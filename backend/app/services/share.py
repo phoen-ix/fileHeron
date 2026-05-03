@@ -1,0 +1,498 @@
+"""Share lifecycle.
+
+Phase 4 model: a share has N user-recipients and M group-recipients.
+Inbox resolution is dynamic — group membership at query time decides
+whether a user sees a group-targeted share. Authorization to download
+follows the same rule.
+
+Authorization to download:
+- The sender (creator) can always download
+- Admins can always download
+- Users in `share_recipients.recipient_user_id` can download
+- Users who are currently a member of any group in
+  `share_recipients.recipient_group_id` can download
+
+Authorization to send (kind=outbound, employee/admin → client(s)):
+- Admins: any client + any group
+- Employees: only clients they're connected to + groups they're a
+  member of (or any company_inbox group, since those are the org-wide
+  landing zone)
+
+Authorization to send (kind=inbound, client → employee(s)/inbox group):
+- The recipient employees must be connected to the sender
+- Group recipients must be company_inbox groups
+"""
+from __future__ import annotations
+
+from datetime import datetime, timezone
+
+from sqlalchemy import or_
+from sqlalchemy.orm import Session, joinedload
+
+from ..middleware.errors import AppError
+from ..models.audit_log import AuditEventType
+from ..models.client_employee_connection import ClientEmployeeConnection
+from ..models.group import Group
+from ..models.group_member import GroupMember
+from ..models.share import Share, ShareKind, ShareState
+from ..models.share_recipient import ShareRecipient
+from ..models.user import User, UserRole
+from .audit import record_audit_event
+
+
+def _utcnow() -> datetime:
+    return datetime.now(tz=timezone.utc).replace(tzinfo=None)
+
+
+def _user_group_ids(db: Session, user_id: int) -> list[int]:
+    rows = (
+        db.query(GroupMember.group_id)
+        .filter(GroupMember.user_id == user_id)
+        .all()
+    )
+    return [r[0] for r in rows]
+
+
+def _connected_employee_ids_of(db: Session, client_id: int) -> set[int]:
+    rows = (
+        db.query(ClientEmployeeConnection.employee_user_id)
+        .filter(ClientEmployeeConnection.client_user_id == client_id)
+        .distinct()
+        .all()
+    )
+    return {r[0] for r in rows}
+
+
+def _connected_client_ids_of(db: Session, employee_id: int) -> set[int]:
+    rows = (
+        db.query(ClientEmployeeConnection.client_user_id)
+        .filter(ClientEmployeeConnection.employee_user_id == employee_id)
+        .distinct()
+        .all()
+    )
+    return {r[0] for r in rows}
+
+
+def _validate_outbound_targets(
+    db: Session, sender: User, users: list[User], groups: list[Group]
+) -> None:
+    if sender.role == UserRole.client:
+        raise AppError(
+            403, "FORBIDDEN_KIND", "Clients cannot send outbound shares."
+        )
+    # Admin: anything goes (within sanity).
+    if sender.role == UserRole.admin:
+        return
+    # Employee: target users must be connected clients (or any user not a
+    # client at all, e.g. another employee — also allowed). Groups must be
+    # ones the employee is a member of OR a company_inbox group.
+    connected = _connected_client_ids_of(db, sender.id)
+    for u in users:
+        if u.role == UserRole.client and u.id not in connected:
+            raise AppError(
+                403,
+                "RECIPIENT_NOT_CONNECTED",
+                f"You're not connected to user {u.id}.",
+            )
+    employee_groups = set(_user_group_ids(db, sender.id))
+    for g in groups:
+        if g.is_company_inbox:
+            continue
+        if g.id not in employee_groups:
+            raise AppError(
+                403,
+                "GROUP_NOT_MEMBER",
+                f"You can only target groups you're a member of.",
+            )
+
+
+def _validate_inbound_targets(
+    db: Session, sender: User, users: list[User], groups: list[Group]
+) -> None:
+    if sender.role != UserRole.client:
+        raise AppError(
+            403, "FORBIDDEN_KIND", "Only clients can send inbound shares."
+        )
+    connected = _connected_employee_ids_of(db, sender.id)
+    for u in users:
+        if u.id not in connected:
+            raise AppError(
+                403,
+                "RECIPIENT_NOT_CONNECTED",
+                f"You're not connected to user {u.id}.",
+            )
+    for g in groups:
+        if not g.is_company_inbox:
+            raise AppError(
+                403,
+                "GROUP_NOT_INBOX",
+                "Inbound shares can only target company-inbox groups.",
+            )
+
+
+def create_share(
+    db: Session,
+    *,
+    created_by: User,
+    kind: ShareKind,
+    expires_at: datetime,
+    recipient_user_ids: list[int] | None = None,
+    recipient_group_ids: list[int] | None = None,
+    subject: str | None = None,
+    message: str | None = None,
+    allow_no_recipients: bool = False,
+    request=None,
+) -> Share:
+    # Pydantic preserves tz info from ISO strings ending in Z / +HH:MM
+    # (which is what dayjs.toISOString() produces on the frontend).
+    # Normalise to naive UTC before comparing or storing — mirrors the
+    # convention every other write site follows. See update_expiry()
+    # below for the same guard at the PATCH boundary.
+    if expires_at.tzinfo is not None:
+        expires_at = expires_at.astimezone(timezone.utc).replace(tzinfo=None)
+    if expires_at < _utcnow():
+        raise AppError(400, "EXPIRY_IN_PAST", "Expiry must be in the future.")
+
+    user_ids = list(dict.fromkeys(recipient_user_ids or []))  # dedupe, preserve order
+    group_ids = list(dict.fromkeys(recipient_group_ids or []))
+    # Empty recipients are only OK when the caller explicitly opted in
+    # (e.g., the router did so because an inline public link is being
+    # attached — the link is the access path).
+    if not user_ids and not group_ids and not allow_no_recipients:
+        raise AppError(
+            400, "NO_RECIPIENTS", "At least one user or group recipient is required."
+        )
+
+    # Resolve + validate user recipients.
+    users: list[User] = []
+    for uid in user_ids:
+        u = db.query(User).filter(User.id == uid).one_or_none()
+        if u is None or u.is_disabled:
+            raise AppError(
+                404, "RECIPIENT_NOT_FOUND", f"Recipient user {uid} is not available."
+            )
+        if u.id == created_by.id:
+            raise AppError(400, "SELF_SHARE", "Cannot share with yourself.")
+        users.append(u)
+
+    # Resolve + validate group recipients.
+    groups: list[Group] = []
+    for gid in group_ids:
+        g = db.query(Group).filter(Group.id == gid).one_or_none()
+        if g is None:
+            raise AppError(
+                404, "GROUP_NOT_FOUND", f"Recipient group {gid} is not available."
+            )
+        groups.append(g)
+
+    # Kind-specific authorization.
+    if kind == ShareKind.outbound:
+        _validate_outbound_targets(db, created_by, users, groups)
+    else:
+        _validate_inbound_targets(db, created_by, users, groups)
+
+    share = Share(
+        created_by_id=created_by.id,
+        kind=kind,
+        subject=(subject or "")[:255] or None,
+        message=message or None,
+        expires_at=expires_at,
+        state=ShareState.active,
+    )
+    db.add(share)
+    db.flush()
+
+    for u in users:
+        db.add(ShareRecipient(share_id=share.id, recipient_user_id=u.id))
+    for g in groups:
+        db.add(ShareRecipient(share_id=share.id, recipient_group_id=g.id))
+    db.flush()
+
+    record_audit_event(
+        db,
+        event_type=AuditEventType.share_created,
+        actor_user_id=created_by.id,
+        target_type="share",
+        target_id=share.id,
+        metadata={
+            "kind": kind.value,
+            "recipient_user_ids": [u.id for u in users],
+            "recipient_group_ids": [g.id for g in groups],
+        },
+        request=request,
+    )
+
+    # Phase 6a: notify each user-recipient (group recipients are not
+    # fanned out here — see workers/share_expiring.py for the same
+    # rationale). Direct user recipients only.
+    from ..models.notification import NotificationCategory
+    from . import notification as notif_svc
+    from . import site as site_svc
+
+    base_url = site_svc.get_site_url(db)
+    payload_base = {
+        "sender_name": created_by.display_name,
+        "subject": share.subject,
+        "message": share.message,
+        "expires_at": share.expires_at,
+        "file_count": 0,  # files added after the share row; stays 0 here
+        "share_url": f"{base_url}/share/{share.id}",
+    }
+    for u in users:
+        payload = dict(payload_base)
+        payload["recipient_name"] = u.display_name
+        notif_svc.dispatch(
+            db,
+            user=u,
+            category=NotificationCategory.share_created,
+            payload=payload,
+            link_url=payload["share_url"],
+            email_to=u.email,
+        )
+    return share
+
+
+def get_share_or_404(db: Session, share_id: str) -> Share:
+    share = db.query(Share).filter(Share.id == share_id).one_or_none()
+    if share is None:
+        raise AppError(404, "SHARE_NOT_FOUND", "Share not found.")
+    return share
+
+
+def is_authorized_to_download(db: Session, *, user: User, share: Share) -> bool:
+    """Sender, admin, direct recipient, or member of any recipient group."""
+    if user.role == UserRole.admin:
+        return True
+    if share.created_by_id == user.id:
+        return True
+    user_group_ids = _user_group_ids(db, user.id)
+    rec = (
+        db.query(ShareRecipient)
+        .filter(ShareRecipient.share_id == share.id)
+        .filter(
+            or_(
+                ShareRecipient.recipient_user_id == user.id,
+                ShareRecipient.recipient_group_id.in_(user_group_ids)
+                if user_group_ids
+                else False,
+            )
+        )
+        .first()
+    )
+    return rec is not None
+
+
+VALID_SORT_COLUMNS = {
+    "subject",
+    "state",
+    "file_count",
+    "total_size",
+    "expires_at",
+    "created_at",
+}
+
+
+def list_shares_for_user(
+    db: Session,
+    *,
+    user: User,
+    box: str = "outbox",
+    q: str = "",
+    states: list[str] | None = None,
+    recipient_user_id: int | None = None,
+    recipient_group_id: int | None = None,
+    sender_user_id: int | None = None,
+    via_group_id: int | None = None,
+    sort: str = "created_at",
+    direction: str = "desc",
+    page: int = 1,
+    page_size: int = 50,
+) -> tuple[list[Share], int]:
+    """Return (rows, total) for a paginated, filtered, sorted query.
+
+    `box`: 'outbox' (sender = user) or 'inbox' (user is recipient).
+    Filters apply after the base box query; sorts are validated against
+    `VALID_SORT_COLUMNS` and silently coerced to the default if invalid.
+    """
+    # Eager-load files to avoid N+1 — the router serializer iterates
+    # `s.files` for file_count, total_size, and effective_subject. With
+    # 50 shares per page, lazy-load would fire 50 extra queries per
+    # list call.
+    if box == "outbox":
+        base = db.query(Share).options(joinedload(Share.files)).filter(
+            Share.created_by_id == user.id
+        )
+        if recipient_user_id is not None:
+            base = base.join(ShareRecipient, ShareRecipient.share_id == Share.id).filter(
+                ShareRecipient.recipient_user_id == recipient_user_id
+            )
+        if recipient_group_id is not None:
+            base = base.join(ShareRecipient, ShareRecipient.share_id == Share.id).filter(
+                ShareRecipient.recipient_group_id == recipient_group_id
+            )
+    elif box == "inbox":
+        user_group_ids = _user_group_ids(db, user.id)
+        recipient_match = ShareRecipient.recipient_user_id == user.id
+        if user_group_ids:
+            recipient_match = or_(
+                recipient_match,
+                ShareRecipient.recipient_group_id.in_(user_group_ids),
+            )
+        base = (
+            db.query(Share)
+            .options(joinedload(Share.files))
+            .join(ShareRecipient, ShareRecipient.share_id == Share.id)
+            .filter(recipient_match)
+        )
+        if sender_user_id is not None:
+            base = base.filter(Share.created_by_id == sender_user_id)
+        if via_group_id is not None:
+            # Only allow filtering by groups the user is a member of.
+            if via_group_id not in user_group_ids:
+                base = base.filter(False)
+            else:
+                base = base.filter(
+                    ShareRecipient.recipient_group_id == via_group_id
+                )
+        base = base.distinct()
+    else:
+        raise AppError(400, "INVALID_BOX", "box must be 'outbox' or 'inbox'.")
+
+    if q:
+        like = f"%{q}%"
+        base = base.filter(Share.subject.ilike(like))
+
+    if states:
+        valid = {s.value for s in ShareState}
+        accepted = [s for s in states if s in valid]
+        if accepted:
+            base = base.filter(Share.state.in_(accepted))
+
+    total = base.count()
+
+    # Sort. Most columns map directly; file_count and total_size are
+    # computed downstream so we sort by created_at as a fallback for
+    # them (the SPA can re-sort the page client-side if it cares).
+    sort_col = sort if sort in VALID_SORT_COLUMNS else "created_at"
+    direction = direction if direction in ("asc", "desc") else "desc"
+
+    column_map = {
+        "subject": Share.subject,
+        "state": Share.state,
+        "expires_at": Share.expires_at,
+        "created_at": Share.created_at,
+    }
+    sort_target = column_map.get(sort_col, Share.created_at)
+    order = sort_target.asc() if direction == "asc" else sort_target.desc()
+    base = base.order_by(order)
+
+    rows = (
+        base.offset(max(0, (page - 1) * page_size)).limit(page_size).all()
+    )
+    return rows, total
+
+
+def revoke_share(db: Session, *, user: User, share: Share, request=None) -> None:
+    if share.created_by_id != user.id and user.role != UserRole.admin:
+        raise AppError(403, "FORBIDDEN", "You cannot revoke this share.")
+    if share.state == ShareState.deleted:
+        raise AppError(409, "ALREADY_DELETED", "Share already deleted.")
+    share.state = ShareState.revoked
+    db.flush()
+    record_audit_event(
+        db,
+        event_type=AuditEventType.share_revoked,
+        actor_user_id=user.id,
+        target_type="share",
+        target_id=share.id,
+        request=request,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Editable expiry + Expire-now (post-Phase 10)
+# ---------------------------------------------------------------------------
+
+
+def update_share_expiry(
+    db: Session,
+    *,
+    user: User,
+    share: Share,
+    new_expires_at: datetime,
+    request=None,
+) -> Share:
+    """Owner-or-admin extends or shortens an active share's expiry.
+    Refuses non-active shares (bytes might be gone) or past timestamps
+    (use `expire_share_now` for that).
+    """
+    if share.created_by_id != user.id and user.role != UserRole.admin:
+        raise AppError(403, "FORBIDDEN", "You cannot edit this share.")
+    if share.state != ShareState.active:
+        raise AppError(
+            409,
+            "SHARE_NOT_ACTIVE",
+            "Only active shares can have their expiry changed.",
+        )
+    # Normalise to naive UTC (matches DB convention).
+    if new_expires_at.tzinfo is not None:
+        new_expires_at = new_expires_at.astimezone(timezone.utc).replace(tzinfo=None)
+    if new_expires_at < _utcnow():
+        raise AppError(
+            400,
+            "INVALID_EXPIRY",
+            "New expiry must be in the future. Use 'expire now' for immediate expiry.",
+        )
+    old = share.expires_at
+    share.expires_at = new_expires_at
+    db.flush()
+    record_audit_event(
+        db,
+        event_type=AuditEventType.share_expiry_updated,
+        actor_user_id=user.id,
+        target_type="share",
+        target_id=share.id,
+        metadata={
+            "old_expires_at": old.isoformat() if old else None,
+            "new_expires_at": new_expires_at.isoformat(),
+        },
+        request=request,
+    )
+    return share
+
+
+def expire_share_now(
+    db: Session, *, user: User, share: Share, request=None
+) -> Share:
+    """Owner-or-admin expires a share immediately. Hard-deletes every
+    file and transitions state to `expired`. Re-uses the same helper
+    the cron uses (`services/file.py::delete_file_for_expiry`)."""
+    if share.created_by_id != user.id and user.role != UserRole.admin:
+        raise AppError(403, "FORBIDDEN", "You cannot expire this share.")
+    if share.state != ShareState.active:
+        raise AppError(
+            409, "SHARE_NOT_ACTIVE", "Only active shares can be expired."
+        )
+
+    # Lazy import — services.file imports services.share elsewhere; keep
+    # the dependency direction loose.
+    from .file import delete_file_for_expiry
+
+    file_count = 0
+    for f in list(share.files):
+        delete_file_for_expiry(db, file=f)
+        file_count += 1
+
+    share.state = ShareState.expired
+    share.expires_at = _utcnow()
+    db.flush()
+    record_audit_event(
+        db,
+        event_type=AuditEventType.share_expired,
+        actor_user_id=user.id,
+        target_type="share",
+        target_id=share.id,
+        metadata={"via": "owner_action", "file_count": file_count},
+        request=request,
+    )
+    return share

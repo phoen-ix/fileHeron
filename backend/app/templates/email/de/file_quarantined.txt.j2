@@ -1,0 +1,11 @@
+Hallo {{ uploader_name|default("zusammen") }},
+
+Eine Datei, die du hochgeladen hast, wurde von unserem Antivirus markiert und unter Quarantäne gestellt.
+
+Datei: {{ filename }}
+Signatur: {{ signature|default("unbekannt") }}
+Die Freigabe wurde widerrufen; Empfänger können nicht mehr herunterladen.
+
+Falls es sich um einen Fehlalarm handelt, wende dich an einen Admin.
+
+— {{ app_name }}

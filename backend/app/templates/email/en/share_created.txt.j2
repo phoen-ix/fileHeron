@@ -1,0 +1,12 @@
+Hi {{ recipient_name|default("there") }},
+
+{{ sender_name }} sent you {{ file_count }} file{% if file_count != 1 %}s{% endif %}{% if subject %} — "{{ subject }}"{% endif %}.
+
+{% if message %}Message:
+{{ message }}
+
+{% endif %}{% if expires_at %}This share expires {{ expires_at|dt_locale(locale) }}.
+
+{% endif %}Open it: {{ share_url }}
+
+— {{ app_name }}

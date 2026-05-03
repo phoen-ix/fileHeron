@@ -1,0 +1,67 @@
+name: Build desktop client (Windows)
+
+on:
+  push:
+    tags:
+      - 'client-v*'
+  # Allow manual runs for testing without a tag — they won't publish.
+  workflow_dispatch: {}
+
+permissions:
+  contents: write   # softprops/action-gh-release writes to releases
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: 'client/pyproject.toml'
+
+      - name: Install client + build deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e "./client[build,dev]"
+
+      - name: Run unit tests
+        working-directory: client
+        run: pytest
+
+      - name: Build .exe with PyInstaller
+        working-directory: client
+        run: |
+          pyinstaller pyinstaller.spec --clean --noconfirm
+
+      - name: Show artifact
+        working-directory: client
+        run: |
+          ls -lh dist/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fileheron-client-windows
+          path: client/dist/fileheron-client.exe
+          if-no-files-found: error
+
+      # Only publish to a Release when the run was triggered by a
+      # client-v* tag. Manual workflow_dispatch runs stop here.
+      - name: Compute release version
+        if: startsWith(github.ref, 'refs/tags/client-v')
+        id: ver
+        run: echo "version=${GITHUB_REF_NAME#client-v}" >> "$GITHUB_OUTPUT"
+
+      - name: Publish release with .exe attached
+        if: startsWith(github.ref, 'refs/tags/client-v')
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: 'Desktop client ${{ steps.ver.outputs.version }}'
+          generate_release_notes: true
+          files: client/dist/fileheron-client.exe

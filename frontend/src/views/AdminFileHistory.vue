@@ -1,0 +1,368 @@
+<script setup lang="ts">
+import { computed, onMounted, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
+
+import { adminListFiles } from '@/api/admin'
+import { useApiError } from '@/composables/useApiError'
+import { useTableSort } from '@/composables/useTableSort'
+import type { AdminFileItem, FileState, ShareState } from '@/types/api'
+
+const { t, locale } = useI18n()
+const { describe } = useApiError()
+
+const items = ref<AdminFileItem[]>([])
+const total = ref(0)
+const page = ref(1)
+const pageSize = ref(50)
+const loading = ref(true)
+const errorMsg = ref<string | null>(null)
+
+const q = ref('')
+const stateFilter = ref<FileState | ''>('')
+const shareStateFilter = ref<ShareState | ''>('')
+let searchTimer: ReturnType<typeof setTimeout> | null = null
+
+const sort = useTableSort({ defaultBy: 'uploaded_at', defaultDir: 'desc' })
+
+async function load() {
+  loading.value = true
+  errorMsg.value = null
+  try {
+    const { data } = await adminListFiles({
+      q: q.value || undefined,
+      state: stateFilter.value || undefined,
+      share_state: shareStateFilter.value || undefined,
+      sort: sort.sortBy.value,
+      direction: sort.sortDir.value,
+      page: page.value,
+      page_size: pageSize.value,
+    })
+    items.value = data.items
+    total.value = data.total
+  } catch (err) {
+    errorMsg.value = describe(err)
+  } finally {
+    loading.value = false
+  }
+}
+
+watch(q, () => {
+  if (searchTimer) clearTimeout(searchTimer)
+  searchTimer = setTimeout(() => {
+    page.value = 1
+    void load()
+  }, 220)
+})
+watch([stateFilter, shareStateFilter], () => {
+  page.value = 1
+  void load()
+})
+watch([sort.sortBy, sort.sortDir, page], load)
+
+const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize.value)))
+
+function formatDate(iso: string | null): string {
+  if (!iso) return '—'
+  return new Date(iso).toLocaleString(
+    locale.value === 'de' ? 'de-AT' : 'en-US',
+    { year: 'numeric', month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' },
+  )
+}
+
+function formatBytes(n: number): string {
+  if (n < 1024) return `${n} B`
+  const k = n / 1024
+  if (k < 1024) return `${k.toFixed(1)} KB`
+  const m = k / 1024
+  if (m < 1024) return `${m.toFixed(1)} MB`
+  return `${(m / 1024).toFixed(2)} GB`
+}
+
+function pillForFileState(s: FileState): string | undefined {
+  if (s === 'clean') return 'active'
+  if (s === 'deleted' || s === 'infected') return 'danger'
+  if (s === 'ready_unscanned') return 'warn'
+  return undefined
+}
+
+function pillForShareState(s: ShareState): string | undefined {
+  if (s === 'active') return 'active'
+  if (s === 'expired') return 'warn'
+  return 'danger'
+}
+
+onMounted(load)
+</script>
+
+<template>
+  <div class="fh-page" data-density="operator">
+    <div class="header-row">
+      <div>
+        <span class="fh-eyebrow">{{ t('admin_file_history.eyebrow') }}</span>
+      </div>
+      <span class="fh-mono total-count">{{ t('admin_file_history.total_count', { n: total }) }}</span>
+    </div>
+
+    <hr class="fh-rule" />
+
+    <p class="fh-field-help intro">{{ t('admin_file_history.intro') }}</p>
+
+    <div class="filters">
+      <input
+        v-model.trim="q"
+        type="search"
+        class="fh-field-input search"
+        :placeholder="t('admin_file_history.search_placeholder')"
+      />
+      <select v-model="stateFilter" class="filter-select">
+        <option value="">{{ t('admin_file_history.file_state_all') }}</option>
+        <option value="clean">clean</option>
+        <option value="ready_unscanned">ready_unscanned</option>
+        <option value="infected">infected</option>
+        <option value="deleted">deleted</option>
+        <option value="uploading">uploading</option>
+      </select>
+      <select v-model="shareStateFilter" class="filter-select">
+        <option value="">{{ t('admin_file_history.share_state_all') }}</option>
+        <option value="active">{{ t('share_state.active') }}</option>
+        <option value="expired">{{ t('share_state.expired') }}</option>
+        <option value="revoked">{{ t('share_state.revoked') }}</option>
+        <option value="deleted">{{ t('share_state.deleted') }}</option>
+      </select>
+    </div>
+
+    <div v-if="loading" class="loading">{{ t('common.loading') }}</div>
+    <div v-else-if="errorMsg" class="fh-notice" data-tone="error">{{ errorMsg }}</div>
+
+    <table v-else-if="items.length > 0" class="files-table">
+      <thead>
+        <tr>
+          <th
+            role="button"
+            tabindex="0"
+            :aria-sort="sort.ariaSort('filename')"
+            @click="sort.toggle('filename')"
+            @keydown.enter="sort.toggle('filename')"
+          >
+            {{ t('admin_file_history.col.filename') }}
+            <span class="sort-ind">{{ sort.indicator('filename') }}</span>
+          </th>
+          <th
+            role="button"
+            tabindex="0"
+            class="numeric"
+            :aria-sort="sort.ariaSort('size')"
+            @click="sort.toggle('size')"
+            @keydown.enter="sort.toggle('size')"
+          >
+            {{ t('admin_file_history.col.size') }}
+            <span class="sort-ind">{{ sort.indicator('size') }}</span>
+          </th>
+          <th
+            role="button"
+            tabindex="0"
+            :aria-sort="sort.ariaSort('state')"
+            @click="sort.toggle('state')"
+            @keydown.enter="sort.toggle('state')"
+          >
+            {{ t('admin_file_history.col.state') }}
+            <span class="sort-ind">{{ sort.indicator('state') }}</span>
+          </th>
+          <th>{{ t('admin_file_history.col.uploader') }}</th>
+          <th>{{ t('admin_file_history.col.share') }}</th>
+          <th
+            role="button"
+            tabindex="0"
+            :aria-sort="sort.ariaSort('uploaded_at')"
+            @click="sort.toggle('uploaded_at')"
+            @keydown.enter="sort.toggle('uploaded_at')"
+          >
+            {{ t('admin_file_history.col.uploaded') }}
+            <span class="sort-ind">{{ sort.indicator('uploaded_at') }}</span>
+          </th>
+          <th
+            role="button"
+            tabindex="0"
+            :aria-sort="sort.ariaSort('last_downloaded_at')"
+            @click="sort.toggle('last_downloaded_at')"
+            @keydown.enter="sort.toggle('last_downloaded_at')"
+          >
+            {{ t('admin_file_history.col.last_dl') }}
+            <span class="sort-ind">{{ sort.indicator('last_downloaded_at') }}</span>
+          </th>
+          <th
+            role="button"
+            tabindex="0"
+            class="numeric"
+            :aria-sort="sort.ariaSort('download_count')"
+            @click="sort.toggle('download_count')"
+            @keydown.enter="sort.toggle('download_count')"
+          >
+            {{ t('admin_file_history.col.dl_count') }}
+            <span class="sort-ind">{{ sort.indicator('download_count') }}</span>
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr v-for="it in items" :key="it.file_id">
+          <td>
+            <div class="row-name">{{ it.filename }}</div>
+            <div class="fh-mono row-hint">{{ it.recipients_summary }}</div>
+          </td>
+          <td class="numeric fh-mono">{{ formatBytes(it.size_bytes) }}</td>
+          <td>
+            <span class="fh-pill" :data-state="pillForFileState(it.state)">
+              {{ it.state }}
+            </span>
+          </td>
+          <td>
+            <div class="row-name">{{ it.uploader.display_name }}</div>
+            <div class="fh-mono row-hint">{{ it.uploader.email }} · {{ it.uploader.role }}</div>
+          </td>
+          <td>
+            <div class="row-name">{{ it.share_subject || t('share_list.no_subject') }}</div>
+            <div class="fh-mono row-hint">
+              <span class="fh-pill" :data-state="pillForShareState(it.share_state)">
+                {{ t(`share_state.${it.share_state}`) }}
+              </span>
+            </div>
+          </td>
+          <td class="fh-mono">{{ formatDate(it.uploaded_at) }}</td>
+          <td class="fh-mono">{{ formatDate(it.last_downloaded_at) }}</td>
+          <td class="numeric fh-mono">{{ it.download_count }}</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <p v-else class="fh-field-help empty">{{ t('admin_file_history.empty') }}</p>
+
+    <div v-if="totalPages > 1" class="pager">
+      <button type="button" class="fh-btn-text" :disabled="page === 1" @click="page -= 1">
+        ← {{ t('admin_users.prev') }}
+      </button>
+      <span class="fh-mono page-info">
+        {{ t('admin_users.page_of', { page, total: totalPages }) }}
+      </span>
+      <button
+        type="button"
+        class="fh-btn-text"
+        :disabled="page >= totalPages"
+        @click="page += 1"
+      >
+        {{ t('admin_users.next') }} →
+      </button>
+    </div>
+  </div>
+</template>
+
+<style scoped>
+.header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: var(--fh-space-4);
+}
+
+.total-count {
+  font-size: var(--fh-text-mono-sm);
+  color: var(--fh-subtle);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.intro {
+  margin: var(--fh-space-2) 0 var(--fh-space-3);
+  max-width: 64ch;
+}
+
+.filters {
+  display: flex;
+  gap: var(--fh-space-3);
+  margin-bottom: var(--fh-space-4);
+  align-items: baseline;
+  flex-wrap: wrap;
+}
+
+.search {
+  flex: 1;
+  max-width: 360px;
+}
+
+.filter-select {
+  font: inherit;
+  background: transparent;
+  border: var(--fh-border-strong);
+  border-radius: var(--fh-radius-sm);
+  padding: 4px 8px;
+  color: var(--fh-ink);
+}
+
+.loading {
+  color: var(--fh-subtle);
+  padding: var(--fh-space-5) 0;
+}
+
+.files-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.files-table th,
+.files-table td {
+  text-align: left;
+  padding: var(--fh-space-2) var(--fh-space-3);
+  border-bottom: 1px solid var(--fh-rule);
+  vertical-align: top;
+}
+
+.files-table th {
+  font-family: var(--fh-font-mono);
+  font-size: var(--fh-text-mono-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--fh-subtle);
+  font-weight: 500;
+  user-select: none;
+}
+
+.files-table th[role="button"] {
+  cursor: pointer;
+}
+
+.files-table th[role="button"]:hover {
+  color: var(--fh-ink);
+}
+
+.sort-ind {
+  display: inline-block;
+  width: 1ch;
+  margin-left: 2px;
+  color: var(--fh-accent);
+}
+
+.row-name {
+  font-weight: 500;
+}
+
+.row-hint {
+  font-size: var(--fh-text-mono-sm);
+  color: var(--fh-subtle);
+}
+
+.numeric {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.empty {
+  margin: var(--fh-space-3) 0;
+}
+
+.pager {
+  display: flex;
+  gap: var(--fh-space-3);
+  align-items: baseline;
+  justify-content: center;
+  margin-top: var(--fh-space-4);
+}
+</style>

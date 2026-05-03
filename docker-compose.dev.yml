@@ -1,0 +1,68 @@
+# Dev override: source mounts + uvicorn --reload + DB exposed on host.
+# Usage: docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+services:
+  db:
+    ports:
+      - "127.0.0.1:${DB_EXTERNAL_PORT:-3307}:3306"
+
+  redis:
+    ports:
+      - "127.0.0.1:${REDIS_EXTERNAL_PORT:-6380}:6379"
+
+  backend:
+    build:
+      dockerfile: docker/backend/Dockerfile.dev
+    volumes:
+      - ./backend/app:/app/app
+      - ./backend/alembic:/app/alembic
+      - ./backend/scripts:/app/scripts
+      - ./backend/tests:/app/tests
+    environment:
+      ENVIRONMENT: development
+      COOKIE_SECURE: "false"
+      LOG_LEVEL: DEBUG
+    # --proxy-headers + forwarded-allow-ips: see prod Dockerfile comment.
+    # Dev backend is also bound to 127.0.0.1 only via compose ports, so
+    # trusting any source is safe.
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000",
+              "--reload", "--proxy-headers", "--forwarded-allow-ips=*"]
+
+  # Mirror the backend's source-mount + dev image for the ARQ worker so
+  # code changes take effect on `compose restart worker` without a
+  # rebuild. ARQ's --watch flag would auto-restart on file changes; for
+  # now, manual restart is fine.
+  worker:
+    build:
+      dockerfile: docker/backend/Dockerfile.dev
+    volumes:
+      - ./backend/app:/app/app
+      - ./backend/alembic:/app/alembic
+      - ./backend/scripts:/app/scripts
+    environment:
+      ENVIRONMENT: development
+      LOG_LEVEL: DEBUG
+
+  frontend:
+    build:
+      dockerfile: docker/frontend/Dockerfile.dev
+    # Compose merges `ports` lists by appending — that would leave both 80 and
+    # 5173 mapped to host:8080, which Docker refuses. !override replaces the
+    # prod list completely.
+    ports: !override
+      - "127.0.0.1:${APP_FRONTEND_PORT:-8080}:5173"
+    volumes:
+      - ./frontend/src:/app/src
+      - ./frontend/tests:/app/tests
+      - ./frontend/public:/app/public
+      - ./frontend/index.html:/app/index.html
+      - ./frontend/vite.config.ts:/app/vite.config.ts
+      - ./frontend/tsconfig.json:/app/tsconfig.json
+      - ./frontend/tsconfig.app.json:/app/tsconfig.app.json
+      - ./frontend/tsconfig.node.json:/app/tsconfig.node.json
+    healthcheck:
+      # Vite dev server doesn't expose a /healthz; just check the port.
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5173/"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s

@@ -1,0 +1,91 @@
+/* fileHeron design tokens.
+ *
+ * Single source of truth for color, spacing, typography, motion. Used by
+ * every component via CSS variables. The "operator mode" surfaces toggle
+ * a [data-density="operator"] attribute on a wrapping <main> to compress
+ * spacing — the tokens are the same; the rhythm differs.
+ *
+ * Editorial mode: client-facing pages (auth, /d/{token}, recipient inbox).
+ * Operator mode:  sender outbox, share-create, /admin/* pages.
+ */
+
+:root {
+  /* --- color (light theme) ------------------------------------------------ */
+  --fh-ink: #1a1d24;
+  --fh-ink-soft: #2c303a;
+  --fh-paper: #faf8f3;
+  --fh-paper-raised: #fffefa;
+  --fh-paper-sunk: #f4f0e6;
+
+  --fh-accent: #b45309;
+  --fh-accent-hover: #92400e;
+  --fh-accent-soft: rgba(180, 83, 9, 0.08);
+
+  --fh-subtle: #6b7280;
+  --fh-subtle-soft: #9ca3af;
+  --fh-hairline: #e5e1d8;
+  --fh-hairline-strong: #d6d1c4;
+
+  --fh-success: #4d7c0f;
+  --fh-warning: #b45309;
+  --fh-danger: #991b1b;
+  --fh-danger-soft: rgba(153, 27, 27, 0.08);
+
+  --fh-focus-ring: rgba(180, 83, 9, 0.35);
+
+  /* --- typography --------------------------------------------------------- */
+  --fh-font-display: 'Instrument Serif', 'Iowan Old Style', 'Palatino Linotype',
+    'Book Antiqua', Georgia, serif;
+  --fh-font-body: 'Geist Variable', ui-sans-serif, -apple-system, 'Segoe UI', system-ui,
+    sans-serif;
+  --fh-font-mono: 'Geist Mono Variable', ui-monospace, 'SF Mono', 'Cascadia Code',
+    'JetBrains Mono', Menlo, monospace;
+
+  /* Editorial scale (client-facing) */
+  --fh-text-display-xl: 3.5rem; /* 56 */
+  --fh-text-display-lg: 2.5rem; /* 40 */
+  --fh-text-display-md: 2rem; /* 32 */
+  --fh-text-body-lg: 1.125rem; /* 18 */
+  --fh-text-body-md: 1rem; /* 16 */
+  --fh-text-body-sm: 0.875rem; /* 14 */
+  --fh-text-mono-md: 0.8125rem; /* 13 */
+  --fh-text-mono-sm: 0.75rem; /* 12 */
+
+  /* --- spacing (8-px base) ------------------------------------------------ */
+  --fh-space-1: 0.25rem; /* 4 */
+  --fh-space-2: 0.5rem; /* 8 */
+  --fh-space-3: 1rem; /* 16 */
+  --fh-space-4: 1.5rem; /* 24 */
+  --fh-space-5: 2.5rem; /* 40 */
+  --fh-space-6: 4rem; /* 64 */
+  --fh-space-7: 6rem; /* 96 */
+
+  /* --- shape -------------------------------------------------------------- */
+  --fh-radius-sm: 2px;
+  --fh-radius-md: 4px;
+  --fh-radius-lg: 6px;
+  --fh-border: 1px solid var(--fh-hairline);
+  --fh-border-strong: 1px solid var(--fh-hairline-strong);
+  --fh-border-ink: 1px solid var(--fh-ink);
+
+  /* --- motion (CSS-only) ------------------------------------------------- */
+  --fh-easing: cubic-bezier(0.2, 0, 0, 1);
+  --fh-duration-fast: 120ms;
+  --fh-duration: 220ms;
+  --fh-duration-slow: 480ms;
+
+  /* --- layout ------------------------------------------------------------- */
+  --fh-max-width-prose: 38rem; /* 608 — comfortable reading width */
+  --fh-max-width-page: 72rem; /* 1152 — operator page width */
+  --fh-page-gutter: var(--fh-space-5);
+  --fh-app-header-height: 4rem; /* sticky AppHeader nominal height — used for sticky-aware offsets and anchor scroll-margin */
+}
+
+/* Operator mode: same tokens, denser rhythm. Toggle via
+   <main data-density="operator"> on operator pages. */
+[data-density='operator'] {
+  --fh-text-display-xl: 1.5rem;
+  --fh-text-display-lg: 1.25rem;
+  --fh-text-display-md: 1.125rem;
+  --fh-page-gutter: var(--fh-space-3);
+}

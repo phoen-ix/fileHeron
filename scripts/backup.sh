@@ -1,0 +1,98 @@
+#!/usr/bin/env bash
+# fileHeron backup — produces a dated archive under ./backups/<stamp>/.
+#
+# Contents:
+#   db.sql                — mysqldump of the MariaDB database
+#   files.tar.gz          — gzipped tar of ./data/files (finalized uploads)
+#   quarantine.tar.gz     — gzipped tar of ./data/quarantine (AV positives)
+#   redis.rdb             — Redis snapshot (rate-limit counters, ARQ queue)
+#   manifest.txt          — sha256 of every artifact + counts
+#
+# If $BACKUP_RESTIC_REPO is set (e.g. "s3:s3.amazonaws.com/my-bucket/repo",
+# "rest:https://restic.example.com/", or a local path), the produced archive
+# is also pushed to a restic repo using $BACKUP_RESTIC_PASSWORD.
+#
+# Designed to be safe to interrupt: temporary files live under /tmp until
+# the artifact is fully written, then atomically renamed in.
+#
+# Recovery: see scripts/restore.sh.
+
+set -euo pipefail
+
+# Resolve paths relative to repo root.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+cd "$ROOT"
+
+# Load env (best-effort).
+if [ -f .env ]; then
+    # shellcheck disable=SC1091
+    set -a; source .env; set +a
+fi
+
+: "${DB_NAME:=fileheron}"
+: "${DB_ROOT_PASSWORD:?DB_ROOT_PASSWORD must be set in .env or environment}"
+
+STAMP="$(date -u +%Y-%m-%d_%H%M%S)"
+DEST="$ROOT/backups/$STAMP"
+mkdir -p "$DEST"
+
+echo "[backup] $STAMP — starting"
+
+# 1. MariaDB dump.
+echo "[backup] dumping MariaDB ($DB_NAME) …"
+docker compose exec -T db mariadb-dump \
+    -uroot -p"$DB_ROOT_PASSWORD" \
+    --single-transaction --quick --lock-tables=false \
+    "$DB_NAME" > "$DEST/db.sql"
+
+# 2. Files + quarantine.
+echo "[backup] archiving data/files …"
+tar -C "$ROOT/data" -czf "$DEST/files.tar.gz" files
+echo "[backup] archiving data/quarantine …"
+tar -C "$ROOT/data" -czf "$DEST/quarantine.tar.gz" quarantine
+
+# 3. Redis snapshot — issue SAVE then copy dump.rdb out of the container.
+echo "[backup] saving Redis …"
+docker compose exec -T redis redis-cli SAVE > /dev/null
+REDIS_CID="$(docker compose ps -q redis)"
+docker cp "$REDIS_CID:/data/dump.rdb" "$DEST/redis.rdb"
+
+# 4. Manifest with sha256s.
+echo "[backup] hashing artifacts …"
+(
+    cd "$DEST"
+    sha256sum db.sql files.tar.gz quarantine.tar.gz redis.rdb > manifest.txt
+)
+
+# 5. Optional restic push.
+if [ -n "${BACKUP_RESTIC_REPO:-}" ]; then
+    if [ -z "${BACKUP_RESTIC_PASSWORD:-}" ]; then
+        echo "[backup] BACKUP_RESTIC_REPO set but BACKUP_RESTIC_PASSWORD missing — skipping push" >&2
+    elif ! command -v restic >/dev/null 2>&1; then
+        echo "[backup] restic not installed on host — skipping push" >&2
+    else
+        echo "[backup] pushing to restic repo $BACKUP_RESTIC_REPO …"
+        # Stash the password in a 0600 temp file and pass it via
+        # restic's --password-file. Avoids `export RESTIC_PASSWORD`
+        # which would leave the secret in /proc/<pid>/environ for
+        # the duration of the restic call (readable by any process
+        # running as the same user).
+        PWD_FILE="$(mktemp)"
+        chmod 600 "$PWD_FILE"
+        # `trap` cleanup so we don't leak the file on error/exit.
+        trap 'rm -f "$PWD_FILE"' EXIT
+        printf '%s' "$BACKUP_RESTIC_PASSWORD" > "$PWD_FILE"
+        restic --repo "$BACKUP_RESTIC_REPO" --password-file "$PWD_FILE" \
+            snapshots > /dev/null 2>&1 || \
+            restic --repo "$BACKUP_RESTIC_REPO" --password-file "$PWD_FILE" init
+        restic --repo "$BACKUP_RESTIC_REPO" --password-file "$PWD_FILE" \
+            backup --tag "fileheron-$STAMP" "$DEST"
+        rm -f "$PWD_FILE"
+        trap - EXIT
+    fi
+fi
+
+echo "[backup] done — $DEST"
+echo "[backup] sizes:"
+du -h "$DEST"/* | sed 's/^/[backup]   /'

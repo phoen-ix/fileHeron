@@ -1,0 +1,18 @@
+{% extends "layout.html.j2" %}
+{% block subject %}SMTP test from {{ app_name }}{% endblock %}
+{% block content %}
+  <p style="margin:0 0 12px 0;color:#6b7280;font-family:Georgia,serif;font-style:italic;">Connectivity check</p>
+  <h1 style="font-family:Georgia,'Times New Roman',serif;font-weight:normal;font-size:28px;line-height:1.15;letter-spacing:-0.01em;margin:0 0 16px 0;color:#1a1d24;">
+    SMTP configuration works
+  </h1>
+  <p style="margin:0 0 16px 0;">
+    If you're reading this, the SMTP values currently saved in
+    <code>/admin/settings/email</code> work for outbound mail.
+  </p>
+  <p style="margin:0 0 8px 0;color:#6b7280;font-size:14px;">
+    Sent at <strong>{{ now_iso }}</strong>
+  </p>
+  <p style="margin:0;color:#6b7280;font-size:14px;">
+    You can ignore this message. It's a routine connectivity check.
+  </p>
+{% endblock %}

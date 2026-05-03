@@ -1,0 +1,12 @@
+Hallo {{ recipient_name|default("zusammen") }},
+
+{{ sender_name }} hat dir {{ file_count }} Datei{% if file_count != 1 %}en{% endif %} gesendet{% if subject %} — „{{ subject }}"{% endif %}.
+
+{% if message %}Nachricht:
+{{ message }}
+
+{% endif %}{% if expires_at %}Diese Freigabe läuft am {{ expires_at|dt_locale(locale) }} ab.
+
+{% endif %}Öffnen: {{ share_url }}
+
+— {{ app_name }}

@@ -1,0 +1,46 @@
+{# Shared HTML layout — table-based for client compatibility, restrained
+   editorial styling that matches the SPA design tokens. Subclasses
+   override the `content` block. #}
+<!doctype html>
+<html lang="{{ locale|default('en') }}">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>{{ self.subject() }}</title>
+  </head>
+  <body style="margin:0;padding:0;background:#faf8f3;font-family:Helvetica,Arial,sans-serif;color:#1a1d24;">
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" bgcolor="#faf8f3">
+      <tr>
+        <td align="center" style="padding:32px 16px;">
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" style="max-width:600px;width:100%;background:#fffaf0;border:1px solid #e5e1d8;border-collapse:separate;">
+            <tr>
+              <td style="padding:24px 32px 8px 32px;border-bottom:1px solid #e5e1d8;">
+                <span style="font-family:Georgia,'Times New Roman',serif;font-style:italic;font-size:22px;color:#1a1d24;">
+                  file:<span style="color:#b45309;">Heron</span>
+                </span>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:32px;line-height:1.55;font-size:16px;">
+                {% block content %}{% endblock %}
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:16px 32px 24px 32px;border-top:1px solid #e5e1d8;font-size:13px;color:#6b7280;">
+                {% block footer %}
+                  {% if locale|default('en') == 'de' %}
+                    Diese E-Mail wurde von <strong>{{ app_name }}</strong> versandt.
+                    Empfangsdatum: {{ now|dt_locale(locale) if now is defined else '' }}.
+                  {% else %}
+                    Sent by <strong>{{ app_name }}</strong>.
+                  {% endif %}
+                {% endblock %}
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>

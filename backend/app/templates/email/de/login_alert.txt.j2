@@ -1,0 +1,13 @@
+Hallo {{ display_name|default("zusammen") }},
+
+Eine neue Anmeldung an deinem {{ app_name }}-Konto erfolgte gerade von einem unbekannten Gerät.
+
+Wann:    {{ at|dt_locale(locale) }}
+Methode: {{ via|default("Passwort") }}
+Browser: {{ ua_summary|default("unbekannt") }}
+Region:  {{ ip_hint|default("unbekannt") }}
+
+Wenn du das warst, ist nichts zu tun. Falls nicht, ändere sofort dein Passwort und überprüfe die aktiven Sitzungen:
+{{ account_url }}
+
+— {{ app_name }}

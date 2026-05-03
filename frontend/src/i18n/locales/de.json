@@ -1,0 +1,974 @@
+{
+  "common": {
+    "continue": "Weiter",
+    "cancel": "Abbrechen",
+    "save": "Speichern",
+    "saved": "Gespeichert.",
+    "back": "Zurück",
+    "loading": "Wird geladen…",
+    "yes": "Ja",
+    "no": "Nein",
+    "email": "E-Mail",
+    "password": "Passwort",
+    "new_password": "Neues Passwort",
+    "current_password": "Aktuelles Passwort",
+    "display_name": "Anzeigename",
+    "language": "Sprache"
+  },
+  "errors": {
+    "INVALID_CREDENTIALS": "E-Mail und Passwort stimmen nicht überein.",
+    "TOTP_REQUIRED": "Bitte gib den sechsstelligen Code aus deiner Authenticator-App ein.",
+    "INVALID_TOTP": "Der Code ist falsch oder abgelaufen.",
+    "INVALID_RECOVERY": "Dieser Wiederherstellungscode ist ungültig oder bereits verbraucht.",
+    "ACCOUNT_LOCKED": "Dieses Konto ist nach zu vielen Fehlversuchen vorübergehend gesperrt. Bitte später erneut versuchen.",
+    "ACCOUNT_DISABLED": "Dieses Konto wurde deaktiviert. Bitte einen Administrator kontaktieren.",
+    "EMAIL_NOT_VERIFIED": "Bitte zuerst die E-Mail bestätigen.",
+    "RATE_LIMITED": "Zu viele Versuche. Bitte kurz warten und erneut versuchen.",
+    "INVITE_INVALID": "Diese Einladung ist nicht gültig.",
+    "INVITE_EXPIRED": "Diese Einladung ist abgelaufen. Bitte den Absender um eine neue.",
+    "INVITE_USED": "Diese Einladung wurde bereits verwendet.",
+    "RESET_TOKEN_INVALID": "Dieser Reset-Link ist nicht gültig.",
+    "RESET_TOKEN_EXPIRED": "Dieser Reset-Link ist abgelaufen. Bitte einen neuen anfordern.",
+    "RESET_TOKEN_USED": "Dieser Reset-Link wurde bereits verwendet.",
+    "VERIFY_TOKEN_INVALID": "Dieser Bestätigungslink ist nicht gültig.",
+    "VERIFY_TOKEN_EXPIRED": "Dieser Bestätigungslink ist abgelaufen.",
+    "VERIFY_TOKEN_USED": "Dieser Bestätigungslink wurde bereits verwendet.",
+    "PASSWORD_BREACHED": "Dieses Passwort wurde in einem bekannten Datenleck gefunden. Bitte ein anderes wählen.",
+    "USER_EXISTS": "Für diese E-Mail existiert bereits ein Konto.",
+    "INVITE_PENDING": "Für diese E-Mail ist bereits eine Einladung offen — bitte warten, bis sie abläuft oder eingelöst wird.",
+    "GROUP_NOT_FOUND": "Eine oder mehrere ausgewählte Gruppen existieren nicht mehr.",
+    "TOTP_ALREADY_ENABLED": "Zwei-Faktor-Auth ist für dieses Konto bereits aktiv.",
+    "TOTP_NOT_ENABLED": "Zwei-Faktor-Auth ist nicht aktiviert.",
+    "TOTP_SETUP_MISSING": "Bitte zuerst die Einrichtung der Zwei-Faktor-Auth starten.",
+    "AUTH_REQUIRED": "Bitte zuerst anmelden.",
+    "TOKEN_REUSE": "Verdächtige Anmeldung erkannt. Alle Sitzungen wurden beendet.",
+    "FORBIDDEN": "Dafür fehlen die nötigen Rechte.",
+    "INTERNAL_ERROR": "Etwas ist schiefgelaufen. Bitte erneut versuchen.",
+    "OIDC_NO_ACCOUNT": "Für diese Identität existiert kein fileHeron-Konto. Bitte einen Admin um eine Einladung.",
+    "OIDC_EMAIL_MISMATCH": "Der Identity-Provider hat eine andere E-Mail-Adresse zurückgegeben als dein fileHeron-Konto. Verbindung abgelehnt.",
+    "OIDC_ALREADY_LINKED": "Du bist bereits mit einem anderen SSO-Provider verbunden. Bitte zuerst trennen.",
+    "OIDC_SUBJECT_TAKEN": "Diese Identität ist bereits mit einem anderen fileHeron-Konto verbunden.",
+    "OIDC_PROVIDER_HAS_USERS": "Dieser SSO-Provider hat noch verknüpfte Benutzer. Bitte vor dem Löschen entkoppeln.",
+    "OIDC_EMAIL_NOT_VERIFIED": "Der Identity-Provider hat keine verifizierte E-Mail-Adresse zurückgegeben. Verbindung abgelehnt.",
+    "OIDC_PROVIDER_DISABLED": "Dieser SSO-Provider ist deaktiviert.",
+    "OIDC_PROVIDER_INCOMPLETE": "Diesem SSO-Provider fehlt die nötige Konfiguration.",
+    "OIDC_PROVIDER_NOT_FOUND": "SSO-Provider nicht gefunden.",
+    "API_TOKEN_NOT_ALLOWED": "Deine Administration hat das Anlegen von API-Tokens eingeschränkt.",
+    "API_TOKEN_DISABLED": "Dieser API-Token ist deaktiviert.",
+    "TOKEN_NOT_FOUND": "API-Token nicht gefunden.",
+    "TOKEN_REVOKED": "Endgültig widerrufene Tokens können nicht reaktiviert werden.",
+    "USER_DISABLED": "Für deaktivierte Benutzer können keine Tokens angelegt werden.",
+    "PUBLIC_LINK_NOT_ALLOWED": "Deine Administration hat das Anlegen öffentlicher Links eingeschränkt.",
+    "SHARE_NOT_ACTIVE": "Diese Freigabe ist nicht mehr aktiv.",
+    "INVALID_EXPIRY": "Der Ablaufzeitpunkt muss in der Zukunft liegen. Verwende „Jetzt ablaufen\" für sofortiges Ablaufen.",
+    "INVALID_LANDING_PAGE": "Unbekannter Name für die Startseite.",
+    "HOME_PAGE_DISABLED": "Die Startseite wurde von deiner Administration deaktiviert.",
+    "QUARANTINE_BYTES_MISSING": "Die quarantänierten Bytes liegen nicht mehr auf der Platte — nichts zum Herunterladen. Verwende „Löschen“, um den Eintrag zu bereinigen.",
+    "QUARANTINED_FILE_NOT_FOUND": "Keine quarantänierte Datei mit dieser ID (möglicherweise schon freigegeben oder gelöscht).",
+    "FILE_QUARANTINED_ADMIN_ONLY": "Diese Datei wurde vom Virenscanner markiert. Nur Admins können sie über die Quarantäne bearbeiten.",
+    "FILE_INFECTED": "Diese Datei wurde vom Virenscanner blockiert und kann nicht heruntergeladen werden.",
+    "FILE_DELETED": "Diese Datei wurde gelöscht.",
+    "SCAN_IN_PROGRESS": "Virenprüfung läuft noch — gleich erneut versuchen.",
+    "FILE_NOT_INFECTED": "Diese Aktion ist nur für aktuell quarantänierte Dateien möglich.",
+    "generic": "Etwas hat nicht funktioniert. Bitte erneut versuchen."
+  },
+  "login": {
+    "title": "Anmelden",
+    "subtitle": "Willkommen zurück.",
+    "email_placeholder": "du{'@'}beispiel.at",
+    "password_placeholder": "Dein Passwort",
+    "totp_label": "Zwei-Faktor-Code",
+    "totp_help": "Öffne deine Authenticator-App und gib den sechsstelligen Code ein.",
+    "totp_placeholder": "123 456",
+    "use_recovery": "Stattdessen einen Wiederherstellungscode verwenden",
+    "use_passkey": "Stattdessen Passkey verwenden",
+    "passkey_cancelled": "Passkey-Eingabe abgebrochen.",
+    "use_totp_back": "Zurück zum Authenticator-Code",
+    "recovery_label": "Wiederherstellungscode",
+    "recovery_help": "Einer deiner Backup-Codes (Format XXXX-XXXX).",
+    "recovery_placeholder": "ABCD-1234",
+    "submit": "Weiter",
+    "forgot": "Passwort vergessen",
+    "submitting": "Wird angemeldet…",
+    "sso_button_with_name": "Mit {name} anmelden",
+    "sso_or": "oder"
+  },
+  "register": {
+    "title": "Konto einrichten",
+    "subtitle": "Du wurdest zu file:Heron eingeladen. Wähle ein Passwort, um abzuschließen.",
+    "name_placeholder": "Wie sollen wir dich ansprechen?",
+    "submit": "Konto erstellen",
+    "password_help": "Mindestens 12 Zeichen."
+  },
+  "forgot": {
+    "title": "Passwort vergessen",
+    "subtitle": "Gib deine E-Mail ein. Falls ein Konto existiert, schicken wir einen Reset-Link.",
+    "submit": "Reset-Link senden",
+    "sent_title": "Bitte E-Mail-Postfach prüfen.",
+    "sent_subtitle": "Falls die E-Mail bei uns liegt, ist ein Reset-Link unterwegs."
+  },
+  "reset": {
+    "title": "Passwort zurücksetzen",
+    "subtitle": "Wähle ein neues Passwort.",
+    "submit": "Passwort zurücksetzen",
+    "done_title": "Passwort zurückgesetzt.",
+    "done_subtitle": "Bitte mit dem neuen Passwort anmelden.",
+    "to_login": "Anmelden"
+  },
+  "verify": {
+    "verifying": "E-Mail wird bestätigt…",
+    "ok_title": "E-Mail bestätigt.",
+    "ok_subtitle": "Du kannst dich jetzt anmelden.",
+    "to_login": "Weiter zur Anmeldung"
+  },
+  "home": {
+    "go_share": "Datei senden",
+    "go_account": "Konto"
+  },
+  "header": {
+    "account": "Konto",
+    "logout": "Abmelden",
+    "menu": "Menü",
+    "outbox": "Gesendet",
+    "inbox": "Empfangen",
+    "new_share": "Neue Freigabe",
+    "admin": "Admin"
+  },
+  "admin": {
+    "eyebrow": "Admin",
+    "nav_label": "Admin-Navigation",
+    "nav": {
+      "users": "Benutzer",
+      "groups": "Gruppen",
+      "audit": "Audit-Protokoll",
+      "file_history": "Dateiverlauf",
+      "quarantine": "Quarantäne",
+      "api_tokens": "API-Tokens",
+      "settings": "Einstellungen"
+    }
+  },
+  "admin_settings": {
+    "eyebrow": "Admin / Einstellungen",
+    "intro": "Laufzeit-Einstellungen ohne .env-Bearbeitung oder Container-Neustart konfigurieren. Sensible Werte werden verschlüsselt gespeichert.",
+    "section_titles": {
+      "general": "Allgemein",
+      "sso": "SSO / OIDC",
+      "api_tokens": "API-Token-Richtlinie",
+      "public_links": "Öffentliche-Links-Richtlinie",
+      "email": "E-Mail / SMTP",
+      "twofa": "Zwei-Faktor-Pflicht",
+      "quarantine": "Quarantäne-Alarme"
+    },
+    "sections": {
+      "general": "Kleine Schalter und allgemeine App-Einstellungen — beginnt mit der Startseite an/aus.",
+      "sso": "Eine oder mehrere OIDC-Identity-Provider konfigurieren (Microsoft Entra, Google, Authentik, Keycloak, …). Benutzer verknüpfen ihr Konto mit einem Provider für Ein-Klick-Anmeldung.",
+      "api_tokens": "Festlegen, wer programmatische API-Tokens anlegen darf — alle, nur Mitarbeiter, nur Admins oder deaktiviert. Eine Allowlist ergänzt die Basis-Richtlinie.",
+      "public_links": "Festlegen, wer öffentliche Links zu Freigaben anlegen darf — alle, nur Mitarbeiter, nur Admins oder deaktiviert. Eine Allowlist ergänzt die Basis-Richtlinie.",
+      "email": "Ausgehenden SMTP konfigurieren — Host, Port, Zugangsdaten, TLS-Modus, Absender. Test-E-Mail senden und tatsächlichen Fehler sehen, falls etwas nicht stimmt.",
+      "twofa": "Festlegen, wer 2FA aktivieren muss — beliebige Kombination aus Rollen (Admin / Mitarbeiter / Client) und Gruppen. Betroffene Benutzer ohne TOTP werden bei jedem Seitenaufruf in den Einrichtungsfluss umgeleitet, bis sie sich registrieren.",
+      "quarantine": "Wenn ClamAV einen Upload als infiziert markiert, optional zusätzlich eine Benachrichtigung (E-Mail + In-App-Glocke) an alle Admins senden."
+    }
+  },
+  "admin_general": {
+    "title": "Allgemein",
+    "intro": "Kleine Schalter und allgemeine App-Einstellungen. Neue minor-Einstellungen werden hier hinzugefügt.",
+    "quicknav": {
+      "aria": "Abschnittsnavigation"
+    }
+  },
+  "admin_twofa_policy": {
+    "title": "Zwei-Faktor-Pflicht",
+    "intro": "Wähle die Rollen und Gruppen, deren Mitglieder einen TOTP-Authenticator aktivieren müssen. Betroffene Benutzer ohne 2FA werden von jeder Seite außer dem Einrichtungs-Assistenten ausgeschlossen, bis sie sich registrieren.",
+    "kv_inheritance_note": "Noch keine Richtlinie gespeichert — aktuell wird die REQUIRE_2FA-Umgebungsvariable geerbt. Speichern hier übernimmt.",
+    "roles_heading": "Pflichtige Rollen",
+    "roles_help": "Eine Rolle aktivieren, um 2FA für jeden Benutzer mit dieser Rolle vorzuschreiben.",
+    "role": {
+      "admin": "Administratoren",
+      "employee": "Mitarbeiter",
+      "client": "Clients"
+    },
+    "groups_heading": "Pflichtige Gruppen",
+    "groups_help": "Mitglieder einer aktivierten Gruppe müssen 2FA aktivieren — zusätzlich zur Rollenliste.",
+    "groups_inbox": "Firmen-Postfach",
+    "effects_heading": "Wirkung beim Speichern",
+    "effect_redirect": "Betroffene Benutzer werden bei jeder Navigation auf /account/2fa/forced umgeleitet, bis sie die Einrichtung abgeschlossen haben.",
+    "effect_recovery": "Wiederherstellungscodes umgehen die Anmeldung weiterhin einmalig, sodass ein registrierter Benutzer mit verlorenem Authenticator nicht ausgesperrt ist.",
+    "effect_lockout": "Wenn du eine Richtlinie speicherst, die dich selbst betrifft und du noch keine 2FA aktiviert hast, wirst du direkt in den QR-Einrichtungs-Assistenten umgeleitet — keine zwischenzeitliche Aussperrung. Wiederherstellungscodes umgehen die Anmeldung weiterhin einmalig, falls du den Authenticator verlierst.",
+    "saved_toast": "Zwei-Faktor-Pflicht gespeichert."
+  },
+  "admin_site_url": {
+    "title": "Site-URL",
+    "intro": "Die URL, unter der die SPA erreichbar ist. Wird in allen E-Mail-Links, öffentlichen Link-URLs, In-App-Benachrichtigungen und Post-OIDC-Weiterleitungen verwendet.",
+    "url_label": "Öffentliche Site-URL",
+    "url_help": "Schema angeben (https:// empfohlen). Kein abschließender Slash. Speichern wirkt sofort für neue E-Mails und Benachrichtigungen.",
+    "env_fallback": "Fallback auf die Umgebungsvariable APP_URL: {url}",
+    "override_active": "Override aktiv",
+    "security_note": "Zwei Bereiche bleiben auf dem Env-Wert und werden NICHT durch dieses Feld geändert: WebAuthn-Passkey-RP-Origin (Änderung würde alle registrierten Passkeys still invalidieren) und OIDC-Redirect-URI (IdPs akzeptieren nur die vorregistrierte URI exakt).",
+    "revert_to_env": "Auf Env zurücksetzen",
+    "saved_toast": "Site-URL gespeichert."
+  },
+  "admin_home_page": {
+    "title": "Startseite",
+    "intro": "Die Startseite ist der Begrüßungsbildschirm unter /. Deaktiviere sie, wenn du Benutzer lieber direkt auf eine Arbeitsoberfläche (Gesendet / Empfangen / Neue Freigabe) leiten möchtest.",
+    "toggle_label": "Standard-Startseite aktivieren",
+    "toggle_help": "Wenn aktiviert, zeigt / eine Begrüßungskarte mit Name, Rolle und Schnell-Links. Wenn deaktiviert, leitet / weiter und die Seite ist verborgen.",
+    "effect_picker": "„Startseite\" verschwindet aus dem persönlichen Startseiten-Selektor.",
+    "effect_brand": "Die file:Heron-Wortmarke im Header wird zu reinem Text (nicht mehr verlinkt).",
+    "effect_redirect": "Wer / aufruft, wird auf die gespeicherte Startseite oder /share/new umgeleitet.",
+    "saved_toast": "Startseiten-Einstellung gespeichert."
+  },
+  "admin_email": {
+    "title": "E-Mail / SMTP",
+    "intro": "Benachrichtigungen, Einladungen, Passwort-Zurücksetzungen und Freigaben werden über diesen SMTP-Server verschickt. Speichern wirkt sofort — kein Neustart. Das Passwort wird verschlüsselt gespeichert.",
+    "status_configured": "SMTP konfiguriert",
+    "status_logs_fallback": "Logs-Fallback (kein Host gesetzt)",
+    "env_only": "Werte stammen aus .env (noch keine DB-Overrides)",
+    "host_label": "Host",
+    "host_help": "Hostname oder IP des SMTP-Servers.",
+    "port_label": "Port",
+    "tls_label": "TLS-Modus",
+    "tls": {
+      "starttls": "STARTTLS (Port 587)",
+      "starttls_help": "Verbindung im Klartext aufbauen, dann per STARTTLS auf TLS upgraden. Üblich; Standard für Port 587.",
+      "implicit": "Implizites TLS (Port 465)",
+      "implicit_help": "TLS ab dem ersten Byte. Wird von älteren SMTPS-Deployments auf Port 465 verwendet.",
+      "none": "Keine (unsicher)",
+      "none_help": "Keine Transportverschlüsselung. Nur sinnvoll bei localhost / einem privaten MTA in einem vertrauenswürdigen Netz."
+    },
+    "user_label": "Benutzername",
+    "password_label": "Passwort",
+    "password_help": "Wird verschlüsselt gespeichert. Leer lassen, um das aktuelle Passwort beizubehalten.",
+    "password_set_placeholder": "(gesetzt — leer lassen zum Beibehalten)",
+    "password_unset_placeholder": "SMTP-Passwort einfügen",
+    "from_email_label": "Absender-E-Mail",
+    "from_name_label": "Absender-Name",
+    "saved_toast": "SMTP-Einstellungen gespeichert.",
+    "test_heading": "Test-E-Mail senden",
+    "test_help": "Sendet eine E-Mail synchron mit den oben eingegebenen Werten (Speichern ist nicht nötig). Bei Fehler wird die echte SMTP-Fehlermeldung inline angezeigt.",
+    "test_placeholder": "Empfänger-Adresse für den Test",
+    "test_recipient_required": "Bitte eine Empfänger-Adresse eingeben.",
+    "test_button": "Test-E-Mail senden",
+    "test_ok": "Test-E-Mail erfolgreich versendet.",
+    "test_failed": "Test-E-Mail fehlgeschlagen."
+  },
+  "admin_public_link_policy": {
+    "title": "Öffentliche-Links-Richtlinie",
+    "intro": "Öffentliche Links erlauben Empfängern ohne fileHeron-Konto, eine Freigabe per Token-URL herunterzuladen. Lege fest, wer sie anlegen darf. Admins können unabhängig vom Modus immer Links erstellen.",
+    "mode_label": "Basis-Richtlinie",
+    "mode": {
+      "everyone": "Alle",
+      "everyone_help": "Jeder angemeldete Benutzer kann öffentliche Links anlegen.",
+      "employees_admins": "Mitarbeiter + Admins",
+      "employees_admins_help": "Clients dürfen keine öffentlichen Links anlegen.",
+      "admins_only": "Nur Admins",
+      "admins_only_help": "Nur Admins dürfen öffentliche Links anlegen.",
+      "disabled": "Deaktiviert",
+      "disabled_help": "Nur Admins dürfen öffentliche Links anlegen; alle anderen werden blockiert."
+    },
+    "allowlist_heading": "Allowlist",
+    "allowlist_help": "Hinzugefügte Benutzer und Gruppen dürfen unabhängig von der Basis-Richtlinie öffentliche Links anlegen.",
+    "users_label": "Bestimmte Benutzer",
+    "users_placeholder": "Suche nach Name oder E-Mail …",
+    "groups_label": "Gruppen-Mitgliedschaften",
+    "groups_inbox": "Firmen-Postfach",
+    "saved_toast": "Öffentliche-Links-Richtlinie gespeichert."
+  },
+  "admin_api_tokens": {
+    "eyebrow": "Admin / API-Tokens",
+    "create_cta": "Token für Benutzer anlegen",
+    "create_heading": "Token im Auftrag eines Benutzers anlegen",
+    "create_help": "Der Klartext wird nur einmalig auf dieser Seite angezeigt. Über einen sicheren Kanal an den Benutzer weitergeben (Passwortmanager / verschlüsselter Chat).",
+    "target_user": "Ziel-Benutzer",
+    "target_user_placeholder": "Suche nach Name oder E-Mail …",
+    "no_user_selected": "Bitte zuerst einen Benutzer aus den Vorschlägen auswählen.",
+    "token_name": "Token-Name",
+    "token_name_placeholder": "z. B. ci-deploy",
+    "create_submit": "Token anlegen",
+    "plaintext_eyebrow": "Klartext-Token (einmalige Anzeige)",
+    "plaintext_warning": "Jetzt kopieren — wird nicht erneut angezeigt. An den Benutzer über deinen Passwortmanager weitergeben.",
+    "search_placeholder": "Suche nach Eigentümer (Name oder E-Mail) …",
+    "status_all": "Alle Status",
+    "empty": "Keine Tokens passen zu den Filtern.",
+    "revoke_confirm": "Token endgültig widerrufen? Kann nicht rückgängig gemacht werden — der Benutzer braucht ein neues Token.",
+    "col": {
+      "name": "Name",
+      "owner": "Eigentümer",
+      "status": "Status",
+      "last_used": "Zuletzt verwendet",
+      "created": "Erstellt"
+    },
+    "status": {
+      "active": "aktiv",
+      "disabled": "deaktiviert",
+      "revoked": "widerrufen"
+    },
+    "action": {
+      "disable": "Deaktivieren",
+      "reactivate": "Reaktivieren",
+      "revoke": "Widerrufen"
+    },
+    "toast": {
+      "disabled": "Token deaktiviert.",
+      "reactivated": "Token reaktiviert.",
+      "revoked": "Token endgültig widerrufen."
+    }
+  },
+  "admin_token_policy": {
+    "title": "API-Token-Richtlinie",
+    "intro": "API-Tokens gewähren programmatischen Zugriff — lege fest, wer sie anlegen darf. Admins können unabhängig vom Modus immer Tokens erstellen (Operator-Notausgang).",
+    "mode_label": "Basis-Richtlinie",
+    "mode": {
+      "everyone": "Alle",
+      "everyone_help": "Jeder angemeldete Benutzer kann Tokens anlegen.",
+      "employees_admins": "Mitarbeiter + Admins",
+      "employees_admins_help": "Clients dürfen keine Tokens anlegen.",
+      "admins_only": "Nur Admins",
+      "admins_only_help": "Nur Admins dürfen Tokens anlegen.",
+      "disabled": "Deaktiviert",
+      "disabled_help": "Nur Admins dürfen Tokens anlegen; alle anderen werden blockiert."
+    },
+    "allowlist_heading": "Allowlist",
+    "allowlist_help": "Hinzugefügte Benutzer und Gruppen dürfen unabhängig von der Basis-Richtlinie Tokens anlegen.",
+    "users_label": "Bestimmte Benutzer",
+    "users_placeholder": "Suche nach Name oder E-Mail …",
+    "groups_label": "Gruppen-Mitgliedschaften",
+    "groups_inbox": "Firmen-Postfach",
+    "saved_toast": "API-Token-Richtlinie gespeichert."
+  },
+  "admin_sso_list": {
+    "title": "SSO",
+    "intro": "Mehrere OIDC-Provider parallel betreiben. Benutzer verknüpfen ihr fileHeron-Konto mit einem davon; neue Benutzer melden sich einmal mit Passwort an und klicken auf Verbinden.",
+    "add_button": "Provider hinzufügen",
+    "empty_title": "Noch keine Provider konfiguriert.",
+    "empty_body": "Füge einen OIDC-Provider hinzu, damit Benutzer sich mit ihrem Identity-Provider anmelden können.",
+    "col": {
+      "name": "Name",
+      "preset": "Vorlage",
+      "status": "Status",
+      "users": "Verknüpfte Benutzer"
+    },
+    "status": {
+      "enabled": "Aktiv",
+      "disabled": "Inaktiv",
+      "no_secret": "Secret fehlt"
+    }
+  },
+  "admin_sso_edit": {
+    "heading_new": "Neuer SSO-Provider",
+    "heading_edit": "SSO-Provider bearbeiten",
+    "name": "Anzeigename",
+    "name_placeholder": "Microsoft Entra (Firma)",
+    "name_help": "Wird Benutzern auf der Login-Seite als Button-Beschriftung gezeigt.",
+    "preset": "Vorlage",
+    "issuer_url": "Issuer-URL",
+    "issuer_url_help": "/.well-known/openid-configuration wird angehängt, um die Endpunkte zu ermitteln.",
+    "client_id": "Client-ID",
+    "client_secret": "Client-Secret",
+    "client_secret_help": "Wird Fernet-verschlüsselt gespeichert. Leer lassen behält das aktuelle Secret. Leerer String löscht es.",
+    "secret_set_placeholder": "(Secret ist gesetzt — leer lassen, um beizubehalten)",
+    "secret_unset_placeholder": "Client-Secret einfügen",
+    "secret_required_on_create": "Beim Anlegen eines neuen Providers ist das Client-Secret erforderlich.",
+    "groups_claim": "Pfad des Gruppen-Claims",
+    "groups_claim_help": "Punkt-getrennter Pfad. „groups\" für die meisten IdPs; „realm_access.roles\" für Keycloak.",
+    "admin_groups": "Admin-Gruppen (kommagetrennt)",
+    "employee_groups": "Mitarbeiter-Gruppen (kommagetrennt)",
+    "redirect_uri": "Redirect-URI (override)",
+    "redirect_uri_default": "(Standard: APP_URL/api/auth/oidc/callback/{id})",
+    "redirect_uri_help": "Nur setzen, wenn dein IdP eine andere Redirect-URI als die Standard-URI verlangt.",
+    "enabled": "Aktiv (auf der Login-Seite sichtbar)",
+    "test_button": "Verbindung testen",
+    "test_ok": "Verbindung sieht gut aus.",
+    "test_failed": "Verbindung fehlgeschlagen.",
+    "delete_button": "Provider löschen",
+    "delete_confirm": "Diesen SSO-Provider löschen? Verknüpfte Benutzer müssen vorher entkoppelt werden.",
+    "saved_toast": "SSO-Provider gespeichert.",
+    "created_toast": "SSO-Provider angelegt.",
+    "deleted_toast": "SSO-Provider gelöscht."
+  },
+  "account_oidc": {
+    "section_title": "Single Sign-On",
+    "section_help": "Verknüpfe dein fileHeron-Konto mit einem Identity-Provider. Anschließend kannst du dich mit einem Klick anmelden — ohne Passwort.",
+    "no_providers": "Noch keine SSO-Provider konfiguriert.",
+    "connect": "Verbinden",
+    "disconnect": "Trennen",
+    "linked_label": "Verbunden ({hint})",
+    "other_linked": "Du bist mit einem anderen Provider verbunden — bitte zuerst trennen, um zu wechseln.",
+    "connected_toast": "SSO-Provider verbunden.",
+    "disconnected_toast": "SSO-Provider getrennt.",
+    "disconnect_confirm": "Diesen SSO-Provider trennen? Bis zur erneuten Verknüpfung musst du dich mit Passwort anmelden."
+  },
+  "webauthn": {
+    "title": "Passkeys & Sicherheitsschlüssel",
+    "intro": "Registriere einen Passkey (Touch ID, Windows Hello oder einen USB-Sicherheitsschlüssel) als zweiten Faktor. Mehrere Geräte sind möglich — z. B. der eingebaute Authentifikator deines Laptops plus ein USB-Schlüssel als Backup.",
+    "unsupported": "Dein Browser unterstützt keine Passkeys. Bitte aktuelles Chrome, Safari, Firefox oder Edge verwenden.",
+    "empty": "Noch keine Passkeys registriert.",
+    "add_cta": "Passkey hinzufügen",
+    "name_label": "Bezeichnung",
+    "name_placeholder": "z. B. MacBook Touch ID",
+    "register": "Passkey registrieren",
+    "added_toast": "Passkey hinzugefügt.",
+    "remove": "Entfernen",
+    "remove_confirm": "Diesen Passkey entfernen? Anmeldung damit ist anschließend nicht mehr möglich.",
+    "removed_toast": "Passkey entfernt.",
+    "cancelled": "Passkey-Registrierung wurde abgebrochen.",
+    "created": "hinzugefügt {d}",
+    "last_used": "zuletzt verwendet {d}",
+    "never_used": "noch nicht verwendet"
+  },
+  "notif_bell": {
+    "aria": "Benachrichtigungen",
+    "title": "Benachrichtigungen",
+    "mark_all_read": "Alle als gelesen markieren",
+    "empty": "Noch keine Benachrichtigungen.",
+    "just_now": "gerade eben",
+    "min_ago": "vor {n}m",
+    "hr_ago": "vor {n}h",
+    "cat": {
+      "share_created": "Freigabe",
+      "share_expiring": "Läuft ab",
+      "public_link_downloaded": "Öffentlicher Link",
+      "account_created": "Neues Konto",
+      "password_reset": "Passwort zurücksetzen",
+      "twofa_required": "2FA",
+      "login_alert": "Anmeldung",
+      "file_quarantined": "Quarantäne"
+    },
+    "headline": {
+      "share_created": "{sender_name} hat dir {file_count} Datei(en) gesendet.",
+      "share_expiring": "Freigabe „{subject}\" läuft in 24 Stunden ab.",
+      "public_link_downloaded": "Öffentlicher Link heruntergeladen: {filename}",
+      "account_created": "{invitee_name} hat deine Einladung angenommen.",
+      "password_reset": "Passwort-Reset angefordert.",
+      "twofa_required": "Zwei-Faktor-Authentifizierung ist erforderlich.",
+      "login_alert": "Anmeldung von einem neuen Gerät.",
+      "file_quarantined": "{filename} wurde durch Antivirus unter Quarantäne gestellt.",
+      "generic": "Neue Aktivität"
+    }
+  },
+  "notif_prefs": {
+    "title": "Benachrichtigungen",
+    "intro": "Wähle für jedes Ereignis, wie du benachrichtigt werden möchtest. „Beides\" steht für E-Mail und Benachrichtigungsglocke.",
+    "col": {
+      "category": "Ereignis",
+      "channel": "Benachrichtigung über"
+    },
+    "channel": {
+      "off": "Aus",
+      "email": "Nur E-Mail",
+      "in_app": "Nur in der App",
+      "both": "Beides"
+    }
+  },
+  "admin_users": {
+    "eyebrow": "Admin / Benutzer",
+    "search_placeholder": "Nach Name oder E-Mail suchen …",
+    "role_all": "Alle Rollen",
+    "col": {
+      "id": "ID",
+      "name": "Name",
+      "role": "Rolle",
+      "status": "Status",
+      "2fa": "2FA",
+      "created": "Erstellt",
+      "last_login": "Zuletzt angemeldet"
+    },
+    "status": {
+      "active": "aktiv",
+      "disabled": "deaktiviert",
+      "needs_2fa": "2FA erforderlich"
+    },
+    "prev": "zurück",
+    "next": "weiter",
+    "page_of": "Seite {page} von {total}",
+    "invite_button": "Benutzer einladen",
+    "invite_heading": "Neuen Benutzer einladen",
+    "invite_email_label": "E-Mail",
+    "invite_email_help": "Wir senden einen einmaligen Einladungslink (24 Stunden gültig).",
+    "invite_display_name_label": "Anzeigename",
+    "invite_display_name_help": "Wie sie in der Einladungs-E-Mail angesprochen werden.",
+    "invite_role_label": "Rolle",
+    "invite_groups_label": "Zu Gruppen hinzufügen",
+    "invite_groups_help": "Mitgliedschaften werden gesetzt, sobald die Einladung angenommen wird.",
+    "invite_groups_inbox": "Firmen-Postfach",
+    "invite_submit": "Einladung senden",
+    "invite_sent": "Einladung an {hint} gesendet, läuft am {expires} ab."
+  },
+  "admin_user_detail": {
+    "eyebrow": "Admin / Benutzer",
+    "profile": "Profil",
+    "role": "Rolle",
+    "quota": "Kontingent (Bytes)",
+    "quota_unlimited": "leer = unbegrenzt",
+    "quota_help": "Maximal erlaubte Upload-Bytes. Leer oder 0 = unbegrenzt.",
+    "disable_label": "Deaktiviert (alle Sitzungen widerrufen)",
+    "no_changes": "Nichts zu speichern.",
+    "security": "Sicherheit",
+    "created": "Erstellt",
+    "last_login": "Zuletzt angemeldet",
+    "force_reset": "Passwort-Reset erzwingen",
+    "force_reset_confirm": "Einmal-Token generieren? Das aktuelle Passwort bleibt gültig, bis der Link verwendet wird.",
+    "reset_eyebrow": "Passwort-Reset-Link",
+    "reset_warning": "Diesen Token über einen sicheren Kanal teilen. Der Link läuft in 1 Stunde ab.",
+    "danger": "Gefahrenbereich",
+    "erase_help": "Recht auf Löschung anonymisiert den Benutzer dauerhaft und löscht jede hochgeladene Datei endgültig. Nicht umkehrbar.",
+    "erase": "Benutzer löschen",
+    "erase_step1": "Damit werden alle vom Benutzer hochgeladenen Dateien endgültig gelöscht und die Zeile auf [erased] anonymisiert. Nicht umkehrbar.",
+    "erase_step2": "Endgültige Bestätigung. Erneut klicken, um zu löschen.",
+    "erase_confirm_1": "Ich verstehe — fortfahren",
+    "erase_confirm_final": "Endgültig löschen",
+    "erased_toast": "Benutzer gelöscht — {n} Datei(en), {bytes} Bytes entfernt.",
+    "already_erased": "Benutzer bereits gelöscht"
+  },
+  "admin_audit": {
+    "eyebrow": "Admin / Audit-Protokoll",
+    "export_csv": "CSV exportieren",
+    "filter": {
+      "event_type": "event_type (z. B. login_success)",
+      "target_type": "target_type",
+      "target_id": "target_id",
+      "from": "von",
+      "to": "bis"
+    },
+    "col": {
+      "when": "Wann",
+      "event": "Ereignis",
+      "actor": "Akteur",
+      "target": "Ziel",
+      "ip": "IP",
+      "request": "Req"
+    },
+    "actor_deleted": "(gelöscht)"
+  },
+  "account": {
+    "title": "Konto",
+    "quicknav": {
+      "aria": "Schnell-Navigation"
+    },
+    "section_profile": "Profil",
+    "section_password": "Passwort",
+    "section_2fa": "Zwei-Faktor-Authentifizierung",
+    "section_sessions": "Aktive Sitzungen",
+    "language_help": "Wird für E-Mails an dich und die UI-Sprache verwendet.",
+    "display_name_help": "Wird auf Freigaben und in E-Mails angezeigt. 1–120 Zeichen.",
+    "display_name_saved": "Anzeigename gespeichert.",
+    "display_name_save_failed": "Anzeigename konnte nicht gespeichert werden.",
+    "locale_saved": "Spracheinstellung gespeichert.",
+    "locale_save_failed": "Spracheinstellung konnte nicht gespeichert werden.",
+    "password_changed_toast": "Passwort geändert. Andere Sitzungen wurden beendet.",
+    "session_revoked_toast": "Sitzung beendet.",
+    "landing": {
+      "label": "Standard-Startseite",
+      "help": "Wo du nach der Anmeldung landest. Wähle „System-Standard\", um der globalen Admin-Einstellung zu folgen.",
+      "system_default": "System-Standard",
+      "home": "Startseite",
+      "outbox": "Gesendet",
+      "inbox": "Empfangen",
+      "share_create": "Neue Freigabe",
+      "account": "Konto",
+      "saved_toast": "Standard-Startseite gespeichert.",
+      "save_failed": "Standard-Startseite konnte nicht gespeichert werden."
+    },
+    "change_password_help": "Nach dem Ändern musst du dich auf jedem Gerät neu anmelden.",
+    "change_password_submit": "Passwort ändern",
+    "twofa_off": "Zwei-Faktor-Auth ist aus.",
+    "twofa_on": "Zwei-Faktor-Auth ist aktiv.",
+    "twofa_recovery_remaining": "{n} Wiederherstellungscodes verbleibend.",
+    "twofa_setup_cta": "Zwei-Faktor einrichten",
+    "twofa_manage_cta": "Zwei-Faktor verwalten",
+    "session_current": "aktuell",
+    "session_revoke": "Beenden",
+    "session_unknown_ua": "unbekannter Browser"
+  },
+  "twofa": {
+    "title": "Zwei-Faktor-Authentifizierung",
+    "intro": "Verwende eine Authenticator-App — 1Password, Authy, Bitwarden, Google Authenticator — und scanne den QR-Code unten.",
+    "forced_banner": "Deine Administration verlangt Zwei-Faktor-Authentifizierung für dein Konto. Scanne den Code unten, um die Einrichtung abzuschließen und fortzufahren.",
+    "manual_secret_label": "Oder gib diesen Secret-Wert manuell ein",
+    "verify_label": "Bestätigen",
+    "verify_help": "Gib den sechsstelligen Code ein, den deine App jetzt anzeigt.",
+    "verify_placeholder": "123 456",
+    "enable_submit": "Zwei-Faktor aktivieren",
+    "saved_codes_title": "Diese Wiederherstellungscodes sicher aufbewahren.",
+    "saved_codes_intro": "Jeder Code funktioniert genau einmal. Sie helfen dir, falls du den Authenticator verlierst. Wir zeigen sie nicht erneut an.",
+    "saved_codes_confirm": "Ich habe sie gespeichert",
+    "saved_codes_copy": "Alle kopieren",
+    "saved_codes_copied": "Kopiert.",
+    "active_title": "Zwei-Faktor ist aktiv.",
+    "active_intro": "Bei jeder Anmeldung wird ein Code aus deiner App benötigt.",
+    "regenerate_cta": "Wiederherstellungscodes neu erzeugen",
+    "disable_cta": "Zwei-Faktor deaktivieren",
+    "disable_intro": "Das Deaktivieren schwächt dein Konto. Zur Bestätigung sind dein Passwort plus ein aktueller Code (oder ein Wiederherstellungscode) nötig.",
+    "code_or_recovery_label": "Sechsstelliger Code oder Wiederherstellungscode",
+    "danger_section": "Deaktivieren",
+    "recovery_codes_copied": "Wiederherstellungscodes kopiert.",
+    "disabled_toast": "Zwei-Faktor deaktiviert."
+  },
+  "password_strength": {
+    "weak": "Schwach",
+    "fair": "Mäßig",
+    "good": "Gut",
+    "strong": "Stark"
+  },
+  "upload": {
+    "dropzone": {
+      "eyebrow": "Hochladen",
+      "headline_a": "Dateien hierher ziehen",
+      "or": "oder",
+      "headline_b": "auswählen",
+      "hint": "Bis 30 GB pro Datei. Bei Verbindungsabbruch wird automatisch fortgesetzt."
+    },
+    "state": {
+      "queued": "Wartet",
+      "preparing": "Wird vorbereitet",
+      "uploading": "Lädt",
+      "finalizing": "Schließt ab",
+      "done": "Fertig",
+      "error": "Fehler"
+    },
+    "actions": {
+      "retry": "Erneut versuchen",
+      "remove": "Entfernen"
+    }
+  },
+  "recipient": {
+    "label": "Empfänger",
+    "search_placeholder": "Personen oder Gruppen suchen …",
+    "help_phase4": "Personen nach Name oder E-Mail suchen. Gruppen für gemeinsame Postfächer wählen.",
+    "remove": "Entfernen",
+    "section_users": "Personen",
+    "section_groups": "Gruppen",
+    "inbox_flag": "Sammelpostfach",
+    "no_results": "Keine Treffer."
+  },
+  "expiry": {
+    "label": "Läuft ab",
+    "presets": {
+      "1h": "1 Stunde",
+      "1d": "1 Tag",
+      "7d": "7 Tage",
+      "14d": "14 Tage",
+      "30d": "30 Tage"
+    },
+    "custom_placeholder": "Datum und Uhrzeit wählen",
+    "in_minutes": "in {n} Minuten",
+    "in_hours": "in {n} Stunden",
+    "in_days": "in {n} Tagen",
+    "in_past": "bereits vorbei — bitte zukünftigen Zeitpunkt wählen"
+  },
+  "files": {
+    "state": {
+      "pending": "Ausstehend",
+      "ready_unscanned": "Bereit",
+      "clean": "Sauber",
+      "infected": "Infiziert",
+      "failed": "Fehlgeschlagen",
+      "deleted": "Gelöscht"
+    },
+    "actions": {
+      "download": "Herunterladen",
+      "delete": "Löschen",
+      "delete_confirm": "Diese Datei löschen? Das kann nicht rückgängig gemacht werden."
+    }
+  },
+  "api_tokens": {
+    "title": "API-Tokens",
+    "intro": "Tokens autorisieren Uploads über die API oder TUS-Clients. Pro Skript oder Gerät einen Token erstellen.",
+    "create_cta": "Token erstellen",
+    "name_label": "Token-Name",
+    "name_placeholder": "z. B. backup-script",
+    "create_submit": "Erstellen",
+    "plaintext_eyebrow": "Neuer Token",
+    "plaintext_warning": "Token jetzt kopieren — er wird nicht erneut angezeigt. An einem Ort speichern, wo das Skript ihn lesen kann.",
+    "copy": "Kopieren",
+    "copied": "Kopiert",
+    "acknowledged": "Ich habe ihn gespeichert",
+    "created_at": "erstellt {d}",
+    "last_used": "zuletzt verwendet {d}",
+    "never_used": "noch nicht verwendet",
+    "revoke": "Widerrufen",
+    "revoke_confirm": "Diesen Token widerrufen? Skripte, die ihn nutzen, funktionieren danach nicht mehr.",
+    "empty": "Noch keine API-Tokens.",
+    "disabled_by_admin": "Deine Administration hat das Anlegen von API-Tokens eingeschränkt. Bitte einen Admin um Hilfe, wenn du einen Token für Automatisierung brauchst."
+  },
+  "share_kind": {
+    "outbound": "Ausgehend",
+    "inbound": "Eingehend"
+  },
+  "share_state": {
+    "active": "Aktiv",
+    "expired": "Abgelaufen",
+    "revoked": "Widerrufen",
+    "deleted": "Gelöscht"
+  },
+  "share_create": {
+    "eyebrow": "Verfassen",
+    "title": "Neue Freigabe",
+    "intro": {
+      "outbound": "Dateien an einen Kunden oder Kollegen senden. Sie erhalten eine E-Mail mit einem Link.",
+      "inbound": "Dateien an deinen Kontakt senden. Eine Benachrichtigungs-E-Mail wird verschickt."
+    },
+    "subject_label": "Betreff",
+    "subject_placeholder": "Optional — worum geht es?",
+    "message_label": "Nachricht",
+    "message_placeholder": "Optional — eine Notiz für den Empfänger.",
+    "recipients_or_public_link_hint": "…oder Empfänger weglassen und unten einen öffentlichen Link erstellen.",
+    "send": "Erstellen und senden",
+    "sending": "Wird gesendet…",
+    "toast_done": "Freigabe erstellt.",
+    "toast_partial": "{n} Datei(en) konnten nicht hochgeladen werden. Unten erneut versuchen.",
+    "public_link": {
+      "toggle_label": "Auch einen öffentlichen Download-Link erstellen",
+      "toggle_help": "Jeder mit dem Link kann herunterladen — kein fileHeron-Konto nötig. Optional mit Passwort und Download-Limit absichern.",
+      "password_label": "Passwort (optional)",
+      "password_placeholder": "Leer lassen für keinen Passwortschutz",
+      "password_help": "Wer den Link hat, braucht dieses Passwort, um die Freigabe freizuschalten.",
+      "download_limit_label": "Download-Limit (optional)",
+      "download_limit_placeholder": "z. B. 10",
+      "download_limit_help": "Maximale Anzahl erfolgreicher Downloads. Leer lassen für unbegrenzt.",
+      "notify_label": "Bei jedem Download benachrichtigen",
+      "result_eyebrow": "Öffentlicher Link (einmalige Anzeige)",
+      "result_warning": "URL jetzt kopieren — wird nicht erneut angezeigt. Über deinen üblichen Kanal an den Empfänger senden.",
+      "continue": "Fertig — zur Freigabe"
+    }
+  },
+  "share_detail": {
+    "eyebrow": {
+      "outbound": "Ausgehend",
+      "inbound": "Eingehend"
+    },
+    "id": "ID",
+    "no_subject": "(Kein Betreff)",
+    "expires": "Läuft ab",
+    "created": "Erstellt",
+    "total": "Gesamt",
+    "files_heading": "Dateien ({n})",
+    "targeted_groups": "Gruppen",
+    "empty": "Diese Freigabe enthält keine Dateien.",
+    "revoke_cta": "Freigabe widerrufen",
+    "revoke_confirm": "Diese Freigabe widerrufen? Der Empfänger kann anschließend nicht mehr zugreifen.",
+    "revoked_toast": "Freigabe widerrufen.",
+    "file_deleted_toast": "Datei gelöscht.",
+    "edit_expiry": "Ändern",
+    "expiry_saved_toast": "Ablaufzeitpunkt aktualisiert.",
+    "expire_now_cta": "Jetzt ablaufen",
+    "expire_now_confirm": "Diese Freigabe jetzt ablaufen lassen und alle hochgeladenen Dateien löschen? Kann nicht rückgängig gemacht werden.",
+    "expire_now_toast": "Freigabe abgelaufen und Dateien gelöscht."
+  },
+  "public_link": {
+    "title": "Öffentlicher Link",
+    "intro": "Erstelle eine URL, mit der jeder die Dateien dieser Freigabe herunterladen kann. Optional mit Passwort schützen und Anzahl der Downloads begrenzen.",
+    "active": "Aktiv",
+    "password": "Passwort",
+    "password_set": "Gesetzt",
+    "password_none": "Keines",
+    "limit": "Downloads",
+    "limit_value": "{used} von {total} verwendet",
+    "limit_none": "Unbegrenzt",
+    "notify": "Benachrichtigung bei Download",
+    "url_label": "Öffentliche URL",
+    "url_copy": "URL kopieren",
+    "url_copied": "URL kopiert",
+    "url_legacy_hint": "URL nicht gespeichert — dieser Link wurde vor dem Anzeige-Feature erstellt. Widerrufen und neu erstellen, um eine sichtbare URL zu erhalten.",
+    "url_lost": "Die vollständige URL wurde nur bei der Erstellung angezeigt — bewahre sie sicher auf. Falls verloren: widerrufen und neu erstellen.",
+    "revoke": "Link widerrufen",
+    "revoke_confirm": "Diesen öffentlichen Link widerrufen? Wer die URL hat, verliert sofort den Zugriff.",
+    "revoked_toast": "Öffentlicher Link widerrufen.",
+    "just_created": "Neuer öffentlicher Link",
+    "url_warning": "URL jetzt kopieren. Sie wird nicht erneut angezeigt.",
+    "copy": "URL kopieren",
+    "copied": "Kopiert",
+    "acknowledged": "Ich habe die URL gespeichert",
+    "create_submit": "Öffentlichen Link erstellen",
+    "password_label": "Passwort (optional)",
+    "password_placeholder": "Leer für kein Passwort",
+    "password_help": "Empfänger müssen das Passwort vor dem Download eingeben.",
+    "limit_label": "Download-Limit (optional)",
+    "limit_placeholder": "Leer für unbegrenzt",
+    "limit_help": "Nach dieser Anzahl Downloads wird der Link automatisch widerrufen.",
+    "notify_label": "Bei jedem Download per E-Mail benachrichtigen",
+    "notify_help": "E-Mail erhalten, wenn jemand über diesen Link herunterlädt."
+  },
+  "public_share": {
+    "eyebrow": "file:Heron",
+    "no_subject": "Dateien für dich",
+    "expires": "Läuft ab",
+    "files_heading": "Dateien ({n})",
+    "downloads_remaining": "Noch {n} Downloads verfügbar.",
+    "password_label": "Passwort",
+    "password_help": "Der Absender hat ein Passwort gesetzt, um auf diese Dateien zuzugreifen.",
+    "unlock": "Entsperren",
+    "scanning": "Scan läuft",
+    "infected": "Quarantäne",
+    "download": "Herunterladen",
+    "errors": {
+      "PUBLIC_LINK_NOT_FOUND": "Dieser Link ist ungültig.",
+      "PUBLIC_LINK_REVOKED": "Dieser Link wurde widerrufen.",
+      "PUBLIC_LINK_EXHAUSTED": "Dieser Link hat das Download-Limit erreicht.",
+      "PUBLIC_LINK_LOCKED": "Dieser Link ist wegen wiederholter Fehlversuche vorübergehend gesperrt. Bitte später erneut versuchen.",
+      "SHARE_EXPIRED": "Diese Freigabe ist abgelaufen.",
+      "SHARE_NOT_ACTIVE": "Diese Freigabe ist nicht mehr aktiv.",
+      "INVALID_PUBLIC_PASSWORD": "Falsches Passwort.",
+      "unlock_failed": "Entsperren fehlgeschlagen.",
+      "generic": "Diese Freigabe konnte nicht geladen werden."
+    }
+  },
+  "admin_groups": {
+    "eyebrow": "Admin / Gruppen",
+    "new_group": "Neue Gruppe",
+    "create_heading": "Gruppe erstellen",
+    "name_label": "Name",
+    "name_placeholder": "z. B. customer-acme",
+    "description_label": "Beschreibung",
+    "is_inbox_label": "Als Sammelpostfach markieren",
+    "is_inbox_help": "Clients können diese Gruppe als Empfänger eingehender Freigaben wählen.",
+    "create_submit": "Erstellen",
+    "created_toast": "Gruppe erstellt.",
+    "kind_normal": "Team",
+    "col": {
+      "name": "Name",
+      "kind": "Art",
+      "members": "Mitglieder",
+      "created": "Erstellt"
+    },
+    "empty_title": "Noch keine Gruppen.",
+    "empty_subtitle": "Erstelle eine, um Empfänger zu organisieren."
+  },
+  "admin_group_detail": {
+    "eyebrow": "Admin / Gruppen",
+    "members_heading": "Mitglieder ({n})",
+    "edit": "Bearbeiten",
+    "saved_toast": "Gespeichert.",
+    "add_placeholder": "Mitglied suchen und hinzufügen …",
+    "add": "Hinzufügen",
+    "remove": "Entfernen",
+    "remove_confirm": "Dieses Mitglied entfernen? Es verliert den Zugriff auf bisherige Gruppenfreigaben.",
+    "since": "seit {d}",
+    "danger_heading": "Gefahrenbereich",
+    "danger_help": "Eine Gruppe kann nur gelöscht werden, wenn keine aktive Freigabe sie als Empfänger hat.",
+    "delete": "Gruppe löschen",
+    "delete_confirm": "Diese Gruppe löschen? Das kann nicht rückgängig gemacht werden.",
+    "deleted_toast": "Gruppe gelöscht."
+  },
+  "share_list": {
+    "eyebrow": {
+      "outbox": "Postausgang",
+      "inbox": "Posteingang"
+    },
+    "title": {
+      "outbox": "Gesendete Freigaben",
+      "inbox": "Empfangene Freigaben"
+    },
+    "new_share": "Neue Freigabe",
+    "no_subject": "(Kein Betreff)",
+    "created": "erstellt {d}",
+    "col": {
+      "subject": "Betreff",
+      "kind": "Art",
+      "state": "Status",
+      "files": "Dateien",
+      "size": "Größe",
+      "expires": "Läuft ab",
+      "sender": "Absender",
+      "recipients": "Empfänger"
+    },
+    "filter": {
+      "state_all": "Beliebiger Status",
+      "party_any": {
+        "outbox": "Beliebiger Empfänger",
+        "inbox": "Beliebiger Absender"
+      },
+      "party_user": {
+        "outbox": "Empfänger (Benutzer)",
+        "inbox": "Absender (Benutzer)"
+      },
+      "party_group": {
+        "outbox": "Empfänger (Gruppe)",
+        "inbox": "Über Gruppe"
+      },
+      "user_placeholder": "Suche nach Name oder E-Mail …",
+      "group_pick": "Gruppe wählen …",
+      "clear": "Filter löschen"
+    },
+    "group": {
+      "label": "Gruppieren nach",
+      "none": "Keine",
+      "recipient_user": "Empfänger (Benutzer)",
+      "recipient_group": "Empfänger (Gruppe)",
+      "sender": "Absender",
+      "via_group": "Über Gruppe",
+      "no_user": "(keine Benutzer-Empfänger)",
+      "no_group": "(keine Gruppen-Empfänger)"
+    },
+    "empty": {
+      "outbox": {
+        "title": "Noch nichts gesendet.",
+        "subtitle": "Erstelle eine Freigabe, um Dateien an einen Empfänger zu senden."
+      },
+      "inbox": {
+        "title": "Noch nichts empfangen.",
+        "subtitle": "An dich gesendete Freigaben erscheinen hier."
+      }
+    }
+  },
+  "admin_file_history": {
+    "eyebrow": "Admin / Dateiverlauf",
+    "intro": "Jede jemals hochgeladene Datei — auch abgelaufene und gelöschte — mit übergeordneter Freigabe, Hochlader und Download-Statistik.",
+    "total_count": "{n} Dateien",
+    "search_placeholder": "Suche nach Dateiname, Hochlader oder E-Mail …",
+    "file_state_all": "Beliebiger Datei-Status",
+    "share_state_all": "Beliebiger Freigabe-Status",
+    "empty": "Keine Dateien passen zu den Filtern.",
+    "col": {
+      "filename": "Dateiname",
+      "size": "Größe",
+      "state": "Status",
+      "uploader": "Hochlader",
+      "share": "Freigabe",
+      "uploaded": "Hochgeladen",
+      "last_dl": "Letzter Download",
+      "dl_count": "Downloads"
+    }
+  },
+  "admin_quarantine": {
+    "eyebrow": "Admin / Quarantäne",
+    "intro": "Dateien, die ClamAV als infiziert markiert hat. Die Bytes liegen weiterhin unter ./data/quarantine/ auf der Platte — du kannst sie für forensische Analyse herunterladen, an den Eigentümer freigeben (wenn der Befund ein False-Positive war) oder dauerhaft entfernen, sobald du fertig bist.",
+    "total_count": "{n} infizierte Dateien",
+    "empty": "Nichts in Quarantäne. Entweder wurde noch nichts markiert oder alles wurde bereits freigegeben oder gelöscht.",
+    "search_placeholder": "Suche nach Dateiname, Hochlader oder E-Mail …",
+    "col": {
+      "filename": "Dateiname",
+      "size": "Größe",
+      "uploader": "Hochlader",
+      "share": "Freigabe",
+      "uploaded": "Hochgeladen",
+      "actions": "Aktionen"
+    },
+    "btn": {
+      "download": "Herunterladen",
+      "release": "Freigeben",
+      "purge": "Löschen"
+    },
+    "confirm": {
+      "release_title": "An Eigentümer freigeben",
+      "release_help": "Markiert die Datei als sauber und reaktiviert die Freigabe (wenn ClamAV der einzige Sperrgrund war). Die Bytes wandern aus der Quarantäne zurück in den aktiven Speicher. Das Kontingent des Hochladers wird neu reserviert.",
+      "purge_title": "Bytes löschen",
+      "purge_help": "Entfernt die quarantänierten Bytes von der Platte. Der DB-Eintrag bleibt als historischer Marker auf state=infected. Unumkehrbar.",
+      "reason_label": "Begründung (erforderlich, 10–500 Zeichen)",
+      "reason_placeholder": "Warum führst du diese Aktion aus? Wird ins Audit-Log geschrieben.",
+      "confirm_release": "Freigeben",
+      "confirm_purge": "Löschen",
+      "cancel": "Abbrechen"
+    },
+    "toast": {
+      "released": "Datei an den Eigentümer freigegeben.",
+      "purged": "Datei-Bytes gelöscht."
+    }
+  },
+  "admin_settings_quarantine": {
+    "title": "Quarantäne-Alarme",
+    "intro": "Wenn ClamAV einen infizierten Upload erkennt, wird der Hochlader immer benachrichtigt. Dieser Schalter sendet zusätzlich eine Benachrichtigung (E-Mail + In-App-Glocke) an alle Admins.",
+    "toggle_label": "Alle Admins benachrichtigen, wenn ein Virus erkannt wird",
+    "toggle_help": "Jeder Admin erhält pro Erkennung eine E-Mail und einen Eintrag in der In-App-Glocke. Ein Admin kann sich unter /account → Benachrichtigungen stummschalten, indem er den Kanal für \"file_quarantined\" auf \"off\" stellt (Standard ist \"both\" — E-Mail + In-App).",
+    "saved_toast": "Einstellung für Quarantäne-Alarme gespeichert."
+  }
+}

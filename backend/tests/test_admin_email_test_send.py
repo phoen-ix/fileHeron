@@ -1,0 +1,144 @@
+"""POST /api/admin/settings/email/test — synchronous SMTP smoke
+that returns structured diagnostics."""
+from __future__ import annotations
+
+import pytest
+
+from app.models.user import UserRole
+from app.services import email as email_svc
+from app.services import settings as settings_svc
+
+
+@pytest.mark.asyncio
+async def test_test_send_returns_logs_fallback_when_unconfigured(
+    make_user, db, client, login_as, monkeypatch
+):
+    monkeypatch.setattr("app.config.settings.SMTP_HOST", "")
+    make_user(email="admin@test.local", role=UserRole.admin, password="Pass12345678!")
+    token, _ = await login_as("admin@test.local", "Pass12345678!")
+
+    resp = await client.post(
+        "/api/admin/settings/email/test",
+        json={"to": "ops@example.com"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["ok"] is False
+    assert body["error_class"] == "NotConfigured"
+
+
+@pytest.mark.asyncio
+async def test_test_send_success_path(
+    make_user, db, client, login_as, monkeypatch
+):
+    """Mock aiosmtplib.send to a no-op; expect ok=True back."""
+    monkeypatch.setattr("app.config.settings.SMTP_HOST", "smtp.example.com")
+    monkeypatch.setattr("app.config.settings.SMTP_PORT", 587)
+
+    async def _fake_send(msg, **kwargs):
+        return None
+
+    import aiosmtplib
+
+    monkeypatch.setattr(aiosmtplib, "send", _fake_send)
+    make_user(email="admin@test.local", role=UserRole.admin, password="Pass12345678!")
+    token, _ = await login_as("admin@test.local", "Pass12345678!")
+
+    resp = await client.post(
+        "/api/admin/settings/email/test",
+        json={"to": "ops@example.com"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["ok"] is True
+    assert body["error_class"] is None
+
+
+@pytest.mark.asyncio
+async def test_test_send_surfaces_smtp_exception_class_and_message(
+    make_user, db, client, login_as, monkeypatch
+):
+    monkeypatch.setattr("app.config.settings.SMTP_HOST", "smtp.example.com")
+    from aiosmtplib.errors import SMTPAuthenticationError
+
+    async def _fake_send(msg, **kwargs):
+        raise SMTPAuthenticationError(535, "wrong password")
+
+    import aiosmtplib
+
+    monkeypatch.setattr(aiosmtplib, "send", _fake_send)
+    make_user(email="admin@test.local", role=UserRole.admin, password="Pass12345678!")
+    token, _ = await login_as("admin@test.local", "Pass12345678!")
+
+    resp = await client.post(
+        "/api/admin/settings/email/test",
+        json={"to": "ops@example.com"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["ok"] is False
+    assert body["error_class"] == "SMTPAuthenticationError"
+    assert "wrong password" in body["error_message"]
+    assert body["smtp_code"] == 535
+
+
+@pytest.mark.asyncio
+async def test_test_send_uses_override_without_persisting(
+    make_user, db, client, login_as, monkeypatch
+):
+    """If `override` is supplied, those values are used for the test —
+    persisted settings are not touched."""
+    monkeypatch.setattr("app.config.settings.SMTP_HOST", "")  # would log-fallback
+    captured: dict = {}
+
+    async def _fake_send(msg, **kwargs):
+        captured.update(kwargs)
+        return None
+
+    import aiosmtplib
+
+    monkeypatch.setattr(aiosmtplib, "send", _fake_send)
+    make_user(email="admin@test.local", role=UserRole.admin, password="Pass12345678!")
+    token, _ = await login_as("admin@test.local", "Pass12345678!")
+
+    resp = await client.post(
+        "/api/admin/settings/email/test",
+        json={
+            "to": "ops@example.com",
+            "override": {
+                "host": "override.example",
+                "port": 2525,
+                "user": "ovuser",
+                "password": "ovpass",
+                "from_email": "ov@example",
+                "from_name": "Override",
+                "tls_mode": "none",
+            },
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["ok"] is True
+    assert captured.get("hostname") == "override.example"
+    assert captured.get("port") == 2525
+    assert captured.get("username") == "ovuser"
+    assert captured.get("password") == "ovpass"
+
+    # Persisted settings remain empty.
+    assert settings_svc.get(db, settings_svc.Keys.SMTP_HOST) is None
+
+
+@pytest.mark.asyncio
+async def test_test_send_admin_only(make_user, client, login_as):
+    make_user(email="c@test.local", role=UserRole.client, password="Pass12345678!")
+    token, _ = await login_as("c@test.local", "Pass12345678!")
+    resp = await client.post(
+        "/api/admin/settings/email/test",
+        json={"to": "x@example.com"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 403

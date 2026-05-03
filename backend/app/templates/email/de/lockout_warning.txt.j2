@@ -1,0 +1,17 @@
+Hallo {{ display_name }},
+
+Dein {{ app_name }}-Konto wurde gerade wegen zu vieler fehlgeschlagener Anmeldeversuche gesperrt. Die Sperre läuft automatisch um {{ locked_until }} (UTC) ab.
+
+Falls du das warst (z.B. Passwort vergessen), warte einfach bis zum Ablauf der Sperre oder setze dein Passwort über diesen Link zurück:
+
+{{ reset_url }}
+
+Falls du das nicht warst, versucht jemand dein Passwort zu erraten. Die Sperre hat den Versuch fürs Erste gestoppt, aber wir empfehlen:
+- Setze dein Passwort auf etwas Einzigartiges, das du nirgendwo sonst verwendest.
+- Aktiviere die Zwei-Faktor-Authentifizierung, falls noch nicht aktiv.
+
+Wir senden in den nächsten 6 Stunden keine weitere E-Mail dieser Art, auch wenn weitere Fehlversuche auftreten.
+
+Quelle des Login-Versuchs (grob): {{ ip_hint }}
+
+— {{ app_name }}

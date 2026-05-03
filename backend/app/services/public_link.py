@@ -1,0 +1,370 @@
+"""Public-link lifecycle: create / unlock (password-gated) / counter
+decrement / revoke.
+
+Token format: 32 random urlsafe-base64 bytes (43 chars). Stored as
+SHA-256 hex; the plaintext is shown to the creator exactly once.
+
+Counter: `downloads_remaining` is the source of truth and is decremented
+atomically via a conditional UPDATE (`WHERE downloads_remaining > 0`).
+The session sees a fresh row only after re-querying — callers that
+need the post-decrement value should re-fetch.
+
+Password rate limit: per-(link, ip), counted from
+`public_link_password_attempts` rows in the last
+`PUBLIC_LINK_PASSWORD_WINDOW_SEC` window. Hitting the cap sets
+`locked_until` on the link itself (so all IPs are blocked, not just the
+attacking one) — defense against distributed brute-forcing.
+"""
+from __future__ import annotations
+
+import hmac
+import logging
+from datetime import datetime, timedelta, timezone
+from typing import NamedTuple
+
+from sqlalchemy import update
+from sqlalchemy.orm import Session
+
+from ..config import settings
+from ..middleware.errors import AppError
+from ..models.audit_log import AuditEventType
+from ..models.public_link import PublicLink
+from ..models.public_link_attempt import (
+    PublicLinkAttempt,
+    PublicLinkAttemptOutcome,
+)
+from ..models.group_member import GroupMember
+from ..models.share import Share, ShareState
+from ..models.user import User, UserRole
+from ..utils.crypto import (
+    argon2_hash,
+    argon2_verify,
+    encrypt_setting,
+    random_token,
+    sha256_hex,
+)
+from .audit import record_audit_event
+
+logger = logging.getLogger("fileheron.public_link")
+
+
+def _utcnow() -> datetime:
+    return datetime.now(tz=timezone.utc).replace(tzinfo=None)
+
+
+class CreatedLink(NamedTuple):
+    record: PublicLink
+    plaintext_token: str  # shown to creator once
+
+
+def create_link(
+    db: Session,
+    *,
+    actor: User,
+    share: Share,
+    password: str | None,
+    download_limit: int | None,
+    notify_on_download: bool,
+    request=None,
+) -> CreatedLink:
+    """Create the (single) public link for a share. Refuses if the share
+    is not in `active` state or already has a link.
+
+    Caller commits."""
+    if not is_allowed_to_create(db, actor):
+        raise AppError(
+            403,
+            "PUBLIC_LINK_NOT_ALLOWED",
+            "Your administrator has restricted public-link creation.",
+        )
+    if share.state != ShareState.active:
+        raise AppError(
+            409, "SHARE_NOT_ACTIVE", "Cannot create a public link for a non-active share."
+        )
+    if share.created_by_id != actor.id and actor.role.value != "admin":
+        raise AppError(403, "FORBIDDEN", "Only the share owner or an admin can do that.")
+
+    existing = (
+        db.query(PublicLink)
+        .filter(PublicLink.share_id == share.id, PublicLink.revoked_at.is_(None))
+        .one_or_none()
+    )
+    if existing is not None:
+        raise AppError(
+            409,
+            "PUBLIC_LINK_EXISTS",
+            "A public link already exists for this share. Revoke it first.",
+        )
+    if download_limit is not None and download_limit <= 0:
+        raise AppError(
+            400, "INVALID_DOWNLOAD_LIMIT", "download_limit must be a positive integer."
+        )
+
+    plaintext = random_token(32)
+    record = PublicLink(
+        share_id=share.id,
+        token_hash=sha256_hex(plaintext),
+        # Fernet ciphertext lets the owner re-view the URL on share
+        # detail; same crypto pattern as OIDC client_secret + TOTP.
+        token_encrypted=encrypt_setting(plaintext),
+        password_hash=argon2_hash(password) if password else None,
+        download_limit=download_limit,
+        downloads_remaining=download_limit,
+        notify_on_download=notify_on_download,
+        created_by_id=actor.id,
+    )
+    db.add(record)
+    db.flush()
+    record_audit_event(
+        db,
+        event_type=AuditEventType.public_link_created,
+        actor_user_id=actor.id,
+        target_type="public_link",
+        target_id=record.id,
+        metadata={
+            "share_id": share.id,
+            "has_password": password is not None,
+            "download_limit": download_limit,
+            "notify_on_download": notify_on_download,
+        },
+        request=request,
+    )
+    return CreatedLink(record=record, plaintext_token=plaintext)
+
+
+def get_active_link_for_share(db: Session, share_id: str) -> PublicLink | None:
+    return (
+        db.query(PublicLink)
+        .filter(PublicLink.share_id == share_id, PublicLink.revoked_at.is_(None))
+        .one_or_none()
+    )
+
+
+def get_link_by_token(db: Session, token: str) -> PublicLink:
+    """Look up by hashed token. Raises 404 PUBLIC_LINK_NOT_FOUND."""
+    record = (
+        db.query(PublicLink)
+        .filter(PublicLink.token_hash == sha256_hex(token))
+        .one_or_none()
+    )
+    if record is None:
+        raise AppError(404, "PUBLIC_LINK_NOT_FOUND", "Public link not found.")
+    return record
+
+
+def assert_link_usable(db: Session, link: PublicLink) -> None:
+    """Validate link state. Raises if revoked, locked-out, expired share,
+    counter exhausted, or share revoked/expired/deleted."""
+    if link.revoked_at is not None:
+        raise AppError(410, "PUBLIC_LINK_REVOKED", "This public link has been revoked.")
+    if link.locked_until is not None and link.locked_until > _utcnow():
+        raise AppError(
+            423,
+            "PUBLIC_LINK_LOCKED",
+            "This public link is temporarily locked due to repeated failed unlocks.",
+        )
+    if link.downloads_remaining is not None and link.downloads_remaining <= 0:
+        raise AppError(
+            410, "PUBLIC_LINK_EXHAUSTED", "This public link's download limit has been reached."
+        )
+    share = db.query(Share).filter(Share.id == link.share_id).one_or_none()
+    if share is None:
+        raise AppError(404, "SHARE_NOT_FOUND", "Share for this public link is missing.")
+    if share.state != ShareState.active:
+        raise AppError(410, "SHARE_NOT_ACTIVE", "The underlying share is no longer active.")
+    if share.expires_at < _utcnow():
+        raise AppError(410, "SHARE_EXPIRED", "The underlying share has expired.")
+
+
+def _record_attempt(
+    db: Session,
+    *,
+    link: PublicLink,
+    ip: str | None,
+    outcome: PublicLinkAttemptOutcome,
+) -> None:
+    db.add(
+        PublicLinkAttempt(
+            public_link_id=link.id, ip=ip, outcome=outcome
+        )
+    )
+    db.flush()
+
+
+def _recent_failure_count(db: Session, link: PublicLink) -> int:
+    cutoff = _utcnow() - timedelta(seconds=settings.PUBLIC_LINK_PASSWORD_WINDOW_SEC)
+    return (
+        db.query(PublicLinkAttempt)
+        .filter(
+            PublicLinkAttempt.public_link_id == link.id,
+            PublicLinkAttempt.outcome == PublicLinkAttemptOutcome.failure,
+            PublicLinkAttempt.attempted_at >= cutoff,
+        )
+        .count()
+    )
+
+
+def verify_password(
+    db: Session,
+    *,
+    link: PublicLink,
+    password: str,
+    ip: str | None,
+) -> bool:
+    """Returns True on match. On miss, records the attempt and may set
+    `locked_until` if the failure count crosses the threshold."""
+    if link.password_hash is None:
+        # No password set — treat any unlock attempt as immediate success.
+        # (Caller shouldn't be asking, but be permissive.)
+        return True
+
+    if hmac.compare_digest("", password):
+        # Empty password → fast fail.
+        _record_attempt(db, link=link, ip=ip, outcome=PublicLinkAttemptOutcome.failure)
+        return False
+
+    ok = argon2_verify(link.password_hash, password)
+    outcome = (
+        PublicLinkAttemptOutcome.success if ok else PublicLinkAttemptOutcome.failure
+    )
+    _record_attempt(db, link=link, ip=ip, outcome=outcome)
+    if ok:
+        return True
+
+    failures = _recent_failure_count(db, link)
+    if failures >= settings.PUBLIC_LINK_PASSWORD_RATE_LIMIT:
+        link.locked_until = _utcnow() + timedelta(
+            seconds=settings.PUBLIC_LINK_LOCKOUT_SEC
+        )
+        _record_attempt(db, link=link, ip=ip, outcome=PublicLinkAttemptOutcome.locked)
+        logger.warning(
+            "public_link %s locked: %d failures in %ds window",
+            link.id,
+            failures,
+            settings.PUBLIC_LINK_PASSWORD_WINDOW_SEC,
+        )
+    return False
+
+
+def decrement_counter(db: Session, *, link: PublicLink) -> bool:
+    """Atomically decrement downloads_remaining iff > 0. Returns True if
+    the decrement happened (download allowed); False if exhausted.
+
+    NULL means unlimited — always returns True without touching the row."""
+    if link.downloads_remaining is None:
+        return True
+    stmt = (
+        update(PublicLink)
+        .where(
+            PublicLink.id == link.id,
+            PublicLink.downloads_remaining > 0,
+        )
+        .values(downloads_remaining=PublicLink.downloads_remaining - 1)
+    )
+    result = db.execute(stmt)
+    db.flush()
+    return result.rowcount > 0
+
+
+def revoke(
+    db: Session, *, actor: User, link: PublicLink, request=None
+) -> None:
+    if link.revoked_at is not None:
+        return  # idempotent
+    if (
+        link.created_by_id != actor.id
+        and actor.role.value != "admin"
+    ):
+        raise AppError(403, "FORBIDDEN", "Only the link owner or an admin can revoke.")
+    link.revoked_at = _utcnow()
+    db.flush()
+    record_audit_event(
+        db,
+        event_type=AuditEventType.public_link_revoked,
+        actor_user_id=actor.id,
+        target_type="public_link",
+        target_id=link.id,
+        request=request,
+    )
+
+
+def record_consumption(
+    db: Session, *, link: PublicLink, file_id: str, ip: str | None, request=None
+) -> None:
+    """Audit row for a successful download. Caller has already done the
+    counter decrement and DownloadLog insert."""
+    record_audit_event(
+        db,
+        event_type=AuditEventType.public_link_consumed,
+        actor_user_id=None,
+        target_type="public_link",
+        target_id=link.id,
+        metadata={"file_id": file_id, "ip": ip, "share_id": link.share_id},
+        request=request,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Policy gate (post-Phase 10). Mirrors services/api_token.py exactly.
+# ---------------------------------------------------------------------------
+
+POLICY_MODES = ("everyone", "employees_admins", "admins_only", "disabled")
+DEFAULT_POLICY_MODE = "everyone"
+
+
+def _resolve_policy(db: Session) -> tuple[str, list[int], list[int]]:
+    """Read policy from app_settings. Returns (mode, allowed_user_ids,
+    allowed_group_ids). Falls back to defaults so an unconfigured deploy
+    keeps working."""
+    from . import settings as settings_svc
+
+    mode = (
+        settings_svc.get(db, settings_svc.Keys.PUBLIC_LINK_POLICY_MODE)
+        or DEFAULT_POLICY_MODE
+    )
+    if mode not in POLICY_MODES:
+        mode = DEFAULT_POLICY_MODE
+
+    raw_users = (
+        settings_svc.get(db, settings_svc.Keys.PUBLIC_LINK_ALLOWED_USERS) or "[]"
+    )
+    raw_groups = (
+        settings_svc.get(db, settings_svc.Keys.PUBLIC_LINK_ALLOWED_GROUPS) or "[]"
+    )
+    import json
+
+    try:
+        user_ids = [int(x) for x in json.loads(raw_users)]
+    except (ValueError, TypeError):
+        user_ids = []
+    try:
+        group_ids = [int(x) for x in json.loads(raw_groups)]
+    except (ValueError, TypeError):
+        group_ids = []
+    return mode, user_ids, group_ids
+
+
+def is_allowed_to_create(db: Session, user: User) -> bool:
+    """True if `user` may create a public link under the active policy.
+    Admin always passes (operator escape hatch)."""
+    if user.role == UserRole.admin:
+        return True
+    mode, allowed_users, allowed_groups = _resolve_policy(db)
+    if mode == "everyone":
+        return True
+    if mode == "employees_admins" and user.role == UserRole.employee:
+        return True
+    if user.id in allowed_users:
+        return True
+    if allowed_groups:
+        hit = (
+            db.query(GroupMember.user_id)
+            .filter(
+                GroupMember.user_id == user.id,
+                GroupMember.group_id.in_(allowed_groups),
+            )
+            .first()
+        )
+        if hit is not None:
+            return True
+    return False

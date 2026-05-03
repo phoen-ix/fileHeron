@@ -1,0 +1,26 @@
+{% extends "layout.html.j2" %}
+{% block subject %}Anmeldung von einem neuen Gerät{% endblock %}
+{% block content %}
+  <p style="margin:0 0 12px 0;color:#6b7280;font-family:Georgia,serif;font-style:italic;">Sicherheit</p>
+  <h1 style="font-family:Georgia,'Times New Roman',serif;font-weight:normal;font-size:26px;line-height:1.2;margin:0 0 16px 0;">
+    Neue Anmeldung
+  </h1>
+  <p style="margin:0 0 16px 0;">Hallo {{ display_name|default("zusammen") }},</p>
+  <p style="margin:0 0 16px 0;">
+    An deinem {{ app_name }}-Konto erfolgte gerade eine Anmeldung von einem unbekannten Gerät.
+  </p>
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 16px 0;width:100%;font-family:'JetBrains Mono',Menlo,Consolas,monospace;font-size:13px;">
+    <tr><td style="padding:4px 0;color:#6b7280;">wann</td><td style="padding:4px 0;color:#1a1d24;">{{ at|dt_locale(locale) }}</td></tr>
+    <tr><td style="padding:4px 0;color:#6b7280;">methode</td><td style="padding:4px 0;color:#1a1d24;">{{ via|default("passwort") }}</td></tr>
+    <tr><td style="padding:4px 0;color:#6b7280;">browser</td><td style="padding:4px 0;color:#1a1d24;">{{ ua_summary|default("unbekannt") }}</td></tr>
+    <tr><td style="padding:4px 0;color:#6b7280;">region</td><td style="padding:4px 0;color:#1a1d24;">{{ ip_hint|default("unbekannt") }}</td></tr>
+  </table>
+  <p style="margin:0 0 16px 0;color:#1a1d24;">
+    Falls du das warst, ist nichts zu tun. Andernfalls ändere dein Passwort und überprüfe aktive Sitzungen.
+  </p>
+  <p style="margin:0;">
+    <a href="{{ account_url }}" style="display:inline-block;background:#1a1d24;color:#faf8f3;text-decoration:none;padding:12px 24px;font-weight:500;">
+      Konto prüfen →
+    </a>
+  </p>
+{% endblock %}

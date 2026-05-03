@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#1a1d24" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+  <!-- Heron silhouette in profile, single outer line.
+       Beak tip → top of head → back of neck (S-curve) → top of back →
+       tail → belly → leg + foot → up → chest → front of neck → head front. -->
+  <path d="M 21 4
+           L 17.6 5.2
+           Q 15 5.5 14 7.6
+           L 13.6 9.6
+           Q 13.2 11.2 12.8 12.6
+           Q 12 14.2 10 14.4
+           L 4.4 13.8
+           Q 2.6 14 3.2 15.2
+           Q 4.4 16.2 6.4 16.3
+           L 11 16.7
+           L 11 19.6
+           L 9.4 22
+           M 11 19.6
+           L 12.6 22
+           M 11 16.7
+           Q 13.4 15.9 14.4 13.6
+           Q 14.9 11.6 15.2 9.6
+           L 15.6 7.8
+           Q 16.4 6.4 17.6 6
+           L 21 4 Z" />
+</svg>

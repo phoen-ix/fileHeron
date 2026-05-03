@@ -1,0 +1,9 @@
+Hallo {{ recipient_name|default("zusammen") }},
+
+Erinnerung: die Freigabe „{{ subject|default("(kein Betreff)") }}" läuft am {{ expires_at|dt_locale(locale) }} ab.
+
+Danach werden die Dateien aus {{ app_name }} gelöscht.
+
+Öffnen: {{ share_url }}
+
+— {{ app_name }}

@@ -1,0 +1,974 @@
+{
+  "common": {
+    "continue": "Continue",
+    "cancel": "Cancel",
+    "save": "Save",
+    "saved": "Saved.",
+    "back": "Back",
+    "loading": "Loading…",
+    "yes": "Yes",
+    "no": "No",
+    "email": "Email",
+    "password": "Password",
+    "new_password": "New password",
+    "current_password": "Current password",
+    "display_name": "Display name",
+    "language": "Language"
+  },
+  "errors": {
+    "INVALID_CREDENTIALS": "That email and password don't match.",
+    "TOTP_REQUIRED": "Enter your six-digit code from your authenticator app.",
+    "INVALID_TOTP": "That code is incorrect or expired.",
+    "INVALID_RECOVERY": "That recovery code is invalid or already used.",
+    "ACCOUNT_LOCKED": "This account is temporarily locked due to too many failed attempts. Please try again later.",
+    "ACCOUNT_DISABLED": "This account has been disabled. Contact an administrator.",
+    "EMAIL_NOT_VERIFIED": "Verify your email first.",
+    "RATE_LIMITED": "Too many attempts. Wait a moment and try again.",
+    "INVITE_INVALID": "This invite link is not valid.",
+    "INVITE_EXPIRED": "This invite link has expired. Ask the sender for a new one.",
+    "INVITE_USED": "This invite link has already been used.",
+    "RESET_TOKEN_INVALID": "This reset link is not valid.",
+    "RESET_TOKEN_EXPIRED": "This reset link has expired. Request a new one.",
+    "RESET_TOKEN_USED": "This reset link has already been used.",
+    "VERIFY_TOKEN_INVALID": "This verification link is not valid.",
+    "VERIFY_TOKEN_EXPIRED": "This verification link has expired.",
+    "VERIFY_TOKEN_USED": "This verification link has already been used.",
+    "PASSWORD_BREACHED": "This password has appeared in a known breach. Please choose another.",
+    "USER_EXISTS": "An account already exists for this email.",
+    "INVITE_PENDING": "An invite for this email is already pending — wait for it to expire or be consumed.",
+    "GROUP_NOT_FOUND": "One or more selected groups do not exist anymore.",
+    "TOTP_ALREADY_ENABLED": "Two-factor auth is already on for this account.",
+    "TOTP_NOT_ENABLED": "Two-factor auth is not enabled.",
+    "TOTP_SETUP_MISSING": "Begin two-factor setup first.",
+    "AUTH_REQUIRED": "Please sign in to continue.",
+    "TOKEN_REUSE": "Suspicious sign-in detected. All sessions have been revoked.",
+    "FORBIDDEN": "You don't have permission to do that.",
+    "INTERNAL_ERROR": "Something went wrong. Please try again.",
+    "OIDC_NO_ACCOUNT": "No fileHeron account exists for this identity. Ask an admin to invite you first.",
+    "OIDC_EMAIL_MISMATCH": "The identity provider returned a different email than your fileHeron account. Connect refused.",
+    "OIDC_ALREADY_LINKED": "You're already connected to another SSO provider. Disconnect that one first.",
+    "OIDC_SUBJECT_TAKEN": "This identity is already connected to another fileHeron account.",
+    "OIDC_PROVIDER_HAS_USERS": "This SSO provider still has linked users. Unlink them before deleting.",
+    "OIDC_EMAIL_NOT_VERIFIED": "The identity provider didn't assert a verified email. Connect refused.",
+    "OIDC_PROVIDER_DISABLED": "This SSO provider is disabled.",
+    "OIDC_PROVIDER_INCOMPLETE": "This SSO provider is missing required configuration.",
+    "OIDC_PROVIDER_NOT_FOUND": "SSO provider not found.",
+    "API_TOKEN_NOT_ALLOWED": "Your administrator has restricted API token creation.",
+    "API_TOKEN_DISABLED": "This API token is disabled.",
+    "TOKEN_NOT_FOUND": "API token not found.",
+    "TOKEN_REVOKED": "Permanently-revoked tokens cannot be reactivated.",
+    "USER_DISABLED": "Cannot create a token for a disabled user.",
+    "PUBLIC_LINK_NOT_ALLOWED": "Your administrator has restricted public link creation.",
+    "SHARE_NOT_ACTIVE": "This share is no longer active.",
+    "INVALID_EXPIRY": "Expiry must be in the future. Use \"Expire now\" for immediate expiry.",
+    "INVALID_LANDING_PAGE": "Unknown landing page name.",
+    "HOME_PAGE_DISABLED": "The home page is disabled by your administrator.",
+    "QUARANTINE_BYTES_MISSING": "The quarantined bytes are no longer on disk — nothing to download. Use “Purge” to clean up the row.",
+    "QUARANTINED_FILE_NOT_FOUND": "No quarantined file with that id (it may have been released or purged).",
+    "FILE_QUARANTINED_ADMIN_ONLY": "This file was flagged by antivirus. Only an administrator can act on it via Quarantine.",
+    "FILE_INFECTED": "This file was quarantined by antivirus and can’t be downloaded.",
+    "FILE_DELETED": "This file has been deleted.",
+    "SCAN_IN_PROGRESS": "Antivirus scan still in progress — try again in a moment.",
+    "FILE_NOT_INFECTED": "Only files currently in quarantine support this action.",
+    "generic": "Something didn't work. Please try again."
+  },
+  "login": {
+    "title": "Sign in",
+    "subtitle": "Welcome back.",
+    "email_placeholder": "you{'@'}example.com",
+    "password_placeholder": "Your password",
+    "totp_label": "Two-factor code",
+    "totp_help": "Open your authenticator app and enter the six-digit code.",
+    "totp_placeholder": "123 456",
+    "use_recovery": "Use a recovery code instead",
+    "use_passkey": "Use a passkey instead",
+    "passkey_cancelled": "Passkey prompt cancelled.",
+    "use_totp_back": "Back to authenticator code",
+    "recovery_label": "Recovery code",
+    "recovery_help": "Use one of your backup codes (formatted XXXX-XXXX).",
+    "recovery_placeholder": "ABCD-1234",
+    "submit": "Continue",
+    "forgot": "Forgot password",
+    "submitting": "Signing in…",
+    "sso_button_with_name": "Sign in with {name}",
+    "sso_or": "or"
+  },
+  "register": {
+    "title": "Set up your account",
+    "subtitle": "You've been invited to file:Heron. Choose a password to finish.",
+    "name_placeholder": "How should we greet you?",
+    "submit": "Create account",
+    "password_help": "At least 12 characters."
+  },
+  "forgot": {
+    "title": "Forgot password",
+    "subtitle": "Enter your email. If we have an account on file, we'll send a link to reset.",
+    "submit": "Send reset link",
+    "sent_title": "Check your inbox.",
+    "sent_subtitle": "If that email is on file, a reset link is on its way."
+  },
+  "reset": {
+    "title": "Reset password",
+    "subtitle": "Choose a new password.",
+    "submit": "Reset password",
+    "done_title": "Password reset.",
+    "done_subtitle": "Sign in with your new password.",
+    "to_login": "Sign in"
+  },
+  "verify": {
+    "verifying": "Verifying your email…",
+    "ok_title": "Email verified.",
+    "ok_subtitle": "You can now sign in.",
+    "to_login": "Continue to sign in"
+  },
+  "home": {
+    "go_share": "Send a file",
+    "go_account": "Account"
+  },
+  "header": {
+    "account": "Account",
+    "logout": "Sign out",
+    "menu": "Menu",
+    "outbox": "Sent",
+    "inbox": "Received",
+    "new_share": "New share",
+    "admin": "Admin"
+  },
+  "admin": {
+    "eyebrow": "Admin",
+    "nav_label": "Admin navigation",
+    "nav": {
+      "users": "Users",
+      "groups": "Groups",
+      "audit": "Audit log",
+      "file_history": "File history",
+      "quarantine": "Quarantine",
+      "api_tokens": "API tokens",
+      "settings": "Settings"
+    }
+  },
+  "admin_settings": {
+    "eyebrow": "Admin / Settings",
+    "intro": "Configure runtime settings without editing .env or restarting containers. Sensitive values are encrypted at rest.",
+    "section_titles": {
+      "general": "General",
+      "sso": "SSO / OIDC",
+      "api_tokens": "API token policy",
+      "public_links": "Public link policy",
+      "email": "Email / SMTP",
+      "twofa": "Two-factor enforcement",
+      "quarantine": "Quarantine alerts"
+    },
+    "sections": {
+      "general": "Small toggles and miscellaneous app settings — start with the home page on/off.",
+      "sso": "Configure one or more OIDC identity providers (Microsoft Entra, Google, Authentik, Keycloak, …). Users connect their account to a provider for one-click sign-in.",
+      "api_tokens": "Decide who can mint programmatic API tokens — everyone, employees only, admins only, or disabled. Add specific users or groups to an allowlist on top.",
+      "public_links": "Decide who can create shareable public links to a share — everyone, employees only, admins only, or disabled. Add specific users or groups to an allowlist on top.",
+      "email": "Configure outbound SMTP — host, port, credentials, TLS mode, From address. Send a test email and see the actual error if something's wrong.",
+      "twofa": "Decide who must enable 2FA — pick any combination of roles (admin / employee / client) and groups. Affected users without TOTP get bounced into the setup flow on every page load until they enrol.",
+      "quarantine": "When ClamAV flags an upload, optionally fan out a notification (email + in-app bell) to every admin in addition to the uploader."
+    }
+  },
+  "admin_general": {
+    "title": "General",
+    "intro": "Small toggles and miscellaneous app settings. New minor settings land here as they're introduced.",
+    "quicknav": {
+      "aria": "Section navigation"
+    }
+  },
+  "admin_twofa_policy": {
+    "title": "Two-factor enforcement",
+    "intro": "Choose the roles and groups whose members must enable a TOTP authenticator. Affected users without 2FA are blocked from every page other than the setup wizard until they enrol.",
+    "kv_inheritance_note": "No saved policy yet — currently inheriting from the REQUIRE_2FA environment variable. Saving here takes over.",
+    "roles_heading": "Required roles",
+    "roles_help": "Tick a role to require 2FA for every user with it.",
+    "role": {
+      "admin": "Administrators",
+      "employee": "Employees",
+      "client": "Clients"
+    },
+    "groups_heading": "Required groups",
+    "groups_help": "Members of any ticked group must enrol — additive on top of the role list.",
+    "groups_inbox": "Company inbox",
+    "effects_heading": "Effects when saved",
+    "effect_redirect": "Affected users are redirected to /account/2fa/forced on every navigation until they finish setup.",
+    "effect_recovery": "Recovery codes still bypass login one-time so an enrolled user who loses their authenticator isn't locked out.",
+    "effect_lockout": "If you save a policy that applies to you and you don't yet have 2FA, you'll be redirected straight into the QR enrolment wizard — no intermediate lockout. Recovery codes still bypass login one-time if you ever lose your authenticator.",
+    "saved_toast": "2FA enforcement policy saved."
+  },
+  "admin_site_url": {
+    "title": "Site URL",
+    "intro": "The URL the SPA is served from. Used in every email link, public-link URL, in-app notification deep link, and post-OIDC browser redirect.",
+    "url_label": "Public site URL",
+    "url_help": "Include the scheme (https:// recommended). No trailing slash. Saving here takes effect immediately for new emails and notifications.",
+    "env_fallback": "Falls back to the APP_URL env var: {url}",
+    "override_active": "Override active",
+    "security_note": "Two surfaces stay on the env value and are NOT changed by this field: WebAuthn passkey RP origin (changing it silently invalidates every registered passkey) and OIDC redirect URI (IdPs reject mismatches against their pre-registered URI).",
+    "revert_to_env": "Revert to env",
+    "saved_toast": "Site URL saved."
+  },
+  "admin_home_page": {
+    "title": "Home page",
+    "intro": "The home page is the welcome screen users see at /. Disable it if you'd rather drop everyone straight into a working surface (Sent / Received / New share).",
+    "toggle_label": "Enable the default home page",
+    "toggle_help": "When enabled, / shows a welcome card with the user's name, role, and quick links. When disabled, / redirects forward and the page is hidden.",
+    "effect_picker": "\"Home\" disappears from the per-user landing-page picker.",
+    "effect_brand": "The file:Heron wordmark in the top header becomes plain text (no link).",
+    "effect_redirect": "Anyone hitting / is redirected to their saved landing page or to /share/new.",
+    "saved_toast": "Home page setting saved."
+  },
+  "admin_email": {
+    "title": "Email / SMTP",
+    "intro": "Outgoing notifications, invites, password resets and shares all flow through this SMTP server. Saving here takes effect immediately — no restart. The password is encrypted at rest.",
+    "status_configured": "SMTP configured",
+    "status_logs_fallback": "Logs fallback (no host set)",
+    "env_only": "values come from .env (no DB overrides yet)",
+    "host_label": "Host",
+    "host_help": "Hostname or IP of the SMTP server.",
+    "port_label": "Port",
+    "tls_label": "TLS mode",
+    "tls": {
+      "starttls": "STARTTLS (port 587)",
+      "starttls_help": "Connect plaintext, upgrade to TLS via STARTTLS. Most common; default for port 587.",
+      "implicit": "Implicit TLS (port 465)",
+      "implicit_help": "TLS from the first byte. Used by some legacy SMTPS deployments on port 465.",
+      "none": "None (insecure)",
+      "none_help": "No transport encryption. Only sane on localhost / a private MTA on a trusted network."
+    },
+    "user_label": "Username",
+    "password_label": "Password",
+    "password_help": "Stored encrypted at rest. Leave blank to keep the current password unchanged.",
+    "password_set_placeholder": "(set — leave blank to keep)",
+    "password_unset_placeholder": "Paste the SMTP password",
+    "from_email_label": "From email",
+    "from_name_label": "From name",
+    "saved_toast": "SMTP settings saved.",
+    "test_heading": "Send a test email",
+    "test_help": "Sends one email synchronously using the values currently filled in above (no need to save first). The actual SMTP error is shown inline if it fails.",
+    "test_placeholder": "Recipient email for the test",
+    "test_recipient_required": "Enter a recipient email address.",
+    "test_button": "Send test email",
+    "test_ok": "Test email sent successfully.",
+    "test_failed": "Test email failed."
+  },
+  "admin_public_link_policy": {
+    "title": "Public link policy",
+    "intro": "Public links let recipients without a fileHeron account download a share via a token URL. Pick who's allowed to create them. Admins can always create links regardless of mode.",
+    "mode_label": "Base policy",
+    "mode": {
+      "everyone": "Everyone",
+      "everyone_help": "Any signed-in user can create public links.",
+      "employees_admins": "Employees + admins",
+      "employees_admins_help": "Clients cannot create public links.",
+      "admins_only": "Admins only",
+      "admins_only_help": "Only admins can create public links.",
+      "disabled": "Disabled",
+      "disabled_help": "Only admins can create public links; everyone else is blocked."
+    },
+    "allowlist_heading": "Allowlist",
+    "allowlist_help": "Users and groups added here can always create public links, regardless of the base policy.",
+    "users_label": "Specific users",
+    "users_placeholder": "Search by name or email…",
+    "groups_label": "Group memberships",
+    "groups_inbox": "company inbox",
+    "saved_toast": "Public link policy saved."
+  },
+  "admin_api_tokens": {
+    "eyebrow": "Admin / API tokens",
+    "create_cta": "Generate token for user",
+    "create_heading": "Generate a token on behalf of a user",
+    "create_help": "The plaintext appears once on this page. Copy it and forward to the user via a secure channel (password manager / encrypted DM).",
+    "target_user": "Target user",
+    "target_user_placeholder": "Search by name or email…",
+    "no_user_selected": "Select a user from the suggestions first.",
+    "token_name": "Token name",
+    "token_name_placeholder": "e.g. ci-deploy",
+    "create_submit": "Generate token",
+    "plaintext_eyebrow": "Plaintext token (shown once)",
+    "plaintext_warning": "Copy this now — it will not be shown again. Forward to the user via your password / secrets manager.",
+    "search_placeholder": "Search by owner name or email…",
+    "status_all": "All statuses",
+    "empty": "No API tokens match the current filters.",
+    "revoke_confirm": "Permanently revoke this token? This cannot be undone — the user will need a brand-new token to keep automating.",
+    "col": {
+      "name": "Name",
+      "owner": "Owner",
+      "status": "Status",
+      "last_used": "Last used",
+      "created": "Created"
+    },
+    "status": {
+      "active": "active",
+      "disabled": "disabled",
+      "revoked": "revoked"
+    },
+    "action": {
+      "disable": "Disable",
+      "reactivate": "Reactivate",
+      "revoke": "Revoke"
+    },
+    "toast": {
+      "disabled": "Token disabled.",
+      "reactivated": "Token reactivated.",
+      "revoked": "Token permanently revoked."
+    }
+  },
+  "admin_token_policy": {
+    "title": "API token policy",
+    "intro": "API tokens grant programmatic access — pick who's allowed to create them. Admins can always create tokens regardless of the mode (operator escape hatch).",
+    "mode_label": "Base policy",
+    "mode": {
+      "everyone": "Everyone",
+      "everyone_help": "Any signed-in user can create tokens.",
+      "employees_admins": "Employees + admins",
+      "employees_admins_help": "Clients cannot create tokens.",
+      "admins_only": "Admins only",
+      "admins_only_help": "Only admins can create tokens.",
+      "disabled": "Disabled",
+      "disabled_help": "Only admins can create tokens; everyone else is blocked."
+    },
+    "allowlist_heading": "Allowlist",
+    "allowlist_help": "Users and groups added here can always mint tokens, regardless of the base policy.",
+    "users_label": "Specific users",
+    "users_placeholder": "Search by name or email…",
+    "groups_label": "Group memberships",
+    "groups_inbox": "company inbox",
+    "saved_toast": "API token policy saved."
+  },
+  "admin_sso_list": {
+    "title": "SSO",
+    "intro": "Run multiple OIDC identity providers concurrently. Users can connect their fileHeron account to one of them; new users sign in once with their password and click Connect.",
+    "add_button": "Add provider",
+    "empty_title": "No providers configured yet.",
+    "empty_body": "Add an OIDC provider to let users sign in with their identity provider.",
+    "col": {
+      "name": "Name",
+      "preset": "Preset",
+      "status": "Status",
+      "users": "Linked users"
+    },
+    "status": {
+      "enabled": "Enabled",
+      "disabled": "Disabled",
+      "no_secret": "Missing secret"
+    }
+  },
+  "admin_sso_edit": {
+    "heading_new": "New SSO provider",
+    "heading_edit": "Edit SSO provider",
+    "name": "Display name",
+    "name_placeholder": "Microsoft Entra (corp)",
+    "name_help": "Shown to users on the login page button.",
+    "preset": "Preset",
+    "issuer_url": "Issuer URL",
+    "issuer_url_help": "We append /.well-known/openid-configuration to discover the endpoints.",
+    "client_id": "Client ID",
+    "client_secret": "Client secret",
+    "client_secret_help": "Stored Fernet-encrypted in the database. Leave blank to keep the current secret unchanged. Empty string clears it.",
+    "secret_set_placeholder": "(secret already set — leave blank to keep)",
+    "secret_unset_placeholder": "Paste the client secret",
+    "secret_required_on_create": "Client secret is required when creating a new provider.",
+    "groups_claim": "Groups claim path",
+    "groups_claim_help": "Dot-walkable path. \"groups\" for most IdPs; \"realm_access.roles\" for Keycloak.",
+    "admin_groups": "Admin groups (comma-separated)",
+    "employee_groups": "Employee groups (comma-separated)",
+    "redirect_uri": "Redirect URI override",
+    "redirect_uri_default": "(defaults to APP_URL/api/auth/oidc/callback/{id})",
+    "redirect_uri_help": "Only set this if your IdP requires a specific redirect URI different from the default.",
+    "enabled": "Enabled (visible on the login page)",
+    "test_button": "Test connection",
+    "test_ok": "Connection looks good.",
+    "test_failed": "Connection failed.",
+    "delete_button": "Delete provider",
+    "delete_confirm": "Delete this SSO provider? Users currently linked to it will need to be unlinked first.",
+    "saved_toast": "SSO provider saved.",
+    "created_toast": "SSO provider created.",
+    "deleted_toast": "SSO provider deleted."
+  },
+  "account_oidc": {
+    "section_title": "Single sign-on",
+    "section_help": "Connect your fileHeron account to an identity provider. Once connected you can sign in with one click — no password.",
+    "no_providers": "No SSO providers are configured yet.",
+    "connect": "Connect",
+    "disconnect": "Disconnect",
+    "linked_label": "Connected ({hint})",
+    "other_linked": "You're linked to another provider — disconnect first to switch.",
+    "connected_toast": "SSO provider connected.",
+    "disconnected_toast": "SSO provider disconnected.",
+    "disconnect_confirm": "Disconnect from this SSO provider? You'll need to sign in with your password until you reconnect."
+  },
+  "webauthn": {
+    "title": "Passkeys & security keys",
+    "intro": "Register a passkey (Touch ID, Windows Hello, or a USB security key) as a second factor. You can register multiple — your laptop's built-in authenticator and a USB key as a backup, for example.",
+    "unsupported": "Your browser doesn't support passkeys. Try a recent Chrome, Safari, Firefox, or Edge.",
+    "empty": "No passkeys registered yet.",
+    "add_cta": "Add a passkey",
+    "name_label": "Label",
+    "name_placeholder": "e.g. MacBook Touch ID",
+    "register": "Register passkey",
+    "added_toast": "Passkey added.",
+    "remove": "Remove",
+    "remove_confirm": "Remove this passkey? You won't be able to use it to sign in anymore.",
+    "removed_toast": "Passkey removed.",
+    "cancelled": "Passkey registration was cancelled.",
+    "created": "added {d}",
+    "last_used": "last used {d}",
+    "never_used": "never used"
+  },
+  "notif_bell": {
+    "aria": "Notifications",
+    "title": "Notifications",
+    "mark_all_read": "Mark all read",
+    "empty": "No notifications yet.",
+    "just_now": "just now",
+    "min_ago": "{n}m ago",
+    "hr_ago": "{n}h ago",
+    "cat": {
+      "share_created": "Share",
+      "share_expiring": "Expiring",
+      "public_link_downloaded": "Public link",
+      "account_created": "New account",
+      "password_reset": "Password reset",
+      "twofa_required": "2FA",
+      "login_alert": "Sign-in",
+      "file_quarantined": "Quarantine"
+    },
+    "headline": {
+      "share_created": "{sender_name} sent you {file_count} file(s).",
+      "share_expiring": "Share \"{subject}\" expires in 24 hours.",
+      "public_link_downloaded": "Public link downloaded: {filename}",
+      "account_created": "{invitee_name} accepted your invite.",
+      "password_reset": "Password reset requested.",
+      "twofa_required": "Two-factor authentication is required.",
+      "login_alert": "Sign-in from a new device.",
+      "file_quarantined": "{filename} was quarantined by antivirus.",
+      "generic": "New activity"
+    }
+  },
+  "notif_prefs": {
+    "title": "Notifications",
+    "intro": "Choose how you'd like to be notified for each event. \"Both\" means email and the bell.",
+    "col": {
+      "category": "Event",
+      "channel": "Notify me via"
+    },
+    "channel": {
+      "off": "Off",
+      "email": "Email only",
+      "in_app": "In-app only",
+      "both": "Both"
+    }
+  },
+  "admin_users": {
+    "eyebrow": "Admin / Users",
+    "search_placeholder": "Search by name or email…",
+    "role_all": "All roles",
+    "col": {
+      "id": "ID",
+      "name": "Name",
+      "role": "Role",
+      "status": "Status",
+      "2fa": "2FA",
+      "created": "Created",
+      "last_login": "Last sign-in"
+    },
+    "status": {
+      "active": "active",
+      "disabled": "disabled",
+      "needs_2fa": "needs 2FA"
+    },
+    "prev": "prev",
+    "next": "next",
+    "page_of": "page {page} of {total}",
+    "invite_button": "Invite user",
+    "invite_heading": "Invite a new user",
+    "invite_email_label": "Email",
+    "invite_email_help": "We'll send a 24h single-use invite link.",
+    "invite_display_name_label": "Display name",
+    "invite_display_name_help": "How they'll be addressed in the invite email.",
+    "invite_role_label": "Role",
+    "invite_groups_label": "Add to groups",
+    "invite_groups_help": "Memberships are applied when the invitee accepts the invite.",
+    "invite_groups_inbox": "company inbox",
+    "invite_submit": "Send invite",
+    "invite_sent": "Invite sent to {hint}, expires {expires}."
+  },
+  "admin_user_detail": {
+    "eyebrow": "Admin / Users",
+    "profile": "Profile",
+    "role": "Role",
+    "quota": "Quota (bytes)",
+    "quota_unlimited": "blank = unlimited",
+    "quota_help": "Total upload bytes allowed for this user. Leave blank or 0 for unlimited.",
+    "disable_label": "Disabled (revoke all sessions)",
+    "no_changes": "Nothing to save.",
+    "security": "Security",
+    "created": "Created",
+    "last_login": "Last sign-in",
+    "force_reset": "Force password reset",
+    "force_reset_confirm": "Generate a one-time reset token? The current password keeps working until the user clicks the link.",
+    "reset_eyebrow": "Password reset link",
+    "reset_warning": "Share this token via a secure out-of-band channel. The link expires in 1 hour.",
+    "danger": "Danger zone",
+    "erase_help": "Right-to-erasure permanently anonymizes this user and hard-deletes every file they uploaded. The action cannot be undone.",
+    "erase": "Erase user",
+    "erase_step1": "This will hard-delete every file this user uploaded. The user row is anonymized to [erased]. The action is irreversible.",
+    "erase_step2": "Final confirmation. Click once more to erase.",
+    "erase_confirm_1": "I understand — continue",
+    "erase_confirm_final": "Erase permanently",
+    "erased_toast": "User erased — {n} file(s), {bytes} bytes deleted.",
+    "already_erased": "User already erased"
+  },
+  "admin_audit": {
+    "eyebrow": "Admin / Audit log",
+    "export_csv": "Export CSV",
+    "filter": {
+      "event_type": "event_type (e.g. login_success)",
+      "target_type": "target_type",
+      "target_id": "target_id",
+      "from": "from",
+      "to": "to"
+    },
+    "col": {
+      "when": "When",
+      "event": "Event",
+      "actor": "Actor",
+      "target": "Target",
+      "ip": "IP",
+      "request": "Req"
+    },
+    "actor_deleted": "(deleted)"
+  },
+  "account": {
+    "title": "Account",
+    "quicknav": {
+      "aria": "Quick navigation"
+    },
+    "section_profile": "Profile",
+    "section_password": "Password",
+    "section_2fa": "Two-factor authentication",
+    "section_sessions": "Active sessions",
+    "language_help": "Used for emails sent to you and the UI language.",
+    "display_name_help": "Shown on shares and emails. 1–120 characters.",
+    "display_name_saved": "Display name saved.",
+    "display_name_save_failed": "Couldn't save display name.",
+    "locale_saved": "Language preference saved.",
+    "locale_save_failed": "Couldn't save language preference.",
+    "password_changed_toast": "Password changed. Other sessions revoked.",
+    "session_revoked_toast": "Session revoked.",
+    "landing": {
+      "label": "Default landing page",
+      "help": "Where you land after logging in. Pick \"System default\" to follow whatever the admin has chosen for everyone.",
+      "system_default": "System default",
+      "home": "Home",
+      "outbox": "Sent",
+      "inbox": "Received",
+      "share_create": "New share",
+      "account": "Account",
+      "saved_toast": "Default landing page saved.",
+      "save_failed": "Couldn't save default landing page."
+    },
+    "change_password_help": "After changing, you'll need to sign in again on every device.",
+    "change_password_submit": "Change password",
+    "twofa_off": "Two-factor auth is off.",
+    "twofa_on": "Two-factor auth is on.",
+    "twofa_recovery_remaining": "{n} recovery codes remaining.",
+    "twofa_setup_cta": "Set up two-factor auth",
+    "twofa_manage_cta": "Manage two-factor",
+    "session_current": "current",
+    "session_revoke": "Revoke",
+    "session_unknown_ua": "unknown browser"
+  },
+  "twofa": {
+    "title": "Two-factor authentication",
+    "intro": "Use an authenticator app — 1Password, Authy, Bitwarden, Google Authenticator — to scan the QR below.",
+    "forced_banner": "Your administrator requires two-factor authentication for your account. Scan the code below to finish setup and continue.",
+    "manual_secret_label": "Or enter this secret manually",
+    "verify_label": "Verify",
+    "verify_help": "Enter the six-digit code your app shows now.",
+    "verify_placeholder": "123 456",
+    "enable_submit": "Enable two-factor",
+    "saved_codes_title": "Save these recovery codes.",
+    "saved_codes_intro": "Each code works once. Use them if you lose access to your authenticator. Store them somewhere safe — we won't show them again.",
+    "saved_codes_confirm": "I've saved them",
+    "saved_codes_copy": "Copy all",
+    "saved_codes_copied": "Copied.",
+    "active_title": "Two-factor is active.",
+    "active_intro": "You'll need a code from your authenticator app on every sign-in.",
+    "regenerate_cta": "Regenerate recovery codes",
+    "disable_cta": "Turn off two-factor",
+    "disable_intro": "Removing two-factor weakens your account. You'll need your password and a current code (or one recovery code) to confirm.",
+    "code_or_recovery_label": "Six-digit code or recovery code",
+    "danger_section": "Disable",
+    "recovery_codes_copied": "Recovery codes copied.",
+    "disabled_toast": "Two-factor disabled."
+  },
+  "password_strength": {
+    "weak": "Weak",
+    "fair": "Fair",
+    "good": "Good",
+    "strong": "Strong"
+  },
+  "upload": {
+    "dropzone": {
+      "eyebrow": "Upload",
+      "headline_a": "Drop files here",
+      "or": "or",
+      "headline_b": "browse",
+      "hint": "Up to 30 GB per file. Resume picks up where the connection drops."
+    },
+    "state": {
+      "queued": "Queued",
+      "preparing": "Preparing",
+      "uploading": "Uploading",
+      "finalizing": "Finalizing",
+      "done": "Done",
+      "error": "Error"
+    },
+    "actions": {
+      "retry": "Retry",
+      "remove": "Remove"
+    }
+  },
+  "recipient": {
+    "label": "Recipients",
+    "search_placeholder": "Search people or groups…",
+    "help_phase4": "Search for people by name or email. Pick groups for shared inboxes.",
+    "remove": "Remove",
+    "section_users": "People",
+    "section_groups": "Groups",
+    "inbox_flag": "company inbox",
+    "no_results": "No matches."
+  },
+  "expiry": {
+    "label": "Expires",
+    "presets": {
+      "1h": "1 hour",
+      "1d": "1 day",
+      "7d": "7 days",
+      "14d": "14 days",
+      "30d": "30 days"
+    },
+    "custom_placeholder": "Pick a date and time",
+    "in_minutes": "in {n} minutes",
+    "in_hours": "in {n} hours",
+    "in_days": "in {n} days",
+    "in_past": "already past — pick a future time"
+  },
+  "files": {
+    "state": {
+      "pending": "Pending",
+      "ready_unscanned": "Ready",
+      "clean": "Clean",
+      "infected": "Infected",
+      "failed": "Failed",
+      "deleted": "Deleted"
+    },
+    "actions": {
+      "download": "Download",
+      "delete": "Delete",
+      "delete_confirm": "Delete this file? This cannot be undone."
+    }
+  },
+  "api_tokens": {
+    "title": "API tokens",
+    "intro": "Tokens authorize programmatic uploads via the API or TUS clients. Create one per script or device.",
+    "create_cta": "Create token",
+    "name_label": "Token name",
+    "name_placeholder": "e.g. backup-script",
+    "create_submit": "Create",
+    "plaintext_eyebrow": "New token",
+    "plaintext_warning": "Copy this token now — it won't be shown again. Store it where the calling script can read it.",
+    "copy": "Copy",
+    "copied": "Copied",
+    "acknowledged": "I've saved it",
+    "created_at": "created {d}",
+    "last_used": "last used {d}",
+    "never_used": "never used",
+    "revoke": "Revoke",
+    "revoke_confirm": "Revoke this token? Any script using it will stop working immediately.",
+    "empty": "No API tokens yet.",
+    "disabled_by_admin": "Your administrator has restricted API token creation. Ask an admin if you need a token for automation."
+  },
+  "share_kind": {
+    "outbound": "Outbound",
+    "inbound": "Inbound"
+  },
+  "share_state": {
+    "active": "Active",
+    "expired": "Expired",
+    "revoked": "Revoked",
+    "deleted": "Deleted"
+  },
+  "share_create": {
+    "eyebrow": "Compose",
+    "title": "New share",
+    "intro": {
+      "outbound": "Send files to a client or colleague. They'll get an email with a link.",
+      "inbound": "Send files to your contact. They'll get an email letting them know."
+    },
+    "subject_label": "Subject",
+    "subject_placeholder": "Optional — what's this about?",
+    "message_label": "Message",
+    "message_placeholder": "Optional — a note for the recipient.",
+    "recipients_or_public_link_hint": "…or skip recipients and attach a public link below.",
+    "send": "Create + send",
+    "sending": "Sending…",
+    "toast_done": "Share created.",
+    "toast_partial": "{n} file(s) failed to upload. Retry below.",
+    "public_link": {
+      "toggle_label": "Also create a public download link",
+      "toggle_help": "Anyone with the link can download — no fileHeron account needed. Optionally protect with a password and a download counter.",
+      "password_label": "Password (optional)",
+      "password_placeholder": "Leave blank for no password",
+      "password_help": "Anyone with the link will need this password to unlock the share.",
+      "download_limit_label": "Download limit (optional)",
+      "download_limit_placeholder": "e.g. 10",
+      "download_limit_help": "Maximum number of successful downloads. Leave blank for unlimited.",
+      "notify_label": "Notify me on every download",
+      "result_eyebrow": "Public link (shown once)",
+      "result_warning": "Copy this URL now — it won't be shown again. Send it to the recipient via your usual channel.",
+      "continue": "Done — go to share"
+    }
+  },
+  "share_detail": {
+    "eyebrow": {
+      "outbound": "Outbound",
+      "inbound": "Inbound"
+    },
+    "id": "ID",
+    "no_subject": "(No subject)",
+    "expires": "Expires",
+    "created": "Created",
+    "total": "Total",
+    "files_heading": "Files ({n})",
+    "targeted_groups": "Groups",
+    "empty": "No files in this share.",
+    "revoke_cta": "Revoke share",
+    "revoke_confirm": "Revoke this share? Files become inaccessible to the recipient.",
+    "revoked_toast": "Share revoked.",
+    "file_deleted_toast": "File deleted.",
+    "edit_expiry": "Edit",
+    "expiry_saved_toast": "Expiry updated.",
+    "expire_now_cta": "Expire now",
+    "expire_now_confirm": "Expire this share now and delete all uploaded files? This cannot be undone.",
+    "expire_now_toast": "Share expired and files deleted."
+  },
+  "public_link": {
+    "title": "Public link",
+    "intro": "Generate a URL anyone can use to download this share's files. Optionally protect with a password and limit how many times it can be used.",
+    "active": "Active",
+    "password": "Password",
+    "password_set": "Set",
+    "password_none": "None",
+    "limit": "Downloads",
+    "limit_value": "{used} of {total} used",
+    "limit_none": "Unlimited",
+    "notify": "Notify on download",
+    "url_label": "Public URL",
+    "url_copy": "Copy URL",
+    "url_copied": "URL copied",
+    "url_legacy_hint": "URL not stored — this link was created before the viewable-URL feature shipped. Revoke and re-create to get a viewable URL.",
+    "url_lost": "The full URL was shown only when the link was created — keep it somewhere safe. Revoke and re-create if you've lost it.",
+    "revoke": "Revoke link",
+    "revoke_confirm": "Revoke this public link? Anyone with the URL will lose access immediately.",
+    "revoked_toast": "Public link revoked.",
+    "just_created": "New public link",
+    "url_warning": "Copy the URL now. It will not be shown again.",
+    "copy": "Copy URL",
+    "copied": "Copied",
+    "acknowledged": "I've saved the URL",
+    "create_submit": "Create public link",
+    "password_label": "Password (optional)",
+    "password_placeholder": "Leave blank for no password",
+    "password_help": "Recipients will need to enter this before downloading.",
+    "limit_label": "Download limit (optional)",
+    "limit_placeholder": "Leave blank for unlimited",
+    "limit_help": "After this many downloads, the link auto-revokes.",
+    "notify_label": "Email me on each download",
+    "notify_help": "Get notified when someone downloads via this link."
+  },
+  "public_share": {
+    "eyebrow": "file:Heron",
+    "no_subject": "Files for you",
+    "expires": "Expires",
+    "files_heading": "Files ({n})",
+    "downloads_remaining": "{n} downloads left.",
+    "password_label": "Password",
+    "password_help": "The sender shared a password to access these files.",
+    "unlock": "Unlock",
+    "scanning": "Scanning",
+    "infected": "Quarantined",
+    "download": "Download",
+    "errors": {
+      "PUBLIC_LINK_NOT_FOUND": "This link is invalid.",
+      "PUBLIC_LINK_REVOKED": "This link has been revoked.",
+      "PUBLIC_LINK_EXHAUSTED": "This link has reached its download limit.",
+      "PUBLIC_LINK_LOCKED": "This link is temporarily locked due to repeated failed unlocks. Try again later.",
+      "SHARE_EXPIRED": "This share has expired.",
+      "SHARE_NOT_ACTIVE": "This share is no longer active.",
+      "INVALID_PUBLIC_PASSWORD": "Wrong password.",
+      "unlock_failed": "Unlock failed.",
+      "generic": "We couldn't load this share."
+    }
+  },
+  "admin_groups": {
+    "eyebrow": "Admin / Groups",
+    "new_group": "New group",
+    "create_heading": "Create group",
+    "name_label": "Name",
+    "name_placeholder": "e.g. customer-acme",
+    "description_label": "Description",
+    "is_inbox_label": "Mark as company inbox",
+    "is_inbox_help": "Clients can target this group for inbound shares.",
+    "create_submit": "Create",
+    "created_toast": "Group created.",
+    "kind_normal": "team",
+    "col": {
+      "name": "Name",
+      "kind": "Kind",
+      "members": "Members",
+      "created": "Created"
+    },
+    "empty_title": "No groups yet.",
+    "empty_subtitle": "Create one to organize recipients."
+  },
+  "admin_group_detail": {
+    "eyebrow": "Admin / Groups",
+    "members_heading": "Members ({n})",
+    "edit": "Edit",
+    "saved_toast": "Saved.",
+    "add_placeholder": "Search to add a member…",
+    "add": "Add",
+    "remove": "Remove",
+    "remove_confirm": "Remove this member? They lose access to past group-targeted shares.",
+    "since": "since {d}",
+    "danger_heading": "Danger zone",
+    "danger_help": "Deleting a group is only allowed if no active share targets it.",
+    "delete": "Delete group",
+    "delete_confirm": "Delete this group? This cannot be undone.",
+    "deleted_toast": "Group deleted."
+  },
+  "share_list": {
+    "eyebrow": {
+      "outbox": "Outbox",
+      "inbox": "Inbox"
+    },
+    "title": {
+      "outbox": "Sent shares",
+      "inbox": "Received shares"
+    },
+    "new_share": "New share",
+    "no_subject": "(No subject)",
+    "created": "created {d}",
+    "col": {
+      "subject": "Subject",
+      "kind": "Kind",
+      "state": "State",
+      "files": "Files",
+      "size": "Size",
+      "expires": "Expires",
+      "sender": "Sender",
+      "recipients": "Recipients"
+    },
+    "filter": {
+      "state_all": "Any state",
+      "party_any": {
+        "outbox": "Any recipient",
+        "inbox": "Any sender"
+      },
+      "party_user": {
+        "outbox": "Recipient (user)",
+        "inbox": "Sender (user)"
+      },
+      "party_group": {
+        "outbox": "Recipient (group)",
+        "inbox": "Via group"
+      },
+      "user_placeholder": "Search by name or email…",
+      "group_pick": "Pick a group…",
+      "clear": "Clear filters"
+    },
+    "group": {
+      "label": "Group by",
+      "none": "None",
+      "recipient_user": "Recipient (user)",
+      "recipient_group": "Recipient (group)",
+      "sender": "Sender",
+      "via_group": "Via group",
+      "no_user": "(no user recipients)",
+      "no_group": "(no group recipients)"
+    },
+    "empty": {
+      "outbox": {
+        "title": "Nothing sent yet.",
+        "subtitle": "Create a share to send files to a recipient."
+      },
+      "inbox": {
+        "title": "Nothing received yet.",
+        "subtitle": "Shares sent to you will appear here."
+      }
+    }
+  },
+  "admin_file_history": {
+    "eyebrow": "Admin / File history",
+    "intro": "Every file ever uploaded — including expired and deleted — joined with parent share metadata, uploader, and download stats.",
+    "total_count": "{n} files",
+    "search_placeholder": "Search filename, uploader name or email…",
+    "file_state_all": "Any file state",
+    "share_state_all": "Any share state",
+    "empty": "No files match the current filters.",
+    "col": {
+      "filename": "Filename",
+      "size": "Size",
+      "state": "State",
+      "uploader": "Uploader",
+      "share": "Share",
+      "uploaded": "Uploaded",
+      "last_dl": "Last download",
+      "dl_count": "# DL"
+    }
+  },
+  "admin_quarantine": {
+    "eyebrow": "Admin / Quarantine",
+    "intro": "Files ClamAV flagged as infected. The bytes are kept on disk under ./data/quarantine/ so you can download them for forensic review, release them back to the owner if you're confident the verdict was a false positive, or purge them once you're done.",
+    "total_count": "{n} infected files",
+    "empty": "Nothing in quarantine. Either nothing has been flagged or everything was already released or purged.",
+    "search_placeholder": "Search filename, uploader name or email…",
+    "col": {
+      "filename": "Filename",
+      "size": "Size",
+      "uploader": "Uploader",
+      "share": "Share",
+      "uploaded": "Uploaded",
+      "actions": "Actions"
+    },
+    "btn": {
+      "download": "Download",
+      "release": "Release",
+      "purge": "Purge"
+    },
+    "confirm": {
+      "release_title": "Release back to owner",
+      "release_help": "Marks the file clean and (when ClamAV was the only revoke reason) reactivates the share. The bytes move from quarantine back to active storage. The uploader's quota is re-reserved.",
+      "purge_title": "Purge bytes",
+      "purge_help": "Deletes the quarantined bytes from disk. The file row stays at state=infected as the historical marker. Irreversible.",
+      "reason_label": "Reason (required, 10–500 chars)",
+      "reason_placeholder": "Why are you taking this action? Goes into the audit log.",
+      "confirm_release": "Release",
+      "confirm_purge": "Purge",
+      "cancel": "Cancel"
+    },
+    "toast": {
+      "released": "File released back to the owner.",
+      "purged": "File bytes purged from disk."
+    }
+  },
+  "admin_settings_quarantine": {
+    "title": "Quarantine alerts",
+    "intro": "When ClamAV detects an infected upload, the uploader is always notified. This toggle additionally fans out a notification (email + in-app bell) to every admin.",
+    "toggle_label": "Notify all admins when a virus is detected",
+    "toggle_help": "Each admin gets an email + an in-app bell ring per detection. An admin can mute themselves from /account → Notifications by switching the \"file_quarantined\" channel to \"off\" (default is \"both\" — email + in-app).",
+    "saved_toast": "Quarantine alert setting saved."
+  }
+}

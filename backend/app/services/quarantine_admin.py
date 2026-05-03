@@ -1,0 +1,163 @@
+"""Admin actions on quarantined files: release back to the owner, or
+purge the bytes from disk while keeping the historical row.
+
+Both actions require an `infected` file. Both audit with the admin as
+actor and a free-text reason that the admin types into the SPA confirm
+dialog (10–500 chars, validated at the schema layer).
+
+Caller commits in both operations.
+"""
+from __future__ import annotations
+
+import logging
+import shutil
+from pathlib import Path
+
+from sqlalchemy.orm import Session
+
+from ..middleware.errors import AppError
+from ..models.audit_log import AuditEventType, AuditLog
+from ..models.file import File, FileState
+from ..models.share import Share, ShareState
+from ..models.user import User
+from .audit import record_audit_event
+from .file import storage_path_for
+from .quota import reserve_bytes
+
+logger = logging.getLogger("fileheron.quarantine_admin")
+
+
+def _refuse_unless_infected(file: File) -> None:
+    if file.state != FileState.infected:
+        raise AppError(
+            409,
+            "FILE_NOT_INFECTED",
+            "Only quarantined (infected) files support this action.",
+            details={"current_state": file.state.value},
+        )
+
+
+def release(
+    db: Session, *, admin: User, file: File, reason: str, request=None
+) -> None:
+    """Move bytes back to active storage, reset file → clean, restore the
+    parent share if it was revoked specifically by AV (not by an admin
+    after the fact), and re-reserve uploader quota."""
+    _refuse_unless_infected(file)
+
+    # Move bytes back to the deterministic storage path. Use shutil.move
+    # so cross-fs bind mounts still work (same handling as finalize).
+    src = Path(file.storage_path) if file.storage_path else None
+    new_path: Path | None = None
+    if src is not None and src.is_file():
+        new_path = storage_path_for(file.id)
+        new_path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(src), str(new_path))
+        file.storage_path = str(new_path)
+    else:
+        # Bytes already gone (manual cleanup, prior purge, etc.) — refuse
+        # rather than silently flip state on a missing file. Admin should
+        # purge instead.
+        raise AppError(
+            409,
+            "QUARANTINE_BYTES_MISSING",
+            "Cannot release: the quarantined bytes are no longer on disk.",
+        )
+
+    file.state = FileState.clean
+    db.flush()
+
+    # Re-reserve uploader quota (release_bytes was called when the file
+    # entered quarantine).
+    uploader = db.query(User).filter(User.id == file.uploaded_by_id).one_or_none()
+    if uploader is not None:
+        try:
+            reserve_bytes(db, user=uploader, additional_bytes=file.size_bytes)
+        except AppError:
+            # If the uploader is now over quota (admin tightened it after
+            # the upload), still allow the release — the bytes already
+            # exist on disk; rejecting would leave the file in a
+            # half-released state. Log it for ops awareness.
+            logger.warning(
+                "release: uploader %d would exceed quota after re-reservation; "
+                "allowing the release anyway",
+                uploader.id,
+            )
+
+    # Restore the parent share — but only if it was revoked specifically
+    # because of THIS quarantine, not by a separate admin action.
+    share = db.query(Share).filter(Share.id == file.share_id).one_or_none()
+    share_restored = False
+    if share is not None and share.state == ShareState.revoked:
+        last_revoke = (
+            db.query(AuditLog)
+            .filter(
+                AuditLog.event_type == AuditEventType.share_revoked.value,
+                AuditLog.target_type == "share",
+                AuditLog.target_id == share.id,
+            )
+            .order_by(AuditLog.created_at.desc())
+            .first()
+        )
+        if (
+            last_revoke is not None
+            and isinstance(last_revoke.extra, dict)
+            and last_revoke.extra.get("reason") == "av_quarantine"
+            and last_revoke.extra.get("trigger_file_id") == file.id
+        ):
+            share.state = ShareState.active
+            share_restored = True
+
+    record_audit_event(
+        db,
+        event_type=AuditEventType.file_quarantine_released,
+        actor_user_id=admin.id,
+        target_type="file",
+        target_id=file.id,
+        metadata={
+            "reason": reason,
+            "size_bytes": file.size_bytes,
+            "filename": file.original_filename,
+            "share_id": file.share_id,
+            "share_restored": share_restored,
+        },
+        request=request,
+    )
+
+
+def purge(
+    db: Session, *, admin: User, file: File, request=None
+) -> None:
+    """Unlink the quarantined bytes from disk and transition the file
+    row to ``state=deleted`` so it disappears from /admin/quarantine
+    (which filters to ``state=infected``). The ``file_quarantine_purged``
+    audit row preserves the history; /admin/file-history still surfaces
+    the row under state=deleted."""
+    _refuse_unless_infected(file)
+
+    if file.storage_path:
+        try:
+            path = Path(file.storage_path)
+            if path.is_file():
+                path.unlink()
+        except OSError as e:
+            logger.warning(
+                "purge: could not unlink %s: %s", file.storage_path, e
+            )
+    file.storage_path = None
+    file.state = FileState.deleted
+    db.flush()
+
+    record_audit_event(
+        db,
+        event_type=AuditEventType.file_quarantine_purged,
+        actor_user_id=admin.id,
+        target_type="file",
+        target_id=file.id,
+        metadata={
+            "size_bytes": file.size_bytes,
+            "filename": file.original_filename,
+            "share_id": file.share_id,
+        },
+        request=request,
+    )

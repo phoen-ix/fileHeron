@@ -1,0 +1,13 @@
+Hi {{ display_name|default("there") }},
+
+A new sign-in to your {{ app_name }} account just happened from a device we hadn't seen before.
+
+When:    {{ at|dt_locale(locale) }}
+Method:  {{ via|default("password") }}
+Browser: {{ ua_summary|default("unknown") }}
+Region:  {{ ip_hint|default("unknown") }}
+
+If this was you, no action is needed. If it wasn't, change your password immediately and review your active sessions:
+{{ account_url }}
+
+— {{ app_name }}

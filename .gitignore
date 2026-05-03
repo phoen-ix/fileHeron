@@ -1,0 +1,70 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+.eggs/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+*.egg
+build/
+.tox/
+.nox/
+.hypothesis/
+
+# Virtualenv
+.venv/
+venv/
+env/
+ENV/
+
+# Node
+node_modules/
+.npm/
+.eslintcache
+.parcel-cache/
+.vite/
+
+# Build artifacts (root + per-workspace)
+dist/
+backend/dist/
+frontend/dist/
+*.local
+
+# Editors
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Env
+.env
+.env.local
+.env.*.local
+
+# Project data — bind mounts, never commit user files
+data/db/*
+!data/db/.gitkeep
+data/redis/*
+!data/redis/.gitkeep
+data/uploads/*
+!data/uploads/.gitkeep
+data/files/*
+!data/files/.gitkeep
+data/quarantine/*
+!data/quarantine/.gitkeep
+backups/*
+!backups/.gitkeep
+
+# Logs
+*.log
+logs/
+
+# Claude Code internal state
+.claude/

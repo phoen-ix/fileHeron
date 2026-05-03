@@ -1,0 +1,275 @@
+services:
+  db:
+    image: mariadb:11
+    container_name: ${COMPOSE_PROJECT_NAME:-fileheron}-db
+    restart: unless-stopped
+    # Resource ceilings — defense against runaway query / OOM. Tune
+    # via `${DB_MEM_LIMIT:-2g}` etc. in your env if the defaults
+    # don't fit your VPS. mem_limit + cpus are honored by docker
+    # compose CLI in non-swarm mode.
+    mem_limit: ${DB_MEM_LIMIT:-2g}
+    cpus: ${DB_CPUS:-2.0}
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?DB_ROOT_PASSWORD is required}
+      MYSQL_DATABASE: ${DB_NAME:-fileheron}
+      MYSQL_USER: ${DB_USER:-fileheron_app}
+      MYSQL_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+    volumes:
+      - ./data/db:/var/lib/mysql
+      - ./docker/mariadb/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks: [internal]
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"
+
+  redis:
+    image: redis:7-alpine
+    container_name: ${COMPOSE_PROJECT_NAME:-fileheron}-redis
+    restart: unless-stopped
+    mem_limit: ${REDIS_MEM_LIMIT:-512m}
+    cpus: ${REDIS_CPUS:-1.0}
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy volatile-lru
+    volumes:
+      - ./data/redis:/data
+    networks: [internal]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"
+
+  backend:
+    build:
+      context: .
+      dockerfile: docker/backend/Dockerfile
+    container_name: ${COMPOSE_PROJECT_NAME:-fileheron}-backend
+    restart: unless-stopped
+    mem_limit: ${BACKEND_MEM_LIMIT:-1g}
+    cpus: ${BACKEND_CPUS:-2.0}
+    ports:
+      - "127.0.0.1:${APP_BACKEND_PORT:-8000}:8000"
+    environment:
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_NAME: ${DB_NAME:-fileheron}
+      DB_USER: ${DB_USER:-fileheron_app}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-15}
+      REFRESH_TOKEN_EXPIRE_DAYS: ${REFRESH_TOKEN_EXPIRE_DAYS:-7}
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
+      ARGON2_TIME_COST: ${ARGON2_TIME_COST:-3}
+      ARGON2_MEMORY_COST_KIB: ${ARGON2_MEMORY_COST_KIB:-65536}
+      ARGON2_PARALLELISM: ${ARGON2_PARALLELISM:-2}
+      ADMIN_BOOTSTRAP_EMAIL: ${ADMIN_BOOTSTRAP_EMAIL:-}
+      ADMIN_BOOTSTRAP_PASSWORD: ${ADMIN_BOOTSTRAP_PASSWORD:-}
+      TEST_ACCOUNT_EMAIL: ${TEST_ACCOUNT_EMAIL:-}
+      TEST_ACCOUNT_PASSWORD: ${TEST_ACCOUNT_PASSWORD:-}
+      TEST_ACCOUNT_DISPLAY_NAME: ${TEST_ACCOUNT_DISPLAY_NAME:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL:-noreply@fileheron.local}
+      SMTP_FROM_NAME: ${SMTP_FROM_NAME:-fileHeron}
+      APP_URL: ${APP_URL:-http://localhost:8080}
+      APP_NAME: ${APP_NAME:-fileHeron}
+      RATE_LIMIT_LOGIN: ${RATE_LIMIT_LOGIN:-10}
+      RATE_LIMIT_REGISTER: ${RATE_LIMIT_REGISTER:-3}
+      RATE_LIMIT_API: ${RATE_LIMIT_API:-100}
+      TUS_HOOK_SECRET: ${TUS_HOOK_SECRET:?TUS_HOOK_SECRET is required}
+      MAX_DIRECT_UPLOAD_BYTES: ${MAX_DIRECT_UPLOAD_BYTES:-104857600}
+      CLAMAV_HOST: ${CLAMAV_HOST:-clamav}
+      CLAMAV_PORT: ${CLAMAV_PORT:-3310}
+      AV_SKIP: ${AV_SKIP:-false}
+      STORAGE_ROOT: ${STORAGE_ROOT:-/data/files}
+      TUS_UPLOAD_DIR: ${TUS_UPLOAD_DIR:-/data/uploads}
+      QUARANTINE_DIR: ${QUARANTINE_DIR:-/data/quarantine}
+      TUS_PUBLIC_BASE: ${TUS_PUBLIC_BASE:-/uploads/}
+    volumes:
+      - ./data/files:/data/files
+      - ./data/uploads:/data/uploads
+      - ./data/quarantine:/data/quarantine
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks: [internal]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "100m"
+        max-file: "3"
+
+  clamav:
+    image: clamav/clamav:stable
+    container_name: ${COMPOSE_PROJECT_NAME:-fileheron}-clamav
+    restart: unless-stopped
+    mem_limit: ${CLAMAV_MEM_LIMIT:-2g}
+    cpus: ${CLAMAV_CPUS:-1.0}
+    volumes:
+      # Read-only access to finalized files for scanning.
+      - ./data/files:/data/files:ro
+      # Quarantine dir: writeable so the backend (mounted at the same path)
+      # can move infected files into a path the worker container shares.
+      - ./data/quarantine:/data/quarantine:rw
+      # Signature DB persists across container restarts.
+      - clamav-defs:/var/lib/clamav
+    networks: [internal]
+    healthcheck:
+      # `clamdcheck.sh` ships with the official image; it short-circuits
+      # to a TCP ping against clamd. Initial freshclam run is slow, so
+      # start_period is generous.
+      test: ["CMD", "clamdcheck.sh"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 180s
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"
+
+  worker:
+    build:
+      context: .
+      dockerfile: docker/backend/Dockerfile
+    container_name: ${COMPOSE_PROJECT_NAME:-fileheron}-worker
+    restart: unless-stopped
+    mem_limit: ${WORKER_MEM_LIMIT:-512m}
+    cpus: ${WORKER_CPUS:-1.0}
+    command: ["arq", "app.workers.worker.WorkerSettings"]
+    environment:
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_NAME: ${DB_NAME:-fileheron}
+      DB_USER: ${DB_USER:-fileheron_app}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      EMAIL_PEPPER: ${EMAIL_PEPPER:?EMAIL_PEPPER is required}
+      TUS_HOOK_SECRET: ${TUS_HOOK_SECRET:?TUS_HOOK_SECRET is required}
+      STORAGE_ROOT: ${STORAGE_ROOT:-/data/files}
+      TUS_UPLOAD_DIR: ${TUS_UPLOAD_DIR:-/data/uploads}
+      QUARANTINE_DIR: ${QUARANTINE_DIR:-/data/quarantine}
+      MAX_DIRECT_UPLOAD_BYTES: ${MAX_DIRECT_UPLOAD_BYTES:-104857600}
+      TUS_PUBLIC_BASE: ${TUS_PUBLIC_BASE:-/uploads/}
+      CLAMAV_HOST: ${CLAMAV_HOST:-clamav}
+      CLAMAV_PORT: ${CLAMAV_PORT:-3310}
+      AV_SKIP: ${AV_SKIP:-false}
+    volumes:
+      - ./data/files:/data/files
+      - ./data/uploads:/data/uploads
+      - ./data/quarantine:/data/quarantine
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks: [internal]
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"
+
+  tusd:
+    image: tusproject/tusd:latest
+    container_name: ${COMPOSE_PROJECT_NAME:-fileheron}-tusd
+    restart: unless-stopped
+    mem_limit: ${TUSD_MEM_LIMIT:-512m}
+    cpus: ${TUSD_CPUS:-1.0}
+    command:
+      - "-upload-dir=/data/uploads"
+      - "-base-path=/uploads/"
+      - "-hooks-http=http://backend:8000/api/internal/tus-hooks"
+      # Forward the signed-metadata header that the browser/API client puts on
+      # each upload request (it carries the HMAC envelope authorising this
+      # upload). tusd doesn't sign requests itself; auth rides on the metadata.
+      - "-hooks-http-forward-headers=Upload-Metadata"
+      - "-hooks-enabled-events=pre-create,pre-finish,post-finish,post-terminate"
+      - "-behind-proxy"
+      - "-disable-cors"  # CORS is handled by the front-facing proxy/Vite
+    volumes:
+      - ./data/uploads:/data/uploads
+    networks: [internal]
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/uploads/"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: "100m"
+        max-file: "3"
+
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/frontend/Dockerfile
+    container_name: ${COMPOSE_PROJECT_NAME:-fileheron}-frontend
+    restart: unless-stopped
+    mem_limit: ${FRONTEND_MEM_LIMIT:-256m}
+    cpus: ${FRONTEND_CPUS:-0.5}
+    ports:
+      - "127.0.0.1:${APP_FRONTEND_PORT:-8080}:80"
+    networks: [internal]
+    depends_on:
+      # Wait for healthy upstreams so the first request through nginx
+      # doesn't hit a 502 before backend / tusd are listening.
+      backend:
+        condition: service_healthy
+      tusd:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"
+
+networks:
+  internal:
+    driver: bridge
+
+volumes:
+  clamav-defs: {}

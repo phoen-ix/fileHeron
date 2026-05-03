@@ -1,0 +1,12 @@
+Hallo {{ owner_name|default("zusammen") }},
+
+Jemand hat gerade eine Datei über den öffentlichen Link zu deiner Freigabe „{{ subject|default("(kein Betreff)") }}" heruntergeladen.
+
+Datei: {{ filename }}
+Größe: {{ size_bytes }} Bytes
+Wann:  {{ at|dt_locale(locale) }}
+{% if downloads_remaining is not none %}Verbleibend: {{ downloads_remaining }}
+{% endif %}
+Link verwalten: {{ share_url }}
+
+— {{ app_name }}

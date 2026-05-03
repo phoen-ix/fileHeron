@@ -1,0 +1,14 @@
+{
+  "verify": "Verify your email",
+  "reset_password": "Reset your password",
+  "invite": "You have been invited to {app_name}",
+  "lockout_warning": "Your account was just locked",
+  "share_created": "{sender_name} sent you files via {app_name}",
+  "share_expiring": "Your share expires in 24 hours",
+  "public_link_downloaded": "A public link to your files was just downloaded",
+  "account_created": "{invitee_name} just joined {app_name}",
+  "twofa_required": "Two-factor auth is now required",
+  "login_alert": "Sign-in from a new device",
+  "file_quarantined": "An infected file was quarantined",
+  "smtp_test": "{app_name} · SMTP test"
+}

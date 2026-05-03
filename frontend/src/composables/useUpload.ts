@@ -1,0 +1,288 @@
+/* Upload orchestration for a single share.
+ *
+ * Two paths, one queue:
+ *
+ * 1. Files smaller than DIRECT_UPLOAD_THRESHOLD go through
+ *    POST /api/uploads/direct (multipart, single round-trip, no resume).
+ * 2. Larger files take the resumable path:
+ *      POST /api/uploads/init → server returns a TUS endpoint + an
+ *      HMAC-signed Upload-Metadata envelope. Uppy's Tus plugin opens
+ *      the upload at that endpoint with that header; tusd verifies
+ *      the envelope on pre-create.
+ *
+ * The composable exposes a flat list of items the UI iterates over —
+ * the small/large split is invisible to the consumer.
+ *
+ * What this composable deliberately does NOT do:
+ *   - It doesn't poll the server for finalization. tusd's post-finish
+ *     hook runs after returning to the client, so upload-success is
+ *     racy with file.state — but the ShareDetail page re-fetches the
+ *     authoritative share+files on navigation, and that's where users
+ *     read final state. Adding polling here would couple two layers. */
+import Uppy, { type UppyFile } from '@uppy/core'
+import Tus from '@uppy/tus'
+import { computed, onBeforeUnmount, ref, type Ref } from 'vue'
+
+import { directUpload, initUpload } from '@/api/uploads'
+
+// Mirror backend's MAX_DIRECT_UPLOAD_BYTES default. Cheap-enough for the
+// smallest VPS — files above this take the chunked path with resume.
+const DIRECT_UPLOAD_THRESHOLD = 100 * 1024 * 1024 // 100 MB
+const TUS_CHUNK_BYTES = 8 * 1024 * 1024 // 8 MB chunks → balanced for big files + slow links
+const TUS_RETRY_DELAYS = [0, 1000, 3000, 5000, 10000] // ms
+
+export type UploadState =
+  | 'queued'
+  | 'preparing'
+  | 'uploading'
+  | 'finalizing'
+  | 'done'
+  | 'error'
+
+export interface UploadItem {
+  uid: string
+  file: File
+  state: UploadState
+  progress: number
+  fileId: string | null
+  error: string | null
+  bytesUploaded: number
+}
+
+// Local meta we attach so the Tus plugin can pull per-file headers off
+// the Uppy file object.
+interface FileMeta {
+  uid: string
+  uploadMetadataHeader: string
+  fileId: string
+}
+
+let uidCounter = 0
+const nextUid = () => `u${++uidCounter}_${Date.now().toString(36)}`
+
+export function useUpload(shareId: Ref<string | null>) {
+  const items = ref<UploadItem[]>([])
+
+  const uppy = new Uppy<FileMeta, Record<string, never>>({
+    autoProceed: false,
+    allowMultipleUploadBatches: true,
+  }).use(Tus, {
+    endpoint: '/uploads/', // Vite/Traefik proxies to tusd
+    chunkSize: TUS_CHUNK_BYTES,
+    retryDelays: TUS_RETRY_DELAYS,
+    removeFingerprintOnSuccess: true,
+    // Per-file Upload-Metadata: the HMAC envelope tusd's pre-create hook
+    // verifies.
+    headers: (file) => {
+      const meta = file?.meta as FileMeta | undefined
+      return meta?.uploadMetadataHeader
+        ? { 'Upload-Metadata': meta.uploadMetadataHeader }
+        : {}
+    },
+  })
+
+  function findItemByUppyId(uppyFileId: string): UploadItem | undefined {
+    const file = uppy.getFile(uppyFileId)
+    const uid = (file?.meta as FileMeta | undefined)?.uid
+    return uid ? items.value.find((i) => i.uid === uid) : undefined
+  }
+
+  uppy.on('upload-progress', (uppyFile, progress) => {
+    if (!uppyFile) return
+    const item = findItemByUppyId(uppyFile.id)
+    if (!item) return
+    item.bytesUploaded = progress.bytesUploaded ?? 0
+    if (progress.bytesTotal) {
+      item.progress = Math.min(
+        99,
+        Math.round((progress.bytesUploaded / progress.bytesTotal) * 100),
+      )
+    }
+    if (item.state === 'preparing') item.state = 'uploading'
+  })
+
+  uppy.on('upload-success', (uppyFile) => {
+    if (!uppyFile) return
+    const item = findItemByUppyId(uppyFile.id)
+    if (!item) return
+    item.progress = 100
+    item.bytesUploaded = item.file.size
+    // tusd post-finish runs server-side after returning here, so we
+    // briefly show 'finalizing' before the next view re-fetches the
+    // share and shows authoritative state.
+    item.state = 'finalizing'
+    setTimeout(() => {
+      if (item.state === 'finalizing') item.state = 'done'
+    }, 800)
+  })
+
+  uppy.on('upload-error', (uppyFile, err) => {
+    if (!uppyFile) return
+    const item = findItemByUppyId(uppyFile.id)
+    if (!item) return
+    item.state = 'error'
+    item.error = err?.message ?? 'upload failed'
+  })
+
+  function add(files: File[]) {
+    for (const f of files) {
+      items.value.push({
+        uid: nextUid(),
+        file: f,
+        state: 'queued',
+        progress: 0,
+        fileId: null,
+        error: null,
+        bytesUploaded: 0,
+      })
+    }
+  }
+
+  async function startItem(item: UploadItem) {
+    if (!shareId.value) {
+      item.state = 'error'
+      item.error = 'no share id'
+      return
+    }
+    if (item.state !== 'queued') return
+    item.state = 'preparing'
+
+    try {
+      if (item.file.size < DIRECT_UPLOAD_THRESHOLD) {
+        // Direct path: one POST, server-managed progress estimation.
+        const { data } = await directUpload(
+          shareId.value,
+          item.file,
+          (n) => {
+            item.progress = Math.min(99, n)
+            item.bytesUploaded = Math.round((item.file.size * n) / 100)
+            if (item.state === 'preparing') item.state = 'uploading'
+          },
+        )
+        item.fileId = data.file_id
+        item.progress = 100
+        item.bytesUploaded = item.file.size
+        item.state = 'done'
+        return
+      }
+
+      // Resumable path.
+      const { data } = await initUpload({
+        share_id: shareId.value,
+        filename: item.file.name,
+        size_bytes: item.file.size,
+        mime_type: item.file.type || 'application/octet-stream',
+      })
+      item.fileId = data.file_id
+
+      const uppyId = uppy.addFile({
+        name: item.file.name,
+        type: item.file.type || 'application/octet-stream',
+        data: item.file,
+        meta: {
+          uid: item.uid,
+          uploadMetadataHeader: data.upload_metadata_header,
+          fileId: data.file_id,
+        },
+      })
+
+      item.state = 'uploading'
+      // Uppy upload returns when this batch completes; per-file
+      // success/error already routed through event handlers.
+      await uppy.upload()
+      // Drop the file from Uppy's internal tracking so a retry can
+      // re-add cleanly.
+      try {
+        uppy.removeFile(uppyId)
+      } catch {
+        /* ignore — already removed on success */
+      }
+    } catch (err) {
+      const msg =
+        err instanceof Error
+          ? err.message
+          : typeof err === 'string'
+            ? err
+            : 'upload failed'
+      item.state = 'error'
+      item.error = msg
+    }
+  }
+
+  async function start() {
+    // Run sequentially to keep tusd hook pressure predictable on small
+    // VPSes. If a particular deploy needs throughput, switching to
+    // parallel is a one-line change.
+    for (const item of items.value) {
+      if (item.state === 'queued') await startItem(item)
+    }
+  }
+
+  function remove(uid: string) {
+    const idx = items.value.findIndex((i) => i.uid === uid)
+    if (idx === -1) return
+    const item = items.value[idx]
+    // If the file is mid-flight in Uppy, remove it there too.
+    const uppyFile = uppy
+      .getFiles()
+      .find((f: UppyFile<FileMeta, Record<string, never>>) => {
+        const meta = f.meta as FileMeta | undefined
+        return meta?.uid === uid
+      })
+    if (uppyFile) {
+      try {
+        uppy.removeFile(uppyFile.id)
+      } catch {
+        /* ignore */
+      }
+    }
+    items.value.splice(idx, 1)
+  }
+
+  async function retry(uid: string) {
+    const item = items.value.find((i) => i.uid === uid)
+    if (!item) return
+    item.state = 'queued'
+    item.progress = 0
+    item.bytesUploaded = 0
+    item.error = null
+    await startItem(item)
+  }
+
+  const isActive = computed(() =>
+    items.value.some((i) =>
+      ['preparing', 'uploading', 'finalizing'].includes(i.state),
+    ),
+  )
+
+  const allDone = computed(
+    () => items.value.length > 0 && items.value.every((i) => i.state === 'done'),
+  )
+
+  const totalBytes = computed(() =>
+    items.value.reduce((acc, i) => acc + i.file.size, 0),
+  )
+  const uploadedBytes = computed(() =>
+    items.value.reduce((acc, i) => acc + i.bytesUploaded, 0),
+  )
+
+  onBeforeUnmount(() => {
+    try {
+      uppy.cancelAll()
+    } catch {
+      /* ignore */
+    }
+  })
+
+  return {
+    items,
+    add,
+    start,
+    remove,
+    retry,
+    isActive,
+    allDone,
+    totalBytes,
+    uploadedBytes,
+  }
+}

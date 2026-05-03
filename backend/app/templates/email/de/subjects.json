@@ -1,0 +1,14 @@
+{
+  "verify": "E-Mail bestätigen",
+  "reset_password": "Passwort zurücksetzen",
+  "invite": "Du wurdest zu {app_name} eingeladen",
+  "lockout_warning": "Dein Konto wurde gesperrt",
+  "share_created": "{sender_name} hat dir Dateien über {app_name} gesendet",
+  "share_expiring": "Deine Freigabe läuft in 24 Stunden ab",
+  "public_link_downloaded": "Ein öffentlicher Link zu deinen Dateien wurde geöffnet",
+  "account_created": "{invitee_name} ist {app_name} beigetreten",
+  "twofa_required": "Zwei-Faktor-Authentifizierung ist jetzt erforderlich",
+  "login_alert": "Anmeldung von einem neuen Gerät",
+  "file_quarantined": "Eine infizierte Datei wurde unter Quarantäne gestellt",
+  "smtp_test": "{app_name} · SMTP-Test"
+}

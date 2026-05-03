@@ -1,0 +1,16 @@
+{% extends "layout.html.j2" %}
+{% block subject %}{{ invitee_name }} just joined{% endblock %}
+{% block content %}
+  <p style="margin:0 0 12px 0;color:#6b7280;font-family:Georgia,serif;font-style:italic;">Invite consumed</p>
+  <h1 style="font-family:Georgia,'Times New Roman',serif;font-weight:normal;font-size:26px;line-height:1.2;margin:0 0 16px 0;">
+    {{ invitee_name }} just joined {{ app_name }}
+  </h1>
+  <p style="margin:0 0 16px 0;">
+    Role: <strong>{{ invitee_role }}</strong>
+  </p>
+  <p style="margin:0;">
+    <a href="{{ account_url }}" style="display:inline-block;background:#1a1d24;color:#faf8f3;text-decoration:none;padding:12px 24px;font-weight:500;">
+      Manage users →
+    </a>
+  </p>
+{% endblock %}

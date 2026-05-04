@@ -70,6 +70,7 @@ async def register_from_invite(
     )
     # Issue session immediately so the new user is logged in.
     access, expires_in = auth_svc.create_access_token(user.id, settings)
+    rate_limit_svc.record_success(db, user=user)
     _, refresh_plain = auth_svc._create_refresh_token(db, user, request, settings)
     db.commit()
     _set_refresh_cookie(response, refresh_plain)

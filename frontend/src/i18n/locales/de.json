@@ -491,7 +491,60 @@
     "invite_groups_help": "Mitgliedschaften werden gesetzt, sobald die Einladung angenommen wird.",
     "invite_groups_inbox": "Firmen-Postfach",
     "invite_submit": "Einladung senden",
-    "invite_sent": "Einladung an {hint} gesendet, läuft am {expires} ab."
+    "invite_sent": "Einladung an {hint} gesendet, läuft am {expires} ab.",
+    "invites": {
+      "heading": "Offene Einladungen",
+      "help": "Benutzer, die eingeladen wurden, ihren Account aber noch nicht aktiviert haben.",
+      "invited_by_unknown": "(unbekannt)",
+      "col": {
+        "email": "E-Mail",
+        "role": "Rolle",
+        "state": "Status",
+        "invited_by": "Eingeladen von",
+        "sent": "Gesendet",
+        "expires": "Läuft ab",
+        "actions": "Aktionen"
+      },
+      "state": {
+        "pending": "offen",
+        "expired": "abgelaufen"
+      },
+      "action": {
+        "copy_link": "Link kopieren",
+        "resend": "Per E-Mail erneut senden",
+        "details": "Details",
+        "activate": "Aktivieren",
+        "revoke": "Zurückziehen"
+      },
+      "toast": {
+        "link_copied": "Einladungslink in die Zwischenablage kopiert.",
+        "resent": "Einladung erneut gesendet. Neues Ablaufdatum: {expires}.",
+        "revoked": "Einladung zurückgezogen.",
+        "activated": "Account aktiviert. Anmeldung ist sofort möglich."
+      },
+      "details": {
+        "title": "Einladungsdetails",
+        "email": "E-Mail",
+        "target_role": "Ziel-Rolle",
+        "state": "Status",
+        "invited_by": "Eingeladen von",
+        "created_at": "Gesendet",
+        "expires_at": "Läuft ab",
+        "initial_groups": "Initiale Gruppen"
+      },
+      "activate": {
+        "title": "Account direkt aktivieren",
+        "body": "Account für {email} mit Rolle {role} sofort aktivieren — der Empfänger muss kein Passwort setzen und kann sich direkt per SSO anmelden. Der Einladungslink wird ungültig.",
+        "display_name_label": "Anzeigename",
+        "display_name_help": "Standard ist der lokale Teil der E-Mail. Bei Bedarf anpassen; der Benutzer kann ihn später selbst ändern.",
+        "confirm": "Jetzt aktivieren"
+      },
+      "revoke": {
+        "title": "Einladung zurückziehen",
+        "body": "Der Einladungslink für {email} wird ungültig. Eine Registrierung über diesen Link ist danach nicht mehr möglich. Fortfahren?",
+        "confirm": "Zurückziehen"
+      }
+    }
   },
   "admin_user_detail": {
     "eyebrow": "Admin / Benutzer",

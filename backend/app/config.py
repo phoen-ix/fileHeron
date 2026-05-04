@@ -67,10 +67,13 @@ class Settings(BaseSettings):
     SMTP_FROM_EMAIL: str = "noreply@fileheron.local"
     SMTP_FROM_NAME: str = "fileHeron"
 
-    # --- Rate limits (Phase 1b uses these) -----------------------------------
+    # --- Rate limits ---------------------------------------------------------
+    # LOGIN gates /api/auth/login + /login/recovery (services/rate_limit.py).
+    # REGISTER gates /register-from-invite, /forgot-password, /verify-email
+    # (routers/auth.py). There is no API-wide bearer-rate-limit today; if you
+    # add one, model it on `services/rate_limit.py::check_ip_allowed`.
     RATE_LIMIT_LOGIN: int = 10
     RATE_LIMIT_REGISTER: int = 3
-    RATE_LIMIT_API: int = 100
 
     # --- Phase 3a — upload pipeline ------------------------------------------
     # Shared HMAC secret for tusd ↔ backend (envelope authorisation).

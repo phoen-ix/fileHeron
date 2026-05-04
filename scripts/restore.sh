@@ -73,16 +73,20 @@ docker compose up -d redis
 
 echo "[restore] restoring database …"
 docker compose up -d db
-# Wait for db to be reachable.
+# Wait for db to be reachable. Pass the password via MYSQL_PWD (forwarded
+# by `docker compose exec -e MYSQL_PWD`) instead of `-p"$pwd"` so the
+# secret never lands in the host's `ps aux`.
+export MYSQL_PWD="$DB_ROOT_PASSWORD"
 for _ in $(seq 1 30); do
-    if docker compose exec -T db mariadb -uroot -p"$DB_ROOT_PASSWORD" -e "SELECT 1" >/dev/null 2>&1; then
+    if docker compose exec -T -e MYSQL_PWD db mariadb -uroot -e "SELECT 1" >/dev/null 2>&1; then
         break
     fi
     sleep 1
 done
-docker compose exec -T db mariadb -uroot -p"$DB_ROOT_PASSWORD" \
+docker compose exec -T -e MYSQL_PWD db mariadb -uroot \
     -e "DROP DATABASE IF EXISTS \`$DB_NAME\`; CREATE DATABASE \`$DB_NAME\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
-docker compose exec -T db mariadb -uroot -p"$DB_ROOT_PASSWORD" "$DB_NAME" < "$BACKUP/db.sql"
+docker compose exec -T -e MYSQL_PWD db mariadb -uroot "$DB_NAME" < "$BACKUP/db.sql"
+unset MYSQL_PWD
 
 echo "[restore] starting full stack …"
 docker compose up -d

@@ -40,9 +40,15 @@ mkdir -p "$DEST"
 echo "[backup] $STAMP — starting"
 
 # 1. MariaDB dump.
+# Pass the password via the MYSQL_PWD env var rather than `-p"$pwd"` on
+# the command line. `MYSQL_PWD=… docker compose exec -e MYSQL_PWD …` keeps
+# the secret out of the host's `ps aux` (env vars set with the
+# `VAR=value cmd` form aren't in /proc/<pid>/cmdline; -e without a value
+# forwards from the caller env into the container). Mirrors the
+# --password-file pattern used for restic below.
 echo "[backup] dumping MariaDB ($DB_NAME) …"
-docker compose exec -T db mariadb-dump \
-    -uroot -p"$DB_ROOT_PASSWORD" \
+MYSQL_PWD="$DB_ROOT_PASSWORD" docker compose exec -T -e MYSQL_PWD db \
+    mariadb-dump -uroot \
     --single-transaction --quick --lock-tables=false \
     "$DB_NAME" > "$DEST/db.sql"
 

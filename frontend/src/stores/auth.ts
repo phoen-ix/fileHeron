@@ -22,22 +22,33 @@ export const useAuthStore = defineStore('auth', () => {
    * uses this to defer guard decisions until we know whether a session
    * exists. */
   const bootstrapping = ref(true)
+  /* Cache the in-flight (or completed) bootstrap promise. The router guard
+   * awaits it on the first navigation — every subsequent guard call gets
+   * the same already-resolved promise (no-op). Replaces a 30 ms setInterval
+   * polling loop. */
+  let bootstrapPromise: Promise<void> | null = null
 
   let onAuthLostCallback: (() => void) | null = null
 
-  /** Attempt a silent refresh + load /me on first paint. */
-  async function bootstrap() {
+  /** Attempt a silent refresh + load /me on first paint. Idempotent — the
+   *  first caller kicks off the request, all subsequent callers receive the
+   *  same promise. */
+  function bootstrap(): Promise<void> {
+    if (bootstrapPromise) return bootstrapPromise
     bootstrapping.value = true
-    try {
-      // GET /me — succeeds if access token is still valid; otherwise the
-      // axios interceptor will try /auth/refresh and retry once.
-      const resp = await getMe()
-      user.value = resp.data
-    } catch {
-      user.value = null
-    } finally {
-      bootstrapping.value = false
-    }
+    bootstrapPromise = (async () => {
+      try {
+        // GET /me — succeeds if access token is still valid; otherwise the
+        // axios interceptor will try /auth/refresh and retry once.
+        const resp = await getMe()
+        user.value = resp.data
+      } catch {
+        user.value = null
+      } finally {
+        bootstrapping.value = false
+      }
+    })()
+    return bootstrapPromise
   }
 
   async function login(email: string, password: string, totpCode?: string) {

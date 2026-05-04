@@ -397,6 +397,41 @@ async def _verify_id_token(
     return claims
 
 
+def _extract_email(
+    claims: dict[str, Any], provider: OIDCProvider
+) -> tuple[str | None, bool]:
+    """Resolve (email, verified) from ID-token claims, with per-IdP heuristics.
+
+    Standard OIDC: read ``email`` and ``email_verified`` directly. That works
+    for Google, Authentik, Keycloak (when configured to emit email).
+
+    Microsoft Entra (work/school accounts, v2 endpoint) is a special case:
+    - ``email_verified`` is **not** issued by default — Entra's reasoning is
+      that the tenant owns the UPN so a separate verification flag is
+      redundant.
+    - ``email`` itself may be absent unless the operator added it as an
+      Optional claim in the app's Token configuration.
+    - The UPN is in ``preferred_username`` (v2 endpoint format = email-like).
+
+    Because the issuer URL we pin in ``provider.issuer_url`` is
+    ``https://login.microsoftonline.com/<specific-tenant>/v2.0`` (never
+    ``/common``), and the JWKS-verified token was issued by THAT tenant,
+    the UPN is authoritative — Microsoft enforces UPN uniqueness within a
+    tenant and the tenant admin controls user provisioning. Treat as
+    verified.
+    """
+    email = claims.get("email")
+    verified = bool(claims.get("email_verified", False))
+
+    if provider.preset == OIDCPreset.entra:
+        if not email:
+            # Common case: operator didn't add `email` as an optional claim.
+            email = claims.get("preferred_username")
+        if email:
+            verified = True
+    return email, verified
+
+
 def _walk_path(claims: dict[str, Any], dotted_path: str) -> Any:
     """Walk a dotted path through nested dicts. Used to extract groups
     from claims even when the IdP nests them (Keycloak's
@@ -487,8 +522,7 @@ async def handle_callback(
             raise AppError(403, "ACCOUNT_DISABLED", "Account is disabled.")
         return by_sub
 
-    email = claims.get("email")
-    email_verified = bool(claims.get("email_verified", False))
+    email, email_verified = _extract_email(claims, provider)
 
     # 2. Auto-link via verified email — only if the local account isn't
     # already bound to a different provider.
@@ -560,8 +594,7 @@ async def handle_connect_callback(
     )
     sub = str(claims["sub"])
 
-    email = claims.get("email")
-    email_verified = bool(claims.get("email_verified", False))
+    email, email_verified = _extract_email(claims, provider)
     if not email or not email_verified:
         raise AppError(
             403,

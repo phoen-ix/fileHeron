@@ -108,6 +108,10 @@ app.include_router(public_links.router, dependencies=_gate)
 app.include_router(users.router, dependencies=_gate)
 app.include_router(groups.router, dependencies=_gate)
 app.include_router(notifications.router, dependencies=_gate)
+# notifications.stream_router intentionally NOT gated: the SSE endpoint
+# auths via a signed `?token=` (EventSource can't send Authorization
+# headers) OR bearer for curl/CI. Same pattern as files.download_router.
+app.include_router(notifications.stream_router)
 app.include_router(admin.router, dependencies=_gate)
 app.include_router(oidc_connect.router, dependencies=_gate)
 app.include_router(webauthn.account_router, dependencies=_gate)

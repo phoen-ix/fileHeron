@@ -115,17 +115,31 @@ def list_invites(
     page: int = 1,
     page_size: int = 50,
 ) -> tuple[list[InviteToken], int]:
-    """List invites still consumable (used_at IS NULL), filtered by state.
+    """List invites that have NOT been consumed by a real user.
 
-    state_filter: ``"pending"`` (still usable) | ``"expired"`` |
-    ``"all"`` (both). Returns ``(items, total)``.
+    The base filter is ``used_user_id IS NULL`` — this captures three
+    visible states:
+
+    - **pending**:  ``used_at IS NULL AND expires_at > now()``
+    - **expired**:  ``used_at IS NULL AND expires_at <= now()``
+    - **revoked**:  ``used_at IS NOT NULL`` (tombstone — admin
+                    cancelled the invite before it was consumed)
+
+    ``state_filter``: ``"pending"`` | ``"expired"`` | ``"revoked"`` |
+    ``"all"``. Returns ``(items, total)``.
     """
     now = _utcnow()
-    base = db.query(InviteToken).filter(InviteToken.used_at.is_(None))
+    base = db.query(InviteToken).filter(InviteToken.used_user_id.is_(None))
     if state_filter == "pending":
-        base = base.filter(InviteToken.expires_at > now)
+        base = base.filter(
+            InviteToken.used_at.is_(None), InviteToken.expires_at > now
+        )
     elif state_filter == "expired":
-        base = base.filter(InviteToken.expires_at <= now)
+        base = base.filter(
+            InviteToken.used_at.is_(None), InviteToken.expires_at <= now
+        )
+    elif state_filter == "revoked":
+        base = base.filter(InviteToken.used_at.is_not(None))
     # else "all": no extra filter
 
     total = base.count()

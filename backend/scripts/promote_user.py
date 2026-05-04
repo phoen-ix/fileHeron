@@ -24,7 +24,7 @@ def main(argv: list[str]) -> int:
     try:
         user = db.query(User).filter(User.email == normalize_email(email)).one_or_none()
         if user is None:
-            print(f"no user found for email_hint matching {email!r}", file=sys.stderr)
+            print(f"no user found with email matching {email!r}", file=sys.stderr)
             return 1
         was = user.role
         if user.role != UserRole.admin:
@@ -40,7 +40,7 @@ def main(argv: list[str]) -> int:
             metadata={"from": was.value, "to": "admin", "reason": "manual_cli"},
         )
         db.commit()
-        print(f"promoted user id={user.id} hint={user.email} (was {was.value})")
+        print(f"promoted user id={user.id} email={user.email} (was {was.value})")
     finally:
         db.close()
     return 0

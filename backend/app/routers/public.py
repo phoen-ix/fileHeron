@@ -216,8 +216,10 @@ def public_download(
     if file.state == FileState.deleted:
         raise AppError(410, "FILE_DELETED", "File has been deleted.")
 
-    # Counter (atomic).
-    if not public_link_svc.decrement_counter(db, link=link):
+    # Counter (atomic). On success, `downloads_remaining` reflects the
+    # post-decrement value used by the owner notification below.
+    allowed, downloads_remaining = public_link_svc.decrement_counter(db, link=link)
+    if not allowed:
         db.commit()
         raise AppError(
             410, "PUBLIC_LINK_EXHAUSTED", "This public link's download limit has been reached."
@@ -251,34 +253,9 @@ def public_download(
     public_link_svc.record_consumption(
         db, link=link, file_id=file.id, ip=ip, request=request
     )
-
-    # Phase 6a: optional notification to the link owner.
-    if link.notify_on_download:
-        from ..models.notification import NotificationCategory
-        from ..models.user import User as _U
-        from ..services import notification as notif_svc
-
-        owner = db.query(_U).filter(_U.id == link.created_by_id).one_or_none()
-        if owner is not None and not owner.is_disabled:
-            share = db.query(Share).filter(Share.id == link.share_id).one()
-            from ..services import site as site_svc
-            share_url = f"{site_svc.get_site_url(db)}/share/{share.id}"
-            notif_svc.dispatch(
-                db,
-                user=owner,
-                category=NotificationCategory.public_link_downloaded,
-                payload={
-                    "owner_name": owner.display_name,
-                    "subject": share.subject,
-                    "filename": file.original_filename,
-                    "size_bytes": file.size_bytes,
-                    "at": _utcnow(),
-                    "downloads_remaining": link.downloads_remaining,
-                    "share_url": share_url,
-                },
-                link_url=share_url,
-                email_to=owner.email,
-            )
+    public_link_svc.notify_owner_on_download(
+        db, link=link, file=file, downloads_remaining=downloads_remaining
+    )
 
     db.commit()
 

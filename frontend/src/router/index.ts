@@ -258,20 +258,11 @@ function isPublic(route: RouteLocationNormalized): boolean {
 
 router.beforeEach(async (to, _from) => {
   const auth = useAuthStore()
-  // Wait for the silent-refresh bootstrap (only meaningful on first navigation).
-  if (auth.bootstrapping) {
-    let cancel = () => {}
-    await new Promise<void>((resolve) => {
-      const stop = setInterval(() => {
-        if (!auth.bootstrapping) {
-          clearInterval(stop)
-          resolve()
-        }
-      }, 30)
-      cancel = () => clearInterval(stop)
-    })
-    cancel()
-  }
+  // Wait for the silent-refresh bootstrap. main.ts already kicked it off
+  // before mount; auth.bootstrap() returns the cached in-flight promise so
+  // every guard call awaits the same resolution. After it settles, this
+  // line is a no-op (resolved promise).
+  await auth.bootstrap()
 
   if (!isPublic(to) && !auth.isAuthenticated) {
     return {

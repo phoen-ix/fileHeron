@@ -56,6 +56,7 @@ import { onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
+import { getStreamToken } from '@/api/notifications'
 import { useSSE } from '@/composables/useSSE'
 import { useNotificationsStore } from '@/stores/notifications'
 import { useAuthStore } from '@/stores/auth'
@@ -74,7 +75,14 @@ const root = ref<HTMLElement | null>(null)
 onClickOutside(root, () => (open.value = false))
 
 const sse = useSSE({
-  url: '/api/notifications/stream',
+  // Mint a fresh signed token on every (re)connect — EventSource can't
+  // send Authorization headers, so auth rides on `?token=`. The token
+  // has a 2-minute TTL so a long-running tab still works as the SSE
+  // composable cycles every 60s.
+  async url() {
+    const { data } = await getStreamToken()
+    return `/api/notifications/stream?token=${encodeURIComponent(data.token)}`
+  },
   onMessage(e) {
     try {
       const data = JSON.parse(e.data) as NItem

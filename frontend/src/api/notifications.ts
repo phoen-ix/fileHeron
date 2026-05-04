@@ -23,6 +23,10 @@ export function markAllRead() {
   return api.post<MarkReadResponse>('/notifications/read-all')
 }
 
+export function getStreamToken() {
+  return api.get<{ token: string }>('/notifications/stream-token')
+}
+
 export function getPreferences() {
   return api.get<PreferencesResponse>('/notifications/preferences')
 }

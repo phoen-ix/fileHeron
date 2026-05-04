@@ -12,10 +12,11 @@ expected to reconnect.
 """
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, Header, Query, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
+from ..config import settings
 from ..dependencies import get_current_user, get_db
 from ..middleware.errors import AppError
 from ..models.notification import Notification, NotificationCategory
@@ -33,9 +34,16 @@ from ..schemas.notification import (
     UpdatePreferencesRequest,
 )
 from ..services import sse as sse_svc
+from ..services import sse_token as sse_token_svc
 from ..services.notification import _DEFAULT_CHANNEL  # internal, but stable
 
 router = APIRouter(prefix="/api/notifications", tags=["notifications"])
+# /stream lives on a separate router so it bypasses the global
+# `require_2fa_complete` gate (which calls `get_actor`, which requires
+# Authorization: Bearer — but EventSource can only send cookies/query).
+# Auth is enforced inline in the endpoint via the signed-token path
+# (browser) or the bearer path (curl).
+stream_router = APIRouter(prefix="/api/notifications", tags=["notifications-stream"])
 
 
 def _unread_count(db: Session, user_id: int) -> int:
@@ -194,16 +202,66 @@ def mark_all_read(
 # ---- SSE stream ----------------------------------------------------------
 
 
-@router.get("/stream")
+@router.get("/stream-token")
+def get_stream_token(user: User = Depends(get_current_user)) -> dict:
+    """Mint a short-lived signed token the SPA passes to EventSource as
+    ?token=<…>. EventSource cannot send Authorization headers; this is
+    the workaround. Mirrors the /api/files/{id}/download-url pattern."""
+    return {"token": sse_token_svc.issue(user.id)}
+
+
+def _resolve_stream_user(
+    request: Request,
+    db: Session,
+    token: str | None,
+    authorization: str | None,
+) -> User:
+    """SSE auth: signed `?token=` (browser) or Authorization: Bearer
+    (curl/CI). Mirrors `_resolve_download_user` in routers/files.py."""
+    if token:
+        user_id = sse_token_svc.verify(token)
+        user = (
+            db.query(User)
+            .filter(User.id == user_id, User.is_disabled.is_(False))
+            .one_or_none()
+        )
+        if user is None:
+            raise AppError(401, "INVALID_SSE_TOKEN", "Bad SSE token.")
+        request.state.user_id = user.id
+        request.state.auth_via = "sse_token"
+        return user
+
+    # Bearer fallback for curl / API clients.
+    if not authorization or not authorization.lower().startswith("bearer "):
+        raise AppError(401, "AUTH_REQUIRED", "Authentication required.")
+    from ..services.auth import resolve_user_from_access_token
+
+    jwt = authorization.split(" ", 1)[1].strip()
+    user = resolve_user_from_access_token(db, jwt, settings)
+    request.state.user_id = user.id
+    request.state.auth_via = "session"
+    return user
+
+
+@stream_router.get("/stream")
 async def stream(
     request: Request,
-    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    token: str | None = None,
+    authorization: str | None = Header(default=None),
 ) -> StreamingResponse:
     """Long-lived SSE connection. Per-user Redis pubsub channel; the
     server closes after 60s and the client is expected to reconnect.
 
+    Two auth paths (see `_resolve_stream_user`):
+    - `?token=<sse>` — short-lived HMAC, used by EventSource since it
+      can't send Authorization headers.
+    - `Authorization: Bearer <jwt>` — for curl/CI.
+
     Important Traefik / reverse-proxy headers below — see CLAUDE.md
     for the labels operators must NOT add (no buffering middleware)."""
+    user = _resolve_stream_user(request, db, token, authorization)
+
     last_event_id_header = request.headers.get("last-event-id")
     last_event_id = None
     if last_event_id_header is not None:

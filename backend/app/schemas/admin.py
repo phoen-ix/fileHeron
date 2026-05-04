@@ -2,10 +2,11 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import Field
 
-from ..models.user import UserRole
+from ..models.user import Locale, UserRole
 from .common import APIBaseModel
 
 
@@ -75,3 +76,48 @@ class AdminAuditResponse(APIBaseModel):
     total: int
     page: int
     page_size: int
+
+
+# ---------------------------------------------------------------------------
+# Pending-invite admin views (post-Phase 10).
+# ---------------------------------------------------------------------------
+
+
+class AdminInviteItem(APIBaseModel):
+    id: int
+    email: str
+    target_role: UserRole
+    state: Literal["pending", "expired"]
+    invited_by_id: int | None
+    # Hydrated by the router via a single bulk lookup per page so the
+    # SPA can show "Alice" instead of bare integer IDs. None when the
+    # inviter has been erased.
+    invited_by_display_name: str | None = None
+    initial_group_ids: list[int] | None
+    created_at: datetime
+    expires_at: datetime
+
+
+class AdminInviteListResponse(APIBaseModel):
+    items: list[AdminInviteItem]
+    total: int
+    page: int
+    page_size: int
+
+
+class ActivateInviteRequest(APIBaseModel):
+    display_name: str | None = Field(default=None, min_length=1, max_length=120)
+    locale: Locale | None = None
+
+
+class RegenerateInviteResponse(APIBaseModel):
+    # Plaintext token, returned exactly once. Caller copies to clipboard.
+    token: str
+    # Full /register/<token> URL using the current site URL.
+    url: str
+    expires_at: datetime
+
+
+class ResendInviteResponse(APIBaseModel):
+    ok: bool
+    expires_at: datetime

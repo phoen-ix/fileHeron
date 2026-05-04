@@ -22,6 +22,7 @@ class AuditEventType(str, enum.Enum):
     email_verified = "email_verified"
     invite_created = "invite_created"
     invite_consumed = "invite_consumed"
+    invite_revoked = "invite_revoked"
     login_success = "login_success"
     login_failure = "login_failure"
     logout = "logout"

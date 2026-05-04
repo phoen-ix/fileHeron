@@ -27,8 +27,8 @@ class KnownDevice(Base):
     )
     ua_fingerprint_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     ip_geohash: Mapped[str] = mapped_column(String(8), nullable=False)
-    first_seen: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utcnow)
-    last_seen: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utcnow)
+    first_seen: Mapped[datetime] = mapped_column(DateTime(), nullable=False, default=_utcnow)
+    last_seen: Mapped[datetime] = mapped_column(DateTime(), nullable=False, default=_utcnow)
 
     __table_args__ = (
         UniqueConstraint("user_id", "ua_fingerprint_hash", "ip_geohash", name="uq_known_device"),

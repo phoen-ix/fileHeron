@@ -66,10 +66,10 @@ class Notification(Base):
     )
     link_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=_utcnow, index=True
+        DateTime(), nullable=False, default=_utcnow, index=True
     )
     read_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
+        DateTime(), nullable=True
     )
 
     user: Mapped["User"] = relationship("User", foreign_keys=[user_id])

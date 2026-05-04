@@ -39,7 +39,7 @@ class AppSetting(Base):
         Boolean, nullable=False, default=False
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=_utcnow
+        DateTime(), nullable=False, default=_utcnow
     )
     updated_by_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True

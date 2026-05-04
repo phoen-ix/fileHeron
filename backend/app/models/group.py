@@ -56,7 +56,7 @@ class Group(Base):
         Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=_utcnow
+        DateTime(), nullable=False, default=_utcnow
     )
 
     created_by: Mapped["User"] = relationship("User", foreign_keys=[created_by_id])

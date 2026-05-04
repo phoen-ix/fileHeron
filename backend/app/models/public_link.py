@@ -77,17 +77,17 @@ class PublicLink(Base):
     )
 
     locked_until: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
+        DateTime(), nullable=True
     )
     revoked_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
+        DateTime(), nullable=True
     )
 
     created_by_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=_utcnow
+        DateTime(), nullable=False, default=_utcnow
     )
 
     share: Mapped["Share"] = relationship("Share")

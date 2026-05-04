@@ -31,7 +31,7 @@ class GroupMember(Base):
         Integer, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
     )
     joined_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=_utcnow
+        DateTime(), nullable=False, default=_utcnow
     )
 
     group: Mapped["Group"] = relationship("Group", back_populates="members")

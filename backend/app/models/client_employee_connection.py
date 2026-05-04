@@ -47,7 +47,7 @@ class ClientEmployeeConnection(Base):
         primary_key=True,
     )
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=_utcnow
+        DateTime(), nullable=False, default=_utcnow
     )
 
     client: Mapped["User"] = relationship("User", foreign_keys=[client_user_id])

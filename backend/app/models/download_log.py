@@ -46,7 +46,7 @@ class DownloadLog(Base):
         Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
     )
     accessed_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=_utcnow, index=True
+        DateTime(), nullable=False, default=_utcnow, index=True
     )
 
     ip: Mapped[str | None] = mapped_column(String(45), nullable=True)

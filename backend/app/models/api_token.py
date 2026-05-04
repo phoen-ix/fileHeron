@@ -44,11 +44,11 @@ class ApiToken(Base):
     last4: Mapped[str] = mapped_column(String(4), nullable=False)
     secret_hash: Mapped[str] = mapped_column(String(64), nullable=False)
 
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utcnow)
-    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(), nullable=False, default=_utcnow)
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(), nullable=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(), nullable=True)
     # Reversible disable, distinct from revoke (which is permanent).
     # If both are set, revoked_at wins (semantically the token is dead).
-    disabled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    disabled_at: Mapped[datetime | None] = mapped_column(DateTime(), nullable=True)
 
     owner: Mapped["User"] = relationship("User", foreign_keys=[owner_user_id])

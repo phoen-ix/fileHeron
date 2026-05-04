@@ -27,7 +27,7 @@ class UserRecoveryCode(Base):
         Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
     code_hash: Mapped[str] = mapped_column(String(255), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utcnow)
-    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(), nullable=False, default=_utcnow)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(), nullable=True)
 
     user: Mapped["User"] = relationship("User", back_populates="recovery_codes")

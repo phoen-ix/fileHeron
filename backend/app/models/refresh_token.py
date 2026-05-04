@@ -34,9 +34,9 @@ class RefreshToken(Base):
     )
     token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True, nullable=False)
 
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utcnow)
-    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(), nullable=False, default=_utcnow)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(), nullable=False)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(), nullable=True)
 
     # Self-FK for rotation chain. NULL until this token is rotated (then points
     # at the successor). When reuse-detection fires, we walk this chain to

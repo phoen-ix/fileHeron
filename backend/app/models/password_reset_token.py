@@ -24,6 +24,6 @@ class PasswordResetToken(Base):
     )
     token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True, nullable=False)
 
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utcnow)
-    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(), nullable=False, default=_utcnow)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(), nullable=False)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(), nullable=True)

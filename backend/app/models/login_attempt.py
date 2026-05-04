@@ -43,6 +43,6 @@ class LoginAttempt(Base):
     email: Mapped[str | None] = mapped_column(String(254), nullable=True, index=True)
     ip: Mapped[str | None] = mapped_column(String(45), nullable=True, index=True)
     attempted_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=_utcnow, index=True
+        DateTime(), nullable=False, default=_utcnow, index=True
     )
     outcome: Mapped[str] = mapped_column(String(32), nullable=False, index=True)

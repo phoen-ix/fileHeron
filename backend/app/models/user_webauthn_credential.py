@@ -58,10 +58,10 @@ class UserWebAuthnCredential(Base):
     name: Mapped[str] = mapped_column(String(120), nullable=False, default="passkey")
 
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=_utcnow
+        DateTime(), nullable=False, default=_utcnow
     )
     last_used_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
+        DateTime(), nullable=True
     )
 
     user: Mapped["User"] = relationship("User", foreign_keys=[user_id])

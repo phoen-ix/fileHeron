@@ -63,7 +63,7 @@ class Share(Base):
     subject: Mapped[str | None] = mapped_column(String(255), nullable=True)
     message: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(), nullable=False, index=True)
 
     state: Mapped[ShareState] = mapped_column(
         SAEnum(ShareState, native_enum=False, length=10),
@@ -72,12 +72,12 @@ class Share(Base):
         index=True,
     )
 
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(), nullable=False, default=_utcnow)
     # Set by the share_expiring_24h_warning cron when it has fired the
     # expiring-soon notification for this share — flag is what makes the
     # job idempotent across re-runs in the same hour.
     expiring_notified_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
+        DateTime(), nullable=True
     )
 
     created_by: Mapped["User"] = relationship("User", foreign_keys=[created_by_id])

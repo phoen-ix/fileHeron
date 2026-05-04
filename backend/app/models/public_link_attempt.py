@@ -53,7 +53,7 @@ class PublicLinkAttempt(Base):
         nullable=False,
     )
     attempted_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=_utcnow, index=True
+        DateTime(), nullable=False, default=_utcnow, index=True
     )
 
     public_link: Mapped["PublicLink"] = relationship("PublicLink")

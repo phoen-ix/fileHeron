@@ -65,12 +65,12 @@ class User(Base):
     # Phase 1b: per-account lockout. failed_login_count is bumped on each
     # invalid-credentials failure; reaching the threshold sets locked_until.
     failed_login_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
-    locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    locked_until: Mapped[datetime | None] = mapped_column(DateTime(), nullable=True)
     # Used to dedupe lockout warning emails (6h window).
-    lockout_email_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    lockout_email_sent_at: Mapped[datetime | None] = mapped_column(DateTime(), nullable=True)
 
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utcnow)
-    last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(), nullable=False, default=_utcnow)
+    last_login_at: Mapped[datetime | None] = mapped_column(DateTime(), nullable=True)
 
     # Phase 7: populated when a user logs in via OIDC. Phase 10 makes
     # uniqueness composite with `oidc_provider_id` so two providers can

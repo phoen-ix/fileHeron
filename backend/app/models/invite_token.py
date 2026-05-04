@@ -34,9 +34,9 @@ class InviteToken(Base):
     )
     created_by: Mapped["User"] = relationship("User", back_populates="invites_created", foreign_keys=[created_by_id])
 
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utcnow)
-    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(), nullable=False, default=_utcnow)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(), nullable=False)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(), nullable=True)
 
     used_user_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True

@@ -69,8 +69,8 @@ class File(Base):
         Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
 
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utcnow)
-    finalized_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(), nullable=False, default=_utcnow)
+    finalized_at: Mapped[datetime | None] = mapped_column(DateTime(), nullable=True)
 
     # Set during the upload, cleared after post-finish move.
     tus_upload_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)

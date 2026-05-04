@@ -29,7 +29,7 @@ class UserTOTP(Base):
         Integer, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
     )
     secret_encrypted: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
-    enabled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    enabled_at: Mapped[datetime | None] = mapped_column(DateTime(), nullable=True)
     last_used_counter: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0, server_default="0")
 
     user: Mapped["User"] = relationship("User", back_populates="totp")

@@ -195,6 +195,13 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      # Wait for backend to be healthy. Both containers share entrypoint.sh,
+      # which runs `alembic upgrade head`; running them in parallel races on
+      # a fresh DB (e.g. concurrent ADD COLUMN → 1060). backend's healthcheck
+      # turns green only after alembic completes, so worker's own alembic
+      # call becomes a no-op against an already-migrated schema.
+      backend:
+        condition: service_healthy
     networks: [internal]
     logging:
       driver: json-file

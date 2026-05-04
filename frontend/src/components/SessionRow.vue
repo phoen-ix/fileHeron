@@ -7,7 +7,7 @@ import type { SessionRecord } from '@/types/api'
 
 dayjs.extend(relativeTime)
 
-const props = defineProps<{ session: SessionRecord }>()
+defineProps<{ session: SessionRecord }>()
 const emit = defineEmits<{ revoke: [id: number] }>()
 const { t } = useI18n()
 

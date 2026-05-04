@@ -176,12 +176,13 @@ async function onCreate() {
     justCreated.value = data
     active.value = {
       id: data.id,
+      url: data.url,
       download_limit: data.download_limit,
       downloads_remaining: data.downloads_remaining,
       notify_on_download: data.notify_on_download,
       has_password: data.has_password,
-      locked_until: null,
-      revoked_at: null,
+      locked_until: null as string | null,
+      revoked_at: null as string | null,
       created_at: data.created_at,
     }
     newPassword.value = ''

@@ -391,7 +391,7 @@ function jumpTo(id: string) {
       <SectionQuickNav
         :sections="sections"
         :active="active"
-        :aria-label="t('account.quicknav.aria')"
+        :ariaLabel="t('account.quicknav.aria')"
         @jump="jumpTo"
       />
     </aside>

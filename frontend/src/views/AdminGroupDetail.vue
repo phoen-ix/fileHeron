@@ -210,7 +210,7 @@ onMounted(load)
             {{ t('common.loading') }}
           </li>
           <li
-            v-for="u in userResults.filter((r) => !group.members.some((m) => m.user_id === r.user_id))"
+            v-for="u in userResults.filter((r) => !(group?.members ?? []).some((m) => m.user_id === r.user_id))"
             :key="u.user_id"
             class="add-result"
           >

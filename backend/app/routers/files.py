@@ -14,7 +14,7 @@ from ..models.audit_log import AuditEventType
 from ..models.download_log import DownloadLog, DownloadVia
 from ..models.file import File, FileState
 from ..models.share import Share, ShareState
-from ..models.user import User
+from ..models.user import User, UserRole
 from ..services import download_token as download_token_svc
 from ..services import file as file_svc
 from ..services import share as share_svc
@@ -196,11 +196,11 @@ def delete_file(
     db: Session = Depends(get_db),
 ) -> None:
     file = _get_file_or_404(db, file_id)
-    if file.uploaded_by_id != user.id and user.role.value != "admin":
+    if file.uploaded_by_id != user.id and user.role != UserRole.admin:
         raise AppError(403, "FORBIDDEN", "Only the uploader or an admin can delete this file.")
     if file.state == FileState.deleted:
         return  # idempotent
-    if file.state == FileState.infected and user.role.value != "admin":
+    if file.state == FileState.infected and user.role != UserRole.admin:
         raise AppError(
             403,
             "FILE_QUARANTINED_ADMIN_ONLY",

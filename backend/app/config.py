@@ -148,10 +148,22 @@ class Settings(BaseSettings):
         )
 
     @property
+    def _env_normalized(self) -> str:
+        return self.ENVIRONMENT.strip().lower()
+
+    @property
     def is_production(self) -> bool:
-        return self.ENVIRONMENT.lower() == "production"
+        # Accept "prod" as an alias and tolerate accidental whitespace /
+        # mixed case so a typo like "Production " doesn't silently disable
+        # COOKIE_SECURE force-true, AV_SKIP fail-fast, and the docs-disable
+        # below.
+        return self._env_normalized in _PRODUCTION_ALIASES
 
     model_config = {"env_file": ".env", "extra": "ignore"}
+
+
+_PRODUCTION_ALIASES = frozenset({"production", "prod"})
+_KNOWN_ENVIRONMENTS = _PRODUCTION_ALIASES | frozenset({"development", "test"})
 
 
 settings = Settings()
@@ -165,6 +177,15 @@ def _fail_or_warn(message: str) -> None:
 
 
 if os.environ.get("PYTEST_CURRENT_TEST") is None:
+    # Hard-exit on a misspelled ENVIRONMENT so the prod safety rails below
+    # aren't silently disabled (e.g. ENVIRONMENT="Production " left
+    # is_production False and shipped insecure cookies + docs exposed).
+    if settings._env_normalized not in _KNOWN_ENVIRONMENTS:
+        sys.exit(
+            f"FATAL: ENVIRONMENT={settings.ENVIRONMENT!r} is not recognised. "
+            f"Use one of: {', '.join(sorted(_KNOWN_ENVIRONMENTS))}."
+        )
+
     _insecure_defaults = [
         ("change-me-in-production-min-32-chars", "JWT_SECRET", settings.JWT_SECRET),
         ("change_me_in_production", "DB_PASSWORD", settings.DB_PASSWORD),

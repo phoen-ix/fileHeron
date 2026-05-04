@@ -19,7 +19,7 @@
  *     racy with file.state — but the ShareDetail page re-fetches the
  *     authoritative share+files on navigation, and that's where users
  *     read final state. Adding polling here would couple two layers. */
-import Uppy, { type UppyFile } from '@uppy/core'
+import Uppy, { type Body, type Meta, type UppyFile } from '@uppy/core'
 import Tus from '@uppy/tus'
 import { computed, onBeforeUnmount, ref, type Ref } from 'vue'
 
@@ -50,11 +50,13 @@ export interface UploadItem {
 }
 
 // Local meta we attach so the Tus plugin can pull per-file headers off
-// the Uppy file object.
+// the Uppy file object. Index signature is required by Uppy v4's `Meta`
+// constraint (Record<string, unknown>).
 interface FileMeta {
   uid: string
   uploadMetadataHeader: string
   fileId: string
+  [key: string]: unknown
 }
 
 let uidCounter = 0
@@ -73,8 +75,8 @@ export function useUpload(shareId: Ref<string | null>) {
     removeFingerprintOnSuccess: true,
     // Per-file Upload-Metadata: the HMAC envelope tusd's pre-create hook
     // verifies.
-    headers: (file) => {
-      const meta = file?.meta as FileMeta | undefined
+    headers: (file: UppyFile<Meta, Body>): Record<string, string> => {
+      const meta = file.meta as unknown as FileMeta | undefined
       return meta?.uploadMetadataHeader
         ? { 'Upload-Metadata': meta.uploadMetadataHeader }
         : {}
@@ -221,7 +223,6 @@ export function useUpload(shareId: Ref<string | null>) {
   function remove(uid: string) {
     const idx = items.value.findIndex((i) => i.uid === uid)
     if (idx === -1) return
-    const item = items.value[idx]
     // If the file is mid-flight in Uppy, remove it there too.
     const uppyFile = uppy
       .getFiles()

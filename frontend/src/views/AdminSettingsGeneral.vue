@@ -60,7 +60,7 @@ function jumpTo(id: string) {
       <SectionQuickNav
         :sections="sections"
         :active="active"
-        :aria-label="t('admin_general.quicknav.aria')"
+        :ariaLabel="t('admin_general.quicknav.aria')"
         @jump="jumpTo"
       />
     </aside>

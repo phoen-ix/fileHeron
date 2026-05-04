@@ -507,7 +507,8 @@
       },
       "state": {
         "pending": "offen",
-        "expired": "abgelaufen"
+        "expired": "abgelaufen",
+        "revoked": "zurückgezogen"
       },
       "action": {
         "copy_link": "Link kopieren",

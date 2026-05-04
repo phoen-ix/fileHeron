@@ -507,7 +507,8 @@
       },
       "state": {
         "pending": "pending",
-        "expired": "expired"
+        "expired": "expired",
+        "revoked": "revoked"
       },
       "action": {
         "copy_link": "Copy link",

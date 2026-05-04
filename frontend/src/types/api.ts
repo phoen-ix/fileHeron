@@ -358,7 +358,7 @@ export interface AdminUserListResponse {
 
 /* Admin pending-invites views (post-Phase 10). */
 
-export type AdminInviteState = 'pending' | 'expired'
+export type AdminInviteState = 'pending' | 'expired' | 'revoked'
 
 export interface AdminInviteItem {
   id: number

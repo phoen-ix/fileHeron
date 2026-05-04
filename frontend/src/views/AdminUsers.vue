@@ -399,7 +399,7 @@ onMounted(() => {
             <td>
               <span
                 class="fh-pill"
-                :data-state="inv.state === 'pending' ? 'warn' : 'danger'"
+                :data-state="inv.state === 'pending' ? 'warn' : inv.state === 'revoked' ? 'subtle' : 'danger'"
               >
                 {{ t(`admin_users.invites.state.${inv.state}`) }}
               </span>
@@ -442,6 +442,7 @@ onMounted(() => {
                 {{ t('admin_users.invites.action.activate') }}
               </button>
               <button
+                v-if="inv.state !== 'revoked'"
                 type="button"
                 class="fh-btn-text inline-action danger"
                 @click="openRevoke(inv)"
@@ -543,7 +544,10 @@ onMounted(() => {
           <dd class="fh-mono">{{ detailsInvite.target_role }}</dd>
           <dt>{{ t('admin_users.invites.details.state') }}</dt>
           <dd>
-            <span class="fh-pill" :data-state="detailsInvite.state === 'pending' ? 'warn' : 'danger'">
+            <span
+              class="fh-pill"
+              :data-state="detailsInvite.state === 'pending' ? 'warn' : detailsInvite.state === 'revoked' ? 'subtle' : 'danger'"
+            >
               {{ t(`admin_users.invites.state.${detailsInvite.state}`) }}
             </span>
           </dd>

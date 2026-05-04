@@ -356,6 +356,45 @@ export interface AdminUserListResponse {
   page_size: number
 }
 
+/* Admin pending-invites views (post-Phase 10). */
+
+export type AdminInviteState = 'pending' | 'expired'
+
+export interface AdminInviteItem {
+  id: number
+  email: string
+  target_role: UserRole
+  state: AdminInviteState
+  invited_by_id: number | null
+  invited_by_display_name: string | null
+  initial_group_ids: number[] | null
+  created_at: string
+  expires_at: string
+}
+
+export interface AdminInviteListResponse {
+  items: AdminInviteItem[]
+  total: number
+  page: number
+  page_size: number
+}
+
+export interface ActivateInviteRequest {
+  display_name?: string
+  locale?: Locale
+}
+
+export interface RegenerateInviteResponse {
+  token: string
+  url: string
+  expires_at: string
+}
+
+export interface ResendInviteResponse {
+  ok: boolean
+  expires_at: string
+}
+
 export interface UpdateUserRequest {
   display_name?: string
   role?: UserRole

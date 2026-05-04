@@ -1,10 +1,13 @@
 import api from './client'
 import type {
+  ActivateInviteRequest,
   AdminApiTokenItem,
   AdminApiTokenListResponse,
   AdminAuditResponse,
   AdminCreateApiTokenRequest,
   AdminFileListResponse,
+  AdminInviteListResponse,
+  AdminInviteState,
   AdminUserItem,
   AdminUserListResponse,
   CreateApiTokenResponse,
@@ -15,6 +18,8 @@ import type {
   PublicLinkPolicyResponse,
   QuarantineActionRequest,
   QuarantineSettingsResponse,
+  RegenerateInviteResponse,
+  ResendInviteResponse,
   SiteSettingsResponse,
   TestEmailRequest,
   TestEmailResponse,
@@ -38,6 +43,32 @@ export function listUsers(params: {
   page_size?: number
 } = {}) {
   return api.get<AdminUserListResponse>('/admin/users', { params })
+}
+
+export function listInvites(
+  params: {
+    state?: AdminInviteState | 'all'
+    page?: number
+    page_size?: number
+  } = {},
+) {
+  return api.get<AdminInviteListResponse>('/admin/invites', { params })
+}
+
+export function revokeInvite(id: number) {
+  return api.delete(`/admin/invites/${id}`)
+}
+
+export function regenerateInvite(id: number) {
+  return api.post<RegenerateInviteResponse>(`/admin/invites/${id}/regenerate`)
+}
+
+export function resendInvite(id: number) {
+  return api.post<ResendInviteResponse>(`/admin/invites/${id}/resend`)
+}
+
+export function activateInvite(id: number, payload: ActivateInviteRequest) {
+  return api.post<AdminUserItem>(`/admin/invites/${id}/activate`, payload)
 }
 
 export function getUser(id: number) {

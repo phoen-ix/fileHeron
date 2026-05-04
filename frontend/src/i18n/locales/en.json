@@ -491,7 +491,60 @@
     "invite_groups_help": "Memberships are applied when the invitee accepts the invite.",
     "invite_groups_inbox": "company inbox",
     "invite_submit": "Send invite",
-    "invite_sent": "Invite sent to {hint}, expires {expires}."
+    "invite_sent": "Invite sent to {hint}, expires {expires}.",
+    "invites": {
+      "heading": "Pending invites",
+      "help": "Users who were invited but haven't yet activated their account.",
+      "invited_by_unknown": "(unknown)",
+      "col": {
+        "email": "Email",
+        "role": "Role",
+        "state": "State",
+        "invited_by": "Invited by",
+        "sent": "Sent",
+        "expires": "Expires",
+        "actions": "Actions"
+      },
+      "state": {
+        "pending": "pending",
+        "expired": "expired"
+      },
+      "action": {
+        "copy_link": "Copy link",
+        "resend": "Resend by email",
+        "details": "Details",
+        "activate": "Activate",
+        "revoke": "Revoke"
+      },
+      "toast": {
+        "link_copied": "Invite link copied to clipboard.",
+        "resent": "Invite resent. New expiry: {expires}.",
+        "revoked": "Invite revoked.",
+        "activated": "Account activated. They can sign in immediately."
+      },
+      "details": {
+        "title": "Invite details",
+        "email": "Email",
+        "target_role": "Target role",
+        "state": "State",
+        "invited_by": "Invited by",
+        "created_at": "Sent",
+        "expires_at": "Expires",
+        "initial_groups": "Initial groups"
+      },
+      "activate": {
+        "title": "Activate account directly",
+        "body": "Create a fully active account for {email} with role {role}, bypassing the invitee's password-set step. They can sign in via SSO immediately. The invite link will no longer work.",
+        "display_name_label": "Display name",
+        "display_name_help": "Defaults to the email's local part. Edit if you'd prefer something else; the user can change it later.",
+        "confirm": "Activate now"
+      },
+      "revoke": {
+        "title": "Revoke invite",
+        "body": "The invite link for {email} will stop working. The recipient cannot complete registration after this. Continue?",
+        "confirm": "Revoke"
+      }
+    }
   },
   "admin_user_detail": {
     "eyebrow": "Admin / Users",

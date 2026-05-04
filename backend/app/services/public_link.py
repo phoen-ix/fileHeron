@@ -28,6 +28,8 @@ from sqlalchemy.orm import Session
 from ..config import settings
 from ..middleware.errors import AppError
 from ..models.audit_log import AuditEventType
+from ..models.file import File
+from ..models.notification import NotificationCategory
 from ..models.public_link import PublicLink
 from ..models.public_link_attempt import (
     PublicLinkAttempt,
@@ -43,6 +45,8 @@ from ..utils.crypto import (
     random_token,
     sha256_hex,
 )
+from . import notification as notif_svc
+from . import site as site_svc
 from .audit import record_audit_event
 
 logger = logging.getLogger("fileheron.public_link")
@@ -246,13 +250,21 @@ def verify_password(
     return False
 
 
-def decrement_counter(db: Session, *, link: PublicLink) -> bool:
-    """Atomically decrement downloads_remaining iff > 0. Returns True if
-    the decrement happened (download allowed); False if exhausted.
+def decrement_counter(
+    db: Session, *, link: PublicLink
+) -> tuple[bool, int | None]:
+    """Atomically decrement downloads_remaining iff > 0.
 
-    NULL means unlimited — always returns True without touching the row."""
+    Returns ``(allowed, new_remaining)``:
+    - ``allowed`` is True when the download is permitted.
+    - ``new_remaining`` is the post-decrement value, or ``None`` for
+      unlimited links. The session-level ``link`` is refreshed on a
+      successful decrement so callers reading ``link.downloads_remaining``
+      see the post-update value (used by ``notify_owner_on_download`` to
+      report the correct count to the share owner).
+    """
     if link.downloads_remaining is None:
-        return True
+        return True, None
     stmt = (
         update(PublicLink)
         .where(
@@ -263,7 +275,10 @@ def decrement_counter(db: Session, *, link: PublicLink) -> bool:
     )
     result = db.execute(stmt)
     db.flush()
-    return result.rowcount > 0
+    if result.rowcount == 0:
+        return False, link.downloads_remaining
+    db.refresh(link)
+    return True, link.downloads_remaining
 
 
 def revoke(
@@ -301,6 +316,46 @@ def record_consumption(
         target_id=link.id,
         metadata={"file_id": file_id, "ip": ip, "share_id": link.share_id},
         request=request,
+    )
+
+
+def notify_owner_on_download(
+    db: Session,
+    *,
+    link: PublicLink,
+    file: File,
+    downloads_remaining: int | None,
+) -> None:
+    """Dispatch the public_link_downloaded notification to the link owner.
+
+    No-op when the link's notify_on_download flag is unset, or the owner
+    is missing/disabled. Caller passes the post-decrement counter so the
+    payload reports the count the recipient actually has left, not the
+    pre-decrement value off by one (the in-memory ``link`` is refreshed
+    by ``decrement_counter`` on success, but routes that pass NULL-limit
+    links never see a refresh — explicit param keeps both paths honest)."""
+    if not link.notify_on_download:
+        return
+    owner = db.query(User).filter(User.id == link.created_by_id).one_or_none()
+    if owner is None or owner.is_disabled:
+        return
+    share = db.query(Share).filter(Share.id == link.share_id).one()
+    share_url = f"{site_svc.get_site_url(db)}/share/{share.id}"
+    notif_svc.dispatch(
+        db,
+        user=owner,
+        category=NotificationCategory.public_link_downloaded,
+        payload={
+            "owner_name": owner.display_name,
+            "subject": share.subject,
+            "filename": file.original_filename,
+            "size_bytes": file.size_bytes,
+            "at": _utcnow(),
+            "downloads_remaining": downloads_remaining,
+            "share_url": share_url,
+        },
+        link_url=share_url,
+        email_to=owner.email,
     )
 
 

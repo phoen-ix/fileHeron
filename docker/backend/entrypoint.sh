@@ -26,11 +26,13 @@ echo "[entrypoint] running alembic upgrade head ..."
 alembic upgrade head
 
 echo "[entrypoint] running admin bootstrap (idempotent) ..."
-python -m scripts.create_admin || true
+python -m scripts.create_admin || \
+    echo "[entrypoint] WARN: admin bootstrap failed (continuing)" >&2
 
 if [ "${ENVIRONMENT:-development}" != "production" ] && [ -n "${TEST_ACCOUNT_EMAIL:-}" ]; then
     echo "[entrypoint] seeding dev test account (idempotent) ..."
-    python -m scripts.seed_dev || true
+    python -m scripts.seed_dev || \
+        echo "[entrypoint] WARN: dev seed failed (continuing)" >&2
 fi
 
 echo "[entrypoint] starting: $*"

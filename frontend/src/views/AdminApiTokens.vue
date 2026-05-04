@@ -171,7 +171,7 @@ async function onCreateForUser() {
   createError.value = null
   try {
     const { data } = await adminCreateApiToken({
-      target_user_id: selectedUser.value.id,
+      target_user_id: selectedUser.value.user_id,
       name: newName.value,
     })
     plaintextResult.value = data
@@ -245,7 +245,7 @@ onMounted(load)
           required
         />
         <ul v-if="userSuggestions.length > 0" class="user-suggestions">
-          <li v-for="u in userSuggestions" :key="u.id">
+          <li v-for="u in userSuggestions" :key="u.user_id">
             <button type="button" class="user-suggest" @click="pickUser(u)">
               <span class="row-name">{{ u.display_name }}</span>
               <span class="fh-mono row-hint">{{ u.email }} · {{ u.role }}</span>

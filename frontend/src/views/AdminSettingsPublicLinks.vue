@@ -45,7 +45,7 @@ watch(userQuery, () => {
     try {
       const { data } = await searchUsers(userQuery.value)
       userSuggestions.value = data.items.filter(
-        (u) => !allowedUsers.value.some((au) => au.id === u.id),
+        (u) => !allowedUsers.value.some((au) => au.id === u.user_id),
       )
     } catch {
       userSuggestions.value = []
@@ -57,7 +57,7 @@ function pickUser(u: UserSearchItem) {
   allowedUsers.value = [
     ...allowedUsers.value,
     {
-      id: u.id,
+      id: u.user_id,
       display_name: u.display_name,
       email: u.email,
       role: u.role,
@@ -210,7 +210,7 @@ onMounted(load)
             :placeholder="t('admin_public_link_policy.users_placeholder')"
           />
           <ul v-if="userSuggestions.length > 0" class="user-suggestions">
-            <li v-for="u in userSuggestions" :key="u.id">
+            <li v-for="u in userSuggestions" :key="u.user_id">
               <button type="button" class="user-suggest" @click="pickUser(u)">
                 <span class="row-name">{{ u.display_name }}</span>
                 <span class="fh-mono row-hint">{{ u.email }} · {{ u.role }}</span>

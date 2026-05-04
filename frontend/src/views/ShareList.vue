@@ -137,13 +137,13 @@ async function load() {
 
     if (box.value === 'outbox') {
       if (partyKind.value === 'user' && partyUser.value) {
-        params.recipient_user_id = partyUser.value.id
+        params.recipient_user_id = partyUser.value.user_id
       } else if (partyKind.value === 'group' && partyGroup.value) {
         params.recipient_group_id = partyGroup.value.id
       }
     } else {
       if (partyKind.value === 'user' && partyUser.value) {
-        params.sender_user_id = partyUser.value.id
+        params.sender_user_id = partyUser.value.user_id
       } else if (partyKind.value === 'group' && partyGroup.value) {
         params.via_group_id = partyGroup.value.id
       }
@@ -328,7 +328,7 @@ onMounted(load)
           :placeholder="t('share_list.filter.user_placeholder')"
         />
         <ul v-if="userSuggestions.length > 0" class="suggestions">
-          <li v-for="u in userSuggestions" :key="u.id">
+          <li v-for="u in userSuggestions" :key="u.user_id">
             <button type="button" class="suggest-btn" @click="pickUser(u)">
               <span class="row-name">{{ u.display_name }}</span>
               <span class="fh-mono row-hint">{{ u.email }} · {{ u.role }}</span>

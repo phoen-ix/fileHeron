@@ -204,32 +204,33 @@ def _revoke_all_user_refresh_tokens(db: Session, user_id: int) -> int:
 # ---------------------------------------------------------------------------
 
 
-def register_from_invite(
+def _create_user_from_invite(
     db: Session,
     *,
-    plaintext_token: str,
+    invite: InviteToken,
     password: str,
     display_name: str,
     locale: Locale,
+    via: str,
     request: Request | None,
 ) -> User:
-    """Consume an invite, create the corresponding user (email pre-verified).
+    """Shared post-validation creation path for invite consumption.
 
-    Caller is responsible for committing.
+    Two callers:
+    - `register_from_invite` (self-registration): caller validated the
+      plaintext token and confirmed the invite is not used/expired.
+    - `services/invite.py::activate_invite_as_admin`: an admin chose
+      to bypass the invitee's password-set step. Admins may activate
+      expired invites; only the `used_at` check is honoured by them.
+
+    `via` discriminates the two in the `invite_consumed` audit
+    extra (`"self_register"` vs `"admin_direct"`) — same pattern as
+    `oidc_linked` extra.via.
+
+    Raises ``AppError(409, USER_EXISTS)`` if a registered account
+    already exists for this email (the invite is for an email that
+    has since been claimed). Caller commits.
     """
-    invite = (
-        db.query(InviteToken).filter(InviteToken.token_hash == sha256_hex(plaintext_token)).one_or_none()
-    )
-    if invite is None:
-        raise AppError(404, "INVITE_INVALID", "Invite is invalid.")
-    if invite.used_at is not None:
-        raise AppError(410, "INVITE_USED", "Invite has already been used.")
-    if invite.expires_at < _utcnow():
-        raise AppError(410, "INVITE_EXPIRED", "Invite has expired.")
-
-    # Email is implied by the invite — we never get the plaintext here, so we
-    # match by the stored hash. If a user already exists with that hash, we
-    # reject (they already have an account).
     existing = db.query(User).filter(User.email == invite.email).one_or_none()
     if existing is not None:
         raise AppError(409, "USER_EXISTS", "An account already exists for this email.")
@@ -286,6 +287,7 @@ def register_from_invite(
                 "invitee_name": user.display_name,
                 "invitee_role": user.role.value,
                 "account_url": account_url,
+                "via": via,
             },
             link_url=account_url,
             email_to=inviter.email,
@@ -305,9 +307,43 @@ def register_from_invite(
         actor_user_id=user.id,
         target_type="invite",
         target_id=invite.id,
+        metadata={"via": via},
         request=request,
     )
     return user
+
+
+def register_from_invite(
+    db: Session,
+    *,
+    plaintext_token: str,
+    password: str,
+    display_name: str,
+    locale: Locale,
+    request: Request | None,
+) -> User:
+    """Consume an invite, create the corresponding user (email pre-verified).
+
+    Caller is responsible for committing.
+    """
+    invite = (
+        db.query(InviteToken).filter(InviteToken.token_hash == sha256_hex(plaintext_token)).one_or_none()
+    )
+    if invite is None:
+        raise AppError(404, "INVITE_INVALID", "Invite is invalid.")
+    if invite.used_at is not None:
+        raise AppError(410, "INVITE_USED", "Invite has already been used.")
+    if invite.expires_at < _utcnow():
+        raise AppError(410, "INVITE_EXPIRED", "Invite has expired.")
+    return _create_user_from_invite(
+        db,
+        invite=invite,
+        password=password,
+        display_name=display_name,
+        locale=locale,
+        via="self_register",
+        request=request,
+    )
 
 
 def _record_login_attempt(

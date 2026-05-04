@@ -22,12 +22,17 @@ from ..models.oidc_provider import OIDCProvider
 from ..models.user import User, UserRole
 from ..models.user_totp import UserTOTP
 from ..schemas.admin import (
+    ActivateInviteRequest,
     AdminAuditResponse,
     AdminAuditRow,
+    AdminInviteItem,
+    AdminInviteListResponse,
     AdminUserItem,
     AdminUserListResponse,
     EraseUserResponse,
     ForcePasswordResetResponse,
+    RegenerateInviteResponse,
+    ResendInviteResponse,
     UpdateUserRequest,
 )
 from ..schemas.settings import (
@@ -43,6 +48,7 @@ from ..schemas.settings import (
 )
 from ..services import api_token as api_token_svc
 from ..services import erasure as erasure_svc
+from ..services import invite as invite_svc
 from ..services import oidc as oidc_svc
 from ..services import settings as settings_svc
 from ..services import user_management as um_svc
@@ -1642,3 +1648,154 @@ def update_quarantine_settings(
     )
     db.commit()
     return QuarantineSettingsResponse(notify_admins=payload.notify_admins)
+
+
+# ---------------------------------------------------------------------------
+# Pending-invite admin views (post-Phase 10).
+#
+# Surface invite_tokens rows that haven't been consumed yet (pending or
+# expired) to the admin UI, with revoke / regenerate / resend / activate
+# actions. All gated by `get_current_admin`; the global `_gate` is applied
+# by main.py when the router is mounted.
+# ---------------------------------------------------------------------------
+
+
+def _to_invite_item(invite, inviter_name: str | None) -> AdminInviteItem:
+    now = datetime.now(tz=timezone.utc).replace(tzinfo=None)
+    state = "pending" if invite.expires_at > now else "expired"
+    return AdminInviteItem(
+        id=invite.id,
+        email=invite.email,
+        target_role=invite.target_role,
+        state=state,
+        invited_by_id=invite.created_by_id,
+        invited_by_display_name=inviter_name,
+        initial_group_ids=invite.initial_group_ids,
+        created_at=invite.created_at,
+        expires_at=invite.expires_at,
+    )
+
+
+@router.get("/invites", response_model=AdminInviteListResponse)
+def list_invites(
+    state: str = Query("all", regex=r"^(pending|expired|all)$"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
+    db: Session = Depends(get_db),
+    _admin: User = Depends(get_current_admin),
+) -> AdminInviteListResponse:
+    items, total = invite_svc.list_invites(
+        db, state_filter=state, page=page, page_size=page_size
+    )
+    # Bulk-hydrate inviter display names so the SPA can render
+    # "Alice" instead of bare integer IDs.
+    inviter_ids = {inv.created_by_id for inv in items if inv.created_by_id}
+    inviter_names: dict[int, str] = {}
+    if inviter_ids:
+        rows = (
+            db.query(User.id, User.display_name)
+            .filter(User.id.in_(inviter_ids))
+            .all()
+        )
+        inviter_names = {row[0]: row[1] for row in rows}
+    return AdminInviteListResponse(
+        items=[
+            _to_invite_item(inv, inviter_names.get(inv.created_by_id))
+            for inv in items
+        ],
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
+
+
+@router.delete("/invites/{invite_id}", status_code=status.HTTP_204_NO_CONTENT)
+def revoke_invite(
+    invite_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin),
+) -> Response:
+    from ..models.invite_token import InviteToken
+
+    invite = db.query(InviteToken).filter(InviteToken.id == invite_id).one_or_none()
+    if invite is None:
+        raise AppError(404, "INVITE_NOT_FOUND", "Invite not found.")
+    invite_svc.revoke_invite(db, invite=invite, actor=admin, request=request)
+    db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post(
+    "/invites/{invite_id}/regenerate", response_model=RegenerateInviteResponse
+)
+def regenerate_invite(
+    invite_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin),
+) -> RegenerateInviteResponse:
+    from ..models.invite_token import InviteToken
+    from ..services import site as site_svc
+
+    invite = db.query(InviteToken).filter(InviteToken.id == invite_id).one_or_none()
+    if invite is None:
+        raise AppError(404, "INVITE_NOT_FOUND", "Invite not found.")
+    plaintext = invite_svc.regenerate_invite(
+        db, invite=invite, actor=admin, request=request
+    )
+    db.commit()
+    base = site_svc.get_site_url(db).rstrip("/")
+    return RegenerateInviteResponse(
+        token=plaintext,
+        url=f"{base}/register/{plaintext}",
+        expires_at=invite.expires_at,
+    )
+
+
+@router.post("/invites/{invite_id}/resend", response_model=ResendInviteResponse)
+async def resend_invite(
+    invite_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin),
+) -> ResendInviteResponse:
+    from ..models.invite_token import InviteToken
+
+    invite = db.query(InviteToken).filter(InviteToken.id == invite_id).one_or_none()
+    if invite is None:
+        raise AppError(404, "INVITE_NOT_FOUND", "Invite not found.")
+    new_expires = await invite_svc.resend_invite(
+        db, invite=invite, actor=admin, request=request
+    )
+    db.commit()
+    return ResendInviteResponse(ok=True, expires_at=new_expires)
+
+
+@router.post(
+    "/invites/{invite_id}/activate",
+    response_model=AdminUserItem,
+    status_code=status.HTTP_201_CREATED,
+)
+def activate_invite(
+    invite_id: int,
+    payload: ActivateInviteRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin),
+) -> AdminUserItem:
+    from ..models.invite_token import InviteToken
+
+    invite = db.query(InviteToken).filter(InviteToken.id == invite_id).one_or_none()
+    if invite is None:
+        raise AppError(404, "INVITE_NOT_FOUND", "Invite not found.")
+    user = invite_svc.activate_invite_as_admin(
+        db,
+        invite=invite,
+        actor=admin,
+        display_name=payload.display_name,
+        locale=payload.locale,
+        request=request,
+    )
+    db.commit()
+    return _to_user_item(db, user)

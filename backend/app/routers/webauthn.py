@@ -35,6 +35,7 @@ from ..schemas.webauthn import (
     WebAuthnRegisterCompleteRequest,
 )
 from ..services import auth as auth_svc
+from ..services import rate_limit as rate_limit_svc
 from ..services import webauthn as webauthn_svc
 from ..services.audit import record_audit_event
 from ..utils.crypto import argon2_verify, normalize_email
@@ -178,6 +179,7 @@ async def auth_complete(
 
     # Mint the same session cookies the password flow produces.
     access, expires_in = auth_svc.create_access_token(user.id, settings)
+    rate_limit_svc.record_success(db, user=user)
     _, refresh_plain = auth_svc._create_refresh_token(db, user, request, settings)
     db.commit()
 

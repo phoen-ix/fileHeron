@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from ..config import settings
 from ..dependencies import get_actor, get_db
 from ..middleware.errors import AppError
-from ..models.user import User
+from ..models.user import User, UserRole
 from ..schemas.public_link import (
     CreatePublicLinkRequest,
     CreatePublicLinkResponse,
@@ -103,7 +103,7 @@ def get_public_link(
     db: Session = Depends(get_db),
 ) -> PublicLinkResponse:
     share = share_svc.get_share_or_404(db, share_id)
-    if share.created_by_id != user.id and user.role.value != "admin":
+    if share.created_by_id != user.id and user.role != UserRole.admin:
         raise AppError(403, "FORBIDDEN", "Only the share owner or an admin can do that.")
     link = public_link_svc.get_active_link_for_share(db, share.id)
     if link is None:

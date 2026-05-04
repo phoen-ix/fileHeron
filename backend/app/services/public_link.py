@@ -85,7 +85,7 @@ def create_link(
         raise AppError(
             409, "SHARE_NOT_ACTIVE", "Cannot create a public link for a non-active share."
         )
-    if share.created_by_id != actor.id and actor.role.value != "admin":
+    if share.created_by_id != actor.id and actor.role != UserRole.admin:
         raise AppError(403, "FORBIDDEN", "Only the share owner or an admin can do that.")
 
     existing = (
@@ -286,10 +286,7 @@ def revoke(
 ) -> None:
     if link.revoked_at is not None:
         return  # idempotent
-    if (
-        link.created_by_id != actor.id
-        and actor.role.value != "admin"
-    ):
+    if link.created_by_id != actor.id and actor.role != UserRole.admin:
         raise AppError(403, "FORBIDDEN", "Only the link owner or an admin can revoke.")
     link.revoked_at = _utcnow()
     db.flush()

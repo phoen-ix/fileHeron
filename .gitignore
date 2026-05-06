@@ -34,6 +34,10 @@ dist/
 backend/dist/
 frontend/dist/
 *.local
+# Vite/vue-tsc incremental build cache
+*.tsbuildinfo
+# We don't track a lockfile (Dockerfile uses `npm install`, not `npm ci`)
+frontend/package-lock.json
 
 # Editors
 .idea/

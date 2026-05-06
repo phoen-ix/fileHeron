@@ -115,6 +115,12 @@ def _validate_inbound_targets(
         )
     connected = _connected_employee_ids_of(db, sender.id)
     for u in users:
+        if u.role == UserRole.client:
+            raise AppError(
+                403,
+                "FORBIDDEN_RECIPIENT",
+                "Inbound shares cannot target another client.",
+            )
         if u.id not in connected:
             raise AppError(
                 403,

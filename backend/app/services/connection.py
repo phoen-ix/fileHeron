@@ -163,6 +163,47 @@ def recompute_shared_group_connections_for_user(
     db.flush()
 
 
+def cleanup_connections_for_role_change(
+    db: Session, *, target: User, old_role: UserRole
+) -> int:
+    """Drop `ClientEmployeeConnection` rows that no longer make sense for
+    `target`'s new role and rebuild any `shared_group` rows the new slot
+    should have.
+
+    The connection table only describes client↔(employee|admin) pairs;
+    its column names (`client_user_id`, `employee_user_id`) lock each
+    row to a specific slot. When `target.role` flips between client and
+    non-client, every row that put `target` in the old slot is now a
+    lie. We delete those rows (both invite + shared_group) and rerun
+    `recompute_shared_group_connections_for_user` so any group-derived
+    pairings appropriate for the new role get repopulated. Invite-source
+    rows for the new role can't be reconstructed (they only exist when an
+    actual invite happened) — that's correct, the trust anchor is gone.
+
+    Slot-preserving transitions (employee↔admin) are no-ops.
+
+    Caller commits. Returns the number of rows deleted (handy for the
+    audit metadata)."""
+    was_client = old_role == UserRole.client
+    is_client = target.role == UserRole.client
+    if was_client == is_client:
+        return 0
+
+    if was_client:
+        q = db.query(ClientEmployeeConnection).filter(
+            ClientEmployeeConnection.client_user_id == target.id
+        )
+    else:
+        q = db.query(ClientEmployeeConnection).filter(
+            ClientEmployeeConnection.employee_user_id == target.id
+        )
+    deleted = q.delete(synchronize_session=False)
+    db.flush()
+
+    recompute_shared_group_connections_for_user(db, user=target)
+    return deleted
+
+
 def list_employees_visible_to(
     db: Session, *, viewer: User
 ) -> list[User]:

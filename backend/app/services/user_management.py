@@ -69,9 +69,22 @@ def update_user(
         target.display_name = display_name.strip()
         changed["display_name"] = display_name.strip()
     if role is not None and role != target.role:
-        old = target.role.value
+        old_role = target.role
         target.role = role
-        changed["role"] = {"from": old, "to": role.value}
+        changed["role"] = {"from": old_role.value, "to": role.value}
+        # Slot-aware: a client↔non-client flip invalidates connection
+        # rows where `target` sat in the old slot (column names on
+        # `ClientEmployeeConnection` lock each row to a slot, so the
+        # rows literally describe the wrong relationship after the flip).
+        # Drop them and let the helper repopulate shared_group rows for
+        # the new slot.
+        from . import connection as connection_svc
+
+        cleaned = connection_svc.cleanup_connections_for_role_change(
+            db, target=target, old_role=old_role
+        )
+        if cleaned:
+            changed["connections_pruned"] = cleaned
         # 2FA-enforcement reflagging is no longer needed — the policy is
         # evaluated live (services.twofa_policy.is_2fa_required) so the
         # next request from `target` will redirect them through the

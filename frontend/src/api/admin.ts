@@ -20,6 +20,7 @@ import type {
   QuarantineSettingsResponse,
   RegenerateInviteResponse,
   ResendInviteResponse,
+  ShareDefaultsResponse,
   SiteSettingsResponse,
   TestEmailRequest,
   TestEmailResponse,
@@ -29,6 +30,7 @@ import type {
   UpdateHomePageSettingsRequest,
   UpdatePublicLinkPolicyRequest,
   UpdateQuarantineSettingsRequest,
+  UpdateShareDefaultsRequest,
   UpdateSiteSettingsRequest,
   UpdateTokenPolicyRequest,
   UpdateTwofaPolicyRequest,
@@ -241,4 +243,12 @@ export function getQuarantineSettings() {
 
 export function updateQuarantineSettings(payload: UpdateQuarantineSettingsRequest) {
   return api.put<QuarantineSettingsResponse>('/admin/settings/quarantine', payload)
+}
+
+export function getShareDefaults() {
+  return api.get<ShareDefaultsResponse>('/admin/settings/share-defaults')
+}
+
+export function updateShareDefaults(payload: UpdateShareDefaultsRequest) {
+  return api.put<ShareDefaultsResponse>('/admin/settings/share-defaults', payload)
 }

@@ -14,6 +14,7 @@ export function createShare(payload: {
   subject?: string | null
   message?: string | null
   public_link?: PublicLinkOnCreate | null
+  notify_recipients?: boolean | null
 }) {
   return api.post<ShareResponse>('/shares', payload)
 }

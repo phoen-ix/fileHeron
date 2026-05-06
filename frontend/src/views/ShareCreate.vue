@@ -44,6 +44,12 @@ const subject = ref('')
 const message = ref('')
 const recipients = ref<ShareRecipientsRequest>({ user_ids: [], group_ids: [] })
 const expiresAtLocal = ref<string | null>(null)
+// Per-share opt-out for the `share_created` notification + email fan-out.
+// Initial state mirrors the admin-controlled kv (surfaced via /me) so the
+// admin can decide whether senders see this on or off by default.
+const notifyRecipients = ref(
+  auth.user?.share_notify_recipients_default ?? true,
+)
 
 const shareId = ref<string | null>(null)
 const upload = useUpload(shareId)
@@ -128,6 +134,7 @@ async function onSubmit() {
       subject: subject.value || null,
       message: message.value || null,
       public_link: publicLinkPayload,
+      notify_recipients: notifyRecipients.value,
     })
     shareId.value = data.id
     if (data.public_link) {
@@ -222,6 +229,21 @@ function dismissPlResult() {
           />
         </div>
       </div>
+
+      <section class="notify-recipients-section">
+        <hr class="fh-rule" />
+        <label class="public-link-toggle">
+          <input
+            type="checkbox"
+            v-model="notifyRecipients"
+            :disabled="submitting || upload.isActive.value"
+          />
+          <span>
+            <span class="toggle-name">{{ t('share_create.notify_recipients_label') }}</span>
+            <span class="toggle-help">{{ t('share_create.notify_recipients_help') }}</span>
+          </span>
+        </label>
+      </section>
 
       <section v-if="canCreatePublicLink" class="public-link-section">
         <hr class="fh-rule" />

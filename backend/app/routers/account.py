@@ -63,6 +63,9 @@ def _me_response(db: Session, user: User) -> MeResponse:
         db, settings_svc.Keys.HOME_PAGE_ENABLED, default=True
     )
     me_resp.requires_2fa = twofa_policy_svc.is_2fa_required(db, user)
+    me_resp.share_notify_recipients_default = settings_svc.get_bool(
+        db, settings_svc.Keys.SHARE_NOTIFY_RECIPIENTS_DEFAULT, default=True
+    )
     return me_resp
 
 

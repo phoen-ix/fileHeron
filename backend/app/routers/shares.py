@@ -136,6 +136,7 @@ def create_share(
         # public_link" at the API boundary; this kwarg keeps the service
         # honest for direct callers.
         allow_no_recipients=payload.public_link is not None,
+        notify_recipients=payload.notify_recipients,
         request=request,
     )
 

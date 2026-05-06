@@ -55,6 +55,10 @@ class Keys:
     # addition to the uploader. Email is not sent — admin plaintext
     # email isn't stored.
     QUARANTINE_NOTIFY_ADMINS = "quarantine.notify_admins"  # boolean: 'true' / 'false'
+    # Default state for the per-share "Notify recipient(s)" checkbox on
+    # the create-share form. When the sender doesn't override the field,
+    # this kv decides whether `share_created` notifications fan out.
+    SHARE_NOTIFY_RECIPIENTS_DEFAULT = "share.notify_recipients_default"  # boolean
 
 
 _ENCRYPTED_KEYS: set[str] = {Keys.SMTP_PASSWORD}

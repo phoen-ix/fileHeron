@@ -39,6 +39,12 @@ class MeResponse(APIBaseModel):
     # `services.twofa_policy.is_2fa_required` — flips false on the
     # next /me hydration after the user finishes setup.
     requires_2fa: bool = False
+    # Default state for the per-share "Notify recipient(s)" checkbox on
+    # the create-share form. Sourced from the kv
+    # `share.notify_recipients_default` (admin-editable). The SPA uses
+    # this to pre-check the checkbox; the sender can still override
+    # per share.
+    share_notify_recipients_default: bool = True
 
 
 class ChangePasswordRequest(APIBaseModel):

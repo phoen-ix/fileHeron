@@ -38,6 +38,11 @@ class CreateShareRequest(APIBaseModel):
     subject: str | None = Field(default=None, max_length=255)
     message: str | None = Field(default=None, max_length=4000)
     public_link: PublicLinkOnCreate | None = None
+    # Whether to fan `share_created` notifications out to recipients
+    # (direct user-recipients + active members of any group recipient).
+    # `None` means "use the admin default kv `share.notify_recipients_default`";
+    # `True`/`False` is an explicit override from the sender.
+    notify_recipients: bool | None = None
 
     @model_validator(mode="after")
     def _recipients_or_public_link(self):

@@ -217,6 +217,13 @@
     "effect_redirect": "Anyone hitting / is redirected to their saved landing page or to /share/new.",
     "saved_toast": "Home page setting saved."
   },
+  "admin_share_defaults": {
+    "title": "Share defaults",
+    "intro": "Controls the initial state of the \"Notify recipient(s)\" checkbox on the new-share form. Senders can still flip it per share.",
+    "toggle_label": "Notify recipients by default when a new share is created",
+    "toggle_help": "When on, the checkbox is pre-checked and `share_created` emails fan out to direct recipients and to every active member of any recipient group. When off, the sender opts in per share.",
+    "saved_toast": "Share defaults saved."
+  },
   "admin_email": {
     "title": "Email / SMTP",
     "intro": "Outgoing notifications, invites, password resets and shares all flow through this SMTP server. Saving here takes effect immediately — no restart. The password is encrypted at rest.",
@@ -766,6 +773,8 @@
     "message_label": "Message",
     "message_placeholder": "Optional — a note for the recipient.",
     "recipients_or_public_link_hint": "…or skip recipients and attach a public link below.",
+    "notify_recipients_label": "Notify recipient(s) by email",
+    "notify_recipients_help": "Send a `share_created` email + in-app notification to every direct recipient and to every active member of any recipient group. Uncheck to keep this share quiet.",
     "send": "Create + send",
     "sending": "Sending…",
     "toast_done": "Share created.",

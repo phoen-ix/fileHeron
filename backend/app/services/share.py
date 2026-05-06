@@ -141,6 +141,7 @@ def create_share(
     subject: str | None = None,
     message: str | None = None,
     allow_no_recipients: bool = False,
+    notify_recipients: bool | None = None,
     request=None,
 ) -> Share:
     # Pydantic preserves tz info from ISO strings ending in Z / +HH:MM
@@ -222,33 +223,69 @@ def create_share(
         request=request,
     )
 
-    # Phase 6a: notify each user-recipient (group recipients are not
-    # fanned out here — see workers/share_expiring.py for the same
-    # rationale). Direct user recipients only.
-    from ..models.notification import NotificationCategory
-    from . import notification as notif_svc
-    from . import site as site_svc
+    # Resolve the per-share notify flag: explicit value from the sender
+    # wins; otherwise fall back to the admin-controlled kv default.
+    from . import settings as settings_svc
 
-    base_url = site_svc.get_site_url(db)
-    payload_base = {
-        "sender_name": created_by.display_name,
-        "subject": share.subject,
-        "message": share.message,
-        "expires_at": share.expires_at,
-        "file_count": 0,  # files added after the share row; stays 0 here
-        "share_url": f"{base_url}/share/{share.id}",
-    }
-    for u in users:
-        payload = dict(payload_base)
-        payload["recipient_name"] = u.display_name
-        notif_svc.dispatch(
+    if notify_recipients is None:
+        notify_recipients = settings_svc.get_bool(
             db,
-            user=u,
-            category=NotificationCategory.share_created,
-            payload=payload,
-            link_url=payload["share_url"],
-            email_to=u.email,
+            settings_svc.Keys.SHARE_NOTIFY_RECIPIENTS_DEFAULT,
+            default=True,
         )
+
+    if notify_recipients:
+        # Build the deduplicated recipient set: direct user-recipients
+        # UNION active members of any group recipient. Sender excluded
+        # (they are the actor); disabled users filtered at the SQL level
+        # so the dispatch loop never sees them. The dispatch funnel itself
+        # also early-returns on disabled users — defence in depth.
+        from ..models.notification import NotificationCategory
+        from . import notification as notif_svc
+        from . import site as site_svc
+
+        recipient_user_ids_set: set[int] = {u.id for u in users}
+        if groups:
+            member_rows = (
+                db.query(GroupMember.user_id)
+                .join(User, User.id == GroupMember.user_id)
+                .filter(
+                    GroupMember.group_id.in_([g.id for g in groups]),
+                    User.is_disabled.is_(False),
+                )
+                .all()
+            )
+            for (uid,) in member_rows:
+                recipient_user_ids_set.add(uid)
+        recipient_user_ids_set.discard(created_by.id)
+
+        base_url = site_svc.get_site_url(db)
+        payload_base = {
+            "sender_name": created_by.display_name,
+            "subject": share.subject,
+            "message": share.message,
+            "expires_at": share.expires_at,
+            "file_count": 0,  # files added after the share row; stays 0 here
+            "share_url": f"{base_url}/share/{share.id}",
+        }
+
+        if recipient_user_ids_set:
+            recipients = (
+                db.query(User)
+                .filter(User.id.in_(recipient_user_ids_set))
+                .all()
+            )
+            for u in recipients:
+                payload = dict(payload_base)
+                payload["recipient_name"] = u.display_name
+                notif_svc.dispatch(
+                    db,
+                    user=u,
+                    category=NotificationCategory.share_created,
+                    payload=payload,
+                    link_url=payload["share_url"],
+                    email_to=u.email,
+                )
     return share
 
 

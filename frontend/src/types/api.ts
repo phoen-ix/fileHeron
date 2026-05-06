@@ -32,6 +32,18 @@ export interface MeResponse {
    * the user finishes setup (then it flips false on the next /me
    * fetch). */
   requires_2fa: boolean
+  /** Post-Phase 10: default state of the per-share "Notify recipient(s)"
+   * checkbox on the create-share form. Sourced from the kv
+   * `share.notify_recipients_default` (admin-editable). */
+  share_notify_recipients_default: boolean
+}
+
+export interface ShareDefaultsResponse {
+  notify_recipients_default: boolean
+}
+
+export interface UpdateShareDefaultsRequest {
+  notify_recipients_default: boolean
 }
 
 export interface LoginResponse {

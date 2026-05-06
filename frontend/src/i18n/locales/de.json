@@ -217,6 +217,13 @@
     "effect_redirect": "Wer / aufruft, wird auf die gespeicherte Startseite oder /share/new umgeleitet.",
     "saved_toast": "Startseiten-Einstellung gespeichert."
   },
+  "admin_share_defaults": {
+    "title": "Freigabe-Voreinstellungen",
+    "intro": "Steuert den Standardzustand der Checkbox „Empfänger benachrichtigen\" im Formular für neue Freigaben. Absender können pro Freigabe weiterhin umschalten.",
+    "toggle_label": "Empfänger standardmäßig benachrichtigen, wenn eine neue Freigabe erstellt wird",
+    "toggle_help": "Wenn aktiv, ist die Checkbox vorausgewählt und es werden `share_created`-E-Mails an direkte Empfänger sowie an jedes aktive Mitglied jeder empfangenden Gruppe verschickt. Wenn deaktiviert, muss der Absender pro Freigabe explizit zustimmen.",
+    "saved_toast": "Freigabe-Voreinstellungen gespeichert."
+  },
   "admin_email": {
     "title": "E-Mail / SMTP",
     "intro": "Benachrichtigungen, Einladungen, Passwort-Zurücksetzungen und Freigaben werden über diesen SMTP-Server verschickt. Speichern wirkt sofort — kein Neustart. Das Passwort wird verschlüsselt gespeichert.",
@@ -766,6 +773,8 @@
     "message_label": "Nachricht",
     "message_placeholder": "Optional — eine Notiz für den Empfänger.",
     "recipients_or_public_link_hint": "…oder Empfänger weglassen und unten einen öffentlichen Link erstellen.",
+    "notify_recipients_label": "Empfänger per E-Mail benachrichtigen",
+    "notify_recipients_help": "Sendet eine `share_created`-E-Mail und eine In-App-Benachrichtigung an jeden direkten Empfänger und an jedes aktive Mitglied jeder empfangenden Gruppe. Deaktivieren, um diese Freigabe lautlos zu erstellen.",
     "send": "Erstellen und senden",
     "sending": "Wird gesendet…",
     "toast_done": "Freigabe erstellt.",

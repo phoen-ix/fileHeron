@@ -70,8 +70,17 @@ def bootstrap_admin_if_configured(db: Session) -> None:
 
     # Path 2: idempotent promote-and-verify.
     changed = False
+    metadata: dict[str, object] = {"reason": "idempotent_promote"}
     if user.role != UserRole.admin:
+        from . import connection as connection_svc
+
+        old_role = user.role
         user.role = UserRole.admin
+        cleaned = connection_svc.cleanup_connections_for_role_change(
+            db, target=user, old_role=old_role
+        )
+        if cleaned:
+            metadata["connections_pruned"] = cleaned
         changed = True
     if not user.email_verified:
         user.email_verified = True
@@ -86,7 +95,7 @@ def bootstrap_admin_if_configured(db: Session) -> None:
             actor_user_id=user.id,
             target_type="user",
             target_id=user.id,
-            metadata={"reason": "idempotent_promote"},
+            metadata=metadata,
         )
         db.commit()
         logger.info("admin_bootstrap: promoted/verified existing user %s", user.email)

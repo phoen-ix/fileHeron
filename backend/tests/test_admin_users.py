@@ -143,7 +143,7 @@ async def test_erase_user_hard_deletes_files_and_anonymizes(
 
     from app.models.user import User
     t_after = db.query(User).filter(User.id == target.id).one()
-    assert t_after.email == "[erased]"
+    assert t_after.email == f"erased-{target.id}@erased.invalid"
     assert t_after.display_name == "[erased]"
     assert t_after.password_hash == ""
     assert t_after.is_disabled is True

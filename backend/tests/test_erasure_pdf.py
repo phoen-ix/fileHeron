@@ -95,9 +95,64 @@ def test_pdf_receipt_renders(make_user, db):
 @pytest.mark.asyncio
 async def test_already_erased_user_summary_flag(make_user, db):
     target = make_user(email="t@test.local", role=UserRole.client)
-    target.email = "[erased]"
+    target.email = f"erased-{target.id}@erased.invalid"
     target.display_name = "[erased]"
     db.commit()
 
     summary = erasure_svc.compute_erasure_summary(db, target=target)
     assert summary["is_already_erased"] is True
+
+
+@pytest.mark.asyncio
+async def test_erase_drops_client_employee_connection_rows(make_user, db):
+    """Erasure must remove ClientEmployeeConnection rows pointing at the
+    target — the FK CASCADE doesn't fire because we anonymise rather
+    than delete the row."""
+    from app.models.client_employee_connection import ClientEmployeeConnection
+    from app.services import connection as connection_svc
+
+    admin = make_user(email="admin@test.local", role=UserRole.admin)
+    employee = make_user(email="emp@test.local", role=UserRole.employee)
+    target_client = make_user(email="t@test.local", role=UserRole.client)
+    connection_svc.record_invite_connection(
+        db, inviter=employee, invitee=target_client
+    )
+    db.commit()
+    assert (
+        db.query(ClientEmployeeConnection)
+        .filter(ClientEmployeeConnection.client_user_id == target_client.id)
+        .count()
+        == 1
+    )
+
+    erasure_svc.erase_user(db, actor=admin, target=target_client)
+    db.commit()
+
+    assert (
+        db.query(ClientEmployeeConnection)
+        .filter(
+            (ClientEmployeeConnection.client_user_id == target_client.id)
+            | (ClientEmployeeConnection.employee_user_id == target_client.id)
+        )
+        .count()
+        == 0
+    )
+
+
+@pytest.mark.asyncio
+async def test_two_erasures_do_not_collide_on_email(make_user, db):
+    """Erasing two different users must not violate UNIQUE(email).
+    The anonymised email embeds the user id, so it's stably unique."""
+    admin = make_user(email="admin@test.local", role=UserRole.admin)
+    a = make_user(email="a@test.local", role=UserRole.client)
+    b = make_user(email="b@test.local", role=UserRole.client)
+
+    erasure_svc.erase_user(db, actor=admin, target=a)
+    db.commit()
+    erasure_svc.erase_user(db, actor=admin, target=b)
+    db.commit()
+
+    db.expire_all()
+    assert a.email == f"erased-{a.id}@erased.invalid"
+    assert b.email == f"erased-{b.id}@erased.invalid"
+    assert a.email != b.email

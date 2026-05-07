@@ -21,7 +21,6 @@ shows the file count + total bytes about to disappear.
 from __future__ import annotations
 
 import logging
-import secrets
 from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
@@ -29,6 +28,7 @@ from sqlalchemy.orm import Session
 from ..middleware.errors import AppError
 from ..models.api_token import ApiToken
 from ..models.audit_log import AuditEventType
+from ..models.client_employee_connection import ClientEmployeeConnection
 from ..models.file import File, FileState
 from ..models.refresh_token import RefreshToken
 from ..models.user import User
@@ -36,6 +36,10 @@ from ..models.user_recovery_code import UserRecoveryCode
 from ..models.user_totp import UserTOTP
 from . import file as file_svc
 from .audit import record_audit_event
+
+
+def _is_erased(user: User) -> bool:
+    return bool(user.email) and user.email.endswith("@erased.invalid")
 
 logger = logging.getLogger("fileheron.erasure")
 
@@ -54,7 +58,7 @@ def erase_user(
         raise AppError(
             400, "CANNOT_ERASE_SELF", "An admin cannot erase their own account."
         )
-    if target.email == "[erased]":
+    if _is_erased(target):
         raise AppError(409, "ALREADY_ERASED", "This user has already been erased.")
 
     # 1. Hard-delete files this user uploaded.
@@ -87,9 +91,17 @@ def erase_user(
         synchronize_session=False
     )
 
-    # 3. Anonymize the row.
-    target.email = f"erased:{secrets.token_hex(16)}"
-    target.email = "[erased]"
+    # 3. Drop ClientEmployeeConnection rows pointing at this user — the
+    # FK CASCADE doesn't fire because erasure anonymises rather than
+    # deletes the row.
+    db.query(ClientEmployeeConnection).filter(
+        (ClientEmployeeConnection.client_user_id == target.id)
+        | (ClientEmployeeConnection.employee_user_id == target.id)
+    ).delete(synchronize_session=False)
+
+    # 4. Anonymize the row. Email pattern keeps the UNIQUE(email)
+    # constraint happy for repeat erasures and makes the row debuggable.
+    target.email = f"erased-{target.id}@erased.invalid"
     target.display_name = "[erased]"
     target.password_hash = ""
     target.is_disabled = True
@@ -165,7 +177,7 @@ def compute_erasure_summary(db: Session, *, target: User) -> dict:
         "display_name": target.display_name,
         "email": target.email,
         "role": target.role.value,
-        "is_already_erased": target.email == "[erased]",
+        "is_already_erased": _is_erased(target),
         "files_to_delete": file_count,
         "bytes_to_delete": total_bytes,
         "shares_created": shares_created,

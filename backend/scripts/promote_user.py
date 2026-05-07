@@ -27,17 +27,30 @@ def main(argv: list[str]) -> int:
             print(f"no user found with email matching {email!r}", file=sys.stderr)
             return 1
         was = user.role
+        cleaned = 0
         if user.role != UserRole.admin:
+            from app.services import connection as connection_svc
+
             user.role = UserRole.admin
+            cleaned = connection_svc.cleanup_connections_for_role_change(
+                db, target=user, old_role=was
+            )
         if not user.email_verified:
             user.email_verified = True
+        metadata: dict[str, object] = {
+            "from": was.value,
+            "to": "admin",
+            "reason": "manual_cli",
+        }
+        if cleaned:
+            metadata["connections_pruned"] = cleaned
         record_audit_event(
             db,
             event_type=AuditEventType.role_changed,
             actor_user_id=user.id,
             target_type="user",
             target_id=user.id,
-            metadata={"from": was.value, "to": "admin", "reason": "manual_cli"},
+            metadata=metadata,
         )
         db.commit()
         print(f"promoted user id={user.id} email={user.email} (was {was.value})")

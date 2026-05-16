@@ -317,6 +317,13 @@ services:
       UPDATER_WORKSPACE: /workspace
       UPDATER_STATE_FILE: /state/updater_state.json
       UPDATER_GHCR_OWNER: phoen-ix
+      # Host-side absolute path that maps to /workspace inside this
+      # container. The self-renew helper container (which recreates
+      # this updater on update) bind-mounts from the host, so it needs
+      # the host path, not /workspace. ${PWD} is set by compose at
+      # parse time to the directory the operator ran compose from.
+      UPDATER_HOST_WORKSPACE: ${UPDATER_HOST_WORKSPACE:-${PWD:-/opt/fileHeron}}
+      COMPOSE_PROJECT_NAME: ${COMPOSE_PROJECT_NAME:-fileheron}
     volumes:
       # Read+write so we can rewrite .env's FH_TAG line after a successful
       # update or rollback. The compose file itself is only read.

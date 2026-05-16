@@ -44,8 +44,24 @@ BACKEND_HEALTH_URL = os.environ.get(
 )
 HEALTH_TIMEOUT_SEC = int(os.environ.get("UPDATER_HEALTH_TIMEOUT_SEC", "90"))
 SERVICES = ["backend", "worker", "frontend"]
+# Updater intentionally NOT in SERVICES — we can't `up -d` ourselves
+# from inside the container. Self-renew is handled separately by
+# `schedule_self_renew` which spawns an ephemeral helper container.
+IMAGES_TO_PULL = SERVICES + ["updater"]
 GHCR_OWNER = os.environ.get("UPDATER_GHCR_OWNER", "phoen-ix")
-IMAGES = [f"fileheron-{s}" for s in SERVICES]
+IMAGES = [f"fileheron-{s}" for s in IMAGES_TO_PULL]
+# Host-side absolute path that maps to /workspace inside this container.
+# The docker daemon resolves bind-mount sources against the host's
+# filesystem, not against the calling container's view, so the helper
+# container we spawn must reference the host path. compose sets this
+# from ${PWD} (the compose-project dir).
+HOST_WORKSPACE = os.environ.get("UPDATER_HOST_WORKSPACE", "/opt/fileHeron")
+COMPOSE_PROJECT = os.environ.get("COMPOSE_PROJECT_NAME", "fileheron")
+# Delay before the helper recreates the updater. Long enough for the SPA
+# (polling /jobs/{id} every 2s) to observe `state=healthy` and stop
+# polling — otherwise the next poll lands during the recreate window
+# and returns 404 against an in-flight container.
+SELF_RENEW_DELAY_SEC = int(os.environ.get("UPDATER_SELF_RENEW_DELAY_SEC", "10"))
 
 app = FastAPI(title="fileHeron-updater", version=os.environ.get("FH_VERSION", "dev"))
 
@@ -205,6 +221,62 @@ async def wait_for_backend_health(job: JobRecord, expected_tag: str) -> bool:
 # ---------------------------------------------------------------------------
 
 
+async def schedule_self_renew(job: JobRecord) -> None:
+    """Spawn an ephemeral helper container that recreates the updater
+    service using the newly-pulled image. The updater can't `up -d`
+    itself — compose would kill this process partway through the
+    command — so we fire-and-forget a detached `docker run` and exit.
+
+    The helper sleeps a few seconds first so the SPA (polling /jobs/{id}
+    every 2s) gets the chance to see `state=healthy` and stop polling
+    before the updater container is killed.
+
+    Best-effort: a failure here doesn't fail the job. The main update
+    (backend/worker/frontend) is already done; the only consequence of
+    a failed self-renew is the updater staying on the old version,
+    which the operator can fix with `scripts/deploy.sh`.
+    """
+    helper_image = f"ghcr.io/{GHCR_OWNER}/fileheron-updater:{job.target_tag}"
+    helper_cmd = (
+        f"sleep {SELF_RENEW_DELAY_SEC} && "
+        f"cd /workspace && "
+        f"FH_TAG={shlex.quote(job.target_tag)} "
+        f"docker compose -p {shlex.quote(COMPOSE_PROJECT)} "
+        f"-f docker-compose.yml up -d updater"
+    )
+    args = [
+        "docker", "run", "-d", "--rm",
+        "--name", f"fileheron-updater-self-renew-{int(time.time())}",
+        "-v", "/var/run/docker.sock:/var/run/docker.sock",
+        "-v", f"{HOST_WORKSPACE}:/workspace",
+        helper_image,
+        "sh", "-c", helper_cmd,
+    ]
+    _log_to_job(job, f"scheduling updater self-renew (sleep {SELF_RENEW_DELAY_SEC}s)")
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *args,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await proc.communicate()
+        if proc.returncode != 0:
+            _log_to_job(
+                job,
+                f"WARNING self-renew helper spawn failed (exit {proc.returncode}): "
+                f"{stderr.decode(errors='replace')[:300]}",
+            )
+            _log_to_job(
+                job,
+                "updater stays on the old version; run scripts/deploy.sh to fix.",
+            )
+            return
+        helper_id = stdout.decode().strip()[:12]
+        _log_to_job(job, f"self-renew helper container scheduled: {helper_id}")
+    except Exception as e:
+        _log_to_job(job, f"WARNING self-renew helper spawn raised: {type(e).__name__}: {e}")
+
+
 async def execute_job(job: JobRecord) -> None:
     global _active_job
     _active_job = job
@@ -262,6 +334,11 @@ async def execute_job(job: JobRecord) -> None:
         job.state = "healthy"
         job.finished_at = _utcnow_iso()
         _log_to_job(job, f"DONE — running on {job.target_tag}")
+        # Self-renew the updater. We fire this AFTER marking healthy so
+        # the SPA observes success before the updater container goes away.
+        # Best-effort: failure leaves backend/worker/frontend on the new
+        # tag but the updater on the old one — recoverable via deploy.sh.
+        await schedule_self_renew(job)
     except Exception as e:
         job.state = "failed"
         job.error = f"{type(e).__name__}: {e}"

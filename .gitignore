@@ -63,6 +63,7 @@ data/files/*
 !data/files/.gitkeep
 data/quarantine/*
 !data/quarantine/.gitkeep
+data/updater/*
 backups/*
 !backups/.gitkeep
 

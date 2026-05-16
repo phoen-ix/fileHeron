@@ -153,18 +153,23 @@ async def test_decrement_counter_atomic_and_terminating(make_user, db):
     db.commit()
     link = created.record
 
-    assert public_link_svc.decrement_counter(db, link=link) is True
+    allowed, remaining = public_link_svc.decrement_counter(db, link=link)
+    assert allowed is True
+    assert remaining == 1
     db.commit()
     db.refresh(link)
     assert link.downloads_remaining == 1
 
-    assert public_link_svc.decrement_counter(db, link=link) is True
+    allowed, remaining = public_link_svc.decrement_counter(db, link=link)
+    assert allowed is True
+    assert remaining == 0
     db.commit()
     db.refresh(link)
     assert link.downloads_remaining == 0
 
     # Third call returns False — exhausted.
-    assert public_link_svc.decrement_counter(db, link=link) is False
+    allowed, _ = public_link_svc.decrement_counter(db, link=link)
+    assert allowed is False
 
 
 @pytest.mark.asyncio
@@ -183,7 +188,9 @@ async def test_unlimited_counter_never_decrements(make_user, db):
     )
     db.commit()
     for _ in range(5):
-        assert public_link_svc.decrement_counter(db, link=created.record) is True
+        allowed, remaining = public_link_svc.decrement_counter(db, link=created.record)
+        assert allowed is True
+        assert remaining is None  # unlimited links report no remaining
     db.refresh(created.record)
     assert created.record.downloads_remaining is None
 

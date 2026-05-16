@@ -111,6 +111,29 @@ async def client(app_with_db):
 
 
 @pytest.fixture(autouse=True)
+def _rebind_session_local(engine):
+    """`SessionLocal` is bound to the prod MySQL engine at module import
+    time in `app/database.py`, and ten modules (services/email,
+    routers/health, every worker, etc.) import it directly. Any code
+    that does `SessionLocal()` instead of going through FastAPI's
+    `Depends(get_db)` bypasses the test fixture and hits a real MySQL
+    socket that isn't there.
+
+    Rebind the existing sessionmaker to the per-test SQLite engine via
+    `.configure(bind=...)` — every module that imported `SessionLocal`
+    holds a reference to the SAME sessionmaker instance, so this one
+    call retargets all of them in lockstep. Restore on teardown so we
+    don't leave a global pointing at a disposed engine.
+    """
+    from app.database import SessionLocal, engine as prod_engine
+    SessionLocal.configure(bind=engine)
+    try:
+        yield
+    finally:
+        SessionLocal.configure(bind=prod_engine)
+
+
+@pytest.fixture(autouse=True)
 def _disable_ip_rate_limit(monkeypatch):
     """The per-IP login rate limit is Redis-backed and shared across all
     invocations from 127.0.0.1. Cumulative test attempts would trip it
@@ -157,6 +180,23 @@ def _no_op_sse_publish(monkeypatch):
         return None
 
     monkeypatch.setattr(sse, "publish", _noop)
+
+
+@pytest.fixture(autouse=True)
+def _no_op_email_send(monkeypatch):
+    """`services/email.py::_send_resolved` opens its own `SessionLocal()`
+    to look up SMTP config. With our SQLite + StaticPool test setup all
+    sessions share the one connection, and the side session's
+    close()-time rollback wipes pending writes from the main request
+    session — including audit rows the test then expects to see.
+    Skip the side-session entirely in tests; the email body is already
+    rendered by the caller, so we just no-op the actual send."""
+    from app.services import email as email_svc
+
+    async def _noop(*_a, **_kw):
+        return None
+
+    monkeypatch.setattr(email_svc, "_send_resolved", _noop)
 
 
 @pytest.fixture(autouse=True)

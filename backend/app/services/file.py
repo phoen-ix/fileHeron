@@ -123,7 +123,15 @@ def finalize_to_disk(
 def hard_delete(
     db: Session, *, file: File, reason: str = "user_request", request=None
 ) -> None:
-    """Hard-delete from disk + DB row marker."""
+    """Hard-delete from disk + DB row marker.
+
+    Raises OSError if the disk unlink fails — callers MUST decide whether
+    to abort the surrounding transaction (e.g. GDPR erasure: stop, don't
+    lie in the receipt PDF) or to swallow + audit + continue (e.g. cron
+    expire: keep processing remaining shares). Pre-fix this function
+    silently swallowed unlink failures, leaving file rows marked deleted
+    while the bytes leaked on disk.
+    """
     # Capture the pre-delete state so we don't double-release quota for
     # files that already went through quarantine (services/quarantine.py
     # released the bytes when it moved the file into ./data/quarantine/).
@@ -131,11 +139,8 @@ def hard_delete(
 
     if file.storage_path:
         path = Path(file.storage_path)
-        try:
-            if path.is_file():
-                path.unlink()
-        except OSError as e:
-            logger.warning("could not unlink %s: %s", path, e)
+        if path.is_file():
+            path.unlink()
 
     file.state = FileState.deleted
     db.flush()
@@ -156,17 +161,15 @@ def hard_delete(
 
 def delete_file_for_expiry(db: Session, *, file: File) -> None:
     """Cleanup-worker variant: hard-delete with `file_expired` audit event,
-    no actor (system action). Idempotent — silently no-ops if the row is
-    already deleted or the file is missing on disk."""
+    no actor (system action). Idempotent on `state == deleted`; raises
+    OSError on disk unlink failure (callers handle per-file failures and
+    decide whether to keep processing the rest of the batch)."""
     if file.state == FileState.deleted:
         return
     if file.storage_path:
         path = Path(file.storage_path)
-        try:
-            if path.is_file():
-                path.unlink()
-        except OSError as e:
-            logger.warning("could not unlink %s: %s", path, e)
+        if path.is_file():
+            path.unlink()
 
     file.state = FileState.deleted
     db.flush()

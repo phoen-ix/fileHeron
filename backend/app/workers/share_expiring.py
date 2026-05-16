@@ -79,11 +79,6 @@ async def share_expiring_24h_warning(_ctx) -> dict:
                 user = db.query(User).filter(User.id == uid).one_or_none()
                 if user is None or user.is_disabled:
                     continue
-                # email_hint is a masked hint, not a deliverable address.
-                # Until we add a `users.email_plaintext_for_delivery`
-                # column (we deliberately don't store plaintext), we
-                # Plaintext email is now stored on the user row, so the
-                # 24h warning actually goes out by email + in-app.
                 payload_for_user = dict(payload)
                 payload_for_user["recipient_name"] = user.display_name
                 try:
@@ -104,9 +99,17 @@ async def share_expiring_24h_warning(_ctx) -> dict:
                     )
 
             share.expiring_notified_at = now
-            notified_shares += 1
+            # Commit per-share so a downstream failure doesn't lose the
+            # idempotency marker for shares we already notified about.
+            try:
+                db.commit()
+                notified_shares += 1
+            except Exception:
+                db.rollback()
+                logger.exception(
+                    "share_expiring commit failed for share=%s", share.id
+                )
 
-        db.commit()
         if notified_shares:
             logger.info(
                 "share_expiring: notified %d shares, %d users",

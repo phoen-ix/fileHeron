@@ -9,6 +9,7 @@ import pytest
 from app.middleware.errors import AppError
 from app.models.user import UserRole
 from app.services import oidc as oidc_svc
+from app.services import oidc_admin as oidc_admin_svc
 
 from ._oidc_helpers import install_jwks_mock, make_claims, patch_exchange, sign_id_token
 
@@ -84,15 +85,15 @@ def test_list_enabled_providers_excludes_disabled(make_provider, db):
         name="Off", issuer_url="https://off.example.com", client_id="off",
         enabled=False,
     )
-    enabled = oidc_svc.list_enabled_providers(db)
+    enabled = oidc_admin_svc.list_enabled_providers(db)
     assert on in enabled
     assert off not in enabled
 
 
 def test_is_any_enabled_reflects_at_least_one(make_provider, db):
-    assert oidc_svc.is_any_enabled(db) is False
+    assert oidc_admin_svc.is_any_enabled(db) is False
     p = make_provider(enabled=False)
-    assert oidc_svc.is_any_enabled(db) is False
+    assert oidc_admin_svc.is_any_enabled(db) is False
     p.enabled = True
     db.commit()
-    assert oidc_svc.is_any_enabled(db) is True
+    assert oidc_admin_svc.is_any_enabled(db) is True

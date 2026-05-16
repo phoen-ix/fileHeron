@@ -13,14 +13,13 @@ Includes:
 """
 from __future__ import annotations
 
-import uuid
+import logging
 from datetime import datetime, timedelta, timezone
-from typing import TYPE_CHECKING
 
-import jwt
 from fastapi import Request
-from sqlalchemy import update
 from sqlalchemy.orm import Session
+
+logger = logging.getLogger("fileheron.auth")
 
 from ..middleware.errors import AppError
 from ..models.audit_log import AuditEventType
@@ -29,14 +28,12 @@ from ..models.invite_token import InviteToken
 from ..models.known_device import KnownDevice
 from ..models.login_attempt import LoginAttempt, LoginOutcome
 from ..models.password_reset_token import PasswordResetToken
-from ..models.refresh_token import RefreshToken
 from ..models.user import Locale, User, UserRole
 from ..utils.crypto import (
     argon2_hash,
     argon2_verify,
     normalize_email,
     random_token,
-    refresh_token_hash,
     sha256_hex,
 )
 from ..utils.geohash import ip_geohash5
@@ -45,9 +42,30 @@ from . import rate_limit as rate_limit_svc
 from . import totp as totp_svc
 from .audit import record_audit_event
 from .hibp import is_password_breached
+from .jwt_session import (
+    create_access_token,
+    create_refresh_token,
+    resolve_user_from_access_token,
+    revoke_all_user_refresh_tokens,
+)
 
-if TYPE_CHECKING:
-    from ..config import Settings
+# Re-exported names for backwards-compatibility with callers that still
+# import these from services.auth (dependencies.py uses
+# resolve_user_from_access_token; tests likely use create_access_token).
+__all__ = [
+    "create_access_token",
+    "resolve_user_from_access_token",
+    "revoke_all_user_refresh_tokens",
+    "create_refresh_token",
+    "login",
+    "login_with_recovery",
+    "register_from_invite",
+    "begin_password_reset",
+    "consume_password_reset",
+    "begin_email_verification",
+    "consume_email_verification",
+    "change_password",
+]
 
 
 # ---------------------------------------------------------------------------
@@ -62,141 +80,6 @@ PASSWORD_RESET_TTL = timedelta(hours=1)
 def _utcnow() -> datetime:
     # Naive UTC — matches what MariaDB returns for DATETIME columns.
     return datetime.now(tz=timezone.utc).replace(tzinfo=None)
-
-
-# ---------------------------------------------------------------------------
-# Access tokens (JWT)
-# ---------------------------------------------------------------------------
-
-
-def create_access_token(user_id: int, settings) -> tuple[str, int]:
-    """Returns (token, expires_in_seconds).
-
-    Uses AWARE UTC for timestamp math — naive .timestamp() is interpreted as
-    local time and would emit incorrect Unix epochs.
-    Adds a `jti` (random nonce) so two tokens issued in the same second
-    are still distinguishable.
-    """
-    now_aware = datetime.now(tz=timezone.utc)
-    exp_aware = now_aware + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    payload = {
-        "sub": str(user_id),
-        "iat": int(now_aware.timestamp()),
-        "exp": int(exp_aware.timestamp()),
-        "jti": uuid.uuid4().hex,
-        "type": "access",
-    }
-    token = jwt.encode(payload, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
-    return token, settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60
-
-
-def resolve_user_from_access_token(db: Session, token: str, settings: "Settings") -> User:
-    try:
-        payload = jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
-    except jwt.ExpiredSignatureError:
-        raise AppError(401, "TOKEN_EXPIRED", "Access token has expired.") from None
-    except jwt.InvalidTokenError:
-        raise AppError(401, "INVALID_TOKEN", "Invalid access token.") from None
-
-    if payload.get("type") != "access":
-        raise AppError(401, "INVALID_TOKEN", "Wrong token type.")
-    try:
-        user_id = int(payload["sub"])
-    except (KeyError, ValueError, TypeError):
-        raise AppError(401, "INVALID_TOKEN", "Invalid token claims.") from None
-
-    user = db.query(User).filter(User.id == user_id).one_or_none()
-    if user is None or user.is_disabled:
-        raise AppError(401, "AUTH_REQUIRED", "Authentication failed.")
-    return user
-
-
-# ---------------------------------------------------------------------------
-# Refresh tokens (DB-backed, rotated, reuse-detected)
-# ---------------------------------------------------------------------------
-
-
-def _enforce_session_cap(
-    db: Session, *, user_id: int, cap: int, request: Request | None
-) -> int:
-    """Revoke the oldest excess active tokens so that creating one
-    more leaves the user at exactly `cap`. Returns number revoked.
-    Called once per `_create_refresh_token` from any auth flow."""
-    if cap <= 0:
-        return 0
-    now = _utcnow()
-    active_q = (
-        db.query(RefreshToken)
-        .filter(
-            RefreshToken.user_id == user_id,
-            RefreshToken.revoked_at.is_(None),
-            RefreshToken.expires_at > now,
-        )
-    )
-    active_count = active_q.count()
-    if active_count < cap:
-        return 0
-    # Need to evict (active_count - cap + 1) to make room for the new one.
-    excess = active_count - cap + 1
-    oldest = (
-        active_q.order_by(RefreshToken.created_at.asc()).limit(excess).all()
-    )
-    for token in oldest:
-        token.revoked_at = now
-        record_audit_event(
-            db,
-            event_type=AuditEventType.refresh_token_evicted,
-            actor_user_id=user_id,
-            target_type="refresh_token",
-            target_id=str(token.id),
-            metadata={
-                "evicted_token_id": token.id,
-                "reason": "session_cap",
-                "cap": cap,
-            },
-            request=request,
-        )
-    db.flush()
-    return len(oldest)
-
-
-def _create_refresh_token(db: Session, user: User, request: Request | None, settings) -> tuple[RefreshToken, str]:
-    # Cap-enforcement chokepoint — every auth flow (password, recovery,
-    # OIDC, WebAuthn, register-from-invite) ends here, so this gate
-    # covers them all. The eviction is non-security-relevant
-    # (`refresh_token_evicted` audit) — distinct from
-    # `refresh_token_reused` family-revoke for compromised chains.
-    _enforce_session_cap(
-        db,
-        user_id=user.id,
-        cap=settings.MAX_ACTIVE_SESSIONS_PER_USER,
-        request=request,
-    )
-
-    plaintext = random_token(48)  # 64 raw bytes → 86-char b64url
-    now = _utcnow()
-    record = RefreshToken(
-        user_id=user.id,
-        token_hash=refresh_token_hash(plaintext),
-        expires_at=now + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
-        created_ip=(request.client.host if request and request.client else None),
-        created_ua=(request.headers.get("user-agent", "")[:255] if request else None),
-    )
-    db.add(record)
-    db.flush()
-    return record, plaintext
-
-
-def _revoke_all_user_refresh_tokens(db: Session, user_id: int) -> int:
-    """Coarse-but-safe family revoke. Used when reuse is detected or on
-    password reset / change. Returns number of rows affected."""
-    now = _utcnow()
-    result = db.execute(
-        update(RefreshToken)
-        .where(RefreshToken.user_id == user_id, RefreshToken.revoked_at.is_(None))
-        .values(revoked_at=now)
-    )
-    return result.rowcount or 0
 
 
 # ---------------------------------------------------------------------------
@@ -516,8 +399,10 @@ async def login(
                 )
                 rate_limit_svc.mark_lockout_email_sent(db, user=user)
             except Exception:
-                # Logging will catch this; lockout still applies.
-                pass
+                logger.exception(
+                    "lockout warning email failed for user=%d via bad_password",
+                    user.id,
+                )
         db.commit()
         raise AppError(401, "INVALID_CREDENTIALS", "Invalid email or password.")
 
@@ -570,11 +455,14 @@ async def login(
             if should_email:
                 try:
                     await _maybe_send_lockout_email(
-                        user=user, email_plaintext=email, request=request
+                        db=db, user=user, email_plaintext=email, request=request
                     )
                     rate_limit_svc.mark_lockout_email_sent(db, user=user)
                 except Exception:
-                    pass
+                    logger.exception(
+                        "lockout warning email failed for user=%d via bad_totp",
+                        user.id,
+                    )
             db.commit()
             raise AppError(401, "INVALID_TOTP", "Two-factor code is invalid.")
 
@@ -583,7 +471,7 @@ async def login(
     rate_limit_svc.reset_ip_window(ip or "")
 
     access, expires_in = create_access_token(user.id, settings)
-    _, refresh_plain = _create_refresh_token(db, user, request, settings)
+    _, refresh_plain = create_refresh_token(db, user, request, settings)
 
     is_new_device = _record_login_device(db, user=user, request=request)
     _record_login_attempt(db, email_value=em_email, ip=ip, outcome=LoginOutcome.success)
@@ -667,7 +555,7 @@ async def login_with_recovery(
     rate_limit_svc.reset_ip_window(ip or "")
 
     access, expires_in = create_access_token(user.id, settings)
-    _, refresh_plain = _create_refresh_token(db, user, request, settings)
+    _, refresh_plain = create_refresh_token(db, user, request, settings)
     is_new_device = _record_login_device(db, user=user, request=request)
     _record_login_attempt(db, email_value=em_email, ip=ip, outcome=LoginOutcome.success)
     record_audit_event(
@@ -685,100 +573,8 @@ async def login_with_recovery(
     return user, access, expires_in, refresh_plain
 
 
-def rotate_refresh(
-    db: Session,
-    *,
-    refresh_token_plain: str,
-    request: Request | None,
-    settings,
-) -> tuple[User, str, int, str]:
-    """Validate + rotate the refresh token. On reuse → revoke all of the
-    user's refresh tokens and raise TOKEN_REUSE.
-
-    Returns (user, new_access_token, expires_in_seconds, new_refresh_token_plain).
-    """
-    record = (
-        db.query(RefreshToken)
-        .filter(RefreshToken.token_hash == refresh_token_hash(refresh_token_plain))
-        .one_or_none()
-    )
-    if record is None:
-        raise AppError(401, "INVALID_REFRESH", "Invalid refresh token.")
-    if record.expires_at < _utcnow():
-        raise AppError(401, "INVALID_REFRESH", "Refresh token expired.")
-    if record.revoked_at is not None:
-        # Reuse detected → kill all sessions for this user, audit, raise.
-        _revoke_all_user_refresh_tokens(db, record.user_id)
-        record_audit_event(
-            db,
-            event_type=AuditEventType.refresh_token_reused,
-            actor_user_id=record.user_id,
-            target_type="refresh_token",
-            target_id=record.id,
-            request=request,
-        )
-        db.commit()
-        raise AppError(401, "TOKEN_REUSE", "Refresh token reuse detected; all sessions revoked.")
-
-    # Conditional UPDATE → atomic check-and-revoke. If two requests race, the
-    # second sees affected_rows=0 and we treat it as reuse.
-    now = _utcnow()
-    result = db.execute(
-        update(RefreshToken)
-        .where(RefreshToken.id == record.id, RefreshToken.revoked_at.is_(None))
-        .values(revoked_at=now)
-    )
-    if (result.rowcount or 0) == 0:
-        _revoke_all_user_refresh_tokens(db, record.user_id)
-        record_audit_event(
-            db,
-            event_type=AuditEventType.refresh_token_reused,
-            actor_user_id=record.user_id,
-            target_type="refresh_token",
-            target_id=record.id,
-            metadata={"reason": "race"},
-            request=request,
-        )
-        db.commit()
-        raise AppError(401, "TOKEN_REUSE", "Refresh token reuse detected; all sessions revoked.")
-
-    user = db.query(User).filter(User.id == record.user_id).one_or_none()
-    if user is None or user.is_disabled:
-        raise AppError(403, "ACCOUNT_DISABLED", "Account unavailable.")
-
-    new_record, new_plain = _create_refresh_token(db, user, request, settings)
-    record.replaced_by_id = new_record.id
-    db.flush()
-
-    access, expires_in = create_access_token(user.id, settings)
-    record_audit_event(
-        db,
-        event_type=AuditEventType.refresh_token_rotated,
-        actor_user_id=user.id,
-        target_type="refresh_token",
-        target_id=new_record.id,
-        request=request,
-    )
-    return user, access, expires_in, new_plain
-
-
-def logout(db: Session, *, refresh_token_plain: str, request: Request | None) -> None:
-    record = (
-        db.query(RefreshToken)
-        .filter(RefreshToken.token_hash == refresh_token_hash(refresh_token_plain))
-        .one_or_none()
-    )
-    if record is None or record.revoked_at is not None:
-        return  # idempotent
-    record.revoked_at = _utcnow()
-    record_audit_event(
-        db,
-        event_type=AuditEventType.logout,
-        actor_user_id=record.user_id,
-        target_type="refresh_token",
-        target_id=record.id,
-        request=request,
-    )
+# `rotate_refresh` and `logout` live in services/jwt_session.py — routers
+# call them directly.
 
 
 def begin_password_reset(
@@ -836,7 +632,7 @@ async def consume_password_reset(
     user.password_hash = argon2_hash(new_password)
     record.used_at = _utcnow()
 
-    _revoke_all_user_refresh_tokens(db, user.id)
+    revoke_all_user_refresh_tokens(db, user.id)
 
     record_audit_event(
         db,
@@ -902,7 +698,7 @@ async def change_password(
         raise AppError(422, "PASSWORD_BREACHED", "Chosen password has appeared in a breach. Pick another.")
 
     user.password_hash = argon2_hash(new_password)
-    _revoke_all_user_refresh_tokens(db, user.id)
+    revoke_all_user_refresh_tokens(db, user.id)
     record_audit_event(
         db,
         event_type=AuditEventType.password_changed,

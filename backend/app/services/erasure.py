@@ -61,7 +61,10 @@ def erase_user(
     if _is_erased(target):
         raise AppError(409, "ALREADY_ERASED", "This user has already been erased.")
 
-    # 1. Hard-delete files this user uploaded.
+    # 1. Hard-delete files this user uploaded. If any unlink fails, abort
+    # the whole erasure — partial erasure would leave the user
+    # half-anonymised AND lie in the receipt PDF that admins hand back.
+    # Better: raise, let admin clean the disk, retry.
     files = (
         db.query(File)
         .filter(
@@ -72,10 +75,22 @@ def erase_user(
     )
     deleted_count = 0
     deleted_bytes = 0
+    failed_files: list[str] = []
     for f in files:
-        deleted_bytes += f.size_bytes
-        file_svc.hard_delete(db, file=f, reason="user_erased", request=request)
-        deleted_count += 1
+        try:
+            file_svc.hard_delete(db, file=f, reason="user_erased", request=request)
+            deleted_bytes += f.size_bytes
+            deleted_count += 1
+        except OSError as e:
+            logger.error("erasure: hard_delete failed file=%s: %s", f.id, e)
+            failed_files.append(f.id)
+    if failed_files:
+        raise AppError(
+            500,
+            "ERASURE_FILE_DELETE_FAILED",
+            f"{len(failed_files)} file(s) failed to delete; aborting erasure.",
+            details={"failed_file_ids": failed_files},
+        )
 
     # 2. Wipe credentials + tokens.
     db.query(UserTOTP).filter(UserTOTP.user_id == target.id).delete(
@@ -107,7 +122,6 @@ def erase_user(
     target.is_disabled = True
     target.oidc_subject = None
     target.last_login_at = None
-    target.requires_2fa_setup = False
     db.flush()
 
     record_audit_event(

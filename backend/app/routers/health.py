@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from ..config import settings
 from ..database import SessionLocal
 from ..dependencies import get_db
-from ..services import oidc as oidc_svc
+from ..services import oidc_admin as oidc_admin_svc
 
 router = APIRouter(tags=["health"])
 
@@ -66,8 +66,8 @@ def public_config(db: Session = Depends(get_db)) -> dict:
     so the SPA renders one button per. Disabled or unconfigured providers
     are excluded."""
     providers = []
-    for p in oidc_svc.list_enabled_providers(db):
-        if not oidc_svc.is_provider_usable(p):
+    for p in oidc_admin_svc.list_enabled_providers(db):
+        if not oidc_admin_svc.is_provider_usable(p):
             continue
         providers.append(
             {

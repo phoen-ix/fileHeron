@@ -30,6 +30,7 @@ from ..config import settings
 from ..dependencies import get_db
 from ..middleware.errors import AppError
 from ..services import auth as auth_svc
+from ..services import jwt_session
 from ..services import oidc as oidc_svc
 from ..services import rate_limit as rate_limit_svc
 
@@ -61,7 +62,7 @@ async def start(
     provider_id: str,
     db: Session = Depends(get_db),
 ) -> RedirectResponse:
-    provider = oidc_svc.get_enabled_provider(db, provider_id)
+    provider = oidc_admin_svc.get_enabled_provider(db, provider_id)
     url, state, nonce = await oidc_svc.build_authorize_url(provider, kind="login")
     response = RedirectResponse(url=url, status_code=302)
     response.set_cookie(
@@ -85,7 +86,7 @@ async def callback(
     fh_oidc_state: str | None = Cookie(default=None),
     db: Session = Depends(get_db),
 ) -> RedirectResponse:
-    provider = oidc_svc.get_enabled_provider(db, provider_id)
+    provider = oidc_admin_svc.get_enabled_provider(db, provider_id)
 
     cookie_state, cookie_provider_id, cookie_nonce = _unpack_state(fh_oidc_state)
     if cookie_provider_id != provider.id or not cookie_nonce:
@@ -107,7 +108,7 @@ async def callback(
 
     access, expires_in = auth_svc.create_access_token(user.id, settings)
     rate_limit_svc.record_success(db, user=user)
-    _, refresh_plain = auth_svc._create_refresh_token(db, user, request, settings)
+    _, refresh_plain = jwt_session.create_refresh_token(db, user, request, settings)
     db.commit()
 
     from ..services import site as site_svc

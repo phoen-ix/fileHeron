@@ -21,6 +21,7 @@ import logging
 from typing import Any
 
 import redis.asyncio as aioredis
+from sqlalchemy import update
 from sqlalchemy.orm import Session
 from webauthn import (
     generate_authentication_options,
@@ -291,10 +292,34 @@ async def authenticate_complete(
             401, "WEBAUTHN_VERIFY_FAILED", "Passkey verification failed."
         ) from e
 
-    record.sign_count = verification.new_sign_count
+    # Atomic conditional UPDATE: only commit the new sign_count if the
+    # row hasn't moved since we read it. Otherwise another concurrent
+    # auth (potentially a clone) raced us — fail closed.
     from datetime import datetime, timezone
-    record.last_used_at = datetime.now(tz=timezone.utc).replace(tzinfo=None)
+    now = datetime.now(tz=timezone.utc).replace(tzinfo=None)
+    result = db.execute(
+        update(UserWebAuthnCredential)
+        .where(
+            UserWebAuthnCredential.id == record.id,
+            UserWebAuthnCredential.sign_count == record.sign_count,
+        )
+        .values(
+            sign_count=verification.new_sign_count,
+            last_used_at=now,
+        )
+    )
     db.flush()
+    if result.rowcount != 1:
+        logger.warning(
+            "webauthn concurrent auth detected for user=%d cred=%d",
+            user_id, record.id,
+        )
+        raise AppError(
+            401,
+            "WEBAUTHN_VERIFY_FAILED",
+            "Concurrent authentication detected.",
+        )
+    db.refresh(record)
 
     user = db.query(User).filter(User.id == user_id).one()
     return user

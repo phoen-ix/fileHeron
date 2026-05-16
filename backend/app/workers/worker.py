@@ -17,6 +17,7 @@ from ..utils.logger import configure_logging
 from .av_scan import av_scan_file
 from .cleanup_expired_tokens import cleanup_expired_tokens
 from .expire_files import expire_files
+from .quota_reconcile import quota_reconcile
 from .send_email import send_email_job
 from .share_expiring import share_expiring_24h_warning
 
@@ -33,12 +34,14 @@ class WorkerSettings:
         send_email_job,
         share_expiring_24h_warning,
         cleanup_expired_tokens,
+        quota_reconcile,
     ]
     cron_jobs = [
         # Stagger so they don't pile up at minute 0.
         cron(expire_files, hour=None, minute={0}, run_at_startup=False),
         cron(share_expiring_24h_warning, hour=None, minute={7}, run_at_startup=False),
         cron(cleanup_expired_tokens, hour=None, minute={23}, run_at_startup=False),
+        cron(quota_reconcile, hour=None, minute={37}, run_at_startup=False),
     ]
     on_startup = startup
     # Use a dedicated queue so the worker doesn't accidentally pick up

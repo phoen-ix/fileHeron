@@ -162,6 +162,46 @@ async def test_disable_requires_password_and_code(make_user, client):
     assert plain.status_code == 200
 
 
+def test_anti_replay_under_concurrency(make_user, db):
+    """Wave 1 P1-2 regression. The atomic UPDATE in verify_at_login
+    (`WHERE last_used_counter < current_counter`) is what protects
+    against same-window code reuse. Two sequential calls with the same
+    valid code → exactly one returns True; the second's rowcount=0 →
+    False. Pre-fix Python-layer read-check-write would have returned
+    True for both in the same 30s window if interleaved before either
+    flushed.
+
+    SQLite + StaticPool + asyncio runs cooperatively on one connection,
+    so we can't reproduce true thread parallelism here. The invariant
+    we test (the atomic UPDATE rejects replay) is the actual protection
+    mechanism the fix relies on, regardless of scheduling.
+    """
+    from datetime import datetime, timezone
+
+    from app.models.user_totp import UserTOTP
+    from app.services import totp as totp_svc
+    from app.utils.crypto import encrypt_totp_secret
+
+    user = make_user(email="alice@test.local")
+    secret = pyotp.random_base32()
+    row = UserTOTP(
+        user_id=user.id,
+        secret_encrypted=encrypt_totp_secret(secret),
+        enabled_at=datetime.now(tz=timezone.utc).replace(tzinfo=None),
+        last_used_counter=0,
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(user)
+
+    code = pyotp.TOTP(secret).now()
+    first = totp_svc.verify_at_login(db, user=user, code=code)
+    second = totp_svc.verify_at_login(db, user=user, code=code)
+
+    assert first is True
+    assert second is False, "same-window replay must be rejected"
+
+
 @pytest.mark.asyncio
 async def test_status_endpoint_reports_correctly(make_user, client):
     make_user(email="alice@test.local", password="LongCorrectHorse123!")

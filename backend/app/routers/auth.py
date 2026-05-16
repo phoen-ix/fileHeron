@@ -24,6 +24,7 @@ from ..schemas.auth import (
 )
 from ..services import auth as auth_svc
 from ..services import email as email_svc
+from ..services import jwt_session
 from ..services import rate_limit as rate_limit_svc
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -71,7 +72,7 @@ async def register_from_invite(
     # Issue session immediately so the new user is logged in.
     access, expires_in = auth_svc.create_access_token(user.id, settings)
     rate_limit_svc.record_success(db, user=user)
-    _, refresh_plain = auth_svc._create_refresh_token(db, user, request, settings)
+    _, refresh_plain = jwt_session.create_refresh_token(db, user, request, settings)
     db.commit()
     _set_refresh_cookie(response, refresh_plain)
     return LoginResponse(access_token=access, expires_in_seconds=expires_in)
@@ -128,7 +129,7 @@ def refresh(
 ) -> RefreshResponse:
     if not fh_refresh:
         raise AppError(401, "AUTH_REQUIRED", "Refresh cookie missing.")
-    _user, access, expires_in, new_refresh_plain = auth_svc.rotate_refresh(
+    _user, access, expires_in, new_refresh_plain = jwt_session.rotate_refresh(
         db, refresh_token_plain=fh_refresh, request=request, settings=settings
     )
     db.commit()
@@ -144,7 +145,7 @@ def logout(
     db: Session = Depends(get_db),
 ) -> Response:
     if fh_refresh:
-        auth_svc.logout(db, refresh_token_plain=fh_refresh, request=request)
+        jwt_session.logout(db, refresh_token_plain=fh_refresh, request=request)
         db.commit()
     _clear_refresh_cookie(response)
     response.status_code = status.HTTP_204_NO_CONTENT

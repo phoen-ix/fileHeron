@@ -82,3 +82,61 @@ async def test_authenticate_begin_requires_credentials(make_user, db):
             db, user=user, session_key="anything"
         )
     assert exc.value.code == "WEBAUTHN_NO_CREDENTIALS"
+
+
+def test_sign_count_atomic_update_rejects_concurrent_overwrite(make_user, db):
+    """Wave 1 P1-3 regression. The atomic UPDATE in
+    authenticate_complete (`WHERE sign_count == record.sign_count`)
+    closes the cloned-authenticator gap: two concurrent verifications
+    both seeing sign_count=5 can't both write new values — the second's
+    WHERE clause no longer matches after the first commits, so its
+    rowcount=0 triggers WEBAUTHN_VERIFY_FAILED. Pre-fix unconditional
+    assignment would silently let both succeed, defeating the whole
+    point of sign-count clone detection.
+
+    SQLite + asyncio is cooperative — we can't reproduce true thread
+    parallelism. Instead we exercise the atomic primitive directly: two
+    UPDATEs with the same expected-sign-count, second one returns
+    rowcount=0 (which the production code converts to AppError).
+    """
+    from sqlalchemy import update as sql_update
+
+    user = make_user(email="alice@test.local", role=UserRole.client)
+    cred = UserWebAuthnCredential(
+        user_id=user.id,
+        credential_id=b"cred-x",
+        public_key=b"pk-x",
+        sign_count=5,
+        transports="internal",
+        name="Test passkey",
+    )
+    db.add(cred)
+    db.commit()
+
+    # Request A: sees sign_count=5, wants to write 7.
+    result_a = db.execute(
+        sql_update(UserWebAuthnCredential)
+        .where(
+            UserWebAuthnCredential.id == cred.id,
+            UserWebAuthnCredential.sign_count == 5,
+        )
+        .values(sign_count=7)
+    )
+    db.flush()
+    assert result_a.rowcount == 1
+
+    # Request B: still thinks sign_count=5 (stale read), tries to write 6.
+    # WHERE sign_count == 5 no longer matches.
+    result_b = db.execute(
+        sql_update(UserWebAuthnCredential)
+        .where(
+            UserWebAuthnCredential.id == cred.id,
+            UserWebAuthnCredential.sign_count == 5,
+        )
+        .values(sign_count=6)
+    )
+    db.flush()
+    assert result_b.rowcount == 0, "stale-sign-count update must not match"
+
+    db.refresh(cred)
+    assert cred.sign_count == 7, "first writer wins; second's write was rejected"

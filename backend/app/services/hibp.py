@@ -39,11 +39,21 @@ def _redis() -> aioredis.Redis:
 
 async def _fetch_range(prefix5: str) -> str | None:
     """Returns the response body (multi-line `<suffix35>:<count>\n…`) or
-    None on network/upstream failure."""
+    None on network/upstream/cache failure.
+
+    Fail-open everywhere: Redis unreachable, HIBP unreachable, HIBP
+    non-200 — all return None so the caller treats the password as
+    not-breached. The security checklist commitment is that HIBP is a
+    best-effort gate, not a hard blocker."""
     cache_key = CACHE_KEY_PREFIX + prefix5
     r = _redis()
     try:
-        cached = await r.get(cache_key)
+        try:
+            cached = await r.get(cache_key)
+        except Exception as e:
+            # Redis down — skip the cache, go straight to HIBP.
+            logger.warning("HIBP cache GET failed for prefix %s: %s", prefix5, e)
+            cached = None
         if cached is not None:
             return cached
 

@@ -72,6 +72,39 @@ async def test_successful_login_resets_failure_counter(make_user, client, db):
     assert user.locked_until is None
 
 
+def test_lockout_threshold_under_concurrency(make_user, db):
+    """Wave 1 P1-4 regression. Six record_failure calls on a fresh user
+    → lockout fires exactly once (on the 5th call), not 6 times. The
+    row-level write lock via `db.refresh(user, with_for_update=True)`
+    serializes the read-modify-write across concurrent callers in
+    MariaDB; subsequent calls past the threshold see is_account_locked
+    and don't re-fire just_locked.
+
+    SQLite ignores FOR UPDATE and is single-threaded in pytest, so this
+    test exercises the invariant (one lockout transition per
+    threshold-crossing) rather than true parallel contention. The
+    pre-fix Python-layer counter+threshold check would have read
+    failed_login_count=0 in all 6 calls if they actually interleaved,
+    incrementing only to 1 instead of 6 and never crossing the
+    threshold.
+    """
+    from app.services import rate_limit
+
+    user = make_user(email="alice@test.local")
+
+    results = []
+    for _ in range(6):
+        just_locked, _ = rate_limit.record_failure(db, user=user)
+        results.append(just_locked)
+    db.commit()
+    db.refresh(user)
+
+    assert results.count(True) == 1, f"exactly one lockout transition expected; got {results}"
+    assert results[4] is True, "lockout should fire on the 5th failure"
+    assert user.failed_login_count == 6, "all 6 increments must persist"
+    assert user.locked_until is not None
+
+
 @pytest.mark.asyncio
 async def test_account_locked_audit_emitted_once(make_user, client, db):
     make_user(email="alice@test.local", password="LongCorrectHorse123!")

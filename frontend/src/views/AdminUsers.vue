@@ -11,14 +11,12 @@ import {
   resendInvite,
   revokeInvite,
 } from '@/api/admin'
-import { inviteUser } from '@/api/account'
-import { listGroups } from '@/api/groups'
 import { useApiError } from '@/composables/useApiError'
+import { useInviteForm } from '@/composables/useInviteForm'
 import { useUiStore } from '@/stores/ui'
 import type {
   AdminInviteItem,
   AdminUserItem,
-  GroupResponse,
   UserRole,
 } from '@/types/api'
 
@@ -74,76 +72,23 @@ function open(u: AdminUserItem) {
   router.push({ name: 'admin-user-detail', params: { id: u.id } })
 }
 
-// --- Invite form ----------------------------------------------------------
+// --- Invite form (state + submit lifecycle in useInviteForm) -------------
 
-const showInviteForm = ref(false)
-const inviteEmail = ref('')
-const inviteDisplayName = ref('')
-const inviteRole = ref<UserRole>('client')
-const inviting = ref(false)
-const inviteError = ref<string | null>(null)
-const availableGroups = ref<GroupResponse[]>([])
-const selectedGroupIds = ref<number[]>([])
+const {
+  showInviteForm,
+  inviteEmail,
+  inviteDisplayName,
+  inviteRole,
+  inviting,
+  inviteError,
+  availableGroups,
+  selectedGroupIds,
+  openInviteForm,
+  closeInviteForm,
+  toggleGroup,
+  onInvite,
+} = useInviteForm()
 
-function resetInviteForm() {
-  inviteEmail.value = ''
-  inviteDisplayName.value = ''
-  inviteRole.value = 'client'
-  selectedGroupIds.value = []
-  inviteError.value = null
-}
-
-function closeInviteForm() {
-  showInviteForm.value = false
-  resetInviteForm()
-}
-
-async function openInviteForm() {
-  showInviteForm.value = true
-  // Lazy-load groups the first time the form is opened.
-  if (availableGroups.value.length === 0) {
-    try {
-      const { data } = await listGroups()
-      availableGroups.value = data.items
-    } catch {
-      /* leave empty — checkbox section just won't render */
-    }
-  }
-}
-
-function toggleGroup(id: number) {
-  const idx = selectedGroupIds.value.indexOf(id)
-  if (idx === -1) {
-    selectedGroupIds.value = [...selectedGroupIds.value, id]
-  } else {
-    selectedGroupIds.value = selectedGroupIds.value.filter((g) => g !== id)
-  }
-}
-
-async function onInvite() {
-  inviting.value = true
-  inviteError.value = null
-  try {
-    const { data } = await inviteUser({
-      email: inviteEmail.value,
-      display_name_hint: inviteDisplayName.value,
-      target_role: inviteRole.value,
-      initial_group_ids: selectedGroupIds.value,
-    })
-    ui.pushToast(
-      t('admin_users.invite_sent', {
-        hint: data.email,
-        expires: formatDate(data.expires_at),
-      }),
-      'success',
-    )
-    closeInviteForm()
-  } catch (err) {
-    inviteError.value = describe(err)
-  } finally {
-    inviting.value = false
-  }
-}
 
 function formatDate(iso: string | null): string {
   if (!iso) return '—'

@@ -147,7 +147,12 @@ def confirm_enable(db: Session, *, user: User, code: str, request) -> list[str]:
 
 def verify_at_login(db: Session, *, user: User, code: str) -> bool:
     """Returns True iff the code is valid AND not a replay. Updates
-    last_used_counter on success."""
+    last_used_counter on success.
+
+    Anti-replay uses an atomic conditional UPDATE so two concurrent
+    requests presenting the same code in the same 30s window can't
+    both succeed — only the first wins, the rest get rowcount=0.
+    """
     if user.totp is None or user.totp.enabled_at is None:
         return False
     secret = decrypt_totp_secret(user.totp.secret_encrypted)
@@ -155,13 +160,20 @@ def verify_at_login(db: Session, *, user: User, code: str) -> bool:
     if not totp.verify(code, valid_window=_TOTP_VALID_WINDOW):
         return False
 
-    # Anti-replay: refuse codes whose counter ≤ last accepted counter.
     current_counter = int(datetime.now(tz=timezone.utc).timestamp() // 30)
-    if current_counter <= (user.totp.last_used_counter or 0):
-        return False
-    user.totp.last_used_counter = current_counter
+    result = db.execute(
+        update(UserTOTP)
+        .where(
+            UserTOTP.user_id == user.id,
+            UserTOTP.last_used_counter < current_counter,
+        )
+        .values(last_used_counter=current_counter)
+    )
     db.flush()
-    return True
+    if result.rowcount == 1:
+        db.refresh(user.totp)
+        return True
+    return False
 
 
 def consume_recovery_code(db: Session, *, user: User, code: str, request) -> bool:
@@ -241,5 +253,3 @@ def regenerate_recovery_codes(
     return plaintexts
 
 
-# Convenience for tests: silence unused-import warning if someone runs ruff
-_ = update

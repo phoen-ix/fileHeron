@@ -1,0 +1,68 @@
+"""/api/admin/files — cross-user file history inventory."""
+from __future__ import annotations
+
+from datetime import datetime
+
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy.orm import Session
+
+from ...dependencies import get_current_admin, get_db
+from ...models.user import User
+from ...schemas.file_admin import (
+    AdminFileItem,
+    AdminFileListResponse,
+    FileUploaderRef,
+)
+from ...services import file_admin as file_admin_svc
+
+router = APIRouter()
+
+
+@router.get("/files", response_model=AdminFileListResponse)
+def admin_list_files(
+    q: str = Query("", max_length=255),
+    state: str | None = Query(None),
+    uploader_id: int | None = Query(None, ge=1),
+    share_state: str | None = Query(None),
+    from_ts: datetime | None = Query(None, alias="from"),
+    to_ts: datetime | None = Query(None, alias="to"),
+    sort: str = Query("uploaded_at"),
+    direction: str = Query("desc", pattern="^(asc|desc)$"),
+    page: int = Query(1, ge=1, le=10_000),
+    page_size: int = Query(50, ge=1, le=200),
+    db: Session = Depends(get_db),
+    _admin: User = Depends(get_current_admin),
+) -> AdminFileListResponse:
+    rows, total = file_admin_svc.list_all_files(
+        db,
+        q=q,
+        state=state,
+        uploader_id=uploader_id,
+        share_state=share_state,
+        from_ts=from_ts,
+        to_ts=to_ts,
+        sort=sort,
+        direction=direction,
+        page=page,
+        page_size=page_size,
+    )
+    items = [
+        AdminFileItem(
+            file_id=r["file_id"],
+            filename=r["filename"],
+            size_bytes=r["size_bytes"],
+            state=r["state"],
+            share_id=r["share_id"],
+            share_subject=r["share_subject"],
+            share_state=r["share_state"],
+            uploader=FileUploaderRef(**r["uploader"]),
+            recipients_summary=r["recipients_summary"],
+            uploaded_at=r["uploaded_at"],
+            last_downloaded_at=r["last_downloaded_at"],
+            download_count=r["download_count"],
+        )
+        for r in rows
+    ]
+    return AdminFileListResponse(
+        items=items, total=total, page=page, page_size=page_size
+    )

@@ -124,17 +124,28 @@ def record_failure(db: Session, *, user: User) -> tuple[bool, bool]:
     - should_send_lockout_email: True iff we crossed the 6h dedup window
       AND this call locked (or was already locked). Caller is responsible
       for sending the email and setting `user.lockout_email_sent_at`.
+
+    Takes a row-level write lock via SELECT … FOR UPDATE so 6 concurrent
+    failures serialize through MariaDB and can't all read the same
+    pre-increment value (the bypass the audit flagged). SQLite ignores
+    FOR UPDATE but is single-threaded in tests, so the same code path
+    works in both.
     """
+    now = _utcnow()
+    # Re-read user with a row-level write lock so concurrent record_failure
+    # calls on the same row serialize.
+    db.refresh(user, with_for_update=True)
+
     user.failed_login_count = (user.failed_login_count or 0) + 1
     just_locked = False
     if user.failed_login_count >= _LOCKOUT_THRESHOLD and not is_account_locked(user):
-        user.locked_until = _utcnow() + _LOCKOUT_DURATION
+        user.locked_until = now + _LOCKOUT_DURATION
         just_locked = True
 
     should_email = False
     if just_locked:
         last = user.lockout_email_sent_at
-        if last is None or (_utcnow() - last) > _LOCKOUT_EMAIL_DEDUP:
+        if last is None or (now - last) > _LOCKOUT_EMAIL_DEDUP:
             should_email = True
     db.flush()
     return just_locked, should_email

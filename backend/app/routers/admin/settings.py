@@ -1,0 +1,584 @@
+"""/api/admin/settings/* — all kv-store admin settings.
+
+Groups: public-link policy, SMTP/email, home page, share defaults, site
+URL, 2FA enforcement, quarantine notify-admins toggle.
+"""
+from __future__ import annotations
+
+import json
+
+from fastapi import APIRouter, Depends, Request
+from sqlalchemy.orm import Session
+
+from ...config import settings as _env_settings
+from ...dependencies import get_current_admin, get_db
+from ...middleware.errors import AppError
+from ...models.audit_log import AuditEventType
+from ...models.group import Group
+from ...models.user import User
+from ...schemas.email_settings import (
+    EmailSettingsResponse,
+    TestEmailRequest,
+    TestEmailResponse,
+    UpdateEmailSettingsRequest,
+)
+from ...schemas.home_page_settings import (
+    HomePageSettingsResponse,
+    UpdateHomePageSettingsRequest,
+)
+from ...schemas.public_link import (
+    PublicLinkAllowedGroup,
+    PublicLinkAllowedUser,
+    PublicLinkPolicyResponse,
+    UpdatePublicLinkPolicyRequest,
+)
+from ...schemas.quarantine import (
+    QuarantineSettingsResponse,
+    UpdateQuarantineSettingsRequest,
+)
+from ...schemas.share_defaults_settings import (
+    ShareDefaultsResponse,
+    UpdateShareDefaultsRequest,
+)
+from ...schemas.site_settings import (
+    SiteSettingsResponse,
+    UpdateSiteSettingsRequest,
+)
+from ...schemas.twofa_policy import (
+    RequiredGroupRef,
+    TwofaPolicyResponse,
+    UpdateTwofaPolicyRequest,
+)
+from ...services import email as email_svc
+from ...services import public_link as public_link_svc
+from ...services import settings as settings_svc
+from ...services import site as site_svc
+from ...services import twofa_policy as twofa_policy_svc
+from ...services.audit import record_audit_event
+
+router = APIRouter()
+
+
+# ---- Public link policy ----------------------------------------------------
+
+
+@router.get(
+    "/settings/public-links/policy", response_model=PublicLinkPolicyResponse
+)
+def get_public_link_policy(
+    db: Session = Depends(get_db),
+    _admin: User = Depends(get_current_admin),
+) -> PublicLinkPolicyResponse:
+    mode, user_ids, group_ids = public_link_svc._resolve_policy(db)
+    users = (
+        db.query(User).filter(User.id.in_(user_ids)).all() if user_ids else []
+    )
+    groups = (
+        db.query(Group).filter(Group.id.in_(group_ids)).all() if group_ids else []
+    )
+    return PublicLinkPolicyResponse(
+        mode=mode,  # type: ignore[arg-type]
+        allowed_user_ids=user_ids,
+        allowed_group_ids=group_ids,
+        allowed_users=[
+            PublicLinkAllowedUser(
+                id=u.id,
+                display_name=u.display_name,
+                email=u.email,
+                role=u.role.value,
+            )
+            for u in users
+        ],
+        allowed_groups=[
+            PublicLinkAllowedGroup(id=g.id, name=g.name) for g in groups
+        ],
+    )
+
+
+@router.put(
+    "/settings/public-links/policy", response_model=PublicLinkPolicyResponse
+)
+def update_public_link_policy(
+    payload: UpdatePublicLinkPolicyRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin),
+) -> PublicLinkPolicyResponse:
+    if payload.allowed_user_ids:
+        found_user_ids = {
+            row[0]
+            for row in db.query(User.id)
+            .filter(User.id.in_(payload.allowed_user_ids))
+            .all()
+        }
+        missing = [
+            uid for uid in payload.allowed_user_ids if uid not in found_user_ids
+        ]
+        if missing:
+            raise AppError(
+                400,
+                "USER_NOT_FOUND",
+                "One or more selected users do not exist.",
+                details={"missing_user_ids": missing},
+            )
+    if payload.allowed_group_ids:
+        found_group_ids = {
+            row[0]
+            for row in db.query(Group.id)
+            .filter(Group.id.in_(payload.allowed_group_ids))
+            .all()
+        }
+        missing = [
+            gid for gid in payload.allowed_group_ids if gid not in found_group_ids
+        ]
+        if missing:
+            raise AppError(
+                400,
+                "GROUP_NOT_FOUND",
+                "One or more selected groups do not exist.",
+                details={"missing_group_ids": missing},
+            )
+
+    settings_svc.set_value(
+        db,
+        key=settings_svc.Keys.PUBLIC_LINK_POLICY_MODE,
+        value=payload.mode,
+        actor=admin,
+    )
+    settings_svc.set_value(
+        db,
+        key=settings_svc.Keys.PUBLIC_LINK_ALLOWED_USERS,
+        value=json.dumps(payload.allowed_user_ids) if payload.allowed_user_ids else None,
+        actor=admin,
+    )
+    settings_svc.set_value(
+        db,
+        key=settings_svc.Keys.PUBLIC_LINK_ALLOWED_GROUPS,
+        value=json.dumps(payload.allowed_group_ids) if payload.allowed_group_ids else None,
+        actor=admin,
+    )
+    record_audit_event(
+        db,
+        event_type=AuditEventType.public_link_policy_changed,
+        actor_user_id=admin.id,
+        target_type="settings",
+        target_id="public_link_policy",
+        metadata={
+            "mode": payload.mode,
+            "user_count": len(payload.allowed_user_ids),
+            "group_count": len(payload.allowed_group_ids),
+        },
+        request=request,
+    )
+    db.commit()
+    return get_public_link_policy(db=db, _admin=admin)
+
+
+# ---- Email / SMTP ----------------------------------------------------------
+
+
+def _to_email_response(db: Session) -> EmailSettingsResponse:
+    cfg = email_svc.resolve_smtp_config(db)
+    has_overrides = any(
+        settings_svc.get(db, k) is not None
+        for k in (
+            settings_svc.Keys.SMTP_HOST,
+            settings_svc.Keys.SMTP_PORT,
+            settings_svc.Keys.SMTP_USER,
+            settings_svc.Keys.SMTP_PASSWORD,
+            settings_svc.Keys.SMTP_FROM_EMAIL,
+            settings_svc.Keys.SMTP_FROM_NAME,
+            settings_svc.Keys.SMTP_TLS_MODE,
+        )
+    )
+    return EmailSettingsResponse(
+        host=cfg.host,
+        port=cfg.port,
+        user=cfg.user,
+        is_password_set=bool(cfg.password),
+        from_email=cfg.from_email,
+        from_name=cfg.from_name,
+        tls_mode=cfg.tls_mode,  # type: ignore[arg-type]
+        is_configured=cfg.is_configured,
+        has_db_overrides=has_overrides,
+    )
+
+
+@router.get("/settings/email", response_model=EmailSettingsResponse)
+def get_email_settings(
+    db: Session = Depends(get_db),
+    _admin: User = Depends(get_current_admin),
+) -> EmailSettingsResponse:
+    return _to_email_response(db)
+
+
+@router.put("/settings/email", response_model=EmailSettingsResponse)
+def update_email_settings(
+    payload: UpdateEmailSettingsRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin),
+) -> EmailSettingsResponse:
+    """Field semantics: missing/None = leave alone; "" = clear; other =
+    replace. Same convention as the Phase 9 OIDC PUT.
+
+    Password gets the same special handling: null keeps existing,
+    "" clears, anything else replaces (and is encrypted at rest by the
+    settings service since `SMTP_PASSWORD` is in `_ENCRYPTED_KEYS`).
+    """
+    pairs: list[tuple[str, str | int | None]] = [
+        (settings_svc.Keys.SMTP_HOST, payload.host),
+        (settings_svc.Keys.SMTP_PORT, payload.port),
+        (settings_svc.Keys.SMTP_USER, payload.user),
+        (settings_svc.Keys.SMTP_FROM_EMAIL, payload.from_email),
+        (settings_svc.Keys.SMTP_FROM_NAME, payload.from_name),
+        (settings_svc.Keys.SMTP_TLS_MODE, payload.tls_mode),
+    ]
+    changed_keys: list[str] = []
+    for key, value in pairs:
+        if value is None:
+            continue
+        coerced: str | None
+        if isinstance(value, int):
+            coerced = str(value)
+        else:
+            coerced = value if value else None
+        settings_svc.set_value(
+            db, key=key, value=coerced, actor=admin, request=request
+        )
+        changed_keys.append(key)
+
+    if payload.password is not None:
+        settings_svc.set_value(
+            db,
+            key=settings_svc.Keys.SMTP_PASSWORD,
+            value=payload.password if payload.password else None,
+            actor=admin,
+            request=request,
+        )
+        changed_keys.append(settings_svc.Keys.SMTP_PASSWORD)
+
+    if changed_keys:
+        record_audit_event(
+            db,
+            event_type=AuditEventType.smtp_config_changed,
+            actor_user_id=admin.id,
+            target_type="settings",
+            target_id="smtp",
+            metadata={"keys": sorted(set(changed_keys))},
+            request=request,
+        )
+    db.commit()
+    return _to_email_response(db)
+
+
+@router.post("/settings/email/test", response_model=TestEmailResponse)
+async def test_email_send(
+    payload: TestEmailRequest,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(get_current_admin),
+) -> TestEmailResponse:
+    """Sends a fixed test email synchronously, bypassing the ARQ queue
+    so the admin sees the actual SMTP error in real time.
+
+    If `override` is provided in the request, those values are used for
+    this one send (no DB write). Otherwise the persisted config is
+    used. Password override of None means "use whatever's stored";
+    "" means "no auth"; any other value is used directly.
+    """
+    override = None
+    if payload.override is not None:
+        from ...utils.emailing import SmtpConfig
+
+        persisted = email_svc.resolve_smtp_config(db)
+        ov = payload.override
+
+        def _o(field: str | None, fallback: str) -> str:
+            if field is None:
+                return fallback
+            return field
+
+        port = ov.port if ov.port is not None else persisted.port
+        tls_mode = ov.tls_mode if ov.tls_mode is not None else persisted.tls_mode
+        password = (
+            persisted.password if ov.password is None else ov.password
+        )
+
+        override = SmtpConfig(
+            host=_o(ov.host, persisted.host),
+            port=port,
+            user=_o(ov.user, persisted.user),
+            password=password,
+            from_email=_o(ov.from_email, persisted.from_email),
+            from_name=_o(ov.from_name, persisted.from_name),
+            tls_mode=tls_mode,
+        )
+    result = await email_svc.test_send(db, to=payload.to, override=override)
+    return TestEmailResponse(**result)
+
+
+# ---- Home page -------------------------------------------------------------
+
+
+@router.get("/settings/home-page", response_model=HomePageSettingsResponse)
+def get_home_page_settings(
+    db: Session = Depends(get_db),
+    _admin: User = Depends(get_current_admin),
+) -> HomePageSettingsResponse:
+    enabled = settings_svc.get_bool(
+        db, settings_svc.Keys.HOME_PAGE_ENABLED, default=True
+    )
+    return HomePageSettingsResponse(enabled=enabled)
+
+
+@router.put("/settings/home-page", response_model=HomePageSettingsResponse)
+def update_home_page_settings(
+    payload: UpdateHomePageSettingsRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin),
+) -> HomePageSettingsResponse:
+    settings_svc.set_value(
+        db,
+        key=settings_svc.Keys.HOME_PAGE_ENABLED,
+        value="true" if payload.enabled else "false",
+        actor=admin,
+        request=request,
+    )
+    record_audit_event(
+        db,
+        event_type=AuditEventType.home_page_toggled,
+        actor_user_id=admin.id,
+        target_type="settings",
+        target_id="home_page",
+        metadata={"enabled": payload.enabled},
+        request=request,
+    )
+    db.commit()
+    return HomePageSettingsResponse(enabled=payload.enabled)
+
+
+# ---- Share defaults --------------------------------------------------------
+
+
+@router.get("/settings/share-defaults", response_model=ShareDefaultsResponse)
+def get_share_defaults_settings(
+    db: Session = Depends(get_db),
+    _admin: User = Depends(get_current_admin),
+) -> ShareDefaultsResponse:
+    enabled = settings_svc.get_bool(
+        db, settings_svc.Keys.SHARE_NOTIFY_RECIPIENTS_DEFAULT, default=True
+    )
+    return ShareDefaultsResponse(notify_recipients_default=enabled)
+
+
+@router.put("/settings/share-defaults", response_model=ShareDefaultsResponse)
+def update_share_defaults_settings(
+    payload: UpdateShareDefaultsRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin),
+) -> ShareDefaultsResponse:
+    settings_svc.set_value(
+        db,
+        key=settings_svc.Keys.SHARE_NOTIFY_RECIPIENTS_DEFAULT,
+        value="true" if payload.notify_recipients_default else "false",
+        actor=admin,
+        request=request,
+    )
+    record_audit_event(
+        db,
+        event_type=AuditEventType.share_defaults_policy_changed,
+        actor_user_id=admin.id,
+        target_type="settings",
+        target_id="share_defaults",
+        metadata={"notify_recipients_default": payload.notify_recipients_default},
+        request=request,
+    )
+    db.commit()
+    return ShareDefaultsResponse(
+        notify_recipients_default=payload.notify_recipients_default
+    )
+
+
+# ---- Site URL --------------------------------------------------------------
+
+
+def _site_settings_response(db: Session) -> SiteSettingsResponse:
+    override = settings_svc.get(db, settings_svc.Keys.SITE_URL)
+    return SiteSettingsResponse(
+        site_url=site_svc.get_site_url(db),
+        has_db_override=override is not None,
+        env_app_url=(_env_settings.APP_URL or "").rstrip("/"),
+    )
+
+
+@router.get("/settings/site", response_model=SiteSettingsResponse)
+def get_site_settings(
+    db: Session = Depends(get_db),
+    _admin: User = Depends(get_current_admin),
+) -> SiteSettingsResponse:
+    return _site_settings_response(db)
+
+
+@router.put("/settings/site", response_model=SiteSettingsResponse)
+def update_site_settings(
+    payload: UpdateSiteSettingsRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin),
+) -> SiteSettingsResponse:
+    previous_effective = site_svc.get_site_url(db)
+    settings_svc.set_value(
+        db,
+        key=settings_svc.Keys.SITE_URL,
+        value=payload.site_url,  # None clears the kv override
+        actor=admin,
+        request=request,
+    )
+    db.flush()
+    new_effective = site_svc.get_site_url(db)
+    record_audit_event(
+        db,
+        event_type=AuditEventType.site_url_changed,
+        actor_user_id=admin.id,
+        target_type="settings",
+        target_id="site_url",
+        metadata={"from": previous_effective, "to": new_effective},
+        request=request,
+    )
+    db.commit()
+    return _site_settings_response(db)
+
+
+# ---- 2FA enforcement -------------------------------------------------------
+
+
+def _twofa_policy_response(db: Session) -> TwofaPolicyResponse:
+    roles, group_ids, is_kv_overridden = twofa_policy_svc._resolve_policy(db)
+    groups = (
+        db.query(Group).filter(Group.id.in_(group_ids)).all() if group_ids else []
+    )
+    by_id = {g.id: g for g in groups}
+    return TwofaPolicyResponse(
+        required_roles=sorted(roles),
+        required_group_ids=group_ids,
+        required_groups=[
+            RequiredGroupRef(
+                id=g.id,
+                name=g.name,
+                is_company_inbox=getattr(g, "is_company_inbox", False),
+            )
+            for gid in group_ids
+            if (g := by_id.get(gid)) is not None
+        ],
+        is_kv_overridden=is_kv_overridden,
+    )
+
+
+@router.get("/settings/twofa", response_model=TwofaPolicyResponse)
+def get_twofa_policy(
+    db: Session = Depends(get_db),
+    _admin: User = Depends(get_current_admin),
+) -> TwofaPolicyResponse:
+    return _twofa_policy_response(db)
+
+
+@router.put("/settings/twofa", response_model=TwofaPolicyResponse)
+def update_twofa_policy(
+    payload: UpdateTwofaPolicyRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin),
+) -> TwofaPolicyResponse:
+    bad_roles = [
+        r for r in payload.required_roles if r not in twofa_policy_svc.ALLOWED_ROLES
+    ]
+    if bad_roles:
+        raise AppError(
+            400,
+            "INVALID_ROLE",
+            "One or more role names are not recognised.",
+            details={"invalid_roles": bad_roles},
+        )
+
+    if payload.required_group_ids:
+        found_group_ids = {
+            row[0]
+            for row in db.query(Group.id)
+            .filter(Group.id.in_(payload.required_group_ids))
+            .all()
+        }
+        missing = [
+            gid for gid in payload.required_group_ids if gid not in found_group_ids
+        ]
+        if missing:
+            raise AppError(
+                400,
+                "GROUP_NOT_FOUND",
+                "One or more selected groups do not exist.",
+                details={"missing_group_ids": missing},
+            )
+
+    twofa_policy_svc.write_policy(
+        db,
+        actor=admin,
+        required_roles=payload.required_roles,
+        required_group_ids=payload.required_group_ids,
+    )
+    record_audit_event(
+        db,
+        event_type=AuditEventType.twofa_policy_changed,
+        actor_user_id=admin.id,
+        target_type="settings",
+        target_id="twofa_policy",
+        metadata={
+            "role_count": len(set(payload.required_roles)),
+            "group_count": len(set(payload.required_group_ids)),
+        },
+        request=request,
+    )
+    db.commit()
+    return _twofa_policy_response(db)
+
+
+# ---- Quarantine notify-admins toggle --------------------------------------
+
+
+@router.get("/settings/quarantine", response_model=QuarantineSettingsResponse)
+def get_quarantine_settings(
+    db: Session = Depends(get_db),
+    _admin: User = Depends(get_current_admin),
+) -> QuarantineSettingsResponse:
+    return QuarantineSettingsResponse(
+        notify_admins=settings_svc.get_bool(
+            db, settings_svc.Keys.QUARANTINE_NOTIFY_ADMINS, default=False
+        )
+    )
+
+
+@router.put("/settings/quarantine", response_model=QuarantineSettingsResponse)
+def update_quarantine_settings(
+    payload: UpdateQuarantineSettingsRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin),
+) -> QuarantineSettingsResponse:
+    settings_svc.set_value(
+        db,
+        key=settings_svc.Keys.QUARANTINE_NOTIFY_ADMINS,
+        value="true" if payload.notify_admins else "false",
+        actor=admin,
+        request=request,
+    )
+    record_audit_event(
+        db,
+        event_type=AuditEventType.quarantine_policy_changed,
+        actor_user_id=admin.id,
+        target_type="settings",
+        target_id="quarantine",
+        metadata={"notify_admins": payload.notify_admins},
+        request=request,
+    )
+    db.commit()
+    return QuarantineSettingsResponse(notify_admins=payload.notify_admins)

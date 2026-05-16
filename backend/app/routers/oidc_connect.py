@@ -44,6 +44,7 @@ from ..schemas.oidc_connect import (
     OIDCLinkResponse,
 )
 from ..services import oidc as oidc_svc
+from ..services import oidc_admin as oidc_admin_svc
 
 logger = logging.getLogger("fileheron.routers.oidc_connect")
 
@@ -115,7 +116,7 @@ async def connect_start(
             "OIDC_ALREADY_LINKED",
             "You're already linked to another OIDC provider — disconnect that first.",
         )
-    provider = oidc_svc.get_enabled_provider(db, provider_id)
+    provider = oidc_admin_svc.get_enabled_provider(db, provider_id)
     url, state, nonce = await oidc_svc.build_authorize_url(
         provider, kind="connect"
     )
@@ -153,7 +154,7 @@ async def connect_callback(
             "OIDC connect state mismatch — please retry.",
         )
 
-    provider = oidc_svc.get_enabled_provider(db, provider_id)
+    provider = oidc_admin_svc.get_enabled_provider(db, provider_id)
 
     await oidc_svc.handle_connect_callback(
         db,
@@ -198,7 +199,7 @@ def get_links(
 ) -> OIDCLinkResponse:
     if not user.oidc_provider_id or not user.oidc_subject:
         return OIDCLinkResponse(link=None)
-    provider = oidc_svc.get_provider_for_user(db, user)
+    provider = oidc_admin_svc.get_provider_for_user(db, user)
     if provider is None:
         # Race: provider was deleted with ON DELETE SET NULL elsewhere.
         return OIDCLinkResponse(link=None)

@@ -24,10 +24,13 @@ Authorization to send (kind=inbound, client → employee(s)/inbox group):
 """
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timezone
 
-from sqlalchemy import or_
+from sqlalchemy import or_, update
 from sqlalchemy.orm import Session, joinedload
+
+logger = logging.getLogger("fileheron.share")
 
 from ..middleware.errors import AppError
 from ..models.audit_log import AuditEventType
@@ -509,33 +512,54 @@ def expire_share_now(
 ) -> Share:
     """Owner-or-admin expires a share immediately. Hard-deletes every
     file and transitions state to `expired`. Re-uses the same helper
-    the cron uses (`services/file.py::delete_file_for_expiry`)."""
+    the cron uses (`services/file.py::delete_file_for_expiry`).
+
+    Concurrent expire-now calls on the same share are guarded by an
+    atomic conditional UPDATE — only the first wins the state flip; the
+    others see 409 SHARE_NOT_ACTIVE."""
     if share.created_by_id != user.id and user.role != UserRole.admin:
         raise AppError(403, "FORBIDDEN", "You cannot expire this share.")
-    if share.state != ShareState.active:
+
+    now = _utcnow()
+    result = db.execute(
+        update(Share)
+        .where(Share.id == share.id, Share.state == ShareState.active)
+        .values(state=ShareState.expired, expires_at=now)
+    )
+    if result.rowcount == 0:
         raise AppError(
             409, "SHARE_NOT_ACTIVE", "Only active shares can be expired."
         )
+    db.flush()
+    db.refresh(share)
 
     # Lazy import — services.file imports services.share elsewhere; keep
     # the dependency direction loose.
     from .file import delete_file_for_expiry
 
     file_count = 0
+    failed_files: list[str] = []
     for f in list(share.files):
-        delete_file_for_expiry(db, file=f)
-        file_count += 1
+        try:
+            delete_file_for_expiry(db, file=f)
+            file_count += 1
+        except OSError as e:
+            logger.error(
+                "expire_share_now: delete failed file=%s share=%s: %s",
+                f.id, share.id, e,
+            )
+            failed_files.append(f.id)
 
-    share.state = ShareState.expired
-    share.expires_at = _utcnow()
-    db.flush()
+    metadata: dict = {"via": "owner_action", "file_count": file_count}
+    if failed_files:
+        metadata["failed_files"] = failed_files
     record_audit_event(
         db,
         event_type=AuditEventType.share_expired,
         actor_user_id=user.id,
         target_type="share",
         target_id=share.id,
-        metadata={"via": "owner_action", "file_count": file_count},
+        metadata=metadata,
         request=request,
     )
     return share

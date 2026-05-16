@@ -28,10 +28,14 @@ def _utcnow() -> datetime:
 
 
 async def expire_files(_ctx) -> dict:
-    """Walk shares.expires_at < now, transition state + hard-delete files."""
+    """Walk shares.expires_at < now, transition state + hard-delete files.
+
+    Per-share commit so a single bad share (e.g., disk unlink failure on
+    one file) doesn't poison the rest of the batch."""
     db = SessionLocal()
     expired_shares = 0
     deleted_files = 0
+    failed_shares = 0
     try:
         now = _utcnow()
         shares = (
@@ -40,26 +44,49 @@ async def expire_files(_ctx) -> dict:
             .all()
         )
         for share in shares:
+            file_count = 0
+            failed_files: list[str] = []
             for f in share.files:
-                delete_file_for_expiry(db, file=f)
-                deleted_files += 1
+                try:
+                    delete_file_for_expiry(db, file=f)
+                    file_count += 1
+                    deleted_files += 1
+                except OSError as e:
+                    logger.error(
+                        "expire_files: delete failed file=%s share=%s: %s",
+                        f.id, share.id, e,
+                    )
+                    failed_files.append(f.id)
             share.state = ShareState.expired
+            metadata: dict = {"file_count": file_count}
+            if failed_files:
+                metadata["failed_files"] = failed_files
             record_audit_event(
                 db,
                 event_type=AuditEventType.share_expired,
                 actor_user_id=None,
                 target_type="share",
                 target_id=share.id,
-                metadata={"file_count": len(share.files)},
+                metadata=metadata,
             )
-            expired_shares += 1
-        db.commit()
-        if expired_shares:
+            try:
+                db.commit()
+                expired_shares += 1
+            except Exception:
+                db.rollback()
+                failed_shares += 1
+                logger.exception(
+                    "expire_files: commit failed for share=%s", share.id
+                )
+        if expired_shares or failed_shares:
             logger.info(
-                "expire_files: expired %d shares, deleted %d files",
-                expired_shares,
-                deleted_files,
+                "expire_files: expired %d shares (%d failed), deleted %d files",
+                expired_shares, failed_shares, deleted_files,
             )
-        return {"expired_shares": expired_shares, "deleted_files": deleted_files}
+        return {
+            "expired_shares": expired_shares,
+            "deleted_files": deleted_files,
+            "failed_shares": failed_shares,
+        }
     finally:
         db.close()

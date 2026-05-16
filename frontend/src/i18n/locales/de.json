@@ -180,6 +180,30 @@
       "view_release": "Release-Notes auf GitHub",
       "release_notes": "Release-Notes anzeigen"
     },
+    "update": {
+      "btn_update": "Auf {v} aktualisieren",
+      "btn_rollback": "Zurückrollen",
+      "rollback_available": "Frühere Version verfügbar: {v}",
+      "confirm": {
+        "title_update": "Auf {v} aktualisieren?",
+        "title_rollback": "Auf {v} zurückrollen?",
+        "body": "Holt die neuen Images und startet Backend/Worker/Frontend neu. Die App ist kurz nicht erreichbar. Mit deinem Passwort bestätigen.",
+        "action": "Anwenden"
+      },
+      "job": {
+        "queued": "Update auf {tag} in der Warteschlange …",
+        "pulling": "Images für {tag} werden geladen …",
+        "restarting": "Dienste werden auf {tag} neu gestartet …",
+        "done": "Fertig — läuft auf {tag}.",
+        "failed": "Update auf {tag} fehlgeschlagen.",
+        "log": "Log anzeigen"
+      },
+      "toast": {
+        "done": "Erfolgreich auf {tag} aktualisiert.",
+        "failed": "Update fehlgeschlagen: {err}",
+        "no_target": "Kein Release-Tag zum Aktualisieren."
+      }
+    },
     "live": {
       "heading": "Live-Prüfungen",
       "db": "Datenbank",

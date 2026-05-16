@@ -1,20 +1,40 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import { getSystemStatus, type SystemStatusResponse } from '@/api/admin'
+import {
+  applyRollback,
+  applyUpdate,
+  getSystemStatus,
+  getUpdaterJob,
+  getUpdaterStatus,
+  type SystemStatusResponse,
+  type UpdaterJob,
+  type UpdaterStatus,
+} from '@/api/admin'
 import { getStreamToken } from '@/api/notifications'
 import { useApiError } from '@/composables/useApiError'
 import { useSSE } from '@/composables/useSSE'
+import { useUiStore } from '@/stores/ui'
 
 const { t, locale } = useI18n()
 const { describe } = useApiError()
+const ui = useUiStore()
 
 const status = ref<SystemStatusResponse | null>(null)
 const loading = ref(true)
 const errorMsg = ref<string | null>(null)
 const refreshedAt = ref<Date | null>(null)
 const liveConnected = ref(false)
+
+// --- Self-update state ---
+const updaterStatus = ref<UpdaterStatus | null>(null)
+const updaterUnreachable = ref(false)
+const activeJob = ref<UpdaterJob | null>(null)
+const confirming = ref<null | 'update' | 'rollback'>(null)
+const passwordInput = ref('')
+const submitting = ref(false)
+let jobPollHandle: ReturnType<typeof setInterval> | null = null
 
 async function load() {
   loading.value = true
@@ -61,9 +81,105 @@ const sse = useSSE({
   },
 })
 
+async function loadUpdaterStatus() {
+  try {
+    const { data } = await getUpdaterStatus()
+    updaterStatus.value = data
+    updaterUnreachable.value = false
+    if (data.job_in_progress && activeJob.value?.id !== data.job_in_progress) {
+      void pollJob(data.job_in_progress)
+    }
+  } catch {
+    // 503 here = updater container not deployed yet. Hide the buttons
+    // gracefully rather than spamming errors.
+    updaterUnreachable.value = true
+  }
+}
+
+async function pollJob(jobId: string) {
+  if (jobPollHandle) clearInterval(jobPollHandle)
+  const tick = async () => {
+    try {
+      const { data } = await getUpdaterJob(jobId)
+      activeJob.value = data
+      if (data.state === 'healthy' || data.state === 'failed') {
+        if (jobPollHandle) clearInterval(jobPollHandle)
+        jobPollHandle = null
+        // Backend reports the new running_version after restart — refresh.
+        void load()
+        void loadUpdaterStatus()
+        if (data.state === 'healthy') {
+          ui.pushToast(
+            t('admin_system.update.toast.done', { tag: data.target_tag }),
+            'success',
+          )
+        } else {
+          ui.pushToast(
+            t('admin_system.update.toast.failed', {
+              err: data.error ?? 'unknown',
+            }),
+            'error',
+          )
+        }
+      }
+    } catch {
+      // Network blip — try again on next tick.
+    }
+  }
+  await tick()
+  jobPollHandle = setInterval(tick, 2000)
+}
+
+async function openConfirm(kind: 'update' | 'rollback') {
+  confirming.value = kind
+  passwordInput.value = ''
+}
+
+function closeConfirm() {
+  if (submitting.value) return
+  confirming.value = null
+  passwordInput.value = ''
+}
+
+async function submitConfirm() {
+  if (!confirming.value || !passwordInput.value) return
+  submitting.value = true
+  try {
+    if (confirming.value === 'update') {
+      const tag = status.value?.version.latest
+      if (!tag) {
+        ui.pushToast(t('admin_system.update.toast.no_target'), 'error')
+        return
+      }
+      const { data } = await applyUpdate(passwordInput.value, tag)
+      void pollJob(data.job_id)
+    } else {
+      const { data } = await applyRollback(passwordInput.value)
+      void pollJob(data.job_id)
+    }
+    confirming.value = null
+    passwordInput.value = ''
+  } catch (err) {
+    ui.pushToast(describe(err), 'error')
+  } finally {
+    submitting.value = false
+  }
+}
+
+const jobInFlight = computed(
+  () =>
+    activeJob.value !== null &&
+    ['queued', 'pulling', 'restarting'].includes(activeJob.value.state),
+)
+
 onMounted(() => {
   void load()
+  void loadUpdaterStatus()
   sse.start()
+})
+
+onBeforeUnmount(() => {
+  if (jobPollHandle) clearInterval(jobPollHandle)
 })
 
 function fmtTime(iso: string | null): string {
@@ -151,15 +267,56 @@ const headlineFailures = computed(
               {{ t('admin_system.version.published', { when: fmtTime(status.version.release_published_at) }) }}
             </p>
           </div>
-          <a
-            v-if="status.version.release_url"
-            :href="status.version.release_url"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="btn-secondary"
-          >
-            {{ t('admin_system.version.view_release') }} ↗
-          </a>
+          <div class="banner-actions">
+            <button
+              v-if="!updaterUnreachable && !jobInFlight"
+              type="button"
+              class="btn-primary"
+              @click="openConfirm('update')"
+            >
+              {{ t('admin_system.update.btn_update', { v: status.version.latest }) }}
+            </button>
+            <a
+              v-if="status.version.release_url"
+              :href="status.version.release_url"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="btn-secondary"
+            >
+              {{ t('admin_system.version.view_release') }} ↗
+            </a>
+          </div>
+        </div>
+
+        <div
+          v-if="updaterStatus?.rollback_target && !jobInFlight"
+          class="rollback-row"
+        >
+          <span class="rollback-text">
+            {{ t('admin_system.update.rollback_available', { v: updaterStatus.rollback_target }) }}
+          </span>
+          <button type="button" class="btn-secondary" @click="openConfirm('rollback')">
+            {{ t('admin_system.update.btn_rollback') }}
+          </button>
+        </div>
+
+        <div v-if="activeJob" class="job-banner" :data-state="activeJob.state">
+          <div class="job-header">
+            <strong>
+              {{
+                activeJob.state === 'healthy'
+                  ? t('admin_system.update.job.done', { tag: activeJob.target_tag })
+                  : activeJob.state === 'failed'
+                  ? t('admin_system.update.job.failed', { tag: activeJob.target_tag })
+                  : t(`admin_system.update.job.${activeJob.state}`, { tag: activeJob.target_tag })
+              }}
+            </strong>
+            <span v-if="activeJob.error" class="error-line">{{ activeJob.error }}</span>
+          </div>
+          <details v-if="activeJob.log_tail.length > 0" class="job-log">
+            <summary>{{ t('admin_system.update.job.log') }}</summary>
+            <pre>{{ activeJob.log_tail.join('\n') }}</pre>
+          </details>
         </div>
 
         <details
@@ -244,6 +401,58 @@ const headlineFailures = computed(
         </table>
       </section>
 
+      <!-- update / rollback confirm modal -->
+      <div
+        v-if="confirming"
+        class="fh-modal-backdrop"
+        role="dialog"
+        aria-modal="true"
+        @click.self="closeConfirm"
+      >
+        <div class="fh-modal fh-modal--small">
+          <h2 class="modal-h2">
+            {{
+              confirming === 'update'
+                ? t('admin_system.update.confirm.title_update', { v: status.version.latest })
+                : t('admin_system.update.confirm.title_rollback', {
+                    v: updaterStatus?.rollback_target,
+                  })
+            }}
+          </h2>
+          <p class="modal-body">{{ t('admin_system.update.confirm.body') }}</p>
+          <form @submit.prevent="submitConfirm">
+            <label class="fh-field">
+              <span class="fh-field-label">{{ t('common.current_password') }}</span>
+              <input
+                v-model="passwordInput"
+                type="password"
+                class="fh-field-input"
+                autocomplete="current-password"
+                required
+                autofocus
+              />
+            </label>
+            <div class="form-actions">
+              <button
+                type="submit"
+                class="btn-primary"
+                :disabled="submitting || !passwordInput"
+              >
+                {{ submitting ? t('common.loading') : t('admin_system.update.confirm.action') }}
+              </button>
+              <button
+                type="button"
+                class="btn-secondary"
+                :disabled="submitting"
+                @click="closeConfirm"
+              >
+                {{ t('common.cancel') }}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+
       <!-- recent failures -->
       <section v-if="status.recent_failures.length > 0" class="card">
         <h2>{{ t('admin_system.failures.heading') }}</h2>
@@ -325,6 +534,70 @@ const headlineFailures = computed(
   font-family: var(--fh-font-mono);
   font-size: var(--fh-text-mono-sm);
 }
+.banner-actions { display: flex; gap: var(--fh-space-2); align-items: center; }
+.rollback-row {
+  margin-top: var(--fh-space-3);
+  padding: var(--fh-space-2) var(--fh-space-3);
+  background: var(--fh-paper-raised);
+  border: 1px solid var(--fh-hairline);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--fh-space-3);
+}
+.rollback-text { color: var(--fh-subtle); font-size: var(--fh-text-body-sm); }
+.job-banner {
+  margin-top: var(--fh-space-3);
+  padding: var(--fh-space-3) var(--fh-space-4);
+  border: 1px solid var(--fh-hairline);
+  background: var(--fh-paper-raised);
+}
+.job-banner[data-state="failed"] { background: #f8d7da; border-color: #f5c6cb; }
+.job-banner[data-state="healthy"] { background: #d4edda; border-color: #c3e6cb; }
+.job-header { display: flex; flex-direction: column; gap: var(--fh-space-1); }
+.job-log { margin-top: var(--fh-space-2); }
+.job-log summary { cursor: pointer; color: var(--fh-subtle); font-size: var(--fh-text-body-sm); }
+.job-log pre {
+  margin: var(--fh-space-2) 0 0;
+  white-space: pre-wrap;
+  max-height: 240px;
+  overflow: auto;
+  background: var(--fh-paper);
+  padding: var(--fh-space-2);
+  border: 1px solid var(--fh-hairline);
+  font-family: var(--fh-font-mono);
+  font-size: var(--fh-text-mono-sm);
+}
+.btn-primary {
+  padding: var(--fh-space-2) var(--fh-space-3);
+  background: var(--fh-accent);
+  color: var(--fh-paper);
+  border: 1px solid var(--fh-accent);
+  cursor: pointer;
+  font: inherit;
+}
+.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+.fh-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(26, 29, 36, 0.4);
+  display: grid;
+  place-items: center;
+  z-index: 100;
+}
+.fh-modal {
+  background: var(--fh-paper);
+  border: 1px solid var(--fh-hairline-strong);
+  box-shadow: 0 8px 40px rgba(26, 29, 36, 0.15);
+  padding: var(--fh-space-5);
+  width: min(480px, 92vw);
+  max-height: 92vh;
+  overflow-y: auto;
+}
+.fh-modal--small { width: min(420px, 92vw); }
+.modal-h2 { font-family: var(--fh-font-display); font-size: 1.25rem; margin: 0 0 var(--fh-space-3); }
+.modal-body { margin: 0 0 var(--fh-space-3); color: var(--fh-ink); font-size: var(--fh-text-body-sm); }
+.form-actions { display: flex; gap: var(--fh-space-3); align-items: baseline; margin-top: var(--fh-space-3); }
 .counters { display: flex; gap: var(--fh-space-4); }
 .counter {
   background: var(--fh-paper-raised);

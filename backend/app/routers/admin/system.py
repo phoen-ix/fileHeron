@@ -38,6 +38,7 @@ _KNOWN_CRONS = [
     "cleanup_expired_tokens",
     "quota_reconcile",
     "ops_check",
+    "release_check",
 ]
 
 
@@ -225,3 +226,152 @@ def cron_runs(
         q = q.filter(CronRun.job_name == job_name)
     rows = q.order_by(CronRun.started_at.desc()).limit(limit).all()
     return {"items": [_cron_row_dict(r) for r in rows], "limit": limit}
+
+
+# ---------------------------------------------------------------------------
+# Self-update endpoints (Phase 4). Backend ↔ updater HMAC contract lives
+# in services/release_apply.py. Update/rollback share the same shape:
+# password re-prompt, audit, notify-all-admins, then forward to updater.
+# ---------------------------------------------------------------------------
+
+
+from pydantic import BaseModel, Field
+
+
+class UpdateApplyRequest(BaseModel):
+    # Same password the admin used to log in. Required to defend against
+    # session-hijack abuse of a destructive-by-design action.
+    password: str = Field(..., min_length=1, max_length=512)
+    # Tag to apply. Updates only; rollback ignores this and reads the
+    # stored rollback_target from the updater's state file.
+    target_tag: str | None = Field(default=None, max_length=64)
+
+
+def _verify_password_or_401(user: User, password: str) -> None:
+    from ...utils.crypto import argon2_verify
+    if not argon2_verify(user.password_hash, password):
+        raise AppError(401, "INVALID_CREDENTIALS", "Password incorrect.")
+
+
+def _dispatch_ops_to_admins(db: Session, payload: dict, link_url: str) -> None:
+    """Fan out an `ops_alert` notification to every non-disabled admin so
+    every admin sees the in-app bell + email about a triggered update,
+    not just the admin who clicked. Mirrors cron_tracker._maybe_alert_admins."""
+    from ...models.notification import NotificationCategory
+    from ...services.notification import dispatch
+    admins = (
+        db.query(User)
+        .filter(User.role == UserRole.admin, User.is_disabled.is_(False))
+        .all()
+    )
+    for a in admins:
+        try:
+            dispatch(
+                db,
+                user=a,
+                category=NotificationCategory.ops_alert,
+                payload=payload,
+                link_url=link_url,
+                email_to=a.email,
+            )
+        except Exception:
+            # Notification dispatch must never block the update.
+            pass
+
+
+@router.get("/system/update-status")
+async def update_status(_admin: User = Depends(get_current_admin)) -> dict:
+    """Read-only: what's the updater's current state? Returns
+    {current_tag, rollback_target, job_in_progress}. Frontend polls
+    this on mount + after kicking off a job."""
+    from ...services import release_apply
+    return await release_apply.get_version()
+
+
+@router.get("/system/update-jobs/{job_id}")
+async def update_job(
+    job_id: str, _admin: User = Depends(get_current_admin)
+) -> dict:
+    """Poll a specific job. The SPA hits this on a short interval while
+    `state` is one of {queued, pulling, restarting}."""
+    from ...services import release_apply
+    return await release_apply.get_job(job_id)
+
+
+@router.post("/system/update")
+async def apply_update(
+    payload: UpdateApplyRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin),
+) -> dict:
+    """Kick off an update to `target_tag`. Returns {job_id} immediately;
+    the SPA polls /system/update-jobs/{job_id} for state."""
+    from ...services import release_apply
+    from ...services.audit import record_audit_event
+
+    _verify_password_or_401(admin, payload.password)
+    if not payload.target_tag:
+        raise AppError(400, "INVALID_INPUT", "target_tag is required.")
+
+    result = await release_apply.apply(action="update", target_tag=payload.target_tag)
+
+    record_audit_event(
+        db,
+        event_type=AuditEventType.update_triggered,
+        actor_user_id=admin.id,
+        target_type="update_job",
+        target_id=result["job_id"],
+        metadata={"target_tag": payload.target_tag},
+        request=request,
+    )
+    _dispatch_ops_to_admins(
+        db,
+        payload={
+            "reason": "update_triggered",
+            "actor_id": admin.id,
+            "target_tag": payload.target_tag,
+            "job_id": result["job_id"],
+        },
+        link_url="/admin/system",
+    )
+    db.commit()
+    return result
+
+
+@router.post("/system/rollback")
+async def apply_rollback(
+    payload: UpdateApplyRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin),
+) -> dict:
+    """Roll back to the previously-running tag. Target is read from the
+    updater's state file — caller doesn't pass it."""
+    from ...services import release_apply
+    from ...services.audit import record_audit_event
+
+    _verify_password_or_401(admin, payload.password)
+    result = await release_apply.apply(action="rollback", target_tag=None)
+
+    record_audit_event(
+        db,
+        event_type=AuditEventType.rollback_triggered,
+        actor_user_id=admin.id,
+        target_type="update_job",
+        target_id=result["job_id"],
+        metadata={"target_tag": result.get("target_tag")},
+        request=request,
+    )
+    _dispatch_ops_to_admins(
+        db,
+        payload={
+            "reason": "rollback_triggered",
+            "actor_id": admin.id,
+            "target_tag": result.get("target_tag"),
+            "job_id": result["job_id"],
+        },
+        link_url="/admin/system",
+    )
+    db.commit()
+    return result

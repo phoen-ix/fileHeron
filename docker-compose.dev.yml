@@ -51,6 +51,14 @@ services:
     build:
       context: .
       dockerfile: docker/frontend/Dockerfile.dev
+
+  # The updater builds from source in dev so changes to docker/updater/app.py
+  # apply on `compose up --build`. Prod uses the GHCR image set in the
+  # production compose file.
+  updater:
+    build:
+      context: .
+      dockerfile: docker/updater/Dockerfile
     # Compose merges `ports` lists by appending — that would leave both 80 and
     # 5173 mapped to host:8080, which Docker refuses. !override replaces the
     # prod list completely.

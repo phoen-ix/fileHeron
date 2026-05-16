@@ -87,6 +87,15 @@ class AuditEventType(str, enum.Enum):
     email_undeliverable = "email_undeliverable"            # SMTP 5xx → audit + admin alert (was silently swallowed)
     cron_failed = "cron_failed"                            # cron_tracker logs the failure to audit + admin alert
     ops_alert_dispatched = "ops_alert_dispatched"          # per-admin in-app ops notification fired
+    # Self-update flow (Phase 4). `update_triggered` and `rollback_triggered`
+    # record the admin actor + target tag. The terminal events are written
+    # after the backend polls the updater's job to completion.
+    update_triggered = "update_triggered"
+    update_completed = "update_completed"
+    update_failed = "update_failed"
+    rollback_triggered = "rollback_triggered"
+    rollback_completed = "rollback_completed"
+    rollback_failed = "rollback_failed"
 
 
 def _utcnow() -> datetime:

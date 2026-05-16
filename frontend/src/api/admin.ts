@@ -122,6 +122,49 @@ export function getCronRuns(params: { job_name?: string; limit?: number } = {}) 
   )
 }
 
+
+// Phase 4 — self-update.
+
+export interface UpdaterStatus {
+  current_tag: string
+  rollback_target: string | null
+  job_in_progress: string | null
+}
+
+export interface UpdaterJob {
+  id: string
+  action: 'update' | 'rollback'
+  target_tag: string
+  state: 'queued' | 'pulling' | 'restarting' | 'healthy' | 'failed'
+  started_at: string
+  finished_at: string | null
+  log_tail: string[]
+  error: string | null
+  previous_tag: string | null
+}
+
+export function getUpdaterStatus() {
+  return api.get<UpdaterStatus>('/admin/system/update-status')
+}
+
+export function getUpdaterJob(jobId: string) {
+  return api.get<UpdaterJob>(`/admin/system/update-jobs/${jobId}`)
+}
+
+export function applyUpdate(password: string, target_tag: string) {
+  return api.post<{ job_id: string; action: string; target_tag: string }>(
+    '/admin/system/update',
+    { password, target_tag },
+  )
+}
+
+export function applyRollback(password: string) {
+  return api.post<{ job_id: string; action: string; target_tag: string }>(
+    '/admin/system/rollback',
+    { password },
+  )
+}
+
 export function listInvites(
   params: {
     state?: AdminInviteState | 'all'

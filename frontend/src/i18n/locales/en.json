@@ -180,6 +180,30 @@
       "view_release": "Release notes on GitHub",
       "release_notes": "Show release notes"
     },
+    "update": {
+      "btn_update": "Update to {v}",
+      "btn_rollback": "Roll back",
+      "rollback_available": "Previous version available for rollback: {v}",
+      "confirm": {
+        "title_update": "Update to {v}?",
+        "title_rollback": "Roll back to {v}?",
+        "body": "Pulls the new images and restarts backend/worker/frontend. The app will be briefly unreachable. Confirm with your password.",
+        "action": "Apply"
+      },
+      "job": {
+        "queued": "Update to {tag} queued…",
+        "pulling": "Pulling images for {tag}…",
+        "restarting": "Restarting services on {tag}…",
+        "done": "Done — running on {tag}.",
+        "failed": "Failed to roll to {tag}.",
+        "log": "Show log"
+      },
+      "toast": {
+        "done": "Successfully updated to {tag}.",
+        "failed": "Update failed: {err}",
+        "no_target": "No release tag to update to."
+      }
+    },
     "live": {
       "heading": "Live checks",
       "db": "Database",

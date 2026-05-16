@@ -15,10 +15,10 @@ async def test_health_exposes_running_version(client):
     body = r.json()
     assert "running_version" in body
     assert "running_sha" in body
-    # Default placeholders from version.py — production images override
-    # these via the Dockerfile ARG/ENV combo.
-    assert body["running_version"] == "0.0.0-dev"
-    assert body["running_sha"] == "unknown"
+    # The test runner inherits whatever FH_VERSION the test image was
+    # built with; just assert the fields are present + non-empty.
+    assert body["running_version"]
+    assert body["running_sha"]
 
 
 @pytest.mark.asyncio
@@ -26,7 +26,7 @@ async def test_config_public_exposes_running_version(client):
     r = await client.get("/api/config-public")
     assert r.status_code == 200
     body = r.json()
-    assert body.get("running_version") == "0.0.0-dev"
+    assert body.get("running_version")
 
 
 def test_version_module_reads_from_env(monkeypatch):

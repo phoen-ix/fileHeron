@@ -32,13 +32,14 @@ FH_TAG="${FH_TAG:-latest}"
 export FH_TAG
 
 REPO_OWNER="phoen-ix"
-IMAGES=(fileheron-backend fileheron-worker fileheron-frontend)
+IMAGES=(fileheron-backend fileheron-worker fileheron-frontend fileheron-updater)
+SERVICES=(backend worker frontend updater)
 
 echo "[deploy] target tag: $FH_TAG"
 echo "[deploy] pulling images from ghcr.io/$REPO_OWNER/*:$FH_TAG"
 
 PULL_OK=true
-if ! docker compose pull backend worker frontend 2>&1; then
+if ! docker compose pull "${SERVICES[@]}" 2>&1; then
     PULL_OK=false
 fi
 
@@ -58,10 +59,13 @@ if [ "$PULL_OK" = "false" ]; then
     docker build -f docker/frontend/Dockerfile \
         --build-arg "FH_VERSION=local-$SHA" --build-arg "FH_GIT_SHA=$SHA" \
         -t "ghcr.io/$REPO_OWNER/fileheron-frontend:$FH_TAG" .
+    docker build -f docker/updater/Dockerfile \
+        --build-arg "FH_VERSION=local-$SHA" --build-arg "FH_GIT_SHA=$SHA" \
+        -t "ghcr.io/$REPO_OWNER/fileheron-updater:$FH_TAG" .
 fi
 
 echo "[deploy] rolling services"
-docker compose up -d backend worker frontend
+docker compose up -d "${SERVICES[@]}"
 
 echo "[deploy] waiting for health (up to 90s)"
 DEADLINE=$(($(date +%s) + 90))

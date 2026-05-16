@@ -101,17 +101,20 @@ async def test_system_status_flags_update_available(
     token, cookies = await login_as("admin@test.local", "TestPassword123!")
     headers = {"Authorization": f"Bearer {token}"}
 
-    # No cache yet → update_available should be False.
+    # No cache yet → update_available should be False whatever the running
+    # version is (the test runner's image bakes its own VERSION).
     r = await client.get("/api/admin/system/status", headers=headers, cookies=cookies)
     assert r.status_code == 200, r.text
     v = r.json()["version"]
-    assert v["running"] == "0.0.0-dev"
+    running = v["running"]
+    assert running  # any non-empty value the image was built with
     assert v["latest"] is None
     assert v["update_available"] is False
 
-    # Prime the cache with a release newer than running, re-hit.
+    # Prime the cache with a release that differs from running, re-hit.
+    fake_latest = f"v999.{running}"
     settings_svc.set_value(
-        db, key=rc.CacheKeys.LATEST_VERSION, value="v0.2.0", actor=None
+        db, key=rc.CacheKeys.LATEST_VERSION, value=fake_latest, actor=None
     )
     settings_svc.set_value(
         db, key=rc.CacheKeys.LAST_CHECK_AT, value="2026-05-16T10:00:00", actor=None
@@ -120,5 +123,5 @@ async def test_system_status_flags_update_available(
 
     r = await client.get("/api/admin/system/status", headers=headers, cookies=cookies)
     v = r.json()["version"]
-    assert v["latest"] == "v0.2.0"
+    assert v["latest"] == fake_latest
     assert v["update_available"] is True

@@ -32,6 +32,12 @@ jobs:
             dockerfile: docker/backend/Dockerfile
           - image: fileheron-frontend
             dockerfile: docker/frontend/Dockerfile
+          - image: fileheron-updater
+            # Phase 4: self-update sidecar. Pinned to the same SemVer as
+            # the rest of the stack so a rollback rolls the updater too.
+            # The updater can't update itself — operators must redeploy
+            # it the old way (scripts/deploy.sh) for updater changes.
+            dockerfile: docker/updater/Dockerfile
     steps:
       - uses: actions/checkout@v4
 
@@ -108,6 +114,7 @@ jobs:
             - `ghcr.io/phoen-ix/fileheron-backend:${{ github.ref_name }}`
             - `ghcr.io/phoen-ix/fileheron-worker:${{ github.ref_name }}`
             - `ghcr.io/phoen-ix/fileheron-frontend:${{ github.ref_name }}`
+            - `ghcr.io/phoen-ix/fileheron-updater:${{ github.ref_name }}`
 
             Set `FH_TAG=${{ github.ref_name }}` in your `.env` and
             `docker compose pull && docker compose up -d` to roll

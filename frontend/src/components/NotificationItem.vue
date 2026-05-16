@@ -16,17 +16,24 @@ const props = defineProps<{ item: NItem }>()
 const emit = defineEmits<{ click: [] }>()
 const { t, locale } = useI18n()
 
+const { te } = useI18n()
+
 const headline = computed(() => {
   // Each category has its own template under notif_bell.headline.{category}
   // with the payload spread. Use $t with arguments — fall back to the
-  // generic line if the payload is missing keys.
-  const key = `notif_bell.headline.${props.item.category}`
+  // generic line if the key is missing entirely.
   const payload = props.item.payload || {}
-  try {
-    return t(key, payload as Record<string, unknown>)
-  } catch {
-    return t('notif_bell.headline.generic')
+  // ops_alert is a single category with a `reason` field that picks the
+  // sub-template (cron_failed / update_triggered / rollback_triggered).
+  if (props.item.category === 'ops_alert') {
+    const reason = (payload as Record<string, unknown>).reason as string | undefined
+    const key = `notif_bell.headline.ops_alert.${reason ?? 'generic'}`
+    if (te(key)) return t(key, payload as Record<string, unknown>)
+    return t('notif_bell.headline.ops_alert.generic', payload as Record<string, unknown>)
   }
+  const key = `notif_bell.headline.${props.item.category}`
+  if (te(key)) return t(key, payload as Record<string, unknown>)
+  return t('notif_bell.headline.generic')
 })
 
 const relTime = computed(() => {

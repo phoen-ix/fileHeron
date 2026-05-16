@@ -576,6 +576,12 @@
       "login_alert": "Sign-in from a new device.",
       "file_quarantined": "{filename} was quarantined by antivirus.",
       "release_available": "fileHeron {version} is available.",
+      "ops_alert": {
+        "cron_failed": "Cron {job_name} failed.",
+        "update_triggered": "Update to {target_tag} started.",
+        "rollback_triggered": "Rollback to {target_tag} started.",
+        "generic": "Operational alert."
+      },
       "generic": "New activity"
     }
   },

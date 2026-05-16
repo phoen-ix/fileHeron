@@ -309,6 +309,8 @@ export type NotificationCategory =
   | 'twofa_required'
   | 'login_alert'
   | 'file_quarantined'
+  | 'ops_alert'
+  | 'release_available'
 
 export type NotificationChannel = 'off' | 'email' | 'in_app' | 'both'
 

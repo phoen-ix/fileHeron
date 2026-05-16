@@ -576,6 +576,12 @@
       "login_alert": "Anmeldung von einem neuen Gerät.",
       "file_quarantined": "{filename} wurde durch Antivirus unter Quarantäne gestellt.",
       "release_available": "fileHeron {version} ist verfügbar.",
+      "ops_alert": {
+        "cron_failed": "Cron-Job {job_name} fehlgeschlagen.",
+        "update_triggered": "Update auf {target_tag} gestartet.",
+        "rollback_triggered": "Rollback auf {target_tag} gestartet.",
+        "generic": "Betriebsalarm."
+      },
       "generic": "Neue Aktivität"
     }
   },

@@ -18,6 +18,17 @@
  * signed SSE token (EventSource can't send Authorization headers, so
  * auth rides in the URL). On error the timer backs off exponentially
  * with a cap so a token-mint failure can't loop the browser.
+ *
+ * Hard cap on consecutive failures: EventSource doesn't expose the
+ * HTTP status to onerror, so a persistent 401 (rotated key across a
+ * deploy, role downgrade, broken stream-token route) is
+ * indistinguishable from a transient network blip and would otherwise
+ * retry forever. After MAX_CONSECUTIVE_ERRORS reconnect attempts
+ * without a single successful `onopen`, we surface `givenUp = true`
+ * and stop. Callers can offer a manual `restart()` button. Real-world
+ * incident 2026-05-16: such a loop produced ~120 401s/hour on
+ * /api/admin/system/stream which tripped the host's fail2ban
+ * traefik-auth jail (10/hour) and banned the admin's IP for 24h.
  */
 import { onBeforeUnmount, ref } from 'vue'
 
@@ -32,13 +43,16 @@ export interface UseSSEOptions {
 
 const RECONNECT_BASE_MS = 1500
 const RECONNECT_CAP_MS = 30_000
+const MAX_CONSECUTIVE_ERRORS = 5
 
 export function useSSE(opts: UseSSEOptions) {
   const connected = ref(false)
+  const givenUp = ref(false)
   const lastEventId = ref<string | null>(null)
   let es: EventSource | null = null
   let reconnectTimer: number | null = null
   let reconnectAttempt = 0
+  let consecutiveErrors = 0
   let stopped = false
 
   function _appendLastId(url: string): string {
@@ -58,20 +72,23 @@ export function useSSE(opts: UseSSEOptions) {
   }
 
   async function _connect() {
-    if (stopped) return
+    if (stopped || givenUp.value) return
     let u: string
     try {
       u = await _resolveUrl()
-    } catch (err) {
+    } catch {
       // URL factory rejected (e.g. token mint failed because the user
-      // logged out). Treat as a soft error and back off.
-      _scheduleReconnect()
+      // logged out). Treat as a soft error and back off — but count
+      // toward the give-up budget so a permanently-broken token route
+      // doesn't loop indefinitely.
+      _onFailure()
       return
     }
     es = new EventSource(u, { withCredentials: true })
     es.onopen = () => {
       connected.value = true
       reconnectAttempt = 0  // reset backoff on successful open
+      consecutiveErrors = 0
       opts.onOpen?.()
     }
     es.onmessage = (e) => {
@@ -87,14 +104,24 @@ export function useSSE(opts: UseSSEOptions) {
     es.onerror = (e) => {
       connected.value = false
       opts.onError?.(e)
-      // The browser auto-reconnects, but on a clean server-side close
-      // (we send `: close` after 60s) it gives up. Force a reconnect
-      // with exponential backoff so a misconfigured server can't be
-      // hammered into the ground.
       es?.close()
       es = null
-      _scheduleReconnect()
+      _onFailure()
     }
+  }
+
+  function _onFailure() {
+    consecutiveErrors += 1
+    if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+      givenUp.value = true
+      stopped = true
+      if (reconnectTimer !== null) {
+        window.clearTimeout(reconnectTimer)
+        reconnectTimer = null
+      }
+      return
+    }
+    _scheduleReconnect()
   }
 
   function _scheduleReconnect() {
@@ -112,7 +139,9 @@ export function useSSE(opts: UseSSEOptions) {
 
   function start() {
     stopped = false
+    givenUp.value = false
     reconnectAttempt = 0
+    consecutiveErrors = 0
     void _connect()
   }
 
@@ -129,5 +158,5 @@ export function useSSE(opts: UseSSEOptions) {
 
   onBeforeUnmount(stop)
 
-  return { connected, lastEventId, start, stop }
+  return { connected, givenUp, lastEventId, start, stop }
 }

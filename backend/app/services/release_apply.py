@@ -18,6 +18,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import tempfile
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -43,6 +44,33 @@ def _read_state() -> dict | None:
     except Exception:
         logger.exception("state file unreadable")
         return None
+
+
+def _write_state_text(text: str) -> None:
+    """Atomic replace of STATE_FILE with `text`. Uses tempfile in
+    STATE_DIR so the new inode is owned by THIS process (appuser);
+    the previous file may be root-owned because the shim and
+    updater-executor both write it as root via the docker socket.
+    `Path.write_text` does open('w') which truncates the existing
+    inode in place — requiring +w on the FILE — so it fails the
+    moment shim/executor have written. tempfile + os.replace only
+    requires +w on the DIRECTORY (which appuser owns), so it works
+    regardless of the existing file's ownership. chmod before
+    replace so the readable bit is set the instant the new inode
+    becomes visible."""
+    fd, tmp_path_str = tempfile.mkstemp(dir=str(STATE_DIR), prefix=".cj-", suffix=".tmp")
+    tmp_path = Path(tmp_path_str)
+    try:
+        with os.fdopen(fd, "w") as f:
+            f.write(text)
+        os.chmod(tmp_path, 0o644)
+        os.replace(tmp_path, STATE_FILE)
+    except Exception:
+        try:
+            tmp_path.unlink()
+        except FileNotFoundError:
+            pass
+        raise
 
 
 def _read_rollback_target() -> str | None:
@@ -154,6 +182,6 @@ def apply(*, action: str, target_tag: str | None) -> dict:
         "created_at": _utcnow_iso(),
         "log_tail": [],
     }
-    STATE_FILE.write_text(json.dumps(job, indent=2))
+    _write_state_text(json.dumps(job, indent=2))
     logger.info("update job written: id=%s action=%s target=%s", job["id"], action, target)
     return {"job_id": job["id"], "action": action, "target_tag": target}

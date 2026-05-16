@@ -151,9 +151,10 @@ async def test_manual_mode_skips_cron_work(db, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_24h_guard_skips_recent_check(db, monkeypatch):
-    """When the last successful check was less than 24h ago, the cron
-    short-circuits without an HTTP call."""
+async def test_24h_guard_skips_recent_success(db, monkeypatch):
+    """When the last SUCCESSFUL check was less than 24h ago, the cron
+    short-circuits without an HTTP call. Reads LAST_SUCCESS_AT, not
+    LAST_CHECK_AT, so failures don't block retries."""
     called = {"n": 0}
 
     class _ShouldNeverGet:
@@ -168,11 +169,10 @@ async def test_24h_guard_skips_recent_check(db, monkeypatch):
             return _StubResponse({"tag_name": "v0.0.0"})
 
     monkeypatch.setattr(rc.httpx, "AsyncClient", lambda **_kw: _ShouldNeverGet())
-    # Last check 1 hour ago.
     from datetime import datetime, timedelta
     one_hour_ago = (datetime.utcnow() - timedelta(hours=1)).isoformat()
     settings_svc.set_value(
-        db, key=rc.CacheKeys.LAST_CHECK_AT, value=one_hour_ago, actor=None
+        db, key=rc.CacheKeys.LAST_SUCCESS_AT, value=one_hour_ago, actor=None
     )
     db.commit()
 
@@ -180,6 +180,53 @@ async def test_24h_guard_skips_recent_check(db, monkeypatch):
     assert result["ok"] is True
     assert result["skipped"] == "too_soon"
     assert called["n"] == 0
+
+
+@pytest.mark.asyncio
+async def test_failure_does_not_advance_success_timer(db, monkeypatch):
+    """A failed check writes last_check_at but NOT last_success_at, so
+    the next hourly tick still tries again instead of waiting 24h."""
+    import httpx
+    monkeypatch.setattr(
+        rc.httpx, "AsyncClient",
+        lambda **_kw: _StubClient(httpx.ConnectError("upstream down")),
+    )
+
+    # First attempt fails.
+    r1 = await rc.run_check(db, manual=False)
+    assert r1["ok"] is False
+    assert settings_svc.get(db, rc.CacheKeys.LAST_CHECK_AT)  # was set
+    assert settings_svc.get(db, rc.CacheKeys.LAST_SUCCESS_AT) is None  # was NOT
+
+    # Second attempt: should still run (not too_soon), still fails.
+    r2 = await rc.run_check(db, manual=False)
+    assert r2["ok"] is False
+    # _too_soon would have returned True if it read last_check_at.
+
+
+@pytest.mark.asyncio
+async def test_success_advances_both_timers(db, monkeypatch):
+    """Successful check advances both last_check_at AND last_success_at,
+    so subsequent ticks within 24h skip."""
+    monkeypatch.setattr(
+        rc.httpx, "AsyncClient",
+        lambda **_kw: _StubClient(_StubResponse({
+            "tag_name": "v9.9.9",
+            "html_url": "https://example.com/r",
+            "body": "",
+            "published_at": "",
+        }))
+    )
+
+    r1 = await rc.run_check(db, manual=False)
+    assert r1["ok"] is True
+    assert settings_svc.get(db, rc.CacheKeys.LAST_CHECK_AT)
+    assert settings_svc.get(db, rc.CacheKeys.LAST_SUCCESS_AT)
+
+    # Second attempt within the window: skipped.
+    r2 = await rc.run_check(db, manual=False)
+    assert r2["ok"] is True
+    assert r2["skipped"] == "too_soon"
 
 
 @pytest.mark.asyncio

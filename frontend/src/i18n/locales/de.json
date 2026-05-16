@@ -186,6 +186,7 @@
       "latest": "Aktuelle Version",
       "never_checked": "Noch nicht geprüft",
       "checked": "geprüft {when}",
+      "last_success": "letzter Erfolg {when}",
       "error": "Fehler",
       "update_available_title": "Update verfügbar: {v}",
       "published": "Veröffentlicht {when}",

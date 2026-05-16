@@ -162,6 +162,7 @@ def system_status(
             "latest": latest,
             "update_available": update_available,
             "last_check_at": cached.get("last_check_at"),
+            "last_success_at": cached.get("last_success_at"),
             "last_check_error": cached.get("last_check_error"),
             "release_notes": cached.get("latest_body"),
             "release_url": cached.get("latest_url"),

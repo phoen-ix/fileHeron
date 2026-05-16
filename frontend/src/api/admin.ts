@@ -139,7 +139,10 @@ export interface SystemStatusResponse {
     sha: string
     latest: string | null
     update_available: boolean
+    /** Every attempt (success OR failure) — display as "checked X ago". */
     last_check_at: string | null
+    /** Only successful attempts — used to gate retries server-side. */
+    last_success_at: string | null
     last_check_error: string | null
     release_notes: string | null
     release_url: string | null

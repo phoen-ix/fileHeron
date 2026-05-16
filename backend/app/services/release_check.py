@@ -48,7 +48,11 @@ class CacheKeys:
     LATEST_PUBLISHED_AT = "release.latest_published_at"
     LATEST_BODY = "release.latest_body"
     LATEST_URL = "release.latest_url"
-    LAST_CHECK_AT = "release.last_check_at"
+    LAST_CHECK_AT = "release.last_check_at"        # every attempt — for UI
+    # Advanced only when an attempt actually returned a tag. Used by the
+    # 24h skip guard so failures (network blip, 404, malformed body)
+    # retry on the next tick instead of blocking for a full day.
+    LAST_SUCCESS_AT = "release.last_success_at"
     LAST_CHECK_ERROR = "release.last_check_error"
     # Dedup: the last version we already notified admins about. If the
     # next poll's `tag_name` matches this, suppress the fan-out.
@@ -106,12 +110,21 @@ def _write_cache(
         )
     if url is not None:
         settings_svc.set_value(db, key=CacheKeys.LATEST_URL, value=url, actor=None)
+    # Every attempt advances `last_check_at` (used by the UI's
+    # "checked X mins ago" display). Only successful attempts advance
+    # `last_success_at` (used by the 24h skip guard). Splitting these
+    # means a failed check doesn't block the next hourly retry.
+    now_iso = _utcnow_iso()
     settings_svc.set_value(
-        db, key=CacheKeys.LAST_CHECK_AT, value=_utcnow_iso(), actor=None
+        db, key=CacheKeys.LAST_CHECK_AT, value=now_iso, actor=None
     )
     settings_svc.set_value(
         db, key=CacheKeys.LAST_CHECK_ERROR, value=error or "", actor=None
     )
+    if error is None and version is not None:
+        settings_svc.set_value(
+            db, key=CacheKeys.LAST_SUCCESS_AT, value=now_iso, actor=None
+        )
     db.commit()
 
 
@@ -163,10 +176,14 @@ def _maybe_notify_admins(db: Session, new_version: str, release_url: str | None)
 
 
 def _too_soon(db: Session) -> bool:
-    """True when the last successful check was less than `_AUTO_INTERVAL`
+    """True when the last SUCCESSFUL check was less than `_AUTO_INTERVAL`
     ago. Used by the cron's auto-mode guard; the on-demand button skips
-    this entirely."""
-    raw = settings_svc.get(db, CacheKeys.LAST_CHECK_AT)
+    this entirely.
+
+    Reads `last_success_at` rather than `last_check_at` so a failed
+    attempt doesn't block the next hourly retry — we want failures to
+    self-heal as soon as the upstream is reachable again."""
+    raw = settings_svc.get(db, CacheKeys.LAST_SUCCESS_AT)
     if not raw:
         return False
     try:
@@ -192,7 +209,7 @@ async def run_check(db: Session, *, manual: bool) -> dict:
                 "skipped": "too_soon",
                 "next_eligible_at": (
                     datetime.fromisoformat(
-                        settings_svc.get(db, CacheKeys.LAST_CHECK_AT) or _utcnow_iso()
+                        settings_svc.get(db, CacheKeys.LAST_SUCCESS_AT) or _utcnow_iso()
                     )
                     + _AUTO_INTERVAL
                 ).isoformat(),
@@ -258,6 +275,7 @@ def read_cached(db: Session) -> dict:
         "latest_body": settings_svc.get(db, CacheKeys.LATEST_BODY) or None,
         "latest_url": settings_svc.get(db, CacheKeys.LATEST_URL) or None,
         "last_check_at": settings_svc.get(db, CacheKeys.LAST_CHECK_AT) or None,
+        "last_success_at": settings_svc.get(db, CacheKeys.LAST_SUCCESS_AT) or None,
         "last_check_error": (
             settings_svc.get(db, CacheKeys.LAST_CHECK_ERROR) or None
         ),

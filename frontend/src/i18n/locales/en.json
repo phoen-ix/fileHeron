@@ -186,6 +186,7 @@
       "latest": "Latest release",
       "never_checked": "Never checked yet",
       "checked": "checked {when}",
+      "last_success": "last success {when}",
       "error": "Error",
       "update_available_title": "Update available: {v}",
       "published": "Published {when}",

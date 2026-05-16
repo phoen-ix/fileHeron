@@ -241,15 +241,35 @@ function statusClass(s: string): string {
   return 'pill danger'
 }
 
-function cronStatusClass(s: string): string {
-  if (s === 'success') return 'pill ok'
+/** True when the cron returned a soft-failure dict (the function caught
+ * an error and returned `{ok: false, ...}` instead of raising). Today
+ * only `release_check` does this; the convention generalizes to any
+ * future cron that swallows transient errors but wants the UI to know. */
+function softFailed(c: SystemStatusResponse['crons'][number]): boolean {
+  const r = c.last_run?.result_summary as { ok?: boolean } | null | undefined
+  return r?.ok === false
+}
+
+function cronStatusClass(c: SystemStatusResponse['crons'][number]): string {
+  const s = c.last_run?.status
   if (s === 'running') return 'pill warn'
+  // A soft-failed run gets a red pill even when cron_tracker said 'success'
+  // (the function returned cleanly but reported ok=false).
+  if (s === 'success' && !softFailed(c)) return 'pill ok'
   return 'pill danger'
 }
 
-const headlineFailures = computed(
-  () => status.value?.crons.reduce((acc, c) => acc + c.last_24h.failure, 0) ?? 0,
-)
+function cronStatusLabel(c: SystemStatusResponse['crons'][number]): string {
+  return softFailed(c) ? 'failed' : c.last_run?.status ?? ''
+}
+
+const headlineFailures = computed(() => {
+  if (!status.value) return 0
+  return status.value.crons.reduce(
+    (acc, c) => acc + c.last_24h.failure + (softFailed(c) ? 1 : 0),
+    0,
+  )
+})
 </script>
 
 <template>
@@ -297,6 +317,12 @@ const headlineFailures = computed(
             <span v-else class="muted">{{ t('admin_system.version.never_checked') }}</span>
             <span v-if="status.version.last_check_at" class="sha">
               · {{ t('admin_system.version.checked', { when: fmtTime(status.version.last_check_at) }) }}
+            </span>
+            <span
+              v-if="status.version.last_success_at && status.version.last_success_at !== status.version.last_check_at"
+              class="sha"
+            >
+              · {{ t('admin_system.version.last_success', { when: fmtTime(status.version.last_success_at) }) }}
             </span>
           </dd>
           <template v-if="status.version.last_check_error">
@@ -425,8 +451,8 @@ const headlineFailures = computed(
             <tr v-for="c in status.crons" :key="c.job_name">
               <td><code>{{ c.job_name }}</code></td>
               <td>
-                <span v-if="c.last_run" :class="cronStatusClass(c.last_run.status)">
-                  {{ c.last_run.status }}
+                <span v-if="c.last_run" :class="cronStatusClass(c)">
+                  {{ cronStatusLabel(c) }}
                 </span>
                 <span v-else class="muted">{{ t('admin_system.crons.no_runs') }}</span>
               </td>

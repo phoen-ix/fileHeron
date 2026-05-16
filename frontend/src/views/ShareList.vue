@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 
 import { useShareListState } from '@/composables/useShareListState'
-import type { ShareListItem, ShareRecipientRef, UserSearchItem } from '@/types/api'
+import type { ShareListItem, ShareRecipientRef, ShareState } from '@/types/api'
 
 const { t, locale } = useI18n()
 const route = useRoute()
@@ -26,7 +26,6 @@ const {
   errorMsg,
   stateFilter,
   partyKind,
-  partyUser,
   partyGroup,
   userQuery,
   userSuggestions,
@@ -36,7 +35,6 @@ const {
   groupedItems,
   groupByOptions,
   pickUser,
-  clearParty,
   clearAllFilters,
   pickGroup,
   load,

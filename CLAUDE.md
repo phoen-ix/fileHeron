@@ -11,8 +11,8 @@ shares, optional public links with token + password + download-count limit.
 This document is the source of truth for Claude Code sessions working on
 this repo. **Topic-based**, not phase-based — each subsystem is described
 as it currently lives, not as it shipped. The human-readable end-user /
-admin / operator / developer manual lives in `README.md`. Per-phase
-historical detail lives in `plans/phase-*.md` and `git log`.
+admin / operator / developer manual lives in `README.md`. Historical
+per-phase detail lives in `git log`.
 
 ## Status
 
@@ -26,12 +26,11 @@ self-service profile, admin-controlled API-token / public-link / 2FA
 policies, admin-editable SMTP, home-page enable toggle, per-user landing
 page picker. **Phase 10 + post-10 polish complete.** Security audit (Waves 1–4 + bonus), operational audit (Waves 1–4), and the follow-up comment-correctness sweep all shipped 2026-05-16.
 
-Open follow-ups: none on the security shortlist. JWKS-based ID-token
-signature + nonce verification shipped (see SSO section). The
-password-strength meter heuristic stays — HIBP is the real defense.
-Per-file envelope encryption deferred until storage moves off
-single-server bind mounts. Locust baseline superseded by real-load
-operation.
+Open follow-ups: per-file envelope encryption deferred until storage
+moves off single-server bind mounts (the KEK and ciphertext would
+otherwise live in the same container). Periodic restore-drill discipline
+outstanding — `scripts/restore_drill.sh` exists but no production drill
+has run.
 
 ## Quickstart
 

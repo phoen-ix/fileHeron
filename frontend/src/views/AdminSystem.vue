@@ -219,7 +219,13 @@ onBeforeUnmount(() => {
 
 function fmtTime(iso: string | null): string {
   if (!iso) return '—'
-  return new Date(iso).toLocaleString(locale.value === 'de' ? 'de-AT' : 'en-US', {
+  // Backend stores naive UTC (no tz suffix) per CLAUDE.md convention.
+  // JS's Date() treats a bare "YYYY-MM-DDTHH:MM:SS" as local time, so
+  // without this fixup the rendered time is wrong by the user's UTC
+  // offset (e.g. 23:46 UTC was shown as "11:46 PM local" instead of
+  // "01:46 AM local").
+  const fixed = /[zZ]|[+-]\d{2}:?\d{2}$/.test(iso) ? iso : iso + 'Z'
+  return new Date(fixed).toLocaleString(locale.value === 'de' ? 'de-AT' : 'en-US', {
     year: 'numeric',
     month: 'short',
     day: '2-digit',

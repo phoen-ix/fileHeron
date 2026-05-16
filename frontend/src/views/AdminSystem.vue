@@ -119,7 +119,7 @@ const headlineFailures = computed(
     <p v-if="errorMsg" class="error">{{ errorMsg }}</p>
 
     <template v-if="status">
-      <!-- version -->
+      <!-- version + update banner -->
       <section v-if="status.version" class="card">
         <h2>{{ t('admin_system.version.heading') }}</h2>
         <dl class="kv-grid">
@@ -130,7 +130,45 @@ const headlineFailures = computed(
               ({{ status.version.sha.slice(0, 12) }})
             </span>
           </dd>
+          <dt>{{ t('admin_system.version.latest') }}</dt>
+          <dd>
+            <span v-if="status.version.latest" class="fh-mono">{{ status.version.latest }}</span>
+            <span v-else class="muted">{{ t('admin_system.version.never_checked') }}</span>
+            <span v-if="status.version.last_check_at" class="sha">
+              · {{ t('admin_system.version.checked', { when: fmtTime(status.version.last_check_at) }) }}
+            </span>
+          </dd>
+          <template v-if="status.version.last_check_error">
+            <dt>{{ t('admin_system.version.error') }}</dt>
+            <dd><span class="error-line">{{ status.version.last_check_error }}</span></dd>
+          </template>
         </dl>
+
+        <div v-if="status.version.update_available" class="update-banner">
+          <div class="banner-text">
+            <strong>{{ t('admin_system.version.update_available_title', { v: status.version.latest }) }}</strong>
+            <p v-if="status.version.release_published_at" class="banner-sub">
+              {{ t('admin_system.version.published', { when: fmtTime(status.version.release_published_at) }) }}
+            </p>
+          </div>
+          <a
+            v-if="status.version.release_url"
+            :href="status.version.release_url"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="btn-secondary"
+          >
+            {{ t('admin_system.version.view_release') }} ↗
+          </a>
+        </div>
+
+        <details
+          v-if="status.version.update_available && status.version.release_notes"
+          class="release-notes"
+        >
+          <summary>{{ t('admin_system.version.release_notes') }}</summary>
+          <pre>{{ status.version.release_notes }}</pre>
+        </details>
       </section>
 
       <!-- live -->
@@ -259,6 +297,34 @@ const headlineFailures = computed(
 .kv-grid dd { margin: 0; }
 .error-line { color: var(--fh-danger); margin-left: var(--fh-space-2); font-family: var(--fh-font-mono); font-size: var(--fh-text-mono-sm); }
 .sha { color: var(--fh-subtle); font-family: var(--fh-font-mono); font-size: var(--fh-text-mono-sm); margin-left: var(--fh-space-2); }
+.update-banner {
+  margin-top: var(--fh-space-3);
+  padding: var(--fh-space-3) var(--fh-space-4);
+  background: #fff8e1;
+  border: 1px solid #f1c40f;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--fh-space-3);
+}
+.banner-text strong { display: block; }
+.banner-sub { margin: var(--fh-space-1) 0 0; color: var(--fh-subtle); font-size: var(--fh-text-body-sm); }
+.release-notes {
+  margin-top: var(--fh-space-3);
+  font-size: var(--fh-text-body-sm);
+}
+.release-notes summary { cursor: pointer; color: var(--fh-subtle); }
+.release-notes pre {
+  margin: var(--fh-space-2) 0 0;
+  white-space: pre-wrap;
+  max-height: 300px;
+  overflow: auto;
+  background: var(--fh-paper);
+  padding: var(--fh-space-2);
+  border: 1px solid var(--fh-hairline);
+  font-family: var(--fh-font-mono);
+  font-size: var(--fh-text-mono-sm);
+}
 .counters { display: flex; gap: var(--fh-space-4); }
 .counter {
   background: var(--fh-paper-raised);

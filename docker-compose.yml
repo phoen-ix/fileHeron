@@ -57,9 +57,12 @@ services:
         max-file: "3"
 
   backend:
-    build:
-      context: .
-      dockerfile: docker/backend/Dockerfile
+    # Production deploys pull a SemVer-tagged image from GHCR (published by
+    # the `server-release.yml` workflow on every `v*` tag). `FH_TAG` lives
+    # in `.env`; default `latest` always tracks the most recent release.
+    # The dev override (`docker-compose.dev.yml`) reinstates `build:` so
+    # the source tree drives local containers without touching GHCR.
+    image: ghcr.io/phoen-ix/fileheron-backend:${FH_TAG:-latest}
     container_name: ${COMPOSE_PROJECT_NAME:-fileheron}-backend
     restart: unless-stopped
     mem_limit: ${BACKEND_MEM_LIMIT:-1g}
@@ -168,9 +171,7 @@ services:
         max-file: "3"
 
   worker:
-    build:
-      context: .
-      dockerfile: docker/backend/Dockerfile
+    image: ghcr.io/phoen-ix/fileheron-worker:${FH_TAG:-latest}
     container_name: ${COMPOSE_PROJECT_NAME:-fileheron}-worker
     restart: unless-stopped
     mem_limit: ${WORKER_MEM_LIMIT:-512m}
@@ -270,9 +271,7 @@ services:
         max-file: "3"
 
   frontend:
-    build:
-      context: .
-      dockerfile: docker/frontend/Dockerfile
+    image: ghcr.io/phoen-ix/fileheron-frontend:${FH_TAG:-latest}
     container_name: ${COMPOSE_PROJECT_NAME:-fileheron}-frontend
     restart: unless-stopped
     mem_limit: ${FRONTEND_MEM_LIMIT:-256m}

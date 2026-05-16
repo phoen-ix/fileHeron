@@ -170,7 +170,15 @@
     "refreshed_at": "Refreshed {when}",
     "version": {
       "heading": "Version",
-      "running": "Running"
+      "running": "Running",
+      "latest": "Latest release",
+      "never_checked": "Never checked yet",
+      "checked": "checked {when}",
+      "error": "Error",
+      "update_available_title": "Update available: {v}",
+      "published": "Published {when}",
+      "view_release": "Release notes on GitHub",
+      "release_notes": "Show release notes"
     },
     "live": {
       "heading": "Live checks",

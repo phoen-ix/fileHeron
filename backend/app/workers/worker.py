@@ -14,6 +14,7 @@ from arq.cron import cron
 
 from ..config import settings
 from ..utils.logger import configure_logging
+from ..services.release_check import release_check
 from .av_scan import av_scan_file
 from .cleanup_abandoned_uploads import cleanup_abandoned_uploads
 from .cleanup_expired_tokens import cleanup_expired_tokens
@@ -43,6 +44,7 @@ class WorkerSettings:
         cleanup_abandoned_uploads,
         purge_old_quarantine,
         prune_history,
+        release_check,
     ]
     cron_jobs = [
         # Stagger so they don't pile up at minute 0. ops_check sits at :15
@@ -55,6 +57,8 @@ class WorkerSettings:
         cron(quota_reconcile, hour=None, minute={37}, run_at_startup=False),
         # Hourly TUS orphan sweep.
         cron(cleanup_abandoned_uploads, hour=None, minute={47}, run_at_startup=False),
+        # GitHub releases poll for in-app "update available" surface.
+        cron(release_check, hour=None, minute={53}, run_at_startup=False),
         # Daily-ish housekeeping (hour=2 keeps it well clear of business hours).
         cron(purge_old_quarantine, hour={2}, minute={13}, run_at_startup=False),
         cron(prune_history, hour={2}, minute={43}, run_at_startup=False),

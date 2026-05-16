@@ -10,7 +10,11 @@ services:
       - "127.0.0.1:${REDIS_EXTERNAL_PORT:-6380}:6379"
 
   backend:
+    # Reinstate the `build:` block stripped from docker-compose.yml so
+    # `docker compose -f docker-compose.yml -f docker-compose.dev.yml`
+    # still builds locally instead of pulling from GHCR.
     build:
+      context: .
       dockerfile: docker/backend/Dockerfile.dev
     volumes:
       - ./backend/app:/app/app
@@ -33,6 +37,7 @@ services:
   # now, manual restart is fine.
   worker:
     build:
+      context: .
       dockerfile: docker/backend/Dockerfile.dev
     volumes:
       - ./backend/app:/app/app
@@ -44,6 +49,7 @@ services:
 
   frontend:
     build:
+      context: .
       dockerfile: docker/frontend/Dockerfile.dev
     # Compose merges `ports` lists by appending — that would leave both 80 and
     # 5173 mapped to host:8080, which Docker refuses. !override replaces the

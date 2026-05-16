@@ -143,14 +143,29 @@ def system_status(
         .count()
     )
 
+    from ...services import release_check as release_check_svc
     from ...version import GIT_SHA, VERSION
+
+    cached = release_check_svc.read_cached(db)
+    latest = cached.get("latest_version")
+    update_available = bool(latest) and latest != VERSION
 
     return {
         "live": _live_checks(db),
         "crons": crons,
         "recent_failures": recent_failures,
         "email_undeliverable_24h": email_undeliverable_24h,
-        "version": {"running": VERSION, "sha": GIT_SHA},
+        "version": {
+            "running": VERSION,
+            "sha": GIT_SHA,
+            "latest": latest,
+            "update_available": update_available,
+            "last_check_at": cached.get("last_check_at"),
+            "last_check_error": cached.get("last_check_error"),
+            "release_notes": cached.get("latest_body"),
+            "release_url": cached.get("latest_url"),
+            "release_published_at": cached.get("latest_published_at"),
+        },
     }
 
 

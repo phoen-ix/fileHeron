@@ -94,10 +94,21 @@ export interface SystemStatusResponse {
   }>
   recent_failures: CronRunDTO[]
   email_undeliverable_24h: number
-  /** Phase 1 of the in-app self-update feature: surface what version
-   * is currently running. Sourced from FH_VERSION / FH_GIT_SHA baked
-   * into the image. Phase 3 will add `latest` + `update_available`. */
-  version: { running: string; sha: string }
+  /** Self-update surface. `running` + `sha` are baked into the image;
+   * `latest` + everything below come from the hourly `release_check`
+   * cron polling the GitHub releases API. All `latest*` fields are null
+   * until the first successful poll. */
+  version: {
+    running: string
+    sha: string
+    latest: string | null
+    update_available: boolean
+    last_check_at: string | null
+    last_check_error: string | null
+    release_notes: string | null
+    release_url: string | null
+    release_published_at: string | null
+  }
 }
 
 export function getSystemStatus() {

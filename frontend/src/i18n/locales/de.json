@@ -170,7 +170,15 @@
     "refreshed_at": "Aktualisiert {when}",
     "version": {
       "heading": "Version",
-      "running": "Läuft"
+      "running": "Läuft",
+      "latest": "Aktuelle Version",
+      "never_checked": "Noch nicht geprüft",
+      "checked": "geprüft {when}",
+      "error": "Fehler",
+      "update_available_title": "Update verfügbar: {v}",
+      "published": "Veröffentlicht {when}",
+      "view_release": "Release-Notes auf GitHub",
+      "release_notes": "Release-Notes anzeigen"
     },
     "live": {
       "heading": "Live-Prüfungen",

@@ -1,28 +1,42 @@
 #!/usr/bin/env bash
-# fileHeron rollback — re-tag a prior SHA-tagged image as :latest and roll.
+# fileHeron rollback — re-tag a prior tag as :latest and roll.
 #
 # Usage:
-#   scripts/rollback.sh                  # list available SHA tags
-#   scripts/rollback.sh <sha>            # roll back to that SHA
+#   scripts/rollback.sh                  # list available local image tags
+#   scripts/rollback.sh <tag>            # roll back to that tag
 #
-# Requires that scripts/deploy.sh built the prior image with SHA tagging.
-# Plain `docker compose build` (without deploy.sh) doesn't leave anything
-# to roll back to.
+# Works against the GHCR-namespaced images written by deploy.sh
+# (`ghcr.io/phoen-ix/fileheron-*:<tag>`). Plain `docker compose build`
+# without deploy.sh doesn't leave anything to roll back to.
+#
+# The tag can be either a SemVer release (e.g. `v0.2.0`) or a `local-*`
+# build label written by deploy.sh's fallback path.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$ROOT"
 
+REPO_OWNER="phoen-ix"
 IMAGES=(fileheron-backend fileheron-worker fileheron-frontend)
 SERVICES=(backend worker frontend)
 
+# Resolve current FH_TAG so the new :latest reflects what compose will pull.
+if [ -f .env ]; then
+    set -o allexport
+    # shellcheck disable=SC1091
+    . ./.env
+    set +o allexport
+fi
+FH_TAG="${FH_TAG:-latest}"
+export FH_TAG
+
 list_tags() {
-    echo "Available SHA-tagged images (most recent first):"
+    echo "Available image tags (most recent first):"
     for img in "${IMAGES[@]}"; do
-        echo "  $img:"
-        docker images "$img" --format '    {{.Tag}}  ({{.CreatedSince}})' \
-            | grep -v '^    latest ' \
+        echo "  ghcr.io/$REPO_OWNER/$img:"
+        docker images "ghcr.io/$REPO_OWNER/$img" --format '    {{.Tag}}  ({{.CreatedSince}})' \
+            | grep -v "^    $FH_TAG " \
             | head -10
     done
 }
@@ -34,11 +48,11 @@ fi
 
 TARGET="$1"
 
-# Verify all three repos have this tag.
+# Verify all three repos have this tag locally.
 MISSING=""
 for img in "${IMAGES[@]}"; do
-    if ! docker image inspect "$img:$TARGET" >/dev/null 2>&1; then
-        MISSING="$MISSING $img:$TARGET"
+    if ! docker image inspect "ghcr.io/$REPO_OWNER/$img:$TARGET" >/dev/null 2>&1; then
+        MISSING="$MISSING ghcr.io/$REPO_OWNER/$img:$TARGET"
     fi
 done
 if [ -n "$MISSING" ]; then
@@ -48,12 +62,12 @@ if [ -n "$MISSING" ]; then
     exit 2
 fi
 
-echo "[rollback] re-tagging $TARGET as :latest for all three repos"
+echo "[rollback] re-tagging $TARGET as :$FH_TAG for all three repos"
 for img in "${IMAGES[@]}"; do
-    docker tag "$img:$TARGET" "$img:latest"
+    docker tag "ghcr.io/$REPO_OWNER/$img:$TARGET" "ghcr.io/$REPO_OWNER/$img:$FH_TAG"
 done
 
-echo "[rollback] rolling services onto :latest (= $TARGET)"
+echo "[rollback] rolling services onto :$FH_TAG (= $TARGET)"
 docker compose up -d "${SERVICES[@]}"
 
 echo "[rollback] waiting for health (up to 90s)"

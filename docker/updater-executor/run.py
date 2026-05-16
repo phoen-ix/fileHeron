@@ -51,6 +51,21 @@ def read_job() -> dict:
     return json.loads(STATE_FILE.read_text())
 
 
+def _write_state_text(text: str) -> None:
+    """Write+chmod helper. The state file is read by the backend
+    process (uid 1000 appuser); the executor runs as root. Without an
+    explicit chmod, the file's mode is whatever the previous writer
+    left — and shim writes via mktemp+mv default to 0600, which
+    silently breaks the backend's _read_state on every subsequent
+    poll. Set 0644 on every write so the state file stays readable
+    regardless of who wrote it last."""
+    STATE_FILE.write_text(text)
+    try:
+        os.chmod(STATE_FILE, 0o644)
+    except OSError:
+        pass
+
+
 def write_job_field(**kwargs) -> None:
     """Read-modify-write the state file with new fields. The shim and
     backend also read this file; the executor is the only writer during
@@ -59,7 +74,7 @@ def write_job_field(**kwargs) -> None:
         return
     data = json.loads(STATE_FILE.read_text())
     data.update(kwargs)
-    STATE_FILE.write_text(json.dumps(data, indent=2))
+    _write_state_text(json.dumps(data, indent=2))
 
 
 def log_line(line: str) -> None:
@@ -75,7 +90,7 @@ def log_line(line: str) -> None:
     if len(log_tail) > 200:
         log_tail = log_tail[-200:]
     data["log_tail"] = log_tail
-    STATE_FILE.write_text(json.dumps(data, indent=2))
+    _write_state_text(json.dumps(data, indent=2))
 
 
 def run_capture(cmd: list[str], env: dict[str, str] | None = None) -> int:
@@ -190,6 +205,10 @@ def main() -> int:
         try:
             ROLLBACK_FILE = STATE_FILE.parent / "rollback_target.json"
             ROLLBACK_FILE.write_text(json.dumps({"tag": previous_tag}))
+            try:
+                os.chmod(ROLLBACK_FILE, 0o644)
+            except OSError:
+                pass
             log_line(f"rollback target recorded: {previous_tag}")
         except Exception as e:
             log_line(f"WARN rollback-target write failed: {e}")

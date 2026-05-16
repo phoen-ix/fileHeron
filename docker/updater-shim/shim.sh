@@ -28,6 +28,17 @@ log() {
     printf '[shim %s] %s\n' "$(date -u +%Y-%m-%dT%H:%M:%S)" "$*"
 }
 
+# Replace STATE_FILE atomically with $1, ensuring 0644 mode so the
+# backend (uid 1000 appuser) can read it. Without this, mktemp's
+# default 0600 + mv leaks through, every shim write silently breaks
+# the backend's _read_state, and the backend logs a PermissionError
+# traceback every poll tick. chmod *before* rename so there's no
+# window where the file is 0600 and visible.
+install_state() {
+    chmod 0644 "$1"
+    mv "$1" "$STATE_FILE"
+}
+
 log "fileheron-updater-shim starting (poll=${POLL_INTERVAL_SEC}s, ghcr=$GHCR_OWNER, project=$COMPOSE_PROJECT)"
 log "workspace host=$HOST_WORKSPACE state host=$HOST_STATE"
 
@@ -46,7 +57,7 @@ if [ -f "$STATE_FILE" ]; then
         log "found in-flight job (status=$status) on startup — marking failed"
         tmp=$(mktemp)
         jq '. + {status: "failed", error: "shim restarted mid-job", finished_at: now | todate}' \
-            "$STATE_FILE" > "$tmp" && mv "$tmp" "$STATE_FILE"
+            "$STATE_FILE" > "$tmp" && install_state "$tmp"
     fi
 fi
 
@@ -66,7 +77,7 @@ while true; do
                 log "ERROR pending job has no target_tag — marking failed"
                 tmp=$(mktemp)
                 jq '. + {status: "failed", error: "missing target_tag", finished_at: now | todate}' \
-                    "$STATE_FILE" > "$tmp" && mv "$tmp" "$STATE_FILE"
+                    "$STATE_FILE" > "$tmp" && install_state "$tmp"
                 continue
             fi
 
@@ -76,7 +87,7 @@ while true; do
             tmp=$(mktemp)
             jq --arg now "$(date -u +%Y-%m-%dT%H:%M:%S)" \
                '. + {status: "claiming", claimed_at: $now}' \
-               "$STATE_FILE" > "$tmp" && mv "$tmp" "$STATE_FILE"
+               "$STATE_FILE" > "$tmp" && install_state "$tmp"
 
             executor_image="ghcr.io/$GHCR_OWNER/fileheron-updater-executor:$target_tag"
 
@@ -90,7 +101,7 @@ while true; do
                 jq --arg err "executor pull failed: $executor_image" \
                    --arg now "$(date -u +%Y-%m-%dT%H:%M:%S)" \
                    '. + {status: "failed", error: $err, finished_at: $now}' \
-                   "$STATE_FILE" > "$tmp" && mv "$tmp" "$STATE_FILE"
+                   "$STATE_FILE" > "$tmp" && install_state "$tmp"
                 continue
             fi
 
@@ -132,7 +143,7 @@ while true; do
                     jq --arg err "executor crashed (exit $exit_code) without writing status" \
                        --arg now "$(date -u +%Y-%m-%dT%H:%M:%S)" \
                        '. + {status: "failed", error: $err, finished_at: $now}' \
-                       "$STATE_FILE" > "$tmp" && mv "$tmp" "$STATE_FILE"
+                       "$STATE_FILE" > "$tmp" && install_state "$tmp"
                 fi
             fi
             ;;
@@ -150,7 +161,7 @@ while true; do
                     tmp=$(mktemp)
                     jq --arg now "$(date -u +%Y-%m-%dT%H:%M:%S)" \
                        '. + {status: "failed", error: "stuck (no progress)", finished_at: $now}' \
-                       "$STATE_FILE" > "$tmp" && mv "$tmp" "$STATE_FILE"
+                       "$STATE_FILE" > "$tmp" && install_state "$tmp"
                 fi
             fi
             ;;

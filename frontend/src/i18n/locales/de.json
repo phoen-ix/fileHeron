@@ -181,6 +181,12 @@
       "release_notes": "Release-Notes anzeigen"
     },
     "update": {
+      "check_now": "Jetzt prüfen",
+      "check_now_toast": {
+        "found": "Neues Release gefunden: {v}",
+        "none": "Bereits aktuell.",
+        "error": "Prüfung fehlgeschlagen: {err}"
+      },
       "btn_update": "Auf {v} aktualisieren",
       "btn_rollback": "Zurückrollen",
       "rollback_available": "Frühere Version verfügbar: {v}",
@@ -317,6 +323,18 @@
     "text_placeholder": "Geplante Wartung Samstag 14:00 UTC — ca. 5 Minuten Ausfall erwartet.",
     "text_help": "Noch {remaining} Zeichen frei.",
     "saved_toast": "Login-Banner gespeichert."
+  },
+  "admin_updates": {
+    "title": "Updates",
+    "intro": "Wo und wie oft nach neuen fileHeron-Releases gesucht wird. Bei eigenen Forks auf das passende Releases-Endpoint zeigen. Nur Admins erhalten Update-Benachrichtigungen.",
+    "url_label": "Release-API-URL",
+    "url_placeholder": "https://api.github.com/repos/phoen-ix/fileHeron/releases/latest",
+    "url_help": "Standardmäßig auf das Upstream-Repo gesetzt. Forks können auf das eigene Releases-Endpoint zeigen — Antwort muss GitHub-kompatibel sein (tag_name, html_url, body, published_at).",
+    "mode_label": "Prüf-Häufigkeit",
+    "mode_auto": "Automatisch (alle 24 Stunden)",
+    "mode_manual": "Nur manuell (keine automatische Prüfung)",
+    "mode_help": "Im manuellen Modus ist der Cron deaktiviert — neue Releases siehst du nur, wenn du in /admin/system auf „Jetzt prüfen\" klickst.",
+    "saved_toast": "Update-Einstellungen gespeichert."
   },
   "admin_email": {
     "title": "E-Mail / SMTP",
@@ -532,7 +550,9 @@
       "password_reset": "Passwort zurücksetzen",
       "twofa_required": "2FA",
       "login_alert": "Anmeldung",
-      "file_quarantined": "Quarantäne"
+      "file_quarantined": "Quarantäne",
+      "ops_alert": "Betriebsalarm",
+      "release_available": "Update verfügbar"
     },
     "headline": {
       "share_created": "{sender_name} hat dir {file_count} Datei(en) gesendet.",
@@ -543,6 +563,7 @@
       "twofa_required": "Zwei-Faktor-Authentifizierung ist erforderlich.",
       "login_alert": "Anmeldung von einem neuen Gerät.",
       "file_quarantined": "{filename} wurde durch Antivirus unter Quarantäne gestellt.",
+      "release_available": "fileHeron {version} ist verfügbar.",
       "generic": "Neue Aktivität"
     }
   },

@@ -68,6 +68,42 @@ export function updateMotdSettings(payload: UpdateMotdSettingsRequest) {
 }
 
 
+// --- Updates (release-check) settings ------------------------------------
+
+export type UpdatesCheckMode = 'auto' | 'manual'
+
+export interface UpdatesSettingsResponse {
+  api_url: string
+  check_mode: UpdatesCheckMode
+}
+
+export interface UpdateUpdatesSettingsRequest {
+  api_url: string
+  check_mode: UpdatesCheckMode
+}
+
+export function getUpdatesSettings() {
+  return api.get<UpdatesSettingsResponse>('/admin/settings/updates')
+}
+
+export function updateUpdatesSettings(payload: UpdateUpdatesSettingsRequest) {
+  return api.put<UpdatesSettingsResponse>('/admin/settings/updates', payload)
+}
+
+export interface CheckUpdatesResult {
+  ok: boolean
+  skipped?: string
+  latest_version?: string
+  admins_notified?: number
+  url?: string
+  error?: string
+}
+
+export function checkUpdatesNow() {
+  return api.post<CheckUpdatesResult>('/admin/system/check-updates')
+}
+
+
 // --- System / ops view (operational audit) -------------------------------
 
 export interface CronRunDTO {

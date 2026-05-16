@@ -87,6 +87,214 @@ async def test_release_check_records_upstream_failure(db, monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_url_override_is_used(db, monkeypatch):
+    """When the admin sets `updates.api_url`, the cron + on-demand both
+    GET that URL instead of the default upstream."""
+    captured: dict[str, str] = {}
+
+    class _CapturingClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return None
+
+        async def get(self, url, **_kw):
+            captured["url"] = url
+            return _StubResponse(
+                {
+                    "tag_name": "v9.9.9",
+                    "html_url": "https://example.com/r",
+                    "body": "x",
+                    "published_at": "2026-05-16T10:00:00Z",
+                }
+            )
+
+    monkeypatch.setattr(rc.httpx, "AsyncClient", lambda **_kw: _CapturingClient())
+    settings_svc.set_value(
+        db,
+        key=settings_svc.Keys.UPDATES_API_URL,
+        value="https://example.com/fork/releases/latest",
+        actor=None,
+    )
+    db.commit()
+
+    await rc.run_check(db, manual=True)
+    assert captured["url"] == "https://example.com/fork/releases/latest"
+
+
+@pytest.mark.asyncio
+async def test_manual_mode_skips_cron_work(db, monkeypatch):
+    """When check_mode=manual, the cron returns without HTTP."""
+    called = {"n": 0}
+
+    class _ShouldNeverGet:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return None
+
+        async def get(self, *_a, **_kw):
+            called["n"] += 1
+            return _StubResponse({"tag_name": "v0.0.0"})
+
+    monkeypatch.setattr(rc.httpx, "AsyncClient", lambda **_kw: _ShouldNeverGet())
+    settings_svc.set_value(
+        db, key=settings_svc.Keys.UPDATES_CHECK_MODE, value="manual", actor=None
+    )
+    db.commit()
+
+    result = await rc.run_check(db, manual=False)
+    assert result == {"ok": True, "skipped": "manual_mode"}
+    assert called["n"] == 0
+
+
+@pytest.mark.asyncio
+async def test_24h_guard_skips_recent_check(db, monkeypatch):
+    """When the last successful check was less than 24h ago, the cron
+    short-circuits without an HTTP call."""
+    called = {"n": 0}
+
+    class _ShouldNeverGet:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return None
+
+        async def get(self, *_a, **_kw):
+            called["n"] += 1
+            return _StubResponse({"tag_name": "v0.0.0"})
+
+    monkeypatch.setattr(rc.httpx, "AsyncClient", lambda **_kw: _ShouldNeverGet())
+    # Last check 1 hour ago.
+    from datetime import datetime, timedelta
+    one_hour_ago = (datetime.utcnow() - timedelta(hours=1)).isoformat()
+    settings_svc.set_value(
+        db, key=rc.CacheKeys.LAST_CHECK_AT, value=one_hour_ago, actor=None
+    )
+    db.commit()
+
+    result = await rc.run_check(db, manual=False)
+    assert result["ok"] is True
+    assert result["skipped"] == "too_soon"
+    assert called["n"] == 0
+
+
+@pytest.mark.asyncio
+async def test_manual_run_bypasses_both_guards(db, monkeypatch):
+    """`run_check(manual=True)` ignores mode and the 24h guard."""
+    called = {"n": 0}
+
+    class _Stub:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return None
+
+        async def get(self, *_a, **_kw):
+            called["n"] += 1
+            return _StubResponse(
+                {
+                    "tag_name": "v0.0.1",
+                    "html_url": "x",
+                    "body": "",
+                    "published_at": "",
+                }
+            )
+
+    monkeypatch.setattr(rc.httpx, "AsyncClient", lambda **_kw: _Stub())
+    settings_svc.set_value(
+        db, key=settings_svc.Keys.UPDATES_CHECK_MODE, value="manual", actor=None
+    )
+    from datetime import datetime
+    settings_svc.set_value(
+        db, key=rc.CacheKeys.LAST_CHECK_AT, value=datetime.utcnow().isoformat(),
+        actor=None,
+    )
+    db.commit()
+
+    result = await rc.run_check(db, manual=True)
+    assert result["ok"] is True
+    assert result["latest_version"] == "v0.0.1"
+    assert called["n"] == 1
+
+
+@pytest.mark.asyncio
+async def test_new_version_dispatches_to_all_admins_once(db, make_user, monkeypatch):
+    """First sighting of a new tag → notification rows for every
+    non-disabled admin. Second sighting of the SAME tag → zero
+    additional rows (dedup via `release.notified_version`)."""
+    from app.models.notification import Notification, NotificationCategory
+    from app.models.user import UserRole
+
+    a1 = make_user(email="adm1@test.local", role=UserRole.admin)
+    a2 = make_user(email="adm2@test.local", role=UserRole.admin)
+    _client = make_user(email="cli@test.local")  # not admin → no notification
+
+    monkeypatch.setattr(
+        rc.httpx, "AsyncClient",
+        lambda **_kw: _StubClient(_StubResponse({
+            "tag_name": "v99.99.99",
+            "html_url": "https://example.com/r",
+            "body": "",
+            "published_at": "",
+        }))
+    )
+    r1 = await rc.run_check(db, manual=True)
+    assert r1["admins_notified"] == 2
+
+    notifs = (
+        db.query(Notification)
+        .filter(Notification.category == NotificationCategory.release_available)
+        .all()
+    )
+    assert {n.user_id for n in notifs} == {a1.id, a2.id}
+
+    # Second poll with the same tag → no new notifications.
+    r2 = await rc.run_check(db, manual=True)
+    assert r2["admins_notified"] == 0
+    notifs2 = (
+        db.query(Notification)
+        .filter(Notification.category == NotificationCategory.release_available)
+        .all()
+    )
+    assert len(notifs2) == 2  # unchanged
+
+
+@pytest.mark.asyncio
+async def test_no_notification_when_target_equals_running(db, make_user, monkeypatch):
+    """If the upstream `latest` matches the running VERSION, skip the
+    notification fan-out — you don't notify admins about their own
+    deployed version."""
+    from app.models.notification import Notification, NotificationCategory
+    from app.models.user import UserRole
+    from app import version as version_mod
+
+    make_user(email="adm@test.local", role=UserRole.admin)
+
+    monkeypatch.setattr(
+        rc.httpx, "AsyncClient",
+        lambda **_kw: _StubClient(_StubResponse({
+            "tag_name": version_mod.VERSION,
+            "html_url": "https://example.com/r",
+            "body": "",
+            "published_at": "",
+        }))
+    )
+    r = await rc.run_check(db, manual=True)
+    assert r["admins_notified"] == 0
+    n = (
+        db.query(Notification)
+        .filter(Notification.category == NotificationCategory.release_available)
+        .count()
+    )
+    assert n == 0
+
+
+@pytest.mark.asyncio
 async def test_system_status_flags_update_available(
     client, db, make_user, login_as, monkeypatch
 ):

@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 import {
   applyRollback,
   applyUpdate,
+  checkUpdatesNow,
   getSystemStatus,
   getUpdaterJob,
   getUpdaterStatus,
@@ -34,7 +35,41 @@ const activeJob = ref<UpdaterJob | null>(null)
 const confirming = ref<null | 'update' | 'rollback'>(null)
 const passwordInput = ref('')
 const submitting = ref(false)
+const checking = ref(false)
 let jobPollHandle: ReturnType<typeof setInterval> | null = null
+
+async function onCheckNow() {
+  checking.value = true
+  try {
+    const { data } = await checkUpdatesNow()
+    if (!data.ok) {
+      ui.pushToast(
+        t('admin_system.update.check_now_toast.error', {
+          err: data.error ?? 'unknown',
+        }),
+        'error',
+      )
+      return
+    }
+    // Refresh status so the version card picks up the new cache.
+    await load()
+    if (data.latest_version && data.latest_version !== status.value?.version.running) {
+      ui.pushToast(
+        t('admin_system.update.check_now_toast.found', { v: data.latest_version }),
+        'success',
+      )
+    } else {
+      ui.pushToast(
+        t('admin_system.update.check_now_toast.none'),
+        'success',
+      )
+    }
+  } catch (err) {
+    ui.pushToast(describe(err), 'error')
+  } finally {
+    checking.value = false
+  }
+}
 
 async function load() {
   loading.value = true
@@ -237,7 +272,17 @@ const headlineFailures = computed(
     <template v-if="status">
       <!-- version + update banner -->
       <section v-if="status.version" class="card">
-        <h2>{{ t('admin_system.version.heading') }}</h2>
+        <div class="card-header">
+          <h2>{{ t('admin_system.version.heading') }}</h2>
+          <button
+            type="button"
+            class="btn-secondary"
+            :disabled="checking"
+            @click="onCheckNow"
+          >
+            {{ checking ? t('common.loading') : t('admin_system.update.check_now') }}
+          </button>
+        </div>
         <dl class="kv-grid">
           <dt>{{ t('admin_system.version.running') }}</dt>
           <dd>
@@ -506,6 +551,14 @@ const headlineFailures = computed(
 .kv-grid dd { margin: 0; }
 .error-line { color: var(--fh-danger); margin-left: var(--fh-space-2); font-family: var(--fh-font-mono); font-size: var(--fh-text-mono-sm); }
 .sha { color: var(--fh-subtle); font-family: var(--fh-font-mono); font-size: var(--fh-text-mono-sm); margin-left: var(--fh-space-2); }
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--fh-space-3);
+  margin-bottom: var(--fh-space-3);
+}
+.card-header h2 { margin: 0; }
 .update-banner {
   margin-top: var(--fh-space-3);
   padding: var(--fh-space-3) var(--fh-space-4);

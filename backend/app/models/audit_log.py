@@ -96,6 +96,8 @@ class AuditEventType(str, enum.Enum):
     rollback_triggered = "rollback_triggered"
     rollback_completed = "rollback_completed"
     rollback_failed = "rollback_failed"
+    # Phase 5: admin-editable Updates settings (URL + check_mode).
+    updates_settings_changed = "updates_settings_changed"
 
 
 def _utcnow() -> datetime:

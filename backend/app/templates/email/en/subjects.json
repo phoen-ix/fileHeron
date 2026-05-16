@@ -9,5 +9,6 @@
   "account_created": "{invitee_name} just joined {app_name}",
   "login_alert": "Sign-in from a new device",
   "file_quarantined": "An infected file was quarantined",
-  "smtp_test": "{app_name} · SMTP test"
+  "smtp_test": "{app_name} · SMTP test",
+  "release_available": "{app_name} {version} is available"
 }

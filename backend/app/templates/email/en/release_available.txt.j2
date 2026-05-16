@@ -1,0 +1,10 @@
+Hi {{ recipient_name|default("there") }},
+
+A new {{ app_name }} release is available: {{ version }}
+(you're currently running {{ running_version }}).
+
+{% if release_url %}Release notes: {{ release_url }}
+
+{% endif %}You can apply the update from /admin/system on your instance.
+
+— {{ app_name }}

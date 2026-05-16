@@ -51,6 +51,10 @@ _DEFAULT_CHANNEL: dict[NotificationCategory, NotificationChannel] = {
     # bell SSE rail are where operators look anyway. Admins can flip to
     # `both` via their notification preferences if they want pages.
     NotificationCategory.ops_alert: NotificationChannel.in_app,
+    # New-release detected. Default `both` so admins get the email even
+    # without opening the app; dedup at the call site means at most one
+    # notification per detected version transition.
+    NotificationCategory.release_available: NotificationChannel.both,
 }
 
 

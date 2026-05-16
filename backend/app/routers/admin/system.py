@@ -213,6 +213,19 @@ async def system_stream(
     )
 
 
+@router.post("/system/check-updates")
+async def check_updates_now(
+    db: Session = Depends(get_db),
+    _admin: User = Depends(get_current_admin),
+) -> dict:
+    """Admin-triggered release check. Bypasses both the manual-mode guard
+    and the 24h cadence — fires a real HTTP call and writes the cache.
+    Returns the same shape as the cron's result so the SPA can toast
+    'found vX.Y.Z' / 'up to date' / error."""
+    from ...services import release_check as release_check_svc
+    return await release_check_svc.run_check(db, manual=True)
+
+
 @router.get("/system/cron-runs")
 def cron_runs(
     job_name: str | None = Query(None, max_length=64),

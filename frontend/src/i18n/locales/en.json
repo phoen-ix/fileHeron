@@ -181,6 +181,12 @@
       "release_notes": "Show release notes"
     },
     "update": {
+      "check_now": "Check now",
+      "check_now_toast": {
+        "found": "Found new release: {v}",
+        "none": "Already up to date.",
+        "error": "Check failed: {err}"
+      },
       "btn_update": "Update to {v}",
       "btn_rollback": "Roll back",
       "rollback_available": "Previous version available for rollback: {v}",
@@ -317,6 +323,18 @@
     "text_placeholder": "Scheduled maintenance Saturday 14:00 UTC — expect a 5-minute outage.",
     "text_help": "{remaining} characters remaining.",
     "saved_toast": "Login banner saved."
+  },
+  "admin_updates": {
+    "title": "Updates",
+    "intro": "Where to check for new fileHeron releases and how often. Point this at your own fork's API if you self-publish images. Only admins receive update notifications.",
+    "url_label": "Release API URL",
+    "url_placeholder": "https://api.github.com/repos/phoen-ix/fileHeron/releases/latest",
+    "url_help": "Pre-filled with the upstream repo. Forks can point this at their own releases endpoint — must return a GitHub-compatible JSON shape (tag_name, html_url, body, published_at).",
+    "mode_label": "Check frequency",
+    "mode_auto": "Automatic (once every 24 hours)",
+    "mode_manual": "Manual only (never on its own)",
+    "mode_help": "Manual mode disables the cron entirely — you'll only ever see new releases when you press Check now in /admin/system.",
+    "saved_toast": "Update settings saved."
   },
   "admin_email": {
     "title": "Email / SMTP",
@@ -532,7 +550,9 @@
       "password_reset": "Password reset",
       "twofa_required": "2FA",
       "login_alert": "Sign-in",
-      "file_quarantined": "Quarantine"
+      "file_quarantined": "Quarantine",
+      "ops_alert": "Ops alert",
+      "release_available": "Update available"
     },
     "headline": {
       "share_created": "{sender_name} sent you {file_count} file(s).",
@@ -543,6 +563,7 @@
       "twofa_required": "Two-factor authentication is required.",
       "login_alert": "Sign-in from a new device.",
       "file_quarantined": "{filename} was quarantined by antivirus.",
+      "release_available": "fileHeron {version} is available.",
       "generic": "New activity"
     }
   },

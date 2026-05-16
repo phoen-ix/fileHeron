@@ -9,5 +9,6 @@
   "account_created": "{invitee_name} ist {app_name} beigetreten",
   "login_alert": "Anmeldung von einem neuen Gerät",
   "file_quarantined": "Eine infizierte Datei wurde unter Quarantäne gestellt",
-  "smtp_test": "{app_name} · SMTP-Test"
+  "smtp_test": "{app_name} · SMTP-Test",
+  "release_available": "{app_name} {version} ist verfügbar"
 }

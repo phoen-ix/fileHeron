@@ -1,0 +1,13 @@
+{% extends "layout.html.j2" %}
+{% block body %}
+<p>Hi {{ recipient_name|default("there") }},</p>
+
+<p>A new <strong>{{ app_name }}</strong> release is available: <strong>{{ version }}</strong><br>
+(you're currently running {{ running_version }}).</p>
+
+{% if release_url %}<p><a href="{{ release_url }}">Release notes on GitHub</a></p>{% endif %}
+
+<p>You can apply the update from <strong>/admin/system</strong> on your instance.</p>
+
+<p>— {{ app_name }}</p>
+{% endblock %}

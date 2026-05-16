@@ -1,0 +1,10 @@
+Hallo {{ recipient_name|default("zusammen") }},
+
+Eine neue {{ app_name }}-Version ist verfügbar: {{ version }}
+(aktuell läuft {{ running_version }}).
+
+{% if release_url %}Release-Notes: {{ release_url }}
+
+{% endif %}Du kannst das Update unter /admin/system auf deiner Instanz anwenden.
+
+— {{ app_name }}

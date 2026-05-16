@@ -30,6 +30,10 @@ from ...schemas.motd_settings import (
     MotdSettingsResponse,
     UpdateMotdSettingsRequest,
 )
+from ...schemas.updates_settings import (
+    UpdateUpdatesSettingsRequest,
+    UpdatesSettingsResponse,
+)
 from ...schemas.public_link import (
     PublicLinkAllowedGroup,
     PublicLinkAllowedUser,
@@ -343,6 +347,70 @@ def get_motd_settings(
     return MotdSettingsResponse(
         enabled=settings_svc.get_bool(db, settings_svc.Keys.MOTD_ENABLED, default=False),
         text=settings_svc.get(db, settings_svc.Keys.MOTD_TEXT) or "",
+    )
+
+
+_DEFAULT_UPDATES_API_URL = (
+    "https://api.github.com/repos/phoen-ix/fileHeron/releases/latest"
+)
+
+
+@router.get("/settings/updates", response_model=UpdatesSettingsResponse)
+def get_updates_settings(
+    db: Session = Depends(get_db),
+    _admin: User = Depends(get_current_admin),
+) -> UpdatesSettingsResponse:
+    """Admin-editable update-check settings: where to poll + how often."""
+    return UpdatesSettingsResponse(
+        api_url=settings_svc.get(db, settings_svc.Keys.UPDATES_API_URL)
+        or _DEFAULT_UPDATES_API_URL,
+        check_mode=(
+            settings_svc.get(db, settings_svc.Keys.UPDATES_CHECK_MODE) or "auto"
+        ),  # type: ignore[arg-type]
+    )
+
+
+@router.put("/settings/updates", response_model=UpdatesSettingsResponse)
+def update_updates_settings(
+    payload: UpdateUpdatesSettingsRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin),
+) -> UpdatesSettingsResponse:
+    """Admin-only PUT. URL must be http(s)://; mode is validated by the schema."""
+    if not (
+        payload.api_url.startswith("http://")
+        or payload.api_url.startswith("https://")
+    ):
+        raise AppError(
+            400, "INVALID_URL", "api_url must start with http:// or https://"
+        )
+    settings_svc.set_value(
+        db,
+        key=settings_svc.Keys.UPDATES_API_URL,
+        value=payload.api_url,
+        actor=admin,
+        request=request,
+    )
+    settings_svc.set_value(
+        db,
+        key=settings_svc.Keys.UPDATES_CHECK_MODE,
+        value=payload.check_mode,
+        actor=admin,
+        request=request,
+    )
+    record_audit_event(
+        db,
+        event_type=AuditEventType.updates_settings_changed,
+        actor_user_id=admin.id,
+        target_type="settings",
+        target_id="updates",
+        metadata={"check_mode": payload.check_mode, "url_changed": True},
+        request=request,
+    )
+    db.commit()
+    return UpdatesSettingsResponse(
+        api_url=payload.api_url, check_mode=payload.check_mode
     )
 
 

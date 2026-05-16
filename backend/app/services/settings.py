@@ -65,6 +65,12 @@ class Keys:
     # the create-share form. When the sender doesn't override the field,
     # this kv decides whether `share_created` notifications fan out.
     SHARE_NOTIFY_RECIPIENTS_DEFAULT = "share.notify_recipients_default"  # boolean
+    # Phase 5 self-update: configurable update-check. URL is the full
+    # GitHub-compatible releases endpoint a fork operator can repoint
+    # at their own repo; mode is 'auto' (poll once every 24h) or
+    # 'manual' (only when admin clicks Check now).
+    UPDATES_API_URL = "updates.api_url"        # plain string
+    UPDATES_CHECK_MODE = "updates.check_mode"  # 'auto' | 'manual'
 
 
 _ENCRYPTED_KEYS: set[str] = {Keys.SMTP_PASSWORD}

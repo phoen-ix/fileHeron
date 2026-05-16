@@ -50,6 +50,11 @@ class NotificationCategory(str, enum.Enum):
     # cron_failed / av_unhealthy / smtp_failing / dispatch_failed. In-app
     # only — admins don't have stored plaintext email in this design.
     ops_alert = "ops_alert"
+    # Phase 5: fired when the release-check cron (or the on-demand button)
+    # detects a new upstream release. Admin-only at the dispatch site;
+    # default channel is `both` so admins get the email too without
+    # opening the app.
+    release_available = "release_available"
 
 
 def _utcnow() -> datetime:

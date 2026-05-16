@@ -15,8 +15,8 @@ services:
       MYSQL_USER: ${DB_USER:-fileheron_app}
       MYSQL_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
     volumes:
-      - ./data/db:/var/lib/mysql
-      - ./docker/mariadb/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ${COMPOSE_HOST_ROOT:-${PWD:-/opt/fileHeron}}/data/db:/var/lib/mysql
+      - ${COMPOSE_HOST_ROOT:-${PWD:-/opt/fileHeron}}/docker/mariadb/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     networks: [internal]
     healthcheck:
       test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
@@ -42,7 +42,7 @@ services:
     # rather than silently breaking the per-IP login lockout.
     command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy noeviction
     volumes:
-      - ./data/redis:/data
+      - ${COMPOSE_HOST_ROOT:-${PWD:-/opt/fileHeron}}/data/redis:/data
     networks: [internal]
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
@@ -116,13 +116,13 @@ services:
       QUARANTINE_DIR: ${QUARANTINE_DIR:-/data/quarantine}
       TUS_PUBLIC_BASE: ${TUS_PUBLIC_BASE:-/uploads/}
     volumes:
-      - ./data/files:/data/files
-      - ./data/uploads:/data/uploads
-      - ./data/quarantine:/data/quarantine
+      - ${COMPOSE_HOST_ROOT:-${PWD:-/opt/fileHeron}}/data/files:/data/files
+      - ${COMPOSE_HOST_ROOT:-${PWD:-/opt/fileHeron}}/data/uploads:/data/uploads
+      - ${COMPOSE_HOST_ROOT:-${PWD:-/opt/fileHeron}}/data/quarantine:/data/quarantine
       # Shared with the updater-shim. Backend writes update requests
       # to /state/current_job.json; shim polls + spawns the executor.
       # No HMAC/HTTP between backend and shim — the file IS the message.
-      - ./data/updater:/state
+      - ${COMPOSE_HOST_ROOT:-${PWD:-/opt/fileHeron}}/data/updater:/state
     depends_on:
       db:
         condition: service_healthy
@@ -155,10 +155,10 @@ services:
     cpus: ${CLAMAV_CPUS:-1.0}
     volumes:
       # Read-only access to finalized files for scanning.
-      - ./data/files:/data/files:ro
+      - ${COMPOSE_HOST_ROOT:-${PWD:-/opt/fileHeron}}/data/files:/data/files:ro
       # Quarantine dir: writeable so the backend (mounted at the same path)
       # can move infected files into a path the worker container shares.
-      - ./data/quarantine:/data/quarantine:rw
+      - ${COMPOSE_HOST_ROOT:-${PWD:-/opt/fileHeron}}/data/quarantine:/data/quarantine:rw
       # Signature DB persists across container restarts.
       - clamav-defs:/var/lib/clamav
     networks: [internal]
@@ -205,9 +205,9 @@ services:
       CLAMAV_PORT: ${CLAMAV_PORT:-3310}
       AV_SKIP: ${AV_SKIP:-false}
     volumes:
-      - ./data/files:/data/files
-      - ./data/uploads:/data/uploads
-      - ./data/quarantine:/data/quarantine
+      - ${COMPOSE_HOST_ROOT:-${PWD:-/opt/fileHeron}}/data/files:/data/files
+      - ${COMPOSE_HOST_ROOT:-${PWD:-/opt/fileHeron}}/data/uploads:/data/uploads
+      - ${COMPOSE_HOST_ROOT:-${PWD:-/opt/fileHeron}}/data/quarantine:/data/quarantine
     depends_on:
       db:
         condition: service_healthy
@@ -258,7 +258,7 @@ services:
       - "-behind-proxy"
       - "-disable-cors"  # CORS is handled by the front-facing proxy/Vite
     volumes:
-      - ./data/uploads:/data/uploads
+      - ${COMPOSE_HOST_ROOT:-${PWD:-/opt/fileHeron}}/data/uploads:/data/uploads
     networks: [internal]
     depends_on:
       backend:
@@ -329,7 +329,7 @@ services:
       GHCR_OWNER: phoen-ix
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - ./data/updater:/state
+      - ${COMPOSE_HOST_ROOT:-${PWD:-/opt/fileHeron}}/data/updater:/state
     networks: [internal]
     logging:
       driver: json-file

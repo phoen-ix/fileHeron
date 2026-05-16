@@ -195,10 +195,20 @@ def main() -> int:
             log_line(f"WARN rollback-target write failed: {e}")
 
     write_job_field(status="restarting")
+    # COMPOSE_HOST_ROOT is set by the shim to the host-absolute path
+    # of the compose project. Without it, compose would substitute
+    # ${PWD} = `/workspace` (the executor's view) into the bind-mount
+    # sources, and the docker daemon would auto-create shadow data
+    # dirs at `/workspace/data/*` on the host — silently forking the
+    # data layer. With it, mounts resolve to the canonical host paths.
+    compose_env = {"FH_TAG": target_tag}
+    host_root = os.environ.get("COMPOSE_HOST_ROOT")
+    if host_root:
+        compose_env["COMPOSE_HOST_ROOT"] = host_root
     if (
         run_capture(
             ["docker", "compose", "-f", str(COMPOSE_FILE), "up", "-d"] + SERVICES,
-            env={"FH_TAG": target_tag},
+            env=compose_env,
         )
         != 0
     ):

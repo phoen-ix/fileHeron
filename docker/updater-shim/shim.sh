@@ -99,6 +99,13 @@ while true; do
             log "spawning executor for $target_tag"
             container_name="${COMPOSE_PROJECT}-executor-$(date +%s)"
             exit_code=0
+            # COMPOSE_HOST_ROOT is the critical bit: compose substitutes
+            # this into the bind-mount sources so the daemon resolves
+            # them against the HOST filesystem (the host's compose dir)
+            # rather than against the executor container's /workspace.
+            # Without it, every relative `./data/X` mount would auto-
+            # create empty shadow dirs at `/workspace/data/X` on the
+            # host and silently fork the data layer.
             docker run --rm \
                 --name "$container_name" \
                 --network "$NETWORK_NAME" \
@@ -106,6 +113,7 @@ while true; do
                 -v "$HOST_WORKSPACE:/workspace" \
                 -v "$HOST_STATE:/state" \
                 -e "COMPOSE_PROJECT_NAME=$COMPOSE_PROJECT" \
+                -e "COMPOSE_HOST_ROOT=$HOST_WORKSPACE" \
                 -e "GHCR_OWNER=$GHCR_OWNER" \
                 "$executor_image" \
                 || exit_code=$?

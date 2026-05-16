@@ -32,12 +32,17 @@ jobs:
             dockerfile: docker/backend/Dockerfile
           - image: fileheron-frontend
             dockerfile: docker/frontend/Dockerfile
-          - image: fileheron-updater
-            # Phase 4: self-update sidecar. Pinned to the same SemVer as
-            # the rest of the stack so a rollback rolls the updater too.
-            # The updater can't update itself — operators must redeploy
-            # it the old way (scripts/deploy.sh) for updater changes.
-            dockerfile: docker/updater/Dockerfile
+          - image: fileheron-updater-shim
+            # v1.0.0: tiny perpetual shim (~50 lines bash). Polls the
+            # state file, spawns the matching executor image. Designed
+            # to never need updating — no business logic.
+            dockerfile: docker/updater-shim/Dockerfile
+          - image: fileheron-updater-executor
+            # v1.0.0: ephemeral worker. Spawned by the shim per update,
+            # pulls images + runs `compose up -d` + exits. Can change
+            # freely between releases — the shim always pulls the
+            # matching version per request.
+            dockerfile: docker/updater-executor/Dockerfile
     steps:
       - uses: actions/checkout@v4
 
@@ -114,9 +119,10 @@ jobs:
             - `ghcr.io/phoen-ix/fileheron-backend:${{ github.ref_name }}`
             - `ghcr.io/phoen-ix/fileheron-worker:${{ github.ref_name }}`
             - `ghcr.io/phoen-ix/fileheron-frontend:${{ github.ref_name }}`
-            - `ghcr.io/phoen-ix/fileheron-updater:${{ github.ref_name }}`
+            - `ghcr.io/phoen-ix/fileheron-updater-shim:${{ github.ref_name }}`
+            - `ghcr.io/phoen-ix/fileheron-updater-executor:${{ github.ref_name }}`
 
             Set `FH_TAG=${{ github.ref_name }}` in your `.env` and
             `docker compose pull && docker compose up -d` to roll
-            forward. Or click **Update** in `/admin/system` (Phase 4+).
+            forward. Or click **Update** in `/admin/system`.
           append_body: true

@@ -17,6 +17,18 @@
     "display_name": "Anzeigename",
     "language": "Sprache"
   },
+  "setup": {
+    "title": "Willkommen bei fileHeron",
+    "intro": "Erstelle das erste Admin-Konto für diese Instanz. Anschließend meldest du dich normal an — dieser Assistent sperrt sich danach selbst.",
+    "display_name_help": "Wird auf Freigaben und in E-Mails angezeigt. Kannst du später ändern.",
+    "password_help": "Mindestens 8 Zeichen. Wähle etwas Sicheres.",
+    "password_confirm": "Passwort bestätigen",
+    "submit": "Admin-Konto erstellen",
+    "error": {
+      "password_mismatch": "Passwörter stimmen nicht überein.",
+      "password_too_short": "Passwort muss mindestens 8 Zeichen lang sein."
+    }
+  },
   "shortcuts": {
     "title": "Tastenkürzel",
     "hint": "Außerhalb von Textfeldern drücken. ? blendet diese Liste ein/aus.",

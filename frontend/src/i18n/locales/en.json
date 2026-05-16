@@ -17,6 +17,18 @@
     "display_name": "Display name",
     "language": "Language"
   },
+  "setup": {
+    "title": "Welcome to fileHeron",
+    "intro": "Create the first admin account for this instance. Once done, you'll sign in normally — this wizard locks itself.",
+    "display_name_help": "Shown on shares and emails. You can change it later.",
+    "password_help": "At least 8 characters. Pick something strong.",
+    "password_confirm": "Confirm password",
+    "submit": "Create admin account",
+    "error": {
+      "password_mismatch": "Passwords don't match.",
+      "password_too_short": "Password must be at least 8 characters."
+    }
+  },
   "shortcuts": {
     "title": "Keyboard shortcuts",
     "hint": "Press anywhere outside text fields. Press ? to toggle this list.",

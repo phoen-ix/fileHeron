@@ -1,112 +1,126 @@
-"""Phase 4 self-update: backend → updater HMAC bridge + admin endpoints.
+"""v1.0.0 self-update: backend writes update requests to a state file
+that the shim container polls. Replaces the v0.x HMAC-over-HTTP design.
 
-The updater runs in its own container with /var/run/docker.sock; tests
-mock the httpx layer so we never actually need it running. We focus on:
-
-- HMAC headers are computed correctly + sent
-- Password re-prompt is enforced (wrong password → 401)
-- audit_log row is written with the right event type + target_id
-- ops_alert dispatched to every non-disabled admin
-- error envelopes propagate from updater 4xx/5xx
+Tests cover:
+- apply() writes the right JSON shape to /state/current_job.json
+- apply() raises 409 when a job is in flight
+- apply(rollback) reads the rollback target file
+- get_version() reports current_tag + rollback_target + in-flight flag
+- POST /admin/system/update enforces password re-prompt + audit + admin notify
 """
 from __future__ import annotations
 
-import hashlib
-import hmac
 import json
 import os
-from typing import Any
+import tempfile
+from pathlib import Path
 
-import httpx
 import pytest
 
 from app.models.audit_log import AuditEventType, AuditLog
 from app.models.user import UserRole
 from app.services import release_apply
 
-os.environ.setdefault("UPDATER_HOOK_SECRET", "test-secret-32-bytes-of-entropy-xxxxxxxxxxxx")
 
-
-# ---------------------------------------------------------------------------
-# httpx stubs — mirror Phase 3 release_check pattern.
-# ---------------------------------------------------------------------------
-
-
-class _StubResponse:
-    def __init__(self, payload: dict, status_code: int = 200):
-        self._payload = payload
-        self.status_code = status_code
-
-    def raise_for_status(self):
-        if self.status_code >= 400:
-            raise httpx.HTTPStatusError("stub", request=None, response=None)  # type: ignore[arg-type]
-
-    def json(self):
-        return self._payload
-
-
-class _StubClient:
-    def __init__(self, response_map: dict[tuple[str, str], _StubResponse] | _StubResponse | Exception):
-        self._map = response_map
-        self.last_post: dict[str, Any] | None = None
-
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, *a):
-        return None
-
-    def _resolve(self, method: str, url: str) -> _StubResponse:
-        if isinstance(self._map, _StubResponse):
-            return self._map
-        if isinstance(self._map, Exception):
-            raise self._map
-        for (m, suffix), resp in self._map.items():
-            if m == method and url.endswith(suffix):
-                return resp
-        raise AssertionError(f"unmatched stub for {method} {url}")
-
-    async def get(self, url, **kw):
-        return self._resolve("GET", url)
-
-    async def post(self, url, content=None, headers=None, **kw):
-        self.last_post = {"url": url, "content": content, "headers": headers}
-        return self._resolve("POST", url)
-
-
-@pytest.mark.asyncio
-async def test_apply_signs_with_hmac(monkeypatch):
-    stub = _StubClient(
-        _StubResponse({"job_id": "abc", "action": "update", "target_tag": "v0.3.0"})
+@pytest.fixture(autouse=True)
+def _isolated_state_dir(monkeypatch, tmp_path):
+    """Each test gets its own /state dir so writes don't leak between tests."""
+    state_dir = tmp_path / "state"
+    state_dir.mkdir()
+    monkeypatch.setattr(release_apply, "STATE_DIR", state_dir)
+    monkeypatch.setattr(release_apply, "STATE_FILE", state_dir / "current_job.json")
+    monkeypatch.setattr(
+        release_apply, "ROLLBACK_FILE", state_dir / "rollback_target.json"
     )
-    monkeypatch.setattr(release_apply.httpx, "AsyncClient", lambda **_kw: stub)
-
-    result = await release_apply.apply(action="update", target_tag="v0.3.0")
-    assert result["job_id"] == "abc"
-    assert stub.last_post is not None
-    body = stub.last_post["content"]
-    sig = stub.last_post["headers"]["X-Updater-Sig"]
-    expected = hmac.new(
-        release_apply._secret().encode("utf-8"), body, hashlib.sha256
-    ).hexdigest()
-    assert sig == expected
+    yield
 
 
-@pytest.mark.asyncio
-async def test_apply_translates_409_in_progress(monkeypatch):
-    stub = _StubClient(
-        _StubResponse(
-            {"detail": {"code": "UPDATE_IN_PROGRESS", "job_id": "xyz"}},
-            status_code=409,
-        )
-    )
-    monkeypatch.setattr(release_apply.httpx, "AsyncClient", lambda **_kw: stub)
+def test_apply_writes_state_file():
+    """A fresh update request lands as a `pending` JSON record."""
+    result = release_apply.apply(action="update", target_tag="v1.0.1")
+    assert result["action"] == "update"
+    assert result["target_tag"] == "v1.0.1"
+    assert result["job_id"]
 
+    raw = release_apply.STATE_FILE.read_text()
+    parsed = json.loads(raw)
+    assert parsed["status"] == "pending"
+    assert parsed["target_tag"] == "v1.0.1"
+    assert parsed["action"] == "update"
+    assert parsed["id"] == result["job_id"]
+
+
+def test_apply_refuses_when_in_flight():
+    """A second apply during a pending/running job → 409 UPDATE_IN_PROGRESS."""
     from app.middleware.errors import AppError
+    release_apply.apply(action="update", target_tag="v1.0.1")
+
     with pytest.raises(AppError) as exc:
-        await release_apply.apply(action="update", target_tag="v0.3.0")
+        release_apply.apply(action="update", target_tag="v1.0.2")
     assert exc.value.status_code == 409
     assert exc.value.code == "UPDATE_IN_PROGRESS"
+
+
+def test_apply_after_healthy_succeeds():
+    """Once a job is in terminal state, a new apply replaces it."""
+    release_apply.apply(action="update", target_tag="v1.0.1")
+    # Simulate executor finishing the job.
+    state = json.loads(release_apply.STATE_FILE.read_text())
+    state["status"] = "healthy"
+    release_apply.STATE_FILE.write_text(json.dumps(state))
+
+    # New apply must succeed.
+    result = release_apply.apply(action="update", target_tag="v1.0.2")
+    assert result["target_tag"] == "v1.0.2"
+
+
+def test_rollback_reads_target_file():
+    """action=rollback uses the tag from rollback_target.json."""
+    release_apply.ROLLBACK_FILE.write_text(json.dumps({"tag": "v0.9.0"}))
+    result = release_apply.apply(action="rollback", target_tag=None)
+    assert result["target_tag"] == "v0.9.0"
+    assert result["action"] == "rollback"
+
+
+def test_rollback_without_target_raises():
+    """Rolling back when no previous version was recorded → 409."""
+    from app.middleware.errors import AppError
+    with pytest.raises(AppError) as exc:
+        release_apply.apply(action="rollback", target_tag=None)
+    assert exc.value.status_code == 409
+    assert exc.value.code == "NO_ROLLBACK_TARGET"
+
+
+def test_get_version_reports_state(monkeypatch):
+    """get_version() folds FH_TAG env + rollback_target file + job state
+    into the shape the SPA expects."""
+    monkeypatch.setenv("FH_TAG", "v1.2.3")
+    release_apply.ROLLBACK_FILE.write_text(json.dumps({"tag": "v1.2.2"}))
+
+    info = release_apply.get_version()
+    assert info["current_tag"] == "v1.2.3"
+    assert info["rollback_target"] == "v1.2.2"
+    assert info["job_in_progress"] is None
+
+    # Now mark a job in-flight; should surface its id.
+    result = release_apply.apply(action="update", target_tag="v1.2.4")
+    info2 = release_apply.get_version()
+    assert info2["job_in_progress"] == result["job_id"]
+
+
+def test_get_job_normalizes_pending_to_queued():
+    """The state file's `pending` status surfaces as `queued` to the SPA."""
+    result = release_apply.apply(action="update", target_tag="v1.0.1")
+    job = release_apply.get_job(result["job_id"])
+    assert job["state"] == "queued"
+    assert job["id"] == result["job_id"]
+
+
+def test_get_job_unknown_raises_404():
+    from app.middleware.errors import AppError
+    with pytest.raises(AppError) as exc:
+        release_apply.get_job("nope")
+    assert exc.value.status_code == 404
 
 
 @pytest.mark.asyncio
@@ -115,10 +129,9 @@ async def test_update_endpoint_requires_password(client, db, make_user, login_as
     token, cookies = await login_as("adm@test.local", "TestPassword123!")
     headers = {"Authorization": f"Bearer {token}"}
 
-    # Wrong password → 401, no updater call.
     r = await client.post(
         "/api/admin/system/update",
-        json={"password": "wrong-pw", "target_tag": "v0.3.0"},
+        json={"password": "wrong-pw", "target_tag": "v1.0.1"},
         headers=headers,
         cookies=cookies,
     )
@@ -128,28 +141,21 @@ async def test_update_endpoint_requires_password(client, db, make_user, login_as
 
 @pytest.mark.asyncio
 async def test_update_endpoint_writes_audit_and_dispatches(
-    client, db, make_user, login_as, monkeypatch
+    client, db, make_user, login_as
 ):
     admin = make_user(email="adm2@test.local", role=UserRole.admin)
-    # Second admin so the notify-all-admins fan-out actually has someone
-    # other than the actor to dispatch to.
     other_admin = make_user(email="adm3@test.local", role=UserRole.admin)
     token, cookies = await login_as("adm2@test.local", "TestPassword123!")
     headers = {"Authorization": f"Bearer {token}"}
 
-    stub = _StubClient(
-        _StubResponse({"job_id": "job-abc", "action": "update", "target_tag": "v0.3.0"})
-    )
-    monkeypatch.setattr(release_apply.httpx, "AsyncClient", lambda **_kw: stub)
-
     r = await client.post(
         "/api/admin/system/update",
-        json={"password": "TestPassword123!", "target_tag": "v0.3.0"},
+        json={"password": "TestPassword123!", "target_tag": "v1.0.1"},
         headers=headers,
         cookies=cookies,
     )
     assert r.status_code == 200, r.text
-    assert r.json()["job_id"] == "job-abc"
+    job_id = r.json()["job_id"]
 
     # Audit row exists with right type + actor + target.
     row = (
@@ -160,8 +166,8 @@ async def test_update_endpoint_writes_audit_and_dispatches(
     )
     assert row is not None
     assert row.actor_user_id == admin.id
-    assert row.target_id == "job-abc"
-    assert row.extra and row.extra.get("target_tag") == "v0.3.0"
+    assert row.target_id == job_id
+    assert row.extra and row.extra.get("target_tag") == "v1.0.1"
 
     # ops_alert fan-out wrote a notification row for the OTHER admin.
     from app.models.notification import Notification, NotificationCategory
@@ -177,18 +183,25 @@ async def test_update_endpoint_writes_audit_and_dispatches(
 
 
 @pytest.mark.asyncio
-async def test_rollback_endpoint_uses_updater_target(
-    client, db, make_user, login_as, monkeypatch
+async def test_rollback_endpoint_uses_target_file(
+    client, db, make_user, login_as
 ):
     admin = make_user(email="adm4@test.local", role=UserRole.admin)
     token, cookies = await login_as("adm4@test.local", "TestPassword123!")
     headers = {"Authorization": f"Bearer {token}"}
 
-    stub = _StubClient(
-        _StubResponse({"job_id": "job-rb", "action": "rollback", "target_tag": "v0.1.0"})
+    # No rollback target file → 409 NO_ROLLBACK_TARGET.
+    r = await client.post(
+        "/api/admin/system/rollback",
+        json={"password": "TestPassword123!"},
+        headers=headers,
+        cookies=cookies,
     )
-    monkeypatch.setattr(release_apply.httpx, "AsyncClient", lambda **_kw: stub)
+    assert r.status_code == 409, r.text
+    assert r.json()["code"] == "NO_ROLLBACK_TARGET"
 
+    # Write the file, retry.
+    release_apply.ROLLBACK_FILE.write_text(json.dumps({"tag": "v0.9.0"}))
     r = await client.post(
         "/api/admin/system/rollback",
         json={"password": "TestPassword123!"},
@@ -196,7 +209,7 @@ async def test_rollback_endpoint_uses_updater_target(
         cookies=cookies,
     )
     assert r.status_code == 200, r.text
-    assert r.json()["target_tag"] == "v0.1.0"
+    assert r.json()["target_tag"] == "v0.9.0"
 
     row = (
         db.query(AuditLog)
@@ -206,4 +219,3 @@ async def test_rollback_endpoint_uses_updater_target(
     )
     assert row is not None
     assert row.actor_user_id == admin.id
-    assert row.target_id == "job-rb"

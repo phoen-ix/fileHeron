@@ -18,6 +18,10 @@ export const useAuthStore = defineStore('auth', () => {
   const role = computed<UserRole | null>(() => user.value?.role ?? null)
   const locale = computed<Locale>(() => user.value?.locale ?? 'en')
 
+  /* True when no admin exists yet — first-time install, SPA bounces
+   * every route to /setup. Polled once during bootstrap. */
+  const setupRequired = ref(false)
+
   /* True while we're attempting a silent refresh on app boot. The router
    * uses this to defer guard decisions until we know whether a session
    * exists. */
@@ -44,9 +48,18 @@ export const useAuthStore = defineStore('auth', () => {
         user.value = resp.data
       } catch {
         user.value = null
-      } finally {
-        bootstrapping.value = false
       }
+      // Independently check whether the first-admin wizard is required.
+      // Anonymous endpoint; fail-open (treat unreachable as "not required")
+      // so dev/offline use doesn't bounce everyone to a broken /setup.
+      try {
+        const { getSetupStatus } = await import('@/api/setup')
+        const sr = await getSetupStatus()
+        setupRequired.value = sr.data.required
+      } catch {
+        setupRequired.value = false
+      }
+      bootstrapping.value = false
     })()
     return bootstrapPromise
   }
@@ -143,6 +156,7 @@ export const useAuthStore = defineStore('auth', () => {
     isAuthenticated,
     role,
     locale,
+    setupRequired,
     bootstrapping,
     bootstrap,
     login,

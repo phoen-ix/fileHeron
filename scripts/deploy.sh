@@ -32,8 +32,11 @@ FH_TAG="${FH_TAG:-latest}"
 export FH_TAG
 
 REPO_OWNER="phoen-ix"
-IMAGES=(fileheron-backend fileheron-worker fileheron-frontend fileheron-updater)
-SERVICES=(backend worker frontend updater)
+# v1.0.0: updater is now `updater-shim` (perpetual) + `updater-executor`
+# (ephemeral, never declared as a compose service — spawned ad-hoc by
+# the shim per request).
+IMAGES=(fileheron-backend fileheron-worker fileheron-frontend fileheron-updater-shim fileheron-updater-executor)
+SERVICES=(backend worker frontend updater-shim)
 
 echo "[deploy] target tag: $FH_TAG"
 echo "[deploy] pulling images from ghcr.io/$REPO_OWNER/*:$FH_TAG"
@@ -59,9 +62,12 @@ if [ "$PULL_OK" = "false" ]; then
     docker build -f docker/frontend/Dockerfile \
         --build-arg "FH_VERSION=local-$SHA" --build-arg "FH_GIT_SHA=$SHA" \
         -t "ghcr.io/$REPO_OWNER/fileheron-frontend:$FH_TAG" .
-    docker build -f docker/updater/Dockerfile \
+    docker build -f docker/updater-shim/Dockerfile \
         --build-arg "FH_VERSION=local-$SHA" --build-arg "FH_GIT_SHA=$SHA" \
-        -t "ghcr.io/$REPO_OWNER/fileheron-updater:$FH_TAG" .
+        -t "ghcr.io/$REPO_OWNER/fileheron-updater-shim:$FH_TAG" .
+    docker build -f docker/updater-executor/Dockerfile \
+        --build-arg "FH_VERSION=local-$SHA" --build-arg "FH_GIT_SHA=$SHA" \
+        -t "ghcr.io/$REPO_OWNER/fileheron-updater-executor:$FH_TAG" .
 fi
 
 echo "[deploy] rolling services"

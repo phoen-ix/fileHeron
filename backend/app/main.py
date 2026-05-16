@@ -31,6 +31,7 @@ from .routers import (
     oidc_connect,
     public,
     public_links,
+    setup,
     shares,
     tus_hooks,
     uploads,
@@ -89,6 +90,7 @@ _gate = [Depends(require_2fa_complete)]
 
 # Exempt: needs to be reachable for setup / login / health-checks.
 app.include_router(health.router)
+app.include_router(setup.router)                 # anonymous wizard for first admin
 app.include_router(auth.router)
 app.include_router(account.router)               # /me + /2fa/* must be reachable
 app.include_router(public.router)                # anonymous public-link landing

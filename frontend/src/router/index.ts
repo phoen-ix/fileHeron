@@ -21,6 +21,12 @@ const router = createRouter({
   routes: [
     /* public --------------------------------------------------------------- */
     {
+      path: '/setup',
+      name: 'setup',
+      component: () => import('@/views/Setup.vue'),
+      meta: { public: true, density: 'editorial', title: 'Set up fileHeron' },
+    },
+    {
       path: '/login',
       name: 'login',
       component: () => import('@/views/Login.vue'),
@@ -269,6 +275,15 @@ router.beforeEach(async (to, _from) => {
   // every guard call awaits the same resolution. After it settles, this
   // line is a no-op (resolved promise).
   await auth.bootstrap()
+
+  // v1.0.0 first-install: if no admin exists, every route bounces to
+  // /setup; the setup route 404s once an admin exists.
+  if (auth.setupRequired && to.name !== 'setup') {
+    return { name: 'setup' }
+  }
+  if (!auth.setupRequired && to.name === 'setup') {
+    return { name: 'login' }
+  }
 
   if (!isPublic(to) && !auth.isAuthenticated) {
     return {

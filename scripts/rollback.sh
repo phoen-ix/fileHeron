@@ -18,8 +18,8 @@ ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$ROOT"
 
 REPO_OWNER="phoen-ix"
-IMAGES=(fileheron-backend fileheron-worker fileheron-frontend fileheron-updater)
-SERVICES=(backend worker frontend updater)
+IMAGES=(fileheron-backend fileheron-worker fileheron-frontend fileheron-updater-shim fileheron-updater-executor)
+SERVICES=(backend worker frontend updater-shim)
 
 # Resolve current FH_TAG so the new :latest reflects what compose will pull.
 if [ -f .env ]; then

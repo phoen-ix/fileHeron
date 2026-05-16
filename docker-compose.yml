@@ -104,9 +104,9 @@ services:
       RATE_LIMIT_REGISTER: ${RATE_LIMIT_REGISTER:-3}
       RATE_LIMIT_API: ${RATE_LIMIT_API:-100}
       TUS_HOOK_SECRET: ${TUS_HOOK_SECRET:?TUS_HOOK_SECRET is required}
-      # Shared HMAC secret for backend → updater POSTs (Phase 4 self-update).
-      # Backend signs every /apply request; updater verifies.
-      UPDATER_HOOK_SECRET: ${UPDATER_HOOK_SECRET:?UPDATER_HOOK_SECRET is required}
+      # Surfaced so backend can show "running on vX.Y.Z" on /admin/system
+      # (the new release_apply.get_version reads this directly).
+      FH_TAG: ${FH_TAG:-latest}
       MAX_DIRECT_UPLOAD_BYTES: ${MAX_DIRECT_UPLOAD_BYTES:-104857600}
       CLAMAV_HOST: ${CLAMAV_HOST:-clamav}
       CLAMAV_PORT: ${CLAMAV_PORT:-3310}
@@ -119,6 +119,10 @@ services:
       - ./data/files:/data/files
       - ./data/uploads:/data/uploads
       - ./data/quarantine:/data/quarantine
+      # Shared with the updater-shim. Backend writes update requests
+      # to /state/current_job.json; shim polls + spawns the executor.
+      # No HMAC/HTTP between backend and shim — the file IS the message.
+      - ./data/updater:/state
     depends_on:
       db:
         condition: service_healthy
@@ -302,41 +306,31 @@ services:
         max-size: "50m"
         max-file: "3"
 
-  updater:
-    # Self-update sidecar. Owns /var/run/docker.sock so the backend
-    # never has to. Reachable ONLY from inside the `internal` network
-    # (no Traefik route, no published port, no external network).
-    # Backend → updater requests are HMAC-signed with UPDATER_HOOK_SECRET.
-    image: ghcr.io/phoen-ix/fileheron-updater:${FH_TAG:-latest}
-    container_name: ${COMPOSE_PROJECT_NAME:-fileheron}-updater
+  updater-shim:
+    # v1.0.0 architecture: tiny perpetual shim with Docker socket
+    # access. Polls /state/current_job.json (written by backend on
+    # admin Update click) and spawns the matching `updater-executor`
+    # container to do the real work. Designed to never need updating
+    # itself — ~50 lines of bash. Reachable only from the internal
+    # network (no Traefik, no published port). Trust to backend is
+    # filesystem-membership via the shared /state bind mount.
+    image: ghcr.io/phoen-ix/fileheron-updater-shim:${FH_TAG:-latest}
+    container_name: ${COMPOSE_PROJECT_NAME:-fileheron}-updater-shim
     restart: unless-stopped
-    mem_limit: ${UPDATER_MEM_LIMIT:-256m}
-    cpus: ${UPDATER_CPUS:-0.5}
+    mem_limit: ${UPDATER_SHIM_MEM_LIMIT:-128m}
+    cpus: ${UPDATER_SHIM_CPUS:-0.5}
     environment:
-      UPDATER_HOOK_SECRET: ${UPDATER_HOOK_SECRET:?UPDATER_HOOK_SECRET is required}
-      UPDATER_WORKSPACE: /workspace
-      UPDATER_STATE_FILE: /state/updater_state.json
-      UPDATER_GHCR_OWNER: phoen-ix
-      # Host-side absolute path that maps to /workspace inside this
-      # container. The self-renew helper container (which recreates
-      # this updater on update) bind-mounts from the host, so it needs
-      # the host path, not /workspace. ${PWD} is set by compose at
-      # parse time to the directory the operator ran compose from.
+      # Host-side absolute paths — the shim spawns the executor via
+      # `docker run`, which talks to the host docker daemon; mount
+      # sources need to be host paths, not container paths.
       UPDATER_HOST_WORKSPACE: ${UPDATER_HOST_WORKSPACE:-${PWD:-/opt/fileHeron}}
+      UPDATER_HOST_STATE: ${UPDATER_HOST_STATE:-${PWD:-/opt/fileHeron}/data/updater}
       COMPOSE_PROJECT_NAME: ${COMPOSE_PROJECT_NAME:-fileheron}
+      GHCR_OWNER: phoen-ix
     volumes:
-      # Read+write so we can rewrite .env's FH_TAG line after a successful
-      # update or rollback. The compose file itself is only read.
-      - .:/workspace
-      - ./data/updater:/state
       - /var/run/docker.sock:/var/run/docker.sock
+      - ./data/updater:/state
     networks: [internal]
-    healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:9000/health"]
-      interval: 15s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
     logging:
       driver: json-file
       options:

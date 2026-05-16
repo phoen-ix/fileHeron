@@ -242,9 +242,12 @@ def cron_runs(
 
 
 # ---------------------------------------------------------------------------
-# Self-update endpoints (Phase 4). Backend ↔ updater HMAC contract lives
-# in services/release_apply.py. Update/rollback share the same shape:
-# password re-prompt, audit, notify-all-admins, then forward to updater.
+# Self-update endpoints (v1.0.0 architecture). Backend writes update
+# requests to /state/current_job.json; the shim container polls that
+# file and spawns the executor. Trust is filesystem-membership in the
+# compose project; no HMAC/HTTP between backend and shim. The user-
+# facing chain (admin auth + password re-prompt + audit + notify-all-
+# admins) stays at this boundary, unchanged.
 # ---------------------------------------------------------------------------
 
 
@@ -293,26 +296,26 @@ def _dispatch_ops_to_admins(db: Session, payload: dict, link_url: str) -> None:
 
 
 @router.get("/system/update-status")
-async def update_status(_admin: User = Depends(get_current_admin)) -> dict:
+def update_status(_admin: User = Depends(get_current_admin)) -> dict:
     """Read-only: what's the updater's current state? Returns
     {current_tag, rollback_target, job_in_progress}. Frontend polls
     this on mount + after kicking off a job."""
     from ...services import release_apply
-    return await release_apply.get_version()
+    return release_apply.get_version()
 
 
 @router.get("/system/update-jobs/{job_id}")
-async def update_job(
+def update_job(
     job_id: str, _admin: User = Depends(get_current_admin)
 ) -> dict:
     """Poll a specific job. The SPA hits this on a short interval while
     `state` is one of {queued, pulling, restarting}."""
     from ...services import release_apply
-    return await release_apply.get_job(job_id)
+    return release_apply.get_job(job_id)
 
 
 @router.post("/system/update")
-async def apply_update(
+def apply_update(
     payload: UpdateApplyRequest,
     request: Request,
     db: Session = Depends(get_db),
@@ -327,7 +330,7 @@ async def apply_update(
     if not payload.target_tag:
         raise AppError(400, "INVALID_INPUT", "target_tag is required.")
 
-    result = await release_apply.apply(action="update", target_tag=payload.target_tag)
+    result = release_apply.apply(action="update", target_tag=payload.target_tag)
 
     record_audit_event(
         db,
@@ -353,7 +356,7 @@ async def apply_update(
 
 
 @router.post("/system/rollback")
-async def apply_rollback(
+def apply_rollback(
     payload: UpdateApplyRequest,
     request: Request,
     db: Session = Depends(get_db),
@@ -365,7 +368,7 @@ async def apply_rollback(
     from ...services.audit import record_audit_event
 
     _verify_password_or_401(admin, payload.password)
-    result = await release_apply.apply(action="rollback", target_tag=None)
+    result = release_apply.apply(action="rollback", target_tag=None)
 
     record_audit_event(
         db,

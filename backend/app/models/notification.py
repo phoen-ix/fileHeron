@@ -39,8 +39,11 @@ class NotificationCategory(str, enum.Enum):
     share_expiring = "share_expiring"
     public_link_downloaded = "public_link_downloaded"
     account_created = "account_created"
-    password_reset = "password_reset"
-    twofa_required = "twofa_required"
+    # Kept for parity with the rest of the categories even though the actual
+    # send goes via the direct `services/email.py::send_password_reset_email`
+    # rather than `notification.dispatch`. Slug name matches the template
+    # file `email/{locale}/reset_password.txt.j2`.
+    reset_password = "reset_password"
     login_alert = "login_alert"
     file_quarantined = "file_quarantined"
     # Ops alerts (admin-only). Single category, payload.reason discriminates

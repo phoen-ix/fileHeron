@@ -42,8 +42,7 @@ _DEFAULT_CHANNEL: dict[NotificationCategory, NotificationChannel] = {
     NotificationCategory.share_expiring: NotificationChannel.both,
     NotificationCategory.public_link_downloaded: NotificationChannel.email,
     NotificationCategory.account_created: NotificationChannel.email,
-    NotificationCategory.password_reset: NotificationChannel.email,
-    NotificationCategory.twofa_required: NotificationChannel.email,
+    NotificationCategory.reset_password: NotificationChannel.email,
     NotificationCategory.login_alert: NotificationChannel.email,
     NotificationCategory.file_quarantined: NotificationChannel.both,
     # Ops alerts: in-app only by default. On a busy system these fire in

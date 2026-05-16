@@ -10,8 +10,6 @@ const { t, locale } = useI18n()
 const { describe } = useApiError()
 
 const items = ref<AdminAuditRow[]>([])
-const total = ref(0)
-const page = ref(1)
 const pageSize = ref(50)
 const eventType = ref('')
 const targetType = ref('')
@@ -21,6 +19,14 @@ const toTs = ref('')
 
 const loading = ref(true)
 const errorMsg = ref<string | null>(null)
+
+// Cursor-based pagination. The backend gives us a `next_cursor` for
+// the next older page. To go back to a previous page we pop the stack:
+// `cursorStack` holds the cursors we used to ARRIVE at each page, so
+// the previous page is one entry back.
+const cursorStack = ref<(string | null)[]>([null])
+const currentCursor = computed(() => cursorStack.value[cursorStack.value.length - 1])
+const nextCursor = ref<string | null>(null)
 
 let searchTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -38,13 +44,14 @@ async function load() {
   loading.value = true
   errorMsg.value = null
   try {
-    const { data } = await listAuditLog({
+    const params: Parameters<typeof listAuditLog>[0] = {
       ...filterParams.value,
-      page: page.value,
       page_size: pageSize.value,
-    })
+    }
+    if (currentCursor.value !== null) params.cursor = currentCursor.value
+    const { data } = await listAuditLog(params)
     items.value = data.items
-    total.value = data.total
+    nextCursor.value = data.next_cursor
   } catch (err) {
     errorMsg.value = describe(err)
   } finally {
@@ -52,18 +59,35 @@ async function load() {
   }
 }
 
+function resetAndReload() {
+  cursorStack.value = [null]
+  nextCursor.value = null
+  void load()
+}
+
+function goNewer() {
+  if (cursorStack.value.length <= 1) return
+  cursorStack.value = cursorStack.value.slice(0, -1)
+  void load()
+}
+
+function goOlder() {
+  if (!nextCursor.value) return
+  cursorStack.value = [...cursorStack.value, nextCursor.value]
+  void load()
+}
+
 function debouncedReload() {
   if (searchTimer) clearTimeout(searchTimer)
   searchTimer = setTimeout(() => {
-    page.value = 1
-    void load()
+    resetAndReload()
   }, 220)
 }
 
 watch([eventType, targetType, targetId, fromTs, toTs], debouncedReload)
-watch(page, load)
 
 const csvHref = computed(() => auditCsvUrl(filterParams.value))
+const isFirstPage = computed(() => cursorStack.value.length <= 1)
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleString(
@@ -140,20 +164,17 @@ onMounted(load)
       </tbody>
     </table>
 
-    <div v-if="total > pageSize" class="pager">
-      <button type="button" class="fh-btn-text" :disabled="page === 1" @click="page -= 1">
-        ← {{ t('admin_users.prev') }}
+    <div v-if="!isFirstPage || nextCursor" class="pager">
+      <button type="button" class="fh-btn-text" :disabled="isFirstPage" @click="goNewer">
+        ← {{ t('admin_audit.pager.newer') }}
       </button>
-      <span class="fh-mono page-info">
-        {{ t('admin_users.page_of', { page, total: Math.ceil(total / pageSize) }) }}
-      </span>
       <button
         type="button"
         class="fh-btn-text"
-        :disabled="page * pageSize >= total"
-        @click="page += 1"
+        :disabled="!nextCursor"
+        @click="goOlder"
       >
-        {{ t('admin_users.next') }} →
+        {{ t('admin_audit.pager.older') }} →
       </button>
     </div>
   </div>

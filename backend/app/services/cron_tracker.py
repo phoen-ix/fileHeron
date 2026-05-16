@@ -34,6 +34,7 @@ from ..models.cron_run import CronRun, CronRunStatus
 from ..models.notification import NotificationCategory
 from ..models.user import User, UserRole
 from ..redis_client import get_redis
+from . import sse as sse_svc
 from .audit import record_audit_event
 from .notification import dispatch
 
@@ -179,6 +180,16 @@ def track_cron(job_name: str) -> Callable[[Callable[..., Awaitable[Any]]], Calla
                     )
                     _maybe_alert_admins(db2, job_name, str(exc))
                     db2.commit()
+                    # Push to admin-system viewers so the table refreshes
+                    # without waiting for the manual Refresh button.
+                    sse_svc.publish_admin_sync({
+                        "event": "cron_run",
+                        "data": {
+                            "job_name": job_name,
+                            "status": "failure",
+                            "duration_ms": duration_ms,
+                        },
+                    })
                 except Exception:
                     db2.rollback()
                     logger.exception("cron_tracker: failure-path write failed for %s", job_name)
@@ -204,6 +215,14 @@ def track_cron(job_name: str) -> Callable[[Callable[..., Awaitable[Any]]], Calla
                 logger.exception("cron_tracker: success-path write failed for %s", job_name)
             finally:
                 db3.close()
+            sse_svc.publish_admin_sync({
+                "event": "cron_run",
+                "data": {
+                    "job_name": job_name,
+                    "status": "success",
+                    "duration_ms": duration_ms,
+                },
+            })
             return result
 
         return _wrapper

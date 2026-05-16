@@ -22,6 +22,11 @@ class AdminUserItem(APIBaseModel):
     # role changes.
     requires_2fa: bool
     quota_bytes: int | None
+    # Live Redis quota counter (kept honest by the hourly
+    # workers/quota_reconcile.py cron). Useful for spotting "who's
+    # eating disk" on the /admin/users list without drilling into
+    # the file-history view.
+    storage_used_bytes: int
     created_at: datetime
     last_login_at: datetime | None
     has_2fa: bool
@@ -73,9 +78,16 @@ class AdminAuditRow(APIBaseModel):
 
 class AdminAuditResponse(APIBaseModel):
     items: list[AdminAuditRow]
+    # Legacy offset fields. Meaningful only when the caller used
+    # ?page=… (no cursor). When the caller follows a `next_cursor`
+    # link, `total` reflects only the matching count above the cursor
+    # and `page` is 1.
     total: int
     page: int
     page_size: int
+    # Opaque cursor for the next-older page. Null when the current page
+    # is the last one in the result set.
+    next_cursor: str | None = None
 
 
 # ---------------------------------------------------------------------------

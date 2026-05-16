@@ -76,8 +76,22 @@ def public_config(db: Session = Depends(get_db)) -> dict:
                 "preset": p.preset.value,
             }
         )
-    return {
+    # Surface the admin-set login banner if enabled + non-empty. The
+    # anonymous SPA login view renders it above the form. Stays absent
+    # from the response when disabled so the SPA doesn't render an
+    # empty notice.
+    from ..services import settings as settings_svc
+    motd: dict | None = None
+    if settings_svc.get_bool(db, settings_svc.Keys.MOTD_ENABLED, default=False):
+        text = (settings_svc.get(db, settings_svc.Keys.MOTD_TEXT) or "").strip()
+        if text:
+            motd = {"text": text}
+
+    body: dict = {
         "app_name": settings.APP_NAME,
         "default_locale": "en",
         "providers": providers,
     }
+    if motd is not None:
+        body["motd"] = motd
+    return body

@@ -356,6 +356,10 @@ export interface AdminUserItem {
    * column was dropped because it wasn't kept consistent. */
   requires_2fa: boolean
   quota_bytes: number | null
+  /** Live Redis quota counter — kept honest by the hourly
+   * `quota_reconcile` cron. Useful for spotting who's eating disk on
+   * the /admin/users list without drilling into file history. */
+  storage_used_bytes: number
   created_at: string
   last_login_at: string | null
   has_2fa: boolean
@@ -447,6 +451,8 @@ export interface AdminAuditResponse {
   total: number
   page: number
   page_size: number
+  /** Opaque cursor for the next-older page; null on the last page. */
+  next_cursor: string | null
 }
 
 export interface ShareRecipientRef {

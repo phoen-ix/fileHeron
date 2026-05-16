@@ -31,6 +31,7 @@ def _has_2fa(db: Session, user_id: int) -> bool:
 
 
 def _to_user_item(db: Session, u: User) -> AdminUserItem:
+    from ...services import quota as quota_svc
     from ...services import twofa_policy as twofa_policy_svc
 
     return AdminUserItem(
@@ -41,6 +42,7 @@ def _to_user_item(db: Session, u: User) -> AdminUserItem:
         is_disabled=u.is_disabled,
         requires_2fa=twofa_policy_svc.is_2fa_required(db, u),
         quota_bytes=u.quota_bytes,
+        storage_used_bytes=quota_svc.used_bytes(user_id=u.id),
         created_at=u.created_at,
         last_login_at=u.last_login_at,
         has_2fa=_has_2fa(db, u.id),

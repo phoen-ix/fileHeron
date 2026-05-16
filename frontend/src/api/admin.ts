@@ -47,6 +47,27 @@ export function listUsers(params: {
   return api.get<AdminUserListResponse>('/admin/users', { params })
 }
 
+// --- MOTD ----------------------------------------------------------------
+
+export interface MotdSettingsResponse {
+  enabled: boolean
+  text: string
+}
+
+export interface UpdateMotdSettingsRequest {
+  enabled: boolean
+  text: string
+}
+
+export function getMotdSettings() {
+  return api.get<MotdSettingsResponse>('/admin/settings/motd')
+}
+
+export function updateMotdSettings(payload: UpdateMotdSettingsRequest) {
+  return api.put<MotdSettingsResponse>('/admin/settings/motd', payload)
+}
+
+
 // --- System / ops view (operational audit) -------------------------------
 
 export interface CronRunDTO {
@@ -139,6 +160,7 @@ export function listAuditLog(params: {
   to?: string
   page?: number
   page_size?: number
+  cursor?: string
 } = {}) {
   return api.get<AdminAuditResponse>('/admin/audit-log', { params })
 }

@@ -11,8 +11,10 @@ export interface PublicProvider {
 export interface PublicConfigResponse {
   app_name: string
   default_locale: 'en' | 'de'
-  /** Phase 10: one entry per enabled, usable OIDC provider. */
+  /** One entry per enabled, usable OIDC provider. */
   providers: PublicProvider[]
+  /** Admin-set login-page banner. Absent when disabled or text is empty. */
+  motd?: { text: string }
 }
 
 export function getPublicConfig() {

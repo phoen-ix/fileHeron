@@ -37,6 +37,13 @@ def _channel(user_id: int) -> str:
     return f"fh:sse:{user_id}"
 
 
+# Shared admin channel — every admin watching /admin/system subscribes
+# to the same Redis pubsub key. Producers (cron_tracker on success
+# and failure, ops_alert dispatch) publish here so the view auto-
+# refreshes without polling.
+_ADMIN_CHANNEL = "fh:sse:admin-system"
+
+
 def _redis() -> aioredis.Redis:
     return aioredis.Redis(
         host=settings.REDIS_HOST, port=settings.REDIS_PORT, decode_responses=True
@@ -96,6 +103,80 @@ def publish_sync(user_id: int, event: dict) -> None:
             user_id,
             exc_info=True,
         )
+
+
+async def publish_admin(event: dict) -> None:
+    """Fan-out to admins watching the system view. Fire-and-forget."""
+    payload = json.dumps(event)
+    r = _redis()
+    try:
+        await r.publish(_ADMIN_CHANNEL, payload)
+    finally:
+        await r.aclose()
+
+
+def publish_admin_sync(event: dict) -> None:
+    """Sync wrapper for the admin channel — mirrors `publish_sync`'s
+    loop-aware behavior so callers in worker / sync contexts can both
+    invoke it without ceremony."""
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+    if loop is None:
+        try:
+            asyncio.run(publish_admin(event))
+        except Exception:
+            logger.warning("admin SSE publish failed", exc_info=True)
+        return
+    try:
+        _track_publish_task(loop.create_task(publish_admin(event)))
+    except Exception:
+        logger.warning("admin SSE publish failed (loop variant)", exc_info=True)
+
+
+async def stream_admin_events() -> AsyncIterator[bytes]:
+    """SSE generator for `/api/admin/system/stream`. Same 60s TTL +
+    keepalive shape as `stream_for_user`, just on the shared admin
+    channel. Each frame is an `event:` line + a `data:` JSON line; the
+    admin SPA reacts by re-fetching `getSystemStatus()` rather than
+    reconstructing the table from incremental events."""
+    r = _redis()
+    pubsub = r.pubsub()
+    await pubsub.subscribe(_ADMIN_CHANNEL)
+
+    deadline = asyncio.get_event_loop().time() + CONNECTION_TTL_SEC
+    try:
+        while True:
+            now = asyncio.get_event_loop().time()
+            if now >= deadline:
+                yield b": close\n\n"
+                return
+            timeout = max(0.5, min(KEEPALIVE_SEC, deadline - now))
+            msg = await pubsub.get_message(
+                ignore_subscribe_messages=True, timeout=timeout
+            )
+            if msg is None:
+                yield b": keepalive\n\n"
+                continue
+            data = msg.get("data")
+            if not isinstance(data, str):
+                continue
+            try:
+                event = json.loads(data)
+            except json.JSONDecodeError:
+                continue
+            line = f"event: {event.get('event', 'admin')}\n"
+            payload = event.get("data") or event
+            line += f"data: {json.dumps(payload, separators=(',', ':'))}\n\n"
+            yield line.encode("utf-8")
+    finally:
+        try:
+            await pubsub.unsubscribe(_ADMIN_CHANNEL)
+            await pubsub.aclose()
+        except Exception:
+            pass
+        await r.aclose()
 
 
 async def stream_for_user(user_id: int, last_event_id: int | None = None) -> AsyncIterator[bytes]:

@@ -27,6 +27,15 @@ export function expireShareNow(shareId: string) {
   return api.post<ShareResponse>(`/shares/${shareId}/expire`)
 }
 
+export interface BulkExpireResult {
+  expired: string[]
+  failed: { id: string; code: string; message: string }[]
+}
+
+export function bulkExpireShares(shareIds: string[]) {
+  return api.post<BulkExpireResult>('/shares/bulk-expire', { share_ids: shareIds })
+}
+
 export interface ListSharesParams {
   box: 'outbox' | 'inbox'
   q?: string

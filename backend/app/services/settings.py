@@ -40,6 +40,12 @@ class Keys:
     SMTP_FROM_NAME = "smtp.from_name"
     SMTP_TLS_MODE = "smtp.tls_mode"           # 'implicit' | 'starttls' | 'none'
     HOME_PAGE_ENABLED = "home_page.enabled"   # boolean: 'true' / 'false'
+    # Login-page MOTD banner. When MOTD_ENABLED is true and MOTD_TEXT is
+    # non-empty, /api/config-public surfaces both so the anonymous SPA
+    # login view renders a notice. Plain text, no Markdown (kept simple
+    # to avoid an HTML sanitizer dependency on the login surface).
+    MOTD_ENABLED = "motd.enabled"             # boolean
+    MOTD_TEXT = "motd.text"                   # plaintext, max ~500 chars
     # Admin-editable site URL. When set, overrides the ``APP_URL`` env
     # var for every user-facing URL builder (emails, public links,
     # notification link_url). WebAuthn RP origin + OIDC redirect URI

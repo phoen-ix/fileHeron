@@ -3,7 +3,9 @@ import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { getSystemStatus, type SystemStatusResponse } from '@/api/admin'
+import { getStreamToken } from '@/api/notifications'
 import { useApiError } from '@/composables/useApiError'
+import { useSSE } from '@/composables/useSSE'
 
 const { t, locale } = useI18n()
 const { describe } = useApiError()
@@ -12,6 +14,7 @@ const status = ref<SystemStatusResponse | null>(null)
 const loading = ref(true)
 const errorMsg = ref<string | null>(null)
 const refreshedAt = ref<Date | null>(null)
+const liveConnected = ref(false)
 
 async function load() {
   loading.value = true
@@ -27,7 +30,41 @@ async function load() {
   }
 }
 
-onMounted(load)
+// Debounce so a burst of cron events doesn't fire N reloads in a
+// single tick (the next cron run-finished event arrives before this
+// reload's response lands).
+let reloadTimer: ReturnType<typeof setTimeout> | null = null
+function scheduleReload() {
+  if (reloadTimer) clearTimeout(reloadTimer)
+  reloadTimer = setTimeout(() => {
+    reloadTimer = null
+    void load()
+  }, 500)
+}
+
+const sse = useSSE({
+  async url() {
+    const { data } = await getStreamToken()
+    return `/api/admin/system/stream?token=${encodeURIComponent(data.token)}`
+  },
+  onMessage() {
+    // We don't try to reconstruct the table from the event payload —
+    // simpler to re-fetch the whole status and let the existing
+    // render path do its thing.
+    scheduleReload()
+  },
+  onOpen() {
+    liveConnected.value = true
+  },
+  onError() {
+    liveConnected.value = false
+  },
+})
+
+onMounted(() => {
+  void load()
+  sse.start()
+})
 
 function fmtTime(iso: string | null): string {
   if (!iso) return '—'

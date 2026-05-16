@@ -17,6 +17,18 @@
     "display_name": "Anzeigename",
     "language": "Sprache"
   },
+  "shortcuts": {
+    "title": "Tastenkürzel",
+    "hint": "Außerhalb von Textfeldern drücken. ? blendet diese Liste ein/aus.",
+    "row": {
+      "focus_search": "Suchfeld auf dieser Seite fokussieren",
+      "new_share": "Neue Freigabe starten",
+      "goto_inbox": "Zum Posteingang",
+      "goto_outbox": "Zum Postausgang",
+      "goto_account": "Zum Konto",
+      "toggle_cheatsheet": "Diese Liste anzeigen / verbergen"
+    }
+  },
   "errors": {
     "INVALID_CREDENTIALS": "E-Mail und Passwort stimmen nicht überein.",
     "TOTP_REQUIRED": "Bitte gib den sechsstelligen Code aus deiner Authenticator-App ein.",
@@ -85,6 +97,7 @@
     "use_recovery": "Stattdessen einen Wiederherstellungscode verwenden",
     "use_passkey": "Stattdessen Passkey verwenden",
     "passkey_cancelled": "Passkey-Eingabe abgebrochen.",
+    "motd_aria": "Hinweis zur Website",
     "use_totp_back": "Zurück zum Authenticator-Code",
     "recovery_label": "Wiederherstellungscode",
     "recovery_help": "Einer deiner Backup-Codes (Format XXXX-XXXX).",
@@ -258,6 +271,16 @@
     "toggle_label": "Empfänger standardmäßig benachrichtigen, wenn eine neue Freigabe erstellt wird",
     "toggle_help": "Wenn aktiv, ist die Checkbox vorausgewählt und es werden `share_created`-E-Mails an direkte Empfänger sowie an jedes aktive Mitglied jeder empfangenden Gruppe verschickt. Wenn deaktiviert, muss der Absender pro Freigabe explizit zustimmen.",
     "saved_toast": "Freigabe-Voreinstellungen gespeichert."
+  },
+  "admin_motd": {
+    "title": "Login-Banner (MOTD)",
+    "intro": "Optionaler Hinweis auf der öffentlichen Anmeldeseite. Geeignet für geplante Wartungen, Onboarding-Infos oder alles, was jeder Besucher vor der Anmeldung sehen soll. Reiner Text, max. 500 Zeichen.",
+    "toggle_label": "Banner auf der Anmeldeseite anzeigen",
+    "toggle_help": "Wenn deaktiviert, wird das Banner unabhängig vom Text unten ausgeblendet.",
+    "text_label": "Banner-Text",
+    "text_placeholder": "Geplante Wartung Samstag 14:00 UTC — ca. 5 Minuten Ausfall erwartet.",
+    "text_help": "Noch {remaining} Zeichen frei.",
+    "saved_toast": "Login-Banner gespeichert."
   },
   "admin_email": {
     "title": "E-Mail / SMTP",
@@ -511,6 +534,7 @@
       "role": "Rolle",
       "status": "Status",
       "2fa": "2FA",
+      "storage": "Speicher",
       "created": "Erstellt",
       "last_login": "Zuletzt angemeldet"
     },
@@ -633,7 +657,11 @@
       "ip": "IP",
       "request": "Req"
     },
-    "actor_deleted": "(gelöscht)"
+    "actor_deleted": "(gelöscht)",
+    "pager": {
+      "older": "Älter",
+      "newer": "Neuer"
+    }
   },
   "account": {
     "title": "Konto",
@@ -1005,6 +1033,24 @@
       "inbox": {
         "title": "Noch nichts empfangen.",
         "subtitle": "An dich gesendete Freigaben erscheinen hier."
+      }
+    },
+    "bulk": {
+      "select_all_aria": "Alle aktiven Freigaben auf dieser Seite auswählen",
+      "select_row_aria": "Diese Freigabe auswählen",
+      "selected": "{n} ausgewählt",
+      "action": "Jetzt ablaufen lassen",
+      "clear": "Aufheben",
+      "bar_aria": "Sammel-Aktionen",
+      "confirm": {
+        "title": "Ausgewählte Freigaben ablaufen lassen?",
+        "body": "{n} Freigabe(n) werden sofort beendet. Die Dateien dieser Freigaben werden endgültig von der Festplatte gelöscht. Das lässt sich nicht rückgängig machen.",
+        "action": "Jetzt ablaufen lassen"
+      },
+      "toast": {
+        "all_expired": "{n} Freigabe(n) beendet.",
+        "partial": "{ok} beendet, {fail} fehlgeschlagen (wahrscheinlich bereits geänderter Status).",
+        "all_failed": "Keine der ausgewählten Freigaben konnte beendet werden."
       }
     }
   },

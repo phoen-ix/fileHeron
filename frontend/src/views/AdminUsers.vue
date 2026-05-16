@@ -98,6 +98,18 @@ function formatDate(iso: string | null): string {
   )
 }
 
+function formatBytes(n: number | null): string {
+  if (!n) return '0'
+  const units = ['B', 'KB', 'MB', 'GB', 'TB']
+  let v = n
+  let i = 0
+  while (v >= 1024 && i < units.length - 1) {
+    v /= 1024
+    i += 1
+  }
+  return `${v.toFixed(v >= 100 || i === 0 ? 0 : 1)} ${units[i]}`
+}
+
 // --- Pending invites section ---------------------------------------------
 
 const invites = ref<AdminInviteItem[]>([])
@@ -427,6 +439,7 @@ onMounted(() => {
           <th>{{ t('admin_users.col.role') }}</th>
           <th>{{ t('admin_users.col.status') }}</th>
           <th>{{ t('admin_users.col.2fa') }}</th>
+          <th class="storage-col">{{ t('admin_users.col.storage') }}</th>
           <th>{{ t('admin_users.col.created') }}</th>
           <th>{{ t('admin_users.col.last_login') }}</th>
         </tr>
@@ -453,6 +466,12 @@ onMounted(() => {
           <td>
             <span v-if="u.has_2fa" class="fh-mono">on</span>
             <span v-else class="fh-mono subtle">off</span>
+          </td>
+          <td class="fh-mono storage-col">
+            {{ formatBytes(u.storage_used_bytes) }}<span
+              v-if="u.quota_bytes"
+              class="subtle"
+            > / {{ formatBytes(u.quota_bytes) }}</span>
           </td>
           <td class="fh-mono">{{ formatDate(u.created_at) }}</td>
           <td class="fh-mono">{{ formatDate(u.last_login_at) }}</td>

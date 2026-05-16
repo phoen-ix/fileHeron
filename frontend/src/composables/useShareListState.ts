@@ -38,6 +38,30 @@ export function useShareListState(box: ComputedRef<'outbox' | 'inbox'>) {
   const loading = ref(true)
   const errorMsg = ref<string | null>(null)
 
+  // Outbox-only bulk selection. Keeps it co-located with the rest of
+  // the list state so the view stays a thin shell.
+  const selectedIds = ref<Set<string>>(new Set())
+  const selectedCount = computed(() => selectedIds.value.size)
+  function isSelected(id: string): boolean {
+    return selectedIds.value.has(id)
+  }
+  function toggleSelected(id: string) {
+    const next = new Set(selectedIds.value)
+    if (next.has(id)) next.delete(id)
+    else next.add(id)
+    selectedIds.value = next
+  }
+  function clearSelection() {
+    selectedIds.value = new Set()
+  }
+  function selectAllActive() {
+    const next = new Set<string>()
+    for (const it of items.value) {
+      if (it.state === 'active') next.add(it.id)
+    }
+    selectedIds.value = next
+  }
+
   // Default to 'active' so the list opens with only usable shares; the
   // dropdown still has "All states" for opt-in.
   const stateFilter = ref<ShareState | ''>('active')
@@ -169,6 +193,13 @@ export function useShareListState(box: ComputedRef<'outbox' | 'inbox'>) {
     groupBy.value = 'none'
     stateFilter.value = 'active'
     sort.reset()
+    clearSelection()
+  })
+
+  watch([page, stateFilter, partyKind, partyUser, partyGroup], () => {
+    // Selection IDs from a different page / filter would survive into
+    // the new view as ghosts. Reset on any boundary change.
+    clearSelection()
   })
 
   // ---- group rendering -----------------------------------------------------
@@ -256,6 +287,8 @@ export function useShareListState(box: ComputedRef<'outbox' | 'inbox'>) {
     myGroups,
     groupBy,
     sort,
+    selectedIds,
+    selectedCount,
     // computed
     groupedItems,
     groupByOptions,
@@ -265,5 +298,9 @@ export function useShareListState(box: ComputedRef<'outbox' | 'inbox'>) {
     clearAllFilters,
     pickGroup,
     load,
+    isSelected,
+    toggleSelected,
+    clearSelection,
+    selectAllActive,
   }
 }

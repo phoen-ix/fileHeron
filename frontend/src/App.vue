@@ -3,7 +3,9 @@ import { computed, onMounted } from 'vue'
 import { RouterView, useRoute } from 'vue-router'
 
 import AppHeader from '@/components/AppHeader.vue'
+import KeyboardShortcutsModal from '@/components/KeyboardShortcutsModal.vue'
 import ToastStack from '@/components/ToastStack.vue'
+import { useKeyboardShortcuts } from '@/composables/useKeyboardShortcuts'
 import { useAuthStore } from '@/stores/auth'
 import { setLocale } from '@/i18n'
 
@@ -12,6 +14,8 @@ const route = useRoute()
 
 const showHeader = computed(() => auth.isAuthenticated && !route.meta.public)
 const density = computed(() => route.meta.density ?? 'editorial')
+
+const { cheatSheetOpen } = useKeyboardShortcuts()
 
 onMounted(() => {
   if (auth.user) setLocale(auth.user.locale)
@@ -28,6 +32,10 @@ onMounted(() => {
     </RouterView>
   </main>
   <ToastStack />
+  <KeyboardShortcutsModal
+    :open="cheatSheetOpen"
+    @close="cheatSheetOpen = false"
+  />
 </template>
 
 <style>

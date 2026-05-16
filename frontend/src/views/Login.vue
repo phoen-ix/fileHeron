@@ -37,12 +37,14 @@ const recoveryInputRef = ref<HTMLInputElement | null>(null)
 const passkeySupported = isWebAuthnSupported()
 
 const providers = ref<PublicProvider[]>([])
+const motdText = ref<string>('')
 ;(async () => {
   try {
     const { data } = await getPublicConfig()
     providers.value = data.providers
+    motdText.value = data.motd?.text ?? ''
   } catch {
-    /* config endpoint can fail in dev — keep buttons hidden */
+    /* config endpoint can fail in dev — keep buttons + motd hidden */
   }
 })()
 
@@ -119,6 +121,16 @@ async function tryPasskey() {
   <AuthCanvas>
     <span class="fh-eyebrow fh-rise" data-stagger="1">{{ $t('login.title') }}</span>
     <h1 class="fh-display fh-rise" data-stagger="2">{{ $t('login.subtitle') }}</h1>
+
+    <div
+      v-if="motdText"
+      class="motd-banner fh-rise"
+      data-stagger="2"
+      role="note"
+      :aria-label="$t('login.motd_aria')"
+    >
+      {{ motdText }}
+    </div>
 
     <div
       v-if="providers.length > 0 && mode === 'creds'"
@@ -244,6 +256,16 @@ async function tryPasskey() {
 </template>
 
 <style scoped>
+.motd-banner {
+  margin-top: var(--fh-space-4);
+  padding: var(--fh-space-3);
+  background: var(--fh-accent-soft);
+  border-left: 2px solid var(--fh-accent);
+  border-radius: var(--fh-radius-sm);
+  font-size: var(--fh-text-body-sm);
+  white-space: pre-wrap;
+}
+
 .form {
   margin-top: var(--fh-space-5);
 }

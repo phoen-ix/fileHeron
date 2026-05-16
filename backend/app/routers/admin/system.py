@@ -17,15 +17,17 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Header, Query, Request
+from fastapi.responses import StreamingResponse
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from ...config import settings
 from ...dependencies import get_current_admin, get_db
+from ...middleware.errors import AppError
 from ...models.audit_log import AuditEventType, AuditLog
 from ...models.cron_run import CronRun, CronRunStatus
-from ...models.user import User
+from ...models.user import User, UserRole
 from ...redis_client import get_redis
 
 router = APIRouter()
@@ -147,6 +149,49 @@ def system_status(
         "recent_failures": recent_failures,
         "email_undeliverable_24h": email_undeliverable_24h,
     }
+
+
+@router.get("/system/stream")
+async def system_stream(
+    request: Request,
+    db: Session = Depends(get_db),
+    token: str | None = None,
+    authorization: str | None = Header(default=None),
+) -> StreamingResponse:
+    """Long-lived SSE for the /admin/system page. Reuses the existing
+    `sse_token` minted at /api/notifications/stream-token (browser
+    can't send Authorization headers from EventSource) and checks the
+    bearer is admin server-side. Per-stream auth, no per-event auth.
+    """
+    from ...services import sse as sse_svc
+    from ...services import sse_token as sse_token_svc
+
+    if token:
+        user_id = sse_token_svc.verify(token)
+        user = (
+            db.query(User)
+            .filter(User.id == user_id, User.is_disabled.is_(False))
+            .one_or_none()
+        )
+    elif authorization and authorization.lower().startswith("bearer "):
+        from ...services.auth import resolve_user_from_access_token
+        jwt_str = authorization.split(" ", 1)[1].strip()
+        user = resolve_user_from_access_token(db, jwt_str, settings)
+    else:
+        raise AppError(401, "AUTH_REQUIRED", "Authentication required.")
+
+    if user is None or user.role != UserRole.admin:
+        raise AppError(403, "FORBIDDEN", "Admin role required.")
+
+    return StreamingResponse(
+        sse_svc.stream_admin_events(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )
 
 
 @router.get("/system/cron-runs")

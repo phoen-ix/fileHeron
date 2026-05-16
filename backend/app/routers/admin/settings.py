@@ -26,6 +26,10 @@ from ...schemas.home_page_settings import (
     HomePageSettingsResponse,
     UpdateHomePageSettingsRequest,
 )
+from ...schemas.motd_settings import (
+    MotdSettingsResponse,
+    UpdateMotdSettingsRequest,
+)
 from ...schemas.public_link import (
     PublicLinkAllowedGroup,
     PublicLinkAllowedUser,
@@ -329,6 +333,51 @@ def get_home_page_settings(
         db, settings_svc.Keys.HOME_PAGE_ENABLED, default=True
     )
     return HomePageSettingsResponse(enabled=enabled)
+
+
+@router.get("/settings/motd", response_model=MotdSettingsResponse)
+def get_motd_settings(
+    db: Session = Depends(get_db),
+    _admin: User = Depends(get_current_admin),
+) -> MotdSettingsResponse:
+    return MotdSettingsResponse(
+        enabled=settings_svc.get_bool(db, settings_svc.Keys.MOTD_ENABLED, default=False),
+        text=settings_svc.get(db, settings_svc.Keys.MOTD_TEXT) or "",
+    )
+
+
+@router.put("/settings/motd", response_model=MotdSettingsResponse)
+def update_motd_settings(
+    payload: UpdateMotdSettingsRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin),
+) -> MotdSettingsResponse:
+    settings_svc.set_value(
+        db,
+        key=settings_svc.Keys.MOTD_ENABLED,
+        value="true" if payload.enabled else "false",
+        actor=admin,
+        request=request,
+    )
+    settings_svc.set_value(
+        db,
+        key=settings_svc.Keys.MOTD_TEXT,
+        value=payload.text if payload.text else None,
+        actor=admin,
+        request=request,
+    )
+    record_audit_event(
+        db,
+        event_type=AuditEventType.motd_changed,
+        actor_user_id=admin.id,
+        target_type="settings",
+        target_id="motd",
+        metadata={"enabled": payload.enabled, "text_length": len(payload.text)},
+        request=request,
+    )
+    db.commit()
+    return MotdSettingsResponse(enabled=payload.enabled, text=payload.text)
 
 
 @router.put("/settings/home-page", response_model=HomePageSettingsResponse)

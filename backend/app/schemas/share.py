@@ -68,6 +68,21 @@ class UpdateShareRequest(APIBaseModel):
     expires_at: datetime
 
 
+class BulkExpireRequest(APIBaseModel):
+    share_ids: list[str]
+
+
+class BulkExpireFailure(APIBaseModel):
+    id: str
+    code: str
+    message: str
+
+
+class BulkExpireResponse(APIBaseModel):
+    expired: list[str]
+    failed: list[BulkExpireFailure]
+
+
 class FileInShareResponse(APIBaseModel):
     id: str
     original_filename: str

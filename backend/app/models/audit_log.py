@@ -71,6 +71,7 @@ class AuditEventType(str, enum.Enum):
     refresh_token_evicted = "refresh_token_evicted"          # post-Phase 10 (session cap)
     smtp_config_changed = "smtp_config_changed"              # post-Phase 10
     home_page_toggled = "home_page_toggled"                  # post-Phase 10
+    motd_changed = "motd_changed"                            # login-page banner
     share_defaults_policy_changed = "share_defaults_policy_changed"  # post-Phase 10
     site_url_changed = "site_url_changed"                    # post-Phase 10
     twofa_policy_changed = "twofa_policy_changed"            # post-Phase 10

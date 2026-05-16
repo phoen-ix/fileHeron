@@ -12,6 +12,9 @@ from ..models.group import Group
 from ..models.share_recipient import ShareRecipient
 from ..models.user import User
 from ..schemas.share import (
+    BulkExpireFailure,
+    BulkExpireRequest,
+    BulkExpireResponse,
     CreateShareRequest,
     FileInShareResponse,
     GroupRecipientRef,
@@ -350,3 +353,50 @@ def expire_share_now_route(
     db.commit()
     db.refresh(share)
     return _to_share_response(db, share)
+
+
+_BULK_EXPIRE_CAP = 100
+
+
+@router.post("/bulk-expire", response_model=BulkExpireResponse)
+def bulk_expire(
+    payload: BulkExpireRequest,
+    request: Request,
+    user: User = Depends(get_actor),
+    db: Session = Depends(get_db),
+) -> BulkExpireResponse:
+    """Expire many shares in one request. Per-share commit so a single
+    failure (404 / 403 / 409 SHARE_NOT_ACTIVE from a concurrent expire)
+    doesn't abort the rest. Capped at 100 IDs per request."""
+    if not payload.share_ids:
+        raise AppError(400, "INVALID_INPUT", "No share IDs provided.")
+    if len(payload.share_ids) > _BULK_EXPIRE_CAP:
+        raise AppError(
+            400,
+            "BULK_TOO_LARGE",
+            f"At most {_BULK_EXPIRE_CAP} shares per request.",
+        )
+
+    expired: list[str] = []
+    failed: list[BulkExpireFailure] = []
+    for sid in payload.share_ids:
+        try:
+            share = share_svc.get_share_or_404(db, sid)
+            share_svc.expire_share_now(
+                db, user=user, share=share, request=request
+            )
+            db.commit()
+            expired.append(sid)
+        except AppError as e:
+            db.rollback()
+            failed.append(
+                BulkExpireFailure(id=sid, code=e.code, message=e.message)
+            )
+        except Exception as e:
+            db.rollback()
+            failed.append(
+                BulkExpireFailure(
+                    id=sid, code="INTERNAL_ERROR", message=str(e)[:200]
+                )
+            )
+    return BulkExpireResponse(expired=expired, failed=failed)

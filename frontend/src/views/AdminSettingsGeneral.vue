@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import HomePageSection from '@/components/admin/HomePageSection.vue'
+import MotdSection from '@/components/admin/MotdSection.vue'
 import ShareDefaultsSection from '@/components/admin/ShareDefaultsSection.vue'
 import SiteUrlSection from '@/components/admin/SiteUrlSection.vue'
 import SectionQuickNav, {
@@ -19,6 +20,7 @@ const sections = computed<QuickNavSection[]>(() => [
   { id: 'site-url', labelKey: 'admin_site_url.title' },
   { id: 'home-page', labelKey: 'admin_home_page.title' },
   { id: 'share-defaults', labelKey: 'admin_share_defaults.title' },
+  { id: 'motd', labelKey: 'admin_motd.title' },
 ])
 
 const sectionIds = computed(() => sections.value.map((s) => s.id))
@@ -60,6 +62,11 @@ function jumpTo(id: string) {
       <section id="share-defaults" class="settings-section">
         <h2 class="settings-h2">{{ t('admin_share_defaults.title') }}</h2>
         <ShareDefaultsSection />
+      </section>
+
+      <section id="motd" class="settings-section">
+        <h2 class="settings-h2">{{ t('admin_motd.title') }}</h2>
+        <MotdSection />
       </section>
     </div>
 

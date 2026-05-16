@@ -17,6 +17,18 @@
     "display_name": "Display name",
     "language": "Language"
   },
+  "shortcuts": {
+    "title": "Keyboard shortcuts",
+    "hint": "Press anywhere outside text fields. Press ? to toggle this list.",
+    "row": {
+      "focus_search": "Focus the search box on this page",
+      "new_share": "Start a new share",
+      "goto_inbox": "Go to inbox",
+      "goto_outbox": "Go to outbox",
+      "goto_account": "Go to account",
+      "toggle_cheatsheet": "Show / hide this list"
+    }
+  },
   "errors": {
     "INVALID_CREDENTIALS": "That email and password don't match.",
     "TOTP_REQUIRED": "Enter your six-digit code from your authenticator app.",
@@ -85,6 +97,7 @@
     "use_recovery": "Use a recovery code instead",
     "use_passkey": "Use a passkey instead",
     "passkey_cancelled": "Passkey prompt cancelled.",
+    "motd_aria": "Site announcement",
     "use_totp_back": "Back to authenticator code",
     "recovery_label": "Recovery code",
     "recovery_help": "Use one of your backup codes (formatted XXXX-XXXX).",
@@ -258,6 +271,16 @@
     "toggle_label": "Notify recipients by default when a new share is created",
     "toggle_help": "When on, the checkbox is pre-checked and `share_created` emails fan out to direct recipients and to every active member of any recipient group. When off, the sender opts in per share.",
     "saved_toast": "Share defaults saved."
+  },
+  "admin_motd": {
+    "title": "Login banner (MOTD)",
+    "intro": "Optional notice shown on the public login page. Use for planned-maintenance announcements, onboarding info, or anything you want every visitor to see before signing in. Plain text, max 500 characters.",
+    "toggle_label": "Show the banner on the login page",
+    "toggle_help": "When off, the banner is hidden regardless of the text below.",
+    "text_label": "Banner text",
+    "text_placeholder": "Scheduled maintenance Saturday 14:00 UTC — expect a 5-minute outage.",
+    "text_help": "{remaining} characters remaining.",
+    "saved_toast": "Login banner saved."
   },
   "admin_email": {
     "title": "Email / SMTP",
@@ -511,6 +534,7 @@
       "role": "Role",
       "status": "Status",
       "2fa": "2FA",
+      "storage": "Storage",
       "created": "Created",
       "last_login": "Last sign-in"
     },
@@ -633,7 +657,11 @@
       "ip": "IP",
       "request": "Req"
     },
-    "actor_deleted": "(deleted)"
+    "actor_deleted": "(deleted)",
+    "pager": {
+      "older": "Older",
+      "newer": "Newer"
+    }
   },
   "account": {
     "title": "Account",
@@ -1005,6 +1033,24 @@
       "inbox": {
         "title": "Nothing received yet.",
         "subtitle": "Shares sent to you will appear here."
+      }
+    },
+    "bulk": {
+      "select_all_aria": "Select all active shares on this page",
+      "select_row_aria": "Select this share",
+      "selected": "{n} selected",
+      "action": "Expire now",
+      "clear": "Clear",
+      "bar_aria": "Bulk actions",
+      "confirm": {
+        "title": "Expire selected shares?",
+        "body": "{n} share(s) will be expired immediately. Files on those shares will be hard-deleted from disk. This cannot be undone.",
+        "action": "Expire now"
+      },
+      "toast": {
+        "all_expired": "{n} share(s) expired.",
+        "partial": "{ok} expired, {fail} failed (likely already changed state).",
+        "all_failed": "Could not expire any of the selected shares."
       }
     }
   },

@@ -1,6 +1,7 @@
 """/api/admin/audit-log — list + streaming CSV export."""
 from __future__ import annotations
 
+import base64
 import csv
 import io
 import json
@@ -9,14 +10,31 @@ from typing import Iterator
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import StreamingResponse
+from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
 
 from ...dependencies import get_current_admin, get_db
+from ...middleware.errors import AppError
 from ...models.audit_log import AuditLog
 from ...models.user import User
 from ...schemas.admin import AdminAuditResponse, AdminAuditRow
 
 router = APIRouter()
+
+
+def _encode_cursor(created_at: datetime, row_id: int) -> str:
+    raw = f"{created_at.isoformat()}|{row_id}".encode()
+    return base64.urlsafe_b64encode(raw).decode().rstrip("=")
+
+
+def _decode_cursor(s: str) -> tuple[datetime, int]:
+    try:
+        padded = s + "=" * (-len(s) % 4)
+        raw = base64.urlsafe_b64decode(padded.encode()).decode()
+        ts_str, id_str = raw.split("|", 1)
+        return datetime.fromisoformat(ts_str), int(id_str)
+    except Exception as e:
+        raise AppError(400, "INVALID_CURSOR", "Cursor is not valid.") from e
 
 
 def _audit_query(
@@ -55,9 +73,25 @@ def list_audit(
     to_ts: datetime | None = Query(None, alias="to"),
     page: int = Query(1, ge=1, le=1000),
     page_size: int = Query(50, ge=1, le=200),
+    cursor: str | None = Query(None),
     db: Session = Depends(get_db),
     _admin: User = Depends(get_current_admin),
 ) -> AdminAuditResponse:
+    """Paginated audit-log feed.
+
+    Two pagination modes coexist for back-compat:
+
+    - **Cursor** (preferred when scrolling past page 1): pass `cursor`
+      from the previous response's `next_cursor`. Filters apply against
+      the (created_at, id) tuple so deep scans don't pre-walk every
+      preceding row the way OFFSET does.
+    - **Offset** (legacy): pass `page` and `page_size`. The new SPA
+      uses cursor; curl scripts + the test suite still work with
+      `?page=…`. The 1000-page cap stays as a DoS guard.
+
+    Both paths return the same shape; `next_cursor` is populated on
+    both so callers can switch over without a flag day.
+    """
     q = _audit_query(
         db,
         event_type=event_type,
@@ -67,13 +101,31 @@ def list_audit(
         from_ts=from_ts,
         to_ts=to_ts,
     )
-    total = q.count()
-    rows = (
-        q.order_by(AuditLog.created_at.desc())
-        .offset((page - 1) * page_size)
-        .limit(page_size)
-        .all()
-    )
+
+    if cursor is not None:
+        ts, last_id = _decode_cursor(cursor)
+        q = q.filter(
+            or_(
+                AuditLog.created_at < ts,
+                and_(AuditLog.created_at == ts, AuditLog.id < last_id),
+            )
+        )
+        total = 0  # counting "remaining below the cursor" is rarely worth the scan
+        rows = (
+            q.order_by(AuditLog.created_at.desc(), AuditLog.id.desc())
+            .limit(page_size)
+            .all()
+        )
+        effective_page = 1
+    else:
+        total = q.count()
+        rows = (
+            q.order_by(AuditLog.created_at.desc(), AuditLog.id.desc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+            .all()
+        )
+        effective_page = page
     # Bulk-load every distinct actor referenced on this page so the
     # SPA shows recognisable names instead of bare integer IDs. One
     # round-trip per page; misses (erased / unknown actors) leave the
@@ -102,11 +154,17 @@ def list_audit(
                 created_at=r.created_at,
             )
         )
+    next_cursor: str | None = None
+    if len(rows) == page_size and rows:
+        last = rows[-1]
+        next_cursor = _encode_cursor(last.created_at, last.id)
+
     return AdminAuditResponse(
         items=items,
         total=total,
-        page=page,
+        page=effective_page,
         page_size=page_size,
+        next_cursor=next_cursor,
     )
 
 

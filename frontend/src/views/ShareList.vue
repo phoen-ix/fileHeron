@@ -1,14 +1,19 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 
+import { bulkExpireShares } from '@/api/shares'
+import { useApiError } from '@/composables/useApiError'
 import { useShareListState } from '@/composables/useShareListState'
+import { useUiStore } from '@/stores/ui'
 import type { ShareListItem, ShareRecipientRef, ShareState } from '@/types/api'
 
 const { t, locale } = useI18n()
 const route = useRoute()
 const router = useRouter()
+const ui = useUiStore()
+const { describe } = useApiError()
 
 const box = computed<'outbox' | 'inbox'>(() =>
   route.name === 'inbox' ? 'inbox' : 'outbox',
@@ -34,11 +39,63 @@ const {
   sort,
   groupedItems,
   groupByOptions,
+  selectedCount,
   pickUser,
   clearAllFilters,
   pickGroup,
   load,
+  isSelected,
+  toggleSelected,
+  clearSelection,
+  selectAllActive,
 } = useShareListState(box)
+
+const bulkConfirmOpen = ref(false)
+const bulkInProgress = ref(false)
+
+function openBulkConfirm() {
+  if (selectedCount.value === 0) return
+  bulkConfirmOpen.value = true
+}
+function closeBulkConfirm() {
+  if (!bulkInProgress.value) bulkConfirmOpen.value = false
+}
+
+async function confirmBulkExpire() {
+  const ids = Array.from(
+    items.value.filter((i) => isSelected(i.id)).map((i) => i.id),
+  )
+  if (ids.length === 0) {
+    bulkConfirmOpen.value = false
+    return
+  }
+  bulkInProgress.value = true
+  try {
+    const { data } = await bulkExpireShares(ids)
+    const expiredN = data.expired.length
+    const failedN = data.failed.length
+    if (expiredN > 0 && failedN === 0) {
+      ui.pushToast(
+        t('share_list.bulk.toast.all_expired', { n: expiredN }),
+        'success',
+      )
+    } else if (expiredN > 0 && failedN > 0) {
+      ui.pushToast(
+        t('share_list.bulk.toast.partial', { ok: expiredN, fail: failedN }),
+        'success',
+      )
+    } else {
+      ui.pushToast(t('share_list.bulk.toast.all_failed'), 'error')
+    }
+    bulkConfirmOpen.value = false
+    clearSelection()
+    void load()
+  } catch (err) {
+    ui.pushToast(describe(err), 'error')
+  } finally {
+    bulkInProgress.value = false
+  }
+}
 
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize.value)))
 
@@ -184,6 +241,15 @@ onMounted(load)
         <table class="share-table">
           <thead>
             <tr>
+              <th v-if="box === 'outbox'" class="select-col">
+                <input
+                  type="checkbox"
+                  :aria-label="t('share_list.bulk.select_all_aria')"
+                  :checked="g.items.some((i) => i.state === 'active') && g.items.filter((i) => i.state === 'active').every((i) => isSelected(i.id))"
+                  @change="(e) => (e.target as HTMLInputElement).checked ? selectAllActive() : clearSelection()"
+                  @click.stop
+                />
+              </th>
               <th
                 role="button"
                 tabindex="0"
@@ -241,6 +307,15 @@ onMounted(load)
               @click="open(item)"
               @keydown.enter="open(item)"
             >
+              <td v-if="box === 'outbox'" class="select-col" @click.stop>
+                <input
+                  v-if="item.state === 'active'"
+                  type="checkbox"
+                  :checked="isSelected(item.id)"
+                  :aria-label="t('share_list.bulk.select_row_aria')"
+                  @change="toggleSelected(item.id)"
+                />
+              </td>
               <td class="subject-cell">
                 <div class="subject">
                   {{ item.effective_subject || t('share_list.no_subject') }}
@@ -300,6 +375,51 @@ onMounted(load)
       >
         {{ t('share_list.new_share') }} <span aria-hidden="true">→</span>
       </RouterLink>
+    </div>
+
+    <Transition name="bulk-bar">
+      <div v-if="box === 'outbox' && selectedCount > 0" class="bulk-bar" role="region" :aria-label="t('share_list.bulk.bar_aria')">
+        <span class="bulk-count fh-mono">
+          {{ t('share_list.bulk.selected', { n: selectedCount }) }}
+        </span>
+        <button type="button" class="fh-btn fh-btn--danger" @click="openBulkConfirm">
+          {{ t('share_list.bulk.action') }}
+        </button>
+        <button type="button" class="fh-btn-text" @click="clearSelection">
+          {{ t('share_list.bulk.clear') }}
+        </button>
+      </div>
+    </Transition>
+
+    <div
+      v-if="bulkConfirmOpen"
+      class="fh-modal-backdrop"
+      @click.self="closeBulkConfirm"
+    >
+      <div class="fh-modal fh-modal--small" role="dialog" :aria-label="t('share_list.bulk.confirm.title')">
+        <h2 class="modal-h2">{{ t('share_list.bulk.confirm.title') }}</h2>
+        <p class="modal-body">
+          {{ t('share_list.bulk.confirm.body', { n: selectedCount }) }}
+        </p>
+        <div class="form-actions">
+          <button
+            type="button"
+            class="fh-btn fh-btn--danger"
+            :disabled="bulkInProgress"
+            @click="confirmBulkExpire"
+          >
+            {{ bulkInProgress ? t('common.loading') : t('share_list.bulk.confirm.action') }}
+          </button>
+          <button
+            type="button"
+            class="fh-btn-text"
+            :disabled="bulkInProgress"
+            @click="closeBulkConfirm"
+          >
+            {{ t('common.cancel') }}
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -503,5 +623,92 @@ onMounted(load)
   align-items: baseline;
   justify-content: center;
   margin-top: var(--fh-space-4);
+}
+
+.select-col {
+  width: 2rem;
+  text-align: center;
+}
+
+.select-col input[type="checkbox"] {
+  cursor: pointer;
+  width: 16px;
+  height: 16px;
+  accent-color: var(--fh-accent);
+}
+
+.bulk-bar {
+  position: fixed;
+  left: 50%;
+  bottom: var(--fh-space-4);
+  transform: translateX(-50%);
+  background: var(--fh-paper);
+  border: 1px solid var(--fh-hairline-strong);
+  box-shadow: 0 8px 32px rgba(26, 29, 36, 0.15);
+  padding: var(--fh-space-2) var(--fh-space-4);
+  display: flex;
+  align-items: center;
+  gap: var(--fh-space-3);
+  z-index: 50;
+  border-radius: var(--fh-radius-sm);
+}
+
+.bulk-count {
+  font-size: var(--fh-text-mono-sm);
+  color: var(--fh-subtle);
+}
+
+.bulk-bar-enter-active,
+.bulk-bar-leave-active {
+  transition:
+    opacity 180ms cubic-bezier(0.2, 0, 0, 1),
+    transform 200ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+.bulk-bar-enter-from,
+.bulk-bar-leave-to {
+  opacity: 0;
+  transform: translate(-50%, 12px);
+}
+
+.fh-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(26, 29, 36, 0.4);
+  display: grid;
+  place-items: center;
+  z-index: 100;
+}
+
+.fh-modal {
+  background: var(--fh-paper);
+  border: 1px solid var(--fh-hairline-strong);
+  box-shadow: 0 8px 40px rgba(26, 29, 36, 0.15);
+  padding: var(--fh-space-5);
+  width: min(560px, 92vw);
+  max-height: 92vh;
+  overflow-y: auto;
+}
+
+.fh-modal--small {
+  width: min(420px, 92vw);
+}
+
+.modal-h2 {
+  font-family: var(--fh-font-display);
+  font-size: 1.25rem;
+  margin: 0 0 var(--fh-space-3);
+}
+
+.modal-body {
+  margin: 0 0 var(--fh-space-4);
+  color: var(--fh-ink);
+}
+
+.form-actions {
+  display: flex;
+  gap: var(--fh-space-3);
+  align-items: baseline;
+  margin-top: var(--fh-space-2);
 }
 </style>

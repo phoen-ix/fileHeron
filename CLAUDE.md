@@ -24,7 +24,7 @@ admin shell (users, groups, audit log, file history, settings store with
 encrypted secrets), GDPR right-to-erasure with verifiable PDF receipt,
 self-service profile, admin-controlled API-token / public-link / 2FA
 policies, admin-editable SMTP, home-page enable toggle, per-user landing
-page picker. **Phase 10 + post-10 polish complete (sessions 1–25).**
+page picker. **Phase 10 + post-10 polish complete.** Security audit (Waves 1–4 + bonus), operational audit (Waves 1–4), and the follow-up comment-correctness sweep all shipped 2026-05-16.
 
 Open follow-ups: none on the security shortlist. JWKS-based ID-token
 signature + nonce verification shipped (see SSO section). The
@@ -180,7 +180,7 @@ client → POST /api/uploads/init  (HMAC envelope, files row state=uploading)
   - `POST /api/admin/files/{id}/quarantine/release` body `{reason}` — moves bytes back to `STORAGE_ROOT`, flips file → `clean`, re-reserves uploader quota, restores the parent share (only if the revoke reason was `av_quarantine` for THIS file). Audits `file_quarantine_released`.
   - `DELETE /api/admin/files/{id}/quarantine` body `{reason}` — unlinks bytes from disk, leaves `state=infected` as historical marker. Audits `file_quarantine_purged`.
   - The list view is the existing admin file inventory filtered to `state=infected` (`/admin/quarantine` SPA route).
-- **Admin notification fan-out:** kv setting `quarantine.notify_admins` (admin-editable at `/admin/settings/quarantine`). When true, every `file_quarantined` dispatch fans out an additional in-app `Notification` row to every non-disabled admin (skipping the uploader if they ARE an admin). Email is intentionally not sent — admin plaintext emails aren't stored. Each admin's per-user `file_quarantined` channel preference still applies (set to `off` to mute).
+- **Admin notification fan-out:** kv setting `quarantine.notify_admins` (admin-editable at `/admin/settings/quarantine`). When true, every `file_quarantined` dispatch fans out an additional `Notification` row to every non-disabled admin (skipping the uploader if they ARE an admin). Channel defaults to `both` per admin via `services/notification.py::_DEFAULT_CHANNEL` — so admins get the in-app bell AND an email at `users.email` unless they've overridden their per-user `file_quarantined` preference (set to `off` or `in_app` to mute email).
 - **`AV_SKIP=true`** marks every upload clean (CI/dev only). Boot fail-fast refuses `ENVIRONMENT=production AND AV_SKIP=true`.
 
 ## Public links
@@ -337,7 +337,6 @@ Page-load reveal staged via `.fh-rise[data-stagger]` classes. Heron line-art on 
 - **axios array params** — frontend axios client needs `paramsSerializer: { indexes: null }` so `?state=active&state=expired` (FastAPI `Query(default=[])` shape) instead of `?state[]=active`.
 - **Default state filter on share lists** is `active` — if a recently-revoked share isn't visible, the user has the default filter on. Documented behaviour, not a bug.
 - **Signed download URL pattern** — browser `<a href>` can't carry a bearer; `GET /api/files/{id}/download-url` issues a short-lived HMAC token (`<user_id>.<exp>.<sig_b64url>`) consumed via `?dt=` on the download endpoint. Ungated `download_router` for the `?dt=` path; gated `router` for bearer.
-- **tusd port** — internal port is 8080 (was incorrectly 1080 in three configs at one point: vite.config.ts, nginx.conf, healthcheck).
 - **TEST_ACCOUNT_*** env vars are used by `scripts/seed_dev.py` + `entrypoint.sh` — not dead. `OIDC_REDIRECT_URI` was the dead one (deleted).
 - **ClamAV `clamd` slow first boot** — full `freshclam` mirror sync (~150 MB). Subsequent updates incremental.
 

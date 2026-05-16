@@ -1,4 +1,4 @@
-"""Admin-only schemas (Phase 6b)."""
+"""Admin-only schemas."""
 from __future__ import annotations
 
 from datetime import datetime

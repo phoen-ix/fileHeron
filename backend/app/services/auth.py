@@ -155,7 +155,7 @@ def _create_user_from_invite(
         from .connection import record_invite_connection
         record_invite_connection(db, inviter=inviter, invitee=user)
 
-        # Phase 6a: notify the inviter that their invite was consumed.
+        # Notify the inviter that their invite was consumed.
         from ..models.notification import NotificationCategory
         from . import notification as notif_svc
         from . import site as site_svc
@@ -248,8 +248,9 @@ def _request_ip(request: Request | None) -> str | None:
 
 def _record_login_device(db: Session, *, user: User, request: Request | None) -> bool:
     """Upsert KnownDevice for (user, UA fingerprint, IP geohash). Returns
-    True if this is the first time we've seen this device tuple (Phase 7 will
-    fire a new-device alert email then)."""
+    True if this is the first time we've seen this device tuple; the login
+    handler then fires a new-device alert email via
+    `services/login_alert.fire_new_device_alert`."""
     if request is None:
         return False
     ip = _request_ip(request) or ""

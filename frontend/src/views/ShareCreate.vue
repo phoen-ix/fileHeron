@@ -99,7 +99,7 @@ const canSubmit = computed(() => {
 // flight; the next view (/share/{id}) re-fetches authoritative state
 // on mount, so a brief flash we'd never see is fine. Without this,
 // the TUS path raced because upload-success sets 'finalizing' then
-// flips to 'done' on a 800ms timer (composables/useUpload.ts:114) —
+// flips to 'done' on a 800ms timer in useUpload.ts —
 // the check fires before that timer.
 const allUploadsDone = computed(() =>
   upload.items.value.length > 0 &&

@@ -40,7 +40,7 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up
    │             │
    │       ./data/uploads/   (tusd working dir)
    │             │
-   │             └─► finalize ─► ./data/files/{yyyy}/{mm}/{share-uuid}
+   │             └─► finalize ─► ./data/files/{yyyy}/{mm}/{file-uuid}.bin
    │
  ┌─────────┬──────────┬──────┐
  │ MariaDB │  Redis   │ ARQ  │
@@ -222,7 +222,7 @@ Files ClamAV flagged as infected. The bytes stay on disk under `./data/quarantin
 - **Release** — moves the bytes back to active storage, marks the file `clean`, re-reserves the uploader's quota, and **conditionally restores the parent share** (only if ClamAV was the most-recent revoke reason; if an admin revoked manually after the fact, the share stays revoked). Requires a free-text reason (10–500 chars), recorded in the audit log.
 - **Purge** — unlinks the bytes from disk and keeps the row at `state=infected` as the historical marker. Irreversible; requires a reason.
 
-Companion setting at **`/admin/settings/quarantine`** — single toggle "Notify all admins when a virus is detected". When on, every infection fans out an additional in-app `file_quarantined` notification to every non-disabled admin. **In-app bell only** — the system never stores plaintext admin email, so email isn't possible without a separate ops alerting channel. Admins who want to mute the alert can set their own `file_quarantined` notification preference to `off`.
+Companion setting at **`/admin/settings/quarantine`** — single toggle "Notify all admins when a virus is detected". When on, every infection fans out an additional `file_quarantined` notification to every non-disabled admin. **Default channel is `both` per admin** (in-app bell + email; backed by `users.email`). Admins who want to mute the alert can set their own `file_quarantined` notification preference to `off` or `in_app`.
 
 ## API token policy + inventory
 

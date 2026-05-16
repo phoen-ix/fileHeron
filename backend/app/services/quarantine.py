@@ -116,8 +116,8 @@ def quarantine_file(
             metadata={"reason": "av_quarantine", "trigger_file_id": file.id},
         )
 
-    # Phase 6a: tell the uploader. Wrapped — never fail the quarantine
-    # because of a notification path.
+    # Tell the uploader + (optionally) fan out to admins. Wrapped —
+    # never fail the quarantine because of a notification path.
     try:
         from ..models.notification import NotificationCategory
         from ..models.user import User, UserRole

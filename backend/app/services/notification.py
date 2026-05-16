@@ -3,9 +3,9 @@
 Every callsite (share creation, password reset, public-link download,
 …) calls `dispatch(db, user, category, payload)`. This:
 
-1. Inserts a row into `notifications` for the in-app bell (Phase 6b
-   surfaces it; the row is always written so we have history regardless
-   of email channel choice).
+1. Inserts a row into `notifications` for the in-app bell. The row is
+   always written regardless of email channel choice, so we have
+   history even when the user has opted out of email for that category.
 2. Reads the user's `user_notification_preferences` row for this
    category — defaulting to `both` when no row exists. If the channel
    includes email, renders the template via `services/email.py` and
@@ -108,11 +108,14 @@ def dispatch(
     file naming convention `{slug}.{txt|html}.j2`. Override only when a
     category fans out to multiple emails (rare).
 
-    `email_to` defaults to the user's `email_hint` — but the hint is
-    masked (e.g. `j***@example.com`), so for actual delivery the caller
-    must pass the real email through. (We never store plaintext email,
-    so the caller — who is operating on freshly-supplied or
-    invite-derived email — has it.)
+    `email_to` is the plaintext recipient address. Callers pass it
+    explicitly; the dispatcher doesn't auto-derive it from
+    `user.email` because some callers (e.g. invite consume) have a
+    freshly-supplied address that hasn't landed in `users.email`
+    yet. The pre-`202605031600_email_plaintext` design stored only a
+    masked hint and required callers to carry the plaintext through —
+    the column-and-hint setup is gone but the `email_to` parameter
+    shape stuck around.
 
     Caller commits."""
     if user.is_disabled:
@@ -140,8 +143,8 @@ def dispatch(
             db.add(notif)
             db.flush()
 
-            # Phase 6b: push live to SSE listeners (the bell). Best-effort —
-            # the in-app row is the durable record; SSE is real-time UX only.
+            # Push live to SSE listeners (the bell). Best-effort — the
+            # in-app row is the durable record; SSE is real-time UX only.
             if _wants_in_app(channel):
                 from . import sse as sse_svc
                 sse_svc.publish_sync(

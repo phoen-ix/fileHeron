@@ -2,7 +2,7 @@
 
 A notification is the durable record that something happened that the
 user should know about. Always written, regardless of how (or whether)
-the email goes out — the UI bell (Phase 6b) reads from this table.
+the email goes out — the UI bell reads from this table.
 
 `payload_json` is intentionally schemaless: each category defines its
 own keys. The renderer in services/notification.py knows how to turn

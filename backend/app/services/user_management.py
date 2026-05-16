@@ -27,7 +27,7 @@ def list_users(
     page: int = 1,
     page_size: int = 50,
 ) -> tuple[list[User], int]:
-    """Return (rows, total). `q` matches display_name + email_hint
+    """Return (rows, total). `q` matches display_name + email
     case-insensitively (substring)."""
     base = db.query(User)
     if role is not None:

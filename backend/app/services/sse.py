@@ -14,8 +14,7 @@ never has to guess.
 The event ID is the notifications.id BIGINT, exposed as the SSE
 `Last-Event-Id` header. On reconnect the client sends it back; the
 server emits any rows newer than that ID before going back to live
-streaming. (Phase 6b implements the live streaming; the catch-up
-behavior is built on top of the same machinery.)
+streaming.
 """
 from __future__ import annotations
 

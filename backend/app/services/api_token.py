@@ -302,7 +302,7 @@ def list_all_tokens(
     """Admin paginated query.
 
     `status` ∈ {`active`, `disabled`, `revoked`}. `q` matches against
-    owner display_name + email_hint.
+    owner display_name + email.
     """
     base = db.query(ApiToken).join(User, ApiToken.owner_user_id == User.id)
     if owner_id is not None:

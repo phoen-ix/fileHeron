@@ -68,8 +68,8 @@ async def share_expiring_24h_warning(_ctx) -> dict:
                 # Group recipients are deliberately NOT fanned out here —
                 # 50-member groups would generate 50 emails and the
                 # group-share recipient sees the share in their inbox
-                # anyway. Phase 6b can add a "I'm subscribed to group X
-                # expiry alerts" toggle if needed.
+                # anyway. A per-group expiry-alert opt-in could be added
+                # later if needed.
 
             from ..services import site as site_svc
             payload = {

@@ -1,4 +1,4 @@
-"""/api/notifications/* — preferences (Phase 6a) + bell list/mark/stream (Phase 6b).
+"""/api/notifications/* — per-user notification preferences + bell list/mark/stream.
 
 Default channel is `both` for any category the user hasn't explicitly
 set — that's resolved at read time in `services/notification.py`. We

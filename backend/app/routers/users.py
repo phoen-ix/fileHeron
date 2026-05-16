@@ -87,7 +87,7 @@ def search(
     db: Session = Depends(get_db),
 ) -> UserSearchResponse:
     """Return the union of users the caller can address as a recipient,
-    filtered by `q` (substring match on display_name + email_hint)."""
+    filtered by `q` (substring match on display_name + email)."""
     if me.role == UserRole.admin:
         candidates = (
             db.query(User)

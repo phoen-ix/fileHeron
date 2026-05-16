@@ -76,9 +76,10 @@ def reserve_bytes(db: Session, *, user: User, additional_bytes: int) -> int:
     Returns the new allocated total. Raises AppError(413, QUOTA_EXCEEDED).
 
     If Redis is unreachable, this fails OPEN — the upload is allowed.
-    Phase 3a's threat model is "user fairness" not "absolute storage cap";
-    Phase 6b adds an admin-visible reconciliation job that rebuilds the
-    Redis counter from the DB sum on a schedule.
+    Quota is a "user fairness" control, not an "absolute storage cap".
+    The hourly `workers/quota_reconcile.py` cron rebuilds the Redis
+    counter from the DB sum on a schedule so drift never compounds
+    invisibly.
     """
     if additional_bytes < 0:
         raise AppError(400, "INVALID_SIZE", "Negative reservation.")
@@ -109,7 +110,8 @@ def reserve_bytes(db: Session, *, user: User, additional_bytes: int) -> int:
 def release_bytes(*, user_id: int, bytes_to_free: int) -> None:
     """Decrement the Redis counter when an upload is abandoned (post-terminate)
     or a file is deleted. Best-effort — if Redis is down, we accept the
-    counter will drift; reconciliation job (Phase 6b) repairs."""
+    counter will drift; the hourly `workers/quota_reconcile.py` cron
+    repairs drift > 1 MiB."""
     if bytes_to_free <= 0:
         return
     try:

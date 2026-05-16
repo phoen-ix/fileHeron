@@ -2,9 +2,9 @@
 
 When admin requests erasure of user X:
 
-1. **User row anonymized** — `email_hash` rewritten to `erased:<random>`
-   so it never collides with a future signup; `email_hint` set to
-   `[erased]`; `display_name` set to `[erased]`; `password_hash` blanked
+1. **User row anonymized** — `email` rewritten to
+   `erased-<id>@erased.invalid` so it never collides with a future
+   signup; `display_name` set to `[erased]`; `password_hash` blanked
    (login impossible); `is_disabled` set true; `oidc_subject` cleared.
 2. **Files uploaded by X hard-deleted** — every `files` row where
    `uploaded_by_id == X.id`. Disk unlink + `state=deleted` + audit.
@@ -151,8 +151,9 @@ def erase_user(
 
 
 def compute_erasure_summary(db: Session, *, target: User) -> dict:
-    """Pre-flight numbers shown in the admin's confirm dialog (Phase 8.3)
-    so they know exactly what's about to disappear."""
+    """Pre-flight numbers shown in the admin's confirm dialog so they
+    know exactly what's about to disappear before they hit the
+    irreversible erase button."""
     from ..models.share import Share, ShareState
     from ..models.share_recipient import ShareRecipient
 

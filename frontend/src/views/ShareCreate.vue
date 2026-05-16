@@ -65,6 +65,10 @@ const includePublicLink = ref(false)
 const plPassword = ref('')
 const plDownloadLimit = ref<number | null>(null)
 const plNotifyOnDownload = ref(false)
+// v1.1.0 per-share download limit (independent of public link).
+// `null` means unlimited; positive integer = cap shared across all
+// recipients + sender + admins.
+const shareDownloadLimit = ref<number | null>(null)
 const plResult = ref<InlinePublicLinkResult | null>(null)
 const plCopied = ref(false)
 
@@ -135,6 +139,7 @@ async function onSubmit() {
       message: message.value || null,
       public_link: publicLinkPayload,
       notify_recipients: notifyRecipients.value,
+      download_limit: shareDownloadLimit.value || null,
     })
     shareId.value = data.id
     if (data.public_link) {
@@ -227,6 +232,19 @@ function dismissPlResult() {
             v-model="expiresAtLocal"
             :disabled="submitting || upload.isActive.value"
           />
+          <label class="fh-field share-limit-field">
+            <span class="fh-field-label">{{ t('share_create.download_limit_label') }}</span>
+            <input
+              v-model.number="shareDownloadLimit"
+              class="fh-field-input fh-field-mono"
+              type="number"
+              min="1"
+              max="100000"
+              :placeholder="t('share_create.download_limit_placeholder')"
+              :disabled="submitting || upload.isActive.value"
+            />
+            <span class="fh-field-help">{{ t('share_create.download_limit_help') }}</span>
+          </label>
         </div>
       </div>
 

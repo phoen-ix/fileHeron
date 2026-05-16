@@ -94,6 +94,7 @@
     "FILE_QUARANTINED_ADMIN_ONLY": "This file was flagged by antivirus. Only an administrator can act on it via Quarantine.",
     "FILE_INFECTED": "This file was quarantined by antivirus and can’t be downloaded.",
     "FILE_DELETED": "This file has been deleted.",
+    "SHARE_DOWNLOAD_LIMIT_REACHED": "This share has reached its download limit.",
     "SCAN_IN_PROGRESS": "Antivirus scan still in progress — try again in a moment.",
     "FILE_NOT_INFECTED": "Only files currently in quarantine support this action.",
     "generic": "Something didn't work. Please try again."
@@ -914,6 +915,9 @@
     "recipients_or_public_link_hint": "…or skip recipients and attach a public link below.",
     "notify_recipients_label": "Notify recipient(s) by email",
     "notify_recipients_help": "Send a `share_created` email + in-app notification to every direct recipient and to every active member of any recipient group. Uncheck to keep this share quiet.",
+    "download_limit_label": "Download limit (optional)",
+    "download_limit_placeholder": "e.g. 10",
+    "download_limit_help": "Maximum total downloads across all recipients. Leave blank for unlimited. You can change this later.",
     "send": "Create + send",
     "sending": "Sending…",
     "toast_done": "Share created.",
@@ -954,7 +958,15 @@
     "expiry_saved_toast": "Expiry updated.",
     "expire_now_cta": "Expire now",
     "expire_now_confirm": "Expire this share now and delete all uploaded files? This cannot be undone.",
-    "expire_now_toast": "Share expired and files deleted."
+    "expire_now_toast": "Share expired and files deleted.",
+    "download_limit": "Downloads",
+    "download_limit_value": "{used} of {total}",
+    "download_limit_none": "unlimited",
+    "edit_limit": "Edit",
+    "download_limit_new_label": "New limit",
+    "download_limit_placeholder": "e.g. 10",
+    "download_limit_clear": "Remove limit (unlimited)",
+    "limit_saved_toast": "Download limit updated."
   },
   "public_link": {
     "title": "Public link",

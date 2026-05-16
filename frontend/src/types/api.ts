@@ -203,6 +203,9 @@ export interface ShareResponse {
   recipient_user_ids: number[]
   recipient_groups: GroupRecipientRef[]
   files: FileInShareResponse[]
+  /** v1.1.0 per-share download budget. Both null = unlimited. */
+  download_limit: number | null
+  downloads_remaining: number | null
   /** Populated only when `public_link` was set in the create request. */
   public_link?: InlinePublicLinkResult | null
 }
@@ -483,6 +486,9 @@ export interface ShareListItem {
   created_by_id: number
   file_count: number
   total_size_bytes: number
+  /** v1.1.0 per-share download budget. Both null = unlimited. */
+  download_limit: number | null
+  downloads_remaining: number | null
   recipients: ShareRecipientRef[]
   sender: ShareSenderRef | null
 }

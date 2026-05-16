@@ -116,6 +116,17 @@ def get_download_url(
         raise AppError(
             425, "SCAN_IN_PROGRESS", "Antivirus scan still in progress; try again shortly."
         )
+    # v1.1.0: refuse to mint a signed URL for a share whose download
+    # budget is exhausted. Saves the user from clicking a working-
+    # looking URL that 410s on consume. (Race window between mint and
+    # consume is still handled by the atomic decrement at the download
+    # endpoint.) NULL limit = unlimited, skipped.
+    if share.download_limit is not None and (share.downloads_remaining or 0) <= 0:
+        raise AppError(
+            410,
+            "SHARE_DOWNLOAD_LIMIT_REACHED",
+            "This share has reached its download limit.",
+        )
     token = download_token_svc.issue(file_id, user.id)
     return {"url": f"/api/files/{file_id}/download?dt={token}"}
 
@@ -150,6 +161,17 @@ def download_file(
     if not file.storage_path or not Path(file.storage_path).is_file():
         logger.error("file %s has missing storage_path: %r", file.id, file.storage_path)
         raise AppError(500, "STORAGE_MISSING", "File data is missing on disk.")
+
+    # v1.1.0: per-share download budget. Atomic decrement; if the
+    # counter is already at 0 we refuse with 410 before logging/sending.
+    # NULL limit = unlimited, the helper's WHERE clause skips the case.
+    if share.download_limit is not None:
+        if not share_svc.try_decrement_share_counter(db, share=share):
+            raise AppError(
+                410,
+                "SHARE_DOWNLOAD_LIMIT_REACHED",
+                "This share has reached its download limit.",
+            )
 
     # Log the download.
     via = DownloadVia.api_token if getattr(request.state, "auth_via", "") == "api_token" else DownloadVia.auth

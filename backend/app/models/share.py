@@ -80,6 +80,14 @@ class Share(Base):
         DateTime(), nullable=True
     )
 
+    # v1.1.0 per-share download budget. NULL = unlimited (matches the
+    # public_link semantic). `download_limit` is the cap chosen by the
+    # sender; `downloads_remaining` decrements atomically per download
+    # via the same `UPDATE … WHERE remaining > 0` pattern public_link
+    # uses. Single shared budget across all recipients + sender + admins.
+    download_limit: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    downloads_remaining: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
     created_by: Mapped["User"] = relationship("User", foreign_keys=[created_by_id])
     files: Mapped[list["File"]] = relationship(
         "File", back_populates="share", cascade="all, delete-orphan"

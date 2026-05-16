@@ -151,6 +151,7 @@ def create_share(
     message: str | None = None,
     allow_no_recipients: bool = False,
     notify_recipients: bool | None = None,
+    download_limit: int | None = None,
     request=None,
 ) -> Share:
     # Pydantic preserves tz info from ISO strings ending in Z / +HH:MM
@@ -208,6 +209,10 @@ def create_share(
         message=message or None,
         expires_at=expires_at,
         state=ShareState.active,
+        download_limit=download_limit,
+        # Mirror limit → remaining on create. Subsequent edits via
+        # update_share_limit recompute remaining = max(0, new_limit - used).
+        downloads_remaining=download_limit,
     )
     db.add(share)
     db.flush()
@@ -458,6 +463,95 @@ def revoke_share(db: Session, *, user: User, share: Share, request=None) -> None
 # ---------------------------------------------------------------------------
 # Editable expiry + Expire-now (post-Phase 10)
 # ---------------------------------------------------------------------------
+
+
+def try_decrement_share_counter(db: Session, *, share: Share) -> bool:
+    """Atomically decrement `downloads_remaining` for a share. Mirrors
+    `services/public_link.py::decrement_counter`. Returns True on
+    success, False when the budget is exhausted (caller raises 410).
+
+    Caller is responsible for the `share.download_limit is not None`
+    pre-check — this function is a no-op-on-call for unlimited shares
+    because the WHERE clause filters them out.
+    """
+    from sqlalchemy import update as _update
+
+    stmt = (
+        _update(Share)
+        .where(Share.id == share.id, Share.downloads_remaining > 0)
+        .values(downloads_remaining=Share.downloads_remaining - 1)
+    )
+    result = db.execute(stmt)
+    db.flush()
+    if result.rowcount == 0:
+        return False
+    db.refresh(share)
+    return True
+
+
+def update_share_limit(
+    db: Session,
+    *,
+    user: User,
+    share: Share,
+    new_limit: int | None,
+    clear: bool,
+    request=None,
+) -> Share:
+    """Owner-or-admin changes the per-share download budget.
+
+    Semantics:
+    - `clear=True`  → both download_limit and downloads_remaining → NULL (unlimited).
+    - `new_limit=N` → preserves the used count (used = old_limit - old_remaining,
+      or 0 if previously unlimited); new_remaining = max(0, new_limit - used).
+      So raising the limit grows the remaining by the delta; lowering it below
+      already-used clamps to 0 (sender sees "5 of 3", informative not destructive).
+    - `new_limit=None` AND `clear=False` → no-op (PATCH "no change").
+
+    Refuses non-active shares (would mean editing a budget on a revoked
+    or expired share with no downloads coming).
+    """
+    if share.created_by_id != user.id and user.role != UserRole.admin:
+        raise AppError(403, "FORBIDDEN", "You cannot edit this share.")
+    if share.state != ShareState.active:
+        raise AppError(
+            409,
+            "SHARE_NOT_ACTIVE",
+            "Only active shares can have their download limit changed.",
+        )
+
+    old_limit = share.download_limit
+    old_remaining = share.downloads_remaining
+
+    if clear:
+        if old_limit is None:
+            return share  # already unlimited; no-op + no audit
+        share.download_limit = None
+        share.downloads_remaining = None
+    elif new_limit is None:
+        return share  # no-change
+    else:
+        used = (old_limit - old_remaining) if old_limit is not None and old_remaining is not None else 0
+        share.download_limit = new_limit
+        share.downloads_remaining = max(0, new_limit - used)
+
+    db.flush()
+    record_audit_event(
+        db,
+        event_type=AuditEventType.share_limit_updated,
+        actor_user_id=user.id,
+        target_type="share",
+        target_id=share.id,
+        metadata={
+            "old_limit": old_limit,
+            "old_remaining": old_remaining,
+            "new_limit": share.download_limit,
+            "new_remaining": share.downloads_remaining,
+            "cleared": clear,
+        },
+        request=request,
+    )
+    return share
 
 
 def update_share_expiry(

@@ -97,6 +97,8 @@ def _to_share_response(db: Session, share) -> ShareResponse:
             )
             for f in files
         ],
+        download_limit=share.download_limit,
+        downloads_remaining=share.downloads_remaining,
     )
 
 
@@ -140,6 +142,7 @@ def create_share(
         # honest for direct callers.
         allow_no_recipients=payload.public_link is not None,
         notify_recipients=payload.notify_recipients,
+        download_limit=payload.download_limit,
         request=request,
     )
 
@@ -283,6 +286,8 @@ def list_shares(
                 created_by_id=s.created_by_id,
                 file_count=len(files),
                 total_size_bytes=sum(f.size_bytes for f in files),
+                download_limit=s.download_limit,
+                downloads_remaining=s.downloads_remaining,
                 recipients=recips_by_share.get(s.id, []),
                 sender=sender,
             )
@@ -324,15 +329,26 @@ def patch_share(
     user: User = Depends(get_actor),
     db: Session = Depends(get_db),
 ) -> ShareResponse:
-    """Editable fields on an active share. Today: only `expires_at`."""
+    """Editable fields on an active share: expires_at, download_limit.
+    All optional — only supplied fields change."""
     share = share_svc.get_share_or_404(db, share_id)
-    share_svc.update_share_expiry(
-        db,
-        user=user,
-        share=share,
-        new_expires_at=payload.expires_at,
-        request=request,
-    )
+    if payload.expires_at is not None:
+        share_svc.update_share_expiry(
+            db,
+            user=user,
+            share=share,
+            new_expires_at=payload.expires_at,
+            request=request,
+        )
+    if payload.download_limit is not None or payload.download_limit_clear:
+        share_svc.update_share_limit(
+            db,
+            user=user,
+            share=share,
+            new_limit=payload.download_limit,
+            clear=payload.download_limit_clear,
+            request=request,
+        )
     db.commit()
     db.refresh(share)
     return _to_share_response(db, share)

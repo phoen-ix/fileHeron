@@ -94,6 +94,7 @@
     "FILE_QUARANTINED_ADMIN_ONLY": "Diese Datei wurde vom Virenscanner markiert. Nur Admins können sie über die Quarantäne bearbeiten.",
     "FILE_INFECTED": "Diese Datei wurde vom Virenscanner blockiert und kann nicht heruntergeladen werden.",
     "FILE_DELETED": "Diese Datei wurde gelöscht.",
+    "SHARE_DOWNLOAD_LIMIT_REACHED": "Diese Freigabe hat ihr Download-Limit erreicht.",
     "SCAN_IN_PROGRESS": "Virenprüfung läuft noch — gleich erneut versuchen.",
     "FILE_NOT_INFECTED": "Diese Aktion ist nur für aktuell quarantänierte Dateien möglich.",
     "generic": "Etwas hat nicht funktioniert. Bitte erneut versuchen."
@@ -914,6 +915,9 @@
     "recipients_or_public_link_hint": "…oder Empfänger weglassen und unten einen öffentlichen Link erstellen.",
     "notify_recipients_label": "Empfänger per E-Mail benachrichtigen",
     "notify_recipients_help": "Sendet eine `share_created`-E-Mail und eine In-App-Benachrichtigung an jeden direkten Empfänger und an jedes aktive Mitglied jeder empfangenden Gruppe. Deaktivieren, um diese Freigabe lautlos zu erstellen.",
+    "download_limit_label": "Download-Limit (optional)",
+    "download_limit_placeholder": "z. B. 10",
+    "download_limit_help": "Maximale Gesamtzahl der Downloads über alle Empfänger. Leer lassen für unbegrenzt. Lässt sich später ändern.",
     "send": "Erstellen und senden",
     "sending": "Wird gesendet…",
     "toast_done": "Freigabe erstellt.",
@@ -954,7 +958,15 @@
     "expiry_saved_toast": "Ablaufzeitpunkt aktualisiert.",
     "expire_now_cta": "Jetzt ablaufen",
     "expire_now_confirm": "Diese Freigabe jetzt ablaufen lassen und alle hochgeladenen Dateien löschen? Kann nicht rückgängig gemacht werden.",
-    "expire_now_toast": "Freigabe abgelaufen und Dateien gelöscht."
+    "expire_now_toast": "Freigabe abgelaufen und Dateien gelöscht.",
+    "download_limit": "Downloads",
+    "download_limit_value": "{used} von {total}",
+    "download_limit_none": "unbegrenzt",
+    "edit_limit": "Ändern",
+    "download_limit_new_label": "Neues Limit",
+    "download_limit_placeholder": "z. B. 10",
+    "download_limit_clear": "Limit entfernen (unbegrenzt)",
+    "limit_saved_toast": "Download-Limit aktualisiert."
   },
   "public_link": {
     "title": "Öffentlicher Link",

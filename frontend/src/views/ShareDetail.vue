@@ -7,6 +7,7 @@ import {
   deleteShare,
   expireShareNow,
   getShare,
+  updateShareDownloadLimit,
   updateShareExpiry,
 } from '@/api/shares'
 import ExpiryPicker from '@/components/ExpiryPicker.vue'
@@ -32,6 +33,12 @@ const expiringNow = ref(false)
 const editingExpiry = ref(false)
 const newExpiryLocal = ref<string | null>(null)
 const savingExpiry = ref(false)
+
+// v1.1.0 download-limit edit modal state.
+const editingLimit = ref(false)
+const newLimitValue = ref<number | null>(null)
+const newLimitClear = ref(false)
+const savingLimit = ref(false)
 
 const isOwner = computed(
   () => share.value?.created_by_id === auth.user?.id,
@@ -114,6 +121,42 @@ async function saveExpiry() {
     ui.pushToast(describe(err), 'error')
   } finally {
     savingExpiry.value = false
+  }
+}
+
+function startEditLimit() {
+  if (!share.value) return
+  newLimitValue.value = share.value.download_limit
+  newLimitClear.value = false
+  editingLimit.value = true
+}
+
+function cancelEditLimit() {
+  editingLimit.value = false
+  newLimitValue.value = null
+  newLimitClear.value = false
+}
+
+async function saveLimit() {
+  if (!share.value) return
+  if (!newLimitClear.value && (!newLimitValue.value || newLimitValue.value <= 0)) {
+    return
+  }
+  savingLimit.value = true
+  try {
+    const { data } = await updateShareDownloadLimit(share.value.id, {
+      limit: newLimitClear.value ? null : newLimitValue.value,
+      clear: newLimitClear.value,
+    })
+    share.value = data
+    editingLimit.value = false
+    newLimitValue.value = null
+    newLimitClear.value = false
+    ui.pushToast(t('share_detail.limit_saved_toast'), 'success')
+  } catch (err) {
+    ui.pushToast(describe(err), 'error')
+  } finally {
+    savingLimit.value = false
   }
 }
 
@@ -201,6 +244,65 @@ onMounted(load)
           <span class="fh-kv-label">{{ t('share_detail.total') }}</span>
           <span class="fh-kv-value">{{ formatBytes(totalSize) }}</span>
         </span>
+        <span class="fh-kv">
+          <span class="fh-kv-label">{{ t('share_detail.download_limit') }}</span>
+          <span class="fh-kv-value">
+            <template v-if="share.download_limit !== null">
+              {{ t('share_detail.download_limit_value', {
+                used: share.download_limit - (share.downloads_remaining ?? 0),
+                total: share.download_limit,
+              }) }}
+            </template>
+            <template v-else>{{ t('share_detail.download_limit_none') }}</template>
+          </span>
+          <button
+            v-if="canManage && share.state === 'active' && !editingLimit"
+            type="button"
+            class="fh-btn-text edit-link"
+            @click="startEditLimit"
+          >
+            {{ t('share_detail.edit_limit') }}
+          </button>
+        </span>
+      </div>
+
+      <div v-if="editingLimit" class="edit-expiry-panel">
+        <label class="fh-field">
+          <input
+            v-model="newLimitClear"
+            type="checkbox"
+          />
+          <span class="toggle-name" style="margin-left: 8px;">{{ t('share_detail.download_limit_clear') }}</span>
+        </label>
+        <label v-if="!newLimitClear" class="fh-field">
+          <span class="fh-field-label">{{ t('share_detail.download_limit_new_label') }}</span>
+          <input
+            v-model.number="newLimitValue"
+            class="fh-field-input fh-field-mono"
+            type="number"
+            min="1"
+            max="100000"
+            :placeholder="t('share_detail.download_limit_placeholder')"
+          />
+        </label>
+        <div class="edit-expiry-actions">
+          <button
+            type="button"
+            class="fh-btn"
+            :disabled="savingLimit || (!newLimitClear && (!newLimitValue || newLimitValue <= 0))"
+            @click="saveLimit"
+          >
+            {{ savingLimit ? t('common.loading') : t('common.save') }}
+          </button>
+          <button
+            type="button"
+            class="fh-btn-text"
+            :disabled="savingLimit"
+            @click="cancelEditLimit"
+          >
+            {{ t('common.cancel') }}
+          </button>
+        </div>
       </div>
 
       <div v-if="editingExpiry" class="edit-expiry-panel">

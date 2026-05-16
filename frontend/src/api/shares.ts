@@ -15,12 +15,26 @@ export function createShare(payload: {
   message?: string | null
   public_link?: PublicLinkOnCreate | null
   notify_recipients?: boolean | null
+  /** v1.1.0 per-share download limit. Omit / null = unlimited. */
+  download_limit?: number | null
 }) {
   return api.post<ShareResponse>('/shares', payload)
 }
 
 export function updateShareExpiry(shareId: string, expires_at: string) {
   return api.patch<ShareResponse>(`/shares/${shareId}`, { expires_at })
+}
+
+/** v1.1.0: PATCH the download budget. Pass `clear: true` to reset
+ *  to unlimited; otherwise pass a positive limit. */
+export function updateShareDownloadLimit(
+  shareId: string,
+  opts: { limit?: number | null; clear?: boolean },
+) {
+  return api.patch<ShareResponse>(`/shares/${shareId}`, {
+    download_limit: opts.limit ?? null,
+    download_limit_clear: opts.clear ?? false,
+  })
 }
 
 export function expireShareNow(shareId: string) {

@@ -43,6 +43,10 @@ class CreateShareRequest(APIBaseModel):
     # `None` means "use the admin default kv `share.notify_recipients_default`";
     # `True`/`False` is an explicit override from the sender.
     notify_recipients: bool | None = None
+    # v1.1.0 per-share download budget. None = unlimited. The counter
+    # is shared across all recipients + sender + admins; first-come-
+    # first-served. Mirrors the public_link.download_limit semantic.
+    download_limit: int | None = Field(default=None, gt=0, le=100_000)
 
     @model_validator(mode="after")
     def _recipients_or_public_link(self):
@@ -62,10 +66,17 @@ class CreateShareRequest(APIBaseModel):
 
 
 class UpdateShareRequest(APIBaseModel):
-    """Body for `PATCH /api/shares/{id}`. Currently only `expires_at` is
-    editable; the schema is in its own model so future fields slot in
-    without breaking callers."""
-    expires_at: datetime
+    """Body for `PATCH /api/shares/{id}`. All fields optional — only
+    the supplied ones change.
+
+    For the download_limit field: None means "no change" (PATCH
+    semantic). To clear the limit (= make unlimited), send
+    `download_limit_clear: true` instead. Splitting the unset signal
+    from the no-change signal keeps the JSON shape unambiguous.
+    """
+    expires_at: datetime | None = None
+    download_limit: int | None = Field(default=None, gt=0, le=100_000)
+    download_limit_clear: bool = False
 
 
 class BulkExpireRequest(APIBaseModel):
@@ -127,6 +138,9 @@ class ShareResponse(APIBaseModel):
     recipient_user_ids: list[int]
     recipient_groups: list[GroupRecipientRef]
     files: list[FileInShareResponse]
+    # v1.1.0 per-share download budget. Both null = unlimited.
+    download_limit: int | None = None
+    downloads_remaining: int | None = None
     # Populated only on creation when `public_link` was set in the
     # request body. Plaintext URL is returned ONCE here and never again.
     public_link: InlinePublicLinkResult | None = None
@@ -162,6 +176,9 @@ class ShareListItem(APIBaseModel):
     created_by_id: int
     file_count: int
     total_size_bytes: int
+    # v1.1.0 per-share download budget. Both null = unlimited.
+    download_limit: int | None = None
+    downloads_remaining: int | None = None
     # Post-Phase 10: extra rendering data so the SPA can sort, filter,
     # and group without follow-up requests.
     recipients: list[ShareRecipientRef] = Field(default_factory=list)

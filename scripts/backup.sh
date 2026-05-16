@@ -99,6 +99,29 @@ if [ -n "${BACKUP_RESTIC_REPO:-}" ]; then
     fi
 fi
 
+# 6. Local retention — keep last 7 dated dirs. Restic remote (if
+# configured) holds older snapshots via its own keep-* policy below.
+echo "[backup] pruning local backups (keep last 7) …"
+# shellcheck disable=SC2012
+ls -1dt "$ROOT/backups"/*/ 2>/dev/null | tail -n +8 | xargs -r rm -rf
+
+# 7. Restic forget + prune — drops snapshots beyond the retention
+# window so the remote repo doesn't grow without bound. Mirrors the
+# password-via-file pattern from step 5; reuses the same temp file
+# when restic is enabled.
+if [ -n "${BACKUP_RESTIC_REPO:-}" ] && [ -n "${BACKUP_RESTIC_PASSWORD:-}" ] && command -v restic >/dev/null 2>&1; then
+    PWD_FILE="$(mktemp)"
+    chmod 600 "$PWD_FILE"
+    trap 'rm -f "$PWD_FILE"' EXIT
+    printf '%s' "$BACKUP_RESTIC_PASSWORD" > "$PWD_FILE"
+    echo "[backup] applying restic retention …"
+    restic --repo "$BACKUP_RESTIC_REPO" --password-file "$PWD_FILE" \
+        forget --keep-daily 7 --keep-weekly 4 --keep-monthly 12 --prune \
+        > /dev/null
+    rm -f "$PWD_FILE"
+    trap - EXIT
+fi
+
 echo "[backup] done — $DEST"
 echo "[backup] sizes:"
 du -h "$DEST"/* | sed 's/^/[backup]   /'

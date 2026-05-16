@@ -139,8 +139,10 @@ def quarantine_file(
                 email_to=uploader.email,
             )
 
-        # Optional admin fan-out — gated by the runtime setting. In-app
-        # bell only (system has no plaintext admin email).
+        # Optional admin fan-out — gated by the runtime setting. Admin
+        # email IS stored in users.email (the early hash+hint design was
+        # retired), so we pass `email_to=admin.email` and let each admin's
+        # per-category preference (default `both`) decide channel.
         if settings_svc.get_bool(
             db, settings_svc.Keys.QUARANTINE_NOTIFY_ADMINS, default=False
         ):
@@ -161,9 +163,24 @@ def quarantine_file(
                     payload=payload,
                     email_to=admin.email,
                 )
-    except Exception:
+    except Exception as e:
         logger.exception(
             "could not enqueue file_quarantined notification for file=%s", file.id
         )
+        # Surface the dispatch failure via the audit log so the next
+        # ops_check sees a recent dispatch_failed event and alerts
+        # admins. Belt-and-braces: the file is already quarantined; we
+        # just want the operator to know the uploader/admin wasn't told.
+        try:
+            record_audit_event(
+                db,
+                event_type=AuditEventType.ops_alert_dispatched,
+                actor_user_id=None,
+                target_type="file",
+                target_id=file.id,
+                metadata={"reason": "quarantine_dispatch_failed", "error": str(e)[:300]},
+            )
+        except Exception:
+            logger.exception("could not record dispatch-failed audit for file=%s", file.id)
 
     return dest if moved else None

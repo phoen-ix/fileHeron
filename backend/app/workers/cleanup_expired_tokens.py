@@ -26,6 +26,7 @@ from datetime import datetime, timedelta, timezone
 from ..config import settings
 from ..database import SessionLocal
 from ..models.refresh_token import RefreshToken
+from ..services.cron_tracker import track_cron
 
 logger = logging.getLogger("fileheron.workers.cleanup_expired_tokens")
 
@@ -34,6 +35,7 @@ def _utcnow() -> datetime:
     return datetime.now(tz=timezone.utc).replace(tzinfo=None)
 
 
+@track_cron("cleanup_expired_tokens")
 async def cleanup_expired_tokens(_ctx) -> dict:
     """Walk refresh_tokens; soft-revoke past-TTL rows + hard-delete
     revoked rows older than the retention window."""

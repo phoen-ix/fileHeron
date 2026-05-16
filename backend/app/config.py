@@ -45,6 +45,20 @@ class Settings(BaseSettings):
     # before the hourly cleanup hard-deletes them.
     REFRESH_TOKEN_RETENTION_DAYS: int = 30
 
+    # --- Operational retention (operational audit Wave 3) --------------------
+    # The prune_history cron deletes rows older than these windows. Audit log
+    # default 365d is conservative; bump for regulated environments. Set any
+    # to 0 to disable that table's pruning.
+    AUDIT_LOG_RETENTION_DAYS: int = 365
+    DOWNLOAD_LOG_RETENTION_DAYS: int = 90
+    LOGIN_ATTEMPT_RETENTION_DAYS: int = 30
+    # The purge_old_quarantine cron unlinks bytes (keeps the file row as a
+    # historical marker) when quarantined longer than this. 0 disables.
+    QUARANTINE_PURGE_AFTER_DAYS: int = 90
+    # Abandoned TUS uploads (no DB row, or row stuck in `uploading` state)
+    # older than this get unlinked from /data/uploads.
+    TUS_UPLOAD_ABANDONED_AFTER_HOURS: int = 24
+
     # --- Argon2id parameters -------------------------------------------------
     ARGON2_TIME_COST: int = 3
     ARGON2_MEMORY_COST_KIB: int = 65536

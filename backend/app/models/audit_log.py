@@ -82,6 +82,10 @@ class AuditEventType(str, enum.Enum):
     group_member_removed = "group_member_removed"          # Phase 4
     file_expired = "file_expired"                          # Phase 4
     settings_changed = "settings_changed"                  # Phase 9
+    # Operational audit additions (2026-05-16):
+    email_undeliverable = "email_undeliverable"            # SMTP 5xx → audit + admin alert (was silently swallowed)
+    cron_failed = "cron_failed"                            # cron_tracker logs the failure to audit + admin alert
+    ops_alert_dispatched = "ops_alert_dispatched"          # per-admin in-app ops notification fired
 
 
 def _utcnow() -> datetime:

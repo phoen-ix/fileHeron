@@ -23,6 +23,7 @@ from ..models.share import Share, ShareState
 from ..models.share_recipient import ShareRecipient
 from ..models.user import User
 from ..services import notification as notif_svc
+from ..services.cron_tracker import track_cron
 
 logger = logging.getLogger("fileheron.workers.share_expiring")
 
@@ -31,6 +32,7 @@ def _utcnow() -> datetime:
     return datetime.now(tz=timezone.utc).replace(tzinfo=None)
 
 
+@track_cron("share_expiring_24h_warning")
 async def share_expiring_24h_warning(_ctx) -> dict:
     """Find active shares expiring in (now+24h, now+25h) without a prior
     notification, dispatch share_expiring to recipients + sender, mark

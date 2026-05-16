@@ -144,7 +144,40 @@
       "file_history": "File history",
       "quarantine": "Quarantine",
       "api_tokens": "API tokens",
-      "settings": "Settings"
+      "settings": "Settings",
+      "system": "System"
+    }
+  },
+  "admin_system": {
+    "heading": "System health",
+    "sub": "Live status, recent cron runs, and operational alerts.",
+    "refresh": "Refresh",
+    "refreshed_at": "Refreshed {when}",
+    "live": {
+      "heading": "Live checks",
+      "db": "Database",
+      "redis": "Redis",
+      "av": "Antivirus"
+    },
+    "counters": {
+      "cron_failures_24h": "Cron failures (24h)",
+      "email_undeliverable_24h": "Emails undeliverable (24h)"
+    },
+    "crons": {
+      "heading": "Crons",
+      "job": "Job",
+      "last_status": "Last status",
+      "last_run": "Last run",
+      "duration": "Duration",
+      "last_24h": "Last 24h",
+      "result": "Result",
+      "no_runs": "no runs yet"
+    },
+    "failures": {
+      "heading": "Recent failures",
+      "job": "Job",
+      "at": "At",
+      "error": "Error"
     }
   },
   "admin_settings": {

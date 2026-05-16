@@ -23,6 +23,8 @@ from aiosmtplib.errors import (
 from arq import Retry
 
 from ..database import SessionLocal
+from ..models.audit_log import AuditEventType
+from ..services.audit import record_audit_event
 from ..services.email import resolve_smtp_config
 from ..utils.emailing import send_email
 
@@ -88,6 +90,29 @@ async def send_email_job(
             to,
             e.message,
         )
+        # Audit the undeliverable so ops_check (hourly) surfaces it to
+        # admins instead of failing silently. Best-effort: never let the
+        # audit write swallow the worker's outcome dict.
+        try:
+            audit_db = SessionLocal()
+            try:
+                record_audit_event(
+                    audit_db,
+                    event_type=AuditEventType.email_undeliverable,
+                    actor_user_id=None,
+                    target_type="email",
+                    target_id=to,
+                    metadata={
+                        "subject": subject[:120],
+                        "smtp_code": e.code,
+                        "smtp_message": (e.message or "")[:300],
+                    },
+                )
+                audit_db.commit()
+            finally:
+                audit_db.close()
+        except Exception:
+            logger.exception("could not record email_undeliverable audit event for %s", to)
         return {"to": to, "subject": subject, "status": "failed", "code": e.code}
     except Exception:
         logger.exception("unexpected error sending email to %s", to)

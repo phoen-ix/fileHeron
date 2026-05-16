@@ -43,6 +43,10 @@ class NotificationCategory(str, enum.Enum):
     twofa_required = "twofa_required"
     login_alert = "login_alert"
     file_quarantined = "file_quarantined"
+    # Ops alerts (admin-only). Single category, payload.reason discriminates
+    # cron_failed / av_unhealthy / smtp_failing / dispatch_failed. In-app
+    # only — admins don't have stored plaintext email in this design.
+    ops_alert = "ops_alert"
 
 
 def _utcnow() -> datetime:

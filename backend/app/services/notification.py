@@ -46,6 +46,12 @@ _DEFAULT_CHANNEL: dict[NotificationCategory, NotificationChannel] = {
     NotificationCategory.twofa_required: NotificationChannel.email,
     NotificationCategory.login_alert: NotificationChannel.email,
     NotificationCategory.file_quarantined: NotificationChannel.both,
+    # Ops alerts: in-app only by default. On a busy system these fire in
+    # bursts (cron retries, transient SMTP/AV issues); emailing each one
+    # would mailstorm the admin's inbox. The /admin/system view + the
+    # bell SSE rail are where operators look anyway. Admins can flip to
+    # `both` via their notification preferences if they want pages.
+    NotificationCategory.ops_alert: NotificationChannel.in_app,
 }
 
 

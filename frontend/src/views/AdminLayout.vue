@@ -24,6 +24,9 @@
         <RouterLink :to="{ name: 'admin-settings' }" class="nav-link">
           {{ t('admin.nav.settings') }}
         </RouterLink>
+        <RouterLink :to="{ name: 'admin-system' }" class="nav-link">
+          {{ t('admin.nav.system') }}
+        </RouterLink>
       </nav>
     </aside>
     <div class="admin-content">

@@ -36,7 +36,11 @@ services:
     restart: unless-stopped
     mem_limit: ${REDIS_MEM_LIMIT:-512m}
     cpus: ${REDIS_CPUS:-1.0}
-    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy volatile-lru
+    # noeviction + larger maxmemory so we never silently drop rate-limit
+    # buckets or ARQ jobs under load. Under pressure, Redis writes start
+    # erroring loudly — the ops_check cron surfaces those to admins
+    # rather than silently breaking the per-IP login lockout.
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy noeviction
     volumes:
       - ./data/redis:/data
     networks: [internal]
@@ -116,7 +120,10 @@ services:
         condition: service_healthy
     networks: [internal]
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
+      # curl is in the slim image (Dockerfile installs it). -fsS fails on
+      # non-2xx and stays quiet on success; --max-time 3 prevents a hung
+      # backend from holding the healthcheck.
+      test: ["CMD", "curl", "-fsS", "--max-time", "3", "http://localhost:8000/api/health"]
       interval: 15s
       timeout: 5s
       retries: 3
@@ -128,7 +135,10 @@ services:
         max-file: "3"
 
   clamav:
-    image: clamav/clamav:stable
+    # Pinned to a specific patch — `:stable` drifts and breaks
+    # reproducibility. Bump deliberately; check ClamAV release notes
+    # for signature-DB format changes before moving.
+    image: clamav/clamav:1.5.2
     container_name: ${COMPOSE_PROJECT_NAME:-fileheron}-clamav
     restart: unless-stopped
     mem_limit: ${CLAMAV_MEM_LIMIT:-2g}
@@ -203,6 +213,17 @@ services:
       backend:
         condition: service_healthy
     networks: [internal]
+    healthcheck:
+      # ARQ doesn't expose a port. A working worker MUST be able to
+      # reach Redis (it's the queue + cron tick source). Pinging Redis
+      # from the worker container catches the common wedged-worker
+      # failure modes (network split, Redis credentials drift, OOM
+      # of the python process leaving the container "up" but idle).
+      test: ["CMD", "python", "-c", "import redis; r=redis.Redis(host='redis', port=6379, socket_connect_timeout=3); r.ping()"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
     logging:
       driver: json-file
       options:
@@ -210,7 +231,9 @@ services:
         max-file: "3"
 
   tusd:
-    image: tusproject/tusd:latest
+    # Pinned — `:latest` is a moving pointer; tusd has had protocol-version
+    # bumps that can desync from @uppy/tus on the SPA side.
+    image: tusproject/tusd:v2.9.2
     container_name: ${COMPOSE_PROJECT_NAME:-fileheron}-tusd
     restart: unless-stopped
     mem_limit: ${TUSD_MEM_LIMIT:-512m}

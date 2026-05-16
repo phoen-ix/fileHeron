@@ -20,6 +20,7 @@ from ..database import SessionLocal
 from ..models.file import File, FileState
 from ..models.user import User
 from ..redis_client import get_redis
+from ..services.cron_tracker import track_cron
 from ..services.quota import _key
 
 logger = logging.getLogger("fileheron.workers.quota_reconcile")
@@ -27,6 +28,7 @@ logger = logging.getLogger("fileheron.workers.quota_reconcile")
 _DRIFT_THRESHOLD = 1024 * 1024  # 1 MiB
 
 
+@track_cron("quota_reconcile")
 async def quota_reconcile(_ctx) -> dict:
     db = SessionLocal()
     checked = 0

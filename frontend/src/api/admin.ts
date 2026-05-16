@@ -47,6 +47,45 @@ export function listUsers(params: {
   return api.get<AdminUserListResponse>('/admin/users', { params })
 }
 
+// --- System / ops view (operational audit) -------------------------------
+
+export interface CronRunDTO {
+  id: number
+  job_name: string
+  started_at: string | null
+  completed_at: string | null
+  status: 'running' | 'success' | 'failure'
+  duration_ms: number | null
+  result_summary: Record<string, unknown> | null
+  error_msg: string | null
+}
+
+export interface SystemStatusResponse {
+  live: {
+    db: { status: string; error: string | null }
+    redis: { status: string; error: string | null }
+    av: { status: string; error: string | null }
+  }
+  crons: Array<{
+    job_name: string
+    last_run: CronRunDTO | null
+    last_24h: { success: number; failure: number; running: number }
+  }>
+  recent_failures: CronRunDTO[]
+  email_undeliverable_24h: number
+}
+
+export function getSystemStatus() {
+  return api.get<SystemStatusResponse>('/admin/system/status')
+}
+
+export function getCronRuns(params: { job_name?: string; limit?: number } = {}) {
+  return api.get<{ items: CronRunDTO[]; limit: number }>(
+    '/admin/system/cron-runs',
+    { params },
+  )
+}
+
 export function listInvites(
   params: {
     state?: AdminInviteState | 'all'

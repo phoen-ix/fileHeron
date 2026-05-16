@@ -144,7 +144,40 @@
       "file_history": "Dateiverlauf",
       "quarantine": "Quarantäne",
       "api_tokens": "API-Tokens",
-      "settings": "Einstellungen"
+      "settings": "Einstellungen",
+      "system": "System"
+    }
+  },
+  "admin_system": {
+    "heading": "Systemzustand",
+    "sub": "Live-Status, letzte Cron-Läufe und Betriebs-Alarme.",
+    "refresh": "Aktualisieren",
+    "refreshed_at": "Aktualisiert {when}",
+    "live": {
+      "heading": "Live-Prüfungen",
+      "db": "Datenbank",
+      "redis": "Redis",
+      "av": "Virenscanner"
+    },
+    "counters": {
+      "cron_failures_24h": "Cron-Fehler (24h)",
+      "email_undeliverable_24h": "E-Mails nicht zustellbar (24h)"
+    },
+    "crons": {
+      "heading": "Crons",
+      "job": "Job",
+      "last_status": "Letzter Status",
+      "last_run": "Letzter Lauf",
+      "duration": "Dauer",
+      "last_24h": "Letzte 24h",
+      "result": "Ergebnis",
+      "no_runs": "noch keine Läufe"
+    },
+    "failures": {
+      "heading": "Letzte Fehler",
+      "job": "Job",
+      "at": "Zeitpunkt",
+      "error": "Fehler"
     }
   },
   "admin_settings": {

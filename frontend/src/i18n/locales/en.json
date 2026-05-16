@@ -168,6 +168,10 @@
     "sub": "Live status, recent cron runs, and operational alerts.",
     "refresh": "Refresh",
     "refreshed_at": "Refreshed {when}",
+    "version": {
+      "heading": "Version",
+      "running": "Running"
+    },
     "live": {
       "heading": "Live checks",
       "db": "Database",

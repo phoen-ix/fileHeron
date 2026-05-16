@@ -55,9 +55,11 @@ async def lifespan(_app: FastAPI):
 
 _disable_docs = settings.is_production
 
+from .version import VERSION as _APP_VERSION
+
 app = FastAPI(
     title="fileHeron",
-    version="0.1.0",
+    version=_APP_VERSION,
     docs_url=None if _disable_docs else "/docs",
     redoc_url=None if _disable_docs else "/redoc",
     openapi_url=None if _disable_docs else "/openapi.json",

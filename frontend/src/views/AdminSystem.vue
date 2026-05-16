@@ -119,6 +119,20 @@ const headlineFailures = computed(
     <p v-if="errorMsg" class="error">{{ errorMsg }}</p>
 
     <template v-if="status">
+      <!-- version -->
+      <section v-if="status.version" class="card">
+        <h2>{{ t('admin_system.version.heading') }}</h2>
+        <dl class="kv-grid">
+          <dt>{{ t('admin_system.version.running') }}</dt>
+          <dd>
+            <span class="fh-mono">{{ status.version.running }}</span>
+            <span v-if="status.version.sha && status.version.sha !== 'unknown'" class="sha">
+              ({{ status.version.sha.slice(0, 12) }})
+            </span>
+          </dd>
+        </dl>
+      </section>
+
       <!-- live -->
       <section class="card">
         <h2>{{ t('admin_system.live.heading') }}</h2>
@@ -244,6 +258,7 @@ const headlineFailures = computed(
 .kv-grid dt { color: var(--fh-subtle); }
 .kv-grid dd { margin: 0; }
 .error-line { color: var(--fh-danger); margin-left: var(--fh-space-2); font-family: var(--fh-font-mono); font-size: var(--fh-text-mono-sm); }
+.sha { color: var(--fh-subtle); font-family: var(--fh-font-mono); font-size: var(--fh-text-mono-sm); margin-left: var(--fh-space-2); }
 .counters { display: flex; gap: var(--fh-space-4); }
 .counter {
   background: var(--fh-paper-raised);

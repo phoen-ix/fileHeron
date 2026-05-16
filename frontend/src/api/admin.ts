@@ -94,6 +94,10 @@ export interface SystemStatusResponse {
   }>
   recent_failures: CronRunDTO[]
   email_undeliverable_24h: number
+  /** Phase 1 of the in-app self-update feature: surface what version
+   * is currently running. Sourced from FH_VERSION / FH_GIT_SHA baked
+   * into the image. Phase 3 will add `latest` + `update_available`. */
+  version: { running: string; sha: string }
 }
 
 export function getSystemStatus() {

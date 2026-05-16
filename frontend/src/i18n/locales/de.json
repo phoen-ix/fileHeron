@@ -168,6 +168,10 @@
     "sub": "Live-Status, letzte Cron-Läufe und Betriebs-Alarme.",
     "refresh": "Aktualisieren",
     "refreshed_at": "Aktualisiert {when}",
+    "version": {
+      "heading": "Version",
+      "running": "Läuft"
+    },
     "live": {
       "heading": "Live-Prüfungen",
       "db": "Datenbank",

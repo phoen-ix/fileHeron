@@ -143,11 +143,14 @@ def system_status(
         .count()
     )
 
+    from ...version import GIT_SHA, VERSION
+
     return {
         "live": _live_checks(db),
         "crons": crons,
         "recent_failures": recent_failures,
         "email_undeliverable_24h": email_undeliverable_24h,
+        "version": {"running": VERSION, "sha": GIT_SHA},
     }
 
 

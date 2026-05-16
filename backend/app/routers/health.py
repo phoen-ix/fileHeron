@@ -12,6 +12,7 @@ from ..config import settings
 from ..database import SessionLocal
 from ..dependencies import get_db
 from ..services import oidc_admin as oidc_admin_svc
+from ..version import GIT_SHA, VERSION
 
 router = APIRouter(tags=["health"])
 
@@ -32,7 +33,14 @@ def health_check() -> JSONResponse:
         finally:
             db.close()
     except Exception:
-        return JSONResponse(status_code=503, content={"status": "db_unavailable"})
+        return JSONResponse(
+            status_code=503,
+            content={
+                "status": "db_unavailable",
+                "running_version": VERSION,
+                "running_sha": GIT_SHA,
+            },
+        )
 
     degraded: list[str] = []
 
@@ -53,7 +61,11 @@ def health_check() -> JSONResponse:
         except Exception:
             degraded.append("clamav")
 
-    body: dict = {"status": "ok"}
+    body: dict = {
+        "status": "ok",
+        "running_version": VERSION,
+        "running_sha": GIT_SHA,
+    }
     if degraded:
         body["degraded"] = degraded
     return JSONResponse(status_code=200, content=body)
@@ -91,6 +103,7 @@ def public_config(db: Session = Depends(get_db)) -> dict:
         "app_name": settings.APP_NAME,
         "default_locale": "en",
         "providers": providers,
+        "running_version": VERSION,
     }
     if motd is not None:
         body["motd"] = motd

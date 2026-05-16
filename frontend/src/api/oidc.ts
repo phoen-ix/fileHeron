@@ -15,6 +15,8 @@ export interface PublicConfigResponse {
   providers: PublicProvider[]
   /** Admin-set login-page banner. Absent when disabled or text is empty. */
   motd?: { text: string }
+  /** Running app version (baked at image build). Phase 1 self-update. */
+  running_version: string
 }
 
 export function getPublicConfig() {

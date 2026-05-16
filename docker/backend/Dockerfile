@@ -3,6 +3,17 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
+# Baked-in version metadata. Defaults match version.py's source-tree
+# fallbacks so an arg-less `docker compose build` keeps working for dev.
+# The Actions release workflow passes both args on v* tag push.
+ARG FH_VERSION=0.0.0-dev
+ARG FH_GIT_SHA=unknown
+ENV FH_VERSION=${FH_VERSION} \
+    FH_GIT_SHA=${FH_GIT_SHA}
+LABEL org.opencontainers.image.version="${FH_VERSION}" \
+      org.opencontainers.image.revision="${FH_GIT_SHA}" \
+      org.opencontainers.image.source="https://github.com/phoen-ix/fileHeron"
+
 # System deps for pymysql/cryptography wheels + healthcheck (urllib via stdlib)
 RUN apt-get update && apt-get install -y --no-install-recommends \
         gcc libmariadb-dev curl \

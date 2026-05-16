@@ -4,6 +4,13 @@
 FROM node:22-alpine AS build
 WORKDIR /build
 
+# Baked-in version metadata. Vite picks up VITE_* env vars at build time
+# and inlines them into the bundle so the SPA can show "running version".
+ARG FH_VERSION=0.0.0-dev
+ARG FH_GIT_SHA=unknown
+ENV VITE_FH_VERSION=${FH_VERSION} \
+    VITE_FH_GIT_SHA=${FH_GIT_SHA}
+
 # Copy manifests first for dep cache.
 COPY frontend/package.json frontend/package-lock.json* ./
 RUN --mount=type=cache,target=/root/.npm npm install
@@ -14,6 +21,12 @@ RUN npm run build
 
 # Stage 2: serve.
 FROM nginx:alpine
+
+ARG FH_VERSION=0.0.0-dev
+ARG FH_GIT_SHA=unknown
+LABEL org.opencontainers.image.version="${FH_VERSION}" \
+      org.opencontainers.image.revision="${FH_GIT_SHA}" \
+      org.opencontainers.image.source="https://github.com/phoen-ix/fileHeron"
 
 COPY docker/frontend/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /build/dist /usr/share/nginx/html

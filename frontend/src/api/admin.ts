@@ -12,6 +12,8 @@ import type {
   AdminUserListResponse,
   CreateApiTokenResponse,
   EmailSettingsResponse,
+  AvReloadResponse,
+  AvStatusResponse,
   EraseUserResponse,
   ForcePasswordResetResponse,
   HomePageSettingsResponse,
@@ -401,6 +403,16 @@ export function getQuarantineSettings() {
 
 export function updateQuarantineSettings(payload: UpdateQuarantineSettingsRequest) {
   return api.put<QuarantineSettingsResponse>('/admin/settings/quarantine', payload)
+}
+
+/* v1.1.6: AV engine read-only status + manual reload. */
+
+export function getAvStatus() {
+  return api.get<AvStatusResponse>('/admin/quarantine/av-status')
+}
+
+export function reloadAvSignatures() {
+  return api.post<AvReloadResponse>('/admin/quarantine/av-reload')
 }
 
 export function getShareDefaults() {

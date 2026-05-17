@@ -1214,5 +1214,19 @@
     "toggle_label": "Notify all admins when a virus is detected",
     "toggle_help": "Each admin gets an email + an in-app bell ring per detection. An admin can mute themselves from /account → Notifications by switching the \"file_quarantined\" channel to \"off\" (default is \"both\" — email + in-app).",
     "saved_toast": "Quarantine alert setting saved."
+  },
+  "admin_av": {
+    "title": "Antivirus engine",
+    "intro": "Read-only view of the running ClamAV daemon plus a manual signature reload. The engine auto-checks for new definitions roughly every 12 hours via freshclam.",
+    "daemon_label": "Daemon",
+    "sigs_version_label": "Signature revision",
+    "sigs_date_label": "Signature date",
+    "last_reload_label": "Last manual reload",
+    "reload_button": "Reload signatures",
+    "reload_help": "Tells the running engine to re-read its signature files from disk. Pick this up after a fresh freshclam fetch lands — no container restart needed.",
+    "reload_done": "Reload signal sent.",
+    "av_skip_notice": "Running in AV_SKIP dev mode — no ClamAV engine attached.",
+    "unavailable_notice": "ClamAV engine unreachable: {error}",
+    "never_reloaded": "Never (auto-updates handled by freshclam)"
   }
 }

@@ -1,4 +1,8 @@
-"""/api/admin/files/{id}/quarantine — admin actions on infected files."""
+"""/api/admin/files/{id}/quarantine — admin actions on infected files.
+
+Also surfaces v1.1.6 read-only AV-engine info + manual reload at
+/api/admin/quarantine/{av-status,av-reload}.
+"""
 from __future__ import annotations
 
 from pathlib import Path
@@ -9,10 +13,17 @@ from sqlalchemy.orm import Session
 
 from ...dependencies import get_current_admin, get_db
 from ...middleware.errors import AppError
+from ...models.audit_log import AuditEventType, AuditLog
 from ...models.file import File, FileState
 from ...models.user import User
-from ...schemas.quarantine import QuarantineActionRequest
+from ...schemas.quarantine import (
+    AvReloadResponse,
+    AvStatusResponse,
+    QuarantineActionRequest,
+)
+from ...services import av_scan as av_scan_svc
 from ...services import quarantine_admin as quarantine_admin_svc
+from ...services.audit import record_audit_event
 
 router = APIRouter()
 
@@ -94,3 +105,71 @@ def admin_quarantine_purge(
     quarantine_admin_svc.purge(db, admin=admin, file=file, request=request)
     db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+# ---------------------------------------------------------------------------
+# v1.1.6 — AV engine status + manual signature reload
+# ---------------------------------------------------------------------------
+
+
+@router.get("/quarantine/av-status", response_model=AvStatusResponse)
+def av_status(
+    db: Session = Depends(get_db),
+    _admin: User = Depends(get_current_admin),
+) -> AvStatusResponse:
+    info = av_scan_svc.get_version()
+    last_reload_at = (
+        db.query(AuditLog.created_at)
+        .filter(AuditLog.event_type == AuditEventType.av_reload_triggered)
+        .order_by(AuditLog.created_at.desc())
+        .limit(1)
+        .scalar()
+    )
+    return AvStatusResponse(**info, last_reload_at=last_reload_at)
+
+
+@router.post("/quarantine/av-reload", response_model=AvReloadResponse)
+def av_reload(
+    request: Request,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin),
+) -> AvReloadResponse:
+    """Tell clamd to re-read its signature DB from disk. Updates
+    fetched by freshclam in the background land in the running engine
+    without a container restart. Audits regardless of outcome so the
+    operator trail captures "they tried, it didn't work" as much as
+    "they tried, it succeeded."
+    """
+    try:
+        result = av_scan_svc.reload_signatures()
+    except av_scan_svc.AVUnavailable as e:
+        record_audit_event(
+            db,
+            event_type=AuditEventType.av_reload_triggered,
+            actor_user_id=admin.id,
+            target_type="av_engine",
+            target_id="clamd",
+            metadata={"ok": False, "av_skip": False, "error": str(e)},
+            request=request,
+        )
+        db.commit()
+        raise AppError(503, "AV_UNAVAILABLE", f"ClamAV unreachable: {e}") from e
+
+    record_audit_event(
+        db,
+        event_type=AuditEventType.av_reload_triggered,
+        actor_user_id=admin.id,
+        target_type="av_engine",
+        target_id="clamd",
+        metadata={"ok": result["ok"], "av_skip": result["av_skip"], "raw": result["raw"]},
+        request=request,
+    )
+    db.commit()
+    if not result["ok"]:
+        # AV_SKIP dev mode, or clamd returned a non-RELOAD reply.
+        raise AppError(
+            503,
+            "AV_UNAVAILABLE",
+            "ClamAV engine did not accept the reload signal.",
+        )
+    return AvReloadResponse(**result)

@@ -1214,5 +1214,19 @@
     "toggle_label": "Alle Admins benachrichtigen, wenn ein Virus erkannt wird",
     "toggle_help": "Jeder Admin erhält pro Erkennung eine E-Mail und einen Eintrag in der In-App-Glocke. Ein Admin kann sich unter /account → Benachrichtigungen stummschalten, indem er den Kanal für \"file_quarantined\" auf \"off\" stellt (Standard ist \"both\" — E-Mail + In-App).",
     "saved_toast": "Einstellung für Quarantäne-Alarme gespeichert."
+  },
+  "admin_av": {
+    "title": "Antiviren-Engine",
+    "intro": "Schreibgeschützte Sicht auf die laufende ClamAV-Engine plus manueller Signaturen-Reload. Die Engine prüft im Hintergrund etwa alle 12 Stunden via freshclam auf neue Definitionen.",
+    "daemon_label": "Daemon",
+    "sigs_version_label": "Signatur-Revision",
+    "sigs_date_label": "Signatur-Datum",
+    "last_reload_label": "Letzter manueller Reload",
+    "reload_button": "Signaturen neu laden",
+    "reload_help": "Weist die laufende Engine an, ihre Signaturdateien neu von der Festplatte zu lesen. Nach einem freshclam-Update einsetzen — kein Container-Neustart nötig.",
+    "reload_done": "Reload-Signal gesendet.",
+    "av_skip_notice": "AV_SKIP-Entwicklungsmodus aktiv — keine ClamAV-Engine angebunden.",
+    "unavailable_notice": "ClamAV-Engine nicht erreichbar: {error}",
+    "never_reloaded": "Nie (automatische Updates über freshclam)"
   }
 }

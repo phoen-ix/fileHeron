@@ -750,3 +750,31 @@ export interface QuarantineSettingsResponse {
 export interface UpdateQuarantineSettingsRequest {
   notify_admins: boolean
 }
+
+/* v1.1.6: AV engine status + manual signature reload. */
+
+export interface AvStatusResponse {
+  available: boolean
+  av_skip: boolean
+  /** "ClamAV 1.5.2" or similar; null when unavailable. */
+  version: string | null
+  /** Signature revision number (e.g. "27543"); null when unavailable. */
+  sigs_version: string | null
+  /** ctime-style date string from clamd (e.g. "Fri Apr 26 10:23:45 2026").
+   *  Free-text — NOT an ISO datetime, so don't run it through
+   *  formatInSiteTime. */
+  sigs_date: string | null
+  /** Full VERSION reply for debugging when the parser splits weirdly. */
+  raw: string | null
+  /** Populated when available=false and av_skip=false (real error). */
+  error: string | null
+  /** ISO datetime of the most recent admin-triggered av_reload, or
+   *  null if it's never been triggered. */
+  last_reload_at: string | null
+}
+
+export interface AvReloadResponse {
+  ok: boolean
+  av_skip: boolean
+  raw: string
+}

@@ -49,6 +49,7 @@ class AuditEventType(str, enum.Enum):
     file_quarantine_released = "file_quarantine_released"  # post-Phase 10
     file_quarantine_purged = "file_quarantine_purged"      # post-Phase 10
     quarantine_policy_changed = "quarantine_policy_changed"  # post-Phase 10
+    av_reload_triggered = "av_reload_triggered"            # v1.1.6
     public_link_created = "public_link_created"            # Phase 5
     public_link_revoked = "public_link_revoked"            # Phase 5
     public_link_consumed = "public_link_consumed"          # Phase 5

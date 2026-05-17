@@ -118,3 +118,87 @@ def ping() -> bool:
         return _read_reply(s).strip() == "PONG"
     finally:
         s.close()
+
+
+def get_version() -> dict:
+    """Ask clamd for its VERSION string + parse out daemon + sig info.
+
+    Returns a dict shaped for the admin-UI ``AvStatusResponse`` schema:
+
+        {
+            "available": bool,
+            "av_skip": bool,
+            "version": str | None,        # e.g. "ClamAV 1.5.2"
+            "sigs_version": str | None,   # e.g. "27543" (sig revision)
+            "sigs_date": str | None,      # ctime-style, e.g. "Fri Apr 26 10:23:45 2026"
+            "raw": str | None,            # full reply for debugging
+            "error": str | None,          # populated when available=False
+        }
+
+    Short-circuits to ``available=False, av_skip=True`` when ``AV_SKIP``
+    is set (dev / CI mode — no clamd running). Never raises; the admin
+    surface always wants to render *something*."""
+    if settings.AV_SKIP:
+        return {
+            "available": False,
+            "av_skip": True,
+            "version": None,
+            "sigs_version": None,
+            "sigs_date": None,
+            "raw": None,
+            "error": None,
+        }
+    try:
+        s = _open_clamd_socket()
+    except AVUnavailable as e:
+        return {
+            "available": False,
+            "av_skip": False,
+            "version": None,
+            "sigs_version": None,
+            "sigs_date": None,
+            "raw": None,
+            "error": str(e),
+        }
+    try:
+        s.sendall(b"zVERSION\0")
+        raw = _read_reply(s).strip()
+    finally:
+        s.close()
+    # Format: "ClamAV <ver>/<sig_revision>/<ctime-date>", split on '/'.
+    parts = [p.strip() for p in raw.split("/")]
+    version = parts[0] if parts and parts[0] else None
+    sigs_version = parts[1] if len(parts) > 1 and parts[1] else None
+    sigs_date = parts[2] if len(parts) > 2 and parts[2] else None
+    return {
+        "available": bool(version),
+        "av_skip": False,
+        "version": version,
+        "sigs_version": sigs_version,
+        "sigs_date": sigs_date,
+        "raw": raw or None,
+        "error": None if version else "empty VERSION reply",
+    }
+
+
+def reload_signatures() -> dict:
+    """Ask clamd to re-read its signature DB from disk. Useful after
+    freshclam has fetched updates and we want them to land in the
+    running engine without a container restart.
+
+    Returns ``{"ok": bool, "av_skip": bool, "raw": str}``. Short-circuits
+    on ``AV_SKIP``. Raises AVUnavailable if clamd is unreachable — the
+    router converts that into a 503 ``AV_UNAVAILABLE`` response."""
+    if settings.AV_SKIP:
+        return {"ok": False, "av_skip": True, "raw": "AV_SKIP set"}
+    s = _open_clamd_socket()
+    try:
+        s.sendall(b"zRELOAD\0")
+        raw = _read_reply(s).strip()
+    finally:
+        s.close()
+    return {
+        "ok": raw.upper().startswith("RELOAD"),
+        "av_skip": False,
+        "raw": raw,
+    }

@@ -30,18 +30,6 @@ def build_root() -> ctk.CTk:
     ctk.set_appearance_mode("system")  # follows Windows light/dark
     ctk.set_default_color_theme("blue")  # CTk stock; tweak in widgets
 
-    # v0.4.13 heartbeat trace caught CTk's "_windows_set_titlebar_color"
-    # routine withdrawing the root and never deiconifying it back —
-    # the routine does ``self.withdraw() → set DWM titlebar color →
-    # self.deiconify()`` and when it lands mid-MainWindow-construction
-    # the deiconify gets lost. The root stays withdrawn forever:
-    # no window, no taskbar icon, but the process keeps running.
-    # CTk exposes a class-level kill switch — flip it BEFORE any CTk
-    # window is constructed. Cost: the Windows title bar won't tint
-    # to follow dark/light mode. Acceptable; the visible app stays.
-    ctk.CTk._deactivate_windows_window_header_manipulation = True
-    ctk.CTkToplevel._deactivate_windows_window_header_manipulation = True
-
     root = ctk.CTk()
     root.title("file:Heron")
     root.geometry("1000x640")

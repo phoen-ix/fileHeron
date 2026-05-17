@@ -11,6 +11,7 @@ from typing import Optional
 
 import customtkinter as ctk
 from tkcalendar import DateEntry
+from tkinterdnd2 import DND_FILES
 
 from .. import api as api_pkg
 from ..api import ApiClient, ApiError
@@ -112,10 +113,24 @@ class UploadPanel(ctk.CTkFrame):
             outer, fg_color=("gray90", "gray20"), height=80,
         )
         self._file_list_frame.pack(fill="both", expand=True, pady=(2, 0))
-        self._empty_var = ctk.StringVar(value="(no files yet — click Add files…)")
+
+        # v0.5.0: drag-drop target + click-to-browse on the file area.
+        # The try/except keeps the button-only flow working if
+        # tkinterdnd2's Tcl extension fails to load for any reason.
+        try:
+            self._file_list_frame.drop_target_register(DND_FILES)
+            self._file_list_frame.dnd_bind("<<Drop>>", self._on_drop)
+        except Exception:
+            logger.warning("tkinterdnd2 drop registration failed; click-only mode")
+        self._file_list_frame.bind("<Button-1>", lambda _e: self._on_add())
+        self._file_list_frame.configure(cursor="hand2")
+
+        self._empty_var = ctk.StringVar(value="(drop files here or click to browse)")
         self._empty_label = ctk.CTkLabel(
             self._file_list_frame, textvariable=self._empty_var, text_color="gray",
+            cursor="hand2",
         )
+        self._empty_label.bind("<Button-1>", lambda _e: self._on_add())
         self._empty_label.pack(pady=12)
 
     def _build_expiry_section(self, parent) -> None:
@@ -212,6 +227,15 @@ class UploadPanel(ctk.CTkFrame):
         for p in paths:
             self._add_file(Path(p))
 
+    def _on_drop(self, event) -> None:
+        # tkinterdnd2 packs paths with spaces in {curly braces}; use
+        # the widget's tk.splitlist to parse correctly. Silently skip
+        # anything that isn't an existing file (folders, non-files).
+        for raw in self._file_list_frame.tk.splitlist(event.data):
+            path = Path(raw)
+            if path.is_file():
+                self._add_file(path)
+
     def _on_clear_files(self) -> None:
         self._files.clear()
         self._render_file_list()
@@ -226,9 +250,14 @@ class UploadPanel(ctk.CTkFrame):
         for child in self._file_list_frame.winfo_children():
             child.destroy()
         if not self._files:
+            # Re-create the empty-state label + re-bind its click (the
+            # widget is destroyed and recreated on every render so the
+            # binding from _build() doesn't carry over).
             self._empty_label = ctk.CTkLabel(
-                self._file_list_frame, textvariable=self._empty_var, text_color="gray",
+                self._file_list_frame, textvariable=self._empty_var,
+                text_color="gray", cursor="hand2",
             )
+            self._empty_label.bind("<Button-1>", lambda _e: self._on_add())
             self._empty_label.pack(pady=20)
             return
         for p in self._files:

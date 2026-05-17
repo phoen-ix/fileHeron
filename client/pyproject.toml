@@ -4,18 +4,23 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "fileheron-client"
-version = "0.4.27"
+version = "0.5.0"
 description = "Desktop GUI client for the file:Heron self-hosted file-sharing platform."
 requires-python = ">=3.12"
 license = { text = "MIT" }
 authors = [{ name = "file:Heron contributors" }]
 readme = "README.md"
 dependencies = [
-    # GUI stack (v0.4.0 migration from PySide6; v0.4.10 dropped tkinterdnd2):
+    # GUI stack (v0.4.0 migration from PySide6; v0.5.0 brought
+    # tkinterdnd2 back after v0.4.11 fixed the actual culprit — a
+    # self._root attribute shadowing tkinter.Misc._root in widget
+    # subclasses, not the library itself):
     #   customtkinter: modern themeable wrapper over stdlib tkinter
+    #   tkinterdnd2:   native drag-drop bindings on the file area
     #   tkcalendar:    date picker widget (Entry+popup calendar)
     # Pure-Python total ~5-10 MB at install; vs PySide6/Qt6's ~150 MB.
     "customtkinter>=5.2",
+    "tkinterdnd2>=0.4",
     "tkcalendar>=1.6",
     "httpx>=0.27",
     "pydantic>=2.5",

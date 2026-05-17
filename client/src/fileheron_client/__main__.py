@@ -24,6 +24,7 @@ from pathlib import Path
 # package`. Absolute imports work both for that and for the canonical
 # `python -m fileheron_client` invocation.
 from fileheron_client.config import load_config
+from fileheron_client.ui._async import init_async
 from fileheron_client.ui.app import build_root
 from fileheron_client.ui.login_window import LoginWindow
 from fileheron_client.ui.main_window import MainWindow
@@ -84,6 +85,13 @@ def main(argv: list[str] | None = None) -> int:
             traceback.print_exception(exc_type, exc, tb, file=f)
         traceback.print_exception(exc_type, exc, tb)
     root.report_callback_exception = _tk_report
+
+    # v0.4.4: kick the main-thread async-result poller. Worker
+    # threads push (callback, args) onto a queue.Queue; the poller
+    # drains it from the main thread every 50 ms. Without this, the
+    # sign-in worker's _done callback never fires (Tk's threading
+    # rules forbid calling .after() from a worker thread).
+    init_async(root)
 
     # Hide the root during the login phase. The login dialog is a
     # Toplevel on top of (and modal to) the hidden root.

@@ -1,31 +1,75 @@
 """Thread-safe UI update primitive for the CustomTkinter migration.
 
-Tkinter is single-threaded for UI mutations; touching a widget from a
-worker thread is undefined behaviour (sometimes crashes, sometimes
-silently corrupts). Qt's signals/slots auto-marshalled across threads;
-in tkinter we have to do that ourselves via ``widget.after(0, ...)``,
-which schedules a callable to run on the next idle tick of the main
-event loop.
+v0.4.0 / v0.4.3 attempted this with worker threads calling
+``root.after(0, callback)`` directly. That broke sign-in on Windows:
+``root.after()`` goes through ``tk.call`` which acquires Tcl's
+interpreter lock, but the main thread sitting in ``wait_window()`` or
+``mainloop()`` holds that lock — the worker either deadlocks waiting
+for it or the scheduled callback never gets serviced.
 
-Two helpers cover the patterns the app needs:
+v0.4.4 switches to the canonical Tk-threading pattern:
 
-- ``run_in_background(root, fn, on_done, on_failed)`` — fire-and-forget
-  for one-shot calls (login, list_shares, revoke_share, etc.). The
-  callbacks run on the Tk main thread.
-- ``run_with_progress(root, fn, on_progress, on_done, on_failed)`` —
-  for calls that take an ``on_progress(done, total)`` callback
-  themselves (download_file, upload_direct, TUS). ``fn`` is invoked
-  with a thread-side progress callback that internally marshals each
-  tick onto the Tk main loop, so the callsite never sees the
-  threading boundary.
+- Worker threads NEVER touch any Tk API. They put ``(callback, args)``
+  tuples on a thread-safe ``queue.Queue``.
+- The Tk main thread polls that queue every 50 ms via ``after()``.
+  Pending callbacks run on the main thread inside the normal event
+  loop, so widget mutations are legal.
 
-Both return the spawned ``threading.Thread`` for callers who want to
-``.join()`` (rare — these are daemon threads).
-"""
+``init_async(root)`` must be called once on the main thread after the
+root is built; it kicks off the polling loop."""
 from __future__ import annotations
 
+import logging
+import queue
 import threading
 from typing import Any, Callable, Optional
+
+_log = logging.getLogger("fileheron_client.ui._async")
+
+# Module-global queue. Workers push (callback, args) tuples; the main-
+# thread poller in init_async drains them. Simpler than wiring a queue
+# per call site, and there's only ever one Tk main loop.
+_result_q: "queue.Queue[tuple[Callable[..., Any], tuple]]" = queue.Queue()
+
+_POLL_INTERVAL_MS = 50
+
+
+def init_async(root) -> None:
+    """Wire the main-thread polling loop. Idempotent — calling more
+    than once just re-schedules the next tick."""
+    def _poll() -> None:
+        try:
+            while True:
+                callback, args = _result_q.get_nowait()
+                try:
+                    callback(*args)
+                except Exception:
+                    # Don't let one bad callback stall the whole queue;
+                    # log + continue. report_callback_exception in
+                    # __main__ will also capture this to crash.log via
+                    # the standard Tk path.
+                    _log.exception("async callback failed")
+        except queue.Empty:
+            pass
+        try:
+            root.after(_POLL_INTERVAL_MS, _poll)
+        except RuntimeError:
+            # Root was destroyed; stop polling.
+            pass
+
+    # Schedule first poll one tick out so init_async can be called
+    # immediately after root construction, before any UI is built.
+    root.after(_POLL_INTERVAL_MS, _poll)
+
+
+def _enqueue(callback: Callable[..., Any], args: tuple) -> None:
+    """Put a callback on the main-thread queue. Drop silently on full
+    queue (never happens with the default unbounded queue, but the
+    paranoia keeps this safe under future refactors)."""
+    try:
+        _result_q.put_nowait((callback, args))
+    except queue.Full:
+        _log.warning("async result queue full; dropping callback %s", callback)
 
 
 def run_in_background(
@@ -35,25 +79,20 @@ def run_in_background(
     on_done: Optional[Callable[[Any], None]] = None,
     on_failed: Optional[Callable[[Exception], None]] = None,
 ) -> threading.Thread:
-    """Run ``fn`` in a daemon thread. On completion, schedule
-    ``on_done(result)`` or ``on_failed(exc)`` on the Tk main loop."""
+    """Run ``fn`` in a daemon thread. On completion, queue ``on_done``
+    or ``on_failed`` for the next main-thread poll.
+
+    ``root`` is accepted but unused in v0.4.4 (the queue is module-
+    scoped) — kept in the signature so call sites don't need to change."""
     def _runner() -> None:
         try:
             result = fn()
-        except Exception as exc:  # network / unexpected — surface to UI
+        except Exception as exc:
             if on_failed is not None:
-                try:
-                    root.after(0, on_failed, exc)
-                except RuntimeError:
-                    # root was destroyed while the worker was running;
-                    # drop the result silently rather than crashing.
-                    pass
+                _enqueue(on_failed, (exc,))
             return
         if on_done is not None:
-            try:
-                root.after(0, on_done, result)
-            except RuntimeError:
-                pass
+            _enqueue(on_done, (result,))
 
     t = threading.Thread(target=_runner, daemon=True)
     t.start()
@@ -68,33 +107,22 @@ def run_with_progress(
     on_done: Optional[Callable[[Any], None]] = None,
     on_failed: Optional[Callable[[Exception], None]] = None,
 ) -> threading.Thread:
-    """Run ``fn(_tick)`` in a daemon thread. The supplied ``_tick``
-    function marshals each ``(done, total)`` update onto the Tk main
-    loop before invoking ``on_progress``. ``on_done`` / ``on_failed``
-    behave identically to ``run_in_background``."""
+    """Run ``fn(_tick)`` in a daemon thread. Progress ticks marshal
+    onto the main thread via the same queue. ``on_done`` /
+    ``on_failed`` behave identically to ``run_in_background``."""
     def _tick(done: int, total: int) -> None:
-        if on_progress is None:
-            return
-        try:
-            root.after(0, on_progress, done, total)
-        except RuntimeError:
-            pass
+        if on_progress is not None:
+            _enqueue(on_progress, (done, total))
 
     def _runner() -> None:
         try:
             result = fn(_tick)
         except Exception as exc:
             if on_failed is not None:
-                try:
-                    root.after(0, on_failed, exc)
-                except RuntimeError:
-                    pass
+                _enqueue(on_failed, (exc,))
             return
         if on_done is not None:
-            try:
-                root.after(0, on_done, result)
-            except RuntimeError:
-                pass
+            _enqueue(on_done, (result,))
 
     t = threading.Thread(target=_runner, daemon=True)
     t.start()

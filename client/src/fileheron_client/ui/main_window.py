@@ -133,6 +133,19 @@ class MainWindow:
         self._app_root.deiconify()
         self._app_root.lift()
         self._app_root.focus_force()
+        # Belt + braces: if CTk's titlebar manipulation (or anything
+        # else) re-withdraws us between now and mainloop settling,
+        # forcibly reassert deiconify a few times. Cheap; idempotent.
+        for delay in (50, 200, 500, 1000):
+            self._app_root.after(delay, self._reassert_visible)
         # Kick the first list load — without it the user sees empty
         # tabs until they click around.
         self.inbox.refresh()
+
+    def _reassert_visible(self) -> None:
+        try:
+            if self._app_root.state() != "normal":
+                self._app_root.deiconify()
+                self._app_root.lift()
+        except Exception:
+            pass

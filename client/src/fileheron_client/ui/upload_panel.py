@@ -35,12 +35,14 @@ class UploadPanel(ctk.CTkFrame):
         self._build()
 
     def _build(self) -> None:
-        # v0.4.24 layout: action area (Create share + upload button,
-        # status text, progress bar, Add files / Clear list) is PINNED
-        # to the bottom via side="bottom" packing, so the submit button
-        # is always visible no matter the window height. Top-packed
-        # form fills space above; the file-list frame absorbs slack
-        # vertical space and shrinks gracefully on smaller windows.
+        # v0.4.25 layout — designed to fit in 1000x640 without clipping:
+        #   row 0: Subject (full width)
+        #   row 1: Message textbox (full width, 50px tall)
+        #   row 2: 2-col grid — Recipients (left) | Expires (right)
+        #   row 3: Public link as ONE compact inline row
+        #   row 4: Files header + scrollable list (fills slack)
+        #   row 5 (PINNED BOTTOM): Add files / Clear list /
+        #          status text / Create share + upload + progress bar
         outer = ctk.CTkFrame(self, fg_color="transparent")
         outer.pack(fill="both", expand=True, padx=8, pady=8)
 
@@ -49,72 +51,72 @@ class UploadPanel(ctk.CTkFrame):
 
         self.progress = ctk.CTkProgressBar(outer)
         self.progress.set(0)
-        self.progress.pack(side="bottom", fill="x", pady=(8, 0))
+        self.progress.pack(side="bottom", fill="x", pady=(6, 0))
         self.progress.pack_forget()
 
-        submit_row = ctk.CTkFrame(outer, fg_color="transparent")
-        submit_row.pack(side="bottom", fill="x", pady=(8, 0))
-        self.status_var = ctk.StringVar(value="")
-        ctk.CTkLabel(
-            submit_row, textvariable=self.status_var, anchor="w",
-        ).pack(side="left", fill="x", expand=True)
+        action_row = ctk.CTkFrame(outer, fg_color="transparent")
+        action_row.pack(side="bottom", fill="x", pady=(6, 0))
+        ctk.CTkButton(action_row, text="Add files…", command=self._on_add).pack(side="left")
+        ctk.CTkButton(
+            action_row, text="Clear list", command=self._on_clear_files,
+            fg_color="gray",
+        ).pack(side="left", padx=(8, 0))
         self.send_btn = ctk.CTkButton(
-            submit_row, text="Create share + upload",
+            action_row, text="Create share + upload",
             command=self._on_send, width=180,
         )
         self.send_btn.pack(side="right")
+        self.status_var = ctk.StringVar(value="")
+        ctk.CTkLabel(
+            action_row, textvariable=self.status_var, anchor="w",
+        ).pack(side="left", fill="x", expand=True, padx=(16, 16))
 
-        files_row = ctk.CTkFrame(outer, fg_color="transparent")
-        files_row.pack(side="bottom", fill="x", pady=(0, 4))
-        ctk.CTkButton(files_row, text="Add files…", command=self._on_add).pack(side="left")
-        ctk.CTkButton(
-            files_row, text="Clear list", command=self._on_clear_files,
-            fg_color="gray",
-        ).pack(side="left", padx=(8, 0))
+        # ---- Top form ----
 
-        # ---- Top-packed form (fills from the top down; the file list
-        # is the only widget that uses expand=True so it absorbs slack).
-
-        # Subject
+        # Subject + Message (full width)
         ctk.CTkLabel(outer, text="Subject", anchor="w").pack(fill="x")
         self.subject_var = ctk.StringVar()
         ctk.CTkEntry(
             outer, textvariable=self.subject_var,
             placeholder_text="(optional — defaults to first filename)",
-        ).pack(fill="x", pady=(0, 8))
+        ).pack(fill="x", pady=(0, 6))
 
-        # Message
         ctk.CTkLabel(outer, text="Message", anchor="w").pack(fill="x")
-        self.message_text = ctk.CTkTextbox(outer, height=60)
+        self.message_text = ctk.CTkTextbox(outer, height=50)
         self.message_text.pack(fill="x", pady=(0, 8))
 
-        # Recipients
-        ctk.CTkLabel(outer, text="Recipients", anchor="w").pack(fill="x")
-        self.recipients = RecipientPickerWidget(outer, self._app_root, self._api)
-        self.recipients.pack(fill="x", pady=(0, 8))
+        # Two-column row: Recipients (left) | Expires (right)
+        two_col = ctk.CTkFrame(outer, fg_color="transparent")
+        two_col.pack(fill="x", pady=(0, 8))
+        two_col.grid_columnconfigure(0, weight=1, uniform="cols")
+        two_col.grid_columnconfigure(1, weight=1, uniform="cols")
 
-        # Expiry — paired date picker + HH:MM + Never checkbox.
-        self._build_expiry_section(outer)
+        left_col = ctk.CTkFrame(two_col, fg_color="transparent")
+        left_col.grid(row=0, column=0, sticky="nsew", padx=(0, 8))
+        ctk.CTkLabel(left_col, text="Recipients", anchor="w").pack(fill="x")
+        self.recipients = RecipientPickerWidget(left_col, self._app_root, self._api)
+        self.recipients.pack(fill="x")
 
-        # Public link
+        right_col = ctk.CTkFrame(two_col, fg_color="transparent")
+        right_col.grid(row=0, column=1, sticky="nsew", padx=(8, 0))
+        self._build_expiry_section(right_col)
+
+        # Public link — one compact inline row instead of a boxed
+        # 4-row sub-form. Saves ~110 px of vertical space.
         self._build_public_link_section(outer)
 
-        # File picker (drag-drop dropped in v0.4.10 — see app.py).
-        ctk.CTkLabel(
-            outer, text="Files", anchor="w"
-        ).pack(fill="x")
-        # No fixed height — fill="both", expand=True so this shrinks
-        # gracefully when the window is small but grows when there's
-        # room. The pinned action row stays visible regardless.
+        # Files: label + scrollable list. Expands to fill leftover
+        # space between the form above and the pinned action row.
+        ctk.CTkLabel(outer, text="Files", anchor="w").pack(fill="x")
         self._file_list_frame = ctk.CTkScrollableFrame(
-            outer, fg_color=("gray90", "gray20"),
+            outer, fg_color=("gray90", "gray20"), height=80,
         )
-        self._file_list_frame.pack(fill="both", expand=True, pady=(2, 4))
+        self._file_list_frame.pack(fill="both", expand=True, pady=(2, 0))
         self._empty_var = ctk.StringVar(value="(no files yet — click Add files…)")
         self._empty_label = ctk.CTkLabel(
             self._file_list_frame, textvariable=self._empty_var, text_color="gray",
         )
-        self._empty_label.pack(pady=20)
+        self._empty_label.pack(pady=12)
 
     def _build_expiry_section(self, parent) -> None:
         ctk.CTkLabel(parent, text="Expires", anchor="w").pack(fill="x")
@@ -140,7 +142,7 @@ class UploadPanel(ctk.CTkFrame):
         ctk.CTkCheckBox(
             parent, text="Never expires (revoke manually)",
             variable=self._never_var, command=self._on_never_toggled,
-        ).pack(anchor="w", pady=(0, 12))
+        ).pack(anchor="w", pady=(4, 0))
 
     def _on_never_toggled(self) -> None:
         state = "disabled" if self._never_var.get() else "normal"
@@ -150,43 +152,38 @@ class UploadPanel(ctk.CTkFrame):
             pass
 
     def _build_public_link_section(self, parent) -> None:
-        ctk.CTkLabel(parent, text="Public link", anchor="w").pack(fill="x")
-        frame = ctk.CTkFrame(parent, border_width=1, fg_color="transparent")
-        frame.pack(fill="x", pady=(0, 12))
-
-        inner = ctk.CTkFrame(frame, fg_color="transparent")
-        inner.pack(fill="x", padx=8, pady=8)
+        # v0.4.25: compact one-row public-link controls. Was four
+        # stacked rows in a bordered box (~150 px tall); now a single
+        # horizontal row (~32 px).
+        row = ctk.CTkFrame(parent, fg_color="transparent")
+        row.pack(fill="x", pady=(4, 4))
 
         self._pl_enabled = ctk.BooleanVar(value=False)
         ctk.CTkCheckBox(
-            inner, text="Include a public link",
+            row, text="Public link",
             variable=self._pl_enabled, command=self._on_public_link_toggled,
-        ).pack(anchor="w", pady=(0, 6))
+        ).pack(side="left")
 
-        # Sub-form grid: Password / Download-limit / Notify row.
-        sub = ctk.CTkFrame(inner, fg_color="transparent")
-        sub.pack(fill="x")
-        sub.grid_columnconfigure(1, weight=1)
-
-        ctk.CTkLabel(sub, text="Password", anchor="w").grid(row=0, column=0, sticky="w", padx=(0, 8))
+        ctk.CTkLabel(row, text="  Password", anchor="w").pack(side="left", padx=(12, 4))
         self._pl_password = ctk.StringVar()
         self._pl_password_entry = ctk.CTkEntry(
-            sub, textvariable=self._pl_password, show="*", placeholder_text="(optional)",
+            row, textvariable=self._pl_password, show="*",
+            placeholder_text="(optional)", width=140,
         )
-        self._pl_password_entry.grid(row=0, column=1, sticky="ew", pady=2)
+        self._pl_password_entry.pack(side="left")
 
-        ctk.CTkLabel(sub, text="Download limit", anchor="w").grid(row=1, column=0, sticky="w", padx=(0, 8))
+        ctk.CTkLabel(row, text="Limit", anchor="w").pack(side="left", padx=(12, 4))
         self._pl_limit = ctk.StringVar(value="")
         self._pl_limit_entry = ctk.CTkEntry(
-            sub, textvariable=self._pl_limit, placeholder_text="blank = unlimited",
+            row, textvariable=self._pl_limit, placeholder_text="∞", width=80,
         )
-        self._pl_limit_entry.grid(row=1, column=1, sticky="ew", pady=2)
+        self._pl_limit_entry.pack(side="left")
 
         self._pl_notify = ctk.BooleanVar(value=False)
         self._pl_notify_box = ctk.CTkCheckBox(
-            sub, text="Notify me on every download", variable=self._pl_notify,
+            row, text="Notify on download", variable=self._pl_notify,
         )
-        self._pl_notify_box.grid(row=2, column=0, columnspan=2, sticky="w", pady=(4, 0))
+        self._pl_notify_box.pack(side="left", padx=(12, 0))
 
         for w in (self._pl_password_entry, self._pl_limit_entry, self._pl_notify_box):
             w.configure(state="disabled")

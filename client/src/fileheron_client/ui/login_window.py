@@ -148,11 +148,30 @@ class LoginWindow:
 
     def _on_signin(self) -> None:
         self.error_var.set("")
+        # v0.4.3: snapshot ALL Tk variables on the main thread BEFORE
+        # spawning the worker. Reading StringVar.get() from a worker
+        # thread is unsupported by Tk — on Windows it deadlocks the
+        # worker because Tcl's interpreter lock is held by the main
+        # thread sitting in the event loop. v0.4.2 read them from
+        # _attempt() which is exactly that.
         server = self.server_url_var.get().strip().rstrip("/")
+        email = self.email_var.get().strip()
+        password = self.password_var.get()
+        totp = self.totp_var.get().strip() or None
+        api_token = self.api_token_var.get().strip()
         if not server:
             self._show_error("Server URL is required.")
             return
         kind = self._cfg.auth_kind
+        if kind == "password" and not email:
+            self._show_error("Email is required.")
+            return
+        if kind == "password" and not password:
+            self._show_error("Password is required.")
+            return
+        if kind == "api_token" and not api_token:
+            self._show_error("API token is required.")
+            return
 
         # Run the network call in a background thread so the UI stays
         # responsive while we hit /api/account/me. The button is
@@ -161,17 +180,13 @@ class LoginWindow:
 
         def _attempt():
             if kind == "api_token":
-                token = self.api_token_var.get().strip()
-                api = ApiClient(server, api_token=token)
+                api = ApiClient(server, api_token=api_token)
                 me = api_pkg.me(api)
-                set_secret("api_token", server, token)
+                set_secret("api_token", server, api_token)
                 return api, me, kind
             api = ApiClient(server)
             api_pkg.login(
-                api,
-                email=self.email_var.get().strip(),
-                password=self.password_var.get(),
-                totp_code=self.totp_var.get().strip() or None,
+                api, email=email, password=password, totp_code=totp,
             )
             me = api_pkg.me(api)
             return api, me, kind
@@ -181,11 +196,22 @@ class LoginWindow:
             self._cfg.server_url = server
             self._cfg.auth_kind = used_kind
             if used_kind == "password":
-                self._cfg.last_email = self.email_var.get().strip()
+                self._cfg.last_email = email
             save_config(self._cfg)
             # Fire the callback BEFORE destroy so the main window can
             # take over the root before we yield the event loop.
-            self._on_signed_in(api, me)
+            try:
+                self._on_signed_in(api, me)
+            except Exception as exc:
+                # Show the error rather than letting it die silently in
+                # a no-console .exe build.
+                import traceback
+                traceback.print_exc()
+                self.signin_btn.configure(state="normal", text="Sign in")
+                self._show_error(
+                    f"Signed in OK but failed to open main window: {exc!r}"
+                )
+                return
             self._win.destroy()
 
         def _failed(exc):

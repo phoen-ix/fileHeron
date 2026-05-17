@@ -25,11 +25,7 @@ logger = logging.getLogger("fileheron_client.ui.upload")
 
 class UploadPanel(ctk.CTkFrame):
     def __init__(self, master, root: ctk.CTk, api: ApiClient) -> None:
-        # v0.4.21 DIAGNOSTIC: hot-pink fg_color to see if this panel
-        # renders at all. If user sees pink → panel renders, form
-        # widgets are just invisible (different bug). If user sees the
-        # Inbox/Outbox table → tab switching is broken, not bleed-thru.
-        super().__init__(master, fg_color="#ff00aa")
+        super().__init__(master)
         self._app_root = root
         self._api = api
         self._files: list[Path] = []
@@ -39,16 +35,7 @@ class UploadPanel(ctk.CTkFrame):
         self._build()
 
     def _build(self) -> None:
-        # v0.4.21 DIAGNOSTIC: bright yellow inner frame + a giant
-        # banner label up top, so we can tell at a glance whether the
-        # build is reaching this code at all.
-        banner = ctk.CTkLabel(
-            self, text="↓ UPLOAD PANEL v0.4.21 ↓",
-            fg_color="#ffff00", text_color="#000000",
-            font=ctk.CTkFont(size=20, weight="bold"),
-        )
-        banner.pack(fill="x", pady=4)
-        outer = ctk.CTkFrame(self, fg_color="#ffff00")
+        outer = ctk.CTkFrame(self, fg_color="transparent")
         outer.pack(fill="both", expand=True, padx=8, pady=8)
 
         # Subject

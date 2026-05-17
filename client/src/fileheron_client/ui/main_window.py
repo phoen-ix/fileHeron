@@ -79,10 +79,23 @@ class MainWindow:
         # tab-change signal is fired via a configure of the segmented
         # button — we poll via a simple StringVar trace.
         self._active_tab = tk.StringVar(value="Inbox")
-        # CTk 5.x exposes ``set`` and ``get`` on CTkTabview; wire up
-        # a callback on the underlying segmented button.
+        # v0.4.22: WRAP CTk's segmented-button command instead of
+        # overwriting it. Earlier code just did
+        #     self.tabs._segmented_button.configure(command=our_cb)
+        # which replaced CTk's internal callback. That callback is the
+        # thing that actually SHOWS the right tab frame — without it,
+        # clicking a tab updates the highlight but the visible content
+        # never swaps. Inbox stayed on screen forever; the "New share"
+        # tab looked empty because its frame was never gridded in.
         try:
-            self.tabs._segmented_button.configure(command=self._on_tab_changed)
+            original_cb = self.tabs._segmented_button.cget("command")
+
+            def _tab_cb(name: str, _orig=original_cb) -> None:
+                if callable(_orig):
+                    _orig(name)  # CTk's frame swap
+                self._on_tab_changed(name)  # our refresh
+
+            self.tabs._segmented_button.configure(command=_tab_cb)
         except AttributeError:
             # Older CTk versions: skip the auto-refresh; user can press
             # the in-panel Refresh button.

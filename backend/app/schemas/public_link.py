@@ -61,7 +61,8 @@ class PublicShareResponse(APIBaseModel):
     share_id: str
     subject: str | None
     message: str | None
-    expires_at: datetime
+    # None = never-expire share (v1.1.4). SPA renders this as "Never".
+    expires_at: datetime | None
     requires_password: bool
     unlocked: bool
     downloads_remaining: int | None

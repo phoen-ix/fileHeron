@@ -65,3 +65,19 @@ export function formatDateInSiteTime(
     ...opts,
   })
 }
+
+/** Share expiry display: null means "Never" (v1.1.4 — admin-set
+ *  no-expiry shares). Renders the localized "Never" label instead of
+ *  the em-dash fallback used by `formatInSiteTime`. For dated rows,
+ *  delegates to formatInSiteTime so the same site-tz + locale rules
+ *  apply. `neverLabel` lets the caller pass the localized string
+ *  (i18n `t()` is component-scoped, not module-scoped). */
+export function formatExpiryInSiteTime(
+  iso: string | null | undefined,
+  locale: string,
+  neverLabel: string,
+  opts?: Intl.DateTimeFormatOptions,
+): string {
+  if (iso === null) return neverLabel
+  return formatInSiteTime(iso, locale, opts)
+}

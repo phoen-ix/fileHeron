@@ -858,13 +858,16 @@
       "1d": "1 day",
       "7d": "7 days",
       "14d": "14 days",
-      "30d": "30 days"
+      "30d": "30 days",
+      "never": "Never"
     },
     "custom_placeholder": "Pick a date and time",
     "in_minutes": "in {n} minutes",
     "in_hours": "in {n} hours",
     "in_days": "in {n} days",
-    "in_past": "already past — pick a future time"
+    "in_past": "already past — pick a future time",
+    "never_label": "Never",
+    "never_help": "This share will not expire automatically. Revoke it manually when you're done."
   },
   "files": {
     "state": {

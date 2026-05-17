@@ -858,13 +858,16 @@
       "1d": "1 Tag",
       "7d": "7 Tage",
       "14d": "14 Tage",
-      "30d": "30 Tage"
+      "30d": "30 Tage",
+      "never": "Nie"
     },
     "custom_placeholder": "Datum und Uhrzeit wählen",
     "in_minutes": "in {n} Minuten",
     "in_hours": "in {n} Stunden",
     "in_days": "in {n} Tagen",
-    "in_past": "bereits vorbei — bitte zukünftigen Zeitpunkt wählen"
+    "in_past": "bereits vorbei — bitte zukünftigen Zeitpunkt wählen",
+    "never_label": "Nie",
+    "never_help": "Diese Freigabe läuft nicht automatisch ab. Manuell widerrufen, wenn nicht mehr benötigt."
   },
   "files": {
     "state": {

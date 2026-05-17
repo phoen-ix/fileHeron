@@ -176,7 +176,8 @@ def assert_link_usable(db: Session, link: PublicLink) -> None:
         raise AppError(404, "SHARE_NOT_FOUND", "Share for this public link is missing.")
     if share.state != ShareState.active:
         raise AppError(410, "SHARE_NOT_ACTIVE", "The underlying share is no longer active.")
-    if share.expires_at < _utcnow():
+    # NULL expires_at = never-expire (v1.1.4) — skip the time check.
+    if share.expires_at is not None and share.expires_at < _utcnow():
         raise AppError(410, "SHARE_EXPIRED", "The underlying share has expired.")
 
 

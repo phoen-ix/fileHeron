@@ -43,7 +43,11 @@ const kind = computed<ShareKind>(() =>
 const subject = ref('')
 const message = ref('')
 const recipients = ref<ShareRecipientsRequest>({ user_ids: [], group_ids: [] })
-const expiresAtLocal = ref<string | null>(null)
+// null = user picked the "Never" preset (v1.1.4 — share never auto-deletes).
+// Initial state is undefined so the picker's auto-emit on mount fills it
+// with the default 7-day preset; from then on the picker always emits a
+// concrete value (string OR null).
+const expiresAtLocal = ref<string | null | undefined>(undefined)
 // Per-share opt-out for the `share_created` notification + email fan-out.
 // Initial state mirrors the admin-controlled kv (surfaced via /me) so the
 // admin can decide whether senders see this on or off by default.
@@ -91,7 +95,10 @@ const canSubmit = computed(() => {
   // as the user has the toggle on AND policy lets them create one.
   const hasPublicLink = includePublicLink.value && canCreatePublicLink.value
   if (!hasRecipients && !hasPublicLink) return false
-  if (!expiresAtLocal.value) return false
+  // Picker emits a value on mount (default 7d preset), so by the time
+  // the user can click submit, expiresAtLocal is either a string (some
+  // datetime) OR null (Never). undefined = picker hasn't initialized.
+  if (expiresAtLocal.value === undefined) return false
   if (upload.items.value.length === 0) return false
   if (submitting.value) return false
   if (upload.isActive.value) return false
@@ -134,7 +141,11 @@ async function onSubmit() {
     const { data } = await createShare({
       kind: kind.value,
       recipients: recipients.value,
-      expires_at: localIsoToUtcIso(expiresAtLocal.value!),
+      // null = "Never expires" (user picked the Never preset); else
+      // local→UTC convert the picker's local ISO string.
+      expires_at: expiresAtLocal.value === null
+        ? null
+        : localIsoToUtcIso(expiresAtLocal.value as string),
       subject: subject.value || null,
       message: message.value || null,
       public_link: publicLinkPayload,

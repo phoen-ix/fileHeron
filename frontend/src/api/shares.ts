@@ -10,7 +10,8 @@ import type {
 export function createShare(payload: {
   kind: ShareKind
   recipients: ShareRecipientsRequest
-  expires_at: string
+  /** ISO datetime, or null = never-expire (v1.1.4). */
+  expires_at: string | null
   subject?: string | null
   message?: string | null
   public_link?: PublicLinkOnCreate | null
@@ -21,8 +22,16 @@ export function createShare(payload: {
   return api.post<ShareResponse>('/shares', payload)
 }
 
-export function updateShareExpiry(shareId: string, expires_at: string) {
-  return api.patch<ShareResponse>(`/shares/${shareId}`, { expires_at })
+/** v1.1.4: pass `clear: true` to remove the expiry (share becomes
+ *  never-expire); otherwise pass a new datetime. */
+export function updateShareExpiry(
+  shareId: string,
+  opts: { expires_at?: string; clear?: boolean },
+) {
+  const body: Record<string, unknown> = {}
+  if (opts.clear) body.expires_at_clear = true
+  else if (opts.expires_at) body.expires_at = opts.expires_at
+  return api.patch<ShareResponse>(`/shares/${shareId}`, body)
 }
 
 /** v1.1.0: PATCH the download budget. Pass `clear: true` to reset

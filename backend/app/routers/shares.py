@@ -330,9 +330,28 @@ def patch_share(
     db: Session = Depends(get_db),
 ) -> ShareResponse:
     """Editable fields on an active share: expires_at, download_limit.
-    All optional — only supplied fields change."""
+    All optional — only supplied fields change.
+
+    For expires_at: supply a datetime to set, or `expires_at_clear: true`
+    to remove the expiry (share becomes never-expire). The two are
+    mutually exclusive — sending both is a 400.
+    """
     share = share_svc.get_share_or_404(db, share_id)
-    if payload.expires_at is not None:
+    if payload.expires_at_clear and payload.expires_at is not None:
+        raise AppError(
+            400,
+            "INVALID_INPUT",
+            "Cannot supply both expires_at and expires_at_clear; they are mutually exclusive.",
+        )
+    if payload.expires_at_clear:
+        share_svc.update_share_expiry(
+            db,
+            user=user,
+            share=share,
+            new_expires_at=None,
+            request=request,
+        )
+    elif payload.expires_at is not None:
         share_svc.update_share_expiry(
             db,
             user=user,

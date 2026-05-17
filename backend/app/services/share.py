@@ -144,7 +144,7 @@ def create_share(
     *,
     created_by: User,
     kind: ShareKind,
-    expires_at: datetime,
+    expires_at: datetime | None,
     recipient_user_ids: list[int] | None = None,
     recipient_group_ids: list[int] | None = None,
     subject: str | None = None,
@@ -154,15 +154,17 @@ def create_share(
     download_limit: int | None = None,
     request=None,
 ) -> Share:
+    # expires_at = None means "never expires" (v1.1.4). Otherwise:
     # Pydantic preserves tz info from ISO strings ending in Z / +HH:MM
     # (which is what dayjs.toISOString() produces on the frontend).
     # Normalise to naive UTC before comparing or storing — mirrors the
     # convention every other write site follows. See update_expiry()
     # below for the same guard at the PATCH boundary.
-    if expires_at.tzinfo is not None:
-        expires_at = expires_at.astimezone(timezone.utc).replace(tzinfo=None)
-    if expires_at < _utcnow():
-        raise AppError(400, "EXPIRY_IN_PAST", "Expiry must be in the future.")
+    if expires_at is not None:
+        if expires_at.tzinfo is not None:
+            expires_at = expires_at.astimezone(timezone.utc).replace(tzinfo=None)
+        if expires_at < _utcnow():
+            raise AppError(400, "EXPIRY_IN_PAST", "Expiry must be in the future.")
 
     user_ids = list(dict.fromkeys(recipient_user_ids or []))  # dedupe, preserve order
     group_ids = list(dict.fromkeys(recipient_group_ids or []))
@@ -435,7 +437,14 @@ def list_shares_for_user(
     }
     sort_target = column_map.get(sort_col, Share.created_at)
     order = sort_target.asc() if direction == "asc" else sort_target.desc()
-    base = base.order_by(order)
+    # NULL expires_at = "never". MariaDB sorts NULL first by default
+    # (ASC) or last (DESC). For user-facing list display, "Never" should
+    # consistently appear AFTER the dated rows regardless of direction —
+    # so prepend an `IS NULL` ordering hint that pushes NULLs to the end.
+    if sort_col == "expires_at":
+        base = base.order_by(Share.expires_at.is_(None).asc(), order)
+    else:
+        base = base.order_by(order)
 
     rows = (
         base.offset(max(0, (page - 1) * page_size)).limit(page_size).all()
@@ -559,12 +568,13 @@ def update_share_expiry(
     *,
     user: User,
     share: Share,
-    new_expires_at: datetime,
+    new_expires_at: datetime | None,
     request=None,
 ) -> Share:
-    """Owner-or-admin extends or shortens an active share's expiry.
+    """Owner-or-admin extends, shortens, or clears an active share's expiry.
     Refuses non-active shares (bytes might be gone) or past timestamps
-    (use `expire_share_now` for that).
+    (use `expire_share_now` for that). new_expires_at=None clears the
+    field — the share becomes never-expire (v1.1.4).
     """
     if share.created_by_id != user.id and user.role != UserRole.admin:
         raise AppError(403, "FORBIDDEN", "You cannot edit this share.")
@@ -574,17 +584,23 @@ def update_share_expiry(
             "SHARE_NOT_ACTIVE",
             "Only active shares can have their expiry changed.",
         )
-    # Normalise to naive UTC (matches DB convention).
-    if new_expires_at.tzinfo is not None:
-        new_expires_at = new_expires_at.astimezone(timezone.utc).replace(tzinfo=None)
-    if new_expires_at < _utcnow():
-        raise AppError(
-            400,
-            "INVALID_EXPIRY",
-            "New expiry must be in the future. Use 'expire now' for immediate expiry.",
-        )
+    if new_expires_at is not None:
+        # Normalise to naive UTC (matches DB convention).
+        if new_expires_at.tzinfo is not None:
+            new_expires_at = new_expires_at.astimezone(timezone.utc).replace(tzinfo=None)
+        if new_expires_at < _utcnow():
+            raise AppError(
+                400,
+                "INVALID_EXPIRY",
+                "New expiry must be in the future. Use 'expire now' for immediate expiry.",
+            )
     old = share.expires_at
     share.expires_at = new_expires_at
+    # Clearing the expiry also resets the 24h-warning idempotency
+    # marker so that a future re-narrowing of the window can fire a
+    # fresh warning.
+    if new_expires_at is None:
+        share.expiring_notified_at = None
     db.flush()
     record_audit_event(
         db,
@@ -594,7 +610,7 @@ def update_share_expiry(
         target_id=share.id,
         metadata={
             "old_expires_at": old.isoformat() if old else None,
-            "new_expires_at": new_expires_at.isoformat(),
+            "new_expires_at": new_expires_at.isoformat() if new_expires_at else None,
         },
         request=request,
     )

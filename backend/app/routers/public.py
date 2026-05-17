@@ -168,10 +168,12 @@ def unlock(
         raise AppError(401, "INVALID_PUBLIC_PASSWORD", "Incorrect password.")
 
     share = db.query(Share).filter(Share.id == link.share_id).one()
-    cookie_exp = min(
-        _utcnow() + timedelta(seconds=UNLOCK_TTL_SEC),
-        share.expires_at,
-    )
+    # Cap the unlock cookie at the share's expiry so a leaked cookie
+    # can't outlive the share itself. NULL expires_at = never-expire
+    # (v1.1.4) — in that case the share doesn't bound the cookie, so
+    # the UNLOCK_TTL_SEC max-age (24h) is the only ceiling.
+    base_exp = _utcnow() + timedelta(seconds=UNLOCK_TTL_SEC)
+    cookie_exp = base_exp if share.expires_at is None else min(base_exp, share.expires_at)
     cookie_value = _make_unlock_cookie(link.id, cookie_exp)
     response.set_cookie(
         key=UNLOCK_COOKIE,

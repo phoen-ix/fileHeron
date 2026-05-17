@@ -13,7 +13,7 @@ import {
   unlockPublicShare,
 } from '@/api/publicLinks'
 import type { PublicShareResponse } from '@/types/api'
-import { formatInSiteTime } from '@/utils/datetime'
+import { formatExpiryInSiteTime } from '@/utils/datetime'
 
 const route = useRoute()
 const { t, locale } = useI18n()
@@ -64,8 +64,8 @@ async function onUnlock() {
   }
 }
 
-function formatDate(iso: string): string {
-  return formatInSiteTime(iso, locale.value)
+function formatExpiry(iso: string | null): string {
+  return formatExpiryInSiteTime(iso, locale.value, t('expiry.never_label'))
 }
 
 function formatBytes(n: number): string {
@@ -107,7 +107,7 @@ onMounted(load)
 
       <p class="fh-rise expires-line" data-stagger="2">
         <span class="fh-kv-label">{{ t('public_share.expires') }}</span>
-        <span class="fh-kv-value fh-mono">{{ formatDate(share.expires_at) }}</span>
+        <span class="fh-kv-value fh-mono">{{ formatExpiry(share.expires_at) }}</span>
       </p>
 
       <p v-if="share.message" class="message fh-rise" data-stagger="3">

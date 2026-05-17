@@ -19,14 +19,14 @@
       type="datetime"
       :placeholder="t('expiry.custom_placeholder')"
       :disabled-date="disabledDate"
-      :disabled="disabled"
+      :disabled="disabled || activePreset === 'never'"
       class="custom-picker"
       format="YYYY-MM-DD HH:mm"
       value-format="YYYY-MM-DDTHH:mm:ss"
       :clearable="false"
     />
     <div class="hint">
-      <span class="fh-mono">{{ formatExpiresIn(dt) }}</span>
+      <span class="fh-mono">{{ hintText }}</span>
     </div>
   </div>
 </template>
@@ -40,19 +40,22 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 const props = defineProps<{
-  modelValue: string | null
+  /** string = local ISO datetime; null = "Never" picked; undefined =
+   *  parent hasn't initialized (picker fills with default 7d on mount). */
+  modelValue: string | null | undefined
   disabled?: boolean
 }>()
 
 const emit = defineEmits<{
-  'update:modelValue': [value: string]
+  'update:modelValue': [value: string | null]
 }>()
 
 const { t, locale } = useI18n()
 
+type PresetId = '1h' | '1d' | '7d' | '14d' | '30d' | 'never'
 interface Preset {
-  id: '1h' | '1d' | '7d' | '14d' | '30d'
-  ms: number
+  id: PresetId
+  ms: number | null  // null = "never"; the sentinel emits null to the parent
 }
 const presets: Preset[] = [
   { id: '1h', ms: 60 * 60 * 1000 },
@@ -60,6 +63,7 @@ const presets: Preset[] = [
   { id: '7d', ms: 7 * 24 * 60 * 60 * 1000 },
   { id: '14d', ms: 14 * 24 * 60 * 60 * 1000 },
   { id: '30d', ms: 30 * 24 * 60 * 60 * 1000 },
+  { id: 'never', ms: null },
 ]
 
 function isoLocal(d: Date): string {
@@ -71,25 +75,39 @@ function isoLocal(d: Date): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
 }
 
-const dt = ref<string>(props.modelValue ?? isoLocal(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)))
-const activePreset = ref<Preset['id'] | null>('7d')
+// dt = null means "never expires" (v1.1.4). Anything else is a
+// "YYYY-MM-DDTHH:mm:ss" local-time string.
+const dt = ref<string | null>(
+  props.modelValue === undefined
+    ? isoLocal(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000))
+    : props.modelValue,
+)
+const activePreset = ref<PresetId | null>(
+  props.modelValue === null ? 'never' : '7d',
+)
 
 watch(dt, (v) => {
-  if (v) emit('update:modelValue', v)
+  emit('update:modelValue', v)
 })
 
 watch(
   () => props.modelValue,
   (v) => {
-    if (v && v !== dt.value) dt.value = v
+    if (v === undefined) return
+    if (v !== dt.value) dt.value = v
   },
 )
 
-// Emit the initial default upward so the parent has a non-null value
+// Emit the initial default upward so the parent has a fully-known value
 // without needing to mirror our preset table.
-if (!props.modelValue) emit('update:modelValue', dt.value)
+if (props.modelValue === undefined) emit('update:modelValue', dt.value)
 
 function applyPreset(preset: Preset) {
+  if (preset.ms === null) {
+    dt.value = null
+    activePreset.value = 'never'
+    return
+  }
   const future = new Date(Date.now() + preset.ms)
   dt.value = isoLocal(future)
   activePreset.value = preset.id
@@ -106,7 +124,10 @@ const expiresInMs = computed(() => {
   return new Date(dt.value).getTime() - Date.now()
 })
 
-function formatExpiresIn(_v: string | null): string {
+const hintText = computed(() => {
+  if (activePreset.value === 'never' || dt.value === null) {
+    return t('expiry.never_help')
+  }
   const ms = expiresInMs.value
   if (ms <= 0) return t('expiry.in_past')
   const minutes = Math.round(ms / 60_000)
@@ -115,18 +136,20 @@ function formatExpiresIn(_v: string | null): string {
   if (hours < 24) return t('expiry.in_hours', { n: hours })
   const days = Math.round(hours / 24)
   return t('expiry.in_days', { n: days })
-}
+})
 
 // Re-evaluate the locale-side label when language flips.
 watch(locale, () => {
-  /* triggers re-render of formatExpiresIn via t() */
+  /* triggers re-render of hintText via t() */
 })
 
 // Manual edits on the picker invalidate the active preset highlight.
+// Skipped when dt is null (Never state — no comparison possible).
 watch(dt, (newV) => {
-  if (!activePreset.value) return
+  if (newV === null) return
+  if (!activePreset.value || activePreset.value === 'never') return
   const preset = presets.find((p) => p.id === activePreset.value)
-  if (!preset) return
+  if (!preset || preset.ms === null) return
   const expected = isoLocal(new Date(Date.now() + preset.ms))
   // Allow a 60-second tolerance band — the time elapsed during click.
   if (Math.abs(new Date(newV).getTime() - new Date(expected).getTime()) > 60_000) {

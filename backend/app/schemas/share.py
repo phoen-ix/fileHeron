@@ -34,7 +34,10 @@ class PublicLinkOnCreate(APIBaseModel):
 class CreateShareRequest(APIBaseModel):
     kind: ShareKind
     recipients: ShareRecipientsRequest
-    expires_at: datetime
+    # None = "never expires" (v1.1.4). Caller must pick this
+    # explicitly — there's no default, so old clients that omit the
+    # field still get the original 422 "field required" response.
+    expires_at: datetime | None
     subject: str | None = Field(default=None, max_length=255)
     message: str | None = Field(default=None, max_length=4000)
     public_link: PublicLinkOnCreate | None = None
@@ -73,8 +76,13 @@ class UpdateShareRequest(APIBaseModel):
     semantic). To clear the limit (= make unlimited), send
     `download_limit_clear: true` instead. Splitting the unset signal
     from the no-change signal keeps the JSON shape unambiguous.
+
+    Same shape for expires_at: omitted = no change; supplying a
+    datetime replaces; supplying `expires_at_clear=true` clears the
+    field (share becomes never-expire). Supplying both is a 400.
     """
     expires_at: datetime | None = None
+    expires_at_clear: bool = False
     download_limit: int | None = Field(default=None, gt=0, le=100_000)
     download_limit_clear: bool = False
 
@@ -133,7 +141,8 @@ class ShareResponse(APIBaseModel):
     effective_subject: str = ""
     message: str | None
     created_at: datetime
-    expires_at: datetime
+    # None = never-expire share (v1.1.4). SPA renders this as "Never".
+    expires_at: datetime | None
     created_by_id: int
     recipient_user_ids: list[int]
     recipient_groups: list[GroupRecipientRef]
@@ -172,7 +181,7 @@ class ShareListItem(APIBaseModel):
     # list endpoint doesn't expose filenames otherwise.
     effective_subject: str = ""
     created_at: datetime
-    expires_at: datetime
+    expires_at: datetime | None
     created_by_id: int
     file_count: int
     total_size_bytes: int

@@ -63,7 +63,11 @@ class Share(Base):
     subject: Mapped[str | None] = mapped_column(String(255), nullable=True)
     message: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    expires_at: Mapped[datetime] = mapped_column(DateTime(), nullable=False, index=True)
+    # NULL = "never expires" (v1.1.4). Cron filters using
+    # `WHERE expires_at < now()` exclude NULL rows by SQL semantics, so
+    # never-expire shares simply sit untouched. Public-link unlock
+    # cookie code in routers/public.py special-cases None.
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(), nullable=True, index=True)
 
     state: Mapped[ShareState] = mapped_column(
         SAEnum(ShareState, native_enum=False, length=10),

@@ -17,7 +17,7 @@ import { useApiError } from '@/composables/useApiError'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
 import type { ShareResponse } from '@/types/api'
-import { formatInSiteTime } from '@/utils/datetime'
+import { formatExpiryInSiteTime, formatInSiteTime } from '@/utils/datetime'
 
 const route = useRoute()
 const router = useRouter()
@@ -32,7 +32,10 @@ const errorMsg = ref<string | null>(null)
 const deleting = ref(false)
 const expiringNow = ref(false)
 const editingExpiry = ref(false)
-const newExpiryLocal = ref<string | null>(null)
+// Picker emits string (local ISO), null (= "Never" preset), or
+// undefined (mount-before-emit). saveExpiry maps these to the API:
+// string → set; null → clear; undefined → no-op.
+const newExpiryLocal = ref<string | null | undefined>(undefined)
 const savingExpiry = ref(false)
 
 // v1.1.0 download-limit edit modal state.
@@ -99,24 +102,28 @@ async function onExpireNow() {
 
 function startEditExpiry() {
   if (!share.value) return
-  newExpiryLocal.value = null
+  newExpiryLocal.value = undefined
   editingExpiry.value = true
 }
 
 function cancelEditExpiry() {
   editingExpiry.value = false
-  newExpiryLocal.value = null
+  newExpiryLocal.value = undefined
 }
 
 async function saveExpiry() {
-  if (!share.value || !newExpiryLocal.value) return
+  if (!share.value || newExpiryLocal.value === undefined) return
   savingExpiry.value = true
   try {
-    const utcIso = new Date(newExpiryLocal.value).toISOString()
-    const { data } = await updateShareExpiry(share.value.id, utcIso)
+    const { data } =
+      newExpiryLocal.value === null
+        ? await updateShareExpiry(share.value.id, { clear: true })
+        : await updateShareExpiry(share.value.id, {
+            expires_at: new Date(newExpiryLocal.value).toISOString(),
+          })
     share.value = data
     editingExpiry.value = false
-    newExpiryLocal.value = null
+    newExpiryLocal.value = undefined
     ui.pushToast(t('share_detail.expiry_saved_toast'), 'success')
   } catch (err) {
     ui.pushToast(describe(err), 'error')
@@ -175,6 +182,10 @@ function formatDate(iso: string): string {
   return formatInSiteTime(iso, locale.value)
 }
 
+function formatExpiry(iso: string | null): string {
+  return formatExpiryInSiteTime(iso, locale.value, t('expiry.never_label'))
+}
+
 function formatBytes(n: number): string {
   if (n < 1024) return `${n} B`
   const units = ['KB', 'MB', 'GB', 'TB']
@@ -218,7 +229,7 @@ onMounted(load)
         </span>
         <span class="fh-kv">
           <span class="fh-kv-label">{{ t('share_detail.expires') }}</span>
-          <span class="fh-kv-value">{{ formatDate(share.expires_at) }}</span>
+          <span class="fh-kv-value">{{ formatExpiry(share.expires_at) }}</span>
           <button
             v-if="canManage && share.state === 'active' && !editingExpiry"
             type="button"

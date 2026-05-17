@@ -8,7 +8,7 @@ import { useApiError } from '@/composables/useApiError'
 import { useShareListState } from '@/composables/useShareListState'
 import { useUiStore } from '@/stores/ui'
 import type { ShareListItem, ShareRecipientRef, ShareState } from '@/types/api'
-import { formatDateInSiteTime } from '@/utils/datetime'
+import { formatDateInSiteTime, formatExpiryInSiteTime } from '@/utils/datetime'
 
 const { t, locale } = useI18n()
 const route = useRoute()
@@ -109,6 +109,13 @@ function pillForState(state: ShareState): string | undefined {
 
 function formatDate(iso: string | null): string {
   return formatDateInSiteTime(iso, locale.value)
+}
+
+function formatExpiry(iso: string | null): string {
+  return formatExpiryInSiteTime(iso, locale.value, t('expiry.never_label'), {
+    year: 'numeric', month: 'short', day: '2-digit',
+    hour: undefined, minute: undefined,
+  })
 }
 
 function formatBytes(n: number): string {
@@ -338,7 +345,7 @@ onMounted(load)
               </td>
               <td class="numeric">{{ item.file_count }}</td>
               <td class="numeric fh-mono">{{ formatBytes(item.total_size_bytes) }}</td>
-              <td class="fh-mono">{{ formatDate(item.expires_at) }}</td>
+              <td class="fh-mono">{{ formatExpiry(item.expires_at) }}</td>
             </tr>
           </tbody>
         </table>

@@ -198,7 +198,9 @@ export interface ShareResponse {
   effective_subject: string
   message: string | null
   created_at: string
-  expires_at: string
+  /** ISO datetime, or null = never-expire (v1.1.4). SPA renders null
+   *  as "Never" via formatExpiryInSiteTime. */
+  expires_at: string | null
   created_by_id: number
   recipient_user_ids: number[]
   recipient_groups: GroupRecipientRef[]
@@ -222,7 +224,12 @@ export interface PublicLinkOnCreate {
 }
 
 export interface UpdateShareRequest {
-  expires_at: string
+  /** Omit = no change; ISO datetime = replace. Mutually exclusive with
+   *  expires_at_clear. */
+  expires_at?: string
+  /** Send true to clear the expiry (share becomes never-expire, v1.1.4).
+   *  Mutually exclusive with expires_at — sending both is a 400. */
+  expires_at_clear?: boolean
 }
 
 /* Admin public-link policy (post-Phase 10) */
@@ -294,7 +301,8 @@ export interface PublicShareResponse {
   share_id: string
   subject: string | null
   message: string | null
-  expires_at: string
+  /** ISO datetime, or null = never-expire (v1.1.4). */
+  expires_at: string | null
   requires_password: boolean
   unlocked: boolean
   downloads_remaining: number | null
@@ -482,7 +490,8 @@ export interface ShareListItem {
    *  else "" (frontend localises to "(no subject)"). */
   effective_subject: string
   created_at: string
-  expires_at: string
+  /** ISO datetime, or null = never-expire (v1.1.4). */
+  expires_at: string | null
   created_by_id: number
   file_count: number
   total_size_bytes: number

@@ -6,16 +6,24 @@ shared across the login phase + main window. We hide the root during
 login (the login dialog is a separate ``CTkToplevel``) and reveal it
 after a successful sign-in.
 
-v0.4.12 diagnostic hardening: the .exe ships with ``console=False``
-so stderr goes nowhere by default. We now layer THREE log surfaces:
+**Two-layer logging (v0.4.16):**
 
-1. ``crash.log``  — uncaught Python exceptions (sys/threading/Tk
-   excepthooks) AND native-level crashes (via ``faulthandler``).
-2. ``app.log``    — ``logging`` output (the ``_log.exception(...)``
-   calls inside ``_async.py`` etc — previously lost to nowhere).
-3. ``trace.log``  — explicit breadcrumbs at every major lifecycle
-   step. Lets us tell "process exited cleanly without doing X" from
-   "process crashed during X" when crash.log is empty.
+Layer 1 — **always on**. Crash reporting only.
+- ``crash.log`` — uncaught Python exceptions (sys/threading/Tk
+  excepthooks) AND native-level crashes (via ``faulthandler``).
+  Cheap, silent in normal operation; the only post-mortem we have
+  when the .exe (``console=False``) dies.
+
+Layer 2 — **gated on ``ClientConfig.enable_diagnostic_logging``,
+default OFF**. Verbose diagnostics added across v0.4.12 → v0.4.15
+to debug the invisible-window bug:
+- ``trace.log`` — explicit lifecycle breadcrumbs.
+- ``app.log``   — ``logging`` output (``_log.exception`` etc.).
+- Heartbeat polling root window state every 2s for 10s after
+  mainloop entry.
+
+The flag is also surfaced in the Settings dialog (CTkSwitch); takes
+effect on next launch because the loggers are wired at startup.
 """
 from __future__ import annotations
 
@@ -43,10 +51,10 @@ def _log_dir() -> Path:
     return d
 
 
-def _install_crash_logging() -> Path:
+def _install_crash_logging(log_path: Path) -> None:
     """Capture uncaught Python exceptions from every thread + Tk
-    callback dispatch. Returns the crash.log path."""
-    log_path = _log_dir() / "crash.log"
+    callback dispatch into ``crash.log``. Always installed — this is
+    the post-mortem safety net, not verbose diagnostics."""
 
     def _write(prefix: str, exc_type, exc, tb) -> None:
         try:
@@ -69,14 +77,13 @@ def _install_crash_logging() -> Path:
 
     sys.excepthook = _excepthook
     threading.excepthook = _thread_excepthook
-    return log_path
 
 
 def _install_faulthandler(log_path: Path) -> None:
     """Native-level crash dumper. Catches SIGSEGV / SIGABRT / SIGFPE
     / SIGBUS / SIGILL and writes a C-stack dump to crash.log. The
     only way to learn anything about a tkinter/Tcl native crash that
-    bypasses Python's exception machinery."""
+    bypasses Python's exception machinery. Always installed."""
     try:
         fh_file = log_path.open("a", encoding="utf-8")
         fh_file.write(f"\n--- {datetime.now().isoformat()} [faulthandler armed] ---\n")
@@ -88,30 +95,52 @@ def _install_faulthandler(log_path: Path) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     log_dir = _log_dir()
-    init_trace(log_dir / "trace.log")
-    trace("=== process start ===")
+    crash_log = log_dir / "crash.log"
 
-    crash_log = _install_crash_logging()
+    # Layer 1 (always on): crash reporting.
+    _install_crash_logging(crash_log)
     _install_faulthandler(crash_log)
 
-    # Route logging output to app.log instead of stderr (which is
-    # /dev/null in a console=False PyInstaller build).
-    app_log = log_dir / "app.log"
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(name)s %(levelname)s %(message)s",
-        handlers=[logging.FileHandler(app_log, encoding="utf-8")],
-    )
-    logging.info("fileHeron client starting; crash log: %s", crash_log)
+    # Read config BEFORE wiring verbose logging so the flag can gate it.
+    # If load_config itself raises (corrupt JSON), the always-on crash
+    # hooks above capture it.
+    cfg = load_config()
 
-    @atexit.register
-    def _on_exit() -> None:
-        trace("=== process exit (clean) ===")
+    # Layer 2 (gated on cfg.enable_diagnostic_logging, default OFF):
+    # trace.log breadcrumbs + app.log + heartbeat polling.
+    diagnostics_on = bool(cfg.enable_diagnostic_logging)
+    if diagnostics_on:
+        init_trace(log_dir / "trace.log")
+        logging.basicConfig(
+            level=logging.INFO,
+            format="%(asctime)s %(name)s %(levelname)s %(message)s",
+            handlers=[
+                logging.FileHandler(log_dir / "app.log", encoding="utf-8")
+            ],
+        )
+        logging.info("fileHeron client starting; crash log: %s", crash_log)
+        trace("=== process start ===")
 
+        @atexit.register
+        def _on_exit() -> None:
+            trace("=== process exit (clean) ===")
+    else:
+        # Defensive: make sure no logger ever bubbles to stderr (which
+        # is /dev/null under console=False anyway) by attaching a
+        # NullHandler at the root and silencing everything below
+        # CRITICAL. trace() is already a no-op when init_trace was
+        # never called.
+        logging.basicConfig(
+            level=logging.CRITICAL, handlers=[logging.NullHandler()]
+        )
+
+    # trace() calls past this point are no-ops when diagnostics are off.
     trace("building root")
     root = build_root()
 
     def _tk_report(exc_type, exc, tb):
+        # Tk callback exception handler — always writes crash.log
+        # regardless of the diagnostics flag.
         try:
             with crash_log.open("a", encoding="utf-8") as f:
                 f.write(f"\n--- {datetime.now().isoformat()} [tk] ---\n")
@@ -126,7 +155,6 @@ def main(argv: list[str] | None = None) -> int:
 
     root.withdraw()
 
-    cfg = load_config()
     main_window: MainWindow | None = None
 
     def _on_signin(api, me) -> None:
@@ -158,21 +186,23 @@ def main(argv: list[str] | None = None) -> int:
     main_window.show()
     trace(f"after show(): root.state()={root.state()!r} viewable={bool(root.winfo_viewable())}")
 
-    # Heartbeat: every 2s for the first 10s, log root visibility state
-    # so we can diagnose "window never appears" complaints.
-    def _heartbeat(tick: int = 0) -> None:
-        try:
-            trace(
-                f"heartbeat#{tick} state={root.state()!r} "
-                f"viewable={bool(root.winfo_viewable())} "
-                f"geom={root.winfo_geometry()!r}"
-            )
-        except Exception as exc:
-            trace(f"heartbeat#{tick} FAILED: {exc!r}")
-            return
-        if tick < 5:
-            root.after(2000, lambda: _heartbeat(tick + 1))
-    root.after(500, _heartbeat)
+    # Heartbeat (diagnostic only): every 2s for the first 10s, log
+    # root visibility state so we can diagnose "window never appears"
+    # complaints. Skipped entirely when diagnostics are off.
+    if diagnostics_on:
+        def _heartbeat(tick: int = 0) -> None:
+            try:
+                trace(
+                    f"heartbeat#{tick} state={root.state()!r} "
+                    f"viewable={bool(root.winfo_viewable())} "
+                    f"geom={root.winfo_geometry()!r}"
+                )
+            except Exception as exc:
+                trace(f"heartbeat#{tick} FAILED: {exc!r}")
+                return
+            if tick < 5:
+                root.after(2000, lambda: _heartbeat(tick + 1))
+        root.after(500, _heartbeat)
 
     trace("entering root.mainloop")
     try:

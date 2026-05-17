@@ -8,6 +8,7 @@ import customtkinter as ctk
 
 from .. import __version__
 from ..api import ApiClient
+from ..config import load_config, save_config
 from ..models import MeResponse
 from .app import set_appearance_mode
 
@@ -25,9 +26,10 @@ class SettingsDialog:
         self._api = api
         self._me = me
         self._on_signed_out = on_signed_out
+        self._cfg = load_config()
         self._win = ctk.CTkToplevel(root)
         self._win.title("Settings")
-        self._win.geometry("420x320")
+        self._win.geometry("440x420")
         self._win.resizable(False, False)
         self._win.transient(root)
         self._build()
@@ -66,9 +68,35 @@ class SettingsDialog:
             width=140,
         ).grid(row=len(rows), column=1, sticky="w", pady=(12, 4))
 
+        # Diagnostic logging toggle (v0.4.16). Default OFF — the verbose
+        # trace.log + app.log + heartbeat plumbing only fires when this
+        # is on. crash.log (uncaught exceptions + native faulthandler)
+        # writes either way. Effect on next launch — loggers are wired
+        # at startup.
+        diag_row = len(rows) + 1
+        ctk.CTkLabel(outer, text="Diagnostics", anchor="w").grid(
+            row=diag_row, column=0, sticky="nw", padx=(0, 12), pady=(12, 4)
+        )
+        diag_cell = ctk.CTkFrame(outer, fg_color="transparent")
+        diag_cell.grid(row=diag_row, column=1, sticky="w", pady=(12, 4))
+        self._diag_switch = ctk.CTkSwitch(
+            diag_cell,
+            text="Verbose logging (trace.log + app.log + heartbeats)",
+            command=self._on_diag_toggled,
+        )
+        self._diag_switch.pack(anchor="w")
+        if self._cfg.enable_diagnostic_logging:
+            self._diag_switch.select()
+        ctk.CTkLabel(
+            diag_cell,
+            text="Crash dumps always on. Restart the app to apply.",
+            text_color="gray",
+            anchor="w",
+        ).pack(anchor="w")
+
         # Buttons row, anchored to the bottom of the dialog.
         btn_row = ctk.CTkFrame(outer, fg_color="transparent")
-        btn_row.grid(row=len(rows) + 1, column=0, columnspan=2, sticky="ew", pady=(20, 0))
+        btn_row.grid(row=diag_row + 1, column=0, columnspan=2, sticky="ew", pady=(20, 0))
         ctk.CTkButton(btn_row, text="Close", command=self._win.destroy, width=90).pack(side="right")
         ctk.CTkButton(
             btn_row, text="Sign out", command=self._on_sign_out, width=90,
@@ -78,6 +106,15 @@ class SettingsDialog:
     def _on_appearance(self, mode: str) -> None:
         # CTk's API accepts lowercase strings.
         set_appearance_mode(mode.lower())
+
+    def _on_diag_toggled(self) -> None:
+        self._cfg.enable_diagnostic_logging = bool(self._diag_switch.get())
+        try:
+            save_config(self._cfg)
+        except Exception:
+            # Don't crash the settings dialog if config save fails;
+            # crash.log will capture if it's something serious.
+            pass
 
     def _on_sign_out(self) -> None:
         from .. import api as api_pkg

@@ -34,6 +34,9 @@ class ClientConfig:
     last_email: Optional[str] = None
     auth_kind: str = "password"  # 'password' | 'api_token'
     last_landing: str = "inbox"  # one of 'inbox' | 'outbox' | 'new'
+    # v0.4.16: gate verbose diagnostic logging (trace.log breadcrumbs,
+    # app.log, heartbeat polling). crash.log + faulthandler always on.
+    enable_diagnostic_logging: bool = False
 
     def normalised_server_url(self) -> str:
         return (self.server_url or "").rstrip("/")
@@ -48,7 +51,13 @@ def load_config() -> ClientConfig:
     except (OSError, json.JSONDecodeError):
         return ClientConfig()
     cfg = ClientConfig()
-    for k in ("server_url", "last_email", "auth_kind", "last_landing"):
+    for k in (
+        "server_url",
+        "last_email",
+        "auth_kind",
+        "last_landing",
+        "enable_diagnostic_logging",
+    ):
         if k in raw and raw[k] is not None:
             setattr(cfg, k, raw[k])
     return cfg

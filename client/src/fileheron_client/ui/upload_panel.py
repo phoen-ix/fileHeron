@@ -35,8 +35,45 @@ class UploadPanel(ctk.CTkFrame):
         self._build()
 
     def _build(self) -> None:
+        # v0.4.24 layout: action area (Create share + upload button,
+        # status text, progress bar, Add files / Clear list) is PINNED
+        # to the bottom via side="bottom" packing, so the submit button
+        # is always visible no matter the window height. Top-packed
+        # form fills space above; the file-list frame absorbs slack
+        # vertical space and shrinks gracefully on smaller windows.
         outer = ctk.CTkFrame(self, fg_color="transparent")
         outer.pack(fill="both", expand=True, padx=8, pady=8)
+
+        # ---- Bottom-pinned action area (packed FIRST so side=bottom
+        # claims its space; later top-packed widgets fill above it).
+
+        self.progress = ctk.CTkProgressBar(outer)
+        self.progress.set(0)
+        self.progress.pack(side="bottom", fill="x", pady=(8, 0))
+        self.progress.pack_forget()
+
+        submit_row = ctk.CTkFrame(outer, fg_color="transparent")
+        submit_row.pack(side="bottom", fill="x", pady=(8, 0))
+        self.status_var = ctk.StringVar(value="")
+        ctk.CTkLabel(
+            submit_row, textvariable=self.status_var, anchor="w",
+        ).pack(side="left", fill="x", expand=True)
+        self.send_btn = ctk.CTkButton(
+            submit_row, text="Create share + upload",
+            command=self._on_send, width=180,
+        )
+        self.send_btn.pack(side="right")
+
+        files_row = ctk.CTkFrame(outer, fg_color="transparent")
+        files_row.pack(side="bottom", fill="x", pady=(0, 4))
+        ctk.CTkButton(files_row, text="Add files…", command=self._on_add).pack(side="left")
+        ctk.CTkButton(
+            files_row, text="Clear list", command=self._on_clear_files,
+            fg_color="gray",
+        ).pack(side="left", padx=(8, 0))
+
+        # ---- Top-packed form (fills from the top down; the file list
+        # is the only widget that uses expand=True so it absorbs slack).
 
         # Subject
         ctk.CTkLabel(outer, text="Subject", anchor="w").pack(fill="x")
@@ -48,13 +85,13 @@ class UploadPanel(ctk.CTkFrame):
 
         # Message
         ctk.CTkLabel(outer, text="Message", anchor="w").pack(fill="x")
-        self.message_text = ctk.CTkTextbox(outer, height=80)
+        self.message_text = ctk.CTkTextbox(outer, height=60)
         self.message_text.pack(fill="x", pady=(0, 8))
 
         # Recipients
         ctk.CTkLabel(outer, text="Recipients", anchor="w").pack(fill="x")
         self.recipients = RecipientPickerWidget(outer, self._app_root, self._api)
-        self.recipients.pack(fill="x", pady=(0, 12))
+        self.recipients.pack(fill="x", pady=(0, 8))
 
         # Expiry — paired date picker + HH:MM + Never checkbox.
         self._build_expiry_section(outer)
@@ -66,36 +103,18 @@ class UploadPanel(ctk.CTkFrame):
         ctk.CTkLabel(
             outer, text="Files", anchor="w"
         ).pack(fill="x")
-        self._file_list_frame = ctk.CTkScrollableFrame(outer, fg_color=("gray90", "gray20"), height=160)
-        self._file_list_frame.pack(fill="x", pady=(2, 4))
-        self._empty_var = ctk.StringVar(value="(no files yet — click Add files…)")
-        self._empty_label = ctk.CTkLabel(self._file_list_frame, textvariable=self._empty_var, text_color="gray")
-        self._empty_label.pack(pady=20)
-
-        # File-list controls
-        files_row = ctk.CTkFrame(outer, fg_color="transparent")
-        files_row.pack(fill="x", pady=(0, 8))
-        ctk.CTkButton(files_row, text="Add files…", command=self._on_add).pack(side="left")
-        ctk.CTkButton(
-            files_row, text="Clear list", command=self._on_clear_files,
-            fg_color="gray",
-        ).pack(side="left", padx=(8, 0))
-
-        # Submit row
-        submit_row = ctk.CTkFrame(outer, fg_color="transparent")
-        submit_row.pack(fill="x")
-        self.status_var = ctk.StringVar(value="")
-        ctk.CTkLabel(submit_row, textvariable=self.status_var, anchor="w").pack(side="left", fill="x", expand=True)
-        self.send_btn = ctk.CTkButton(
-            submit_row, text="Create share + upload",
-            command=self._on_send, width=180,
+        # No fixed height — fill="both", expand=True so this shrinks
+        # gracefully when the window is small but grows when there's
+        # room. The pinned action row stays visible regardless.
+        self._file_list_frame = ctk.CTkScrollableFrame(
+            outer, fg_color=("gray90", "gray20"),
         )
-        self.send_btn.pack(side="right")
-
-        self.progress = ctk.CTkProgressBar(outer)
-        self.progress.set(0)
-        self.progress.pack(fill="x", pady=(8, 0))
-        self.progress.pack_forget()
+        self._file_list_frame.pack(fill="both", expand=True, pady=(2, 4))
+        self._empty_var = ctk.StringVar(value="(no files yet — click Add files…)")
+        self._empty_label = ctk.CTkLabel(
+            self._file_list_frame, textvariable=self._empty_var, text_color="gray",
+        )
+        self._empty_label.pack(pady=20)
 
     def _build_expiry_section(self, parent) -> None:
         ctk.CTkLabel(parent, text="Expires", anchor="w").pack(fill="x")

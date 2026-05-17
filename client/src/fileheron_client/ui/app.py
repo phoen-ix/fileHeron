@@ -41,10 +41,11 @@ def build_root() -> ctk.CTk:
 
     root = ctk.CTk()
     root.title("file:Heron")
-    # v0.4.23: bumped 1000x640 → 1000x820 so the New share form fits
-    # without clipping the Files list + Create share button. Window is
-    # resizable; this is just the default at first launch.
-    root.geometry("1000x820")
+    # v0.4.24: reverted to 1000x640 — the New share form now pins its
+    # submit/Add files row to the bottom (side="bottom") so they're
+    # always visible regardless of window height; the file list area
+    # absorbs slack space.
+    root.geometry("1000x640")
 
     # Window icon — fall back to PNG if .ico missing in dev. iconbitmap
     # only works on Windows + uses .ico; iconphoto is cross-platform

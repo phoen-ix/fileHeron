@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
 
 from .. import api as api_pkg
 from ..api import ApiClient, ApiError
+from ..formatters import format_expiry
 from ..models import ShareListItem
 from .widgets import PillLabel, human_size
 
@@ -126,10 +127,7 @@ class ShareListPanel(QWidget):
                 row, 4, QTableWidgetItem(item.created_at.strftime("%Y-%m-%d %H:%M"))
             )
             self.table.setItem(
-                row, 5,
-                QTableWidgetItem(
-                    item.expires_at.strftime("%Y-%m-%d %H:%M") if item.expires_at else "—"
-                ),
+                row, 5, QTableWidgetItem(format_expiry(item.expires_at))
             )
             self.table.setCellWidget(row, 6, PillLabel(item.state, state=item.state))
 

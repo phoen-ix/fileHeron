@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
 
 from .. import api as api_pkg
 from ..api import ApiClient, ApiError
+from ..formatters import format_expiry
 from ..models import FileInShareResponse, ShareResponse
 from .widgets import PillLabel, human_size
 
@@ -102,9 +103,10 @@ class ShareDetailDialog(QDialog):
             return
         s = self._share
         self.title.setText(s.effective_subject or "(no subject)")
-        bits = [f"Created {s.created_at.strftime('%Y-%m-%d %H:%M')}"]
-        if s.expires_at:
-            bits.append(f"Expires {s.expires_at.strftime('%Y-%m-%d %H:%M')}")
+        bits = [
+            f"Created {s.created_at.strftime('%Y-%m-%d %H:%M')}",
+            f"Expires {format_expiry(s.expires_at)}",
+        ]
         if s.message:
             bits.append(s.message)
         self.meta.setText(" · ".join(bits))

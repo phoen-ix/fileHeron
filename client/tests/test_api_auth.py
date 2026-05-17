@@ -71,8 +71,11 @@ def test_401_triggers_one_refresh_then_replays():
     me_route.side_effect = [
         httpx.Response(401, json={"code": "TOKEN_EXPIRED", "error": "expired"}),
         httpx.Response(200, json={
+            # Backend retired the HMAC + email_hint design — see CLAUDE.md
+            # "Email storage": plaintext in users.email so notification
+            # dispatchers can address them. MeResponse expects 'email'.
             "id": 1,
-            "email_hint": "a***@b.c",
+            "email": "a@b.c",
             "display_name": "A",
             "role": "client",
             "locale": "en",

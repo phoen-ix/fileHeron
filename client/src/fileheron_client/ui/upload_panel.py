@@ -185,10 +185,18 @@ class UploadPanel(QWidget):
             return
 
         self.status.setText(f"Share {share.id[:8]} created — uploading {len(files)} file(s)…")
+        # Progress is driven by aggregate bytes across all queued
+        # workers, not by file count — smoother for the common case of
+        # 1-3 files where one big file dominates. Range is 0..100 (pct).
         self.progress.show()
-        self.progress.setRange(0, len(files))
+        self.progress.setRange(0, 100)
         self.progress.setValue(0)
         self._completed = 0
+        # Per-worker progress bookkeeping. _per_file_done[path] tracks
+        # the bytes already uploaded for that specific file; summed each
+        # tick to derive the overall percent.
+        self._total_bytes = sum(p.stat().st_size for p in files)
+        self._per_file_done: dict[str, int] = {}
         for p in files:
             w = UploadWorker(self._api, share.id, p)
             w.progress.connect(self._on_chunk_progress)
@@ -197,22 +205,36 @@ class UploadPanel(QWidget):
             self._workers.append(w)
             w.start()
 
-    def _on_chunk_progress(self, _path: str, _done: int, _total: int) -> None:
-        # Per-file chunk progress is verbose to display in a single bar;
-        # we use the bar for "files complete" instead. Hook left for a
-        # future per-file row in the list.
-        pass
+    def _on_chunk_progress(self, path: str, done: int, _total: int) -> None:
+        # _total is per-file (provided by both the direct and TUS code
+        # paths in upload_worker.py); we ignore it and use the upfront
+        # stat()-based sum instead, so the percent is anchored to the
+        # known total rather than per-file shifting.
+        self._per_file_done[path] = done
+        if self._total_bytes <= 0:
+            return
+        done_total = sum(self._per_file_done.values())
+        pct = max(0, min(100, int(done_total * 100 / self._total_bytes)))
+        self.progress.setValue(pct)
 
     def _on_one_done(self, path: str, file_id: str) -> None:
+        # Snap the per-file counter to its final size in case the final
+        # progress tick was elided (TUS sometimes emits the post-PATCH
+        # state without an explicit "100% done" event).
+        try:
+            self._per_file_done[path] = Path(path).stat().st_size
+        except OSError:
+            pass
         self._completed += 1
-        self.progress.setValue(self._completed)
         if self._completed == len(self._workers):
+            self.progress.setValue(100)
             self._reset_form_after_send(success=True)
+        else:
+            self._on_chunk_progress(path, self._per_file_done.get(path, 0), 0)
 
     def _on_one_failed(self, path: str, message: str) -> None:
         QMessageBox.warning(self, "Upload failed", f"{Path(path).name}\n\n{message}")
         self._completed += 1
-        self.progress.setValue(self._completed)
         if self._completed == len(self._workers):
             self._reset_form_after_send(success=False)
 

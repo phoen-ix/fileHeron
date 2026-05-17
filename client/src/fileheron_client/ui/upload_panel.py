@@ -95,8 +95,12 @@ class UploadPanel(ctk.CTkFrame):
         left_col = ctk.CTkFrame(two_col, fg_color="transparent")
         left_col.grid(row=0, column=0, sticky="nsew", padx=(0, 8))
         ctk.CTkLabel(left_col, text="Recipients", anchor="w").pack(fill="x")
-        self.recipients = RecipientPickerWidget(left_col, self._app_root, self._api)
-        self.recipients.pack(fill="x")
+        # v0.5.1: bordered group around the recipients widget so the
+        # section reads as one block (matches Expires + Public link).
+        rec_box = ctk.CTkFrame(left_col, border_width=1, fg_color="transparent")
+        rec_box.pack(fill="x")
+        self.recipients = RecipientPickerWidget(rec_box, self._app_root, self._api)
+        self.recipients.pack(fill="x", padx=6, pady=6)
 
         right_col = ctk.CTkFrame(two_col, fg_color="transparent")
         right_col.grid(row=0, column=1, sticky="nsew", padx=(8, 0))
@@ -135,7 +139,14 @@ class UploadPanel(ctk.CTkFrame):
 
     def _build_expiry_section(self, parent) -> None:
         ctk.CTkLabel(parent, text="Expires", anchor="w").pack(fill="x")
-        row = ctk.CTkFrame(parent, fg_color="transparent")
+        # v0.5.1: bordered group around the expiry controls (date,
+        # Never checkbox, per-share download limit).
+        box = ctk.CTkFrame(parent, border_width=1, fg_color="transparent")
+        box.pack(fill="x")
+        inner = ctk.CTkFrame(box, fg_color="transparent")
+        inner.pack(fill="x", padx=6, pady=6)
+
+        row = ctk.CTkFrame(inner, fg_color="transparent")
         row.pack(fill="x", pady=(0, 4))
 
         default = datetime.now() + timedelta(days=7)
@@ -155,14 +166,14 @@ class UploadPanel(ctk.CTkFrame):
 
         self._never_var = ctk.BooleanVar(value=False)
         ctk.CTkCheckBox(
-            parent, text="Never expires (revoke manually)",
+            inner, text="Never expires (revoke manually)",
             variable=self._never_var, command=self._on_never_toggled,
         ).pack(anchor="w", pady=(4, 4))
 
         # v0.4.26: per-share download limit for AUTHENTICATED
         # recipients (backend feature shipped in v1.1.0). Separate
         # from the public-link limit further down. Blank = unlimited.
-        limit_row = ctk.CTkFrame(parent, fg_color="transparent")
+        limit_row = ctk.CTkFrame(inner, fg_color="transparent")
         limit_row.pack(fill="x", anchor="w")
         ctk.CTkLabel(limit_row, text="Download limit", anchor="w").pack(side="left")
         self._share_limit = ctk.StringVar(value="")
@@ -179,46 +190,55 @@ class UploadPanel(ctk.CTkFrame):
             pass
 
     def _build_public_link_section(self, parent) -> None:
-        # v0.4.25: compact one-row public-link controls. Was four
-        # stacked rows in a bordered box (~150 px tall); now a single
-        # horizontal row (~32 px).
-        row = ctk.CTkFrame(parent, fg_color="transparent")
-        row.pack(fill="x", pady=(4, 4))
+        # v0.5.1: bordered group with a collapsible fields-row.
+        # Initially only the [✓] Public link checkbox shows inside
+        # the box. Ticking the checkbox packs the Password / Limit /
+        # Notify row; unticking it hides them again (no more
+        # always-greyed-out controls — pack/forget instead of
+        # disable/enable). _collect_public_link() returns None when
+        # the checkbox is off, so the submit path is unchanged.
+        ctk.CTkLabel(parent, text="Public link", anchor="w").pack(fill="x")
+        box = ctk.CTkFrame(parent, border_width=1, fg_color="transparent")
+        box.pack(fill="x", pady=(0, 4))
+        inner = ctk.CTkFrame(box, fg_color="transparent")
+        inner.pack(fill="x", padx=6, pady=6)
 
         self._pl_enabled = ctk.BooleanVar(value=False)
         ctk.CTkCheckBox(
-            row, text="Public link",
+            inner, text="Include a public link",
             variable=self._pl_enabled, command=self._on_public_link_toggled,
-        ).pack(side="left")
+        ).pack(anchor="w")
 
-        ctk.CTkLabel(row, text="  Password", anchor="w").pack(side="left", padx=(12, 4))
+        # Fields row — packed only when _pl_enabled is on.
+        self._pl_fields_row = ctk.CTkFrame(inner, fg_color="transparent")
+        # NOT packed here — _on_public_link_toggled controls visibility.
+
+        ctk.CTkLabel(self._pl_fields_row, text="Password", anchor="w").pack(side="left", padx=(0, 4))
         self._pl_password = ctk.StringVar()
         self._pl_password_entry = ctk.CTkEntry(
-            row, textvariable=self._pl_password, show="*",
+            self._pl_fields_row, textvariable=self._pl_password, show="*",
             placeholder_text="(optional)", width=140,
         )
         self._pl_password_entry.pack(side="left")
 
-        ctk.CTkLabel(row, text="Limit", anchor="w").pack(side="left", padx=(12, 4))
+        ctk.CTkLabel(self._pl_fields_row, text="Limit", anchor="w").pack(side="left", padx=(12, 4))
         self._pl_limit = ctk.StringVar(value="")
         self._pl_limit_entry = ctk.CTkEntry(
-            row, textvariable=self._pl_limit, placeholder_text="∞", width=80,
+            self._pl_fields_row, textvariable=self._pl_limit, placeholder_text="∞", width=80,
         )
         self._pl_limit_entry.pack(side="left")
 
         self._pl_notify = ctk.BooleanVar(value=False)
         self._pl_notify_box = ctk.CTkCheckBox(
-            row, text="Notify on download", variable=self._pl_notify,
+            self._pl_fields_row, text="Notify on download", variable=self._pl_notify,
         )
         self._pl_notify_box.pack(side="left", padx=(12, 0))
 
-        for w in (self._pl_password_entry, self._pl_limit_entry, self._pl_notify_box):
-            w.configure(state="disabled")
-
     def _on_public_link_toggled(self) -> None:
-        state = "normal" if self._pl_enabled.get() else "disabled"
-        for w in (self._pl_password_entry, self._pl_limit_entry, self._pl_notify_box):
-            w.configure(state=state)
+        if self._pl_enabled.get():
+            self._pl_fields_row.pack(fill="x", pady=(6, 0))
+        else:
+            self._pl_fields_row.pack_forget()
 
     # ---- file list helpers ----
 

@@ -36,7 +36,12 @@ class UploadPanel(ctk.CTkFrame):
         self._build()
 
     def _build(self) -> None:
-        outer = ctk.CTkScrollableFrame(self, fg_color="transparent")
+        # v0.4.19: was a CTkScrollableFrame, which renders empty (zero
+        # canvas size) when nested inside a CTkTabview tab with a
+        # transparent fg_color — known CTk layout issue. Whole panel
+        # was invisible. A plain CTkFrame fits the 1000x640 root and
+        # the inner _file_list_frame still scrolls its own content.
+        outer = ctk.CTkFrame(self, fg_color="transparent")
         outer.pack(fill="both", expand=True, padx=8, pady=8)
 
         # Subject

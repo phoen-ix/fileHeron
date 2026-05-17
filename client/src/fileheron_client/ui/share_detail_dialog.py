@@ -22,7 +22,8 @@ from PySide6.QtWidgets import (
 from .. import api as api_pkg
 from ..api import ApiClient, ApiError
 from ..formatters import format_expiry
-from ..models import FileInShareResponse, ShareResponse
+from ..models import FileInShareResponse, MeResponse, ShareResponse
+from .expiry_dialog import ExpiryDialog
 from .widgets import PillLabel, human_size
 
 
@@ -54,16 +55,39 @@ class _DownloadWorker(QThread):
 
 
 class ShareDetailDialog(QDialog):
-    def __init__(self, api: ApiClient, share_id: str, parent: Optional[QWidget] = None) -> None:
+    # Emitted after the user mutates the share (revoke / expire-now /
+    # edit-expiry) so the parent list view can re-fetch and reflect
+    # the new state without a manual reload.
+    share_mutated = Signal()
+
+    def __init__(
+        self,
+        api: ApiClient,
+        share_id: str,
+        me: MeResponse,
+        parent: Optional[QWidget] = None,
+    ) -> None:
         super().__init__(parent)
         self._api = api
         self._share_id = share_id
+        self._me = me
         self._share: Optional[ShareResponse] = None
         self._workers: list[_DownloadWorker] = []
         self.setWindowTitle("Share")
         self.setMinimumSize(620, 460)
         self._build()
         self._load()
+
+    def _can_manage(self) -> bool:
+        """The Revoke / Expire-now / Edit-expiry buttons are visible only
+        when the actor owns the share or is an admin. Mirrors the
+        backend's `update_share_expiry` + `revoke_share` authorisation."""
+        if self._share is None:
+            return False
+        return (
+            self._me.role == "admin"
+            or self._share.created_by_id == self._me.id
+        )
 
     def _build(self) -> None:
         outer = QVBoxLayout(self)
@@ -81,6 +105,24 @@ class ShareDetailDialog(QDialog):
         outer.addWidget(self.file_list, 1)
 
         btns = QHBoxLayout()
+        # Manager actions (left-aligned). Created hidden; _load reveals
+        # them when _can_manage() is True. Disabled when share state
+        # isn't 'active' (server would reject anyway with SHARE_NOT_ACTIVE).
+        self.edit_expiry_btn = QPushButton("Edit expiry…")
+        self.edit_expiry_btn.clicked.connect(self._edit_expiry)
+        self.edit_expiry_btn.hide()
+        btns.addWidget(self.edit_expiry_btn)
+
+        self.expire_now_btn = QPushButton("Expire now")
+        self.expire_now_btn.clicked.connect(self._expire_now)
+        self.expire_now_btn.hide()
+        btns.addWidget(self.expire_now_btn)
+
+        self.revoke_btn = QPushButton("Revoke")
+        self.revoke_btn.clicked.connect(self._revoke)
+        self.revoke_btn.hide()
+        btns.addWidget(self.revoke_btn)
+
         btns.addStretch()
         self.save_all_btn = QPushButton("Save all to folder…")
         self.save_all_btn.clicked.connect(self._save_all)
@@ -113,6 +155,102 @@ class ShareDetailDialog(QDialog):
         self.state.setState(s.state)
         self.state.setText(s.state)
         self._render_files(s.files)
+        self._refresh_action_visibility()
+
+    def _refresh_action_visibility(self) -> None:
+        """Show + enable the manager-action buttons per role + state.
+        Called from _load() and after any successful mutation so the
+        UI reflects the current state without a full rebuild."""
+        manage = self._can_manage()
+        active = self._share is not None and self._share.state == "active"
+        for btn in (self.edit_expiry_btn, self.expire_now_btn, self.revoke_btn):
+            btn.setVisible(manage)
+            btn.setEnabled(manage and active)
+
+    # ---- Manager actions ----------------------------------------------------
+
+    def _revoke(self) -> None:
+        if not self._share:
+            return
+        if QMessageBox.question(
+            self,
+            "Revoke share",
+            f"Revoke this share? Files become inaccessible to the recipient.\n\n"
+            f"Subject: {self._share.effective_subject or '(no subject)'}",
+        ) != QMessageBox.Yes:
+            return
+        try:
+            api_pkg.revoke_share(self._api, self._share.id)
+        except ApiError as exc:
+            QMessageBox.warning(self, "Revoke failed", exc.message or str(exc))
+            return
+        self.share_mutated.emit()
+        QMessageBox.information(self, "Revoked", "Share revoked.")
+        self.accept()
+
+    def _expire_now(self) -> None:
+        if not self._share:
+            return
+        if QMessageBox.question(
+            self,
+            "Expire now",
+            "Expire this share immediately? The file bytes are hard-"
+            "deleted from disk; this cannot be undone.",
+        ) != QMessageBox.Yes:
+            return
+        try:
+            updated = api_pkg.expire_share_now(self._api, self._share.id)
+        except ApiError as exc:
+            QMessageBox.warning(self, "Expire failed", exc.message or str(exc))
+            return
+        self._share = updated
+        self.share_mutated.emit()
+        # Re-render the meta line + state pill + buttons rather than
+        # closing the dialog, so the admin sees the new state.
+        bits = [
+            f"Created {updated.created_at.strftime('%Y-%m-%d %H:%M')}",
+            f"Expires {format_expiry(updated.expires_at)}",
+        ]
+        if updated.message:
+            bits.append(updated.message)
+        self.meta.setText(" · ".join(bits))
+        self.state.setState(updated.state)
+        self.state.setText(updated.state)
+        self._refresh_action_visibility()
+        QMessageBox.information(self, "Expired", "Share expired.")
+
+    def _edit_expiry(self) -> None:
+        if not self._share:
+            return
+        dlg = ExpiryDialog(self, current=self._share.expires_at)
+        if dlg.exec() != QDialog.Accepted:
+            return
+        choice = dlg.selected_expiry()
+        if choice is None:
+            return
+        mode, value = choice
+        try:
+            if mode == "clear":
+                updated = api_pkg.patch_share_expiry(
+                    self._api, self._share.id, clear=True
+                )
+            else:
+                updated = api_pkg.patch_share_expiry(
+                    self._api, self._share.id, expires_at=value
+                )
+        except ApiError as exc:
+            QMessageBox.warning(self, "Edit failed", exc.message or str(exc))
+            return
+        self._share = updated
+        self.share_mutated.emit()
+        bits = [
+            f"Created {updated.created_at.strftime('%Y-%m-%d %H:%M')}",
+            f"Expires {format_expiry(updated.expires_at)}",
+        ]
+        if updated.message:
+            bits.append(updated.message)
+        self.meta.setText(" · ".join(bits))
+        QMessageBox.information(self, "Updated", "Share expiry updated.")
 
     def _render_files(self, files: list[FileInShareResponse]) -> None:
         self.file_list.clear()

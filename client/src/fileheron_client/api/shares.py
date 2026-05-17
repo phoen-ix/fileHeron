@@ -1,4 +1,4 @@
-"""Share endpoints — list, get, create, revoke."""
+"""Share endpoints — list, get, create, revoke, expire-now, patch-expiry."""
 from __future__ import annotations
 
 from datetime import datetime
@@ -64,3 +64,56 @@ def delete_share(api: ApiClient, share_id: str) -> None:
     api.request_or_raise(
         "DELETE", f"/api/shares/{share_id}", expected=204
     )
+
+
+# v0.2.0 share-manager actions ------------------------------------------------
+#
+# All three return the up-to-date ShareResponse so the caller can refresh
+# the dialog state from one response — no follow-up GET needed.
+
+
+def revoke_share(api: ApiClient, share_id: str) -> None:
+    """Revoke an active share. Files become inaccessible to recipients;
+    audit row `share_revoked` is written server-side. 204 No Content.
+
+    Alias for ``delete_share`` — the backend routes DELETE /shares/{id}
+    to ``services.share.revoke_share`` (no hard-delete). Kept as a
+    separate name because the SPA-mirrored UI button reads "Revoke".
+    """
+    delete_share(api, share_id)
+
+
+def expire_share_now(api: ApiClient, share_id: str) -> ShareResponse:
+    """Force-expire the share immediately. Flips state to ``expired``,
+    sets ``expires_at = now()``, hard-deletes the file bytes from disk.
+    Audit row ``share_expired`` with ``{via: "owner_action"}``."""
+    out = api.request_or_raise("POST", f"/api/shares/{share_id}/expire")
+    return ShareResponse.model_validate(out)
+
+
+def patch_share_expiry(
+    api: ApiClient,
+    share_id: str,
+    *,
+    expires_at: Optional[datetime] = None,
+    clear: bool = False,
+) -> ShareResponse:
+    """PATCH ``/api/shares/{id}`` with expiry semantics:
+
+    - ``clear=True`` → ``expires_at_clear: true`` (share becomes
+      never-expire, v1.1.4 semantics). Mutually exclusive with
+      supplying ``expires_at`` (server returns 400 on both).
+    - ``expires_at=<datetime>`` → replace.
+    - both unset → no-op (caller should not call us in that case).
+    """
+    if clear and expires_at is not None:
+        raise ValueError(
+            "Pass either expires_at or clear=True, not both."
+        )
+    body: dict = {}
+    if clear:
+        body["expires_at_clear"] = True
+    elif expires_at is not None:
+        body["expires_at"] = expires_at.isoformat()
+    out = api.request_or_raise("PATCH", f"/api/shares/{share_id}", json=body)
+    return ShareResponse.model_validate(out)

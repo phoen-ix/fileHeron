@@ -57,8 +57,19 @@ class MainWindow(QMainWindow):
 
     @Slot(str)
     def _open_share(self, share_id: str) -> None:
-        dlg = ShareDetailDialog(self._api, share_id, parent=self)
+        dlg = ShareDetailDialog(self._api, share_id, self._me, parent=self)
+        # If the user revoked / expired / edited the share inside the
+        # dialog, refresh the list view they came from so the new state
+        # is visible without a manual reload.
+        dlg.share_mutated.connect(self._refresh_current_tab)
         dlg.exec()
+
+    def _refresh_current_tab(self) -> None:
+        idx = self.tabs.currentIndex()
+        if idx == 0:
+            self.inbox.refresh()
+        elif idx == 1:
+            self.outbox.refresh()
 
     def _open_settings(self) -> None:
         dlg = SettingsDialog(self._api, self._me, parent=self)

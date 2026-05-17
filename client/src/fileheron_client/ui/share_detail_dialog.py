@@ -5,6 +5,7 @@ scrollable file list and three manager-action buttons (revoke /
 expire-now / edit-expiry) gated by ownership."""
 from __future__ import annotations
 
+import webbrowser
 from pathlib import Path
 from tkinter import filedialog
 from typing import Callable, Optional
@@ -78,6 +79,10 @@ class ShareDetailDialog:
         self.state_pill = PillLabel(outer, text="…", state="active")
         self.state_pill.pack(anchor="w", pady=(0, 8))
 
+        # v0.5.3: Public-link section (only shown if the share has
+        # one; populated by _load_public_link via background fetch).
+        self._build_public_link_section(outer)
+
         ctk.CTkLabel(outer, text="Files", anchor="w").pack(fill="x")
         self.file_scroll = ctk.CTkScrollableFrame(outer, fg_color="transparent")
         self.file_scroll.pack(fill="both", expand=True, pady=(2, 8))
@@ -117,6 +122,88 @@ class ShareDetailDialog:
         self.progress.pack(fill="x", pady=(8, 0))
         self.progress.pack_forget()  # shown when a download is in flight
 
+    def _build_public_link_section(self, parent) -> None:
+        """Create a hidden bordered section for the public-link URL.
+        Revealed by ``_render_public_link`` when the background
+        fetch returns non-None data."""
+        self._pl_section_label = ctk.CTkLabel(parent, text="Public link", anchor="w")
+        self._pl_section = ctk.CTkFrame(parent, border_width=1, fg_color="transparent")
+
+        inner = ctk.CTkFrame(self._pl_section, fg_color="transparent")
+        inner.pack(fill="x", padx=8, pady=8)
+
+        url_row = ctk.CTkFrame(inner, fg_color="transparent")
+        url_row.pack(fill="x")
+        self._pl_url_var = ctk.StringVar(value="")
+        self._pl_url_entry = ctk.CTkEntry(
+            url_row, textvariable=self._pl_url_var, state="readonly",
+        )
+        self._pl_url_entry.pack(side="left", fill="x", expand=True)
+        ctk.CTkButton(
+            url_row, text="Copy", width=70, command=self._copy_pl_url,
+        ).pack(side="left", padx=(8, 0))
+        ctk.CTkButton(
+            url_row, text="Open", width=70, command=self._open_pl_url,
+        ).pack(side="left", padx=(4, 0))
+
+        self._pl_info_var = ctk.StringVar(value="")
+        ctk.CTkLabel(
+            inner, textvariable=self._pl_info_var, anchor="w",
+            text_color="gray",
+        ).pack(fill="x", pady=(6, 0))
+
+        # Section starts hidden; we don't pack the label/frame yet.
+
+    def _render_public_link(self, pl: Optional[dict]) -> None:
+        if not pl:
+            return
+        url = pl.get("url")
+        if not url:
+            # Legacy row with the token only stored as hash — no
+            # plaintext to show. Skip rather than misleading the user
+            # with an empty box.
+            return
+        self._pl_url_var.set(url)
+        bits: list[str] = []
+        if pl.get("has_password"):
+            bits.append("Password protected")
+        dl_limit = pl.get("download_limit")
+        if dl_limit is not None:
+            remaining = pl.get("downloads_remaining")
+            bits.append(f"Downloads: {remaining}/{dl_limit}")
+        if pl.get("notify_on_download"):
+            bits.append("Notifies on download")
+        locked = pl.get("locked_until")
+        if locked:
+            bits.append("LOCKED (too many password attempts)")
+        revoked = pl.get("revoked_at")
+        if revoked:
+            bits.append("REVOKED")
+        self._pl_info_var.set("  ·  ".join(bits))
+        # Reveal the section now that we have content.
+        self._pl_section_label.pack(fill="x", pady=(8, 0))
+        self._pl_section.pack(fill="x", pady=(0, 8))
+
+    def _copy_pl_url(self) -> None:
+        url = self._pl_url_var.get()
+        if not url:
+            return
+        try:
+            self._win.clipboard_clear()
+            self._win.clipboard_append(url)
+            self._win.update()  # ensures the clipboard sticks after destroy
+        except Exception:
+            pass
+
+    def _open_pl_url(self) -> None:
+        url = self._pl_url_var.get()
+        if not url:
+            return
+        try:
+            webbrowser.open(url)
+        except Exception:
+            pass
+
     def _load(self) -> None:
         def _fetch():
             return api_pkg.get_share(self._api, self._share_id)
@@ -129,6 +216,23 @@ class ShareDetailDialog:
             msg = getattr(exc, "message", None) or str(exc)
             mb.warn(self._win, "Could not load share", msg)
             self._win.destroy()
+
+        run_in_background(self._app_root, _fetch, on_done=_done, on_failed=_failed)
+        self._load_public_link()
+
+    def _load_public_link(self) -> None:
+        """Fetch public-link metadata in the background. The endpoint
+        is owner+admin only and returns None when there's no link, so
+        recipients / unprivileged users see no section."""
+        def _fetch():
+            return api_pkg.get_public_link(self._api, self._share_id)
+
+        def _done(pl):
+            self._render_public_link(pl)
+
+        def _failed(_exc):
+            # Already permissive in the helper; nothing to do here.
+            pass
 
         run_in_background(self._app_root, _fetch, on_done=_done, on_failed=_failed)
 

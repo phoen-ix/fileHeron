@@ -119,6 +119,28 @@ def expire_share_now(api: ApiClient, share_id: str) -> ShareResponse:
     return ShareResponse.model_validate(out)
 
 
+def get_public_link(api: ApiClient, share_id: str) -> Optional[dict]:
+    """Return the public-link metadata for an owned share (incl. the
+    plaintext URL via the encrypted-token column shipped in
+    migration 202605031400), or ``None`` if the share has no public
+    link / the request fails. Backend enforces owner+admin auth on
+    GET ``/api/shares/{id}/public-link``.
+
+    Returns a raw dict rather than a typed model — the desktop client
+    only reads a few fields and a permissive shape lets backend
+    schema changes land without a client release. Notable keys:
+    ``url`` (Optional[str] — None for legacy rows where the token
+    wasn't encrypted), ``has_password``, ``download_limit``,
+    ``downloads_remaining``, ``locked_until``, ``revoked_at``.
+    """
+    try:
+        return api.request_or_raise(
+            "GET", f"/api/shares/{share_id}/public-link",
+        )
+    except Exception:
+        return None
+
+
 def patch_share_expiry(
     api: ApiClient,
     share_id: str,

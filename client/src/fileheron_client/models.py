@@ -89,6 +89,20 @@ class GroupRecipientRef(_Base):
     is_company_inbox: bool = False
 
 
+class InlinePublicLinkResult(_Base):
+    """Returned on POST /api/shares when ``public_link`` was set
+    in the request — plaintext URL shown ONCE. Mirrors the backend
+    schema; ``_Base`` ignores any extra fields so server-side
+    additions don't break us."""
+    id: str
+    url: str
+    download_limit: Optional[int] = None
+    downloads_remaining: Optional[int] = None
+    notify_on_download: bool = False
+    has_password: bool = False
+    created_at: Optional[datetime] = None
+
+
 class ShareResponse(_Base):
     id: str
     kind: str
@@ -102,6 +116,11 @@ class ShareResponse(_Base):
     recipient_user_ids: list[int] = []
     recipient_groups: list[GroupRecipientRef] = []
     files: list[FileInShareResponse] = []
+    # v0.5.3: present only on the response to POST /api/shares when
+    # the request body included ``public_link``. Pydantic would
+    # silently drop the server's field if we didn't declare it,
+    # which broke the "Save this URL now" popup.
+    public_link: Optional[InlinePublicLinkResult] = None
 
 
 class DirectUploadResponse(_Base):

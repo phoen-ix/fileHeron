@@ -417,7 +417,10 @@ class UploadPanel(ctk.CTkFrame):
         self.status_var.set(
             f"Share {share.id[:8]} created — uploading {len(self._files)} file(s)…"
         )
-        self.progress.pack(fill="x", pady=(8, 0))
+        # v0.5.3: re-pack with side="bottom" matching _build()'s
+        # original geometry, otherwise the bar lands at the top of the
+        # form (default side="top") instead of in the pinned bottom row.
+        self.progress.pack(side="bottom", fill="x", pady=(6, 0))
         self.progress.set(0)
         self._completed = 0
         self._total_bytes = sum(p.stat().st_size for p in self._files)

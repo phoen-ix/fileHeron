@@ -102,6 +102,7 @@ import {
 } from '@/api/apiTokens'
 import { useApiError } from '@/composables/useApiError'
 import type { ApiTokenListItem, CreateApiTokenResponse } from '@/types/api'
+import { formatInSiteTime } from '@/utils/datetime'
 
 const { t, locale } = useI18n()
 const { describe } = useApiError()
@@ -179,14 +180,7 @@ function dismissPlaintext() {
 }
 
 function formatDate(iso: string): string {
-  const d = new Date(iso)
-  return d.toLocaleString(locale.value === 'de' ? 'de-AT' : 'en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
+  return formatInSiteTime(iso, locale.value)
 }
 
 onMounted(refresh)

@@ -301,6 +301,7 @@ async def _maybe_send_lockout_email(
         locked_until_iso=locked_until,
         ip_hint=ip_hint,
         app_url=site_svc.get_site_url(db),
+        site_timezone=site_svc.get_site_timezone(db),
     )
 
 

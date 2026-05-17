@@ -17,6 +17,10 @@ export interface PublicConfigResponse {
   motd?: { text: string }
   /** Running app version (baked at image build). Phase 1 self-update. */
   running_version: string
+  /** Admin-set site-wide display timezone (IANA name). Always present;
+   *  defaults to "UTC" when unset. Drives every timestamp formatter via
+   *  the site Pinia store. */
+  site_timezone: string
 }
 
 export function getPublicConfig() {

@@ -6,6 +6,7 @@ import { adminListFiles } from '@/api/admin'
 import { useApiError } from '@/composables/useApiError'
 import { useTableSort } from '@/composables/useTableSort'
 import type { AdminFileItem, FileState, ShareState } from '@/types/api'
+import { formatInSiteTime } from '@/utils/datetime'
 
 const { t, locale } = useI18n()
 const { describe } = useApiError()
@@ -62,11 +63,7 @@ watch([sort.sortBy, sort.sortDir, page], load)
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize.value)))
 
 function formatDate(iso: string | null): string {
-  if (!iso) return '—'
-  return new Date(iso).toLocaleString(
-    locale.value === 'de' ? 'de-AT' : 'en-US',
-    { year: 'numeric', month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' },
-  )
+  return formatInSiteTime(iso, locale.value)
 }
 
 function formatBytes(n: number): string {

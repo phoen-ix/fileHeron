@@ -173,7 +173,9 @@ def dispatch(
 
             slug = template_slug or category.value
             subject, text, html = email_svc.render_email(
-                user.locale, slug, payload, app_url=site_svc.get_site_url(db)
+                user.locale, slug, payload,
+                app_url=site_svc.get_site_url(db),
+                site_timezone=site_svc.get_site_timezone(db),
             )
             job_queue.enqueue(
                 "send_email_job",

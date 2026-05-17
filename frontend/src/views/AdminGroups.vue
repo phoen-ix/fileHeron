@@ -8,11 +8,16 @@ import { createGroup, listGroups } from '@/api/groups'
 import { useApiError } from '@/composables/useApiError'
 import { useUiStore } from '@/stores/ui'
 import type { GroupResponse } from '@/types/api'
+import { formatDateInSiteTime } from '@/utils/datetime'
 
 const router = useRouter()
 const ui = useUiStore()
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const { describe } = useApiError()
+
+function formatDate(iso: string | null): string {
+  return formatDateInSiteTime(iso, locale.value)
+}
 
 const items = ref<GroupResponse[]>([])
 const loading = ref(true)
@@ -151,7 +156,7 @@ onMounted(load)
             <span v-else class="fh-mono row-plain">{{ t('admin_groups.kind_normal') }}</span>
           </td>
           <td class="numeric fh-mono">{{ g.member_count }}</td>
-          <td class="fh-mono">{{ new Date(g.created_at).toLocaleDateString() }}</td>
+          <td class="fh-mono">{{ formatDate(g.created_at) }}</td>
         </tr>
       </tbody>
     </table>

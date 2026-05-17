@@ -8,6 +8,7 @@ import { useApiError } from '@/composables/useApiError'
 import { useShareListState } from '@/composables/useShareListState'
 import { useUiStore } from '@/stores/ui'
 import type { ShareListItem, ShareRecipientRef, ShareState } from '@/types/api'
+import { formatDateInSiteTime } from '@/utils/datetime'
 
 const { t, locale } = useI18n()
 const route = useRoute()
@@ -107,11 +108,7 @@ function pillForState(state: ShareState): string | undefined {
 }
 
 function formatDate(iso: string | null): string {
-  if (!iso) return '—'
-  return new Date(iso).toLocaleDateString(
-    locale.value === 'de' ? 'de-AT' : 'en-US',
-    { year: 'numeric', month: 'short', day: '2-digit' },
-  )
+  return formatDateInSiteTime(iso, locale.value)
 }
 
 function formatBytes(n: number): string {

@@ -18,10 +18,14 @@ Two surfaces deliberately stay on the env value:
 """
 from __future__ import annotations
 
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
 from sqlalchemy.orm import Session
 
 from ..config import settings as _env
 from . import settings as settings_svc
+
+DEFAULT_TIMEZONE = "UTC"
 
 
 def get_site_url(db: Session) -> str:
@@ -31,3 +35,19 @@ def get_site_url(db: Session) -> str:
     override = settings_svc.get(db, settings_svc.Keys.SITE_URL)
     raw = (override or _env.APP_URL or "").rstrip("/")
     return raw
+
+
+def get_site_timezone(db: Session) -> str:
+    """Return the effective site-wide display timezone as an IANA name.
+    Defaults to ``"UTC"`` when unset. Falls back to ``"UTC"`` on a
+    stored value that isn't a recognized zone — settings PUT validates
+    on write, but a row hand-edited out-of-band must not crash readers
+    (the read path runs on every email render and every page load)."""
+    stored = settings_svc.get(db, settings_svc.Keys.SITE_TIMEZONE)
+    if not stored:
+        return DEFAULT_TIMEZONE
+    try:
+        ZoneInfo(stored)
+    except ZoneInfoNotFoundError:
+        return DEFAULT_TIMEZONE
+    return stored

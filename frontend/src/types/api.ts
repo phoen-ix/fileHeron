@@ -713,11 +713,18 @@ export interface SiteSettingsResponse {
   has_db_override: boolean
   /** The env value, so the UI can show "fallback to:". */
   env_app_url: string
+  /** Effective IANA timezone for human-facing timestamps. Defaults
+   *  to "UTC" when the kv key is unset. */
+  site_timezone: string
 }
 
 export interface UpdateSiteSettingsRequest {
-  /** null clears the kv override (revert to env). */
-  site_url: string | null
+  /** Omitted = leave unchanged; null = clear (revert to env fallback);
+   *  any other value = replace. */
+  site_url?: string | null
+  /** Omitted = leave unchanged; empty string = clear back to default
+   *  ("UTC"); any other value must be a valid IANA name. */
+  site_timezone?: string | null
 }
 
 /* Admin quarantine actions + settings (post-Phase 10) */

@@ -311,6 +311,16 @@
     "revert_to_env": "Auf Env zurücksetzen",
     "saved_toast": "Site-URL gespeichert."
   },
+  "admin_site_timezone": {
+    "title": "Site-Zeitzone",
+    "intro": "Die IANA-Zeitzone, in der jeder für Menschen sichtbare Zeitstempel dargestellt wird — Admin-Tabellen, Freigabe-Listen, öffentliche Freigabe-Seiten und E-Mail-Benachrichtigungen. Die Speicherung bleibt in UTC; dies betrifft nur die Anzeige.",
+    "timezone_label": "Zeitzone",
+    "timezone_help": "Ein IANA-Name wie UTC, Europe/Vienna oder America/New_York. Aus der Liste wählen oder zum Filtern tippen.",
+    "browser_hint": "Dein Browser läuft aktuell in: {tz}",
+    "use_browser": "Übernehmen",
+    "invalid_tz": "{tz} ist keine gültige IANA-Zeitzone.",
+    "saved_toast": "Site-Zeitzone gespeichert."
+  },
   "admin_home_page": {
     "title": "Startseite",
     "intro": "Die Startseite ist der Begrüßungsbildschirm unter /. Deaktiviere sie, wenn du Benutzer lieber direkt auf eine Arbeitsoberfläche (Gesendet / Empfangen / Neue Freigabe) leiten möchtest.",

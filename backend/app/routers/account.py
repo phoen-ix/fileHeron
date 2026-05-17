@@ -258,6 +258,7 @@ async def create_invite(
         inviter_display_name=user.display_name,
         token=plaintext,
         app_url=site_svc.get_site_url(db),
+        site_timezone=site_svc.get_site_timezone(db),
     )
     return {"ok": True, "email": record.email, "expires_at": record.expires_at.isoformat()}
 

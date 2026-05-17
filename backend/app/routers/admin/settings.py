@@ -527,6 +527,7 @@ def _site_settings_response(db: Session) -> SiteSettingsResponse:
         site_url=site_svc.get_site_url(db),
         has_db_override=override is not None,
         env_app_url=(_env_settings.APP_URL or "").rstrip("/"),
+        site_timezone=site_svc.get_site_timezone(db),
     )
 
 
@@ -545,25 +546,52 @@ def update_site_settings(
     db: Session = Depends(get_db),
     admin: User = Depends(get_current_admin),
 ) -> SiteSettingsResponse:
-    previous_effective = site_svc.get_site_url(db)
-    settings_svc.set_value(
-        db,
-        key=settings_svc.Keys.SITE_URL,
-        value=payload.site_url,  # None clears the kv override
-        actor=admin,
-        request=request,
-    )
-    db.flush()
-    new_effective = site_svc.get_site_url(db)
-    record_audit_event(
-        db,
-        event_type=AuditEventType.site_url_changed,
-        actor_user_id=admin.id,
-        target_type="settings",
-        target_id="site_url",
-        metadata={"from": previous_effective, "to": new_effective},
-        request=request,
-    )
+    fields = payload.model_fields_set
+    if "site_url" in fields:
+        previous_url = site_svc.get_site_url(db)
+        settings_svc.set_value(
+            db,
+            key=settings_svc.Keys.SITE_URL,
+            value=payload.site_url,  # None clears the kv override
+            actor=admin,
+            request=request,
+        )
+        db.flush()
+        new_url = site_svc.get_site_url(db)
+        if new_url != previous_url:
+            record_audit_event(
+                db,
+                event_type=AuditEventType.site_url_changed,
+                actor_user_id=admin.id,
+                target_type="settings",
+                target_id="site_url",
+                metadata={"from": previous_url, "to": new_url},
+                request=request,
+            )
+    if "site_timezone" in fields:
+        previous_tz = site_svc.get_site_timezone(db)
+        # Validator turns "" into "" (clear sentinel); store None to drop
+        # the row so future reads fall through to the default helper.
+        write_value: str | None = payload.site_timezone or None
+        settings_svc.set_value(
+            db,
+            key=settings_svc.Keys.SITE_TIMEZONE,
+            value=write_value,
+            actor=admin,
+            request=request,
+        )
+        db.flush()
+        new_tz = site_svc.get_site_timezone(db)
+        if new_tz != previous_tz:
+            record_audit_event(
+                db,
+                event_type=AuditEventType.site_timezone_changed,
+                actor_user_id=admin.id,
+                target_type="settings",
+                target_id="site_timezone",
+                metadata={"from": previous_tz, "to": new_tz},
+                request=request,
+            )
     db.commit()
     return _site_settings_response(db)
 

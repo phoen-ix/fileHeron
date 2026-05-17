@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 import { auditCsvUrl, listAuditLog } from '@/api/admin'
 import { useApiError } from '@/composables/useApiError'
 import type { AdminAuditRow } from '@/types/api'
+import { formatInSiteTime } from '@/utils/datetime'
 
 const { t, locale } = useI18n()
 const { describe } = useApiError()
@@ -90,10 +91,7 @@ const csvHref = computed(() => auditCsvUrl(filterParams.value))
 const isFirstPage = computed(() => cursorStack.value.length <= 1)
 
 function formatDate(iso: string): string {
-  return new Date(iso).toLocaleString(
-    locale.value === 'de' ? 'de-AT' : 'en-US',
-    { year: 'numeric', month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' },
-  )
+  return formatInSiteTime(iso, locale.value, { second: '2-digit' })
 }
 
 onMounted(load)

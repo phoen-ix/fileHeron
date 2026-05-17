@@ -1,0 +1,92 @@
+import { createPinia, setActivePinia } from 'pinia'
+import { beforeEach, describe, expect, it } from 'vitest'
+
+import { useSiteStore } from '@/stores/site'
+import { formatDateInSiteTime, formatInSiteTime, parseServerDate } from '@/utils/datetime'
+
+describe('parseServerDate', () => {
+  it('appends Z to a naive ISO so the value is treated as UTC', () => {
+    // 2026-05-16 23:46:07 UTC = 1779580_secs since epoch (approx).
+    // What matters: the same wall-clock string parses to the same Date.
+    const naive = parseServerDate('2026-05-16T23:46:07')
+    const withZ = parseServerDate('2026-05-16T23:46:07Z')
+    expect(naive.getTime()).toBe(withZ.getTime())
+  })
+
+  it('leaves a string with an explicit Z designator alone', () => {
+    const d = parseServerDate('2026-05-16T23:46:07Z')
+    expect(d.getUTCHours()).toBe(23)
+    expect(d.getUTCMinutes()).toBe(46)
+  })
+
+  it('leaves a string with a numeric offset alone', () => {
+    const d = parseServerDate('2026-05-16T23:46:07+02:00')
+    // 23:46 in +02:00 == 21:46 UTC
+    expect(d.getUTCHours()).toBe(21)
+    expect(d.getUTCMinutes()).toBe(46)
+  })
+})
+
+describe('formatInSiteTime', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
+  it('returns the em-dash placeholder for null / undefined / empty', () => {
+    expect(formatInSiteTime(null, 'en')).toBe('—')
+    expect(formatInSiteTime(undefined, 'en')).toBe('—')
+    expect(formatInSiteTime('', 'en')).toBe('—')
+  })
+
+  it('renders the same instant differently for UTC vs Europe/Vienna vs Pacific/Auckland', () => {
+    const site = useSiteStore()
+    const iso = '2026-05-16T23:46:00' // naive UTC
+
+    site.timezone = 'UTC'
+    const utc = formatInSiteTime(iso, 'en')
+
+    site.timezone = 'Europe/Vienna' // CEST = +02:00 in May
+    const vie = formatInSiteTime(iso, 'en')
+
+    site.timezone = 'Pacific/Auckland' // NZST = +12:00 in May
+    const nzl = formatInSiteTime(iso, 'en')
+
+    // The three formatted strings should all differ from each other.
+    expect(utc).not.toBe(vie)
+    expect(vie).not.toBe(nzl)
+    expect(utc).not.toBe(nzl)
+  })
+
+  it('reflects locale on the format-language axis (en vs de)', () => {
+    const site = useSiteStore()
+    site.timezone = 'UTC'
+    const en = formatInSiteTime('2026-05-16T23:46:00', 'en')
+    const de = formatInSiteTime('2026-05-16T23:46:00', 'de')
+    // de-AT vs en-US format the month and separators differently;
+    // we don't assert exact substrings (CLDR may change) but they
+    // must not be byte-identical.
+    expect(en).not.toBe(de)
+  })
+
+  it('falls back to UTC when the store has no timezone set', () => {
+    const site = useSiteStore()
+    site.timezone = '' // simulate pre-bootstrap default
+    const out = formatInSiteTime('2026-05-16T23:46:00', 'en')
+    expect(out).toMatch(/2026/) // smoke — should produce some output
+  })
+})
+
+describe('formatDateInSiteTime', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
+  it('omits hour and minute', () => {
+    const site = useSiteStore()
+    site.timezone = 'UTC'
+    const out = formatDateInSiteTime('2026-05-16T23:46:00', 'en')
+    // The narrow-date format shouldn't include a colon (which is in
+    // hh:mm). Date-only shows month + day + year only.
+    expect(out).not.toMatch(/:/)
+  })
+})

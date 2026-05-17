@@ -14,11 +14,12 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from babel.dates import format_datetime
-from jinja2 import Environment, FileSystemLoader, select_autoescape
+from jinja2 import Environment, FileSystemLoader, pass_context, select_autoescape
 
 from sqlalchemy.orm import Session
 
@@ -26,6 +27,8 @@ from ..config import settings
 from ..database import SessionLocal
 from ..models.user import Locale
 from ..utils.emailing import SmtpConfig, send_email
+
+DEFAULT_TIMEZONE = "UTC"
 
 logger = logging.getLogger("fileheron.email")
 
@@ -50,15 +53,29 @@ def _resolve_locale(locale: Locale | str) -> str:
     return code if code in {"en", "de"} else "en"
 
 
-def _format_dt_locale(value, locale_code: str = "en") -> str:
-    """Jinja filter: format a datetime in the recipient's locale, marked UTC.
-    Handles naive UTC datetimes (the convention in this codebase)."""
+@pass_context
+def _format_dt_locale(jctx, value, locale_code: str = "en") -> str:
+    """Jinja filter: format a datetime in the recipient's locale, in the
+    admin-set site timezone. Reads ``site_timezone`` from the rendering
+    context (set in ``_render``); falls back to UTC if absent or invalid.
+
+    The codebase convention is naive UTC datetimes — we promote naive
+    values to aware UTC before handing to babel, then babel re-renders
+    in the target tz."""
     if value is None:
         return ""
     dt = value if isinstance(value, datetime) else datetime.fromisoformat(str(value))
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    tz_name = jctx.get("site_timezone") or DEFAULT_TIMEZONE
+    try:
+        tz = ZoneInfo(tz_name)
+    except ZoneInfoNotFoundError:
+        tz_name = DEFAULT_TIMEZONE
+        tz = ZoneInfo(DEFAULT_TIMEZONE)
     locale_str = "de_AT" if locale_code == "de" else "en_US"
-    rendered = format_datetime(dt, format="medium", locale=locale_str)
-    return f"{rendered} (UTC)"
+    rendered = format_datetime(dt, format="medium", locale=locale_str, tzinfo=tz)
+    return f"{rendered} ({tz_name})"
 
 
 _env.filters["dt_locale"] = _format_dt_locale
@@ -66,14 +83,17 @@ _env.filters["dt_locale"] = _format_dt_locale
 
 def _render(
     locale: Locale | str, slug: str, kind: str, ctx: dict,
-    *, app_url: str | None = None,
+    *, app_url: str | None = None, site_timezone: str | None = None,
 ) -> str:
     """Render a single template. `kind` is 'txt' or 'html'.
 
-    ``app_url``: explicit override from the caller (db-resolved
-    via ``services.site.get_site_url``). Falls back to the env value
-    when not provided — safe default for tests + paths that don't
-    yet have a Session in scope."""
+    ``app_url``: explicit override from the caller (db-resolved via
+    ``services.site.get_site_url``). Falls back to env when not provided.
+
+    ``site_timezone``: db-resolved IANA name (via
+    ``services.site.get_site_timezone``). Falls back to UTC when not
+    provided — safe default for tests + auth paths that haven't been
+    threaded through yet."""
     code = _resolve_locale(locale)
     candidate = f"{code}/{slug}.{kind}.j2"
     fallback = f"en/{slug}.{kind}.j2"
@@ -86,6 +106,7 @@ def _render(
         app_name=settings.APP_NAME,
         app_url=app_url if app_url is not None else settings.APP_URL,
         locale=code,
+        site_timezone=site_timezone or DEFAULT_TIMEZONE,
     )
 
 
@@ -103,18 +124,20 @@ def _resolve_subject(locale_code: str, slug: str, ctx: dict) -> str:
 
 
 def render_email(
-    locale: Locale | str, slug: str, ctx: dict, *, app_url: str | None = None
+    locale: Locale | str, slug: str, ctx: dict,
+    *, app_url: str | None = None, site_timezone: str | None = None,
 ) -> tuple[str, str, str | None]:
     """Render (subject, text, html). HTML may be None if no .html.j2 exists.
     Used by the notification dispatcher before enqueueing.
 
     ``app_url`` should be the kv-resolved value from
-    ``services.site.get_site_url``; defaults to the env when omitted."""
+    ``services.site.get_site_url``; ``site_timezone`` from
+    ``services.site.get_site_timezone``. Both default safely when omitted."""
     code = _resolve_locale(locale)
     subject = _resolve_subject(code, slug, ctx)
-    text = _render(code, slug, "txt", ctx, app_url=app_url)
+    text = _render(code, slug, "txt", ctx, app_url=app_url, site_timezone=site_timezone)
     try:
-        html = _render(code, slug, "html", ctx, app_url=app_url)
+        html = _render(code, slug, "html", ctx, app_url=app_url, site_timezone=site_timezone)
     except Exception:
         html = None
     return subject, text, html
@@ -220,16 +243,17 @@ async def test_send(
             "error_message": "SMTP host is empty. The dev logs-fallback would be used.",
             "smtp_code": None,
         }
-    from datetime import timezone
+    from . import site as site_svc
 
     ctx = {
         "now_iso": datetime.now(tz=timezone.utc).replace(microsecond=0).isoformat()
     }
     locale_code = "en"
+    tz = site_svc.get_site_timezone(db)
     subject = _resolve_subject(locale_code, "smtp_test", ctx)
-    text = _render(locale_code, "smtp_test", "txt", ctx)
+    text = _render(locale_code, "smtp_test", "txt", ctx, site_timezone=tz)
     try:
-        html = _render(locale_code, "smtp_test", "html", ctx)
+        html = _render(locale_code, "smtp_test", "html", ctx, site_timezone=tz)
     except Exception:
         html = None
     try:
@@ -251,44 +275,52 @@ async def test_send(
 def _app_url(explicit: str | None) -> str:
     """Direct-sender helper: explicit kv-resolved value if the caller
     provided one, else env. Direct senders (verify/reset/invite/lockout)
-    accept ``app_url`` so the auth router can pass
-    ``site_svc.get_site_url(db)`` without each one re-opening a session."""
+    accept ``app_url`` + ``site_timezone`` so the auth router can pass
+    ``site_svc.get_site_url(db)`` / ``site_svc.get_site_timezone(db)``
+    without each one re-opening a session."""
     return explicit if explicit is not None else settings.APP_URL
+
+
+def _site_tz(explicit: str | None) -> str:
+    return explicit if explicit is not None else DEFAULT_TIMEZONE
 
 
 async def send_verify_email(
     *, to: str, locale: Locale | str, display_name: str, token: str,
-    app_url: str | None = None,
+    app_url: str | None = None, site_timezone: str | None = None,
 ) -> None:
     base = _app_url(app_url)
+    tz = _site_tz(site_timezone)
     ctx = {"display_name": display_name, "verify_url": f"{base}/verify-email/{token}"}
-    body = _render(locale, "verify", "txt", ctx, app_url=base)
+    body = _render(locale, "verify", "txt", ctx, app_url=base, site_timezone=tz)
     subject = _resolve_subject(_resolve_locale(locale), "verify", ctx)
     await _send_resolved(to=to, subject=subject, text_body=body)
 
 
 async def send_password_reset_email(
     *, to: str, locale: Locale | str, display_name: str, token: str,
-    app_url: str | None = None,
+    app_url: str | None = None, site_timezone: str | None = None,
 ) -> None:
     base = _app_url(app_url)
+    tz = _site_tz(site_timezone)
     ctx = {"display_name": display_name, "reset_url": f"{base}/reset-password/{token}"}
-    body = _render(locale, "reset_password", "txt", ctx, app_url=base)
+    body = _render(locale, "reset_password", "txt", ctx, app_url=base, site_timezone=tz)
     subject = _resolve_subject(_resolve_locale(locale), "reset_password", ctx)
     await _send_resolved(to=to, subject=subject, text_body=body)
 
 
 async def send_invite_email(
     *, to: str, locale: Locale | str, display_name_hint: str, inviter_display_name: str,
-    token: str, app_url: str | None = None,
+    token: str, app_url: str | None = None, site_timezone: str | None = None,
 ) -> None:
     base = _app_url(app_url)
+    tz = _site_tz(site_timezone)
     ctx = {
         "display_name_hint": display_name_hint,
         "inviter_display_name": inviter_display_name,
         "register_url": f"{base}/register/{token}",
     }
-    body = _render(locale, "invite", "txt", ctx, app_url=base)
+    body = _render(locale, "invite", "txt", ctx, app_url=base, site_timezone=tz)
     subject = _resolve_subject(_resolve_locale(locale), "invite", ctx)
     await _send_resolved(to=to, subject=subject, text_body=body)
 
@@ -301,14 +333,16 @@ async def send_lockout_warning_email(
     locked_until_iso: str,
     ip_hint: str | None,
     app_url: str | None = None,
+    site_timezone: str | None = None,
 ) -> None:
     base = _app_url(app_url)
+    tz = _site_tz(site_timezone)
     ctx = {
         "display_name": display_name,
         "locked_until": locked_until_iso,
         "ip_hint": ip_hint or "unknown",
         "reset_url": f"{base}/forgot-password",
     }
-    body = _render(locale, "lockout_warning", "txt", ctx, app_url=base)
+    body = _render(locale, "lockout_warning", "txt", ctx, app_url=base, site_timezone=tz)
     subject = _resolve_subject(_resolve_locale(locale), "lockout_warning", ctx)
     await _send_resolved(to=to, subject=subject, text_body=body)

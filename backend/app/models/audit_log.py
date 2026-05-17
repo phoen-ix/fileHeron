@@ -75,6 +75,7 @@ class AuditEventType(str, enum.Enum):
     motd_changed = "motd_changed"                            # login-page banner
     share_defaults_policy_changed = "share_defaults_policy_changed"  # post-Phase 10
     site_url_changed = "site_url_changed"                    # post-Phase 10
+    site_timezone_changed = "site_timezone_changed"          # v1.1.3
     twofa_policy_changed = "twofa_policy_changed"            # post-Phase 10
     file_finalized = "file_finalized"                        # post-Phase 10 (was miscategorised as share_created)
     group_created = "group_created"                        # Phase 4

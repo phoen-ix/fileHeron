@@ -5,11 +5,12 @@ import { useRoute, useRouter } from 'vue-router'
 
 import AuthCanvas from '@/components/AuthCanvas.vue'
 import { asEnvelope } from '@/api/client'
-import { getPublicConfig, oidcStartUrl, type PublicProvider } from '@/api/oidc'
+import { oidcStartUrl, type PublicProvider } from '@/api/oidc'
 import { useApiError } from '@/composables/useApiError'
 import { effectiveLandingPath } from '@/composables/useEffectiveLanding'
 import { isWebAuthnSupported } from '@/composables/useWebAuthn'
 import { useAuthStore } from '@/stores/auth'
+import { useSiteStore } from '@/stores/site'
 
 const auth = useAuthStore()
 const router = useRouter()
@@ -36,17 +37,9 @@ const recoveryInputRef = ref<HTMLInputElement | null>(null)
 // availability doesn't change at runtime.
 const passkeySupported = isWebAuthnSupported()
 
-const providers = ref<PublicProvider[]>([])
-const motdText = ref<string>('')
-;(async () => {
-  try {
-    const { data } = await getPublicConfig()
-    providers.value = data.providers
-    motdText.value = data.motd?.text ?? ''
-  } catch {
-    /* config endpoint can fail in dev — keep buttons + motd hidden */
-  }
-})()
+const site = useSiteStore()
+const providers = computed<PublicProvider[]>(() => site.providers)
+const motdText = computed<string>(() => site.motd?.text ?? '')
 
 function onProviderClick(p: PublicProvider) {
   window.location.href = oidcStartUrl(p.id)

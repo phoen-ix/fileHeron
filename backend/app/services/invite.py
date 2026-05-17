@@ -291,6 +291,7 @@ async def resend_invite(
         inviter_display_name=actor.display_name,
         token=plaintext,
         app_url=site_svc.get_site_url(db),
+        site_timezone=site_svc.get_site_timezone(db),
     )
     return invite.expires_at
 

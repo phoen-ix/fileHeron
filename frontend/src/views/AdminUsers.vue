@@ -14,6 +14,7 @@ import {
 import { useApiError } from '@/composables/useApiError'
 import { useInviteForm } from '@/composables/useInviteForm'
 import { useUiStore } from '@/stores/ui'
+import { formatDateInSiteTime } from '@/utils/datetime'
 import type {
   AdminInviteItem,
   AdminUserItem,
@@ -91,11 +92,7 @@ const {
 
 
 function formatDate(iso: string | null): string {
-  if (!iso) return '—'
-  return new Date(iso).toLocaleDateString(
-    locale.value === 'de' ? 'de-AT' : 'en-US',
-    { year: 'numeric', month: 'short', day: '2-digit' },
-  )
+  return formatDateInSiteTime(iso, locale.value)
 }
 
 function formatBytes(n: number | null): string {

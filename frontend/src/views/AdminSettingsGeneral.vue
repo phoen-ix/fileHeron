@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 import HomePageSection from '@/components/admin/HomePageSection.vue'
 import MotdSection from '@/components/admin/MotdSection.vue'
 import ShareDefaultsSection from '@/components/admin/ShareDefaultsSection.vue'
+import SiteTimezoneSection from '@/components/admin/SiteTimezoneSection.vue'
 import SiteUrlSection from '@/components/admin/SiteUrlSection.vue'
 import UpdatesSection from '@/components/admin/UpdatesSection.vue'
 import SectionQuickNav, {
@@ -19,6 +20,7 @@ const { t } = useI18n()
 // and scroll-spy pick them up automatically.
 const sections = computed<QuickNavSection[]>(() => [
   { id: 'site-url', labelKey: 'admin_site_url.title' },
+  { id: 'site-timezone', labelKey: 'admin_site_timezone.title' },
   { id: 'home-page', labelKey: 'admin_home_page.title' },
   { id: 'share-defaults', labelKey: 'admin_share_defaults.title' },
   { id: 'motd', labelKey: 'admin_motd.title' },
@@ -54,6 +56,11 @@ function jumpTo(id: string) {
       <section id="site-url" class="settings-section">
         <h2 class="settings-h2">{{ t('admin_site_url.title') }}</h2>
         <SiteUrlSection />
+      </section>
+
+      <section id="site-timezone" class="settings-section">
+        <h2 class="settings-h2">{{ t('admin_site_timezone.title') }}</h2>
+        <SiteTimezoneSection />
       </section>
 
       <section id="home-page" class="settings-section">

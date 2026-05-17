@@ -52,6 +52,12 @@ class Keys:
     # stay on env (security-sensitive). Read via
     # ``services/site.py::get_site_url``.
     SITE_URL = "site.url"
+    # Admin-editable site-wide display timezone. IANA name
+    # (e.g. "Europe/Vienna"). Default "UTC" when unset. Used by every
+    # human-facing timestamp render: SPA via /api/config-public,
+    # email templates via the dt_locale Jinja filter. Read via
+    # ``services/site.py::get_site_timezone``.
+    SITE_TIMEZONE = "site.timezone"
     # 2FA enforcement policy. When neither key is set the env knob
     # `REQUIRE_2FA` is the source of truth.
     TWOFA_REQUIRED_ROLES = "twofa.required_roles"        # JSON list[str]

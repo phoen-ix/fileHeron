@@ -5,6 +5,7 @@ import App from './App.vue'
 import { i18n, setLocale } from './i18n'
 import router from './router'
 import { useAuthStore } from './stores/auth'
+import { useSiteStore } from './stores/site'
 import './styles/global.css'
 import 'element-plus/dist/index.css'
 import './styles/element-plus.css'
@@ -27,8 +28,13 @@ auth.registerAuthLostHandler(() => {
   })
 })
 
-// Sync locale from user when available; otherwise stays on detected/default.
-auth.bootstrap().finally(() => {
+// Hydrate site config (timezone, MOTD, OIDC providers) in parallel with
+// the silent-refresh attempt. Both must resolve before mount so the
+// router's first beforeEach sees auth state AND the formatInSiteTime
+// helper has a real timezone (not the UTC default placeholder) for the
+// first paint of any view that renders timestamps.
+const site = useSiteStore()
+Promise.all([auth.bootstrap(), site.loadConfig()]).finally(() => {
   if (auth.user) setLocale(auth.user.locale)
   app.mount('#app')
 })

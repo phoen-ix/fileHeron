@@ -93,6 +93,7 @@ def public_config(db: Session = Depends(get_db)) -> dict:
     # from the response when disabled so the SPA doesn't render an
     # empty notice.
     from ..services import settings as settings_svc
+    from ..services import site as site_svc
     motd: dict | None = None
     if settings_svc.get_bool(db, settings_svc.Keys.MOTD_ENABLED, default=False):
         text = (settings_svc.get(db, settings_svc.Keys.MOTD_TEXT) or "").strip()
@@ -104,6 +105,7 @@ def public_config(db: Session = Depends(get_db)) -> dict:
         "default_locale": "en",
         "providers": providers,
         "running_version": VERSION,
+        "site_timezone": site_svc.get_site_timezone(db),
     }
     if motd is not None:
         body["motd"] = motd

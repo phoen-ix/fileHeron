@@ -171,7 +171,9 @@ async def forgot_password(
         from ..services import site as site_svc
         await email_svc.send_password_reset_email(
             to=payload.email, locale=user.locale, display_name=user.display_name,
-            token=plaintext, app_url=site_svc.get_site_url(db),
+            token=plaintext,
+            app_url=site_svc.get_site_url(db),
+            site_timezone=site_svc.get_site_timezone(db),
         )
     return {"ok": True}
 

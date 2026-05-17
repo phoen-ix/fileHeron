@@ -311,6 +311,16 @@
     "revert_to_env": "Revert to env",
     "saved_toast": "Site URL saved."
   },
+  "admin_site_timezone": {
+    "title": "Site timezone",
+    "intro": "The IANA timezone every human-facing timestamp is rendered in — admin tables, share lists, public-share pages, and notification emails. Backend storage stays in UTC; this only affects display.",
+    "timezone_label": "Timezone",
+    "timezone_help": "An IANA name like UTC, Europe/Vienna, or America/New_York. Pick from the dropdown or type to filter.",
+    "browser_hint": "Your browser is currently in: {tz}",
+    "use_browser": "Use this",
+    "invalid_tz": "{tz} is not a recognized IANA timezone.",
+    "saved_toast": "Site timezone saved."
+  },
   "admin_home_page": {
     "title": "Home page",
     "intro": "The home page is the welcome screen users see at /. Disable it if you'd rather drop everyone straight into a working surface (Sent / Received / New share).",

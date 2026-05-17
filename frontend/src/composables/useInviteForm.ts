@@ -6,6 +6,7 @@ import { listGroups } from '@/api/groups'
 import { useApiError } from '@/composables/useApiError'
 import { useUiStore } from '@/stores/ui'
 import type { GroupResponse, UserRole } from '@/types/api'
+import { formatDateInSiteTime } from '@/utils/datetime'
 
 /**
  * State machine for the "Invite a user" modal in the admin users view.
@@ -63,11 +64,7 @@ export function useInviteForm() {
   }
 
   function _formatDate(iso: string | null): string {
-    if (!iso) return '—'
-    return new Date(iso).toLocaleDateString(
-      locale.value === 'de' ? 'de-AT' : 'en-US',
-      { year: 'numeric', month: 'short', day: '2-digit' },
-    )
+    return formatDateInSiteTime(iso, locale.value)
   }
 
   async function onInvite() {

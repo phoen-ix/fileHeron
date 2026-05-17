@@ -11,6 +11,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import type { NotificationItem as NItem } from '@/types/api'
+import { formatInSiteTime, parseServerDate } from '@/utils/datetime'
 
 const props = defineProps<{ item: NItem }>()
 const emit = defineEmits<{ click: [] }>()
@@ -37,17 +38,17 @@ const headline = computed(() => {
 })
 
 const relTime = computed(() => {
-  const created = new Date(props.item.created_at).getTime()
+  const created = parseServerDate(props.item.created_at).getTime()
   const diff = Date.now() - created
   const min = Math.round(diff / 60_000)
   if (min < 1) return t('notif_bell.just_now')
   if (min < 60) return t('notif_bell.min_ago', { n: min })
   const hr = Math.round(min / 60)
   if (hr < 24) return t('notif_bell.hr_ago', { n: hr })
-  return new Date(created).toLocaleDateString(
-    locale.value === 'de' ? 'de-AT' : 'en-US',
-    { month: 'short', day: 'numeric' },
-  )
+  return formatInSiteTime(props.item.created_at, locale.value, {
+    year: undefined, month: 'short', day: 'numeric',
+    hour: undefined, minute: undefined,
+  })
 })
 </script>
 

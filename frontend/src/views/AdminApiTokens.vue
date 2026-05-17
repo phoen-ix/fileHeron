@@ -12,6 +12,7 @@ import {
 import { searchUsers } from '@/api/users'
 import { useApiError } from '@/composables/useApiError'
 import { useUiStore } from '@/stores/ui'
+import { formatInSiteTime } from '@/utils/datetime'
 import type {
   AdminApiTokenItem,
   CreateApiTokenResponse,
@@ -68,11 +69,7 @@ watch(status, () => {
 watch(page, load)
 
 function formatDate(iso: string | null): string {
-  if (!iso) return '—'
-  return new Date(iso).toLocaleString(
-    locale.value === 'de' ? 'de-AT' : 'en-US',
-    { year: 'numeric', month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' },
-  )
+  return formatInSiteTime(iso, locale.value)
 }
 
 async function onDisable(item: AdminApiTokenItem) {

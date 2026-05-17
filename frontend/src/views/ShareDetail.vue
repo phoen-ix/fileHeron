@@ -17,6 +17,7 @@ import { useApiError } from '@/composables/useApiError'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
 import type { ShareResponse } from '@/types/api'
+import { formatInSiteTime } from '@/utils/datetime'
 
 const route = useRoute()
 const router = useRouter()
@@ -171,16 +172,7 @@ async function onFileDeleted(_fileId: string) {
 }
 
 function formatDate(iso: string): string {
-  return new Date(iso).toLocaleString(
-    locale.value === 'de' ? 'de-AT' : 'en-US',
-    {
-      year: 'numeric',
-      month: 'short',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-    },
-  )
+  return formatInSiteTime(iso, locale.value)
 }
 
 function formatBytes(n: number): string {

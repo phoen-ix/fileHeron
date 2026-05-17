@@ -15,6 +15,7 @@ import { searchUsers } from '@/api/users'
 import { useApiError } from '@/composables/useApiError'
 import { useUiStore } from '@/stores/ui'
 import type { GroupDetailResponse, UserSearchItem } from '@/types/api'
+import { formatInSiteTime } from '@/utils/datetime'
 
 const route = useRoute()
 const router = useRouter()
@@ -128,10 +129,9 @@ async function onDeleteGroup() {
 }
 
 function formatDate(iso: string): string {
-  return new Date(iso).toLocaleString(locale.value === 'de' ? 'de-AT' : 'en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: '2-digit',
+  return formatInSiteTime(iso, locale.value, {
+    year: 'numeric', month: 'short', day: '2-digit',
+    hour: undefined, minute: undefined,
   })
 }
 

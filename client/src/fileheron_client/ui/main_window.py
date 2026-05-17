@@ -27,11 +27,15 @@ class MainWindow:
     code reads naturally."""
 
     def __init__(self, root: ctk.CTk, api: ApiClient, me: MeResponse) -> None:
+        from .. import __version__
+        self._version = __version__
         self._root = root
         self._api = api
         self._me = me
         self._on_signed_out: Optional[callable] = None
-        root.title(f"file:Heron — {me.display_name} ({me.role})")
+        root.title(
+            f"file:Heron — {me.display_name} ({me.role})  ·  v{self._version}"
+        )
         self._build_menu()
         self._build_central()
 

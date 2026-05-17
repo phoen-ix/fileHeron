@@ -36,8 +36,12 @@ class LoginWindow:
         self._root = root
         self._cfg = cfg
         self._on_signed_in = on_signed_in
+        from .. import __version__
         self._win = ctk.CTkToplevel(root)
-        self._win.title("Sign in to file:Heron")
+        # Version in the title bar so we can identify which build the
+        # user is running even when they can't reach Settings (e.g. a
+        # sign-in error blocks them).
+        self._win.title(f"Sign in to file:Heron  —  client v{__version__}")
         self._win.geometry("480x460")
         self._win.resizable(False, False)
         # We're shown while the root is hidden; without transient() the
@@ -216,6 +220,26 @@ class LoginWindow:
 
         def _failed(exc):
             self.signin_btn.configure(state="normal", text="Sign in")
+            # v0.4.6: write every caught sign-in failure to the crash
+            # log with a full Python traceback. Without this the "Could
+            # not reach server: …" surface message is all the user can
+            # tell us — which isn't enough to debug DLL-load /
+            # SSL-import / OS-level failures.
+            try:
+                import platformdirs
+                import traceback
+                from datetime import datetime
+                from pathlib import Path
+                log_path = (
+                    Path(platformdirs.user_log_dir("fileHeron", appauthor=False))
+                    / "crash.log"
+                )
+                log_path.parent.mkdir(parents=True, exist_ok=True)
+                with log_path.open("a", encoding="utf-8") as f:
+                    f.write(f"\n--- {datetime.now().isoformat()} [signin] ---\n")
+                    traceback.print_exception(type(exc), exc, exc.__traceback__, file=f)
+            except Exception:
+                pass  # logging must never crash the UI thread
             if isinstance(exc, ApiError):
                 if exc.code == "TOTP_REQUIRED":
                     self._show_error(

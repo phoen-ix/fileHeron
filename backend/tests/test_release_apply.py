@@ -129,11 +129,14 @@ async def test_update_endpoint_requires_password(client, db, make_user, login_as
     token, cookies = await login_as("adm@test.local", "TestPassword123!")
     headers = {"Authorization": f"Bearer {token}"}
 
+    # httpx 0.28+ deprecates per-request cookies=; the AsyncClient jar
+    # already carries the fh_refresh set by login_as above, so the kwarg
+    # was redundant. Same pattern in every test in this file.
+    _ = cookies
     r = await client.post(
         "/api/admin/system/update",
         json={"password": "wrong-pw", "target_tag": "v1.0.1"},
         headers=headers,
-        cookies=cookies,
     )
     assert r.status_code == 401, r.text
     assert r.json()["code"] == "INVALID_CREDENTIALS"
@@ -148,11 +151,11 @@ async def test_update_endpoint_writes_audit_and_dispatches(
     token, cookies = await login_as("adm2@test.local", "TestPassword123!")
     headers = {"Authorization": f"Bearer {token}"}
 
+    _ = cookies
     r = await client.post(
         "/api/admin/system/update",
         json={"password": "TestPassword123!", "target_tag": "v1.0.1"},
         headers=headers,
-        cookies=cookies,
     )
     assert r.status_code == 200, r.text
     job_id = r.json()["job_id"]
@@ -190,12 +193,12 @@ async def test_rollback_endpoint_uses_target_file(
     token, cookies = await login_as("adm4@test.local", "TestPassword123!")
     headers = {"Authorization": f"Bearer {token}"}
 
+    _ = cookies
     # No rollback target file → 409 NO_ROLLBACK_TARGET.
     r = await client.post(
         "/api/admin/system/rollback",
         json={"password": "TestPassword123!"},
         headers=headers,
-        cookies=cookies,
     )
     assert r.status_code == 409, r.text
     assert r.json()["code"] == "NO_ROLLBACK_TARGET"
@@ -206,7 +209,6 @@ async def test_rollback_endpoint_uses_target_file(
         "/api/admin/system/rollback",
         json={"password": "TestPassword123!"},
         headers=headers,
-        cookies=cookies,
     )
     assert r.status_code == 200, r.text
     assert r.json()["target_tag"] == "v0.9.0"

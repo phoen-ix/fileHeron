@@ -169,8 +169,13 @@ async def test_24h_guard_skips_recent_success(db, monkeypatch):
             return _StubResponse({"tag_name": "v0.0.0"})
 
     monkeypatch.setattr(rc.httpx, "AsyncClient", lambda **_kw: _ShouldNeverGet())
-    from datetime import datetime, timedelta
-    one_hour_ago = (datetime.utcnow() - timedelta(hours=1)).isoformat()
+    from datetime import datetime, timedelta, timezone
+    # CLAUDE.md convention: naive UTC. datetime.utcnow() is deprecated
+    # in Python 3.12; build aware UTC then drop tzinfo to match the
+    # codebase's on-disk shape.
+    one_hour_ago = (
+        datetime.now(tz=timezone.utc).replace(tzinfo=None) - timedelta(hours=1)
+    ).isoformat()
     settings_svc.set_value(
         db, key=rc.CacheKeys.LAST_SUCCESS_AT, value=one_hour_ago, actor=None
     )
@@ -256,9 +261,11 @@ async def test_manual_run_bypasses_both_guards(db, monkeypatch):
     settings_svc.set_value(
         db, key=settings_svc.Keys.UPDATES_CHECK_MODE, value="manual", actor=None
     )
-    from datetime import datetime
+    from datetime import datetime, timezone
     settings_svc.set_value(
-        db, key=rc.CacheKeys.LAST_CHECK_AT, value=datetime.utcnow().isoformat(),
+        db,
+        key=rc.CacheKeys.LAST_CHECK_AT,
+        value=datetime.now(tz=timezone.utc).replace(tzinfo=None).isoformat(),
         actor=None,
     )
     db.commit()
@@ -355,10 +362,13 @@ async def test_system_status_flags_update_available(
 
     token, cookies = await login_as("admin@test.local", "TestPassword123!")
     headers = {"Authorization": f"Bearer {token}"}
+    # httpx 0.28+ deprecates per-request cookies=; AsyncClient's jar
+    # already holds fh_refresh from login_as, so the kwarg was redundant.
+    _ = cookies
 
     # No cache yet → update_available should be False whatever the running
     # version is (the test runner's image bakes its own VERSION).
-    r = await client.get("/api/admin/system/status", headers=headers, cookies=cookies)
+    r = await client.get("/api/admin/system/status", headers=headers)
     assert r.status_code == 200, r.text
     v = r.json()["version"]
     running = v["running"]
@@ -376,7 +386,7 @@ async def test_system_status_flags_update_available(
     )
     db.commit()
 
-    r = await client.get("/api/admin/system/status", headers=headers, cookies=cookies)
+    r = await client.get("/api/admin/system/status", headers=headers)
     v = r.json()["version"]
     assert v["latest"] == fake_latest
     assert v["update_available"] is True

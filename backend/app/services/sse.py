@@ -145,10 +145,10 @@ async def stream_admin_events() -> AsyncIterator[bytes]:
     pubsub = r.pubsub()
     await pubsub.subscribe(_ADMIN_CHANNEL)
 
-    deadline = asyncio.get_event_loop().time() + CONNECTION_TTL_SEC
+    deadline = asyncio.get_running_loop().time() + CONNECTION_TTL_SEC
     try:
         while True:
-            now = asyncio.get_event_loop().time()
+            now = asyncio.get_running_loop().time()
             if now >= deadline:
                 yield b": close\n\n"
                 return
@@ -192,12 +192,12 @@ async def stream_for_user(user_id: int, last_event_id: int | None = None) -> Asy
     pubsub = r.pubsub()
     await pubsub.subscribe(_channel(user_id))
 
-    deadline = asyncio.get_event_loop().time() + CONNECTION_TTL_SEC
-    last_yield = asyncio.get_event_loop().time()
+    deadline = asyncio.get_running_loop().time() + CONNECTION_TTL_SEC
+    last_yield = asyncio.get_running_loop().time()
 
     try:
         while True:
-            now = asyncio.get_event_loop().time()
+            now = asyncio.get_running_loop().time()
             if now >= deadline:
                 # Tell the client to reconnect (default per the spec is
                 # 3000ms — we leave that as-is).

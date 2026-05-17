@@ -86,9 +86,18 @@ exe = EXE(
     name="fileheron-client",
     debug=False,
     bootloader_ignore_signals=False,
-    # strip stays enabled — strips debug symbols from native binaries,
-    # safe + small win.
-    strip=True,
+    # v0.4.8: strip DISABLED. PyInstaller invokes MSYS/GNU `strip` on
+    # every native binary in the bundle (visible in the build log as
+    # `Executing: strip ...`). On Windows PE files — particularly
+    # Python C extensions like _ssl.pyd + their OpenSSL dependencies
+    # libssl-3.dll + libcrypto-3.dll — this can corrupt the section
+    # layout, leaving DLLs that LOAD successfully but ACCESS_VIOLATE
+    # the moment a function inside them is called. That's exactly the
+    # "DLL load failed while importing _ssl: ACCESS_VIOLATION" crash
+    # users hit in v0.4.0–v0.4.7 (we only saw it post-v0.4.4 because
+    # earlier versions had different sign-in bugs blocking the
+    # network path before _ssl was needed).
+    strip=False,
     # v0.4.5: UPX disabled. We learned the hard way that:
     #   1. In PyInstaller --onefile mode the outer bootloader ZIP layer
     #      largely un-does UPX's gains — the v0.4.2 build with UPX on

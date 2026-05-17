@@ -1,11 +1,11 @@
-"""Small shared widgets."""
+"""Small shared widgets — CustomTkinter port (v0.4.0)."""
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QLabel
+import customtkinter as ctk
 
 
-# State pill colours, mirroring the SPA's design tokens.
+# State pill colours, mirroring the SPA's design tokens. (bg, fg) per
+# state — picked to read well on both light + dark CTk themes.
 _PILL_COLOURS: dict[str, tuple[str, str]] = {
     # state -> (background, text)
     "active": ("#dcfce7", "#166534"),
@@ -18,22 +18,40 @@ _PILL_COLOURS: dict[str, tuple[str, str]] = {
 }
 
 
-class PillLabel(QLabel):
-    """Compact rounded chip for share / file states."""
+class PillLabel(ctk.CTkLabel):
+    """Compact rounded chip for share / file states.
 
-    def __init__(self, text: str = "", state: str | None = None) -> None:
-        super().__init__(text)
-        self.setAlignment(Qt.AlignCenter)
-        self.setMinimumHeight(20)
-        self.setContentsMargins(8, 2, 8, 2)
-        self.setState(state or text)
+    CTk's ``corner_radius`` does the rounded edge for free — much
+    cleaner than the Qt stylesheet hack the v0.3.x version used."""
 
-    def setState(self, state: str | None) -> None:
-        bg, fg = _PILL_COLOURS.get(state or "", ("#e5e7eb", "#374151"))
-        self.setStyleSheet(
-            f"QLabel {{ background:{bg}; color:{fg}; border-radius:10px; "
-            f"padding:1px 8px; font-size:11px; font-weight:600; }}"
+    def __init__(self, master, text: str = "", state: str | None = None) -> None:
+        bg, fg = _PILL_COLOURS.get(state or text, ("#e5e7eb", "#374151"))
+        # CTkLabel doesn't take padx/pady (those are geometry-manager
+        # options). The "padding" effect is achieved with corner_radius
+        # + a fixed width that's wider than the text. Width:auto would
+        # give a tightly-clipped chip; 70px holds the longest state
+        # ("ready_unscanned") with a margin.
+        super().__init__(
+            master,
+            text=text,
+            fg_color=bg,
+            text_color=fg,
+            corner_radius=10,
+            font=ctk.CTkFont(size=11, weight="bold"),
+            width=80,
+            height=20,
         )
+        self._state_value = state or text
+
+    def setState(self, state: str | None) -> None:  # Qt-style camelCase
+        # Preserved name from the v0.3.x API so the callsites in
+        # share_detail_dialog don't all need updating.
+        bg, fg = _PILL_COLOURS.get(state or "", ("#e5e7eb", "#374151"))
+        self.configure(fg_color=bg, text_color=fg)
+        self._state_value = state or ""
+
+    def setText(self, text: str) -> None:
+        self.configure(text=text)
 
 
 def human_size(n: int) -> str:

@@ -1,91 +1,132 @@
-"""Small modal: pick a new expiry datetime, or check "Never" to clear.
+"""Edit-expiry modal — date picker + Never checkbox. v0.4.0 CTk port.
 
-Used by the share-detail dialog's Edit-expiry action (v0.2.0). The
-caller reads ``selected_expiry()`` which returns one of:
+The caller invokes ``show_modal()`` which blocks and returns:
 
 - ``("set", datetime)`` — user picked a future datetime
 - ``("clear", None)`` — user checked the Never box
-- ``None`` — dialog was rejected (no-op)
-"""
+- ``None`` — dialog was cancelled (no-op)
+
+Pre-fills the picker from ``current`` if non-None; otherwise defaults
+to ``now + 7 days`` (matches the SPA's ExpiryPicker default) and ticks
+the Never box (most expiry edits are either "shorten" or "remove
+entirely")."""
 from __future__ import annotations
 
 from datetime import datetime, timedelta
 from typing import Optional, Tuple
 
-from PySide6.QtCore import QDateTime, Qt
-from PySide6.QtWidgets import (
-    QCheckBox,
-    QDateTimeEdit,
-    QDialog,
-    QDialogButtonBox,
-    QLabel,
-    QVBoxLayout,
-)
+import customtkinter as ctk
+from tkcalendar import DateEntry
 
 
-class ExpiryDialog(QDialog):
-    """Modal dialog for changing a share's expiry.
+class ExpiryDialog:
+    def __init__(self, parent, current: Optional[datetime] = None) -> None:
+        self._win = ctk.CTkToplevel(parent)
+        self._win.title("Edit expiry")
+        self._win.geometry("460x300")
+        self._win.resizable(False, False)
+        self._win.transient(parent)
 
-    `current` (optional): the share's existing expiry; pre-populates
-    the date picker. If None, the picker defaults to now + 7 days
-    (matches the SPA's default preset) and the Never box is checked.
-    """
+        default = current if current is not None else (datetime.now() + timedelta(days=7))
+        self._result: Optional[Tuple[str, Optional[datetime]]] = None
 
-    def __init__(self, parent=None, current: Optional[datetime] = None) -> None:
-        super().__init__(parent)
-        self.setWindowTitle("Edit expiry")
-        self.setModal(True)
+        outer = ctk.CTkFrame(self._win, fg_color="transparent")
+        outer.pack(fill="both", expand=True, padx=18, pady=18)
 
-        layout = QVBoxLayout(self)
-        layout.addWidget(QLabel("Set a new expiry datetime, or check Never."))
+        ctk.CTkLabel(
+            outer,
+            text="Set a new expiry datetime, or check Never.",
+            anchor="w",
+        ).pack(fill="x", pady=(0, 12))
 
-        # Date+time picker. Use the current expiry if set, else 7 days
-        # out — same default as the SPA's ExpiryPicker.
-        default = current if current is not None else datetime.utcnow() + timedelta(days=7)
-        self.picker = QDateTimeEdit(QDateTime(default))
-        self.picker.setCalendarPopup(True)
-        self.picker.setDisplayFormat("yyyy-MM-dd HH:mm")
-        # Block past dates so we don't have to validate after accept.
-        self.picker.setMinimumDateTime(QDateTime.currentDateTime().addSecs(60))
-        layout.addWidget(self.picker)
+        # tkcalendar.DateEntry is date-only; pair with HH/MM CTk entries
+        # to recover the datetime granularity Qt's QDateTimeEdit gave us
+        # in one widget.
+        date_row = ctk.CTkFrame(outer, fg_color="transparent")
+        date_row.pack(fill="x", pady=(0, 8))
 
-        self.never_box = QCheckBox("Never expires")
-        self.never_box.setChecked(current is None)
-        self.never_box.toggled.connect(self._on_never_toggled)
-        layout.addWidget(self.never_box)
-
-        self.help = QLabel(
-            "When checked, the share is never auto-deleted by the cron. "
-            "Revoke it manually when you're done."
+        ctk.CTkLabel(date_row, text="Date", width=60, anchor="w").pack(side="left")
+        # DateEntry's mindate=today blocks past picks at the picker level.
+        self._date = DateEntry(
+            date_row,
+            year=default.year,
+            month=default.month,
+            day=default.day,
+            mindate=datetime.now().date(),
+            date_pattern="yyyy-mm-dd",
         )
-        self.help.setWordWrap(True)
-        self.help.setStyleSheet("color: gray;")
-        layout.addWidget(self.help)
+        self._date.pack(side="left", padx=(0, 8))
 
-        buttons = QDialogButtonBox(
-            QDialogButtonBox.Ok | QDialogButtonBox.Cancel
-        )
-        buttons.accepted.connect(self.accept)
-        buttons.rejected.connect(self.reject)
-        layout.addWidget(buttons)
+        ctk.CTkLabel(date_row, text="Time", width=40, anchor="w").pack(side="left", padx=(8, 0))
+        self._hour_var = ctk.StringVar(value=f"{default.hour:02d}")
+        ctk.CTkEntry(date_row, textvariable=self._hour_var, width=50).pack(side="left")
+        ctk.CTkLabel(date_row, text=":").pack(side="left", padx=4)
+        self._minute_var = ctk.StringVar(value=f"{default.minute:02d}")
+        ctk.CTkEntry(date_row, textvariable=self._minute_var, width=50).pack(side="left")
 
-        # Apply initial enabled/disabled state based on Never box.
-        self._on_never_toggled(self.never_box.isChecked())
+        self._never_var = ctk.BooleanVar(value=(current is None))
+        ctk.CTkCheckBox(
+            outer,
+            text="Never expires",
+            variable=self._never_var,
+            command=self._on_never_toggled,
+        ).pack(anchor="w", pady=(8, 4))
 
-    def _on_never_toggled(self, checked: bool) -> None:
-        # Greying out the picker rather than hiding it keeps the dialog
-        # height stable when the box is toggled — easier on the eyes.
-        self.picker.setEnabled(not checked)
+        ctk.CTkLabel(
+            outer,
+            text=(
+                "When checked, the share is never auto-deleted by the cron. "
+                "Revoke it manually when you're done."
+            ),
+            wraplength=420, justify="left", text_color="gray",
+        ).pack(fill="x", pady=(0, 12))
 
-    def selected_expiry(self) -> Optional[Tuple[str, Optional[datetime]]]:
-        """Return the user's choice. Only meaningful after ``exec()``
-        returns ``Accepted``. Use ``("clear", None)`` for never, or
-        ``("set", datetime)`` for a real value."""
-        if self.never_box.isChecked():
-            return ("clear", None)
-        qdt = self.picker.dateTime()
-        # Convert QDateTime → naive Python datetime in local time. The
-        # caller (api.patch_share_expiry) will turn this into an ISO
-        # string; the backend treats it as naive UTC after the standard
-        # offset-strip — same as the SPA's "local ISO sent as-is" flow.
-        return ("set", qdt.toPython())
+        btn_row = ctk.CTkFrame(outer, fg_color="transparent")
+        btn_row.pack(fill="x")
+        ctk.CTkButton(btn_row, text="OK", command=self._on_ok, width=90).pack(side="right")
+        ctk.CTkButton(
+            btn_row, text="Cancel", command=self._win.destroy, width=90, fg_color="gray",
+        ).pack(side="right", padx=(0, 8))
+
+        self._win.bind("<Return>", lambda _e: self._on_ok())
+        self._win.bind("<Escape>", lambda _e: self._win.destroy())
+
+        # Apply initial enabled/disabled state.
+        self._on_never_toggled()
+
+    def _on_never_toggled(self) -> None:
+        disabled = self._never_var.get()
+        # tkcalendar's DateEntry honours .configure(state="disabled")
+        try:
+            self._date.configure(state="disabled" if disabled else "normal")
+        except Exception:
+            pass
+
+    def _on_ok(self) -> None:
+        if self._never_var.get():
+            self._result = ("clear", None)
+            self._win.destroy()
+            return
+        try:
+            hh = int(self._hour_var.get())
+            mm = int(self._minute_var.get())
+            if not (0 <= hh < 24) or not (0 <= mm < 60):
+                raise ValueError
+        except ValueError:
+            # Cheap inline validation — clear the result and bail.
+            from ._messagebox import warn
+            warn(self._win, "Invalid time", "Use 00-23 for hour and 00-59 for minute.")
+            return
+        d = self._date.get_date()
+        chosen = datetime(d.year, d.month, d.day, hh, mm)
+        if chosen <= datetime.now():
+            from ._messagebox import warn
+            warn(self._win, "Past datetime", "Pick a datetime in the future.")
+            return
+        self._result = ("set", chosen)
+        self._win.destroy()
+
+    def show_modal(self) -> Optional[Tuple[str, Optional[datetime]]]:
+        self._win.after_idle(lambda: (self._win.grab_set(), self._win.focus_force()))
+        self._win.wait_window()
+        return self._result

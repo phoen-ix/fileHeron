@@ -30,6 +30,13 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e "./client[build,dev]"
 
+      # v0.4.0: pyinstaller.spec sets upx=True so the final .exe is
+      # compressed (~60 MB → ~18 MB once paired with the CTk swap).
+      # Choco ships UPX on the windows-latest runner.
+      - name: Install UPX
+        shell: pwsh
+        run: choco install upx --yes --no-progress
+
       - name: Run unit tests
         working-directory: client
         run: pytest

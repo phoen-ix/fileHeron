@@ -1,9 +1,16 @@
-"""Tabbed main window — Inbox · Outbox · New share."""
+"""Tabbed main window — Inbox · Outbox · New share (v0.4.0 CTk port).
+
+In the v0.3.x Qt version, MainWindow was a QMainWindow + the login was
+a separate QDialog. Here, the same ``ctk.CTk`` root we built in
+``app.build_root()`` hosts everything: during login it's hidden
+(``withdraw``); after sign-in we populate it with the tabview and
+show it (``deiconify``)."""
 from __future__ import annotations
 
-from PySide6.QtCore import Slot
-from PySide6.QtGui import QAction
-from PySide6.QtWidgets import QMainWindow, QTabWidget
+import tkinter as tk
+from typing import Optional
+
+import customtkinter as ctk
 
 from ..api import ApiClient
 from ..models import MeResponse
@@ -13,65 +20,115 @@ from .share_list_panel import ShareListPanel
 from .upload_panel import UploadPanel
 
 
-class MainWindow(QMainWindow):
-    def __init__(self, api: ApiClient, me: MeResponse) -> None:
-        super().__init__()
+class MainWindow:
+    """Wraps a pre-built ``ctk.CTk`` root + populates it with the three
+    tabs. Not itself a widget (the root is the widget) — but exposes
+    methods the entry point calls (``show``, etc.) so the rest of the
+    code reads naturally."""
+
+    def __init__(self, root: ctk.CTk, api: ApiClient, me: MeResponse) -> None:
+        self._root = root
         self._api = api
         self._me = me
-        self.setWindowTitle(f"file:Heron — {me.display_name} ({me.role})")
-        self.resize(1000, 640)
+        self._on_signed_out: Optional[callable] = None
+        root.title(f"file:Heron — {me.display_name} ({me.role})")
         self._build_menu()
         self._build_central()
 
     def _build_menu(self) -> None:
-        m_file = self.menuBar().addMenu("&File")
-        a_settings = QAction("&Settings…", self)
-        a_settings.triggered.connect(self._open_settings)
-        m_file.addAction(a_settings)
-        m_file.addSeparator()
-        a_quit = QAction("&Quit", self)
-        a_quit.triggered.connect(self.close)
-        m_file.addAction(a_quit)
+        # tkinter.Menu is stdlib — CTk doesn't ship a menu widget.
+        # The native menu look is acceptable since it's just two items.
+        menubar = tk.Menu(self._root)
+        m_file = tk.Menu(menubar, tearoff=False)
+        m_file.add_command(label="Settings…", command=self._open_settings)
+        m_file.add_separator()
+        m_file.add_command(label="Quit", command=self._root.destroy)
+        menubar.add_cascade(label="File", menu=m_file)
+        self._root.config(menu=menubar)
 
     def _build_central(self) -> None:
-        tabs = QTabWidget()
-        self.inbox = ShareListPanel(self._api, box="inbox")
-        self.outbox = ShareListPanel(self._api, box="outbox")
-        self.upload = UploadPanel(self._api)
-        tabs.addTab(self.inbox, "Inbox")
-        tabs.addTab(self.outbox, "Outbox")
-        tabs.addTab(self.upload, "New share")
-        tabs.currentChanged.connect(self._on_tab_changed)
-        self.inbox.open_share.connect(self._open_share)
-        self.outbox.open_share.connect(self._open_share)
-        self.setCentralWidget(tabs)
+        self.tabs = ctk.CTkTabview(self._root)
+        self.tabs.pack(fill="both", expand=True, padx=8, pady=8)
 
-    @Slot(int)
-    def _on_tab_changed(self, idx: int) -> None:
-        # Refresh list panels when revisited so newly-created/expired
-        # shares show up without a manual click.
-        if idx == 0:
+        inbox_tab = self.tabs.add("Inbox")
+        outbox_tab = self.tabs.add("Outbox")
+        upload_tab = self.tabs.add("New share")
+
+        self.inbox = ShareListPanel(
+            inbox_tab, self._root, self._api, box="inbox",
+            on_open_share=self._open_share,
+        )
+        self.inbox.pack(fill="both", expand=True)
+
+        self.outbox = ShareListPanel(
+            outbox_tab, self._root, self._api, box="outbox",
+            on_open_share=self._open_share,
+        )
+        self.outbox.pack(fill="both", expand=True)
+
+        self.upload = UploadPanel(upload_tab, self._root, self._api)
+        self.upload.pack(fill="both", expand=True)
+
+        # CTkTabview's tab change callback. Refresh the active list
+        # panel so newly-created/expired shares show up without a
+        # manual click. CTk's API surface is a bit awkward — the
+        # tab-change signal is fired via a configure of the segmented
+        # button — we poll via a simple StringVar trace.
+        self._active_tab = tk.StringVar(value="Inbox")
+        # CTk 5.x exposes ``set`` and ``get`` on CTkTabview; wire up
+        # a callback on the underlying segmented button.
+        try:
+            self.tabs._segmented_button.configure(command=self._on_tab_changed)
+        except AttributeError:
+            # Older CTk versions: skip the auto-refresh; user can press
+            # the in-panel Refresh button.
+            pass
+
+    def _on_tab_changed(self, name: str) -> None:
+        if name == "Inbox":
             self.inbox.refresh()
-        elif idx == 1:
+        elif name == "Outbox":
             self.outbox.refresh()
 
-    @Slot(str)
     def _open_share(self, share_id: str) -> None:
-        dlg = ShareDetailDialog(self._api, share_id, self._me, parent=self)
-        # If the user revoked / expired / edited the share inside the
-        # dialog, refresh the list view they came from so the new state
-        # is visible without a manual reload.
-        dlg.share_mutated.connect(self._refresh_current_tab)
-        dlg.exec()
+        dlg = ShareDetailDialog(
+            self._root,
+            self._api,
+            share_id,
+            self._me,
+            on_mutated=self._refresh_current_tab,
+        )
+        dlg.show_modal()
 
     def _refresh_current_tab(self) -> None:
-        idx = self.tabs.currentIndex()
-        if idx == 0:
+        name = self.tabs.get()
+        if name == "Inbox":
             self.inbox.refresh()
-        elif idx == 1:
+        elif name == "Outbox":
             self.outbox.refresh()
 
     def _open_settings(self) -> None:
-        dlg = SettingsDialog(self._api, self._me, parent=self)
-        dlg.signed_out.connect(self.close)
-        dlg.exec()
+        dlg = SettingsDialog(
+            self._root, self._api, self._me,
+            on_signed_out=self._handle_signed_out,
+        )
+        dlg.show_modal()
+
+    def _handle_signed_out(self) -> None:
+        # Caller in __main__ may want to know — bubble up if registered.
+        if self._on_signed_out is not None:
+            self._on_signed_out()
+        self._root.destroy()
+
+    def set_on_signed_out(self, callback) -> None:
+        self._on_signed_out = callback
+
+    def show(self) -> None:
+        # Called by __main__ after a successful login. The root was
+        # hidden during the login phase.
+        self._root.deiconify()
+        self._root.lift()
+        self._root.focus_force()
+        # Kick the first list load — without it the user sees empty
+        # tabs until they click around.
+        self.inbox.refresh()

@@ -25,14 +25,13 @@ logger = logging.getLogger("fileheron_client.ui.upload")
 
 class UploadPanel(ctk.CTkFrame):
     def __init__(self, master, root: ctk.CTk, api: ApiClient) -> None:
-        # v0.4.20: removed fg_color="transparent". CTkTabview stacks
-        # tab frames z-order, and with a transparent UploadPanel the
-        # Inbox / Outbox ShareListPanel underneath bleeds through.
-        # The default CTkFrame fg_color is opaque and theme-matched.
-        super().__init__(master)
+        # v0.4.21 DIAGNOSTIC: hot-pink fg_color to see if this panel
+        # renders at all. If user sees pink → panel renders, form
+        # widgets are just invisible (different bug). If user sees the
+        # Inbox/Outbox table → tab switching is broken, not bleed-thru.
+        super().__init__(master, fg_color="#ff00aa")
         self._app_root = root
         self._api = api
-        # Per-upload tracking. Cleared between submits.
         self._files: list[Path] = []
         self._completed = 0
         self._total_bytes = 0
@@ -40,14 +39,16 @@ class UploadPanel(ctk.CTkFrame):
         self._build()
 
     def _build(self) -> None:
-        # v0.4.19 swapped a CTkScrollableFrame for CTkFrame because
-        # the scrollable one inside a CTkTabview tab renders zero-size
-        # and the form was invisible. v0.4.20 also dropped the
-        # fg_color="transparent" on UploadPanel itself — the panel
-        # was see-through so Inbox/Outbox content underneath bled in.
-        # The inner _file_list_frame stays a CTkScrollableFrame for
-        # its own row scrolling (works fine inside a plain frame).
-        outer = ctk.CTkFrame(self, fg_color="transparent")
+        # v0.4.21 DIAGNOSTIC: bright yellow inner frame + a giant
+        # banner label up top, so we can tell at a glance whether the
+        # build is reaching this code at all.
+        banner = ctk.CTkLabel(
+            self, text="↓ UPLOAD PANEL v0.4.21 ↓",
+            fg_color="#ffff00", text_color="#000000",
+            font=ctk.CTkFont(size=20, weight="bold"),
+        )
+        banner.pack(fill="x", pady=4)
+        outer = ctk.CTkFrame(self, fg_color="#ffff00")
         outer.pack(fill="both", expand=True, padx=8, pady=8)
 
         # Subject

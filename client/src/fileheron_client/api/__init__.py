@@ -1,5 +1,7 @@
 from .client import ApiClient, ApiError
 from .auth import login, refresh, logout, me
+from .files import download_file, get_download_url
+from .groups import list_recipient_groups
 from .shares import (
     create_share,
     delete_share,
@@ -9,8 +11,8 @@ from .shares import (
     patch_share_expiry,
     revoke_share,
 )
-from .files import download_file, get_download_url
 from .uploads import upload_direct, upload_init
+from .users import search_users
 
 __all__ = [
     "ApiClient",
@@ -30,4 +32,6 @@ __all__ = [
     "get_download_url",
     "upload_direct",
     "upload_init",
+    "list_recipient_groups",
+    "search_users",
 ]

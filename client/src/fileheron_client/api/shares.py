@@ -40,10 +40,26 @@ def create_share(
     subject: Optional[str] = None,
     message: Optional[str] = None,
     expires_at: Optional[datetime] = None,
+    expires_at_never: bool = False,
+    public_link: Optional[dict] = None,
 ) -> ShareResponse:
     """Create the share envelope. Files are added in a separate step
-    (POST /api/uploads/direct or the TUS init+upload flow)."""
-    body = {
+    (POST /api/uploads/direct or the TUS init+upload flow).
+
+    v0.3.0 extras (matching SPA create-share parity):
+
+    - ``expires_at_never=True`` sends ``expires_at: null`` so the
+      share is never auto-deleted (v1.1.4 backend semantics). Mutually
+      exclusive with ``expires_at``.
+    - ``public_link`` is an inline ``{password?, download_limit?,
+      notify_on_download}`` dict; the server returns the plaintext URL
+      ONCE in ``ShareResponse.public_link.url``.
+    """
+    if expires_at_never and expires_at is not None:
+        raise ValueError(
+            "Pass either expires_at or expires_at_never=True, not both."
+        )
+    body: dict = {
         "kind": kind,
         "recipients": {
             "user_ids": list(recipient_user_ids or []),
@@ -54,8 +70,12 @@ def create_share(
         body["subject"] = subject
     if message is not None:
         body["message"] = message
-    if expires_at is not None:
+    if expires_at_never:
+        body["expires_at"] = None
+    elif expires_at is not None:
         body["expires_at"] = expires_at.isoformat()
+    if public_link is not None:
+        body["public_link"] = public_link
     out = api.request_or_raise("POST", "/api/shares", json=body, expected=201)
     return ShareResponse.model_validate(out)
 

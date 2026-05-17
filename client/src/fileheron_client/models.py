@@ -115,3 +115,29 @@ class UploadInitResponse(_Base):
     tus_endpoint: str
     upload_metadata_header: str
     expires_at: datetime
+
+
+# v0.3.0 recipient-picker models -----------------------------------------------
+
+
+class UserSearchItem(_Base):
+    user_id: int
+    display_name: str
+    email: str
+    role: str
+
+
+class UserSearchResponse(_Base):
+    items: list[UserSearchItem]
+
+
+class GroupItem(_Base):
+    id: int
+    name: str
+    description: Optional[str] = None
+    is_company_inbox: bool = False
+    member_count: int = 0
+
+
+class GroupListResponse(_Base):
+    items: list[GroupItem]

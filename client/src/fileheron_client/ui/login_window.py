@@ -8,6 +8,7 @@ from typing import Callable, Optional
 import customtkinter as ctk
 
 from .. import api as api_pkg
+from .._trace import trace
 from ..api import ApiClient, ApiError
 from ..config import (
     ClientConfig,
@@ -183,32 +184,43 @@ class LoginWindow:
         self.signin_btn.configure(state="disabled", text="Signing in…")
 
         def _attempt():
+            trace(f"_attempt start (kind={kind}, server={server})")
             if kind == "api_token":
                 api = ApiClient(server, api_token=api_token)
                 me = api_pkg.me(api)
                 set_secret("api_token", server, api_token)
+                trace("_attempt done (api_token)")
                 return api, me, kind
             api = ApiClient(server)
+            trace("calling api_pkg.login")
             api_pkg.login(
                 api, email=email, password=password, totp_code=totp,
             )
+            trace("login OK; calling api_pkg.me")
             me = api_pkg.me(api)
+            trace("_attempt done (password)")
             return api, me, kind
 
         def _done(result):
+            trace("_done callback fired (on main thread)")
             api, me, used_kind = result
             self._cfg.server_url = server
             self._cfg.auth_kind = used_kind
             if used_kind == "password":
                 self._cfg.last_email = email
-            save_config(self._cfg)
+            try:
+                save_config(self._cfg)
+                trace("save_config OK")
+            except Exception as exc:
+                trace(f"save_config FAILED: {exc!r}")
             # Fire the callback BEFORE destroy so the main window can
             # take over the root before we yield the event loop.
             try:
+                trace("invoking _on_signed_in")
                 self._on_signed_in(api, me)
+                trace("_on_signed_in returned")
             except Exception as exc:
-                # Show the error rather than letting it die silently in
-                # a no-console .exe build.
+                trace(f"_on_signed_in RAISED: {exc!r}")
                 import traceback
                 traceback.print_exc()
                 self.signin_btn.configure(state="normal", text="Sign in")
@@ -216,9 +228,12 @@ class LoginWindow:
                     f"Signed in OK but failed to open main window: {exc!r}"
                 )
                 return
+            trace("destroying login window")
             self._win.destroy()
+            trace("login window destroyed")
 
         def _failed(exc):
+            trace(f"_failed callback fired: {type(exc).__name__}: {exc!r}")
             self.signin_btn.configure(state="normal", text="Sign in")
             # v0.4.6: write every caught sign-in failure to the crash
             # log with a full Python traceback. Without this the "Could

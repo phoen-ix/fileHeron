@@ -130,16 +130,18 @@ def main(argv: list[str] | None = None) -> int:
     main_window: MainWindow | None = None
 
     def _on_signin(api, me) -> None:
+        # v0.4.13: only CONSTRUCT MainWindow here (widgets built into
+        # the still-withdrawn root). Actual show() happens AFTER login
+        # is destroyed — see below. The previous order (show before
+        # destroy) left the root in a stuck-withdrawn state on Windows
+        # — login's transient teardown swallowed the deiconify.
         nonlocal main_window
         trace(f"_on_signin called (role={me.role})")
         try:
             main_window = MainWindow(root, api, me)
-            trace("MainWindow constructed")
-            main_window.show()
-            trace("MainWindow.show() returned")
+            trace("MainWindow constructed (will show after login destroyed)")
         except BaseException as exc:
             trace(f"_on_signin RAISED: {type(exc).__name__}: {exc!r}")
-            # Re-raise so LoginWindow._done can show the error in the dialog.
             raise
 
     trace("opening LoginWindow")
@@ -151,6 +153,26 @@ def main(argv: list[str] | None = None) -> int:
         trace("no main_window — destroying root + exiting")
         root.destroy()
         return 0
+
+    trace("calling MainWindow.show() (login already destroyed)")
+    main_window.show()
+    trace(f"after show(): root.state()={root.state()!r} viewable={bool(root.winfo_viewable())}")
+
+    # Heartbeat: every 2s for the first 10s, log root visibility state
+    # so we can diagnose "window never appears" complaints.
+    def _heartbeat(tick: int = 0) -> None:
+        try:
+            trace(
+                f"heartbeat#{tick} state={root.state()!r} "
+                f"viewable={bool(root.winfo_viewable())} "
+                f"geom={root.winfo_geometry()!r}"
+            )
+        except Exception as exc:
+            trace(f"heartbeat#{tick} FAILED: {exc!r}")
+            return
+        if tick < 5:
+            root.after(2000, lambda: _heartbeat(tick + 1))
+    root.after(500, _heartbeat)
 
     trace("entering root.mainloop")
     try:

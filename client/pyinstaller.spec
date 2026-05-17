@@ -52,7 +52,12 @@ a = Analysis(
     hiddenimports=hiddenimports,
     hookspath=[],
     hooksconfig={},
-    runtime_hooks=[],
+    # v0.4.7: anchor the Windows DLL search path to the bundle dir so
+    # the bundled OpenSSL wins over any system-wide libssl-3.dll /
+    # libcrypto-3.dll that Git for Windows / Conda / Node.js / OpenVPN
+    # etc. may have on PATH. Without this hook, _ssl.pyd's loader
+    # picks up the wrong OpenSSL build and crashes with ACCESS_VIOLATION.
+    runtime_hooks=[str(HERE / "runtime_hooks" / "dll_search_path.py")],
     excludes=[
         # Belt-and-braces — if PySide6 sneaks in via a transitive
         # dep (it shouldn't, but it has happened in the wild), keep

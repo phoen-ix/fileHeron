@@ -99,7 +99,7 @@ class AdminInviteItem(APIBaseModel):
     id: int
     email: str
     target_role: UserRole
-    state: Literal["pending", "expired", "revoked"]
+    state: Literal["pending", "expired"]
     invited_by_id: int | None
     # Hydrated by the router via a single bulk lookup per page so the
     # SPA can show "Alice" instead of bare integer IDs. None when the

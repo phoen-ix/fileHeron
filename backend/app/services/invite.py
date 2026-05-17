@@ -95,16 +95,15 @@ def mark_invite_consumed(db: Session, record: InviteToken, used_user_id: int) ->
 
 
 # ---------------------------------------------------------------------------
-# Admin views over pending / expired invites (post-Phase 10).
+# Admin views over pending / expired invites (post-Phase 10; v1.1.5
+# dropped the soft-revoke tombstone — admin delete is now a hard delete).
 #
-# An invite has three observable states:
+# An invite has two observable states for the admin list:
 #   - pending: used_at IS NULL AND expires_at > now()
 #   - expired: used_at IS NULL AND expires_at <= now()
-#   - tombstoned (revoked): used_at IS NOT NULL AND used_user_id IS NULL
-#   - consumed: used_at IS NOT NULL AND used_user_id IS NOT NULL
-#
-# The admin-list endpoint returns pending + expired only — tombstoned and
-# consumed rows are excluded by filtering on ``used_at IS NULL``.
+# Consumed invites (used_user_id IS NOT NULL) are excluded from the list.
+# Hard-deleted invites are gone from the table; the audit_log row carries
+# the {email, target_role} so the admin trail is preserved.
 # ---------------------------------------------------------------------------
 
 
@@ -117,16 +116,14 @@ def list_invites(
 ) -> tuple[list[InviteToken], int]:
     """List invites that have NOT been consumed by a real user.
 
-    The base filter is ``used_user_id IS NULL`` — this captures three
+    The base filter is ``used_user_id IS NULL`` — this captures the two
     visible states:
 
     - **pending**:  ``used_at IS NULL AND expires_at > now()``
     - **expired**:  ``used_at IS NULL AND expires_at <= now()``
-    - **revoked**:  ``used_at IS NOT NULL`` (tombstone — admin
-                    cancelled the invite before it was consumed)
 
-    ``state_filter``: ``"pending"`` | ``"expired"`` | ``"revoked"`` |
-    ``"all"``. Returns ``(items, total)``.
+    ``state_filter``: ``"pending"`` | ``"expired"`` | ``"all"``.
+    Returns ``(items, total)``.
     """
     now = _utcnow()
     base = db.query(InviteToken).filter(InviteToken.used_user_id.is_(None))
@@ -138,8 +135,6 @@ def list_invites(
         base = base.filter(
             InviteToken.used_at.is_(None), InviteToken.expires_at <= now
         )
-    elif state_filter == "revoked":
-        base = base.filter(InviteToken.used_at.is_not(None))
     # else "all": no extra filter
 
     total = base.count()
@@ -155,31 +150,35 @@ def list_invites(
 def revoke_invite(
     db: Session, *, invite: InviteToken, actor: User, request=None
 ) -> None:
-    """Tombstone an invite: ``used_at`` set, ``used_user_id`` left NULL.
+    """Hard-delete an invite. Audit log retains {email, target_role}
+    so the admin trail survives even though the row is gone (v1.1.5
+    behaviour change — previously this was a soft tombstone).
 
-    Soft-tombstone instead of hard-delete so the audit trail (who
-    revoked, when) survives. The list endpoint filters on
-    ``used_at IS NULL`` so tombstoned rows disappear from the UI
-    without further work.
+    Refuses to operate on consumed invites (which would either orphan
+    the consuming user's link to their original invite or — pre-FK-
+    cascade — fail at the constraint).
     """
-    if invite.used_at is not None and invite.used_user_id is not None:
+    if invite.used_user_id is not None:
         raise AppError(
             409,
             "INVITE_ALREADY_CONSUMED",
-            "Invite has already been consumed and cannot be revoked.",
+            "Invite has already been consumed and cannot be deleted.",
         )
-    invite.used_at = _utcnow()
-    invite.used_user_id = None  # discriminates revoked from consumed
+    # Capture the fields the audit log carries BEFORE the row goes away.
+    email = invite.email
+    target_role = invite.target_role.value
+    invite_id = invite.id
+    db.delete(invite)
     db.flush()
     record_audit_event(
         db,
         event_type=AuditEventType.invite_revoked,
         actor_user_id=actor.id,
         target_type="invite",
-        target_id=invite.id,
+        target_id=invite_id,
         metadata={
-            "email": invite.email,
-            "target_role": invite.target_role.value,
+            "email": email,
+            "target_role": target_role,
         },
         request=request,
     )
@@ -196,18 +195,16 @@ def regenerate_invite(
 ) -> str:
     """Mint a fresh plaintext token on an existing invite row.
 
-    Refuses if the invite has been consumed (used_at IS NOT NULL AND
-    used_user_id IS NOT NULL). Allowed for pending and expired and
-    revoked-but-not-consumed states (revoking an admin's prior decision
-    is fine — that's an undo). Resets ``created_at`` and pushes
-    ``expires_at = now + ttl``. Returns the new plaintext, which the
-    caller must surface exactly once.
+    Refuses if the invite has been consumed (used_user_id IS NOT NULL).
+    Allowed for pending and expired states. Resets ``created_at`` and
+    pushes ``expires_at = now + ttl``. Returns the new plaintext, which
+    the caller must surface exactly once.
 
     ``audit=False`` suppresses the ``invite_created`` audit row so a
     composite caller (``resend_invite``) can emit a single combined
     audit event with ``resent=true`` instead of two separate rows.
     """
-    if invite.used_at is not None and invite.used_user_id is not None:
+    if invite.used_user_id is not None:
         raise AppError(
             409,
             "INVITE_ALREADY_CONSUMED",
@@ -218,7 +215,11 @@ def regenerate_invite(
     invite.token_hash = sha256_hex(plaintext)
     invite.created_at = now
     invite.expires_at = now + ttl
-    invite.used_at = None  # un-tombstone if it was revoked
+    # Defensive reset of the lifecycle fields on the existing row — no
+    # row in the post-v1.1.5 DB should have used_at set without
+    # used_user_id, but we don't want stale state on an in-flight
+    # regenerate to leak through.
+    invite.used_at = None
     invite.used_user_id = None
     db.flush()
     if audit:
@@ -320,20 +321,15 @@ def activate_invite_as_admin(
         (raised inside _create_user_from_invite)
 
     Allowed on expired invites — admin override.
-    Allowed on revoked invites — same row, just resurrect it.
     """
     from .auth import _create_user_from_invite
 
-    if invite.used_at is not None and invite.used_user_id is not None:
+    if invite.used_user_id is not None:
         raise AppError(
             409,
             "INVITE_ALREADY_CONSUMED",
             "Invite has already been consumed.",
         )
-    # If the invite was revoked (tombstoned) earlier, undo that so the
-    # shared creator can mark it consumed against the new user.
-    if invite.used_at is not None and invite.used_user_id is None:
-        invite.used_at = None
     if display_name is None:
         local = invite.email.split("@", 1)[0]
         # Replace _/. separators with spaces and title-case so

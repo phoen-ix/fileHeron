@@ -197,7 +197,7 @@ async function onConfirmRevoke() {
   revokeInProgress.value = true
   try {
     await revokeInvite(revokeInviteRow.value.id)
-    ui.pushToast(t('admin_users.invites.toast.revoked'), 'success')
+    ui.pushToast(t('admin_users.invites.toast.deleted'), 'success')
     closeRevoke()
     void loadInvites()
   } catch (err) {
@@ -353,7 +353,7 @@ onMounted(() => {
             <td>
               <span
                 class="fh-pill"
-                :data-state="inv.state === 'pending' ? 'warn' : inv.state === 'revoked' ? 'subtle' : 'danger'"
+                :data-state="inv.state === 'pending' ? 'warn' : 'danger'"
               >
                 {{ t(`admin_users.invites.state.${inv.state}`) }}
               </span>
@@ -396,12 +396,11 @@ onMounted(() => {
                 {{ t('admin_users.invites.action.activate') }}
               </button>
               <button
-                v-if="inv.state !== 'revoked'"
                 type="button"
                 class="fh-btn-text inline-action danger"
                 @click="openRevoke(inv)"
               >
-                {{ t('admin_users.invites.action.revoke') }}
+                {{ t('admin_users.invites.action.delete') }}
               </button>
             </td>
           </tr>
@@ -507,7 +506,7 @@ onMounted(() => {
           <dd>
             <span
               class="fh-pill"
-              :data-state="detailsInvite.state === 'pending' ? 'warn' : detailsInvite.state === 'revoked' ? 'subtle' : 'danger'"
+              :data-state="detailsInvite.state === 'pending' ? 'warn' : 'danger'"
             >
               {{ t(`admin_users.invites.state.${detailsInvite.state}`) }}
             </span>
@@ -583,10 +582,10 @@ onMounted(() => {
 
     <!-- Revoke confirmation -->
     <div v-if="revokeInviteRow" class="fh-modal-backdrop" @click.self="closeRevoke">
-      <div class="fh-modal fh-modal--small" role="dialog" :aria-label="t('admin_users.invites.revoke.title')">
-        <h2 class="modal-h2">{{ t('admin_users.invites.revoke.title') }}</h2>
+      <div class="fh-modal fh-modal--small" role="dialog" :aria-label="t('admin_users.invites.delete.title')">
+        <h2 class="modal-h2">{{ t('admin_users.invites.delete.title') }}</h2>
         <p class="modal-body">
-          {{ t('admin_users.invites.revoke.body', { email: revokeInviteRow.email }) }}
+          {{ t('admin_users.invites.delete.body', { email: revokeInviteRow.email }) }}
         </p>
         <div class="form-actions">
           <button
@@ -595,7 +594,7 @@ onMounted(() => {
             :disabled="revokeInProgress"
             @click="onConfirmRevoke"
           >
-            {{ revokeInProgress ? t('common.loading') : t('admin_users.invites.revoke.confirm') }}
+            {{ revokeInProgress ? t('common.loading') : t('admin_users.invites.delete.confirm') }}
           </button>
           <button type="button" class="fh-btn-text" @click="closeRevoke">
             {{ t('common.cancel') }}

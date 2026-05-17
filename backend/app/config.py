@@ -44,6 +44,11 @@ class Settings(BaseSettings):
     # How long revoked refresh-token rows stick around for forensics
     # before the hourly cleanup hard-deletes them.
     REFRESH_TOKEN_RETENTION_DAYS: int = 30
+    # How long pending/expired invite_tokens rows linger before the
+    # daily cleanup_pending_invites cron purges them. Consumed invites
+    # are kept indefinitely (proof-of-onboarding for the resulting
+    # user row). Default 14 days from created_at.
+    INVITE_RETENTION_DAYS: int = 14
 
     # --- Operational retention (operational audit Wave 3) --------------------
     # The prune_history cron deletes rows older than these windows. Audit log

@@ -18,6 +18,7 @@ from ..services.release_check import release_check
 from .av_scan import av_scan_file
 from .cleanup_abandoned_uploads import cleanup_abandoned_uploads
 from .cleanup_expired_tokens import cleanup_expired_tokens
+from .cleanup_pending_invites import cleanup_pending_invites
 from .expire_files import expire_files
 from .ops_check import ops_check
 from .prune_history import prune_history
@@ -39,6 +40,7 @@ class WorkerSettings:
         send_email_job,
         share_expiring_24h_warning,
         cleanup_expired_tokens,
+        cleanup_pending_invites,
         quota_reconcile,
         ops_check,
         cleanup_abandoned_uploads,
@@ -61,6 +63,7 @@ class WorkerSettings:
         cron(release_check, hour=None, minute={53}, run_at_startup=False),
         # Daily-ish housekeeping (hour=2 keeps it well clear of business hours).
         cron(purge_old_quarantine, hour={2}, minute={13}, run_at_startup=False),
+        cron(cleanup_pending_invites, hour={2}, minute={15}, run_at_startup=False),
         cron(prune_history, hour={2}, minute={43}, run_at_startup=False),
     ]
     on_startup = startup

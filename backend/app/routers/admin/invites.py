@@ -28,12 +28,10 @@ router = APIRouter()
 
 def _to_invite_item(invite, inviter_name: str | None) -> AdminInviteItem:
     now = datetime.now(tz=timezone.utc).replace(tzinfo=None)
-    if invite.used_at is not None:
-        # Tombstoned by an admin (used_user_id IS NULL discriminates
-        # this from a consumed invite, but the list query already filters
-        # those out — anything reaching here with used_at set is revoked).
-        state = "revoked"
-    elif invite.expires_at <= now:
+    # v1.1.5: admin delete is now a hard delete, so no row in the list
+    # can be in the legacy 'revoked' tombstone state. Only pending and
+    # expired remain.
+    if invite.expires_at <= now:
         state = "expired"
     else:
         state = "pending"
@@ -52,7 +50,7 @@ def _to_invite_item(invite, inviter_name: str | None) -> AdminInviteItem:
 
 @router.get("/invites", response_model=AdminInviteListResponse)
 def list_invites(
-    state: str = Query("all", pattern=r"^(pending|expired|revoked|all)$"),
+    state: str = Query("all", pattern=r"^(pending|expired|all)$"),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
     db: Session = Depends(get_db),

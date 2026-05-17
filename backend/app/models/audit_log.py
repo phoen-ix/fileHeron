@@ -23,6 +23,7 @@ class AuditEventType(str, enum.Enum):
     invite_created = "invite_created"
     invite_consumed = "invite_consumed"
     invite_revoked = "invite_revoked"
+    invite_purged = "invite_purged"                          # v1.1.5 cron
     login_success = "login_success"
     login_failure = "login_failure"
     logout = "logout"

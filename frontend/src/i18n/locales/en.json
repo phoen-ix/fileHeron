@@ -660,20 +660,19 @@
       },
       "state": {
         "pending": "pending",
-        "expired": "expired",
-        "revoked": "revoked"
+        "expired": "expired"
       },
       "action": {
         "copy_link": "Copy link",
         "resend": "Resend by email",
         "details": "Details",
         "activate": "Activate",
-        "revoke": "Revoke"
+        "delete": "Delete"
       },
       "toast": {
         "link_copied": "Invite link copied to clipboard.",
         "resent": "Invite resent. New expiry: {expires}.",
-        "revoked": "Invite revoked.",
+        "deleted": "Invite deleted.",
         "activated": "Account activated. They can sign in immediately."
       },
       "details": {
@@ -693,10 +692,10 @@
         "display_name_help": "Defaults to the email's local part. Edit if you'd prefer something else; the user can change it later.",
         "confirm": "Activate now"
       },
-      "revoke": {
-        "title": "Revoke invite",
-        "body": "The invite link for {email} will stop working. The recipient cannot complete registration after this. Continue?",
-        "confirm": "Revoke"
+      "delete": {
+        "title": "Delete invite",
+        "body": "Delete the invite for {email}? The invite link will stop working and the row will be removed from the list. The audit log keeps a record of the deletion.",
+        "confirm": "Delete"
       }
     }
   },

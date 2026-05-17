@@ -387,7 +387,8 @@ export interface AdminUserListResponse {
 
 /* Admin pending-invites views (post-Phase 10). */
 
-export type AdminInviteState = 'pending' | 'expired' | 'revoked'
+/** v1.1.5: 'revoked' dropped — admin delete is now a hard delete. */
+export type AdminInviteState = 'pending' | 'expired'
 
 export interface AdminInviteItem {
   id: number

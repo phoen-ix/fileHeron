@@ -660,20 +660,19 @@
       },
       "state": {
         "pending": "offen",
-        "expired": "abgelaufen",
-        "revoked": "zurückgezogen"
+        "expired": "abgelaufen"
       },
       "action": {
         "copy_link": "Link kopieren",
         "resend": "Per E-Mail erneut senden",
         "details": "Details",
         "activate": "Aktivieren",
-        "revoke": "Zurückziehen"
+        "delete": "Löschen"
       },
       "toast": {
         "link_copied": "Einladungslink in die Zwischenablage kopiert.",
         "resent": "Einladung erneut gesendet. Neues Ablaufdatum: {expires}.",
-        "revoked": "Einladung zurückgezogen.",
+        "deleted": "Einladung gelöscht.",
         "activated": "Account aktiviert. Anmeldung ist sofort möglich."
       },
       "details": {
@@ -693,10 +692,10 @@
         "display_name_help": "Standard ist der lokale Teil der E-Mail. Bei Bedarf anpassen; der Benutzer kann ihn später selbst ändern.",
         "confirm": "Jetzt aktivieren"
       },
-      "revoke": {
-        "title": "Einladung zurückziehen",
-        "body": "Der Einladungslink für {email} wird ungültig. Eine Registrierung über diesen Link ist danach nicht mehr möglich. Fortfahren?",
-        "confirm": "Zurückziehen"
+      "delete": {
+        "title": "Einladung löschen",
+        "body": "Einladung für {email} löschen? Der Einladungslink wird ungültig und der Eintrag aus der Liste entfernt. Das Audit-Log behält einen Vermerk der Löschung.",
+        "confirm": "Löschen"
       }
     }
   },

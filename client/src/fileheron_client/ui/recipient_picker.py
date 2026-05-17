@@ -29,7 +29,7 @@ class _MultiSelectPickerDialog:
     """Shared scaffolding for the user + group pickers."""
 
     def __init__(self, root, parent, title: str) -> None:
-        self._root = root
+        self._app_root = root
         self._win = ctk.CTkToplevel(parent)
         self._win.title(title)
         self._win.geometry("460x520")
@@ -135,7 +135,7 @@ class UserPickerDialog(_MultiSelectPickerDialog):
         def _failed(exc):
             mb.warn(self._win, "Search failed", getattr(exc, "message", None) or str(exc))
 
-        run_in_background(self._root, _fetch, on_done=_done, on_failed=_failed)
+        run_in_background(self._app_root, _fetch, on_done=_done, on_failed=_failed)
 
 
 class GroupPickerDialog(_MultiSelectPickerDialog):
@@ -156,7 +156,7 @@ class GroupPickerDialog(_MultiSelectPickerDialog):
         def _failed(exc):
             mb.warn(self._win, "Could not load groups", getattr(exc, "message", None) or str(exc))
 
-        run_in_background(self._root, _fetch, on_done=_done, on_failed=_failed)
+        run_in_background(self._app_root, _fetch, on_done=_done, on_failed=_failed)
 
     def _reload(self) -> None:
         needle = self.search_var.get().strip().lower()
@@ -184,7 +184,7 @@ class GroupPickerDialog(_MultiSelectPickerDialog):
 class RecipientPickerWidget(ctk.CTkFrame):
     def __init__(self, master, root: ctk.CTk, api: ApiClient) -> None:
         super().__init__(master, fg_color="transparent")
-        self._root = root
+        self._app_root = root
         self._api = api
         self._user_ids: list[int] = []
         self._user_labels: list[str] = []
@@ -238,7 +238,7 @@ class RecipientPickerWidget(ctk.CTkFrame):
     # ---- internal ----
 
     def _add_users(self) -> None:
-        dlg = UserPickerDialog(self._root, self.winfo_toplevel(), self._api)
+        dlg = UserPickerDialog(self._app_root, self.winfo_toplevel(), self._api)
         ids, labels = dlg.show_modal()
         for iid, label in zip(ids, labels):
             if iid not in self._user_ids:
@@ -247,7 +247,7 @@ class RecipientPickerWidget(ctk.CTkFrame):
         self._render()
 
     def _add_groups(self) -> None:
-        dlg = GroupPickerDialog(self._root, self.winfo_toplevel(), self._api)
+        dlg = GroupPickerDialog(self._app_root, self.winfo_toplevel(), self._api)
         ids, labels = dlg.show_modal()
         for iid, label in zip(ids, labels):
             if iid not in self._group_ids:

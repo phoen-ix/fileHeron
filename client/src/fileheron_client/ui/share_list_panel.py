@@ -53,7 +53,7 @@ class ShareListPanel(ctk.CTkFrame):
         on_open_share: Callable[[str], None],
     ) -> None:
         super().__init__(master, fg_color="transparent")
-        self._root = root
+        self._app_root = root
         self._api = api
         self._box = box
         self._on_open_share = on_open_share
@@ -136,7 +136,7 @@ class ShareListPanel(ctk.CTkFrame):
             msg = getattr(exc, "message", None) or str(exc)
             self.status_var.set(f"Error: {msg}")
 
-        run_in_background(self._root, _fetch, on_done=_done, on_failed=_failed)
+        run_in_background(self._app_root, _fetch, on_done=_done, on_failed=_failed)
 
     def _render(self) -> None:
         # Clear old rows.

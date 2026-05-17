@@ -33,7 +33,7 @@ class LoginWindow:
         cfg: ClientConfig,
         on_signed_in: Callable[[ApiClient, object], None],
     ) -> None:
-        self._root = root
+        self._app_root = root
         self._cfg = cfg
         self._on_signed_in = on_signed_in
         from .. import __version__
@@ -45,7 +45,7 @@ class LoginWindow:
         self._win.geometry("480x460")
         self._win.resizable(False, False)
         # We're shown while the root is hidden; without transient() the
-        # window doesn't always lift. transient(self._root) is harmless.
+        # window doesn't always lift. transient(self._app_root) is harmless.
         self._win.transient(root)
         self._build()
         self._show_mode(self._cfg.auth_kind)
@@ -255,7 +255,7 @@ class LoginWindow:
             # Network / TLS / DNS.
             self._show_error(f"Could not reach server: {exc}")
 
-        run_in_background(self._root, _attempt, on_done=_done, on_failed=_failed)
+        run_in_background(self._app_root, _attempt, on_done=_done, on_failed=_failed)
 
     def _show_error(self, msg: str) -> None:
         self.error_var.set(msg)

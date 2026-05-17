@@ -29,7 +29,7 @@ class MainWindow:
     def __init__(self, root: ctk.CTk, api: ApiClient, me: MeResponse) -> None:
         from .. import __version__
         self._version = __version__
-        self._root = root
+        self._app_root = root
         self._api = api
         self._me = me
         self._on_signed_out: Optional[callable] = None
@@ -42,16 +42,16 @@ class MainWindow:
     def _build_menu(self) -> None:
         # tkinter.Menu is stdlib — CTk doesn't ship a menu widget.
         # The native menu look is acceptable since it's just two items.
-        menubar = tk.Menu(self._root)
+        menubar = tk.Menu(self._app_root)
         m_file = tk.Menu(menubar, tearoff=False)
         m_file.add_command(label="Settings…", command=self._open_settings)
         m_file.add_separator()
-        m_file.add_command(label="Quit", command=self._root.destroy)
+        m_file.add_command(label="Quit", command=self._app_root.destroy)
         menubar.add_cascade(label="File", menu=m_file)
-        self._root.config(menu=menubar)
+        self._app_root.config(menu=menubar)
 
     def _build_central(self) -> None:
-        self.tabs = ctk.CTkTabview(self._root)
+        self.tabs = ctk.CTkTabview(self._app_root)
         self.tabs.pack(fill="both", expand=True, padx=8, pady=8)
 
         inbox_tab = self.tabs.add("Inbox")
@@ -59,18 +59,18 @@ class MainWindow:
         upload_tab = self.tabs.add("New share")
 
         self.inbox = ShareListPanel(
-            inbox_tab, self._root, self._api, box="inbox",
+            inbox_tab, self._app_root, self._api, box="inbox",
             on_open_share=self._open_share,
         )
         self.inbox.pack(fill="both", expand=True)
 
         self.outbox = ShareListPanel(
-            outbox_tab, self._root, self._api, box="outbox",
+            outbox_tab, self._app_root, self._api, box="outbox",
             on_open_share=self._open_share,
         )
         self.outbox.pack(fill="both", expand=True)
 
-        self.upload = UploadPanel(upload_tab, self._root, self._api)
+        self.upload = UploadPanel(upload_tab, self._app_root, self._api)
         self.upload.pack(fill="both", expand=True)
 
         # CTkTabview's tab change callback. Refresh the active list
@@ -96,7 +96,7 @@ class MainWindow:
 
     def _open_share(self, share_id: str) -> None:
         dlg = ShareDetailDialog(
-            self._root,
+            self._app_root,
             self._api,
             share_id,
             self._me,
@@ -113,7 +113,7 @@ class MainWindow:
 
     def _open_settings(self) -> None:
         dlg = SettingsDialog(
-            self._root, self._api, self._me,
+            self._app_root, self._api, self._me,
             on_signed_out=self._handle_signed_out,
         )
         dlg.show_modal()
@@ -122,7 +122,7 @@ class MainWindow:
         # Caller in __main__ may want to know — bubble up if registered.
         if self._on_signed_out is not None:
             self._on_signed_out()
-        self._root.destroy()
+        self._app_root.destroy()
 
     def set_on_signed_out(self, callback) -> None:
         self._on_signed_out = callback
@@ -130,9 +130,9 @@ class MainWindow:
     def show(self) -> None:
         # Called by __main__ after a successful login. The root was
         # hidden during the login phase.
-        self._root.deiconify()
-        self._root.lift()
-        self._root.focus_force()
+        self._app_root.deiconify()
+        self._app_root.lift()
+        self._app_root.focus_force()
         # Kick the first list load — without it the user sees empty
         # tabs until they click around.
         self.inbox.refresh()

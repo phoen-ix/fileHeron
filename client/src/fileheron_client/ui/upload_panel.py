@@ -26,7 +26,7 @@ logger = logging.getLogger("fileheron_client.ui.upload")
 class UploadPanel(ctk.CTkFrame):
     def __init__(self, master, root: ctk.CTk, api: ApiClient) -> None:
         super().__init__(master, fg_color="transparent")
-        self._root = root
+        self._app_root = root
         self._api = api
         # Per-upload tracking. Cleared between submits.
         self._files: list[Path] = []
@@ -54,7 +54,7 @@ class UploadPanel(ctk.CTkFrame):
 
         # Recipients
         ctk.CTkLabel(outer, text="Recipients", anchor="w").pack(fill="x")
-        self.recipients = RecipientPickerWidget(outer, self._root, self._api)
+        self.recipients = RecipientPickerWidget(outer, self._app_root, self._api)
         self.recipients.pack(fill="x", pady=(0, 12))
 
         # Expiry — paired date picker + HH:MM + Never checkbox.
@@ -313,7 +313,7 @@ class UploadPanel(ctk.CTkFrame):
             self.status_var.set(f"Error: {msg}")
 
         from ._async import run_in_background
-        run_in_background(self._root, _create, on_done=_on_created, on_failed=_on_create_failed)
+        run_in_background(self._app_root, _create, on_done=_on_created, on_failed=_on_create_failed)
 
     def _start_uploads(self, share: ShareResponse) -> None:
         self.status_var.set(
@@ -326,7 +326,7 @@ class UploadPanel(ctk.CTkFrame):
         self._per_file_done = {}
         for p in self._files:
             start_upload(
-                self._root, self._api,
+                self._app_root, self._api,
                 share_id=share.id,
                 file_path=p,
                 on_progress=self._on_chunk_progress,

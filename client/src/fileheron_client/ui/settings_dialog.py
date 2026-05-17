@@ -21,7 +21,7 @@ class SettingsDialog:
         *,
         on_signed_out: Optional[Callable[[], None]] = None,
     ) -> None:
-        self._root = root
+        self._app_root = root
         self._api = api
         self._me = me
         self._on_signed_out = on_signed_out

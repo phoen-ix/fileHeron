@@ -35,7 +35,7 @@ class ShareDetailDialog:
         *,
         on_mutated: Optional[Callable[[], None]] = None,
     ) -> None:
-        self._root = root
+        self._app_root = root
         self._api = api
         self._share_id = share_id
         self._me = me
@@ -130,7 +130,7 @@ class ShareDetailDialog:
             mb.warn(self._win, "Could not load share", msg)
             self._win.destroy()
 
-        run_in_background(self._root, _fetch, on_done=_done, on_failed=_failed)
+        run_in_background(self._app_root, _fetch, on_done=_done, on_failed=_failed)
 
     def _render_after_load(self) -> None:
         s = self._share
@@ -189,7 +189,7 @@ class ShareDetailDialog:
             msg = getattr(exc, "message", None) or str(exc)
             mb.warn(self._win, "Revoke failed", msg)
 
-        run_in_background(self._root, _do, on_done=_done, on_failed=_failed)
+        run_in_background(self._app_root, _do, on_done=_done, on_failed=_failed)
 
     def _expire_now(self) -> None:
         s = self._share
@@ -227,7 +227,7 @@ class ShareDetailDialog:
             msg = getattr(exc, "message", None) or str(exc)
             mb.warn(self._win, "Expire failed", msg)
 
-        run_in_background(self._root, _do, on_done=_done, on_failed=_failed)
+        run_in_background(self._app_root, _do, on_done=_done, on_failed=_failed)
 
     def _edit_expiry(self) -> None:
         s = self._share
@@ -261,7 +261,7 @@ class ShareDetailDialog:
             msg = getattr(exc, "message", None) or str(exc)
             mb.warn(self._win, "Edit failed", msg)
 
-        run_in_background(self._root, _do, on_done=_done, on_failed=_failed)
+        run_in_background(self._app_root, _do, on_done=_done, on_failed=_failed)
 
     # ---- Files ----
 
@@ -345,7 +345,7 @@ class ShareDetailDialog:
             mb.warn(self._win, "Download failed", msg)
 
         run_with_progress(
-            self._root, _do,
+            self._app_root, _do,
             on_progress=_on_progress,
             on_done=_done,
             on_failed=_failed,

@@ -36,21 +36,24 @@ class MainWindow:
         root.title(
             f"file:Heron — {me.display_name} ({me.role})  ·  v{self._version}"
         )
-        self._build_menu()
+        # v0.4.27: removed the tk.Menu menu bar. On Windows the menu
+        # bar strip is a Win32 control that ignores DWM dark-mode and
+        # stayed light below the (now dark) title bar — broke the
+        # visual. Settings moved to a ⚙ button in the top-right of
+        # the central area; Quit is the window close button.
         self._build_central()
 
-    def _build_menu(self) -> None:
-        # tkinter.Menu is stdlib — CTk doesn't ship a menu widget.
-        # The native menu look is acceptable since it's just two items.
-        menubar = tk.Menu(self._app_root)
-        m_file = tk.Menu(menubar, tearoff=False)
-        m_file.add_command(label="Settings…", command=self._open_settings)
-        m_file.add_separator()
-        m_file.add_command(label="Quit", command=self._app_root.destroy)
-        menubar.add_cascade(label="File", menu=m_file)
-        self._app_root.config(menu=menubar)
-
     def _build_central(self) -> None:
+        # Top bar with right-aligned ⚙ Settings button (replaces the
+        # native menu bar that didn't honour dark mode on Windows).
+        top_bar = ctk.CTkFrame(self._app_root, fg_color="transparent")
+        top_bar.pack(fill="x", padx=8, pady=(8, 0))
+        ctk.CTkButton(
+            top_bar, text="⚙  Settings", command=self._open_settings,
+            width=110, height=28, fg_color="transparent",
+            border_width=1, hover_color=("gray85", "gray25"),
+        ).pack(side="right")
+
         self.tabs = ctk.CTkTabview(self._app_root)
         self.tabs.pack(fill="both", expand=True, padx=8, pady=8)
 

@@ -81,19 +81,21 @@ exe = EXE(
     name="fileheron-client",
     debug=False,
     bootloader_ignore_signals=False,
-    # strip + upx: enabled in v0.4.0 alongside the CTk swap so the
-    # 60 MB → ~18 MB drop lands in one release. Builds need `upx` on
-    # PATH (Windows CI: choco install upx).
+    # strip stays enabled — strips debug symbols from native binaries,
+    # safe + small win.
     strip=True,
-    upx=True,
-    upx_exclude=[
-        # Tcl/Tk DLLs sometimes break under UPX; exclude defensively.
-        # Empty list means "compress everything"; the patterns below
-        # match the substrings PyInstaller logs.
-        "tcl*.dll",
-        "tk*.dll",
-        "vcruntime140.dll",
-    ],
+    # v0.4.5: UPX disabled. We learned the hard way that:
+    #   1. In PyInstaller --onefile mode the outer bootloader ZIP layer
+    #      largely un-does UPX's gains — the v0.4.2 build with UPX on
+    #      every DLL came out the same 31 MB as v0.4.0 without UPX.
+    #   2. UPX broke _ssl.pyd in v0.4.2/0.4.3/0.4.4 — SSL imports failed
+    #      with "DLL load failed... Invalid access to a memory region"
+    #      (Windows ACCESS_VIOLATION). Likely also affects other native
+    #      crypto / openssl DLLs that depend on aligned-load semantics.
+    # No size cost from disabling — the v0.4.5 .exe is the same ~31 MB
+    # as the broken v0.4.2-0.4.4 builds, just functional.
+    upx=False,
+    upx_exclude=[],
     runtime_tmpdir=None,
     console=False,
     disable_windowed_traceback=False,

@@ -160,22 +160,23 @@ class ShareListPanel(ctk.CTkFrame):
                 item.created_at.strftime("%Y-%m-%d %H:%M"),
                 format_expiry(item.expires_at),
             ]
+            # v0.5.4: single-click AND double-click open the share.
+            # Used to be double-click only; single click was a silent
+            # no-op, which reads as a broken UI. Hand cursor signals
+            # the row is interactive.
+            open_handler = lambda _e, sid=item.id: self._on_open_share(sid)
             for col_idx, text in enumerate(cells):
                 lbl = ctk.CTkLabel(
                     self._scroll, text=text, anchor="w", justify="left",
-                    wraplength=0,
+                    wraplength=0, cursor="hand2",
                 )
                 lbl.grid(row=r, column=col_idx, sticky="ew", padx=6, pady=2)
-                # Double-click to open the share — same on every cell
-                # so the user can click anywhere on the row.
-                lbl.bind(
-                    "<Double-Button-1>",
-                    lambda _e, sid=item.id: self._on_open_share(sid),
-                )
+                lbl.bind("<Button-1>", open_handler)
+                lbl.bind("<Double-Button-1>", open_handler)
 
-            pill = PillLabel(self._scroll, text=item.state, state=item.state)
-            pill.grid(row=r, column=6, sticky="w", padx=6, pady=2)
-            pill.bind(
-                "<Double-Button-1>",
-                lambda _e, sid=item.id: self._on_open_share(sid),
+            pill = PillLabel(
+                self._scroll, text=item.state, state=item.state, cursor="hand2",
             )
+            pill.grid(row=r, column=6, sticky="w", padx=6, pady=2)
+            pill.bind("<Button-1>", open_handler)
+            pill.bind("<Double-Button-1>", open_handler)

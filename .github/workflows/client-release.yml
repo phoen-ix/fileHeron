@@ -30,12 +30,20 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e "./client[build,dev]"
 
-      # v0.4.0: pyinstaller.spec sets upx=True so the final .exe is
-      # compressed (~60 MB → ~18 MB once paired with the CTk swap).
-      # Choco ships UPX on the windows-latest runner.
+      # v0.4.1: pyinstaller.spec sets upx=True so the final .exe is
+      # compressed. v0.4.0 tried choco for this; the install succeeded
+      # but PyInstaller didn't find upx on PATH in the bash subprocess,
+      # so the EXE step silently fell back to uncompressed (31 MB
+      # instead of the targeted ~21 MB). This explicit download +
+      # GITHUB_PATH update is debuggable and works in any shell.
       - name: Install UPX
-        shell: pwsh
-        run: choco install upx --yes --no-progress
+        shell: bash
+        run: |
+          curl -sSL -o upx.zip https://github.com/upx/upx/releases/download/v5.1.1/upx-5.1.1-win64.zip
+          mkdir -p /c/upx
+          unzip -j -o upx.zip 'upx-*/upx.exe' -d /c/upx
+          /c/upx/upx.exe --version
+          echo "C:\\upx" >> "$GITHUB_PATH"
 
       - name: Run unit tests
         working-directory: client
@@ -44,7 +52,9 @@ jobs:
       - name: Build .exe with PyInstaller
         working-directory: client
         run: |
-          pyinstaller pyinstaller.spec --clean --noconfirm
+          # --log-level INFO surfaces "Packing executable with UPX" so
+          # we can confirm in the build log that compression ran.
+          pyinstaller pyinstaller.spec --clean --noconfirm --log-level INFO
 
       - name: Show artifact
         working-directory: client

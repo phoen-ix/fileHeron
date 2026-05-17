@@ -52,9 +52,14 @@ jobs:
       - name: Build .exe with PyInstaller
         working-directory: client
         run: |
-          # --log-level INFO surfaces "Packing executable with UPX" so
-          # we can confirm in the build log that compression ran.
-          pyinstaller pyinstaller.spec --clean --noconfirm --log-level INFO
+          # --upx-dir explicitly tells PyInstaller where to find upx.exe;
+          # v0.4.1 had upx on PATH but PyInstaller didn't seem to pick it
+          # up (no "Packing executable with UPX..." in the log). Passing
+          # the directory removes any path-resolution ambiguity.
+          # --log-level INFO surfaces the UPX activity in the log.
+          pyinstaller pyinstaller.spec --clean --noconfirm \
+            --log-level INFO \
+            --upx-dir "C:\\upx"
 
       - name: Show artifact
         working-directory: client

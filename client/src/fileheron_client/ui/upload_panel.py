@@ -25,7 +25,11 @@ logger = logging.getLogger("fileheron_client.ui.upload")
 
 class UploadPanel(ctk.CTkFrame):
     def __init__(self, master, root: ctk.CTk, api: ApiClient) -> None:
-        super().__init__(master, fg_color="transparent")
+        # v0.4.20: removed fg_color="transparent". CTkTabview stacks
+        # tab frames z-order, and with a transparent UploadPanel the
+        # Inbox / Outbox ShareListPanel underneath bleeds through.
+        # The default CTkFrame fg_color is opaque and theme-matched.
+        super().__init__(master)
         self._app_root = root
         self._api = api
         # Per-upload tracking. Cleared between submits.
@@ -36,11 +40,13 @@ class UploadPanel(ctk.CTkFrame):
         self._build()
 
     def _build(self) -> None:
-        # v0.4.19: was a CTkScrollableFrame, which renders empty (zero
-        # canvas size) when nested inside a CTkTabview tab with a
-        # transparent fg_color — known CTk layout issue. Whole panel
-        # was invisible. A plain CTkFrame fits the 1000x640 root and
-        # the inner _file_list_frame still scrolls its own content.
+        # v0.4.19 swapped a CTkScrollableFrame for CTkFrame because
+        # the scrollable one inside a CTkTabview tab renders zero-size
+        # and the form was invisible. v0.4.20 also dropped the
+        # fg_color="transparent" on UploadPanel itself — the panel
+        # was see-through so Inbox/Outbox content underneath bled in.
+        # The inner _file_list_frame stays a CTkScrollableFrame for
+        # its own row scrolling (works fine inside a plain frame).
         outer = ctk.CTkFrame(self, fg_color="transparent")
         outer.pack(fill="both", expand=True, padx=8, pady=8)
 

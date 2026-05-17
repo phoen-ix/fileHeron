@@ -142,7 +142,19 @@ class UploadPanel(ctk.CTkFrame):
         ctk.CTkCheckBox(
             parent, text="Never expires (revoke manually)",
             variable=self._never_var, command=self._on_never_toggled,
-        ).pack(anchor="w", pady=(4, 0))
+        ).pack(anchor="w", pady=(4, 4))
+
+        # v0.4.26: per-share download limit for AUTHENTICATED
+        # recipients (backend feature shipped in v1.1.0). Separate
+        # from the public-link limit further down. Blank = unlimited.
+        limit_row = ctk.CTkFrame(parent, fg_color="transparent")
+        limit_row.pack(fill="x", anchor="w")
+        ctk.CTkLabel(limit_row, text="Download limit", anchor="w").pack(side="left")
+        self._share_limit = ctk.StringVar(value="")
+        ctk.CTkEntry(
+            limit_row, textvariable=self._share_limit,
+            placeholder_text="∞", width=80,
+        ).pack(side="left", padx=(8, 0))
 
     def _on_never_toggled(self) -> None:
         state = "disabled" if self._never_var.get() else "normal"
@@ -255,6 +267,24 @@ class UploadPanel(ctk.CTkFrame):
         chosen = datetime(d.year, d.month, d.day, hh, mm)
         return chosen, False
 
+    def _collect_share_limit(self) -> tuple[Optional[int], bool]:
+        """Return (limit, ok). limit=None means unlimited. ok=False
+        means the user entered something that isn't a positive int."""
+        raw = self._share_limit.get().strip()
+        if not raw:
+            return None, True
+        try:
+            n = int(raw)
+            if n <= 0:
+                raise ValueError
+        except ValueError:
+            mb.warn(
+                self.winfo_toplevel(), "Invalid download limit",
+                "Download limit must be a positive integer, or blank for unlimited.",
+            )
+            return None, False
+        return n, True
+
     def _collect_public_link(self) -> Optional[dict]:
         if not self._pl_enabled.get():
             return None
@@ -290,6 +320,9 @@ class UploadPanel(ctk.CTkFrame):
         expires_at, never = self._collect_expiry()
         if not never and expires_at is None:
             return  # _collect_expiry already showed an error toast
+        share_limit, ok = self._collect_share_limit()
+        if not ok:
+            return  # _collect_share_limit already showed an error toast
 
         self.send_btn.configure(state="disabled", text="Creating…")
         self.status_var.set("Creating share…")
@@ -304,6 +337,7 @@ class UploadPanel(ctk.CTkFrame):
                 message=self.message_text.get("1.0", "end").strip() or None,
                 expires_at=expires_at if not never else None,
                 expires_at_never=never,
+                download_limit=share_limit,
                 public_link=public_link,
             )
 

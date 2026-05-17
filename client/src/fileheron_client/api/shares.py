@@ -41,6 +41,7 @@ def create_share(
     message: Optional[str] = None,
     expires_at: Optional[datetime] = None,
     expires_at_never: bool = False,
+    download_limit: Optional[int] = None,
     public_link: Optional[dict] = None,
 ) -> ShareResponse:
     """Create the share envelope. Files are added in a separate step
@@ -51,6 +52,11 @@ def create_share(
     - ``expires_at_never=True`` sends ``expires_at: null`` so the
       share is never auto-deleted (v1.1.4 backend semantics). Mutually
       exclusive with ``expires_at``.
+    - ``download_limit`` (v1.1.0 backend feature, exposed in client
+      v0.4.26): per-share total download cap for AUTHENTICATED
+      recipients. Server stores ``downloads_remaining`` and decrements
+      atomically per download. NULL / None = unlimited. Separate from
+      and additive to the public-link download_limit.
     - ``public_link`` is an inline ``{password?, download_limit?,
       notify_on_download}`` dict; the server returns the plaintext URL
       ONCE in ``ShareResponse.public_link.url``.
@@ -74,6 +80,8 @@ def create_share(
         body["expires_at"] = None
     elif expires_at is not None:
         body["expires_at"] = expires_at.isoformat()
+    if download_limit is not None:
+        body["download_limit"] = download_limit
     if public_link is not None:
         body["public_link"] = public_link
     out = api.request_or_raise("POST", "/api/shares", json=body, expected=201)

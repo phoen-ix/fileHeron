@@ -128,32 +128,15 @@ class MainWindow:
         self._on_signed_out = callback
 
     def show(self) -> None:
-        # v0.4.13 traced the symptom: CTk's _windows_set_titlebar_color
-        # runs withdraw() → DWM call → deiconify() on Windows, and the
-        # deiconify gets lost when it lands mid-MainWindow-construction.
-        # The root stays withdrawn forever. v0.4.14 tried to disable
-        # CTk's routine and broke the login window. v0.4.15 keeps the
-        # routine alive but polls root.state() for 3 seconds after
-        # show() and re-deiconifies any time it's not 'normal'.
+        # Called by __main__ after a successful login. The root was
+        # hidden during the login phase. v0.4.17 removed the aggressive
+        # _reassert_visible polling that v0.4.15 added — the underlying
+        # cause (CTk's _windows_set_titlebar_color withdraw-dance) is
+        # now patched out in ui/app.py, so the root no longer randomly
+        # withdraws itself and we don't need to fight back.
         self._app_root.deiconify()
         self._app_root.lift()
         self._app_root.focus_force()
-        # Aggressive safety net — poll every 50ms for 3s, force back
-        # to normal if anything withdraws us.
-        self._reassert_visible(remaining_ticks=60)
         # Kick the first list load — without it the user sees empty
         # tabs until they click around.
         self.inbox.refresh()
-
-    def _reassert_visible(self, remaining_ticks: int) -> None:
-        try:
-            state = self._app_root.state()
-            if state != "normal":
-                self._app_root.deiconify()
-                self._app_root.lift()
-        except Exception:
-            return
-        if remaining_ticks > 0:
-            self._app_root.after(
-                50, lambda: self._reassert_visible(remaining_ticks - 1)
-            )

@@ -6,10 +6,11 @@ asset under ``assets/``. Run from the ``client/`` directory:
 
     pyinstaller pyinstaller.spec
 
-GUI stack is CustomTkinter (+ tkinterdnd2 for drag-drop, + tkcalendar
-for the date picker). PyInstaller's stock hooks find tkinter on their
-own; the explicit hidden-imports below cover the three packages whose
-static analysis sometimes misses dynamic submodule loads.
+GUI stack is CustomTkinter (+ tkcalendar for the date picker). v0.4.10
+dropped tkinterdnd2 — it crashed Tk's event dispatcher post-login no
+matter how we combined it with CTk. PyInstaller's stock hooks find
+tkinter on their own; the explicit hidden-imports below cover packages
+whose static analysis sometimes misses dynamic submodule loads.
 """
 from pathlib import Path
 
@@ -24,11 +25,9 @@ datas = [
 ]
 
 hiddenimports = [
-    # GUI deps. tkinterdnd2 ships its own .tcl + native binary that
-    # PyInstaller's stock hook collects; the explicit import below
-    # nudges the static analyser to follow.
+    # GUI deps. The explicit imports nudge PyInstaller's static analyser
+    # to follow dynamic submodule loads.
     "customtkinter",
-    "tkinterdnd2",
     "tkcalendar",
     # Submodules pulled in by string in the API package.
     "fileheron_client.api.client",

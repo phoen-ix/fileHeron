@@ -11,7 +11,6 @@ from typing import Optional
 
 import customtkinter as ctk
 from tkcalendar import DateEntry
-from tkinterdnd2 import DND_FILES
 
 from .. import api as api_pkg
 from ..api import ApiClient, ApiError
@@ -64,24 +63,13 @@ class UploadPanel(ctk.CTkFrame):
         # Public link
         self._build_public_link_section(outer)
 
-        # File picker + drop target
+        # File picker (drag-drop dropped in v0.4.10 — see app.py).
         ctk.CTkLabel(
-            outer, text="Files (drag from file manager or click Add)", anchor="w"
+            outer, text="Files", anchor="w"
         ).pack(fill="x")
-        # The drop target is the scrollable frame holding the file rows.
-        # tkinterdnd2's drop_target_register requires the widget to be
-        # a TkinterDnD-aware container; CTkFrame works because we mixed
-        # TkinterDnD into ctk.CTk in app.build_root.
         self._file_list_frame = ctk.CTkScrollableFrame(outer, fg_color=("gray90", "gray20"), height=160)
         self._file_list_frame.pack(fill="x", pady=(2, 4))
-        try:
-            self._file_list_frame.drop_target_register(DND_FILES)
-            self._file_list_frame.dnd_bind("<<Drop>>", self._on_drop)
-        except Exception:
-            # tkinterdnd2 not initialised — keep going; user can still
-            # click Add files…
-            logger.warning("tkinterdnd2 drop registration failed; click-Add only.")
-        self._empty_var = ctk.StringVar(value="(no files yet — drop here or click Add files…)")
+        self._empty_var = ctk.StringVar(value="(no files yet — click Add files…)")
         self._empty_label = ctk.CTkLabel(self._file_list_frame, textvariable=self._empty_var, text_color="gray")
         self._empty_label.pack(pady=20)
 
@@ -191,14 +179,6 @@ class UploadPanel(ctk.CTkFrame):
             w.configure(state=state)
 
     # ---- file list helpers ----
-
-    def _on_drop(self, event) -> None:
-        # tkinterdnd2 packs paths with spaces in {curly braces}. Use
-        # the widget's tk.splitlist to parse correctly.
-        for p in self._file_list_frame.tk.splitlist(event.data):
-            path = Path(p)
-            if path.is_file():
-                self._add_file(path)
 
     def _on_add(self) -> None:
         paths = filedialog.askopenfilenames(parent=self.winfo_toplevel(), title="Add files")

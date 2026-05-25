@@ -15,7 +15,6 @@ import customtkinter as ctk
 from ..api import ApiClient
 from ..models import MeResponse
 from .settings_dialog import SettingsDialog
-from .share_detail_dialog import ShareDetailDialog
 from .share_list_panel import ShareListPanel
 from .upload_panel import UploadPanel
 
@@ -62,14 +61,12 @@ class MainWindow:
         upload_tab = self.tabs.add("New share")
 
         self.inbox = ShareListPanel(
-            inbox_tab, self._app_root, self._api, box="inbox",
-            on_open_share=self._open_share,
+            inbox_tab, self._app_root, self._api, self._me, box="inbox",
         )
         self.inbox.pack(fill="both", expand=True)
 
         self.outbox = ShareListPanel(
-            outbox_tab, self._app_root, self._api, box="outbox",
-            on_open_share=self._open_share,
+            outbox_tab, self._app_root, self._api, self._me, box="outbox",
         )
         self.outbox.pack(fill="both", expand=True)
 
@@ -105,23 +102,6 @@ class MainWindow:
             pass
 
     def _on_tab_changed(self, name: str) -> None:
-        if name == "Inbox":
-            self.inbox.refresh()
-        elif name == "Outbox":
-            self.outbox.refresh()
-
-    def _open_share(self, share_id: str) -> None:
-        dlg = ShareDetailDialog(
-            self._app_root,
-            self._api,
-            share_id,
-            self._me,
-            on_mutated=self._refresh_current_tab,
-        )
-        dlg.show_modal()
-
-    def _refresh_current_tab(self) -> None:
-        name = self.tabs.get()
         if name == "Inbox":
             self.inbox.refresh()
         elif name == "Outbox":

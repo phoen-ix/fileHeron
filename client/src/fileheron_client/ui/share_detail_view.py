@@ -1,8 +1,15 @@
 """Share detail — files + per-file download + manager actions.
 
-v0.4.0 CustomTkinter port. The dialog is a ``CTkToplevel`` with a
-scrollable file list and three manager-action buttons (revoke /
-expire-now / edit-expiry) gated by ownership."""
+v0.6.0 refactor: this used to be ``ShareDetailDialog`` — a separate
+``CTkToplevel`` window with ``transient`` + ``grab_set``. Users
+disliked the extra window. The class is now ``ShareDetailView``, a
+``CTkFrame`` that packs into the parent ``ShareListPanel`` in place
+of the list. The list panel handles the pack swap; the "← Back"
+button at the top calls back into ``on_back`` to return to the list.
+
+Modal sub-dialogs (``mb.info``, ``mb.confirm``, ``ExpiryDialog``) and
+the native ``filedialog`` calls stay as overlays — they're small and
+fine as pop-ups. Only the detail itself moved in-window."""
 from __future__ import annotations
 
 import webbrowser
@@ -22,35 +29,51 @@ from .expiry_dialog import ExpiryDialog
 from .widgets import PillLabel, human_size
 
 
-class ShareDetailDialog:
-    """Modal share-detail dialog. Caller passes ``on_mutated`` to be
-    invoked after revoke / expire-now / edit-expiry succeeds, so the
-    parent list view can re-fetch and reflect the new state."""
+class ShareDetailView(ctk.CTkFrame):
+    """In-window share detail (v0.6.0+, was ``ShareDetailDialog``).
+
+    Constructor arguments mirror the old dialog plus ``on_back`` — the
+    drill-out callback the host ``ShareListPanel`` provides. Pack into
+    the parent yourself; the view doesn't do its own geometry."""
 
     def __init__(
         self,
+        master,
         root: ctk.CTk,
         api: ApiClient,
         share_id: str,
         me: MeResponse,
         *,
+        on_back: Callable[[], None],
         on_mutated: Optional[Callable[[], None]] = None,
     ) -> None:
+        super().__init__(master, fg_color="transparent")
         self._app_root = root
         self._api = api
         self._share_id = share_id
         self._me = me
+        self._on_back = on_back
         self._on_mutated = on_mutated
         self._share: Optional[ShareResponse] = None
         self._dl_in_flight = 0
 
-        self._win = ctk.CTkToplevel(root)
-        self._win.title("Share")
-        self._win.geometry("680x520")
-        self._win.transient(root)
-
         self._build()
         self._load()
+        # Esc-to-close parity with the old Toplevel modal. Bind on the
+        # toplevel so it works regardless of focus inside the frame;
+        # unbind when this view is destroyed so we don't leak the
+        # binding into whatever replaces us.
+        self._top = self.winfo_toplevel()
+        self._esc_funcid = self._top.bind(
+            "<Escape>", lambda _e: self._on_back(), add="+"
+        )
+        self.bind("<Destroy>", self._on_destroy_unbind, add="+")
+
+    def _on_destroy_unbind(self, _event) -> None:
+        try:
+            self._top.unbind("<Escape>", self._esc_funcid)
+        except Exception:
+            pass
 
     def _can_manage(self) -> bool:
         if self._share is None:
@@ -61,7 +84,23 @@ class ShareDetailDialog:
         )
 
     def _build(self) -> None:
-        outer = ctk.CTkFrame(self._win, fg_color="transparent")
+        # Top header with "← Back" + a textual breadcrumb. Sits above
+        # the existing content frame so it scrolls / resizes
+        # independently of the file list.
+        header = ctk.CTkFrame(self, fg_color="transparent")
+        header.pack(fill="x", padx=16, pady=(12, 0))
+        ctk.CTkButton(
+            header,
+            text="← Back",
+            width=90,
+            height=28,
+            fg_color="transparent",
+            border_width=1,
+            hover_color=("gray85", "gray25"),
+            command=self._on_back,
+        ).pack(side="left")
+
+        outer = ctk.CTkFrame(self, fg_color="transparent")
         outer.pack(fill="both", expand=True, padx=16, pady=16)
 
         self.title_var = ctk.StringVar(value="…")
@@ -79,8 +118,8 @@ class ShareDetailDialog:
         self.state_pill = PillLabel(outer, text="…", state="active")
         self.state_pill.pack(anchor="w", pady=(0, 8))
 
-        # v0.5.3: Public-link section (only shown if the share has
-        # one; populated by _load_public_link via background fetch).
+        # Public-link section (only shown if the share has one;
+        # populated by _load_public_link via background fetch).
         self._build_public_link_section(outer)
 
         ctk.CTkLabel(outer, text="Files", anchor="w").pack(fill="x")
@@ -102,7 +141,6 @@ class ShareDetailDialog:
             fg_color="#991b1b", hover_color="#7f1d1d",
         )
         # Initially hidden; _refresh_action_visibility shows them.
-        # They pack on the LEFT (with stretch in between).
         self.edit_expiry_btn.pack(side="left", padx=(0, 4))
         self.expire_now_btn.pack(side="left", padx=4)
         self.revoke_btn.pack(side="left", padx=(4, 0))
@@ -110,11 +148,10 @@ class ShareDetailDialog:
         self.expire_now_btn.pack_forget()
         self.revoke_btn.pack_forget()
 
-        # Right-aligned buttons.
-        ctk.CTkButton(btns, text="Close", command=self._win.destroy, width=90, fg_color="gray").pack(side="right")
+        # Right-aligned button. "Close" gone — Back at the top replaces it.
         ctk.CTkButton(
             btns, text="Save all to folder…", command=self._save_all, width=160,
-        ).pack(side="right", padx=(0, 8))
+        ).pack(side="right")
 
         # Progress (download).
         self.progress = ctk.CTkProgressBar(outer)
@@ -189,9 +226,10 @@ class ShareDetailDialog:
         if not url:
             return
         try:
-            self._win.clipboard_clear()
-            self._win.clipboard_append(url)
-            self._win.update()  # ensures the clipboard sticks after destroy
+            top = self.winfo_toplevel()
+            top.clipboard_clear()
+            top.clipboard_append(url)
+            top.update()  # ensures the clipboard sticks
         except Exception:
             pass
 
@@ -214,8 +252,8 @@ class ShareDetailDialog:
 
         def _failed(exc):
             msg = getattr(exc, "message", None) or str(exc)
-            mb.warn(self._win, "Could not load share", msg)
-            self._win.destroy()
+            mb.warn(self.winfo_toplevel(), "Could not load share", msg)
+            self._on_back()
 
         run_in_background(self._app_root, _fetch, on_done=_done, on_failed=_failed)
         self._load_public_link()
@@ -269,8 +307,9 @@ class ShareDetailDialog:
         s = self._share
         if not s:
             return
+        top = self.winfo_toplevel()
         if not mb.confirm(
-            self._win,
+            top,
             "Revoke share",
             (
                 f"Revoke this share? Files become inaccessible to the recipient.\n\n"
@@ -284,14 +323,14 @@ class ShareDetailDialog:
             api_pkg.revoke_share(self._api, s.id)
 
         def _done(_result):
-            if self._on_mutated is not None:
-                self._on_mutated()
-            mb.info(self._win, "Revoked", "Share revoked.")
-            self._win.destroy()
+            mb.info(top, "Revoked", "Share revoked.")
+            # Drill out — the list panel's _drill_out refreshes the
+            # list, so we don't separately fire on_mutated here.
+            self._on_back()
 
         def _failed(exc):
             msg = getattr(exc, "message", None) or str(exc)
-            mb.warn(self._win, "Revoke failed", msg)
+            mb.warn(top, "Revoke failed", msg)
 
         run_in_background(self._app_root, _do, on_done=_done, on_failed=_failed)
 
@@ -299,8 +338,9 @@ class ShareDetailDialog:
         s = self._share
         if not s:
             return
+        top = self.winfo_toplevel()
         if not mb.confirm(
-            self._win,
+            top,
             "Expire now",
             "Expire this share immediately? The file bytes are hard-"
             "deleted from disk; this cannot be undone.",
@@ -325,11 +365,11 @@ class ShareDetailDialog:
             self.state_pill.setState(updated.state)
             self.state_pill.setText(updated.state)
             self._refresh_action_visibility()
-            mb.info(self._win, "Expired", "Share expired.")
+            mb.info(top, "Expired", "Share expired.")
 
         def _failed(exc):
             msg = getattr(exc, "message", None) or str(exc)
-            mb.warn(self._win, "Expire failed", msg)
+            mb.warn(top, "Expire failed", msg)
 
         run_in_background(self._app_root, _do, on_done=_done, on_failed=_failed)
 
@@ -337,7 +377,8 @@ class ShareDetailDialog:
         s = self._share
         if not s:
             return
-        dlg = ExpiryDialog(self._win, current=s.expires_at)
+        top = self.winfo_toplevel()
+        dlg = ExpiryDialog(top, current=s.expires_at)
         choice = dlg.show_modal()
         if choice is None:
             return
@@ -359,11 +400,11 @@ class ShareDetailDialog:
             if updated.message:
                 bits.append(updated.message)
             self.meta_var.set(" · ".join(bits))
-            mb.info(self._win, "Updated", "Share expiry updated.")
+            mb.info(top, "Updated", "Share expiry updated.")
 
         def _failed(exc):
             msg = getattr(exc, "message", None) or str(exc)
-            mb.warn(self._win, "Edit failed", msg)
+            mb.warn(top, "Edit failed", msg)
 
         run_in_background(self._app_root, _do, on_done=_done, on_failed=_failed)
 
@@ -395,7 +436,7 @@ class ShareDetailDialog:
 
     def _download_one(self, file_id: str, filename: str) -> None:
         dest_str = filedialog.asksaveasfilename(
-            parent=self._win, title="Save file as", initialfile=filename,
+            parent=self.winfo_toplevel(), title="Save file as", initialfile=filename,
         )
         if not dest_str:
             return
@@ -404,16 +445,15 @@ class ShareDetailDialog:
     def _save_all(self) -> None:
         if not self._share:
             return
+        top = self.winfo_toplevel()
         downloadable = [
             f for f in self._share.files
             if f.state in ("clean", "ready_unscanned")
         ]
         if not downloadable:
-            mb.info(self._win, "Nothing to save", "No downloadable files.")
+            mb.info(top, "Nothing to save", "No downloadable files.")
             return
-        dir_str = filedialog.askdirectory(
-            parent=self._win, title="Save all to folder"
-        )
+        dir_str = filedialog.askdirectory(parent=top, title="Save all to folder")
         if not dir_str:
             return
         base = Path(dir_str)
@@ -439,14 +479,14 @@ class ShareDetailDialog:
             self._dl_in_flight -= 1
             if self._dl_in_flight <= 0:
                 self.progress.pack_forget()
-            mb.info(self._win, "Downloaded", f"Saved to:\n{path}")
+            mb.info(self.winfo_toplevel(), "Downloaded", f"Saved to:\n{path}")
 
         def _failed(exc):
             self._dl_in_flight -= 1
             if self._dl_in_flight <= 0:
                 self.progress.pack_forget()
             msg = getattr(exc, "message", None) or str(exc)
-            mb.warn(self._win, "Download failed", msg)
+            mb.warn(self.winfo_toplevel(), "Download failed", msg)
 
         run_with_progress(
             self._app_root, _do,
@@ -454,7 +494,3 @@ class ShareDetailDialog:
             on_done=_done,
             on_failed=_failed,
         )
-
-    def show_modal(self) -> None:
-        self._win.after_idle(lambda: (self._win.grab_set(), self._win.focus_force()))
-        self._win.wait_window()

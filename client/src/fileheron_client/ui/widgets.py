@@ -56,7 +56,7 @@ class PillLabel(ctk.CTkLabel):
 
     def setState(self, state: str | None) -> None:  # Qt-style camelCase
         # Preserved name from the v0.3.x API so the callsites in
-        # share_detail_dialog don't all need updating.
+        # share_detail_view don't all need updating.
         bg, fg = _PILL_COLOURS.get(state or "", ("#e5e7eb", "#374151"))
         self.configure(fg_color=bg, text_color=fg)
         self._state_value = state or ""

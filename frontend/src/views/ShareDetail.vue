@@ -1,10 +1,9 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
 
 import {
-  deleteShare,
   expireShareNow,
   getShare,
   updateShareDownloadLimit,
@@ -20,7 +19,6 @@ import type { ShareResponse } from '@/types/api'
 import { formatExpiryInSiteTime, formatInSiteTime } from '@/utils/datetime'
 
 const route = useRoute()
-const router = useRouter()
 const auth = useAuthStore()
 const ui = useUiStore()
 const { t, locale } = useI18n()
@@ -29,7 +27,6 @@ const { describe } = useApiError()
 const share = ref<ShareResponse | null>(null)
 const loading = ref(true)
 const errorMsg = ref<string | null>(null)
-const deleting = ref(false)
 const expiringNow = ref(false)
 const editingExpiry = ref(false)
 // Picker emits string (local ISO), null (= "Never" preset), or
@@ -70,29 +67,14 @@ async function load() {
   }
 }
 
-async function onRevoke() {
+async function onEndShare() {
   if (!share.value) return
-  if (!confirm(t('share_detail.revoke_confirm'))) return
-  deleting.value = true
-  try {
-    await deleteShare(share.value.id)
-    ui.pushToast(t('share_detail.revoked_toast'), 'success')
-    await router.push({ name: 'outbox' })
-  } catch (err) {
-    ui.pushToast(describe(err), 'error')
-  } finally {
-    deleting.value = false
-  }
-}
-
-async function onExpireNow() {
-  if (!share.value) return
-  if (!confirm(t('share_detail.expire_now_confirm'))) return
+  if (!confirm(t('share_detail.end_share_confirm'))) return
   expiringNow.value = true
   try {
     const { data } = await expireShareNow(share.value.id)
     share.value = data
-    ui.pushToast(t('share_detail.expire_now_toast'), 'success')
+    ui.pushToast(t('share_detail.end_share_toast'), 'success')
   } catch (err) {
     ui.pushToast(describe(err), 'error')
   } finally {
@@ -370,19 +352,11 @@ onMounted(load)
       <div v-if="canManage && share.state === 'active'" class="owner-actions">
         <button
           type="button"
-          class="fh-btn-ghost fh-btn"
-          :disabled="expiringNow"
-          @click="onExpireNow"
-        >
-          {{ expiringNow ? t('common.loading') : t('share_detail.expire_now_cta') }}
-        </button>
-        <button
-          type="button"
           class="fh-btn-danger fh-btn"
-          :disabled="deleting"
-          @click="onRevoke"
+          :disabled="expiringNow"
+          @click="onEndShare"
         >
-          {{ deleting ? t('common.loading') : t('share_detail.revoke_cta') }}
+          {{ expiringNow ? t('common.loading') : t('share_detail.end_share_cta') }}
         </button>
       </div>
     </template>

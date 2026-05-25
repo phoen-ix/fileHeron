@@ -24,7 +24,17 @@ class PillLabel(ctk.CTkLabel):
     CTk's ``corner_radius`` does the rounded edge for free — much
     cleaner than the Qt stylesheet hack the v0.3.x version used."""
 
-    def __init__(self, master, text: str = "", state: str | None = None) -> None:
+    def __init__(
+        self,
+        master,
+        text: str = "",
+        state: str | None = None,
+        **kwargs,
+    ) -> None:
+        # **kwargs forwards widget-level options (cursor, take_focus, …)
+        # to CTkLabel. v0.5.4's share_list_panel started passing
+        # cursor="hand2"; without forwarding it would raise TypeError
+        # mid-render and the swallowed exception broke the whole rows.
         bg, fg = _PILL_COLOURS.get(state or text, ("#e5e7eb", "#374151"))
         # CTkLabel doesn't take padx/pady (those are geometry-manager
         # options). The "padding" effect is achieved with corner_radius
@@ -40,6 +50,7 @@ class PillLabel(ctk.CTkLabel):
             font=ctk.CTkFont(size=11, weight="bold"),
             width=80,
             height=20,
+            **kwargs,
         )
         self._state_value = state or text
 

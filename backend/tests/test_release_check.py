@@ -68,6 +68,116 @@ async def test_release_check_caches_on_success(db, monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_run_check_filters_client_tags_from_list(db, monkeypatch):
+    """v1.1.8: GitHub /releases returns a list ordered newest-first.
+    When the most recent entries are desktop-client tags (client-v*),
+    the check must skip them and pick the most recent vX.Y.Z entry."""
+    payload = [
+        {
+            "tag_name": "client-v0.8.0",
+            "html_url": "https://github.com/.../client-v0.8.0",
+            "body": "client release notes",
+            "published_at": "2026-05-25T11:10:23Z",
+        },
+        {
+            "tag_name": "client-v0.7.2",
+            "html_url": "https://github.com/.../client-v0.7.2",
+            "body": "client release notes",
+            "published_at": "2026-05-24T10:00:00Z",
+        },
+        {
+            "tag_name": "v1.1.7",
+            "html_url": "https://github.com/.../v1.1.7",
+            "body": "## v1.1.7\n- backend fix",
+            "published_at": "2026-05-16T10:00:00Z",
+        },
+        {
+            "tag_name": "v1.1.6",
+            "html_url": "https://github.com/.../v1.1.6",
+            "body": "older backend",
+            "published_at": "2026-05-01T08:00:00Z",
+        },
+    ]
+    monkeypatch.setattr(
+        rc.httpx, "AsyncClient", lambda **_kw: _StubClient(_StubResponse(payload))
+    )
+    result = await rc.run_check(db, manual=True)
+    assert result["ok"] is True
+    assert result["latest_version"] == "v1.1.7"
+
+    cached = rc.read_cached(db)
+    assert cached["latest_version"] == "v1.1.7"
+    assert cached["latest_body"] == "## v1.1.7\n- backend fix"
+    assert cached["latest_url"].endswith("/v1.1.7")
+    assert cached["last_check_error"] is None
+
+
+@pytest.mark.asyncio
+async def test_run_check_no_backend_release_writes_error(db, monkeypatch):
+    """When the GitHub response contains only client-v* tags (e.g. a
+    fresh fork that's only published desktop builds, or per_page=30
+    doesn't reach the most recent backend tag), record a clean error
+    and DO NOT overwrite any previously-cached good version."""
+    # Prime the cache with a known-good prior version so we can prove
+    # the failure path doesn't clobber it.
+    settings_svc.set_value(
+        db, key=rc.CacheKeys.LATEST_VERSION, value="v1.1.6", actor=None
+    )
+    db.commit()
+
+    payload = [
+        {"tag_name": "client-v0.8.0", "html_url": "x", "body": "", "published_at": ""},
+        {"tag_name": "client-v0.7.2", "html_url": "x", "body": "", "published_at": ""},
+    ]
+    monkeypatch.setattr(
+        rc.httpx, "AsyncClient", lambda **_kw: _StubClient(_StubResponse(payload))
+    )
+    result = await rc.run_check(db, manual=True)
+    assert result["ok"] is False
+    assert "no backend release" in result["error"]
+
+    cached = rc.read_cached(db)
+    # Prior good value preserved — _write_cache(version=None) doesn't
+    # overwrite the kv.
+    assert cached["latest_version"] == "v1.1.6"
+    assert cached["last_check_error"] and "no backend release" in cached["last_check_error"]
+    # last_success_at must NOT advance — failures should retry next hour.
+    assert cached["last_success_at"] is None
+
+
+@pytest.mark.asyncio
+async def test_run_check_legacy_single_object_response_still_works(db, monkeypatch):
+    """Admins overriding ``updates.api_url`` to a fork's
+    ``/releases/latest`` get a single dict back, not a list. The
+    auto-detect wraps it in a one-element list so the filter still
+    finds the (single) backend tag. Backwards-compat path."""
+    payload = {
+        "tag_name": "v1.1.8",
+        "html_url": "https://example.com/fork/releases/tag/v1.1.8",
+        "body": "fork-specific notes",
+        "published_at": "2026-05-25T12:00:00Z",
+    }
+    monkeypatch.setattr(
+        rc.httpx, "AsyncClient", lambda **_kw: _StubClient(_StubResponse(payload))
+    )
+    settings_svc.set_value(
+        db,
+        key=settings_svc.Keys.UPDATES_API_URL,
+        value="https://example.com/fork/releases/latest",
+        actor=None,
+    )
+    db.commit()
+
+    result = await rc.run_check(db, manual=True)
+    assert result["ok"] is True
+    assert result["latest_version"] == "v1.1.8"
+
+    cached = rc.read_cached(db)
+    assert cached["latest_version"] == "v1.1.8"
+    assert cached["latest_body"] == "fork-specific notes"
+
+
+@pytest.mark.asyncio
 async def test_release_check_records_upstream_failure(db, monkeypatch):
     monkeypatch.setattr(
         rc.httpx,
@@ -329,10 +439,15 @@ async def test_no_notification_when_target_equals_running(db, make_user, monkeyp
 
     make_user(email="adm@test.local", role=UserRole.admin)
 
+    # v1.1.8: pin both the running version and the upstream tag to a
+    # v-prefixed value so the new backend-tag regex
+    # (``^v\d+\.\d+\.\d+``) accepts it. The test's placeholder
+    # ``0.0.0-dev`` wouldn't match.
+    monkeypatch.setattr(version_mod, "VERSION", "v1.1.7")
     monkeypatch.setattr(
         rc.httpx, "AsyncClient",
         lambda **_kw: _StubClient(_StubResponse({
-            "tag_name": version_mod.VERSION,
+            "tag_name": "v1.1.7",
             "html_url": "https://example.com/r",
             "body": "",
             "published_at": "",

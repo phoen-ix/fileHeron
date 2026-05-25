@@ -5,12 +5,19 @@ admin-configurable, and notifies admins (bell + email by default,
 per-admin overridable) when a new release is first detected.
 
 - URL: kv `updates.api_url` (default = upstream phoen-ix/fileHeron).
-  Forks repoint at their own repo's `/releases/latest` endpoint.
+  Forks repoint at their own repo's `/releases` (list) or
+  `/releases/latest` (single) — the auto-detect below handles both.
 - Cadence: kv `updates.check_mode` ∈ {auto, manual}. In `auto` the
   cron does a real check at most once per 24h; in `manual` the cron
   skips entirely and only the on-demand button works.
 - The cron stays fired hourly by ARQ; the guards live inside the
   cron body so we don't have to dynamically reschedule.
+
+v1.1.8: the default URL points at the list endpoint (not /latest) and
+we filter for tags matching ``^v\\d+\\.\\d+\\.\\d+`` so the desktop
+client's far-more-frequent ``client-v*`` tags don't get surfaced as
+backend updates. Admin overrides that still point at /releases/latest
+keep working (single-object response is wrapped in a one-element list).
 
 Cache lives in `app_settings` under `release.*`:
   - latest_version / latest_published_at / latest_body / latest_url
@@ -20,6 +27,7 @@ Cache lives in `app_settings` under `release.*`:
 from __future__ import annotations
 
 import logging
+import re
 from datetime import datetime, timedelta, timezone
 
 import httpx
@@ -34,13 +42,23 @@ from .notification import dispatch
 
 logger = logging.getLogger("fileheron.release_check")
 
-_DEFAULT_URL = "https://api.github.com/repos/phoen-ix/fileHeron/releases/latest"
+_DEFAULT_URL = (
+    "https://api.github.com/repos/phoen-ix/fileHeron/releases?per_page=30"
+)
 _HTTP_TIMEOUT_SEC = 10
 # Fudge: re-check whenever last_check_at is older than this. Slightly
 # less than 24h so the daily cadence doesn't slip by one tick because
 # the previous run ran a few seconds late.
 _AUTO_INTERVAL = timedelta(hours=23, minutes=55)
 _BODY_MAX_BYTES = 8192
+
+# Backend releases are tagged ``vX.Y.Z`` (the server-release.yml CI
+# workflow fires on ``v*``). The desktop client tags as
+# ``client-vX.Y.Z``. Without this filter GitHub's "latest" was almost
+# always a client release because the client publishes far more often.
+# Uses ``re.match`` (not fullmatch) so suffixes like ``v1.1.7-rc1``
+# or ``v1.1.7+build42`` still pass.
+_BACKEND_TAG_RE = re.compile(r"^v\d+\.\d+\.\d+")
 
 
 class CacheKeys:
@@ -75,7 +93,10 @@ def _check_mode(db: Session) -> str:
     return settings_svc.get(db, settings_svc.Keys.UPDATES_CHECK_MODE) or "auto"
 
 
-async def _fetch_latest_release(url: str) -> dict:
+async def _fetch_releases(url: str):
+    """Return the raw GitHub JSON: a list (``/releases``) or a single
+    dict (``/releases/latest``). Caller picks the right one via
+    ``_select_backend_release``."""
     headers = {
         "Accept": "application/vnd.github+json",
         "User-Agent": "fileHeron-release-check",
@@ -85,6 +106,24 @@ async def _fetch_latest_release(url: str) -> dict:
         r = await client.get(url, headers=headers)
         r.raise_for_status()
         return r.json()
+
+
+def _select_backend_release(payload) -> dict | None:
+    """Return the first release object whose ``tag_name`` matches the
+    backend tag pattern (``vX.Y.Z[…]``), or None.
+
+    Handles both response shapes — list (the new default URL) and
+    single object (legacy /releases/latest overrides). The list path
+    relies on GitHub returning releases newest-first.
+    """
+    candidates = payload if isinstance(payload, list) else [payload]
+    for entry in candidates:
+        if not isinstance(entry, dict):
+            continue
+        tag = entry.get("tag_name")
+        if isinstance(tag, str) and _BACKEND_TAG_RE.match(tag):
+            return entry
+    return None
 
 
 def _write_cache(
@@ -217,7 +256,7 @@ async def run_check(db: Session, *, manual: bool) -> dict:
 
     url = _configured_url(db)
     try:
-        payload = await _fetch_latest_release(url)
+        payload = await _fetch_releases(url)
     except Exception as e:
         msg = f"{type(e).__name__}: {str(e)[:200]}"
         logger.warning("release_check: upstream call failed: %s", msg)
@@ -226,21 +265,28 @@ async def run_check(db: Session, *, manual: bool) -> dict:
         )
         return {"ok": False, "error": msg}
 
-    version = payload.get("tag_name")
-    if not version or not isinstance(version, str):
-        msg = "missing tag_name in GitHub response"
+    match = _select_backend_release(payload)
+    if match is None:
+        # No vX.Y.Z tag in the response — either the repo has only
+        # client-v* tags currently (early in a fresh-fork's lifetime)
+        # or per_page=30 doesn't reach back far enough. Cache the
+        # error so the UI shows something, leave latest_version alone
+        # (don't overwrite a previously-good cached version), and
+        # _too_soon won't advance — the next hourly tick retries.
+        msg = "no backend release (vX.Y.Z) in GitHub response"
         logger.warning("release_check: %s", msg)
         _write_cache(
             db, version=None, published_at=None, body=None, url=None, error=msg
         )
         return {"ok": False, "error": msg}
 
-    release_url = payload.get("html_url") or ""
+    version = match["tag_name"]
+    release_url = match.get("html_url") or ""
     _write_cache(
         db,
         version=version,
-        published_at=payload.get("published_at") or "",
-        body=payload.get("body") or "",
+        published_at=match.get("published_at") or "",
+        body=match.get("body") or "",
         url=release_url,
         error=None,
     )

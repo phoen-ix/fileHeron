@@ -26,6 +26,36 @@ def login(
     return out
 
 
+def login_with_recovery(
+    api: ApiClient, *, email: str, password: str, recovery_code: str
+) -> LoginResponse:
+    """v0.7.0: sign in using a one-time recovery code instead of TOTP.
+
+    Backend route ``POST /api/auth/login/recovery`` consumes one recovery
+    code per call (single-use; the user has 10 from 2FA enrolment). Same
+    LoginResponse shape as ``login()``. Error envelope codes the user
+    surface should know about:
+
+    - ``INVALID_RECOVERY`` (401) — code is wrong or already used
+    - ``INVALID_CREDENTIALS`` (401) — wrong email/password
+    - ``RATE_LIMITED`` (429) — IP exceeded the sliding window
+    - ``ACCOUNT_LOCKED`` (401) — soft lockout from too many failures
+    """
+    body = {
+        "email": email,
+        "password": password,
+        "recovery_code": recovery_code,
+    }
+    resp = api.request(
+        "POST", "/api/auth/login/recovery", json=body, retry_on_401=False,
+    )
+    if resp.status_code != 200:
+        raise _envelope_from_response(resp)
+    out = LoginResponse.model_validate(resp.json())
+    api.set_access_token(out.access_token)
+    return out
+
+
 def refresh(api: ApiClient) -> RefreshResponse:
     out = api.request_or_raise("POST", "/api/auth/refresh")
     parsed = RefreshResponse.model_validate(out)

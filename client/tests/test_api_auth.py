@@ -122,3 +122,76 @@ def test_api_token_path_does_not_attempt_refresh():
         auth_api.me(api)
     assert refresh_route.call_count == 0
     assert me_route.call_count == 1
+
+
+# v0.7.0 recovery-code login --------------------------------------------------
+
+
+@respx.mock
+def test_login_with_recovery_happy_path():
+    captured = {}
+
+    def _on_call(request: httpx.Request) -> httpx.Response:
+        import json as _j
+
+        captured.update(_j.loads(request.content))
+        return httpx.Response(
+            200, json={"access_token": "ACCESS", "expires_in_seconds": 900}
+        )
+
+    respx.post(f"{SERVER}/api/auth/login/recovery").mock(side_effect=_on_call)
+    api = ApiClient(SERVER)
+    out = auth_api.login_with_recovery(
+        api, email="a@b.c", password="pw", recovery_code="abc123def456",
+    )
+    assert out.access_token == "ACCESS"
+    assert api.access_token == "ACCESS"
+    assert captured == {
+        "email": "a@b.c",
+        "password": "pw",
+        "recovery_code": "abc123def456",
+    }
+
+
+@respx.mock
+def test_login_with_recovery_invalid_code_raises_envelope():
+    respx.post(f"{SERVER}/api/auth/login/recovery").mock(
+        return_value=httpx.Response(
+            401,
+            json={
+                "error": "Recovery code is invalid or already used.",
+                "code": "INVALID_RECOVERY",
+                "details": {},
+                "request_id": "abc",
+            },
+        )
+    )
+    api = ApiClient(SERVER)
+    with pytest.raises(ApiError) as ei:
+        auth_api.login_with_recovery(
+            api, email="a@b.c", password="pw", recovery_code="bad-code",
+        )
+    assert ei.value.code == "INVALID_RECOVERY"
+    assert ei.value.status_code == 401
+
+
+@respx.mock
+def test_login_with_recovery_rate_limited_propagates():
+    respx.post(f"{SERVER}/api/auth/login/recovery").mock(
+        return_value=httpx.Response(
+            429,
+            json={
+                "error": "Too many login attempts.",
+                "code": "RATE_LIMITED",
+                "details": {},
+                "request_id": "xyz",
+            },
+        )
+    )
+    api = ApiClient(SERVER)
+    with pytest.raises(ApiError) as ei:
+        auth_api.login_with_recovery(
+            api, email="a@b.c", password="pw", recovery_code="abc123def456",
+        )
+    assert ei.value.code == "RATE_LIMITED"
+    assert ei.value.status_code == 429

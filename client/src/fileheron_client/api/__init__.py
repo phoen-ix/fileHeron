@@ -1,5 +1,5 @@
 from .client import ApiClient, ApiError
-from .auth import login, refresh, logout, me
+from .auth import login, login_with_recovery, refresh, logout, me
 from .files import download_file, get_download_url
 from .groups import list_recipient_groups
 from .shares import (
@@ -18,6 +18,7 @@ __all__ = [
     "ApiClient",
     "ApiError",
     "login",
+    "login_with_recovery",
     "refresh",
     "logout",
     "me",

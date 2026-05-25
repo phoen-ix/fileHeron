@@ -84,9 +84,38 @@ class LoginWindow:
         ctk.CTkLabel(self._pw_frame, text="Password", anchor="w").pack(fill="x")
         self.password_var = ctk.StringVar()
         ctk.CTkEntry(self._pw_frame, textvariable=self.password_var, show="*").pack(fill="x", pady=(0, 8))
-        ctk.CTkLabel(self._pw_frame, text="TOTP (only if asked)", anchor="w").pack(fill="x")
+
+        # v0.7.0: second-factor row. TOTP by default; "Use recovery
+        # code instead" link below swaps it for a recovery-code entry
+        # that calls POST /api/auth/login/recovery. Without this a
+        # user who lost their TOTP device had to fall back to the SPA.
+        self._second_factor_label = ctk.CTkLabel(
+            self._pw_frame, text="TOTP (only if asked)", anchor="w",
+        )
+        self._second_factor_label.pack(fill="x")
         self.totp_var = ctk.StringVar()
-        ctk.CTkEntry(self._pw_frame, textvariable=self.totp_var, placeholder_text="6-digit code").pack(fill="x", pady=(0, 8))
+        self.recovery_var = ctk.StringVar()
+        self._totp_entry = ctk.CTkEntry(
+            self._pw_frame, textvariable=self.totp_var,
+            placeholder_text="6-digit code",
+        )
+        self._recovery_entry = ctk.CTkEntry(
+            self._pw_frame, textvariable=self.recovery_var,
+            placeholder_text="recovery code (one-time use)",
+        )
+        self._totp_entry.pack(fill="x", pady=(0, 4))
+        # _recovery_entry packed only when in recovery mode.
+
+        self._use_recovery = False
+        self._recovery_toggle = ctk.CTkLabel(
+            self._pw_frame,
+            text="Use recovery code instead",
+            text_color=("#1e6fbf", "#5fa8ff"),
+            cursor="hand2",
+            anchor="w",
+        )
+        self._recovery_toggle.pack(fill="x", pady=(0, 8))
+        self._recovery_toggle.bind("<Button-1>", self._on_recovery_toggle)
 
         # API-token mode
         ctk.CTkLabel(self._tok_frame, text="API token", anchor="w").pack(fill="x")
@@ -151,6 +180,28 @@ class LoginWindow:
         self._cfg.auth_kind = "api_token" if current_kind != "api_token" else "password"
         self._show_mode(self._cfg.auth_kind)
 
+    def _on_recovery_toggle(self, _event=None) -> None:
+        """v0.7.0: swap TOTP entry for recovery-code entry and back."""
+        self._use_recovery = not self._use_recovery
+        if self._use_recovery:
+            self._totp_entry.pack_forget()
+            self._recovery_entry.pack(
+                fill="x", pady=(0, 4),
+                before=self._recovery_toggle,
+            )
+            self._second_factor_label.configure(text="Recovery code")
+            self._recovery_toggle.configure(text="Use TOTP code instead")
+            self.totp_var.set("")
+        else:
+            self._recovery_entry.pack_forget()
+            self._totp_entry.pack(
+                fill="x", pady=(0, 4),
+                before=self._recovery_toggle,
+            )
+            self._second_factor_label.configure(text="TOTP (only if asked)")
+            self._recovery_toggle.configure(text="Use recovery code instead")
+            self.recovery_var.set("")
+
     def _on_signin(self) -> None:
         self.error_var.set("")
         # v0.4.3: snapshot ALL Tk variables on the main thread BEFORE
@@ -163,6 +214,8 @@ class LoginWindow:
         email = self.email_var.get().strip()
         password = self.password_var.get()
         totp = self.totp_var.get().strip() or None
+        recovery = self.recovery_var.get().strip() or None
+        use_recovery = self._use_recovery
         api_token = self.api_token_var.get().strip()
         if not server:
             self._show_error("Server URL is required.")
@@ -173,6 +226,9 @@ class LoginWindow:
             return
         if kind == "password" and not password:
             self._show_error("Password is required.")
+            return
+        if kind == "password" and use_recovery and not recovery:
+            self._show_error("Recovery code is required.")
             return
         if kind == "api_token" and not api_token:
             self._show_error("API token is required.")
@@ -192,10 +248,17 @@ class LoginWindow:
                 trace("_attempt done (api_token)")
                 return api, me, kind
             api = ApiClient(server)
-            trace("calling api_pkg.login")
-            api_pkg.login(
-                api, email=email, password=password, totp_code=totp,
-            )
+            if use_recovery:
+                trace("calling api_pkg.login_with_recovery")
+                api_pkg.login_with_recovery(
+                    api, email=email, password=password,
+                    recovery_code=recovery,
+                )
+            else:
+                trace("calling api_pkg.login")
+                api_pkg.login(
+                    api, email=email, password=password, totp_code=totp,
+                )
             trace("login OK; calling api_pkg.me")
             me = api_pkg.me(api)
             trace("_attempt done (password)")
@@ -258,12 +321,20 @@ class LoginWindow:
             if isinstance(exc, ApiError):
                 if exc.code == "TOTP_REQUIRED":
                     self._show_error(
-                        "Two-factor code required. Enter the 6-digit code from your authenticator."
+                        "Two-factor code required. Enter the 6-digit code "
+                        "from your authenticator, or use a recovery code."
                     )
                     return
                 if exc.code == "INVALID_TOTP":
                     self._show_error("Invalid TOTP code. Try again.")
                     self.totp_var.set("")
+                    return
+                if exc.code == "INVALID_RECOVERY":
+                    self._show_error(
+                        "Recovery code is invalid or already used. "
+                        "Each code can only be used once."
+                    )
+                    self.recovery_var.set("")
                     return
                 self._show_error(exc.message or "Sign-in failed.")
                 return

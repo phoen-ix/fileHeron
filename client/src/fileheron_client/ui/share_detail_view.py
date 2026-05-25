@@ -133,20 +133,20 @@ class ShareDetailView(ctk.CTkFrame):
         self.edit_expiry_btn = ctk.CTkButton(
             btns, text="Edit expiry…", command=self._edit_expiry, width=110,
         )
-        self.expire_now_btn = ctk.CTkButton(
-            btns, text="Expire now", command=self._expire_now, width=110,
-        )
-        self.revoke_btn = ctk.CTkButton(
-            btns, text="Revoke", command=self._revoke, width=90,
+        # v0.6.1: single destructive "End share" replaces the old
+        # Revoke + Expire-now pair. Same backend call as before
+        # (POST /api/shares/{id}/expire) — state → expired, files
+        # hard-deleted. Red styling because this is now the only
+        # destructive manager action.
+        self.end_share_btn = ctk.CTkButton(
+            btns, text="End share", command=self._end_share, width=110,
             fg_color="#991b1b", hover_color="#7f1d1d",
         )
         # Initially hidden; _refresh_action_visibility shows them.
         self.edit_expiry_btn.pack(side="left", padx=(0, 4))
-        self.expire_now_btn.pack(side="left", padx=4)
-        self.revoke_btn.pack(side="left", padx=(4, 0))
+        self.end_share_btn.pack(side="left", padx=4)
         self.edit_expiry_btn.pack_forget()
-        self.expire_now_btn.pack_forget()
-        self.revoke_btn.pack_forget()
+        self.end_share_btn.pack_forget()
 
         # Right-aligned button. "Close" gone — Back at the top replaces it.
         ctk.CTkButton(
@@ -294,7 +294,7 @@ class ShareDetailView(ctk.CTkFrame):
     def _refresh_action_visibility(self) -> None:
         manage = self._can_manage()
         active = self._share is not None and self._share.state == "active"
-        for btn in (self.edit_expiry_btn, self.expire_now_btn, self.revoke_btn):
+        for btn in (self.edit_expiry_btn, self.end_share_btn):
             if manage:
                 btn.pack(side="left", padx=(0, 4)) if btn is self.edit_expiry_btn else btn.pack(side="left", padx=4)
             else:
@@ -303,48 +303,23 @@ class ShareDetailView(ctk.CTkFrame):
 
     # ---- Manager actions ----
 
-    def _revoke(self) -> None:
+    def _end_share(self) -> None:
+        """v0.6.1: single destructive action — calls expire-now
+        (state → expired, files hard-deleted, uploader quota released).
+        Replaces the old separate Revoke and Expire-now buttons."""
         s = self._share
         if not s:
             return
         top = self.winfo_toplevel()
         if not mb.confirm(
             top,
-            "Revoke share",
+            "End share",
             (
-                f"Revoke this share? Files become inaccessible to the recipient.\n\n"
+                f"End this share now and delete all uploaded files? "
+                f"This cannot be undone.\n\n"
                 f"Subject: {s.effective_subject or '(no subject)'}"
             ),
-            ok_text="Revoke",
-        ):
-            return
-
-        def _do():
-            api_pkg.revoke_share(self._api, s.id)
-
-        def _done(_result):
-            mb.info(top, "Revoked", "Share revoked.")
-            # Drill out — the list panel's _drill_out refreshes the
-            # list, so we don't separately fire on_mutated here.
-            self._on_back()
-
-        def _failed(exc):
-            msg = getattr(exc, "message", None) or str(exc)
-            mb.warn(top, "Revoke failed", msg)
-
-        run_in_background(self._app_root, _do, on_done=_done, on_failed=_failed)
-
-    def _expire_now(self) -> None:
-        s = self._share
-        if not s:
-            return
-        top = self.winfo_toplevel()
-        if not mb.confirm(
-            top,
-            "Expire now",
-            "Expire this share immediately? The file bytes are hard-"
-            "deleted from disk; this cannot be undone.",
-            ok_text="Expire",
+            ok_text="End share",
         ):
             return
 
@@ -365,11 +340,11 @@ class ShareDetailView(ctk.CTkFrame):
             self.state_pill.setState(updated.state)
             self.state_pill.setText(updated.state)
             self._refresh_action_visibility()
-            mb.info(top, "Expired", "Share expired.")
+            mb.info(top, "Ended", "Share ended and files deleted.")
 
         def _failed(exc):
             msg = getattr(exc, "message", None) or str(exc)
-            mb.warn(top, "Expire failed", msg)
+            mb.warn(top, "End share failed", msg)
 
         run_in_background(self._app_root, _do, on_done=_done, on_failed=_failed)
 

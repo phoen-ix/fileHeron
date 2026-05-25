@@ -101,12 +101,16 @@ def delete_share(api: ApiClient, share_id: str) -> None:
 
 
 def revoke_share(api: ApiClient, share_id: str) -> None:
-    """Revoke an active share. Files become inaccessible to recipients;
-    audit row `share_revoked` is written server-side. 204 No Content.
+    """Revoke an active share. Files become inaccessible to recipients
+    but stay on disk; audit row `share_revoked` is written server-side.
+    204 No Content.
 
     Alias for ``delete_share`` — the backend routes DELETE /shares/{id}
-    to ``services.share.revoke_share`` (no hard-delete). Kept as a
-    separate name because the SPA-mirrored UI button reads "Revoke".
+    to ``services.share.revoke_share`` (no hard-delete). The desktop
+    client and SPA UIs collapsed to a single "End share" button (calls
+    ``expire_share_now``, which hard-deletes bytes) in v0.6.1 — this
+    wrapper stays for API-token-driven scripts that still want the
+    soft-revoke semantics.
     """
     delete_share(api, share_id)
 

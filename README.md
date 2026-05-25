@@ -363,6 +363,8 @@ docker compose up -d --build
 
 Alembic migrations run from the backend `entrypoint.sh` on every boot — idempotent, safe to re-run. Migrations are written with `_has_table` / `_has_column` / `_has_index` helpers so a partial-failure mid-migration can be re-run without manual cleanup. Roll-forward only — there is no `downgrade` story; backup before upgrading and restore if needed.
 
+**In-app self-update.** `/admin/system` polls GitHub for the most recent backend release every 24h (admin-configurable to `manual`) and surfaces an "Update available" banner + an **Update** button that delegates to the updater shim/executor pair. The release check filters by `^v\d+\.\d+\.\d+` — `client-v*` desktop-client tags do not surface as backend updates. Per-version notes shipped from `softprops/action-gh-release` populate the banner body so admins can read changelog before clicking. **Previous version** is recorded automatically for a one-click rollback (`updater-executor/run.py` stores the prior `FH_TAG` on every successful update).
+
 ## Health checks
 
 - `GET /api/health` returns `{"status": "ok"}` when everything's green; `{"status": "degraded", "degraded": ["redis"]}` when a non-fatal subsystem is down. ClamAV being down marks degraded but new uploads still happen (they queue for scan when it returns).

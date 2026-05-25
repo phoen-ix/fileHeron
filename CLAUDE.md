@@ -338,6 +338,7 @@ Page-load reveal staged via `.fh-rise[data-stagger]` classes. Heron line-art on 
 - **Signed download URL pattern** — browser `<a href>` can't carry a bearer; `GET /api/files/{id}/download-url` issues a short-lived HMAC token (`<user_id>.<exp>.<sig_b64url>`) consumed via `?dt=` on the download endpoint. Ungated `download_router` for the `?dt=` path; gated `router` for bearer.
 - **TEST_ACCOUNT_*** env vars are used by `scripts/seed_dev.py` + `entrypoint.sh` — not dead. `OIDC_REDIRECT_URI` was the dead one (deleted).
 - **ClamAV `clamd` slow first boot** — full `freshclam` mirror sync (~150 MB). Subsequent updates incremental.
+- **Self-update banner filters by `^v\d+\.\d+\.\d+`** — `services/release_check.py` only counts backend-tagged releases. Default URL is `https://api.github.com/repos/.../releases?per_page=30` (list, newest-first). Admin overrides at `updates.api_url` can stay pointed at `/releases/latest` (single object) — auto-detect wraps it. Without the filter, GitHub's "latest" was almost always a `client-v*` desktop release (40+ tags vs ~10 backend tags). Bug surfaced in v1.1.7 as "Update available: client-v0.5.4" on the admin System health page; v1.1.8 fixed it.
 
 ## Desktop client
 

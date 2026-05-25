@@ -18,11 +18,13 @@ from typing import Optional, Tuple
 import customtkinter as ctk
 from tkcalendar import DateEntry
 
+from ..i18n import t
+
 
 class ExpiryDialog:
     def __init__(self, parent, current: Optional[datetime] = None) -> None:
         self._win = ctk.CTkToplevel(parent)
-        self._win.title("Edit expiry")
+        self._win.title(t("expiry_dialog.title"))
         self._win.geometry("460x300")
         self._win.resizable(False, False)
         self._win.transient(parent)
@@ -34,9 +36,7 @@ class ExpiryDialog:
         outer.pack(fill="both", expand=True, padx=18, pady=18)
 
         ctk.CTkLabel(
-            outer,
-            text="Set a new expiry datetime, or check Never.",
-            anchor="w",
+            outer, text=t("expiry_dialog.intro"), anchor="w",
         ).pack(fill="x", pady=(0, 12))
 
         # tkcalendar.DateEntry is date-only; pair with HH/MM CTk entries
@@ -45,7 +45,7 @@ class ExpiryDialog:
         date_row = ctk.CTkFrame(outer, fg_color="transparent")
         date_row.pack(fill="x", pady=(0, 8))
 
-        ctk.CTkLabel(date_row, text="Date", width=60, anchor="w").pack(side="left")
+        ctk.CTkLabel(date_row, text=t("expiry_dialog.date_label"), width=60, anchor="w").pack(side="left")
         # DateEntry's mindate=today blocks past picks at the picker level.
         self._date = DateEntry(
             date_row,
@@ -57,7 +57,7 @@ class ExpiryDialog:
         )
         self._date.pack(side="left", padx=(0, 8))
 
-        ctk.CTkLabel(date_row, text="Time", width=40, anchor="w").pack(side="left", padx=(8, 0))
+        ctk.CTkLabel(date_row, text=t("expiry_dialog.time_label"), width=40, anchor="w").pack(side="left", padx=(8, 0))
         self._hour_var = ctk.StringVar(value=f"{default.hour:02d}")
         ctk.CTkEntry(date_row, textvariable=self._hour_var, width=50).pack(side="left")
         ctk.CTkLabel(date_row, text=":").pack(side="left", padx=4)
@@ -67,25 +67,21 @@ class ExpiryDialog:
         self._never_var = ctk.BooleanVar(value=(current is None))
         ctk.CTkCheckBox(
             outer,
-            text="Never expires",
+            text=t("expiry_dialog.never_label"),
             variable=self._never_var,
             command=self._on_never_toggled,
         ).pack(anchor="w", pady=(8, 4))
 
         ctk.CTkLabel(
-            outer,
-            text=(
-                "When checked, the share is never auto-deleted by the cron. "
-                "Revoke it manually when you're done."
-            ),
+            outer, text=t("expiry_dialog.never_help"),
             wraplength=420, justify="left", text_color="gray",
         ).pack(fill="x", pady=(0, 12))
 
         btn_row = ctk.CTkFrame(outer, fg_color="transparent")
         btn_row.pack(fill="x")
-        ctk.CTkButton(btn_row, text="OK", command=self._on_ok, width=90).pack(side="right")
+        ctk.CTkButton(btn_row, text=t("common.ok"), command=self._on_ok, width=90).pack(side="right")
         ctk.CTkButton(
-            btn_row, text="Cancel", command=self._win.destroy, width=90, fg_color="gray",
+            btn_row, text=t("common.cancel"), command=self._win.destroy, width=90, fg_color="gray",
         ).pack(side="right", padx=(0, 8))
 
         self._win.bind("<Return>", lambda _e: self._on_ok())
@@ -115,13 +111,21 @@ class ExpiryDialog:
         except ValueError:
             # Cheap inline validation — clear the result and bail.
             from ._messagebox import warn
-            warn(self._win, "Invalid time", "Use 00-23 for hour and 00-59 for minute.")
+            warn(
+                self._win,
+                t("expiry_dialog.err_invalid_time_title"),
+                t("expiry_dialog.err_invalid_time_body"),
+            )
             return
         d = self._date.get_date()
         chosen = datetime(d.year, d.month, d.day, hh, mm)
         if chosen <= datetime.now():
             from ._messagebox import warn
-            warn(self._win, "Past datetime", "Pick a datetime in the future.")
+            warn(
+                self._win,
+                t("expiry_dialog.err_past_title"),
+                t("expiry_dialog.err_past_body"),
+            )
             return
         self._result = ("set", chosen)
         self._win.destroy()

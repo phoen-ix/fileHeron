@@ -24,6 +24,12 @@ HERE = Path(SPECPATH).resolve()  # noqa: F821
 
 datas = [
     (str(HERE / "assets"), "assets"),
+    # v0.8.0: i18n locale JSON files. Loaded at runtime via
+    # importlib.resources (paths resolve identically in dev + bundle).
+    (
+        str(HERE / "src" / "fileheron_client" / "locales"),
+        "fileheron_client/locales",
+    ),
 ]
 
 hiddenimports = [

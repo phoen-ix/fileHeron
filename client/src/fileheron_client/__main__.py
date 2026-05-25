@@ -37,7 +37,8 @@ from datetime import datetime
 from pathlib import Path
 
 from fileheron_client._trace import init as init_trace, trace
-from fileheron_client.config import load_config
+from fileheron_client.config import load_config, save_config
+from fileheron_client.i18n import set_locale
 from fileheron_client.ui._async import init_async
 from fileheron_client.ui.app import build_root
 from fileheron_client.ui.login_window import LoginWindow
@@ -106,6 +107,11 @@ def main(argv: list[str] | None = None) -> int:
     # hooks above capture it.
     cfg = load_config()
 
+    # v0.8.0: apply the cached locale (from the previous sign-in) so the
+    # login window already renders in the user's language. Updated below
+    # in _on_signin once we have the server-side users.locale.
+    set_locale(cfg.locale or "en")
+
     # Layer 2 (gated on cfg.enable_diagnostic_logging, default OFF):
     # trace.log breadcrumbs + app.log + heartbeat polling.
     diagnostics_on = bool(cfg.enable_diagnostic_logging)
@@ -164,7 +170,21 @@ def main(argv: list[str] | None = None) -> int:
         # destroy) left the root in a stuck-withdrawn state on Windows
         # — login's transient teardown swallowed the deiconify.
         nonlocal main_window
-        trace(f"_on_signin called (role={me.role})")
+        trace(f"_on_signin called (role={me.role}, locale={me.locale!r})")
+        # v0.8.0: apply + cache the server-side locale so the main
+        # window renders correctly and subsequent launches start in
+        # the right language. Failure to persist isn't fatal — the
+        # in-memory set_locale call has already taken effect.
+        try:
+            set_locale(me.locale or "en")
+            if cfg.locale != (me.locale or ""):
+                cfg.locale = me.locale or ""
+                try:
+                    save_config(cfg)
+                except Exception as exc:
+                    trace(f"save_config (locale) failed: {exc!r}")
+        except Exception as exc:
+            trace(f"locale wiring failed (non-fatal): {exc!r}")
         try:
             main_window = MainWindow(root, api, me)
             trace("MainWindow constructed (will show after login destroyed)")

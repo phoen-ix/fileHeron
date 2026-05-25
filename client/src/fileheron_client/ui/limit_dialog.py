@@ -14,11 +14,13 @@ from typing import Optional, Tuple
 
 import customtkinter as ctk
 
+from ..i18n import t
+
 
 class LimitDialog:
     def __init__(self, parent, current: Optional[int] = None) -> None:
         self._win = ctk.CTkToplevel(parent)
-        self._win.title("Edit download limit")
+        self._win.title(t("limit_dialog.title"))
         self._win.geometry("420x260")
         self._win.resizable(False, False)
         self._win.transient(parent)
@@ -29,50 +31,41 @@ class LimitDialog:
         outer.pack(fill="both", expand=True, padx=18, pady=18)
 
         ctk.CTkLabel(
-            outer,
-            text=(
-                "Cap the total downloads across all authenticated "
-                "recipients. Public-link downloads have their own "
-                "separate budget."
-            ),
+            outer, text=t("limit_dialog.intro"),
             wraplength=380, justify="left",
         ).pack(fill="x", pady=(0, 12))
 
         row = ctk.CTkFrame(outer, fg_color="transparent")
         row.pack(fill="x", pady=(0, 8))
-        ctk.CTkLabel(row, text="New limit", width=80, anchor="w").pack(side="left")
+        ctk.CTkLabel(row, text=t("limit_dialog.new_limit_label"), width=80, anchor="w").pack(side="left")
         # Pre-fill with the current value if set, else placeholder "e.g. 10".
         self._limit_var = ctk.StringVar(
             value="" if current is None else str(current)
         )
         self._limit_entry = ctk.CTkEntry(
             row, textvariable=self._limit_var, width=120,
-            placeholder_text="e.g. 10",
+            placeholder_text=t("limit_dialog.limit_placeholder"),
         )
         self._limit_entry.pack(side="left")
 
         self._unlimited_var = ctk.BooleanVar(value=(current is None))
         ctk.CTkCheckBox(
             outer,
-            text="Unlimited",
+            text=t("limit_dialog.unlimited_label"),
             variable=self._unlimited_var,
             command=self._on_unlimited_toggled,
         ).pack(anchor="w", pady=(8, 4))
 
         ctk.CTkLabel(
-            outer,
-            text=(
-                "When checked, no per-share cap applies. The user "
-                "quota and public-link cap (if any) still do."
-            ),
+            outer, text=t("limit_dialog.unlimited_help"),
             wraplength=380, justify="left", text_color="gray",
         ).pack(fill="x", pady=(0, 12))
 
         btn_row = ctk.CTkFrame(outer, fg_color="transparent")
         btn_row.pack(fill="x")
-        ctk.CTkButton(btn_row, text="OK", command=self._on_ok, width=90).pack(side="right")
+        ctk.CTkButton(btn_row, text=t("common.ok"), command=self._on_ok, width=90).pack(side="right")
         ctk.CTkButton(
-            btn_row, text="Cancel", command=self._win.destroy,
+            btn_row, text=t("common.cancel"), command=self._win.destroy,
             width=90, fg_color="gray",
         ).pack(side="right", padx=(0, 8))
 
@@ -103,8 +96,9 @@ class LimitDialog:
         except ValueError:
             from ._messagebox import warn
             warn(
-                self._win, "Invalid limit",
-                "Enter a positive integer (or check Unlimited).",
+                self._win,
+                t("limit_dialog.err_invalid_title"),
+                t("limit_dialog.err_invalid_body"),
             )
             return
         self._result = ("set", n)

@@ -15,6 +15,7 @@ from tkinterdnd2 import DND_FILES
 
 from .. import api as api_pkg
 from ..api import ApiClient, ApiError
+from ..i18n import t
 from ..models import ShareResponse
 from . import _messagebox as mb
 from .recipient_picker import RecipientPickerWidget
@@ -57,14 +58,14 @@ class UploadPanel(ctk.CTkFrame):
 
         action_row = ctk.CTkFrame(outer, fg_color="transparent")
         action_row.pack(side="bottom", fill="x", pady=(6, 0))
-        ctk.CTkButton(action_row, text="Add files…", command=self._on_add).pack(side="left")
+        ctk.CTkButton(action_row, text=t("upload.add_files_btn"), command=self._on_add).pack(side="left")
         ctk.CTkButton(
-            action_row, text="Clear list", command=self._on_clear_files,
+            action_row, text=t("upload.clear_list_btn"), command=self._on_clear_files,
             fg_color="gray",
         ).pack(side="left", padx=(8, 0))
         self.send_btn = ctk.CTkButton(
-            action_row, text="Create share + upload",
-            command=self._on_send, width=180,
+            action_row, text=t("upload.send_btn"),
+            command=self._on_send, width=220,
         )
         self.send_btn.pack(side="right")
         self.status_var = ctk.StringVar(value="")
@@ -75,14 +76,14 @@ class UploadPanel(ctk.CTkFrame):
         # ---- Top form ----
 
         # Subject + Message (full width)
-        ctk.CTkLabel(outer, text="Subject", anchor="w").pack(fill="x")
+        ctk.CTkLabel(outer, text=t("upload.subject_label"), anchor="w").pack(fill="x")
         self.subject_var = ctk.StringVar()
         ctk.CTkEntry(
             outer, textvariable=self.subject_var,
-            placeholder_text="(optional — defaults to first filename)",
+            placeholder_text=t("upload.subject_placeholder"),
         ).pack(fill="x", pady=(0, 6))
 
-        ctk.CTkLabel(outer, text="Message", anchor="w").pack(fill="x")
+        ctk.CTkLabel(outer, text=t("upload.message_label"), anchor="w").pack(fill="x")
         self.message_text = ctk.CTkTextbox(outer, height=50)
         self.message_text.pack(fill="x", pady=(0, 8))
 
@@ -94,7 +95,7 @@ class UploadPanel(ctk.CTkFrame):
 
         left_col = ctk.CTkFrame(two_col, fg_color="transparent")
         left_col.grid(row=0, column=0, sticky="nsew", padx=(0, 8))
-        ctk.CTkLabel(left_col, text="Recipients", anchor="w").pack(fill="x")
+        ctk.CTkLabel(left_col, text=t("upload.recipients_label"), anchor="w").pack(fill="x")
         # v0.5.1: bordered group around the recipients widget so the
         # section reads as one block (matches Expires + Public link).
         rec_box = ctk.CTkFrame(left_col, border_width=1, fg_color="transparent")
@@ -112,7 +113,7 @@ class UploadPanel(ctk.CTkFrame):
 
         # Files: label + scrollable list. Expands to fill leftover
         # space between the form above and the pinned action row.
-        ctk.CTkLabel(outer, text="Files", anchor="w").pack(fill="x")
+        ctk.CTkLabel(outer, text=t("upload.files_label"), anchor="w").pack(fill="x")
         self._file_list_frame = ctk.CTkScrollableFrame(
             outer, fg_color=("gray90", "gray20"), height=80,
         )
@@ -129,7 +130,7 @@ class UploadPanel(ctk.CTkFrame):
         self._file_list_frame.bind("<Button-1>", lambda _e: self._on_add())
         self._file_list_frame.configure(cursor="hand2")
 
-        self._empty_var = ctk.StringVar(value="(drop files here or click to browse)")
+        self._empty_var = ctk.StringVar(value=t("upload.files_empty"))
         self._empty_label = ctk.CTkLabel(
             self._file_list_frame, textvariable=self._empty_var, text_color="gray",
             cursor="hand2",
@@ -138,7 +139,7 @@ class UploadPanel(ctk.CTkFrame):
         self._empty_label.pack(pady=12)
 
     def _build_expiry_section(self, parent) -> None:
-        ctk.CTkLabel(parent, text="Expires", anchor="w").pack(fill="x")
+        ctk.CTkLabel(parent, text=t("upload.expires_label"), anchor="w").pack(fill="x")
         # v0.5.1: bordered group around the expiry controls (date,
         # Never checkbox, per-share download limit).
         box = ctk.CTkFrame(parent, border_width=1, fg_color="transparent")
@@ -166,7 +167,7 @@ class UploadPanel(ctk.CTkFrame):
 
         self._never_var = ctk.BooleanVar(value=False)
         ctk.CTkCheckBox(
-            inner, text="Never expires (revoke manually)",
+            inner, text=t("upload.never_label"),
             variable=self._never_var, command=self._on_never_toggled,
         ).pack(anchor="w", pady=(4, 4))
 
@@ -175,11 +176,11 @@ class UploadPanel(ctk.CTkFrame):
         # from the public-link limit further down. Blank = unlimited.
         limit_row = ctk.CTkFrame(inner, fg_color="transparent")
         limit_row.pack(fill="x", anchor="w")
-        ctk.CTkLabel(limit_row, text="Download limit", anchor="w").pack(side="left")
+        ctk.CTkLabel(limit_row, text=t("upload.download_limit_label"), anchor="w").pack(side="left")
         self._share_limit = ctk.StringVar(value="")
         ctk.CTkEntry(
             limit_row, textvariable=self._share_limit,
-            placeholder_text="∞", width=80,
+            placeholder_text=t("upload.download_limit_placeholder"), width=80,
         ).pack(side="left", padx=(8, 0))
 
     def _on_never_toggled(self) -> None:
@@ -197,7 +198,7 @@ class UploadPanel(ctk.CTkFrame):
         # always-greyed-out controls — pack/forget instead of
         # disable/enable). _collect_public_link() returns None when
         # the checkbox is off, so the submit path is unchanged.
-        ctk.CTkLabel(parent, text="Public link", anchor="w").pack(fill="x")
+        ctk.CTkLabel(parent, text=t("upload.public_link_label"), anchor="w").pack(fill="x")
         box = ctk.CTkFrame(parent, border_width=1, fg_color="transparent")
         box.pack(fill="x", pady=(0, 4))
         inner = ctk.CTkFrame(box, fg_color="transparent")
@@ -205,7 +206,7 @@ class UploadPanel(ctk.CTkFrame):
 
         self._pl_enabled = ctk.BooleanVar(value=False)
         ctk.CTkCheckBox(
-            inner, text="Include a public link",
+            inner, text=t("upload.include_public_link"),
             variable=self._pl_enabled, command=self._on_public_link_toggled,
         ).pack(anchor="w")
 
@@ -213,24 +214,25 @@ class UploadPanel(ctk.CTkFrame):
         self._pl_fields_row = ctk.CTkFrame(inner, fg_color="transparent")
         # NOT packed here — _on_public_link_toggled controls visibility.
 
-        ctk.CTkLabel(self._pl_fields_row, text="Password", anchor="w").pack(side="left", padx=(0, 4))
+        ctk.CTkLabel(self._pl_fields_row, text=t("upload.pl_password"), anchor="w").pack(side="left", padx=(0, 4))
         self._pl_password = ctk.StringVar()
         self._pl_password_entry = ctk.CTkEntry(
             self._pl_fields_row, textvariable=self._pl_password, show="*",
-            placeholder_text="(optional)", width=140,
+            placeholder_text=t("upload.pl_password_placeholder"), width=140,
         )
         self._pl_password_entry.pack(side="left")
 
-        ctk.CTkLabel(self._pl_fields_row, text="Limit", anchor="w").pack(side="left", padx=(12, 4))
+        ctk.CTkLabel(self._pl_fields_row, text=t("upload.pl_limit"), anchor="w").pack(side="left", padx=(12, 4))
         self._pl_limit = ctk.StringVar(value="")
         self._pl_limit_entry = ctk.CTkEntry(
-            self._pl_fields_row, textvariable=self._pl_limit, placeholder_text="∞", width=80,
+            self._pl_fields_row, textvariable=self._pl_limit,
+            placeholder_text=t("upload.pl_limit_placeholder"), width=80,
         )
         self._pl_limit_entry.pack(side="left")
 
         self._pl_notify = ctk.BooleanVar(value=False)
         self._pl_notify_box = ctk.CTkCheckBox(
-            self._pl_fields_row, text="Notify on download", variable=self._pl_notify,
+            self._pl_fields_row, text=t("upload.pl_notify"), variable=self._pl_notify,
         )
         self._pl_notify_box.pack(side="left", padx=(12, 0))
 
@@ -243,7 +245,10 @@ class UploadPanel(ctk.CTkFrame):
     # ---- file list helpers ----
 
     def _on_add(self) -> None:
-        paths = filedialog.askopenfilenames(parent=self.winfo_toplevel(), title="Add files")
+        paths = filedialog.askopenfilenames(
+            parent=self.winfo_toplevel(),
+            title=t("upload.add_files_dialog_title"),
+        )
         for p in paths:
             self._add_file(Path(p))
 
@@ -308,8 +313,9 @@ class UploadPanel(ctk.CTkFrame):
                 raise ValueError
         except ValueError:
             mb.warn(
-                self.winfo_toplevel(), "Invalid time",
-                "Use 00-23 for hour and 00-59 for minute.",
+                self.winfo_toplevel(),
+                t("upload.err_invalid_time_title"),
+                t("upload.err_invalid_time_body"),
             )
             return None, False
         d = self._expiry_date.get_date()
@@ -328,8 +334,9 @@ class UploadPanel(ctk.CTkFrame):
                 raise ValueError
         except ValueError:
             mb.warn(
-                self.winfo_toplevel(), "Invalid download limit",
-                "Download limit must be a positive integer, or blank for unlimited.",
+                self.winfo_toplevel(),
+                t("upload.err_invalid_limit_title"),
+                t("upload.err_invalid_limit_body"),
             )
             return None, False
         return n, True
@@ -342,8 +349,9 @@ class UploadPanel(ctk.CTkFrame):
             limit = int(limit_str) if limit_str else None
         except ValueError:
             mb.warn(
-                self.winfo_toplevel(), "Invalid limit",
-                "Download limit must be a positive integer, or blank for unlimited.",
+                self.winfo_toplevel(),
+                t("upload.err_invalid_pl_limit_title"),
+                t("upload.err_invalid_pl_limit_body"),
             )
             return None
         return {
@@ -356,14 +364,18 @@ class UploadPanel(ctk.CTkFrame):
 
     def _on_send(self) -> None:
         if not self._files:
-            mb.warn(self.winfo_toplevel(), "No files", "Add at least one file.")
+            mb.warn(
+                self.winfo_toplevel(),
+                t("upload.err_no_files_title"),
+                t("upload.err_no_files_body"),
+            )
             return
         public_link = self._collect_public_link()
         if not self.recipients.has_any() and public_link is None:
             mb.warn(
-                self.winfo_toplevel(), "No recipients",
-                "Add at least one user or group recipient, or attach an "
-                "inline public link.",
+                self.winfo_toplevel(),
+                t("upload.err_no_recipients_title"),
+                t("upload.err_no_recipients_body"),
             )
             return
         expires_at, never = self._collect_expiry()
@@ -373,8 +385,8 @@ class UploadPanel(ctk.CTkFrame):
         if not ok:
             return  # _collect_share_limit already showed an error toast
 
-        self.send_btn.configure(state="disabled", text="Creating…")
-        self.status_var.set("Creating share…")
+        self.send_btn.configure(state="disabled", text=t("upload.creating"))
+        self.status_var.set(t("upload.creating_status"))
 
         def _create():
             return api_pkg.create_share(
@@ -400,22 +412,24 @@ class UploadPanel(ctk.CTkFrame):
                     url = getattr(pl, "url", None)
                 if url:
                     mb.info(
-                        self.winfo_toplevel(), "Public link created",
-                        f"Save this URL now — it will not be shown again.\n\n{url}",
+                        self.winfo_toplevel(),
+                        t("upload.public_link_created_title"),
+                        t("upload.public_link_created_body", url=url),
                     )
             self._start_uploads(share)
 
         def _on_create_failed(exc):
-            self.send_btn.configure(state="normal", text="Create share + upload")
+            self.send_btn.configure(state="normal", text=t("upload.send_btn"))
             msg = getattr(exc, "message", None) or str(exc)
-            self.status_var.set(f"Error: {msg}")
+            self.status_var.set(t("upload.status_err", detail=msg))
 
         from ._async import run_in_background
         run_in_background(self._app_root, _create, on_done=_on_created, on_failed=_on_create_failed)
 
     def _start_uploads(self, share: ShareResponse) -> None:
         self.status_var.set(
-            f"Share {share.id[:8]} created — uploading {len(self._files)} file(s)…"
+            t("upload.status_uploading",
+              short_id=share.id[:8], n=len(self._files)),
         )
         # v0.5.3: re-pack with side="bottom" matching _build()'s
         # original geometry, otherwise the bar lands at the top of the
@@ -457,18 +471,19 @@ class UploadPanel(ctk.CTkFrame):
 
     def _on_one_failed(self, path: str, message: str) -> None:
         mb.warn(
-            self.winfo_toplevel(), "Upload failed",
-            f"{Path(path).name}\n\n{message}",
+            self.winfo_toplevel(),
+            t("upload.upload_failed_title"),
+            t("upload.upload_failed_body", name=Path(path).name, detail=message),
         )
         self._completed += 1
         if self._completed == len(self._files):
             self._reset_form_after_send(success=False)
 
     def _reset_form_after_send(self, *, success: bool) -> None:
-        self.send_btn.configure(state="normal", text="Create share + upload")
+        self.send_btn.configure(state="normal", text=t("upload.send_btn"))
         self.progress.pack_forget()
         if success:
-            self.status_var.set("Share created and all files uploaded.")
+            self.status_var.set(t("upload.status_success"))
             self.subject_var.set("")
             self.message_text.delete("1.0", "end")
             self.recipients.reset()
@@ -480,4 +495,4 @@ class UploadPanel(ctk.CTkFrame):
             self._pl_limit.set("")
             self._pl_notify.set(False)
         else:
-            self.status_var.set("Some uploads failed — see dialogs above.")
+            self.status_var.set(t("upload.status_partial"))

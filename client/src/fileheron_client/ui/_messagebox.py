@@ -15,24 +15,40 @@ from typing import Optional
 
 import customtkinter as ctk
 
+from ..i18n import t
 
-def confirm(parent, title: str, body: str, *, ok_text: str = "OK", cancel_text: str = "Cancel") -> bool:
+
+def confirm(
+    parent,
+    title: str,
+    body: str,
+    *,
+    ok_text: Optional[str] = None,
+    cancel_text: Optional[str] = None,
+) -> bool:
     """Modal Y/N confirmation. Returns True if the user clicked OK,
-    False if they cancelled (or closed the window via the X)."""
-    return _modal(parent, title, body, kind="confirm", ok_text=ok_text, cancel_text=cancel_text)
+    False if they cancelled (or closed the window via the X). Default
+    button labels resolve through i18n at call time so the active
+    locale is honoured (v0.8.0)."""
+    return _modal(
+        parent, title, body,
+        kind="confirm",
+        ok_text=ok_text or t("common.ok"),
+        cancel_text=cancel_text or t("common.cancel"),
+    )
 
 
-def info(parent, title: str, body: str, *, ok_text: str = "OK") -> None:
+def info(parent, title: str, body: str, *, ok_text: Optional[str] = None) -> None:
     """Modal info popup with a single OK button. Returns None."""
-    _modal(parent, title, body, kind="info", ok_text=ok_text)
+    _modal(parent, title, body, kind="info", ok_text=ok_text or t("common.ok"))
 
 
-def warn(parent, title: str, body: str, *, ok_text: str = "OK") -> None:
+def warn(parent, title: str, body: str, *, ok_text: Optional[str] = None) -> None:
     """Modal warning popup — same shape as info; the caller picks the
     title/body wording, the visual treatment is the same as info today.
     Separate function so future styling (red accent, ! icon) can
     diverge without touching call sites."""
-    _modal(parent, title, body, kind="info", ok_text=ok_text)
+    _modal(parent, title, body, kind="info", ok_text=ok_text or t("common.ok"))
 
 
 def _modal(
@@ -42,7 +58,7 @@ def _modal(
     *,
     kind: str,
     ok_text: str,
-    cancel_text: str = "Cancel",
+    cancel_text: Optional[str] = None,
 ) -> bool:
     win = ctk.CTkToplevel(parent)
     win.title(title)
@@ -74,7 +90,8 @@ def _modal(
 
     if kind == "confirm":
         cancel_btn = ctk.CTkButton(
-            btn_row, text=cancel_text, command=_on_cancel, width=100, fg_color="gray"
+            btn_row, text=cancel_text or t("common.cancel"),
+            command=_on_cancel, width=100, fg_color="gray",
         )
         cancel_btn.pack(side="right", padx=(8, 0))
     ok_btn = ctk.CTkButton(btn_row, text=ok_text, command=_on_ok, width=100)

@@ -16,6 +16,7 @@ from ..config import (
     save_config,
     set_secret,
 )
+from ..i18n import t
 from ._async import run_in_background
 
 
@@ -42,7 +43,7 @@ class LoginWindow:
         # Version in the title bar so we can identify which build the
         # user is running even when they can't reach Settings (e.g. a
         # sign-in error blocks them).
-        self._win.title(f"Sign in to file:Heron  —  client v{__version__}")
+        self._win.title(t("login.title", version=__version__))
         self._win.geometry("480x460")
         self._win.resizable(False, False)
         # We're shown while the root is hidden; without transient() the
@@ -56,21 +57,17 @@ class LoginWindow:
         outer.pack(fill="both", expand=True, padx=20, pady=20)
 
         intro = ctk.CTkLabel(
-            outer,
-            text=(
-                "Connect to a file:Heron server. Your credentials live in "
-                "your OS credential store; only the server URL is saved on disk."
-            ),
-            wraplength=420,
-            justify="left",
+            outer, text=t("login.intro"),
+            wraplength=420, justify="left",
         )
         intro.pack(fill="x", pady=(0, 12))
 
         # Server URL — common to both modes.
-        ctk.CTkLabel(outer, text="Server URL", anchor="w").pack(fill="x")
+        ctk.CTkLabel(outer, text=t("login.server_url_label"), anchor="w").pack(fill="x")
         self.server_url_var = ctk.StringVar(value=self._cfg.server_url)
         ctk.CTkEntry(
-            outer, textvariable=self.server_url_var, placeholder_text="https://files.example.com"
+            outer, textvariable=self.server_url_var,
+            placeholder_text=t("login.server_url_placeholder"),
         ).pack(fill="x", pady=(0, 12))
 
         # Two stacked frames; only one visible at a time.
@@ -78,10 +75,10 @@ class LoginWindow:
         self._tok_frame = ctk.CTkFrame(outer, fg_color="transparent")
 
         # Password mode
-        ctk.CTkLabel(self._pw_frame, text="Email", anchor="w").pack(fill="x")
+        ctk.CTkLabel(self._pw_frame, text=t("login.email_label"), anchor="w").pack(fill="x")
         self.email_var = ctk.StringVar(value=self._cfg.last_email or "")
         ctk.CTkEntry(self._pw_frame, textvariable=self.email_var).pack(fill="x", pady=(0, 8))
-        ctk.CTkLabel(self._pw_frame, text="Password", anchor="w").pack(fill="x")
+        ctk.CTkLabel(self._pw_frame, text=t("login.password_label"), anchor="w").pack(fill="x")
         self.password_var = ctk.StringVar()
         ctk.CTkEntry(self._pw_frame, textvariable=self.password_var, show="*").pack(fill="x", pady=(0, 8))
 
@@ -90,18 +87,18 @@ class LoginWindow:
         # that calls POST /api/auth/login/recovery. Without this a
         # user who lost their TOTP device had to fall back to the SPA.
         self._second_factor_label = ctk.CTkLabel(
-            self._pw_frame, text="TOTP (only if asked)", anchor="w",
+            self._pw_frame, text=t("login.second_factor_label"), anchor="w",
         )
         self._second_factor_label.pack(fill="x")
         self.totp_var = ctk.StringVar()
         self.recovery_var = ctk.StringVar()
         self._totp_entry = ctk.CTkEntry(
             self._pw_frame, textvariable=self.totp_var,
-            placeholder_text="6-digit code",
+            placeholder_text=t("login.totp_placeholder"),
         )
         self._recovery_entry = ctk.CTkEntry(
             self._pw_frame, textvariable=self.recovery_var,
-            placeholder_text="recovery code (one-time use)",
+            placeholder_text=t("login.recovery_placeholder"),
         )
         self._totp_entry.pack(fill="x", pady=(0, 4))
         # _recovery_entry packed only when in recovery mode.
@@ -109,7 +106,7 @@ class LoginWindow:
         self._use_recovery = False
         self._recovery_toggle = ctk.CTkLabel(
             self._pw_frame,
-            text="Use recovery code instead",
+            text=t("login.use_recovery"),
             text_color=("#1e6fbf", "#5fa8ff"),
             cursor="hand2",
             anchor="w",
@@ -118,13 +115,13 @@ class LoginWindow:
         self._recovery_toggle.bind("<Button-1>", self._on_recovery_toggle)
 
         # API-token mode
-        ctk.CTkLabel(self._tok_frame, text="API token", anchor="w").pack(fill="x")
+        ctk.CTkLabel(self._tok_frame, text=t("login.api_token_label"), anchor="w").pack(fill="x")
         self.api_token_var = ctk.StringVar()
         ctk.CTkEntry(
             self._tok_frame,
             textvariable=self.api_token_var,
             show="*",
-            placeholder_text="fh_xxxxxxxx_…  (from /account/api-tokens)",
+            placeholder_text=t("login.api_token_placeholder"),
         ).pack(fill="x", pady=(0, 8))
 
         # Toggle row — CTk-style hyperlink (just a label that calls
@@ -133,7 +130,7 @@ class LoginWindow:
         toggle_row.pack(fill="x", pady=(4, 8))
         self.toggle_label = ctk.CTkLabel(
             toggle_row,
-            text="Use API token instead",
+            text=t("login.toggle_to_token"),
             text_color=("#1e6fbf", "#5fa8ff"),
             cursor="hand2",
         )
@@ -150,10 +147,10 @@ class LoginWindow:
         # Buttons
         btn_row = ctk.CTkFrame(outer, fg_color="transparent")
         btn_row.pack(fill="x")
-        self.signin_btn = ctk.CTkButton(btn_row, text="Sign in", command=self._on_signin)
+        self.signin_btn = ctk.CTkButton(btn_row, text=t("login.sign_in"), command=self._on_signin)
         self.signin_btn.pack(side="right")
         ctk.CTkButton(
-            btn_row, text="Cancel", command=self._win.destroy, fg_color="gray"
+            btn_row, text=t("common.cancel"), command=self._win.destroy, fg_color="gray",
         ).pack(side="right", padx=(0, 8))
 
         # Enter submits.
@@ -166,14 +163,14 @@ class LoginWindow:
         self._tok_frame.pack_forget()
         if kind == "api_token":
             self._tok_frame.pack(fill="x", pady=(0, 0), before=self.toggle_label.master)
-            self.toggle_label.configure(text="Use email + password instead")
+            self.toggle_label.configure(text=t("login.toggle_to_password"))
             # Pre-fill from keyring if available.
             stored = get_secret("api_token", self.server_url_var.get().rstrip("/"))
             if stored:
                 self.api_token_var.set(stored)
         else:
             self._pw_frame.pack(fill="x", pady=(0, 0), before=self.toggle_label.master)
-            self.toggle_label.configure(text="Use API token instead")
+            self.toggle_label.configure(text=t("login.toggle_to_token"))
 
     def _on_toggle(self, _event=None) -> None:
         current_kind = self._cfg.auth_kind
@@ -189,8 +186,8 @@ class LoginWindow:
                 fill="x", pady=(0, 4),
                 before=self._recovery_toggle,
             )
-            self._second_factor_label.configure(text="Recovery code")
-            self._recovery_toggle.configure(text="Use TOTP code instead")
+            self._second_factor_label.configure(text=t("login.second_factor_label_recovery"))
+            self._recovery_toggle.configure(text=t("login.use_totp"))
             self.totp_var.set("")
         else:
             self._recovery_entry.pack_forget()
@@ -198,8 +195,8 @@ class LoginWindow:
                 fill="x", pady=(0, 4),
                 before=self._recovery_toggle,
             )
-            self._second_factor_label.configure(text="TOTP (only if asked)")
-            self._recovery_toggle.configure(text="Use recovery code instead")
+            self._second_factor_label.configure(text=t("login.second_factor_label"))
+            self._recovery_toggle.configure(text=t("login.use_recovery"))
             self.recovery_var.set("")
 
     def _on_signin(self) -> None:
@@ -218,26 +215,26 @@ class LoginWindow:
         use_recovery = self._use_recovery
         api_token = self.api_token_var.get().strip()
         if not server:
-            self._show_error("Server URL is required.")
+            self._show_error(t("login.err_server_required"))
             return
         kind = self._cfg.auth_kind
         if kind == "password" and not email:
-            self._show_error("Email is required.")
+            self._show_error(t("login.err_email_required"))
             return
         if kind == "password" and not password:
-            self._show_error("Password is required.")
+            self._show_error(t("login.err_password_required"))
             return
         if kind == "password" and use_recovery and not recovery:
-            self._show_error("Recovery code is required.")
+            self._show_error(t("login.err_recovery_required"))
             return
         if kind == "api_token" and not api_token:
-            self._show_error("API token is required.")
+            self._show_error(t("login.err_api_token_required"))
             return
 
         # Run the network call in a background thread so the UI stays
         # responsive while we hit /api/account/me. The button is
         # disabled during the in-flight call.
-        self.signin_btn.configure(state="disabled", text="Signing in…")
+        self.signin_btn.configure(state="disabled", text=t("login.signing_in"))
 
         def _attempt():
             trace(f"_attempt start (kind={kind}, server={server})")
@@ -286,10 +283,8 @@ class LoginWindow:
                 trace(f"_on_signed_in RAISED: {exc!r}")
                 import traceback
                 traceback.print_exc()
-                self.signin_btn.configure(state="normal", text="Sign in")
-                self._show_error(
-                    f"Signed in OK but failed to open main window: {exc!r}"
-                )
+                self.signin_btn.configure(state="normal", text=t("login.sign_in"))
+                self._show_error(t("login.err_open_main_window", detail=repr(exc)))
                 return
             trace("destroying login window")
             self._win.destroy()
@@ -297,7 +292,7 @@ class LoginWindow:
 
         def _failed(exc):
             trace(f"_failed callback fired: {type(exc).__name__}: {exc!r}")
-            self.signin_btn.configure(state="normal", text="Sign in")
+            self.signin_btn.configure(state="normal", text=t("login.sign_in"))
             # v0.4.6: write every caught sign-in failure to the crash
             # log with a full Python traceback. Without this the "Could
             # not reach server: …" surface message is all the user can
@@ -320,26 +315,20 @@ class LoginWindow:
                 pass  # logging must never crash the UI thread
             if isinstance(exc, ApiError):
                 if exc.code == "TOTP_REQUIRED":
-                    self._show_error(
-                        "Two-factor code required. Enter the 6-digit code "
-                        "from your authenticator, or use a recovery code."
-                    )
+                    self._show_error(t("login.err_totp_required"))
                     return
                 if exc.code == "INVALID_TOTP":
-                    self._show_error("Invalid TOTP code. Try again.")
+                    self._show_error(t("login.err_invalid_totp"))
                     self.totp_var.set("")
                     return
                 if exc.code == "INVALID_RECOVERY":
-                    self._show_error(
-                        "Recovery code is invalid or already used. "
-                        "Each code can only be used once."
-                    )
+                    self._show_error(t("login.err_invalid_recovery"))
                     self.recovery_var.set("")
                     return
-                self._show_error(exc.message or "Sign-in failed.")
+                self._show_error(exc.message or t("login.err_signin_failed"))
                 return
             # Network / TLS / DNS.
-            self._show_error(f"Could not reach server: {exc}")
+            self._show_error(t("login.err_unreachable", detail=str(exc)))
 
         run_in_background(self._app_root, _attempt, on_done=_done, on_failed=_failed)
 

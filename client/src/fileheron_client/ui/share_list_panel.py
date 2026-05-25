@@ -23,36 +23,43 @@ import customtkinter as ctk
 from .. import api as api_pkg
 from ..api import ApiClient, ApiError
 from ..formatters import format_expiry
+from ..i18n import t
 from ..models import MeResponse, ShareListItem
 from ._async import run_in_background
 from .share_detail_view import ShareDetailView
 from .widgets import PillLabel, human_size
 
 
-# Column header labels + their grid-column widths. Keep COL_WIDTHS in
-# sync with how each cell is sized below.
-_COLS = ("Subject", "Party", "Files", "Size", "Created", "Expires", "State")
+# Column-header i18n keys + grid weights. Resolved at build time so
+# they pick up the active locale; not re-resolved on locale switch.
+_COL_KEYS = (
+    "share_list.col_subject",
+    "share_list.col_party",
+    "share_list.col_files",
+    "share_list.col_size",
+    "share_list.col_created",
+    "share_list.col_expires",
+    "share_list.col_state",
+)
 _COL_WEIGHTS = (4, 3, 1, 1, 2, 2, 1)
 
 
-_STATE_FILTERS: list[tuple[str, str]] = [
-    ("Active", "active"),
-    ("Any state", ""),
-    ("Expired", "expired"),
-    ("Revoked", "revoked"),
-    ("Deleted", "deleted"),
+# (i18n_key, server_value) — same shape as the v0.7.x English tuples.
+_STATE_FILTER_KEYS: list[tuple[str, str]] = [
+    ("share_list.state_active", "active"),
+    ("share_list.state_any", ""),
+    ("share_list.state_expired", "expired"),
+    ("share_list.state_revoked", "revoked"),
+    ("share_list.state_deleted", "deleted"),
 ]
 
 
 # v0.7.2: sort options match the SPA's GET /api/shares ?sort= values.
-_SORT_OPTIONS: list[tuple[str, str]] = [
-    ("Created", "created_at"),
-    ("Expires", "expires_at"),
-    ("Subject", "subject"),
+_SORT_OPTION_KEYS: list[tuple[str, str]] = [
+    ("share_list.sort_created", "created_at"),
+    ("share_list.sort_expires", "expires_at"),
+    ("share_list.sort_subject", "subject"),
 ]
-
-# Sentinel for "no party filter applied" in the OptionMenu.
-_ANY_PARTY = "Anyone"
 
 
 class ShareListPanel(ctk.CTkFrame):
@@ -91,35 +98,43 @@ class ShareListPanel(ctk.CTkFrame):
 
         self.search_var = ctk.StringVar()
         search = ctk.CTkEntry(
-            row, textvariable=self.search_var, placeholder_text="Search subject…"
+            row, textvariable=self.search_var,
+            placeholder_text=t("share_list.search_placeholder"),
         )
         search.pack(side="left", fill="x", expand=True)
         search.bind("<Return>", lambda _e: self.refresh())
 
-        self.state_filter_var = ctk.StringVar(value=_STATE_FILTERS[0][0])
+        # Cache resolved label→value maps for the two enum-style filters
+        # so refresh() doesn't repeatedly walk the constant tuples.
+        self._state_label_to_value = {t(k): v for (k, v) in _STATE_FILTER_KEYS}
+        self._sort_label_to_value = {t(k): v for (k, v) in _SORT_OPTION_KEYS}
+
+        state_labels = list(self._state_label_to_value.keys())
+        self.state_filter_var = ctk.StringVar(value=state_labels[0])
         state_menu = ctk.CTkOptionMenu(
             row,
             variable=self.state_filter_var,
-            values=[label for label, _ in _STATE_FILTERS],
+            values=state_labels,
             command=lambda _v: self.refresh(),
             width=120,
         )
         state_menu.pack(side="left", padx=(8, 8))
 
-        ctk.CTkButton(row, text="Refresh", command=self.refresh, width=90).pack(side="left")
+        ctk.CTkButton(row, text=t("common.refresh"), command=self.refresh, width=90).pack(side="left")
 
         # ---- Row 2 (v0.7.2): sort + direction + party filter
         row2 = ctk.CTkFrame(self._list_frame, fg_color="transparent")
         row2.pack(fill="x", padx=8, pady=(0, 4))
 
-        ctk.CTkLabel(row2, text="Sort:", anchor="w").pack(side="left")
-        self.sort_var = ctk.StringVar(value=_SORT_OPTIONS[0][0])
+        ctk.CTkLabel(row2, text=t("share_list.sort_label"), anchor="w").pack(side="left")
+        sort_labels = list(self._sort_label_to_value.keys())
+        self.sort_var = ctk.StringVar(value=sort_labels[0])
         sort_menu = ctk.CTkOptionMenu(
             row2,
             variable=self.sort_var,
-            values=[label for label, _ in _SORT_OPTIONS],
+            values=sort_labels,
             command=lambda _v: self.refresh(),
-            width=110,
+            width=120,
         )
         sort_menu.pack(side="left", padx=(6, 6))
 
@@ -127,7 +142,8 @@ class ShareListPanel(ctk.CTkFrame):
         # the backend default + the old client behaviour).
         self._direction = "desc"
         self._direction_btn = ctk.CTkButton(
-            row2, text="↓ desc", command=self._toggle_direction, width=80,
+            row2, text=t("share_list.direction_desc"),
+            command=self._toggle_direction, width=110,
         )
         self._direction_btn.pack(side="left", padx=(0, 12))
 
@@ -135,25 +151,30 @@ class ShareListPanel(ctk.CTkFrame):
         # (outbox) seen on the current page. Lightweight: no server
         # search, just the parties already present in _items. Refilled
         # by ``_rebuild_party_options`` after every successful refresh.
-        party_label = "Sender:" if self._box == "inbox" else "Recipient:"
+        self._any_party_label = t("share_list.party_any")
+        party_label = (
+            t("share_list.party_inbox") if self._box == "inbox"
+            else t("share_list.party_outbox")
+        )
         ctk.CTkLabel(row2, text=party_label, anchor="w").pack(side="left")
-        self.party_var = ctk.StringVar(value=_ANY_PARTY)
+        self.party_var = ctk.StringVar(value=self._any_party_label)
         self._party_menu = ctk.CTkOptionMenu(
             row2,
             variable=self.party_var,
-            values=[_ANY_PARTY],
+            values=[self._any_party_label],
             command=lambda _v: self.refresh(),
             width=180,
         )
         self._party_menu.pack(side="left", padx=(6, 0))
-        # Map: party label → user_id (None for _ANY_PARTY). Refilled
-        # by ``_rebuild_party_options`` on each refresh response.
-        self._party_id_by_label: dict[str, Optional[int]] = {_ANY_PARTY: None}
+        # Map: party label → user_id (None for the "Anyone" sentinel).
+        # Refilled by ``_rebuild_party_options`` on each refresh.
+        self._party_id_by_label: dict[str, Optional[int]] = {self._any_party_label: None}
 
         # Header row (sticky above the scrollable content).
         header = ctk.CTkFrame(self._list_frame, fg_color=("gray80", "gray25"), corner_radius=4)
         header.pack(fill="x", padx=8, pady=(0, 2))
-        for col_idx, (col_name, weight) in enumerate(zip(_COLS, _COL_WEIGHTS)):
+        col_labels = [t(k) for k in _COL_KEYS]
+        for col_idx, (col_name, weight) in enumerate(zip(col_labels, _COL_WEIGHTS)):
             header.grid_columnconfigure(col_idx, weight=weight, uniform="cols")
             ctk.CTkLabel(
                 header,
@@ -176,7 +197,8 @@ class ShareListPanel(ctk.CTkFrame):
     def _toggle_direction(self) -> None:
         self._direction = "asc" if self._direction == "desc" else "desc"
         self._direction_btn.configure(
-            text="↑ asc" if self._direction == "asc" else "↓ desc",
+            text=t("share_list.direction_asc") if self._direction == "asc"
+            else t("share_list.direction_desc"),
         )
         self.refresh()
 
@@ -196,32 +218,30 @@ class ShareListPanel(ctk.CTkFrame):
                 for rec in it.recipients:
                     if rec.kind == "user":
                         seen.setdefault(rec.id, rec.label)
-        labels = [_ANY_PARTY] + sorted(seen.values(), key=str.casefold)
-        self._party_id_by_label = {_ANY_PARTY: None}
+        labels = [self._any_party_label] + sorted(seen.values(), key=str.casefold)
+        self._party_id_by_label = {self._any_party_label: None}
         for uid, label in seen.items():
             self._party_id_by_label[label] = uid
         # Preserve the current selection if still present; else reset.
         current = self.party_var.get()
         if current not in labels:
-            self.party_var.set(_ANY_PARTY)
+            self.party_var.set(self._any_party_label)
         self._party_menu.configure(values=labels)
 
     def refresh(self) -> None:
-        label = self.state_filter_var.get()
-        state_value = next(
-            (v for (lbl, v) in _STATE_FILTERS if lbl == label), ""
+        state_value = self._state_label_to_value.get(
+            self.state_filter_var.get(), "",
         )
         states = [state_value] if state_value else None
-        sort_value = next(
-            (v for (lbl, v) in _SORT_OPTIONS if lbl == self.sort_var.get()),
-            "created_at",
+        sort_value = self._sort_label_to_value.get(
+            self.sort_var.get(), "created_at",
         )
-        party_id = self._party_id_by_label.get(self.party_var.get())
+        party_id = self._party_id_by_label.get(self.party_var.get(), None)
         # v0.7.2: split the same picker between the two backend params
         # depending on which box we're showing.
         sender_user_id: Optional[int] = party_id if self._box == "inbox" else None
         recipient_user_id: Optional[int] = party_id if self._box == "outbox" else None
-        self.status_var.set("Loading…")
+        self.status_var.set(t("common.loading"))
 
         def _fetch():
             return api_pkg.list_shares(
@@ -239,7 +259,10 @@ class ShareListPanel(ctk.CTkFrame):
 
         def _done(resp):
             self._items = resp.items
-            self.status_var.set(f"{len(resp.items)} of {resp.total} shares")
+            self.status_var.set(
+                t("share_list.status_count",
+                  shown=len(resp.items), total=resp.total),
+            )
             self._rebuild_party_options()
             # v0.6.2: skip re-grid while drilled in. The list frame is
             # pack_forgot during drill-in, so a render() during that
@@ -251,7 +274,7 @@ class ShareListPanel(ctk.CTkFrame):
 
         def _failed(exc):
             msg = getattr(exc, "message", None) or str(exc)
-            self.status_var.set(f"Error: {msg}")
+            self.status_var.set(t("share_list.status_err", detail=msg))
 
         run_in_background(self._app_root, _fetch, on_done=_done, on_failed=_failed)
 
@@ -261,11 +284,17 @@ class ShareListPanel(ctk.CTkFrame):
             child.destroy()
 
         for r, item in enumerate(self._items):
-            subject = item.effective_subject or "(no subject)"
+            subject = item.effective_subject or t("share_list.no_subject")
             if self._box == "inbox":
-                party = item.sender.display_name if item.sender else "(unknown)"
+                party = (
+                    item.sender.display_name if item.sender
+                    else t("share_list.unknown")
+                )
             else:
-                party = ", ".join(rec.label for rec in item.recipients) or "(none)"
+                party = (
+                    ", ".join(rec.label for rec in item.recipients)
+                    or t("share_list.no_party")
+                )
 
             # Plain text cells — manually grid each into the scrollable
             # frame. The PillLabel state chip is a widget (cell 6).

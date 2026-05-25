@@ -37,6 +37,10 @@ class ClientConfig:
     # v0.4.16: gate verbose diagnostic logging (trace.log breadcrumbs,
     # app.log, heartbeat polling). crash.log + faulthandler always on.
     enable_diagnostic_logging: bool = False
+    # v0.8.0: cached locale code from the last sign-in so the pre-login
+    # screen renders in the user's language without a round trip.
+    # Empty = use server's users.locale at sign-in; valid: 'en', 'de'.
+    locale: str = ""
 
     def normalised_server_url(self) -> str:
         return (self.server_url or "").rstrip("/")
@@ -57,6 +61,7 @@ def load_config() -> ClientConfig:
         "auth_kind",
         "last_landing",
         "enable_diagnostic_logging",
+        "locale",
     ):
         if k in raw and raw[k] is not None:
             setattr(cfg, k, raw[k])

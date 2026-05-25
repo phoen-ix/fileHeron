@@ -25,6 +25,7 @@ _log = logging.getLogger("fileheron_client.ui.share_detail_view")
 from .. import api as api_pkg
 from ..api import ApiClient, ApiError
 from ..formatters import format_expiry
+from ..i18n import t
 from ..models import FileInShareResponse, MeResponse, ShareResponse
 from ._async import run_in_background, run_with_progress
 from . import _messagebox as mb
@@ -95,8 +96,8 @@ class ShareDetailView(ctk.CTkFrame):
         header.pack(fill="x", padx=16, pady=(12, 0))
         ctk.CTkButton(
             header,
-            text="← Back",
-            width=90,
+            text=t("share_detail.back"),
+            width=110,
             height=28,
             fg_color="transparent",
             border_width=1,
@@ -107,7 +108,7 @@ class ShareDetailView(ctk.CTkFrame):
         outer = ctk.CTkFrame(self, fg_color="transparent")
         outer.pack(fill="both", expand=True, padx=16, pady=16)
 
-        self.title_var = ctk.StringVar(value="…")
+        self.title_var = ctk.StringVar(value=t("share_detail.title_placeholder"))
         ctk.CTkLabel(
             outer, textvariable=self.title_var, anchor="w",
             font=ctk.CTkFont(size=16, weight="bold"),
@@ -119,14 +120,14 @@ class ShareDetailView(ctk.CTkFrame):
             justify="left", wraplength=620,
         ).pack(fill="x", pady=(2, 6))
 
-        self.state_pill = PillLabel(outer, text="…", state="active")
+        self.state_pill = PillLabel(outer, text=t("share_detail.title_placeholder"), state="active")
         self.state_pill.pack(anchor="w", pady=(0, 8))
 
         # Public-link section (only shown if the share has one;
         # populated by _load_public_link via background fetch).
         self._build_public_link_section(outer)
 
-        ctk.CTkLabel(outer, text="Files", anchor="w").pack(fill="x")
+        ctk.CTkLabel(outer, text=t("share_detail.files_heading"), anchor="w").pack(fill="x")
         self.file_scroll = ctk.CTkScrollableFrame(outer, fg_color="transparent")
         self.file_scroll.pack(fill="both", expand=True, pady=(2, 8))
 
@@ -135,11 +136,13 @@ class ShareDetailView(ctk.CTkFrame):
         btns.pack(fill="x")
 
         self.edit_expiry_btn = ctk.CTkButton(
-            btns, text="Edit expiry…", command=self._edit_expiry, width=110,
+            btns, text=t("share_detail.edit_expiry_btn"),
+            command=self._edit_expiry, width=140,
         )
         # v0.7.1: per-share download-budget editor (matches SPA).
         self.edit_limit_btn = ctk.CTkButton(
-            btns, text="Edit limit…", command=self._edit_limit, width=110,
+            btns, text=t("share_detail.edit_limit_btn"),
+            command=self._edit_limit, width=140,
         )
         # v0.6.1: single destructive "End share" replaces the old
         # Revoke + Expire-now pair. Same backend call as before
@@ -147,7 +150,8 @@ class ShareDetailView(ctk.CTkFrame):
         # hard-deleted. Red styling because this is now the only
         # destructive manager action.
         self.end_share_btn = ctk.CTkButton(
-            btns, text="End share", command=self._end_share, width=110,
+            btns, text=t("share_detail.end_share_btn"),
+            command=self._end_share, width=140,
             fg_color="#991b1b", hover_color="#7f1d1d",
         )
         # Initially hidden; _refresh_action_visibility shows them.
@@ -160,7 +164,8 @@ class ShareDetailView(ctk.CTkFrame):
 
         # Right-aligned button. "Close" gone — Back at the top replaces it.
         ctk.CTkButton(
-            btns, text="Save all to folder…", command=self._save_all, width=160,
+            btns, text=t("share_detail.save_all_btn"),
+            command=self._save_all, width=180,
         ).pack(side="right")
 
         # Progress (download).
@@ -173,7 +178,7 @@ class ShareDetailView(ctk.CTkFrame):
         """Create a hidden bordered section for the public-link URL.
         Revealed by ``_render_public_link`` when the background
         fetch returns non-None data."""
-        self._pl_section_label = ctk.CTkLabel(parent, text="Public link", anchor="w")
+        self._pl_section_label = ctk.CTkLabel(parent, text=t("share_detail.public_link_heading"), anchor="w")
         self._pl_section = ctk.CTkFrame(parent, border_width=1, fg_color="transparent")
 
         inner = ctk.CTkFrame(self._pl_section, fg_color="transparent")
@@ -187,10 +192,10 @@ class ShareDetailView(ctk.CTkFrame):
         )
         self._pl_url_entry.pack(side="left", fill="x", expand=True)
         ctk.CTkButton(
-            url_row, text="Copy", width=70, command=self._copy_pl_url,
+            url_row, text=t("share_detail.pl_copy"), width=90, command=self._copy_pl_url,
         ).pack(side="left", padx=(8, 0))
         ctk.CTkButton(
-            url_row, text="Open", width=70, command=self._open_pl_url,
+            url_row, text=t("share_detail.pl_open"), width=90, command=self._open_pl_url,
         ).pack(side="left", padx=(4, 0))
 
         self._pl_info_var = ctk.StringVar(value="")
@@ -213,19 +218,20 @@ class ShareDetailView(ctk.CTkFrame):
         self._pl_url_var.set(url)
         bits: list[str] = []
         if pl.get("has_password"):
-            bits.append("Password protected")
+            bits.append(t("share_detail.pl_password_protected"))
         dl_limit = pl.get("download_limit")
         if dl_limit is not None:
             remaining = pl.get("downloads_remaining")
-            bits.append(f"Downloads: {remaining}/{dl_limit}")
+            bits.append(t("share_detail.pl_downloads",
+                          remaining=remaining, limit=dl_limit))
         if pl.get("notify_on_download"):
-            bits.append("Notifies on download")
+            bits.append(t("share_detail.pl_notifies"))
         locked = pl.get("locked_until")
         if locked:
-            bits.append("LOCKED (too many password attempts)")
+            bits.append(t("share_detail.pl_locked"))
         revoked = pl.get("revoked_at")
         if revoked:
-            bits.append("REVOKED")
+            bits.append(t("share_detail.pl_revoked"))
         self._pl_info_var.set("  ·  ".join(bits))
         # Reveal the section now that we have content.
         self._pl_section_label.pack(fill="x", pady=(8, 0))
@@ -248,9 +254,8 @@ class ShareDetailView(ctk.CTkFrame):
             _log.warning("clipboard copy of public-link URL failed: %s", e)
             mb.warn(
                 top,
-                "Copy failed",
-                "Couldn't reach the clipboard. The URL is shown in the "
-                "field above — copy it manually with Ctrl+C.",
+                t("share_detail.copy_failed_title"),
+                t("share_detail.copy_failed_body"),
             )
 
     def _open_pl_url(self) -> None:
@@ -272,7 +277,7 @@ class ShareDetailView(ctk.CTkFrame):
 
         def _failed(exc):
             msg = getattr(exc, "message", None) or str(exc)
-            mb.warn(self.winfo_toplevel(), "Could not load share", msg)
+            mb.warn(self.winfo_toplevel(), t("share_detail.could_not_load_title"), msg)
             self._on_back()
 
         run_in_background(self._app_root, _fetch, on_done=_done, on_failed=_failed)
@@ -301,15 +306,17 @@ class ShareDetailView(ctk.CTkFrame):
         doesn't require touching `_render_after_load`, `_end_share._done`,
         and `_edit_expiry._done` in lockstep."""
         bits = [
-            f"Created {s.created_at.strftime('%Y-%m-%d %H:%M')}",
-            f"Expires {format_expiry(s.expires_at)}",
+            t("share_detail.meta_created",
+              date=s.created_at.strftime("%Y-%m-%d %H:%M")),
+            t("share_detail.meta_expires", when=format_expiry(s.expires_at)),
         ]
         if s.download_limit is not None:
             remaining = s.downloads_remaining
             if remaining is None:
-                bits.append(f"Limit: {s.download_limit}")
+                bits.append(t("share_detail.meta_limit", limit=s.download_limit))
             else:
-                bits.append(f"Downloads: {remaining}/{s.download_limit}")
+                bits.append(t("share_detail.meta_downloads",
+                              remaining=remaining, limit=s.download_limit))
         if s.message:
             bits.append(s.message)
         return bits
@@ -347,13 +354,10 @@ class ShareDetailView(ctk.CTkFrame):
         top = self.winfo_toplevel()
         if not mb.confirm(
             top,
-            "End share",
-            (
-                f"End this share now and delete all uploaded files? "
-                f"This cannot be undone.\n\n"
-                f"Subject: {s.effective_subject or '(no subject)'}"
-            ),
-            ok_text="End share",
+            t("share_detail.end_share_confirm_title"),
+            t("share_detail.end_share_confirm_body",
+              subject=s.effective_subject or t("share_list.no_subject")),
+            ok_text=t("share_detail.end_share_ok"),
         ):
             return
 
@@ -368,11 +372,11 @@ class ShareDetailView(ctk.CTkFrame):
             self.state_pill.setState(updated.state)
             self.state_pill.setText(updated.state)
             self._refresh_action_visibility()
-            mb.info(top, "Ended", "Share ended and files deleted.")
+            mb.info(top, t("share_detail.ended_title"), t("share_detail.ended_body"))
 
         def _failed(exc):
             msg = getattr(exc, "message", None) or str(exc)
-            mb.warn(top, "End share failed", msg)
+            mb.warn(top, t("share_detail.end_share_failed_title"), msg)
 
         run_in_background(self._app_root, _do, on_done=_done, on_failed=_failed)
 
@@ -397,11 +401,11 @@ class ShareDetailView(ctk.CTkFrame):
             if self._on_mutated is not None:
                 self._on_mutated()
             self.meta_var.set(" · ".join(self._build_meta_bits(updated)))
-            mb.info(top, "Updated", "Share expiry updated.")
+            mb.info(top, t("share_detail.expiry_updated_title"), t("share_detail.expiry_updated_body"))
 
         def _failed(exc):
             msg = getattr(exc, "message", None) or str(exc)
-            mb.warn(top, "Edit failed", msg)
+            mb.warn(top, t("share_detail.edit_failed_title"), msg)
 
         run_in_background(self._app_root, _do, on_done=_done, on_failed=_failed)
 
@@ -431,11 +435,11 @@ class ShareDetailView(ctk.CTkFrame):
             if self._on_mutated is not None:
                 self._on_mutated()
             self.meta_var.set(" · ".join(self._build_meta_bits(updated)))
-            mb.info(top, "Updated", "Share download limit updated.")
+            mb.info(top, t("share_detail.expiry_updated_title"), t("share_detail.limit_updated_body"))
 
         def _failed(exc):
             msg = getattr(exc, "message", None) or str(exc)
-            mb.warn(top, "Edit failed", msg)
+            mb.warn(top, t("share_detail.edit_failed_title"), msg)
 
         run_in_background(self._app_root, _do, on_done=_done, on_failed=_failed)
 
@@ -458,7 +462,7 @@ class ShareDetailView(ctk.CTkFrame):
             )
             PillLabel(row, text=f.state, state=f.state).grid(row=0, column=2, padx=8)
             dl_btn = ctk.CTkButton(
-                row, text="Download", width=90,
+                row, text=t("share_detail.download_btn"), width=110,
                 command=lambda fid=f.id, fname=f.original_filename: self._download_one(fid, fname),
             )
             if f.state not in ("clean", "ready_unscanned"):
@@ -467,7 +471,9 @@ class ShareDetailView(ctk.CTkFrame):
 
     def _download_one(self, file_id: str, filename: str) -> None:
         dest_str = filedialog.asksaveasfilename(
-            parent=self.winfo_toplevel(), title="Save file as", initialfile=filename,
+            parent=self.winfo_toplevel(),
+            title=t("share_detail.save_file_as"),
+            initialfile=filename,
         )
         if not dest_str:
             return
@@ -482,9 +488,11 @@ class ShareDetailView(ctk.CTkFrame):
             if f.state in ("clean", "ready_unscanned")
         ]
         if not downloadable:
-            mb.info(top, "Nothing to save", "No downloadable files.")
+            mb.info(top, t("share_detail.nothing_to_save_title"), t("share_detail.nothing_to_save_body"))
             return
-        dir_str = filedialog.askdirectory(parent=top, title="Save all to folder")
+        dir_str = filedialog.askdirectory(
+            parent=top, title=t("share_detail.save_all_dir_title"),
+        )
         if not dir_str:
             return
         base = Path(dir_str)
@@ -510,14 +518,18 @@ class ShareDetailView(ctk.CTkFrame):
             self._dl_in_flight -= 1
             if self._dl_in_flight <= 0:
                 self.progress.pack_forget()
-            mb.info(self.winfo_toplevel(), "Downloaded", f"Saved to:\n{path}")
+            mb.info(
+                self.winfo_toplevel(),
+                t("share_detail.downloaded_title"),
+                t("share_detail.downloaded_body", path=path),
+            )
 
         def _failed(exc):
             self._dl_in_flight -= 1
             if self._dl_in_flight <= 0:
                 self.progress.pack_forget()
             msg = getattr(exc, "message", None) or str(exc)
-            mb.warn(self.winfo_toplevel(), "Download failed", msg)
+            mb.warn(self.winfo_toplevel(), t("share_detail.download_failed_title"), msg)
 
         run_with_progress(
             self._app_root, _do,

@@ -13,6 +13,7 @@ from typing import Optional
 import customtkinter as ctk
 
 from ..api import ApiClient
+from ..i18n import t
 from ..models import MeResponse
 from .settings_dialog import SettingsDialog
 from .share_list_panel import ShareListPanel
@@ -33,7 +34,8 @@ class MainWindow:
         self._me = me
         self._on_signed_out: Optional[callable] = None
         root.title(
-            f"file:Heron — {me.display_name} ({me.role})  ·  v{self._version}"
+            t("app.title_template",
+              name=me.display_name, role=me.role, version=self._version)
         )
         # v0.4.27: removed the tk.Menu menu bar. On Windows the menu
         # bar strip is a Win32 control that ignores DWM dark-mode and
@@ -48,7 +50,8 @@ class MainWindow:
         top_bar = ctk.CTkFrame(self._app_root, fg_color="transparent")
         top_bar.pack(fill="x", padx=8, pady=(8, 0))
         ctk.CTkButton(
-            top_bar, text="⚙  Settings", command=self._open_settings,
+            top_bar, text=t("main_window.settings_button"),
+            command=self._open_settings,
             width=110, height=28, fg_color="transparent",
             border_width=1, hover_color=("gray85", "gray25"),
         ).pack(side="right")
@@ -56,6 +59,11 @@ class MainWindow:
         self.tabs = ctk.CTkTabview(self._app_root)
         self.tabs.pack(fill="both", expand=True, padx=8, pady=8)
 
+        # Tab keys stay in English — they're the lookup keys CTk
+        # uses for tab switching and ``_on_tab_changed`` matches
+        # against them. The DISPLAYED label is the same string for
+        # now; localised labels would require remapping the segmented
+        # button text without changing the lookup key.
         inbox_tab = self.tabs.add("Inbox")
         outbox_tab = self.tabs.add("Outbox")
         upload_tab = self.tabs.add("New share")

@@ -236,7 +236,7 @@ onMounted(load)
       </button>
     </div>
 
-    <div v-if="confirm" class="confirm-backdrop" @click.self="closeConfirm">
+    <div v-if="confirm" class="confirm-backdrop" @click.self="closeConfirm" @keydown.escape="closeConfirm">
       <div
         class="confirm-card"
         role="dialog"

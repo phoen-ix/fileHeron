@@ -472,6 +472,7 @@ const headlineFailures = computed(() => {
         role="dialog"
         aria-modal="true"
         @click.self="closeConfirm"
+        @keydown.escape="closeConfirm"
       >
         <div class="fh-modal fh-modal--small">
           <h2 class="modal-h2">

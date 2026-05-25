@@ -494,7 +494,7 @@ onMounted(() => {
     </template>
 
     <!-- Details modal -->
-    <div v-if="detailsInvite" class="fh-modal-backdrop" @click.self="closeDetails">
+    <div v-if="detailsInvite" class="fh-modal-backdrop" @click.self="closeDetails" @keydown.escape="closeDetails">
       <div class="fh-modal" role="dialog" :aria-label="t('admin_users.invites.details.title')">
         <h2 class="modal-h2">{{ t('admin_users.invites.details.title') }}</h2>
         <dl class="details-list">
@@ -542,7 +542,7 @@ onMounted(() => {
     </div>
 
     <!-- Activate modal -->
-    <div v-if="activateInviteRow" class="fh-modal-backdrop" @click.self="closeActivate">
+    <div v-if="activateInviteRow" class="fh-modal-backdrop" @click.self="closeActivate" @keydown.escape="closeActivate">
       <div class="fh-modal" role="dialog" :aria-label="t('admin_users.invites.activate.title')">
         <h2 class="modal-h2">{{ t('admin_users.invites.activate.title') }}</h2>
         <p class="modal-body">
@@ -581,7 +581,7 @@ onMounted(() => {
     </div>
 
     <!-- Revoke confirmation -->
-    <div v-if="revokeInviteRow" class="fh-modal-backdrop" @click.self="closeRevoke">
+    <div v-if="revokeInviteRow" class="fh-modal-backdrop" @click.self="closeRevoke" @keydown.escape="closeRevoke">
       <div class="fh-modal fh-modal--small" role="dialog" :aria-label="t('admin_users.invites.delete.title')">
         <h2 class="modal-h2">{{ t('admin_users.invites.delete.title') }}</h2>
         <p class="modal-body">

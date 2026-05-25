@@ -399,6 +399,7 @@ onMounted(load)
       v-if="bulkConfirmOpen"
       class="fh-modal-backdrop"
       @click.self="closeBulkConfirm"
+      @keydown.escape="closeBulkConfirm"
     >
       <div class="fh-modal fh-modal--small" role="dialog" :aria-label="t('share_list.bulk.confirm.title')">
         <h2 class="modal-h2">{{ t('share_list.bulk.confirm.title') }}</h2>

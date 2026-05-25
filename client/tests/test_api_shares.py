@@ -150,3 +150,58 @@ def test_patch_share_download_limit_rejects_both_args():
         shares_api.patch_share_download_limit(
             api, "share-1", limit=5, clear=True,
         )
+
+
+# v0.7.2 list_shares filter expansion ----------------------------------------
+
+
+@respx.mock
+def test_list_shares_passes_sort_direction_and_party_filters():
+    captured: dict = {}
+
+    def _handler(request: httpx.Request) -> httpx.Response:
+        captured["url"] = str(request.url)
+        return httpx.Response(
+            200, json={"items": [], "total": 0, "page": 1, "page_size": 200},
+        )
+
+    respx.get(f"{SERVER}/api/shares").mock(side_effect=_handler)
+    api = ApiClient(SERVER, api_token="fh_xx_yy")
+    shares_api.list_shares(
+        api,
+        box="outbox",
+        sort="expires_at",
+        direction="asc",
+        recipient_user_id=42,
+    )
+    url = captured["url"]
+    assert "sort=expires_at" in url
+    assert "direction=asc" in url
+    assert "recipient_user_id=42" in url
+    # Inbox-side param must not leak when not supplied.
+    assert "sender_user_id" not in url
+
+
+@respx.mock
+def test_list_shares_omits_optional_params_when_unset():
+    """Default call (the v0.5.x shape) must not regress — no sort,
+    direction, or party params on the wire when caller didn't set
+    them. Backend has its own defaults; injecting client defaults
+    would shadow future server-side changes."""
+    captured: dict = {}
+
+    def _handler(request: httpx.Request) -> httpx.Response:
+        captured["url"] = str(request.url)
+        return httpx.Response(
+            200, json={"items": [], "total": 0, "page": 1, "page_size": 200},
+        )
+
+    respx.get(f"{SERVER}/api/shares").mock(side_effect=_handler)
+    api = ApiClient(SERVER, api_token="fh_xx_yy")
+    shares_api.list_shares(api, box="inbox")
+    url = captured["url"]
+    assert "sort=" not in url
+    assert "direction=" not in url
+    assert "sender_user_id=" not in url
+    assert "recipient_user_id=" not in url
+    assert "recipient_group_id=" not in url

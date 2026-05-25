@@ -44,6 +44,17 @@ _STATE_FILTERS: list[tuple[str, str]] = [
 ]
 
 
+# v0.7.2: sort options match the SPA's GET /api/shares ?sort= values.
+_SORT_OPTIONS: list[tuple[str, str]] = [
+    ("Created", "created_at"),
+    ("Expires", "expires_at"),
+    ("Subject", "subject"),
+]
+
+# Sentinel for "no party filter applied" in the OptionMenu.
+_ANY_PARTY = "Anyone"
+
+
 class ShareListPanel(ctk.CTkFrame):
     """Used twice — for the Inbox tab (box=inbox, shows sender) and
     the Outbox tab (box=outbox, shows recipients)."""
@@ -74,7 +85,7 @@ class ShareListPanel(ctk.CTkFrame):
         self._list_frame = ctk.CTkFrame(self, fg_color="transparent")
         self._list_frame.pack(fill="both", expand=True)
 
-        # Filter row.
+        # ---- Row 1: search + state filter + refresh
         row = ctk.CTkFrame(self._list_frame, fg_color="transparent")
         row.pack(fill="x", padx=8, pady=(8, 4))
 
@@ -96,6 +107,48 @@ class ShareListPanel(ctk.CTkFrame):
         state_menu.pack(side="left", padx=(8, 8))
 
         ctk.CTkButton(row, text="Refresh", command=self.refresh, width=90).pack(side="left")
+
+        # ---- Row 2 (v0.7.2): sort + direction + party filter
+        row2 = ctk.CTkFrame(self._list_frame, fg_color="transparent")
+        row2.pack(fill="x", padx=8, pady=(0, 4))
+
+        ctk.CTkLabel(row2, text="Sort:", anchor="w").pack(side="left")
+        self.sort_var = ctk.StringVar(value=_SORT_OPTIONS[0][0])
+        sort_menu = ctk.CTkOptionMenu(
+            row2,
+            variable=self.sort_var,
+            values=[label for label, _ in _SORT_OPTIONS],
+            command=lambda _v: self.refresh(),
+            width=110,
+        )
+        sort_menu.pack(side="left", padx=(6, 6))
+
+        # Direction toggle: starts at desc (newest/farthest first — matches
+        # the backend default + the old client behaviour).
+        self._direction = "desc"
+        self._direction_btn = ctk.CTkButton(
+            row2, text="↓ desc", command=self._toggle_direction, width=80,
+        )
+        self._direction_btn.pack(side="left", padx=(0, 12))
+
+        # Party filter — distinct senders (inbox) or recipient users
+        # (outbox) seen on the current page. Lightweight: no server
+        # search, just the parties already present in _items. Refilled
+        # by ``_rebuild_party_options`` after every successful refresh.
+        party_label = "Sender:" if self._box == "inbox" else "Recipient:"
+        ctk.CTkLabel(row2, text=party_label, anchor="w").pack(side="left")
+        self.party_var = ctk.StringVar(value=_ANY_PARTY)
+        self._party_menu = ctk.CTkOptionMenu(
+            row2,
+            variable=self.party_var,
+            values=[_ANY_PARTY],
+            command=lambda _v: self.refresh(),
+            width=180,
+        )
+        self._party_menu.pack(side="left", padx=(6, 0))
+        # Map: party label → user_id (None for _ANY_PARTY). Refilled
+        # by ``_rebuild_party_options`` on each refresh response.
+        self._party_id_by_label: dict[str, Optional[int]] = {_ANY_PARTY: None}
 
         # Header row (sticky above the scrollable content).
         header = ctk.CTkFrame(self._list_frame, fg_color=("gray80", "gray25"), corner_radius=4)
@@ -120,12 +173,54 @@ class ShareListPanel(ctk.CTkFrame):
             fill="x", padx=8, pady=(0, 8)
         )
 
+    def _toggle_direction(self) -> None:
+        self._direction = "asc" if self._direction == "desc" else "desc"
+        self._direction_btn.configure(
+            text="↑ asc" if self._direction == "asc" else "↓ desc",
+        )
+        self.refresh()
+
+    def _rebuild_party_options(self) -> None:
+        """v0.7.2: derive the Sender/Recipient OptionMenu values from
+        the parties present in the current page of items. Cheap, no
+        server search needed, and gives an immediate "filter to Alice"
+        UX. Loss: parties not visible on the current page aren't
+        selectable — acceptable given the 200-row page cap."""
+        seen: dict[int, str] = {}
+        if self._box == "inbox":
+            for it in self._items:
+                if it.sender is not None:
+                    seen.setdefault(it.sender.id, it.sender.display_name)
+        else:
+            for it in self._items:
+                for rec in it.recipients:
+                    if rec.kind == "user":
+                        seen.setdefault(rec.id, rec.label)
+        labels = [_ANY_PARTY] + sorted(seen.values(), key=str.casefold)
+        self._party_id_by_label = {_ANY_PARTY: None}
+        for uid, label in seen.items():
+            self._party_id_by_label[label] = uid
+        # Preserve the current selection if still present; else reset.
+        current = self.party_var.get()
+        if current not in labels:
+            self.party_var.set(_ANY_PARTY)
+        self._party_menu.configure(values=labels)
+
     def refresh(self) -> None:
         label = self.state_filter_var.get()
         state_value = next(
             (v for (lbl, v) in _STATE_FILTERS if lbl == label), ""
         )
         states = [state_value] if state_value else None
+        sort_value = next(
+            (v for (lbl, v) in _SORT_OPTIONS if lbl == self.sort_var.get()),
+            "created_at",
+        )
+        party_id = self._party_id_by_label.get(self.party_var.get())
+        # v0.7.2: split the same picker between the two backend params
+        # depending on which box we're showing.
+        sender_user_id: Optional[int] = party_id if self._box == "inbox" else None
+        recipient_user_id: Optional[int] = party_id if self._box == "outbox" else None
         self.status_var.set("Loading…")
 
         def _fetch():
@@ -136,11 +231,16 @@ class ShareListPanel(ctk.CTkFrame):
                 states=states,
                 page=1,
                 page_size=200,
+                sort=sort_value,
+                direction=self._direction,
+                sender_user_id=sender_user_id,
+                recipient_user_id=recipient_user_id,
             )
 
         def _done(resp):
             self._items = resp.items
             self.status_var.set(f"{len(resp.items)} of {resp.total} shares")
+            self._rebuild_party_options()
             # v0.6.2: skip re-grid while drilled in. The list frame is
             # pack_forgot during drill-in, so a render() during that
             # time is just wasted CPU + GC churn (and a latent footgun

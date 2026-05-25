@@ -16,12 +16,36 @@ def list_shares(
     states: Optional[list[str]] = None,
     page: int = 1,
     page_size: int = 50,
+    sort: Optional[str] = None,
+    direction: Optional[str] = None,
+    sender_user_id: Optional[int] = None,
+    recipient_user_id: Optional[int] = None,
+    recipient_group_id: Optional[int] = None,
 ) -> ShareListResponse:
+    """v0.7.2: optional sort + party-filter params matching the SPA's
+    GET /api/shares query shape.
+
+    - ``sort`` ∈ ``created_at`` (default server-side) / ``expires_at`` /
+      ``subject``. ``direction`` ∈ ``asc`` / ``desc`` (default ``desc``).
+    - Party filters (``sender_user_id`` for inbox, ``recipient_user_id`` /
+      ``recipient_group_id`` for outbox) narrow to a single party. Mutually
+      consistent with whatever the panel UI exposes.
+    """
     params: dict = {"box": box, "page": page, "page_size": page_size}
     if q:
         params["q"] = q
     if states:
         params["state"] = states  # httpx serialises list-valued params correctly
+    if sort is not None:
+        params["sort"] = sort
+    if direction is not None:
+        params["direction"] = direction
+    if sender_user_id is not None:
+        params["sender_user_id"] = sender_user_id
+    if recipient_user_id is not None:
+        params["recipient_user_id"] = recipient_user_id
+    if recipient_group_id is not None:
+        params["recipient_group_id"] = recipient_group_id
     out = api.request_or_raise("GET", "/api/shares", params=params)
     return ShareListResponse.model_validate(out)
 

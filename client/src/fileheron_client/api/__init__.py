@@ -8,6 +8,7 @@ from .shares import (
     expire_share_now,
     get_share,
     list_shares,
+    patch_share_download_limit,
     patch_share_expiry,
     revoke_share,
 )
@@ -29,6 +30,7 @@ __all__ = [
     "revoke_share",
     "expire_share_now",
     "patch_share_expiry",
+    "patch_share_download_limit",
     "download_file",
     "get_download_url",
     "upload_direct",

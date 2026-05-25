@@ -101,3 +101,52 @@ def test_patch_share_expiry_rejects_both_args():
         shares_api.patch_share_expiry(
             api, "share-1", expires_at=datetime(2026, 6, 1), clear=True
         )
+
+
+# v0.7.1 download-limit edit -------------------------------------------------
+
+
+@respx.mock
+def test_patch_share_download_limit_set_sends_limit():
+    body = _share_response_json()
+    body["download_limit"] = 10
+    body["downloads_remaining"] = 10
+    captured: dict = {}
+
+    def _handler(request: httpx.Request) -> httpx.Response:
+        captured["body"] = request.content
+        return httpx.Response(200, json=body)
+
+    respx.patch(f"{SERVER}/api/shares/share-1").mock(side_effect=_handler)
+    api = ApiClient(SERVER, api_token="fh_xx_yy")
+    out = shares_api.patch_share_download_limit(api, "share-1", limit=10)
+    assert b'"download_limit":10' in captured["body"].replace(b" ", b"")
+    assert b"download_limit_clear" not in captured["body"]
+    assert out.download_limit == 10
+    assert out.downloads_remaining == 10
+
+
+@respx.mock
+def test_patch_share_download_limit_clear_sends_clear_flag():
+    body = _share_response_json()
+    body["download_limit"] = None
+    body["downloads_remaining"] = None
+    captured: dict = {}
+
+    def _handler(request: httpx.Request) -> httpx.Response:
+        captured["body"] = request.content
+        return httpx.Response(200, json=body)
+
+    respx.patch(f"{SERVER}/api/shares/share-1").mock(side_effect=_handler)
+    api = ApiClient(SERVER, api_token="fh_xx_yy")
+    out = shares_api.patch_share_download_limit(api, "share-1", clear=True)
+    assert b'"download_limit_clear":true' in captured["body"].replace(b" ", b"")
+    assert out.download_limit is None
+
+
+def test_patch_share_download_limit_rejects_both_args():
+    api = ApiClient(SERVER, api_token="fh_xx_yy")
+    with pytest.raises(ValueError, match="not both"):
+        shares_api.patch_share_download_limit(
+            api, "share-1", limit=5, clear=True,
+        )

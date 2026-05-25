@@ -118,6 +118,33 @@ def get_public_link(api: ApiClient, share_id: str) -> Optional[dict]:
         return None
 
 
+def patch_share_download_limit(
+    api: ApiClient,
+    share_id: str,
+    *,
+    limit: Optional[int] = None,
+    clear: bool = False,
+) -> ShareResponse:
+    """v0.7.1: edit a share's per-recipient download budget.
+
+    Same backend route as ``patch_share_expiry`` (``PATCH /api/shares/{id}``)
+    — body keys are ``download_limit`` (int > 0) and
+    ``download_limit_clear`` (true → no limit, mutually exclusive with
+    ``download_limit``).
+    """
+    if clear and limit is not None:
+        raise ValueError(
+            "Pass either limit or clear=True, not both."
+        )
+    body: dict = {}
+    if clear:
+        body["download_limit_clear"] = True
+    elif limit is not None:
+        body["download_limit"] = limit
+    out = api.request_or_raise("PATCH", f"/api/shares/{share_id}", json=body)
+    return ShareResponse.model_validate(out)
+
+
 def patch_share_expiry(
     api: ApiClient,
     share_id: str,

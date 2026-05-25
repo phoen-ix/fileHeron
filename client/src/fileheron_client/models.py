@@ -116,6 +116,12 @@ class ShareResponse(_Base):
     recipient_user_ids: list[int] = []
     recipient_groups: list[GroupRecipientRef] = []
     files: list[FileInShareResponse] = []
+    # v0.7.1: per-share download budget for AUTHENTICATED recipients
+    # (separate from + additive to the public-link's own budget).
+    # None = unlimited. `downloads_remaining` is atomic-decrement
+    # state, only meaningful when `download_limit` is set.
+    download_limit: Optional[int] = None
+    downloads_remaining: Optional[int] = None
     # v0.5.3: present only on the response to POST /api/shares when
     # the request body included ``public_link``. Pydantic would
     # silently drop the server's field if we didn't declare it,

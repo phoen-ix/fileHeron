@@ -29,6 +29,7 @@ from ..models import FileInShareResponse, MeResponse, ShareResponse
 from ._async import run_in_background, run_with_progress
 from . import _messagebox as mb
 from .expiry_dialog import ExpiryDialog
+from .limit_dialog import LimitDialog
 from .widgets import PillLabel, human_size
 
 
@@ -136,6 +137,10 @@ class ShareDetailView(ctk.CTkFrame):
         self.edit_expiry_btn = ctk.CTkButton(
             btns, text="Edit expiry…", command=self._edit_expiry, width=110,
         )
+        # v0.7.1: per-share download-budget editor (matches SPA).
+        self.edit_limit_btn = ctk.CTkButton(
+            btns, text="Edit limit…", command=self._edit_limit, width=110,
+        )
         # v0.6.1: single destructive "End share" replaces the old
         # Revoke + Expire-now pair. Same backend call as before
         # (POST /api/shares/{id}/expire) — state → expired, files
@@ -147,8 +152,10 @@ class ShareDetailView(ctk.CTkFrame):
         )
         # Initially hidden; _refresh_action_visibility shows them.
         self.edit_expiry_btn.pack(side="left", padx=(0, 4))
+        self.edit_limit_btn.pack(side="left", padx=4)
         self.end_share_btn.pack(side="left", padx=4)
         self.edit_expiry_btn.pack_forget()
+        self.edit_limit_btn.pack_forget()
         self.end_share_btn.pack_forget()
 
         # Right-aligned button. "Close" gone — Back at the top replaces it.
@@ -287,18 +294,32 @@ class ShareDetailView(ctk.CTkFrame):
 
         run_in_background(self._app_root, _fetch, on_done=_done, on_failed=_failed)
 
+    @staticmethod
+    def _build_meta_bits(s: ShareResponse) -> list[str]:
+        """v0.7.1: collapse the three inline copies of this loop into
+        one helper so adding/removing a meta field (e.g. download_limit)
+        doesn't require touching `_render_after_load`, `_end_share._done`,
+        and `_edit_expiry._done` in lockstep."""
+        bits = [
+            f"Created {s.created_at.strftime('%Y-%m-%d %H:%M')}",
+            f"Expires {format_expiry(s.expires_at)}",
+        ]
+        if s.download_limit is not None:
+            remaining = s.downloads_remaining
+            if remaining is None:
+                bits.append(f"Limit: {s.download_limit}")
+            else:
+                bits.append(f"Downloads: {remaining}/{s.download_limit}")
+        if s.message:
+            bits.append(s.message)
+        return bits
+
     def _render_after_load(self) -> None:
         s = self._share
         if s is None:
             return
         self.title_var.set(s.effective_subject or "(no subject)")
-        bits = [
-            f"Created {s.created_at.strftime('%Y-%m-%d %H:%M')}",
-            f"Expires {format_expiry(s.expires_at)}",
-        ]
-        if s.message:
-            bits.append(s.message)
-        self.meta_var.set(" · ".join(bits))
+        self.meta_var.set(" · ".join(self._build_meta_bits(s)))
         self.state_pill.setState(s.state)
         self.state_pill.setText(s.state)
         self._render_files(s.files)
@@ -307,7 +328,7 @@ class ShareDetailView(ctk.CTkFrame):
     def _refresh_action_visibility(self) -> None:
         manage = self._can_manage()
         active = self._share is not None and self._share.state == "active"
-        for btn in (self.edit_expiry_btn, self.end_share_btn):
+        for btn in (self.edit_expiry_btn, self.edit_limit_btn, self.end_share_btn):
             if manage:
                 btn.pack(side="left", padx=(0, 4)) if btn is self.edit_expiry_btn else btn.pack(side="left", padx=4)
             else:
@@ -343,13 +364,7 @@ class ShareDetailView(ctk.CTkFrame):
             self._share = updated
             if self._on_mutated is not None:
                 self._on_mutated()
-            bits = [
-                f"Created {updated.created_at.strftime('%Y-%m-%d %H:%M')}",
-                f"Expires {format_expiry(updated.expires_at)}",
-            ]
-            if updated.message:
-                bits.append(updated.message)
-            self.meta_var.set(" · ".join(bits))
+            self.meta_var.set(" · ".join(self._build_meta_bits(updated)))
             self.state_pill.setState(updated.state)
             self.state_pill.setText(updated.state)
             self._refresh_action_visibility()
@@ -381,14 +396,42 @@ class ShareDetailView(ctk.CTkFrame):
             self._share = updated
             if self._on_mutated is not None:
                 self._on_mutated()
-            bits = [
-                f"Created {updated.created_at.strftime('%Y-%m-%d %H:%M')}",
-                f"Expires {format_expiry(updated.expires_at)}",
-            ]
-            if updated.message:
-                bits.append(updated.message)
-            self.meta_var.set(" · ".join(bits))
+            self.meta_var.set(" · ".join(self._build_meta_bits(updated)))
             mb.info(top, "Updated", "Share expiry updated.")
+
+        def _failed(exc):
+            msg = getattr(exc, "message", None) or str(exc)
+            mb.warn(top, "Edit failed", msg)
+
+        run_in_background(self._app_root, _do, on_done=_done, on_failed=_failed)
+
+    def _edit_limit(self) -> None:
+        """v0.7.1: edit the per-share download-budget cap."""
+        s = self._share
+        if not s:
+            return
+        top = self.winfo_toplevel()
+        dlg = LimitDialog(top, current=s.download_limit)
+        choice = dlg.show_modal()
+        if choice is None:
+            return
+        mode, value = choice
+
+        def _do():
+            if mode == "clear":
+                return api_pkg.patch_share_download_limit(
+                    self._api, s.id, clear=True,
+                )
+            return api_pkg.patch_share_download_limit(
+                self._api, s.id, limit=value,
+            )
+
+        def _done(updated):
+            self._share = updated
+            if self._on_mutated is not None:
+                self._on_mutated()
+            self.meta_var.set(" · ".join(self._build_meta_bits(updated)))
+            mb.info(top, "Updated", "Share download limit updated.")
 
         def _failed(exc):
             msg = getattr(exc, "message", None) or str(exc)

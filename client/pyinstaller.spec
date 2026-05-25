@@ -41,10 +41,11 @@ hiddenimports = [
     "fileheron_client.api.uploads",
     "fileheron_client.api.users",
     "fileheron_client.api.groups",
-    # keyring backends are dynamically loaded.
+    # keyring backends are dynamically loaded. The desktop client
+    # ships Windows-only via .github/workflows/client-release.yml; the
+    # Linux (SecretService) and macOS backends are dead weight in the
+    # .exe (~200 KB saved by v0.6.2 trim).
     "keyring.backends.Windows",
-    "keyring.backends.SecretService",
-    "keyring.backends.macOS",
 ]
 
 a = Analysis(

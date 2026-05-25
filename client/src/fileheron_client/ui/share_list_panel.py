@@ -141,7 +141,13 @@ class ShareListPanel(ctk.CTkFrame):
         def _done(resp):
             self._items = resp.items
             self.status_var.set(f"{len(resp.items)} of {resp.total} shares")
-            self._render()
+            # v0.6.2: skip re-grid while drilled in. The list frame is
+            # pack_forgot during drill-in, so a render() during that
+            # time is just wasted CPU + GC churn (and a latent footgun
+            # if a future refactor assumes _render only runs while the
+            # list is visible). _drill_out fires its own refresh().
+            if self._detail_view is None:
+                self._render()
 
         def _failed(exc):
             msg = getattr(exc, "message", None) or str(exc)

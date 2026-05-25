@@ -88,33 +88,6 @@ def create_share(
     return ShareResponse.model_validate(out)
 
 
-def delete_share(api: ApiClient, share_id: str) -> None:
-    api.request_or_raise(
-        "DELETE", f"/api/shares/{share_id}", expected=204
-    )
-
-
-# v0.2.0 share-manager actions ------------------------------------------------
-#
-# All three return the up-to-date ShareResponse so the caller can refresh
-# the dialog state from one response — no follow-up GET needed.
-
-
-def revoke_share(api: ApiClient, share_id: str) -> None:
-    """Revoke an active share. Files become inaccessible to recipients
-    but stay on disk; audit row `share_revoked` is written server-side.
-    204 No Content.
-
-    Alias for ``delete_share`` — the backend routes DELETE /shares/{id}
-    to ``services.share.revoke_share`` (no hard-delete). The desktop
-    client and SPA UIs collapsed to a single "End share" button (calls
-    ``expire_share_now``, which hard-deletes bytes) in v0.6.1 — this
-    wrapper stays for API-token-driven scripts that still want the
-    soft-revoke semantics.
-    """
-    delete_share(api, share_id)
-
-
 def expire_share_now(api: ApiClient, share_id: str) -> ShareResponse:
     """Force-expire the share immediately. Flips state to ``expired``,
     sets ``expires_at = now()``, hard-deletes the file bytes from disk.
@@ -171,3 +144,33 @@ def patch_share_expiry(
         body["expires_at"] = expires_at.isoformat()
     out = api.request_or_raise("PATCH", f"/api/shares/{share_id}", json=body)
     return ShareResponse.model_validate(out)
+
+
+# ---------------------------------------------------------------------------
+# Backward-compat for API-token scripts (UIs collapsed in v0.6.1)
+#
+# The desktop client + SPA UIs both ship a single "End share" button that
+# routes to ``expire_share_now`` (state → expired, files hard-deleted). The
+# wrappers below stay because:
+#
+#   - External scripts using API tokens may already call them.
+#   - Some flows still want the soft-revoke semantics (state → revoked, files
+#     stay on disk) that the backend's DELETE /shares/{id} preserves.
+#
+# Neither is called from any UI module in this package. Don't wire either
+# back into the UI without revisiting v0.6.1's "End share" decision.
+# ---------------------------------------------------------------------------
+
+
+def delete_share(api: ApiClient, share_id: str) -> None:
+    api.request_or_raise(
+        "DELETE", f"/api/shares/{share_id}", expected=204
+    )
+
+
+def revoke_share(api: ApiClient, share_id: str) -> None:
+    """Revoke an active share. Files become inaccessible to recipients
+    but stay on disk; audit row ``share_revoked`` is written server-side.
+    204 No Content. Alias for ``delete_share`` (the backend routes
+    DELETE /shares/{id} to ``services.share.revoke_share``)."""
+    delete_share(api, share_id)

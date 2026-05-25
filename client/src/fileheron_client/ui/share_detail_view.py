@@ -12,12 +12,15 @@ the native ``filedialog`` calls stay as overlays — they're small and
 fine as pop-ups. Only the detail itself moved in-window."""
 from __future__ import annotations
 
+import logging
 import webbrowser
 from pathlib import Path
 from tkinter import filedialog
 from typing import Callable, Optional
 
 import customtkinter as ctk
+
+_log = logging.getLogger("fileheron_client.ui.share_detail_view")
 
 from .. import api as api_pkg
 from ..api import ApiClient, ApiError
@@ -225,13 +228,23 @@ class ShareDetailView(ctk.CTkFrame):
         url = self._pl_url_var.get()
         if not url:
             return
+        top = self.winfo_toplevel()
         try:
-            top = self.winfo_toplevel()
             top.clipboard_clear()
             top.clipboard_append(url)
             top.update()  # ensures the clipboard sticks
-        except Exception:
-            pass
+        except Exception as e:
+            # v0.6.2: surface the failure. Rare in practice (only seen
+            # when another process holds a global clipboard lock) but
+            # before this users would click Copy, see no feedback, then
+            # paste stale data — silent loss of trust.
+            _log.warning("clipboard copy of public-link URL failed: %s", e)
+            mb.warn(
+                top,
+                "Copy failed",
+                "Couldn't reach the clipboard. The URL is shown in the "
+                "field above — copy it manually with Ctrl+C.",
+            )
 
     def _open_pl_url(self) -> None:
         url = self._pl_url_var.get()

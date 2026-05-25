@@ -106,3 +106,18 @@ def test_main_window_no_share_detail_dialog_import() -> None:
     assert "on_open_share" not in src, (
         "main_window.py must not pass on_open_share to ShareListPanel"
     )
+
+
+def test_refresh_done_skips_render_while_drilled_in() -> None:
+    """v0.6.2: background list-refresh that completes while the user
+    is drilled into a share detail must NOT call _render() — the list
+    frame is pack_forgot, the work is wasted, and a future refactor
+    could assume _render only runs while visible.
+
+    Source guard: ``if self._detail_view is None: self._render()``."""
+    src = _source("share_list_panel.py")
+    assert "if self._detail_view is None:" in src, (
+        "share_list_panel.py refresh._done must guard _render() with "
+        "`if self._detail_view is None:` (v0.6.2 — skip wasted render "
+        "while drilled in)."
+    )

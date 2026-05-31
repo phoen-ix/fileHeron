@@ -1,0 +1,15 @@
+Hallo {{ user_name|default("zusammen") }},
+
+Eine Single-Sign-On-Identität wurde gerade mit deinem {{ app_name }}-Konto
+verknüpft:
+
+Anbieter: {{ provider_name }}
+
+Wenn du das warst, musst du nichts tun. Falls du dich NICHT gerade mit
+diesem Anbieter angemeldet hast, wende dich umgehend an deine
+Administratorin oder deinen Administrator — dein Konto könnte
+kompromittiert sein.
+
+Konto: {{ account_url }}
+
+— {{ app_name }}

@@ -312,6 +312,20 @@ def get_share_or_404(db: Session, share_id: str) -> Share:
     return share
 
 
+def assert_share_downloadable(share: Share) -> None:
+    """Gate downloads on share lifecycle state. Mirrors the public path's
+    `public_link.assert_link_usable` so the authenticated download path
+    honours revoke / expire just like public links do.
+
+    Without this, `revoke_share` (which only flips `state`, leaving the
+    bytes + `file.state` intact) is a no-op for authorised recipients:
+    they can keep minting signed URLs and downloading a revoked share."""
+    if share.state != ShareState.active:
+        raise AppError(410, "SHARE_NOT_ACTIVE", "This share is no longer active.")
+    if share.expires_at is not None and share.expires_at < _utcnow():
+        raise AppError(410, "SHARE_EXPIRED", "This share has expired.")
+
+
 def is_authorized_to_download(db: Session, *, user: User, share: Share) -> bool:
     """Sender, admin, direct recipient, or member of any recipient group."""
     if user.role == UserRole.admin:

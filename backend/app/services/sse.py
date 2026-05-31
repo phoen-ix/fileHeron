@@ -32,6 +32,33 @@ logger = logging.getLogger("fileheron.sse")
 CONNECTION_TTL_SEC = 60.0
 KEEPALIVE_SEC = 15.0
 
+# Per-worker cap on concurrent SSE connections per user. Without it, an
+# authenticated user could open hundreds of streams (each holds a Redis
+# pubsub subscription + an HTTP connection) and exhaust FDs / memory
+# (audit finding M4). A handful of tabs is the legitimate ceiling; the
+# 60s TTL recycles connections so this is per live connection, not per
+# lifetime. Bounded per worker → bounded per worker's resources.
+MAX_STREAMS_PER_USER = 5
+_active_streams: dict[int, int] = {}
+
+
+def try_acquire_user_stream(user_id: int) -> bool:
+    """Reserve a stream slot for the user on this worker. Returns False
+    when the user is already at MAX_STREAMS_PER_USER (caller → 429)."""
+    n = _active_streams.get(user_id, 0)
+    if n >= MAX_STREAMS_PER_USER:
+        return False
+    _active_streams[user_id] = n + 1
+    return True
+
+
+def release_user_stream(user_id: int) -> None:
+    n = _active_streams.get(user_id, 0)
+    if n <= 1:
+        _active_streams.pop(user_id, None)
+    else:
+        _active_streams[user_id] = n - 1
+
 
 def _channel(user_id: int) -> str:
     return f"fh:sse:{user_id}"

@@ -1,0 +1,13 @@
+Hi {{ user_name|default("there") }},
+
+A single sign-on identity was just linked to your {{ app_name }} account:
+
+Provider: {{ provider_name }}
+
+If this was you, no action is needed. If you did NOT just sign in with
+this provider, contact your administrator immediately — your account may
+be compromised.
+
+Account: {{ account_url }}
+
+— {{ app_name }}

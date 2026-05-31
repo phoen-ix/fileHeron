@@ -36,6 +36,7 @@ from sqlalchemy.orm import Session
 from ..database import SessionLocal
 from ..models.notification import NotificationCategory
 from ..models.user import User, UserRole
+from ..utils.net import assert_public_http_url
 from . import settings as settings_svc
 from .cron_tracker import track_cron
 from .notification import dispatch
@@ -102,6 +103,9 @@ async def _fetch_releases(url: str):
         "User-Agent": "fileHeron-release-check",
         "X-GitHub-Api-Version": "2022-11-28",
     }
+    # SSRF guard for the admin-configurable updates URL — block loopback /
+    # metadata while still allowing a self-hosted/internal release mirror.
+    assert_public_http_url(url, allow_private=True, require_https=False)
     async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT_SEC) as client:
         r = await client.get(url, headers=headers)
         r.raise_for_status()

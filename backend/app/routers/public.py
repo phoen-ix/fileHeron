@@ -162,6 +162,14 @@ def unlock(
         return UnlockPublicLinkResponse(ok=True)
 
     ip = request.client.host if request.client else None
+    # Per-IP throttle: a single noisy IP is refused here (429) without
+    # locking the link for legitimate users on other IPs (finding M5).
+    if public_link_svc.ip_is_rate_limited(db, link, ip):
+        raise AppError(
+            429,
+            "PUBLIC_LINK_RATE_LIMITED",
+            "Too many failed attempts from your address; try again later.",
+        )
     ok = public_link_svc.verify_password(db, link=link, password=payload.password, ip=ip)
     db.commit()
     if not ok:

@@ -29,7 +29,14 @@ from ..middleware.errors import AppError
 from ..models.api_token import ApiToken
 from ..models.audit_log import AuditEventType
 from ..models.client_employee_connection import ClientEmployeeConnection
+from ..models.download_log import DownloadLog
+from ..models.email_verify_token import EmailVerifyToken
 from ..models.file import File, FileState
+from ..models.invite_token import InviteToken
+from ..models.known_device import KnownDevice
+from ..models.login_attempt import LoginAttempt
+from ..models.notification import Notification
+from ..models.password_reset_token import PasswordResetToken
 from ..models.refresh_token import RefreshToken
 from ..models.user import User
 from ..models.user_recovery_code import UserRecoveryCode
@@ -114,6 +121,68 @@ def erase_user(
         | (ClientEmployeeConnection.employee_user_id == target.id)
     ).delete(synchronize_session=False)
 
+    # 3b. Purge personal data that lives OUTSIDE the users row. Because
+    # erasure anonymises (UPDATE) rather than DELETEs the user, no FK
+    # CASCADE fires — these rows would otherwise retain plaintext email /
+    # device fingerprints / IPs of a supposedly-erased user (GDPR Art. 17).
+    # Captured BEFORE the email is rewritten below so the email-keyed
+    # deletes still match.
+    original_email = target.email
+    pii_purged: dict[str, int] = {}
+    # Plaintext email in the forensic login-attempt log.
+    pii_purged["login_attempts"] = (
+        db.query(LoginAttempt)
+        .filter(LoginAttempt.email == original_email)
+        .delete(synchronize_session=False)
+    )
+    # Plaintext email in invites — both invites sent TO this user and
+    # invites this user created (the latter also carry third-party emails).
+    pii_purged["invite_tokens"] = (
+        db.query(InviteToken)
+        .filter(
+            (InviteToken.email == original_email)
+            | (InviteToken.created_by_id == target.id)
+        )
+        .delete(synchronize_session=False)
+    )
+    # Device fingerprints (UA hash + IP geohash) are personal data.
+    pii_purged["known_devices"] = (
+        db.query(KnownDevice)
+        .filter(KnownDevice.user_id == target.id)
+        .delete(synchronize_session=False)
+    )
+    # This user's own bell notifications — payloads can embed names /
+    # filenames. (Notifications to OTHER users that merely reference this
+    # user by then-current name are their data, not ours to delete.)
+    pii_purged["notifications"] = (
+        db.query(Notification)
+        .filter(Notification.user_id == target.id)
+        .delete(synchronize_session=False)
+    )
+    # Dangling single-use auth tokens (no PII, but they're this user's).
+    db.query(PasswordResetToken).filter(
+        PasswordResetToken.user_id == target.id
+    ).delete(synchronize_session=False)
+    db.query(EmailVerifyToken).filter(
+        EmailVerifyToken.user_id == target.id
+    ).delete(synchronize_session=False)
+    # Strip IP / UA from this user's download rows but KEEP the row (the
+    # FK now points at the anonymised user) so the sender's "was it
+    # downloaded" history survives without leaking the recipient's PII.
+    pii_purged["download_log_scrubbed"] = (
+        db.query(DownloadLog)
+        .filter(DownloadLog.accessed_by_user_id == target.id)
+        .update(
+            {DownloadLog.ip: None, DownloadLog.ua_fingerprint_hash: None},
+            synchronize_session=False,
+        )
+    )
+    # Deliberately retained: `share_recipients` rows reference the (now
+    # anonymised) user by integer FK only — no plaintext PII — so the
+    # sender's recipient list stays intact. `audit_log` is the append-only
+    # legal record the erasure receipt verifies against; it references the
+    # user by anonymised id.
+
     # 4. Anonymize the row. Email pattern keeps the UNIQUE(email)
     # constraint happy for repeat erasures and makes the row debuggable.
     target.email = f"erased-{target.id}@erased.invalid"
@@ -133,6 +202,7 @@ def erase_user(
         metadata={
             "deleted_files": deleted_count,
             "deleted_bytes": deleted_bytes,
+            "pii_purged": pii_purged,
         },
         request=request,
     )

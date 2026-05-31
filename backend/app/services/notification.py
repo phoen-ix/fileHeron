@@ -44,6 +44,9 @@ _DEFAULT_CHANNEL: dict[NotificationCategory, NotificationChannel] = {
     NotificationCategory.account_created: NotificationChannel.email,
     NotificationCategory.reset_password: NotificationChannel.email,
     NotificationCategory.login_alert: NotificationChannel.email,
+    # Security notice — surface an SSO auto-link on both channels so an
+    # unauthorised link is hard to miss.
+    NotificationCategory.oidc_linked: NotificationChannel.both,
     NotificationCategory.file_quarantined: NotificationChannel.both,
     # Ops alerts: in-app only by default. On a busy system these fire in
     # bursts (cron retries, transient SMTP/AV issues); emailing each one

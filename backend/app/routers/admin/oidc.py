@@ -11,7 +11,9 @@ from sqlalchemy.orm import Session
 from ...dependencies import get_current_admin, get_db
 from ...models.audit_log import AuditEventType
 from ...models.oidc_provider import OIDCProvider
+from ...middleware.errors import AppError
 from ...models.user import User
+from ...utils.net import assert_public_http_url
 from ...schemas.settings import (
     CreateOIDCProviderRequest,
     OIDCProviderItem,
@@ -286,10 +288,15 @@ async def _probe_issuer(issuer: str) -> TestConnectionResponse:
         return TestConnectionResponse(ok=False, error="No issuer URL provided.")
     url = f"{issuer}/.well-known/openid-configuration"
     try:
+        # SSRF guard — admin can't probe loopback/metadata/etc. Private LAN
+        # allowed (self-hosted IdP). Errors surface as a friendly result.
+        assert_public_http_url(url, allow_private=True, require_https=False)
         async with httpx.AsyncClient(timeout=5.0) as cli:
             resp = await cli.get(url)
             resp.raise_for_status()
         doc = resp.json()
+    except AppError as e:
+        return TestConnectionResponse(ok=False, error=e.message)
     except httpx.HTTPStatusError as e:
         return TestConnectionResponse(
             ok=False, error=f"IdP returned HTTP {e.response.status_code}"

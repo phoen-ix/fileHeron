@@ -14,6 +14,7 @@ Tests reset the cache via `_reset_cache()` (see conftest autouse).
 """
 from __future__ import annotations
 
+import json
 import logging
 import time
 from typing import Any
@@ -23,11 +24,15 @@ import jwt
 
 from ..middleware.errors import AppError
 from ..models.oidc_provider import OIDCProvider
+from ..utils.net import assert_public_http_url
 from . import oidc as oidc_svc
 
 logger = logging.getLogger("fileheron.jwks")
 
 _CACHE_TTL_SEC = 3600  # 1 hour
+# A real JWKS is a few KB. Cap the response so a malicious / compromised IdP
+# can't OOM a worker by returning a multi-GB body. 1 MiB is generous.
+_JWKS_MAX_BYTES = 1 * 1024 * 1024
 
 # (provider_id) → (fetched_at, {kid: PyJWK})
 _cache: dict[str, tuple[float, dict[str, jwt.PyJWK]]] = {}
@@ -39,15 +44,37 @@ def _reset_cache() -> None:
 
 
 async def _fetch_jwks(jwks_uri: str) -> dict[str, jwt.PyJWK]:
+    # SSRF guard (allow private LAN IdPs; block loopback/metadata) + a hard
+    # byte cap streamed off the wire so a huge body can't exhaust memory.
+    assert_public_http_url(jwks_uri, allow_private=True, require_https=False)
     try:
         async with httpx.AsyncClient(timeout=5.0) as cli:
-            resp = await cli.get(jwks_uri)
-            resp.raise_for_status()
-            doc = resp.json()
+            async with cli.stream("GET", jwks_uri) as resp:
+                resp.raise_for_status()
+                cl = resp.headers.get("content-length")
+                if cl is not None and int(cl) > _JWKS_MAX_BYTES:
+                    raise AppError(
+                        503, "OIDC_JWKS_TOO_LARGE", "Identity provider key set is too large."
+                    )
+                buf = bytearray()
+                async for chunk in resp.aiter_bytes():
+                    buf.extend(chunk)
+                    if len(buf) > _JWKS_MAX_BYTES:
+                        raise AppError(
+                            503,
+                            "OIDC_JWKS_TOO_LARGE",
+                            "Identity provider key set is too large.",
+                        )
+        doc = json.loads(bytes(buf))
     except httpx.HTTPError as e:
         logger.warning("JWKS fetch failed uri=%s: %s", jwks_uri, e)
         raise AppError(
             503, "OIDC_JWKS_UNAVAILABLE", "Identity provider key set is unreachable."
+        ) from e
+    except (ValueError, json.JSONDecodeError) as e:
+        logger.warning("JWKS parse failed uri=%s: %s", jwks_uri, e)
+        raise AppError(
+            503, "OIDC_JWKS_UNAVAILABLE", "Identity provider key set is malformed."
         ) from e
 
     keys: dict[str, jwt.PyJWK] = {}

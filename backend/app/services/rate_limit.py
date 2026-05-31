@@ -11,6 +11,9 @@ Successful login resets failed_login_count to 0 and clears locked_until.
 """
 from __future__ import annotations
 
+import logging
+import threading
+import time
 from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING
 
@@ -24,11 +27,38 @@ from ..utils.crypto import sha256_hex
 if TYPE_CHECKING:
     pass
 
+logger = logging.getLogger("fileheron.rate_limit")
 
 _LOGIN_RATE_WINDOW_S = 15 * 60
 _LOCKOUT_THRESHOLD = 5
 _LOCKOUT_DURATION = timedelta(minutes=15)
 _LOCKOUT_EMAIL_DEDUP = timedelta(hours=6)
+
+
+# In-process fixed-window fallback used ONLY when Redis is unreachable.
+# Without it the per-IP limits fail fully open, leaving credential-stuffing
+# from one IP unthrottled during a Redis outage (finding M8). This bounds
+# attempts per worker process; it isn't shared across workers (that's what
+# Redis is for) but turns "unlimited" into "limit × worker_count".
+_local_lock = threading.Lock()
+_local_windows: dict[str, tuple[int, float]] = {}  # key -> (count, expiry_monotonic)
+
+
+def _local_allow(key: str, limit: int, window_sec: int) -> bool:
+    if limit <= 0:
+        return True
+    now = time.monotonic()
+    with _local_lock:
+        count, expiry = _local_windows.get(key, (0, 0.0))
+        if now >= expiry:
+            count, expiry = 0, now + window_sec
+        count += 1
+        _local_windows[key] = (count, expiry)
+        # Opportunistic prune so the dict can't grow without bound.
+        if len(_local_windows) > 4096:
+            for k in [k for k, (_, e) in _local_windows.items() if e <= now]:
+                _local_windows.pop(k, None)
+    return count <= limit
 
 
 def _utcnow() -> datetime:
@@ -59,9 +89,10 @@ def check_login_ip_allowed(ip: str) -> bool:
             redis.expire(key, _LOGIN_RATE_WINDOW_S)
         return count <= settings.RATE_LIMIT_LOGIN
     except Exception:
-        # Fail-open if Redis is unreachable. Account-level lockout still
-        # protects individual users.
-        return True
+        # Redis unreachable → fall back to the in-process limiter rather
+        # than failing fully open (account-level lockout still applies too).
+        logger.warning("login IP rate-limit: Redis unavailable, using in-process fallback")
+        return _local_allow(_ip_key(ip), settings.RATE_LIMIT_LOGIN, _LOGIN_RATE_WINDOW_S)
 
 
 def reset_ip_window(ip: str) -> None:
@@ -102,7 +133,8 @@ def check_ip_allowed(bucket: str, ip: str, limit: int, window_sec: int = _LOGIN_
             redis.expire(key, window_sec)
         return count <= limit
     except Exception:
-        return True
+        logger.warning("%s IP rate-limit: Redis unavailable, using in-process fallback", bucket)
+        return _local_allow(_bucket_key(bucket, ip), limit, window_sec)
 
 
 # ---------------------------------------------------------------------------

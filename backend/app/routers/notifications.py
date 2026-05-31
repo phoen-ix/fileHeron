@@ -33,6 +33,7 @@ from ..schemas.notification import (
     PreferencesResponse,
     UpdatePreferencesRequest,
 )
+from ..services import rate_limit
 from ..services import sse as sse_svc
 from ..services import sse_token as sse_token_svc
 from ..services.notification import _DEFAULT_CHANNEL  # internal, but stable
@@ -203,10 +204,19 @@ def mark_all_read(
 
 
 @router.get("/stream-token")
-def get_stream_token(user: User = Depends(get_current_user)) -> dict:
+def get_stream_token(
+    request: Request, user: User = Depends(get_current_user)
+) -> dict:
     """Mint a short-lived signed token the SPA passes to EventSource as
     ?token=<…>. EventSource cannot send Authorization headers; this is
-    the workaround. Mirrors the /api/files/{id}/download-url pattern."""
+    the workaround. Mirrors the /api/files/{id}/download-url pattern.
+
+    Generous per-IP backstop so a token-mint flood can't be used to
+    amplify the stream DoS (the per-user connection cap in services/sse
+    is the primary bound)."""
+    ip = request.client.host if request.client else "unknown"
+    if not rate_limit.check_ip_allowed("sse_token", ip, limit=120, window_sec=60):
+        raise AppError(429, "RATE_LIMITED", "Too many requests; slow down.")
     return {"token": sse_token_svc.issue(user.id)}
 
 
@@ -270,8 +280,23 @@ async def stream(
         except ValueError:
             last_event_id = None
 
+    # Per-user concurrent-connection cap (finding M4). Acquire here so we
+    # can return a clean 429; release in the generator's finally, which
+    # Starlette invokes on completion OR client disconnect.
+    if not sse_svc.try_acquire_user_stream(user.id):
+        raise AppError(
+            429, "TOO_MANY_STREAMS", "Too many concurrent connections; close some tabs."
+        )
+
+    async def _capped_stream():
+        try:
+            async for frame in sse_svc.stream_for_user(user.id, last_event_id):
+                yield frame
+        finally:
+            sse_svc.release_user_stream(user.id)
+
     return StreamingResponse(
-        sse_svc.stream_for_user(user.id, last_event_id),
+        _capped_stream(),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache, no-transform",

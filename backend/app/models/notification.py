@@ -45,6 +45,11 @@ class NotificationCategory(str, enum.Enum):
     # file `email/{locale}/reset_password.txt.j2`.
     reset_password = "reset_password"
     login_alert = "login_alert"
+    # Security notice: an SSO (OIDC) identity was just linked to this
+    # account (auto-linked on first verified-email sign-in). Lets a user
+    # spot an unauthorised link. Stored as a plain string (non-native
+    # enum) so no migration is needed for the new value.
+    oidc_linked = "oidc_linked"
     file_quarantined = "file_quarantined"
     # Ops alerts (admin-only). Single category, payload.reason discriminates
     # cron_failed / av_unhealthy / smtp_failing / dispatch_failed. In-app

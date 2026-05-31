@@ -106,6 +106,7 @@ def get_download_url(
     share = db.query(Share).filter(Share.id == file.share_id).one()
     if not share_svc.is_authorized_to_download(db, user=user, share=share):
         raise AppError(403, "FORBIDDEN", "You don't have access to this file.")
+    share_svc.assert_share_downloadable(share)
     if file.state == FileState.uploading:
         raise AppError(409, "STILL_UPLOADING", "File hasn't finished uploading yet.")
     if file.state == FileState.deleted:
@@ -145,6 +146,7 @@ def download_file(
 
     if not share_svc.is_authorized_to_download(db, user=user, share=share):
         raise AppError(403, "FORBIDDEN", "You don't have access to this file.")
+    share_svc.assert_share_downloadable(share)
 
     if file.state == FileState.uploading:
         raise AppError(409, "STILL_UPLOADING", "File hasn't finished uploading yet.")

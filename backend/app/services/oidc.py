@@ -44,6 +44,7 @@ from ..models.audit_log import AuditEventType
 from ..models.oidc_provider import OIDCPreset, OIDCProvider
 from ..models.user import Locale, User, UserRole
 from ..utils.crypto import normalize_email
+from ..utils.net import assert_public_http_url
 from .audit import record_audit_event
 from .oidc_admin import get_client_secret, is_provider_usable
 
@@ -75,6 +76,9 @@ async def _discovery(provider: OIDCProvider) -> dict[str, Any]:
         return _DISCOVERY_CACHE[key]
     issuer = provider.issuer_url.rstrip("/")
     url = f"{issuer}/.well-known/openid-configuration"
+    # SSRF guard: block loopback / link-local (metadata) / multicast etc.
+    # allow_private=True — self-hosted IdPs on a private LAN are legitimate.
+    assert_public_http_url(url, allow_private=True, require_https=False)
     try:
         async with httpx.AsyncClient(timeout=5.0) as cli:
             resp = await cli.get(url)
@@ -160,6 +164,9 @@ async def _exchange_code(
     token_url = doc.get("token_endpoint")
     if not token_url:
         raise AppError(503, "OIDC_BAD_DISCOVERY", "IdP discovery is missing token_endpoint.")
+    # Defence in depth: a malicious discovery doc can't redirect the
+    # client-secret-bearing token POST at an internal service.
+    assert_public_http_url(token_url, allow_private=True, require_https=False)
     secret = get_client_secret(provider)
     try:
         async with httpx.AsyncClient(timeout=10.0) as cli:
@@ -331,6 +338,33 @@ async def _verify_token_response(
 # ---------------------------------------------------------------------------
 
 
+def _notify_account_linked(db: Session, *, user: User, provider: OIDCProvider) -> None:
+    """Best-effort security notice that an SSO identity was auto-linked.
+    Never raises into the login path (the dispatcher swallows failures)."""
+    try:
+        from ..models.notification import NotificationCategory
+        from . import notification as notif_svc
+        from . import site as site_svc
+
+        account_url = site_svc.get_site_url(db).rstrip("/") + "/account"
+        notif_svc.dispatch(
+            db,
+            user=user,
+            category=NotificationCategory.oidc_linked,
+            payload={
+                "user_name": user.display_name,
+                "provider_name": provider.name,
+                "account_url": account_url,
+            },
+            link_url=account_url,
+            email_to=user.email,
+        )
+    except Exception:
+        logger.warning(
+            "oidc_linked notification failed for user=%s", user.id, exc_info=True
+        )
+
+
 async def handle_callback(
     db: Session,
     *,
@@ -376,10 +410,18 @@ async def handle_callback(
     email, email_verified = _extract_email(claims, provider)
 
     # 2. Auto-link via verified email — only if the local account isn't
-    # already bound to a different provider.
+    # already bound to a different provider. Row-lock the user so two
+    # concurrent callbacks (e.g. an attacker's provider racing the user's
+    # real one) can't both pass the `oidc_provider_id is None` check and
+    # mis-link the account (finding M7). The locked re-read is the gate.
     if email and email_verified:
         em_hash = normalize_email(email)
-        local = db.query(User).filter(User.email == em_hash).one_or_none()
+        local = (
+            db.query(User)
+            .filter(User.email == em_hash)
+            .with_for_update()
+            .one_or_none()
+        )
         if local is not None and local.oidc_provider_id is None:
             if local.is_disabled:
                 raise AppError(403, "ACCOUNT_DISABLED", "Account is disabled.")
@@ -400,6 +442,10 @@ async def handle_callback(
                 },
                 request=request,
             )
+            # Tell the user an SSO identity was linked, so an unauthorised
+            # link (e.g. via a rogue IdP) is visible. Best-effort; the
+            # dispatcher never propagates failures into the login path.
+            _notify_account_linked(db, user=local, provider=provider)
             return local
 
     # 3. No auto-create. Admin must invite first.

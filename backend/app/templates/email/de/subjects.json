@@ -8,6 +8,7 @@
   "public_link_downloaded": "Ein öffentlicher Link zu deinen Dateien wurde geöffnet",
   "account_created": "{invitee_name} ist {app_name} beigetreten",
   "login_alert": "Anmeldung von einem neuen Gerät",
+  "oidc_linked": "Ein Anmelde-Anbieter wurde mit deinem {app_name}-Konto verknüpft",
   "file_quarantined": "Eine infizierte Datei wurde unter Quarantäne gestellt",
   "smtp_test": "{app_name} · SMTP-Test",
   "release_available": "{app_name} {version} ist verfügbar"

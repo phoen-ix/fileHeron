@@ -34,9 +34,19 @@ logger = logging.getLogger("fileheron.email")
 
 _TEMPLATE_ROOT = Path(__file__).resolve().parent.parent / "templates" / "email"
 
+# Templates are named `<slug>.<kind>.j2` (e.g. `share_created.html.j2`),
+# so the final extension is always `.j2`. `select_autoescape(["html"])`
+# keys on the *trailing* extension and would therefore NEVER autoescape —
+# leaving user-controlled fields (subject, message, display_name, filename)
+# injected raw into HTML mail. Match on the compound `.html.j2` extension
+# (and explicitly leave `.txt.j2` un-escaped — plain text needs raw output).
 _env = Environment(
     loader=FileSystemLoader(str(_TEMPLATE_ROOT)),
-    autoescape=select_autoescape(["html"]),
+    autoescape=select_autoescape(
+        enabled_extensions=("html.j2",),
+        disabled_extensions=("txt.j2",),
+        default_for_string=False,
+    ),
     keep_trailing_newline=True,
 )
 

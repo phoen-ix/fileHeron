@@ -1,0 +1,22 @@
+{% extends "layout.html.j2" %}
+{% block subject %}A sign-in provider was linked to your account{% endblock %}
+{% block content %}
+  <p style="margin:0 0 12px 0;color:#6b7280;font-family:Georgia,serif;font-style:italic;">Security notice</p>
+  <h1 style="font-family:Georgia,'Times New Roman',serif;font-weight:normal;font-size:26px;line-height:1.2;margin:0 0 16px 0;">
+    A sign-in provider was linked to your account
+  </h1>
+  <p style="margin:0 0 16px 0;">
+    The single sign-on provider <strong>{{ provider_name }}</strong> was just
+    linked to your {{ app_name }} account.
+  </p>
+  <p style="margin:0 0 16px 0;color:#6b7280;font-size:14px;">
+    If this was you, no action is needed. If you did <strong>not</strong> just
+    sign in with this provider, contact your administrator immediately — your
+    account may be compromised.
+  </p>
+  <p style="margin:0;">
+    <a href="{{ account_url }}" style="display:inline-block;background:#1a1d24;color:#faf8f3;text-decoration:none;padding:12px 24px;font-weight:500;">
+      Review your account →
+    </a>
+  </p>
+{% endblock %}

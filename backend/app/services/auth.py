@@ -17,6 +17,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 
 from fastapi import Request
+from sqlalchemy import update
 from sqlalchemy.orm import Session
 
 logger = logging.getLogger("fileheron.auth")
@@ -630,9 +631,23 @@ async def consume_password_reset(
             422, "PASSWORD_BREACHED", "Chosen password has appeared in a breach. Pick another."
         )
 
+    # Atomically CLAIM the token: the conditional UPDATE + rowcount check
+    # is the single-use gate. Two concurrent requests with the same token
+    # both pass the read checks above, but only one wins this UPDATE — the
+    # loser gets 410 and never resets the password (finding M6).
+    claimed = db.execute(
+        update(PasswordResetToken)
+        .where(
+            PasswordResetToken.id == record.id,
+            PasswordResetToken.used_at.is_(None),
+        )
+        .values(used_at=_utcnow())
+    )
+    if claimed.rowcount == 0:
+        raise AppError(410, "RESET_TOKEN_USED", "Reset link has already been used.")
+
     user = db.query(User).filter(User.id == record.user_id).one()
     user.password_hash = argon2_hash(new_password)
-    record.used_at = _utcnow()
 
     revoke_all_user_refresh_tokens(db, user.id)
 
@@ -676,7 +691,18 @@ def consume_email_verification(db: Session, *, plaintext_token: str, request: Re
     if record.expires_at < _utcnow():
         raise AppError(410, "VERIFY_TOKEN_EXPIRED", "Verification link has expired.")
 
-    record.used_at = _utcnow()
+    # Atomic single-use claim (see consume_password_reset for rationale).
+    claimed = db.execute(
+        update(EmailVerifyToken)
+        .where(
+            EmailVerifyToken.id == record.id,
+            EmailVerifyToken.used_at.is_(None),
+        )
+        .values(used_at=_utcnow())
+    )
+    if claimed.rowcount == 0:
+        raise AppError(410, "VERIFY_TOKEN_USED", "Verification link has already been used.")
+
     user = db.query(User).filter(User.id == record.user_id).one()
     user.email_verified = True
 

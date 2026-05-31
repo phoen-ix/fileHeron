@@ -77,7 +77,7 @@ async def test_create_link_refuses_double(make_user, db):
 
 
 @pytest.mark.asyncio
-async def test_password_verify_locks_after_repeated_failures(make_user, db, monkeypatch):
+async def test_password_verify_locks_on_distributed_attack(make_user, db, monkeypatch):
     # Tighten the threshold so the test runs fast.
     from app.services import public_link as svc
     monkeypatch.setattr(svc.settings, "PUBLIC_LINK_PASSWORD_RATE_LIMIT", 3)
@@ -98,14 +98,14 @@ async def test_password_verify_locks_after_repeated_failures(make_user, db, monk
     db.commit()
     link = created.record
 
-    for _ in range(3):
-        ok = public_link_svc.verify_password(db, link=link, password="wrong", ip="1.2.3.4")
-        assert ok is False
+    # Failures from 3 DISTINCT IPs (>= MIN_DISTINCT_IPS_FOR_LOCK) and total
+    # >= rate limit → genuine distributed attack → link-wide lock.
+    for ip in ("1.1.1.1", "2.2.2.2", "3.3.3.3"):
+        assert public_link_svc.verify_password(db, link=link, password="wrong", ip=ip) is False
     db.commit()
     db.refresh(link)
     assert link.locked_until is not None and link.locked_until > _now_naive()
 
-    # And the audit-style attempt rows show the expected pattern.
     outcomes = [
         a.outcome
         for a in db.query(PublicLinkAttempt)
@@ -114,6 +114,38 @@ async def test_password_verify_locks_after_repeated_failures(make_user, db, monk
         .all()
     ]
     assert outcomes[-1] == PublicLinkAttemptOutcome.locked
+
+
+@pytest.mark.asyncio
+async def test_single_ip_failures_do_not_lock_link_for_everyone(make_user, db, monkeypatch):
+    """Finding M5: one IP must not be able to DoS the link for others.
+    It throttles itself (ip_is_rate_limited) but never sets the global lock."""
+    from app.services import public_link as svc
+    monkeypatch.setattr(svc.settings, "PUBLIC_LINK_PASSWORD_RATE_LIMIT", 3)
+    monkeypatch.setattr(svc.settings, "PUBLIC_LINK_PASSWORD_WINDOW_SEC", 900)
+
+    owner = make_user(email="hr@test.local", role=UserRole.admin)
+    recipient = make_user(email="cli@test.local", role=UserRole.client)
+    share = _make_share(db, owner, recipient.id)
+    db.commit()
+    created = public_link_svc.create_link(
+        db, actor=owner, share=share, password="correct horse",
+        download_limit=None, notify_on_download=False,
+    )
+    db.commit()
+    link = created.record
+
+    # 6 failures, all from one IP.
+    for _ in range(6):
+        public_link_svc.verify_password(db, link=link, password="wrong", ip="9.9.9.9")
+    db.commit()
+    db.refresh(link)
+
+    # The link is NOT globally locked …
+    assert link.locked_until is None
+    # … but that one IP is now rate-limited, while a fresh IP is not.
+    assert public_link_svc.ip_is_rate_limited(db, link, "9.9.9.9") is True
+    assert public_link_svc.ip_is_rate_limited(db, link, "8.8.8.8") is False
 
 
 @pytest.mark.asyncio

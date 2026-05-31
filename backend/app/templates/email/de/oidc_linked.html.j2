@@ -1,0 +1,23 @@
+{% extends "layout.html.j2" %}
+{% block subject %}Ein Anmelde-Anbieter wurde mit deinem Konto verknüpft{% endblock %}
+{% block content %}
+  <p style="margin:0 0 12px 0;color:#6b7280;font-family:Georgia,serif;font-style:italic;">Sicherheitshinweis</p>
+  <h1 style="font-family:Georgia,'Times New Roman',serif;font-weight:normal;font-size:26px;line-height:1.2;margin:0 0 16px 0;">
+    Ein Anmelde-Anbieter wurde mit deinem Konto verknüpft
+  </h1>
+  <p style="margin:0 0 16px 0;">
+    Der Single-Sign-On-Anbieter <strong>{{ provider_name }}</strong> wurde
+    gerade mit deinem {{ app_name }}-Konto verknüpft.
+  </p>
+  <p style="margin:0 0 16px 0;color:#6b7280;font-size:14px;">
+    Wenn du das warst, musst du nichts tun. Falls du dich <strong>nicht</strong>
+    gerade mit diesem Anbieter angemeldet hast, wende dich umgehend an deine
+    Administratorin oder deinen Administrator — dein Konto könnte
+    kompromittiert sein.
+  </p>
+  <p style="margin:0;">
+    <a href="{{ account_url }}" style="display:inline-block;background:#1a1d24;color:#faf8f3;text-decoration:none;padding:12px 24px;font-weight:500;">
+      Konto überprüfen →
+    </a>
+  </p>
+{% endblock %}

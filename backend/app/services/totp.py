@@ -186,7 +186,20 @@ def consume_recovery_code(db: Session, *, user: User, code: str, request) -> boo
     )
     for rc in candidates:
         if argon2_verify(rc.code_hash, code):
-            rc.used_at = _utcnow()
+            # Atomic single-use claim: the conditional UPDATE + rowcount
+            # check is the gate, so two concurrent logins replaying the
+            # same recovery code can't both succeed (finding M6).
+            claimed = db.execute(
+                update(UserRecoveryCode)
+                .where(
+                    UserRecoveryCode.id == rc.id,
+                    UserRecoveryCode.used_at.is_(None),
+                )
+                .values(used_at=_utcnow())
+            )
+            if claimed.rowcount == 0:
+                # Lost the race — another request already consumed it.
+                return False
             db.flush()
             record_audit_event(
                 db,

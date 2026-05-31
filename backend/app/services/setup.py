@@ -20,6 +20,7 @@ from ..models.audit_log import AuditEventType
 from ..models.user import Locale, User, UserRole
 from ..utils.crypto import argon2_hash, normalize_email
 from .audit import record_audit_event
+from .hibp import assert_password_not_breached
 
 logger = logging.getLogger("fileheron.setup")
 
@@ -34,7 +35,7 @@ def is_setup_complete(db: Session) -> bool:
     )
 
 
-def complete_setup(
+async def complete_setup(
     db: Session,
     *,
     email: str,
@@ -52,10 +53,11 @@ def complete_setup(
     em = normalize_email(email)
     if not em:
         raise AppError(400, "INVALID_EMAIL", "Email cannot be empty.")
-    if not password or len(password) < 8:
-        raise AppError(400, "WEAK_PASSWORD", "Password must be at least 8 characters.")
+    if not password or len(password) < 12:
+        raise AppError(400, "WEAK_PASSWORD", "Password must be at least 12 characters.")
     if not display_name or not display_name.strip():
         raise AppError(400, "INVALID_DISPLAY_NAME", "Display name is required.")
+    await assert_password_not_breached(db, password)
 
     # Belt-and-braces: refuse if a user (any role) with this email already
     # exists — the unique constraint would catch it, but we want a clean

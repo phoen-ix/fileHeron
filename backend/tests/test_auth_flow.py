@@ -91,12 +91,17 @@ async def test_refresh_reuse_revokes_entire_family(make_user, client, db):
     rotated = await client.post("/api/auth/refresh")
     assert rotated.status_code == 200
 
-    # Replay the ORIGINAL cookie → reuse. httpx 0.28+ deprecates the
-    # per-request `cookies=` kwarg; set on the client jar instead.
-    # The next test ends right after this call, so we don't need to
-    # restore the rotated value.
-    client.cookies.set("fh_refresh", original_refresh, path="/api/auth")
-    replay = await client.post("/api/auth/refresh")
+    # Replay the ORIGINAL refresh token → reuse detection must fire.
+    # The jar now holds the rotated cookie; clear it and send the original
+    # explicitly via the Cookie header so the replayed value is deterministic.
+    # (httpx 0.28's cookie-jar dedup otherwise lets the rotated cookie — same
+    # name, different domain — shadow a re-set original, so the server sees a
+    # still-valid token and returns 200 instead of detecting reuse.)
+    client.cookies.clear()
+    replay = await client.post(
+        "/api/auth/refresh",
+        headers={"Cookie": f"fh_refresh={original_refresh}"},
+    )
     assert replay.status_code == 401
     assert replay.json()["code"] == "TOKEN_REUSE"
 
@@ -184,6 +189,37 @@ async def test_register_from_invite_rejects_used_token(make_user, client, db):
     )
     assert second.status_code in (404, 410)
     assert second.json()["code"] in {"INVITE_USED", "INVITE_INVALID"}
+
+
+@pytest.mark.asyncio
+async def test_register_from_invite_rejects_breached_password(make_user, client, db, monkeypatch):
+    """A new user's first password is also screened against HIBP: a
+    valid-length but breached password is refused (422 PASSWORD_BREACHED)
+    and the invite is left unconsumed."""
+    from app.services import hibp as hibp_svc
+
+    async def _breached(_pw, _db=None):
+        return True
+
+    monkeypatch.setattr(hibp_svc, "is_password_breached", _breached)
+
+    inviter = make_user(email="hr@test.local", password="HRTestPassword123!", role=UserRole.admin)
+    _record, plaintext = invite_svc.create_invite(
+        db, email="newbie@test.local", target_role=UserRole.client, created_by=inviter
+    )
+    db.commit()
+
+    resp = await client.post(
+        "/api/auth/register-from-invite",
+        json={
+            "token": plaintext,
+            "password": "BreachedPassword123!",
+            "display_name": "Newbie",
+            "locale": "en",
+        },
+    )
+    assert resp.status_code == 422, resp.text
+    assert resp.json()["code"] == "PASSWORD_BREACHED"
 
 
 @pytest.mark.asyncio

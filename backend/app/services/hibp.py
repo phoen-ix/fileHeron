@@ -22,6 +22,7 @@ import httpx
 import redis.asyncio as aioredis
 
 from ..config import settings
+from ..middleware.errors import AppError
 
 logger = logging.getLogger("fileheron.hibp")
 
@@ -132,3 +133,17 @@ async def is_password_breached(password: str, db=None) -> bool:
             count = int(count_str.strip())
             return count > 0
     return False
+
+
+async def assert_password_not_breached(db, password: str) -> None:
+    """Raise 422 PASSWORD_BREACHED when HIBP is enabled and the password is
+    in the breach corpus. No-op when disabled or upstream unreachable
+    (fail-open — same contract as is_password_breached).
+
+    The single definition of the breach-reject behavior; every password-set
+    path (register, reset, change, setup) routes through here so the code +
+    message stay identical."""
+    if await is_password_breached(password, db):
+        raise AppError(
+            422, "PASSWORD_BREACHED", "Chosen password has appeared in a breach. Pick another."
+        )

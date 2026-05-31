@@ -69,7 +69,29 @@ async def test_weak_password_rejected(client, db):
             "display_name": "First",
         },
     )
-    assert r.status_code == 422  # Pydantic min_length=8
+    assert r.status_code == 422  # Pydantic min_length=12
+
+
+@pytest.mark.asyncio
+async def test_breached_password_rejected(client, db, monkeypatch):
+    """HIBP enforcement also covers the first-admin wizard: a valid-length
+    but breached password is refused (422 PASSWORD_BREACHED)."""
+    from app.services import hibp as hibp_svc
+
+    async def _breached(_pw, _db=None):
+        return True
+
+    monkeypatch.setattr(hibp_svc, "is_password_breached", _breached)
+    r = await client.post(
+        "/api/setup/admin",
+        json={
+            "email": "first.admin@test.local",
+            "password": "BreachedPassword123!",
+            "display_name": "First",
+        },
+    )
+    assert r.status_code == 422
+    assert r.json()["code"] == "PASSWORD_BREACHED"
 
 
 @pytest.mark.asyncio

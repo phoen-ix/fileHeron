@@ -26,7 +26,7 @@ async function onSubmit() {
     errorMsg.value = t('setup.error.password_mismatch')
     return
   }
-  if (password.value.length < 8) {
+  if (password.value.length < 12) {
     errorMsg.value = t('setup.error.password_too_short')
     return
   }
@@ -88,7 +88,7 @@ async function onSubmit() {
           class="fh-field-input"
           autocomplete="new-password"
           required
-          minlength="8"
+          minlength="12"
         />
         <span class="fh-field-help">{{ t('setup.password_help') }}</span>
       </label>

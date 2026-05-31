@@ -43,7 +43,7 @@ from . import rate_limit as rate_limit_svc
 from . import settings_registry
 from . import totp as totp_svc
 from .audit import record_audit_event
-from .hibp import is_password_breached
+from .hibp import assert_password_not_breached
 from .jwt_session import (
     create_access_token,
     create_refresh_token,
@@ -198,7 +198,7 @@ def _create_user_from_invite(
     return user
 
 
-def register_from_invite(
+async def register_from_invite(
     db: Session,
     *,
     plaintext_token: str,
@@ -220,6 +220,7 @@ def register_from_invite(
         raise AppError(410, "INVITE_USED", "Invite has already been used.")
     if invite.expires_at < _utcnow():
         raise AppError(410, "INVITE_EXPIRED", "Invite has expired.")
+    await assert_password_not_breached(db, password)
     return _create_user_from_invite(
         db,
         invite=invite,
@@ -635,10 +636,7 @@ async def consume_password_reset(
     if record.expires_at < _utcnow():
         raise AppError(410, "RESET_TOKEN_EXPIRED", "Reset link has expired.")
 
-    if await is_password_breached(new_password, db):
-        raise AppError(
-            422, "PASSWORD_BREACHED", "Chosen password has appeared in a breach. Pick another."
-        )
+    await assert_password_not_breached(db, new_password)
 
     # Atomically CLAIM the token: the conditional UPDATE + rowcount check
     # is the single-use gate. Two concurrent requests with the same token
@@ -731,8 +729,7 @@ async def change_password(
 ) -> None:
     if not argon2_verify(user.password_hash, current_password):
         raise AppError(401, "INVALID_CREDENTIALS", "Current password is incorrect.")
-    if await is_password_breached(new_password, db):
-        raise AppError(422, "PASSWORD_BREACHED", "Chosen password has appeared in a breach. Pick another.")
+    await assert_password_not_breached(db, new_password)
 
     user.password_hash = argon2_hash(new_password)
     revoke_all_user_refresh_tokens(db, user.id)

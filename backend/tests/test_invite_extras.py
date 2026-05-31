@@ -129,7 +129,7 @@ async def test_invite_with_groups_applies_memberships_on_consume(
     db.commit()
 
     # Consume → the new user gets both group memberships.
-    user = auth_svc.register_from_invite(
+    user = await auth_svc.register_from_invite(
         db,
         plaintext_token=plaintext,
         password="Pass12345678!",
@@ -170,7 +170,7 @@ async def test_invite_with_deleted_group_silently_skips(
     db.delete(g)
     db.commit()
 
-    user = auth_svc.register_from_invite(
+    user = await auth_svc.register_from_invite(
         db,
         plaintext_token=plaintext,
         password="Pass12345678!",

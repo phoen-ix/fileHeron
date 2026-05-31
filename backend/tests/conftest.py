@@ -222,6 +222,25 @@ def _no_op_job_queue(monkeypatch):
     monkeypatch.setattr(job_queue, "enqueue", lambda *_a, **_kw: None)
 
 
+@pytest.fixture(autouse=True)
+def _hibp_offline(monkeypatch):
+    """Default the HIBP breach check to fail-open (not breached) for the
+    whole suite. `is_password_breached` is now enforced on every
+    password-set path (register / setup / reset / change), so without this
+    the tests would depend on live network access to pwnedpasswords.com and
+    on whether a given fixture password happens to be in the breach corpus —
+    flaky and environment-coupled. We stub the lowest level (`_fetch_range`)
+    so the real k-anonymity logic still runs; tests that exercise HIBP
+    directly (test_hibp.py) re-monkeypatch `_fetch_range`, and tests that
+    want a breach stub `is_password_breached` itself — both override this."""
+    from app.services import hibp as hibp_svc
+
+    async def _no_range(_prefix5):
+        return None
+
+    monkeypatch.setattr(hibp_svc, "_fetch_range", _no_range)
+
+
 @pytest.fixture
 def make_user(db):
     """Create a verified user with a known password. Returns the User object."""

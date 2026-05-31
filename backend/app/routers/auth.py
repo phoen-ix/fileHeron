@@ -67,7 +67,7 @@ async def register_from_invite(
         "register", ip, settings_registry.effective(db, settings_registry.K.RATE_LIMIT_REGISTER)
     ):
         raise AppError(429, "RATE_LIMITED", "Too many attempts; try again shortly.")
-    user = auth_svc.register_from_invite(
+    user = await auth_svc.register_from_invite(
         db,
         plaintext_token=payload.token,
         password=payload.password,

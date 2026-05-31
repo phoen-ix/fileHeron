@@ -11,6 +11,7 @@ import pytest
 from app.middleware.errors import AppError
 from app.models.user_recovery_code import UserRecoveryCode
 from app.services import auth as auth_svc
+from app.services import hibp as hibp_svc
 from app.services import totp as totp_svc
 from app.utils.crypto import argon2_hash
 
@@ -20,7 +21,9 @@ async def test_password_reset_token_is_single_use(make_user, db, monkeypatch):
     async def _not_breached(_pw, _db=None):
         return False
 
-    monkeypatch.setattr(auth_svc, "is_password_breached", _not_breached)
+    # The reject now flows through hibp.assert_password_not_breached, which
+    # calls the module-global is_password_breached in `hibp`.
+    monkeypatch.setattr(hibp_svc, "is_password_breached", _not_breached)
 
     user = make_user(email="reset@test.local", password="OldPassword123!")
     result = auth_svc.begin_password_reset(db, email="reset@test.local", request=None)

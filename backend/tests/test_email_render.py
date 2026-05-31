@@ -61,7 +61,12 @@ def test_unknown_locale_falls_back_to_en():
 
 
 def test_dt_locale_filter_includes_utc_marker():
-    formatted = email_svc._format_dt_locale(_utc(2026, 5, 3, 9), "en")
+    # `_format_dt_locale` is a @pass_context Jinja filter — invoke it through
+    # a rendered template so Jinja injects the rendering context itself.
+    # Calling it directly is brittle: how pass_context threads the context
+    # argument varies by Jinja version.
+    tmpl = email_svc._env.from_string("{{ d | dt_locale('en') }}")
+    formatted = tmpl.render(d=_utc(2026, 5, 3, 9), site_timezone="UTC")
     assert "(UTC)" in formatted
     assert "May" in formatted
 

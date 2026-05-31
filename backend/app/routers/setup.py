@@ -28,14 +28,14 @@ def setup_status(db: Session = Depends(get_db)) -> SetupStatusResponse:
 
 
 @router.post("/admin", response_model=CompleteSetupResponse)
-def complete_setup(
+async def complete_setup(
     payload: CompleteSetupRequest,
     db: Session = Depends(get_db),
 ) -> CompleteSetupResponse:
     """Anonymous one-shot. Creates the first admin; subsequent calls
     get 409 SETUP_ALREADY_COMPLETE. Caller is expected to follow up
     with a normal POST /api/auth/login to obtain a session."""
-    user = setup_svc.complete_setup(
+    user = await setup_svc.complete_setup(
         db,
         email=str(payload.email),
         password=payload.password,

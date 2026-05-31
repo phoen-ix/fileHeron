@@ -16,7 +16,7 @@ class CompleteSetupRequest(APIBaseModel):
     # rejects duplicates. Matches the rest of the codebase, which doesn't
     # use Pydantic's strict EmailStr (rejects .local TLDs etc).
     email: str = Field(..., min_length=3, max_length=254, pattern=r".+@.+\..+")
-    password: str = Field(..., min_length=8, max_length=512)
+    password: str = Field(..., min_length=12, max_length=512)
     display_name: str = Field(..., min_length=1, max_length=120)
 
 

@@ -21,12 +21,12 @@
     "title": "Welcome to fileHeron",
     "intro": "Create the first admin account for this instance. Once done, you'll sign in normally — this wizard locks itself.",
     "display_name_help": "Shown on shares and emails. You can change it later.",
-    "password_help": "At least 8 characters. Pick something strong.",
+    "password_help": "At least 12 characters. Pick something strong.",
     "password_confirm": "Confirm password",
     "submit": "Create admin account",
     "error": {
       "password_mismatch": "Passwords don't match.",
-      "password_too_short": "Password must be at least 8 characters."
+      "password_too_short": "Password must be at least 12 characters."
     }
   },
   "shortcuts": {

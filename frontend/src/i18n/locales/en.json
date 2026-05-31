@@ -647,9 +647,10 @@
       "share_expiring": "Expiring",
       "public_link_downloaded": "Public link",
       "account_created": "New account",
-      "password_reset": "Password reset",
+      "reset_password": "Password reset",
       "twofa_required": "2FA",
       "login_alert": "Sign-in",
+      "oidc_linked": "SSO link",
       "file_quarantined": "Quarantine",
       "ops_alert": "Ops alert",
       "release_available": "Update available"

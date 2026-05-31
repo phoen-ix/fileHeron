@@ -647,9 +647,10 @@
       "share_expiring": "Läuft ab",
       "public_link_downloaded": "Öffentlicher Link",
       "account_created": "Neues Konto",
-      "password_reset": "Passwort zurücksetzen",
+      "reset_password": "Passwort zurücksetzen",
       "twofa_required": "2FA",
       "login_alert": "Anmeldung",
+      "oidc_linked": "SSO-Verknüpfung",
       "file_quarantined": "Quarantäne",
       "ops_alert": "Betriebsalarm",
       "release_available": "Update verfügbar"

@@ -54,6 +54,10 @@ jobs:
       - name: Smoke-test the .exe (--selfcheck)
         working-directory: client
         shell: pwsh
+        # Backstop: the self-check does filesystem-only data-dir checks and
+        # must return in seconds. A hang means something regressed — fail
+        # the step rather than let it stall the runner.
+        timeout-minutes: 3
         run: |
           $p = Start-Process -FilePath "dist/fileheron-client.exe" `
             -ArgumentList "--selfcheck" -Wait -PassThru

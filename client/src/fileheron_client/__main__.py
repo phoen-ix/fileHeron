@@ -95,16 +95,39 @@ def _install_faulthandler(log_path: Path) -> None:
 
 
 def _selfcheck() -> int:
-    """Headless bundle smoke test (finding C11). Imports the GUI deps and
-    builds + destroys a root so a missing bundled-data regression
-    (customtkinter themes, tkinterdnd2's `tkdnd` Tcl lib) makes the build
-    FAIL rather than shipping a .exe that crashes on a user's machine. Run
-    on the freshly-built binary in CI: `fileheron-client --selfcheck`."""
-    import customtkinter  # noqa: F401 — import-time theme/asset load
-    import tkcalendar  # noqa: F401
-    root = build_root()  # CTk + tkinterdnd2 root → exercises tkdnd load
-    root.update_idletasks()
-    root.destroy()
+    """Headless bundle smoke test (finding C11). Verifies the data files
+    that pyinstaller.spec's collect_all() must bundle are actually present
+    in the frozen image, so a packaging regression FAILS the release
+    instead of shipping a .exe that crashes on a user's machine.
+
+    Deliberately does NOT construct a Tk root — creating a GUI window can
+    hang on a session-less CI runner (the process never exits under
+    `Start-Process -Wait`). Importing the packages + checking their bundled
+    data dirs on disk is enough to catch a missing-collect regression and
+    always terminates quickly."""
+    from pathlib import Path
+
+    import customtkinter
+    import tkcalendar  # noqa: F401 — import must resolve in the bundle
+    import tkinterdnd2
+
+    problems: list[str] = []
+
+    ctk_assets = Path(customtkinter.__file__).resolve().parent / "assets"
+    if not ctk_assets.is_dir():
+        problems.append(f"customtkinter assets missing: {ctk_assets}")
+
+    # tkinterdnd2 ships its native `tkdnd` Tcl library under the package;
+    # without it, drag-drop crashes at startup in the frozen .exe.
+    dnd_root = Path(tkinterdnd2.__file__).resolve().parent
+    if not (dnd_root / "tkdnd").is_dir() and not any(dnd_root.glob("tkdnd*")):
+        problems.append(f"tkinterdnd2 tkdnd lib missing under: {dnd_root}")
+
+    if problems:
+        for p in problems:
+            sys.stderr.write(f"selfcheck FAIL: {p}\n")
+        return 1
+    sys.stderr.write("selfcheck OK\n")
     return 0
 
 

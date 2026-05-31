@@ -43,6 +43,7 @@
   },
   "errors": {
     "INVALID_CREDENTIALS": "E-Mail und Passwort stimmen nicht überein.",
+    "INVALID_PASSWORD": "Passwort falsch.",
     "TOTP_REQUIRED": "Bitte gib den sechsstelligen Code aus deiner Authenticator-App ein.",
     "INVALID_TOTP": "Der Code ist falsch oder abgelaufen.",
     "INVALID_RECOVERY": "Dieser Wiederherstellungscode ist ungültig oder bereits verbraucht.",

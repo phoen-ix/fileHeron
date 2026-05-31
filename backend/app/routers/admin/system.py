@@ -264,10 +264,16 @@ class UpdateApplyRequest(BaseModel):
     target_tag: str | None = Field(default=None, max_length=64)
 
 
-def _verify_password_or_401(user: User, password: str) -> None:
+def _verify_password_or_403(user: User, password: str) -> None:
     from ...utils.crypto import argon2_verify
+    # 403 (not 401) on a wrong confirm-password: the admin IS authenticated —
+    # this is a re-auth gate, not a session failure. A 401 here collides with
+    # the SPA's global access-token-refresh interceptor, which would silently
+    # refresh the session and re-submit the update with the same wrong
+    # password, masking the error (the user saw "nothing happened"). A
+    # distinct INVALID_PASSWORD code lets the UI show a precise message.
     if not argon2_verify(user.password_hash, password):
-        raise AppError(401, "INVALID_CREDENTIALS", "Password incorrect.")
+        raise AppError(403, "INVALID_PASSWORD", "Password incorrect.")
 
 
 def _dispatch_ops_to_admins(db: Session, payload: dict, link_url: str) -> None:
@@ -327,7 +333,7 @@ def apply_update(
     from ...services import release_apply
     from ...services.audit import record_audit_event
 
-    _verify_password_or_401(admin, payload.password)
+    _verify_password_or_403(admin, payload.password)
     if not payload.target_tag:
         raise AppError(400, "INVALID_INPUT", "target_tag is required.")
 
@@ -368,7 +374,7 @@ def apply_rollback(
     from ...services import release_apply
     from ...services.audit import record_audit_event
 
-    _verify_password_or_401(admin, payload.password)
+    _verify_password_or_403(admin, payload.password)
     result = release_apply.apply(action="rollback", target_tag=None)
 
     record_audit_event(

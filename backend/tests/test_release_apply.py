@@ -138,8 +138,11 @@ async def test_update_endpoint_requires_password(client, db, make_user, login_as
         json={"password": "wrong-pw", "target_tag": "v1.0.1"},
         headers=headers,
     )
-    assert r.status_code == 401, r.text
-    assert r.json()["code"] == "INVALID_CREDENTIALS"
+    # 403 (not 401): the admin is authenticated; the confirm-password is a
+    # re-auth gate. A 401 here would be eaten by the SPA's token-refresh
+    # interceptor, masking the error.
+    assert r.status_code == 403, r.text
+    assert r.json()["code"] == "INVALID_PASSWORD"
 
 
 @pytest.mark.asyncio

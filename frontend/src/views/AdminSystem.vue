@@ -35,6 +35,7 @@ const updaterUnreachable = ref(false)
 const activeJob = ref<UpdaterJob | null>(null)
 const confirming = ref<null | 'update' | 'rollback'>(null)
 const passwordInput = ref('')
+const confirmError = ref<string | null>(null)
 const submitting = ref(false)
 const checking = ref(false)
 let jobPollHandle: ReturnType<typeof setInterval> | null = null
@@ -169,17 +170,20 @@ async function pollJob(jobId: string) {
 async function openConfirm(kind: 'update' | 'rollback') {
   confirming.value = kind
   passwordInput.value = ''
+  confirmError.value = null
 }
 
 function closeConfirm() {
   if (submitting.value) return
   confirming.value = null
   passwordInput.value = ''
+  confirmError.value = null
 }
 
 async function submitConfirm() {
   if (!confirming.value || !passwordInput.value) return
   submitting.value = true
+  confirmError.value = null
   try {
     if (confirming.value === 'update') {
       const tag = status.value?.version.latest
@@ -196,6 +200,9 @@ async function submitConfirm() {
     confirming.value = null
     passwordInput.value = ''
   } catch (err) {
+    // Inline error in the modal (the toast alone was easy to miss, and a
+    // wrong password left the modal looking like nothing happened).
+    confirmError.value = describe(err)
     ui.pushToast(describe(err), 'error')
   } finally {
     submitting.value = false
@@ -497,6 +504,14 @@ const headlineFailures = computed(() => {
                 autofocus
               />
             </label>
+            <div
+              v-if="confirmError"
+              class="fh-notice"
+              data-tone="error"
+              role="alert"
+            >
+              {{ confirmError }}
+            </div>
             <div class="form-actions">
               <button
                 type="submit"

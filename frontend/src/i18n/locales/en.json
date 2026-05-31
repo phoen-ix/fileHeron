@@ -43,6 +43,7 @@
   },
   "errors": {
     "INVALID_CREDENTIALS": "That email and password don't match.",
+    "INVALID_PASSWORD": "Password incorrect.",
     "TOTP_REQUIRED": "Enter your six-digit code from your authenticator app.",
     "INVALID_TOTP": "That code is incorrect or expired.",
     "INVALID_RECOVERY": "That recovery code is invalid or already used.",

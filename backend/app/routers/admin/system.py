@@ -36,6 +36,7 @@ _KNOWN_CRONS = [
     "expire_files",
     "share_expiring_24h_warning",
     "cleanup_expired_tokens",
+    "cleanup_read_notifications",
     "quota_reconcile",
     "ops_check",
     "release_check",

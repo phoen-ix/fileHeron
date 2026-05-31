@@ -47,14 +47,25 @@ describe('notifications store', () => {
     expect(s.unreadCount).toBe(2) // we counted the duplicate as new
   })
 
-  it('markRead lowers unread count', async () => {
+  it('markRead drops the item from the unread bell + lowers count', async () => {
     const s = useNotificationsStore()
     s.pushFromSSE(fakeNotif(1))
     s.pushFromSSE(fakeNotif(2))
     expect(s.unreadCount).toBe(2)
     await s.markRead(1)
-    expect(s.items.find((i) => i.id === 1)?.read_at).not.toBeNull()
+    // Read → removed from the unread inbox (not just greyed).
+    expect(s.items.find((i) => i.id === 1)).toBeUndefined()
+    expect(s.items.length).toBe(1)
     expect(s.unreadCount).toBe(0) // mock returns 0
+  })
+
+  it('refresh fetches unread-only', async () => {
+    const api: any = await import('@/api/notifications')
+    const s = useNotificationsStore()
+    await s.refresh()
+    expect(api.listNotifications).toHaveBeenCalledWith(
+      expect.objectContaining({ unread: true }),
+    )
   })
 
   it('markRead is a no-op for already-read items', async () => {
@@ -66,14 +77,14 @@ describe('notifications store', () => {
     expect(s.items[0].read_at).toBe(beforeRead)
   })
 
-  it('markAllRead clears unread + marks every item', async () => {
+  it('markAllRead empties the unread bell', async () => {
     const s = useNotificationsStore()
     s.pushFromSSE(fakeNotif(1))
     s.pushFromSSE(fakeNotif(2))
     s.pushFromSSE(fakeNotif(3))
     await s.markAllRead()
     expect(s.unreadCount).toBe(0)
-    expect(s.items.every((i) => i.read_at !== null)).toBe(true)
+    expect(s.items).toEqual([])
   })
 
   it('reset clears state', () => {

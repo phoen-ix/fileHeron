@@ -24,7 +24,10 @@ export const useNotificationsStore = defineStore('notifications', () => {
   async function refresh() {
     loading.value = true
     try {
-      const { data } = await listNotifications({ page_size: RECENT_LIMIT })
+      // The bell is an UNREAD inbox: once a notification is read it drops off
+      // on the next load (and the backend hard-deletes it after the retention
+      // window). Fetch unread-only so read items never reappear on refresh.
+      const { data } = await listNotifications({ unread: true, page_size: RECENT_LIMIT })
       items.value = data.items
       unreadCount.value = data.unread_count
     } finally {
@@ -45,30 +48,29 @@ export const useNotificationsStore = defineStore('notifications', () => {
     const target = items.value.find((i) => i.id === id)
     if (!target || target.read_at) return
     const before = unreadCount.value
-    target.read_at = new Date().toISOString()
+    // Read → drop it from the unread bell immediately.
+    items.value = items.value.filter((i) => i.id !== id)
     unreadCount.value = Math.max(0, before - 1)
     try {
       const { data } = await apiMarkRead(id)
       unreadCount.value = data.unread_count
     } catch {
-      // Roll back on failure.
-      target.read_at = null
+      // Restore truth from the server (the item is still unread there).
       unreadCount.value = before
+      void refresh()
     }
   }
 
   async function markAllRead() {
     const before = unreadCount.value
-    const now = new Date().toISOString()
-    items.value.forEach((i) => {
-      if (!i.read_at) i.read_at = now
-    })
+    const snapshot = items.value
+    // All read → the unread bell is now empty.
+    items.value = []
     unreadCount.value = 0
     try {
       await apiMarkAllRead()
     } catch {
-      // Rollback is annoying — refetch instead.
-      void refresh()
+      items.value = snapshot
       unreadCount.value = before
     }
   }

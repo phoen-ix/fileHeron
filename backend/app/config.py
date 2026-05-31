@@ -57,6 +57,11 @@ class Settings(BaseSettings):
     AUDIT_LOG_RETENTION_DAYS: int = 365
     DOWNLOAD_LOG_RETENTION_DAYS: int = 90
     LOGIN_ATTEMPT_RETENTION_DAYS: int = 30
+    # In-app notifications: once read, the bell hides them on next load; this
+    # is how long a READ notification lingers in the DB before the daily
+    # cleanup_read_notifications cron hard-deletes it (not instant — keeps a
+    # short read-history window for support/debug). 0 disables the cron.
+    NOTIFICATION_READ_RETENTION_DAYS: int = 3
     # The purge_old_quarantine cron unlinks bytes (keeps the file row as a
     # historical marker) when quarantined longer than this. 0 disables.
     QUARANTINE_PURGE_AFTER_DAYS: int = 90

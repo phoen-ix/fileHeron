@@ -19,6 +19,7 @@ from .av_scan import av_scan_file
 from .cleanup_abandoned_uploads import cleanup_abandoned_uploads
 from .cleanup_expired_tokens import cleanup_expired_tokens
 from .cleanup_pending_invites import cleanup_pending_invites
+from .cleanup_read_notifications import cleanup_read_notifications
 from .expire_files import expire_files
 from .ops_check import ops_check
 from .prune_history import prune_history
@@ -47,6 +48,7 @@ class WorkerSettings:
         purge_old_quarantine,
         prune_history,
         release_check,
+        cleanup_read_notifications,
     ]
     cron_jobs = [
         # Stagger so they don't pile up at minute 0. ops_check sits at :15
@@ -64,6 +66,7 @@ class WorkerSettings:
         # Daily-ish housekeeping (hour=2 keeps it well clear of business hours).
         cron(purge_old_quarantine, hour={2}, minute={13}, run_at_startup=False),
         cron(cleanup_pending_invites, hour={2}, minute={15}, run_at_startup=False),
+        cron(cleanup_read_notifications, hour={2}, minute={29}, run_at_startup=False),
         cron(prune_history, hour={2}, minute={43}, run_at_startup=False),
     ]
     on_startup = startup

@@ -1,8 +1,9 @@
 # file:Heron desktop client
 
-PySide6 (Qt6) desktop client for the file:Heron platform. Talks to
-the same REST API as the SPA — login (email/password + TOTP or API
-token), browse Inbox & Outbox, download files, and create new
+CustomTkinter desktop client for the file:Heron platform (migrated off
+PySide6 in v0.4.0 — pure-Python GUI, ~10 MB of deps vs Qt6's ~150 MB).
+Talks to the same REST API as the SPA — login (email/password + TOTP or
+API token), browse Inbox & Outbox, download files, and create new
 shares (direct multipart for ≤100 MB, TUS resumable for larger).
 
 Windows-first. Linux + macOS source-runs the same; only the
@@ -28,8 +29,9 @@ pytest                        # ~15 unit tests (no GUI, no network)
 python -m fileheron_client    # launches the GUI against the server URL the config dialog asks for
 ```
 
-Python 3.12+. The runtime deps (PySide6, httpx, pydantic, keyring,
-platformdirs) are all standard PyPI; no system packages required
+Python 3.12+. The runtime deps (customtkinter, tkinterdnd2, tkcalendar,
+httpx, pydantic, keyring, platformdirs) are all standard PyPI; no system
+packages required
 beyond Python itself.
 
 ## Build a Windows .exe locally
@@ -78,6 +80,6 @@ client/
 │   ├── models.py          # subset Pydantic mirrors of backend schemas
 │   ├── api/               # httpx wrappers (auth, shares, files, uploads)
 │   ├── tus.py             # raw TUS 1.0.0 client (chunked PATCH + resume)
-│   └── ui/                # PySide6 windows + workers
+│   └── ui/                # CustomTkinter windows + workers
 └── tests/                 # pytest, no GUI, no real network
 ```

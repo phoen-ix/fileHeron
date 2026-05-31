@@ -24,14 +24,14 @@ _log = logging.getLogger("fileheron_client.ui.share_detail_view")
 
 from .. import api as api_pkg
 from ..api import ApiClient, ApiError
-from ..formatters import format_expiry
+from ..formatters import format_datetime, format_expiry
 from ..i18n import t
 from ..models import FileInShareResponse, MeResponse, ShareResponse
 from ._async import run_in_background, run_with_progress
 from . import _messagebox as mb
 from .expiry_dialog import ExpiryDialog
 from .limit_dialog import LimitDialog
-from .widgets import PillLabel, human_size
+from .widgets import PillLabel, alive, human_size
 
 
 class ShareDetailView(ctk.CTkFrame):
@@ -207,6 +207,8 @@ class ShareDetailView(ctk.CTkFrame):
         # Section starts hidden; we don't pack the label/frame yet.
 
     def _render_public_link(self, pl: Optional[dict]) -> None:
+        if not alive(self):
+            return  # view torn down while the PL fetch was in flight (C6)
         if not pl:
             return
         url = pl.get("url")
@@ -273,9 +275,11 @@ class ShareDetailView(ctk.CTkFrame):
 
         def _done(share):
             self._share = share
-            self._render_after_load()
+            self._render_after_load()  # guarded internally (C6)
 
         def _failed(exc):
+            if not alive(self):
+                return  # view gone; nothing to warn about (C6)
             msg = getattr(exc, "message", None) or str(exc)
             mb.warn(self.winfo_toplevel(), t("share_detail.could_not_load_title"), msg)
             self._on_back()
@@ -307,7 +311,7 @@ class ShareDetailView(ctk.CTkFrame):
         and `_edit_expiry._done` in lockstep."""
         bits = [
             t("share_detail.meta_created",
-              date=s.created_at.strftime("%Y-%m-%d %H:%M")),
+              date=format_datetime(s.created_at)),
             t("share_detail.meta_expires", when=format_expiry(s.expires_at)),
         ]
         if s.download_limit is not None:
@@ -322,6 +326,8 @@ class ShareDetailView(ctk.CTkFrame):
         return bits
 
     def _render_after_load(self) -> None:
+        if not alive(self):
+            return  # view torn down while the load was in flight (C6)
         s = self._share
         if s is None:
             return
@@ -367,7 +373,9 @@ class ShareDetailView(ctk.CTkFrame):
         def _done(updated):
             self._share = updated
             if self._on_mutated is not None:
-                self._on_mutated()
+                self._on_mutated()  # refresh the list even if we navigated away
+            if not alive(self):
+                return  # detail view gone; don't touch its widgets (C6)
             self.meta_var.set(" · ".join(self._build_meta_bits(updated)))
             self.state_pill.setState(updated.state)
             self.state_pill.setText(updated.state)
@@ -399,7 +407,9 @@ class ShareDetailView(ctk.CTkFrame):
         def _done(updated):
             self._share = updated
             if self._on_mutated is not None:
-                self._on_mutated()
+                self._on_mutated()  # refresh the list even if we navigated away
+            if not alive(self):
+                return  # detail view gone; don't touch its widgets (C6)
             self.meta_var.set(" · ".join(self._build_meta_bits(updated)))
             mb.info(top, t("share_detail.expiry_updated_title"), t("share_detail.expiry_updated_body"))
 
@@ -433,7 +443,9 @@ class ShareDetailView(ctk.CTkFrame):
         def _done(updated):
             self._share = updated
             if self._on_mutated is not None:
-                self._on_mutated()
+                self._on_mutated()  # refresh the list even if we navigated away
+            if not alive(self):
+                return  # detail view gone; don't touch its widgets (C6)
             self.meta_var.set(" · ".join(self._build_meta_bits(updated)))
             mb.info(top, t("share_detail.expiry_updated_title"), t("share_detail.limit_updated_body"))
 
@@ -511,10 +523,14 @@ class ShareDetailView(ctk.CTkFrame):
             return str(dest)
 
         def _on_progress(done, total):
+            if not alive(self):
+                return  # download outlived the view (C6)
             if total > 0:
                 self.progress.set(min(1.0, done / total))
 
         def _done(path):
+            if not alive(self):
+                return
             self._dl_in_flight -= 1
             if self._dl_in_flight <= 0:
                 self.progress.pack_forget()
@@ -525,6 +541,8 @@ class ShareDetailView(ctk.CTkFrame):
             )
 
         def _failed(exc):
+            if not alive(self):
+                return
             self._dl_in_flight -= 1
             if self._dl_in_flight <= 0:
                 self.progress.pack_forget()

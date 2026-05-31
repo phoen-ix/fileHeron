@@ -94,13 +94,34 @@ def _install_faulthandler(log_path: Path) -> None:
         pass
 
 
+def _selfcheck() -> int:
+    """Headless bundle smoke test (finding C11). Imports the GUI deps and
+    builds + destroys a root so a missing bundled-data regression
+    (customtkinter themes, tkinterdnd2's `tkdnd` Tcl lib) makes the build
+    FAIL rather than shipping a .exe that crashes on a user's machine. Run
+    on the freshly-built binary in CI: `fileheron-client --selfcheck`."""
+    import customtkinter  # noqa: F401 — import-time theme/asset load
+    import tkcalendar  # noqa: F401
+    root = build_root()  # CTk + tkinterdnd2 root → exercises tkdnd load
+    root.update_idletasks()
+    root.destroy()
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
+    args = list(sys.argv[1:] if argv is None else argv)
     log_dir = _log_dir()
     crash_log = log_dir / "crash.log"
 
     # Layer 1 (always on): crash reporting.
     _install_crash_logging(crash_log)
     _install_faulthandler(crash_log)
+
+    # Bundle self-check short-circuits before any config/UI/login work.
+    # Crash hooks are already installed so a failure lands in crash.log AND
+    # exits non-zero for CI to catch.
+    if "--selfcheck" in args:
+        return _selfcheck()
 
     # Read config BEFORE wiring verbose logging so the flag can gate it.
     # If load_config itself raises (corrupt JSON), the always-on crash

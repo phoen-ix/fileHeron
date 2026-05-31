@@ -12,7 +12,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Callable, Optional
 
-from .client import ApiClient, _envelope_from_response
+from .client import ApiClient, _envelope_from_response, json_or_raise
 from ..models import DirectUploadResponse, UploadInitResponse
 
 
@@ -54,7 +54,7 @@ def upload_direct(
         raise _envelope_from_response(resp)
     if on_progress is not None:
         on_progress(size, size)
-    return DirectUploadResponse.model_validate(resp.json())
+    return DirectUploadResponse.model_validate(json_or_raise(resp))
 
 
 def upload_init(

@@ -16,26 +16,43 @@ analysis sometimes misses dynamic submodule loads.
 """
 from pathlib import Path
 
+from PyInstaller.utils.hooks import collect_all, collect_data_files
+
 block_cipher = None
 
 # PyInstaller exec's the spec file (no __file__); SPECPATH is the
 # absolute directory of this spec, injected by the build runner.
 HERE = Path(SPECPATH).resolve()  # noqa: F821
 
+# Explicitly COLLECT the data files / native libs these packages need at
+# runtime (finding C11). Previously the spec only listed them as
+# hiddenimports and trusted PyInstaller's contrib hooks to collect their
+# data. That works with the currently-pinned versions, but a hook/version
+# regression would silently ship a .exe that crashes on launch (missing
+# customtkinter theme JSON) or on drag-drop (missing tkinterdnd2 `tkdnd`
+# Tcl lib). collect_all returns (datas, binaries, hiddenimports) and is
+# self-healing across versions; the CI self-check (see client-release.yml)
+# proves the bundle actually launches.
+_ctk_datas, _ctk_bins, _ctk_hidden = collect_all("customtkinter")
+_dnd_datas, _dnd_bins, _dnd_hidden = collect_all("tkinterdnd2")
+
 datas = [
     (str(HERE / "assets"), "assets"),
-    # v0.8.0: i18n locale JSON files. Loaded at runtime via
-    # importlib.resources (paths resolve identically in dev + bundle).
+    # v0.8.0: i18n locale JSON files. Loaded at runtime via a
+    # __file__-relative path that resolves under sys._MEIPASS in the bundle.
     (
         str(HERE / "src" / "fileheron_client" / "locales"),
         "fileheron_client/locales",
     ),
 ]
+datas += _ctk_datas + _dnd_datas
+# tkcalendar pulls Babel locale data for its date rendering.
+datas += collect_data_files("tkcalendar")
+datas += collect_data_files("babel")
+
+binaries = _ctk_bins + _dnd_bins
 
 hiddenimports = [
-    # GUI deps. The explicit imports nudge PyInstaller's static analyser
-    # to follow dynamic submodule loads. tkinterdnd2 ships a Tcl extension
-    # folder that PyInstaller's stock hook collects automatically.
     "customtkinter",
     "tkinterdnd2",
     "tkcalendar",
@@ -53,11 +70,12 @@ hiddenimports = [
     # .exe (~200 KB saved by v0.6.2 trim).
     "keyring.backends.Windows",
 ]
+hiddenimports += _ctk_hidden + _dnd_hidden
 
 a = Analysis(
     [str(HERE / "src" / "fileheron_client" / "__main__.py")],
     pathex=[str(HERE / "src")],
-    binaries=[],
+    binaries=binaries,
     datas=datas,
     hiddenimports=hiddenimports,
     hookspath=[],

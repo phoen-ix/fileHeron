@@ -29,7 +29,7 @@ logger = logging.getLogger("fileheron_client.tus")
 
 TUS_VERSION = "1.0.0"
 DEFAULT_CHUNK = 4 * 1024 * 1024  # 4 MiB
-MAX_RETRIES = 3
+MAX_RETRIES = 3  # total attempts per chunk (initial try + 2 retries), not "3 retries"
 BACKOFF_SECONDS = (1, 4, 12)
 
 
@@ -60,6 +60,11 @@ def upload_tus(
 ) -> str:
     """Upload ``file_path`` via the TUS resumable protocol. Returns the
     final upload URL (for debugging / log correlation)."""
+    # Snapshot the size once and declare it as Upload-Length. If the user
+    # edits the file mid-upload (finding C9 — TOCTOU), the streamed bytes
+    # will diverge from this length and the server rejects the final chunk;
+    # we don't try to recover (re-statting mid-stream would just race
+    # again). The caller should treat the file as immutable for the upload.
     size = file_path.stat().st_size
     base_headers: dict[str, str] = {
         "Tus-Resumable": TUS_VERSION,
@@ -82,7 +87,12 @@ def upload_tus(
         location = resp.headers.get("Location")
         if not location:
             raise TusError("TUS create response missing Location header")
-        upload_url = _absolute(server_url, location) if location.startswith("/") else location
+        # _absolute() already handles all three forms (full URL, root-relative
+        # /path, bare relative path). The old `if location.startswith("/")`
+        # guard left a bare-relative Location (e.g. "uploads/abc") un-resolved,
+        # which httpx then rejected mid-upload (finding C2). Resolve always —
+        # matches the create_url handling at the top of this function.
+        upload_url = _absolute(server_url, location)
 
         # 2. Stream chunks (with resume on failure).
         offset = 0

@@ -8,7 +8,7 @@ A self-hosted, bidirectional file-sharing platform. Companies share files outbou
 
 This README is also the user / admin / operator / developer manual — the full walkthrough lives below the phase tracker. Jump to: [Using file:Heron](#using-fileheron-end-user-guide) · [Admin guide](#admin-guide) · [Operator guide](#operator-guide) · [Developer guide](#developer-guide) · [Desktop client](client/README.md).
 
-A native PySide6 desktop client (single Windows .exe) lives under [`client/`](client/). Releases are built by GitHub Actions on `client-v*` tags and attached to the matching release.
+A native CustomTkinter desktop client (single Windows .exe) lives under [`client/`](client/). Releases are built by GitHub Actions on `client-v*` tags and attached to the matching release.
 
 ## Quickstart (production target)
 

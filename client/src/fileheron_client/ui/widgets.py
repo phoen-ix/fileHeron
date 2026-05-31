@@ -65,6 +65,21 @@ class PillLabel(ctk.CTkLabel):
         self.configure(text=text)
 
 
+def alive(widget) -> bool:
+    """True if `widget` still exists in Tk (finding C6).
+
+    Background fetches marshal their on_done/on_failed back to the main
+    thread via ui/_async. If the user navigated away (the view/window was
+    destroyed) while the fetch was in flight, the callback would touch a
+    dead widget. The async poll loop catches the resulting TclError, but it
+    spams crash.log and the update is wasted — so callbacks that mutate
+    widgets should early-return on `not alive(self)`."""
+    try:
+        return bool(widget.winfo_exists())
+    except Exception:
+        return False
+
+
 def human_size(n: int) -> str:
     if n < 1024:
         return f"{n} B"

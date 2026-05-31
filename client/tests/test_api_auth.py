@@ -26,6 +26,30 @@ def test_login_happy_path():
 
 
 @respx.mock
+def test_login_non_json_200_raises_clean_apierror():
+    """Finding C3: a 200 with a non-JSON body must surface as a clean
+    ApiError(MALFORMED_RESPONSE), not a raw ValueError."""
+    respx.post(f"{SERVER}/api/auth/login").mock(
+        return_value=httpx.Response(200, text="<html>gateway</html>")
+    )
+    api = ApiClient(SERVER)
+    with pytest.raises(ApiError) as ei:
+        auth_api.login(api, email="a@b.c", password="pw")
+    assert ei.value.code == "MALFORMED_RESPONSE"
+
+
+@respx.mock
+def test_me_non_json_200_raises_clean_apierror():
+    respx.get(f"{SERVER}/api/account/me").mock(
+        return_value=httpx.Response(200, text="not json")
+    )
+    api = ApiClient(SERVER, access_token="ACCESS")
+    with pytest.raises(ApiError) as ei:
+        auth_api.me(api)
+    assert ei.value.code == "MALFORMED_RESPONSE"
+
+
+@respx.mock
 def test_login_totp_required_raises_envelope():
     respx.post(f"{SERVER}/api/auth/login").mock(
         return_value=httpx.Response(

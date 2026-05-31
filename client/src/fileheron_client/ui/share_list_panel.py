@@ -22,7 +22,7 @@ import customtkinter as ctk
 
 from .. import api as api_pkg
 from ..api import ApiClient, ApiError
-from ..formatters import format_expiry
+from ..formatters import format_datetime, format_expiry
 from ..i18n import t
 from ..models import MeResponse, ShareListItem
 from ._async import run_in_background
@@ -303,7 +303,7 @@ class ShareListPanel(ctk.CTkFrame):
                 party,
                 str(item.file_count),
                 human_size(item.total_size_bytes),
-                item.created_at.strftime("%Y-%m-%d %H:%M"),
+                format_datetime(item.created_at),
                 format_expiry(item.expires_at),
             ]
             # Single-click AND double-click drill into the share detail.

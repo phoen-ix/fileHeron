@@ -20,7 +20,7 @@ from ..models import ShareResponse
 from . import _messagebox as mb
 from .recipient_picker import RecipientPickerWidget
 from .upload_worker import start_upload
-from .widgets import human_size
+from .widgets import alive, human_size
 
 logger = logging.getLogger("fileheron_client.ui.upload")
 
@@ -450,6 +450,8 @@ class UploadPanel(ctk.CTkFrame):
             )
 
     def _on_chunk_progress(self, path: str, done: int, _total: int) -> None:
+        if not alive(self):
+            return  # panel torn down mid-upload (C6)
         self._per_file_done[path] = done
         if self._total_bytes <= 0:
             return
@@ -458,6 +460,8 @@ class UploadPanel(ctk.CTkFrame):
         self.progress.set(pct)
 
     def _on_one_done(self, path: str, _file_id: str) -> None:
+        if not alive(self):
+            return  # panel gone; nothing to update (C6)
         try:
             self._per_file_done[path] = Path(path).stat().st_size
         except OSError:
@@ -470,6 +474,8 @@ class UploadPanel(ctk.CTkFrame):
             self._on_chunk_progress(path, self._per_file_done.get(path, 0), 0)
 
     def _on_one_failed(self, path: str, message: str) -> None:
+        if not alive(self):
+            return  # panel gone; nothing to warn about (C6)
         mb.warn(
             self.winfo_toplevel(),
             t("upload.upload_failed_title"),

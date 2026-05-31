@@ -46,6 +46,22 @@ def _envelope_from_response(resp: httpx.Response) -> ApiError:
     )
 
 
+def json_or_raise(resp: httpx.Response) -> Any:
+    """Parse a (already status-checked) response body as JSON, or raise a
+    clear ApiError. The typed wrappers feed this straight into a Pydantic
+    model, so a 200 with a non-JSON body (proxy/misconfig) should surface as
+    a clean MALFORMED_RESPONSE error rather than a raw ValueError that the
+    UI reports as a generic failure (finding C3)."""
+    try:
+        return resp.json()
+    except ValueError as exc:
+        raise ApiError(
+            status_code=resp.status_code,
+            code="MALFORMED_RESPONSE",
+            message="Server returned a malformed (non-JSON) response.",
+        ) from exc
+
+
 class ApiClient:
     """One-per-session HTTP client. Methods return parsed JSON dicts;
     callers wrap them in Pydantic models."""
@@ -137,7 +153,14 @@ class ApiClient:
                 headers={"Accept": "application/json"},
             )
             if ref.status_code == 200:
-                token = ref.json().get("access_token")
+                # Defensive parse (finding C3): a non-JSON 200 from a
+                # misconfigured proxy must not raise here — fall through to
+                # returning the original 401, which the UI turns into a
+                # clean re-login prompt.
+                try:
+                    token = ref.json().get("access_token")
+                except ValueError:
+                    token = None
                 if token:
                     self.access_token = token
                     return self.request(
@@ -165,7 +188,7 @@ class ApiClient:
             raise _envelope_from_response(resp)
         if resp.status_code == 204 or not resp.content:
             return None
-        try:
-            return resp.json()
-        except ValueError:
-            return resp.content
+        # Non-JSON body on a success status → clean error, not raw bytes.
+        # The old `return resp.content` fallback handed callers bytes that
+        # they then fed to model_validate()/[...] (finding C3/C4).
+        return json_or_raise(resp)

@@ -6,7 +6,7 @@ import logging
 from pathlib import Path
 from typing import Callable, Optional
 
-from .client import ApiClient, _envelope_from_response
+from .client import ApiClient, ApiError, _envelope_from_response
 
 logger = logging.getLogger("fileheron_client.files")
 
@@ -50,4 +50,12 @@ def get_download_url(api: ApiClient, file_id: str) -> str:
     out = api.request_or_raise(
         "GET", f"/api/files/{file_id}/download-url"
     )
+    # Guard the response shape (finding C4): request_or_raise can return
+    # None (204/empty) and a non-conforming body lacks "url".
+    if not isinstance(out, dict) or "url" not in out:
+        raise ApiError(
+            status_code=200,
+            code="MALFORMED_RESPONSE",
+            message="Download-URL response did not contain a url.",
+        )
     return out["url"]

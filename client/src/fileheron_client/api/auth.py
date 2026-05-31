@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from .client import ApiClient, _envelope_from_response
+from .client import ApiClient, _envelope_from_response, json_or_raise
 from ..models import LoginResponse, MeResponse, RefreshResponse
 
 
@@ -21,7 +21,7 @@ def login(
     resp = api.request("POST", "/api/auth/login", json=body, retry_on_401=False)
     if resp.status_code != 200:
         raise _envelope_from_response(resp)
-    out = LoginResponse.model_validate(resp.json())
+    out = LoginResponse.model_validate(json_or_raise(resp))
     api.set_access_token(out.access_token)
     return out
 
@@ -51,7 +51,7 @@ def login_with_recovery(
     )
     if resp.status_code != 200:
         raise _envelope_from_response(resp)
-    out = LoginResponse.model_validate(resp.json())
+    out = LoginResponse.model_validate(json_or_raise(resp))
     api.set_access_token(out.access_token)
     return out
 

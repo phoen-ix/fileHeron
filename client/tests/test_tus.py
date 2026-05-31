@@ -85,6 +85,35 @@ def test_tus_resync_on_offset_mismatch(tmp_path):
 
 
 @respx.mock
+def test_tus_relative_location_without_slash_is_resolved(tmp_path):
+    """Finding C2: a Location header that is a bare relative path (no
+    leading slash) must still resolve to an absolute URL for the PATCH."""
+    f = tmp_path / "big.bin"
+    f.write_bytes(b"X" * 4000)
+
+    respx.post(TUS_URL).mock(
+        # Note: "uploads/rel-id" — NO leading slash.
+        return_value=httpx.Response(201, headers={"Location": "uploads/rel-id"})
+    )
+    resolved = f"{SERVER}/uploads/rel-id"
+
+    def _on_patch(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(204, headers={"Upload-Offset": str(len(request.content))})
+
+    route = respx.patch(resolved).mock(side_effect=_on_patch)
+
+    final_url = upload_tus(
+        server_url=SERVER,
+        tus_endpoint="/uploads/",
+        upload_metadata_header="fh_payload Y,fh_sig Z",
+        file_path=f,
+        chunk_size=8192,
+    )
+    assert final_url == resolved
+    assert route.called
+
+
+@respx.mock
 def test_tus_create_failure_raises(tmp_path):
     f = tmp_path / "big.bin"
     f.write_bytes(b"X" * 100)

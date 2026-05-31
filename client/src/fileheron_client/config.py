@@ -9,6 +9,7 @@ restarts but never end up in a flat file on disk.
 from __future__ import annotations
 
 import json
+import logging
 import os
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -19,6 +20,8 @@ import platformdirs
 
 APP_NAME = "fileHeron"
 KEYRING_SERVICE = "fileheron-client"
+
+_log = logging.getLogger("fileheron_client.config")
 
 
 def _config_dir() -> Path:
@@ -72,14 +75,21 @@ def load_config() -> ClientConfig:
 def save_config(cfg: ClientConfig) -> None:
     p = config_path()
     p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(json.dumps(asdict(cfg), indent=2), encoding="utf-8")
+    # Atomic write (finding C7): write a temp file in the same dir then
+    # os.replace() it over the target. A crash mid-write can no longer
+    # leave a truncated config.json that load_config silently resets to
+    # defaults (losing the server URL / last email / locale).
+    tmp = p.with_name(p.name + ".tmp")
+    tmp.write_text(json.dumps(asdict(cfg), indent=2), encoding="utf-8")
     # Restrict to owner-only (finding L9). Best-effort: chmod is a no-op on
     # Windows ACLs but harmless; on POSIX it stops other local users reading
-    # the server URL / last email from a shared machine.
+    # the server URL / last email from a shared machine. Set on the temp
+    # file before the rename so the final file is never world-readable.
     try:
-        os.chmod(p, 0o600)
+        os.chmod(tmp, 0o600)
     except OSError:
         pass
+    os.replace(tmp, p)
 
 
 def normalize_server_url(raw: str) -> str:
@@ -99,6 +109,10 @@ def normalize_server_url(raw: str) -> str:
         s = "https://" + s
     parsed = urlparse(s)
     host = (parsed.hostname or "").lower()
+    # Reject embedded credentials (finding C8): https://user:pass@host hides
+    # the real host and is a phishing/confusion vector — never legitimate here.
+    if parsed.username or parsed.password:
+        raise ValueError("Server URL must not contain a username or password.")
     if parsed.scheme == "https":
         return s
     if parsed.scheme == "http" and host in ("localhost", "127.0.0.1", "::1"):
@@ -113,16 +127,31 @@ def _secret_username(kind: str, server_url: str) -> str:
 
 
 def get_secret(kind: str, server_url: str) -> Optional[str]:
-    """Read a secret from the keyring. Returns None if missing."""
-    return keyring.get_password(
-        KEYRING_SERVICE, _secret_username(kind, server_url)
-    )
+    """Read a secret from the keyring. Returns None if missing OR if the
+    keyring backend is unavailable/locked. A keyring failure must NOT crash
+    a UI flow (finding C1): persistence is best-effort, so degrade to None
+    and let the caller fall back to asking the user."""
+    try:
+        return keyring.get_password(
+            KEYRING_SERVICE, _secret_username(kind, server_url)
+        )
+    except Exception as exc:  # keyring.errors.KeyringError + backend quirks
+        _log.warning("keyring get_secret(%s) failed: %r", kind, exc)
+        return None
 
 
 def set_secret(kind: str, server_url: str, value: str) -> None:
-    keyring.set_password(
-        KEYRING_SERVICE, _secret_username(kind, server_url), value
-    )
+    """Persist a secret. Best-effort: if the keyring backend is
+    unavailable/locked, log and return rather than raising (finding C1) —
+    the token is still live in memory for the session; the only cost is
+    re-authenticating next launch. Crashing sign-in here surfaced as a
+    false 'could not reach server' error even though auth had succeeded."""
+    try:
+        keyring.set_password(
+            KEYRING_SERVICE, _secret_username(kind, server_url), value
+        )
+    except Exception as exc:
+        _log.warning("keyring set_secret(%s) failed: %r", kind, exc)
 
 
 def clear_secret(kind: str, server_url: str) -> None:
@@ -131,4 +160,6 @@ def clear_secret(kind: str, server_url: str) -> None:
             KEYRING_SERVICE, _secret_username(kind, server_url)
         )
     except keyring.errors.PasswordDeleteError:
-        pass
+        pass  # nothing stored — fine
+    except Exception as exc:
+        _log.warning("keyring clear_secret(%s) failed: %r", kind, exc)

@@ -30,21 +30,6 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e "./client[build,dev]"
 
-      # v0.4.1: pyinstaller.spec sets upx=True so the final .exe is
-      # compressed. v0.4.0 tried choco for this; the install succeeded
-      # but PyInstaller didn't find upx on PATH in the bash subprocess,
-      # so the EXE step silently fell back to uncompressed (31 MB
-      # instead of the targeted ~21 MB). This explicit download +
-      # GITHUB_PATH update is debuggable and works in any shell.
-      - name: Install UPX
-        shell: bash
-        run: |
-          curl -sSL -o upx.zip https://github.com/upx/upx/releases/download/v5.1.1/upx-5.1.1-win64.zip
-          mkdir -p /c/upx
-          unzip -j -o upx.zip 'upx-*/upx.exe' -d /c/upx
-          /c/upx/upx.exe --version
-          echo "C:\\upx" >> "$GITHUB_PATH"
-
       - name: Run unit tests
         working-directory: client
         run: pytest
@@ -52,19 +37,31 @@ jobs:
       - name: Build .exe with PyInstaller
         working-directory: client
         run: |
-          # --upx-dir explicitly tells PyInstaller where to find upx.exe;
-          # v0.4.1 had upx on PATH but PyInstaller didn't seem to pick it
-          # up (no "Packing executable with UPX..." in the log). Passing
-          # the directory removes any path-resolution ambiguity.
-          # --log-level INFO surfaces the UPX activity in the log.
-          pyinstaller pyinstaller.spec --clean --noconfirm \
-            --log-level INFO \
-            --upx-dir "C:\\upx"
+          # NOTE: pyinstaller.spec sets upx=False (UPX corrupted _ssl.pyd
+          # and gave no size win in --onefile; see the spec comment), so no
+          # UPX install / --upx-dir is needed here.
+          pyinstaller pyinstaller.spec --clean --noconfirm --log-level INFO
 
       - name: Show artifact
         working-directory: client
         run: |
           ls -lh dist/
+
+      # Launch the freshly-built .exe headless to prove the bundle is
+      # complete (finding C11): customtkinter themes + tkinterdnd2's tkdnd
+      # Tcl lib must be present or the GUI root construction throws. A
+      # non-zero exit fails the release before it ships.
+      - name: Smoke-test the .exe (--selfcheck)
+        working-directory: client
+        shell: pwsh
+        run: |
+          $p = Start-Process -FilePath "dist/fileheron-client.exe" `
+            -ArgumentList "--selfcheck" -Wait -PassThru
+          if ($p.ExitCode -ne 0) {
+            Write-Error "selfcheck failed with exit code $($p.ExitCode)"
+            exit 1
+          }
+          Write-Host "selfcheck OK"
 
       - uses: actions/upload-artifact@v4
         with:

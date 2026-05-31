@@ -30,7 +30,7 @@ const ITEMS = [
   },
 ]
 
-const updateSpy = vi.fn(async () => ({ data: { items: ITEMS } }))
+const updateSpy = vi.fn(async (_payload: any) => ({ data: { items: ITEMS } }))
 
 vi.mock('@/api/admin', () => ({
   getAdvancedSettings: vi.fn(async () => ({ data: { items: ITEMS } })),

@@ -160,6 +160,7 @@ def system_status(
         "version": {
             "running": VERSION,
             "sha": GIT_SHA,
+            "running_release_url": release_check_svc.html_release_url_for_tag(db, VERSION),
             "latest": latest,
             "update_available": update_available,
             "last_check_at": cached.get("last_check_at"),

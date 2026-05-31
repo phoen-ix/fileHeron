@@ -194,7 +194,8 @@
       "update_available_title": "Update verfügbar: {v}",
       "published": "Veröffentlicht {when}",
       "view_release": "Release-Notes auf GitHub",
-      "release_notes": "Release-Notes anzeigen"
+      "release_notes": "Release-Notes anzeigen",
+      "changelog": "Changelog"
     },
     "update": {
       "check_now": "Jetzt prüfen",

@@ -171,6 +171,9 @@ export interface SystemStatusResponse {
   version: {
     running: string
     sha: string
+    /** GitHub release page for the running tag (null for dev builds /
+     * non-github mirrors). The latest version's changelog uses release_url. */
+    running_release_url: string | null
     latest: string | null
     update_available: boolean
     /** Every attempt (success OR failure) — display as "checked X ago". */

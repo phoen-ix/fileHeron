@@ -323,6 +323,15 @@ const headlineFailures = computed(() => {
             <span v-if="status.version.sha && status.version.sha !== 'unknown'" class="sha">
               ({{ status.version.sha.slice(0, 12) }})
             </span>
+            <a
+              v-if="status.version.running_release_url"
+              :href="status.version.running_release_url"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="changelog-link"
+            >
+              {{ t('admin_system.version.changelog') }} ↗
+            </a>
           </dd>
           <dt>{{ t('admin_system.version.latest') }}</dt>
           <dd>
@@ -337,6 +346,15 @@ const headlineFailures = computed(() => {
             >
               · {{ t('admin_system.version.last_success', { when: fmtTime(status.version.last_success_at) }) }}
             </span>
+            <a
+              v-if="status.version.release_url"
+              :href="status.version.release_url"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="changelog-link"
+            >
+              {{ t('admin_system.version.changelog') }} ↗
+            </a>
           </dd>
           <template v-if="status.version.last_check_error">
             <dt>{{ t('admin_system.version.error') }}</dt>
@@ -599,6 +617,8 @@ const headlineFailures = computed(() => {
 .kv-grid dd { margin: 0; }
 .error-line { color: var(--fh-danger); margin-left: var(--fh-space-2); font-family: var(--fh-font-mono); font-size: var(--fh-text-mono-sm); }
 .sha { color: var(--fh-subtle); font-family: var(--fh-font-mono); font-size: var(--fh-text-mono-sm); margin-left: var(--fh-space-2); }
+.changelog-link { color: var(--fh-accent); font-size: var(--fh-text-body-sm); margin-left: var(--fh-space-2); text-decoration: none; white-space: nowrap; }
+.changelog-link:hover { text-decoration: underline; }
 .card-header {
   display: flex;
   align-items: center;

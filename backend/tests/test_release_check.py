@@ -505,3 +505,42 @@ async def test_system_status_flags_update_available(
     v = r.json()["version"]
     assert v["latest"] == fake_latest
     assert v["update_available"] is True
+
+
+def test_html_release_url_for_tag_default_repo(db):
+    # The default configured URL targets api.github.com/repos/phoen-ix/fileHeron.
+    assert (
+        rc.html_release_url_for_tag(db, "v1.2.4")
+        == "https://github.com/phoen-ix/fileHeron/releases/tag/v1.2.4"
+    )
+
+
+def test_html_release_url_for_tag_respects_configured_repo(db):
+    settings_svc.set_value(
+        db,
+        key=settings_svc.Keys.UPDATES_API_URL,
+        value="https://api.github.com/repos/acme/widgets/releases/latest",
+        actor=None,
+    )
+    db.commit()
+    assert (
+        rc.html_release_url_for_tag(db, "v2.0.0")
+        == "https://github.com/acme/widgets/releases/tag/v2.0.0"
+    )
+
+
+def test_html_release_url_for_tag_none_for_dev_or_missing(db):
+    # The source-tree placeholder isn't a vX.Y.Z tag → no link.
+    assert rc.html_release_url_for_tag(db, "0.0.0-dev") is None
+    assert rc.html_release_url_for_tag(db, None) is None
+
+
+def test_html_release_url_for_tag_none_for_non_github_mirror(db):
+    settings_svc.set_value(
+        db,
+        key=settings_svc.Keys.UPDATES_API_URL,
+        value="https://git.internal.example/api/v3/repos/acme/widgets/releases",
+        actor=None,
+    )
+    db.commit()
+    assert rc.html_release_url_for_tag(db, "v1.0.0") is None

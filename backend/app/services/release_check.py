@@ -316,6 +316,24 @@ async def release_check(_ctx) -> dict:
         db.close()
 
 
+def html_release_url_for_tag(db: Session, tag: str | None) -> str | None:
+    """Best-effort GitHub release page URL for an arbitrary tag, derived
+    from the configured updates API URL. Returns None for non-release tags
+    (e.g. the "0.0.0-dev" source-tree placeholder) or non-github.com hosts
+    (self-hosted mirrors), where we can't reliably construct the URL.
+
+    Used to link the *running* version to its changelog. The *latest*
+    version reuses the cached `latest_url` (GitHub's own `html_url`)."""
+    if not tag or not _BACKEND_TAG_RE.match(tag):
+        return None
+    m = re.search(
+        r"https?://api\.github\.com/repos/([^/]+)/([^/]+)", _configured_url(db)
+    )
+    if not m:
+        return None
+    return f"https://github.com/{m.group(1)}/{m.group(2)}/releases/tag/{tag}"
+
+
 def read_cached(db: Session) -> dict:
     """Snapshot of the cached release row for the admin endpoint."""
     return {

@@ -178,6 +178,7 @@
     }
   },
   "admin_system": {
+    "eyebrow": "Admin / System",
     "heading": "System health",
     "sub": "Live status, recent cron runs, and operational alerts.",
     "refresh": "Refresh",

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import {
@@ -33,6 +33,19 @@ const liveConnected = ref(false)
 const updaterStatus = ref<UpdaterStatus | null>(null)
 const updaterUnreachable = ref(false)
 const activeJob = ref<UpdaterJob | null>(null)
+const logPre = ref<HTMLElement | null>(null)
+
+// Follow the newest log line as it streams in (sticky-bottom: don't yank the
+// view if the operator has scrolled up to read earlier output).
+watch(
+  () => activeJob.value?.log_tail?.length ?? 0,
+  async () => {
+    const el = logPre.value
+    const stick = !el || el.scrollHeight - el.scrollTop - el.clientHeight < 48
+    await nextTick()
+    if (stick && logPre.value) logPre.value.scrollTop = logPre.value.scrollHeight
+  },
+)
 const confirming = ref<null | 'update' | 'rollback'>(null)
 const passwordInput = ref('')
 const confirmError = ref<string | null>(null)
@@ -275,7 +288,7 @@ const headlineFailures = computed(() => {
 <template>
   <section class="system-page">
     <header class="page-header">
-      <h1>{{ t('admin_system.heading') }}</h1>
+      <span class="fh-eyebrow">{{ t('admin_system.eyebrow') }}</span>
       <p class="page-sub">{{ t('admin_system.sub') }}</p>
       <div class="actions">
         <button class="btn-secondary" :disabled="loading" @click="load">
@@ -384,9 +397,9 @@ const headlineFailures = computed(() => {
             </strong>
             <span v-if="activeJob.error" class="error-line">{{ activeJob.error }}</span>
           </div>
-          <details v-if="activeJob.log_tail.length > 0" class="job-log">
+          <details v-if="activeJob.log_tail.length > 0" class="job-log" open>
             <summary>{{ t('admin_system.update.job.log') }}</summary>
-            <pre>{{ activeJob.log_tail.join('\n') }}</pre>
+            <pre ref="logPre">{{ activeJob.log_tail.join('\n') }}</pre>
           </details>
         </div>
 

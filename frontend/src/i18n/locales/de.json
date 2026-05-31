@@ -178,6 +178,7 @@
     }
   },
   "admin_system": {
+    "eyebrow": "Admin / System",
     "heading": "Systemzustand",
     "sub": "Live-Status, letzte Cron-Läufe und Betriebs-Alarme.",
     "refresh": "Aktualisieren",

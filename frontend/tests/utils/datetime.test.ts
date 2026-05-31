@@ -74,6 +74,25 @@ describe('formatInSiteTime', () => {
     const out = formatInSiteTime('2026-05-16T23:46:00', 'en')
     expect(out).toMatch(/2026/) // smoke — should produce some output
   })
+
+  it('renders 24-hour with a zone label in the site timezone (not 12-hour, not UTC)', () => {
+    const site = useSiteStore()
+    site.timezone = 'Europe/Vienna' // CEST = +02:00 in May
+    // 11:00 UTC -> 13:00 Vienna. Must be 24-hour ("13:00", no AM/PM) and
+    // carry a DST-aware zone token so it can't be mistaken for UTC.
+    const out = formatInSiteTime('2026-05-31T11:00:00', 'en')
+    expect(out).toContain('13:00')
+    expect(out).not.toMatch(/\b(AM|PM)\b/)
+    expect(out).toMatch(/GMT|CEST|CET/)
+  })
+
+  it('labels a UTC site timezone as UTC', () => {
+    const site = useSiteStore()
+    site.timezone = 'UTC'
+    const out = formatInSiteTime('2026-05-31T11:00:00', 'en')
+    expect(out).toContain('11:00')
+    expect(out).toContain('UTC')
+  })
 })
 
 describe('formatDateInSiteTime', () => {
@@ -88,5 +107,12 @@ describe('formatDateInSiteTime', () => {
     // The narrow-date format shouldn't include a colon (which is in
     // hh:mm). Date-only shows month + day + year only.
     expect(out).not.toMatch(/:/)
+  })
+
+  it('carries no zone token on a date-only cell', () => {
+    const site = useSiteStore()
+    site.timezone = 'Europe/Vienna'
+    const out = formatDateInSiteTime('2026-05-16T23:46:00', 'en')
+    expect(out).not.toMatch(/GMT|CEST|CET|UTC/)
   })
 })

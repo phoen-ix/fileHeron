@@ -46,6 +46,12 @@ export function formatInSiteTime(
     day: '2-digit',
     hour: '2-digit',
     minute: '2-digit',
+    // 24-hour + a DST-aware zone token ("GMT+2"/"CEST" in summer, "UTC" if
+    // the site zone is UTC) so timestamps are unambiguous — a 12-hour
+    // "1:00 PM" with no zone reads like it might be UTC when it's already
+    // the admin-set site timezone.
+    hour12: false,
+    timeZoneName: 'short',
     ...opts,
   }).format(date)
 }
@@ -62,6 +68,8 @@ export function formatDateInSiteTime(
     day: '2-digit',
     hour: undefined,
     minute: undefined,
+    // No clock → no dangling zone token on a date-only cell.
+    timeZoneName: undefined,
     ...opts,
   })
 }

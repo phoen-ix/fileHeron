@@ -32,14 +32,22 @@ from ...redis_client import get_redis
 
 router = APIRouter()
 
+# Every scheduled cron (worker.py::WorkerSettings.cron_jobs), in schedule
+# order. Doubles as the allowlist for the on-demand run endpoint — each is
+# registered in WorkerSettings.functions, so enqueueable by name, and each
+# is idempotent (acts only on already-eligible rows).
 _KNOWN_CRONS = [
     "expire_files",
     "share_expiring_24h_warning",
-    "cleanup_expired_tokens",
-    "cleanup_read_notifications",
-    "quota_reconcile",
     "ops_check",
+    "cleanup_expired_tokens",
+    "quota_reconcile",
+    "cleanup_abandoned_uploads",
     "release_check",
+    "purge_old_quarantine",
+    "cleanup_pending_invites",
+    "cleanup_read_notifications",
+    "prune_history",
 ]
 
 
@@ -48,8 +56,9 @@ def _utcnow() -> datetime:
 
 
 def _live_checks(db: Session) -> dict:
-    """Mirror /api/health's probes — DB, Redis, AV."""
-    out: dict[str, dict[str, str | None]] = {}
+    """Mirror /api/health's probes — DB, Redis, AV. Probes run fresh on every
+    call; `checked_at` records when, so the UI can show 'checked <time>'."""
+    out: dict = {"checked_at": _utcnow().isoformat()}
 
     # DB — if we got this far the request session worked, so just label OK.
     out["db"] = {"status": "ok", "error": None}
@@ -242,6 +251,50 @@ def cron_runs(
         q = q.filter(CronRun.job_name == job_name)
     rows = q.order_by(CronRun.started_at.desc()).limit(limit).all()
     return {"items": [_cron_row_dict(r) for r in rows], "limit": limit}
+
+
+@router.get("/system/live")
+def live_checks_now(
+    db: Session = Depends(get_db),
+    _admin: User = Depends(get_current_admin),
+) -> dict:
+    """On-demand re-run of the liveness probes (DB / Redis / AV). Lightweight
+    sibling of /system/status that skips the cron + version queries — backs
+    the 'Re-run' button on the Live checks card."""
+    return {"live": _live_checks(db)}
+
+
+@router.post("/system/crons/{job_name}/run")
+async def run_cron_now(
+    job_name: str,
+    request: Request,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin),
+) -> dict:
+    """Enqueue a scheduled cron to run immediately on the worker. The job's
+    own @track_cron wrapper writes the CronRun row + publishes the SSE
+    'cron_run' event, so the status table updates like any scheduled run.
+
+    Restricted to the known-cron allowlist so arbitrary worker functions
+    (which may require arguments) can't be enqueued through here."""
+    if job_name not in _KNOWN_CRONS:
+        raise AppError(404, "CRON_UNKNOWN", f"Unknown cron job '{job_name}'.")
+
+    from ...services import job_queue
+    from ...services.audit import record_audit_event
+
+    await job_queue.aenqueue(job_name)
+    record_audit_event(
+        db,
+        event_type=AuditEventType.cron_run_triggered,
+        actor_user_id=admin.id,
+        target_type="cron",
+        target_id=job_name,
+        metadata={"reason": "admin_on_demand"},
+        request=request,
+    )
+    db.commit()
+    return {"job_name": job_name, "queued": True}
 
 
 # ---------------------------------------------------------------------------

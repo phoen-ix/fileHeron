@@ -231,7 +231,10 @@
       "heading": "Live-Prüfungen",
       "db": "Datenbank",
       "redis": "Redis",
-      "av": "Virenscanner"
+      "av": "Virenscanner",
+      "checked": "geprüft {when}",
+      "rerun": "Erneut prüfen",
+      "rerun_done": "Live-Prüfungen aktualisiert."
     },
     "counters": {
       "cron_failures_24h": "Cron-Fehler (24h)",
@@ -245,7 +248,10 @@
       "duration": "Dauer",
       "last_24h": "Letzte 24h",
       "result": "Ergebnis",
-      "no_runs": "noch keine Läufe"
+      "no_runs": "noch keine Läufe",
+      "actions": "Aktionen",
+      "run_now": "Jetzt ausführen",
+      "run_queued": "{job} eingereiht"
     },
     "failures": {
       "heading": "Letzte Fehler",

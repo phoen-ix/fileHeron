@@ -9,6 +9,8 @@ import {
   getSystemStatus,
   getUpdaterJob,
   getUpdaterStatus,
+  runCron,
+  runLiveChecks,
   type SystemStatusResponse,
   type UpdaterJob,
   type UpdaterStatus,
@@ -97,6 +99,39 @@ async function load() {
     errorMsg.value = describe(err)
   } finally {
     loading.value = false
+  }
+}
+
+// --- On-demand cron + live-check triggers ---
+const runningCron = ref<string | null>(null)
+const liveRunning = ref(false)
+
+async function onRunCron(jobName: string) {
+  if (runningCron.value) return
+  runningCron.value = jobName
+  try {
+    await runCron(jobName)
+    ui.pushToast(t('admin_system.crons.run_queued', { job: jobName }), 'success')
+    // Pick up the 'running' row shortly; the SSE 'cron_run' event reloads
+    // again on completion (with the final status + duration + result).
+    setTimeout(() => void load(), 1500)
+  } catch (err) {
+    ui.pushToast(describe(err), 'error')
+  } finally {
+    runningCron.value = null
+  }
+}
+
+async function onRunLiveChecks() {
+  liveRunning.value = true
+  try {
+    const { data } = await runLiveChecks()
+    if (status.value) status.value.live = data.live
+    ui.pushToast(t('admin_system.live.rerun_done'), 'success')
+  } catch (err) {
+    ui.pushToast(describe(err), 'error')
+  } finally {
+    liveRunning.value = false
   }
 }
 
@@ -432,7 +467,20 @@ const headlineFailures = computed(() => {
 
       <!-- live -->
       <section class="card">
-        <h2>{{ t('admin_system.live.heading') }}</h2>
+        <div class="card-header">
+          <h2>{{ t('admin_system.live.heading') }}</h2>
+          <button
+            type="button"
+            class="btn-secondary"
+            :disabled="liveRunning"
+            @click="onRunLiveChecks"
+          >
+            {{ liveRunning ? t('common.loading') : t('admin_system.live.rerun') }}
+          </button>
+        </div>
+        <p v-if="status.live.checked_at" class="fh-field-help live-checked">
+          {{ t('admin_system.live.checked', { when: fmtTime(status.live.checked_at) }) }}
+        </p>
         <dl class="kv-grid">
           <dt>{{ t('admin_system.live.db') }}</dt>
           <dd>
@@ -476,6 +524,7 @@ const headlineFailures = computed(() => {
               <th>{{ t('admin_system.crons.duration') }}</th>
               <th>{{ t('admin_system.crons.last_24h') }}</th>
               <th>{{ t('admin_system.crons.result') }}</th>
+              <th>{{ t('admin_system.crons.actions') }}</th>
             </tr>
           </thead>
           <tbody>
@@ -497,6 +546,16 @@ const headlineFailures = computed(() => {
               <td class="result">
                 <code v-if="c.last_run?.result_summary">{{ JSON.stringify(c.last_run.result_summary) }}</code>
                 <span v-else class="muted">—</span>
+              </td>
+              <td>
+                <button
+                  type="button"
+                  class="btn-secondary run-btn"
+                  :disabled="runningCron === c.job_name || c.last_run?.status === 'running'"
+                  @click="onRunCron(c.job_name)"
+                >
+                  {{ runningCron === c.job_name ? t('common.loading') : t('admin_system.crons.run_now') }}
+                </button>
               </td>
             </tr>
           </tbody>
@@ -619,6 +678,8 @@ const headlineFailures = computed(() => {
 .sha { color: var(--fh-subtle); font-family: var(--fh-font-mono); font-size: var(--fh-text-mono-sm); margin-left: var(--fh-space-2); }
 .changelog-link { color: var(--fh-accent); font-size: var(--fh-text-body-sm); margin-left: var(--fh-space-2); text-decoration: none; white-space: nowrap; }
 .changelog-link:hover { text-decoration: underline; }
+.run-btn { padding: 2px 10px; font-size: var(--fh-text-body-sm); white-space: nowrap; }
+.live-checked { margin: 0 0 var(--fh-space-2); }
 .card-header {
   display: flex;
   align-items: center;

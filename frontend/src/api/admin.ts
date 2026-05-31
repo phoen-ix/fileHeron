@@ -151,12 +151,16 @@ export interface CronRunDTO {
   error_msg: string | null
 }
 
+export interface LiveChecks {
+  /** Server time the probes ran (naive UTC ISO) — for "checked <time>". */
+  checked_at: string | null
+  db: { status: string; error: string | null }
+  redis: { status: string; error: string | null }
+  av: { status: string; error: string | null }
+}
+
 export interface SystemStatusResponse {
-  live: {
-    db: { status: string; error: string | null }
-    redis: { status: string; error: string | null }
-    av: { status: string; error: string | null }
-  }
+  live: LiveChecks
   crons: Array<{
     job_name: string
     last_run: CronRunDTO | null
@@ -196,6 +200,19 @@ export function getCronRuns(params: { job_name?: string; limit?: number } = {}) 
     '/admin/system/cron-runs',
     { params },
   )
+}
+
+/** Enqueue a scheduled cron to run now on the worker. The status table
+ * updates via the existing SSE 'cron_run' event when it finishes. */
+export function runCron(jobName: string) {
+  return api.post<{ job_name: string; queued: boolean }>(
+    `/admin/system/crons/${encodeURIComponent(jobName)}/run`,
+  )
+}
+
+/** On-demand re-run of the liveness probes (db / redis / av). */
+export function runLiveChecks() {
+  return api.get<{ live: LiveChecks }>('/admin/system/live')
 }
 
 

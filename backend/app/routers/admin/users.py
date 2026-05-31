@@ -15,6 +15,7 @@ from ...models.user_totp import UserTOTP
 from ...schemas.admin import (
     AdminUserItem,
     AdminUserListResponse,
+    CreateUserRequest,
     EraseUserResponse,
     ForcePasswordResetResponse,
     UpdateUserRequest,
@@ -65,6 +66,29 @@ def list_users(
         page=page,
         page_size=page_size,
     )
+
+
+@router.post("/users", response_model=AdminUserItem, status_code=status.HTTP_201_CREATED)
+async def create_user(
+    payload: CreateUserRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin),
+) -> AdminUserItem:
+    """Create a user immediately — no invite email, email pre-verified, with
+    an admin-set password. The 'skip invite' path of the admin invite form."""
+    user = await um_svc.create_user_as_admin(
+        db,
+        actor=admin,
+        email=str(payload.email),
+        display_name=payload.display_name,
+        password=payload.password,
+        target_role=payload.target_role,
+        initial_group_ids=payload.initial_group_ids,
+        request=request,
+    )
+    db.commit()
+    return _to_user_item(db, user)
 
 
 @router.get("/users/{user_id}", response_model=AdminUserItem)

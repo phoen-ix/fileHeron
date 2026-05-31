@@ -11,6 +11,7 @@ import type {
   AdminUserItem,
   AdminUserListResponse,
   CreateApiTokenResponse,
+  CreateUserRequest,
   EmailSettingsResponse,
   AvReloadResponse,
   AvStatusResponse,
@@ -286,6 +287,11 @@ export function activateInvite(id: number, payload: ActivateInviteRequest) {
 
 export function getUser(id: number) {
   return api.get<AdminUserItem>(`/admin/users/${id}`)
+}
+
+/** Create a user immediately — no invite, email pre-verified, set password. */
+export function createUserDirect(payload: CreateUserRequest) {
+  return api.post<AdminUserItem>('/admin/users', payload)
 }
 
 export function updateUser(id: number, payload: UpdateUserRequest) {

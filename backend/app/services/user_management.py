@@ -165,3 +165,93 @@ def get_or_404(db: Session, user_id: int) -> User:
     if u is None:
         raise AppError(404, "USER_NOT_FOUND", "User not found.")
     return u
+
+
+async def create_user_as_admin(
+    db: Session,
+    *,
+    actor: User,
+    email: str,
+    display_name: str,
+    password: str,
+    target_role: UserRole,
+    initial_group_ids: list[int] | None = None,
+    request=None,
+) -> User:
+    """Create a user account immediately — no invite, email pre-verified,
+    with an admin-set password the user can sign in with right away.
+
+    Mirrors the invite flow's invariants (uniqueness / pending-invite /
+    group-existence guards) and reuses its group + connection helpers so a
+    directly-created user is indistinguishable from an invited one. Caller
+    commits."""
+    from ..utils.crypto import argon2_hash, normalize_email
+    from .hibp import assert_password_not_breached
+    from . import invite as invite_svc
+
+    em = normalize_email(email)
+    if not em:
+        raise AppError(400, "INVALID_EMAIL", "Email cannot be empty.")
+    if not display_name or not display_name.strip():
+        raise AppError(400, "INVALID_DISPLAY_NAME", "Display name is required.")
+    await assert_password_not_breached(db, password)
+
+    if db.query(User).filter(User.email == em).one_or_none() is not None:
+        raise AppError(409, "USER_EXISTS", "An account already exists for this email.")
+    if invite_svc.has_pending_invite(db, email_value=em):
+        raise AppError(
+            409,
+            "INVITE_PENDING",
+            "A pending invite exists for this email — revoke it first, or activate it.",
+        )
+
+    group_ids = list(initial_group_ids or [])
+    groups = []
+    if group_ids:
+        from ..models.group import Group
+
+        found = db.query(Group).filter(Group.id.in_(group_ids)).all()
+        missing = sorted(set(group_ids) - {g.id for g in found})
+        if missing:
+            raise AppError(
+                400,
+                "GROUP_NOT_FOUND",
+                "One or more groups no longer exist.",
+                details={"missing_group_ids": missing},
+            )
+        groups = found
+
+    user = User(
+        email=em,
+        password_hash=argon2_hash(password),
+        display_name=display_name.strip()[:120],
+        role=target_role,
+        locale=actor.locale,
+        email_verified=True,
+        is_disabled=False,
+        created_by_id=actor.id,
+    )
+    db.add(user)
+    db.flush()
+
+    from .group import add_member as _add_group_member
+
+    for grp in groups:
+        _add_group_member(db, actor=actor, group=grp, user=user, request=request)
+
+    # Sticky client↔employee connection, same as the invite path.
+    from .connection import record_invite_connection
+
+    record_invite_connection(db, inviter=actor, invitee=user)
+
+    record_audit_event(
+        db,
+        event_type=AuditEventType.user_created_by_admin,
+        actor_user_id=actor.id,
+        target_type="user",
+        target_id=user.id,
+        metadata={"role": target_role.value, "group_ids": group_ids},
+        request=request,
+    )
+    logger.info("admin %d created user %s (id=%d) directly", actor.id, user.email, user.id)
+    return user

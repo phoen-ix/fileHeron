@@ -11,6 +11,7 @@ import {
   resendInvite,
   revokeInvite,
 } from '@/api/admin'
+import PasswordStrength from '@/components/PasswordStrength.vue'
 import { useApiError } from '@/composables/useApiError'
 import { useInviteForm } from '@/composables/useInviteForm'
 import { useUiStore } from '@/stores/ui'
@@ -84,11 +85,13 @@ const {
   inviteError,
   availableGroups,
   selectedGroupIds,
+  createDirectly,
+  invitePassword,
   openInviteForm,
   closeInviteForm,
   toggleGroup,
   onInvite,
-} = useInviteForm()
+} = useInviteForm({ onUserCreated: load })
 
 
 function formatDate(iso: string | null): string {
@@ -271,7 +274,9 @@ onMounted(() => {
           autocomplete="off"
           required
         />
-        <span class="fh-field-help">{{ t('admin_users.invite_email_help') }}</span>
+        <span class="fh-field-help">{{
+          createDirectly ? t('admin_users.invite_email_help_direct') : t('admin_users.invite_email_help')
+        }}</span>
       </label>
       <label class="fh-field">
         <span class="fh-field-label">{{ t('admin_users.invite_display_name_label') }}</span>
@@ -311,14 +316,42 @@ onMounted(() => {
           </li>
         </ul>
       </div>
+      <label class="fh-checkbox-row">
+        <input type="checkbox" v-model="createDirectly" />
+        <span>{{ t('admin_users.invite_create_direct') }}</span>
+      </label>
+      <label v-if="createDirectly" class="fh-field">
+        <span class="fh-field-label">{{ t('admin_users.invite_password_label') }}</span>
+        <input
+          v-model="invitePassword"
+          class="fh-field-input"
+          type="password"
+          autocomplete="new-password"
+          minlength="12"
+          required
+        />
+        <span class="fh-field-help">{{ t('admin_users.invite_password_help') }}</span>
+        <PasswordStrength :password="invitePassword" />
+      </label>
       <div v-if="inviteError" class="fh-notice" data-tone="error">{{ inviteError }}</div>
       <div class="form-actions">
         <button
           type="submit"
           class="fh-btn"
-          :disabled="inviting || !inviteEmail || !inviteDisplayName"
+          :disabled="
+            inviting ||
+            !inviteEmail ||
+            !inviteDisplayName ||
+            (createDirectly && invitePassword.length < 12)
+          "
         >
-          {{ inviting ? t('common.loading') : t('admin_users.invite_submit') }}
+          {{
+            inviting
+              ? t('common.loading')
+              : createDirectly
+              ? t('admin_users.invite_create_submit')
+              : t('admin_users.invite_submit')
+          }}
         </button>
         <button type="button" class="fh-btn-text" @click="closeInviteForm">
           {{ t('common.cancel') }}
@@ -657,6 +690,14 @@ onMounted(() => {
   align-items: center;
   gap: var(--fh-space-2);
   cursor: pointer;
+}
+
+.fh-checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: var(--fh-space-2);
+  cursor: pointer;
+  font-size: var(--fh-text-body-sm);
 }
 
 .group-name {

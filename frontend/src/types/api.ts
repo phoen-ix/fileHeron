@@ -432,6 +432,15 @@ export interface UpdateUserRequest {
   is_disabled?: boolean
 }
 
+/** Admin creates a user directly (no invite, email pre-verified, set password). */
+export interface CreateUserRequest {
+  email: string
+  display_name: string
+  password: string
+  target_role: UserRole
+  initial_group_ids?: number[]
+}
+
 export interface ForcePasswordResetResponse {
   plaintext_token: string
   expires_at: string

@@ -8,6 +8,7 @@ from pydantic import Field
 
 from ..models.user import Locale, UserRole
 from .common import APIBaseModel
+from .types import EmailLike
 
 
 class AdminUserItem(APIBaseModel):
@@ -44,6 +45,16 @@ class UpdateUserRequest(APIBaseModel):
     role: UserRole | None = None
     quota_bytes: int | None = Field(default=None, ge=0)
     is_disabled: bool | None = None
+
+
+class CreateUserRequest(APIBaseModel):
+    """Admin creates a user directly — no invite, email pre-verified, with an
+    admin-set password. Password floor matches every other set-password path."""
+    email: EmailLike
+    display_name: str = Field(..., min_length=1, max_length=120)
+    password: str = Field(..., min_length=12, max_length=256)
+    target_role: UserRole = UserRole.client
+    initial_group_ids: list[int] = Field(default_factory=list)
 
 
 class ForcePasswordResetResponse(APIBaseModel):

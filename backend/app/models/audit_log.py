@@ -19,6 +19,7 @@ from ..database import Base
 class AuditEventType(str, enum.Enum):
     # Phase 1a events
     user_registered = "user_registered"
+    user_created_by_admin = "user_created_by_admin"          # admin created a user directly (no invite)
     email_verified = "email_verified"
     invite_created = "invite_created"
     invite_consumed = "invite_consumed"

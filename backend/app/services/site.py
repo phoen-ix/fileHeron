@@ -37,6 +37,13 @@ def get_site_url(db: Session) -> str:
     return raw
 
 
+def get_app_name(db: Session) -> str:
+    """Effective brand name (admin-tunable kv override beats env APP_NAME).
+    Used by the SPA brand surface (config-public) and notification emails."""
+    override = settings_svc.get(db, settings_svc.Keys.APP_NAME)
+    return override if override not in (None, "") else _env.APP_NAME
+
+
 def get_site_timezone(db: Session) -> str:
     """Return the effective site-wide display timezone as an IANA name.
     Defaults to ``"UTC"`` when unset. Falls back to ``"UTC"`` on a

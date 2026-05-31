@@ -104,7 +104,8 @@ async def direct_upload(
         raise AppError(403, "FORBIDDEN", "Only the share owner can upload to it.")
 
     # Stream-check size as we read.
-    cap = int(settings.MAX_DIRECT_UPLOAD_BYTES)
+    from ..services import settings_registry
+    cap = int(settings_registry.effective(db, settings_registry.K.MAX_DIRECT_UPLOAD_BYTES))
     chunks: list[bytes] = []
     received = 0
     import hashlib

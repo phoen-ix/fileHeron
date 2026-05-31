@@ -25,7 +25,7 @@ from typing import NamedTuple
 from sqlalchemy import update
 from sqlalchemy.orm import Session
 
-from ..config import settings
+from . import settings_registry
 from ..middleware.errors import AppError
 from ..models.audit_log import AuditEventType
 from ..models.file import File
@@ -205,7 +205,7 @@ MIN_DISTINCT_IPS_FOR_LOCK = 3
 
 
 def _recent_failure_count(db: Session, link: PublicLink) -> int:
-    cutoff = _utcnow() - timedelta(seconds=settings.PUBLIC_LINK_PASSWORD_WINDOW_SEC)
+    cutoff = _utcnow() - timedelta(seconds=settings_registry.effective(db, settings_registry.K.PUBLIC_LINK_PASSWORD_WINDOW_SEC))
     return (
         db.query(PublicLinkAttempt)
         .filter(
@@ -220,7 +220,7 @@ def _recent_failure_count(db: Session, link: PublicLink) -> int:
 def recent_ip_failure_count(db: Session, link: PublicLink, ip: str | None) -> int:
     if ip is None:
         return 0
-    cutoff = _utcnow() - timedelta(seconds=settings.PUBLIC_LINK_PASSWORD_WINDOW_SEC)
+    cutoff = _utcnow() - timedelta(seconds=settings_registry.effective(db, settings_registry.K.PUBLIC_LINK_PASSWORD_WINDOW_SEC))
     return (
         db.query(PublicLinkAttempt)
         .filter(
@@ -238,12 +238,12 @@ def ip_is_rate_limited(db: Session, link: PublicLink, ip: str | None) -> bool:
     The unlock router refuses it (429) without locking out other IPs."""
     return (
         recent_ip_failure_count(db, link, ip)
-        >= settings.PUBLIC_LINK_PASSWORD_RATE_LIMIT
+        >= settings_registry.effective(db, settings_registry.K.PUBLIC_LINK_PASSWORD_RATE_LIMIT)
     )
 
 
 def _recent_distinct_failure_ips(db: Session, link: PublicLink) -> int:
-    cutoff = _utcnow() - timedelta(seconds=settings.PUBLIC_LINK_PASSWORD_WINDOW_SEC)
+    cutoff = _utcnow() - timedelta(seconds=settings_registry.effective(db, settings_registry.K.PUBLIC_LINK_PASSWORD_WINDOW_SEC))
     return (
         db.query(PublicLinkAttempt.ip)
         .filter(
@@ -288,11 +288,11 @@ def verify_password(
     # Link-wide lock ONLY for a distributed attack (many IPs). A single
     # noisy IP is handled per-IP by the router's rate-limit check.
     if (
-        failures >= settings.PUBLIC_LINK_PASSWORD_RATE_LIMIT
+        failures >= settings_registry.effective(db, settings_registry.K.PUBLIC_LINK_PASSWORD_RATE_LIMIT)
         and distinct_ips >= MIN_DISTINCT_IPS_FOR_LOCK
     ):
         link.locked_until = _utcnow() + timedelta(
-            seconds=settings.PUBLIC_LINK_LOCKOUT_SEC
+            seconds=settings_registry.effective(db, settings_registry.K.PUBLIC_LINK_LOCKOUT_SEC)
         )
         _record_attempt(db, link=link, ip=ip, outcome=PublicLinkAttemptOutcome.locked)
         logger.warning(
@@ -300,7 +300,7 @@ def verify_password(
             link.id,
             failures,
             distinct_ips,
-            settings.PUBLIC_LINK_PASSWORD_WINDOW_SEC,
+            settings_registry.effective(db, settings_registry.K.PUBLIC_LINK_PASSWORD_WINDOW_SEC),
         )
     return False
 

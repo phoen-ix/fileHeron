@@ -74,25 +74,33 @@ def _ip_key(ip: str) -> str:
     return f"fh:rl:login:ip:{sha256_hex(ip)[:16]}"
 
 
-def check_login_ip_allowed(ip: str) -> bool:
+def check_login_ip_allowed(
+    ip: str, limit: int | None = None, window_sec: int | None = None
+) -> bool:
     """Returns True if this attempt is allowed (under the per-IP rate limit
-    for the current 15-min window). Also INCR-s the counter atomically.
+    for the current window). Also INCR-s the counter atomically.
+
+    `limit`/`window_sec` let the caller pass admin-tunable values resolved
+    from the settings registry (it has the db); both fall back to the env
+    defaults when omitted.
     """
     if not ip:
         return True
+    eff_limit = settings.RATE_LIMIT_LOGIN if limit is None else limit
+    eff_window = _LOGIN_RATE_WINDOW_S if window_sec is None else window_sec
     try:
         redis = get_redis()
         key = _ip_key(ip)
         # Atomic INCR; set TTL on first hit.
         count = redis.incr(key)
         if count == 1:
-            redis.expire(key, _LOGIN_RATE_WINDOW_S)
-        return count <= settings.RATE_LIMIT_LOGIN
+            redis.expire(key, eff_window)
+        return count <= eff_limit
     except Exception:
         # Redis unreachable → fall back to the in-process limiter rather
         # than failing fully open (account-level lockout still applies too).
         logger.warning("login IP rate-limit: Redis unavailable, using in-process fallback")
-        return _local_allow(_ip_key(ip), settings.RATE_LIMIT_LOGIN, _LOGIN_RATE_WINDOW_S)
+        return _local_allow(_ip_key(ip), eff_limit, eff_window)
 
 
 def reset_ip_window(ip: str) -> None:
@@ -163,6 +171,11 @@ def record_failure(db: Session, *, user: User) -> tuple[bool, bool]:
     FOR UPDATE but is single-threaded in tests, so the same code path
     works in both.
     """
+    from . import settings_registry
+    threshold = settings_registry.effective(db, settings_registry.K.LOCKOUT_THRESHOLD)
+    duration = timedelta(
+        minutes=settings_registry.effective(db, settings_registry.K.LOCKOUT_DURATION_MIN)
+    )
     now = _utcnow()
     # Re-read user with a row-level write lock so concurrent record_failure
     # calls on the same row serialize.
@@ -170,8 +183,8 @@ def record_failure(db: Session, *, user: User) -> tuple[bool, bool]:
 
     user.failed_login_count = (user.failed_login_count or 0) + 1
     just_locked = False
-    if user.failed_login_count >= _LOCKOUT_THRESHOLD and not is_account_locked(user):
-        user.locked_until = now + _LOCKOUT_DURATION
+    if user.failed_login_count >= threshold and not is_account_locked(user):
+        user.locked_until = now + duration
         just_locked = True
 
     should_email = False

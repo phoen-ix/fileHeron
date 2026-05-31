@@ -18,7 +18,6 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timedelta, timezone
 
-from ..config import settings
 from ..database import SessionLocal
 from ..models.notification import Notification
 from ..services.cron_tracker import track_cron
@@ -33,12 +32,14 @@ def _utcnow() -> datetime:
 @track_cron("cleanup_read_notifications")
 async def cleanup_read_notifications(_ctx) -> dict:
     """Hard-delete read notifications older than the retention window."""
-    days = settings.NOTIFICATION_READ_RETENTION_DAYS
-    if days <= 0:
-        return {"deleted": 0, "skipped": "disabled"}
-
     db = SessionLocal()
     try:
+        from ..services import settings_registry
+        days = settings_registry.effective(
+            db, settings_registry.K.NOTIFICATION_READ_RETENTION_DAYS
+        )
+        if days <= 0:
+            return {"deleted": 0, "skipped": "disabled"}
         cutoff = _utcnow() - timedelta(days=days)
         deleted = (
             db.query(Notification)

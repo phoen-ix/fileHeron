@@ -22,7 +22,6 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import delete
 from sqlalchemy.orm import Session
 
-from ..config import settings
 from ..database import SessionLocal
 from ..models.audit_log import AuditLog
 from ..models.download_log import DownloadLog
@@ -79,15 +78,24 @@ async def _prune_table(
 
 @track_cron("prune_history")
 async def prune_history(_ctx) -> dict:
+    # Resolve the admin-tunable retention windows once (kv overlay, env default).
+    from ..services import settings_registry as _sr
+    _db0 = SessionLocal()
+    try:
+        audit_days = _sr.effective(_db0, _sr.K.AUDIT_LOG_RETENTION_DAYS)
+        download_days = _sr.effective(_db0, _sr.K.DOWNLOAD_LOG_RETENTION_DAYS)
+        login_days = _sr.effective(_db0, _sr.K.LOGIN_ATTEMPT_RETENTION_DAYS)
+    finally:
+        _db0.close()
     audit_pruned = await _prune_table(
-        "audit_log", settings.AUDIT_LOG_RETENTION_DAYS, AuditLog.created_at, AuditLog
+        "audit_log", audit_days, AuditLog.created_at, AuditLog
     )
     download_pruned = await _prune_table(
-        "download_log", settings.DOWNLOAD_LOG_RETENTION_DAYS, DownloadLog.accessed_at, DownloadLog
+        "download_log", download_days, DownloadLog.accessed_at, DownloadLog
     )
     login_pruned = await _prune_table(
         "login_attempts",
-        settings.LOGIN_ATTEMPT_RETENTION_DAYS,
+        login_days,
         LoginAttempt.attempted_at,
         LoginAttempt,
     )

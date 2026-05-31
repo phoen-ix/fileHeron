@@ -17,7 +17,7 @@ from app.utils.crypto import argon2_hash
 
 @pytest.mark.asyncio
 async def test_password_reset_token_is_single_use(make_user, db, monkeypatch):
-    async def _not_breached(_pw):
+    async def _not_breached(_pw, _db=None):
         return False
 
     monkeypatch.setattr(auth_svc, "is_password_breached", _not_breached)

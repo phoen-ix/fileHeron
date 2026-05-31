@@ -26,7 +26,6 @@ from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import delete
 
-from ..config import settings
 from ..database import SessionLocal
 from ..models.audit_log import AuditEventType
 from ..models.invite_token import InviteToken
@@ -46,7 +45,11 @@ async def cleanup_pending_invites(_ctx) -> dict:
     window. Returns a small dict for diagnostics."""
     db = SessionLocal()
     try:
-        cutoff = _utcnow() - timedelta(days=settings.INVITE_RETENTION_DAYS)
+        from ..services import settings_registry
+        retention_days = settings_registry.effective(
+            db, settings_registry.K.INVITE_RETENTION_DAYS
+        )
+        cutoff = _utcnow() - timedelta(days=retention_days)
         result = db.execute(
             delete(InviteToken).where(
                 InviteToken.used_user_id.is_(None),
@@ -64,7 +67,7 @@ async def cleanup_pending_invites(_ctx) -> dict:
                 metadata={
                     "purged_count": purged,
                     "cutoff": cutoff.isoformat(),
-                    "retention_days": settings.INVITE_RETENTION_DAYS,
+                    "retention_days": retention_days,
                 },
             )
         db.commit()

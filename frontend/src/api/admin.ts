@@ -92,6 +92,38 @@ export function updateUpdatesSettings(payload: UpdateUpdatesSettingsRequest) {
   return api.put<UpdatesSettingsResponse>('/admin/settings/updates', payload)
 }
 
+// --- Advanced (registry-driven) settings ---
+
+export type AdvancedSettingKind = 'int' | 'bool' | 'str'
+
+export interface AdvancedSettingItem {
+  key: string
+  group: string
+  kind: AdvancedSettingKind
+  value: number | boolean | string
+  default: number | boolean | string
+  is_overridden: boolean
+  min: number | null
+  max: number | null
+}
+
+export interface AdvancedSettingsResponse {
+  items: AdvancedSettingItem[]
+}
+
+export interface UpdateAdvancedSettingsRequest {
+  // {key: value} to set, or {key: null} to reset that key to its default.
+  updates: Record<string, number | boolean | string | null>
+}
+
+export function getAdvancedSettings() {
+  return api.get<AdvancedSettingsResponse>('/admin/settings/advanced')
+}
+
+export function updateAdvancedSettings(payload: UpdateAdvancedSettingsRequest) {
+  return api.put<AdvancedSettingsResponse>('/admin/settings/advanced', payload)
+}
+
 export interface CheckUpdatesResult {
   ok: boolean
   skipped?: string

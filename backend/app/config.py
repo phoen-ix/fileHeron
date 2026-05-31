@@ -98,6 +98,13 @@ class Settings(BaseSettings):
     # add one, model it on `services/rate_limit.py::check_ip_allowed`.
     RATE_LIMIT_LOGIN: int = 10
     RATE_LIMIT_REGISTER: int = 3
+    # Login lockout knobs (promoted from rate_limit.py module constants so
+    # they're admin-tunable via the settings registry). The per-IP login
+    # window, the consecutive-failure threshold that locks an account, and
+    # how long that lock lasts.
+    LOGIN_RATE_WINDOW_SEC: int = 900  # 15 min
+    LOCKOUT_THRESHOLD: int = 5
+    LOCKOUT_DURATION_MIN: int = 15
 
     # --- Phase 3a — upload pipeline ------------------------------------------
     # Shared HMAC secret for tusd ↔ backend (envelope authorisation).

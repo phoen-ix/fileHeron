@@ -45,6 +45,11 @@ const sections: SettingsSection[] = [
     to: { name: 'admin-settings-quarantine' },
     description: 'admin_settings.sections.quarantine',
   },
+  {
+    name: 'advanced',
+    to: { name: 'admin-settings-advanced' },
+    description: 'admin_settings.sections.advanced',
+  },
 ]
 </script>
 

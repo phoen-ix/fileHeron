@@ -26,6 +26,7 @@ from ..services import auth as auth_svc
 from ..services import email as email_svc
 from ..services import jwt_session
 from ..services import rate_limit as rate_limit_svc
+from ..services import settings_registry
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -33,11 +34,16 @@ _REFRESH_COOKIE = "fh_refresh"
 _REFRESH_PATH = "/api/auth"
 
 
-def _set_refresh_cookie(response: Response, plaintext: str) -> None:
+def _set_refresh_cookie(response: Response, plaintext: str, db: Session) -> None:
+    # Match the cookie's client-side lifetime to the refresh token's
+    # server-side expiry — both read the admin-tunable value (kv overlay,
+    # env default) so an admin change keeps them in sync.
+    from ..services import settings_registry
+    days = settings_registry.effective(db, settings_registry.K.REFRESH_TOKEN_EXPIRE_DAYS)
     response.set_cookie(
         key=_REFRESH_COOKIE,
         value=plaintext,
-        max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 3600,
+        max_age=days * 24 * 3600,
         httponly=True,
         secure=settings.COOKIE_SECURE,
         samesite="lax",
@@ -58,7 +64,7 @@ async def register_from_invite(
 ) -> LoginResponse:
     ip = request.client.host if request.client else ""
     if not rate_limit_svc.check_ip_allowed(
-        "register", ip, settings.RATE_LIMIT_REGISTER
+        "register", ip, settings_registry.effective(db, settings_registry.K.RATE_LIMIT_REGISTER)
     ):
         raise AppError(429, "RATE_LIMITED", "Too many attempts; try again shortly.")
     user = auth_svc.register_from_invite(
@@ -70,11 +76,11 @@ async def register_from_invite(
         request=request,
     )
     # Issue session immediately so the new user is logged in.
-    access, expires_in = auth_svc.create_access_token(user.id, settings)
+    access, expires_in = auth_svc.create_access_token(user.id, settings, db)
     rate_limit_svc.record_success(db, user=user)
     _, refresh_plain = jwt_session.create_refresh_token(db, user, request, settings)
     db.commit()
-    _set_refresh_cookie(response, refresh_plain)
+    _set_refresh_cookie(response, refresh_plain, db)
     return LoginResponse(access_token=access, expires_in_seconds=expires_in)
 
 
@@ -94,7 +100,7 @@ async def login(
         settings=settings,
     )
     db.commit()
-    _set_refresh_cookie(response, refresh_plain)
+    _set_refresh_cookie(response, refresh_plain, db)
     return LoginResponse(access_token=access, expires_in_seconds=expires_in)
 
 
@@ -116,7 +122,7 @@ async def login_recovery(
         settings=settings,
     )
     db.commit()
-    _set_refresh_cookie(response, refresh_plain)
+    _set_refresh_cookie(response, refresh_plain, db)
     return LoginResponse(access_token=access, expires_in_seconds=expires_in)
 
 
@@ -133,7 +139,7 @@ def refresh(
         db, refresh_token_plain=fh_refresh, request=request, settings=settings
     )
     db.commit()
-    _set_refresh_cookie(response, new_refresh_plain)
+    _set_refresh_cookie(response, new_refresh_plain, db)
     return RefreshResponse(access_token=access, expires_in_seconds=expires_in)
 
 
@@ -161,7 +167,7 @@ async def forgot_password(
     """Always returns 200 — never reveals whether the email exists."""
     ip = request.client.host if request.client else ""
     if not rate_limit_svc.check_ip_allowed(
-        "forgot", ip, settings.RATE_LIMIT_REGISTER
+        "forgot", ip, settings_registry.effective(db, settings_registry.K.RATE_LIMIT_REGISTER)
     ):
         raise AppError(429, "RATE_LIMITED", "Too many attempts; try again shortly.")
     result = auth_svc.begin_password_reset(db, email=payload.email, request=request)
@@ -198,7 +204,7 @@ async def reset_password(
 def verify_email(payload: VerifyEmailRequest, request: Request, db: Session = Depends(get_db)) -> dict:
     ip = request.client.host if request.client else ""
     if not rate_limit_svc.check_ip_allowed(
-        "verify", ip, settings.RATE_LIMIT_REGISTER
+        "verify", ip, settings_registry.effective(db, settings_registry.K.RATE_LIMIT_REGISTER)
     ):
         raise AppError(429, "RATE_LIMITED", "Too many attempts; try again shortly.")
     auth_svc.consume_email_verification(db, plaintext_token=payload.token, request=request)

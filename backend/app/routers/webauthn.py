@@ -37,6 +37,7 @@ from ..schemas.webauthn import (
 from ..services import auth as auth_svc
 from ..services import jwt_session
 from ..services import rate_limit as rate_limit_svc
+from ..services import settings_registry
 from ..services import webauthn as webauthn_svc
 from ..services.audit import record_audit_event
 from ..utils.crypto import argon2_verify, normalize_email
@@ -179,7 +180,7 @@ async def auth_complete(
     )
 
     # Mint the same session cookies the password flow produces.
-    access, expires_in = auth_svc.create_access_token(user.id, settings)
+    access, expires_in = auth_svc.create_access_token(user.id, settings, db)
     rate_limit_svc.record_success(db, user=user)
     _, refresh_plain = jwt_session.create_refresh_token(db, user, request, settings)
     db.commit()
@@ -187,7 +188,7 @@ async def auth_complete(
     response.set_cookie(
         key="fh_refresh",
         value=refresh_plain,
-        max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 3600,
+        max_age=settings_registry.effective(db, settings_registry.K.REFRESH_TOKEN_EXPIRE_DAYS) * 24 * 3600,
         httponly=True,
         secure=settings.COOKIE_SECURE,
         samesite="lax",

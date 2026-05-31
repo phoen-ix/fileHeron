@@ -101,7 +101,7 @@ def public_config(db: Session = Depends(get_db)) -> dict:
             motd = {"text": text}
 
     body: dict = {
-        "app_name": settings.APP_NAME,
+        "app_name": site_svc.get_app_name(db),
         "default_locale": "en",
         "providers": providers,
         "running_version": VERSION,

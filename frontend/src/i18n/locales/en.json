@@ -262,7 +262,8 @@
       "public_links": "Public link policy",
       "email": "Email / SMTP",
       "twofa": "Two-factor enforcement",
-      "quarantine": "Quarantine alerts"
+      "quarantine": "Quarantine alerts",
+      "advanced": "Advanced"
     },
     "sections": {
       "general": "Small toggles and miscellaneous app settings — start with the home page on/off.",
@@ -271,7 +272,72 @@
       "public_links": "Decide who can create shareable public links to a share — everyone, employees only, admins only, or disabled. Add specific users or groups to an allowlist on top.",
       "email": "Configure outbound SMTP — host, port, credentials, TLS mode, From address. Send a test email and see the actual error if something's wrong.",
       "twofa": "Decide who must enable 2FA — pick any combination of roles (admin / employee / client) and groups. Affected users without TOTP get bounced into the setup flow on every page load until they enrol.",
-      "quarantine": "When ClamAV flags an upload, optionally fan out a notification (email + in-app bell) to every admin in addition to the uploader."
+      "quarantine": "When ClamAV flags an upload, optionally fan out a notification (email + in-app bell) to every admin in addition to the uploader.",
+      "advanced": "Tune session, rate-limit, retention, upload and branding values that otherwise live in environment variables. Each falls back to its built-in default; changes apply live, no redeploy."
+    }
+  },
+  "admin_advanced": {
+    "eyebrow": "Settings",
+    "intro": "Runtime-tunable knobs. Each shows its built-in default as the placeholder; leave a field at the default (or hit Reset) to fall back to it. Changes apply live — no redeploy. Secrets and infrastructure stay in environment variables.",
+    "saved_toast": "Advanced settings saved.",
+    "reset": "Reset",
+    "reset_title": "Reset to default ({default})",
+    "groups": {
+      "sessions": "Sessions & authentication",
+      "rate_limits": "Rate limits & lockout",
+      "retention": "Data retention",
+      "uploads": "Uploads",
+      "security": "Security",
+      "branding": "Branding"
+    },
+    "keys": {
+      "auth": {
+        "access_token_expire_minutes": "Access-token lifetime (minutes)",
+        "refresh_token_expire_days": "Refresh-token lifetime (days)",
+        "max_active_sessions_per_user": "Max active sessions per user"
+      },
+      "rate_limit": {
+        "login": "Login attempts allowed per window",
+        "register": "Register / forgot / verify attempts per window",
+        "login_window_sec": "Login rate-limit window (seconds)",
+        "lockout_threshold": "Failed logins before account lockout",
+        "lockout_duration_min": "Account lockout duration (minutes)"
+      },
+      "public_link": {
+        "password_rate_limit": "Public-link password attempts per window",
+        "password_window_sec": "Public-link password window (seconds)",
+        "lockout_sec": "Public-link lockout duration (seconds)"
+      },
+      "retention": {
+        "refresh_token_days": "Revoked refresh tokens (days)",
+        "invite_days": "Pending invites (days)",
+        "audit_log_days": "Audit log (days, 0 = keep forever)",
+        "download_log_days": "Download log (days, 0 = keep forever)",
+        "login_attempt_days": "Login attempts (days, 0 = keep forever)",
+        "notification_read_days": "Read notifications (days, 0 = disable cleanup)",
+        "quarantine_purge_days": "Quarantined file bytes (days, 0 = keep)",
+        "tus_abandoned_hours": "Abandoned uploads (hours)"
+      },
+      "uploads": {
+        "max_direct_bytes": "Direct-upload size cap (bytes)"
+      },
+      "security": {
+        "hibp_enabled": "Check passwords against Have I Been Pwned"
+      },
+      "branding": {
+        "app_name": "Application / brand name"
+      }
+    },
+    "help": {
+      "uploads": {
+        "max_direct_bytes": "Files larger than this must use the resumable (TUS) upload path."
+      },
+      "rate_limit": {
+        "lockout_duration_min": "How long an account stays locked after too many failed logins."
+      },
+      "branding": {
+        "app_name": "Shown in the UI header and outgoing notification emails."
+      }
     }
   },
   "admin_general": {

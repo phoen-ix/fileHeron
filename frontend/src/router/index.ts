@@ -229,6 +229,12 @@ const router = createRouter({
           meta: { density: 'operator', title: 'Quarantine', requiresRole: 'admin' },
         },
         {
+          path: 'settings/advanced',
+          name: 'admin-settings-advanced',
+          component: () => import('@/views/AdminSettingsAdvanced.vue'),
+          meta: { density: 'operator', title: 'Advanced', requiresRole: 'admin' },
+        },
+        {
           path: 'system',
           name: 'admin-system',
           component: () => import('@/views/AdminSystem.vue'),

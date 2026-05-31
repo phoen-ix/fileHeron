@@ -19,7 +19,6 @@ import logging
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from ..config import settings
 from ..database import SessionLocal
 from ..models.audit_log import AuditEventType
 from ..models.file import File, FileState
@@ -35,15 +34,17 @@ def _utcnow() -> datetime:
 
 @track_cron("purge_old_quarantine")
 async def purge_old_quarantine(_ctx) -> dict:
-    days = settings.QUARANTINE_PURGE_AFTER_DAYS
-    if days <= 0:
-        return {"disabled": True, "purged": 0}
-
-    cutoff = _utcnow() - timedelta(days=days)
     purged = 0
     failed = 0
     db = SessionLocal()
     try:
+        from ..services import settings_registry
+        days = settings_registry.effective(
+            db, settings_registry.K.QUARANTINE_PURGE_AFTER_DAYS
+        )
+        if days <= 0:
+            return {"disabled": True, "purged": 0}
+        cutoff = _utcnow() - timedelta(days=days)
         rows = (
             db.query(File)
             .filter(

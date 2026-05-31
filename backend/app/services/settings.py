@@ -78,6 +78,32 @@ class Keys:
     UPDATES_API_URL = "updates.api_url"        # plain string
     UPDATES_CHECK_MODE = "updates.check_mode"  # 'auto' | 'manual'
 
+    # --- Advanced runtime-tunable knobs (registry-driven, see
+    # services/settings_registry.py). Each overlays the matching env
+    # default in config.Settings; read live via settings_registry.effective.
+    ACCESS_TOKEN_EXPIRE_MINUTES = "auth.access_token_expire_minutes"
+    REFRESH_TOKEN_EXPIRE_DAYS = "auth.refresh_token_expire_days"
+    MAX_ACTIVE_SESSIONS_PER_USER = "auth.max_active_sessions_per_user"
+    RATE_LIMIT_LOGIN = "rate_limit.login"
+    RATE_LIMIT_REGISTER = "rate_limit.register"
+    LOGIN_RATE_WINDOW_SEC = "rate_limit.login_window_sec"
+    LOCKOUT_THRESHOLD = "rate_limit.lockout_threshold"
+    LOCKOUT_DURATION_MIN = "rate_limit.lockout_duration_min"
+    PUBLIC_LINK_PASSWORD_RATE_LIMIT = "public_link.password_rate_limit"
+    PUBLIC_LINK_PASSWORD_WINDOW_SEC = "public_link.password_window_sec"
+    PUBLIC_LINK_LOCKOUT_SEC = "public_link.lockout_sec"
+    REFRESH_TOKEN_RETENTION_DAYS = "retention.refresh_token_days"
+    INVITE_RETENTION_DAYS = "retention.invite_days"
+    AUDIT_LOG_RETENTION_DAYS = "retention.audit_log_days"
+    DOWNLOAD_LOG_RETENTION_DAYS = "retention.download_log_days"
+    LOGIN_ATTEMPT_RETENTION_DAYS = "retention.login_attempt_days"
+    NOTIFICATION_READ_RETENTION_DAYS = "retention.notification_read_days"
+    QUARANTINE_PURGE_AFTER_DAYS = "retention.quarantine_purge_days"
+    TUS_UPLOAD_ABANDONED_AFTER_HOURS = "retention.tus_abandoned_hours"
+    MAX_DIRECT_UPLOAD_BYTES = "uploads.max_direct_bytes"
+    HIBP_ENABLED = "security.hibp_enabled"
+    APP_NAME = "branding.app_name"
+
 
 _ENCRYPTED_KEYS: set[str] = {Keys.SMTP_PASSWORD}
 
@@ -176,3 +202,15 @@ def get_bool(db: Session, key: str, default: bool = False) -> bool:
     if raw.lower() in ("false", "0", "no", "off"):
         return False
     return default
+
+
+def get_int(db: Session, key: str, default: int) -> int:
+    """Read an integer kv setting, falling back to `default` when the row
+    is missing or the stored value isn't a valid int. Mirrors get_bool."""
+    raw = get(db, key)
+    if raw is None:
+        return default
+    try:
+        return int(str(raw).strip())
+    except (TypeError, ValueError):
+        return default

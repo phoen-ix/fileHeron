@@ -51,16 +51,25 @@ def _utcnow() -> datetime:
 # ---------------------------------------------------------------------------
 
 
-def create_access_token(user_id: int, settings) -> tuple[str, int]:
+def create_access_token(user_id: int, settings, db: Session | None = None) -> tuple[str, int]:
     """Returns (token, expires_in_seconds).
 
     Uses AWARE UTC for timestamp math — naive .timestamp() is interpreted as
     local time and would emit incorrect Unix epochs.
     Adds a `jti` (random nonce) so two tokens issued in the same second
     are still distinguishable.
+
+    `db` is optional: when supplied, the access-token TTL is read live from
+    the admin-tunable settings registry (kv overlay, env default); without
+    it the env value is used (keeps non-DB call sites working).
     """
+    if db is not None:
+        from . import settings_registry
+        minutes = settings_registry.effective(db, settings_registry.K.ACCESS_TOKEN_EXPIRE_MINUTES)
+    else:
+        minutes = settings.ACCESS_TOKEN_EXPIRE_MINUTES
     now_aware = datetime.now(tz=timezone.utc)
-    exp_aware = now_aware + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    exp_aware = now_aware + timedelta(minutes=minutes)
     payload = {
         "sub": str(user_id),
         "iat": int(now_aware.timestamp()),
@@ -69,7 +78,7 @@ def create_access_token(user_id: int, settings) -> tuple[str, int]:
         "type": "access",
     }
     token = jwt.encode(payload, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
-    return token, settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60
+    return token, minutes * 60
 
 
 def resolve_user_from_access_token(db: Session, token: str, settings: "Settings") -> User:
@@ -148,19 +157,23 @@ def create_refresh_token(db: Session, user: User, request: Request | None, setti
     # covers them all. The eviction is non-security-relevant
     # (`refresh_token_evicted` audit) — distinct from
     # `refresh_token_reused` family-revoke for compromised chains.
+    from . import settings_registry
     enforce_session_cap(
         db,
         user_id=user.id,
-        cap=settings.MAX_ACTIVE_SESSIONS_PER_USER,
+        cap=settings_registry.effective(db, settings_registry.K.MAX_ACTIVE_SESSIONS_PER_USER),
         request=request,
     )
 
     plaintext = random_token(48)  # 64 raw bytes → 86-char b64url
     now = _utcnow()
+    refresh_days = settings_registry.effective(
+        db, settings_registry.K.REFRESH_TOKEN_EXPIRE_DAYS
+    )
     record = RefreshToken(
         user_id=user.id,
         token_hash=refresh_token_hash(plaintext),
-        expires_at=now + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
+        expires_at=now + timedelta(days=refresh_days),
         created_ip=(request.client.host if request and request.client else None),
         created_ua=(request.headers.get("user-agent", "")[:255] if request else None),
     )
@@ -246,7 +259,7 @@ def rotate_refresh(
     record.replaced_by_id = new_record.id
     db.flush()
 
-    access, expires_in = create_access_token(user.id, settings)
+    access, expires_in = create_access_token(user.id, settings, db)
     record_audit_event(
         db,
         event_type=AuditEventType.refresh_token_rotated,

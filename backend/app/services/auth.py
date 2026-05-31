@@ -40,6 +40,7 @@ from ..utils.crypto import (
 from ..utils.geohash import ip_geohash5
 from ..utils.ua_fingerprint import ua_fingerprint_hash
 from . import rate_limit as rate_limit_svc
+from . import settings_registry
 from . import totp as totp_svc
 from .audit import record_audit_event
 from .hibp import is_password_breached
@@ -330,7 +331,11 @@ async def login(
     ip = _request_ip(request)
 
     # 1. Per-IP rate limit
-    if ip and not rate_limit_svc.check_login_ip_allowed(ip):
+    if ip and not rate_limit_svc.check_login_ip_allowed(
+        ip,
+        limit=settings_registry.effective(db, settings_registry.K.RATE_LIMIT_LOGIN),
+        window_sec=settings_registry.effective(db, settings_registry.K.LOGIN_RATE_WINDOW_SEC),
+    ):
         _record_login_attempt(db, email_value=None, ip=ip, outcome=LoginOutcome.rate_limited)
         db.commit()
         raise AppError(429, "RATE_LIMITED", "Too many login attempts. Try again later.")
@@ -473,7 +478,7 @@ async def login(
     rate_limit_svc.record_success(db, user=user)
     rate_limit_svc.reset_ip_window(ip or "")
 
-    access, expires_in = create_access_token(user.id, settings)
+    access, expires_in = create_access_token(user.id, settings, db)
     _, refresh_plain = create_refresh_token(db, user, request, settings)
 
     is_new_device = _record_login_device(db, user=user, request=request)
@@ -508,7 +513,11 @@ async def login_with_recovery(
     success, the recovery code is consumed (cannot be re-used)."""
     ip = _request_ip(request)
 
-    if ip and not rate_limit_svc.check_login_ip_allowed(ip):
+    if ip and not rate_limit_svc.check_login_ip_allowed(
+        ip,
+        limit=settings_registry.effective(db, settings_registry.K.RATE_LIMIT_LOGIN),
+        window_sec=settings_registry.effective(db, settings_registry.K.LOGIN_RATE_WINDOW_SEC),
+    ):
         _record_login_attempt(db, email_value=None, ip=ip, outcome=LoginOutcome.rate_limited)
         db.commit()
         raise AppError(429, "RATE_LIMITED", "Too many login attempts. Try again later.")
@@ -557,7 +566,7 @@ async def login_with_recovery(
     rate_limit_svc.record_success(db, user=user)
     rate_limit_svc.reset_ip_window(ip or "")
 
-    access, expires_in = create_access_token(user.id, settings)
+    access, expires_in = create_access_token(user.id, settings, db)
     _, refresh_plain = create_refresh_token(db, user, request, settings)
     is_new_device = _record_login_device(db, user=user, request=request)
     _record_login_attempt(db, email_value=em_email, ip=ip, outcome=LoginOutcome.success)
@@ -626,7 +635,7 @@ async def consume_password_reset(
     if record.expires_at < _utcnow():
         raise AppError(410, "RESET_TOKEN_EXPIRED", "Reset link has expired.")
 
-    if await is_password_breached(new_password):
+    if await is_password_breached(new_password, db):
         raise AppError(
             422, "PASSWORD_BREACHED", "Chosen password has appeared in a breach. Pick another."
         )
@@ -722,7 +731,7 @@ async def change_password(
 ) -> None:
     if not argon2_verify(user.password_hash, current_password):
         raise AppError(401, "INVALID_CREDENTIALS", "Current password is incorrect.")
-    if await is_password_breached(new_password):
+    if await is_password_breached(new_password, db):
         raise AppError(422, "PASSWORD_BREACHED", "Chosen password has appeared in a breach. Pick another.")
 
     user.password_hash = argon2_hash(new_password)

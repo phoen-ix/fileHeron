@@ -262,7 +262,8 @@
       "public_links": "Öffentliche-Links-Richtlinie",
       "email": "E-Mail / SMTP",
       "twofa": "Zwei-Faktor-Pflicht",
-      "quarantine": "Quarantäne-Alarme"
+      "quarantine": "Quarantäne-Alarme",
+      "advanced": "Erweitert"
     },
     "sections": {
       "general": "Kleine Schalter und allgemeine App-Einstellungen — beginnt mit der Startseite an/aus.",
@@ -271,7 +272,72 @@
       "public_links": "Festlegen, wer öffentliche Links zu Freigaben anlegen darf — alle, nur Mitarbeiter, nur Admins oder deaktiviert. Eine Allowlist ergänzt die Basis-Richtlinie.",
       "email": "Ausgehenden SMTP konfigurieren — Host, Port, Zugangsdaten, TLS-Modus, Absender. Test-E-Mail senden und tatsächlichen Fehler sehen, falls etwas nicht stimmt.",
       "twofa": "Festlegen, wer 2FA aktivieren muss — beliebige Kombination aus Rollen (Admin / Mitarbeiter / Client) und Gruppen. Betroffene Benutzer ohne TOTP werden bei jedem Seitenaufruf in den Einrichtungsfluss umgeleitet, bis sie sich registrieren.",
-      "quarantine": "Wenn ClamAV einen Upload als infiziert markiert, optional zusätzlich eine Benachrichtigung (E-Mail + In-App-Glocke) an alle Admins senden."
+      "quarantine": "Wenn ClamAV einen Upload als infiziert markiert, optional zusätzlich eine Benachrichtigung (E-Mail + In-App-Glocke) an alle Admins senden.",
+      "advanced": "Werte für Sitzungen, Rate-Limits, Aufbewahrung, Uploads und Branding anpassen, die sonst in Umgebungsvariablen leben. Jeder Wert fällt auf seinen Standard zurück; Änderungen greifen sofort, ohne Neustart."
+    }
+  },
+  "admin_advanced": {
+    "eyebrow": "Einstellungen",
+    "intro": "Zur Laufzeit anpassbare Werte. Jeder zeigt seinen eingebauten Standard als Platzhalter; ein Feld auf dem Standard lassen (oder Zurücksetzen) fällt darauf zurück. Änderungen greifen sofort — kein Neustart. Geheimnisse und Infrastruktur bleiben in Umgebungsvariablen.",
+    "saved_toast": "Erweiterte Einstellungen gespeichert.",
+    "reset": "Zurücksetzen",
+    "reset_title": "Auf Standard zurücksetzen ({default})",
+    "groups": {
+      "sessions": "Sitzungen & Authentifizierung",
+      "rate_limits": "Rate-Limits & Sperren",
+      "retention": "Datenaufbewahrung",
+      "uploads": "Uploads",
+      "security": "Sicherheit",
+      "branding": "Branding"
+    },
+    "keys": {
+      "auth": {
+        "access_token_expire_minutes": "Access-Token-Lebensdauer (Minuten)",
+        "refresh_token_expire_days": "Refresh-Token-Lebensdauer (Tage)",
+        "max_active_sessions_per_user": "Max. aktive Sitzungen pro Benutzer"
+      },
+      "rate_limit": {
+        "login": "Erlaubte Anmeldeversuche pro Fenster",
+        "register": "Registrieren / Vergessen / Bestätigen pro Fenster",
+        "login_window_sec": "Anmelde-Rate-Limit-Fenster (Sekunden)",
+        "lockout_threshold": "Fehlversuche bis Kontosperre",
+        "lockout_duration_min": "Dauer der Kontosperre (Minuten)"
+      },
+      "public_link": {
+        "password_rate_limit": "Passwortversuche für öffentliche Links pro Fenster",
+        "password_window_sec": "Passwortfenster für öffentliche Links (Sekunden)",
+        "lockout_sec": "Sperrdauer für öffentliche Links (Sekunden)"
+      },
+      "retention": {
+        "refresh_token_days": "Widerrufene Refresh-Tokens (Tage)",
+        "invite_days": "Offene Einladungen (Tage)",
+        "audit_log_days": "Audit-Log (Tage, 0 = unbegrenzt)",
+        "download_log_days": "Download-Log (Tage, 0 = unbegrenzt)",
+        "login_attempt_days": "Anmeldeversuche (Tage, 0 = unbegrenzt)",
+        "notification_read_days": "Gelesene Benachrichtigungen (Tage, 0 = Bereinigung aus)",
+        "quarantine_purge_days": "Quarantäne-Dateibytes (Tage, 0 = behalten)",
+        "tus_abandoned_hours": "Abgebrochene Uploads (Stunden)"
+      },
+      "uploads": {
+        "max_direct_bytes": "Größenlimit für Direkt-Upload (Bytes)"
+      },
+      "security": {
+        "hibp_enabled": "Passwörter gegen Have I Been Pwned prüfen"
+      },
+      "branding": {
+        "app_name": "Anwendungs-/Markenname"
+      }
+    },
+    "help": {
+      "uploads": {
+        "max_direct_bytes": "Größere Dateien müssen den fortsetzbaren (TUS-)Upload-Pfad nutzen."
+      },
+      "rate_limit": {
+        "lockout_duration_min": "Wie lange ein Konto nach zu vielen Fehlversuchen gesperrt bleibt."
+      },
+      "branding": {
+        "app_name": "Wird in der UI-Kopfzeile und in ausgehenden Benachrichtigungs-E-Mails angezeigt."
+      }
     }
   },
   "admin_general": {

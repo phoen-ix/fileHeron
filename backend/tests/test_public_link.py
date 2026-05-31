@@ -79,9 +79,11 @@ async def test_create_link_refuses_double(make_user, db):
 @pytest.mark.asyncio
 async def test_password_verify_locks_on_distributed_attack(make_user, db, monkeypatch):
     # Tighten the threshold so the test runs fast.
-    from app.services import public_link as svc
-    monkeypatch.setattr(svc.settings, "PUBLIC_LINK_PASSWORD_RATE_LIMIT", 3)
-    monkeypatch.setattr(svc.settings, "PUBLIC_LINK_PASSWORD_WINDOW_SEC", 900)
+    # The threshold/window are now read via settings_registry.effective(),
+    # which falls back to the env config — patch that.
+    from app.config import settings as cfg
+    monkeypatch.setattr(cfg, "PUBLIC_LINK_PASSWORD_RATE_LIMIT", 3)
+    monkeypatch.setattr(cfg, "PUBLIC_LINK_PASSWORD_WINDOW_SEC", 900)
 
     owner = make_user(email="hr@test.local", role=UserRole.admin)
     recipient = make_user(email="cli@test.local", role=UserRole.client)
@@ -120,9 +122,11 @@ async def test_password_verify_locks_on_distributed_attack(make_user, db, monkey
 async def test_single_ip_failures_do_not_lock_link_for_everyone(make_user, db, monkeypatch):
     """Finding M5: one IP must not be able to DoS the link for others.
     It throttles itself (ip_is_rate_limited) but never sets the global lock."""
-    from app.services import public_link as svc
-    monkeypatch.setattr(svc.settings, "PUBLIC_LINK_PASSWORD_RATE_LIMIT", 3)
-    monkeypatch.setattr(svc.settings, "PUBLIC_LINK_PASSWORD_WINDOW_SEC", 900)
+    # The threshold/window are now read via settings_registry.effective(),
+    # which falls back to the env config — patch that.
+    from app.config import settings as cfg
+    monkeypatch.setattr(cfg, "PUBLIC_LINK_PASSWORD_RATE_LIMIT", 3)
+    monkeypatch.setattr(cfg, "PUBLIC_LINK_PASSWORD_WINDOW_SEC", 900)
 
     owner = make_user(email="hr@test.local", role=UserRole.admin)
     recipient = make_user(email="cli@test.local", role=UserRole.client)

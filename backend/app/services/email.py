@@ -94,6 +94,7 @@ _env.filters["dt_locale"] = _format_dt_locale
 def _render(
     locale: Locale | str, slug: str, kind: str, ctx: dict,
     *, app_url: str | None = None, site_timezone: str | None = None,
+    app_name: str | None = None,
 ) -> str:
     """Render a single template. `kind` is 'txt' or 'html'.
 
@@ -113,14 +114,16 @@ def _render(
         template = _env.get_template(fallback)
     return template.render(
         **ctx,
-        app_name=settings.APP_NAME,
+        app_name=app_name if app_name else settings.APP_NAME,
         app_url=app_url if app_url is not None else settings.APP_URL,
         locale=code,
         site_timezone=site_timezone or DEFAULT_TIMEZONE,
     )
 
 
-def _resolve_subject(locale_code: str, slug: str, ctx: dict) -> str:
+def _resolve_subject(
+    locale_code: str, slug: str, ctx: dict, app_name: str | None = None
+) -> str:
     """Pull the subject line from subjects.json with str.format(**ctx).
     Falls back to EN if missing in the requested locale."""
     book = _SUBJECTS.get(locale_code) or {}
@@ -128,7 +131,7 @@ def _resolve_subject(locale_code: str, slug: str, ctx: dict) -> str:
     if template is None:
         template = (_SUBJECTS.get("en") or {}).get(slug, slug)
     try:
-        return template.format(**ctx, app_name=settings.APP_NAME)
+        return template.format(**ctx, app_name=app_name or settings.APP_NAME)
     except (KeyError, IndexError):
         return template
 
@@ -136,18 +139,20 @@ def _resolve_subject(locale_code: str, slug: str, ctx: dict) -> str:
 def render_email(
     locale: Locale | str, slug: str, ctx: dict,
     *, app_url: str | None = None, site_timezone: str | None = None,
+    app_name: str | None = None,
 ) -> tuple[str, str, str | None]:
     """Render (subject, text, html). HTML may be None if no .html.j2 exists.
     Used by the notification dispatcher before enqueueing.
 
     ``app_url`` should be the kv-resolved value from
     ``services.site.get_site_url``; ``site_timezone`` from
-    ``services.site.get_site_timezone``. Both default safely when omitted."""
+    ``services.site.get_site_timezone``; ``app_name`` from
+    ``services.site.get_app_name``. All default safely when omitted."""
     code = _resolve_locale(locale)
-    subject = _resolve_subject(code, slug, ctx)
-    text = _render(code, slug, "txt", ctx, app_url=app_url, site_timezone=site_timezone)
+    subject = _resolve_subject(code, slug, ctx, app_name)
+    text = _render(code, slug, "txt", ctx, app_url=app_url, site_timezone=site_timezone, app_name=app_name)
     try:
-        html = _render(code, slug, "html", ctx, app_url=app_url, site_timezone=site_timezone)
+        html = _render(code, slug, "html", ctx, app_url=app_url, site_timezone=site_timezone, app_name=app_name)
     except Exception:
         html = None
     return subject, text, html

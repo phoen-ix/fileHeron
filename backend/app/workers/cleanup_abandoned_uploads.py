@@ -38,13 +38,18 @@ async def cleanup_abandoned_uploads(_ctx) -> dict:
     if not upload_dir.is_dir():
         return {"scanned": 0, "deleted": 0, "skipped_active": 0}
 
-    cutoff = _utcnow() - timedelta(hours=settings.TUS_UPLOAD_ABANDONED_AFTER_HOURS)
     scanned = 0
     deleted = 0
     skipped_active = 0
 
     db = SessionLocal()
     try:
+        from ..services import settings_registry
+        cutoff = _utcnow() - timedelta(
+            hours=settings_registry.effective(
+                db, settings_registry.K.TUS_UPLOAD_ABANDONED_AFTER_HOURS
+            )
+        )
         for info_path in upload_dir.glob("*.info"):
             scanned += 1
             try:

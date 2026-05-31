@@ -93,12 +93,19 @@ async def _fetch_range(prefix5: str) -> str | None:
             pass
 
 
-async def is_password_breached(password: str) -> bool:
+async def is_password_breached(password: str, db=None) -> bool:
     """True iff the password appears in the HIBP corpus.
 
-    Always returns False if HIBP_ENABLED=false or the upstream is
-    unreachable (fail-open by design)."""
-    if not getattr(settings, "HIBP_ENABLED", True):
+    Always returns False if HIBP is disabled or the upstream is
+    unreachable (fail-open by design). When `db` is supplied the enable
+    flag is read live from the admin-tunable settings registry (kv
+    overlay, env default); otherwise the env value is used."""
+    if db is not None:
+        from . import settings_registry
+        enabled = settings_registry.effective(db, settings_registry.K.HIBP_ENABLED)
+    else:
+        enabled = getattr(settings, "HIBP_ENABLED", True)
+    if not enabled:
         return False
     if not password:
         return False

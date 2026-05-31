@@ -60,9 +60,15 @@ from ...schemas.twofa_policy import (
 from ...services import email as email_svc
 from ...services import public_link as public_link_svc
 from ...services import settings as settings_svc
+from ...services import settings_registry
 from ...services import site as site_svc
 from ...services import twofa_policy as twofa_policy_svc
 from ...services.audit import record_audit_event
+from ...schemas.advanced_settings import (
+    AdvancedSettingItem,
+    AdvancedSettingsResponse,
+    UpdateAdvancedSettingsRequest,
+)
 
 router = APIRouter()
 
@@ -727,3 +733,68 @@ def update_quarantine_settings(
     )
     db.commit()
     return QuarantineSettingsResponse(notify_admins=payload.notify_admins)
+
+
+# ---------------------------------------------------------------------------
+# Generic registry-driven "Advanced settings" — one GET/PUT for every
+# runtime-tunable knob in services/settings_registry.py. Only keys present
+# in the registry are ever exposed or accepted (secrets/infra stay env-only).
+# ---------------------------------------------------------------------------
+
+
+@router.get("/settings/advanced", response_model=AdvancedSettingsResponse)
+def get_advanced_settings(
+    db: Session = Depends(get_db),
+    _admin: User = Depends(get_current_admin),
+) -> AdvancedSettingsResponse:
+    items: list[AdvancedSettingItem] = []
+    for spec in settings_registry.TUNABLES:
+        items.append(
+            AdvancedSettingItem(
+                key=spec.key,
+                group=spec.group,
+                kind=spec.kind,
+                value=settings_registry.effective(db, spec.key),
+                default=settings_registry.env_default(spec),
+                is_overridden=settings_svc.get(db, spec.key) is not None,
+                min=spec.min,
+                max=spec.max,
+            )
+        )
+    return AdvancedSettingsResponse(items=items)
+
+
+@router.put("/settings/advanced", response_model=AdvancedSettingsResponse)
+def update_advanced_settings(
+    payload: UpdateAdvancedSettingsRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin),
+) -> AdvancedSettingsResponse:
+    """Set or reset registry knobs. `null` resets a key to its env default.
+    Unknown keys and out-of-bounds/typed-wrong values are rejected (400)
+    before any write, so the PUT is all-or-nothing."""
+    # Validate everything first (atomic — reject the whole PUT on any error).
+    to_set: dict[str, str | None] = {}
+    for key, value in payload.updates.items():
+        spec = settings_registry.BY_KEY.get(key)
+        if spec is None:
+            raise AppError(400, "UNKNOWN_SETTING", f"Unknown setting: {key}")
+        if value is None:
+            to_set[key] = None  # reset to env default
+            continue
+        try:
+            to_set[key] = settings_registry.coerce_for_store(spec, value)
+        except ValueError as e:
+            raise AppError(400, "INVALID_SETTING", str(e)) from None
+
+    if not to_set:
+        return get_advanced_settings(db=db, _admin=admin)
+
+    for key, stored in to_set.items():
+        settings_svc.set_value(db, key=key, value=stored, actor=admin, request=request)
+    settings_svc.audit_settings_change(
+        db, actor=admin, changed_keys=to_set.keys(), request=request
+    )
+    db.commit()
+    return get_advanced_settings(db=db, _admin=admin)

@@ -23,7 +23,6 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timedelta, timezone
 
-from ..config import settings
 from ..database import SessionLocal
 from ..models.refresh_token import RefreshToken
 from ..services.cron_tracker import track_cron
@@ -57,7 +56,10 @@ async def cleanup_expired_tokens(_ctx) -> dict:
         )
 
         # 2. Revoked + past retention window → hard-delete.
-        cutoff = now - timedelta(days=settings.REFRESH_TOKEN_RETENTION_DAYS)
+        from ..services import settings_registry
+        cutoff = now - timedelta(
+            days=settings_registry.effective(db, settings_registry.K.REFRESH_TOKEN_RETENTION_DAYS)
+        )
         deleted = (
             db.query(RefreshToken)
             .filter(

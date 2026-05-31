@@ -54,6 +54,11 @@ const relTime = computed(() => {
 
 <style scoped>
 .notif-row {
+  /* Containing block for the unread `::before` dot. Without this the dot
+     is positioned against the dropdown panel instead of its own row, so
+     it neither scrolls with the list nor gets clipped by the bell-list
+     overflow — the off-screen rows' dots leak onto the page. */
+  position: relative;
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 4px 12px;

@@ -211,6 +211,14 @@ if os.environ.get("PYTEST_CURRENT_TEST") is None:
     _insecure_defaults = [
         ("change-me-in-production-min-32-chars", "JWT_SECRET", settings.JWT_SECRET),
         ("change_me_in_production", "DB_PASSWORD", settings.DB_PASSWORD),
+        # TUS_HOOK_SECRET is the load-bearing HMAC secret for the internal
+        # tusd webhook — at its default an attacker who knows the placeholder
+        # could forge upload envelopes. Fail fast like the others (finding L1/M-tus).
+        (
+            "change-me-tus-hook-secret-min-32-chars-_______________",
+            "TUS_HOOK_SECRET",
+            settings.TUS_HOOK_SECRET,
+        ),
     ]
     for placeholder, name, value in _insecure_defaults:
         if value == placeholder:
@@ -218,6 +226,8 @@ if os.environ.get("PYTEST_CURRENT_TEST") is None:
 
     if len(settings.JWT_SECRET) < 32:
         _fail_or_warn("JWT_SECRET is too short (min 32 chars).")
+    if len(settings.TUS_HOOK_SECRET) < 32:
+        _fail_or_warn("TUS_HOOK_SECRET is too short (min 32 chars).")
 
     # AV_SKIP is meant for tests — in production, uploads must be
     # scanned before they're available for download. If both are

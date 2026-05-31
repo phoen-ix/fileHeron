@@ -46,3 +46,25 @@ def test_secret_roundtrip_per_server(tmp_keyring):
 def test_clear_secret_for_unknown_is_noop(tmp_keyring):
     # Should not raise even if nothing's there.
     config.clear_secret("refresh", "https://nothing.example.com")
+
+
+# ---- normalize_server_url (finding L9: HTTPS enforcement) ------------------
+
+
+def test_normalize_server_url_defaults_to_https():
+    assert config.normalize_server_url("files.example.com") == "https://files.example.com"
+    assert config.normalize_server_url("https://files.example.com/") == "https://files.example.com"
+
+
+def test_normalize_server_url_rejects_plain_http_remote():
+    import pytest
+
+    with pytest.raises(ValueError):
+        config.normalize_server_url("http://files.example.com")
+    with pytest.raises(ValueError):
+        config.normalize_server_url("")
+
+
+def test_normalize_server_url_allows_http_localhost():
+    assert config.normalize_server_url("http://localhost:8000") == "http://localhost:8000"
+    assert config.normalize_server_url("http://127.0.0.1:8000/") == "http://127.0.0.1:8000"

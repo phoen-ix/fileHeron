@@ -134,9 +134,7 @@ async def callback(
     response.delete_cookie(oidc_svc.STATE_COOKIE, path="/api/auth/oidc")
     return response
 
-
-@router.post("/_test_reset_discovery", include_in_schema=False)
-def _test_reset_discovery() -> dict:
-    """Test hook to clear the discovery cache; not in OpenAPI."""
-    oidc_svc.reset_discovery_cache()
-    return {"ok": True}
+# (Removed an unauthenticated `_test_reset_discovery` HTTP hook — finding
+# L2. Tests clear the cache by calling `oidc_svc.reset_discovery_cache()`
+# directly via the conftest autouse fixture, so the endpoint was dead
+# weight that let anyone flush the discovery cache repeatedly.)

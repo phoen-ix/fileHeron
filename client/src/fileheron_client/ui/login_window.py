@@ -13,6 +13,7 @@ from ..api import ApiClient, ApiError
 from ..config import (
     ClientConfig,
     get_secret,
+    normalize_server_url,
     save_config,
     set_secret,
 )
@@ -207,15 +208,23 @@ class LoginWindow:
         # worker because Tcl's interpreter lock is held by the main
         # thread sitting in the event loop. v0.4.2 read them from
         # _attempt() which is exactly that.
-        server = self.server_url_var.get().strip().rstrip("/")
+        server_raw = self.server_url_var.get().strip().rstrip("/")
         email = self.email_var.get().strip()
         password = self.password_var.get()
         totp = self.totp_var.get().strip() or None
         recovery = self.recovery_var.get().strip() or None
         use_recovery = self._use_recovery
         api_token = self.api_token_var.get().strip()
-        if not server:
+        if not server_raw:
             self._show_error(t("login.err_server_required"))
+            return
+        # Enforce https (finding L9): refuse to send credentials in
+        # cleartext to a socially-engineered http:// endpoint. http is
+        # only accepted for localhost (local dev).
+        try:
+            server = normalize_server_url(server_raw)
+        except ValueError as e:
+            self._show_error(str(e))
             return
         kind = self._cfg.auth_kind
         if kind == "password" and not email:

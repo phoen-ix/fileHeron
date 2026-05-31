@@ -9,6 +9,7 @@ restarts but never end up in a flat file on disk.
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Optional
@@ -72,6 +73,37 @@ def save_config(cfg: ClientConfig) -> None:
     p = config_path()
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(json.dumps(asdict(cfg), indent=2), encoding="utf-8")
+    # Restrict to owner-only (finding L9). Best-effort: chmod is a no-op on
+    # Windows ACLs but harmless; on POSIX it stops other local users reading
+    # the server URL / last email from a shared machine.
+    try:
+        os.chmod(p, 0o600)
+    except OSError:
+        pass
+
+
+def normalize_server_url(raw: str) -> str:
+    """Validate + normalise a user-entered server URL (finding L9).
+
+    Enforces https so credentials can't be sent in cleartext to a
+    socially-engineered http:// endpoint. Plain http is allowed ONLY for
+    localhost / 127.0.0.1 (local dev). Raises ValueError on anything else.
+    """
+    from urllib.parse import urlparse
+
+    s = (raw or "").strip().rstrip("/")
+    if not s:
+        raise ValueError("Server URL is required.")
+    if "://" not in s:
+        # Default to https when the user omits the scheme.
+        s = "https://" + s
+    parsed = urlparse(s)
+    host = (parsed.hostname or "").lower()
+    if parsed.scheme == "https":
+        return s
+    if parsed.scheme == "http" and host in ("localhost", "127.0.0.1", "::1"):
+        return s
+    raise ValueError("Server URL must use https:// (http is only allowed for localhost).")
 
 
 def _secret_username(kind: str, server_url: str) -> str:

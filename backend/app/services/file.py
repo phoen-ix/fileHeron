@@ -132,6 +132,12 @@ def hard_delete(
     silently swallowed unlink failures, leaving file rows marked deleted
     while the bytes leaked on disk.
     """
+    # Idempotency guard: a second hard_delete on an already-deleted file
+    # would re-run release_bytes and double-credit the uploader's quota
+    # (finding L11). Bail out — the row is already a deleted marker.
+    if file.state == FileState.deleted:
+        return
+
     # Capture the pre-delete state so we don't double-release quota for
     # files that already went through quarantine (services/quarantine.py
     # released the bytes when it moved the file into ./data/quarantine/).

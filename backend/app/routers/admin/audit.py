@@ -22,6 +22,18 @@ from ...schemas.admin import AdminAuditResponse, AdminAuditRow
 router = APIRouter()
 
 
+def _csv_safe(value) -> str:
+    """Neutralise CSV formula injection (finding L3). Spreadsheet apps
+    execute a cell whose text starts with = + - @ (or a leading control
+    char). User-influenced fields land in the export (e.g. a failed-email
+    `target_id`, display names in `extra`), so prefix a single quote to
+    defuse the formula while keeping the value readable."""
+    s = "" if value is None else str(value)
+    if s and s[0] in ("=", "+", "-", "@", "\t", "\r"):
+        return "'" + s
+    return s
+
+
 def _encode_cursor(created_at: datetime, row_id: int) -> str:
     raw = f"{created_at.isoformat()}|{row_id}".encode()
     return base64.urlsafe_b64encode(raw).decode().rstrip("=")
@@ -217,13 +229,13 @@ def export_audit_csv(
                 [
                     r.id,
                     r.created_at.isoformat() if r.created_at else "",
-                    r.event_type,
+                    _csv_safe(r.event_type),
                     r.actor_user_id if r.actor_user_id is not None else "",
-                    r.target_type or "",
-                    r.target_id or "",
-                    r.ip or "",
-                    r.request_id or "",
-                    "" if r.extra is None else json.dumps(r.extra),
+                    _csv_safe(r.target_type or ""),
+                    _csv_safe(r.target_id or ""),
+                    _csv_safe(r.ip or ""),
+                    _csv_safe(r.request_id or ""),
+                    "" if r.extra is None else _csv_safe(json.dumps(r.extra)),
                 ]
             )
             data = buf.getvalue()

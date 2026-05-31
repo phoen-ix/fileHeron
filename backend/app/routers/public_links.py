@@ -119,6 +119,10 @@ def revoke_public_link(
     db: Session = Depends(get_db),
 ) -> None:
     share = share_svc.get_share_or_404(db, share_id)
+    # Explicit route-level ownership check, mirroring GET (finding L5) —
+    # don't rely solely on the service-layer created_by check.
+    if share.created_by_id != user.id and user.role != UserRole.admin:
+        raise AppError(403, "FORBIDDEN", "Only the share owner or an admin can do that.")
     link = public_link_svc.get_active_link_for_share(db, share.id)
     if link is None:
         raise AppError(404, "PUBLIC_LINK_NOT_FOUND", "No active public link for this share.")

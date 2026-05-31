@@ -644,6 +644,9 @@ export interface AdminFileItem {
   uploaded_at: string
   last_downloaded_at: string | null
   download_count: number
+  /** Bytes still on disk + counting quota, but the parent share is
+   * revoked/deleted — reclaimable to free the uploader's quota. */
+  is_orphaned: boolean
 }
 
 export interface AdminFileListResponse {

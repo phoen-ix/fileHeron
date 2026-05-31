@@ -57,6 +57,7 @@ TUNABLES: list[Tunable] = [
     Tunable(K.LOGIN_ATTEMPT_RETENTION_DAYS, "LOGIN_ATTEMPT_RETENTION_DAYS", "int", "retention", 0, 3650),
     Tunable(K.NOTIFICATION_READ_RETENTION_DAYS, "NOTIFICATION_READ_RETENTION_DAYS", "int", "retention", 0, 3650),
     Tunable(K.QUARANTINE_PURGE_AFTER_DAYS, "QUARANTINE_PURGE_AFTER_DAYS", "int", "retention", 0, 3650),
+    Tunable(K.ORPHAN_RECLAIM_AFTER_DAYS, "ORPHAN_RECLAIM_AFTER_DAYS", "int", "retention", 0, 3650),
     Tunable(K.TUS_UPLOAD_ABANDONED_AFTER_HOURS, "TUS_UPLOAD_ABANDONED_AFTER_HOURS", "int", "retention", 1, 8760),
     # --- Uploads / security / branding ---
     Tunable(K.MAX_DIRECT_UPLOAD_BYTES, "MAX_DIRECT_UPLOAD_BYTES", "int", "uploads", 1_000_000, 5_368_709_120),

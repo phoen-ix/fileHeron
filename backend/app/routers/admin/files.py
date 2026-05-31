@@ -3,10 +3,14 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request, status
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from ...dependencies import get_current_admin, get_db
+from ...middleware.errors import AppError
+from ...models.file import File
+from ...models.share import Share
 from ...models.user import User
 from ...schemas.file_admin import (
     AdminFileItem,
@@ -24,6 +28,7 @@ def admin_list_files(
     state: str | None = Query(None),
     uploader_id: int | None = Query(None, ge=1),
     share_state: str | None = Query(None),
+    orphaned: bool = Query(False),
     from_ts: datetime | None = Query(None, alias="from"),
     to_ts: datetime | None = Query(None, alias="to"),
     sort: str = Query("uploaded_at"),
@@ -39,6 +44,7 @@ def admin_list_files(
         state=state,
         uploader_id=uploader_id,
         share_state=share_state,
+        orphaned=orphaned,
         from_ts=from_ts,
         to_ts=to_ts,
         sort=sort,
@@ -60,9 +66,38 @@ def admin_list_files(
             uploaded_at=r["uploaded_at"],
             last_downloaded_at=r["last_downloaded_at"],
             download_count=r["download_count"],
+            is_orphaned=r["is_orphaned"],
         )
         for r in rows
     ]
     return AdminFileListResponse(
         items=items, total=total, page=page, page_size=page_size
     )
+
+
+@router.post("/files/{file_id}/reclaim", status_code=status.HTTP_204_NO_CONTENT)
+def admin_reclaim_orphan(
+    file_id: str,
+    request: Request,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin),
+) -> Response:
+    """Free an orphaned file's bytes + the uploader's quota now, without
+    waiting for the grace-window cron. Refuses anything that isn't an orphan
+    (so active-share files can't be deleted through here)."""
+    file = db.query(File).filter(File.id == file_id).one_or_none()
+    if file is None:
+        raise AppError(404, "FILE_NOT_FOUND", "File not found.")
+    share = db.query(Share).filter(Share.id == file.share_id).one_or_none()
+    if share is None or not file_admin_svc.is_orphan(file, share):
+        raise AppError(
+            409,
+            "NOT_ORPHANED",
+            "Only files whose share is revoked/deleted (and still on disk) can be reclaimed.",
+        )
+
+    from ...services import file as file_svc
+
+    file_svc.hard_delete(db, file=file, reason="admin_reclaim", request=request)
+    db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

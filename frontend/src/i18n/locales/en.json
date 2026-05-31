@@ -324,6 +324,7 @@
         "login_attempt_days": "Login attempts (days, 0 = keep forever)",
         "notification_read_days": "Read notifications (days, 0 = disable cleanup)",
         "quarantine_purge_days": "Quarantined file bytes (days, 0 = keep)",
+        "orphan_reclaim_days": "Orphaned files from revoked/deleted shares (days, 0 = disable auto-reclaim)",
         "tus_abandoned_hours": "Abandoned uploads (hours)"
       },
       "uploads": {
@@ -1239,6 +1240,11 @@
     "search_placeholder": "Search filename, uploader name or email…",
     "file_state_all": "Any file state",
     "share_state_all": "Any share state",
+    "orphaned_only": "Orphaned only",
+    "orphaned_badge": "orphaned",
+    "reclaim": "Reclaim",
+    "reclaim_confirm": "Permanently delete the bytes of “{name}” and free the uploader's quota? The share is already revoked/deleted, so this only removes dead storage.",
+    "reclaimed_toast": "Reclaimed “{name}” — bytes freed.",
     "empty": "No files match the current filters.",
     "col": {
       "filename": "Filename",
@@ -1248,7 +1254,8 @@
       "share": "Share",
       "uploaded": "Uploaded",
       "last_dl": "Last download",
-      "dl_count": "# DL"
+      "dl_count": "# DL",
+      "actions": "Actions"
     }
   },
   "admin_quarantine": {

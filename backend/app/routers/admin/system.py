@@ -48,6 +48,7 @@ _KNOWN_CRONS = [
     "cleanup_pending_invites",
     "cleanup_read_notifications",
     "prune_history",
+    "reclaim_orphaned_files",
 ]
 
 

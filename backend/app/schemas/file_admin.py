@@ -26,6 +26,9 @@ class AdminFileItem(APIBaseModel):
     uploaded_at: datetime
     last_downloaded_at: datetime | None
     download_count: int
+    # True when bytes are still on disk + counting quota but the parent
+    # share is terminal (revoked/deleted) — reclaimable to free quota.
+    is_orphaned: bool = False
 
 
 class AdminFileListResponse(APIBaseModel):

@@ -472,6 +472,9 @@ def revoke_share(db: Session, *, user: User, share: Share, request=None) -> None
     if share.state == ShareState.deleted:
         raise AppError(409, "ALREADY_DELETED", "Share already deleted.")
     share.state = ShareState.revoked
+    # Stamp the terminal transition so the orphan-reclaim cron can age its
+    # grace window. Bytes are kept (soft revoke); the cron frees them later.
+    share.terminated_at = _utcnow()
     db.flush()
     record_audit_event(
         db,

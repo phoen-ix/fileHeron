@@ -65,6 +65,10 @@ class Settings(BaseSettings):
     # The purge_old_quarantine cron unlinks bytes (keeps the file row as a
     # historical marker) when quarantined longer than this. 0 disables.
     QUARANTINE_PURGE_AFTER_DAYS: int = 90
+    # The reclaim_orphaned_files cron frees bytes + quota for files whose
+    # share has been revoked/deleted longer than this (grace window after a
+    # soft revoke). 0 disables auto-reclaim (admins still reclaim manually).
+    ORPHAN_RECLAIM_AFTER_DAYS: int = 7
     # Abandoned TUS uploads (no DB row, or row stuck in `uploading` state)
     # older than this get unlinked from /data/uploads.
     TUS_UPLOAD_ABANDONED_AFTER_HOURS: int = 24

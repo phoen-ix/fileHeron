@@ -29,6 +29,15 @@ VALID_SORT_COLUMNS = {
     "download_count",
 }
 
+# An orphan = bytes still on disk + counting quota, but the parent share is
+# terminal. Excludes quarantine (infected, bytes in QUARANTINE_DIR).
+_ORPHAN_FILE_STATES = (FileState.clean, FileState.ready_unscanned)
+_ORPHAN_SHARE_STATES = (ShareState.revoked, ShareState.deleted)
+
+
+def is_orphan(file: File, share: Share) -> bool:
+    return file.state in _ORPHAN_FILE_STATES and share.state in _ORPHAN_SHARE_STATES
+
 
 def _format_recipients(
     share_id: str,
@@ -58,6 +67,7 @@ def list_all_files(
     state: str | None = None,
     uploader_id: int | None = None,
     share_state: str | None = None,
+    orphaned: bool = False,
     from_ts: datetime | None = None,
     to_ts: datetime | None = None,
     sort: str = "uploaded_at",
@@ -99,6 +109,12 @@ def list_all_files(
         valid_share = {s.value for s in ShareState}
         if share_state in valid_share:
             base = base.filter(Share.state == share_state)
+
+    if orphaned:
+        base = base.filter(
+            File.state.in_(_ORPHAN_FILE_STATES),
+            Share.state.in_(_ORPHAN_SHARE_STATES),
+        )
 
     if uploader_id is not None:
         base = base.filter(File.uploaded_by_id == uploader_id)
@@ -189,6 +205,7 @@ def list_all_files(
                 "uploaded_at": f.created_at,
                 "last_downloaded_at": last_dl,
                 "download_count": dl_count or 0,
+                "is_orphaned": is_orphan(f, s),
             }
         )
     return out, total

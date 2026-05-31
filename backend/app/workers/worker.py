@@ -25,6 +25,7 @@ from .ops_check import ops_check
 from .prune_history import prune_history
 from .purge_old_quarantine import purge_old_quarantine
 from .quota_reconcile import quota_reconcile
+from .reclaim_orphaned_files import reclaim_orphaned_files
 from .send_email import send_email_job
 from .share_expiring import share_expiring_24h_warning
 
@@ -49,6 +50,7 @@ class WorkerSettings:
         prune_history,
         release_check,
         cleanup_read_notifications,
+        reclaim_orphaned_files,
     ]
     cron_jobs = [
         # Stagger so they don't pile up at minute 0. ops_check sits at :15
@@ -68,6 +70,7 @@ class WorkerSettings:
         cron(cleanup_pending_invites, hour={2}, minute={15}, run_at_startup=False),
         cron(cleanup_read_notifications, hour={2}, minute={29}, run_at_startup=False),
         cron(prune_history, hour={2}, minute={43}, run_at_startup=False),
+        cron(reclaim_orphaned_files, hour={2}, minute={51}, run_at_startup=False),
     ]
     on_startup = startup
     # Use a dedicated queue so the worker doesn't accidentally pick up

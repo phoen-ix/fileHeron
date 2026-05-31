@@ -374,6 +374,7 @@ export function adminListFiles(params: {
   state?: string
   uploader_id?: number
   share_state?: string
+  orphaned?: boolean
   from?: string
   to?: string
   sort?: string
@@ -382,6 +383,11 @@ export function adminListFiles(params: {
   page_size?: number
 } = {}) {
   return api.get<AdminFileListResponse>('/admin/files', { params })
+}
+
+/** Free an orphaned file's bytes + the uploader's quota immediately. */
+export function adminReclaimFile(fileId: string) {
+  return api.post<void>(`/admin/files/${fileId}/reclaim`)
 }
 
 // Public link policy (post-Phase 10)

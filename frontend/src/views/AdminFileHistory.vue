@@ -2,14 +2,16 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import { adminListFiles } from '@/api/admin'
+import { adminListFiles, adminReclaimFile } from '@/api/admin'
 import { useApiError } from '@/composables/useApiError'
 import { useTableSort } from '@/composables/useTableSort'
+import { useUiStore } from '@/stores/ui'
 import type { AdminFileItem, FileState, ShareState } from '@/types/api'
 import { formatInSiteTime } from '@/utils/datetime'
 
 const { t, locale } = useI18n()
 const { describe } = useApiError()
+const ui = useUiStore()
 
 const items = ref<AdminFileItem[]>([])
 const total = ref(0)
@@ -21,6 +23,8 @@ const errorMsg = ref<string | null>(null)
 const q = ref('')
 const stateFilter = ref<FileState | ''>('')
 const shareStateFilter = ref<ShareState | ''>('')
+const orphanedOnly = ref(false)
+const reclaiming = ref<string | null>(null)
 let searchTimer: ReturnType<typeof setTimeout> | null = null
 
 const sort = useTableSort({ defaultBy: 'uploaded_at', defaultDir: 'desc' })
@@ -33,6 +37,7 @@ async function load() {
       q: q.value || undefined,
       state: stateFilter.value || undefined,
       share_state: shareStateFilter.value || undefined,
+      orphaned: orphanedOnly.value || undefined,
       sort: sort.sortBy.value,
       direction: sort.sortDir.value,
       page: page.value,
@@ -54,10 +59,25 @@ watch(q, () => {
     void load()
   }, 220)
 })
-watch([stateFilter, shareStateFilter], () => {
+watch([stateFilter, shareStateFilter, orphanedOnly], () => {
   page.value = 1
   void load()
 })
+
+async function onReclaim(it: AdminFileItem) {
+  if (reclaiming.value) return
+  if (!window.confirm(t('admin_file_history.reclaim_confirm', { name: it.filename }))) return
+  reclaiming.value = it.file_id
+  try {
+    await adminReclaimFile(it.file_id)
+    ui.pushToast(t('admin_file_history.reclaimed_toast', { name: it.filename }), 'success')
+    await load()
+  } catch (err) {
+    ui.pushToast(describe(err), 'error')
+  } finally {
+    reclaiming.value = null
+  }
+}
 watch([sort.sortBy, sort.sortDir, page], load)
 
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize.value)))
@@ -126,6 +146,10 @@ onMounted(load)
         <option value="revoked">{{ t('share_state.revoked') }}</option>
         <option value="deleted">{{ t('share_state.deleted') }}</option>
       </select>
+      <label class="orphan-toggle">
+        <input type="checkbox" v-model="orphanedOnly" />
+        {{ t('admin_file_history.orphaned_only') }}
+      </label>
     </div>
 
     <div v-if="loading" class="loading">{{ t('common.loading') }}</div>
@@ -198,6 +222,7 @@ onMounted(load)
             {{ t('admin_file_history.col.dl_count') }}
             <span class="sort-ind">{{ sort.indicator('download_count') }}</span>
           </th>
+          <th>{{ t('admin_file_history.col.actions') }}</th>
         </tr>
       </thead>
       <tbody>
@@ -210,6 +235,9 @@ onMounted(load)
           <td>
             <span class="fh-pill" :data-state="pillForFileState(it.state)">
               {{ it.state }}
+            </span>
+            <span v-if="it.is_orphaned" class="fh-pill orphan-badge" data-state="warn">
+              {{ t('admin_file_history.orphaned_badge') }}
             </span>
           </td>
           <td>
@@ -227,6 +255,18 @@ onMounted(load)
           <td class="fh-mono">{{ formatDate(it.uploaded_at) }}</td>
           <td class="fh-mono">{{ formatDate(it.last_downloaded_at) }}</td>
           <td class="numeric fh-mono">{{ it.download_count }}</td>
+          <td>
+            <button
+              v-if="it.is_orphaned"
+              type="button"
+              class="fh-btn-text reclaim-btn"
+              :disabled="reclaiming === it.file_id"
+              @click="onReclaim(it)"
+            >
+              {{ reclaiming === it.file_id ? t('common.loading') : t('admin_file_history.reclaim') }}
+            </button>
+            <span v-else class="row-hint">—</span>
+          </td>
         </tr>
       </tbody>
     </table>
@@ -292,6 +332,24 @@ onMounted(load)
   border-radius: var(--fh-radius-sm);
   padding: 4px 8px;
   color: var(--fh-ink);
+}
+
+.orphan-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--fh-space-2);
+  font-size: var(--fh-text-body-sm);
+  color: var(--fh-subtle);
+  cursor: pointer;
+}
+
+.orphan-badge {
+  margin-left: var(--fh-space-2);
+}
+
+.reclaim-btn {
+  color: var(--fh-accent);
+  white-space: nowrap;
 }
 
 .loading {

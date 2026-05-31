@@ -324,6 +324,7 @@
         "login_attempt_days": "Anmeldeversuche (Tage, 0 = unbegrenzt)",
         "notification_read_days": "Gelesene Benachrichtigungen (Tage, 0 = Bereinigung aus)",
         "quarantine_purge_days": "Quarantäne-Dateibytes (Tage, 0 = behalten)",
+        "orphan_reclaim_days": "Verwaiste Dateien aus widerrufenen/gelöschten Freigaben (Tage, 0 = Auto-Freigabe aus)",
         "tus_abandoned_hours": "Abgebrochene Uploads (Stunden)"
       },
       "uploads": {
@@ -1239,6 +1240,11 @@
     "search_placeholder": "Suche nach Dateiname, Hochlader oder E-Mail …",
     "file_state_all": "Beliebiger Datei-Status",
     "share_state_all": "Beliebiger Freigabe-Status",
+    "orphaned_only": "Nur verwaiste",
+    "orphaned_badge": "verwaist",
+    "reclaim": "Freigeben",
+    "reclaim_confirm": "Bytes von „{name}“ endgültig löschen und das Kontingent des Hochladers freigeben? Die Freigabe ist bereits widerrufen/gelöscht — dies entfernt nur toten Speicher.",
+    "reclaimed_toast": "„{name}“ freigegeben — Bytes gelöscht.",
     "empty": "Keine Dateien passen zu den Filtern.",
     "col": {
       "filename": "Dateiname",
@@ -1248,7 +1254,8 @@
       "share": "Freigabe",
       "uploaded": "Hochgeladen",
       "last_dl": "Letzter Download",
-      "dl_count": "Downloads"
+      "dl_count": "Downloads",
+      "actions": "Aktionen"
     }
   },
   "admin_quarantine": {

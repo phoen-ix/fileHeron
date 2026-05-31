@@ -83,6 +83,10 @@ class Share(Base):
     expiring_notified_at: Mapped[datetime | None] = mapped_column(
         DateTime(), nullable=True
     )
+    # Set when the share transitions to a terminal state (revoked / deleted).
+    # The orphan-reclaim cron ages its grace window off this so a deliberately
+    # revoked share keeps its bytes for a recovery margin before cleanup.
+    terminated_at: Mapped[datetime | None] = mapped_column(DateTime(), nullable=True)
 
     # v1.1.0 per-share download budget. NULL = unlimited (matches the
     # public_link semantic). `download_limit` is the cap chosen by the

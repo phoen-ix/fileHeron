@@ -1,0 +1,8 @@
+Hi {{ display_name|default("there") }},
+
+{% if count and count > 1 %}{{ count }} older sessions were{% else %}An older session was{% endif %} signed out of your {{ app_name }} account because you reached your {{ cap }}-session limit.
+
+This is routine housekeeping when you stay signed in on more than {{ cap }} devices — the least-recently-active session is signed out to make room. If this wasn't you, change your password and review your active sessions:
+{{ app_url }}/account
+
+— {{ app_name }}

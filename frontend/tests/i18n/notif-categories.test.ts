@@ -17,6 +17,7 @@ const CATEGORIES = [
   'login_alert',
   'oidc_linked',
   'file_quarantined',
+  'session_evicted',
   'ops_alert',
   'release_available',
 ] as const

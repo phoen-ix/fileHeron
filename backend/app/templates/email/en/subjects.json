@@ -10,6 +10,7 @@
   "login_alert": "Sign-in from a new device",
   "oidc_linked": "A sign-in provider was linked to your {app_name} account",
   "file_quarantined": "An infected file was quarantined",
+  "session_evicted": "A session was signed out of your {app_name} account",
   "smtp_test": "{app_name} · SMTP test",
   "release_available": "{app_name} {version} is available"
 }

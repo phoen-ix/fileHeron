@@ -148,7 +148,71 @@ def enforce_session_cap(
             request=request,
         )
     db.flush()
+    if oldest:
+        # Make the eviction visible instead of a silent sign-out. Best-effort:
+        # dispatch failures never break the login that triggered the cap.
+        try:
+            from ..models.notification import NotificationCategory
+            from . import notification as notif_svc
+
+            evicted_user = db.query(User).filter(User.id == user_id).one_or_none()
+            if evicted_user is not None:
+                notif_svc.dispatch(
+                    db,
+                    user=evicted_user,
+                    category=NotificationCategory.session_evicted,
+                    payload={"count": len(oldest), "cap": cap},
+                    link_url="/account",
+                    email_to=evicted_user.email,
+                )
+        except Exception:
+            logger.exception("session_evicted dispatch failed user=%d", user_id)
     return len(oldest)
+
+
+def reclamp_refresh_expiry(
+    db: Session, *, new_days: int, actor: User | None = None, request: Request | None = None
+) -> dict:
+    """Apply a shortened refresh-token TTL to EXISTING active sessions.
+
+    For each active token, clamp ``expires_at`` down to
+    ``created_at + new_days`` (never extend); any token now past that new
+    expiry is revoked immediately. Sessions still inside the new window keep
+    running, just with the shorter expiry. Returns ``{clamped, revoked}``.
+    Caller commits."""
+    now = _utcnow()
+    rows = (
+        db.query(RefreshToken)
+        .filter(RefreshToken.revoked_at.is_(None), RefreshToken.expires_at > now)
+        .all()
+    )
+    clamped = 0
+    revoked = 0
+    for t in rows:
+        new_exp = t.created_at + timedelta(days=new_days)
+        if new_exp < t.expires_at:
+            t.expires_at = new_exp
+            clamped += 1
+        if t.expires_at <= now:
+            t.revoked_at = now
+            revoked += 1
+    if clamped or revoked:
+        db.flush()
+        record_audit_event(
+            db,
+            event_type=AuditEventType.refresh_token_evicted,
+            actor_user_id=actor.id if actor else None,
+            target_type="refresh_token",
+            target_id=None,
+            metadata={
+                "reason": "ttl_shortened",
+                "new_days": new_days,
+                "clamped": clamped,
+                "revoked": revoked,
+            },
+            request=request,
+        )
+    return {"clamped": clamped, "revoked": revoked}
 
 
 def create_refresh_token(db: Session, user: User, request: Request | None, settings) -> tuple[RefreshToken, str]:

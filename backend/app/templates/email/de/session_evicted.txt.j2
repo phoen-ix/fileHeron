@@ -1,0 +1,8 @@
+Hallo {{ display_name|default("there") }},
+
+{% if count and count > 1 %}{{ count }} ältere Sitzungen wurden{% else %}Eine ältere Sitzung wurde{% endif %} von deinem {{ app_name }}-Konto abgemeldet, weil du dein Limit von {{ cap }} Sitzungen erreicht hast.
+
+Das ist normale Bereinigung, wenn du auf mehr als {{ cap }} Geräten angemeldet bleibst — die am längsten inaktive Sitzung wird abgemeldet, um Platz zu schaffen. Falls du das nicht warst, ändere dein Passwort und überprüfe deine aktiven Sitzungen:
+{{ app_url }}/account
+
+— {{ app_name }}

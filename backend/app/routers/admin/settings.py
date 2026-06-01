@@ -791,10 +791,28 @@ def update_advanced_settings(
     if not to_set:
         return get_advanced_settings(db=db, _admin=admin)
 
+    # Capture the pre-write refresh-TTL so we can detect a *shortening* and
+    # apply it to existing sessions (clamp down; revoke only ones already
+    # expired under the new value).
+    refresh_ttl_old = settings_registry.effective(
+        db, settings_registry.K.REFRESH_TOKEN_EXPIRE_DAYS
+    )
+
     for key, stored in to_set.items():
         settings_svc.set_value(db, key=key, value=stored, actor=admin, request=request)
     settings_svc.audit_settings_change(
         db, actor=admin, changed_keys=to_set.keys(), request=request
     )
+
+    if settings_registry.K.REFRESH_TOKEN_EXPIRE_DAYS in to_set:
+        refresh_ttl_new = settings_registry.effective(
+            db, settings_registry.K.REFRESH_TOKEN_EXPIRE_DAYS
+        )
+        if refresh_ttl_new < refresh_ttl_old:
+            from ...services import jwt_session
+            jwt_session.reclamp_refresh_expiry(
+                db, new_days=refresh_ttl_new, actor=admin, request=request
+            )
+
     db.commit()
     return get_advanced_settings(db=db, _admin=admin)

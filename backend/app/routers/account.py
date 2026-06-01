@@ -1,14 +1,11 @@
 """/api/account/* endpoints — self-service for the authenticated user."""
 from __future__ import annotations
 
-from datetime import datetime, timezone
-
-from fastapi import APIRouter, Cookie, Depends, Request, status
+from fastapi import APIRouter, Depends, Request, status
 from sqlalchemy.orm import Session
 
 from ..dependencies import get_actor, get_current_user, get_db
 from ..middleware.errors import AppError
-from ..models.refresh_token import RefreshToken
 from ..models.user import User, UserRole
 from ..models.user_recovery_code import UserRecoveryCode
 from ..schemas.account import (
@@ -28,8 +25,6 @@ from ..schemas.api_token import (
 from ..schemas.two_factor import (
     RecoveryCodeRegenerateRequest,
     RecoveryCodesResponse,
-    SessionListResponse,
-    SessionResponse,
     TotpDisableRequest,
     TotpEnableRequest,
     TotpSetupResponse,
@@ -40,13 +35,8 @@ from ..services import auth as auth_svc
 from ..services import email as email_svc
 from ..services import invite as invite_svc
 from ..services import totp as totp_svc
-from ..utils.crypto import refresh_token_hash
 
 router = APIRouter(prefix="/api/account", tags=["account"])
-
-
-def _utcnow_naive() -> datetime:
-    return datetime.now(tz=timezone.utc).replace(tzinfo=None)
 
 
 def _me_response(db: Session, user: User) -> MeResponse:
@@ -337,64 +327,6 @@ def totp_recovery_regenerate(
     )
     db.commit()
     return RecoveryCodesResponse(recovery_codes=codes)
-
-
-# ---------------------------------------------------------------------------
-# Sessions (refresh tokens)
-# ---------------------------------------------------------------------------
-
-
-@router.get("/sessions", response_model=SessionListResponse)
-def list_sessions(
-    user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-    fh_refresh: str | None = Cookie(default=None),
-) -> SessionListResponse:
-    current_hash = refresh_token_hash(fh_refresh) if fh_refresh else None
-    # Active = not revoked AND not yet past TTL. Without the second
-    # clause expired-but-not-yet-cleaned-up tokens stay visible as
-    # "active sessions" for the full 7-day default — confusing UX.
-    rows = (
-        db.query(RefreshToken)
-        .filter(
-            RefreshToken.user_id == user.id,
-            RefreshToken.revoked_at.is_(None),
-            RefreshToken.expires_at > _utcnow_naive(),
-        )
-        .order_by(RefreshToken.created_at.desc())
-        .all()
-    )
-    return SessionListResponse(
-        items=[
-            SessionResponse(
-                id=row.id,
-                created_at=row.created_at,
-                expires_at=row.expires_at,
-                created_ip=row.created_ip,
-                created_ua=row.created_ua,
-                is_current=(row.token_hash == current_hash),
-            )
-            for row in rows
-        ]
-    )
-
-
-@router.delete("/sessions/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
-def revoke_session(
-    session_id: int,
-    user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-) -> None:
-    row = (
-        db.query(RefreshToken)
-        .filter(RefreshToken.id == session_id, RefreshToken.user_id == user.id)
-        .one_or_none()
-    )
-    if row is None:
-        raise AppError(404, "SESSION_NOT_FOUND", "Session not found.")
-    if row.revoked_at is None:
-        row.revoked_at = _utcnow_naive()
-    db.commit()
 
 
 # ---------------------------------------------------------------------------

@@ -138,6 +138,17 @@ async function revokeSession(id: number) {
   }
 }
 
+async function onRevokeOthers() {
+  if (!window.confirm(t('account.session_revoke_others_confirm'))) return
+  try {
+    await accountApi.revokeOtherSessions()
+    await loadSessions()
+    ui.pushToast(t('account.session_revoke_others_toast'), 'success')
+  } catch (e) {
+    ui.pushToast(describe(e), 'error')
+  }
+}
+
 async function changeLocale(l: Locale) {
   if (locale.value === l) return
   const previous = locale.value
@@ -363,6 +374,14 @@ function jumpTo(id: string) {
           @revoke="revokeSession"
         />
       </ul>
+      <button
+        v-if="sessions.length > 1"
+        type="button"
+        class="fh-btn-text revoke-others"
+        @click="onRevokeOthers"
+      >
+        {{ $t('account.session_revoke_others') }}
+      </button>
     </section>
 
     <!-- API tokens -->

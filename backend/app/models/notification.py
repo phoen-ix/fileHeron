@@ -51,6 +51,11 @@ class NotificationCategory(str, enum.Enum):
     # enum) so no migration is needed for the new value.
     oidc_linked = "oidc_linked"
     file_quarantined = "file_quarantined"
+    # Fired when the session cap (MAX_ACTIVE_SESSIONS_PER_USER) signs an
+    # older idle session out on a new login — so the eviction isn't silent.
+    # Stored as a plain string (non-native enum), so no migration for the
+    # new value. Default channel in_app; users can opt into email.
+    session_evicted = "session_evicted"
     # Ops alerts (admin-only). Single category, payload.reason discriminates
     # cron_failed / av_unhealthy / smtp_failing / dispatch_failed. In-app
     # only — admins don't have stored plaintext email in this design.

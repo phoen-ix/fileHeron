@@ -48,6 +48,9 @@ _DEFAULT_CHANNEL: dict[NotificationCategory, NotificationChannel] = {
     # unauthorised link is hard to miss.
     NotificationCategory.oidc_linked: NotificationChannel.both,
     NotificationCategory.file_quarantined: NotificationChannel.both,
+    # Session-cap eviction: in_app only by default (informational; the user
+    # can re-login any time). Users can opt into email via preferences.
+    NotificationCategory.session_evicted: NotificationChannel.in_app,
     # Ops alerts: in-app only by default. On a busy system these fire in
     # bursts (cron retries, transient SMTP/AV issues); emailing each one
     # would mailstorm the admin's inbox. The /admin/system view + the

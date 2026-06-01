@@ -36,12 +36,20 @@ export function changePassword(payload: { current_password: string; new_password
   return api.post('/account/change-password', payload)
 }
 
+// Sessions live under /auth (not /account) so the refresh cookie — which is
+// path-scoped to /api/auth — is sent, letting the backend flag the current
+// session and keep it on "sign out others".
 export function listSessions() {
-  return api.get<SessionListResponse>('/account/sessions')
+  return api.get<SessionListResponse>('/auth/sessions')
 }
 
 export function revokeSession(id: number) {
-  return api.delete(`/account/sessions/${id}`)
+  return api.delete(`/auth/sessions/${id}`)
+}
+
+/** Revoke every session except the current device. */
+export function revokeOtherSessions() {
+  return api.post<{ revoked: number }>('/auth/sessions/revoke-others')
 }
 
 export function inviteUser(payload: InviteRequest) {

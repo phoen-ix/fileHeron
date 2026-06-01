@@ -5,12 +5,15 @@ NEVER attached to other API routes (uploads, downloads, etc.).
 """
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Cookie, Depends, Request, Response, status
 from sqlalchemy.orm import Session
 
 from ..config import settings
 from ..dependencies import get_current_user, get_db
 from ..middleware.errors import AppError
+from ..models.refresh_token import RefreshToken
 from ..models.user import User
 from ..schemas.auth import (
     ForgotPasswordRequest,
@@ -22,11 +25,13 @@ from ..schemas.auth import (
     ResetPasswordRequest,
     VerifyEmailRequest,
 )
+from ..schemas.two_factor import SessionListResponse, SessionResponse
 from ..services import auth as auth_svc
 from ..services import email as email_svc
 from ..services import jwt_session
 from ..services import rate_limit as rate_limit_svc
 from ..services import settings_registry
+from ..utils.crypto import refresh_token_hash
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -230,3 +235,88 @@ async def resend_verification(
     # branch should be unreachable in practice.
     request.state.verify_link_for_dev = plaintext
     return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
+# Active sessions. These live under /api/auth (not /api/account) so the
+# refresh cookie — which is path-scoped to /api/auth — is sent, letting us
+# flag the current session and keep it on "sign out others".
+# ---------------------------------------------------------------------------
+
+
+def _utcnow_naive() -> datetime:
+    return datetime.now(tz=timezone.utc).replace(tzinfo=None)
+
+
+@router.get("/sessions", response_model=SessionListResponse)
+def list_sessions(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    fh_refresh: str | None = Cookie(default=None),
+) -> SessionListResponse:
+    current_hash = refresh_token_hash(fh_refresh) if fh_refresh else None
+    # Active = not revoked AND not yet past TTL. Without the second clause
+    # expired-but-not-yet-swept tokens would show as "active" for days.
+    rows = (
+        db.query(RefreshToken)
+        .filter(
+            RefreshToken.user_id == user.id,
+            RefreshToken.revoked_at.is_(None),
+            RefreshToken.expires_at > _utcnow_naive(),
+        )
+        .order_by(RefreshToken.created_at.desc())
+        .all()
+    )
+    return SessionListResponse(
+        items=[
+            SessionResponse(
+                id=row.id,
+                created_at=row.created_at,
+                expires_at=row.expires_at,
+                created_ip=row.created_ip,
+                created_ua=row.created_ua,
+                is_current=(row.token_hash == current_hash),
+            )
+            for row in rows
+        ]
+    )
+
+
+@router.delete("/sessions/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
+def revoke_session(
+    session_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> None:
+    row = (
+        db.query(RefreshToken)
+        .filter(RefreshToken.id == session_id, RefreshToken.user_id == user.id)
+        .one_or_none()
+    )
+    if row is None:
+        raise AppError(404, "SESSION_NOT_FOUND", "Session not found.")
+    if row.revoked_at is None:
+        row.revoked_at = _utcnow_naive()
+    db.commit()
+
+
+@router.post("/sessions/revoke-others")
+def revoke_other_sessions(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    fh_refresh: str | None = Cookie(default=None),
+) -> dict:
+    """Revoke every active session for this user EXCEPT the current device
+    (identified by the refresh cookie). The current session is left intact so
+    the caller stays signed in. Returns {revoked: n}."""
+    current_hash = refresh_token_hash(fh_refresh) if fh_refresh else None
+    now = _utcnow_naive()
+    q = db.query(RefreshToken).filter(
+        RefreshToken.user_id == user.id,
+        RefreshToken.revoked_at.is_(None),
+    )
+    if current_hash is not None:
+        q = q.filter(RefreshToken.token_hash != current_hash)
+    revoked = q.update({"revoked_at": now}, synchronize_session=False)
+    db.commit()
+    return {"revoked": int(revoked or 0)}

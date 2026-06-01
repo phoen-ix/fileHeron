@@ -1,4 +1,4 @@
-"""GET /api/account/sessions excludes expired-but-not-revoked tokens.
+"""GET /api/auth/sessions excludes expired-but-not-revoked tokens.
 
 Before this fix, a token could sit in the user's "Active sessions" UI
 for the full TTL even after expires_at had passed (only revoked_at was
@@ -37,7 +37,7 @@ async def test_list_sessions_excludes_expired(
     db.refresh(expired)
 
     resp = await client.get(
-        "/api/account/sessions",
+        "/api/auth/sessions",
         headers={"Authorization": f"Bearer {token}"},
     )
     assert resp.status_code == 200

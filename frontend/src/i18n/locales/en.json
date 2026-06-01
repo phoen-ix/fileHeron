@@ -652,6 +652,7 @@
       "login_alert": "Sign-in",
       "oidc_linked": "SSO link",
       "file_quarantined": "Quarantine",
+      "session_evicted": "Signed out",
       "ops_alert": "Ops alert",
       "release_available": "Update available"
     },
@@ -664,6 +665,7 @@
       "twofa_required": "Two-factor authentication is required.",
       "login_alert": "Sign-in from a new device.",
       "file_quarantined": "{filename} was quarantined by antivirus.",
+      "session_evicted": "An older session was signed out — you reached your {cap}-session limit.",
       "release_available": "fileHeron {version} is available.",
       "ops_alert": {
         "cron_failed": "Cron {job_name} failed.",
@@ -849,6 +851,9 @@
     "locale_save_failed": "Couldn't save language preference.",
     "password_changed_toast": "Password changed. Other sessions revoked.",
     "session_revoked_toast": "Session revoked.",
+    "session_revoke_others": "Sign out all other sessions",
+    "session_revoke_others_confirm": "Sign out every other session? This device stays signed in; all other browsers and the desktop app will need to log in again.",
+    "session_revoke_others_toast": "Signed out all other sessions.",
     "landing": {
       "label": "Default landing page",
       "help": "Where you land after logging in. Pick \"System default\" to follow whatever the admin has chosen for everyone.",

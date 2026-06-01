@@ -1,72 +1,71 @@
-"""Recipient picker — v0.4.0 CustomTkinter port.
+"""Recipient picker — inline search (v0.9.4).
 
-Same external API as v0.3.x (``RecipientPickerWidget`` exposes
-``user_ids()``, ``group_ids()``, ``has_any()``, ``reset()``); the
-internals swap Qt list-widgets for CTk scrollable frames of
-checkboxes.
+``RecipientPickerWidget`` keeps its external API (``user_ids()``,
+``group_ids()``, ``has_any()``, ``reset()``) so ``upload_panel`` is untouched.
+The user/group search used to open a ``CTkToplevel`` modal; it now reveals an
+**inline** bounded panel inside the recipients section (one open at a time) —
+no popup.
 
-- ``UserPickerDialog`` — type-to-search list against
-  /api/users/search, multi-select via checkboxes, OK adds the
-  checked rows. Search is debounced (~200 ms) via ``after``.
-- ``GroupPickerDialog`` — full list from
-  /api/groups/recipient-targets, local substring filter.
-- ``RecipientPickerWidget`` — embedded "Users: …" / "Groups: …" rows
-  with Add / Clear buttons each."""
+- ``_InlineUserSearch`` — type-to-search against /api/users/search (debounced).
+- ``_InlineGroupSearch`` — one-shot /api/groups/recipient-targets + local filter.
+"""
 from __future__ import annotations
 
-from typing import Optional
+from typing import Callable
 
 import customtkinter as ctk
 
 from .. import api as api_pkg
-from ..api import ApiClient, ApiError
+from ..api import ApiClient
 from ..i18n import t
-from ..models import GroupItem, UserSearchItem
+from ..models import GroupItem
 from ._async import run_in_background
-from .app import center_window
+from .widgets import alive
 from . import _messagebox as mb
 
+# Bounded height for the inline result list so it doesn't blow up the dense
+# New-Share form.
+_LIST_HEIGHT = 200
 
-class _MultiSelectPickerDialog:
-    """Shared scaffolding for the user + group pickers."""
 
-    def __init__(self, root, parent, title: str) -> None:
+class _InlineMultiSelectPanel(ctk.CTkFrame):
+    """Shared scaffolding for the inline user + group search panels. Renders a
+    search entry + bounded checkbox list + Add/Cancel row into a bordered frame
+    (not a toplevel). Subclasses implement ``_reload``."""
+
+    def __init__(
+        self,
+        master,
+        root,
+        api,
+        *,
+        on_done: Callable[[list[int], list[str]], None],
+        on_cancel: Callable[[], None],
+    ) -> None:
+        super().__init__(master, fg_color=("gray92", "gray16"), border_width=1, corner_radius=6)
         self._app_root = root
-        self._win = ctk.CTkToplevel(parent)
-        self._win.title(title)
-        center_window(self._win, 460, 520)
-        self._win.transient(parent)
-        self._selected_ids: list[int] = []
-        self._selected_labels: list[str] = []
+        self._api = api
+        self._on_done = on_done
+        self._on_cancel = on_cancel
+        self._debounce_token = None
+        self._row_vars: list[tuple[int, str, ctk.BooleanVar]] = []
 
-        outer = ctk.CTkFrame(self._win, fg_color="transparent")
-        outer.pack(fill="both", expand=True, padx=14, pady=14)
+        outer = ctk.CTkFrame(self, fg_color="transparent")
+        outer.pack(fill="both", expand=True, padx=10, pady=10)
 
         self.search_var = ctk.StringVar()
-        search = ctk.CTkEntry(
+        self._search = ctk.CTkEntry(
             outer, textvariable=self.search_var,
             placeholder_text=t("common.search_placeholder_filter"),
         )
-        search.pack(fill="x", pady=(0, 8))
-        # Debounce typing via a single after-token we cancel + reissue
-        # on each keystroke. 200ms matches the SPA's vue-i18n debounce
-        # for the recipient picker.
-        self._debounce_token = None
+        self._search.pack(fill="x", pady=(0, 8))
+        self.search_var.trace_add("write", self._on_search_change)
+        self._search.bind("<Return>", lambda _e: self._on_add())
+        self._search.bind("<Escape>", lambda _e: self._on_cancel())
 
-        def _on_search_change(*_args):
-            if self._debounce_token is not None:
-                try:
-                    self._win.after_cancel(self._debounce_token)
-                except Exception:
-                    pass
-            self._debounce_token = self._win.after(200, self._reload)
-
-        self.search_var.trace_add("write", _on_search_change)
-
-        self._scroll = ctk.CTkScrollableFrame(outer, fg_color="transparent")
-        self._scroll.pack(fill="both", expand=True)
-        # Track CheckBox vars by id so we can pull selections on accept.
-        self._row_vars: list[tuple[int, str, ctk.BooleanVar]] = []
+        # Bounded scroll list (the single CTkScrollableFrame — leaf only).
+        self._scroll = ctk.CTkScrollableFrame(outer, fg_color="transparent", height=_LIST_HEIGHT)
+        self._scroll.pack(fill="x")
 
         self.empty_var = ctk.StringVar(value="")
         ctk.CTkLabel(
@@ -74,18 +73,35 @@ class _MultiSelectPickerDialog:
         ).pack(fill="x", pady=(4, 4))
 
         btn_row = ctk.CTkFrame(outer, fg_color="transparent")
-        btn_row.pack(fill="x", pady=(8, 0))
-        self._ok_btn = ctk.CTkButton(
-            btn_row, text=t("common.ok"), command=self._on_ok, width=90
-        )
-        self._ok_btn.pack(side="right")
+        btn_row.pack(fill="x", pady=(4, 0))
         ctk.CTkButton(
-            btn_row, text=t("common.cancel"), command=self._win.destroy,
+            btn_row, text=t("common.ok"), command=self._on_add, width=90
+        ).pack(side="right")
+        ctk.CTkButton(
+            btn_row, text=t("common.cancel"), command=self._on_cancel,
             width=90, fg_color="gray",
         ).pack(side="right", padx=(0, 8))
 
+        # A pending debounce after() firing into a destroyed panel would raise.
+        self.bind("<Destroy>", lambda _e: self._cancel_debounce())
+
+    def _on_search_change(self, *_args) -> None:
+        self._cancel_debounce()
+        # 200ms debounce — matches the SPA's recipient-picker debounce.
+        self._debounce_token = self.after(200, self._reload)
+
+    def _cancel_debounce(self) -> None:
+        if self._debounce_token is not None:
+            try:
+                self.after_cancel(self._debounce_token)
+            except Exception:
+                pass
+            self._debounce_token = None
+
     def _populate(self, rows: list[tuple[int, str]]) -> None:
         """Subclass calls this with ``(id, label)`` pairs after fetch."""
+        if not alive(self):
+            return
         for child in self._scroll.winfo_children():
             child.destroy()
         self._row_vars.clear()
@@ -94,40 +110,39 @@ class _MultiSelectPickerDialog:
             cb = ctk.CTkCheckBox(self._scroll, text=label, variable=var)
             cb.pack(anchor="w", pady=2)
             self._row_vars.append((iid, label.split("  ·  ")[0], var))
-        if not rows:
-            self.empty_var.set(t("common.no_matches"))
-        else:
-            self.empty_var.set("")
+        self.empty_var.set("" if rows else t("common.no_matches"))
 
     def _reload(self) -> None:
         raise NotImplementedError
 
-    def _on_ok(self) -> None:
-        self._selected_ids = [iid for (iid, _l, v) in self._row_vars if v.get()]
-        self._selected_labels = [l for (_iid, l, v) in self._row_vars if v.get()]
-        self._win.destroy()
+    def _on_add(self) -> None:
+        ids = [iid for (iid, _l, v) in self._row_vars if v.get()]
+        labels = [l for (_iid, l, v) in self._row_vars if v.get()]
+        self._on_done(ids, labels)
 
-    def show_modal(self) -> tuple[list[int], list[str]]:
-        self._win.after_idle(
-            lambda: (self._win.grab_set(), self._win.focus_force())
-        )
-        self._win.wait_window()
-        return self._selected_ids, self._selected_labels
+    def focus_search(self) -> None:
+        try:
+            self._search.focus_set()
+        except Exception:
+            pass
 
 
-class UserPickerDialog(_MultiSelectPickerDialog):
-    def __init__(self, root, parent, api: ApiClient) -> None:
-        super().__init__(root, parent, t("recipient_picker.users_title"))
-        self._api = api
+class _InlineUserSearch(_InlineMultiSelectPanel):
+    def __init__(self, master, root, api, **kw) -> None:
+        super().__init__(master, root, api, **kw)
         self._reload()
 
     def _reload(self) -> None:
+        if not alive(self):
+            return
         q = self.search_var.get().strip()
 
         def _fetch():
             return api_pkg.search_users(self._api, q)
 
         def _done(resp):
+            if not alive(self):
+                return
             rows = [
                 (u.user_id, f"{u.display_name}  ·  {u.email}  ·  {u.role}")
                 for u in resp.items
@@ -139,38 +154,45 @@ class UserPickerDialog(_MultiSelectPickerDialog):
                 )
 
         def _failed(exc):
+            if not alive(self):
+                return
             mb.warn(
-                self._win, t("recipient_picker.search_failed_title"),
+                self.winfo_toplevel(), t("recipient_picker.search_failed_title"),
                 getattr(exc, "message", None) or str(exc),
             )
 
         run_in_background(self._app_root, _fetch, on_done=_done, on_failed=_failed)
 
 
-class GroupPickerDialog(_MultiSelectPickerDialog):
+class _InlineGroupSearch(_InlineMultiSelectPanel):
     """One-shot fetch + local substring filter — groups are few."""
 
-    def __init__(self, root, parent, api: ApiClient) -> None:
-        super().__init__(root, parent, t("recipient_picker.groups_title"))
-        self._api = api
+    def __init__(self, master, root, api, **kw) -> None:
+        super().__init__(master, root, api, **kw)
         self._all_groups: list[GroupItem] = []
 
         def _fetch():
             return api_pkg.list_recipient_groups(self._api)
 
         def _done(resp):
+            if not alive(self):
+                return
             self._all_groups = resp.items
             self._reload()
 
         def _failed(exc):
+            if not alive(self):
+                return
             mb.warn(
-                self._win, t("recipient_picker.load_groups_failed_title"),
+                self.winfo_toplevel(), t("recipient_picker.load_groups_failed_title"),
                 getattr(exc, "message", None) or str(exc),
             )
 
         run_in_background(self._app_root, _fetch, on_done=_done, on_failed=_failed)
 
     def _reload(self) -> None:
+        if not alive(self):
+            return
         needle = self.search_var.get().strip().lower()
         matched = [
             g
@@ -202,6 +224,7 @@ class RecipientPickerWidget(ctk.CTkFrame):
         self._user_labels: list[str] = []
         self._group_ids: list[int] = []
         self._group_labels: list[str] = []
+        self._inline_panel: _InlineMultiSelectPanel | None = None
 
         # Users row
         users_row = ctk.CTkFrame(self, fg_color="transparent")
@@ -239,7 +262,11 @@ class RecipientPickerWidget(ctk.CTkFrame):
             command=self._clear_groups, fg_color="gray",
         ).pack(side="left", padx=(8, 0))
 
-    # ---- public API ----
+        # Slot the inline search panel packs into (below the two rows).
+        self._inline_host = ctk.CTkFrame(self, fg_color="transparent")
+        # not packed until a search is opened.
+
+    # ---- public API (unchanged) ----
 
     def user_ids(self) -> list[int]:
         return list(self._user_ids)
@@ -251,30 +278,60 @@ class RecipientPickerWidget(ctk.CTkFrame):
         return bool(self._user_ids or self._group_ids)
 
     def reset(self) -> None:
+        self._collapse_inline()
         self._user_ids.clear()
         self._user_labels.clear()
         self._group_ids.clear()
         self._group_labels.clear()
         self._render()
 
-    # ---- internal ----
+    # ---- inline search ----
 
     def _add_users(self) -> None:
-        dlg = UserPickerDialog(self._app_root, self.winfo_toplevel(), self._api)
-        ids, labels = dlg.show_modal()
+        self._open_inline("users")
+
+    def _add_groups(self) -> None:
+        self._open_inline("groups")
+
+    def _open_inline(self, kind: str) -> None:
+        # One search panel open at a time (bounds vertical space in the form).
+        self._collapse_inline()
+        cls = _InlineUserSearch if kind == "users" else _InlineGroupSearch
+        self._inline_panel = cls(
+            self._inline_host, self._app_root, self._api,
+            on_done=self._on_inline_done_users if kind == "users" else self._on_inline_done_groups,
+            on_cancel=self._collapse_inline,
+        )
+        self._inline_panel.pack(fill="x", pady=(6, 0))
+        self._inline_host.pack(fill="x")
+        self._inline_panel.after_idle(self._inline_panel.focus_search)
+
+    def _collapse_inline(self) -> None:
+        if self._inline_panel is not None:
+            try:
+                self._inline_panel.destroy()
+            except Exception:
+                pass
+            self._inline_panel = None
+        try:
+            self._inline_host.pack_forget()
+        except Exception:
+            pass
+
+    def _on_inline_done_users(self, ids: list[int], labels: list[str]) -> None:
         for iid, label in zip(ids, labels):
             if iid not in self._user_ids:
                 self._user_ids.append(iid)
                 self._user_labels.append(label)
+        self._collapse_inline()
         self._render()
 
-    def _add_groups(self) -> None:
-        dlg = GroupPickerDialog(self._app_root, self.winfo_toplevel(), self._api)
-        ids, labels = dlg.show_modal()
+    def _on_inline_done_groups(self, ids: list[int], labels: list[str]) -> None:
         for iid, label in zip(ids, labels):
             if iid not in self._group_ids:
                 self._group_ids.append(iid)
                 self._group_labels.append(label)
+        self._collapse_inline()
         self._render()
 
     def _clear_users(self) -> None:

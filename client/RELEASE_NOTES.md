@@ -1,29 +1,29 @@
-# Desktop client 0.9.3
+# Desktop client 0.9.4
 
-A sign-in flow that works the way you expect.
+Fewer pop-ups, smoother flow.
 
-## Two-step second factor
+## In-window, not pop-ups
 
-If your account has two-factor authentication, the client now asks for your
-code **the normal way**:
+- **Settings** now open as a panel inside the main window (dimmed backdrop +
+  centered card), not a separate dialog. Press **Esc** or **Close** to dismiss.
+- **Adding recipients** is now **inline**: clicking *Add user…* / *Add group…*
+  reveals a search box and results list right inside the New-Share form — no
+  pop-up window to manage.
 
-1. Enter your email and password and click **Sign in**.
-2. *Only if* 2FA is on, a single **Authentication code** field appears.
+## Public link — keep it and copy it
 
-Previously the code field was shown up front on the first screen, before you'd
-even entered your password — out of step with how every other app does it.
+The biggest fix: after you create a share with a public link, the URL now stays
+on screen in a **result card with a Copy button** (and Open), instead of a
+one-time message box that wrongly claimed *"it will not be shown again."* The
+link was always re-viewable — and still is, on the share's **detail page**,
+which now also flashes a **"✓ Copied"** confirmation when you copy.
 
-## One field for code *or* recovery
+## Gentler notifications
 
-That second-factor field accepts **either** your 6-digit authenticator code
-**or** one of your recovery codes (`XXXX-XXXX`). You no longer have to flip a
-"use a recovery code instead" switch — just type whichever you have and the
-client figures out the rest. There's a **← Use a different account** link if you
-need to go back and re-enter your email/password.
-
-No change to API-token sign-in, and nothing to reconfigure.
-
-(The web app gets the same single-field treatment in this release.)
+Routine confirmations — *Downloaded*, *Share ended*, *Expiry/limit updated* —
+now flash a brief **toast** at the bottom of the window instead of interrupting
+you with a dialog you have to click away. Destructive confirmations (ending a
+share) and genuine errors still ask for acknowledgement.
 
 ---
 

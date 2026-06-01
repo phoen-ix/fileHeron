@@ -7,20 +7,19 @@ disliked the extra window. The class is now ``ShareDetailView``, a
 of the list. The list panel handles the pack swap; the "← Back"
 button at the top calls back into ``on_back`` to return to the list.
 
-Modal sub-dialogs (``mb.info``, ``mb.confirm``, ``ExpiryDialog``) and
-the native ``filedialog`` calls stay as overlays — they're small and
-fine as pop-ups. Only the detail itself moved in-window."""
+v0.9.4: informational notices (downloaded / ended / expiry-updated / …) now
+flash a non-modal toast (via the ``flash`` callback) instead of an ``mb.info``
+popup. Destructive confirms (``mb.confirm`` for End-share), error warnings
+(``mb.warn``), the edit dialogs (``ExpiryDialog``/``LimitDialog``), and the
+native ``filedialog`` calls stay as pop-ups."""
 from __future__ import annotations
 
-import logging
 import webbrowser
 from pathlib import Path
 from tkinter import filedialog
 from typing import Callable, Optional
 
 import customtkinter as ctk
-
-_log = logging.getLogger("fileheron_client.ui.share_detail_view")
 
 from .. import api as api_pkg
 from ..api import ApiClient, ApiError
@@ -31,7 +30,7 @@ from ._async import run_in_background, run_with_progress
 from . import _messagebox as mb
 from .expiry_dialog import ExpiryDialog
 from .limit_dialog import LimitDialog
-from .widgets import PillLabel, alive, human_size
+from .widgets import PillLabel, alive, copy_to_clipboard_with_feedback, human_size
 
 
 class ShareDetailView(ctk.CTkFrame):
@@ -51,6 +50,7 @@ class ShareDetailView(ctk.CTkFrame):
         *,
         on_back: Callable[[], None],
         on_mutated: Optional[Callable[[], None]] = None,
+        flash: Optional[Callable[[str], None]] = None,
     ) -> None:
         super().__init__(master, fg_color="transparent")
         self._app_root = root
@@ -59,10 +59,16 @@ class ShareDetailView(ctk.CTkFrame):
         self._me = me
         self._on_back = on_back
         self._on_mutated = on_mutated
+        self._flash = flash
         self._share: Optional[ShareResponse] = None
         self._dl_in_flight = 0
 
         self._build()
+
+    def _toast(self, text: str, kind: str = "info") -> None:
+        """Non-modal success/info notice (replaces interrupting mb.info popups)."""
+        if self._flash is not None:
+            self._flash(text, kind=kind)
         self._load()
         # Esc-to-close parity with the old Toplevel modal. Bind on the
         # toplevel so it works regardless of focus inside the frame;
@@ -204,6 +210,12 @@ class ShareDetailView(ctk.CTkFrame):
             text_color="gray",
         ).pack(fill="x", pady=(6, 0))
 
+        self._pl_copied_var = ctk.StringVar(value="")
+        ctk.CTkLabel(
+            inner, textvariable=self._pl_copied_var, anchor="w",
+            text_color=("#166534", "#bbf7d0"),
+        ).pack(fill="x", pady=(2, 0))
+
         # Section starts hidden; we don't pack the label/frame yet.
 
     def _render_public_link(self, pl: Optional[dict]) -> None:
@@ -240,25 +252,16 @@ class ShareDetailView(ctk.CTkFrame):
         self._pl_section.pack(fill="x", pady=(0, 8))
 
     def _copy_pl_url(self) -> None:
-        url = self._pl_url_var.get()
-        if not url:
-            return
-        top = self.winfo_toplevel()
-        try:
-            top.clipboard_clear()
-            top.clipboard_append(url)
-            top.update()  # ensures the clipboard sticks
-        except Exception as e:
-            # v0.6.2: surface the failure. Rare in practice (only seen
-            # when another process holds a global clipboard lock) but
-            # before this users would click Copy, see no feedback, then
-            # paste stale data — silent loss of trust.
-            _log.warning("clipboard copy of public-link URL failed: %s", e)
-            mb.warn(
-                top,
+        # Copy + flash "✓ Copied"; warns on the rare clipboard-lock failure.
+        copy_to_clipboard_with_feedback(
+            self, self._pl_url_var.get(),
+            feedback_var=self._pl_copied_var,
+            on_fail=lambda: mb.warn(
+                self.winfo_toplevel(),
                 t("share_detail.copy_failed_title"),
                 t("share_detail.copy_failed_body"),
-            )
+            ),
+        )
 
     def _open_pl_url(self) -> None:
         url = self._pl_url_var.get()
@@ -380,7 +383,7 @@ class ShareDetailView(ctk.CTkFrame):
             self.state_pill.setState(updated.state)
             self.state_pill.setText(updated.state)
             self._refresh_action_visibility()
-            mb.info(top, t("share_detail.ended_title"), t("share_detail.ended_body"))
+            self._toast(t("share_detail.ended_body"), kind="success")
 
         def _failed(exc):
             msg = getattr(exc, "message", None) or str(exc)
@@ -411,7 +414,7 @@ class ShareDetailView(ctk.CTkFrame):
             if not alive(self):
                 return  # detail view gone; don't touch its widgets (C6)
             self.meta_var.set(" · ".join(self._build_meta_bits(updated)))
-            mb.info(top, t("share_detail.expiry_updated_title"), t("share_detail.expiry_updated_body"))
+            self._toast(t("share_detail.expiry_updated_body"), kind="success")
 
         def _failed(exc):
             msg = getattr(exc, "message", None) or str(exc)
@@ -447,7 +450,7 @@ class ShareDetailView(ctk.CTkFrame):
             if not alive(self):
                 return  # detail view gone; don't touch its widgets (C6)
             self.meta_var.set(" · ".join(self._build_meta_bits(updated)))
-            mb.info(top, t("share_detail.expiry_updated_title"), t("share_detail.limit_updated_body"))
+            self._toast(t("share_detail.limit_updated_body"), kind="success")
 
         def _failed(exc):
             msg = getattr(exc, "message", None) or str(exc)
@@ -500,7 +503,7 @@ class ShareDetailView(ctk.CTkFrame):
             if f.state in ("clean", "ready_unscanned")
         ]
         if not downloadable:
-            mb.info(top, t("share_detail.nothing_to_save_title"), t("share_detail.nothing_to_save_body"))
+            self._toast(t("share_detail.nothing_to_save_body"), kind="info")
             return
         dir_str = filedialog.askdirectory(
             parent=top, title=t("share_detail.save_all_dir_title"),
@@ -534,11 +537,7 @@ class ShareDetailView(ctk.CTkFrame):
             self._dl_in_flight -= 1
             if self._dl_in_flight <= 0:
                 self.progress.pack_forget()
-            mb.info(
-                self.winfo_toplevel(),
-                t("share_detail.downloaded_title"),
-                t("share_detail.downloaded_body", path=path),
-            )
+            self._toast(t("share_detail.downloaded_body", path=path), kind="success")
 
         def _failed(exc):
             if not alive(self):

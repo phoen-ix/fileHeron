@@ -7,6 +7,7 @@
     "refresh": "Aktualisieren",
     "loading": "Lädt…",
     "error": "Fehler",
+    "copied": "✓ Kopiert",
     "search_placeholder_filter": "Zum Filtern tippen…",
     "no_matches": "Keine Treffer."
   },
@@ -222,8 +223,7 @@
     "err_invalid_limit_body": "Download-Limit muss eine positive ganze Zahl sein (oder leer für unbegrenzt).",
     "err_invalid_pl_limit_title": "Ungültiges Limit",
     "err_invalid_pl_limit_body": "Download-Limit muss eine positive ganze Zahl sein (oder leer für unbegrenzt).",
-    "public_link_created_title": "Öffentlicher Link erstellt",
-    "public_link_created_body": "Diese URL jetzt sichern — sie wird nicht erneut angezeigt.\n\n{url}",
+    "public_link_result_note": "Öffentlicher Link erstellt. Unten kopieren — er ist auch auf der Detailseite der Freigabe verfügbar.",
     "status_uploading": "Freigabe {short_id} erstellt — {n} Datei(en) werden hochgeladen…",
     "status_err": "Fehler: {detail}",
     "status_success": "Freigabe erstellt und alle Dateien hochgeladen.",

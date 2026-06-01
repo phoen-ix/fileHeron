@@ -1,5 +1,10 @@
-"""Settings dialog (v0.4.0 CTk port): server URL display, current
-account, appearance-mode picker, sign-out."""
+"""Settings — in-window overlay (v0.9.4).
+
+Was a ``CTkToplevel`` modal; now a ``CTkFrame`` placed full-cover over the root
+(dimmed backdrop + centered card), the same pattern as ``LoginOverlay`` — no
+popup. Content (server/account/role/version rows, appearance + language pickers,
+diagnostics toggle, sign-out) and its handlers are unchanged; only the container
+and the close mechanism (place_forget/destroy instead of wait_window) differ."""
 from __future__ import annotations
 
 from typing import Callable, Optional
@@ -9,13 +14,13 @@ import customtkinter as ctk
 from .. import __version__
 from ..api import ApiClient
 from ..config import load_config, save_config
-from ..i18n import get_locale, set_locale, t
+from ..i18n import set_locale, t
 from ..models import MeResponse
-from .app import center_window, set_appearance_mode
+from .app import set_appearance_mode
 from . import _messagebox as mb
 
 
-class SettingsDialog:
+class SettingsOverlay(ctk.CTkFrame):
     def __init__(
         self,
         root: ctk.CTk,
@@ -23,17 +28,16 @@ class SettingsDialog:
         me: MeResponse,
         *,
         on_signed_out: Optional[Callable[[], None]] = None,
+        on_closed: Optional[Callable[[], None]] = None,
     ) -> None:
+        super().__init__(root, fg_color=("gray75", "gray10"))
         self._app_root = root
         self._api = api
         self._me = me
         self._on_signed_out = on_signed_out
+        self._on_closed = on_closed
         self._cfg = load_config()
-        self._win = ctk.CTkToplevel(root)
-        self._win.title(t("settings.title"))
-        center_window(self._win, 440, 470)
-        self._win.resizable(False, False)
-        self._win.transient(root)
+        self._esc_targets: list = []
         self._build()
 
     # Map for the Language picker: display label → server-side
@@ -46,8 +50,15 @@ class SettingsDialog:
     )
 
     def _build(self) -> None:
-        outer = ctk.CTkFrame(self._win, fg_color="transparent")
-        outer.pack(fill="both", expand=True, padx=18, pady=18)
+        card = ctk.CTkFrame(self, fg_color=("gray92", "gray16"), corner_radius=12)
+        card.place(relx=0.5, rely=0.5, anchor="center")
+        outer = ctk.CTkFrame(card, fg_color="transparent", width=400)
+        outer.pack(fill="both", expand=True, padx=22, pady=20)
+
+        ctk.CTkLabel(
+            outer, text=t("settings.title"),
+            font=ctk.CTkFont(size=16, weight="bold"),
+        ).grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 12))
 
         # Two-column "label : value" grid.
         rows = [
@@ -56,7 +67,9 @@ class SettingsDialog:
             (t("settings.row_role"), self._me.role),
             (t("settings.row_version"), __version__),
         ]
-        for r, (label, value) in enumerate(rows):
+        base = 1
+        for i, (label, value) in enumerate(rows):
+            r = base + i
             ctk.CTkLabel(outer, text=label, anchor="w").grid(
                 row=r, column=0, sticky="w", padx=(0, 12), pady=4
             )
@@ -67,7 +80,7 @@ class SettingsDialog:
         outer.grid_columnconfigure(1, weight=1)
 
         # Appearance mode picker (v0.4.0 — CTk's built-in theming).
-        appearance_row = len(rows)
+        appearance_row = base + len(rows)
         ctk.CTkLabel(outer, text=t("settings.appearance"), anchor="w").grid(
             row=appearance_row, column=0, sticky="w", padx=(0, 12), pady=(12, 4)
         )
@@ -77,13 +90,15 @@ class SettingsDialog:
             "Dark": t("settings.appearance_dark"),
             "System": t("settings.appearance_system"),
         }
-        ctk.CTkOptionMenu(
+        appearance_menu = ctk.CTkOptionMenu(
             outer,
             variable=self._appearance_var,
             values=list(self._appearance_labels.values()),
             command=self._on_appearance,
             width=140,
-        ).grid(row=appearance_row, column=1, sticky="w", pady=(12, 4))
+        )
+        appearance_menu.grid(row=appearance_row, column=1, sticky="w", pady=(12, 4))
+        self._esc_targets.append(appearance_menu)
         # Display the CURRENT appearance label in the active locale.
         self._appearance_var.set(
             self._appearance_labels.get(
@@ -94,7 +109,7 @@ class SettingsDialog:
 
         # Language picker (v0.8.0). Calls patch_locale → updates the
         # active i18n locale + persists to users.locale. The current
-        # locale doesn't auto-translate the open dialog (would require
+        # locale doesn't auto-translate the open panel (would require
         # a full re-pack); takes effect on the next dialog/window open.
         lang_row = appearance_row + 1
         ctk.CTkLabel(outer, text=t("settings.language"), anchor="w").grid(
@@ -105,13 +120,15 @@ class SettingsDialog:
         current_code = (self._me.locale or "").lower()
         current_label = self._lang_code_to_label.get(current_code, t("settings.language_auto"))
         self._lang_var = ctk.StringVar(value=current_label)
-        ctk.CTkOptionMenu(
+        lang_menu = ctk.CTkOptionMenu(
             outer,
             variable=self._lang_var,
             values=list(self._lang_label_to_code.keys()),
             command=self._on_language,
             width=200,
-        ).grid(row=lang_row, column=1, sticky="w", pady=(12, 4))
+        )
+        lang_menu.grid(row=lang_row, column=1, sticky="w", pady=(12, 4))
+        self._esc_targets.append(lang_menu)
 
         # Diagnostic logging toggle (v0.4.16). Default OFF — the verbose
         # trace.log + app.log + heartbeat plumbing only fires when this
@@ -130,6 +147,7 @@ class SettingsDialog:
             command=self._on_diag_toggled,
         )
         self._diag_switch.pack(anchor="w")
+        self._esc_targets.append(self._diag_switch)
         if self._cfg.enable_diagnostic_logging:
             self._diag_switch.select()
         ctk.CTkLabel(
@@ -139,17 +157,50 @@ class SettingsDialog:
             anchor="w",
         ).pack(anchor="w")
 
-        # Buttons row, anchored to the bottom of the dialog.
+        # Buttons row.
         btn_row = ctk.CTkFrame(outer, fg_color="transparent")
         btn_row.grid(row=diag_row + 1, column=0, columnspan=2, sticky="ew", pady=(20, 0))
-        ctk.CTkButton(btn_row, text=t("common.close"), command=self._win.destroy, width=90).pack(side="right")
-        ctk.CTkButton(
+        self._close_btn = ctk.CTkButton(
+            btn_row, text=t("common.close"), command=self._close, width=90,
+        )
+        self._close_btn.pack(side="right")
+        signout_btn = ctk.CTkButton(
             btn_row, text=t("settings.sign_out"), command=self._on_sign_out, width=90,
             fg_color="#991b1b", hover_color="#7f1d1d",
-        ).pack(side="right", padx=(0, 8))
+        )
+        signout_btn.pack(side="right", padx=(0, 8))
+        self._esc_targets.extend([self._close_btn, signout_btn])
+
+        # Esc closes. No grab_set, so bind on each focusable control.
+        for w in self._esc_targets:
+            w.bind("<Escape>", lambda _e: self._close())
+
+    # ---- show / hide -----------------------------------------------------
+
+    def show(self) -> None:
+        self.place(relx=0, rely=0, relwidth=1, relheight=1)
+        self.lift()
+        self.after_idle(lambda: self._close_btn.focus_set())
+
+    def hide(self) -> None:
+        try:
+            self.place_forget()
+        except Exception:
+            pass
+
+    def _close(self) -> None:
+        self.hide()
+        try:
+            self.destroy()
+        except Exception:
+            pass
+        if self._on_closed is not None:
+            self._on_closed()
+
+    # ---- handlers (unchanged logic) --------------------------------------
 
     def _on_appearance(self, mode: str) -> None:
-        # The picker now shows translated labels; map back to the CTk
+        # The picker shows translated labels; map back to the CTk
         # canonical English value before passing through.
         canonical = next(
             (k for (k, v) in self._appearance_labels.items() if v == mode),
@@ -159,23 +210,21 @@ class SettingsDialog:
 
     def _on_language(self, label: str) -> None:
         """v0.8.0: persist the picked locale to users.locale and apply
-        it immediately in the running app. The Settings dialog itself
-        doesn't repaint — labels update on next dialog open. The fall-
-        back to local-only set_locale on a failed PATCH keeps the UI
-        usable when the server is unreachable."""
+        it immediately in the running app. The panel itself doesn't
+        repaint — labels update on next open. The fallback to local-only
+        set_locale on a failed PATCH keeps the UI usable when the server
+        is unreachable."""
         from .. import api as api_pkg
 
         code = self._lang_label_to_code.get(label, "")
         applied = code or (self._me.locale or "en")
-        # Apply locally first so the user sees the change without a
-        # round-trip wait.
         set_locale(applied)
         try:
             updated = api_pkg.patch_locale(self._api, applied)
             self._me = updated
         except Exception as exc:
             mb.warn(
-                self._win,
+                self,
                 t("common.error"),
                 t("settings.language_save_failed",
                   detail=getattr(exc, "message", None) or str(exc),
@@ -187,8 +236,8 @@ class SettingsDialog:
         try:
             save_config(self._cfg)
         except Exception:
-            # Don't crash the settings dialog if config save fails;
-            # crash.log will capture if it's something serious.
+            # Don't crash on a config-save failure; crash.log captures
+            # anything serious.
             pass
 
     def _on_sign_out(self) -> None:
@@ -201,10 +250,8 @@ class SettingsDialog:
             pass
         clear_secret("refresh", self._api.server_url)
         clear_secret("api_token", self._api.server_url)
+        # Remove this overlay first, then hand off to the controller (which
+        # tears down the main window and shows a fresh login overlay).
+        self._close()
         if self._on_signed_out is not None:
             self._on_signed_out()
-        self._win.destroy()
-
-    def show_modal(self) -> None:
-        self._win.after_idle(lambda: (self._win.grab_set(), self._win.focus_force()))
-        self._win.wait_window()

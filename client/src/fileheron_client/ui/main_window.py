@@ -18,9 +18,10 @@ from ..api import ApiClient
 from ..i18n import t
 from ..models import MeResponse
 from .app import reassert_visible
-from .settings_dialog import SettingsDialog
+from .settings_dialog import SettingsOverlay
 from .share_list_panel import ShareListPanel
 from .upload_panel import UploadPanel
+from .widgets import Toast
 
 # Tab keys — the lookup keys CTk uses for tab switching and that
 # ``_on_tab_changed`` matches against. The displayed label is the same
@@ -51,6 +52,8 @@ class MainWindow:
         self._api = api
         self._me = me
         self._on_signed_out = on_signed_out
+        self._settings_overlay: Optional[SettingsOverlay] = None
+        self._toast: Optional[Toast] = None
         root.title(
             t("app.title_template",
               name=me.display_name, role=me.role, version=self._version)
@@ -78,17 +81,24 @@ class MainWindow:
         self.tabs = ctk.CTkTabview(self._app_root)
         self.tabs.pack(fill="both", expand=True, padx=8, pady=8)
 
+        # Non-modal toast for info/success notifications (replaces the
+        # interrupting messagebox popups). Parents to the root so any tab /
+        # the drilled-in detail view can reach it via the flash callback.
+        self._toast = Toast(self._app_root)
+
         inbox_tab = self.tabs.add(TAB_INBOX)
         outbox_tab = self.tabs.add(TAB_OUTBOX)
         upload_tab = self.tabs.add(TAB_NEW_SHARE)
 
         self.inbox = ShareListPanel(
             inbox_tab, self._app_root, self._api, self._me, box="inbox",
+            flash=self.flash,
         )
         self.inbox.pack(fill="both", expand=True)
 
         self.outbox = ShareListPanel(
             outbox_tab, self._app_root, self._api, self._me, box="outbox",
+            flash=self.flash,
         )
         self.outbox.pack(fill="both", expand=True)
 
@@ -130,11 +140,23 @@ class MainWindow:
             self.outbox.refresh()
 
     def _open_settings(self) -> None:
-        dlg = SettingsDialog(
+        if self._settings_overlay is not None:
+            return  # already open
+        self._settings_overlay = SettingsOverlay(
             self._app_root, self._api, self._me,
             on_signed_out=self._on_signed_out,
+            on_closed=self._on_settings_closed,
         )
-        dlg.show_modal()
+        self._settings_overlay.show()
+
+    def _on_settings_closed(self) -> None:
+        self._settings_overlay = None
+
+    def flash(self, text: str, kind: str = "info") -> None:
+        """Show a transient, non-modal toast. Threaded into the panels as the
+        `flash=` callback so they notify without a popup."""
+        if self._toast is not None:
+            self._toast.show(text, kind=kind)
 
     def post_show(self) -> None:
         """Called by AppController after the overlay is removed. The root is
@@ -153,6 +175,16 @@ class MainWindow:
         clean root. Destroying the tabview recursively destroys both share
         panels, the upload panel, any drilled-in detail view, and the
         wrapped segmented-button callback (all descendants of self.tabs)."""
+        # Settings overlay + toast parent to the root, not self.tabs, so they
+        # survive a tabview destroy — tear them down explicitly.
+        for w in (self._settings_overlay, self._toast):
+            if w is not None:
+                try:
+                    w.destroy()
+                except Exception:
+                    pass
+        self._settings_overlay = None
+        self._toast = None
         try:
             self._top_bar.destroy()
         except Exception:

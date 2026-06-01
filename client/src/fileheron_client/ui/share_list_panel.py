@@ -16,7 +16,7 @@ instead of delegating up to ``MainWindow``. The list UI lives inside
 back in and refreshes."""
 from __future__ import annotations
 
-from typing import Optional
+from typing import Callable, Optional
 
 import customtkinter as ctk
 
@@ -74,12 +74,14 @@ class ShareListPanel(ctk.CTkFrame):
         me: MeResponse,
         *,
         box: str,
+        flash: Optional[Callable[[str], None]] = None,
     ) -> None:
         super().__init__(master, fg_color="transparent")
         self._app_root = root
         self._api = api
         self._me = me
         self._box = box
+        self._flash = flash
         self._items: list[ShareListItem] = []
         self._detail_view: Optional[ShareDetailView] = None
         self._build()
@@ -343,6 +345,7 @@ class ShareListPanel(ctk.CTkFrame):
             self._me,
             on_back=self._drill_out,
             on_mutated=self.refresh,
+            flash=self._flash,
         )
         self._detail_view.pack(fill="both", expand=True)
 

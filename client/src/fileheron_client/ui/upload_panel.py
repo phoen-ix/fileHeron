@@ -4,6 +4,7 @@ byte-driven aggregate progress."""
 from __future__ import annotations
 
 import logging
+import webbrowser
 from datetime import datetime, timedelta
 from pathlib import Path
 from tkinter import filedialog
@@ -20,7 +21,7 @@ from ..models import ShareResponse
 from . import _messagebox as mb
 from .recipient_picker import RecipientPickerWidget
 from .upload_worker import start_upload
-from .widgets import alive, human_size
+from .widgets import alive, copy_to_clipboard_with_feedback, human_size
 
 logger = logging.getLogger("fileheron_client.ui.upload")
 
@@ -75,8 +76,14 @@ class UploadPanel(ctk.CTkFrame):
 
         # ---- Top form ----
 
+        # Public-link result card — built hidden; revealed at the very top of
+        # the form after a share with a public link is created (so the URL is
+        # kept + copyable, not dumped in a one-time popup).
+        self._build_pl_result_section(outer)
+
         # Subject + Message (full width)
-        ctk.CTkLabel(outer, text=t("upload.subject_label"), anchor="w").pack(fill="x")
+        self._subject_label = ctk.CTkLabel(outer, text=t("upload.subject_label"), anchor="w")
+        self._subject_label.pack(fill="x")
         self.subject_var = ctk.StringVar()
         ctk.CTkEntry(
             outer, textvariable=self.subject_var,
@@ -245,6 +252,67 @@ class UploadPanel(ctk.CTkFrame):
         else:
             self._pl_fields_row.pack_forget()
 
+    # ---- public-link result card ----
+
+    def _build_pl_result_section(self, parent) -> None:
+        self._pl_result_section = ctk.CTkFrame(parent, border_width=1, fg_color="transparent")
+        inner = ctk.CTkFrame(self._pl_result_section, fg_color="transparent")
+        inner.pack(fill="x", padx=8, pady=8)
+        ctk.CTkLabel(
+            inner, text=t("upload.public_link_result_note"), anchor="w",
+            text_color=("#166534", "#bbf7d0"), wraplength=560,
+        ).pack(fill="x", pady=(0, 6))
+        url_row = ctk.CTkFrame(inner, fg_color="transparent")
+        url_row.pack(fill="x")
+        self._pl_result_url_var = ctk.StringVar(value="")
+        ctk.CTkEntry(
+            url_row, textvariable=self._pl_result_url_var, state="readonly",
+        ).pack(side="left", fill="x", expand=True)
+        ctk.CTkButton(
+            url_row, text=t("share_detail.pl_copy"), width=80, command=self._copy_result_url,
+        ).pack(side="left", padx=(8, 0))
+        ctk.CTkButton(
+            url_row, text=t("share_detail.pl_open"), width=80, command=self._open_result_url,
+        ).pack(side="left", padx=(4, 0))
+        self._pl_result_copied_var = ctk.StringVar(value="")
+        ctk.CTkLabel(
+            inner, textvariable=self._pl_result_copied_var, anchor="w",
+            text_color=("#166534", "#bbf7d0"),
+        ).pack(fill="x", pady=(4, 0))
+        # Not packed here — revealed by _show_pl_result.
+
+    def _show_pl_result(self, url: str) -> None:
+        self._pl_result_url_var.set(url)
+        self._pl_result_copied_var.set("")
+        # Reveal at the very top of the form (above Subject).
+        self._pl_result_section.pack(fill="x", pady=(0, 8), before=self._subject_label)
+
+    def _hide_pl_result(self) -> None:
+        try:
+            self._pl_result_section.pack_forget()
+        except Exception:
+            pass
+
+    def _copy_result_url(self) -> None:
+        copy_to_clipboard_with_feedback(
+            self, self._pl_result_url_var.get(),
+            feedback_var=self._pl_result_copied_var,
+            on_fail=lambda: mb.warn(
+                self.winfo_toplevel(),
+                t("share_detail.copy_failed_title"),
+                t("share_detail.copy_failed_body"),
+            ),
+        )
+
+    def _open_result_url(self) -> None:
+        url = self._pl_result_url_var.get()
+        if not url:
+            return
+        try:
+            webbrowser.open(url)
+        except Exception:
+            pass
+
     # ---- file list helpers ----
 
     def _on_add(self) -> None:
@@ -366,6 +434,8 @@ class UploadPanel(ctk.CTkFrame):
     # ---- submit + upload ----
 
     def _on_send(self) -> None:
+        # Starting a new share dismisses the previous public-link result card.
+        self._hide_pl_result()
         if not self._files:
             mb.warn(
                 self.winfo_toplevel(),
@@ -414,11 +484,10 @@ class UploadPanel(ctk.CTkFrame):
                 elif pl is not None:
                     url = getattr(pl, "url", None)
                 if url:
-                    mb.info(
-                        self.winfo_toplevel(),
-                        t("upload.public_link_created_title"),
-                        t("upload.public_link_created_body", url=url),
-                    )
+                    # Persistent inline result (URL + Copy + Open) instead of a
+                    # one-time popup — the link is also re-viewable on the
+                    # share's detail page.
+                    self._show_pl_result(url)
             self._start_uploads(share)
 
         def _on_create_failed(exc):

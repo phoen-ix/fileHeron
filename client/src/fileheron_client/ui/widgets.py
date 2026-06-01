@@ -1,7 +1,14 @@
 """Small shared widgets — CustomTkinter port (v0.4.0)."""
 from __future__ import annotations
 
+import logging
+from typing import Callable, Optional
+
 import customtkinter as ctk
+
+from ..i18n import t
+
+_log = logging.getLogger("fileheron_client.ui.widgets")
 
 
 # State pill colours, mirroring the SPA's design tokens. (bg, fg) per
@@ -78,6 +85,101 @@ def alive(widget) -> bool:
         return bool(widget.winfo_exists())
     except Exception:
         return False
+
+
+def copy_to_clipboard_with_feedback(
+    widget,
+    text: str,
+    *,
+    feedback_var: "ctk.StringVar | None" = None,
+    on_fail: Optional[Callable[[], None]] = None,
+    duration_ms: int = 2000,
+) -> bool:
+    """Copy ``text`` to the OS clipboard and flash a transient "✓ Copied".
+
+    The ``clipboard_clear()`` + ``clipboard_append()`` + ``update()`` sequence
+    is required on Linux/X11 — the X selection is a live protocol owned by the
+    source app; without pumping the event loop the data is dropped when focus
+    leaves. (Harmless on Windows.) On failure ``on_fail`` is invoked (callers
+    pass an ``mb.warn`` closure). Returns True on success."""
+    if not text:
+        return False
+    top = widget.winfo_toplevel()
+    try:
+        top.clipboard_clear()
+        top.clipboard_append(text)
+        top.update()
+    except Exception as e:
+        _log.warning("clipboard copy failed: %s", e)
+        if on_fail is not None:
+            on_fail()
+        return False
+    if feedback_var is not None:
+        feedback_var.set(t("common.copied"))
+
+        def _clear() -> None:
+            if alive(widget):
+                try:
+                    feedback_var.set("")
+                except Exception:
+                    pass
+
+        try:
+            widget.after(duration_ms, _clear)
+        except Exception:
+            pass
+    return True
+
+
+class Toast(ctk.CTkLabel):
+    """Transient, non-modal status banner. ``show()`` places it centered at the
+    bottom of its master (over content, no layout shift) and auto-hides it after
+    a few seconds. Replaces the informational ``_messagebox.info`` popups."""
+
+    # kind -> (fg_color, text_color), each a (light, dark) pair.
+    _KIND_COLORS = {
+        "info": (("#e5e7eb", "#374151"), ("#111827", "#f9fafb")),
+        "success": (("#dcfce7", "#14532d"), ("#166534", "#bbf7d0")),
+        "error": (("#fee2e2", "#7f1d1d"), ("#991b1b", "#fecaca")),
+    }
+
+    def __init__(self, master, **kwargs) -> None:
+        super().__init__(
+            master, text="", corner_radius=8,
+            font=ctk.CTkFont(size=12), wraplength=560,
+            **kwargs,
+        )
+        self._after_id = None
+        # A pending after() firing into a destroyed widget would raise; drop it.
+        self.bind("<Destroy>", lambda _e: self._cancel())
+
+    def show(self, text: str, *, kind: str = "info", duration_ms: int = 2800) -> None:
+        self._cancel()
+        fg, txt = self._KIND_COLORS.get(kind, self._KIND_COLORS["info"])
+        self.configure(text=text, fg_color=fg, text_color=txt)
+        # place (not pack) so showing/hiding never reflows the panels.
+        self.place(relx=0.5, rely=1.0, anchor="s", y=-12)
+        self.lift()
+        try:
+            self._after_id = self.after(duration_ms, self._hide)
+        except Exception:
+            self._after_id = None
+
+    def _hide(self) -> None:
+        self._after_id = None
+        if alive(self):
+            try:
+                self.place_forget()
+            except Exception:
+                pass
+
+    def _cancel(self) -> None:
+        if self._after_id is not None:
+            try:
+                self.after_cancel(self._after_id)
+            except Exception:
+                pass
+            self._after_id = None
 
 
 def human_size(n: int) -> str:

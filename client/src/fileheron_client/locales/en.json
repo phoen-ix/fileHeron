@@ -7,6 +7,7 @@
     "refresh": "Refresh",
     "loading": "Loading…",
     "error": "Error",
+    "copied": "✓ Copied",
     "search_placeholder_filter": "Type to filter…",
     "no_matches": "No matches."
   },
@@ -222,8 +223,7 @@
     "err_invalid_limit_body": "Download limit must be a positive integer, or blank for unlimited.",
     "err_invalid_pl_limit_title": "Invalid limit",
     "err_invalid_pl_limit_body": "Download limit must be a positive integer, or blank for unlimited.",
-    "public_link_created_title": "Public link created",
-    "public_link_created_body": "Save this URL now — it will not be shown again.\n\n{url}",
+    "public_link_result_note": "Public link created. Copy it below — it's also on the share's detail page.",
     "status_uploading": "Share {short_id} created — uploading {n} file(s)…",
     "status_err": "Error: {detail}",
     "status_success": "Share created and all files uploaded.",

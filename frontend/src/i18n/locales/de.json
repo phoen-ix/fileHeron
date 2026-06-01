@@ -1030,6 +1030,21 @@
       "result_eyebrow": "Öffentlicher Link (einmalige Anzeige)",
       "result_warning": "URL jetzt kopieren — wird nicht erneut angezeigt. Über deinen üblichen Kanal an den Empfänger senden.",
       "continue": "Fertig — zur Freigabe"
+    },
+    "progress": {
+      "uploading_title": "Wird hochgeladen…",
+      "done_title": "Alle Dateien gesendet",
+      "partial_title": "{n} Datei(en) fehlgeschlagen",
+      "log_heading": "Aktivität",
+      "view_share": "Freigabe ansehen",
+      "create_another": "Weitere erstellen",
+      "log": {
+        "queued": "in Warteschlange",
+        "started": "Upload gestartet",
+        "finalizing": "wird abgeschlossen",
+        "done": "fertig",
+        "error": "fehlgeschlagen: {error}"
+      }
     }
   },
   "share_detail": {

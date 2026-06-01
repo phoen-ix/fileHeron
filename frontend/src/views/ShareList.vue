@@ -8,7 +8,7 @@ import { useApiError } from '@/composables/useApiError'
 import { useShareListState } from '@/composables/useShareListState'
 import { useUiStore } from '@/stores/ui'
 import type { ShareListItem, ShareRecipientRef, ShareState } from '@/types/api'
-import { formatDateInSiteTime, formatExpiryInSiteTime } from '@/utils/datetime'
+import { formatExpiryInSiteTime, formatInSiteTime } from '@/utils/datetime'
 
 const { t, locale } = useI18n()
 const route = useRoute()
@@ -108,14 +108,15 @@ function pillForState(state: ShareState): string | undefined {
 }
 
 function formatDate(iso: string | null): string {
-  return formatDateInSiteTime(iso, locale.value)
+  // Date + time (+ site-tz token) so shares created on the same day are
+  // distinguishable at a glance.
+  return formatInSiteTime(iso, locale.value)
 }
 
 function formatExpiry(iso: string | null): string {
-  return formatExpiryInSiteTime(iso, locale.value, t('expiry.never_label'), {
-    year: 'numeric', month: 'short', day: '2-digit',
-    hour: undefined, minute: undefined,
-  })
+  // Full date + HH:MM + tz (formatInSiteTime defaults) — a bare zone token
+  // with no clock ("Jun 08, 2026, GMT+2") is meaningless.
+  return formatExpiryInSiteTime(iso, locale.value, t('expiry.never_label'))
 }
 
 function formatBytes(n: number): string {

@@ -10,9 +10,22 @@
  * All admin / share / public surfaces should call `formatInSiteTime`
  * for display so a single admin setting controls the whole UI.
  */
+import dayjs from 'dayjs'
+import timezone from 'dayjs/plugin/timezone'
+import utc from 'dayjs/plugin/utc'
+
 import { useSiteStore } from '@/stores/site'
 
+// utc + timezone ship with dayjs core (no extra dependency). timezone
+// depends on utc, so register utc first.
+dayjs.extend(utc)
+dayjs.extend(timezone)
+
 const TZ_DESIGNATOR_RE = /[zZ]|[+-]\d{2}:?\d{2}$/
+
+function siteTz(): string {
+  return useSiteStore().timezone || 'UTC'
+}
 
 /** Parse a backend ISO datetime as UTC, appending `Z` when no
  *  timezone designator is present. Returns an invalid `Date` if
@@ -72,6 +85,33 @@ export function formatDateInSiteTime(
     timeZoneName: undefined,
     ...opts,
   })
+}
+
+/** Wall-clock "YYYY-MM-DDTHH:mm:ss" string in the admin-set SITE timezone
+ *  for the instant `now + ms`. Used by the expiry picker so its defaults +
+ *  presets are expressed in the same timezone the app *displays* expiry in
+ *  (formatInSiteTime), instead of the viewer's browser timezone. Without
+ *  this, a viewer whose browser tz ≠ the site tz picks "7 days" and the
+ *  stored/displayed expiry lands off by the offset between the two. */
+export function siteNowPlusIso(ms: number): string {
+  return dayjs(Date.now() + ms)
+    .tz(siteTz())
+    .format('YYYY-MM-DDTHH:mm:ss')
+}
+
+/** Inverse of the picker convention: interpret a naive "YYYY-MM-DDTHH:mm:ss"
+ *  wall-clock string as a time in the SITE timezone and return the matching
+ *  UTC instant as an ISO string (with `Z`). The backend strips the `Z` and
+ *  stores naive UTC; `formatInSiteTime` then renders it back in the site tz,
+ *  so the round-trip preserves the exact wall-clock the user picked. */
+export function siteLocalIsoToUtcIso(siteLocal: string): string {
+  return dayjs.tz(siteLocal, siteTz()).utc().toISOString()
+}
+
+/** Parse a naive site-tz wall-clock string to an epoch-ms instant (for
+ *  "expires in N days" style relative hints in the picker). */
+export function siteLocalIsoToEpochMs(siteLocal: string): number {
+  return dayjs.tz(siteLocal, siteTz()).valueOf()
 }
 
 /** Share expiry display: null means "Never" (v1.1.4 — admin-set

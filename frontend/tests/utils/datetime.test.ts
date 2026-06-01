@@ -2,7 +2,13 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 
 import { useSiteStore } from '@/stores/site'
-import { formatDateInSiteTime, formatInSiteTime, parseServerDate } from '@/utils/datetime'
+import {
+  formatDateInSiteTime,
+  formatInSiteTime,
+  parseServerDate,
+  siteLocalIsoToUtcIso,
+  siteNowPlusIso,
+} from '@/utils/datetime'
 
 describe('parseServerDate', () => {
   it('appends Z to a naive ISO so the value is treated as UTC', () => {
@@ -114,5 +120,36 @@ describe('formatDateInSiteTime', () => {
     site.timezone = 'Europe/Vienna'
     const out = formatDateInSiteTime('2026-05-16T23:46:00', 'en')
     expect(out).not.toMatch(/GMT|CEST|CET|UTC/)
+  })
+})
+
+describe('site-tz expiry pipeline (siteNowPlusIso / siteLocalIsoToUtcIso)', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
+  it('interprets the picker wall-clock in the site tz, not the browser tz', () => {
+    const site = useSiteStore()
+    site.timezone = 'Europe/Vienna' // CEST = +02:00 in June
+    // 15:10 Vienna == 13:10 UTC — independent of the test runner's TZ.
+    expect(siteLocalIsoToUtcIso('2026-06-08T15:10:00')).toBe('2026-06-08T13:10:00.000Z')
+  })
+
+  it('is a no-op on the wall-clock when the site tz is UTC', () => {
+    const site = useSiteStore()
+    site.timezone = 'UTC'
+    expect(siteLocalIsoToUtcIso('2026-06-08T15:10:00')).toBe('2026-06-08T15:10:00.000Z')
+  })
+
+  it('round-trips now+7d back to the correct instant (no browser-vs-site skew)', () => {
+    const site = useSiteStore()
+    site.timezone = 'Europe/Vienna'
+    const ms = 7 * 24 * 60 * 60 * 1000
+    const before = Date.now()
+    const utcMs = new Date(siteLocalIsoToUtcIso(siteNowPlusIso(ms))).getTime()
+    const after = Date.now()
+    // The picker convention drops sub-second precision; allow a small band.
+    expect(utcMs).toBeGreaterThanOrEqual(before + ms - 2000)
+    expect(utcMs).toBeLessThanOrEqual(after + ms + 2000)
   })
 })

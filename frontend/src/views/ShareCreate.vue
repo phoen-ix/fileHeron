@@ -17,8 +17,10 @@ import { createShare } from '@/api/shares'
 import ExpiryPicker from '@/components/ExpiryPicker.vue'
 import FileUploadArea from '@/components/FileUploadArea.vue'
 import RecipientPicker from '@/components/RecipientPicker.vue'
+import ShareUploadProgress from '@/components/ShareUploadProgress.vue'
 import { useApiError } from '@/composables/useApiError'
 import { useUpload } from '@/composables/useUpload'
+import { siteLocalIsoToUtcIso } from '@/utils/datetime'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
 import type {
@@ -59,6 +61,9 @@ const shareId = ref<string | null>(null)
 const upload = useUpload(shareId)
 const submitting = ref(false)
 const errorMsg = ref<string | null>(null)
+// 'compose' shows the form; 'progress' swaps in the dedicated upload screen
+// in place (no route change) so the live useUpload state survives.
+const phase = ref<'compose' | 'progress'>('compose')
 
 // --- Inline public link --------------------------------------------------
 
@@ -74,18 +79,10 @@ const plNotifyOnDownload = ref(false)
 // recipients + sender + admins.
 const shareDownloadLimit = ref<number | null>(null)
 const plResult = ref<InlinePublicLinkResult | null>(null)
-const plCopied = ref(false)
 
-async function copyPublicLink() {
-  if (!plResult.value) return
-  try {
-    await navigator.clipboard.writeText(plResult.value.url)
-    plCopied.value = true
-    setTimeout(() => (plCopied.value = false), 1600)
-  } catch {
-    /* clipboard blocked */
-  }
-}
+const errorCount = computed(
+  () => upload.items.value.filter((i) => i.state === 'error').length,
+)
 
 const canSubmit = computed(() => {
   const hasRecipients =
@@ -117,13 +114,6 @@ const allUploadsDone = computed(() =>
   upload.items.value.every((i) => i.state === 'done' || i.state === 'finalizing'),
 )
 
-function localIsoToUtcIso(local: string): string {
-  // ExpiryPicker emits "YYYY-MM-DDTHH:mm:ss" in local time; Date()
-  // parses that as local, and toISOString gives UTC in Z form. The
-  // backend service strips any tzinfo and stores naive UTC.
-  return new Date(local).toISOString()
-}
-
 async function onSubmit() {
   if (!canSubmit.value) return
   errorMsg.value = null
@@ -141,11 +131,12 @@ async function onSubmit() {
     const { data } = await createShare({
       kind: kind.value,
       recipients: recipients.value,
-      // null = "Never expires" (user picked the Never preset); else
-      // local→UTC convert the picker's local ISO string.
+      // null = "Never expires" (user picked the Never preset); else the
+      // picker emits a site-tz wall-clock string — convert it to a UTC
+      // instant interpreting it in the site tz (matches display).
       expires_at: expiresAtLocal.value === null
         ? null
-        : localIsoToUtcIso(expiresAtLocal.value as string),
+        : siteLocalIsoToUtcIso(expiresAtLocal.value as string),
       subject: subject.value || null,
       message: message.value || null,
       public_link: publicLinkPayload,
@@ -157,28 +148,46 @@ async function onSubmit() {
       plResult.value = data.public_link
     }
     submitting.value = false
-    // Now route uploads through the share.
+    // Swap to the dedicated progress screen BEFORE uploads start, so the
+    // list mounts while items are still 'queued' and the user watches each
+    // one advance. Uploads keep running here because useUpload stays mounted.
+    phase.value = 'progress'
     await upload.start()
     if (allUploadsDone.value) {
       ui.pushToast(t('share_create.toast_done'), 'success')
-      // If a public link was returned, hold on the page so the user can
-      // copy it before routing to /share/{id}. Otherwise jump.
-      if (!plResult.value) {
-        await router.push({ name: 'share-detail', params: { id: data.id } })
-      }
     } else {
-      const errCount = upload.items.value.filter((i) => i.state === 'error').length
-      ui.pushToast(t('share_create.toast_partial', { n: errCount }), 'warn')
+      ui.pushToast(t('share_create.toast_partial', { n: errorCount.value }), 'warn')
     }
   } catch (err) {
+    // createShare failed before any swap — stay on the form with the error.
     errorMsg.value = describe(err)
     submitting.value = false
   }
 }
 
-function dismissPlResult() {
+function onViewShare() {
   if (!shareId.value) return
   router.push({ name: 'share-detail', params: { id: shareId.value } })
+}
+
+function onCreateAnother() {
+  upload.reset()
+  shareId.value = null
+  plResult.value = null
+  errorMsg.value = null
+  subject.value = ''
+  message.value = ''
+  recipients.value = { user_ids: [], group_ids: [] }
+  // undefined → ExpiryPicker's mount auto-emit refills the 7-day default
+  // when the form remounts (v-if, not v-show).
+  expiresAtLocal.value = undefined
+  notifyRecipients.value = auth.user?.share_notify_recipients_default ?? true
+  shareDownloadLimit.value = null
+  includePublicLink.value = false
+  plPassword.value = ''
+  plDownloadLimit.value = null
+  plNotifyOnDownload.value = false
+  phase.value = 'compose'
 }
 </script>
 
@@ -190,7 +199,7 @@ function dismissPlResult() {
 
     <hr class="fh-rule" />
 
-    <form class="composer" @submit.prevent="onSubmit">
+    <form v-if="phase === 'compose'" class="composer" @submit.prevent="onSubmit">
       <FileUploadArea
         :items="upload.items.value"
         :disabled="submitting"
@@ -263,8 +272,8 @@ function dismissPlResult() {
         <hr class="fh-rule" />
         <label class="public-link-toggle">
           <input
-            type="checkbox"
             v-model="notifyRecipients"
+            type="checkbox"
             :disabled="submitting || upload.isActive.value"
           />
           <span>
@@ -278,8 +287,8 @@ function dismissPlResult() {
         <hr class="fh-rule" />
         <label class="public-link-toggle">
           <input
-            type="checkbox"
             v-model="includePublicLink"
+            type="checkbox"
             :disabled="submitting || upload.isActive.value"
           />
           <span>
@@ -318,8 +327,8 @@ function dismissPlResult() {
 
           <label class="public-link-toggle compact">
             <input
-              type="checkbox"
               v-model="plNotifyOnDownload"
+              type="checkbox"
               :disabled="submitting || upload.isActive.value"
             />
             <span>{{ t('share_create.public_link.notify_label') }}</span>
@@ -327,26 +336,9 @@ function dismissPlResult() {
         </div>
       </section>
 
-      <div
-        v-if="plResult"
-        class="fh-rise plaintext-box"
-      >
-        <div class="plaintext-eyebrow">{{ t('share_create.public_link.result_eyebrow') }}</div>
-        <div class="plaintext-warning">{{ t('share_create.public_link.result_warning') }}</div>
-        <pre class="plaintext-token fh-mono">{{ plResult.url }}</pre>
-        <div class="plaintext-actions">
-          <button type="button" class="fh-btn-text" @click="copyPublicLink">
-            {{ plCopied ? t('api_tokens.copied') : t('api_tokens.copy') }}
-          </button>
-          <button type="button" class="fh-btn-text" @click="dismissPlResult">
-            {{ t('share_create.public_link.continue') }}
-          </button>
-        </div>
-      </div>
-
       <div v-if="errorMsg" class="fh-notice" data-tone="error">{{ errorMsg }}</div>
 
-      <div v-if="!plResult" class="actions">
+      <div class="actions">
         <button class="fh-btn-text" type="button" @click="router.back()">
           {{ t('common.cancel') }}
         </button>
@@ -359,6 +351,19 @@ function dismissPlResult() {
         </button>
       </div>
     </form>
+
+    <ShareUploadProgress
+      v-else
+      :items="upload.items.value"
+      :public-link="plResult"
+      :log="upload.log.value"
+      :is-active="upload.isActive.value"
+      :all-done="allUploadsDone"
+      :error-count="errorCount"
+      @retry="upload.retry"
+      @view-share="onViewShare"
+      @create-another="onCreateAnother"
+    />
   </div>
 </template>
 
@@ -441,46 +446,6 @@ function dismissPlResult() {
   gap: var(--fh-space-2);
   padding-left: var(--fh-space-4);
   border-left: 2px solid var(--fh-rule);
-}
-
-.plaintext-box {
-  padding: var(--fh-space-4);
-  background: var(--fh-accent-soft);
-  border: var(--fh-border);
-  border-left: 2px solid var(--fh-accent);
-  border-radius: var(--fh-radius-sm);
-  display: flex;
-  flex-direction: column;
-  gap: var(--fh-space-2);
-}
-
-.plaintext-eyebrow {
-  font-family: var(--fh-font-mono);
-  font-size: var(--fh-text-mono-sm);
-  text-transform: uppercase;
-  letter-spacing: 0.14em;
-  color: var(--fh-subtle);
-}
-
-.plaintext-warning {
-  font-size: var(--fh-text-body-sm);
-}
-
-.plaintext-token {
-  background: var(--fh-paper);
-  padding: var(--fh-space-3);
-  border: var(--fh-border);
-  border-radius: var(--fh-radius-sm);
-  font-size: var(--fh-text-mono-md);
-  word-break: break-all;
-  white-space: pre-wrap;
-  margin: 0;
-  user-select: all;
-}
-
-.plaintext-actions {
-  display: flex;
-  gap: var(--fh-space-3);
 }
 
 @media (max-width: 720px) {

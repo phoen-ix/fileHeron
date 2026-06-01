@@ -49,6 +49,20 @@ export interface UploadItem {
   bytesUploaded: number
 }
 
+// One timestamped line in the per-file activity log surfaced on the
+// upload-progress screen. We store an i18n key + params (not a rendered
+// string) so the log stays reactive to a mid-session locale switch and the
+// composable stays free of any i18n dependency.
+export interface LogEntry {
+  id: string
+  ts: number // client wall-clock epoch ms (Date.now())
+  uid: string
+  fileName: string
+  kind: 'queued' | 'started' | 'finalizing' | 'done' | 'error'
+  messageKey: string
+  params?: Record<string, unknown>
+}
+
 // Local meta we attach so the Tus plugin can pull per-file headers off
 // the Uppy file object. Index signature is required by Uppy v4's `Meta`
 // constraint (Record<string, unknown>).
@@ -64,6 +78,24 @@ const nextUid = () => `u${++uidCounter}_${Date.now().toString(36)}`
 
 export function useUpload(shareId: Ref<string | null>) {
   const items = ref<UploadItem[]>([])
+  const log = ref<LogEntry[]>([])
+  let logCounter = 0
+
+  function pushLog(
+    item: UploadItem,
+    kind: LogEntry['kind'],
+    params?: Record<string, unknown>,
+  ) {
+    log.value.push({
+      id: `l${++logCounter}`,
+      ts: Date.now(),
+      uid: item.uid,
+      fileName: item.file.name,
+      kind,
+      messageKey: `share_create.progress.log.${kind}`,
+      params,
+    })
+  }
 
   const uppy = new Uppy<FileMeta, Record<string, never>>({
     autoProceed: false,
@@ -113,8 +145,12 @@ export function useUpload(shareId: Ref<string | null>) {
     // briefly show 'finalizing' before the next view re-fetches the
     // share and shows authoritative state.
     item.state = 'finalizing'
+    pushLog(item, 'finalizing')
     setTimeout(() => {
-      if (item.state === 'finalizing') item.state = 'done'
+      if (item.state === 'finalizing') {
+        item.state = 'done'
+        pushLog(item, 'done')
+      }
     }, 800)
   })
 
@@ -124,11 +160,12 @@ export function useUpload(shareId: Ref<string | null>) {
     if (!item) return
     item.state = 'error'
     item.error = err?.message ?? 'upload failed'
+    pushLog(item, 'error', { error: item.error })
   })
 
   function add(files: File[]) {
     for (const f of files) {
-      items.value.push({
+      const item: UploadItem = {
         uid: nextUid(),
         file: f,
         state: 'queued',
@@ -136,7 +173,9 @@ export function useUpload(shareId: Ref<string | null>) {
         fileId: null,
         error: null,
         bytesUploaded: 0,
-      })
+      }
+      items.value.push(item)
+      pushLog(item, 'queued')
     }
   }
 
@@ -152,6 +191,7 @@ export function useUpload(shareId: Ref<string | null>) {
     try {
       if (item.file.size < DIRECT_UPLOAD_THRESHOLD) {
         // Direct path: one POST, server-managed progress estimation.
+        pushLog(item, 'started')
         const { data } = await directUpload(
           shareId.value,
           item.file,
@@ -165,6 +205,7 @@ export function useUpload(shareId: Ref<string | null>) {
         item.progress = 100
         item.bytesUploaded = item.file.size
         item.state = 'done'
+        pushLog(item, 'done')
         return
       }
 
@@ -189,6 +230,7 @@ export function useUpload(shareId: Ref<string | null>) {
       })
 
       item.state = 'uploading'
+      pushLog(item, 'started')
       // Uppy upload returns when this batch completes; per-file
       // success/error already routed through event handlers.
       await uppy.upload()
@@ -208,6 +250,7 @@ export function useUpload(shareId: Ref<string | null>) {
             : 'upload failed'
       item.state = 'error'
       item.error = msg
+      pushLog(item, 'error', { error: msg })
     }
   }
 
@@ -247,7 +290,20 @@ export function useUpload(shareId: Ref<string | null>) {
     item.progress = 0
     item.bytesUploaded = 0
     item.error = null
+    pushLog(item, 'queued')
     await startItem(item)
+  }
+
+  // Clear everything for a fresh "create another" round. The Uppy instance
+  // is kept alive (cancelAll, not close) since the composable persists.
+  function reset() {
+    try {
+      uppy.cancelAll()
+    } catch {
+      /* ignore */
+    }
+    items.value = []
+    log.value = []
   }
 
   const isActive = computed(() =>
@@ -277,10 +333,12 @@ export function useUpload(shareId: Ref<string | null>) {
 
   return {
     items,
+    log,
     add,
     start,
     remove,
     retry,
+    reset,
     isActive,
     allDone,
     totalBytes,

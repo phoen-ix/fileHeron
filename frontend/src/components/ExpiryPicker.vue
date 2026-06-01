@@ -39,6 +39,8 @@ import 'element-plus/theme-chalk/el-popper.css'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import { siteLocalIsoToEpochMs, siteNowPlusIso } from '@/utils/datetime'
+
 const props = defineProps<{
   /** string = local ISO datetime; null = "Never" picked; undefined =
    *  parent hasn't initialized (picker fills with default 7d on mount). */
@@ -66,20 +68,16 @@ const presets: Preset[] = [
   { id: 'never', ms: null },
 ]
 
-function isoLocal(d: Date): string {
-  // Element Plus's datetime picker emits "YYYY-MM-DDTHH:mm:ss" in *local*
-  // time; we keep it in that format and let the backend interpret it as
-  // UTC (per the Phase 3a convention). For accuracy, downstream Date
-  // construction must use new Date(s + 'Z') if it needs UTC.
-  const pad = (n: number) => n.toString().padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
-}
-
 // dt = null means "never expires" (v1.1.4). Anything else is a
-// "YYYY-MM-DDTHH:mm:ss" local-time string.
+// "YYYY-MM-DDTHH:mm:ss" wall-clock string in the admin-set SITE timezone —
+// the same zone the app *displays* expiry in (formatInSiteTime). Anchoring
+// the picker to the site tz (via siteNowPlusIso) instead of the browser tz
+// means a "7 days" pick lands exactly 7 days out and shows the time the user
+// picked, even when the viewer's browser tz differs from the site tz.
+// ShareCreate converts this string back to UTC with siteLocalIsoToUtcIso.
 const dt = ref<string | null>(
   props.modelValue === undefined
-    ? isoLocal(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000))
+    ? siteNowPlusIso(7 * 24 * 60 * 60 * 1000)
     : props.modelValue,
 )
 const activePreset = ref<PresetId | null>(
@@ -108,8 +106,7 @@ function applyPreset(preset: Preset) {
     activePreset.value = 'never'
     return
   }
-  const future = new Date(Date.now() + preset.ms)
-  dt.value = isoLocal(future)
+  dt.value = siteNowPlusIso(preset.ms)
   activePreset.value = preset.id
 }
 
@@ -121,7 +118,9 @@ function disabledDate(d: Date): boolean {
 
 const expiresInMs = computed(() => {
   if (!dt.value) return 0
-  return new Date(dt.value).getTime() - Date.now()
+  // dt is a site-tz wall-clock string; resolve it to an instant in the site
+  // tz before differencing against now.
+  return siteLocalIsoToEpochMs(dt.value) - Date.now()
 })
 
 const hintText = computed(() => {
@@ -150,9 +149,10 @@ watch(dt, (newV) => {
   if (!activePreset.value || activePreset.value === 'never') return
   const preset = presets.find((p) => p.id === activePreset.value)
   if (!preset || preset.ms === null) return
-  const expected = isoLocal(new Date(Date.now() + preset.ms))
+  const expected = siteNowPlusIso(preset.ms)
+  // Both are site-tz wall-clock strings; compare as instants in the site tz.
   // Allow a 60-second tolerance band — the time elapsed during click.
-  if (Math.abs(new Date(newV).getTime() - new Date(expected).getTime()) > 60_000) {
+  if (Math.abs(siteLocalIsoToEpochMs(newV) - siteLocalIsoToEpochMs(expected)) > 60_000) {
     activePreset.value = null
   }
 })

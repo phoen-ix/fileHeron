@@ -1030,6 +1030,21 @@
       "result_eyebrow": "Public link (shown once)",
       "result_warning": "Copy this URL now — it won't be shown again. Send it to the recipient via your usual channel.",
       "continue": "Done — go to share"
+    },
+    "progress": {
+      "uploading_title": "Uploading…",
+      "done_title": "All files sent",
+      "partial_title": "{n} file(s) failed",
+      "log_heading": "Activity",
+      "view_share": "View share",
+      "create_another": "Create another",
+      "log": {
+        "queued": "queued",
+        "started": "upload started",
+        "finalizing": "finalizing",
+        "done": "done",
+        "error": "failed: {error}"
+      }
     }
   },
   "share_detail": {

@@ -126,4 +126,31 @@ describe('useUpload', () => {
     expect(u.isActive.value).toBe(false)
     wrapper.unmount()
   })
+
+  it('add() appends a queued log entry per file', () => {
+    const shareId = ref<string | null>('share-uuid')
+    const wrapper = mount(makeHost(shareId))
+    const u = wrapper.vm.u
+    u.add([fakeFile('a.txt', 10), fakeFile('b.txt', 20)])
+    expect(u.log.value).toHaveLength(2)
+    expect(u.log.value[0].kind).toBe('queued')
+    expect(u.log.value[0].fileName).toBe('a.txt')
+    expect(u.log.value[0].uid).toBe(u.items.value[0].uid)
+    expect(u.log.value[0].messageKey).toBe('share_create.progress.log.queued')
+    expect(typeof u.log.value[0].ts).toBe('number')
+    wrapper.unmount()
+  })
+
+  it('reset() clears items and log', () => {
+    const shareId = ref<string | null>('share-uuid')
+    const wrapper = mount(makeHost(shareId))
+    const u = wrapper.vm.u
+    u.add([fakeFile('a.txt', 10), fakeFile('b.txt', 20)])
+    expect(u.items.value).toHaveLength(2)
+    expect(u.log.value.length).toBeGreaterThan(0)
+    u.reset()
+    expect(u.items.value).toHaveLength(0)
+    expect(u.log.value).toHaveLength(0)
+    wrapper.unmount()
+  })
 })

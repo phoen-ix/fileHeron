@@ -147,7 +147,7 @@ onMounted(load)
         <option value="deleted">{{ t('share_state.deleted') }}</option>
       </select>
       <label class="orphan-toggle">
-        <input type="checkbox" v-model="orphanedOnly" />
+        <input v-model="orphanedOnly" type="checkbox" />
         {{ t('admin_file_history.orphaned_only') }}
       </label>
     </div>

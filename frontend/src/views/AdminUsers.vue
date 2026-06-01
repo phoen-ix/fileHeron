@@ -317,7 +317,7 @@ onMounted(() => {
         </ul>
       </div>
       <label class="fh-checkbox-row">
-        <input type="checkbox" v-model="createDirectly" />
+        <input v-model="createDirectly" type="checkbox" />
         <span>{{ t('admin_users.invite_create_direct') }}</span>
       </label>
       <label v-if="createDirectly" class="fh-field">

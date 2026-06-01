@@ -205,7 +205,7 @@ onMounted(load)
         <fieldset class="tls-fieldset">
           <legend class="fh-field-label">{{ t('admin_email.tls_label') }}</legend>
           <label v-for="opt in tlsOptions" :key="opt.value" class="tls-option">
-            <input type="radio" :value="opt.value" v-model="form.tls_mode" />
+            <input v-model="form.tls_mode" type="radio" :value="opt.value" />
             <span>
               <span class="tls-name">{{ t(opt.labelKey) }}</span>
               <span class="tls-help">{{ t(opt.helpKey) }}</span>

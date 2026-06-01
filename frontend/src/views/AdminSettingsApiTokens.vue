@@ -151,9 +151,9 @@ onMounted(load)
           class="mode-option"
         >
           <input
+            v-model="mode"
             type="radio"
             :value="opt.value"
-            v-model="mode"
           />
           <span>
             <span class="mode-name">{{ t(opt.labelKey) }}</span>

@@ -116,7 +116,7 @@ class _InlineMultiSelectPanel(ctk.CTkFrame):
 
     def _on_add(self) -> None:
         ids = [iid for (iid, _l, v) in self._row_vars if v.get()]
-        labels = [l for (_iid, l, v) in self._row_vars if v.get()]
+        labels = [lbl for (_iid, lbl, v) in self._row_vars if v.get()]
         self._on_done(ids, labels)
 
     def focus_search(self) -> None:

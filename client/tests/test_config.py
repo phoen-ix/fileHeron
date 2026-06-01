@@ -102,8 +102,6 @@ def test_save_config_is_atomic_no_partial_file(tmp_config_dir, monkeypatch):
     config.save_config(good)
     # Simulate a crash mid-write: make the temp write blow up AFTER an
     # earlier good file exists. The old file must remain intact.
-    real_write = config.Path.write_text
-
     def _boom(self, *_a, **_kw):
         raise OSError("disk full")
 

@@ -85,12 +85,14 @@ function jumpTo(id: string) {
     </div>
 
     <aside class="general-quicknav-rail">
+      <!-- eslint-disable vue/attribute-hyphenation -- ariaLabel is a camelCase component prop on SectionQuickNav, not a native HTML attr; vue-tsc requires the prop's exact name -->
       <SectionQuickNav
         :sections="sections"
         :active="active"
         :ariaLabel="t('admin_general.quicknav.aria')"
         @jump="jumpTo"
       />
+      <!-- eslint-enable vue/attribute-hyphenation -->
     </aside>
   </div>
 </template>

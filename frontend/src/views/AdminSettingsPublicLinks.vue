@@ -175,7 +175,7 @@ onMounted(load)
           :key="opt.value"
           class="mode-option"
         >
-          <input type="radio" :value="opt.value" v-model="mode" />
+          <input v-model="mode" type="radio" :value="opt.value" />
           <span>
             <span class="mode-name">{{ t(opt.labelKey) }}</span>
             <span class="mode-help">{{ t(opt.helpKey) }}</span>

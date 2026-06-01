@@ -50,7 +50,7 @@ function uaShort(ua: string | null): string {
     </div>
     <div class="sr-right">
       <span class="sr-meta">
-        <span class="sr-ip" v-if="session.created_ip">{{ session.created_ip }}</span>
+        <span v-if="session.created_ip" class="sr-ip">{{ session.created_ip }}</span>
         <span class="sr-when" :title="session.created_at">
           {{ dayjs(session.created_at).fromNow() }}
         </span>

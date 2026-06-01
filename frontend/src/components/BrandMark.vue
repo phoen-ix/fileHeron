@@ -15,7 +15,7 @@ const props = withDefaults(
     size?: 'sm' | 'md' | 'lg'
     linkable?: boolean
   }>(),
-  { linkable: true },
+  { size: 'md', linkable: true },
 )
 </script>
 

@@ -13,9 +13,9 @@ const label = computed(() => t(`password_strength.${strength.value.label}`))
 </script>
 
 <template>
-  <div class="ps" v-if="password">
+  <div v-if="password" class="ps">
     <div class="ps-bars">
-      <span class="ps-bar" v-for="i in 4" :key="i" :data-on="i <= strength.score + 1" />
+      <span v-for="i in 4" :key="i" class="ps-bar" :data-on="i <= strength.score + 1" />
     </div>
     <span class="ps-label" :data-state="strength.label">{{ label }}</span>
   </div>

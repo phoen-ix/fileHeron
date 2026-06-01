@@ -218,8 +218,8 @@ function jumpTo(id: string) {
         <label class="fh-field-label" for="acc-display-name">{{ $t('common.display_name') }}</label>
         <input
           id="acc-display-name"
-          class="fh-field-input"
           v-model="displayName"
+          class="fh-field-input"
           maxlength="120"
           @keydown.enter.prevent="saveDisplayName"
         />
@@ -407,12 +407,14 @@ function jumpTo(id: string) {
     </div>
 
     <aside class="account-quicknav-rail">
+      <!-- eslint-disable vue/attribute-hyphenation -- ariaLabel is a camelCase component prop on SectionQuickNav, not a native HTML attr; vue-tsc requires the prop's exact name -->
       <SectionQuickNav
         :sections="sections"
         :active="active"
         :ariaLabel="t('account.quicknav.aria')"
         @jump="jumpTo"
       />
+      <!-- eslint-enable vue/attribute-hyphenation -->
     </aside>
   </div>
 </template>

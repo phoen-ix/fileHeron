@@ -186,6 +186,7 @@ async function disable() {
              on TotpSetupResponse is generated server-side from the
              secret — NEVER allow user-supplied content into that
              field, or this becomes a stored XSS sink. -->
+        <!-- eslint-disable-next-line vue/no-v-html -- trusted server-generated TOTP QR SVG, never user input (see above) -->
         <div class="qr-svg" v-html="setup.qr_svg" />
         <div class="qr-secret">
           <span class="fh-eyebrow">{{ $t('twofa.manual_secret_label') }}</span>

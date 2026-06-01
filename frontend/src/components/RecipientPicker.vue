@@ -2,7 +2,7 @@
   <div class="recipient-picker">
     <label class="fh-field-label" :for="inputId">{{ t('recipient.label') }}</label>
 
-    <div class="chips-row" v-if="hasSelection">
+    <div v-if="hasSelection" class="chips-row">
       <span
         v-for="chip in chips"
         :key="`${chip.kind}-${chip.id}`"

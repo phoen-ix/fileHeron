@@ -22,7 +22,7 @@ from typing import Callable, Optional
 import customtkinter as ctk
 
 from .. import api as api_pkg
-from ..api import ApiClient, ApiError
+from ..api import ApiClient
 from ..formatters import format_datetime, format_expiry
 from ..i18n import t
 from ..models import FileInShareResponse, MeResponse, ShareResponse

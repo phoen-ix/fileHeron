@@ -21,7 +21,7 @@ from typing import Callable, Optional
 import customtkinter as ctk
 
 from .. import api as api_pkg
-from ..api import ApiClient, ApiError
+from ..api import ApiClient
 from ..formatters import format_datetime, format_expiry
 from ..i18n import t
 from ..models import MeResponse, ShareListItem
@@ -310,7 +310,8 @@ class ShareListPanel(ctk.CTkFrame):
             ]
             # Single-click AND double-click drill into the share detail.
             # v0.6.0: routing is internal (no more on_open_share kwarg).
-            open_handler = lambda _e, sid=item.id: self._drill_in(sid)
+            def open_handler(_e, sid=item.id):
+                self._drill_in(sid)
             for col_idx, text in enumerate(cells):
                 lbl = ctk.CTkLabel(
                     self._scroll, text=text, anchor="w", justify="left",

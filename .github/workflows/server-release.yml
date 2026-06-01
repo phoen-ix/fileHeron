@@ -104,25 +104,13 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
+      # Checkout so the release body can be read from the repo's RELEASE_NOTES.md.
+      - uses: actions/checkout@v4
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
           name: 'Server ${{ github.ref_name }}'
-          generate_release_notes: true
-          # Body lists the three published images so admins can pin a
-          # specific tag if they need to.
-          body: |
-            ## Container images
-
-            Published to GitHub Container Registry:
-
-            - `ghcr.io/phoen-ix/fileheron-backend:${{ github.ref_name }}`
-            - `ghcr.io/phoen-ix/fileheron-worker:${{ github.ref_name }}`
-            - `ghcr.io/phoen-ix/fileheron-frontend:${{ github.ref_name }}`
-            - `ghcr.io/phoen-ix/fileheron-updater-shim:${{ github.ref_name }}`
-            - `ghcr.io/phoen-ix/fileheron-updater-executor:${{ github.ref_name }}`
-
-            Set `FH_TAG=${{ github.ref_name }}` in your `.env` and
-            `docker compose pull && docker compose up -d` to roll
-            forward. Or click **Update** in `/admin/system`.
-          append_body: true
+          # Hand-written changelog — admins read this from the in-app Update
+          # banner (/admin/system), so it must NOT be auto-generated. Update
+          # RELEASE_NOTES.md per release; it also lists the published images.
+          body_path: RELEASE_NOTES.md

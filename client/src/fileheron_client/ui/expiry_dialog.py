@@ -18,7 +18,7 @@ from typing import Optional, Tuple
 import customtkinter as ctk
 from tkcalendar import DateEntry
 
-from ..i18n import t
+from ..i18n import get_locale, t
 from .app import center_window
 
 
@@ -55,6 +55,11 @@ class ExpiryDialog:
             day=default.day,
             mindate=datetime.now().date(),
             date_pattern="yyyy-mm-dd",
+            # Pin to the app locale (en/de) so the bundled .exe only needs
+            # those Babel CLDR files — the spec trims the rest. Without this,
+            # tkcalendar defaults to the host's system locale and would raise
+            # UnknownLocaleError on a machine whose locale was trimmed away.
+            locale=get_locale(),
         )
         self._date.pack(side="left", padx=(0, 8))
 

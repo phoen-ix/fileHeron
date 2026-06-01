@@ -46,9 +46,21 @@ datas = [
     ),
 ]
 datas += _ctk_datas + _dnd_datas
-# tkcalendar pulls Babel locale data for its date rendering.
 datas += collect_data_files("tkcalendar")
-datas += collect_data_files("babel")
+
+# tkcalendar pulls Babel for its date rendering, and Babel ships the FULL
+# CLDR locale database — ~30 MB across 1000+ `locale-data/*.dat` files, the
+# single biggest chunk of the .exe. The app only ever renders the date picker
+# in en/de (DateEntry is pinned to the app locale in the UI code), so keep
+# only `root` (Babel's ultimate fallback) + `en*` + `de*` and drop the rest.
+# Everything outside `locale-data/` (e.g. global.dat) is kept untouched.
+_BABEL_KEEP_LANGS = {"root", "en", "de"}
+for _src, _dest in collect_data_files("babel"):
+    _p = Path(_src)
+    if "locale-data" in _p.parts and _p.suffix == ".dat":
+        if _p.stem.split("_", 1)[0] not in _BABEL_KEEP_LANGS:
+            continue  # drop this locale's CLDR data
+    datas.append((_src, _dest))
 
 binaries = _ctk_bins + _dnd_bins
 
@@ -93,6 +105,13 @@ a = Analysis(
         "PySide6",
         "PyQt6",
         "PyQt5",
+        # Pillow (~17 MB) is pulled in only by customtkinter's CTkImage,
+        # which this app never uses (the window icon goes through
+        # tkinter.PhotoImage, not PIL). CTkImage's `from PIL import ...`
+        # is wrapped in try/except ImportError, so excluding PIL is safe —
+        # `import customtkinter` still works; only CTkImage would be
+        # unavailable. Saves a large chunk of the bundle.
+        "PIL",
     ],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,

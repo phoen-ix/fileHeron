@@ -1,38 +1,27 @@
-# Desktop client 0.9.1
+# Desktop client 0.9.2
 
-A UX-polish release focused on the sign-in experience and the session
-lifecycle. The client now lives in a **single window** for the whole session.
+A slimming + packaging release. No change to how you sign in or use the app.
 
-## Highlights
+## Smaller download
 
-- **Login is now an in-window overlay.** Instead of a separate login window
-  popping up *before* the main window, the app opens directly and presents the
-  sign-in form as a dimmed overlay with a centered card. One window, start to
-  finish.
-- **Signing out no longer closes the app.** After you sign out you land back on
-  the sign-in overlay (server and email pre-filled, secrets cleared), ready to
-  sign in again — no relaunch needed.
-- **Expired sessions recover gracefully.** If your session is revoked or
-  expires (an admin disables the account, the refresh token is no longer
-  valid, …), the app returns you to the sign-in screen with a clear
-  *“Your session expired — please sign in again”* message instead of leaving
-  you stuck on a dead screen.
+The Windows `.exe` is **substantially leaner**. Two things were bloating the
+bundle:
 
-## Polish
+- **Babel locale data** — the date picker pulled in the *entire* Unicode CLDR
+  database (~30 MB across 1,000+ locale files). The app only ever shows dates in
+  English or German, so the build now ships just those (plus the universal
+  fallback) and drops the rest.
+- **Pillow** — an image library pulled in transitively but never actually used
+  (the window icon uses Tk's own image loader). It's now excluded from the build.
 
-- The main window and every dialog now open **centered on screen** rather than
-  in the top-left corner.
-- A **progress indicator** runs during sign-in, so a slow connection no longer
-  looks like a frozen button.
-- The **recipient picker is fully localized** now (German + English) — a few
-  buttons and labels that were still English-only have been translated.
+Same features, same behavior — just a faster download and less disk.
 
-## Under the hood
+## Small fix
 
-- The login → main → sign-out → session-expiry flow is coordinated by a single
-  controller in one Tk mainloop (no modal `wait_window`), which also sidesteps
-  the long-standing Windows “invisible window” race more cleanly.
-- Client-only release — no server/API changes; it talks to the same REST API.
+- The expiry **date picker now follows the app language** (English/German) instead
+  of the operating system's locale. Dates were already displayed as `YYYY-MM-DD`;
+  this makes the pop-up calendar's month/day names match the rest of the app, and
+  is what lets the build above ship without every locale's data.
 
 ---
 

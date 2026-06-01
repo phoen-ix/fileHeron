@@ -43,8 +43,10 @@ export const useAuthStore = defineStore('auth', () => {
     bootstrapPromise = (async () => {
       try {
         // GET /me — succeeds if access token is still valid; otherwise the
-        // axios interceptor will try /auth/refresh and retry once.
-        const resp = await getMe()
+        // axios interceptor will try /auth/refresh and retry once. _skipAuthLost
+        // keeps a failed probe from redirecting to /login (e.g. an anonymous
+        // visitor on a public /d/:token page).
+        const resp = await getMe({ _skipAuthLost: true })
         user.value = resp.data
       } catch {
         user.value = null

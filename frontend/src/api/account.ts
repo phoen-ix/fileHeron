@@ -1,3 +1,5 @@
+import type { AxiosRequestConfig } from 'axios'
+
 import api from './client'
 import type { Locale, MeResponse, SessionListResponse, UserRole } from '@/types/api'
 
@@ -14,8 +16,8 @@ export interface InviteResponse {
   expires_at: string
 }
 
-export function getMe() {
-  return api.get<MeResponse>('/account/me')
+export function getMe(config?: AxiosRequestConfig) {
+  return api.get<MeResponse>('/account/me', config)
 }
 
 export function updateLocale(locale: Locale) {

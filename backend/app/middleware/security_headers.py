@@ -2,37 +2,52 @@
 
 CSP is intentionally relaxed for `style-src 'self' 'unsafe-inline'` to support
 Element Plus (it injects scoped styles inline). Documented in CLAUDE.md.
+
+Implemented as **pure ASGI** (not BaseHTTPMiddleware) so it doesn't wrap the
+response body — preserving ``FileResponse``'s zero-copy ``os.sendfile`` for
+large downloads (BaseHTTPMiddleware throttled them to a crawl).
 """
 from __future__ import annotations
 
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.requests import Request
-from starlette.responses import Response
+from starlette.datastructures import MutableHeaders
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
+
+_CSP = (
+    "default-src 'self'; "
+    "script-src 'self'; "
+    "style-src 'self' 'unsafe-inline'; "
+    "img-src 'self' data: blob:; "
+    "font-src 'self' data:; "
+    "connect-src 'self'; "
+    "object-src 'none'; "
+    "base-uri 'self'; "
+    "form-action 'self'; "
+    "frame-ancestors 'none'"
+)
 
 
-class SecurityHeadersMiddleware(BaseHTTPMiddleware):
-    def __init__(self, app, *, is_production: bool = False) -> None:
-        super().__init__(app)
+class SecurityHeadersMiddleware:
+    def __init__(self, app: ASGIApp, *, is_production: bool = False) -> None:
+        self._app = app
         self._is_production = is_production
 
-    async def dispatch(self, request: Request, call_next):
-        response: Response = await call_next(request)
-        response.headers["X-Content-Type-Options"] = "nosniff"
-        response.headers["X-Frame-Options"] = "DENY"
-        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-        response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
-        response.headers["Content-Security-Policy"] = (
-            "default-src 'self'; "
-            "script-src 'self'; "
-            "style-src 'self' 'unsafe-inline'; "
-            "img-src 'self' data: blob:; "
-            "font-src 'self' data:; "
-            "connect-src 'self'; "
-            "object-src 'none'; "
-            "base-uri 'self'; "
-            "form-action 'self'; "
-            "frame-ancestors 'none'"
-        )
-        if self._is_production:
-            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
-        return response
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self._app(scope, receive, send)
+            return
+
+        async def send_wrapper(message: Message) -> None:
+            if message["type"] == "http.response.start":
+                headers = MutableHeaders(raw=message.setdefault("headers", []))
+                headers["X-Content-Type-Options"] = "nosniff"
+                headers["X-Frame-Options"] = "DENY"
+                headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+                headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+                headers["Content-Security-Policy"] = _CSP
+                if self._is_production:
+                    headers["Strict-Transport-Security"] = (
+                        "max-age=31536000; includeSubDomains"
+                    )
+            await send(message)
+
+        await self._app(scope, receive, send_wrapper)

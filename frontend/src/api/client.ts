@@ -15,6 +15,16 @@ import axios, { type AxiosError, type AxiosRequestConfig } from 'axios'
 
 import type { ApiErrorEnvelope, RefreshResponse } from '@/types/api'
 
+declare module 'axios' {
+  // Per-request opt-out: when true, a 401 that can't be refreshed away does
+  // NOT trigger the global onAuthLost() redirect. Used by the app-bootstrap
+  // session probe (getMe) so an anonymous visitor on a PUBLIC page isn't
+  // bounced to /login before the router guard can honor meta.public.
+  interface AxiosRequestConfig {
+    _skipAuthLost?: boolean
+  }
+}
+
 const api = axios.create({
   baseURL: '/api',
   timeout: 30000,
@@ -99,7 +109,9 @@ api.interceptors.response.use(
       if (refreshed) {
         return api(original)
       }
-      onAuthLost?.()
+      // The bootstrap session-probe opts out: a failed probe just means
+      // "anonymous", it must not force a navigation to /login.
+      if (!original._skipAuthLost) onAuthLost?.()
     }
 
     return Promise.reject(error)

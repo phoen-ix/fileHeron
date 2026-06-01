@@ -12,11 +12,11 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI
-from fastapi.middleware.gzip import GZipMiddleware
 
 from .config import settings
 from .database import SessionLocal
 from .middleware.errors import AppError, app_error_handler, unhandled_exception_handler
+from .middleware.gzip import SelectiveGZipMiddleware
 from .middleware.request_id import RequestIdMiddleware
 from .middleware.security_headers import SecurityHeadersMiddleware
 from .routers import (
@@ -69,8 +69,10 @@ app = FastAPI(
 
 # Outer-most first to inner-most: security_headers wraps everything (so error
 # responses still get the headers); request_id provides correlation; gzip is
-# innermost so error envelopes get compressed too.
-app.add_middleware(GZipMiddleware, minimum_size=1024)
+# innermost so error envelopes get compressed too. Gzip is SELECTIVE — it skips
+# file-download responses (gzipping a multi-GB binary is pointless + defeats
+# FileResponse sendfile, making downloads crawl).
+app.add_middleware(SelectiveGZipMiddleware, minimum_size=1024)
 app.add_middleware(RequestIdMiddleware)
 app.add_middleware(SecurityHeadersMiddleware, is_production=settings.is_production)
 

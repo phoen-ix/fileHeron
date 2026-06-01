@@ -20,10 +20,19 @@ proxies external HTTPS to those local ports.
    `X-Forwarded-Proto` to decide whether to issue Secure cookies —
    if the proxy strips that header, login silently breaks. Make
    sure Traefik forwards it (the snippet below does).
-3. **Body-size limits matter for uploads.** TUS streams chunks (5 MB
-   default) but the SPA also uses the direct-upload path for
-   <100 MB files. Set Traefik's max body to at least
-   `MAX_DIRECT_UPLOAD_BYTES + 10%`.
+3. **Body-size limits matter for uploads — but scope them to the
+   direct-upload path only.** The SPA uploads <100 MB files via
+   `POST /api/uploads/direct`; cap that with the `buffering` middleware
+   at `MAX_DIRECT_UPLOAD_BYTES + 10%`. (The backend also enforces the
+   cap with a `413`, so this is defense-in-depth.)
+4. **NEVER put the `buffering` middleware on `/api/` or `/uploads/`.**
+   Traefik's `buffering` middleware buffers **responses** too
+   (`maxResponseBodyBytes` defaults to *unlimited*), so a multi-GB
+   download is spooled to disk on the Traefik host **before the first
+   byte reaches the client** — minutes of latency and flaky/aborted
+   downloads. TUS (`/uploads/`) must likewise stream, not buffer.
+   Attach `fileheron-large-body` ONLY to a dedicated
+   `Path('/api/uploads/direct')` router (see below).
 
 ---
 
@@ -43,11 +52,15 @@ http:
         - fileheron-headers
         - fileheron-deny-internal
 
-    fileheron-api:
-      rule: "Host(`files.example.com`) && PathPrefix(`/api/`)"
+    # Dedicated, higher-priority router for the ONE endpoint that needs a
+    # request-body cap. The buffering middleware lives ONLY here so it can
+    # never buffer download/streaming responses (see operator rule 4).
+    fileheron-api-upload:
+      rule: "Host(`files.example.com`) && Path(`/api/uploads/direct`)"
       entryPoints:
         - websecure
       service: fileheron-backend
+      priority: 60          # > fileheron-api so this exact path wins
       tls:
         certResolver: letsencrypt
       middlewares:
@@ -55,19 +68,31 @@ http:
         - fileheron-deny-internal
         - fileheron-large-body
 
+    fileheron-api:
+      rule: "Host(`files.example.com`) && PathPrefix(`/api/`)"
+      entryPoints:
+        - websecure
+      service: fileheron-backend
+      tls:
+        certResolver: letsencrypt
+      # NO fileheron-large-body here — buffering would spool every download
+      # response to disk before the first byte (operator rule 4).
+      middlewares:
+        - fileheron-headers
+        - fileheron-deny-internal
+
     fileheron-uploads:
       rule: "Host(`files.example.com`) && PathPrefix(`/uploads/`)"
       entryPoints:
         - websecure
       service: fileheron-backend
-      # tusd is reached via the SPA container's nginx proxy — same
-      # backend service as /api but with body-size + timeout
-      # appropriate for large streaming uploads.
+      # tusd is reached via the SPA container's nginx proxy. TUS streams
+      # 5 MB chunks and tusd enforces its own limits — NO buffering here,
+      # or large resumable uploads (and any download) stall.
       tls:
         certResolver: letsencrypt
       middlewares:
         - fileheron-headers
-        - fileheron-large-body
 
   services:
     fileheron-spa:
@@ -110,12 +135,15 @@ http:
       # your Traefik version.
 
     fileheron-large-body:
-      # Adjust to MAX_DIRECT_UPLOAD_BYTES + headroom; default is
-      # 100 MB direct upload + tusd chunked, so 110 MB is plenty
-      # for the API path. The /uploads/ TUS path streams 5 MB
-      # chunks so its body limit is much smaller.
+      # Adjust to MAX_DIRECT_UPLOAD_BYTES + headroom (~110 MiB for the
+      # 100 MB default). Attach ONLY to fileheron-api-upload — Traefik's
+      # buffering middleware ALSO buffers responses (memResponseBodyBytes
+      # 1 MB in RAM, the rest spooled to disk, maxResponseBodyBytes
+      # unlimited by default), which would break large downloads. The
+      # direct-upload response is tiny JSON, so buffering it is harmless.
       buffering:
         maxRequestBodyBytes: 115343360  # ~110 MiB
+        memRequestBodyBytes: 6291456    # 6 MiB in RAM before spilling to disk
 ```
 
 ---
@@ -183,5 +211,9 @@ providers:
       `Secure; HttpOnly; SameSite=Lax`
 - [ ] Upload a file >100 MB (forces TUS path); confirm completion
 - [ ] Upload a file <100 MB (forces direct path); confirm completion
+- [ ] **Download a multi-GB file and confirm the save dialog appears
+      within ~1-2s** (not minutes). If it stalls, a `buffering`
+      middleware is wrongly attached to `/api/` (operator rule 4):
+      `curl -o /dev/null -w '%{time_starttransfer}\n' <download-url>`
 - [ ] If `BACKUP_RESTIC_*` is set, run `scripts/backup.sh` once and
       confirm the snapshot lands in your repo

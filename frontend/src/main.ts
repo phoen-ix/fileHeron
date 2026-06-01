@@ -21,6 +21,9 @@ app.use(router)
 // first beforeEach can wait for the silent-refresh result.
 const auth = useAuthStore()
 auth.registerAuthLostHandler(() => {
+  // A public route (e.g. /d/:token) must never be bounced to login by a
+  // background 401 — the page works fully logged-out.
+  if (router.currentRoute.value.meta.public === true) return
   const path = router.currentRoute.value.fullPath
   router.push({
     name: 'login',

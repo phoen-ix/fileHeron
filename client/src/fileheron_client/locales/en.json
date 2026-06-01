@@ -229,6 +229,7 @@
     "status_success": "Share created and all files uploaded.",
     "status_partial": "Some uploads failed — see dialogs above.",
     "upload_failed_title": "Upload failed",
-    "upload_failed_body": "{name}\n\n{detail}"
+    "upload_failed_body": "{name}\n\n{detail}",
+    "upload_failed_toast": "Upload failed — {name}: {detail}"
   }
 }

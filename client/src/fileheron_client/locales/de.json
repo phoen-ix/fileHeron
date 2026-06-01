@@ -229,6 +229,7 @@
     "status_success": "Freigabe erstellt und alle Dateien hochgeladen.",
     "status_partial": "Einige Uploads fehlgeschlagen — siehe Hinweise oben.",
     "upload_failed_title": "Upload fehlgeschlagen",
-    "upload_failed_body": "{name}\n\n{detail}"
+    "upload_failed_body": "{name}\n\n{detail}",
+    "upload_failed_toast": "Upload fehlgeschlagen — {name}: {detail}"
   }
 }

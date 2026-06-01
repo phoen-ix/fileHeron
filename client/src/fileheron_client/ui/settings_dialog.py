@@ -17,7 +17,6 @@ from ..config import load_config, save_config
 from ..i18n import set_locale, t
 from ..models import MeResponse
 from .app import set_appearance_mode
-from . import _messagebox as mb
 
 
 class SettingsOverlay(ctk.CTkFrame):
@@ -171,6 +170,13 @@ class SettingsOverlay(ctk.CTkFrame):
         signout_btn.pack(side="right", padx=(0, 8))
         self._esc_targets.extend([self._close_btn, signout_btn])
 
+        # Inline status line (e.g. a failed language save) — no popup.
+        self._status_var = ctk.StringVar(value="")
+        ctk.CTkLabel(
+            outer, textvariable=self._status_var, text_color="#991b1b",
+            anchor="w", wraplength=380, justify="left",
+        ).grid(row=diag_row + 2, column=0, columnspan=2, sticky="ew", pady=(8, 0))
+
         # Esc closes. No grab_set, so bind on each focusable control.
         for w in self._esc_targets:
             w.bind("<Escape>", lambda _e: self._close())
@@ -219,16 +225,15 @@ class SettingsOverlay(ctk.CTkFrame):
         code = self._lang_label_to_code.get(label, "")
         applied = code or (self._me.locale or "en")
         set_locale(applied)
+        self._status_var.set("")
         try:
             updated = api_pkg.patch_locale(self._api, applied)
             self._me = updated
         except Exception as exc:
-            mb.warn(
-                self,
-                t("common.error"),
+            self._status_var.set(
                 t("settings.language_save_failed",
                   detail=getattr(exc, "message", None) or str(exc),
-                  locale=applied),
+                  locale=applied)
             )
 
     def _on_diag_toggled(self) -> None:

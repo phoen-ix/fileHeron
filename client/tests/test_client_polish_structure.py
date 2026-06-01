@@ -86,11 +86,17 @@ def test_widgets_has_toast_and_copy_helper() -> None:
 # ---- Informational popups are gone (toasts instead) -------------------------
 
 
-def test_no_info_popups_in_detail_or_upload() -> None:
+def test_info_and_error_popups_are_toasts() -> None:
+    # Neither info nor error popups in the upload / detail flows — they flash
+    # non-modal toasts instead.
     for name in ("share_detail_view.py", "upload_panel.py"):
-        assert "mb.info(" not in _src(name), f"{name} must not call mb.info (use a toast)"
+        assert "mb.info(" not in _src(name), f"{name}: use a toast, not mb.info"
+        assert "mb.warn(" not in _src(name), f"{name}: use a toast, not mb.warn"
+    # Settings + recipient pickers dropped the messagebox dependency entirely.
+    for name in ("settings_dialog.py", "recipient_picker.py"):
+        assert "_messagebox" not in _src(name), f"{name}: should have no popups left"
 
 
 def test_end_share_confirm_stays_modal() -> None:
-    # Destructive action keeps the blocking confirm.
+    # The one destructive action keeps the blocking yes/no confirm.
     assert "mb.confirm(" in _src("share_detail_view.py")

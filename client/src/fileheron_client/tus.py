@@ -21,7 +21,7 @@ import logging
 import time
 from pathlib import Path
 from typing import Callable, Optional
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlsplit, urlunsplit
 
 import httpx
 
@@ -45,6 +45,26 @@ def _absolute(server_url: str, location_or_path: str) -> str:
     if location_or_path.startswith(("http://", "https://")):
         return location_or_path
     return urljoin(server_url.rstrip("/") + "/", location_or_path.lstrip("/"))
+
+
+def _same_origin(server_url: str, location: str) -> str:
+    """Resolve a TUS ``Location`` but ALWAYS force it onto the scheme + host we
+    connected to.
+
+    tusd runs ``-behind-proxy`` and builds the created-upload Location from the
+    forwarded headers. If the reverse proxy passes ``X-Forwarded-Proto: http``
+    (e.g. nginx overriding it with ``$scheme`` on the internal hop), tusd hands
+    back an ``http://`` Location even though the client is on https. PATCHing
+    that triggers an http→https **308 redirect** that httpx won't follow — and
+    following it would strip the ``Authorization`` header across the scheme
+    change. The upload is always same-origin, so we keep only the path + query
+    from the Location and graft on our own scheme + host."""
+    su = urlsplit(server_url)
+    loc = urlsplit(location)
+    path = loc.path or "/"
+    if not loc.scheme and not loc.netloc and not path.startswith("/"):
+        path = "/" + path  # bare-relative Location, e.g. "uploads/abc"
+    return urlunsplit((su.scheme, su.netloc, path, loc.query, ""))
 
 
 def upload_tus(
@@ -87,12 +107,12 @@ def upload_tus(
         location = resp.headers.get("Location")
         if not location:
             raise TusError("TUS create response missing Location header")
-        # _absolute() already handles all three forms (full URL, root-relative
-        # /path, bare relative path). The old `if location.startswith("/")`
-        # guard left a bare-relative Location (e.g. "uploads/abc") un-resolved,
-        # which httpx then rejected mid-upload (finding C2). Resolve always —
-        # matches the create_url handling at the top of this function.
-        upload_url = _absolute(server_url, location)
+        # Force the upload URL onto OUR origin (scheme+host). A proxy that
+        # forwards X-Forwarded-Proto: http makes tusd emit an http:// Location;
+        # PATCHing it 308-redirects to https and the upload dies. See
+        # _same_origin. (Handles full-URL, root-relative, and bare-relative
+        # Locations — superset of the old _absolute resolution.)
+        upload_url = _same_origin(server_url, location)
 
         # 2. Stream chunks (with resume on failure).
         offset = 0

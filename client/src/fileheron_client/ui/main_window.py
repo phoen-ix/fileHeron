@@ -102,7 +102,7 @@ class MainWindow:
         )
         self.outbox.pack(fill="both", expand=True)
 
-        self.upload = UploadPanel(upload_tab, self._app_root, self._api)
+        self.upload = UploadPanel(upload_tab, self._app_root, self._api, flash=self.flash)
         self.upload.pack(fill="both", expand=True)
 
         # CTkTabview's tab change callback. Refresh the active list

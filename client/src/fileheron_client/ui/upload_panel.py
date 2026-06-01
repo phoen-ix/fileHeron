@@ -8,7 +8,7 @@ import webbrowser
 from datetime import datetime, timedelta
 from pathlib import Path
 from tkinter import filedialog
-from typing import Optional
+from typing import Callable, Optional
 
 import customtkinter as ctk
 from tkcalendar import DateEntry
@@ -18,7 +18,6 @@ from .. import api as api_pkg
 from ..api import ApiClient, ApiError
 from ..i18n import get_locale, t
 from ..models import ShareResponse
-from . import _messagebox as mb
 from .recipient_picker import RecipientPickerWidget
 from .upload_worker import start_upload
 from .widgets import alive, copy_to_clipboard_with_feedback, human_size
@@ -27,15 +26,27 @@ logger = logging.getLogger("fileheron_client.ui.upload")
 
 
 class UploadPanel(ctk.CTkFrame):
-    def __init__(self, master, root: ctk.CTk, api: ApiClient) -> None:
+    def __init__(
+        self, master, root: ctk.CTk, api: ApiClient,
+        *, flash: Optional[Callable[[str], None]] = None,
+    ) -> None:
         super().__init__(master)
         self._app_root = root
         self._api = api
+        self._flash = flash
         self._files: list[Path] = []
         self._completed = 0
         self._total_bytes = 0
         self._per_file_done: dict[str, int] = {}
         self._build()
+
+    def _toast(self, text: str, kind: str = "info") -> None:
+        """Non-modal notice (replaces interrupting mb.warn/info popups). Falls
+        back to the panel's status line if no toast callback was wired."""
+        if self._flash is not None:
+            self._flash(text, kind=kind)
+        else:
+            self.status_var.set(text)
 
     def _build(self) -> None:
         # v0.4.25 layout — designed to fit in 1000x640 without clipping:
@@ -297,11 +308,7 @@ class UploadPanel(ctk.CTkFrame):
         copy_to_clipboard_with_feedback(
             self, self._pl_result_url_var.get(),
             feedback_var=self._pl_result_copied_var,
-            on_fail=lambda: mb.warn(
-                self.winfo_toplevel(),
-                t("share_detail.copy_failed_title"),
-                t("share_detail.copy_failed_body"),
-            ),
+            on_fail=lambda: self._toast(t("share_detail.copy_failed_body"), kind="error"),
         )
 
     def _open_result_url(self) -> None:
@@ -383,11 +390,7 @@ class UploadPanel(ctk.CTkFrame):
             if not (0 <= hh < 24) or not (0 <= mm < 60):
                 raise ValueError
         except ValueError:
-            mb.warn(
-                self.winfo_toplevel(),
-                t("upload.err_invalid_time_title"),
-                t("upload.err_invalid_time_body"),
-            )
+            self._toast(t("upload.err_invalid_time_body"), kind="error")
             return None, False
         d = self._expiry_date.get_date()
         chosen = datetime(d.year, d.month, d.day, hh, mm)
@@ -404,11 +407,7 @@ class UploadPanel(ctk.CTkFrame):
             if n <= 0:
                 raise ValueError
         except ValueError:
-            mb.warn(
-                self.winfo_toplevel(),
-                t("upload.err_invalid_limit_title"),
-                t("upload.err_invalid_limit_body"),
-            )
+            self._toast(t("upload.err_invalid_limit_body"), kind="error")
             return None, False
         return n, True
 
@@ -419,11 +418,7 @@ class UploadPanel(ctk.CTkFrame):
             limit_str = self._pl_limit.get().strip()
             limit = int(limit_str) if limit_str else None
         except ValueError:
-            mb.warn(
-                self.winfo_toplevel(),
-                t("upload.err_invalid_pl_limit_title"),
-                t("upload.err_invalid_pl_limit_body"),
-            )
+            self._toast(t("upload.err_invalid_pl_limit_body"), kind="error")
             return None
         return {
             "password": self._pl_password.get().strip() or None,
@@ -437,19 +432,11 @@ class UploadPanel(ctk.CTkFrame):
         # Starting a new share dismisses the previous public-link result card.
         self._hide_pl_result()
         if not self._files:
-            mb.warn(
-                self.winfo_toplevel(),
-                t("upload.err_no_files_title"),
-                t("upload.err_no_files_body"),
-            )
+            self._toast(t("upload.err_no_files_body"), kind="error")
             return
         public_link = self._collect_public_link()
         if not self.recipients.has_any() and public_link is None:
-            mb.warn(
-                self.winfo_toplevel(),
-                t("upload.err_no_recipients_title"),
-                t("upload.err_no_recipients_body"),
-            )
+            self._toast(t("upload.err_no_recipients_body"), kind="error")
             return
         expires_at, never = self._collect_expiry()
         if not never and expires_at is None:
@@ -548,10 +535,9 @@ class UploadPanel(ctk.CTkFrame):
     def _on_one_failed(self, path: str, message: str) -> None:
         if not alive(self):
             return  # panel gone; nothing to warn about (C6)
-        mb.warn(
-            self.winfo_toplevel(),
-            t("upload.upload_failed_title"),
-            t("upload.upload_failed_body", name=Path(path).name, detail=message),
+        self._toast(
+            t("upload.upload_failed_toast", name=Path(path).name, detail=message),
+            kind="error",
         )
         self._completed += 1
         if self._completed == len(self._files):

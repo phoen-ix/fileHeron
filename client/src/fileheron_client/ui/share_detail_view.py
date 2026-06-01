@@ -256,11 +256,7 @@ class ShareDetailView(ctk.CTkFrame):
         copy_to_clipboard_with_feedback(
             self, self._pl_url_var.get(),
             feedback_var=self._pl_copied_var,
-            on_fail=lambda: mb.warn(
-                self.winfo_toplevel(),
-                t("share_detail.copy_failed_title"),
-                t("share_detail.copy_failed_body"),
-            ),
+            on_fail=lambda: self._toast(t("share_detail.copy_failed_body"), kind="error"),
         )
 
     def _open_pl_url(self) -> None:
@@ -284,7 +280,7 @@ class ShareDetailView(ctk.CTkFrame):
             if not alive(self):
                 return  # view gone; nothing to warn about (C6)
             msg = getattr(exc, "message", None) or str(exc)
-            mb.warn(self.winfo_toplevel(), t("share_detail.could_not_load_title"), msg)
+            self._toast(f'{t("share_detail.could_not_load_title")}: {msg}', kind="error")
             self._on_back()
 
         run_in_background(self._app_root, _fetch, on_done=_done, on_failed=_failed)
@@ -387,7 +383,7 @@ class ShareDetailView(ctk.CTkFrame):
 
         def _failed(exc):
             msg = getattr(exc, "message", None) or str(exc)
-            mb.warn(top, t("share_detail.end_share_failed_title"), msg)
+            self._toast(f'{t("share_detail.end_share_failed_title")}: {msg}', kind="error")
 
         run_in_background(self._app_root, _do, on_done=_done, on_failed=_failed)
 
@@ -418,7 +414,7 @@ class ShareDetailView(ctk.CTkFrame):
 
         def _failed(exc):
             msg = getattr(exc, "message", None) or str(exc)
-            mb.warn(top, t("share_detail.edit_failed_title"), msg)
+            self._toast(f'{t("share_detail.edit_failed_title")}: {msg}', kind="error")
 
         run_in_background(self._app_root, _do, on_done=_done, on_failed=_failed)
 
@@ -454,7 +450,7 @@ class ShareDetailView(ctk.CTkFrame):
 
         def _failed(exc):
             msg = getattr(exc, "message", None) or str(exc)
-            mb.warn(top, t("share_detail.edit_failed_title"), msg)
+            self._toast(f'{t("share_detail.edit_failed_title")}: {msg}', kind="error")
 
         run_in_background(self._app_root, _do, on_done=_done, on_failed=_failed)
 
@@ -546,7 +542,7 @@ class ShareDetailView(ctk.CTkFrame):
             if self._dl_in_flight <= 0:
                 self.progress.pack_forget()
             msg = getattr(exc, "message", None) or str(exc)
-            mb.warn(self.winfo_toplevel(), t("share_detail.download_failed_title"), msg)
+            self._toast(f'{t("share_detail.download_failed_title")}: {msg}', kind="error")
 
         run_with_progress(
             self._app_root, _do,

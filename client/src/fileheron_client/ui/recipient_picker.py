@@ -21,7 +21,6 @@ from ..i18n import t
 from ..models import GroupItem
 from ._async import run_in_background
 from .widgets import alive
-from . import _messagebox as mb
 
 # Bounded height for the inline result list so it doesn't blow up the dense
 # New-Share form.
@@ -156,9 +155,9 @@ class _InlineUserSearch(_InlineMultiSelectPanel):
         def _failed(exc):
             if not alive(self):
                 return
-            mb.warn(
-                self.winfo_toplevel(), t("recipient_picker.search_failed_title"),
-                getattr(exc, "message", None) or str(exc),
+            self.empty_var.set(
+                f'{t("recipient_picker.search_failed_title")}: '
+                f'{getattr(exc, "message", None) or str(exc)}'
             )
 
         run_in_background(self._app_root, _fetch, on_done=_done, on_failed=_failed)
@@ -183,9 +182,9 @@ class _InlineGroupSearch(_InlineMultiSelectPanel):
         def _failed(exc):
             if not alive(self):
                 return
-            mb.warn(
-                self.winfo_toplevel(), t("recipient_picker.load_groups_failed_title"),
-                getattr(exc, "message", None) or str(exc),
+            self.empty_var.set(
+                f'{t("recipient_picker.load_groups_failed_title")}: '
+                f'{getattr(exc, "message", None) or str(exc)}'
             )
 
         run_in_background(self._app_root, _fetch, on_done=_done, on_failed=_failed)

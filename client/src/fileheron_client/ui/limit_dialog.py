@@ -15,13 +15,14 @@ from typing import Optional, Tuple
 import customtkinter as ctk
 
 from ..i18n import t
+from .app import center_window
 
 
 class LimitDialog:
     def __init__(self, parent, current: Optional[int] = None) -> None:
         self._win = ctk.CTkToplevel(parent)
         self._win.title(t("limit_dialog.title"))
-        self._win.geometry("420x260")
+        center_window(self._win, 420, 260)
         self._win.resizable(False, False)
         self._win.transient(parent)
 

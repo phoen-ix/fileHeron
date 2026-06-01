@@ -2,9 +2,11 @@
 
 In the v0.3.x Qt version, MainWindow was a QMainWindow + the login was
 a separate QDialog. Here, the same ``ctk.CTk`` root we built in
-``app.build_root()`` hosts everything: during login it's hidden
-(``withdraw``); after sign-in we populate it with the tabview and
-show it (``deiconify``)."""
+``app.build_root()`` hosts everything. v0.9.1: the root is visible from
+startup with a ``LoginOverlay`` placed on top; after sign-in the
+``AppController`` constructs this window into the root and removes the
+overlay, and ``teardown()`` reverses it on sign-out / session-expiry (the
+app no longer quits on logout)."""
 from __future__ import annotations
 
 import tkinter as tk
@@ -15,9 +17,18 @@ import customtkinter as ctk
 from ..api import ApiClient
 from ..i18n import t
 from ..models import MeResponse
+from .app import reassert_visible
 from .settings_dialog import SettingsDialog
 from .share_list_panel import ShareListPanel
 from .upload_panel import UploadPanel
+
+# Tab keys — the lookup keys CTk uses for tab switching and that
+# ``_on_tab_changed`` matches against. The displayed label is the same
+# string for now (localised labels would require remapping the segmented
+# button text without changing the lookup key).
+TAB_INBOX = "Inbox"
+TAB_OUTBOX = "Outbox"
+TAB_NEW_SHARE = "New share"
 
 
 class MainWindow:
@@ -26,13 +37,20 @@ class MainWindow:
     methods the entry point calls (``show``, etc.) so the rest of the
     code reads naturally."""
 
-    def __init__(self, root: ctk.CTk, api: ApiClient, me: MeResponse) -> None:
+    def __init__(
+        self,
+        root: ctk.CTk,
+        api: ApiClient,
+        me: MeResponse,
+        *,
+        on_signed_out: Optional[callable] = None,
+    ) -> None:
         from .. import __version__
         self._version = __version__
         self._app_root = root
         self._api = api
         self._me = me
-        self._on_signed_out: Optional[callable] = None
+        self._on_signed_out = on_signed_out
         root.title(
             t("app.title_template",
               name=me.display_name, role=me.role, version=self._version)
@@ -47,10 +65,11 @@ class MainWindow:
     def _build_central(self) -> None:
         # Top bar with right-aligned ⚙ Settings button (replaces the
         # native menu bar that didn't honour dark mode on Windows).
-        top_bar = ctk.CTkFrame(self._app_root, fg_color="transparent")
-        top_bar.pack(fill="x", padx=8, pady=(8, 0))
+        # Held on self so teardown() can destroy it on sign-out.
+        self._top_bar = ctk.CTkFrame(self._app_root, fg_color="transparent")
+        self._top_bar.pack(fill="x", padx=8, pady=(8, 0))
         ctk.CTkButton(
-            top_bar, text=t("main_window.settings_button"),
+            self._top_bar, text=t("main_window.settings_button"),
             command=self._open_settings,
             width=110, height=28, fg_color="transparent",
             border_width=1, hover_color=("gray85", "gray25"),
@@ -59,14 +78,9 @@ class MainWindow:
         self.tabs = ctk.CTkTabview(self._app_root)
         self.tabs.pack(fill="both", expand=True, padx=8, pady=8)
 
-        # Tab keys stay in English — they're the lookup keys CTk
-        # uses for tab switching and ``_on_tab_changed`` matches
-        # against them. The DISPLAYED label is the same string for
-        # now; localised labels would require remapping the segmented
-        # button text without changing the lookup key.
-        inbox_tab = self.tabs.add("Inbox")
-        outbox_tab = self.tabs.add("Outbox")
-        upload_tab = self.tabs.add("New share")
+        inbox_tab = self.tabs.add(TAB_INBOX)
+        outbox_tab = self.tabs.add(TAB_OUTBOX)
+        upload_tab = self.tabs.add(TAB_NEW_SHARE)
 
         self.inbox = ShareListPanel(
             inbox_tab, self._app_root, self._api, self._me, box="inbox",
@@ -86,7 +100,7 @@ class MainWindow:
         # manual click. CTk's API surface is a bit awkward — the
         # tab-change signal is fired via a configure of the segmented
         # button — we poll via a simple StringVar trace.
-        self._active_tab = tk.StringVar(value="Inbox")
+        self._active_tab = tk.StringVar(value=TAB_INBOX)
         # v0.4.22: WRAP CTk's segmented-button command instead of
         # overwriting it. Earlier code just did
         #     self.tabs._segmented_button.configure(command=our_cb)
@@ -110,58 +124,44 @@ class MainWindow:
             pass
 
     def _on_tab_changed(self, name: str) -> None:
-        if name == "Inbox":
+        if name == TAB_INBOX:
             self.inbox.refresh()
-        elif name == "Outbox":
+        elif name == TAB_OUTBOX:
             self.outbox.refresh()
 
     def _open_settings(self) -> None:
         dlg = SettingsDialog(
             self._app_root, self._api, self._me,
-            on_signed_out=self._handle_signed_out,
+            on_signed_out=self._on_signed_out,
         )
         dlg.show_modal()
 
-    def _handle_signed_out(self) -> None:
-        # Caller in __main__ may want to know — bubble up if registered.
-        if self._on_signed_out is not None:
-            self._on_signed_out()
-        self._app_root.destroy()
-
-    def set_on_signed_out(self, callback) -> None:
-        self._on_signed_out = callback
-
-    def show(self) -> None:
-        # v0.4.13 traced the symptom: CTk's _windows_set_titlebar_color
-        # runs withdraw() → DWM call → deiconify() on Windows, and the
-        # deiconify gets lost when it lands mid-MainWindow-construction.
-        # The root stays withdrawn forever. v0.4.14 tried to disable
-        # CTk's routine and broke the login window. v0.4.15 keeps the
-        # routine alive but polls root.state() for 3 seconds after
-        # show() and re-deiconifies any time it's not 'normal'.
-        # v0.4.17 tried to patch the routine out — broke first-show.
-        # v0.4.18 reverted to v0.4.15's polling: known-working, but
-        # the polling races with CTk's DWM call so the title bar
-        # stays light even in dark mode. Accepted regression.
-        self._app_root.deiconify()
+    def post_show(self) -> None:
+        """Called by AppController after the overlay is removed. The root is
+        already visible (no withdraw in the overlay era), so this just brings
+        the tabs to front, runs the titlebar-withdraw safety net, and kicks
+        the first list load so the user doesn't see empty tabs."""
         self._app_root.lift()
-        self._app_root.focus_force()
-        # Aggressive safety net — poll every 50ms for 3s, force back
-        # to normal if anything withdraws us.
-        self._reassert_visible(remaining_ticks=60)
-        # Kick the first list load — without it the user sees empty
-        # tabs until they click around.
+        # Safety net — CTk's _windows_set_titlebar_color can withdraw the
+        # window on Windows; poll for 3s and force it back to normal.
+        reassert_visible(self._app_root, 60)
         self.inbox.refresh()
 
-    def _reassert_visible(self, remaining_ticks: int) -> None:
+    def teardown(self) -> None:
+        """Destroy the main UI (top bar + tabview) on sign-out / session
+        expiry so the AppController can place a fresh login overlay on a
+        clean root. Destroying the tabview recursively destroys both share
+        panels, the upload panel, any drilled-in detail view, and the
+        wrapped segmented-button callback (all descendants of self.tabs)."""
         try:
-            state = self._app_root.state()
-            if state != "normal":
-                self._app_root.deiconify()
-                self._app_root.lift()
+            self._top_bar.destroy()
         except Exception:
-            return
-        if remaining_ticks > 0:
-            self._app_root.after(
-                50, lambda: self._reassert_visible(remaining_ticks - 1)
-            )
+            pass
+        try:
+            self.tabs.destroy()
+        except Exception:
+            pass
+        try:
+            self._app_root.title("file:Heron")
+        except Exception:
+            pass

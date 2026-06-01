@@ -74,5 +74,8 @@ jobs:
         with:
           tag_name: ${{ github.ref_name }}
           name: 'Desktop client ${{ steps.ver.outputs.version }}'
-          generate_release_notes: true
+          # Ship the hand-written changelog, not auto-generated notes (the
+          # auto "What's Changed" list mixes in backend commits since tags
+          # share the repo). Update client/RELEASE_NOTES.md per release.
+          body_path: client/RELEASE_NOTES.md
           files: client/dist/fileheron-client.exe

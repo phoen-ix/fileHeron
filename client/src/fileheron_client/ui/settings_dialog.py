@@ -11,7 +11,7 @@ from ..api import ApiClient
 from ..config import load_config, save_config
 from ..i18n import get_locale, set_locale, t
 from ..models import MeResponse
-from .app import set_appearance_mode
+from .app import center_window, set_appearance_mode
 from . import _messagebox as mb
 
 
@@ -31,7 +31,7 @@ class SettingsDialog:
         self._cfg = load_config()
         self._win = ctk.CTkToplevel(root)
         self._win.title(t("settings.title"))
-        self._win.geometry("440x470")
+        center_window(self._win, 440, 470)
         self._win.resizable(False, False)
         self._win.transient(root)
         self._build()

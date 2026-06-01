@@ -1,10 +1,11 @@
 """Entry point: ``python -m fileheron_client`` or the installed
 ``fileheron-client`` console script.
 
-v0.4.0 architecture: one ``ctk.CTk`` root is created up-front and
-shared across the login phase + main window. We hide the root during
-login (the login dialog is a separate ``CTkToplevel``) and reveal it
-after a successful sign-in.
+v0.9.1 architecture: one ``ctk.CTk`` root is created up-front and shown
+immediately. ``AppController`` places a ``LoginOverlay`` (a CTkFrame) on top
+of it and swaps overlay ⇄ main window inside that single root — one mainloop,
+no separate login toplevel, no ``wait_window``. (Pre-v0.9.1 the root was
+hidden during a modal login toplevel and revealed after sign-in.)
 
 **Two-layer logging (v0.4.16):**
 
@@ -37,12 +38,11 @@ from datetime import datetime
 from pathlib import Path
 
 from fileheron_client._trace import init as init_trace, trace
-from fileheron_client.config import load_config, save_config
+from fileheron_client.config import load_config
 from fileheron_client.i18n import set_locale
 from fileheron_client.ui._async import init_async
 from fileheron_client.ui.app import build_root
-from fileheron_client.ui.login_window import LoginWindow
-from fileheron_client.ui.main_window import MainWindow
+from fileheron_client.ui.controller import AppController
 
 
 def _log_dir() -> Path:
@@ -203,52 +203,11 @@ def main(argv: list[str] | None = None) -> int:
     trace("initialising async poller")
     init_async(root)
 
-    root.withdraw()
-
-    main_window: MainWindow | None = None
-
-    def _on_signin(api, me) -> None:
-        # v0.4.13: only CONSTRUCT MainWindow here (widgets built into
-        # the still-withdrawn root). Actual show() happens AFTER login
-        # is destroyed — see below. The previous order (show before
-        # destroy) left the root in a stuck-withdrawn state on Windows
-        # — login's transient teardown swallowed the deiconify.
-        nonlocal main_window
-        trace(f"_on_signin called (role={me.role}, locale={me.locale!r})")
-        # v0.8.0: apply + cache the server-side locale so the main
-        # window renders correctly and subsequent launches start in
-        # the right language. Failure to persist isn't fatal — the
-        # in-memory set_locale call has already taken effect.
-        try:
-            set_locale(me.locale or "en")
-            if cfg.locale != (me.locale or ""):
-                cfg.locale = me.locale or ""
-                try:
-                    save_config(cfg)
-                except Exception as exc:
-                    trace(f"save_config (locale) failed: {exc!r}")
-        except Exception as exc:
-            trace(f"locale wiring failed (non-fatal): {exc!r}")
-        try:
-            main_window = MainWindow(root, api, me)
-            trace("MainWindow constructed (will show after login destroyed)")
-        except BaseException as exc:
-            trace(f"_on_signin RAISED: {type(exc).__name__}: {exc!r}")
-            raise
-
-    trace("opening LoginWindow")
-    login = LoginWindow(root, cfg, on_signed_in=_on_signin)
-    login.show_modal()
-    trace(f"LoginWindow.show_modal returned; main_window set? {main_window is not None}")
-
-    if main_window is None:
-        trace("no main_window — destroying root + exiting")
-        root.destroy()
-        return 0
-
-    trace("calling MainWindow.show() (login already destroyed)")
-    main_window.show()
-    trace(f"after show(): root.state()={root.state()!r} viewable={bool(root.winfo_viewable())}")
+    # The root is visible from the start; AppController places the login
+    # overlay on top of it and owns every screen transition from here on
+    # (sign-in → main, sign-out → overlay, session-expiry → overlay).
+    trace("starting AppController (login overlay on the root)")
+    AppController(root, cfg).start()
 
     # Heartbeat (diagnostic only): every 2s for the first 10s, log
     # root visibility state so we can diagnose "window never appears"

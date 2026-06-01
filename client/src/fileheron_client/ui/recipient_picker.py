@@ -20,8 +20,10 @@ import customtkinter as ctk
 
 from .. import api as api_pkg
 from ..api import ApiClient, ApiError
+from ..i18n import t
 from ..models import GroupItem, UserSearchItem
 from ._async import run_in_background
+from .app import center_window
 from . import _messagebox as mb
 
 
@@ -32,7 +34,7 @@ class _MultiSelectPickerDialog:
         self._app_root = root
         self._win = ctk.CTkToplevel(parent)
         self._win.title(title)
-        self._win.geometry("460x520")
+        center_window(self._win, 460, 520)
         self._win.transient(parent)
         self._selected_ids: list[int] = []
         self._selected_labels: list[str] = []
@@ -42,7 +44,8 @@ class _MultiSelectPickerDialog:
 
         self.search_var = ctk.StringVar()
         search = ctk.CTkEntry(
-            outer, textvariable=self.search_var, placeholder_text="Type to filter…"
+            outer, textvariable=self.search_var,
+            placeholder_text=t("common.search_placeholder_filter"),
         )
         search.pack(fill="x", pady=(0, 8))
         # Debounce typing via a single after-token we cancel + reissue
@@ -72,10 +75,13 @@ class _MultiSelectPickerDialog:
 
         btn_row = ctk.CTkFrame(outer, fg_color="transparent")
         btn_row.pack(fill="x", pady=(8, 0))
-        self._ok_btn = ctk.CTkButton(btn_row, text="OK", command=self._on_ok, width=90)
+        self._ok_btn = ctk.CTkButton(
+            btn_row, text=t("common.ok"), command=self._on_ok, width=90
+        )
         self._ok_btn.pack(side="right")
         ctk.CTkButton(
-            btn_row, text="Cancel", command=self._win.destroy, width=90, fg_color="gray",
+            btn_row, text=t("common.cancel"), command=self._win.destroy,
+            width=90, fg_color="gray",
         ).pack(side="right", padx=(0, 8))
 
     def _populate(self, rows: list[tuple[int, str]]) -> None:
@@ -89,7 +95,7 @@ class _MultiSelectPickerDialog:
             cb.pack(anchor="w", pady=2)
             self._row_vars.append((iid, label.split("  ·  ")[0], var))
         if not rows:
-            self.empty_var.set("No matches.")
+            self.empty_var.set(t("common.no_matches"))
         else:
             self.empty_var.set("")
 
@@ -111,7 +117,7 @@ class _MultiSelectPickerDialog:
 
 class UserPickerDialog(_MultiSelectPickerDialog):
     def __init__(self, root, parent, api: ApiClient) -> None:
-        super().__init__(root, parent, "Add recipients (users)")
+        super().__init__(root, parent, t("recipient_picker.users_title"))
         self._api = api
         self._reload()
 
@@ -129,11 +135,14 @@ class UserPickerDialog(_MultiSelectPickerDialog):
             self._populate(rows)
             if not rows:
                 self.empty_var.set(
-                    "No matches." if q else "No users available to address."
+                    t("common.no_matches") if q else t("recipient_picker.no_users")
                 )
 
         def _failed(exc):
-            mb.warn(self._win, "Search failed", getattr(exc, "message", None) or str(exc))
+            mb.warn(
+                self._win, t("recipient_picker.search_failed_title"),
+                getattr(exc, "message", None) or str(exc),
+            )
 
         run_in_background(self._app_root, _fetch, on_done=_done, on_failed=_failed)
 
@@ -142,7 +151,7 @@ class GroupPickerDialog(_MultiSelectPickerDialog):
     """One-shot fetch + local substring filter — groups are few."""
 
     def __init__(self, root, parent, api: ApiClient) -> None:
-        super().__init__(root, parent, "Add recipients (groups)")
+        super().__init__(root, parent, t("recipient_picker.groups_title"))
         self._api = api
         self._all_groups: list[GroupItem] = []
 
@@ -154,7 +163,10 @@ class GroupPickerDialog(_MultiSelectPickerDialog):
             self._reload()
 
         def _failed(exc):
-            mb.warn(self._win, "Could not load groups", getattr(exc, "message", None) or str(exc))
+            mb.warn(
+                self._win, t("recipient_picker.load_groups_failed_title"),
+                getattr(exc, "message", None) or str(exc),
+            )
 
         run_in_background(self._app_root, _fetch, on_done=_done, on_failed=_failed)
 
@@ -177,7 +189,7 @@ class GroupPickerDialog(_MultiSelectPickerDialog):
         self._populate(rows)
         if not rows:
             self.empty_var.set(
-                "No matches." if needle else "No groups available to address."
+                t("common.no_matches") if needle else t("recipient_picker.no_groups")
             )
 
 
@@ -194,27 +206,37 @@ class RecipientPickerWidget(ctk.CTkFrame):
         # Users row
         users_row = ctk.CTkFrame(self, fg_color="transparent")
         users_row.pack(fill="x", pady=(0, 4))
-        ctk.CTkLabel(users_row, text="Users:", width=60, anchor="w").pack(side="left")
-        self.users_summary_var = ctk.StringVar(value="(none)")
+        ctk.CTkLabel(
+            users_row, text=t("recipient_picker.users_label"), width=60, anchor="w"
+        ).pack(side="left")
+        self.users_summary_var = ctk.StringVar(value=t("recipient_picker.none"))
         ctk.CTkLabel(
             users_row, textvariable=self.users_summary_var, anchor="w", wraplength=300
         ).pack(side="left", fill="x", expand=True)
-        ctk.CTkButton(users_row, text="Add user…", width=90, command=self._add_users).pack(side="left")
         ctk.CTkButton(
-            users_row, text="Clear", width=60, command=self._clear_users, fg_color="gray",
+            users_row, text=t("recipient_picker.add_user"), width=90, command=self._add_users
+        ).pack(side="left")
+        ctk.CTkButton(
+            users_row, text=t("recipient_picker.clear"), width=60,
+            command=self._clear_users, fg_color="gray",
         ).pack(side="left", padx=(8, 0))
 
         # Groups row
         groups_row = ctk.CTkFrame(self, fg_color="transparent")
         groups_row.pack(fill="x")
-        ctk.CTkLabel(groups_row, text="Groups:", width=60, anchor="w").pack(side="left")
-        self.groups_summary_var = ctk.StringVar(value="(none)")
+        ctk.CTkLabel(
+            groups_row, text=t("recipient_picker.groups_label"), width=60, anchor="w"
+        ).pack(side="left")
+        self.groups_summary_var = ctk.StringVar(value=t("recipient_picker.none"))
         ctk.CTkLabel(
             groups_row, textvariable=self.groups_summary_var, anchor="w", wraplength=300
         ).pack(side="left", fill="x", expand=True)
-        ctk.CTkButton(groups_row, text="Add group…", width=90, command=self._add_groups).pack(side="left")
         ctk.CTkButton(
-            groups_row, text="Clear", width=60, command=self._clear_groups, fg_color="gray",
+            groups_row, text=t("recipient_picker.add_group"), width=90, command=self._add_groups
+        ).pack(side="left")
+        ctk.CTkButton(
+            groups_row, text=t("recipient_picker.clear"), width=60,
+            command=self._clear_groups, fg_color="gray",
         ).pack(side="left", padx=(8, 0))
 
     # ---- public API ----
@@ -267,8 +289,8 @@ class RecipientPickerWidget(ctk.CTkFrame):
 
     def _render(self) -> None:
         self.users_summary_var.set(
-            ", ".join(self._user_labels) if self._user_labels else "(none)"
+            ", ".join(self._user_labels) if self._user_labels else t("recipient_picker.none")
         )
         self.groups_summary_var.set(
-            ", ".join(self._group_labels) if self._group_labels else "(none)"
+            ", ".join(self._group_labels) if self._group_labels else t("recipient_picker.none")
         )

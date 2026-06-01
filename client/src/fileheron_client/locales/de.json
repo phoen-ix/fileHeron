@@ -34,6 +34,8 @@
     "toggle_to_password": "Stattdessen E-Mail + Passwort verwenden",
     "sign_in": "Anmelden",
     "signing_in": "Wird angemeldet…",
+    "quit": "Beenden",
+    "session_expired": "Ihre Sitzung ist abgelaufen — bitte erneut anmelden.",
 
     "err_server_required": "Server-URL ist erforderlich.",
     "err_email_required": "E-Mail ist erforderlich.",
@@ -53,6 +55,21 @@
     "tab_outbox": "Ausgang",
     "tab_new_share": "Neue Freigabe",
     "settings_button": "⚙  Einstellungen"
+  },
+
+  "recipient_picker": {
+    "users_title": "Empfänger hinzufügen (Benutzer)",
+    "groups_title": "Empfänger hinzufügen (Gruppen)",
+    "users_label": "Benutzer:",
+    "groups_label": "Gruppen:",
+    "add_user": "Benutzer hinzufügen…",
+    "add_group": "Gruppe hinzufügen…",
+    "clear": "Leeren",
+    "none": "(keine)",
+    "no_users": "Keine adressierbaren Benutzer verfügbar.",
+    "no_groups": "Keine adressierbaren Gruppen verfügbar.",
+    "search_failed_title": "Suche fehlgeschlagen",
+    "load_groups_failed_title": "Gruppen konnten nicht geladen werden"
   },
 
   "settings": {

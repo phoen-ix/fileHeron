@@ -16,6 +16,7 @@ from typing import Optional
 import customtkinter as ctk
 
 from ..i18n import t
+from .app import center_window
 
 
 def confirm(
@@ -64,7 +65,7 @@ def _modal(
     win.title(title)
     # Modal: grab focus + block until closed.
     win.transient(parent)
-    win.geometry("420x180")
+    center_window(win, 420, 180)
     win.resizable(False, False)
 
     container = ctk.CTkFrame(win, fg_color="transparent")

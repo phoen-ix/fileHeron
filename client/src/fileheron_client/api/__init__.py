@@ -1,5 +1,5 @@
 from .account import patch_locale
-from .client import ApiClient, ApiError
+from .client import ApiClient, ApiError, SessionExpiredError
 from .auth import login, login_with_recovery, refresh, logout, me
 from .files import download_file, get_download_url
 from .groups import list_recipient_groups
@@ -19,6 +19,7 @@ from .users import search_users
 __all__ = [
     "ApiClient",
     "ApiError",
+    "SessionExpiredError",
     "login",
     "login_with_recovery",
     "refresh",

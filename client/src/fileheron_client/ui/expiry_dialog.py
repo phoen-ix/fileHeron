@@ -19,13 +19,14 @@ import customtkinter as ctk
 from tkcalendar import DateEntry
 
 from ..i18n import t
+from .app import center_window
 
 
 class ExpiryDialog:
     def __init__(self, parent, current: Optional[datetime] = None) -> None:
         self._win = ctk.CTkToplevel(parent)
         self._win.title(t("expiry_dialog.title"))
-        self._win.geometry("460x300")
+        center_window(self._win, 460, 300)
         self._win.resizable(False, False)
         self._win.transient(parent)
 

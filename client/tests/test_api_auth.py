@@ -5,7 +5,7 @@ import httpx
 import pytest
 import respx
 
-from fileheron_client.api import ApiClient, ApiError
+from fileheron_client.api import ApiClient, ApiError, SessionExpiredError
 from fileheron_client.api import auth as auth_api
 
 
@@ -118,7 +118,11 @@ def test_401_triggers_one_refresh_then_replays():
 
 
 @respx.mock
-def test_401_after_failed_refresh_propagates():
+def test_401_after_failed_refresh_raises_session_expired():
+    """v0.9.1: when a 401 can't be recovered by a refresh, the client raises
+    SessionExpiredError (a subclass of ApiError) so the UI's async layer can
+    bounce the user back to the login overlay instead of rendering an inline
+    error on a dead screen."""
     respx.get(f"{SERVER}/api/account/me").mock(
         return_value=httpx.Response(401, json={"code": "TOKEN_EXPIRED", "error": "expired"})
     )
@@ -126,10 +130,11 @@ def test_401_after_failed_refresh_propagates():
         return_value=httpx.Response(401, json={"code": "REFRESH_INVALID", "error": "bad"})
     )
     api = ApiClient(SERVER, access_token="OLD")
-    with pytest.raises(ApiError) as ei:
+    with pytest.raises(SessionExpiredError) as ei:
         auth_api.me(api)
-    # Original 401 surfaces (we don't re-retry after refresh fails).
+    assert isinstance(ei.value, ApiError)  # still matches existing panel checks
     assert ei.value.status_code == 401
+    assert ei.value.code == "SESSION_EXPIRED"
 
 
 @respx.mock

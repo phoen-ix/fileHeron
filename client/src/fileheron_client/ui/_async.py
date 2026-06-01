@@ -24,7 +24,32 @@ import queue
 import threading
 from typing import Any, Callable, Optional
 
+from ..api.client import SessionExpiredError
+
 _log = logging.getLogger("fileheron_client.ui._async")
+
+# Set once by AppController. When a worker raises SessionExpiredError we route
+# it here (marshaled to the main thread) instead of the per-call on_failed, so
+# every panel bounces back to login without special-casing it individually.
+_session_expired_handler: Optional[Callable[[], None]] = None
+
+
+def set_session_expired_handler(fn: Optional[Callable[[], None]]) -> None:
+    global _session_expired_handler
+    _session_expired_handler = fn
+
+
+def _route_failure(
+    exc: Exception, on_failed: Optional[Callable[[Exception], None]]
+) -> None:
+    """Marshal a worker-thread failure onto the main-thread queue. A dead
+    session is intercepted and sent to the global handler; everything else
+    goes to the call's own ``on_failed``."""
+    if isinstance(exc, SessionExpiredError) and _session_expired_handler is not None:
+        _enqueue(_session_expired_handler, ())
+        return
+    if on_failed is not None:
+        _enqueue(on_failed, (exc,))
 
 # Module-global queue. Workers push (callback, args) tuples; the main-
 # thread poller in init_async drains them. Simpler than wiring a queue
@@ -88,8 +113,7 @@ def run_in_background(
         try:
             result = fn()
         except Exception as exc:
-            if on_failed is not None:
-                _enqueue(on_failed, (exc,))
+            _route_failure(exc, on_failed)
             return
         if on_done is not None:
             _enqueue(on_done, (result,))
@@ -118,8 +142,7 @@ def run_with_progress(
         try:
             result = fn(_tick)
         except Exception as exc:
-            if on_failed is not None:
-                _enqueue(on_failed, (exc,))
+            _route_failure(exc, on_failed)
             return
         if on_done is not None:
             _enqueue(on_done, (result,))

@@ -34,6 +34,8 @@
     "toggle_to_password": "Use email + password instead",
     "sign_in": "Sign in",
     "signing_in": "Signing in…",
+    "quit": "Quit",
+    "session_expired": "Your session expired — please sign in again.",
 
     "err_server_required": "Server URL is required.",
     "err_email_required": "Email is required.",
@@ -53,6 +55,21 @@
     "tab_outbox": "Outbox",
     "tab_new_share": "New share",
     "settings_button": "⚙  Settings"
+  },
+
+  "recipient_picker": {
+    "users_title": "Add recipients (users)",
+    "groups_title": "Add recipients (groups)",
+    "users_label": "Users:",
+    "groups_label": "Groups:",
+    "add_user": "Add user…",
+    "add_group": "Add group…",
+    "clear": "Clear",
+    "none": "(none)",
+    "no_users": "No users available to address.",
+    "no_groups": "No groups available to address.",
+    "search_failed_title": "Search failed",
+    "load_groups_failed_title": "Could not load groups"
   },
 
   "settings": {

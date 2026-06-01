@@ -32,6 +32,16 @@ class ApiError(Exception):
         return f"[{self.status_code} {self.code}] {self.message}"
 
 
+class SessionExpiredError(ApiError):
+    """Raised when a 401 could not be recovered by a token refresh — the
+    session is truly dead (revoked refresh token, disabled account, …).
+
+    Subclasses ``ApiError`` so existing ``isinstance(exc, ApiError)`` checks
+    in the panels still match (no regression), but the UI's async layer
+    intercepts it specifically to bounce the user back to the login overlay
+    instead of rendering an inline error on a now-unusable screen."""
+
+
 def _envelope_from_response(resp: httpx.Response) -> ApiError:
     try:
         body = resp.json()
@@ -173,6 +183,15 @@ class ApiClient:
                         files=files,
                         retry_on_401=False,
                     )
+            # Refresh was attempted (we had an access token, this isn't an
+            # /api/auth call, not an API-token session) but didn't yield a
+            # usable token → the session is dead. Signal the UI to return to
+            # login rather than letting a raw 401 surface as a panel error.
+            raise SessionExpiredError(
+                status_code=401,
+                code="SESSION_EXPIRED",
+                message="Your session expired. Please sign in again.",
+            )
         return resp
 
     def request_or_raise(

@@ -19,6 +19,7 @@ from ..services import download_token as download_token_svc
 from ..services import file as file_svc
 from ..services import share as share_svc
 from ..services.audit import record_audit_event
+from ..utils.http_range import is_partial_continuation
 from ..utils.ua_fingerprint import ua_fingerprint_hash
 
 logger = logging.getLogger("fileheron.files")
@@ -164,40 +165,44 @@ def download_file(
         logger.error("file %s has missing storage_path: %r", file.id, file.storage_path)
         raise AppError(500, "STORAGE_MISSING", "File data is missing on disk.")
 
-    # v1.1.0: per-share download budget. Atomic decrement; if the
-    # counter is already at 0 we refuse with 410 before logging/sending.
-    # NULL limit = unlimited, the helper's WHERE clause skips the case.
-    if share.download_limit is not None:
-        if not share_svc.try_decrement_share_counter(db, share=share):
-            raise AppError(
-                410,
-                "SHARE_DOWNLOAD_LIMIT_REACHED",
-                "This share has reached its download limit.",
-            )
+    # Parallel/segmented downloads send several ranged GETs for one logical
+    # download; the byte-0 (or full) request counts it, the continuation
+    # ranges must not re-decrement or re-log. See utils/http_range.
+    if not is_partial_continuation(request):
+        # v1.1.0: per-share download budget. Atomic decrement; if the
+        # counter is already at 0 we refuse with 410 before logging/sending.
+        # NULL limit = unlimited, the helper's WHERE clause skips the case.
+        if share.download_limit is not None:
+            if not share_svc.try_decrement_share_counter(db, share=share):
+                raise AppError(
+                    410,
+                    "SHARE_DOWNLOAD_LIMIT_REACHED",
+                    "This share has reached its download limit.",
+                )
 
-    # Log the download.
-    via = DownloadVia.api_token if getattr(request.state, "auth_via", "") == "api_token" else DownloadVia.auth
-    db.add(
-        DownloadLog(
-            file_id=file.id,
-            share_id=file.share_id,
-            accessed_by_user_id=user.id,
-            ip=(request.client.host if request.client else None),
-            ua_fingerprint_hash=ua_fingerprint_hash(request.headers.get("user-agent", "")),
-            bytes_served=file.size_bytes,
-            via=via,
+        # Log the download.
+        via = DownloadVia.api_token if getattr(request.state, "auth_via", "") == "api_token" else DownloadVia.auth
+        db.add(
+            DownloadLog(
+                file_id=file.id,
+                share_id=file.share_id,
+                accessed_by_user_id=user.id,
+                ip=(request.client.host if request.client else None),
+                ua_fingerprint_hash=ua_fingerprint_hash(request.headers.get("user-agent", "")),
+                bytes_served=file.size_bytes,
+                via=via,
+            )
         )
-    )
-    record_audit_event(
-        db,
-        event_type=AuditEventType.file_downloaded,
-        actor_user_id=user.id,
-        target_type="file",
-        target_id=file.id,
-        metadata={"via": via.value, "share_id": file.share_id},
-        request=request,
-    )
-    db.commit()
+        record_audit_event(
+            db,
+            event_type=AuditEventType.file_downloaded,
+            actor_user_id=user.id,
+            target_type="file",
+            target_id=file.id,
+            metadata={"via": via.value, "share_id": file.share_id},
+            request=request,
+        )
+        db.commit()
 
     # FastAPI's FileResponse uses os.sendfile under uvicorn — kernel-level
     # zero-copy from the disk fd to the socket. The Content-Disposition

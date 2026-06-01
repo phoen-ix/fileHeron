@@ -46,6 +46,7 @@ from ..schemas.public_link import (
 )
 from ..services import public_link as public_link_svc
 from ..services.audit import record_audit_event
+from ..utils.http_range import is_partial_continuation
 from ..utils.ua_fingerprint import ua_fingerprint_hash
 
 logger = logging.getLogger("fileheron.public")
@@ -226,48 +227,52 @@ def public_download(
     if file.state == FileState.deleted:
         raise AppError(410, "FILE_DELETED", "File has been deleted.")
 
-    # Counter (atomic). On success, `downloads_remaining` reflects the
-    # post-decrement value used by the owner notification below.
-    allowed, downloads_remaining = public_link_svc.decrement_counter(db, link=link)
-    if not allowed:
-        db.commit()
-        raise AppError(
-            410, "PUBLIC_LINK_EXHAUSTED", "This public link's download limit has been reached."
-        )
-
     if not file.storage_path or not Path(file.storage_path).is_file():
         logger.error("public download: storage missing for %s", file.id)
         raise AppError(500, "STORAGE_MISSING", "File data is missing on disk.")
 
-    ip = request.client.host if request.client else None
-    db.add(
-        DownloadLog(
-            file_id=file.id,
-            share_id=file.share_id,
-            accessed_by_user_id=None,
-            ip=ip,
-            ua_fingerprint_hash=ua_fingerprint_hash(request.headers.get("user-agent", "")),
-            bytes_served=file.size_bytes,
-            via=DownloadVia.public,
-        )
-    )
-    record_audit_event(
-        db,
-        event_type=AuditEventType.file_downloaded,
-        actor_user_id=None,
-        target_type="file",
-        target_id=file.id,
-        metadata={"via": "public", "share_id": file.share_id, "public_link_id": link.id},
-        request=request,
-    )
-    public_link_svc.record_consumption(
-        db, link=link, file_id=file.id, ip=ip, request=request
-    )
-    public_link_svc.notify_owner_on_download(
-        db, link=link, file=file, downloads_remaining=downloads_remaining
-    )
+    # Parallel/segmented downloads send several ranged GETs for one logical
+    # download; the byte-0 (or full) request counts it + logs, the continuation
+    # ranges must not re-decrement or re-log. See utils/http_range.
+    if not is_partial_continuation(request):
+        # Counter (atomic). On success, `downloads_remaining` reflects the
+        # post-decrement value used by the owner notification below.
+        allowed, downloads_remaining = public_link_svc.decrement_counter(db, link=link)
+        if not allowed:
+            db.commit()
+            raise AppError(
+                410, "PUBLIC_LINK_EXHAUSTED", "This public link's download limit has been reached."
+            )
 
-    db.commit()
+        ip = request.client.host if request.client else None
+        db.add(
+            DownloadLog(
+                file_id=file.id,
+                share_id=file.share_id,
+                accessed_by_user_id=None,
+                ip=ip,
+                ua_fingerprint_hash=ua_fingerprint_hash(request.headers.get("user-agent", "")),
+                bytes_served=file.size_bytes,
+                via=DownloadVia.public,
+            )
+        )
+        record_audit_event(
+            db,
+            event_type=AuditEventType.file_downloaded,
+            actor_user_id=None,
+            target_type="file",
+            target_id=file.id,
+            metadata={"via": "public", "share_id": file.share_id, "public_link_id": link.id},
+            request=request,
+        )
+        public_link_svc.record_consumption(
+            db, link=link, file_id=file.id, ip=ip, request=request
+        )
+        public_link_svc.notify_owner_on_download(
+            db, link=link, file=file, downloads_remaining=downloads_remaining
+        )
+
+        db.commit()
 
     return FileResponse(
         path=file.storage_path,

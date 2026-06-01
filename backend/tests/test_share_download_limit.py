@@ -267,6 +267,87 @@ async def test_download_url_refuses_when_exhausted(
     assert r.json()["code"] == "SHARE_DOWNLOAD_LIMIT_REACHED"
 
 
+# ---------------------------------------------------------------------------
+# Partial-range (parallel/segmented download) counting — utils/http_range.
+# ---------------------------------------------------------------------------
+
+
+def test_is_partial_continuation_helper():
+    from starlette.requests import Request
+
+    from app.utils.http_range import is_partial_continuation
+
+    def _req(range_val):
+        headers = [(b"range", range_val.encode())] if range_val is not None else []
+        return Request({"type": "http", "headers": headers})
+
+    assert is_partial_continuation(_req("bytes=5-10")) is True
+    assert is_partial_continuation(_req("bytes=0-10")) is False  # byte-0 counts
+    assert is_partial_continuation(_req(None)) is False  # full request counts
+    assert is_partial_continuation(_req("bytes=-100")) is False  # suffix range
+
+
+@pytest.mark.asyncio
+async def test_partial_range_does_not_decrement(
+    make_user, db, client, login_as, monkeypatch
+):
+    sender, recipient, share, file_row = _setup_share_with_file(
+        make_user, db, monkeypatch, download_limit=1
+    )
+    token, _ = await login_as("rec@test.local", "Pass12345678!")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # A continuation range (start > 0) returns 206 but must NOT decrement.
+    r = await client.get(
+        f"/api/files/{file_row.id}/download",
+        headers={**headers, "Range": "bytes=5-10"},
+    )
+    assert r.status_code == 206, r.text
+    db.refresh(share)
+    assert share.downloads_remaining == 1  # untouched
+
+    # The byte-0 range counts the download once.
+    r = await client.get(
+        f"/api/files/{file_row.id}/download",
+        headers={**headers, "Range": "bytes=0-3"},
+    )
+    assert r.status_code == 206, r.text
+    db.refresh(share)
+    assert share.downloads_remaining == 0
+
+
+@pytest.mark.asyncio
+async def test_parallel_ranges_count_once_and_log_once(
+    make_user, db, client, login_as, monkeypatch
+):
+    from app.models.download_log import DownloadLog
+
+    sender, recipient, share, file_row = _setup_share_with_file(
+        make_user, db, monkeypatch, download_limit=1
+    )
+    token, _ = await login_as("rec@test.local", "Pass12345678!")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # Two segments of one logical download against a limit-1 share: the byte-0
+    # segment counts, the start>0 segment must still succeed (not 410) and not
+    # re-count — i.e. a parallel download of a limited share works.
+    r0 = await client.get(
+        f"/api/files/{file_row.id}/download",
+        headers={**headers, "Range": "bytes=0-9"},
+    )
+    rN = await client.get(
+        f"/api/files/{file_row.id}/download",
+        headers={**headers, "Range": "bytes=10-22"},
+    )
+    assert r0.status_code == 206, r0.text
+    assert rN.status_code == 206, rN.text  # NOT 410, despite remaining==0
+
+    db.refresh(share)
+    assert share.downloads_remaining == 0  # decremented exactly once
+    logs = db.query(DownloadLog).filter(DownloadLog.file_id == file_row.id).count()
+    assert logs == 1  # one DownloadLog for the whole parallel download
+
+
 @pytest.mark.asyncio
 async def test_unlimited_share_downloads_freely(
     make_user, db, client, login_as, monkeypatch

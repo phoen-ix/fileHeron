@@ -42,6 +42,7 @@ _KNOWN_CRONS = [
     "ops_check",
     "cleanup_expired_tokens",
     "quota_reconcile",
+    "cleanup_stale_uploads",
     "cleanup_abandoned_uploads",
     "release_check",
     "purge_old_quarantine",

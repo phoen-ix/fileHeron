@@ -152,7 +152,7 @@ export interface UpdateGroupRequest {
 /* Shares */
 
 export type ShareKind = 'outbound' | 'inbound'
-export type ShareState = 'active' | 'expired' | 'revoked' | 'deleted'
+export type ShareState = 'active' | 'expired' | 'revoked' | 'deleted' | 'failed'
 export type FileState =
   | 'pending'
   | 'ready_unscanned'

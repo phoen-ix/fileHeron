@@ -103,7 +103,7 @@ const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize.v
 function pillForState(state: ShareState): string | undefined {
   if (state === 'active') return 'active'
   if (state === 'expired') return 'warn'
-  if (state === 'revoked' || state === 'deleted') return 'danger'
+  if (state === 'revoked' || state === 'deleted' || state === 'failed') return 'danger'
   return undefined
 }
 
@@ -169,6 +169,7 @@ onMounted(load)
         <option value="expired">{{ t('share_state.expired') }}</option>
         <option value="revoked">{{ t('share_state.revoked') }}</option>
         <option value="deleted">{{ t('share_state.deleted') }}</option>
+        <option value="failed">{{ t('share_state.failed') }}</option>
       </select>
 
       <select v-model="partyKind" class="filter-select">

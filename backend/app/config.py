@@ -72,6 +72,11 @@ class Settings(BaseSettings):
     # Abandoned TUS uploads (no DB row, or row stuck in `uploading` state)
     # older than this get unlinked from /data/uploads.
     TUS_UPLOAD_ABANDONED_AFTER_HOURS: int = 24
+    # A `files` row stuck in `uploading` longer than this is treated as an
+    # abandoned/failed upload: cleanup_stale_uploads reaps the file and flips
+    # the now-empty share to `failed`. Short because legit uploads finish well
+    # under the ~1h TUS resume window.
+    UPLOAD_STALE_AFTER_HOURS: int = 3
 
     # --- Argon2id parameters -------------------------------------------------
     ARGON2_TIME_COST: int = 3

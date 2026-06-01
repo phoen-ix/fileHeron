@@ -18,6 +18,7 @@ _PILL_COLOURS: dict[str, tuple[str, str]] = {
     "active": ("#dcfce7", "#166534"),
     "expired": ("#fef3c7", "#92400e"),
     "revoked": ("#fee2e2", "#991b1b"),
+    "failed": ("#fee2e2", "#991b1b"),
     "deleted": ("#e5e7eb", "#374151"),
     "clean": ("#dcfce7", "#166534"),
     "ready_unscanned": ("#fef3c7", "#92400e"),

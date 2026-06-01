@@ -37,6 +37,11 @@ class ShareState(str, enum.Enum):
     expired = "expired"
     revoked = "revoked"
     deleted = "deleted"
+    # Upload never completed — the cleanup_stale_uploads cron reaps the
+    # abandoned file(s) and flips the otherwise-empty share here so it leaves
+    # the active sent folder. Stored as VARCHAR (native_enum=False) so adding
+    # this value needs no migration; "failed" (6) fits length=10.
+    failed = "failed"
 
 
 def _utcnow() -> datetime:

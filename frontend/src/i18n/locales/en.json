@@ -994,7 +994,8 @@
     "active": "Active",
     "expired": "Expired",
     "revoked": "Revoked",
-    "deleted": "Deleted"
+    "deleted": "Deleted",
+    "failed": "Failed"
   },
   "share_create": {
     "eyebrow": "Compose",

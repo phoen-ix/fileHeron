@@ -101,6 +101,7 @@ class Keys:
     QUARANTINE_PURGE_AFTER_DAYS = "retention.quarantine_purge_days"
     ORPHAN_RECLAIM_AFTER_DAYS = "retention.orphan_reclaim_days"
     TUS_UPLOAD_ABANDONED_AFTER_HOURS = "retention.tus_abandoned_hours"
+    UPLOAD_STALE_AFTER_HOURS = "retention.upload_stale_hours"
     MAX_DIRECT_UPLOAD_BYTES = "uploads.max_direct_bytes"
     HIBP_ENABLED = "security.hibp_enabled"
     APP_NAME = "branding.app_name"

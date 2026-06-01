@@ -994,7 +994,8 @@
     "active": "Aktiv",
     "expired": "Abgelaufen",
     "revoked": "Widerrufen",
-    "deleted": "Gelöscht"
+    "deleted": "Gelöscht",
+    "failed": "Fehlgeschlagen"
   },
   "share_create": {
     "eyebrow": "Verfassen",

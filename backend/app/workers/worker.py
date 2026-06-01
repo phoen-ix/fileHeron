@@ -9,6 +9,7 @@ Hourly, staggered so they don't pile up at minute 0:
 - ops_check: minute=15            (sees the :00/:07 outcomes when scanning for failures)
 - cleanup_expired_tokens: minute=23
 - quota_reconcile: minute=37
+- cleanup_stale_uploads: minute=41
 - cleanup_abandoned_uploads: minute=47
 - release_check: minute=53
 Daily housekeeping at 02:xx (well clear of business hours):
@@ -32,6 +33,7 @@ from .cleanup_abandoned_uploads import cleanup_abandoned_uploads
 from .cleanup_expired_tokens import cleanup_expired_tokens
 from .cleanup_pending_invites import cleanup_pending_invites
 from .cleanup_read_notifications import cleanup_read_notifications
+from .cleanup_stale_uploads import cleanup_stale_uploads
 from .expire_files import expire_files
 from .ops_check import ops_check
 from .prune_history import prune_history
@@ -58,6 +60,7 @@ class WorkerSettings:
         quota_reconcile,
         ops_check,
         cleanup_abandoned_uploads,
+        cleanup_stale_uploads,
         purge_old_quarantine,
         prune_history,
         release_check,
@@ -73,7 +76,10 @@ class WorkerSettings:
         cron(ops_check, hour=None, minute={15}, run_at_startup=False),
         cron(cleanup_expired_tokens, hour=None, minute={23}, run_at_startup=False),
         cron(quota_reconcile, hour=None, minute={37}, run_at_startup=False),
-        # Hourly TUS orphan sweep.
+        # Reap DB `files` rows stuck in `uploading` (abandoned uploads) +
+        # fail their now-empty shares.
+        cron(cleanup_stale_uploads, hour=None, minute={41}, run_at_startup=False),
+        # Hourly TUS orphan sweep (disk working dir).
         cron(cleanup_abandoned_uploads, hour=None, minute={47}, run_at_startup=False),
         # GitHub releases poll for in-app "update available" surface.
         cron(release_check, hour=None, minute={53}, run_at_startup=False),

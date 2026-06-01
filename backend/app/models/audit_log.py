@@ -104,6 +104,10 @@ class AuditEventType(str, enum.Enum):
     rollback_failed = "rollback_failed"
     # Phase 5: admin-editable Updates settings (URL + check_mode).
     updates_settings_changed = "updates_settings_changed"
+    # v1.5.1: cleanup_stale_uploads reaper — an upload abandoned in `uploading`
+    # past retention.upload_stale_hours, and the share it left empty.
+    file_upload_abandoned = "file_upload_abandoned"
+    share_failed = "share_failed"
 
 
 def _utcnow() -> datetime:

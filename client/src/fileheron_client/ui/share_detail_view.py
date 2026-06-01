@@ -515,9 +515,15 @@ class ShareDetailView(ctk.CTkFrame):
         self.progress.set(0)
         self._dl_in_flight += 1
 
+        from ..config import load_config
+        conns = load_config().download_connections
+
         def _do(tick):
-            api_pkg.download_file(
-                self._api, file_id, dest=dest, on_progress=tick,
+            # Segmented (parallel-range) download for large files; falls back
+            # to a single stream when ranges aren't supported / file is small /
+            # connections <= 1.
+            api_pkg.download_file_segmented(
+                self._api, file_id, dest=dest, connections=conns, on_progress=tick,
             )
             return str(dest)
 

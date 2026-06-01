@@ -45,6 +45,9 @@ class ClientConfig:
     # screen renders in the user's language without a round trip.
     # Empty = use server's users.locale at sign-in; valid: 'en', 'de'.
     locale: str = ""
+    # v0.9.6: number of parallel connections for large downloads (segmented
+    # HTTP Range). 1 disables segmenting (single stream). Clamped 1..8.
+    download_connections: int = 4
 
     def normalised_server_url(self) -> str:
         return (self.server_url or "").rstrip("/")
@@ -66,6 +69,7 @@ def load_config() -> ClientConfig:
         "last_landing",
         "enable_diagnostic_logging",
         "locale",
+        "download_connections",
     ):
         if k in raw and raw[k] is not None:
             setattr(cfg, k, raw[k])

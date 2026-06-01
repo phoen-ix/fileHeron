@@ -231,5 +231,21 @@
     "upload_failed_title": "Upload fehlgeschlagen",
     "upload_failed_body": "{name}\n\n{detail}",
     "upload_failed_toast": "Upload fehlgeschlagen — {name}: {detail}"
+  },
+  "upload_progress": {
+    "title": "Dateien werden hochgeladen",
+    "files_heading": "Dateien",
+    "log_heading": "Aktivitätsprotokoll",
+    "state_pending": "Ausstehend",
+    "state_uploading": "Wird hochgeladen…",
+    "state_done": "Fertig",
+    "state_failed": "Fehlgeschlagen",
+    "log_started": "Upload gestartet — {name}",
+    "log_done": "Upload abgeschlossen — {name}",
+    "log_failed": "Upload fehlgeschlagen — {name}: {detail}",
+    "status_all_done": "Alle {n} Datei(en) hochgeladen.",
+    "status_partial": "{failed} von {total} Upload(s) fehlgeschlagen.",
+    "new_share_btn": "Neue Freigabe",
+    "view_outbox_btn": "Im Postausgang anzeigen"
   }
 }

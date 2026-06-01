@@ -102,7 +102,10 @@ class MainWindow:
         )
         self.outbox.pack(fill="both", expand=True)
 
-        self.upload = UploadPanel(upload_tab, self._app_root, self._api, flash=self.flash)
+        self.upload = UploadPanel(
+            upload_tab, self._app_root, self._api,
+            flash=self.flash, on_view_outbox=self._go_to_outbox,
+        )
         self.upload.pack(fill="both", expand=True)
 
         # CTkTabview's tab change callback. Refresh the active list
@@ -138,6 +141,14 @@ class MainWindow:
             self.inbox.refresh()
         elif name == TAB_OUTBOX:
             self.outbox.refresh()
+
+    def _go_to_outbox(self) -> None:
+        """Switch to the Outbox tab + refresh — wired into the upload-progress
+        view's 'View in Outbox' action. Uses the public CTkTabview.set (not the
+        wrapped _segmented_button command); .set doesn't fire that wrapped
+        auto-refresh callback, so refresh explicitly."""
+        self.tabs.set(TAB_OUTBOX)
+        self.outbox.refresh()
 
     def _open_settings(self) -> None:
         if self._settings_overlay is not None:

@@ -231,5 +231,21 @@
     "upload_failed_title": "Upload failed",
     "upload_failed_body": "{name}\n\n{detail}",
     "upload_failed_toast": "Upload failed — {name}: {detail}"
+  },
+  "upload_progress": {
+    "title": "Uploading files",
+    "files_heading": "Files",
+    "log_heading": "Activity log",
+    "state_pending": "Pending",
+    "state_uploading": "Uploading…",
+    "state_done": "Done",
+    "state_failed": "Failed",
+    "log_started": "Upload started — {name}",
+    "log_done": "Upload complete — {name}",
+    "log_failed": "Upload failed — {name}: {detail}",
+    "status_all_done": "All {n} file(s) uploaded.",
+    "status_partial": "{failed} of {total} upload(s) failed.",
+    "new_share_btn": "New share",
+    "view_outbox_btn": "View in Outbox"
   }
 }

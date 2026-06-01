@@ -4,7 +4,6 @@ byte-driven aggregate progress."""
 from __future__ import annotations
 
 import logging
-import webbrowser
 from datetime import datetime, timedelta
 from pathlib import Path
 from tkinter import filedialog
@@ -15,12 +14,12 @@ from tkcalendar import DateEntry
 from tkinterdnd2 import DND_FILES
 
 from .. import api as api_pkg
-from ..api import ApiClient, ApiError
+from ..api import ApiClient
 from ..i18n import get_locale, t
 from ..models import ShareResponse
 from .recipient_picker import RecipientPickerWidget
-from .upload_worker import start_upload
-from .widgets import alive, copy_to_clipboard_with_feedback, human_size
+from .upload_progress_view import UploadProgressView
+from .widgets import alive, human_size
 
 logger = logging.getLogger("fileheron_client.ui.upload")
 
@@ -28,16 +27,18 @@ logger = logging.getLogger("fileheron_client.ui.upload")
 class UploadPanel(ctk.CTkFrame):
     def __init__(
         self, master, root: ctk.CTk, api: ApiClient,
-        *, flash: Optional[Callable[[str], None]] = None,
+        *,
+        flash: Optional[Callable[[str], None]] = None,
+        on_view_outbox: Optional[Callable[[], None]] = None,
     ) -> None:
         super().__init__(master)
         self._app_root = root
         self._api = api
         self._flash = flash
+        self._on_view_outbox = on_view_outbox
         self._files: list[Path] = []
-        self._completed = 0
-        self._total_bytes = 0
-        self._per_file_done: dict[str, int] = {}
+        # Set while drilled into the upload-progress view (see _on_created).
+        self._progress_view: Optional[UploadProgressView] = None
         self._build()
 
     def _toast(self, text: str, kind: str = "info") -> None:
@@ -57,18 +58,15 @@ class UploadPanel(ctk.CTkFrame):
         #   row 4: Files header + scrollable list (fills slack)
         #   row 5 (PINNED BOTTOM): Add files / Clear list /
         #          status text / Create share + upload + progress bar
-        outer = ctk.CTkFrame(self, fg_color="transparent")
-        outer.pack(fill="both", expand=True, padx=8, pady=8)
+        self._form_outer = ctk.CTkFrame(self, fg_color="transparent")
+        self._form_outer.pack(fill="both", expand=True, padx=8, pady=8)
 
         # ---- Bottom-pinned action area (packed FIRST so side=bottom
         # claims its space; later top-packed widgets fill above it).
+        # Per-file progress + the public-link result now live on the
+        # dedicated UploadProgressView (drilled into on send).
 
-        self.progress = ctk.CTkProgressBar(outer)
-        self.progress.set(0)
-        self.progress.pack(side="bottom", fill="x", pady=(6, 0))
-        self.progress.pack_forget()
-
-        action_row = ctk.CTkFrame(outer, fg_color="transparent")
+        action_row = ctk.CTkFrame(self._form_outer, fg_color="transparent")
         action_row.pack(side="bottom", fill="x", pady=(6, 0))
         ctk.CTkButton(action_row, text=t("upload.add_files_btn"), command=self._on_add).pack(side="left")
         ctk.CTkButton(
@@ -87,26 +85,21 @@ class UploadPanel(ctk.CTkFrame):
 
         # ---- Top form ----
 
-        # Public-link result card — built hidden; revealed at the very top of
-        # the form after a share with a public link is created (so the URL is
-        # kept + copyable, not dumped in a one-time popup).
-        self._build_pl_result_section(outer)
-
         # Subject + Message (full width)
-        self._subject_label = ctk.CTkLabel(outer, text=t("upload.subject_label"), anchor="w")
+        self._subject_label = ctk.CTkLabel(self._form_outer, text=t("upload.subject_label"), anchor="w")
         self._subject_label.pack(fill="x")
         self.subject_var = ctk.StringVar()
         ctk.CTkEntry(
-            outer, textvariable=self.subject_var,
+            self._form_outer, textvariable=self.subject_var,
             placeholder_text=t("upload.subject_placeholder"),
         ).pack(fill="x", pady=(0, 6))
 
-        ctk.CTkLabel(outer, text=t("upload.message_label"), anchor="w").pack(fill="x")
-        self.message_text = ctk.CTkTextbox(outer, height=50)
+        ctk.CTkLabel(self._form_outer, text=t("upload.message_label"), anchor="w").pack(fill="x")
+        self.message_text = ctk.CTkTextbox(self._form_outer, height=50)
         self.message_text.pack(fill="x", pady=(0, 8))
 
         # Two-column row: Recipients (left) | Expires (right)
-        two_col = ctk.CTkFrame(outer, fg_color="transparent")
+        two_col = ctk.CTkFrame(self._form_outer, fg_color="transparent")
         two_col.pack(fill="x", pady=(0, 8))
         two_col.grid_columnconfigure(0, weight=1, uniform="cols")
         two_col.grid_columnconfigure(1, weight=1, uniform="cols")
@@ -127,13 +120,13 @@ class UploadPanel(ctk.CTkFrame):
 
         # Public link — one compact inline row instead of a boxed
         # 4-row sub-form. Saves ~110 px of vertical space.
-        self._build_public_link_section(outer)
+        self._build_public_link_section(self._form_outer)
 
         # Files: label + scrollable list. Expands to fill leftover
         # space between the form above and the pinned action row.
-        ctk.CTkLabel(outer, text=t("upload.files_label"), anchor="w").pack(fill="x")
+        ctk.CTkLabel(self._form_outer, text=t("upload.files_label"), anchor="w").pack(fill="x")
         self._file_list_frame = ctk.CTkScrollableFrame(
-            outer, fg_color=("gray90", "gray20"), height=80,
+            self._form_outer, fg_color=("gray90", "gray20"), height=80,
         )
         self._file_list_frame.pack(fill="both", expand=True, pady=(2, 0))
 
@@ -263,63 +256,6 @@ class UploadPanel(ctk.CTkFrame):
         else:
             self._pl_fields_row.pack_forget()
 
-    # ---- public-link result card ----
-
-    def _build_pl_result_section(self, parent) -> None:
-        self._pl_result_section = ctk.CTkFrame(parent, border_width=1, fg_color="transparent")
-        inner = ctk.CTkFrame(self._pl_result_section, fg_color="transparent")
-        inner.pack(fill="x", padx=8, pady=8)
-        ctk.CTkLabel(
-            inner, text=t("upload.public_link_result_note"), anchor="w",
-            text_color=("#166534", "#bbf7d0"), wraplength=560,
-        ).pack(fill="x", pady=(0, 6))
-        url_row = ctk.CTkFrame(inner, fg_color="transparent")
-        url_row.pack(fill="x")
-        self._pl_result_url_var = ctk.StringVar(value="")
-        ctk.CTkEntry(
-            url_row, textvariable=self._pl_result_url_var, state="readonly",
-        ).pack(side="left", fill="x", expand=True)
-        ctk.CTkButton(
-            url_row, text=t("share_detail.pl_copy"), width=80, command=self._copy_result_url,
-        ).pack(side="left", padx=(8, 0))
-        ctk.CTkButton(
-            url_row, text=t("share_detail.pl_open"), width=80, command=self._open_result_url,
-        ).pack(side="left", padx=(4, 0))
-        self._pl_result_copied_var = ctk.StringVar(value="")
-        ctk.CTkLabel(
-            inner, textvariable=self._pl_result_copied_var, anchor="w",
-            text_color=("#166534", "#bbf7d0"),
-        ).pack(fill="x", pady=(4, 0))
-        # Not packed here — revealed by _show_pl_result.
-
-    def _show_pl_result(self, url: str) -> None:
-        self._pl_result_url_var.set(url)
-        self._pl_result_copied_var.set("")
-        # Reveal at the very top of the form (above Subject).
-        self._pl_result_section.pack(fill="x", pady=(0, 8), before=self._subject_label)
-
-    def _hide_pl_result(self) -> None:
-        try:
-            self._pl_result_section.pack_forget()
-        except Exception:
-            pass
-
-    def _copy_result_url(self) -> None:
-        copy_to_clipboard_with_feedback(
-            self, self._pl_result_url_var.get(),
-            feedback_var=self._pl_result_copied_var,
-            on_fail=lambda: self._toast(t("share_detail.copy_failed_body"), kind="error"),
-        )
-
-    def _open_result_url(self) -> None:
-        url = self._pl_result_url_var.get()
-        if not url:
-            return
-        try:
-            webbrowser.open(url)
-        except Exception:
-            pass
-
     # ---- file list helpers ----
 
     def _on_add(self) -> None:
@@ -429,8 +365,6 @@ class UploadPanel(ctk.CTkFrame):
     # ---- submit + upload ----
 
     def _on_send(self) -> None:
-        # Starting a new share dismisses the previous public-link result card.
-        self._hide_pl_result()
         if not self._files:
             self._toast(t("upload.err_no_files_body"), kind="error")
             return
@@ -463,21 +397,13 @@ class UploadPanel(ctk.CTkFrame):
             )
 
         def _on_created(share: ShareResponse):
-            if public_link is not None:
-                pl = getattr(share, "public_link", None)
-                url = None
-                if isinstance(pl, dict):
-                    url = pl.get("url")
-                elif pl is not None:
-                    url = getattr(pl, "url", None)
-                if url:
-                    # Persistent inline result (URL + Copy + Open) instead of a
-                    # one-time popup — the link is also re-viewable on the
-                    # share's detail page.
-                    self._show_pl_result(url)
-            self._start_uploads(share)
+            if not alive(self):
+                return  # panel torn down mid-create (C6)
+            self._drill_in_to_progress(share)
 
         def _on_create_failed(exc):
+            if not alive(self):
+                return  # panel gone; nothing to restore (C6)
             self.send_btn.configure(state="normal", text=t("upload.send_btn"))
             msg = getattr(exc, "message", None) or str(exc)
             self.status_var.set(t("upload.status_err", detail=msg))
@@ -485,78 +411,42 @@ class UploadPanel(ctk.CTkFrame):
         from ._async import run_in_background
         run_in_background(self._app_root, _create, on_done=_on_created, on_failed=_on_create_failed)
 
-    def _start_uploads(self, share: ShareResponse) -> None:
-        self.status_var.set(
-            t("upload.status_uploading",
-              short_id=share.id[:8], n=len(self._files)),
+    # ---- drill-down to / from the upload-progress view ----
+
+    def _drill_in_to_progress(self, share: ShareResponse) -> None:
+        """Hide the form, pack a fresh UploadProgressView in its place, and
+        run the uploads there. Mirrors ShareListPanel's detail drill-in.
+        ``list(self._files)`` snapshots the selection so the later form reset
+        (which clears self._files) doesn't mutate the view's list."""
+        self._form_outer.pack_forget()
+        self._progress_view = UploadProgressView(
+            self, self._app_root, self._api,
+            share, list(self._files),
+            on_new_share=self._drill_out_to_form,
+            on_view_outbox=self._on_view_outbox,
+            flash=self._flash,
         )
-        # v0.5.3: re-pack with side="bottom" matching _build()'s
-        # original geometry, otherwise the bar lands at the top of the
-        # form (default side="top") instead of in the pinned bottom row.
-        self.progress.pack(side="bottom", fill="x", pady=(6, 0))
-        self.progress.set(0)
-        self._completed = 0
-        self._total_bytes = sum(p.stat().st_size for p in self._files)
-        self._per_file_done = {}
-        for p in self._files:
-            start_upload(
-                self._app_root, self._api,
-                share_id=share.id,
-                file_path=p,
-                on_progress=self._on_chunk_progress,
-                on_done=self._on_one_done,
-                on_failed=self._on_one_failed,
-            )
+        self._progress_view.pack(fill="both", expand=True)
+        self._progress_view.start_uploads()
 
-    def _on_chunk_progress(self, path: str, done: int, _total: int) -> None:
-        if not alive(self):
-            return  # panel torn down mid-upload (C6)
-        self._per_file_done[path] = done
-        if self._total_bytes <= 0:
-            return
-        done_total = sum(self._per_file_done.values())
-        pct = max(0.0, min(1.0, done_total / self._total_bytes))
-        self.progress.set(pct)
-
-    def _on_one_done(self, path: str, _file_id: str) -> None:
-        if not alive(self):
-            return  # panel gone; nothing to update (C6)
-        try:
-            self._per_file_done[path] = Path(path).stat().st_size
-        except OSError:
-            pass
-        self._completed += 1
-        if self._completed == len(self._files):
-            self.progress.set(1.0)
-            self._reset_form_after_send(success=True)
-        else:
-            self._on_chunk_progress(path, self._per_file_done.get(path, 0), 0)
-
-    def _on_one_failed(self, path: str, message: str) -> None:
-        if not alive(self):
-            return  # panel gone; nothing to warn about (C6)
-        self._toast(
-            t("upload.upload_failed_toast", name=Path(path).name, detail=message),
-            kind="error",
-        )
-        self._completed += 1
-        if self._completed == len(self._files):
-            self._reset_form_after_send(success=False)
-
-    def _reset_form_after_send(self, *, success: bool) -> None:
+    def _drill_out_to_form(self) -> None:
+        """Destroy the progress view, restore a cleared form."""
+        if self._progress_view is not None:
+            self._progress_view.destroy()
+            self._progress_view = None
+        self._form_outer.pack(fill="both", expand=True)
+        self._reset_form_fields()
         self.send_btn.configure(state="normal", text=t("upload.send_btn"))
-        self.progress.pack_forget()
-        if success:
-            self.status_var.set(t("upload.status_success"))
-            self.subject_var.set("")
-            self.message_text.delete("1.0", "end")
-            self.recipients.reset()
-            self._files.clear()
-            self._render_file_list()
-            self._pl_enabled.set(False)
-            self._on_public_link_toggled()
-            self._pl_password.set("")
-            self._pl_limit.set("")
-            self._pl_notify.set(False)
-        else:
-            self.status_var.set(t("upload.status_partial"))
+        self.status_var.set("")
+
+    def _reset_form_fields(self) -> None:
+        self.subject_var.set("")
+        self.message_text.delete("1.0", "end")
+        self.recipients.reset()
+        self._files.clear()
+        self._render_file_list()
+        self._pl_enabled.set(False)
+        self._on_public_link_toggled()
+        self._pl_password.set("")
+        self._pl_limit.set("")
+        self._pl_notify.set(False)

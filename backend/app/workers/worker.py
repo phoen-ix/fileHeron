@@ -2,10 +2,22 @@
 
 Run with: ``arq app.workers.worker.WorkerSettings``
 
-Cron jobs (configured here, not via a separate arq.scheduler package):
-- expire_files: hourly at minute=0
-- share_expiring_24h_warning: hourly at minute=7
-- cleanup_expired_tokens: hourly at minute=23
+Cron jobs (configured here, not via a separate arq.scheduler package).
+Hourly, staggered so they don't pile up at minute 0:
+- expire_files: minute=0
+- share_expiring_24h_warning: minute=7
+- ops_check: minute=15            (sees the :00/:07 outcomes when scanning for failures)
+- cleanup_expired_tokens: minute=23
+- quota_reconcile: minute=37
+- cleanup_abandoned_uploads: minute=47
+- release_check: minute=53
+Daily housekeeping at 02:xx (well clear of business hours):
+- purge_old_quarantine: 02:13
+- cleanup_pending_invites: 02:15
+- cleanup_read_notifications: 02:29
+- prune_history: 02:43
+- reclaim_orphaned_files: 02:51
+Plus event-driven jobs (not cron): av_scan_file, send_email_job.
 """
 from __future__ import annotations
 

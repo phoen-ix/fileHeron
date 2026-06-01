@@ -1,6 +1,6 @@
 # file:Heron — Claude Code handover
 
-> Project directory: `REDACTED/claude/fileHeron/` (no colon; filesystems forbid `:`).
+> Project directory: `/opt/fileHeron/` (no colon; filesystems forbid `:`).
 > Display / brand name: **file:Heron** (used in UI, emails, prose). All code,
 > file paths, container names, package names, env-var names use **fileHeron**.
 
@@ -25,6 +25,21 @@ encrypted secrets), GDPR right-to-erasure with verifiable PDF receipt,
 self-service profile, admin-controlled API-token / public-link / 2FA
 policies, admin-editable SMTP, home-page enable toggle, per-user landing
 page picker. **Phase 10 + post-10 polish complete.** Security audit (Waves 1–4 + bonus), operational audit (Waves 1–4), and the follow-up comment-correctness sweep all shipped 2026-05-16.
+
+**Post-1.0 backend (current `v1.4.0`):** in-app self-update flow (GitHub
+release-check → updater shim/executor + one-click rollback); admin
+"create user directly" (skip invite, set password); orphaned-file reclaim
+(revoked-share bytes) with admin visibility; 24-hour timestamps with an
+admin-set site **timezone** label (`site.timezone`); login-page MOTD banner;
+per-share "notify recipients" default; retroactive refresh-token-TTL
+shortening + transparent per-user session cap; the ~25-key runtime settings
+**registry** (`services/settings_registry.py`) that overlays env defaults so
+sessions/rate-limits/retention/uploads/HIBP/branding are admin-tunable live.
+
+**Desktop client (current `client-v0.9.1`):** CustomTkinter, single Windows
+.exe. v0.9.x reworked it to an in-window login overlay (no separate login
+window), logout-returns-to-overlay (the app no longer quits on sign-out), and
+graceful session-expiry recovery. See `client/` + `client/RELEASE_NOTES.md`.
 
 Open follow-ups: per-file envelope encryption deferred until storage
 moves off single-server bind mounts (the KEK and ciphertext would
@@ -54,7 +69,7 @@ If `SMTP_HOST` is empty, all outgoing email is logged to backend stdout.
 | Layer | Choice | Rationale |
 |---|---|---|
 | Backend | Python 3.12 + FastAPI + SQLAlchemy 2.0 + Alembic + Pydantic v2 | Matches `REDACTED`; async, mature |
-| Database | MariaDB 11 | Matches every other project under `REDACTED/claude/` |
+| Database | MariaDB 11 | Matches the author's other FastAPI/Vue projects |
 | Cache + queue | Redis 7-alpine | ARQ, rate limits, quota Lua |
 | Background jobs | ARQ | Async-native, FastAPI-friendly |
 | Upload protocol | tusd standalone | Resumable, decoupled from backend bytes |
@@ -106,7 +121,7 @@ Downloads: `browser → Traefik → FastAPI → FileResponse(path) → kernel se
 - **HIBP password check:** k-anonymity (no plaintext sent); fail-open on upstream outage.
 - **Email storage:** plaintext in `users.email` (and `invite_tokens.email`, `login_attempts.email`). Always normalised on write via `utils/crypto.normalize_email` (lower + strip). The earlier HMAC + masked-hint design was retired so notification dispatchers (share_created, share_expiring, public_link_downloaded, file_quarantined, login_alert, account_created) can actually fire emails.
 - **Migration helpers:** every alembic revision uses `_has_table` / `_has_column` / `_has_index` from `alembic/env.py` so it's re-runnable after partial failures.
-- **Site URL:** the URL fileHeron puts in front of users is admin-editable at runtime via the kv `site.url` (admin → Settings → General → Site URL). Read through `services/site.py::get_site_url(db)` at every user-facing URL builder (emails, public links, in-app notification `link_url`, post-OIDC browser redirects). Falls back to the `APP_URL` env when no override is set. Two surfaces stay on the env value: `services/webauthn.py` RP origin (RP-ID-bound creds invalidate on change) and `services/oidc.py::_redirect_uri_for` (IdP-registered allowlist).
+- **Site URL + timezone:** admin-editable at runtime via kv `site.url` + `site.timezone` (admin → Settings → Site). `services/site.py::get_site_url(db)` feeds every user-facing URL builder (emails, public links, in-app notification `link_url`, post-OIDC browser redirects), falling back to `APP_URL`. `get_site_timezone(db)` (IANA name, default `UTC`) drives human-facing timestamps — rendered 24-hour with the tz label, in the SPA (via `/api/config-public`) and in email templates (the `dt_locale` Jinja filter). Two surfaces stay on the env value: `services/webauthn.py` RP origin (RP-ID-bound creds invalidate on change) and `services/oidc.py::_redirect_uri_for` (IdP-registered allowlist).
 - **Service-not-router rule:** routers parse + delegate + serialise. Business logic, audit, notification dispatch all in `services/`.
 - **No comments unless WHY is non-obvious.** Don't explain WHAT.
 
@@ -203,7 +218,7 @@ Failures logged but never propagate.
 
 - **Templates:** `backend/app/templates/email/{en,de}/{slug}.{txt,html}.j2` + shared `layout.html.j2` (table-based for client compat) + per-locale `subjects.json`. `dt_locale(locale)` Jinja filter via `babel.dates.format_datetime`.
 - **Locale fallback:** tries `{locale}/...` first, falls back to `en/`.
-- **Sources currently wired:** `share_created`, `account_created`, `public_link_downloaded`, `file_quarantined`, `share_expiring`, `lockout_warning`, `login_alert`, `smtp_test`.
+- **Categories** (`models/notification.py::NotificationCategory`, with `_DEFAULT_CHANNEL`): `share_created` (both), `share_expiring` (both), `public_link_downloaded` (email), `account_created` (email), `reset_password` (email), `login_alert` (email), `oidc_linked` (both), `file_quarantined` (both), `session_evicted` (in_app), `ops_alert` (in_app, admin-only), `release_available` (both, admin-only). Absent preference row → the per-category default.
 
 ### In-app bell + SSE
 
@@ -234,7 +249,7 @@ Failures logged but never propagate.
 ## Admin
 
 - **Shell:** `/admin` is `AdminLayout.vue` with left sidebar (Users / Groups / Audit log / File history / API tokens / Settings tree). All admin routes are nested children with `requireAdmin: true` route meta + `get_current_admin` backend dependency.
-- **Pages:** `/admin/users` (list + filter + paginate + inline invite form, ID column visible), `/admin/users/:id` (edit + force-reset + 2-step erasure with pre-flight + PDF receipt download), `/admin/groups`, `/admin/groups/:id`, `/admin/audit-log` (filter + paginate + streaming CSV export), `/admin/file-history` (cross-user file inventory), `/admin/api-tokens` (inventory: disable / reactivate / revoke / generate-on-behalf), `/admin/settings/{sso,api-tokens,public-links,twofa,email,home-page,general}`.
+- **Pages:** `/admin/users` (list + filter + paginate + inline invite form, ID column visible), `/admin/users/:id` (edit + force-reset + 2-step erasure with pre-flight + PDF receipt download), `/admin/groups`, `/admin/groups/:id`, `/admin/audit-log` (filter + paginate + streaming CSV export), `/admin/file-history` (cross-user file inventory), `/admin/api-tokens` (inventory: disable / reactivate / revoke / generate-on-behalf), `/admin/system` (health + self-update banner + on-demand cron run), `/admin/settings/{sso,api-tokens,public-links,twofa,email,home-page,site,motd,share-defaults,quarantine,updates,advanced,general}`.
 - **Audit log Actor cell** is a RouterLink to `/admin/users/:id`; bulk-loads display name + email per page (mirroring `shares.py`'s sender/recipient hydration). Erased / deleted users render ID + `(deleted)` tag.
 - **Admin nav location:** `Admin` link is in the user-menu dropdown (above `Account`), not in the top horizontal nav. EN/DE language switcher is **not** in the header — only on public auth pages (`AuthCanvas`); `users.locale` overrides on bootstrap, `localStorage.fh.locale` survives anonymous picks.
 
@@ -242,15 +257,21 @@ Failures logged but never propagate.
 
 `(key, value, is_encrypted, updated_at, updated_by_id)` — generic kv override layer. `services/settings.py::get` / `get_bool` / `set_value`. Encrypted keys go through Fernet (same HKDF as TOTP). Pattern is well-trod across:
 
-| Feature | Mode key | Allowlist keys | Notes |
-|---|---|---|---|
-| API tokens | `api_token.policy_mode` | `api_token.allowed_user_ids` + `..allowed_group_ids` | Admin always passes. Token states: active / disabled (reversible) / revoked (permanent). |
-| Public links | `public_link.policy_mode` | `public_link.allowed_user_ids` + `..allowed_group_ids` | Admin always passes. Single gate `is_allowed_to_create`. |
-| 2FA enforcement | `twofa.required_roles` (JSON) | `twofa.required_group_ids` (JSON) | Computed live per request. No admin escape. |
-| SMTP | `smtp.{host,port,user,password,from_email,from_name,tls_mode}` | — | Password Fernet-encrypted. DB overlays env. |
-| Home page | `home_page.enabled` (bool) | — | When off: brand mark non-linkable, "Home" hidden from landing picker, `/` redirects forward. |
+| Feature (admin page) | Keys | Notes |
+|---|---|---|
+| API tokens (`/api-tokens`) | `api_token.policy_mode` + `..allowed_user_ids` + `..allowed_group_ids` | Mode ∈ everyone/employees_admins/admins_only/disabled. Admin always passes. Token states: active / disabled (reversible) / revoked (permanent). |
+| Public links (`/public-links`) | `public_link.policy_mode` + `..allowed_user_ids` + `..allowed_group_ids` | Same shape. Single gate `is_allowed_to_create`. |
+| 2FA enforcement (`/twofa`) | `twofa.required_roles` (JSON) + `twofa.required_group_ids` (JSON) | Computed live per request. No admin escape. |
+| SMTP (`/email`) | `smtp.{host,port,user,password,from_email,from_name,tls_mode}` | `smtp.password` is the **only** key in `_ENCRYPTED_KEYS` (Fernet). DB overlays env. |
+| Site (`/site`) | `site.url`, `site.timezone` | URL overrides `APP_URL` for user-facing links (not WebAuthn/OIDC redirect). Timezone (IANA) drives 24h timestamp render. `services/site.py`. |
+| Home page (`/home-page`) | `home_page.enabled` (bool) | When off: brand mark non-linkable, "Home" hidden from landing picker, `/` redirects forward. |
+| MOTD (`/motd`) | `motd.enabled` (bool), `motd.text` (plaintext) | Login-page banner; surfaced via `/api/config-public`. No Markdown. |
+| Share defaults (`/share-defaults`) | `share.notify_recipients_default` (bool) | Default state of the create-share "Notify recipient(s)" checkbox. |
+| Quarantine (`/quarantine`) | `quarantine.notify_admins` (bool) | Fan out `file_quarantined` in-app notice to every non-disabled admin. |
+| Self-update (`/updates`) | `updates.api_url`, `updates.check_mode` (auto/manual) | Fork operators repoint the releases endpoint; `auto` polls every 24h. |
+| Advanced (`/advanced`) | registry-overlay keys: `auth.*`, `rate_limit.*`, `public_link.*` (lockout), `retention.*`, `uploads.max_direct_bytes`, `security.hibp_enabled`, `branding.app_name` | `services/settings_registry.py::TUNABLES`. Each overlays a `config.Settings` env default, clamped to bounds; read live via `effective(db, key)` (no boot cache). |
 
-PATCH semantics for secret-bearing keys: `null` = leave unchanged, `""` = clear, other = replace. Audit-policy-changed events record counts only (no allowlist IDs in the audit trail).
+`services/settings.py::Keys` is the authoritative key list; `_ENCRYPTED_KEYS = {smtp.password}`. PATCH semantics for secret-bearing keys: `null` = leave unchanged, `""` = clear, other = replace. Policy/settings-change audit events record counts/keys only (no allowlist IDs or values in the audit trail).
 
 ### Right-to-erasure
 
@@ -272,16 +293,27 @@ Pre-flight `GET /api/admin/users/{id}/erase/preflight` returns counts before con
 
 ## Background jobs
 
-ARQ worker container. Config: `backend/app/workers/worker.py::WorkerSettings`. Queue: `fileheron:default`.
+ARQ worker container. Config: `backend/app/workers/worker.py::WorkerSettings`. Queue: `fileheron:default`. `max_tries=5` (transient AV/SMTP retries). All cron jobs idempotent; staggered so nothing piles up at minute 0.
 
-**Cron** (idempotent):
-- `expire_files` — hourly minute 00. Walks expired-active shares; hard-deletes file bytes; transitions to expired.
-- `share_expiring_24h_warning` — hourly minute 07. Picks shares with `expires_at` in (now+24h, now+25h) and `expiring_notified_at IS NULL`; dispatches `share_expiring` to sender + user-recipients; marks the column.
-- `cleanup_expired_tokens` — hourly minute 23. Soft-revokes refresh tokens past `expires_at`; hard-deletes revoked rows older than `REFRESH_TOKEN_RETENTION_DAYS`.
+**Hourly cron:**
+- `expire_files` (:00) — walks expired-active shares; hard-deletes file bytes; → expired.
+- `share_expiring_24h_warning` (:07) — shares with `expires_at` in (now+24h, now+25h) and `expiring_notified_at IS NULL` → dispatch `share_expiring` to sender + user-recipients; mark column.
+- `ops_check` (:15) — scans recent cron outcomes + Redis health; fires `ops_alert` to admins on failure (`cron_failed`, av/smtp unhealthy).
+- `cleanup_expired_tokens` (:23) — soft-revoke refresh tokens past `expires_at`; hard-delete revoked rows older than `retention.refresh_token_days`.
+- `quota_reconcile` (:37) — recompute per-user used-bytes from disk to fix drift.
+- `cleanup_abandoned_uploads` (:47) — unlink partial/stuck TUS uploads older than `retention.tus_abandoned_hours`.
+- `release_check` (:53) — poll GitHub releases (filter `^v\d+\.\d+\.\d+`) → in-app "update available" surface.
+
+**Daily cron (≈02:xx):**
+- `purge_old_quarantine` (02:13) — unlink infected bytes (keep row marker) older than `retention.quarantine_purge_days`.
+- `cleanup_pending_invites` (02:15) — delete unconsumed/expired invites older than `retention.invite_days`.
+- `cleanup_read_notifications` (02:29) — hard-delete read notifications older than `retention.notification_read_days`.
+- `prune_history` (02:43) — delete `audit_log` / `download_log` / `login_attempts` rows older than their `retention.*` windows (0 disables a table).
+- `reclaim_orphaned_files` (02:51) — free bytes + quota for files whose share was revoked/deleted longer than `retention.orphan_reclaim_days` ago.
 
 **Event-driven:**
 - `av_scan_file(file_id)` — see Antivirus.
-- `send_email_job(to, subject, text, html)` — generic SMTP sender. Per-job DB session resolves SMTP config (DB-overlay-env) so admin saves apply without restart. Retries on transient errors with exponential backoff; permanent (5xx) → log + give up.
+- `send_email_job(to, subject, text, html)` — generic SMTP sender. Per-job DB session resolves SMTP config (DB-overlay-env) so admin saves apply without restart. Retries on transient errors with exponential backoff; permanent (5xx) → log + audit `email_undeliverable` + admin alert.
 
 ## Database schema
 
@@ -343,10 +375,11 @@ Page-load reveal staged via `.fh-rise[data-stagger]` classes. Heron line-art on 
 
 ## Desktop client
 
-- Lives at `client/` (separate top-level dir; not part of the docker compose stack). PySide6 (Qt6) GUI, single Windows .exe via PyInstaller. Talks to the same REST API as the SPA — no privileged endpoints.
-- Auth: email + password (with TOTP if enrolled) OR an `fh_<8-hex>_<43-b64>` API token from `/account/api-tokens`. Refresh cookie + tokens stored in the OS keyring (Windows Credential Manager).
-- Server URL is per-install configurable (asked at first launch; persisted under `%APPDATA%\fileHeron\config.json` via `platformdirs`). Not baked into the .exe.
-- Builds: pushing a tag matching `client-v*` triggers `.github/workflows/client-release.yml` on `windows-latest`, which runs the unit tests, builds with `pyinstaller pyinstaller.spec`, and publishes the .exe to the matching GitHub release.
+- Lives at `client/` (separate top-level dir; not part of the docker compose stack). **CustomTkinter** GUI (`customtkinter` + `tkinterdnd2` for drag-drop), single Windows .exe via PyInstaller. **Not Qt** — migrated off PySide6 in client v0.4.0 to shrink the binary. Talks to the same REST API as the SPA — no privileged endpoints.
+- **Window architecture (`client-v0.9.1`):** one `ctk.CTk` root, visible from startup. `ui/controller.py::AppController` owns the screen swap: it `place()`-s a `LoginOverlay` (a `CTkFrame`, dimmed backdrop + centered card) over the root, builds `MainWindow` into the root on sign-in and removes the overlay, and on sign-out / session-expiry tears `MainWindow` down and re-shows the overlay (the app **no longer quits on logout**). One mainloop, no modal `wait_window`/`grab_set`. Session-expiry: `api/client.py` raises `SessionExpiredError` when a 401 can't be refreshed; `ui/_async.py` routes it to the controller → back to login with a banner. Windows centered via `ui/app.py::center_window`. Background work marshals to the Tk main thread via the `ui/_async.py` queue poller (workers never touch Tk). Respect the documented CTk traps (titlebar-withdraw safety net in `reassert_visible`; never shadow `tkinter.Misc` attrs; wrap — don't replace — the `CTkTabview` segmented-button command).
+- Auth: email + password (with TOTP / recovery code) OR an `fh_<8-hex>_<43-b64>` API token from `/account/api-tokens`. Refresh cookie + tokens stored in the OS keyring (Windows Credential Manager).
+- Server URL is per-install configurable (asked at first launch; persisted under `%APPDATA%\fileHeron\config.json` via `platformdirs`). Not baked into the .exe. UI locale cached from the last sign-in (EN/DE).
+- Builds: pushing a tag matching `client-v*` triggers `.github/workflows/client-release.yml` on `windows-latest`, which runs the unit tests, builds with `pyinstaller pyinstaller.spec`, and publishes the .exe with `client/RELEASE_NOTES.md` as the release body (hand-written, not auto-generated). Tests are AST/structural (CI lacks system tkinter).
 - Out of scope for v1: OIDC flow (browser dance), WebAuthn, admin shell, SSE notifications. Direct multipart for ≤100 MB; TUS resumable for larger files (own minimal client at `client/src/fileheron_client/tus.py`, no third-party tuspy dep).
 
 ## Security checklist
@@ -358,7 +391,7 @@ Page-load reveal staged via `.fh-rise[data-stagger]` classes. Heron line-art on 
 - [x] Cookie scoped to `/api/auth`, httpOnly, Secure (in prod), SameSite=Lax.
 - [x] `AppError` envelope on all 4xx/5xx; `X-Request-Id` for correlation.
 - [x] Security headers: HSTS (prod), X-Frame-Options=DENY, X-Content-Type-Options, Referrer-Policy, CSP.
-- [x] Audit log on every privileged action (~40 event types).
+- [x] Audit log on every privileged action (~70 event types; `models/audit_log.py::AuditEventType`).
 - [x] Per-IP login rate limit (Redis sliding window) — also applied to register / forgot / verify.
 - [x] Per-account consecutive-failure soft lockout (DB-backed) + 6h-deduped warning email.
 - [x] TOTP 2FA (Fernet-encrypted) + 10 single-use Argon2-hashed recovery codes.
@@ -386,5 +419,7 @@ Page-load reveal staged via `.fh-rise[data-stagger]` classes. Heron line-art on 
 
 
 
-- `REDACTED/claude/REDACTED/` — closest precedent (FastAPI + Vue 3 + Element Plus monorepo); patterns for `config.py` fail-fast, SQLAlchemy session, Dockerfile multi-stage, Pinia auth store + axios refresh interceptor.
-- `REDACTED/claude/reclaim/` — refresh-rotation reuse-detection, admin bootstrap, email-with-logs-fallback, AppError envelope shape.
+
+
+- `REDACTED` — closest precedent (FastAPI + Vue 3 + Element Plus monorepo); patterns for `config.py` fail-fast, SQLAlchemy session, Dockerfile multi-stage, Pinia auth store + axios refresh interceptor.
+

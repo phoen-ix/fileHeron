@@ -18,18 +18,19 @@ const route = useRoute()
 const { describe } = useApiError()
 const { t } = useI18n()
 
-type Mode = 'creds' | 'totp' | 'recovery'
+type Mode = 'creds' | 'code'
 
 const email = ref('')
 const password = ref('')
-const totpCode = ref('')
-const recoveryCode = ref('')
+// One second-factor field that accepts EITHER a 6-digit TOTP code or a
+// recovery code (formatted XXXX-XXXX). The two shapes never collide, so
+// onSubmit routes to the right endpoint — the user never has to choose.
+const code = ref('')
 const mode = ref<Mode>('creds')
 const error = ref<string | null>(null)
 const submitting = ref(false)
 
-const totpInputRef = ref<HTMLInputElement | null>(null)
-const recoveryInputRef = ref<HTMLInputElement | null>(null)
+const codeInputRef = ref<HTMLInputElement | null>(null)
 
 // Show the "Use passkey" button only when the browser supports
 // WebAuthn AND the user is past the password step. The browser
@@ -47,8 +48,7 @@ function onProviderClick(p: PublicProvider) {
 
 watch(mode, async (m) => {
   await nextTick()
-  if (m === 'totp') totpInputRef.value?.focus()
-  else if (m === 'recovery') recoveryInputRef.value?.focus()
+  if (m === 'code') codeInputRef.value?.focus()
 })
 
 const submitLabel = computed(() => (submitting.value ? 'login.submitting' : 'login.submit'))
@@ -62,23 +62,39 @@ const redirectTo = computed(() => {
   return effectiveLandingPath(auth.user)
 })
 
+// A TOTP code is exactly six digits; a recovery code is XXXX-XXXX (letters +
+// a hyphen). They never collide, so we route on shape alone.
+function isTotpShape(v: string): boolean {
+  return /^\d{6}$/.test(v.replace(/\s+/g, ''))
+}
+
 async function onSubmit() {
   error.value = null
   submitting.value = true
   try {
-    if (mode.value === 'recovery') {
-      await auth.loginWithRecovery(email.value, password.value, recoveryCode.value)
+    if (mode.value === 'creds') {
+      // Step 1: email + password only. If 2FA is on, the server answers
+      // TOTP_REQUIRED and we reveal the code step below (no penalty — the
+      // password was already verified).
+      await auth.login(email.value, password.value)
     } else {
-      await auth.login(email.value, password.value, totpCode.value || undefined)
+      const entered = code.value.trim()
+      if (isTotpShape(entered)) {
+        await auth.login(email.value, password.value, entered.replace(/\s+/g, ''))
+      } else {
+        await auth.loginWithRecovery(email.value, password.value, entered)
+      }
     }
     await router.push(redirectTo.value)
   } catch (e) {
     const env = asEnvelope(e)
     if (env?.code === 'TOTP_REQUIRED') {
-      mode.value = 'totp'
+      mode.value = 'code'
       error.value = null
     } else {
       error.value = describe(e)
+      // Wrong code → clear it so the next attempt starts fresh.
+      if (mode.value === 'code') code.value = ''
     }
   } finally {
     submitting.value = false
@@ -181,27 +197,23 @@ async function tryPasskey() {
         />
       </div>
 
-      <!-- TOTP step -->
-      <div v-if="mode === 'totp'" class="step-2fa">
+      <!-- Second-factor step: one field that takes a TOTP *or* a recovery code -->
+      <div v-if="mode === 'code'" class="step-2fa">
         <div class="fh-field">
-          <label class="fh-field-label" for="login-totp">{{ $t('login.totp_label') }}</label>
+          <label class="fh-field-label" for="login-code">{{ $t('login.code_label') }}</label>
           <input
-            id="login-totp"
-            ref="totpInputRef"
-            v-model="totpCode"
+            id="login-code"
+            ref="codeInputRef"
+            v-model="code"
             class="fh-field-input fh-field-mono"
-            inputmode="numeric"
-            pattern="[0-9 ]*"
-            maxlength="9"
-            :placeholder="$t('login.totp_placeholder')"
+            :placeholder="$t('login.code_placeholder')"
             autocomplete="one-time-code"
             required
           />
-          <span class="fh-field-help">{{ $t('login.totp_help') }}</span>
+          <span class="fh-field-help">{{ $t('login.code_help') }}</span>
         </div>
-        <div class="step-2fa-alts">
+        <div v-if="passkeySupported" class="step-2fa-alts">
           <button
-            v-if="passkeySupported"
             type="button"
             class="fh-btn fh-btn-ghost passkey-btn"
             :disabled="submitting"
@@ -209,29 +221,7 @@ async function tryPasskey() {
           >
             {{ $t('login.use_passkey') }} <span aria-hidden="true">→</span>
           </button>
-          <button type="button" class="fh-btn-text recovery-toggle" @click="mode = 'recovery'">
-            {{ $t('login.use_recovery') }}
-          </button>
         </div>
-      </div>
-
-      <!-- Recovery step -->
-      <div v-if="mode === 'recovery'" class="step-2fa">
-        <div class="fh-field">
-          <label class="fh-field-label" for="login-recovery">{{ $t('login.recovery_label') }}</label>
-          <input
-            id="login-recovery"
-            ref="recoveryInputRef"
-            v-model="recoveryCode"
-            class="fh-field-input fh-field-mono"
-            :placeholder="$t('login.recovery_placeholder')"
-            required
-          />
-          <span class="fh-field-help">{{ $t('login.recovery_help') }}</span>
-        </div>
-        <button type="button" class="fh-btn-text recovery-toggle" @click="mode = 'totp'">
-          {{ $t('login.use_totp_back') }}
-        </button>
       </div>
 
       <div v-if="error" class="fh-notice" data-tone="error" role="alert">{{ error }}</div>

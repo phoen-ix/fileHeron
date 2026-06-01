@@ -1,27 +1,29 @@
-# Desktop client 0.9.2
+# Desktop client 0.9.3
 
-A slimming + packaging release. No change to how you sign in or use the app.
+A sign-in flow that works the way you expect.
 
-## Smaller download
+## Two-step second factor
 
-The Windows `.exe` is **substantially leaner**. Two things were bloating the
-bundle:
+If your account has two-factor authentication, the client now asks for your
+code **the normal way**:
 
-- **Babel locale data** — the date picker pulled in the *entire* Unicode CLDR
-  database (~30 MB across 1,000+ locale files). The app only ever shows dates in
-  English or German, so the build now ships just those (plus the universal
-  fallback) and drops the rest.
-- **Pillow** — an image library pulled in transitively but never actually used
-  (the window icon uses Tk's own image loader). It's now excluded from the build.
+1. Enter your email and password and click **Sign in**.
+2. *Only if* 2FA is on, a single **Authentication code** field appears.
 
-Same features, same behavior — just a faster download and less disk.
+Previously the code field was shown up front on the first screen, before you'd
+even entered your password — out of step with how every other app does it.
 
-## Small fix
+## One field for code *or* recovery
 
-- The expiry **date picker now follows the app language** (English/German) instead
-  of the operating system's locale. Dates were already displayed as `YYYY-MM-DD`;
-  this makes the pop-up calendar's month/day names match the rest of the app, and
-  is what lets the build above ship without every locale's data.
+That second-factor field accepts **either** your 6-digit authenticator code
+**or** one of your recovery codes (`XXXX-XXXX`). You no longer have to flip a
+"use a recovery code instead" switch — just type whichever you have and the
+client figures out the rest. There's a **← Use a different account** link if you
+need to go back and re-enter your email/password.
+
+No change to API-token sign-in, and nothing to reconfigure.
+
+(The web app gets the same single-field treatment in this release.)
 
 ---
 

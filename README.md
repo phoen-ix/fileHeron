@@ -88,7 +88,7 @@ Audience: anyone with an account — admin, employee, or client. The same UI ser
 
 Open the app URL (e.g. `https://files.example.com`) and you'll land on **Login**. There are up to four ways to authenticate, depending on what an admin has configured:
 
-1. **Email + password** — the default. If you've enabled 2FA, the page reveals a **6-digit code** field after you submit the password. Lost your authenticator? Click **Use a recovery code** below the code field — each of the 10 codes works once.
+1. **Email + password** — the default. If you've enabled 2FA, submitting your password reveals a single **Authentication code** field. Enter the 6-digit code from your authenticator app **or** one of your recovery codes (`XXXX-XXXX`, each works once) — the same field accepts either, no toggle. The desktop client uses the identical two-step flow.
 2. **Passkey** — if you've registered one on `/account`, click **Sign in with passkey** after entering email + password (the passkey acts as your second factor instead of TOTP).
 3. **SSO (OIDC)** — if your admin enabled one or more providers, you'll see one **Sign in with {provider}** button per provider above the password form. Clicking redirects to the provider, you authenticate there, and you come back logged in.
 

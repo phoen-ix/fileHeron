@@ -2,7 +2,7 @@ from .account import patch_locale
 from .client import ApiClient, ApiError, SessionExpiredError
 from .auth import login, login_with_recovery, refresh, logout, me
 from .download_segmented import download_file_segmented
-from .files import download_file, get_download_url
+from .files import DownloadCancelled, download_file, get_download_url
 from .groups import list_recipient_groups
 from .shares import (
     create_share,
@@ -37,6 +37,7 @@ __all__ = [
     "patch_share_download_limit",
     "download_file",
     "download_file_segmented",
+    "DownloadCancelled",
     "get_download_url",
     "upload_direct",
     "upload_init",

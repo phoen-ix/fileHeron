@@ -1,11 +1,15 @@
 """Segmented (parallel-range) downloader."""
 from __future__ import annotations
 
+import threading
+
 import httpx
+import pytest
 import respx
 
 from fileheron_client.api import ApiClient
 from fileheron_client.api import download_segmented as seg
+from fileheron_client.api.files import DownloadCancelled, download_file
 
 SERVER = "https://files.example.com"
 DATA = bytes((i % 251) for i in range(50))  # 50 deterministic bytes
@@ -75,6 +79,38 @@ def test_fallback_when_ranges_unsupported(tmp_path, monkeypatch):
     out = seg.download_file_segmented(api, "fid", dest=dest, connections=4)
     assert out == dest
     assert dest.read_bytes() == DATA
+
+
+@respx.mock
+def test_segmented_cancel_raises_no_fallback(tmp_path):
+    # A pre-set cancel must raise DownloadCancelled before any transfer, leave
+    # no .part, and NOT fall back to a single-stream download.
+    route = respx.get(f"{SERVER}/api/files/fid/download").mock(side_effect=_range_handler)
+    api = ApiClient(SERVER, api_token="fh_xx_yy")
+    dest = tmp_path / "out.bin"
+    ev = threading.Event()
+    ev.set()
+    with pytest.raises(DownloadCancelled):
+        seg.download_file_segmented(api, "fid", dest=dest, connections=4, cancel=ev)
+    assert not dest.exists()
+    assert not (tmp_path / "out.bin.part").exists()
+    assert route.call_count == 0  # never hit the server (no fallback re-download)
+
+
+@respx.mock
+def test_single_stream_cancel_removes_partial(tmp_path):
+    respx.get(f"{SERVER}/api/files/fid/download").mock(
+        return_value=httpx.Response(
+            200, content=DATA, headers={"Content-Length": str(len(DATA))}
+        )
+    )
+    api = ApiClient(SERVER, api_token="fh_xx_yy")
+    dest = tmp_path / "out.bin"
+    ev = threading.Event()
+    ev.set()  # cancel before the first chunk is written
+    with pytest.raises(DownloadCancelled):
+        download_file(api, "fid", dest=dest, cancel=ev)
+    assert not dest.exists()  # partial removed
 
 
 @respx.mock

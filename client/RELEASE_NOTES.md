@@ -1,13 +1,14 @@
-# Desktop client 0.9.10
+# Desktop client 0.9.11
 
-Fixes the missing speed/ETA readout during downloads.
+Cancel a download in progress.
 
-## Speed + ETA now actually show
+## Abort downloads
 
-0.9.9 added per-file progress but the speed/ETA label stayed hidden (it was set
-but never un-hidden), so you only saw the bar. Each downloading file now shows
-its live **transfer rate and ETA** (e.g. `12.3 MB/s · 0:42`) next to its inline
-progress bar, and it's cleared when the download finishes or fails.
+While a file is downloading, its **Download** button now reads **Cancel**.
+Clicking it stops the transfer promptly, removes the partial file from disk, and
+returns the row to a ready state — no more waiting for an unwanted (or wrong)
+download to finish. Each file has its own Cancel, so **Save all to folder**
+downloads can be aborted individually too.
 
 ---
 

@@ -24,7 +24,7 @@ from pathlib import Path
 from typing import Callable, Optional
 
 from .client import ApiClient
-from .files import download_file
+from .files import DownloadCancelled, download_file
 
 logger = logging.getLogger("fileheron_client.api.download_segmented")
 
@@ -43,16 +43,22 @@ def download_file_segmented(
     dest: Path,
     connections: int = 4,
     on_progress: Optional[Callable[[int, int], None]] = None,
+    cancel: Optional[threading.Event] = None,
 ) -> Path:
     headers = {"Authorization": f"Bearer {api.bearer}"} if api.bearer else {}
     url = f"/api/files/{file_id}/download"
+
+    if cancel is not None and cancel.is_set():
+        raise DownloadCancelled
 
     n = max(1, min(int(connections), MAX_CONNECTIONS))
     total = _probe_total(api, url, headers) if n > 1 else None
 
     if total is None or total < SEGMENT_THRESHOLD or n == 1:
         # Unsupported / too small / disabled → single stream.
-        return download_file(api, file_id, dest=dest, on_progress=on_progress)
+        return download_file(
+            api, file_id, dest=dest, on_progress=on_progress, cancel=cancel
+        )
 
     segments = _split(total, SEGMENT_SIZE)
     dest.parent.mkdir(parents=True, exist_ok=True)
@@ -75,11 +81,21 @@ def download_file_segmented(
     try:
         with ThreadPoolExecutor(max_workers=n) as pool:
             futs = [
-                pool.submit(_fetch_segment, api, url, headers, part, s, e, _bump)
+                pool.submit(_fetch_segment, api, url, headers, part, s, e, _bump, cancel)
                 for (s, e) in segments
             ]
             for fut in as_completed(futs):
                 fut.result()  # re-raise the first segment failure
+    except DownloadCancelled:
+        # User aborted — stop any straggler segments, drop the partial, and
+        # propagate (do NOT fall back to a single-stream re-download).
+        if cancel is not None:
+            cancel.set()
+        try:
+            part.unlink(missing_ok=True)
+        except OSError:
+            pass
+        raise
     except Exception as exc:
         logger.warning(
             "segmented download failed for %s (%s); falling back to single stream",
@@ -89,7 +105,9 @@ def download_file_segmented(
             part.unlink()
         except OSError:
             pass
-        return download_file(api, file_id, dest=dest, on_progress=on_progress)
+        return download_file(
+            api, file_id, dest=dest, on_progress=on_progress, cancel=cancel
+        )
 
     os.replace(part, dest)  # atomic
     return dest
@@ -131,11 +149,14 @@ def _fetch_segment(
     start: int,
     end: int,
     bump: Callable[[int], None],
+    cancel: Optional[threading.Event] = None,
 ) -> None:
     rng = {**headers, "Range": f"bytes={start}-{end}"}
     for attempt in range(MAX_RETRIES):
         written = 0
         try:
+            if cancel is not None and cancel.is_set():
+                raise DownloadCancelled
             with api._http.stream("GET", url, headers=rng) as resp:
                 if resp.status_code not in (206, 200):
                     resp.read()
@@ -143,10 +164,14 @@ def _fetch_segment(
                 with open(part, "r+b") as f:
                     f.seek(start)
                     for chunk in resp.iter_bytes(CHUNK):
+                        if cancel is not None and cancel.is_set():
+                            raise DownloadCancelled
                         f.write(chunk)
                         written += len(chunk)
                         bump(len(chunk))
             return
+        except DownloadCancelled:
+            raise  # never retry a cancel
         except Exception:
             if written:
                 bump(-written)  # this attempt's bytes will be re-fetched

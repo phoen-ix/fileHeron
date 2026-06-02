@@ -14,6 +14,7 @@ popup. Destructive confirms (``mb.confirm`` for End-share), error warnings
 native ``filedialog`` calls stay as pop-ups."""
 from __future__ import annotations
 
+import threading
 import webbrowser
 from pathlib import Path
 from tkinter import filedialog
@@ -22,7 +23,7 @@ from typing import Callable, Optional
 import customtkinter as ctk
 
 from .. import api as api_pkg
-from ..api import ApiClient
+from ..api import ApiClient, DownloadCancelled
 from ..formatters import (
     RateEstimator,
     format_datetime,
@@ -496,6 +497,11 @@ class ShareDetailView(ctk.CTkFrame):
             info_lbl.grid_remove()
             self._file_rows[f.id] = {
                 "bar": bar, "info_var": info_var, "info_lbl": info_lbl, "dl_btn": dl_btn,
+                # Captured so the button can flip Download -> Cancel -> Download.
+                "download_cmd": (
+                    lambda fid=f.id, fn=f.original_filename: self._download_one(fid, fn)
+                ),
+                "cancel": None,
             }
 
     def _download_one(self, file_id: str, filename: str) -> None:
@@ -528,35 +534,65 @@ class ShareDetailView(ctk.CTkFrame):
         for f in downloadable:
             self._spawn_download(f.id, base / f.original_filename)
 
+    def _restore_dl_btn(self, row: dict) -> None:
+        """Flip the row's button back to 'Download' (from 'Cancel')."""
+        if alive(row["dl_btn"]):
+            row["dl_btn"].configure(
+                text=t("share_detail.download_btn"),
+                command=row["download_cmd"],
+                state="normal",
+            )
+        row["cancel"] = None
+
+    def _cancel_download(self, file_id: str) -> None:
+        row = self._file_rows.get(file_id)
+        if row is None:
+            return
+        ev = row.get("cancel")
+        if ev is not None:
+            ev.set()
+        if alive(row["dl_btn"]):
+            row["dl_btn"].configure(state="disabled", text=t("share_detail.cancelling"))
+        row["info_var"].set(t("share_detail.cancelling"))
+
     def _spawn_download(self, file_id: str, dest: Path) -> None:
         from ..config import load_config
         conns = load_config().download_connections
 
         row = self._file_rows.get(file_id)
         tracker = RateEstimator()
+        cancel = threading.Event()
 
-        # Instant feedback: reveal the file's inline bar + "Starting…" and
-        # lock its Download button before the worker (probe + first bytes)
-        # produces any progress.
+        # Instant feedback: reveal the file's inline bar + "Starting…" and turn
+        # its Download button into Cancel before the worker (probe + first
+        # bytes) produces any progress.
         if row is not None:
+            row["cancel"] = cancel
             row["bar"].set(0)
             row["bar"].grid()
             row["info_lbl"].grid()  # re-show the rate/ETA label (hidden by default)
             row["info_var"].set(t("share_detail.dl_starting"))
-            row["dl_btn"].configure(state="disabled")
+            row["dl_btn"].configure(
+                text=t("share_detail.cancel_btn"),
+                command=lambda fid=file_id: self._cancel_download(fid),
+                state="normal",
+            )
 
         def _do(tick):
             # Segmented (parallel-range) download for large files; falls back
             # to a single stream when ranges aren't supported / file is small /
             # connections <= 1.
             api_pkg.download_file_segmented(
-                self._api, file_id, dest=dest, connections=conns, on_progress=tick,
+                self._api, file_id, dest=dest, connections=conns,
+                on_progress=tick, cancel=cancel,
             )
             return str(dest)
 
         def _on_progress(done, total):
             if not alive(self) or row is None or not alive(row["bar"]):
                 return  # view/row torn down mid-download (C6)
+            if cancel.is_set():
+                return  # don't clobber the "Cancelling…" label
             if total > 0:
                 row["bar"].set(min(1.0, done / total))
             rate, eta = tracker.update(done, total)
@@ -568,19 +604,25 @@ class ShareDetailView(ctk.CTkFrame):
             if row is not None and alive(row["bar"]):
                 row["bar"].set(1.0)
                 row["info_var"].set(t("share_detail.dl_done"))
-                row["dl_btn"].configure(state="normal")
+                self._restore_dl_btn(row)
             self._toast(t("share_detail.downloaded_body", path=path), kind="success")
 
         def _failed(exc):
             if not alive(self):
                 return
+            cancelled = isinstance(exc, DownloadCancelled)
             if row is not None and alive(row["bar"]):
                 row["bar"].grid_remove()
                 row["info_lbl"].grid_remove()
                 row["info_var"].set("")
-                row["dl_btn"].configure(state="normal")
-            msg = getattr(exc, "message", None) or str(exc)
-            self._toast(f'{t("share_detail.download_failed_title")}: {msg}', kind="error")
+                self._restore_dl_btn(row)
+            if cancelled:
+                self._toast(t("share_detail.dl_cancelled"), kind="info")
+            else:
+                msg = getattr(exc, "message", None) or str(exc)
+                self._toast(
+                    f'{t("share_detail.download_failed_title")}: {msg}', kind="error"
+                )
 
         run_with_progress(
             self._app_root, _do,

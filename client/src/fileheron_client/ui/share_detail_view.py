@@ -494,7 +494,9 @@ class ShareDetailView(ctk.CTkFrame):
             info_lbl.grid(row=1, column=3, sticky="e", pady=(4, 0))
             bar.grid_remove()
             info_lbl.grid_remove()
-            self._file_rows[f.id] = {"bar": bar, "info_var": info_var, "dl_btn": dl_btn}
+            self._file_rows[f.id] = {
+                "bar": bar, "info_var": info_var, "info_lbl": info_lbl, "dl_btn": dl_btn,
+            }
 
     def _download_one(self, file_id: str, filename: str) -> None:
         dest_str = filedialog.asksaveasfilename(
@@ -539,6 +541,7 @@ class ShareDetailView(ctk.CTkFrame):
         if row is not None:
             row["bar"].set(0)
             row["bar"].grid()
+            row["info_lbl"].grid()  # re-show the rate/ETA label (hidden by default)
             row["info_var"].set(t("share_detail.dl_starting"))
             row["dl_btn"].configure(state="disabled")
 
@@ -573,6 +576,7 @@ class ShareDetailView(ctk.CTkFrame):
                 return
             if row is not None and alive(row["bar"]):
                 row["bar"].grid_remove()
+                row["info_lbl"].grid_remove()
                 row["info_var"].set("")
                 row["dl_btn"].configure(state="normal")
             msg = getattr(exc, "message", None) or str(exc)

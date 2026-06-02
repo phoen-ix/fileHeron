@@ -1,14 +1,13 @@
-# Desktop client 0.9.9
+# Desktop client 0.9.10
 
-Per-file download progress, with live speed and ETA.
+Fixes the missing speed/ETA readout during downloads.
 
-## Inline progress per file
+## Speed + ETA now actually show
 
-The single progress bar at the bottom is gone. Each file now shows its own
-progress bar right in its row, with a live **transfer rate and ETA**
-(e.g. `12.3 MB/s · 0:42`). Pressing **Download** gives instant feedback (the bar
-appears and the button locks while it runs), and **Save all to folder** shows an
-independent bar for every file at once.
+0.9.9 added per-file progress but the speed/ETA label stayed hidden (it was set
+but never un-hidden), so you only saw the bar. Each downloading file now shows
+its live **transfer rate and ETA** (e.g. `12.3 MB/s · 0:42`) next to its inline
+progress bar, and it's cleared when the download finishes or fails.
 
 ---
 

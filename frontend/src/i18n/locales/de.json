@@ -849,10 +849,8 @@
     "session_revoke_others": "Alle anderen Sitzungen abmelden",
     "session_revoke_others_confirm": "Alle anderen Sitzungen abmelden? Dieses Gerät bleibt angemeldet, alle anderen Browser müssen sich neu anmelden. Hinweis: API-Tokens werden dabei NICHT widerrufen — programmatische Clients (z. B. eine Token-basierte Desktop-App) funktionieren weiter, bis du ihr Token unter „Verbundene API-Clients“ unten widerrufst.",
     "session_revoke_others_toast": "Alle anderen Sitzungen abgemeldet.",
-    "api_clients_heading": "Verbundene API-Clients",
-    "api_clients_help": "Diese programmatischen Clients (z. B. die Desktop-App) melden sich mit einem langlebigen API-Token an, nicht mit einer Browser-Sitzung — das Abmelden anderer Sitzungen trennt sie NICHT. Widerrufe hier ein Token, um seinen Client sofort zu trennen.",
-    "api_client_revoke_confirm": "Dieses API-Token widerrufen? Der damit angemeldete Client (z. B. die Desktop-App) wird sofort getrennt und benötigt ein neues Token zur Anmeldung.",
-    "api_client_revoked_toast": "API-Token widerrufen — sein Client ist getrennt.",
+    "api_clients_help": "Programmatische Clients (z. B. die Desktop-App) melden sich mit einem langlebigen API-Token an, nicht mit einer Browser-Sitzung — das Abmelden anderer Sitzungen trennt sie NICHT.",
+    "api_clients_jump": "API-Tokens verwalten →",
     "landing": {
       "label": "Standard-Startseite",
       "help": "Wo du nach der Anmeldung landest. Wähle „System-Standard\", um der globalen Admin-Einstellung zu folgen.",
@@ -973,6 +971,7 @@
   "api_tokens": {
     "title": "API-Tokens",
     "intro": "Tokens autorisieren Uploads über die API oder TUS-Clients. Pro Skript oder Gerät einen Token erstellen.",
+    "sessions_note": "Diese sind von deinen Browser-/App-Sitzungen getrennt: Das Abmelden anderer Sitzungen widerruft sie nicht. Widerrufe hier ein Token, um seinen Client (z. B. die Desktop-App) sofort zu trennen.",
     "create_cta": "Token erstellen",
     "name_label": "Token-Name",
     "name_placeholder": "z. B. backup-script",

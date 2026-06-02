@@ -15,6 +15,8 @@
 
     <p class="fh-field-help intro">{{ t('api_tokens.intro') }}</p>
 
+    <p class="fh-notice" data-tone="muted">{{ t('api_tokens.sessions_note') }}</p>
+
     <p
       v-if="!loading && !canCreate && tokens.length === 0"
       class="fh-notice"

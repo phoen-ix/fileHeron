@@ -849,10 +849,8 @@
     "session_revoke_others": "Sign out all other sessions",
     "session_revoke_others_confirm": "Sign out every other session? This device stays signed in, and all other browsers will need to log in again. Note: this does NOT revoke API tokens — programmatic clients (like a token-based desktop app) keep working until you revoke their token under \"Connected API clients\" below.",
     "session_revoke_others_toast": "Signed out all other sessions.",
-    "api_clients_heading": "Connected API clients",
-    "api_clients_help": "These programmatic clients (e.g. the desktop app) sign in with a long-lived API token, not a browser session — signing out other sessions does NOT disconnect them. Revoke a token here to cut off its client immediately.",
-    "api_client_revoke_confirm": "Revoke this API token? The client using it (e.g. the desktop app) is disconnected immediately and will need a new token to sign in again.",
-    "api_client_revoked_toast": "API token revoked — its client is disconnected.",
+    "api_clients_help": "Programmatic clients (e.g. the desktop app) sign in with a long-lived API token, not a browser session — signing out other sessions does NOT disconnect them.",
+    "api_clients_jump": "Manage API tokens →",
     "landing": {
       "label": "Default landing page",
       "help": "Where you land after logging in. Pick \"System default\" to follow whatever the admin has chosen for everyone.",
@@ -973,6 +971,7 @@
   "api_tokens": {
     "title": "API tokens",
     "intro": "Tokens authorize programmatic uploads via the API or TUS clients. Create one per script or device.",
+    "sessions_note": "These are separate from your browser/app sessions: signing out other sessions does not revoke them. Revoke a token here to disconnect its client (e.g. the desktop app) immediately.",
     "create_cta": "Create token",
     "name_label": "Token name",
     "name_placeholder": "e.g. backup-script",

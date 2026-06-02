@@ -3,7 +3,6 @@ import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import * as accountApi from '@/api/account'
-import { listTokens, revokeToken } from '@/api/apiTokens'
 import * as twoFaApi from '@/api/twoFactor'
 import SectionQuickNav, {
   type QuickNavSection,
@@ -19,18 +18,12 @@ import { useScrollSpy } from '@/composables/useScrollSpy'
 import { setLocale } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
-import type {
-  ApiTokenListItem,
-  Locale,
-  SessionRecord,
-  TotpStatusResponse,
-} from '@/types/api'
-import { formatInSiteTime } from '@/utils/datetime'
+import type { Locale, SessionRecord, TotpStatusResponse } from '@/types/api'
 
 const auth = useAuthStore()
 const ui = useUiStore()
 const { describe } = useApiError()
-const { t, locale: i18nLocale } = useI18n()
+const { t } = useI18n()
 
 /* --- profile (display name + locale + landing page) -------------------- */
 const displayName = ref('')
@@ -71,8 +64,6 @@ const pwError = ref<string | null>(null)
 /* --- 2FA + sessions ----------------------------------------------------- */
 const totpStatus = ref<TotpStatusResponse | null>(null)
 const sessions = ref<SessionRecord[]>([])
-const apiClients = ref<ApiTokenListItem[]>([])
-const revokingToken = ref<number | null>(null)
 
 onMounted(async () => {
   if (auth.user) {
@@ -80,7 +71,7 @@ onMounted(async () => {
     locale.value = auth.user.locale
     landingPage.value = auth.user.default_landing_page
   }
-  await Promise.all([loadTotp(), loadSessions(), loadApiClients()])
+  await Promise.all([loadTotp(), loadSessions()])
 })
 
 async function changeLandingPage(value: string | null) {
@@ -116,33 +107,6 @@ async function loadSessions() {
   } catch {
     /* non-fatal */
   }
-}
-
-async function loadApiClients() {
-  try {
-    const r = await listTokens()
-    apiClients.value = r.data.items
-  } catch {
-    /* non-fatal */
-  }
-}
-
-async function revokeApiClient(id: number) {
-  if (!window.confirm(t('account.api_client_revoke_confirm'))) return
-  revokingToken.value = id
-  try {
-    await revokeToken(id)
-    apiClients.value = apiClients.value.filter((tok) => tok.id !== id)
-    ui.pushToast(t('account.api_client_revoked_toast'), 'success')
-  } catch (e) {
-    ui.pushToast(describe(e), 'error')
-  } finally {
-    revokingToken.value = null
-  }
-}
-
-function formatTokenDate(iso: string): string {
-  return formatInSiteTime(iso, i18nLocale.value)
 }
 
 async function changePassword() {
@@ -419,45 +383,12 @@ function jumpTo(id: string) {
         {{ $t('account.session_revoke_others') }}
       </button>
 
-      <div v-if="apiClients.length > 0" class="api-clients">
-        <h3 class="account-h3">{{ $t('account.api_clients_heading') }}</h3>
-        <p class="fh-field-help">{{ $t('account.api_clients_help') }}</p>
-        <ul class="api-client-list">
-          <li
-            v-for="tok in apiClients"
-            :key="tok.id"
-            class="api-client-row"
-          >
-            <div class="ac-main">
-              <div class="ac-name">{{ tok.name }}</div>
-              <div class="ac-meta fh-mono">
-                <span>fh_…{{ tok.last4 }}</span>
-                <span>
-                  {{
-                    tok.last_used_at
-                      ? $t('api_tokens.last_used', {
-                          d: formatTokenDate(tok.last_used_at),
-                        })
-                      : $t('api_tokens.never_used')
-                  }}
-                </span>
-              </div>
-            </div>
-            <button
-              type="button"
-              class="fh-btn-text danger"
-              :disabled="revokingToken === tok.id"
-              @click="revokeApiClient(tok.id)"
-            >
-              {{
-                revokingToken === tok.id
-                  ? $t('common.loading')
-                  : $t('api_tokens.revoke')
-              }}
-            </button>
-          </li>
-        </ul>
-      </div>
+      <p class="fh-field-help api-clients-note">
+        {{ $t('account.api_clients_help') }}
+        <a class="fh-link" href="#api-tokens" @click.prevent="jumpTo('api-tokens')">
+          {{ $t('account.api_clients_jump') }}
+        </a>
+      </p>
     </section>
 
     <!-- API tokens -->
@@ -624,50 +555,18 @@ function jumpTo(id: string) {
   margin: 0;
 }
 
-.api-clients {
-  margin-top: var(--fh-space-4);
-  padding-top: var(--fh-space-3);
-  border-top: var(--fh-border);
+.api-clients-note {
+  margin-top: var(--fh-space-3);
 }
 
-.account-h3 {
-  font-family: var(--fh-font-display);
-  font-size: 1.15rem;
-  font-weight: 400;
-  margin: 0 0 var(--fh-space-1);
-  color: var(--fh-ink);
+.api-clients-note .fh-link {
+  color: var(--fh-accent);
+  text-decoration: none;
+  white-space: nowrap;
 }
 
-.api-client-list {
-  list-style: none;
-  padding: 0;
-  margin: var(--fh-space-2) 0 0;
-}
-
-.api-client-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: var(--fh-space-3);
-  padding: var(--fh-space-2) 0;
-  border-bottom: var(--fh-border);
-}
-
-.ac-name {
-  color: var(--fh-ink);
-  font-size: var(--fh-text-body-md);
-}
-
-.ac-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--fh-space-3);
-  font-size: var(--fh-text-mono-sm);
-  color: var(--fh-subtle);
-  margin-top: 2px;
-}
-
-.fh-btn-text.danger {
-  color: var(--fh-danger);
+.api-clients-note .fh-link:hover {
+  color: var(--fh-accent-hover);
+  text-decoration: underline;
 }
 </style>

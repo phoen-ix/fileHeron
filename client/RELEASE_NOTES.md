@@ -1,28 +1,25 @@
-# Desktop client 0.9.7
+# Desktop client 0.9.8
 
-Fixes a broken share-detail view, corrects the version label, and brings the
-parallel downloads from the 0.9.6 build.
+Fixes the window freezing during downloads, and makes the debug logs reachable
+from Settings.
 
-## Share detail loads again
+## Window no longer freezes during a download
 
-Opening a share from the Inbox/Outbox showed only an empty placeholder — no
-subject, no file list, no download buttons. A regression had moved the data-load
-call out of the view's startup, so the detail never fetched the share. It now
-loads correctly (subject, state, files, public link), and **Esc** closes it
-again.
+While a download ran, the app window was unresponsive until it finished. The
+download already ran in the background, but it reported progress thousands of
+times (per chunk, across several connections) and that flood of UI updates
+starved the main loop. Progress updates are now coalesced (only the latest is
+applied, a few times per second), and downloads read in larger chunks — so the
+progress bar moves smoothly and the window stays responsive the whole time. (Same
+fix benefits large uploads.)
 
-> Supersedes 0.9.6, which shipped this bug and still showed "v0.9.5" in the
-> title bar. (0.9.4–0.9.6 were all affected by the share-detail bug.)
+## Open the debug logs from Settings
 
-## Parallel (segmented) downloads
-
-Large downloads use several connections at once (HTTP byte ranges) and reassemble
-the file locally, so they saturate the link instead of being capped by a single
-stream. Small files, or servers that don't support ranges, fall back
-automatically. Tune or disable with `download_connections` in
-`%APPDATA%\fileHeron\config.json` (default 4, set 1 to disable).
-
-**Requires server v1.5.2 or newer.**
+Verbose logging already had a toggle in **Settings → Diagnostics**; now there's
+an **"Open log folder"** button right next to it that reveals
+`crash.log` / `trace.log` / `app.log` in your file manager, so you can grab them
+for analysis. Enabling verbose logging still takes effect after the next restart
+(Settings now reminds you).
 
 ---
 

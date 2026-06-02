@@ -46,10 +46,8 @@ from fileheron_client.ui.controller import AppController
 
 
 def _log_dir() -> Path:
-    import platformdirs
-    d = Path(platformdirs.user_log_dir("fileHeron", appauthor=False))
-    d.mkdir(parents=True, exist_ok=True)
-    return d
+    from fileheron_client.config import log_dir
+    return log_dir()
 
 
 def _install_crash_logging(log_path: Path) -> None:

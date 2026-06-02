@@ -89,6 +89,9 @@
     "diagnostics": "Diagnose",
     "diagnostics_switch": "Ausführliches Logging (trace.log + app.log + Heartbeats)",
     "diagnostics_help": "Crash-Dumps sind immer aktiv. Änderung greift nach Neustart.",
+    "diagnostics_restart_hint": "Gespeichert. App neu starten, damit die Logging-Änderung wirkt.",
+    "open_logs": "Log-Ordner öffnen",
+    "open_logs_failed": "Log-Ordner konnte nicht geöffnet werden. Pfad: {path}",
     "sign_out": "Abmelden"
   },
 

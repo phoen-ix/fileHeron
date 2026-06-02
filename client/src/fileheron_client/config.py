@@ -32,6 +32,15 @@ def config_path() -> Path:
     return _config_dir() / "config.json"
 
 
+def log_dir() -> Path:
+    """Directory holding crash.log / trace.log / app.log. Single source of
+    truth for both the startup logging setup and the Settings "Open log
+    folder" button."""
+    d = Path(platformdirs.user_log_dir(APP_NAME, appauthor=False))
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
 @dataclass
 class ClientConfig:
     server_url: str = ""

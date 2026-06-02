@@ -155,6 +155,15 @@ class SettingsOverlay(ctk.CTkFrame):
             text_color="gray",
             anchor="w",
         ).pack(anchor="w")
+        # Reach the logs (crash.log / trace.log / app.log) for analysis.
+        open_logs_btn = ctk.CTkButton(
+            diag_cell,
+            text=t("settings.open_logs"),
+            command=self._open_logs,
+            width=140,
+        )
+        open_logs_btn.pack(anchor="w", pady=(6, 0))
+        self._esc_targets.append(open_logs_btn)
 
         # Buttons row.
         btn_row = ctk.CTkFrame(outer, fg_color="transparent")
@@ -244,6 +253,29 @@ class SettingsOverlay(ctk.CTkFrame):
             # Don't crash on a config-save failure; crash.log captures
             # anything serious.
             pass
+        # Loggers are wired at startup, so the change applies next launch.
+        self._status_var.set(t("settings.diagnostics_restart_hint"))
+
+    def _open_logs(self) -> None:
+        """Open the log folder (crash.log / trace.log / app.log) in the OS file
+        manager so the user can grab them for analysis."""
+        import os
+        import subprocess
+        import sys
+
+        from ..config import log_dir
+
+        path = str(log_dir())
+        try:
+            if sys.platform.startswith("win"):
+                os.startfile(path)  # type: ignore[attr-defined]
+            elif sys.platform == "darwin":
+                subprocess.Popen(["open", path])
+            else:
+                subprocess.Popen(["xdg-open", path])
+        except Exception:
+            # Fall back to showing the path so the user can navigate manually.
+            self._status_var.set(t("settings.open_logs_failed", path=path))
 
     def _on_sign_out(self) -> None:
         from .. import api as api_pkg

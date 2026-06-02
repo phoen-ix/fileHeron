@@ -133,10 +133,34 @@ def run_with_progress(
 ) -> threading.Thread:
     """Run ``fn(_tick)`` in a daemon thread. Progress ticks marshal
     onto the main thread via the same queue. ``on_done`` /
-    ``on_failed`` behave identically to ``run_in_background``."""
+    ``on_failed`` behave identically to ``run_in_background``.
+
+    Progress is **coalesced**: a fast producer (e.g. a multi-GB segmented
+    download reading 1 MiB chunks across several threads) would otherwise
+    enqueue thousands of callbacks, and the main-thread poller drains the
+    queue until empty — so it would never return to the Tk event loop and the
+    UI would freeze until the transfer finished. We keep only the latest
+    (done, total) with at most one flush queued, capping redraws to ~the poll
+    rate while always delivering the final value."""
+    _state: dict[str, Any] = {"latest": None, "pending": False}
+    _state_lock = threading.Lock()
+
+    def _flush() -> None:
+        with _state_lock:
+            latest = _state["latest"]
+            _state["pending"] = False
+        if latest is not None and on_progress is not None:
+            on_progress(*latest)
+
     def _tick(done: int, total: int) -> None:
-        if on_progress is not None:
-            _enqueue(on_progress, (done, total))
+        if on_progress is None:
+            return
+        with _state_lock:
+            _state["latest"] = (done, total)
+            if _state["pending"]:
+                return  # a flush is already queued; it'll pick up this value
+            _state["pending"] = True
+        _enqueue(_flush, ())
 
     def _runner() -> None:
         try:

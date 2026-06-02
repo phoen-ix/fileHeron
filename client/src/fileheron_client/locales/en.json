@@ -89,6 +89,9 @@
     "diagnostics": "Diagnostics",
     "diagnostics_switch": "Verbose logging (trace.log + app.log + heartbeats)",
     "diagnostics_help": "Crash dumps always on. Restart the app to apply.",
+    "diagnostics_restart_hint": "Saved. Restart the app for the logging change to take effect.",
+    "open_logs": "Open log folder",
+    "open_logs_failed": "Couldn't open the log folder. It's at: {path}",
     "sign_out": "Sign out"
   },
 

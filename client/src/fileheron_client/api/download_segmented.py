@@ -28,7 +28,7 @@ from .files import download_file
 
 logger = logging.getLogger("fileheron_client.api.download_segmented")
 
-CHUNK = 64 * 1024
+CHUNK = 1024 * 1024  # 1 MiB — fewer iterations → less per-chunk overhead/GIL churn
 SEGMENT_THRESHOLD = 16 * 1024 * 1024  # below this, single stream isn't worth it
 SEGMENT_SIZE = 16 * 1024 * 1024       # bytes per segment (bounds segment count)
 MAX_CONNECTIONS = 8

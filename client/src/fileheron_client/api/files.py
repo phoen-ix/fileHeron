@@ -10,7 +10,7 @@ from .client import ApiClient, ApiError, _envelope_from_response
 
 logger = logging.getLogger("fileheron_client.files")
 
-CHUNK = 64 * 1024  # 64 KiB — same order tusd uses
+CHUNK = 1024 * 1024  # 1 MiB — fewer progress ticks / less per-chunk overhead
 
 
 def download_file(

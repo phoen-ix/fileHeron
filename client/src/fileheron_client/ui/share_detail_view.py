@@ -23,7 +23,13 @@ import customtkinter as ctk
 
 from .. import api as api_pkg
 from ..api import ApiClient
-from ..formatters import format_datetime, format_expiry
+from ..formatters import (
+    RateEstimator,
+    format_datetime,
+    format_eta,
+    format_expiry,
+    format_rate,
+)
 from ..i18n import t
 from ..models import FileInShareResponse, MeResponse, ShareResponse
 from ._async import run_in_background, run_with_progress
@@ -61,7 +67,8 @@ class ShareDetailView(ctk.CTkFrame):
         self._on_mutated = on_mutated
         self._flash = flash
         self._share: Optional[ShareResponse] = None
-        self._dl_in_flight = 0
+        # file_id -> {"bar": CTkProgressBar, "info_var": StringVar, "dl_btn": …}
+        self._file_rows: dict[str, dict] = {}
 
         self._build()
         self._load()
@@ -173,12 +180,6 @@ class ShareDetailView(ctk.CTkFrame):
             btns, text=t("share_detail.save_all_btn"),
             command=self._save_all, width=180,
         ).pack(side="right")
-
-        # Progress (download).
-        self.progress = ctk.CTkProgressBar(outer)
-        self.progress.set(0)
-        self.progress.pack(fill="x", pady=(8, 0))
-        self.progress.pack_forget()  # shown when a download is in flight
 
     def _build_public_link_section(self, parent) -> None:
         """Create a hidden bordered section for the public-link URL.
@@ -459,10 +460,11 @@ class ShareDetailView(ctk.CTkFrame):
     def _render_files(self, files: list[FileInShareResponse]) -> None:
         for child in self.file_scroll.winfo_children():
             child.destroy()
+        self._file_rows = {}
+        self.file_scroll.grid_columnconfigure(0, weight=1)
         for r, f in enumerate(files):
             row = ctk.CTkFrame(self.file_scroll, fg_color="transparent")
             row.grid(row=r, column=0, sticky="ew", pady=2)
-            self.file_scroll.grid_columnconfigure(0, weight=1)
             row.grid_columnconfigure(0, weight=1)
 
             ctk.CTkLabel(row, text=f.original_filename, anchor="w").grid(
@@ -479,6 +481,20 @@ class ShareDetailView(ctk.CTkFrame):
             if f.state not in ("clean", "ready_unscanned"):
                 dl_btn.configure(state="disabled")
             dl_btn.grid(row=0, column=3, padx=(8, 0))
+
+            # Inline per-file progress (hidden until a download starts): a thin
+            # bar spanning the row + a "rate · eta" readout.
+            bar = ctk.CTkProgressBar(row, height=6)
+            bar.set(0)
+            info_var = ctk.StringVar(value="")
+            info_lbl = ctk.CTkLabel(
+                row, textvariable=info_var, anchor="e", text_color="gray",
+            )
+            bar.grid(row=1, column=0, columnspan=3, sticky="ew", padx=(0, 8), pady=(4, 0))
+            info_lbl.grid(row=1, column=3, sticky="e", pady=(4, 0))
+            bar.grid_remove()
+            info_lbl.grid_remove()
+            self._file_rows[f.id] = {"bar": bar, "info_var": info_var, "dl_btn": dl_btn}
 
     def _download_one(self, file_id: str, filename: str) -> None:
         dest_str = filedialog.asksaveasfilename(
@@ -511,12 +527,20 @@ class ShareDetailView(ctk.CTkFrame):
             self._spawn_download(f.id, base / f.original_filename)
 
     def _spawn_download(self, file_id: str, dest: Path) -> None:
-        self.progress.pack(fill="x", pady=(8, 0))
-        self.progress.set(0)
-        self._dl_in_flight += 1
-
         from ..config import load_config
         conns = load_config().download_connections
+
+        row = self._file_rows.get(file_id)
+        tracker = RateEstimator()
+
+        # Instant feedback: reveal the file's inline bar + "Starting…" and
+        # lock its Download button before the worker (probe + first bytes)
+        # produces any progress.
+        if row is not None:
+            row["bar"].set(0)
+            row["bar"].grid()
+            row["info_var"].set(t("share_detail.dl_starting"))
+            row["dl_btn"].configure(state="disabled")
 
         def _do(tick):
             # Segmented (parallel-range) download for large files; falls back
@@ -528,25 +552,29 @@ class ShareDetailView(ctk.CTkFrame):
             return str(dest)
 
         def _on_progress(done, total):
-            if not alive(self):
-                return  # download outlived the view (C6)
+            if not alive(self) or row is None or not alive(row["bar"]):
+                return  # view/row torn down mid-download (C6)
             if total > 0:
-                self.progress.set(min(1.0, done / total))
+                row["bar"].set(min(1.0, done / total))
+            rate, eta = tracker.update(done, total)
+            row["info_var"].set(f"{format_rate(rate)} · {format_eta(eta)}")
 
         def _done(path):
             if not alive(self):
                 return
-            self._dl_in_flight -= 1
-            if self._dl_in_flight <= 0:
-                self.progress.pack_forget()
+            if row is not None and alive(row["bar"]):
+                row["bar"].set(1.0)
+                row["info_var"].set(t("share_detail.dl_done"))
+                row["dl_btn"].configure(state="normal")
             self._toast(t("share_detail.downloaded_body", path=path), kind="success")
 
         def _failed(exc):
             if not alive(self):
                 return
-            self._dl_in_flight -= 1
-            if self._dl_in_flight <= 0:
-                self.progress.pack_forget()
+            if row is not None and alive(row["bar"]):
+                row["bar"].grid_remove()
+                row["info_var"].set("")
+                row["dl_btn"].configure(state="normal")
             msg = getattr(exc, "message", None) or str(exc)
             self._toast(f'{t("share_detail.download_failed_title")}: {msg}', kind="error")
 

@@ -182,6 +182,8 @@
     "edit_failed_title": "Bearbeiten fehlgeschlagen",
     "could_not_load_title": "Freigabe konnte nicht geladen werden",
     "download_btn": "Herunterladen",
+    "dl_starting": "Wird gestartet…",
+    "dl_done": "Fertig",
     "save_file_as": "Datei speichern unter",
     "save_all_btn": "Alle in Ordner speichern…",
     "save_all_dir_title": "Alle in Ordner speichern",

@@ -46,7 +46,8 @@ class AppController:
         self._root.lift()
         # Safety net for CTk's Windows titlebar-withdraw routine on first show.
         reassert_visible(self._root, 60)
-        self._show_overlay()
+        # Initial show only: auto sign-in if a stored API token is present.
+        self._show_overlay(auto_login=True)
 
     def _on_root_close(self) -> None:
         """Window-manager close (the X button) handler. On a normal close
@@ -71,7 +72,9 @@ class AppController:
 
     # ---- screen transitions ---------------------------------------------
 
-    def _show_overlay(self, *, info: Optional[str] = None) -> None:
+    def _show_overlay(
+        self, *, info: Optional[str] = None, auto_login: bool = False
+    ) -> None:
         if self._overlay is not None:
             try:
                 self._overlay.destroy()
@@ -82,6 +85,7 @@ class AppController:
             on_signed_in=self._on_signed_in,
             on_cancel=self._root.destroy,  # nothing behind the overlay → quit
             info=info,
+            auto_login=auto_login,
         )
         self._overlay.show()
         try:

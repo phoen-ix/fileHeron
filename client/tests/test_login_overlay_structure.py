@@ -96,6 +96,37 @@ def test_app_controller_exists_with_transitions() -> None:
         _has_method(cls, m)
 
 
+# ---- auto-login from a stored API token (client-v0.9.14) -----------------
+
+
+def test_login_overlay_takes_auto_login_flag() -> None:
+    cls = _has_class(_tree(UI / "login_window.py"), "LoginOverlay")
+    init = _has_method(cls, "__init__")
+    kw = {a.arg for a in init.args.kwonlyargs}
+    assert "auto_login" in kw, f"LoginOverlay.__init__ must accept auto_login; got {kw}"
+
+
+def test_login_overlay_has_one_shot_auto_login() -> None:
+    cls = _has_class(_tree(UI / "login_window.py"), "LoginOverlay")
+    body = ast.unparse(_has_method(cls, "_maybe_auto_login"))
+    # One-shot (clears the flag), gated to API-token mode, and invokes sign-in.
+    assert "self._auto_login = False" in body, "_maybe_auto_login must be one-shot"
+    assert "api_token" in body, "_maybe_auto_login must gate on API-token mode"
+    assert "_on_signin" in body, "_maybe_auto_login must trigger the sign-in path"
+
+
+def test_controller_auto_logs_in_only_on_initial_show() -> None:
+    src = _source(UI / "controller.py")
+    # start() opts into auto-login; logout()/session_expired() must not.
+    assert "auto_login=True" in src, (
+        "AppController.start() must request auto_login on the initial overlay"
+    )
+    assert src.count("auto_login=True") == 1, (
+        "only the initial start() show should auto-login (not logout / "
+        "session-expiry re-shows)"
+    )
+
+
 # ---- MainWindow lifecycle ------------------------------------------------
 
 

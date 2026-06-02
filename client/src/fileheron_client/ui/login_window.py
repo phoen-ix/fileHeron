@@ -56,6 +56,7 @@ class LoginOverlay(ctk.CTkFrame):
         on_signed_in: Callable[[ApiClient, object], None],
         on_cancel: Callable[[], None],
         info: Optional[str] = None,
+        auto_login: bool = False,
     ) -> None:
         super().__init__(root, fg_color=("gray75", "gray10"))
         self._app_root = root
@@ -63,6 +64,11 @@ class LoginOverlay(ctk.CTkFrame):
         self._on_signed_in = on_signed_in
         self._on_cancel = on_cancel
         self._info = info
+        # One-shot: when True (initial startup only), if a stored API token is
+        # present we sign in automatically — no click. Cleared after the first
+        # attempt so a failure (revoked token / server down) drops to the form
+        # without looping. Never set on logout/session-expiry re-shows.
+        self._auto_login = auto_login
         self._step = "creds"  # "creds" | "code"
         self._entries: list[ctk.CTkEntry] = []
         self._build()
@@ -198,6 +204,21 @@ class LoginOverlay(ctk.CTkFrame):
         self.place(relx=0, rely=0, relwidth=1, relheight=1)
         self.lift()
         self.after_idle(self._focus_first)
+        self.after_idle(self._maybe_auto_login)
+
+    def _maybe_auto_login(self) -> None:
+        """If launched with a stored API token, sign in without a click.
+        One-shot + gated to API-token mode at the creds step. ``_show_mode``
+        has already prefilled ``api_token_var`` from the keyring, so a
+        non-empty value here means Windows Credential Manager had a token."""
+        if not self._auto_login:
+            return
+        self._auto_login = False
+        if self._step != "creds" or self._cfg.auth_kind != "api_token":
+            return
+        if self.server_url_var.get().strip() and self.api_token_var.get().strip():
+            trace("auto-login: stored API token present — signing in")
+            self._on_signin()
 
     def hide(self) -> None:
         self.place_forget()

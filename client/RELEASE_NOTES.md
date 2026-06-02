@@ -1,15 +1,19 @@
-# Desktop client 0.9.13
+# Desktop client 0.9.14
 
-Right-click now opens a standard text menu.
+Signs you in automatically when your API token is saved.
 
-## Cut · Copy · Paste · Select all
+## Auto sign-in
 
-Every text field — login, the share subject and message, search boxes, the
-read-only public-link URL and one-time token — now has a normal right-click
-context menu with **Cut, Copy, Paste, and Select all**. (Tkinter ships no native
-one, so previously right-clicking did nothing.) Read-only fields offer **Copy**
-and **Select all**; Cut and Paste are greyed out there. Menu labels follow your
-selected language.
+If you sign in with an **API token**, the token is kept in **Windows Credential
+Manager**. On the next launch the app now uses it to **sign you in
+automatically** — no clicking *Sign in*, straight to your files.
+
+- Only applies to API-token logins (password logins still ask each time — the
+  password is never stored).
+- If the saved token has been revoked or the server is unreachable, the app
+  falls back to the normal login screen so you can fix it.
+- Don't want it? **Settings → Sign out** clears the saved token, and the next
+  launch shows the login screen again.
 
 ---
 

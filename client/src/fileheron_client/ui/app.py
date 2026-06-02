@@ -17,6 +17,7 @@ import customtkinter as ctk
 from tkinterdnd2 import TkinterDnD
 
 from ..assets_loader import asset_path
+from .context_menu import install_context_menus
 
 
 class CTkDnD(ctk.CTk, TkinterDnD.DnDWrapper):
@@ -38,6 +39,10 @@ def build_root() -> ctk.CTk:
 
     root = CTkDnD()
     root.title("file:Heron")
+    # Standard right-click Cut/Copy/Paste/Select-all in every text field
+    # (Tkinter has no native one). Interpreter-global, so one call covers
+    # widgets built later too.
+    install_context_menus(root)
     # The New share form pins its submit/Add files row to the bottom
     # (side="bottom") so 1000x640 fits everything; the file list area
     # absorbs slack space. center_window opens it mid-screen rather than

@@ -12,6 +12,13 @@
     "no_matches": "Keine Treffer."
   },
 
+  "context_menu": {
+    "cut": "Ausschneiden",
+    "copy": "Kopieren",
+    "paste": "Einfügen",
+    "select_all": "Alles auswählen"
+  },
+
   "app": {
     "title_template": "file:Heron — {name} ({role})  ·  v{version}"
   },

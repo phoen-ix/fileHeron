@@ -64,11 +64,6 @@ class ShareDetailView(ctk.CTkFrame):
         self._dl_in_flight = 0
 
         self._build()
-
-    def _toast(self, text: str, kind: str = "info") -> None:
-        """Non-modal success/info notice (replaces interrupting mb.info popups)."""
-        if self._flash is not None:
-            self._flash(text, kind=kind)
         self._load()
         # Esc-to-close parity with the old Toplevel modal. Bind on the
         # toplevel so it works regardless of focus inside the frame;
@@ -79,6 +74,11 @@ class ShareDetailView(ctk.CTkFrame):
             "<Escape>", lambda _e: self._on_back(), add="+"
         )
         self.bind("<Destroy>", self._on_destroy_unbind, add="+")
+
+    def _toast(self, text: str, kind: str = "info") -> None:
+        """Non-modal success/info notice (replaces interrupting mb.info popups)."""
+        if self._flash is not None:
+            self._flash(text, kind=kind)
 
     def _on_destroy_unbind(self, _event) -> None:
         try:

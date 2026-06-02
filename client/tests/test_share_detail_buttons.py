@@ -53,6 +53,53 @@ def test_end_share_method_present() -> None:
     )
 
 
+def _method(cls: ast.ClassDef, name: str) -> ast.FunctionDef:
+    for n in cls.body:
+        if isinstance(n, ast.FunctionDef) and n.name == name:
+            return n
+    raise AssertionError(f"{name} not found in ShareDetailView")
+
+
+def _calls_self_method(fn: ast.FunctionDef, method: str) -> bool:
+    for node in ast.walk(fn):
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == method
+            and isinstance(node.func.value, ast.Name)
+            and node.func.value.id == "self"
+        ):
+            return True
+    return False
+
+
+def test_init_calls_load_and_binds_destroy() -> None:
+    """Regression guard (client-v0.9.4 bug): __init__ MUST call self._load(),
+    otherwise the share detail never loads and renders only placeholders. It
+    also wires the <Destroy> unbind here."""
+    cls = _share_detail_view_class()
+    init = _method(cls, "__init__")
+    assert _calls_self_method(init, "_load"), (
+        "ShareDetailView.__init__ must call self._load() — otherwise the detail "
+        "view never loads the share (regression shipped in client-v0.9.4)."
+    )
+    init_src = ast.get_source_segment(VIEW.read_text(encoding="utf-8"), init) or ""
+    assert "<Destroy>" in init_src, (
+        "ShareDetailView.__init__ must bind <Destroy> (esc-unbind setup)."
+    )
+
+
+def test_toast_does_not_call_load() -> None:
+    """The _load() call must live in __init__, never in _toast — the latter is
+    exactly the client-v0.9.4 boundary bug that broke share-detail loading."""
+    cls = _share_detail_view_class()
+    toast = _method(cls, "_toast")
+    assert not _calls_self_method(toast, "_load"), (
+        "ShareDetailView._toast must not call self._load(); that orphaned the "
+        "load out of __init__ and left the detail on placeholders."
+    )
+
+
 def test_no_revoke_btn_or_expire_now_btn_assignments() -> None:
     """The old widget attributes ``self.revoke_btn`` and
     ``self.expire_now_btn`` should both be gone — replaced by

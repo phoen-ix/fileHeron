@@ -77,6 +77,8 @@
     "row_account": "Account",
     "row_role": "Role",
     "row_version": "Client version",
+    "row_api_token": "API token",
+    "api_token_hint": "Manage or revoke this token in the web app under Account → Connected API clients.",
     "appearance": "Appearance",
     "appearance_light": "Light",
     "appearance_dark": "Dark",

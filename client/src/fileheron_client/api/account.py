@@ -21,3 +21,22 @@ def patch_locale(api: ApiClient, locale: str) -> MeResponse:
         "PATCH", "/api/account/locale", json={"locale": locale},
     )
     return MeResponse.model_validate(out)
+
+
+def get_current_api_token(api: ApiClient) -> dict | None:
+    """GET ``/api/account/api-tokens/current`` — metadata about the API token
+    this client is authenticated with (``id, name, last4, created_at,
+    last_used_at, status``), so Settings can show which token it's running on.
+
+    Returns ``None`` when the call doesn't yield a token: a server too old to
+    expose the endpoint (404) or a non-token (password) session (400). Callers
+    fall back to the locally-derivable prefix/last4."""
+    resp = api.request(
+        "GET", "/api/account/api-tokens/current", retry_on_401=False,
+    )
+    if resp.status_code != 200:
+        return None
+    try:
+        return resp.json()
+    except ValueError:
+        return None

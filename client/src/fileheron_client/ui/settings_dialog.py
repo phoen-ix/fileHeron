@@ -16,6 +16,7 @@ from ..api import ApiClient
 from ..config import load_config, save_config
 from ..i18n import set_locale, t
 from ..models import MeResponse
+from ._async import run_in_background
 from .app import set_appearance_mode
 
 
@@ -77,9 +78,33 @@ class SettingsOverlay(ctk.CTkFrame):
             )
 
         outer.grid_columnconfigure(1, weight=1)
+        next_row = base + len(rows)
+
+        # API-token identity (v0.9.12) — only when signed in via an API token.
+        # Shows WHICH token this client runs on so the user can find + revoke
+        # it in the web app (Account → Connected API clients). The prefix/last4
+        # is derived locally (instant); the name + status are filled in async.
+        if self._api.api_token:
+            self._token_var = ctk.StringVar(value=self._local_token_label())
+            ctk.CTkLabel(outer, text=t("settings.row_api_token"), anchor="nw").grid(
+                row=next_row, column=0, sticky="nw", padx=(0, 12), pady=4
+            )
+            tok_cell = ctk.CTkFrame(outer, fg_color="transparent")
+            tok_cell.grid(row=next_row, column=1, sticky="ew", pady=4)
+            ctk.CTkLabel(
+                tok_cell, textvariable=self._token_var, anchor="w",
+                text_color="gray", justify="left", wraplength=300,
+            ).pack(anchor="w")
+            ctk.CTkLabel(
+                tok_cell, text=t("settings.api_token_hint"), anchor="w",
+                text_color="gray", justify="left", wraplength=300,
+                font=ctk.CTkFont(size=11),
+            ).pack(anchor="w")
+            next_row += 1
+            self._load_token_meta()
 
         # Appearance mode picker (v0.4.0 — CTk's built-in theming).
-        appearance_row = base + len(rows)
+        appearance_row = next_row
         ctk.CTkLabel(outer, text=t("settings.appearance"), anchor="w").grid(
             row=appearance_row, column=0, sticky="w", padx=(0, 12), pady=(12, 4)
         )
@@ -189,6 +214,46 @@ class SettingsOverlay(ctk.CTkFrame):
         # Esc closes. No grab_set, so bind on each focusable control.
         for w in self._esc_targets:
             w.bind("<Escape>", lambda _e: self._close())
+
+    # ---- API-token identity ---------------------------------------------
+
+    def _local_token_label(self) -> str:
+        """``fh_<prefix>_…<last4>`` derived from the in-memory token, with no
+        network call — so the row renders instantly."""
+        tok = self._api.api_token or ""
+        parts = tok.split("_", 2)
+        if len(parts) == 3 and parts[1]:
+            return f"fh_{parts[1]}_…{parts[2][-4:]}"
+        return (tok[:12] + "…") if tok else ""
+
+    def _load_token_meta(self) -> None:
+        """Enrich the token row with the server-side name (and revoked/disabled
+        status) so the user can pick this token out of the web list. Best-
+        effort: an older server (404) or a transient error just leaves the
+        locally-derived prefix/last4 label in place."""
+        from .. import api as api_pkg
+
+        def _work():
+            return api_pkg.get_current_api_token(self._api)
+
+        def _done(meta) -> None:
+            if not meta:
+                return
+            name = (meta.get("name") or "").strip()
+            label = self._local_token_label()
+            if name:
+                label = f"{name}  ·  {label}"
+            status = meta.get("status")
+            if status and status != "active":
+                label = f"{label}  ({status})"
+            try:
+                self._token_var.set(label)
+            except Exception:
+                pass
+
+        run_in_background(
+            self._app_root, _work, on_done=_done, on_failed=lambda _e: None
+        )
 
     # ---- show / hide -----------------------------------------------------
 

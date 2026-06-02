@@ -63,9 +63,10 @@ def refresh(api: ApiClient) -> RefreshResponse:
     return parsed
 
 
-def logout(api: ApiClient) -> None:
-    # Best-effort — server clears the cookie regardless.
-    api.request("POST", "/api/auth/logout", retry_on_401=False)
+def logout(api: ApiClient, *, timeout: float | None = None) -> None:
+    # Best-effort — server clears the cookie regardless. ``timeout`` caps the
+    # call so a normal program close can't hang on an unreachable server.
+    api.request("POST", "/api/auth/logout", retry_on_401=False, timeout=timeout)
     api.set_access_token(None)
 
 

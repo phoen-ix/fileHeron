@@ -77,6 +77,8 @@
     "row_account": "Konto",
     "row_role": "Rolle",
     "row_version": "Client-Version",
+    "row_api_token": "API-Token",
+    "api_token_hint": "Dieses Token in der Web-App unter Konto → Verbundene API-Clients verwalten oder widerrufen.",
     "appearance": "Erscheinungsbild",
     "appearance_light": "Hell",
     "appearance_dark": "Dunkel",

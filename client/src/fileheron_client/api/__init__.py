@@ -1,4 +1,4 @@
-from .account import patch_locale
+from .account import get_current_api_token, patch_locale
 from .client import ApiClient, ApiError, SessionExpiredError
 from .auth import login, login_with_recovery, refresh, logout, me
 from .download_segmented import download_file_segmented
@@ -27,6 +27,7 @@ __all__ = [
     "logout",
     "me",
     "patch_locale",
+    "get_current_api_token",
     "list_shares",
     "get_share",
     "create_share",

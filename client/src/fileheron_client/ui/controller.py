@@ -41,11 +41,33 @@ class AppController:
         login overlay placed on top, and enter the single mainloop (run by
         the caller)."""
         set_session_expired_handler(self.session_expired)
+        self._root.protocol("WM_DELETE_WINDOW", self._on_root_close)
         self._root.deiconify()
         self._root.lift()
         # Safety net for CTk's Windows titlebar-withdraw routine on first show.
         reassert_visible(self._root, 60)
         self._show_overlay()
+
+    def _on_root_close(self) -> None:
+        """Window-manager close (the X button) handler. On a normal close
+        while signed in with a PASSWORD session, revoke that session
+        server-side (best-effort, short timeout) so it doesn't linger until
+        the cleanup cron. API-token logins have no session to revoke — and we
+        must NOT touch the persistent token (it's reused on the next launch).
+        A crash skips this entirely; the cron reaps those."""
+        api = self._api
+        if api is not None and self._main is not None and api.api_token is None:
+            trace("normal close — revoking password session")
+            try:
+                from ..api import auth as auth_pkg
+
+                auth_pkg.logout(api, timeout=3.0)
+            except Exception as exc:
+                trace(f"logout-on-close failed (non-fatal): {exc!r}")
+        try:
+            self._root.destroy()
+        except Exception:
+            pass
 
     # ---- screen transitions ---------------------------------------------
 

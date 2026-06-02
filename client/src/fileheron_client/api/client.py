@@ -137,10 +137,19 @@ class ApiClient:
         data: Any = None,
         files: Any = None,
         retry_on_401: bool = True,
+        timeout: float | None = None,
     ) -> httpx.Response:
         """Issue a request relative to ``self.server_url``. Auto-handles
         a single 401 → refresh → retry cycle when an access token is in
-        play (not for API-token sessions — those never refresh)."""
+        play (not for API-token sessions — those never refresh).
+
+        ``timeout`` overrides the client default for this one call. Only set
+        it when given — passing ``timeout=None`` to httpx means *infinite*,
+        the opposite of what a short-deadline caller (e.g. logout-on-close)
+        wants."""
+        extra_kw: dict[str, Any] = {}
+        if timeout is not None:
+            extra_kw["timeout"] = timeout
         resp = self._http.request(
             method,
             path,
@@ -149,6 +158,7 @@ class ApiClient:
             data=data,
             files=files,
             headers=self._headers(headers),
+            **extra_kw,
         )
         if (
             resp.status_code == 401

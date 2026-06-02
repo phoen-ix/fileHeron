@@ -847,8 +847,12 @@
     "password_changed_toast": "Password changed. Other sessions revoked.",
     "session_revoked_toast": "Session revoked.",
     "session_revoke_others": "Sign out all other sessions",
-    "session_revoke_others_confirm": "Sign out every other session? This device stays signed in; all other browsers and the desktop app will need to log in again.",
+    "session_revoke_others_confirm": "Sign out every other session? This device stays signed in, and all other browsers will need to log in again. Note: this does NOT revoke API tokens — programmatic clients (like a token-based desktop app) keep working until you revoke their token under \"Connected API clients\" below.",
     "session_revoke_others_toast": "Signed out all other sessions.",
+    "api_clients_heading": "Connected API clients",
+    "api_clients_help": "These programmatic clients (e.g. the desktop app) sign in with a long-lived API token, not a browser session — signing out other sessions does NOT disconnect them. Revoke a token here to cut off its client immediately.",
+    "api_client_revoke_confirm": "Revoke this API token? The client using it (e.g. the desktop app) is disconnected immediately and will need a new token to sign in again.",
+    "api_client_revoked_toast": "API token revoked — its client is disconnected.",
     "landing": {
       "label": "Default landing page",
       "help": "Where you land after logging in. Pick \"System default\" to follow whatever the admin has chosen for everyone.",

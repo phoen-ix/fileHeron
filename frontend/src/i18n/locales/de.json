@@ -847,8 +847,12 @@
     "password_changed_toast": "Passwort geändert. Andere Sitzungen wurden beendet.",
     "session_revoked_toast": "Sitzung beendet.",
     "session_revoke_others": "Alle anderen Sitzungen abmelden",
-    "session_revoke_others_confirm": "Alle anderen Sitzungen abmelden? Dieses Gerät bleibt angemeldet; alle anderen Browser und die Desktop-App müssen sich neu anmelden.",
+    "session_revoke_others_confirm": "Alle anderen Sitzungen abmelden? Dieses Gerät bleibt angemeldet, alle anderen Browser müssen sich neu anmelden. Hinweis: API-Tokens werden dabei NICHT widerrufen — programmatische Clients (z. B. eine Token-basierte Desktop-App) funktionieren weiter, bis du ihr Token unter „Verbundene API-Clients“ unten widerrufst.",
     "session_revoke_others_toast": "Alle anderen Sitzungen abgemeldet.",
+    "api_clients_heading": "Verbundene API-Clients",
+    "api_clients_help": "Diese programmatischen Clients (z. B. die Desktop-App) melden sich mit einem langlebigen API-Token an, nicht mit einer Browser-Sitzung — das Abmelden anderer Sitzungen trennt sie NICHT. Widerrufe hier ein Token, um seinen Client sofort zu trennen.",
+    "api_client_revoke_confirm": "Dieses API-Token widerrufen? Der damit angemeldete Client (z. B. die Desktop-App) wird sofort getrennt und benötigt ein neues Token zur Anmeldung.",
+    "api_client_revoked_toast": "API-Token widerrufen — sein Client ist getrennt.",
     "landing": {
       "label": "Standard-Startseite",
       "help": "Wo du nach der Anmeldung landest. Wähle „System-Standard\", um der globalen Admin-Einstellung zu folgen.",

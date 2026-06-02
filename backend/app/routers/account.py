@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from ..dependencies import get_actor, get_current_user, get_db
 from ..middleware.errors import AppError
+from ..models.api_token import ApiToken
 from ..models.user import User, UserRole
 from ..models.user_recovery_code import UserRecoveryCode
 from ..schemas.account import (
@@ -21,6 +22,7 @@ from ..schemas.api_token import (
     ApiTokenListResponse,
     CreateApiTokenRequest,
     CreateApiTokenResponse,
+    CurrentApiTokenResponse,
 )
 from ..schemas.two_factor import (
     RecoveryCodeRegenerateRequest,
@@ -389,6 +391,43 @@ def list_api_tokens(
             for r in rows
         ],
         can_create=api_token_svc.is_allowed_to_create(db, user),
+    )
+
+
+@router.get("/api-tokens/current", response_model=CurrentApiTokenResponse)
+def get_current_api_token(
+    request: Request,
+    user: User = Depends(get_actor),
+    db: Session = Depends(get_db),
+) -> CurrentApiTokenResponse:
+    """Metadata for the API token authenticating THIS request, so a client
+    (e.g. the desktop app) can show the user which token it's running on and
+    point them at where to revoke it. JWT/session auth has no token → 400."""
+    if getattr(request.state, "auth_via", None) != "api_token":
+        raise AppError(
+            400, "NOT_API_TOKEN", "Current authentication is not an API token."
+        )
+    token_id = getattr(request.state, "api_token_id", None)
+    record = (
+        db.query(ApiToken)
+        .filter(ApiToken.id == token_id, ApiToken.owner_user_id == user.id)
+        .one_or_none()
+    )
+    if record is None:
+        raise AppError(404, "TOKEN_NOT_FOUND", "API token not found.")
+    if record.revoked_at is not None:
+        token_status = "revoked"
+    elif record.disabled_at is not None:
+        token_status = "disabled"
+    else:
+        token_status = "active"
+    return CurrentApiTokenResponse(
+        id=record.id,
+        name=record.name,
+        last4=record.last4,
+        created_at=record.created_at,
+        last_used_at=record.last_used_at,
+        status=token_status,
     )
 
 

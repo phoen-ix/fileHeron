@@ -47,6 +47,18 @@ PolicyMode = Literal["everyone", "employees_admins", "admins_only", "disabled"]
 TokenStatus = Literal["active", "disabled", "revoked"]
 
 
+class CurrentApiTokenResponse(APIBaseModel):
+    """Metadata for the API token authenticating the current request, so a
+    programmatic client can show the user which token it's running on and
+    where to revoke it."""
+    id: int
+    name: str
+    last4: str
+    created_at: datetime
+    last_used_at: datetime | None
+    status: TokenStatus
+
+
 class TokenPolicyResponse(APIBaseModel):
     mode: PolicyMode
     allowed_user_ids: list[int]

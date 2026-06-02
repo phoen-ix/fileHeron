@@ -1,19 +1,19 @@
-# Desktop client 0.9.14
+# Desktop client 0.9.15
 
-Signs you in automatically when your API token is saved.
+After a download finishes, open the file or its folder.
 
-## Auto sign-in
+## Open / Folder
 
-If you sign in with an **API token**, the token is kept in **Windows Credential
-Manager**. On the next launch the app now uses it to **sign you in
-automatically** — no clicking *Sign in*, straight to your files.
+Once a file finishes downloading, its **Download** button is replaced by two
+actions:
 
-- Only applies to API-token logins (password logins still ask each time — the
-  password is never stored).
-- If the saved token has been revoked or the server is unreachable, the app
-  falls back to the normal login screen so you can fix it.
-- Don't want it? **Settings → Sign out** clears the saved token, and the next
-  launch shows the login screen again.
+- **Open** — opens the file in its default application.
+- **Folder** — reveals the file in the file manager (selected in Explorer on
+  Windows / Finder on macOS).
+
+No more wondering whether the download worked or hunting for where it landed.
+(Need to download it again? Go back and reopen the share — the Download buttons
+come back fresh.)
 
 ---
 

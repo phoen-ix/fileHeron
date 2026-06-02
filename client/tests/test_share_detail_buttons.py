@@ -100,6 +100,23 @@ def test_toast_does_not_call_load() -> None:
     )
 
 
+def test_done_swaps_to_open_actions_not_redownload() -> None:
+    """client-v0.9.15: a successful download must replace the row button with
+    Open/Folder actions, not flip back to Download. Guard that the open-actions
+    helpers exist and the row tracks its action cell."""
+    cls = _share_detail_view_class()
+    names = {n.name for n in cls.body if isinstance(n, ast.FunctionDef)}
+    assert {"_show_open_actions", "_open_path", "_reveal_path"} <= names, (
+        "ShareDetailView must declare _show_open_actions / _open_path / "
+        "_reveal_path for the post-download Open + Folder buttons."
+    )
+    src = VIEW.read_text(encoding="utf-8")
+    assert '"action_cell"' in src, (
+        "_render_files must store the row's action_cell so _show_open_actions "
+        "can swap its buttons after a successful save."
+    )
+
+
 def test_no_revoke_btn_or_expire_now_btn_assignments() -> None:
     """The old widget attributes ``self.revoke_btn`` and
     ``self.expire_now_btn`` should both be gone — replaced by

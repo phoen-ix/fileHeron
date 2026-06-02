@@ -475,13 +475,17 @@ class ShareDetailView(ctk.CTkFrame):
                 row=0, column=1, padx=8
             )
             PillLabel(row, text=f.state, state=f.state).grid(row=0, column=2, padx=8)
+            # The action cell hosts a variable button set: Download → Cancel
+            # (while downloading) → Open + Folder (after a successful save).
+            action_cell = ctk.CTkFrame(row, fg_color="transparent")
+            action_cell.grid(row=0, column=3, padx=(8, 0))
             dl_btn = ctk.CTkButton(
-                row, text=t("share_detail.download_btn"), width=110,
+                action_cell, text=t("share_detail.download_btn"), width=110,
                 command=lambda fid=f.id, fname=f.original_filename: self._download_one(fid, fname),
             )
             if f.state not in ("clean", "ready_unscanned"):
                 dl_btn.configure(state="disabled")
-            dl_btn.grid(row=0, column=3, padx=(8, 0))
+            dl_btn.pack(side="right")
 
             # Inline per-file progress (hidden until a download starts): a thin
             # bar spanning the row + a "rate · eta" readout.
@@ -496,7 +500,8 @@ class ShareDetailView(ctk.CTkFrame):
             bar.grid_remove()
             info_lbl.grid_remove()
             self._file_rows[f.id] = {
-                "bar": bar, "info_var": info_var, "info_lbl": info_lbl, "dl_btn": dl_btn,
+                "bar": bar, "info_var": info_var, "info_lbl": info_lbl,
+                "dl_btn": dl_btn, "action_cell": action_cell,
                 # Captured so the button can flip Download -> Cancel -> Download.
                 "download_cmd": (
                     lambda fid=f.id, fn=f.original_filename: self._download_one(fid, fn)
@@ -533,6 +538,61 @@ class ShareDetailView(ctk.CTkFrame):
         base = Path(dir_str)
         for f in downloadable:
             self._spawn_download(f.id, base / f.original_filename)
+
+    def _show_open_actions(self, row: dict, dest: Path) -> None:
+        """After a successful save, replace the row's Download/Cancel button
+        with Open (launch the file in its default app) + Folder (reveal it in
+        the OS file manager). Re-downloading is still possible by leaving and
+        re-opening the share (which re-renders fresh Download buttons)."""
+        cell = row.get("action_cell")
+        if not alive(cell):
+            return
+        for child in cell.winfo_children():
+            child.destroy()
+        # Pack Folder first so it sits to the right of Open (side="right" stacks
+        # right-to-left): visual order is [Open] [Folder].
+        ctk.CTkButton(
+            cell, text=t("share_detail.open_folder_btn"), width=72,
+            fg_color="transparent", border_width=1,
+            hover_color=("gray85", "gray25"),
+            command=lambda p=dest: self._reveal_path(p),
+        ).pack(side="right")
+        ctk.CTkButton(
+            cell, text=t("share_detail.open_file_btn"), width=72,
+            command=lambda p=dest: self._open_path(p),
+        ).pack(side="right", padx=(0, 4))
+
+    def _open_path(self, path: Path) -> None:
+        """Open the downloaded file in its default application."""
+        import os
+        import subprocess
+        import sys
+
+        try:
+            if sys.platform.startswith("win"):
+                os.startfile(str(path))  # type: ignore[attr-defined]
+            elif sys.platform == "darwin":
+                subprocess.Popen(["open", str(path)])
+            else:
+                subprocess.Popen(["xdg-open", str(path)])
+        except Exception as exc:
+            self._toast(t("share_detail.open_failed", detail=str(exc)), kind="error")
+
+    def _reveal_path(self, path: Path) -> None:
+        """Reveal the downloaded file in the OS file manager (selected on
+        Windows/macOS; opens the containing folder on Linux)."""
+        import subprocess
+        import sys
+
+        try:
+            if sys.platform.startswith("win"):
+                subprocess.Popen(["explorer", "/select,", str(path)])
+            elif sys.platform == "darwin":
+                subprocess.Popen(["open", "-R", str(path)])
+            else:
+                subprocess.Popen(["xdg-open", str(path.parent)])
+        except Exception as exc:
+            self._toast(t("share_detail.open_failed", detail=str(exc)), kind="error")
 
     def _restore_dl_btn(self, row: dict) -> None:
         """Flip the row's button back to 'Download' (from 'Cancel')."""
@@ -601,10 +661,16 @@ class ShareDetailView(ctk.CTkFrame):
         def _done(path):
             if not alive(self):
                 return
-            if row is not None and alive(row["bar"]):
-                row["bar"].set(1.0)
-                row["info_var"].set(t("share_detail.dl_done"))
-                self._restore_dl_btn(row)
+            if row is not None and alive(row.get("action_cell")):
+                if alive(row["bar"]):
+                    row["bar"].grid_remove()
+                if alive(row["info_lbl"]):
+                    row["info_lbl"].grid_remove()
+                row["info_var"].set("")
+                row["cancel"] = None
+                # Saved — the button becomes Open (the file) + Folder (reveal it),
+                # not another Download.
+                self._show_open_actions(row, Path(path))
             self._toast(t("share_detail.downloaded_body", path=path), kind="success")
 
         def _failed(exc):

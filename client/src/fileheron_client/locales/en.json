@@ -203,7 +203,10 @@
     "nothing_to_save_body": "No downloadable files.",
     "downloaded_title": "Downloaded",
     "downloaded_body": "Saved to:\n{path}",
-    "download_failed_title": "Download failed"
+    "download_failed_title": "Download failed",
+    "open_file_btn": "Open",
+    "open_folder_btn": "Folder",
+    "open_failed": "Couldn't open it: {detail}"
   },
 
   "upload": {

@@ -203,7 +203,10 @@
     "nothing_to_save_body": "Keine herunterladbaren Dateien.",
     "downloaded_title": "Heruntergeladen",
     "downloaded_body": "Gespeichert unter:\n{path}",
-    "download_failed_title": "Download fehlgeschlagen"
+    "download_failed_title": "Download fehlgeschlagen",
+    "open_file_btn": "Öffnen",
+    "open_folder_btn": "Ordner",
+    "open_failed": "Konnte nicht geöffnet werden: {detail}"
   },
 
   "upload": {

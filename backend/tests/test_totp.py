@@ -202,6 +202,51 @@ def test_anti_replay_under_concurrency(make_user, db):
     assert second is False, "same-window replay must be rejected"
 
 
+def _enabled_totp_row(make_user, db, email: str) -> tuple:
+    """Create a user with an enabled UserTOTP row; return (user, secret_b32)."""
+    from datetime import datetime, timezone
+
+    from app.models.user_totp import UserTOTP
+    from app.utils.crypto import encrypt_totp_secret
+
+    user = make_user(email=email)
+    secret = pyotp.random_base32()
+    db.add(
+        UserTOTP(
+            user_id=user.id,
+            secret_encrypted=encrypt_totp_secret(secret),
+            enabled_at=datetime.now(tz=timezone.utc).replace(tzinfo=None),
+            last_used_counter=0,
+        )
+    )
+    db.commit()
+    db.refresh(user)
+    return user, secret
+
+
+def test_totp_accepts_code_within_60s_window(make_user, db):
+    """v1.5.9: window widened to ±2 steps (±60s) to tolerate mild device clock
+    drift. A code generated 2 steps (60s) in the past is still accepted."""
+    import time
+
+    from app.services import totp as totp_svc
+
+    user, secret = _enabled_totp_row(make_user, db, "win2@test.local")
+    code = pyotp.TOTP(secret).at(int(time.time()) - 60)  # exactly 2 steps back
+    assert totp_svc.verify_at_login(db, user=user, code=code) is True
+
+
+def test_totp_rejects_code_beyond_60s_window(make_user, db):
+    """Boundary stays finite: a code 3 steps (90s) away is rejected."""
+    import time
+
+    from app.services import totp as totp_svc
+
+    user, secret = _enabled_totp_row(make_user, db, "win3@test.local")
+    code = pyotp.TOTP(secret).at(int(time.time()) - 90)  # 3 steps back → out
+    assert totp_svc.verify_at_login(db, user=user, code=code) is False
+
+
 @pytest.mark.asyncio
 async def test_status_endpoint_reports_correctly(make_user, client):
     make_user(email="alice@test.local", password="LongCorrectHorse123!")

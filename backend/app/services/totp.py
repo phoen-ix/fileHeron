@@ -45,8 +45,11 @@ from ..utils.crypto import (
 from ..utils.qr import render_qr_svg
 from .audit import record_audit_event
 
-# Authenticator-style window: accept previous, current, next 30s step.
-_TOTP_VALID_WINDOW = 1
+# Acceptance window in 30s steps either side of the current step. 2 ⇒ ±60s,
+# which tolerates mild authenticator-device clock drift (the common cause of
+# "valid code rejected") without meaningfully weakening 2FA — the anti-replay
+# counter in verify_at_login still allows only one login per server 30s window.
+_TOTP_VALID_WINDOW = 2
 
 
 def _utcnow() -> datetime:

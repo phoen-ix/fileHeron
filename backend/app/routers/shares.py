@@ -9,8 +9,9 @@ from ..dependencies import get_actor, get_db
 from ..middleware.errors import AppError
 from ..models.file import FileState
 from ..models.group import Group
+from ..models.share import ShareKind
 from ..models.share_recipient import ShareRecipient
-from ..models.user import User
+from ..models.user import User, UserRole
 from ..schemas.share import (
     BulkExpireFailure,
     BulkExpireRequest,
@@ -126,10 +127,16 @@ def create_share(
             "Your administrator has restricted public-link creation.",
         )
 
+    # Kind is determined by role, not the client payload: a client always
+    # creates an inbound (→ company) share; staff always create outbound. This
+    # is the server-side enforcement of the share model (the SPA/desktop set it
+    # too, but we never trust the client). Inbound ignores any recipients.
+    kind = ShareKind.inbound if user.role == UserRole.client else ShareKind.outbound
+
     share = share_svc.create_share(
         db,
         created_by=user,
-        kind=payload.kind,
+        kind=kind,
         recipient_user_ids=payload.recipients.user_ids,
         recipient_group_ids=payload.recipients.group_ids,
         expires_at=payload.expires_at,
@@ -274,6 +281,13 @@ def list_shares(
                 sender = ShareSenderRef(
                     id=su.id, display_name=su.display_name, email=su.email
                 )
+        # Inbound (client → company) shares carry no recipient rows — the
+        # audience is "the company". Surface a single synthetic recipient so the
+        # UI renders "→ Company" (the SPA translates on kind="company").
+        if s.kind == ShareKind.inbound:
+            recips = [ShareRecipientRef(kind="company", id=0, label="Company")]
+        else:
+            recips = recips_by_share.get(s.id, [])
         items.append(
             ShareListItem(
                 id=s.id,
@@ -288,7 +302,7 @@ def list_shares(
                 total_size_bytes=sum(f.size_bytes for f in files),
                 download_limit=s.download_limit,
                 downloads_remaining=s.downloads_remaining,
-                recipients=recips_by_share.get(s.id, []),
+                recipients=recips,
                 sender=sender,
             )
         )

@@ -53,9 +53,14 @@ class CreateShareRequest(APIBaseModel):
 
     @model_validator(mode="after")
     def _recipients_or_public_link(self):
-        # Recipients are optional iff an inline public link is attached
-        # — the link IS the access mechanism. Without either, the share
-        # has no path to a consumer and shouldn't exist.
+        # Inbound (client → company) shares never carry recipients — the
+        # audience (the whole company + group-peers) is implicit — so the
+        # rule below only applies to outbound shares.
+        if self.kind == ShareKind.inbound:
+            return self
+        # Outbound: recipients are optional iff an inline public link is
+        # attached — the link IS the access mechanism. Without either, the
+        # share has no path to a consumer and shouldn't exist.
         if (
             not self.recipients.user_ids
             and not self.recipients.group_ids

@@ -27,7 +27,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timezone
 
-from sqlalchemy import or_, update
+from sqlalchemy import and_, or_, update
 from sqlalchemy.orm import Session, joinedload
 
 from ..middleware.errors import AppError
@@ -54,16 +54,6 @@ def _user_group_ids(db: Session, user_id: int) -> list[int]:
         .all()
     )
     return [r[0] for r in rows]
-
-
-def _connected_employee_ids_of(db: Session, client_id: int) -> set[int]:
-    rows = (
-        db.query(ClientEmployeeConnection.employee_user_id)
-        .filter(ClientEmployeeConnection.client_user_id == client_id)
-        .distinct()
-        .all()
-    )
-    return {r[0] for r in rows}
 
 
 def _connected_client_ids_of(db: Session, employee_id: int) -> set[int]:
@@ -109,34 +99,13 @@ def _validate_outbound_targets(
             )
 
 
-def _validate_inbound_targets(
-    db: Session, sender: User, users: list[User], groups: list[Group]
-) -> None:
-    if sender.role != UserRole.client:
-        raise AppError(
-            403, "FORBIDDEN_KIND", "Only clients can send inbound shares."
-        )
-    connected = _connected_employee_ids_of(db, sender.id)
-    for u in users:
-        if u.role == UserRole.client:
-            raise AppError(
-                403,
-                "FORBIDDEN_RECIPIENT",
-                "Inbound shares cannot target another client.",
-            )
-        if u.id not in connected:
-            raise AppError(
-                403,
-                "RECIPIENT_NOT_CONNECTED",
-                f"You're not connected to user {u.id}.",
-            )
-    for g in groups:
-        if not g.is_company_inbox:
-            raise AppError(
-                403,
-                "GROUP_NOT_INBOX",
-                "Inbound shares can only target company-inbox groups.",
-            )
+def _shares_group(db: Session, user_a_id: int, user_b_id: int) -> bool:
+    """True if the two users are members of at least one common group. Used for
+    client group-peer visibility of inbound (client→company) submissions."""
+    a_groups = set(_user_group_ids(db, user_a_id))
+    if not a_groups:
+        return False
+    return bool(a_groups & set(_user_group_ids(db, user_b_id)))
 
 
 def create_share(
@@ -166,43 +135,41 @@ def create_share(
         if expires_at < _utcnow():
             raise AppError(400, "EXPIRY_IN_PAST", "Expiry must be in the future.")
 
-    user_ids = list(dict.fromkeys(recipient_user_ids or []))  # dedupe, preserve order
-    group_ids = list(dict.fromkeys(recipient_group_ids or []))
-    # Empty recipients are only OK when the caller explicitly opted in
-    # (e.g., the router did so because an inline public link is being
-    # attached — the link is the access path).
-    if not user_ids and not group_ids and not allow_no_recipients:
-        raise AppError(
-            400, "NO_RECIPIENTS", "At least one user or group recipient is required."
-        )
-
-    # Resolve + validate user recipients.
+    # Inbound (client → the company): the client never picks recipients. The
+    # audience — every employee/admin, plus the creator's group-peers — is
+    # resolved at read time (see is_authorized_to_download / list_shares_for_user),
+    # so no recipient rows are written and any client-supplied recipients are
+    # ignored. Outbound (staff → client/group) resolves + validates recipients
+    # as before.
     users: list[User] = []
-    for uid in user_ids:
-        u = db.query(User).filter(User.id == uid).one_or_none()
-        if u is None or u.is_disabled:
-            raise AppError(
-                404, "RECIPIENT_NOT_FOUND", f"Recipient user {uid} is not available."
-            )
-        if u.id == created_by.id:
-            raise AppError(400, "SELF_SHARE", "Cannot share with yourself.")
-        users.append(u)
-
-    # Resolve + validate group recipients.
     groups: list[Group] = []
-    for gid in group_ids:
-        g = db.query(Group).filter(Group.id == gid).one_or_none()
-        if g is None:
-            raise AppError(
-                404, "GROUP_NOT_FOUND", f"Recipient group {gid} is not available."
-            )
-        groups.append(g)
-
-    # Kind-specific authorization.
     if kind == ShareKind.outbound:
+        user_ids = list(dict.fromkeys(recipient_user_ids or []))  # dedupe, keep order
+        group_ids = list(dict.fromkeys(recipient_group_ids or []))
+        # Empty recipients are only OK when the caller explicitly opted in
+        # (e.g., the router did so because an inline public link is being
+        # attached — the link is the access path).
+        if not user_ids and not group_ids and not allow_no_recipients:
+            raise AppError(
+                400, "NO_RECIPIENTS", "At least one user or group recipient is required."
+            )
+        for uid in user_ids:
+            u = db.query(User).filter(User.id == uid).one_or_none()
+            if u is None or u.is_disabled:
+                raise AppError(
+                    404, "RECIPIENT_NOT_FOUND", f"Recipient user {uid} is not available."
+                )
+            if u.id == created_by.id:
+                raise AppError(400, "SELF_SHARE", "Cannot share with yourself.")
+            users.append(u)
+        for gid in group_ids:
+            g = db.query(Group).filter(Group.id == gid).one_or_none()
+            if g is None:
+                raise AppError(
+                    404, "GROUP_NOT_FOUND", f"Recipient group {gid} is not available."
+                )
+            groups.append(g)
         _validate_outbound_targets(db, created_by, users, groups)
-    else:
-        _validate_inbound_targets(db, created_by, users, groups)
 
     share = Share(
         created_by_id=created_by.id,
@@ -239,42 +206,52 @@ def create_share(
         request=request,
     )
 
-    # Resolve the per-share notify flag: explicit value from the sender
-    # wins; otherwise fall back to the admin-controlled kv default.
+    # Build the notify set. Inbound (client → company): every non-disabled
+    # employee + admin (the company), regardless of the per-share flag —
+    # group-peers are intentionally NOT notified, they see it in their inbox.
+    # Outbound: the per-share notify flag gates direct users UNION active
+    # group members. Each recipient still honours their own per-user
+    # notification preference at dispatch time. Sender always excluded.
+    from ..models.notification import NotificationCategory
+    from . import notification as notif_svc
     from . import settings as settings_svc
+    from . import site as site_svc
 
-    if notify_recipients is None:
-        notify_recipients = settings_svc.get_bool(
-            db,
-            settings_svc.Keys.SHARE_NOTIFY_RECIPIENTS_DEFAULT,
-            default=True,
-        )
-
-    if notify_recipients:
-        # Build the deduplicated recipient set: direct user-recipients
-        # UNION active members of any group recipient. Sender excluded
-        # (they are the actor); disabled users filtered at the SQL level
-        # so the dispatch loop never sees them. The dispatch funnel itself
-        # also early-returns on disabled users — defence in depth.
-        from ..models.notification import NotificationCategory
-        from . import notification as notif_svc
-        from . import site as site_svc
-
-        recipient_user_ids_set: set[int] = {u.id for u in users}
-        if groups:
-            member_rows = (
-                db.query(GroupMember.user_id)
-                .join(User, User.id == GroupMember.user_id)
-                .filter(
-                    GroupMember.group_id.in_([g.id for g in groups]),
-                    User.is_disabled.is_(False),
-                )
-                .all()
+    notify_user_ids: set[int] = set()
+    if kind == ShareKind.inbound:
+        staff_rows = (
+            db.query(User.id)
+            .filter(
+                User.role.in_([UserRole.employee, UserRole.admin]),
+                User.is_disabled.is_(False),
             )
-            for (uid,) in member_rows:
-                recipient_user_ids_set.add(uid)
-        recipient_user_ids_set.discard(created_by.id)
+            .all()
+        )
+        notify_user_ids = {uid for (uid,) in staff_rows}
+    else:
+        if notify_recipients is None:
+            notify_recipients = settings_svc.get_bool(
+                db,
+                settings_svc.Keys.SHARE_NOTIFY_RECIPIENTS_DEFAULT,
+                default=True,
+            )
+        if notify_recipients:
+            notify_user_ids = {u.id for u in users}
+            if groups:
+                member_rows = (
+                    db.query(GroupMember.user_id)
+                    .join(User, User.id == GroupMember.user_id)
+                    .filter(
+                        GroupMember.group_id.in_([g.id for g in groups]),
+                        User.is_disabled.is_(False),
+                    )
+                    .all()
+                )
+                for (uid,) in member_rows:
+                    notify_user_ids.add(uid)
+    notify_user_ids.discard(created_by.id)
 
+    if notify_user_ids:
         base_url = site_svc.get_site_url(db)
         payload_base = {
             "sender_name": created_by.display_name,
@@ -284,24 +261,18 @@ def create_share(
             "file_count": 0,  # files added after the share row; stays 0 here
             "share_url": f"{base_url}/share/{share.id}",
         }
-
-        if recipient_user_ids_set:
-            recipients = (
-                db.query(User)
-                .filter(User.id.in_(recipient_user_ids_set))
-                .all()
+        recipients = db.query(User).filter(User.id.in_(notify_user_ids)).all()
+        for u in recipients:
+            payload = dict(payload_base)
+            payload["recipient_name"] = u.display_name
+            notif_svc.dispatch(
+                db,
+                user=u,
+                category=NotificationCategory.share_created,
+                payload=payload,
+                link_url=payload["share_url"],
+                email_to=u.email,
             )
-            for u in recipients:
-                payload = dict(payload_base)
-                payload["recipient_name"] = u.display_name
-                notif_svc.dispatch(
-                    db,
-                    user=u,
-                    category=NotificationCategory.share_created,
-                    payload=payload,
-                    link_url=payload["share_url"],
-                    email_to=u.email,
-                )
     return share
 
 
@@ -327,11 +298,23 @@ def assert_share_downloadable(share: Share) -> None:
 
 
 def is_authorized_to_download(db: Session, *, user: User, share: Share) -> bool:
-    """Sender, admin, direct recipient, or member of any recipient group."""
+    """Who may see/download a share:
+    - admin: any share; creator: their own.
+    - inbound (client → company): every employee/admin (the company), plus any
+      client who shares ≥1 group with the creator (group-peer visibility).
+    - outbound (staff → client/group): direct recipient or member of a recipient
+      group.
+    """
     if user.role == UserRole.admin:
         return True
     if share.created_by_id == user.id:
         return True
+    if share.kind == ShareKind.inbound:
+        if user.role == UserRole.employee:
+            return True
+        return user.role == UserRole.client and _shares_group(
+            db, user.id, share.created_by_id
+        )
     user_group_ids = _user_group_ids(db, user.id)
     rec = (
         db.query(ShareRecipient)
@@ -399,17 +382,48 @@ def list_shares_for_user(
             )
     elif box == "inbox":
         user_group_ids = _user_group_ids(db, user.id)
+        # (a) Outbound shares addressed to me — direct, or via a group I'm in.
         recipient_match = ShareRecipient.recipient_user_id == user.id
         if user_group_ids:
             recipient_match = or_(
                 recipient_match,
                 ShareRecipient.recipient_group_id.in_(user_group_ids),
             )
+        # (b) Inbound (client → company) shares. Staff (employee/admin) see all;
+        # a client sees submissions from group-peers (creators sharing ≥1 group),
+        # never their own (those are their outbox). Inbound shares have no
+        # recipient rows, so this is matched on kind/creator, not the join.
+        inbound_match = None
+        if user.role in (UserRole.admin, UserRole.employee):
+            inbound_match = Share.kind == ShareKind.inbound
+        elif user_group_ids:
+            peer_ids = [
+                uid
+                for (uid,) in (
+                    db.query(GroupMember.user_id)
+                    .filter(
+                        GroupMember.group_id.in_(user_group_ids),
+                        GroupMember.user_id != user.id,
+                    )
+                    .distinct()
+                    .all()
+                )
+            ]
+            if peer_ids:
+                inbound_match = and_(
+                    Share.kind == ShareKind.inbound,
+                    Share.created_by_id.in_(peer_ids),
+                )
+        visibility = (
+            recipient_match
+            if inbound_match is None
+            else or_(recipient_match, inbound_match)
+        )
         base = (
             db.query(Share)
             .options(joinedload(Share.files))
-            .join(ShareRecipient, ShareRecipient.share_id == Share.id)
-            .filter(recipient_match)
+            .outerjoin(ShareRecipient, ShareRecipient.share_id == Share.id)
+            .filter(visibility)
         )
         if sender_user_id is not None:
             base = base.filter(Share.created_by_id == sender_user_id)

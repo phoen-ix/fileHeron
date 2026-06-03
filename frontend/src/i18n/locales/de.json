@@ -1015,12 +1015,14 @@
     "title": "Neue Freigabe",
     "intro": {
       "outbound": "Dateien an einen Kunden oder Kollegen senden. Sie erhalten eine E-Mail mit einem Link.",
-      "inbound": "Dateien an deinen Kontakt senden. Eine Benachrichtigungs-E-Mail wird verschickt."
+      "inbound": "Dateien an das Unternehmen senden. Das gesamte Team sieht deine Einreichung."
     },
     "subject_label": "Betreff",
     "subject_placeholder": "Optional — worum geht es?",
     "message_label": "Nachricht",
     "message_placeholder": "Optional — eine Notiz für den Empfänger.",
+    "recipient_label": "Empfänger",
+    "to_company": "Dies geht an das Unternehmen — das gesamte Team kann es sehen. Du wählst keine Empfänger.",
     "recipients_or_public_link_hint": "…oder Empfänger weglassen und unten einen öffentlichen Link erstellen.",
     "notify_recipients_label": "Empfänger per E-Mail benachrichtigen",
     "notify_recipients_help": "Sendet eine `share_created`-E-Mail und eine In-App-Benachrichtigung an jeden direkten Empfänger und an jedes aktive Mitglied jeder empfangenden Gruppe. Deaktivieren, um diese Freigabe lautlos zu erstellen.",
@@ -1185,6 +1187,7 @@
     "deleted_toast": "Gruppe gelöscht."
   },
   "share_list": {
+    "company": "Unternehmen",
     "eyebrow": {
       "outbox": "Postausgang",
       "inbox": "Posteingang"

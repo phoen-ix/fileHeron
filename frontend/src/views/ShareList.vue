@@ -135,10 +135,15 @@ function open(s: ShareListItem) {
 // Compact recipient list for the outbox column. Shows the first
 // two labels; collapses the rest as "+N" so multi-recipient shares
 // don't blow up the row width.
+function recipientLabel(r: ShareRecipientRef): string {
+  // Inbound submissions carry a synthetic "company" recipient — translate it.
+  return r.kind === 'company' ? t('share_list.company') : r.label
+}
+
 function recipientSummary(rs: ShareRecipientRef[]): string {
   if (!rs || rs.length === 0) return '—'
-  if (rs.length <= 2) return rs.map((r) => r.label).join(', ')
-  return `${rs[0].label}, ${rs[1].label} +${rs.length - 2}`
+  if (rs.length <= 2) return rs.map(recipientLabel).join(', ')
+  return `${recipientLabel(rs[0])}, ${recipientLabel(rs[1])} +${rs.length - 2}`
 }
 
 onMounted(load)

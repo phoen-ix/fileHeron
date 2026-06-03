@@ -1015,12 +1015,14 @@
     "title": "New share",
     "intro": {
       "outbound": "Send files to a client or colleague. They'll get an email with a link.",
-      "inbound": "Send files to your contact. They'll get an email letting them know."
+      "inbound": "Send files to the company. Everyone on the team can see your submission."
     },
     "subject_label": "Subject",
     "subject_placeholder": "Optional — what's this about?",
     "message_label": "Message",
     "message_placeholder": "Optional — a note for the recipient.",
+    "recipient_label": "Recipient",
+    "to_company": "This goes to the company — everyone on the team can see it. You don't pick recipients.",
     "recipients_or_public_link_hint": "…or skip recipients and attach a public link below.",
     "notify_recipients_label": "Notify recipient(s) by email",
     "notify_recipients_help": "Send a `share_created` email + in-app notification to every direct recipient and to every active member of any recipient group. Uncheck to keep this share quiet.",
@@ -1185,6 +1187,7 @@
     "deleted_toast": "Group deleted."
   },
   "share_list": {
+    "company": "Company",
     "eyebrow": {
       "outbox": "Outbox",
       "inbox": "Inbox"

@@ -1,33 +1,44 @@
-# fileHeron v1.5.11
+# fileHeron v1.6.0
 
-**Hide the "SSO identity linked" notification setting when no SSO is configured.**
-
-A small follow-up to the v1.5.10 notification-preferences cleanup. The
-`oidc_linked` toggle (a security notice that an SSO identity was linked to your
-account) is only meaningful when single sign-on is set up. With no OIDC provider
-enabled, nobody can link SSO, so the toggle was inert clutter.
+**Client submissions now go to the whole company — and group members share an
+inbox.** This fixes a design flaw where a client creating a share could hand-pick
+recipients. The model is now strictly: staff send *to* clients; clients submit
+*to the company*.
 
 ## What changed
 
-- The **SSO identity linked** preference row is now hidden for everyone when no
-  OIDC provider is enabled. It reappears automatically once an admin enables a
-  provider. (Defensive: the preferences API also rejects setting it in that
-  state.)
-- This is the last loose end from the notification audit — every other category
-  (shares, expiry, login alerts, quarantine, account/password, session evicted,
-  public-link downloads) legitimately reaches regular users, and the admin-only
-  update/ops categories were already hidden in v1.5.10.
+- **Clients no longer pick recipients.** When a client uploads, the submission
+  automatically goes to the **whole company** — every employee and admin (new
+  staff are included automatically). The recipient picker is gone for clients on
+  both the web app and the desktop app.
+- **Group members share submissions.** A client can now **see and download** the
+  submissions of any other client they share a group with — a shared workspace
+  per customer/group. Clients with no shared group only see their own.
+- **All staff are notified** of each client submission (via the normal
+  `share_created` notification; each staff member can still mute it in their
+  notification preferences). Group-mates are not notified — they just see it in
+  their inbox.
+- Staff → client ("outbound") sharing is unchanged: staff still pick recipients
+  and groups exactly as before.
 
-Backend-only. No database migration, no `.env` changes.
+Server-enforced: the share direction is determined by role, not the client — a
+client request can never address another client.
+
+## Notes
+
+- No database migration. Existing client submissions become visible to all staff
+  and to the submitter's group-mates, consistent with the new model.
+- The desktop app gets the matching behaviour in **client-v0.9.16** (download it
+  from the desktop releases).
 
 ## Container images
 
 Published to GitHub Container Registry:
 
-- `ghcr.io/phoen-ix/fileheron-backend:v1.5.11`
-- `ghcr.io/phoen-ix/fileheron-worker:v1.5.11`
-- `ghcr.io/phoen-ix/fileheron-frontend:v1.5.11`
-- `ghcr.io/phoen-ix/fileheron-updater-shim:v1.5.11`
-- `ghcr.io/phoen-ix/fileheron-updater-executor:v1.5.11`
+- `ghcr.io/phoen-ix/fileheron-backend:v1.6.0`
+- `ghcr.io/phoen-ix/fileheron-worker:v1.6.0`
+- `ghcr.io/phoen-ix/fileheron-frontend:v1.6.0`
+- `ghcr.io/phoen-ix/fileheron-updater-shim:v1.6.0`
+- `ghcr.io/phoen-ix/fileheron-updater-executor:v1.6.0`
 
 Click **Update** in `/admin/system` to roll forward.

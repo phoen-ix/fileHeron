@@ -41,6 +41,9 @@ const { describe } = useApiError()
 const kind = computed<ShareKind>(() =>
   auth.user?.role === 'client' ? 'inbound' : 'outbound',
 )
+// Clients submit to the whole company — they don't pick recipients (the
+// server ignores any and resolves the audience by role/group at read time).
+const isClient = computed(() => auth.user?.role === 'client')
 
 const subject = ref('')
 const message = ref('')
@@ -91,7 +94,9 @@ const canSubmit = computed(() => {
   // Public-link-only shares (no directed recipient) are valid as long
   // as the user has the toggle on AND policy lets them create one.
   const hasPublicLink = includePublicLink.value && canCreatePublicLink.value
-  if (!hasRecipients && !hasPublicLink) return false
+  // Clients always submit to the company, so they need neither a recipient
+  // nor a public link — just files. Staff still require one of the two.
+  if (!isClient.value && !hasRecipients && !hasPublicLink) return false
   // Picker emits a value on mount (default 7d preset), so by the time
   // the user can click submit, expiresAtLocal is either a string (some
   // datetime) OR null (Never). undefined = picker hasn't initialized.
@@ -238,16 +243,22 @@ function onCreateAnother() {
         </div>
 
         <div class="col">
-          <RecipientPicker
-            v-model="recipients"
-            :disabled="submitting || upload.isActive.value"
-          />
-          <p
-            v-if="canCreatePublicLink"
-            class="fh-field-help recipients-hint"
-          >
-            {{ t('share_create.recipients_or_public_link_hint') }}
-          </p>
+          <template v-if="!isClient">
+            <RecipientPicker
+              v-model="recipients"
+              :disabled="submitting || upload.isActive.value"
+            />
+            <p
+              v-if="canCreatePublicLink"
+              class="fh-field-help recipients-hint"
+            >
+              {{ t('share_create.recipients_or_public_link_hint') }}
+            </p>
+          </template>
+          <div v-else class="to-company">
+            <span class="fh-field-label">{{ t('share_create.recipient_label') }}</span>
+            <p class="fh-field-help">{{ t('share_create.to_company') }}</p>
+          </div>
           <ExpiryPicker
             v-model="expiresAtLocal"
             :disabled="submitting || upload.isActive.value"
@@ -268,7 +279,7 @@ function onCreateAnother() {
         </div>
       </div>
 
-      <section class="notify-recipients-section">
+      <section v-if="!isClient" class="notify-recipients-section">
         <hr class="fh-rule" />
         <label class="public-link-toggle">
           <input

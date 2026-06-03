@@ -479,7 +479,7 @@ export interface AdminAuditResponse {
 }
 
 export interface ShareRecipientRef {
-  kind: 'user' | 'group'
+  kind: 'user' | 'group' | 'company'
   id: number
   label: string
   role?: string | null

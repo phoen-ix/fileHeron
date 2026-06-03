@@ -73,6 +73,22 @@ def _to_item(n: Notification) -> NotificationItem:
 # ---- Preferences ----------------------------------------------------------
 
 
+def _hidden_categories(db: Session, user: User) -> set[NotificationCategory]:
+    """Categories that should not appear in this user's preferences because
+    they can never deliver to them:
+    - admin-only categories (ops/updates) for non-admins;
+    - oidc_linked when no SSO provider is enabled (nobody can link SSO).
+    """
+    from ..services import oidc_admin
+
+    hidden: set[NotificationCategory] = set()
+    if user.role != UserRole.admin:
+        hidden |= ADMIN_ONLY_CATEGORIES
+    if not oidc_admin.is_any_enabled(db):
+        hidden.add(NotificationCategory.oidc_linked)
+    return hidden
+
+
 @router.get("/preferences", response_model=PreferencesResponse)
 def get_preferences(
     user: User = Depends(get_current_user),
@@ -84,7 +100,7 @@ def get_preferences(
         .all()
     )
     by_cat = {r.category: r.channel for r in rows}
-    is_admin = user.role == UserRole.admin
+    hidden = _hidden_categories(db, user)
     items = [
         PreferenceItem(
             category=cat,
@@ -93,7 +109,7 @@ def get_preferences(
             ),
         )
         for cat in NotificationCategory
-        if is_admin or cat not in ADMIN_ONLY_CATEGORIES
+        if cat not in hidden
     ]
     return PreferencesResponse(items=items)
 
@@ -104,12 +120,8 @@ def update_preferences(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> PreferencesResponse:
-    is_admin = user.role == UserRole.admin
-    valid_cats = {
-        c.value
-        for c in NotificationCategory
-        if is_admin or c not in ADMIN_ONLY_CATEGORIES
-    }
+    hidden = _hidden_categories(db, user)
+    valid_cats = {c.value for c in NotificationCategory if c not in hidden}
     valid_chans = {c.value for c in NotificationChannel}
     for cat_key, chan_val in payload.preferences.items():
         if cat_key not in valid_cats:

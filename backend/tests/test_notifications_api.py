@@ -157,6 +157,47 @@ async def test_admin_can_set_admin_only_preference(make_user, client, login_as):
 
 
 @pytest.mark.asyncio
+async def test_oidc_linked_hidden_when_no_sso_provider(make_user, client, login_as):
+    make_user(email="u@test.local", role=UserRole.client, password="Pass12345678!")
+    token, _ = await login_as("u@test.local", "Pass12345678!")
+    resp = await client.get(
+        "/api/notifications/preferences",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200, resp.text
+    cats = {it["category"] for it in resp.json()["items"]}
+    assert "oidc_linked" not in cats
+    put = await client.put(
+        "/api/notifications/preferences",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"preferences": {"oidc_linked": "off"}},
+    )
+    assert put.status_code == 400, put.text
+    assert put.json()["code"] == "INVALID_CATEGORY"
+
+
+@pytest.mark.asyncio
+async def test_oidc_linked_shown_when_sso_enabled(
+    make_user, make_provider, client, login_as
+):
+    make_user(email="u@test.local", role=UserRole.client, password="Pass12345678!")
+    make_provider()  # enabled OIDC provider (conftest default)
+    token, _ = await login_as("u@test.local", "Pass12345678!")
+    resp = await client.get(
+        "/api/notifications/preferences",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    cats = {it["category"] for it in resp.json()["items"]}
+    assert "oidc_linked" in cats
+    put = await client.put(
+        "/api/notifications/preferences",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"preferences": {"oidc_linked": "in_app"}},
+    )
+    assert put.status_code == 200, put.text
+
+
+@pytest.mark.asyncio
 async def test_mark_others_notification_returns_404(make_user, db, client, login_as):
     make_user(email="me@test.local", role=UserRole.client, password="Pass12345678!")
     other = make_user(email="other@test.local", role=UserRole.client)

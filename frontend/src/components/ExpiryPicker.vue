@@ -46,6 +46,9 @@ const props = defineProps<{
    *  parent hasn't initialized (picker fills with default 7d on mount). */
   modelValue: string | null | undefined
   disabled?: boolean
+  /** Optional override of the preset buttons (default = the share set).
+   *  e.g. API tokens pass ['7d','30d','90d','1y','never']. */
+  presets?: readonly PresetId[]
 }>()
 
 const emit = defineEmits<{
@@ -54,19 +57,28 @@ const emit = defineEmits<{
 
 const { t, locale } = useI18n()
 
-type PresetId = '1h' | '1d' | '7d' | '14d' | '30d' | 'never'
+const DAY = 24 * 60 * 60 * 1000
+type PresetId = '1h' | '1d' | '7d' | '14d' | '30d' | '60d' | '90d' | '1y' | 'never'
+const PRESET_MS: Record<PresetId, number | null> = {
+  '1h': 60 * 60 * 1000,
+  '1d': DAY,
+  '7d': 7 * DAY,
+  '14d': 14 * DAY,
+  '30d': 30 * DAY,
+  '60d': 60 * DAY,
+  '90d': 90 * DAY,
+  '1y': 365 * DAY,
+  never: null,
+}
 interface Preset {
   id: PresetId
   ms: number | null  // null = "never"; the sentinel emits null to the parent
 }
-const presets: Preset[] = [
-  { id: '1h', ms: 60 * 60 * 1000 },
-  { id: '1d', ms: 24 * 60 * 60 * 1000 },
-  { id: '7d', ms: 7 * 24 * 60 * 60 * 1000 },
-  { id: '14d', ms: 14 * 24 * 60 * 60 * 1000 },
-  { id: '30d', ms: 30 * 24 * 60 * 60 * 1000 },
-  { id: 'never', ms: null },
-]
+const DEFAULT_PRESET_IDS: PresetId[] = ['1h', '1d', '7d', '14d', '30d', 'never']
+const presets: Preset[] = (props.presets ?? DEFAULT_PRESET_IDS).map((id) => ({
+  id,
+  ms: PRESET_MS[id],
+}))
 
 // dt = null means "never expires" (v1.1.4). Anything else is a
 // "YYYY-MM-DDTHH:mm:ss" wall-clock string in the admin-set SITE timezone —

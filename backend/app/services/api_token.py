@@ -51,9 +51,28 @@ def _gen_secret() -> str:
     return base64.urlsafe_b64encode(raw).rstrip(b"=").decode("ascii")
 
 
-def create_token(db: Session, *, owner: User, name: str) -> tuple[ApiToken, str]:
+def normalize_expiry(expires_at: datetime | None) -> datetime | None:
+    """Validate + normalise an optional API-token expiry to naive UTC (the
+    storage convention), mirroring services/share.py::create_share. None =
+    never expires. Refuses a past timestamp with 400 INVALID_EXPIRY."""
+    if expires_at is None:
+        return None
+    if expires_at.tzinfo is not None:
+        expires_at = expires_at.astimezone(timezone.utc).replace(tzinfo=None)
+    if expires_at < _utcnow():
+        raise AppError(400, "INVALID_EXPIRY", "Expiry must be in the future.")
+    return expires_at
+
+
+def create_token(
+    db: Session,
+    *,
+    owner: User,
+    name: str,
+    expires_at: datetime | None = None,
+) -> tuple[ApiToken, str]:
     """Returns (record, plaintext_token). The plaintext is shown to the user
-    once; only the SHA-256 hash is stored."""
+    once; only the SHA-256 hash is stored. ``expires_at`` NULL = never expires."""
     prefix = _gen_prefix()
     secret = _gen_secret()
     plaintext = f"fh_{prefix}_{secret}"
@@ -64,6 +83,7 @@ def create_token(db: Session, *, owner: User, name: str) -> tuple[ApiToken, str]
         prefix=prefix,
         last4=secret[-4:],
         secret_hash=sha256_hex(secret),
+        expires_at=expires_at,
     )
     db.add(record)
     db.flush()
@@ -100,6 +120,8 @@ def verify_token(db: Session, *, token_str: str) -> ApiToken:
         raise AppError(401, "INVALID_API_TOKEN", "Invalid API token.")
     if record.revoked_at is not None:
         raise AppError(401, "INVALID_API_TOKEN", "API token has been revoked.")
+    if record.expires_at is not None and _utcnow() > record.expires_at:
+        raise AppError(401, "API_TOKEN_EXPIRED", "API token has expired.")
     if record.disabled_at is not None:
         # Distinct code so admin/UX can tell "temporarily off" from "gone".
         raise AppError(401, "API_TOKEN_DISABLED", "API token is disabled.")
@@ -295,11 +317,19 @@ def admin_revoke_token(
 
 
 def admin_create_for(
-    db: Session, *, actor: User, target_user: User, name: str, request=None
+    db: Session,
+    *,
+    actor: User,
+    target_user: User,
+    name: str,
+    expires_at: datetime | None = None,
+    request=None,
 ) -> tuple[ApiToken, str]:
     """Admin creates a token on behalf of `target_user`. Plaintext is
     returned to the admin once and forwarded out-of-band."""
-    record, plaintext = create_token(db, owner=target_user, name=name)
+    record, plaintext = create_token(
+        db, owner=target_user, name=name, expires_at=expires_at
+    )
     record_audit_event(
         db,
         event_type=AuditEventType.api_token_admin_created,
@@ -323,19 +353,31 @@ def list_all_tokens(
 ) -> tuple[list[ApiToken], int]:
     """Admin paginated query.
 
-    `status` ∈ {`active`, `disabled`, `revoked`}. `q` matches against
-    owner display_name + email.
+    `status` ∈ {`active`, `disabled`, `revoked`, `expired`}. `q` matches against
+    owner display_name + email. Status precedence mirrors `_token_status`:
+    revoked > expired > disabled > active.
     """
+    now = _utcnow()
     base = db.query(ApiToken).join(User, ApiToken.owner_user_id == User.id)
     if owner_id is not None:
         base = base.filter(ApiToken.owner_user_id == owner_id)
     if status == "active":
         base = base.filter(
-            ApiToken.revoked_at.is_(None), ApiToken.disabled_at.is_(None)
+            ApiToken.revoked_at.is_(None),
+            ApiToken.disabled_at.is_(None),
+            (ApiToken.expires_at.is_(None)) | (ApiToken.expires_at >= now),
+        )
+    elif status == "expired":
+        base = base.filter(
+            ApiToken.revoked_at.is_(None),
+            ApiToken.expires_at.is_not(None),
+            ApiToken.expires_at < now,
         )
     elif status == "disabled":
         base = base.filter(
-            ApiToken.revoked_at.is_(None), ApiToken.disabled_at.is_not(None)
+            ApiToken.revoked_at.is_(None),
+            ApiToken.disabled_at.is_not(None),
+            (ApiToken.expires_at.is_(None)) | (ApiToken.expires_at >= now),
         )
     elif status == "revoked":
         base = base.filter(ApiToken.revoked_at.is_not(None))

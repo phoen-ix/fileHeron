@@ -11,6 +11,8 @@ from .common import APIBaseModel
 
 class CreateApiTokenRequest(APIBaseModel):
     name: str = Field(..., min_length=1, max_length=120)
+    # Optional expiry. Omit / null = never expires.
+    expires_at: datetime | None = None
 
 
 class CreateApiTokenResponse(APIBaseModel):
@@ -20,6 +22,7 @@ class CreateApiTokenResponse(APIBaseModel):
     last4: str
     plaintext_token: str
     created_at: datetime
+    expires_at: datetime | None = None
     owner_user_id: int | None = None  # populated for admin-create-on-behalf
 
 
@@ -29,6 +32,7 @@ class ApiTokenListItem(APIBaseModel):
     last4: str
     created_at: datetime
     last_used_at: datetime | None
+    expires_at: datetime | None = None
 
 
 class ApiTokenListResponse(APIBaseModel):
@@ -44,7 +48,7 @@ class ApiTokenListResponse(APIBaseModel):
 
 
 PolicyMode = Literal["everyone", "employees_admins", "admins_only", "disabled"]
-TokenStatus = Literal["active", "disabled", "revoked"]
+TokenStatus = Literal["active", "disabled", "revoked", "expired"]
 
 
 class CurrentApiTokenResponse(APIBaseModel):
@@ -56,6 +60,7 @@ class CurrentApiTokenResponse(APIBaseModel):
     last4: str
     created_at: datetime
     last_used_at: datetime | None
+    expires_at: datetime | None = None
     status: TokenStatus
 
 
@@ -99,6 +104,7 @@ class AdminApiTokenItem(APIBaseModel):
     last_used_at: datetime | None
     revoked_at: datetime | None
     disabled_at: datetime | None
+    expires_at: datetime | None = None
 
 
 class AdminApiTokenListResponse(APIBaseModel):
@@ -111,6 +117,8 @@ class AdminApiTokenListResponse(APIBaseModel):
 class AdminCreateApiTokenRequest(APIBaseModel):
     target_user_id: int
     name: str = Field(..., min_length=1, max_length=120)
+    # Optional expiry. Omit / null = never expires.
+    expires_at: datetime | None = None
 
 
 # Resolve forward refs for embedded item types.

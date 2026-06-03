@@ -509,12 +509,15 @@
       "owner": "Eigentümer",
       "status": "Status",
       "last_used": "Zuletzt verwendet",
-      "created": "Erstellt"
+      "created": "Erstellt",
+      "expiry": "Läuft ab"
     },
+    "never_expires": "Nie",
     "status": {
       "active": "aktiv",
       "disabled": "deaktiviert",
-      "revoked": "widerrufen"
+      "revoked": "widerrufen",
+      "expired": "abgelaufen"
     },
     "action": {
       "disable": "Deaktivieren",
@@ -943,6 +946,9 @@
       "7d": "7 Tage",
       "14d": "14 Tage",
       "30d": "30 Tage",
+      "60d": "60 Tage",
+      "90d": "90 Tage",
+      "1y": "1 Jahr",
       "never": "Nie"
     },
     "custom_placeholder": "Datum und Uhrzeit wählen",
@@ -984,6 +990,10 @@
     "created_at": "erstellt {d}",
     "last_used": "zuletzt verwendet {d}",
     "never_used": "noch nicht verwendet",
+    "expiry_help": "Wähle, wann der Token ablaufen soll, oder belasse „Nie“ für einen Token ohne Ablauf.",
+    "never_expires": "läuft nie ab",
+    "expires_label": "läuft ab {d}",
+    "expired_label": "abgelaufen {d}",
     "revoke": "Widerrufen",
     "revoke_confirm": "Diesen Token widerrufen? Skripte, die ihn nutzen, funktionieren danach nicht mehr.",
     "empty": "Noch keine API-Tokens.",

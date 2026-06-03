@@ -50,5 +50,7 @@ class ApiToken(Base):
     # Reversible disable, distinct from revoke (which is permanent).
     # If both are set, revoked_at wins (semantically the token is dead).
     disabled_at: Mapped[datetime | None] = mapped_column(DateTime(), nullable=True)
+    # Optional expiry. NULL = never expires (the default, back-compat).
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(), nullable=True)
 
     owner: Mapped[User] = relationship("User", foreign_keys=[owner_user_id])

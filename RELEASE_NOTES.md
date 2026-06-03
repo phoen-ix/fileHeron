@@ -1,37 +1,35 @@
-# fileHeron v1.5.6
+# fileHeron v1.5.7
 
-**Fix: OIDC (SSO) login crash + a repo-wide code-quality cleanup.**
+**API tokens can now be given an optional expiry date.** Previously every token
+was valid forever; now you can issue a time-limited token while still keeping
+unlimited tokens for cases that need them.
 
 ## What changed
 
-- **OIDC SSO login fixed.** The anonymous SSO routes
-  (`/api/auth/oidc/start/{provider_id}` and `/callback/{provider_id}`) referenced
-  a service module that was never imported — so clicking a provider's **Sign in**
-  button would have crashed with a 500 (`NameError`) instead of redirecting to
-  the identity provider. If you use (or were about to set up) Entra / Google /
-  Authentik / Keycloak SSO, it works now. (Local password + API-token logins were
-  never affected.)
-- **Zero-warning lint baseline.** The backend is now clean under its full linter
-  ruleset (was carrying ~525 findings). This was almost entirely mechanical —
-  import ordering, modern type-annotation syntax, exception chaining
-  (`raise … from …`), collapsing nested conditionals — with no behaviour change,
-  plus genuine ignores for intentional framework idioms (FastAPI dependency
-  defaults) and removal of a few dead variables. Backed by the full test suite
-  (552 passing).
+- **Optional expiry when creating a token.** Account → API tokens (and the admin
+  "generate for user" form) now has an expiry picker with quick presets
+  (7 days / 30 / 90 / 1 year), a custom date, or **Never**. The default is
+  **Never**, so existing behaviour and any tokens created before this release are
+  unchanged (they never expire).
+- **Expired tokens stop working.** Once past its expiry a token is rejected
+  (`401`), exactly like a revoked one — any client using it (e.g. the desktop
+  app) is cut off and falls back to its login screen.
+- **Visible everywhere.** The token list shows each token's expiry (or "never
+  expires") and flags expired ones; the admin inventory adds an **Expires**
+  column, an **expired** status, and an `expired` filter so you can find and
+  clean them up.
 
-This keeps future changes honest: a new bug that trips the linter now stands out
-instead of hiding among hundreds of pre-existing warnings.
-
-No database migration. No `.env` changes required.
+Adds a nullable `api_tokens.expires_at` column (NULL = never). The migration runs
+automatically on update and is safe + idempotent; no `.env` changes.
 
 ## Container images
 
 Published to GitHub Container Registry:
 
-- `ghcr.io/phoen-ix/fileheron-backend:v1.5.6`
-- `ghcr.io/phoen-ix/fileheron-worker:v1.5.6`
-- `ghcr.io/phoen-ix/fileheron-frontend:v1.5.6`
-- `ghcr.io/phoen-ix/fileheron-updater-shim:v1.5.6`
-- `ghcr.io/phoen-ix/fileheron-updater-executor:v1.5.6`
+- `ghcr.io/phoen-ix/fileheron-backend:v1.5.7`
+- `ghcr.io/phoen-ix/fileheron-worker:v1.5.7`
+- `ghcr.io/phoen-ix/fileheron-frontend:v1.5.7`
+- `ghcr.io/phoen-ix/fileheron-updater-shim:v1.5.7`
+- `ghcr.io/phoen-ix/fileheron-updater-executor:v1.5.7`
 
 Click **Update** in `/admin/system` to roll forward.

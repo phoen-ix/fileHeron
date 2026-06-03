@@ -38,6 +38,12 @@
           required
         />
       </label>
+      <ExpiryPicker
+        v-model="expiresAtLocal"
+        :presets="TOKEN_PRESETS"
+        :disabled="creatingBusy"
+      />
+      <span class="fh-field-help">{{ t('api_tokens.expiry_help') }}</span>
       <div class="create-form-actions">
         <button type="submit" class="fh-btn" :disabled="creatingBusy || !newName">
           {{ creatingBusy ? t('common.loading') : t('api_tokens.create_submit') }}
@@ -76,6 +82,9 @@
                 : t('api_tokens.never_used')
             }}
           </span>
+          <span class="fh-mono expiry" :class="{ expired: isExpired(token) }">
+            {{ expiryLabel(token) }}
+          </span>
         </div>
         <button
           type="button"
@@ -102,9 +111,14 @@ import {
   listTokens,
   revokeToken,
 } from '@/api/apiTokens'
+import ExpiryPicker from '@/components/ExpiryPicker.vue'
 import { useApiError } from '@/composables/useApiError'
 import type { ApiTokenListItem, CreateApiTokenResponse } from '@/types/api'
-import { formatInSiteTime } from '@/utils/datetime'
+import { formatInSiteTime, siteLocalIsoToUtcIso } from '@/utils/datetime'
+
+// Token-appropriate durations; default null → the picker shows "Never" so a
+// token stays unlimited unless the user opts into an expiry.
+const TOKEN_PRESETS = ['7d', '30d', '90d', '1y', 'never'] as const
 
 const { t, locale } = useI18n()
 const { describe } = useApiError()
@@ -115,6 +129,7 @@ const loading = ref(false)
 const creating = ref(false)
 const creatingBusy = ref(false)
 const newName = ref('')
+const expiresAtLocal = ref<string | null>(null)  // null = Never (default)
 const plaintext = ref<CreateApiTokenResponse | null>(null)
 const errorMsg = ref<string | null>(null)
 const revoking = ref<number | null>(null)
@@ -135,10 +150,15 @@ async function onCreate() {
   errorMsg.value = null
   creatingBusy.value = true
   try {
-    const { data } = await createToken(newName.value)
+    const expiresAt =
+      expiresAtLocal.value === null
+        ? null
+        : siteLocalIsoToUtcIso(expiresAtLocal.value)
+    const { data } = await createToken(newName.value, expiresAt)
     plaintext.value = data
     creating.value = false
     newName.value = ''
+    expiresAtLocal.value = null
     await refresh()
   } catch (err) {
     errorMsg.value = describe(err)
@@ -150,7 +170,20 @@ async function onCreate() {
 function cancelCreate() {
   creating.value = false
   newName.value = ''
+  expiresAtLocal.value = null
   errorMsg.value = null
+}
+
+function isExpired(token: ApiTokenListItem): boolean {
+  return token.expires_at !== null && new Date(token.expires_at) <= new Date()
+}
+
+function expiryLabel(token: ApiTokenListItem): string {
+  if (token.expires_at === null) return t('api_tokens.never_expires')
+  const d = formatDate(token.expires_at)
+  return isExpired(token)
+    ? t('api_tokens.expired_label', { d })
+    : t('api_tokens.expires_label', { d })
 }
 
 async function onRevoke(id: number) {
@@ -300,6 +333,12 @@ onMounted(refresh)
 
 .fh-btn-text.danger {
   color: var(--fh-danger);
+}
+
+.token-meta .expiry.expired {
+  color: var(--fh-danger);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
 }
 
 .empty {

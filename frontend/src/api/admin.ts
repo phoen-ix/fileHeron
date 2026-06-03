@@ -344,7 +344,7 @@ export function updateTokenPolicy(payload: UpdateTokenPolicyRequest) {
 export function adminListApiTokens(params: {
   q?: string
   owner_id?: number
-  status?: 'active' | 'disabled' | 'revoked'
+  status?: 'active' | 'disabled' | 'revoked' | 'expired'
   page?: number
   page_size?: number
 } = {}) {

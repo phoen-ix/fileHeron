@@ -542,6 +542,7 @@ export interface ApiTokenListItem {
   last4: string
   created_at: string
   last_used_at: string | null
+  expires_at: string | null
 }
 
 export interface ApiTokenListResponse {
@@ -556,6 +557,7 @@ export interface CreateApiTokenResponse {
   last4: string
   plaintext_token: string
   created_at: string
+  expires_at: string | null
   owner_user_id?: number
 }
 
@@ -567,7 +569,7 @@ export type TokenPolicyMode =
   | 'admins_only'
   | 'disabled'
 
-export type TokenStatus = 'active' | 'disabled' | 'revoked'
+export type TokenStatus = 'active' | 'disabled' | 'revoked' | 'expired'
 
 export interface AllowedUserItem {
   id: number
@@ -608,6 +610,7 @@ export interface AdminApiTokenItem {
   last_used_at: string | null
   revoked_at: string | null
   disabled_at: string | null
+  expires_at: string | null
 }
 
 export interface AdminApiTokenListResponse {
@@ -620,6 +623,7 @@ export interface AdminApiTokenListResponse {
 export interface AdminCreateApiTokenRequest {
   target_user_id: number
   name: string
+  expires_at?: string | null
 }
 
 /* Admin file history (post-Phase 10) */

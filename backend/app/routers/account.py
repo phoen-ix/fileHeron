@@ -1,6 +1,8 @@
 """/api/account/* endpoints — self-service for the authenticated user."""
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, Request, status
 from sqlalchemy.orm import Session
 
@@ -349,7 +351,10 @@ def create_api_token(
             "API_TOKEN_NOT_ALLOWED",
             "Your administrator has restricted API token creation.",
         )
-    record, plaintext = api_token_svc.create_token(db, owner=user, name=payload.name)
+    expires_at = api_token_svc.normalize_expiry(payload.expires_at)
+    record, plaintext = api_token_svc.create_token(
+        db, owner=user, name=payload.name, expires_at=expires_at
+    )
 
     from ..models.audit_log import AuditEventType
     from ..services.audit import record_audit_event
@@ -370,6 +375,7 @@ def create_api_token(
         last4=record.last4,
         plaintext_token=plaintext,
         created_at=record.created_at,
+        expires_at=record.expires_at,
     )
 
 
@@ -387,6 +393,7 @@ def list_api_tokens(
                 last4=r.last4,
                 created_at=r.created_at,
                 last_used_at=r.last_used_at,
+                expires_at=r.expires_at,
             )
             for r in rows
         ],
@@ -415,8 +422,11 @@ def get_current_api_token(
     )
     if record is None:
         raise AppError(404, "TOKEN_NOT_FOUND", "API token not found.")
+    now = datetime.now(tz=timezone.utc).replace(tzinfo=None)
     if record.revoked_at is not None:
         token_status = "revoked"
+    elif record.expires_at is not None and now > record.expires_at:
+        token_status = "expired"
     elif record.disabled_at is not None:
         token_status = "disabled"
     else:
@@ -427,6 +437,7 @@ def get_current_api_token(
         last4=record.last4,
         created_at=record.created_at,
         last_used_at=record.last_used_at,
+        expires_at=record.expires_at,
         status=token_status,
     )
 

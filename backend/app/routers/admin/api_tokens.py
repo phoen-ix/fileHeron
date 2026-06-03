@@ -33,6 +33,8 @@ router = APIRouter()
 def _token_status(t: ApiToken) -> str:
     if t.revoked_at is not None:
         return "revoked"
+    if t.expires_at is not None and api_token_svc._utcnow() > t.expires_at:
+        return "expired"
     if t.disabled_at is not None:
         return "disabled"
     return "active"
@@ -52,6 +54,7 @@ def _to_admin_token_item(t: ApiToken, owner: User) -> AdminApiTokenItem:
         last_used_at=t.last_used_at,
         revoked_at=t.revoked_at,
         disabled_at=t.disabled_at,
+        expires_at=t.expires_at,
     )
 
 
@@ -207,8 +210,14 @@ def admin_create_api_token(
         raise AppError(
             409, "USER_DISABLED", "Cannot create a token for a disabled user."
         )
+    expires_at = api_token_svc.normalize_expiry(payload.expires_at)
     record, plaintext = api_token_svc.admin_create_for(
-        db, actor=admin, target_user=target, name=payload.name, request=request
+        db,
+        actor=admin,
+        target_user=target,
+        name=payload.name,
+        expires_at=expires_at,
+        request=request,
     )
     db.commit()
     return CreateApiTokenResponse(
@@ -217,6 +226,7 @@ def admin_create_api_token(
         last4=record.last4,
         plaintext_token=plaintext,
         created_at=record.created_at,
+        expires_at=record.expires_at,
         owner_user_id=record.owner_user_id,
     )
 

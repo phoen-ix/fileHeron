@@ -8,8 +8,11 @@ export function listTokens() {
   return api.get<ApiTokenListResponse>('/account/api-tokens')
 }
 
-export function createToken(name: string) {
-  return api.post<CreateApiTokenResponse>('/account/api-tokens', { name })
+export function createToken(name: string, expiresAt: string | null = null) {
+  return api.post<CreateApiTokenResponse>('/account/api-tokens', {
+    name,
+    expires_at: expiresAt,
+  })
 }
 
 export function revokeToken(tokenId: number) {

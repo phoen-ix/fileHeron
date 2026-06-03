@@ -10,9 +10,10 @@ import {
   adminRevokeApiToken,
 } from '@/api/admin'
 import { searchUsers } from '@/api/users'
+import ExpiryPicker from '@/components/ExpiryPicker.vue'
 import { useApiError } from '@/composables/useApiError'
 import { useUiStore } from '@/stores/ui'
-import { formatInSiteTime } from '@/utils/datetime'
+import { formatInSiteTime, siteLocalIsoToUtcIso } from '@/utils/datetime'
 import type {
   AdminApiTokenItem,
   CreateApiTokenResponse,
@@ -119,8 +120,10 @@ const userQuery = ref('')
 const userSuggestions = ref<UserSearchItem[]>([])
 const selectedUser = ref<UserSearchItem | null>(null)
 const newName = ref('')
+const tokenExpiresAt = ref<string | null>(null)  // null = Never (default)
 const creating = ref(false)
 const createError = ref<string | null>(null)
+const TOKEN_PRESETS = ['7d', '30d', '90d', '1y', 'never'] as const
 const plaintextResult = ref<CreateApiTokenResponse | null>(null)
 const copied = ref(false)
 let userSearchTimer: ReturnType<typeof setTimeout> | null = null
@@ -156,6 +159,7 @@ function resetCreateForm() {
   userSuggestions.value = []
   selectedUser.value = null
   newName.value = ''
+  tokenExpiresAt.value = null
   createError.value = null
 }
 
@@ -170,12 +174,17 @@ async function onCreateForUser() {
     const { data } = await adminCreateApiToken({
       target_user_id: selectedUser.value.user_id,
       name: newName.value,
+      expires_at:
+        tokenExpiresAt.value === null
+          ? null
+          : siteLocalIsoToUtcIso(tokenExpiresAt.value),
     })
     plaintextResult.value = data
     showCreateForm.value = false
     userQuery.value = ''
     selectedUser.value = null
     newName.value = ''
+    tokenExpiresAt.value = null
     await load()
   } catch (err) {
     createError.value = describe(err)
@@ -263,6 +272,13 @@ onMounted(load)
         />
       </label>
 
+      <ExpiryPicker
+        v-model="tokenExpiresAt"
+        :presets="TOKEN_PRESETS"
+        :disabled="creating"
+      />
+      <span class="fh-field-help">{{ t('api_tokens.expiry_help') }}</span>
+
       <div v-if="createError" class="fh-notice" data-tone="error">{{ createError }}</div>
 
       <div class="form-actions">
@@ -306,6 +322,7 @@ onMounted(load)
           <option value="">{{ t('admin_api_tokens.status_all') }}</option>
           <option value="active">{{ t('admin_api_tokens.status.active') }}</option>
           <option value="disabled">{{ t('admin_api_tokens.status.disabled') }}</option>
+          <option value="expired">{{ t('admin_api_tokens.status.expired') }}</option>
           <option value="revoked">{{ t('admin_api_tokens.status.revoked') }}</option>
         </select>
       </div>
@@ -321,6 +338,7 @@ onMounted(load)
             <th>{{ t('admin_api_tokens.col.status') }}</th>
             <th>{{ t('admin_api_tokens.col.last_used') }}</th>
             <th>{{ t('admin_api_tokens.col.created') }}</th>
+            <th>{{ t('admin_api_tokens.col.expiry') }}</th>
             <th class="actions-col"></th>
           </tr>
         </thead>
@@ -341,6 +359,9 @@ onMounted(load)
             </td>
             <td class="fh-mono">{{ formatDate(item.last_used_at) }}</td>
             <td class="fh-mono">{{ formatDate(item.created_at) }}</td>
+            <td class="fh-mono">
+              {{ item.expires_at ? formatDate(item.expires_at) : t('admin_api_tokens.never_expires') }}
+            </td>
             <td class="actions">
               <button
                 v-if="item.status === 'active'"

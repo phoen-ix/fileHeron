@@ -1,5 +1,5 @@
 <template>
-  <li class="notif-row" :class="{ unread: !item.read_at }" tabindex="0" @keydown.enter="emit('click')" @click="emit('click')">
+  <li class="notif-row" tabindex="0" @keydown.enter="emit('click')" @click="emit('click')">
     <span class="notif-eyebrow fh-mono">{{ t(`notif_bell.cat.${item.category}`) }}</span>
     <span class="notif-headline">{{ headline }}</span>
     <span class="notif-time fh-mono">{{ relTime }}</span>

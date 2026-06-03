@@ -31,7 +31,14 @@ def _utcnow() -> datetime:
 
 @track_cron("cleanup_read_notifications")
 async def cleanup_read_notifications(_ctx) -> dict:
-    """Hard-delete read notifications older than the retention window."""
+    """Age-out old in-app notifications by creation time.
+
+    The bell is now a delete-to-dismiss inbox (the read/unread concept was
+    retired in v1.6.1) — `read_at` is no longer set, so pruning is based on
+    `created_at`: hard-delete any notification older than the retention window
+    so the table can't grow unbounded for users who never clear the bell. The
+    cron identifier + registry key are kept for continuity. `days <= 0`
+    disables it."""
     db = SessionLocal()
     try:
         from ..services import settings_registry
@@ -43,15 +50,12 @@ async def cleanup_read_notifications(_ctx) -> dict:
         cutoff = _utcnow() - timedelta(days=days)
         deleted = (
             db.query(Notification)
-            .filter(
-                Notification.read_at.is_not(None),
-                Notification.read_at < cutoff,
-            )
+            .filter(Notification.created_at < cutoff)
             .delete(synchronize_session=False)
         )
         db.commit()
         if deleted:
-            logger.info("cleanup_read_notifications: deleted=%d (>%dd read)", deleted, days)
+            logger.info("cleanup_read_notifications: deleted=%d (>%dd old)", deleted, days)
         return {"deleted": deleted}
     finally:
         db.close()

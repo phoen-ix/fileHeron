@@ -29,12 +29,12 @@
       <div class="bell-head">
         <span class="bell-title">{{ t('notif_bell.title') }}</span>
         <button
-          v-if="store.unreadCount > 0"
+          v-if="store.items.length > 0"
           type="button"
           class="fh-btn-text mark-all"
-          @click="onMarkAll"
+          @click="onDeleteAll"
         >
-          {{ t('notif_bell.mark_all_read') }}
+          {{ t('notif_bell.delete_all') }}
         </button>
       </div>
       <ul v-if="store.items.length" class="bell-list">
@@ -120,13 +120,19 @@ onMounted(() => {
   }
 })
 
-async function onMarkAll() {
-  await store.markAllRead()
+async function onDeleteAll() {
+  await store.removeAll()
 }
 
 function onItemClick(item: NItem) {
-  void store.markRead(item.id)
+  // Single click dismisses the notification (hard delete) — navigate to its
+  // target first, then delete. Deletion is optimistic in the store.
   open.value = false
+  navigateToLink(item)
+  void store.remove(item.id)
+}
+
+function navigateToLink(item: NItem) {
   if (!item.link_url) return
 
   // Defense-in-depth: only follow same-origin app paths. The

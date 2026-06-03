@@ -635,7 +635,7 @@
   "notif_bell": {
     "aria": "Benachrichtigungen",
     "title": "Benachrichtigungen",
-    "mark_all_read": "Alle als gelesen markieren",
+    "delete_all": "Alle löschen",
     "empty": "Noch keine Benachrichtigungen.",
     "just_now": "gerade eben",
     "min_ago": "vor {n}m",

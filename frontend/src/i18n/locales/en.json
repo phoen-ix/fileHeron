@@ -635,7 +635,7 @@
   "notif_bell": {
     "aria": "Notifications",
     "title": "Notifications",
-    "mark_all_read": "Mark all read",
+    "delete_all": "Delete all",
     "empty": "No notifications yet.",
     "just_now": "just now",
     "min_ago": "{n}m ago",

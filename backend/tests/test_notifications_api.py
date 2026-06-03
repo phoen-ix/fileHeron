@@ -60,37 +60,57 @@ async def test_list_unread_filter(make_user, db, client, login_as):
 
 
 @pytest.mark.asyncio
-async def test_mark_one_read(make_user, db, client, login_as):
+async def test_delete_one_hard_deletes_row(make_user, db, client, login_as):
     user = make_user(email="u@test.local", role=UserRole.client, password="Pass12345678!")
     _seed(db, user.id, n=2)
     token, _ = await login_as("u@test.local", "Pass12345678!")
-    # Login_alert added 1 unread; mark one of the seeded ones read.
     n_id = db.query(Notification).filter(Notification.user_id == user.id).first().id
-    resp = await client.post(
-        f"/api/notifications/{n_id}/read",
+    resp = await client.delete(
+        f"/api/notifications/{n_id}",
         headers={"Authorization": f"Bearer {token}"},
     )
-    assert resp.status_code == 200
-    assert resp.json()["unread_count"] == 2  # was 3 (2 seeded + 1 login_alert), -1 read
+    assert resp.status_code == 200, resp.text
+    # The row is GONE from the DB (hard delete, no soft-delete residue).
+    db.expire_all()
+    assert (
+        db.query(Notification).filter(Notification.id == n_id).count() == 0
+    )
 
 
 @pytest.mark.asyncio
-async def test_mark_all_read(make_user, db, client, login_as):
+async def test_delete_all_hard_deletes_callers_rows_only(make_user, db, client, login_as):
     user = make_user(email="u@test.local", role=UserRole.client, password="Pass12345678!")
+    other = make_user(email="other@test.local", role=UserRole.client)
     _seed(db, user.id, n=4)
+    _seed(db, other.id, n=2)
     token, _ = await login_as("u@test.local", "Pass12345678!")
-    resp = await client.post(
-        "/api/notifications/read-all",
+    resp = await client.delete(
+        "/api/notifications",
         headers={"Authorization": f"Bearer {token}"},
     )
-    assert resp.status_code == 200
+    assert resp.status_code == 200, resp.text
     assert resp.json()["unread_count"] == 0
-    assert (
-        db.query(Notification)
-        .filter(Notification.user_id == user.id, Notification.read_at.is_(None))
-        .count()
-        == 0
+    db.expire_all()
+    assert db.query(Notification).filter(Notification.user_id == user.id).count() == 0
+    # Another user's notifications are untouched.
+    assert db.query(Notification).filter(Notification.user_id == other.id).count() == 2
+
+
+@pytest.mark.asyncio
+async def test_delete_other_users_notification_returns_404(make_user, db, client, login_as):
+    make_user(email="me@test.local", role=UserRole.client, password="Pass12345678!")
+    other = make_user(email="other@test.local", role=UserRole.client)
+    _seed(db, other.id, n=1)
+    n_id = db.query(Notification).filter(Notification.user_id == other.id).first().id
+    token, _ = await login_as("me@test.local", "Pass12345678!")
+    resp = await client.delete(
+        f"/api/notifications/{n_id}",
+        headers={"Authorization": f"Bearer {token}"},
     )
+    assert resp.status_code == 404
+    # The other user's row survives the cross-user attempt.
+    db.expire_all()
+    assert db.query(Notification).filter(Notification.id == n_id).count() == 1
 
 
 @pytest.mark.asyncio
@@ -195,17 +215,3 @@ async def test_oidc_linked_shown_when_sso_enabled(
         json={"preferences": {"oidc_linked": "in_app"}},
     )
     assert put.status_code == 200, put.text
-
-
-@pytest.mark.asyncio
-async def test_mark_others_notification_returns_404(make_user, db, client, login_as):
-    make_user(email="me@test.local", role=UserRole.client, password="Pass12345678!")
-    other = make_user(email="other@test.local", role=UserRole.client)
-    _seed(db, other.id, n=1)
-    n_id = db.query(Notification).filter(Notification.user_id == other.id).first().id
-    token, _ = await login_as("me@test.local", "Pass12345678!")
-    resp = await client.post(
-        f"/api/notifications/{n_id}/read",
-        headers={"Authorization": f"Bearer {token}"},
-    )
-    assert resp.status_code == 404

@@ -5,9 +5,9 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 
 import {
+  deleteAllNotifications as apiDeleteAll,
+  deleteNotification as apiDeleteOne,
   listNotifications,
-  markAllRead as apiMarkAllRead,
-  markRead as apiMarkRead,
 } from '@/api/notifications'
 import type { NotificationItem } from '@/types/api'
 
@@ -44,31 +44,31 @@ export const useNotificationsStore = defineStore('notifications', () => {
     if (!item.read_at) unreadCount.value += 1
   }
 
-  async function markRead(id: number) {
+  async function remove(id: number) {
     const target = items.value.find((i) => i.id === id)
-    if (!target || target.read_at) return
+    if (!target) return
     const before = unreadCount.value
-    // Read → drop it from the unread bell immediately.
+    const snapshot = items.value
+    // Delete → drop it from the bell immediately (optimistic).
     items.value = items.value.filter((i) => i.id !== id)
     unreadCount.value = Math.max(0, before - 1)
     try {
-      const { data } = await apiMarkRead(id)
+      const { data } = await apiDeleteOne(id)
       unreadCount.value = data.unread_count
     } catch {
-      // Restore truth from the server (the item is still unread there).
+      // Restore truth from the server (the item still exists there).
+      items.value = snapshot
       unreadCount.value = before
-      void refresh()
     }
   }
 
-  async function markAllRead() {
+  async function removeAll() {
     const before = unreadCount.value
     const snapshot = items.value
-    // All read → the unread bell is now empty.
     items.value = []
     unreadCount.value = 0
     try {
-      await apiMarkAllRead()
+      await apiDeleteAll()
     } catch {
       items.value = snapshot
       unreadCount.value = before
@@ -89,8 +89,8 @@ export const useNotificationsStore = defineStore('notifications', () => {
     hasUnread,
     refresh,
     pushFromSSE,
-    markRead,
-    markAllRead,
+    remove,
+    removeAll,
     reset,
   }
 })

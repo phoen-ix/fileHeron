@@ -15,12 +15,12 @@ export function listNotifications(params: {
   return api.get<NotificationListResponse>('/notifications', { params })
 }
 
-export function markRead(id: number) {
-  return api.post<MarkReadResponse>(`/notifications/${id}/read`)
+export function deleteNotification(id: number) {
+  return api.delete<MarkReadResponse>(`/notifications/${id}`)
 }
 
-export function markAllRead() {
-  return api.post<MarkReadResponse>('/notifications/read-all')
+export function deleteAllNotifications() {
+  return api.delete<MarkReadResponse>('/notifications')
 }
 
 export function getStreamToken() {

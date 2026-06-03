@@ -1,6 +1,6 @@
-/* Notifications store — push/markRead/markAll behaviour. The HTTP +
- * SSE plumbing is mocked so we test only the local state transitions
- * the bell relies on. */
+/* Notifications store — push / remove / removeAll behaviour. The HTTP + SSE
+ * plumbing is mocked so we test only the local state transitions the bell
+ * relies on. The bell is a delete-to-dismiss inbox (no read/unread). */
 import { setActivePinia, createPinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -10,27 +10,27 @@ vi.mock('@/api/notifications', () => ({
   listNotifications: vi.fn(async () => ({
     data: { items: [], unread_count: 0, page: 1, page_size: 20, total: 0 },
   })),
-  markRead: vi.fn(async () => ({ data: { ok: true, unread_count: 0 } })),
-  markAllRead: vi.fn(async () => ({ data: { ok: true, unread_count: 0 } })),
+  deleteNotification: vi.fn(async () => ({ data: { ok: true, unread_count: 0 } })),
+  deleteAllNotifications: vi.fn(async () => ({ data: { ok: true, unread_count: 0 } })),
 }))
 
 beforeEach(() => {
   setActivePinia(createPinia())
 })
 
-function fakeNotif(id: number, read = false): any {
+function fakeNotif(id: number): any {
   return {
     id,
     category: 'share_created',
     payload: { sender_name: 'Alice', file_count: 1 },
     link_url: '/share/abc',
     created_at: new Date().toISOString(),
-    read_at: read ? new Date().toISOString() : null,
+    read_at: null,
   }
 }
 
 describe('notifications store', () => {
-  it('pushFromSSE prepends and bumps unread count', () => {
+  it('pushFromSSE prepends and bumps the count', () => {
     const s = useNotificationsStore()
     s.pushFromSSE(fakeNotif(1))
     s.pushFromSSE(fakeNotif(2))
@@ -44,22 +44,30 @@ describe('notifications store', () => {
     s.pushFromSSE(fakeNotif(1))
     s.pushFromSSE(fakeNotif(1))
     expect(s.items.length).toBe(1)
-    expect(s.unreadCount).toBe(2) // we counted the duplicate as new
+    expect(s.unreadCount).toBe(2) // counted the duplicate as new
   })
 
-  it('markRead drops the item from the unread bell + lowers count', async () => {
+  it('remove deletes the item from the bell + lowers the count', async () => {
     const s = useNotificationsStore()
     s.pushFromSSE(fakeNotif(1))
     s.pushFromSSE(fakeNotif(2))
     expect(s.unreadCount).toBe(2)
-    await s.markRead(1)
-    // Read → removed from the unread inbox (not just greyed).
+    await s.remove(1)
     expect(s.items.find((i) => i.id === 1)).toBeUndefined()
     expect(s.items.length).toBe(1)
     expect(s.unreadCount).toBe(0) // mock returns 0
   })
 
-  it('refresh fetches unread-only', async () => {
+  it('remove is a no-op for an unknown id', async () => {
+    const api: any = await import('@/api/notifications')
+    const s = useNotificationsStore()
+    s.pushFromSSE(fakeNotif(1))
+    await s.remove(999)
+    expect(s.items.length).toBe(1)
+    expect(api.deleteNotification).not.toHaveBeenCalled()
+  })
+
+  it('refresh fetches the inbox', async () => {
     const api: any = await import('@/api/notifications')
     const s = useNotificationsStore()
     await s.refresh()
@@ -68,21 +76,12 @@ describe('notifications store', () => {
     )
   })
 
-  it('markRead is a no-op for already-read items', async () => {
-    const s = useNotificationsStore()
-    s.pushFromSSE(fakeNotif(1, true))
-    s.unreadCount = 0
-    const beforeRead = s.items[0].read_at
-    await s.markRead(1)
-    expect(s.items[0].read_at).toBe(beforeRead)
-  })
-
-  it('markAllRead empties the unread bell', async () => {
+  it('removeAll empties the bell', async () => {
     const s = useNotificationsStore()
     s.pushFromSSE(fakeNotif(1))
     s.pushFromSSE(fakeNotif(2))
     s.pushFromSSE(fakeNotif(3))
-    await s.markAllRead()
+    await s.removeAll()
     expect(s.unreadCount).toBe(0)
     expect(s.items).toEqual([])
   })

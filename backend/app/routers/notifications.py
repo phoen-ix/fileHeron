@@ -186,39 +186,36 @@ def list_notifications(
     )
 
 
-@router.post("/{notif_id}/read", response_model=MarkReadResponse)
-def mark_read(
+@router.delete("/{notif_id}", response_model=MarkReadResponse)
+def delete_one(
     notif_id: int,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> MarkReadResponse:
-    from datetime import datetime, timezone
-
-    n = (
+    """Hard-delete a single notification. The bell is a delete-to-dismiss inbox
+    (the read/unread concept is retired); clicking an item removes it."""
+    deleted = (
         db.query(Notification)
         .filter(Notification.id == notif_id, Notification.user_id == user.id)
-        .one_or_none()
+        .delete(synchronize_session=False)
     )
-    if n is None:
+    if deleted == 0:
         raise AppError(404, "NOTIFICATION_NOT_FOUND", "Notification not found.")
-    if n.read_at is None:
-        n.read_at = datetime.now(tz=timezone.utc).replace(tzinfo=None)
-        db.commit()
+    db.commit()
+    # `unread_count` is the post-delete count of the user's notifications
+    # (read_at is no longer set, so this is simply how many remain).
     return MarkReadResponse(ok=True, unread_count=_unread_count(db, user.id))
 
 
-@router.post("/read-all", response_model=MarkReadResponse)
-def mark_all_read(
+@router.delete("", response_model=MarkReadResponse)
+def delete_all(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> MarkReadResponse:
-    from datetime import datetime, timezone
-
-    when = datetime.now(tz=timezone.utc).replace(tzinfo=None)
+    """Hard-delete all of the caller's notifications ("Delete all")."""
     db.query(Notification).filter(
         Notification.user_id == user.id,
-        Notification.read_at.is_(None),
-    ).update({Notification.read_at: when}, synchronize_session=False)
+    ).delete(synchronize_session=False)
     db.commit()
     return MarkReadResponse(ok=True, unread_count=0)
 

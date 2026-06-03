@@ -1,35 +1,31 @@
-# fileHeron v1.5.7
+# fileHeron v1.5.8
 
-**API tokens can now be given an optional expiry date.** Previously every token
-was valid forever; now you can issue a time-limited token while still keeping
-unlimited tokens for cases that need them.
+**Fix: Active-session times were shown off by the viewer's UTC offset.** On
+Account → Active sessions, a session's time was rendered as if the stored
+(UTC) timestamp were the viewer's local time. For anyone east/west of UTC this
+shifted the time by their offset — e.g. a GMT+2 user saw a session they'd *just*
+created as "2 hours ago", which could look like it predated the account (or
+belonged to someone else). It did not: the sessions list is, and always was,
+strictly scoped to your own account — this was purely a display bug.
 
 ## What changed
 
-- **Optional expiry when creating a token.** Account → API tokens (and the admin
-  "generate for user" form) now has an expiry picker with quick presets
-  (7 days / 30 / 90 / 1 year), a custom date, or **Never**. The default is
-  **Never**, so existing behaviour and any tokens created before this release are
-  unchanged (they never expire).
-- **Expired tokens stop working.** Once past its expiry a token is rejected
-  (`401`), exactly like a revoked one — any client using it (e.g. the desktop
-  app) is cut off and falls back to its login screen.
-- **Visible everywhere.** The token list shows each token's expiry (or "never
-  expires") and flags expired ones; the admin inventory adds an **Expires**
-  column, an **expired** status, and an `expired` filter so you can find and
-  clean them up.
+- The session timestamp now renders with the same timezone-correct formatter
+  used everywhere else in the app — an absolute time in the admin-set **site
+  timezone** with an explicit zone label (e.g. "Jun 3, 2026, 10:30 GMT+2"),
+  localised to your language. No more relative "X ago" computed against the
+  wrong instant.
 
-Adds a nullable `api_tokens.expires_at` column (NULL = never). The migration runs
-automatically on update and is safe + idempotent; no `.env` changes.
+Frontend-only. No database migration, no `.env` changes.
 
 ## Container images
 
 Published to GitHub Container Registry:
 
-- `ghcr.io/phoen-ix/fileheron-backend:v1.5.7`
-- `ghcr.io/phoen-ix/fileheron-worker:v1.5.7`
-- `ghcr.io/phoen-ix/fileheron-frontend:v1.5.7`
-- `ghcr.io/phoen-ix/fileheron-updater-shim:v1.5.7`
-- `ghcr.io/phoen-ix/fileheron-updater-executor:v1.5.7`
+- `ghcr.io/phoen-ix/fileheron-backend:v1.5.8`
+- `ghcr.io/phoen-ix/fileheron-worker:v1.5.8`
+- `ghcr.io/phoen-ix/fileheron-frontend:v1.5.8`
+- `ghcr.io/phoen-ix/fileheron-updater-shim:v1.5.8`
+- `ghcr.io/phoen-ix/fileheron-updater-executor:v1.5.8`
 
 Click **Update** in `/admin/system` to roll forward.

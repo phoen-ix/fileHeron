@@ -1,15 +1,12 @@
 <script setup lang="ts">
-import dayjs from 'dayjs'
-import relativeTime from 'dayjs/plugin/relativeTime'
 import { useI18n } from 'vue-i18n'
 
 import type { SessionRecord } from '@/types/api'
-
-dayjs.extend(relativeTime)
+import { formatInSiteTime } from '@/utils/datetime'
 
 defineProps<{ session: SessionRecord }>()
 const emit = defineEmits<{ revoke: [id: number] }>()
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
 function uaShort(ua: string | null): string {
   if (!ua) return t('account.session_unknown_ua')
@@ -51,8 +48,8 @@ function uaShort(ua: string | null): string {
     <div class="sr-right">
       <span class="sr-meta">
         <span v-if="session.created_ip" class="sr-ip">{{ session.created_ip }}</span>
-        <span class="sr-when" :title="session.created_at">
-          {{ dayjs(session.created_at).fromNow() }}
+        <span class="sr-when">
+          {{ formatInSiteTime(session.created_at, locale) }}
         </span>
       </span>
       <button

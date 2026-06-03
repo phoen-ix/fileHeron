@@ -16,7 +16,8 @@ from __future__ import annotations
 import enum
 from datetime import datetime, timezone
 
-from sqlalchemy import BigInteger, DateTime, Enum as SAEnum, Integer, JSON, String, Text
+from sqlalchemy import JSON, BigInteger, DateTime, Integer, String, Text
+from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column
 
 from ..database import Base

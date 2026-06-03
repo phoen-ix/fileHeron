@@ -51,4 +51,4 @@ class ApiToken(Base):
     # If both are set, revoked_at wins (semantically the token is dead).
     disabled_at: Mapped[datetime | None] = mapped_column(DateTime(), nullable=True)
 
-    owner: Mapped["User"] = relationship("User", foreign_keys=[owner_user_id])
+    owner: Mapped[User] = relationship("User", foreign_keys=[owner_user_id])

@@ -1,7 +1,6 @@
 """Inline public-link creation as part of POST /api/shares (post-Phase 10)."""
 from __future__ import annotations
 
-import json
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -21,7 +20,7 @@ def _future_iso(days: int = 7) -> str:
 async def test_create_share_with_inline_public_link(
     make_user, db, client, login_as
 ):
-    sender = make_user(
+    make_user(
         email="hr@test.local", role=UserRole.admin, password="Pass12345678!"
     )
     rec = make_user(email="r@test.local", role=UserRole.client)
@@ -65,7 +64,7 @@ async def test_create_share_without_public_link_block(
     make_user, db, client, login_as
 ):
     """The optional block is truly optional — no link created."""
-    sender = make_user(
+    make_user(
         email="hr@test.local", role=UserRole.admin, password="Pass12345678!"
     )
     rec = make_user(email="r@test.local", role=UserRole.client)
@@ -97,7 +96,7 @@ async def test_create_share_without_public_link_block(
 async def test_create_share_with_inline_link_password(
     make_user, db, client, login_as
 ):
-    sender = make_user(
+    make_user(
         email="hr@test.local", role=UserRole.admin, password="Pass12345678!"
     )
     rec = make_user(email="r@test.local", role=UserRole.client)

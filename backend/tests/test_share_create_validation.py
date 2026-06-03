@@ -24,7 +24,7 @@ def _expires_in(hours: int) -> str:
 async def test_create_refuses_when_no_recipient_and_no_public_link(
     make_user, db, client, login_as
 ):
-    sender = make_user(
+    make_user(
         email="s@test.local", role=UserRole.admin, password="Pass12345678!"
     )
     token, _ = await login_as("s@test.local", "Pass12345678!")
@@ -45,7 +45,7 @@ async def test_create_refuses_when_no_recipient_and_no_public_link(
 async def test_create_allows_no_recipient_when_public_link_set(
     make_user, db, client, login_as
 ):
-    sender = make_user(
+    make_user(
         email="s@test.local", role=UserRole.admin, password="Pass12345678!"
     )
     token, _ = await login_as("s@test.local", "Pass12345678!")
@@ -74,7 +74,7 @@ async def test_create_allows_recipients_only_unchanged(
 ):
     """Sanity: the existing happy path (recipients, no public link)
     still works after the validator change."""
-    sender = make_user(
+    make_user(
         email="s@test.local", role=UserRole.admin, password="Pass12345678!"
     )
     rec = make_user(email="r@test.local", role=UserRole.client)

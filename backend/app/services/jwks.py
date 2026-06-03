@@ -48,23 +48,22 @@ async def _fetch_jwks(jwks_uri: str) -> dict[str, jwt.PyJWK]:
     # byte cap streamed off the wire so a huge body can't exhaust memory.
     assert_public_http_url(jwks_uri, allow_private=True, require_https=False)
     try:
-        async with httpx.AsyncClient(timeout=5.0) as cli:
-            async with cli.stream("GET", jwks_uri) as resp:
-                resp.raise_for_status()
-                cl = resp.headers.get("content-length")
-                if cl is not None and int(cl) > _JWKS_MAX_BYTES:
+        async with httpx.AsyncClient(timeout=5.0) as cli, cli.stream("GET", jwks_uri) as resp:
+            resp.raise_for_status()
+            cl = resp.headers.get("content-length")
+            if cl is not None and int(cl) > _JWKS_MAX_BYTES:
+                raise AppError(
+                    503, "OIDC_JWKS_TOO_LARGE", "Identity provider key set is too large."
+                )
+            buf = bytearray()
+            async for chunk in resp.aiter_bytes():
+                buf.extend(chunk)
+                if len(buf) > _JWKS_MAX_BYTES:
                     raise AppError(
-                        503, "OIDC_JWKS_TOO_LARGE", "Identity provider key set is too large."
+                        503,
+                        "OIDC_JWKS_TOO_LARGE",
+                        "Identity provider key set is too large.",
                     )
-                buf = bytearray()
-                async for chunk in resp.aiter_bytes():
-                    buf.extend(chunk)
-                    if len(buf) > _JWKS_MAX_BYTES:
-                        raise AppError(
-                            503,
-                            "OIDC_JWKS_TOO_LARGE",
-                            "Identity provider key set is too large.",
-                        )
         doc = json.loads(bytes(buf))
     except httpx.HTTPError as e:
         logger.warning("JWKS fetch failed uri=%s: %s", jwks_uri, e)

@@ -1,9 +1,7 @@
 """Signed download URL — issuance, verification, end-to-end download."""
 from __future__ import annotations
 
-import os
 import tempfile
-import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -15,7 +13,6 @@ from app.models.share import Share, ShareKind, ShareState
 from app.models.share_recipient import ShareRecipient
 from app.models.user import UserRole
 from app.services import download_token as download_token_svc
-
 
 # ---- pure unit tests on the signing helpers -------------------------------
 

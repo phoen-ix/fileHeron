@@ -14,9 +14,8 @@ from ..middleware.errors import AppError
 from ..models.audit_log import AuditEventType
 from ..models.group import Group
 from ..models.group_member import GroupMember
-from ..models.share import ShareState
+from ..models.share import Share, ShareState
 from ..models.share_recipient import ShareRecipient
-from ..models.share import Share
 from ..models.user import User
 from .audit import record_audit_event
 from .connection import recompute_shared_group_connections_for_user

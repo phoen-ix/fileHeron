@@ -74,7 +74,7 @@ async def test_admin_create_for_returns_plaintext_and_audits(
 async def test_admin_disable_reactivate_round_trip(
     make_user, db, client, login_as
 ):
-    admin = make_user(
+    make_user(
         email="a@test.local", role=UserRole.admin, password="Pass12345678!"
     )
     bob = make_user(email="b@test.local", role=UserRole.client)
@@ -113,7 +113,7 @@ async def test_admin_disable_reactivate_round_trip(
 async def test_admin_permanent_revoke_blocks_reactivate(
     make_user, db, client, login_as
 ):
-    admin = make_user(
+    make_user(
         email="a@test.local", role=UserRole.admin, password="Pass12345678!"
     )
     bob = make_user(email="b@test.local", role=UserRole.client)
@@ -158,7 +158,7 @@ async def test_admin_disable_refuses_when_already_revoked(
 
 @pytest.mark.asyncio
 async def test_policy_get_put_round_trip(make_user, db, client, login_as):
-    admin = make_user(
+    make_user(
         email="a@test.local", role=UserRole.admin, password="Pass12345678!"
     )
     bob = make_user(email="b@test.local", role=UserRole.client)

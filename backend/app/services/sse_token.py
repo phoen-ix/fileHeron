@@ -53,7 +53,7 @@ def _sign(payload: bytes) -> str:
 def issue(user_id: int, ttl_sec: int = DEFAULT_TTL_SEC) -> str:
     """Mint a signed SSE token for `user_id` with `ttl_sec` lifetime."""
     exp = _now() + ttl_sec
-    payload = f"sse|{user_id}|{exp}".encode("utf-8")
+    payload = f"sse|{user_id}|{exp}".encode()
     sig = _sign(payload)
     return f"{user_id}.{exp}.{sig}"
 
@@ -67,12 +67,12 @@ def verify(token: str) -> int:
         user_id = int(user_str)
         exp = int(exp_str)
     except (ValueError, AttributeError):
-        raise AppError(401, "INVALID_SSE_TOKEN", "Bad SSE token.")
+        raise AppError(401, "INVALID_SSE_TOKEN", "Bad SSE token.") from None
 
     if exp < _now():
         raise AppError(401, "SSE_TOKEN_EXPIRED", "SSE token expired.")
 
-    expected = _sign(f"sse|{user_id}|{exp}".encode("utf-8"))
+    expected = _sign(f"sse|{user_id}|{exp}".encode())
     # Constant-time compare to defeat timing oracles.
     if not hmac.compare_digest(expected, sig):
         raise AppError(401, "INVALID_SSE_TOKEN", "Bad SSE token.")

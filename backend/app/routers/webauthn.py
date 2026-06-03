@@ -35,9 +35,8 @@ from ..schemas.webauthn import (
     WebAuthnRegisterCompleteRequest,
 )
 from ..services import auth as auth_svc
-from ..services import jwt_session
+from ..services import jwt_session, settings_registry
 from ..services import rate_limit as rate_limit_svc
-from ..services import settings_registry
 from ..services import webauthn as webauthn_svc
 from ..services.audit import record_audit_event
 from ..utils.crypto import argon2_verify, normalize_email

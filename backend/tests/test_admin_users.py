@@ -11,7 +11,7 @@ from app.models.user import UserRole
 
 @pytest.mark.asyncio
 async def test_admin_list_users_filters(make_user, db, client, login_as):
-    admin = make_user(email="admin@test.local", role=UserRole.admin, password="Pass12345678!")
+    make_user(email="admin@test.local", role=UserRole.admin, password="Pass12345678!")
     make_user(email="alice@test.local", role=UserRole.client, display_name="Alice")
     make_user(email="bob@test.local", role=UserRole.employee, display_name="Bob")
     token, _ = await login_as("admin@test.local", "Pass12345678!")
@@ -61,7 +61,7 @@ async def test_admin_cannot_disable_self(make_user, db, client, login_as):
 
 @pytest.mark.asyncio
 async def test_force_password_reset_returns_token(make_user, db, client, login_as):
-    admin = make_user(email="admin@test.local", role=UserRole.admin, password="Pass12345678!")
+    make_user(email="admin@test.local", role=UserRole.admin, password="Pass12345678!")
     target = make_user(email="t@test.local", role=UserRole.client)
     token, _ = await login_as("admin@test.local", "Pass12345678!")
     resp = await client.post(
@@ -84,8 +84,9 @@ async def test_erase_user_hard_deletes_files_and_anonymizes(
     # it queries by uploaded_by_id directly).
     on_disk = tmp_path / "file.bin"
     on_disk.write_bytes(b"x" * 100)
-    from app.models.share import Share, ShareKind, ShareState
     from datetime import datetime, timedelta, timezone
+
+    from app.models.share import Share, ShareKind, ShareState
 
     share = Share(
         created_by_id=admin.id,

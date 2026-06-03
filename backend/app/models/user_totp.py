@@ -32,4 +32,4 @@ class UserTOTP(Base):
     enabled_at: Mapped[datetime | None] = mapped_column(DateTime(), nullable=True)
     last_used_counter: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0, server_default="0")
 
-    user: Mapped["User"] = relationship("User", back_populates="totp")
+    user: Mapped[User] = relationship("User", back_populates="totp")

@@ -175,7 +175,7 @@ def test_update_share_limit_refuses_on_revoked(make_user, db, monkeypatch):
 async def test_create_share_persists_download_limit(
     make_user, db, client, login_as
 ):
-    sender = make_user(
+    make_user(
         email="hr@test.local", role=UserRole.admin, password="Pass12345678!"
     )
     rec = make_user(email="r@test.local", role=UserRole.client)
@@ -335,12 +335,12 @@ async def test_parallel_ranges_count_once_and_log_once(
         f"/api/files/{file_row.id}/download",
         headers={**headers, "Range": "bytes=0-9"},
     )
-    rN = await client.get(
+    r_n = await client.get(
         f"/api/files/{file_row.id}/download",
         headers={**headers, "Range": "bytes=10-22"},
     )
     assert r0.status_code == 206, r0.text
-    assert rN.status_code == 206, rN.text  # NOT 410, despite remaining==0
+    assert r_n.status_code == 206, r_n.text  # NOT 410, despite remaining==0
 
     db.refresh(share)
     assert share.downloads_remaining == 0  # decremented exactly once

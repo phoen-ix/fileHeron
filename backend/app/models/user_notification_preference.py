@@ -12,7 +12,8 @@ from __future__ import annotations
 import enum
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Enum as SAEnum, ForeignKey, Integer
+from sqlalchemy import Enum as SAEnum
+from sqlalchemy import ForeignKey, Integer
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ..database import Base
@@ -45,4 +46,4 @@ class UserNotificationPreference(Base):
         default=NotificationChannel.both,
     )
 
-    user: Mapped["User"] = relationship("User", foreign_keys=[user_id])
+    user: Mapped[User] = relationship("User", foreign_keys=[user_id])

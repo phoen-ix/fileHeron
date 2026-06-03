@@ -15,13 +15,15 @@ from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import (
+    JSON,
     BigInteger,
     DateTime,
-    Enum as SAEnum,
     ForeignKey,
     Integer,
-    JSON,
     String,
+)
+from sqlalchemy import (
+    Enum as SAEnum,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -94,4 +96,4 @@ class Notification(Base):
         DateTime(), nullable=True
     )
 
-    user: Mapped["User"] = relationship("User", foreign_keys=[user_id])
+    user: Mapped[User] = relationship("User", foreign_keys=[user_id])

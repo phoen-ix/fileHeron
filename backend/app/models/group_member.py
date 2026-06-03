@@ -34,5 +34,5 @@ class GroupMember(Base):
         DateTime(), nullable=False, default=_utcnow
     )
 
-    group: Mapped["Group"] = relationship("Group", back_populates="members")
-    user: Mapped["User"] = relationship("User", foreign_keys=[user_id])
+    group: Mapped[Group] = relationship("Group", back_populates="members")
+    user: Mapped[User] = relationship("User", foreign_keys=[user_id])

@@ -95,7 +95,7 @@ async def test_mark_all_read(make_user, db, client, login_as):
 
 @pytest.mark.asyncio
 async def test_mark_others_notification_returns_404(make_user, db, client, login_as):
-    me = make_user(email="me@test.local", role=UserRole.client, password="Pass12345678!")
+    make_user(email="me@test.local", role=UserRole.client, password="Pass12345678!")
     other = make_user(email="other@test.local", role=UserRole.client)
     _seed(db, other.id, n=1)
     n_id = db.query(Notification).filter(Notification.user_id == other.id).first().id

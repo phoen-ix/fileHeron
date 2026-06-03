@@ -12,10 +12,12 @@ from typing import TYPE_CHECKING
 from sqlalchemy import (
     BigInteger,
     DateTime,
-    Enum as SAEnum,
     ForeignKey,
     Integer,
     String,
+)
+from sqlalchemy import (
+    Enum as SAEnum,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -56,4 +58,4 @@ class PublicLinkAttempt(Base):
         DateTime(), nullable=False, default=_utcnow, index=True
     )
 
-    public_link: Mapped["PublicLink"] = relationship("PublicLink")
+    public_link: Mapped[PublicLink] = relationship("PublicLink")

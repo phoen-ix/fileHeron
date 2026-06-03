@@ -48,4 +48,4 @@ class RefreshToken(Base):
     created_ip: Mapped[str | None] = mapped_column(String(45), nullable=True)  # IPv6 textual length
     created_ua: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
-    user: Mapped["User"] = relationship("User", back_populates="refresh_tokens", foreign_keys=[user_id])
+    user: Mapped[User] = relationship("User", back_populates="refresh_tokens", foreign_keys=[user_id])

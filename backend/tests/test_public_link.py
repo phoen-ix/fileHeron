@@ -6,12 +6,11 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from app.middleware.errors import AppError
-from app.models.public_link import PublicLink
 from app.models.public_link_attempt import (
     PublicLinkAttempt,
     PublicLinkAttemptOutcome,
 )
-from app.models.share import Share, ShareKind, ShareState
+from app.models.share import Share, ShareKind
 from app.models.user import UserRole
 from app.services import public_link as public_link_svc
 

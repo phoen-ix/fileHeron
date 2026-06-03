@@ -55,7 +55,6 @@ from app.database import Base
 from app.dependencies import get_db
 from app.main import app
 from app.models.user import Locale, User, UserRole
-from app.services import auth as auth_svc
 from app.utils.crypto import argon2_hash, normalize_email
 
 
@@ -125,7 +124,8 @@ def _rebind_session_local(engine):
     call retargets all of them in lockstep. Restore on teardown so we
     don't leave a global pointing at a disposed engine.
     """
-    from app.database import SessionLocal, engine as prod_engine
+    from app.database import SessionLocal
+    from app.database import engine as prod_engine
     SessionLocal.configure(bind=engine)
     try:
         yield
@@ -307,7 +307,7 @@ def make_provider(db):
         employee_groups: str = "fh-employees",
         redirect_uri: str = "",
         enabled: bool = True,
-    ) -> "OIDCProvider":
+    ) -> OIDCProvider:
         p = OIDCProvider(
             name=name,
             preset=preset,

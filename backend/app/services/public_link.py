@@ -25,17 +25,16 @@ from typing import NamedTuple
 from sqlalchemy import update
 from sqlalchemy.orm import Session
 
-from . import settings_registry
 from ..middleware.errors import AppError
 from ..models.audit_log import AuditEventType
 from ..models.file import File
+from ..models.group_member import GroupMember
 from ..models.notification import NotificationCategory
 from ..models.public_link import PublicLink
 from ..models.public_link_attempt import (
     PublicLinkAttempt,
     PublicLinkAttemptOutcome,
 )
-from ..models.group_member import GroupMember
 from ..models.share import Share, ShareState
 from ..models.user import User, UserRole
 from ..utils.crypto import (
@@ -46,6 +45,7 @@ from ..utils.crypto import (
     sha256_hex,
 )
 from . import notification as notif_svc
+from . import settings_registry
 from . import site as site_svc
 from .audit import record_audit_event
 
@@ -205,7 +205,10 @@ MIN_DISTINCT_IPS_FOR_LOCK = 3
 
 
 def _recent_failure_count(db: Session, link: PublicLink) -> int:
-    cutoff = _utcnow() - timedelta(seconds=settings_registry.effective(db, settings_registry.K.PUBLIC_LINK_PASSWORD_WINDOW_SEC))
+    window_sec = settings_registry.effective(
+        db, settings_registry.K.PUBLIC_LINK_PASSWORD_WINDOW_SEC
+    )
+    cutoff = _utcnow() - timedelta(seconds=window_sec)
     return (
         db.query(PublicLinkAttempt)
         .filter(
@@ -220,7 +223,10 @@ def _recent_failure_count(db: Session, link: PublicLink) -> int:
 def recent_ip_failure_count(db: Session, link: PublicLink, ip: str | None) -> int:
     if ip is None:
         return 0
-    cutoff = _utcnow() - timedelta(seconds=settings_registry.effective(db, settings_registry.K.PUBLIC_LINK_PASSWORD_WINDOW_SEC))
+    window_sec = settings_registry.effective(
+        db, settings_registry.K.PUBLIC_LINK_PASSWORD_WINDOW_SEC
+    )
+    cutoff = _utcnow() - timedelta(seconds=window_sec)
     return (
         db.query(PublicLinkAttempt)
         .filter(
@@ -243,7 +249,10 @@ def ip_is_rate_limited(db: Session, link: PublicLink, ip: str | None) -> bool:
 
 
 def _recent_distinct_failure_ips(db: Session, link: PublicLink) -> int:
-    cutoff = _utcnow() - timedelta(seconds=settings_registry.effective(db, settings_registry.K.PUBLIC_LINK_PASSWORD_WINDOW_SEC))
+    window_sec = settings_registry.effective(
+        db, settings_registry.K.PUBLIC_LINK_PASSWORD_WINDOW_SEC
+    )
+    cutoff = _utcnow() - timedelta(seconds=window_sec)
     return (
         db.query(PublicLinkAttempt.ip)
         .filter(

@@ -16,6 +16,11 @@ from ...middleware.errors import AppError
 from ...models.audit_log import AuditEventType
 from ...models.group import Group
 from ...models.user import User
+from ...schemas.advanced_settings import (
+    AdvancedSettingItem,
+    AdvancedSettingsResponse,
+    UpdateAdvancedSettingsRequest,
+)
 from ...schemas.email_settings import (
     EmailSettingsResponse,
     TestEmailRequest,
@@ -29,10 +34,6 @@ from ...schemas.home_page_settings import (
 from ...schemas.motd_settings import (
     MotdSettingsResponse,
     UpdateMotdSettingsRequest,
-)
-from ...schemas.updates_settings import (
-    UpdateUpdatesSettingsRequest,
-    UpdatesSettingsResponse,
 )
 from ...schemas.public_link import (
     PublicLinkAllowedGroup,
@@ -57,6 +58,10 @@ from ...schemas.twofa_policy import (
     TwofaPolicyResponse,
     UpdateTwofaPolicyRequest,
 )
+from ...schemas.updates_settings import (
+    UpdatesSettingsResponse,
+    UpdateUpdatesSettingsRequest,
+)
 from ...services import email as email_svc
 from ...services import public_link as public_link_svc
 from ...services import settings as settings_svc
@@ -64,11 +69,6 @@ from ...services import settings_registry
 from ...services import site as site_svc
 from ...services import twofa_policy as twofa_policy_svc
 from ...services.audit import record_audit_event
-from ...schemas.advanced_settings import (
-    AdvancedSettingItem,
-    AdvancedSettingsResponse,
-    UpdateAdvancedSettingsRequest,
-)
 
 router = APIRouter()
 
@@ -253,10 +253,7 @@ def update_email_settings(
         if value is None:
             continue
         coerced: str | None
-        if isinstance(value, int):
-            coerced = str(value)
-        else:
-            coerced = value if value else None
+        coerced = str(value) if isinstance(value, int) else value if value else None
         settings_svc.set_value(
             db, key=key, value=coerced, actor=admin, request=request
         )

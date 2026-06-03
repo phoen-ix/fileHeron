@@ -19,6 +19,7 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Header, Query, Request
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel, Field
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -307,9 +308,6 @@ async def run_cron_now(
 # facing chain (admin auth + password re-prompt + audit + notify-all-
 # admins) stays at this boundary, unchanged.
 # ---------------------------------------------------------------------------
-
-
-from pydantic import BaseModel, Field
 
 
 class UpdateApplyRequest(BaseModel):

@@ -13,7 +13,6 @@ from app.models.user_totp import UserTOTP
 from app.services import settings as settings_svc
 from app.services import twofa_policy as twofa_policy_svc
 
-
 # ---- helpers --------------------------------------------------------------
 
 

@@ -75,7 +75,7 @@ async def test_session_cap_does_not_evict_when_under_limit(
     monkeypatch.setattr(
         "app.config.settings.MAX_ACTIVE_SESSIONS_PER_USER", 10
     )
-    user = make_user(
+    make_user(
         email="under@test.local",
         role=UserRole.client,
         password="Pass12345678!",

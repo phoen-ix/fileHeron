@@ -172,13 +172,14 @@ def download_file(
         # v1.1.0: per-share download budget. Atomic decrement; if the
         # counter is already at 0 we refuse with 410 before logging/sending.
         # NULL limit = unlimited, the helper's WHERE clause skips the case.
-        if share.download_limit is not None:
-            if not share_svc.try_decrement_share_counter(db, share=share):
-                raise AppError(
-                    410,
-                    "SHARE_DOWNLOAD_LIMIT_REACHED",
-                    "This share has reached its download limit.",
-                )
+        if share.download_limit is not None and not share_svc.try_decrement_share_counter(
+            db, share=share
+        ):
+            raise AppError(
+                410,
+                "SHARE_DOWNLOAD_LIMIT_REACHED",
+                "This share has reached its download limit.",
+            )
 
         # Log the download.
         via = DownloadVia.api_token if getattr(request.state, "auth_via", "") == "api_token" else DownloadVia.auth

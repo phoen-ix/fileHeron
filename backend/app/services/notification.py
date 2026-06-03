@@ -138,40 +138,41 @@ def dispatch(
     channel = _channel_for(db, user.id, category)
 
     notif: Notification | None = None
-    if _wants_in_app(channel) or channel == NotificationChannel.email:
-        # Always write an in-app row when the channel is email-only too;
-        # the bell becomes a permanent log of what was emailed. Only the
-        # explicit `off` choice suppresses persistence.
-        if channel != NotificationChannel.off:
-            notif = Notification(
-                user_id=user.id,
-                category=category,
-                payload_json=_json_safe(payload),
-                link_url=link_url,
-            )
-            db.add(notif)
-            db.flush()
+    # Always write an in-app row when the channel is email-only too; the bell
+    # becomes a permanent log of what was emailed. Only the explicit `off`
+    # choice suppresses persistence.
+    if (
+        _wants_in_app(channel) or channel == NotificationChannel.email
+    ) and channel != NotificationChannel.off:
+        notif = Notification(
+            user_id=user.id,
+            category=category,
+            payload_json=_json_safe(payload),
+            link_url=link_url,
+        )
+        db.add(notif)
+        db.flush()
 
-            # Push live to SSE listeners (the bell). Best-effort — the
-            # in-app row is the durable record; SSE is real-time UX only.
-            if _wants_in_app(channel):
-                from . import sse as sse_svc
-                sse_svc.publish_sync(
-                    user.id,
-                    {
-                        "event": "notification",
+        # Push live to SSE listeners (the bell). Best-effort — the
+        # in-app row is the durable record; SSE is real-time UX only.
+        if _wants_in_app(channel):
+            from . import sse as sse_svc
+            sse_svc.publish_sync(
+                user.id,
+                {
+                    "event": "notification",
+                    "id": notif.id,
+                    "data": {
                         "id": notif.id,
-                        "data": {
-                            "id": notif.id,
-                            "category": notif.category.value,
-                            "link_url": notif.link_url,
-                            "created_at": notif.created_at.isoformat()
-                            if notif.created_at
-                            else None,
-                            "payload": notif.payload_json,
-                        },
+                        "category": notif.category.value,
+                        "link_url": notif.link_url,
+                        "created_at": notif.created_at.isoformat()
+                        if notif.created_at
+                        else None,
+                        "payload": notif.payload_json,
                     },
-                )
+                },
+            )
 
     if _wants_email(channel) and email_to:
         try:

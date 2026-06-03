@@ -20,8 +20,6 @@ from fastapi import Request
 from sqlalchemy import update
 from sqlalchemy.orm import Session
 
-logger = logging.getLogger("fileheron.auth")
-
 from ..middleware.errors import AppError
 from ..models.audit_log import AuditEventType
 from ..models.email_verify_token import EmailVerifyToken
@@ -50,6 +48,8 @@ from .jwt_session import (
     resolve_user_from_access_token,
     revoke_all_user_refresh_tokens,
 )
+
+logger = logging.getLogger("fileheron.auth")
 
 # Re-exported names for backwards-compatibility with callers that still
 # import these from services.auth (dependencies.py uses
@@ -291,8 +291,8 @@ async def _maybe_send_lockout_email(
 ) -> None:
     """Phase 1b lockout warning email. Imported lazily to avoid a circular
     import (services.email → models.user → services.auth)."""
-    from .email import send_lockout_warning_email
     from . import site as site_svc
+    from .email import send_lockout_warning_email
 
     locked_until = user.locked_until.isoformat() if user.locked_until else "soon"
     ip = _request_ip(request)

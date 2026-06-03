@@ -278,10 +278,10 @@ def generate_receipt_pdf(audit_event) -> bytes:
     module imports cheaply at startup."""
     from io import BytesIO
 
+    from reportlab.lib import colors
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.styles import getSampleStyleSheet
     from reportlab.lib.units import mm
-    from reportlab.pdfgen import canvas
     from reportlab.platypus import (
         Paragraph,
         SimpleDocTemplate,
@@ -289,7 +289,6 @@ def generate_receipt_pdf(audit_event) -> bytes:
         Table,
         TableStyle,
     )
-    from reportlab.lib import colors
 
     buf = BytesIO()
     doc = SimpleDocTemplate(
@@ -304,7 +303,6 @@ def generate_receipt_pdf(audit_event) -> bytes:
     styles = getSampleStyleSheet()
     title_style = styles["Title"]
     body_style = styles["BodyText"]
-    mono_style = styles["Code"]
 
     extra = audit_event.extra or {}
     target_id = audit_event.target_id or "?"

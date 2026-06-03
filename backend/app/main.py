@@ -41,6 +41,7 @@ from .routers import (
 from .services.admin_bootstrap import bootstrap_admin_if_configured
 from .services.twofa_enforcement import require_2fa_complete
 from .utils.logger import configure_logging  # noqa: F401
+from .version import VERSION as _APP_VERSION
 
 
 @asynccontextmanager
@@ -55,8 +56,6 @@ async def lifespan(_app: FastAPI):
 
 
 _disable_docs = settings.is_production
-
-from .version import VERSION as _APP_VERSION
 
 app = FastAPI(
     title="fileHeron",

@@ -42,7 +42,7 @@ async def av_scan_file(_ctx, file_id: str) -> dict:
 
         try:
             result = av_scan_svc.scan_path(file.storage_path)
-        except av_scan_svc.AVUnavailable as e:
+        except av_scan_svc.AVUnavailableError as e:
             # Re-raise so ARQ retries with backoff. Worker config picks
             # the retry count.
             logger.warning("clamd unavailable for %s: %s", file_id, e)

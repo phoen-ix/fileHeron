@@ -14,7 +14,8 @@ import uuid
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, Enum as SAEnum, ForeignKey, Integer, String, Text
+from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ..database import Base
@@ -101,10 +102,10 @@ class Share(Base):
     download_limit: Mapped[int | None] = mapped_column(Integer, nullable=True)
     downloads_remaining: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
-    created_by: Mapped["User"] = relationship("User", foreign_keys=[created_by_id])
-    files: Mapped[list["File"]] = relationship(
+    created_by: Mapped[User] = relationship("User", foreign_keys=[created_by_id])
+    files: Mapped[list[File]] = relationship(
         "File", back_populates="share", cascade="all, delete-orphan"
     )
-    recipients: Mapped[list["ShareRecipient"]] = relationship(
+    recipients: Mapped[list[ShareRecipient]] = relationship(
         "ShareRecipient", back_populates="share", cascade="all, delete-orphan"
     )

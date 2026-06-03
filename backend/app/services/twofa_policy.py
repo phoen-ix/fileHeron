@@ -17,14 +17,13 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Iterable
+from collections.abc import Iterable
 
 from sqlalchemy.orm import Session
 
 from ..config import settings
 from ..models.group_member import GroupMember
 from ..models.user import User, UserRole
-from ..models.user_totp import UserTOTP
 from . import settings as settings_svc
 
 logger = logging.getLogger("fileheron.twofa_policy")

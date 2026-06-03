@@ -81,7 +81,7 @@ def create_access_token(user_id: int, settings, db: Session | None = None) -> tu
     return token, minutes * 60
 
 
-def resolve_user_from_access_token(db: Session, token: str, settings: "Settings") -> User:
+def resolve_user_from_access_token(db: Session, token: str, settings: Settings) -> User:
     try:
         payload = jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
     except jwt.ExpiredSignatureError:

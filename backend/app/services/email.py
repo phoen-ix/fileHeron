@@ -20,7 +20,6 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from babel.dates import format_datetime
 from jinja2 import Environment, FileSystemLoader, pass_context, select_autoescape
-
 from sqlalchemy.orm import Session
 
 from ..config import settings

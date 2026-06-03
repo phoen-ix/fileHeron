@@ -55,10 +55,22 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "N", "UP", "B", "S", "ASYNC", "C4", "SIM"]
-ignore = ["S101", "S104"]
+ignore = [
+    "S101",   # assert used (tests + defensive invariants)
+    "S104",   # bind to all interfaces (containerised; bound to 127.0.0.1 by compose)
+    "B008",   # FastAPI Depends()/Query()/Header() in arg defaults — the framework idiom
+    "S105",   # "hardcoded password" false positives: settings-key constants,
+              # AuditEventType enum values, config field names — no real secrets
+    "S110",   # try-except-pass: deliberate best-effort / fail-open blocks
+    "S112",   # try-except-continue: same deliberate best-effort pattern
+    "SIM105", # try-except-pass kept as-is (don't force contextlib.suppress) — same blocks
+    "UP017",  # keep datetime.timezone.utc — the documented timestamp convention (CLAUDE.md)
+]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**/*.py" = ["S105", "S106", "S311"]
+# Security lints that are noise in test code: hardcoded creds/keys in fixtures,
+# /tmp paths, the migration test's literal SQL, and randomness for test data.
+"tests/**/*.py" = ["S105", "S106", "S107", "S108", "S311", "S608"]
 
 [tool.mypy]
 python_version = "3.12"

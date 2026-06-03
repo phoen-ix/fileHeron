@@ -43,5 +43,5 @@ class ShareRecipient(Base):
     # in Phase 3a where every recipient is a user.
     recipient_group_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True, index=True)
 
-    share: Mapped["Share"] = relationship("Share", back_populates="recipients")
-    recipient_user: Mapped["User | None"] = relationship("User", foreign_keys=[recipient_user_id])
+    share: Mapped[Share] = relationship("Share", back_populates="recipients")
+    recipient_user: Mapped[User | None] = relationship("User", foreign_keys=[recipient_user_id])

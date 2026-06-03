@@ -1,8 +1,6 @@
 """Notification dispatch service — channel resolution + persistence."""
 from __future__ import annotations
 
-import pytest
-
 from app.models.notification import Notification, NotificationCategory
 from app.models.user import UserRole
 from app.models.user_notification_preference import (

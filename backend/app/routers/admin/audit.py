@@ -5,8 +5,8 @@ import base64
 import csv
 import io
 import json
+from collections.abc import Iterator
 from datetime import datetime
-from typing import Iterator
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import StreamingResponse
@@ -223,8 +223,8 @@ def export_audit_csv(
         buf.seek(0)
         buf.truncate()
 
-        BATCH = 500
-        for r in q.yield_per(BATCH):
+        batch_size = 500
+        for r in q.yield_per(batch_size):
             writer.writerow(
                 [
                     r.id,

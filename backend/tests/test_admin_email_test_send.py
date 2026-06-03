@@ -5,7 +5,6 @@ from __future__ import annotations
 import pytest
 
 from app.models.user import UserRole
-from app.services import email as email_svc
 from app.services import settings as settings_svc
 
 

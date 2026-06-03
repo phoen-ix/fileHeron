@@ -139,7 +139,7 @@ async def test_admin_files_includes_deleted(make_user, db, client, login_as):
         message=None,
     )
     share.state = ShareState.expired
-    f = _make_file(db, share=share, uploader=admin, state=FileState.deleted)
+    _make_file(db, share=share, uploader=admin, state=FileState.deleted)
     db.commit()
 
     token, _ = await login_as("admin@test.local", "Pass12345678!")

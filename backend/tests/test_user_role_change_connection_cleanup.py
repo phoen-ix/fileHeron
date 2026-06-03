@@ -15,7 +15,6 @@ import pytest
 from app.models.audit_log import AuditEventType, AuditLog
 from app.models.client_employee_connection import (
     ClientEmployeeConnection,
-    ConnectionSource,
 )
 from app.models.user import UserRole
 from app.services import connection as connection_svc

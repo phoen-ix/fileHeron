@@ -6,7 +6,8 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
-from sqlalchemy import JSON, DateTime, Enum as SAEnum, ForeignKey, Integer, String
+from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String
+from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ..database import Base
@@ -32,7 +33,7 @@ class InviteToken(Base):
     created_by_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
-    created_by: Mapped["User"] = relationship("User", back_populates="invites_created", foreign_keys=[created_by_id])
+    created_by: Mapped[User] = relationship("User", back_populates="invites_created", foreign_keys=[created_by_id])
 
     created_at: Mapped[datetime] = mapped_column(DateTime(), nullable=False, default=_utcnow)
     expires_at: Mapped[datetime] = mapped_column(DateTime(), nullable=False)

@@ -14,7 +14,8 @@ import enum
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
-from sqlalchemy import BigInteger, Boolean, DateTime, Enum as SAEnum, ForeignKey, Integer, String
+from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Integer, String
+from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ..database import Base
@@ -99,21 +100,21 @@ class User(Base):
     created_by_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    created_by: Mapped["User | None"] = relationship("User", remote_side="User.id")
+    created_by: Mapped[User | None] = relationship("User", remote_side="User.id")
 
     # Backrefs
-    refresh_tokens: Mapped[list["RefreshToken"]] = relationship(
+    refresh_tokens: Mapped[list[RefreshToken]] = relationship(
         "RefreshToken", back_populates="user", cascade="all, delete-orphan",
         foreign_keys="RefreshToken.user_id",
     )
-    invites_created: Mapped[list["InviteToken"]] = relationship(
+    invites_created: Mapped[list[InviteToken]] = relationship(
         "InviteToken", back_populates="created_by",
         foreign_keys="InviteToken.created_by_id",
     )
-    totp: Mapped["UserTOTP | None"] = relationship(
+    totp: Mapped[UserTOTP | None] = relationship(
         "UserTOTP", back_populates="user", uselist=False, cascade="all, delete-orphan",
     )
-    recovery_codes: Mapped[list["UserRecoveryCode"]] = relationship(
+    recovery_codes: Mapped[list[UserRecoveryCode]] = relationship(
         "UserRecoveryCode", back_populates="user", cascade="all, delete-orphan",
     )
 

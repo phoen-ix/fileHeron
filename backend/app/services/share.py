@@ -30,8 +30,6 @@ from datetime import datetime, timezone
 from sqlalchemy import or_, update
 from sqlalchemy.orm import Session, joinedload
 
-logger = logging.getLogger("fileheron.share")
-
 from ..middleware.errors import AppError
 from ..models.audit_log import AuditEventType
 from ..models.client_employee_connection import ClientEmployeeConnection
@@ -41,6 +39,8 @@ from ..models.share import Share, ShareKind, ShareState
 from ..models.share_recipient import ShareRecipient
 from ..models.user import User, UserRole
 from .audit import record_audit_event
+
+logger = logging.getLogger("fileheron.share")
 
 
 def _utcnow() -> datetime:
@@ -105,7 +105,7 @@ def _validate_outbound_targets(
             raise AppError(
                 403,
                 "GROUP_NOT_MEMBER",
-                f"You can only target groups you're a member of.",
+                "You can only target groups you're a member of.",
             )
 
 
@@ -455,10 +455,7 @@ def list_shares_for_user(
     # (ASC) or last (DESC). For user-facing list display, "Never" should
     # consistently appear AFTER the dated rows regardless of direction —
     # so prepend an `IS NULL` ordering hint that pushes NULLs to the end.
-    if sort_col == "expires_at":
-        base = base.order_by(Share.expires_at.is_(None).asc(), order)
-    else:
-        base = base.order_by(order)
+    base = base.order_by(Share.expires_at.is_(None).asc(), order) if sort_col == "expires_at" else base.order_by(order)
 
     rows = (
         base.offset(max(0, (page - 1) * page_size)).limit(page_size).all()

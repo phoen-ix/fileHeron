@@ -21,7 +21,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from typing import AsyncIterator
+from collections.abc import AsyncIterator
 
 import redis.asyncio as aioredis
 
@@ -220,7 +220,6 @@ async def stream_for_user(user_id: int, last_event_id: int | None = None) -> Asy
     await pubsub.subscribe(_channel(user_id))
 
     deadline = asyncio.get_running_loop().time() + CONNECTION_TTL_SEC
-    last_yield = asyncio.get_running_loop().time()
 
     try:
         while True:
@@ -237,7 +236,6 @@ async def stream_for_user(user_id: int, last_event_id: int | None = None) -> Asy
             if msg is None:
                 # Keepalive comment — keeps proxies from killing the connection.
                 yield b": keepalive\n\n"
-                last_yield = now
                 continue
 
             data = msg.get("data")
@@ -256,7 +254,6 @@ async def stream_for_user(user_id: int, last_event_id: int | None = None) -> Asy
                 line += f"id: {event_id}\n"
             line += f"data: {json.dumps(payload, separators=(',', ':'))}\n\n"
             yield line.encode("utf-8")
-            last_yield = now
     finally:
         try:
             await pubsub.unsubscribe(_channel(user_id))

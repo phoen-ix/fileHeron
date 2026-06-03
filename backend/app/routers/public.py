@@ -26,7 +26,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from fastapi import APIRouter, Cookie, Depends, Request, Response, status
+from fastapi import APIRouter, Cookie, Depends, Request, Response
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 

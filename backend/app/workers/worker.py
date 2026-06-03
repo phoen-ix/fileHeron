@@ -26,8 +26,8 @@ from arq.connections import RedisSettings
 from arq.cron import cron
 
 from ..config import settings
-from ..utils.logger import configure_logging
 from ..services.release_check import release_check
+from ..utils.logger import configure_logging
 from .av_scan import av_scan_file
 from .cleanup_abandoned_uploads import cleanup_abandoned_uploads
 from .cleanup_expired_tokens import cleanup_expired_tokens
@@ -94,6 +94,6 @@ class WorkerSettings:
     # Use a dedicated queue so the worker doesn't accidentally pick up
     # ad-hoc job enqueues from elsewhere if those ever appear.
     queue_name = "fileheron:default"
-    # Retry transient AVUnavailable errors a few times before giving up.
+    # Retry transient AVUnavailableError errors a few times before giving up.
     # Backoff defaults are roughly: 0s, 5s, 25s, 60s … (ARQ's exponential).
     max_tries = 5

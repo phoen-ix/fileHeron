@@ -18,7 +18,6 @@ from datetime import datetime, timezone
 from fastapi import Request
 from sqlalchemy.orm import Session
 
-from ..config import settings
 from ..models.notification import NotificationCategory
 from ..models.user import User
 from ..utils.geohash import ip_geohash5

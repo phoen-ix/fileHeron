@@ -28,9 +28,8 @@ from ..schemas.auth import (
 from ..schemas.two_factor import SessionListResponse, SessionResponse
 from ..services import auth as auth_svc
 from ..services import email as email_svc
-from ..services import jwt_session
+from ..services import jwt_session, settings_registry
 from ..services import rate_limit as rate_limit_svc
-from ..services import settings_registry
 from ..utils.crypto import refresh_token_hash
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])

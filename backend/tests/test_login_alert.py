@@ -1,8 +1,6 @@
 """New-device login alert dispatch + UA suppression."""
 from __future__ import annotations
 
-import pytest
-
 from app.services import login_alert as la_svc
 from app.services.login_alert import _summarize_ua
 from app.utils.ua_fingerprint import ua_fingerprint_hash
@@ -42,6 +40,7 @@ def test_fire_new_device_dispatches_login_alert(make_user, db, monkeypatch):
     """The alert helper goes through services/notification.dispatch
     with the login_alert category."""
     from unittest.mock import MagicMock
+
     from app.models.user import UserRole
 
     user = make_user(email="u@test.local", role=UserRole.client)

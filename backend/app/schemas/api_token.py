@@ -64,8 +64,8 @@ class TokenPolicyResponse(APIBaseModel):
     allowed_user_ids: list[int]
     allowed_group_ids: list[int]
     # Resolved labels so the UI can show names without a second roundtrip.
-    allowed_users: list["AllowedUserItem"]
-    allowed_groups: list["AllowedGroupItem"]
+    allowed_users: list[AllowedUserItem]
+    allowed_groups: list[AllowedGroupItem]
 
 
 class AllowedUserItem(APIBaseModel):

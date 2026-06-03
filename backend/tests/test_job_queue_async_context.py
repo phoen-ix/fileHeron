@@ -13,6 +13,7 @@ actually push to Redis.
 from __future__ import annotations
 
 import asyncio
+
 import pytest
 
 from app.services import job_queue

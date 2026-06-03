@@ -6,7 +6,6 @@ than mutate the row — it walks files + share recipients.
 from __future__ import annotations
 
 import logging
-from typing import Optional
 
 from sqlalchemy.orm import Session
 
@@ -58,10 +57,10 @@ def update_user(
     *,
     actor: User,
     target: User,
-    display_name: Optional[str] = None,
-    role: Optional[UserRole] = None,
-    quota_bytes: Optional[int] = None,
-    is_disabled: Optional[bool] = None,
+    display_name: str | None = None,
+    role: UserRole | None = None,
+    quota_bytes: int | None = None,
+    is_disabled: bool | None = None,
     request=None,
 ) -> User:
     changed: dict[str, object] = {}
@@ -136,6 +135,7 @@ def force_password_reset(
 
     Caller commits."""
     from datetime import datetime, timedelta, timezone
+
     from ..models.password_reset_token import PasswordResetToken
     from ..utils.crypto import random_token, sha256_hex
 
@@ -186,8 +186,8 @@ async def create_user_as_admin(
     directly-created user is indistinguishable from an invited one. Caller
     commits."""
     from ..utils.crypto import argon2_hash, normalize_email
-    from .hibp import assert_password_not_breached
     from . import invite as invite_svc
+    from .hibp import assert_password_not_breached
 
     em = normalize_email(email)
     if not em:

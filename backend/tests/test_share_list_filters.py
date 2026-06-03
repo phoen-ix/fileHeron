@@ -274,7 +274,7 @@ async def test_filter_by_state(make_user, db, client, login_as):
         email="hr@test.local", role=UserRole.admin, password="Pass12345678!"
     )
     rec = make_user(email="r@test.local", role=UserRole.client)
-    s1 = share_svc.create_share(
+    share_svc.create_share(
         db,
         created_by=sender,
         kind=ShareKind.outbound,

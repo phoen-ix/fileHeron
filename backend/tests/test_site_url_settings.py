@@ -7,8 +7,7 @@ import pytest
 
 from app.models.audit_log import AuditEventType, AuditLog
 from app.models.notification import Notification, NotificationCategory
-from app.models.share import Share, ShareKind, ShareState
-from app.models.share_recipient import ShareRecipient
+from app.models.share import ShareKind
 from app.models.user import UserRole
 from app.services import settings as settings_svc
 from app.services import site as site_svc
@@ -20,7 +19,7 @@ def _now_naive() -> datetime:
 
 @pytest.mark.asyncio
 async def test_get_returns_env_when_no_override(make_user, db, client, login_as):
-    admin = make_user(
+    make_user(
         email="admin@test.local", role=UserRole.admin, password="Pass12345678!"
     )
     token, _ = await login_as("admin@test.local", "Pass12345678!")
@@ -37,7 +36,7 @@ async def test_get_returns_env_when_no_override(make_user, db, client, login_as)
 
 @pytest.mark.asyncio
 async def test_put_writes_kv_and_get_returns_it(make_user, db, client, login_as):
-    admin = make_user(
+    make_user(
         email="admin@test.local", role=UserRole.admin, password="Pass12345678!"
     )
     token, _ = await login_as("admin@test.local", "Pass12345678!")
@@ -63,7 +62,7 @@ async def test_put_writes_kv_and_get_returns_it(make_user, db, client, login_as)
 
 @pytest.mark.asyncio
 async def test_put_null_clears_the_override(make_user, db, client, login_as):
-    admin = make_user(
+    make_user(
         email="admin@test.local", role=UserRole.admin, password="Pass12345678!"
     )
     token, _ = await login_as("admin@test.local", "Pass12345678!")
@@ -88,7 +87,7 @@ async def test_put_null_clears_the_override(make_user, db, client, login_as):
 
 @pytest.mark.asyncio
 async def test_put_rejects_malformed_url(make_user, db, client, login_as):
-    admin = make_user(
+    make_user(
         email="admin@test.local", role=UserRole.admin, password="Pass12345678!"
     )
     token, _ = await login_as("admin@test.local", "Pass12345678!")

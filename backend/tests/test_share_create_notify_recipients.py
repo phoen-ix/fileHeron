@@ -43,7 +43,7 @@ def test_default_kv_true_dispatches_to_direct_recipient(
     rec = make_user(email="rec@test.local", role=UserRole.client)
     enqueued = _patch_email_capture(monkeypatch)
 
-    share = share_svc.create_share(
+    share_svc.create_share(
         db,
         created_by=admin,
         kind=ShareKind.outbound,

@@ -42,7 +42,7 @@ from ..config import settings
 from ..middleware.errors import AppError
 from ..models.audit_log import AuditEventType
 from ..models.oidc_provider import OIDCPreset, OIDCProvider
-from ..models.user import Locale, User, UserRole
+from ..models.user import User, UserRole
 from ..utils.crypto import normalize_email
 from ..utils.net import assert_public_http_url
 from .audit import record_audit_event
@@ -247,10 +247,9 @@ async def _verify_id_token(
     except jwt.InvalidTokenError as e:
         raise AppError(401, "OIDC_BAD_ID_TOKEN", f"ID token invalid: {e}") from e
 
-    if expected_nonce is not None:
-        if claims.get("nonce") != expected_nonce:
-            logger.warning("OIDC nonce mismatch provider=%s", provider.id)
-            raise AppError(401, "OIDC_BAD_NONCE", "ID token nonce mismatch.")
+    if expected_nonce is not None and claims.get("nonce") != expected_nonce:
+        logger.warning("OIDC nonce mismatch provider=%s", provider.id)
+        raise AppError(401, "OIDC_BAD_NONCE", "ID token nonce mismatch.")
 
     return claims
 

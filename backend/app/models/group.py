@@ -59,7 +59,7 @@ class Group(Base):
         DateTime(), nullable=False, default=_utcnow
     )
 
-    created_by: Mapped["User"] = relationship("User", foreign_keys=[created_by_id])
-    members: Mapped[list["GroupMember"]] = relationship(
+    created_by: Mapped[User] = relationship("User", foreign_keys=[created_by_id])
+    members: Mapped[list[GroupMember]] = relationship(
         "GroupMember", back_populates="group", cascade="all, delete-orphan"
     )

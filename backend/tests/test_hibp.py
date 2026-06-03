@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import hashlib
 
-import httpx
 import pytest
 
 from app.services import hibp as hibp_svc

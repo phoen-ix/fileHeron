@@ -30,10 +30,12 @@ from sqlalchemy.orm import Session
 
 from ..middleware.errors import AppError
 from ..models.file import File, FileState
-from ..models.share import Share, ShareState
 from ..models.user import User
 from . import file as file_svc
 from . import quota as quota_svc
+from .tus_signing import UploadEnvelope, verify_envelope
+
+logger = logging.getLogger("fileheron.tus_hooks")
 
 # tusd's default upload ID is a hex / urlsafe-base64 string. Validate
 # defensively so a malicious / malformed ID can never escape the
@@ -47,9 +49,6 @@ def _check_tus_upload_id(tus_upload_id: str | None) -> str:
             400, "TUSD_INVALID_UPLOAD_ID", "Malformed tusd upload ID."
         )
     return tus_upload_id
-from .tus_signing import UploadEnvelope, verify_envelope
-
-logger = logging.getLogger("fileheron.tus_hooks")
 
 
 def _extract_envelope(meta: dict[str, str]) -> UploadEnvelope:

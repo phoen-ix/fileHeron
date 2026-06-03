@@ -228,7 +228,7 @@ async def test_purge_endpoint_takes_no_body(
     """Regression: DELETE /api/admin/files/{id}/quarantine accepts no
     body. Posting one anyway is fine (FastAPI ignores it); the key is
     that omitting it doesn't 422."""
-    admin = make_user(
+    make_user(
         email="admin@test.local", role=UserRole.admin, password="Pass12345678!"
     )
     sender = make_user(email="up@test.local", role=UserRole.employee)
@@ -251,7 +251,7 @@ async def test_purge_endpoint_takes_no_body(
 async def test_download_returns_bytes_for_infected_file_only(
     make_user, db, client, login_as, tmp_path, monkeypatch
 ):
-    admin = make_user(email="admin@test.local", role=UserRole.admin, password="Pass12345678!")
+    make_user(email="admin@test.local", role=UserRole.admin, password="Pass12345678!")
     sender = make_user(email="up@test.local", role=UserRole.employee)
     share, file = _seed_share_with_quarantined_file(
         db, sender, tmp_path, monkeypatch=monkeypatch

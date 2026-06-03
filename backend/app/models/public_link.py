@@ -90,5 +90,5 @@ class PublicLink(Base):
         DateTime(), nullable=False, default=_utcnow
     )
 
-    share: Mapped["Share"] = relationship("Share")
-    created_by: Mapped["User"] = relationship("User", foreign_keys=[created_by_id])
+    share: Mapped[Share] = relationship("Share")
+    created_by: Mapped[User] = relationship("User", foreign_keys=[created_by_id])

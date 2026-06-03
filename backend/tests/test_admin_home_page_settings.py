@@ -52,10 +52,10 @@ async def test_me_response_reflects_admin_toggle(
 ):
     """Disabling the home page in admin settings makes
     `MeResponse.home_page_enabled` flip for every user immediately."""
-    admin = make_user(
+    make_user(
         email="a@test.local", role=UserRole.admin, password="Pass12345678!"
     )
-    other = make_user(
+    make_user(
         email="o@test.local", role=UserRole.client, password="Pass12345678!"
     )
     admin_token, _ = await login_as("a@test.local", "Pass12345678!")

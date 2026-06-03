@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import pytest
 
-
 _REQUIRED = {
     "X-Content-Type-Options",
     "X-Frame-Options",

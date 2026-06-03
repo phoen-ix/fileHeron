@@ -142,7 +142,7 @@ def av_reload(
     """
     try:
         result = av_scan_svc.reload_signatures()
-    except av_scan_svc.AVUnavailable as e:
+    except av_scan_svc.AVUnavailableError as e:
         record_audit_event(
             db,
             event_type=AuditEventType.av_reload_triggered,

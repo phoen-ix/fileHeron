@@ -19,7 +19,8 @@ import uuid
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
-from sqlalchemy import BigInteger, DateTime, Enum as SAEnum, ForeignKey, Integer, String
+from sqlalchemy import BigInteger, DateTime, ForeignKey, Integer, String
+from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ..database import Base
@@ -75,5 +76,5 @@ class File(Base):
     # Set during the upload, cleared after post-finish move.
     tus_upload_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
 
-    share: Mapped["Share"] = relationship("Share", back_populates="files")
-    uploaded_by: Mapped["User"] = relationship("User", foreign_keys=[uploaded_by_id])
+    share: Mapped[Share] = relationship("Share", back_populates="files")
+    uploaded_by: Mapped[User] = relationship("User", foreign_keys=[uploaded_by_id])

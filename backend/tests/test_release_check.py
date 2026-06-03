@@ -3,8 +3,6 @@ the admin /system/status endpoint reads it, and update_available flips
 when the cached `latest_version` differs from the running VERSION."""
 from __future__ import annotations
 
-from typing import Any
-
 import httpx
 import pytest
 
@@ -433,9 +431,9 @@ async def test_no_notification_when_target_equals_running(db, make_user, monkeyp
     """If the upstream `latest` matches the running VERSION, skip the
     notification fan-out — you don't notify admins about their own
     deployed version."""
+    from app import version as version_mod
     from app.models.notification import Notification, NotificationCategory
     from app.models.user import UserRole
-    from app import version as version_mod
 
     make_user(email="adm@test.local", role=UserRole.admin)
 

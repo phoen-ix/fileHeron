@@ -58,7 +58,7 @@ def _sign(payload: bytes) -> str:
 def issue(file_id: str, user_id: int, ttl_sec: int = DEFAULT_TTL_SEC) -> str:
     """Mint a signed download token for (file_id, user_id) with ttl."""
     exp = _now() + ttl_sec
-    payload = f"{file_id}|{user_id}|{exp}".encode("utf-8")
+    payload = f"{file_id}|{user_id}|{exp}".encode()
     sig = _sign(payload)
     return f"{user_id}.{exp}.{sig}"
 
@@ -72,12 +72,14 @@ def verify(file_id: str, token: str) -> int:
         user_id = int(user_str)
         exp = int(exp_str)
     except (ValueError, AttributeError):
-        raise AppError(401, "INVALID_DOWNLOAD_TOKEN", "Bad download token.")
+        raise AppError(
+            401, "INVALID_DOWNLOAD_TOKEN", "Bad download token."
+        ) from None
 
     if exp < _now():
         raise AppError(401, "DOWNLOAD_TOKEN_EXPIRED", "Download token expired.")
 
-    expected = _sign(f"{file_id}|{user_id}|{exp}".encode("utf-8"))
+    expected = _sign(f"{file_id}|{user_id}|{exp}".encode())
     # Constant-time compare to defeat timing oracles.
     if not hmac.compare_digest(expected, sig):
         raise AppError(401, "INVALID_DOWNLOAD_TOKEN", "Bad download token.")

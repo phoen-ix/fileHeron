@@ -35,7 +35,7 @@ class ScanResult:
     raw: str  # full clamd reply line for the audit log
 
 
-class AVUnavailable(Exception):
+class AVUnavailableError(Exception):
     """Raised when clamd is unreachable. Caller decides whether to retry
     (worker does) or to fall through to a permissive default."""
 
@@ -47,7 +47,9 @@ def _open_clamd_socket() -> socket.socket:
         s.connect((settings.CLAMAV_HOST, settings.CLAMAV_PORT))
     except OSError as e:
         s.close()
-        raise AVUnavailable(f"cannot connect to {settings.CLAMAV_HOST}:{settings.CLAMAV_PORT}: {e}")
+        raise AVUnavailableError(
+            f"cannot connect to {settings.CLAMAV_HOST}:{settings.CLAMAV_PORT}: {e}"
+        ) from e
     return s
 
 
@@ -89,7 +91,7 @@ def scan_path(abs_path: str) -> ScanResult:
     """Ask clamd to scan a file at the given absolute path. The path must
     be visible inside the clamav container at the same absolute path.
 
-    Raises AVUnavailable if clamd is unreachable. All other failures (e.g.
+    Raises AVUnavailableError if clamd is unreachable. All other failures (e.g.
     file unreadable to clamd) come back as ScanResult(state='error')."""
     if not Path(abs_path).is_file():
         return ScanResult(state="error", signature=None, raw=f"file not found: {abs_path}")
@@ -111,7 +113,7 @@ def ping() -> bool:
     """Healthcheck — returns True if clamd answers PONG."""
     try:
         s = _open_clamd_socket()
-    except AVUnavailable:
+    except AVUnavailableError:
         return False
     try:
         s.sendall(b"zPING\0")
@@ -150,7 +152,7 @@ def get_version() -> dict:
         }
     try:
         s = _open_clamd_socket()
-    except AVUnavailable as e:
+    except AVUnavailableError as e:
         return {
             "available": False,
             "av_skip": False,
@@ -187,7 +189,7 @@ def reload_signatures() -> dict:
     running engine without a container restart.
 
     Returns ``{"ok": bool, "av_skip": bool, "raw": str}``. Short-circuits
-    on ``AV_SKIP``. Raises AVUnavailable if clamd is unreachable — the
+    on ``AV_SKIP``. Raises AVUnavailableError if clamd is unreachable — the
     router converts that into a 503 ``AV_UNAVAILABLE`` response."""
     if settings.AV_SKIP:
         return {"ok": False, "av_skip": True, "raw": "AV_SKIP set"}

@@ -64,4 +64,4 @@ class UserWebAuthnCredential(Base):
         DateTime(), nullable=True
     )
 
-    user: Mapped["User"] = relationship("User", foreign_keys=[user_id])
+    user: Mapped[User] = relationship("User", foreign_keys=[user_id])

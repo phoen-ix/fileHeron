@@ -30,10 +30,10 @@ from ..config import settings
 from ..dependencies import get_db
 from ..middleware.errors import AppError
 from ..services import auth as auth_svc
-from ..services import jwt_session
+from ..services import jwt_session, settings_registry
 from ..services import oidc as oidc_svc
+from ..services import oidc_admin as oidc_admin_svc
 from ..services import rate_limit as rate_limit_svc
-from ..services import settings_registry
 
 logger = logging.getLogger("fileheron.routers.oidc")
 

@@ -6,7 +6,7 @@ import io
 
 import pytest
 
-from app.models.audit_log import AuditEventType, AuditLog
+from app.models.audit_log import AuditLog
 from app.models.user import UserRole
 
 
@@ -62,7 +62,7 @@ async def test_audit_csv_export_contains_filtered_rows(make_user, db, client, lo
 
 @pytest.mark.asyncio
 async def test_audit_endpoint_admin_only(make_user, client, login_as):
-    user = make_user(email="u@test.local", role=UserRole.client, password="Pass12345678!")
+    make_user(email="u@test.local", role=UserRole.client, password="Pass12345678!")
     token, _ = await login_as("u@test.local", "Pass12345678!")
     resp = await client.get(
         "/api/admin/audit-log", headers={"Authorization": f"Bearer {token}"}

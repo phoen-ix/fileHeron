@@ -85,7 +85,7 @@ async def test_admin_can_delete_infected_file(
 ):
     sender = make_user(email="up@test.local", role=UserRole.employee)
     recipient = make_user(email="r@test.local", role=UserRole.client)
-    admin = make_user(
+    make_user(
         email="admin@test.local", role=UserRole.admin, password="Pass12345678!"
     )
     share, file = _seed_infected_file(db, sender, recipient, tmp_path)
@@ -111,7 +111,7 @@ async def test_admin_delete_infected_does_not_release_quota_again(
 
     sender = make_user(email="up@test.local", role=UserRole.employee)
     recipient = make_user(email="r@test.local", role=UserRole.client)
-    admin = make_user(
+    make_user(
         email="admin@test.local", role=UserRole.admin, password="Pass12345678!"
     )
     share, file = _seed_infected_file(db, sender, recipient, tmp_path)

@@ -11,9 +11,6 @@ Tests cover:
 from __future__ import annotations
 
 import json
-import os
-import tempfile
-from pathlib import Path
 
 import pytest
 
@@ -125,7 +122,7 @@ def test_get_job_unknown_raises_404():
 
 @pytest.mark.asyncio
 async def test_update_endpoint_requires_password(client, db, make_user, login_as):
-    admin = make_user(email="adm@test.local", role=UserRole.admin)
+    make_user(email="adm@test.local", role=UserRole.admin)
     token, cookies = await login_as("adm@test.local", "TestPassword123!")
     headers = {"Authorization": f"Bearer {token}"}
 

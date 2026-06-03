@@ -125,7 +125,7 @@ async def test_route_returns_403_when_policy_blocks(
         email="hr@test.local", role=UserRole.admin, password="Pass12345678!"
     )
     rec = make_user(email="r@test.local", role=UserRole.client)
-    share = share_svc.create_share(
+    share_svc.create_share(
         db,
         created_by=sender,
         kind=ShareKind.outbound,
@@ -204,7 +204,7 @@ async def test_admin_only_endpoints_refuse_non_admins(
 
 @pytest.mark.asyncio
 async def test_policy_get_put_round_trip(make_user, db, client, login_as):
-    admin = make_user(
+    make_user(
         email="a@test.local", role=UserRole.admin, password="Pass12345678!"
     )
     bob = make_user(email="b@test.local", role=UserRole.client)

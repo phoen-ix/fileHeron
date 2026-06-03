@@ -9,7 +9,6 @@ manual revoke or AV-triggered revoke.
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 
 import pytest
 

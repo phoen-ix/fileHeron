@@ -16,7 +16,6 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timedelta, timezone
 
-from ..config import settings
 from ..database import SessionLocal
 from ..models.notification import NotificationCategory
 from ..models.share import Share, ShareState

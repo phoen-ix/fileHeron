@@ -127,6 +127,7 @@ async def test_delete_group_blocks_when_active_share_targets_it(
     make_user, db
 ):
     from datetime import datetime, timedelta, timezone
+
     from app.models.share import ShareKind
     from app.services import share as share_svc
 

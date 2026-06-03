@@ -27,7 +27,7 @@ async def test_client_cannot_send_outbound(make_user, db, client, login_as):
     """Clients are senders of inbound shares only — outbound is for
     employees/admins. The kind-vs-role gate at the top of
     `_validate_outbound_targets` rejects clients with FORBIDDEN_KIND."""
-    sender = make_user(
+    make_user(
         email="bob@test.local", role=UserRole.client, password="Pass12345678!"
     )
     recipient = make_user(email="alice@test.local", role=UserRole.employee)
@@ -87,7 +87,7 @@ async def test_client_cannot_target_another_client_no_connection(
     No connection exists (and never could — the classifier refuses to
     create client↔client rows). The role check fires first and returns
     FORBIDDEN_RECIPIENT."""
-    sender = make_user(
+    make_user(
         email="bob@test.local", role=UserRole.client, password="Pass12345678!"
     )
     other_client = make_user(email="charlie@test.local", role=UserRole.client)
@@ -165,7 +165,7 @@ async def test_client_cannot_target_unconnected_employee(
     """Regression-protection that the role check didn't shadow the
     pre-existing connection check. A client targeting an employee they're
     not connected to should still produce RECIPIENT_NOT_CONNECTED."""
-    sender = make_user(
+    make_user(
         email="bob@test.local", role=UserRole.client, password="Pass12345678!"
     )
     stranger = make_user(email="alice@test.local", role=UserRole.employee)
@@ -194,7 +194,7 @@ async def test_client_cannot_target_non_inbox_group(
     A regular team group should be rejected even if the client somehow
     obtained the id."""
     admin = make_user(email="admin@test.local", role=UserRole.admin)
-    sender = make_user(
+    make_user(
         email="bob@test.local", role=UserRole.client, password="Pass12345678!"
     )
     g = group_svc.create_group(
@@ -230,7 +230,7 @@ async def test_client_can_still_share_with_company_inbox_group(
     client→company-inbox flow. Client targets an `is_company_inbox=True`
     group → 201 Created."""
     admin = make_user(email="admin@test.local", role=UserRole.admin)
-    sender = make_user(
+    make_user(
         email="bob@test.local", role=UserRole.client, password="Pass12345678!"
     )
     inbox = group_svc.create_group(

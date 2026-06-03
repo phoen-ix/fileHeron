@@ -17,7 +17,6 @@ from pathlib import Path
 
 import pytest
 
-
 _SKIP = pytest.mark.skipif(
     os.environ.get("RUN_ALEMBIC_ROUNDTRIP") != "1",
     reason="alembic roundtrip is slow; set RUN_ALEMBIC_ROUNDTRIP=1 to enable",

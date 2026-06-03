@@ -9,11 +9,10 @@ from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from ...dependencies import get_current_admin, get_db
+from ...middleware.errors import AppError
 from ...models.audit_log import AuditEventType
 from ...models.oidc_provider import OIDCProvider
-from ...middleware.errors import AppError
 from ...models.user import User
-from ...utils.net import assert_public_http_url
 from ...schemas.settings import (
     CreateOIDCProviderRequest,
     OIDCProviderItem,
@@ -29,6 +28,7 @@ from ...services import oidc as oidc_svc
 from ...services import oidc_admin as oidc_admin_svc
 from ...services.audit import record_audit_event
 from ...utils.crypto import encrypt_setting
+from ...utils.net import assert_public_http_url
 
 router = APIRouter()
 

@@ -30,4 +30,4 @@ class UserRecoveryCode(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(), nullable=False, default=_utcnow)
     used_at: Mapped[datetime | None] = mapped_column(DateTime(), nullable=True)
 
-    user: Mapped["User"] = relationship("User", back_populates="recovery_codes")
+    user: Mapped[User] = relationship("User", back_populates="recovery_codes")

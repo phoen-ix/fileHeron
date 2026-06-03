@@ -15,7 +15,8 @@ import enum
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, Enum as SAEnum, ForeignKey, Integer
+from sqlalchemy import DateTime, ForeignKey, Integer
+from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ..database import Base
@@ -50,5 +51,5 @@ class ClientEmployeeConnection(Base):
         DateTime(), nullable=False, default=_utcnow
     )
 
-    client: Mapped["User"] = relationship("User", foreign_keys=[client_user_id])
-    employee: Mapped["User"] = relationship("User", foreign_keys=[employee_user_id])
+    client: Mapped[User] = relationship("User", foreign_keys=[client_user_id])
+    employee: Mapped[User] = relationship("User", foreign_keys=[employee_user_id])

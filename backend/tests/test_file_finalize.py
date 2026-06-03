@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from app.models.file import File, FileState
+from app.models.file import FileState
 from app.models.share import Share, ShareKind, ShareState
 from app.models.user import UserRole
 from app.services import file as file_svc

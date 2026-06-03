@@ -1,19 +1,17 @@
-# Desktop client 0.9.15
+# Desktop client 0.9.16
 
-After a download finishes, open the file or its folder.
+Matches the new client→company share model (server v1.6.0).
 
-## Open / Folder
+## Clients submit to the company
 
-Once a file finishes downloading, its **Download** button is replaced by two
-actions:
+If you sign in as a **client**, the New-share screen no longer asks you to pick
+recipients — your upload goes to the **whole company** (everyone on the team).
+You just add files, optionally a subject/message/expiry, and send.
 
-- **Open** — opens the file in its default application.
-- **Folder** — reveals the file in the file manager (selected in Explorer on
-  Windows / Finder on macOS).
+If you sign in as **staff** (employee/admin), nothing changes: you still pick
+recipients and groups and send outbound as before.
 
-No more wondering whether the download worked or hunting for where it landed.
-(Need to download it again? Go back and reopen the share — the Download buttons
-come back fresh.)
+> Requires server **v1.6.0+**.
 
 ---
 

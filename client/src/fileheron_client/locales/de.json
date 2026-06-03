@@ -214,6 +214,7 @@
     "subject_placeholder": "(optional — entspricht dem ersten Dateinamen)",
     "message_label": "Nachricht",
     "recipients_label": "Empfänger",
+    "to_company": "Geht an das Unternehmen — das gesamte Team kann es sehen. Du wählst keine Empfänger.",
     "expires_label": "Läuft ab",
     "never_label": "Läuft nie ab (manuell beenden)",
     "download_limit_label": "Download-Limit",

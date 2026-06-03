@@ -103,7 +103,7 @@ class MainWindow:
         self.outbox.pack(fill="both", expand=True)
 
         self.upload = UploadPanel(
-            upload_tab, self._app_root, self._api,
+            upload_tab, self._app_root, self._api, self._me,
             flash=self.flash, on_view_outbox=self._go_to_outbox,
         )
         self.upload.pack(fill="both", expand=True)

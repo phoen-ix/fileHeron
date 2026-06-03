@@ -214,6 +214,7 @@
     "subject_placeholder": "(optional — defaults to first filename)",
     "message_label": "Message",
     "recipients_label": "Recipients",
+    "to_company": "Goes to the company — everyone on the team can see it. You don't pick recipients.",
     "expires_label": "Expires",
     "never_label": "Never expires (end manually)",
     "download_limit_label": "Download limit",

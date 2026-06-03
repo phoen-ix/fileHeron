@@ -16,7 +16,7 @@ from tkinterdnd2 import DND_FILES
 from .. import api as api_pkg
 from ..api import ApiClient
 from ..i18n import get_locale, t
-from ..models import ShareResponse
+from ..models import MeResponse, ShareResponse
 from .recipient_picker import RecipientPickerWidget
 from .upload_progress_view import UploadProgressView
 from .widgets import alive, human_size
@@ -26,7 +26,7 @@ logger = logging.getLogger("fileheron_client.ui.upload")
 
 class UploadPanel(ctk.CTkFrame):
     def __init__(
-        self, master, root: ctk.CTk, api: ApiClient,
+        self, master, root: ctk.CTk, api: ApiClient, me: MeResponse,
         *,
         flash: Optional[Callable[[str], None]] = None,
         on_view_outbox: Optional[Callable[[], None]] = None,
@@ -34,6 +34,9 @@ class UploadPanel(ctk.CTkFrame):
         super().__init__(master)
         self._app_root = root
         self._api = api
+        # Clients submit to the whole company — no recipient picker, kind=inbound.
+        # Staff pick recipients and send outbound. Mirrors the web SPA.
+        self._is_client = me.role == "client"
         self._flash = flash
         self._on_view_outbox = on_view_outbox
         self._files: list[Path] = []
@@ -107,12 +110,22 @@ class UploadPanel(ctk.CTkFrame):
         left_col = ctk.CTkFrame(two_col, fg_color="transparent")
         left_col.grid(row=0, column=0, sticky="nsew", padx=(0, 8))
         ctk.CTkLabel(left_col, text=t("upload.recipients_label"), anchor="w").pack(fill="x")
-        # v0.5.1: bordered group around the recipients widget so the
-        # section reads as one block (matches Expires + Public link).
-        rec_box = ctk.CTkFrame(left_col, border_width=1, fg_color="transparent")
-        rec_box.pack(fill="x")
-        self.recipients = RecipientPickerWidget(rec_box, self._app_root, self._api)
-        self.recipients.pack(fill="x", padx=6, pady=6)
+        self.recipients: Optional[RecipientPickerWidget] = None
+        if self._is_client:
+            # Client → the company: no recipient selection.
+            box = ctk.CTkFrame(left_col, border_width=1, fg_color="transparent")
+            box.pack(fill="x")
+            ctk.CTkLabel(
+                box, text=t("upload.to_company"), anchor="w",
+                text_color="gray", wraplength=320, justify="left",
+            ).pack(fill="x", padx=6, pady=6)
+        else:
+            # v0.5.1: bordered group around the recipients widget so the
+            # section reads as one block (matches Expires + Public link).
+            rec_box = ctk.CTkFrame(left_col, border_width=1, fg_color="transparent")
+            rec_box.pack(fill="x")
+            self.recipients = RecipientPickerWidget(rec_box, self._app_root, self._api)
+            self.recipients.pack(fill="x", padx=6, pady=6)
 
         right_col = ctk.CTkFrame(two_col, fg_color="transparent")
         right_col.grid(row=0, column=1, sticky="nsew", padx=(8, 0))
@@ -369,7 +382,13 @@ class UploadPanel(ctk.CTkFrame):
             self._toast(t("upload.err_no_files_body"), kind="error")
             return
         public_link = self._collect_public_link()
-        if not self.recipients.has_any() and public_link is None:
+        # Staff must address the share (recipients or a public link). Clients
+        # always submit to the company, so they only need files.
+        if (
+            not self._is_client
+            and not self.recipients.has_any()
+            and public_link is None
+        ):
             self._toast(t("upload.err_no_recipients_body"), kind="error")
             return
         expires_at, never = self._collect_expiry()
@@ -382,12 +401,16 @@ class UploadPanel(ctk.CTkFrame):
         self.send_btn.configure(state="disabled", text=t("upload.creating"))
         self.status_var.set(t("upload.creating_status"))
 
+        kind = "inbound" if self._is_client else "outbound"
+        rec_user_ids = [] if self._is_client else self.recipients.user_ids()
+        rec_group_ids = [] if self._is_client else self.recipients.group_ids()
+
         def _create():
             return api_pkg.create_share(
                 self._api,
-                kind="outbound",
-                recipient_user_ids=self.recipients.user_ids(),
-                recipient_group_ids=self.recipients.group_ids(),
+                kind=kind,
+                recipient_user_ids=rec_user_ids,
+                recipient_group_ids=rec_group_ids,
                 subject=self.subject_var.get().strip() or None,
                 message=self.message_text.get("1.0", "end").strip() or None,
                 expires_at=expires_at if not never else None,
@@ -442,7 +465,8 @@ class UploadPanel(ctk.CTkFrame):
     def _reset_form_fields(self) -> None:
         self.subject_var.set("")
         self.message_text.delete("1.0", "end")
-        self.recipients.reset()
+        if self.recipients is not None:
+            self.recipients.reset()
         self._files.clear()
         self._render_file_list()
         self._pl_enabled.set(False)

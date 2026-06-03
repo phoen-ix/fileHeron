@@ -94,6 +94,69 @@ async def test_mark_all_read(make_user, db, client, login_as):
 
 
 @pytest.mark.asyncio
+async def test_preferences_hide_admin_only_categories_from_non_admin(
+    make_user, client, login_as
+):
+    make_user(email="u@test.local", role=UserRole.client, password="Pass12345678!")
+    token, _ = await login_as("u@test.local", "Pass12345678!")
+    resp = await client.get(
+        "/api/notifications/preferences",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200, resp.text
+    cats = {it["category"] for it in resp.json()["items"]}
+    assert "release_available" not in cats
+    assert "ops_alert" not in cats
+    assert "share_created" in cats  # normal categories still present
+
+
+@pytest.mark.asyncio
+async def test_preferences_include_admin_only_categories_for_admin(
+    make_user, client, login_as
+):
+    make_user(email="a@test.local", role=UserRole.admin, password="Pass12345678!")
+    token, _ = await login_as("a@test.local", "Pass12345678!")
+    resp = await client.get(
+        "/api/notifications/preferences",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200, resp.text
+    cats = {it["category"] for it in resp.json()["items"]}
+    assert {"release_available", "ops_alert"} <= cats
+
+
+@pytest.mark.asyncio
+async def test_non_admin_cannot_set_admin_only_preference(
+    make_user, client, login_as
+):
+    make_user(email="u@test.local", role=UserRole.client, password="Pass12345678!")
+    token, _ = await login_as("u@test.local", "Pass12345678!")
+    resp = await client.put(
+        "/api/notifications/preferences",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"preferences": {"release_available": "off"}},
+    )
+    assert resp.status_code == 400, resp.text
+    assert resp.json()["code"] == "INVALID_CATEGORY"
+
+
+@pytest.mark.asyncio
+async def test_admin_can_set_admin_only_preference(make_user, client, login_as):
+    make_user(email="a@test.local", role=UserRole.admin, password="Pass12345678!")
+    token, _ = await login_as("a@test.local", "Pass12345678!")
+    resp = await client.put(
+        "/api/notifications/preferences",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"preferences": {"release_available": "in_app"}},
+    )
+    assert resp.status_code == 200, resp.text
+    chan = {
+        it["category"]: it["channel"] for it in resp.json()["items"]
+    }["release_available"]
+    assert chan == "in_app"
+
+
+@pytest.mark.asyncio
 async def test_mark_others_notification_returns_404(make_user, db, client, login_as):
     make_user(email="me@test.local", role=UserRole.client, password="Pass12345678!")
     other = make_user(email="other@test.local", role=UserRole.client)

@@ -69,6 +69,13 @@ class NotificationCategory(str, enum.Enum):
     release_available = "release_available"
 
 
+# Categories only ever dispatched to admins (the dispatch sites filter on
+# role). Non-admins must not see preference toggles for them — they'd be inert.
+ADMIN_ONLY_CATEGORIES = frozenset(
+    {NotificationCategory.ops_alert, NotificationCategory.release_available}
+)
+
+
 def _utcnow() -> datetime:
     return datetime.now(tz=timezone.utc).replace(tzinfo=None)
 

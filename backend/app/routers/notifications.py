@@ -19,8 +19,12 @@ from sqlalchemy.orm import Session
 from ..config import settings
 from ..dependencies import get_current_user, get_db
 from ..middleware.errors import AppError
-from ..models.notification import Notification, NotificationCategory
-from ..models.user import User
+from ..models.notification import (
+    ADMIN_ONLY_CATEGORIES,
+    Notification,
+    NotificationCategory,
+)
+from ..models.user import User, UserRole
 from ..models.user_notification_preference import (
     NotificationChannel,
     UserNotificationPreference,
@@ -80,6 +84,7 @@ def get_preferences(
         .all()
     )
     by_cat = {r.category: r.channel for r in rows}
+    is_admin = user.role == UserRole.admin
     items = [
         PreferenceItem(
             category=cat,
@@ -88,6 +93,7 @@ def get_preferences(
             ),
         )
         for cat in NotificationCategory
+        if is_admin or cat not in ADMIN_ONLY_CATEGORIES
     ]
     return PreferencesResponse(items=items)
 
@@ -98,7 +104,12 @@ def update_preferences(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> PreferencesResponse:
-    valid_cats = {c.value for c in NotificationCategory}
+    is_admin = user.role == UserRole.admin
+    valid_cats = {
+        c.value
+        for c in NotificationCategory
+        if is_admin or c not in ADMIN_ONLY_CATEGORIES
+    }
     valid_chans = {c.value for c in NotificationChannel}
     for cat_key, chan_val in payload.preferences.items():
         if cat_key not in valid_cats:

@@ -31,6 +31,10 @@ from .audit import record_audit_event
 TOKEN_PREFIX_BYTES = 4  # 8 hex chars
 TOKEN_SECRET_BYTES = 32  # 43 b64url chars (no padding)
 
+# Granularity for the `last_used_at` write — one update per minute is plenty for
+# a human-facing "last used" while avoiding an UPDATE on every single request.
+LAST_USED_THROTTLE_SEC = 60
+
 
 def _utcnow() -> datetime:
     return datetime.now(tz=timezone.utc).replace(tzinfo=None)
@@ -102,9 +106,27 @@ def verify_token(db: Session, *, token_str: str) -> ApiToken:
     if not constant_time_equals(record.secret_hash, sha256_hex(secret)):
         raise AppError(401, "INVALID_API_TOKEN", "Invalid API token.")
 
-    record.last_used_at = _utcnow()
-    db.flush()
+    _record_last_used(db, record)
     return record
+
+
+def _record_last_used(db: Session, record: ApiToken) -> None:
+    """Persist token usage. Most API-token requests are GETs, and ``get_db``
+    never commits (it rolls back on close) — so a bare ``flush()`` here was
+    discarded when the request ended, and ``last_used_at`` only ever advanced
+    on write endpoints that happened to commit. Commit it instead: this runs in
+    the auth dependency, before the endpoint body, so only this update is
+    pending. Throttled to one write per minute to avoid an UPDATE on every
+    request; best-effort so a write failure never blocks authentication."""
+    now = _utcnow()
+    last = record.last_used_at
+    if last is not None and (now - last).total_seconds() < LAST_USED_THROTTLE_SEC:
+        return
+    record.last_used_at = now
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
 
 
 def list_tokens(db: Session, *, owner: User) -> list[ApiToken]:

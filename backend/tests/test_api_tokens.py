@@ -79,6 +79,30 @@ async def test_list_tokens_excludes_revoked(make_user, db):
 
 
 @pytest.mark.asyncio
+async def test_last_used_persists_on_get_request(make_user, db, client):
+    """Regression: a read-only GET with an API token must COMMIT last_used_at.
+
+    get_db never commits (rolls back on close), so the old bare flush() in
+    verify_token was discarded on GETs — last_used_at only advanced on write
+    endpoints. Here we read the row back after the request (under StaticPool a
+    rolled-back flush would have reverted it) and assert it persisted.
+    """
+    user = make_user(email="u@test.local")
+    record, plaintext = api_token_svc.create_token(db, owner=user, name="t")
+    db.commit()
+    assert record.last_used_at is None
+
+    resp = await client.get(
+        "/api/account/me", headers={"Authorization": f"Bearer {plaintext}"}
+    )
+    assert resp.status_code == 200, resp.text
+
+    db.expire_all()
+    row = db.query(ApiToken).filter(ApiToken.id == record.id).one()
+    assert row.last_used_at is not None  # committed, not rolled back on close
+
+
+@pytest.mark.asyncio
 async def test_create_via_api(make_user, client, db):
     make_user(email="alice@test.local", password="LongCorrectHorse123!")
     login = await client.post(

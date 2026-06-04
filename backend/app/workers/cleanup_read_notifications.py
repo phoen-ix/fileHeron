@@ -1,17 +1,14 @@
-"""Daily cron: prune READ in-app notifications past their retention window.
+"""Daily cron: age-out old in-app notifications past their retention window.
 
-The notification bell shows only UNREAD items, so a read notification is
-already invisible to the user — but the row lingers in `notifications` and
-would otherwise accumulate forever. This cron hard-deletes notifications
-whose ``read_at`` is older than ``NOTIFICATION_READ_RETENTION_DAYS``.
+The bell is a delete-to-dismiss inbox (the read/unread concept was retired in
+v1.6.1), so pruning is by creation time, not read state: this cron hard-deletes
+any notification whose ``created_at`` is older than
+``NOTIFICATION_READ_RETENTION_DAYS`` so the `notifications` table can't grow
+unbounded for users who never clear the bell.
 
-Deliberately NOT instant on mark-read: the row survives for the retention
-window (default 30d) so support/debugging can still see recent history.
-Set ``NOTIFICATION_READ_RETENTION_DAYS=0`` to disable.
-
-Only READ notifications are pruned; unread ones are left alone regardless
-of age (the user hasn't seen them yet). Idempotent — re-running matches no
-new rows once a batch is gone.
+The cron identifier + registry key keep their historical names for
+cron-history continuity. Set ``NOTIFICATION_READ_RETENTION_DAYS=0`` to disable.
+Idempotent — re-running matches no new rows once a batch is gone.
 """
 from __future__ import annotations
 

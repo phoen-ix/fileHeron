@@ -45,7 +45,7 @@ def _to_user_item(db: Session, u: User) -> AdminUserItem:
         is_disabled=u.is_disabled,
         requires_2fa=twofa_policy_svc.is_2fa_required(db, u),
         quota_bytes=u.quota_bytes,
-        storage_used_bytes=quota_svc.used_bytes(user_id=u.id),
+        storage_used_bytes=quota_svc.storage_used_bytes(db, user_id=u.id),
         created_at=u.created_at,
         last_login_at=u.last_login_at,
         has_2fa=_has_2fa(db, u.id),
@@ -67,7 +67,7 @@ def _hydrate_user_items(db: Session, rows: list[User]) -> list[AdminUserItem]:
         for t in db.query(UserTOTP).filter(UserTOTP.user_id.in_(ids)).all()
     }
     requires_2fa = twofa_policy_svc.is_2fa_required_bulk(db, rows)
-    used = quota_svc.used_bytes_bulk(ids)
+    used = quota_svc.storage_used_bytes_bulk(db, ids)
     return [
         AdminUserItem(
             id=u.id,

@@ -60,13 +60,18 @@ async def quota_reconcile(_ctx) -> dict:
             except Exception:
                 continue
             redis_val = int(redis_val_raw) if redis_val_raw else 0
-            if abs(db_sum - redis_val) > _DRIFT_THRESHOLD:
+            # Fix on meaningful drift, OR whenever the counter went negative
+            # (release-without-reserve), regardless of magnitude.
+            if abs(db_sum - redis_val) > _DRIFT_THRESHOLD or redis_val < 0:
                 logger.warning(
                     "quota_reconcile: user=%d drift=%d (db=%d redis=%d) → DB wins",
                     user_id, abs(db_sum - redis_val), db_sum, redis_val,
                 )
                 try:
-                    redis.set(_key(user_id), db_sum, ex=86400)
+                    # No TTL — the counter must not silently lapse to 0 between
+                    # reconcile runs (Redis is persistent; this cron is the
+                    # authority).
+                    redis.set(_key(user_id), db_sum)
                     fixed += 1
                 except Exception as e:
                     logger.error(

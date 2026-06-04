@@ -23,10 +23,9 @@ class AdminUserItem(APIBaseModel):
     # role changes.
     requires_2fa: bool
     quota_bytes: int | None
-    # Live Redis quota counter (kept honest by the hourly
-    # workers/quota_reconcile.py cron). Useful for spotting "who's
-    # eating disk" on the /admin/users list without drilling into
-    # the file-history view.
+    # Authoritative storage used, summed from the DB (uploading +
+    # ready_unscanned + clean files). Display-only — distinct from the fast
+    # Redis quota counter used for upload enforcement, which can lapse/drift.
     storage_used_bytes: int
     created_at: datetime
     last_login_at: datetime | None

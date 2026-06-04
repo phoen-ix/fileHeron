@@ -64,7 +64,10 @@ def _initialize_from_db(db: Session, user_id: int) -> int:
     )
     used = int(sum_q)
     try:
-        get_redis().set(_key(user_id), used, nx=True, ex=86400)
+        # No TTL: Redis is persistent (AOF) and the hourly quota_reconcile cron
+        # keeps the counter honest. An expiring counter silently lapsed to 0,
+        # which both mis-displayed usage and loosened enforcement.
+        get_redis().set(_key(user_id), used, nx=True)
     except Exception:
         # Redis unreachable — quota check will fail-open below.
         logger.warning("redis unreachable during quota init for user %d", user_id)
@@ -115,27 +118,56 @@ def release_bytes(*, user_id: int, bytes_to_free: int) -> None:
     if bytes_to_free <= 0:
         return
     try:
-        get_redis().decrby(_key(user_id), bytes_to_free)
+        remaining = get_redis().decrby(_key(user_id), bytes_to_free)
+        # A release for bytes that were never reserved (counter uninitialized at
+        # reserve time) must not drive the counter negative — floor at 0.
+        if remaining < 0:
+            get_redis().set(_key(user_id), 0)
     except Exception:
         logger.warning("quota release failed (redis): user=%d bytes=%d", user_id, bytes_to_free)
 
 
 def used_bytes(*, user_id: int) -> int:
-    """Read-only — returns the current Redis counter or 0 if uninitialized."""
+    """Read-only — the current Redis counter (the fast quota-enforcement
+    source). Floored at 0 so a drifted negative counter can never *loosen*
+    enforcement. For an accurate storage figure to display, use
+    `storage_used_bytes` (DB-authoritative) instead."""
     try:
         v = get_redis().get(_key(user_id))
-        return int(v) if v else 0
+        return max(0, int(v)) if v else 0
     except Exception:
         return 0
 
 
-def used_bytes_bulk(user_ids: list[int]) -> dict[int, int]:
-    """Read-only batch variant — one Redis MGET for a whole page of users.
-    Missing/uninitialized counters read as 0. Fail-open to all-zero."""
+def _used_bytes_query(db: Session, user_ids: list[int]):
+    """Authoritative allocated-bytes per user from the DB — same filter as
+    `_initialize_from_db` / `quota_reconcile` (in-flight + finalized, not
+    deleted). Grouped so a whole page is one query."""
+    return (
+        db.query(File.uploaded_by_id, func.coalesce(func.sum(File.size_bytes), 0))
+        .filter(
+            File.uploaded_by_id.in_(user_ids),
+            File.state.in_(
+                [FileState.uploading, FileState.ready_unscanned, FileState.clean]
+            ),
+        )
+        .group_by(File.uploaded_by_id)
+    )
+
+
+def storage_used_bytes(db: Session, *, user_id: int) -> int:
+    """Authoritative storage used by a user, summed from the DB. Use for
+    display (admin UI) — unlike `used_bytes` it never lapses or drifts."""
+    row = _used_bytes_query(db, [user_id]).one_or_none()
+    return int(row[1]) if row else 0
+
+
+def storage_used_bytes_bulk(db: Session, user_ids: list[int]) -> dict[int, int]:
+    """Bulk DB-authoritative storage — one grouped query for a page of users.
+    Users with no files default to 0."""
     if not user_ids:
         return {}
-    try:
-        vals = get_redis().mget([_key(uid) for uid in user_ids])
-        return {uid: (int(v) if v else 0) for uid, v in zip(user_ids, vals, strict=False)}
-    except Exception:
-        return dict.fromkeys(user_ids, 0)
+    out = dict.fromkeys(user_ids, 0)
+    for uid, total in _used_bytes_query(db, user_ids).all():
+        out[uid] = int(total)
+    return out

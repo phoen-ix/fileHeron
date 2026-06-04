@@ -69,6 +69,48 @@ async def test_admin_list_users_bulk_hydration(make_user, db, client, login_as):
 
 
 @pytest.mark.asyncio
+async def test_admin_users_storage_is_db_authoritative(make_user, db, client, login_as):
+    """The Storage column sums file bytes from the DB (excludes deleted) — it
+    must not depend on the volatile Redis quota counter."""
+    from datetime import datetime, timedelta, timezone
+
+    from app.models.share import Share, ShareKind, ShareState
+
+    make_user(email="admin@test.local", role=UserRole.admin, password="Pass12345678!")
+    target = make_user(email="store@test.local", role=UserRole.client, display_name="Storer")
+    share = Share(
+        created_by_id=target.id, kind=ShareKind.outbound, subject=None, message=None,
+        expires_at=(datetime.now(tz=timezone.utc) + timedelta(hours=1)).replace(tzinfo=None),
+        state=ShareState.active,
+    )
+    db.add(share)
+    db.flush()
+    db.add_all([
+        File(id="st-a", share_id=share.id, uploaded_by_id=target.id, original_filename="a",
+             mime_type="application/octet-stream", size_bytes=2000, storage_path="/a",
+             state=FileState.clean),
+        File(id="st-b", share_id=share.id, uploaded_by_id=target.id, original_filename="b",
+             mime_type="application/octet-stream", size_bytes=9_000_000, storage_path="/b",
+             state=FileState.deleted),  # excluded
+    ])
+    db.commit()
+    token, _ = await login_as("admin@test.local", "Pass12345678!")
+
+    resp = await client.get(
+        "/api/admin/users?page_size=200", headers={"Authorization": f"Bearer {token}"}
+    )
+    assert resp.status_code == 200
+    row = next(u for u in resp.json()["items"] if u["email"] == "store@test.local")
+    assert row["storage_used_bytes"] == 2000
+
+    # Single-user detail uses the same authoritative source.
+    detail = await client.get(
+        f"/api/admin/users/{target.id}", headers={"Authorization": f"Bearer {token}"}
+    )
+    assert detail.json()["storage_used_bytes"] == 2000
+
+
+@pytest.mark.asyncio
 async def test_admin_patch_user_role_audits(make_user, db, client, login_as):
     admin = make_user(email="admin@test.local", role=UserRole.admin, password="Pass12345678!")
     target = make_user(email="t@test.local", role=UserRole.client)

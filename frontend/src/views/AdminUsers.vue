@@ -450,7 +450,7 @@ onMounted(() => {
     <div v-if="loading" class="loading">{{ t('common.loading') }}</div>
     <div v-else-if="errorMsg" class="fh-notice" data-tone="error">{{ errorMsg }}</div>
 
-    <table v-else class="user-table">
+    <table v-else-if="items.length" class="user-table">
       <thead>
         <tr>
           <th class="id-col">{{ t('admin_users.col.id') }}</th>
@@ -497,6 +497,8 @@ onMounted(() => {
         </tr>
       </tbody>
     </table>
+
+    <p v-else class="empty-state fh-field-help">{{ t('admin_users.empty') }}</p>
 
     <div v-if="total > pageSize" class="pager">
       <button type="button" class="fh-btn-text" :disabled="page === 1" @click="page -= 1">

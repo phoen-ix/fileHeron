@@ -197,7 +197,7 @@ async function onCreate() {
 
 async function onRevoke() {
   if (!active.value) return
-  if (!confirm(t('public_link.revoke_confirm'))) return
+  if (!(await ui.confirm({ message: t('public_link.revoke_confirm'), danger: true }))) return
   revoking.value = true
   try {
     await revokePublicLink(props.shareId)

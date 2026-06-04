@@ -58,7 +58,7 @@ async function onConnect(p: PublicProvider) {
 }
 
 async function onDisconnect() {
-  if (!window.confirm(t('account_oidc.disconnect_confirm'))) return
+  if (!(await ui.confirm({ message: t('account_oidc.disconnect_confirm'), danger: true }))) return
   disconnecting.value = true
   errorMsg.value = null
   try {

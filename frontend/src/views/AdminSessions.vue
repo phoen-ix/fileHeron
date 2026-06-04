@@ -66,7 +66,7 @@ watch([sort.sortBy, sort.sortDir, page], load)
 async function onRevoke(s: AdminSessionRow) {
   if (revokingId.value) return
   const who = s.user_display_name || s.user_email || `#${s.user_id}`
-  if (!window.confirm(t('admin_sessions.revoke_confirm', { who }))) return
+  if (!(await ui.confirm({ message: t('admin_sessions.revoke_confirm', { who }), danger: true }))) return
   revokingId.value = s.id
   try {
     await adminRevokeSession(s.id)
@@ -82,7 +82,7 @@ async function onRevoke(s: AdminSessionRow) {
 async function onRevokeAll(s: AdminSessionRow) {
   if (revokingUserId.value) return
   const who = s.user_display_name || s.user_email || `#${s.user_id}`
-  if (!window.confirm(t('admin_sessions.revoke_all_confirm', { who }))) return
+  if (!(await ui.confirm({ message: t('admin_sessions.revoke_all_confirm', { who }), danger: true }))) return
   revokingUserId.value = s.user_id
   try {
     const { data } = await adminRevokeUserSessions(s.user_id)

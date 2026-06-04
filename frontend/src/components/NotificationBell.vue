@@ -37,7 +37,7 @@
           {{ t('notif_bell.delete_all') }}
         </button>
       </div>
-      <ul v-if="store.items.length" class="bell-list">
+      <ul v-if="store.items.length" class="bell-list" role="list">
         <NotificationItem
           v-for="item in store.items"
           :key="item.id"

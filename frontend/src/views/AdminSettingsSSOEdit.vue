@@ -232,7 +232,7 @@ async function onSave() {
 
 async function onDelete() {
   if (!isEdit.value) return
-  if (!window.confirm(t('admin_sso_edit.delete_confirm'))) return
+  if (!(await ui.confirm({ message: t('admin_sso_edit.delete_confirm'), danger: true }))) return
   deleting.value = true
   errorMsg.value = null
   try {

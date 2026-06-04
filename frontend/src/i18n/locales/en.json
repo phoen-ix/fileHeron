@@ -1,7 +1,11 @@
 {
+  "a11y": {
+    "language_switcher": "Language"
+  },
   "common": {
     "continue": "Continue",
     "cancel": "Cancel",
+    "confirm": "Confirm",
     "save": "Save",
     "saved": "Saved.",
     "back": "Back",
@@ -711,6 +715,7 @@
     "prev": "prev",
     "next": "next",
     "page_of": "page {page} of {total}",
+    "empty": "No users match the current filters.",
     "invite_button": "Invite user",
     "invite_heading": "Invite a new user",
     "invite_email_label": "Email",

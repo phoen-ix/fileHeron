@@ -3,7 +3,7 @@ import { useI18n } from 'vue-i18n'
 
 import { setLocale, type SupportedLocale } from '@/i18n'
 
-const { locale } = useI18n()
+const { locale, t } = useI18n()
 
 function pick(l: SupportedLocale) {
   setLocale(l)
@@ -11,11 +11,13 @@ function pick(l: SupportedLocale) {
 </script>
 
 <template>
-  <div class="lang">
+  <div class="lang" role="group" :aria-label="t('a11y.language_switcher')">
     <button
       type="button"
       class="lang-btn"
       :class="{ active: locale === 'en' }"
+      :aria-pressed="locale === 'en'"
+      aria-label="English"
       @click="pick('en')"
     >
       EN
@@ -25,6 +27,8 @@ function pick(l: SupportedLocale) {
       type="button"
       class="lang-btn"
       :class="{ active: locale === 'de' }"
+      :aria-pressed="locale === 'de'"
+      aria-label="Deutsch"
       @click="pick('de')"
     >
       DE

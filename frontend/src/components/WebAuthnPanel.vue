@@ -154,7 +154,7 @@ async function onRegister() {
 }
 
 async function onDelete(id: number) {
-  if (!confirm(t('webauthn.remove_confirm'))) return
+  if (!(await ui.confirm({ message: t('webauthn.remove_confirm'), danger: true }))) return
   busy.value = true
   try {
     await deleteCredential(id)

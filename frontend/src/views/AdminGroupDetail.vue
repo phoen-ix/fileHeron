@@ -107,7 +107,7 @@ async function onAdd(u: UserSearchItem) {
 
 async function onRemove(userId: number) {
   if (!group.value) return
-  if (!confirm(t('admin_group_detail.remove_confirm'))) return
+  if (!(await ui.confirm({ message: t('admin_group_detail.remove_confirm'), danger: true }))) return
   try {
     await removeMember(group.value.id, userId)
     await load()
@@ -118,7 +118,7 @@ async function onRemove(userId: number) {
 
 async function onDeleteGroup() {
   if (!group.value) return
-  if (!confirm(t('admin_group_detail.delete_confirm'))) return
+  if (!(await ui.confirm({ message: t('admin_group_detail.delete_confirm'), danger: true }))) return
   try {
     await deleteGroup(group.value.id)
     ui.pushToast(t('admin_group_detail.deleted_toast'), 'success')

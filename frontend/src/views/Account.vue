@@ -139,7 +139,7 @@ async function revokeSession(id: number) {
 }
 
 async function onRevokeOthers() {
-  if (!window.confirm(t('account.session_revoke_others_confirm'))) return
+  if (!(await ui.confirm({ message: t('account.session_revoke_others_confirm'), danger: true }))) return
   try {
     await accountApi.revokeOtherSessions()
     await loadSessions()

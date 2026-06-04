@@ -113,6 +113,7 @@ import {
 } from '@/api/apiTokens'
 import ExpiryPicker from '@/components/ExpiryPicker.vue'
 import { useApiError } from '@/composables/useApiError'
+import { useUiStore } from '@/stores/ui'
 import type { ApiTokenListItem, CreateApiTokenResponse } from '@/types/api'
 import { formatInSiteTime, siteLocalIsoToUtcIso } from '@/utils/datetime'
 
@@ -122,6 +123,7 @@ const TOKEN_PRESETS = ['7d', '30d', '90d', '1y', 'never'] as const
 
 const { t, locale } = useI18n()
 const { describe } = useApiError()
+const ui = useUiStore()
 
 const tokens = ref<ApiTokenListItem[]>([])
 const canCreate = ref(true)
@@ -187,7 +189,7 @@ function expiryLabel(token: ApiTokenListItem): string {
 }
 
 async function onRevoke(id: number) {
-  if (!confirm(t('api_tokens.revoke_confirm'))) return
+  if (!(await ui.confirm({ message: t('api_tokens.revoke_confirm'), danger: true }))) return
   revoking.value = id
   try {
     await revokeToken(id)

@@ -1,7 +1,11 @@
 {
+  "a11y": {
+    "language_switcher": "Sprache"
+  },
   "common": {
     "continue": "Weiter",
     "cancel": "Abbrechen",
+    "confirm": "Bestätigen",
     "save": "Speichern",
     "saved": "Gespeichert.",
     "back": "Zurück",
@@ -711,6 +715,7 @@
     "prev": "zurück",
     "next": "weiter",
     "page_of": "Seite {page} von {total}",
+    "empty": "Keine Benutzer entsprechen den aktuellen Filtern.",
     "invite_button": "Benutzer einladen",
     "invite_heading": "Neuen Benutzer einladen",
     "invite_email_label": "E-Mail",

@@ -67,7 +67,7 @@ watch([stateFilter, shareStateFilter, orphanedOnly], () => {
 
 async function onReclaim(it: AdminFileItem) {
   if (reclaiming.value) return
-  if (!window.confirm(t('admin_file_history.reclaim_confirm', { name: it.filename }))) return
+  if (!(await ui.confirm({ message: t('admin_file_history.reclaim_confirm', { name: it.filename }), danger: true }))) return
   reclaiming.value = it.file_id
   try {
     await adminReclaimFile(it.file_id)

@@ -100,7 +100,7 @@ async function onReactivate(item: AdminApiTokenItem) {
 }
 
 async function onRevoke(item: AdminApiTokenItem) {
-  if (!window.confirm(t('admin_api_tokens.revoke_confirm'))) return
+  if (!(await ui.confirm({ message: t('admin_api_tokens.revoke_confirm'), danger: true }))) return
   busyTokenId.value = item.id
   try {
     await adminRevokeApiToken(item.id)

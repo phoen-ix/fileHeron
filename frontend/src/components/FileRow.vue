@@ -93,7 +93,7 @@ function pillForFile(state: FileState): 'active' | 'warn' | 'danger' | undefined
 }
 
 async function onDelete() {
-  if (!confirm(t('files.actions.delete_confirm'))) return
+  if (!(await ui.confirm({ message: t('files.actions.delete_confirm'), danger: true }))) return
   deleting.value = true
   try {
     await deleteFile(props.file.id)

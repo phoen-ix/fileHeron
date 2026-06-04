@@ -96,7 +96,7 @@ async function onRevokeSession(s: AdminSessionRow) {
 
 async function onRevokeAllSessions() {
   if (!user.value || revokingAll.value) return
-  if (!confirm(t('admin_user_detail.sessions_revoke_all_confirm'))) return
+  if (!(await ui.confirm({ message: t('admin_user_detail.sessions_revoke_all_confirm'), danger: true }))) return
   revokingAll.value = true
   try {
     const { data } = await adminRevokeUserSessions(user.value.id)
@@ -136,7 +136,7 @@ async function onSave() {
 
 async function onForceReset() {
   if (!user.value) return
-  if (!confirm(t('admin_user_detail.force_reset_confirm'))) return
+  if (!(await ui.confirm({ message: t('admin_user_detail.force_reset_confirm') }))) return
   resetting.value = true
   try {
     const { data } = await forcePasswordReset(user.value.id)

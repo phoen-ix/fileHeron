@@ -160,7 +160,11 @@ onMounted(load)
     <hr class="fh-rule" />
 
     <div class="filters">
-      <select v-model="stateFilter" class="filter-select">
+      <select
+        v-model="stateFilter"
+        class="filter-select"
+        :aria-label="t('share_list.filter.state_all')"
+      >
         <option value="">{{ t('share_list.filter.state_all') }}</option>
         <option value="active">{{ t('share_state.active') }}</option>
         <option value="expired">{{ t('share_state.expired') }}</option>
@@ -169,7 +173,11 @@ onMounted(load)
         <option value="failed">{{ t('share_state.failed') }}</option>
       </select>
 
-      <select v-model="partyKind" class="filter-select">
+      <select
+        v-model="partyKind"
+        class="filter-select"
+        :aria-label="t(`share_list.filter.party_any.${box}`)"
+      >
         <option value="any">
           {{ t(`share_list.filter.party_any.${box}`) }}
         </option>
@@ -187,6 +195,7 @@ onMounted(load)
           type="search"
           class="fh-field-input"
           autocomplete="off"
+          :aria-label="t('share_list.filter.user_placeholder')"
           :placeholder="t('share_list.filter.user_placeholder')"
         />
         <ul v-if="userSuggestions.length > 0" class="suggestions">

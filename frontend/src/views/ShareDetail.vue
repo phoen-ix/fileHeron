@@ -70,7 +70,7 @@ async function load() {
 
 async function onEndShare() {
   if (!share.value) return
-  if (!confirm(t('share_detail.end_share_confirm'))) return
+  if (!(await ui.confirm({ message: t('share_detail.end_share_confirm'), danger: true }))) return
   expiringNow.value = true
   try {
     const { data } = await expireShareNow(share.value.id)

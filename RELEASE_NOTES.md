@@ -1,32 +1,34 @@
-# file:Heron v1.9.0
+# file:Heron v1.9.1
 
-**Smaller, faster front-end load.** This release removes the Element Plus UI
-library — it was pulled in app-wide (its entire stylesheet loaded on every
-page) just to provide the calendar in the expiry picker. The expiry picker now
-uses the browser's native date-time control, so the whole library and its
-stylesheet are gone from the bundle.
+**Accessibility & UX polish.** Consistent confirmation dialogs, better keyboard
+and screen-reader support, and clearer empty states.
 
 ## What changed
 
-- **Expiry picker** (used on Share create/detail + API-token expiry) now uses a
-  native date-time input. The quick presets (1 h, 7 d, 30 d, Never, …), the
-  "expires in …" hint, and the site-timezone handling are all unchanged — only
-  the calendar widget itself is now the browser's built-in one.
-- **Removed the Element Plus dependency** and its global stylesheet. This drops
-  a ~227 kB JavaScript chunk (~74 kB gzipped) and a large global CSS file that
-  previously loaded on every page.
+- **Styled confirmation dialogs.** Destructive actions (revoke a session or
+  token, delete a group, remove a member, end a share, disconnect SSO, remove a
+  passkey, reclaim a file, …) now show an in-app confirm dialog matching the
+  design system instead of the browser's plain pop-up. The dialog traps focus on
+  the confirm button, closes on Escape or backdrop click, and highlights
+  destructive actions in red.
+- **Keyboard focus follows navigation.** Moving between pages now sends focus to
+  the main content region (unless a page already focuses an input), so
+  keyboard/screen-reader users aren't left inside the previous page's menu.
+- **Screen-reader labels** added to the language switcher, the notification list,
+  and the Shares list filters.
+- **Empty states.** The admin Users list now shows a clear "no users match"
+  message instead of an empty table.
 
-No functional change beyond the picker's look; no `.env` change; no migration.
-(No desktop-client change.)
+No `.env` change, no migration. (No desktop-client change.)
 
 ## Container images
 
 Published to GitHub Container Registry:
 
-- `ghcr.io/phoen-ix/fileheron-backend:v1.9.0`
-- `ghcr.io/phoen-ix/fileheron-worker:v1.9.0`
-- `ghcr.io/phoen-ix/fileheron-frontend:v1.9.0`
-- `ghcr.io/phoen-ix/fileheron-updater-shim:v1.9.0`
-- `ghcr.io/phoen-ix/fileheron-updater-executor:v1.9.0`
+- `ghcr.io/phoen-ix/fileheron-backend:v1.9.1`
+- `ghcr.io/phoen-ix/fileheron-worker:v1.9.1`
+- `ghcr.io/phoen-ix/fileheron-frontend:v1.9.1`
+- `ghcr.io/phoen-ix/fileheron-updater-shim:v1.9.1`
+- `ghcr.io/phoen-ix/fileheron-updater-executor:v1.9.1`
 
 Click **Update** in `/admin/system` to roll forward.

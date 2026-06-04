@@ -166,6 +166,7 @@
       "groups": "Groups",
       "audit": "Audit log",
       "file_history": "File history",
+      "sessions": "Sessions",
       "quarantine": "Quarantine",
       "api_tokens": "API tokens",
       "settings": "Settings",
@@ -806,7 +807,12 @@
     "erase_confirm_1": "I understand — continue",
     "erase_confirm_final": "Erase permanently",
     "erased_toast": "User erased — {n} file(s), {bytes} bytes deleted.",
-    "already_erased": "User already erased"
+    "already_erased": "User already erased",
+    "sessions": "Active sessions",
+    "sessions_help": "Devices currently signed in as this user, oldest activity first. Revoke a single device or all of them.",
+    "sessions_revoke_all": "Revoke all",
+    "sessions_revoke_all_confirm": "Revoke every active session for this user? They will be signed out on every device.",
+    "sessions_empty": "No active sessions."
   },
   "admin_audit": {
     "eyebrow": "Admin / Audit log",
@@ -874,6 +880,7 @@
     "twofa_setup_cta": "Set up two-factor auth",
     "twofa_manage_cta": "Manage two-factor",
     "session_current": "current",
+    "session_last_active": "Last active",
     "session_revoke": "Revoke",
     "session_unknown_ua": "unknown browser"
   },
@@ -1264,6 +1271,33 @@
         "partial": "{ok} expired, {fail} failed (likely already changed state).",
         "all_failed": "Could not expire any of the selected shares."
       }
+    }
+  },
+  "admin_sessions": {
+    "eyebrow": "Admin / Sessions",
+    "intro": "Every signed-in session across all users. A session rotates on use, so “Last active” reflects the most recent activity — sort by it ascending to spot stale or forgotten devices.",
+    "total_count": "{n} sessions",
+    "search_placeholder": "Search user name, email or IP…",
+    "include_inactive": "Include expired/revoked",
+    "empty": "No sessions match the current filters.",
+    "revoke": "Revoke",
+    "revoke_all": "Revoke all",
+    "revoke_confirm": "Revoke this session for {who}? The device will be signed out on its next request.",
+    "revoke_all_confirm": "Revoke every active session for {who}? They will be signed out on all devices.",
+    "revoked_toast": "Session revoked.",
+    "revoked_all_toast": "Revoked {n} session(s).",
+    "deleted_user": "(deleted user)",
+    "unknown_device": "unknown device",
+    "state_revoked": "revoked",
+    "state_expired": "expired",
+    "col": {
+      "user": "User",
+      "device": "Device",
+      "ip": "IP",
+      "started": "Started",
+      "last_active": "Last active",
+      "expires": "Expires",
+      "actions": "Actions"
     }
   },
   "admin_file_history": {

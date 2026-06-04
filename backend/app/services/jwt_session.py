@@ -320,6 +320,11 @@ def rotate_refresh(
         raise AppError(403, "ACCOUNT_DISABLED", "Account unavailable.")
 
     new_record, new_plain = create_refresh_token(db, user, request, settings)
+    # Carry the original sign-in time forward across the rotation chain so
+    # `created_at` keeps meaning "session start"; `last_used_at` tracks this
+    # latest activity (admins sort by it to spot stale/hanging sessions).
+    new_record.created_at = record.created_at
+    new_record.last_used_at = now
     record.replaced_by_id = new_record.id
     db.flush()
 

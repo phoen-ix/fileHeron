@@ -35,6 +35,10 @@ class RefreshToken(Base):
     token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True, nullable=False)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(), nullable=False, default=_utcnow)
+    # Last activity on this session. Because the token rotates on every refresh
+    # (a new head row is minted), `created_at` is threaded forward to mean the
+    # original sign-in time while `last_used_at` advances to the latest rotation.
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(), nullable=True, default=_utcnow)
     expires_at: Mapped[datetime] = mapped_column(DateTime(), nullable=False)
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(), nullable=True)
 

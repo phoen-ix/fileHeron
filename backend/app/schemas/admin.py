@@ -102,6 +102,34 @@ class AdminAuditResponse(APIBaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Admin session oversight (v1.7.0). A session = a `refresh_tokens` row.
+# ---------------------------------------------------------------------------
+
+
+class AdminSessionRow(APIBaseModel):
+    id: int
+    user_id: int
+    # Hydrated server-side via a single bulk lookup per page (mirrors the
+    # audit row). Null for erased / unknown owners.
+    user_display_name: str | None = None
+    user_email: str | None = None
+    created_at: datetime  # session start (threaded across rotations)
+    last_used_at: datetime | None = None  # latest rotation ≈ last activity
+    expires_at: datetime
+    revoked_at: datetime | None = None
+    created_ip: str | None = None
+    created_ua: str | None = None
+    is_active: bool
+
+
+class AdminSessionListResponse(APIBaseModel):
+    items: list[AdminSessionRow]
+    total: int
+    page: int
+    page_size: int
+
+
+# ---------------------------------------------------------------------------
 # Pending-invite admin views (post-Phase 10).
 # ---------------------------------------------------------------------------
 

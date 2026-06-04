@@ -15,6 +15,9 @@
         <RouterLink :to="{ name: 'admin-file-history' }" class="nav-link">
           {{ t('admin.nav.file_history') }}
         </RouterLink>
+        <RouterLink :to="{ name: 'admin-sessions' }" class="nav-link">
+          {{ t('admin.nav.sessions') }}
+        </RouterLink>
         <RouterLink :to="{ name: 'admin-quarantine' }" class="nav-link">
           {{ t('admin.nav.quarantine') }}
         </RouterLink>

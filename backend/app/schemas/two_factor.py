@@ -47,6 +47,7 @@ class TotpStatusResponse(APIBaseModel):
 class SessionResponse(APIBaseModel):
     id: int
     created_at: datetime
+    last_used_at: datetime | None = None
     expires_at: datetime
     created_ip: str | None = None
     created_ua: str | None = None

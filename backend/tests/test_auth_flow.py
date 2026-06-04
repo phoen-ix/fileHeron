@@ -77,6 +77,40 @@ async def test_refresh_rotates_and_returns_new_access_token(make_user, client):
 
 
 @pytest.mark.asyncio
+async def test_refresh_threads_created_at_and_advances_last_used(make_user, client, db):
+    """Rotation carries the original sign-in time forward (created_at) while
+    last_used_at advances to the rotation — the basis for the admin session
+    'started' vs 'last active' columns."""
+    user = make_user(email="alice@test.local", password="LongCorrectHorse123!")
+
+    await client.post(
+        "/api/auth/login",
+        json={"email": "alice@test.local", "password": "LongCorrectHorse123!"},
+    )
+    root = (
+        db.query(RefreshToken)
+        .filter(RefreshToken.user_id == user.id)
+        .order_by(RefreshToken.id.asc())
+        .first()
+    )
+    original_created = root.created_at
+
+    refresh = await client.post("/api/auth/refresh")
+    assert refresh.status_code == 200, refresh.text
+
+    head = (
+        db.query(RefreshToken)
+        .filter(RefreshToken.user_id == user.id, RefreshToken.revoked_at.is_(None))
+        .one()
+    )
+    # Original sign-in time threaded forward.
+    assert head.created_at == original_created
+    # Activity advanced to (or past) the original.
+    assert head.last_used_at is not None
+    assert head.last_used_at >= original_created
+
+
+@pytest.mark.asyncio
 async def test_refresh_reuse_revokes_entire_family(make_user, client, db):
     user = make_user(email="alice@test.local", password="LongCorrectHorse123!")
 

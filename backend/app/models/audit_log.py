@@ -73,6 +73,7 @@ class AuditEventType(str, enum.Enum):
     share_expiry_updated = "share_expiry_updated"            # post-Phase 10
     share_limit_updated = "share_limit_updated"              # v1.1.0 (per-share download budget)
     refresh_token_evicted = "refresh_token_evicted"          # post-Phase 10 (session cap)
+    refresh_token_admin_revoked = "refresh_token_admin_revoked"  # v1.7.0 (admin session revoke)
     smtp_config_changed = "smtp_config_changed"              # post-Phase 10
     home_page_toggled = "home_page_toggled"                  # post-Phase 10
     motd_changed = "motd_changed"                            # login-page banner

@@ -166,6 +166,7 @@
       "groups": "Gruppen",
       "audit": "Audit-Protokoll",
       "file_history": "Dateiverlauf",
+      "sessions": "Sitzungen",
       "quarantine": "Quarantäne",
       "api_tokens": "API-Tokens",
       "settings": "Einstellungen",
@@ -806,7 +807,12 @@
     "erase_confirm_1": "Ich verstehe — fortfahren",
     "erase_confirm_final": "Endgültig löschen",
     "erased_toast": "Benutzer gelöscht — {n} Datei(en), {bytes} Bytes entfernt.",
-    "already_erased": "Benutzer bereits gelöscht"
+    "already_erased": "Benutzer bereits gelöscht",
+    "sessions": "Aktive Sitzungen",
+    "sessions_help": "Geräte, die derzeit als dieser Benutzer angemeldet sind, älteste Aktivität zuerst. Einzelne Geräte oder alle abmelden.",
+    "sessions_revoke_all": "Alle widerrufen",
+    "sessions_revoke_all_confirm": "Alle aktiven Sitzungen dieses Benutzers widerrufen? Er wird auf allen Geräten abgemeldet.",
+    "sessions_empty": "Keine aktiven Sitzungen."
   },
   "admin_audit": {
     "eyebrow": "Admin / Audit-Protokoll",
@@ -874,6 +880,7 @@
     "twofa_setup_cta": "Zwei-Faktor einrichten",
     "twofa_manage_cta": "Zwei-Faktor verwalten",
     "session_current": "aktuell",
+    "session_last_active": "Zuletzt aktiv",
     "session_revoke": "Beenden",
     "session_unknown_ua": "unbekannter Browser"
   },
@@ -1264,6 +1271,33 @@
         "partial": "{ok} beendet, {fail} fehlgeschlagen (wahrscheinlich bereits geänderter Status).",
         "all_failed": "Keine der ausgewählten Freigaben konnte beendet werden."
       }
+    }
+  },
+  "admin_sessions": {
+    "eyebrow": "Admin / Sitzungen",
+    "intro": "Alle angemeldeten Sitzungen über alle Benutzer hinweg. Eine Sitzung rotiert bei Nutzung, daher zeigt „Zuletzt aktiv“ die jüngste Aktivität — aufsteigend sortieren, um veraltete oder vergessene Geräte zu finden.",
+    "total_count": "{n} Sitzungen",
+    "search_placeholder": "Nach Benutzername, E-Mail oder IP suchen…",
+    "include_inactive": "Abgelaufene/widerrufene einschließen",
+    "empty": "Keine Sitzungen entsprechen den aktuellen Filtern.",
+    "revoke": "Widerrufen",
+    "revoke_all": "Alle widerrufen",
+    "revoke_confirm": "Diese Sitzung von {who} widerrufen? Das Gerät wird bei der nächsten Anfrage abgemeldet.",
+    "revoke_all_confirm": "Alle aktiven Sitzungen von {who} widerrufen? Sie werden auf allen Geräten abgemeldet.",
+    "revoked_toast": "Sitzung widerrufen.",
+    "revoked_all_toast": "{n} Sitzung(en) widerrufen.",
+    "deleted_user": "(gelöschter Benutzer)",
+    "unknown_device": "unbekanntes Gerät",
+    "state_revoked": "widerrufen",
+    "state_expired": "abgelaufen",
+    "col": {
+      "user": "Benutzer",
+      "device": "Gerät",
+      "ip": "IP",
+      "started": "Begonnen",
+      "last_active": "Zuletzt aktiv",
+      "expires": "Läuft ab",
+      "actions": "Aktionen"
     }
   },
   "admin_file_history": {

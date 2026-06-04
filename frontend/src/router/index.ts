@@ -150,6 +150,12 @@ const router = createRouter({
           meta: { density: 'operator', title: 'File history', requiresRole: 'admin' },
         },
         {
+          path: 'sessions',
+          name: 'admin-sessions',
+          component: () => import('@/views/AdminSessions.vue'),
+          meta: { density: 'operator', title: 'Sessions', requiresRole: 'admin' },
+        },
+        {
           path: 'quarantine',
           name: 'admin-quarantine',
           component: () => import('@/views/AdminQuarantine.vue'),

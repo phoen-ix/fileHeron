@@ -86,6 +86,7 @@ export interface RecoveryCodesResponse {
 export interface SessionRecord {
   id: number
   created_at: string
+  last_used_at: string | null
   expires_at: string
   created_ip: string | null
   created_ua: string | null
@@ -94,6 +95,27 @@ export interface SessionRecord {
 
 export interface SessionListResponse {
   items: SessionRecord[]
+}
+
+export interface AdminSessionRow {
+  id: number
+  user_id: number
+  user_display_name: string | null
+  user_email: string | null
+  created_at: string
+  last_used_at: string | null
+  expires_at: string
+  revoked_at: string | null
+  created_ip: string | null
+  created_ua: string | null
+  is_active: boolean
+}
+
+export interface AdminSessionListResponse {
+  items: AdminSessionRow[]
+  total: number
+  page: number
+  page_size: number
 }
 
 /* User search (Phase 4 recipient picker) */

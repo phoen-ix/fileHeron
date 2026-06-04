@@ -271,6 +271,7 @@ def list_sessions(
             SessionResponse(
                 id=row.id,
                 created_at=row.created_at,
+                last_used_at=row.last_used_at,
                 expires_at=row.expires_at,
                 created_ip=row.created_ip,
                 created_ua=row.created_ua,

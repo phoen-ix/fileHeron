@@ -8,6 +8,7 @@ import type {
   AdminFileListResponse,
   AdminInviteListResponse,
   AdminInviteState,
+  AdminSessionListResponse,
   AdminUserItem,
   AdminUserListResponse,
   CreateApiTokenResponse,
@@ -388,6 +389,28 @@ export function adminListFiles(params: {
 /** Free an orphaned file's bytes + the uploader's quota immediately. */
 export function adminReclaimFile(fileId: string) {
   return api.post<void>(`/admin/files/${fileId}/reclaim`)
+}
+
+// Admin session oversight (v1.7.0)
+
+export function adminListSessions(params: {
+  q?: string
+  user_id?: number
+  include_inactive?: boolean
+  sort?: 'created_at' | 'last_used_at' | 'expires_at'
+  direction?: 'asc' | 'desc'
+  page?: number
+  page_size?: number
+} = {}) {
+  return api.get<AdminSessionListResponse>('/admin/sessions', { params })
+}
+
+export function adminRevokeSession(sessionId: number) {
+  return api.delete<{ revoked: number }>(`/admin/sessions/${sessionId}`)
+}
+
+export function adminRevokeUserSessions(userId: number) {
+  return api.delete<{ revoked: number }>(`/admin/users/${userId}/sessions`)
 }
 
 // Public link policy (post-Phase 10)

@@ -11,6 +11,7 @@ Sub-modules:
                  quarantine notify_admins)
 - quarantine     file-level actions on infected files
 - invites        invite tokens list + revoke/regenerate/resend/activate
+- sessions       cross-user session oversight + revoke
 - system         operator-facing health + cron history (operational audit)
 
 The parent prefix `/api/admin` is set here once; sub-routers don't repeat it.
@@ -19,8 +20,19 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from . import api_tokens, audit, files, invites, oidc, quarantine, settings, system, users
+from . import (
+    api_tokens,
+    audit,
+    files,
+    invites,
+    oidc,
+    quarantine,
+    sessions,
+    settings,
+    system,
+    users,
+)
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
-for _sub in (users, audit, oidc, api_tokens, files, settings, quarantine, invites, system):
+for _sub in (api_tokens, audit, files, invites, oidc, quarantine, sessions, settings, system, users):
     router.include_router(_sub.router)

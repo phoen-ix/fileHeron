@@ -4,6 +4,9 @@ import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 
 import {
+  adminListSessions,
+  adminRevokeSession,
+  adminRevokeUserSessions,
   eraseUser,
   forcePasswordReset,
   getUser,
@@ -11,8 +14,9 @@ import {
 } from '@/api/admin'
 import { useApiError } from '@/composables/useApiError'
 import { useUiStore } from '@/stores/ui'
-import type { AdminUserItem, UserRole } from '@/types/api'
+import type { AdminSessionRow, AdminUserItem, UserRole } from '@/types/api'
 import { formatInSiteTime } from '@/utils/datetime'
+import { uaShort } from '@/utils/ua'
 
 const route = useRoute()
 const router = useRouter()
@@ -36,6 +40,11 @@ const resetTokenPlaintext = ref<string | null>(null)
 const eraseStep = ref<0 | 1 | 2>(0)
 const erasing = ref(false)
 
+const sessions = ref<AdminSessionRow[]>([])
+const sessionsLoading = ref(false)
+const revokingSessionId = ref<number | null>(null)
+const revokingAll = ref(false)
+
 const isErased = computed(() => user.value?.email === '[erased]')
 
 async function load() {
@@ -47,8 +56,56 @@ async function load() {
     editRole.value = data.role
     editQuota.value = data.quota_bytes
     editDisabled.value = data.is_disabled
+    await loadSessions()
   } finally {
     loading.value = false
+  }
+}
+
+async function loadSessions() {
+  if (!user.value) return
+  sessionsLoading.value = true
+  try {
+    const { data } = await adminListSessions({
+      user_id: user.value.id,
+      sort: 'last_used_at',
+      direction: 'asc',
+      page_size: 100,
+    })
+    sessions.value = data.items
+  } catch (err) {
+    ui.pushToast(describe(err), 'error')
+  } finally {
+    sessionsLoading.value = false
+  }
+}
+
+async function onRevokeSession(s: AdminSessionRow) {
+  if (revokingSessionId.value) return
+  revokingSessionId.value = s.id
+  try {
+    await adminRevokeSession(s.id)
+    ui.pushToast(t('admin_sessions.revoked_toast'), 'success')
+    await loadSessions()
+  } catch (err) {
+    ui.pushToast(describe(err), 'error')
+  } finally {
+    revokingSessionId.value = null
+  }
+}
+
+async function onRevokeAllSessions() {
+  if (!user.value || revokingAll.value) return
+  if (!confirm(t('admin_user_detail.sessions_revoke_all_confirm'))) return
+  revokingAll.value = true
+  try {
+    const { data } = await adminRevokeUserSessions(user.value.id)
+    ui.pushToast(t('admin_sessions.revoked_all_toast', { n: data.revoked }), 'success')
+    await loadSessions()
+  } catch (err) {
+    ui.pushToast(describe(err), 'error')
+  } finally {
+    revokingAll.value = false
   }
 }
 
@@ -209,6 +266,44 @@ onMounted(load)
 
       <hr class="fh-rule" />
 
+      <div class="sessions-head">
+        <h2 class="section-h2">{{ t('admin_user_detail.sessions') }}</h2>
+        <button
+          v-if="sessions.length > 0"
+          type="button"
+          class="fh-btn-text revoke-btn"
+          :disabled="revokingAll"
+          @click="onRevokeAllSessions"
+        >
+          {{ revokingAll ? t('common.loading') : t('admin_user_detail.sessions_revoke_all') }}
+        </button>
+      </div>
+      <p class="fh-field-help">{{ t('admin_user_detail.sessions_help') }}</p>
+
+      <div v-if="sessionsLoading" class="loading">{{ t('common.loading') }}</div>
+      <ul v-else-if="sessions.length > 0" class="session-list">
+        <li v-for="s in sessions" :key="s.id" class="session-item">
+          <div class="session-info">
+            <span class="session-ua">{{ uaShort(s.created_ua, t('admin_sessions.unknown_device')) }}</span>
+            <span class="fh-mono session-meta">
+              <span v-if="s.created_ip">{{ s.created_ip }}</span>
+              <span>{{ t('admin_sessions.col.last_active') }}: {{ formatDate(s.last_used_at) }}</span>
+            </span>
+          </div>
+          <button
+            type="button"
+            class="fh-btn-text revoke-btn"
+            :disabled="revokingSessionId === s.id"
+            @click="onRevokeSession(s)"
+          >
+            {{ revokingSessionId === s.id ? t('common.loading') : t('admin_sessions.revoke') }}
+          </button>
+        </li>
+      </ul>
+      <p v-else class="fh-field-help empty">{{ t('admin_user_detail.sessions_empty') }}</p>
+
+      <hr class="fh-rule" />
+
       <div class="danger-zone">
         <h2 class="section-h2">{{ t('admin_user_detail.danger') }}</h2>
         <p class="fh-field-help">{{ t('admin_user_detail.erase_help') }}</p>
@@ -325,5 +420,53 @@ onMounted(load)
 
 .danger-zone {
   margin-top: var(--fh-space-4);
+}
+
+.sessions-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--fh-space-4);
+}
+
+.revoke-btn {
+  color: var(--fh-accent);
+  white-space: nowrap;
+}
+
+.session-list {
+  list-style: none;
+  padding: 0;
+  margin: var(--fh-space-2) 0 0;
+}
+
+.session-item {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--fh-space-3);
+  padding: var(--fh-space-2) 0;
+  border-top: 1px solid var(--fh-hairline);
+}
+
+.session-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.session-ua {
+  color: var(--fh-ink);
+}
+
+.session-meta {
+  display: inline-flex;
+  gap: var(--fh-space-3);
+  font-size: var(--fh-text-mono-sm);
+  color: var(--fh-subtle);
+}
+
+.empty {
+  margin: var(--fh-space-2) 0;
 }
 </style>

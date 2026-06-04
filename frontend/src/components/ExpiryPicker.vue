@@ -14,16 +14,13 @@
         {{ t(`expiry.presets.${preset.id}`) }}
       </button>
     </div>
-    <ElDatePicker
-      v-model="dt"
-      type="datetime"
+    <input
+      v-model="inputValue"
+      type="datetime-local"
+      class="fh-field-input custom-picker"
       :placeholder="t('expiry.custom_placeholder')"
-      :disabled-date="disabledDate"
+      :min="minAttr"
       :disabled="disabled || activePreset === 'never'"
-      class="custom-picker"
-      format="YYYY-MM-DD HH:mm"
-      value-format="YYYY-MM-DDTHH:mm:ss"
-      :clearable="false"
     />
     <div class="hint">
       <span class="fh-mono">{{ hintText }}</span>
@@ -32,10 +29,6 @@
 </template>
 
 <script setup lang="ts">
-import { ElDatePicker } from 'element-plus'
-import 'element-plus/theme-chalk/el-date-picker.css'
-import 'element-plus/theme-chalk/el-input.css'
-import 'element-plus/theme-chalk/el-popper.css'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
@@ -122,11 +115,19 @@ function applyPreset(preset: Preset) {
   activePreset.value = preset.id
 }
 
-function disabledDate(d: Date): boolean {
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  return d.getTime() < today.getTime()
-}
+// Bridge the native <input type="datetime-local"> (minute precision,
+// "YYYY-MM-DDTHH:mm") to the component's site-tz wall-clock contract
+// ("YYYY-MM-DDTHH:mm:ss"). Null = "never".
+const inputValue = computed<string>({
+  get: () => (dt.value ? dt.value.slice(0, 16) : ''),
+  set: (v: string) => {
+    dt.value = v ? `${v}:00` : null
+  },
+})
+
+// Prevent picking a past instant — the site-tz "now" at page load, to the
+// minute. Evaluated once (no reactive deps); a coarse floor is sufficient.
+const minAttr = siteNowPlusIso(0).slice(0, 16)
 
 const expiresInMs = computed(() => {
   if (!dt.value) return 0

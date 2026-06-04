@@ -7,8 +7,6 @@ import router from './router'
 import { useAuthStore } from './stores/auth'
 import { useSiteStore } from './stores/site'
 import './styles/global.css'
-import 'element-plus/dist/index.css'
-import './styles/element-plus.css'
 
 const app = createApp(App)
 const pinia = createPinia()

@@ -43,6 +43,7 @@ from ..utils.crypto import (
     generate_recovery_codes,
 )
 from ..utils.qr import render_qr_svg
+from ..utils.timeutil import utc_now
 from .audit import record_audit_event
 
 # Acceptance window in 30s steps either side of the current step. 2 ⇒ ±60s,
@@ -52,8 +53,6 @@ from .audit import record_audit_event
 _TOTP_VALID_WINDOW = 2
 
 
-def _utcnow() -> datetime:
-    return datetime.now(tz=timezone.utc).replace(tzinfo=None)
 
 
 def _build_otpauth_uri(secret_b32: str, account_label: str) -> str:
@@ -122,7 +121,7 @@ def confirm_enable(db: Session, *, user: User, code: str, request) -> list[str]:
     if not pyotp.TOTP(secret).verify(code, valid_window=_TOTP_VALID_WINDOW):
         raise AppError(401, "INVALID_TOTP", "Code is incorrect or expired.")
 
-    user.totp.enabled_at = _utcnow()
+    user.totp.enabled_at = utc_now()
     # NOTE: do NOT seed last_used_counter to the current step. The first login
     # after enable would otherwise be rejected as replay until the next 30s
     # window. Anti-replay only kicks in once a code is accepted by login.
@@ -198,7 +197,7 @@ def consume_recovery_code(db: Session, *, user: User, code: str, request) -> boo
                     UserRecoveryCode.id == rc.id,
                     UserRecoveryCode.used_at.is_(None),
                 )
-                .values(used_at=_utcnow())
+                .values(used_at=utc_now())
             )
             if claimed.rowcount == 0:
                 # Lost the race — another request already consumed it.

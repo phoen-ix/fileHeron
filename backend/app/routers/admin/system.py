@@ -15,7 +15,7 @@ Read-only. No mutating endpoints — the cron_tracker writes the rows.
 """
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 
 from fastapi import APIRouter, Depends, Header, Query, Request
 from fastapi.responses import StreamingResponse
@@ -30,6 +30,7 @@ from ...models.audit_log import AuditEventType, AuditLog
 from ...models.cron_run import CronRun, CronRunStatus
 from ...models.user import User, UserRole
 from ...redis_client import get_redis
+from ...utils.timeutil import utc_now
 
 router = APIRouter()
 
@@ -54,14 +55,12 @@ _KNOWN_CRONS = [
 ]
 
 
-def _utcnow() -> datetime:
-    return datetime.now(tz=timezone.utc).replace(tzinfo=None)
 
 
 def _live_checks(db: Session) -> dict:
     """Mirror /api/health's probes — DB, Redis, AV. Probes run fresh on every
     call; `checked_at` records when, so the UI can show 'checked <time>'."""
-    out: dict = {"checked_at": _utcnow().isoformat()}
+    out: dict = {"checked_at": utc_now().isoformat()}
 
     # DB — if we got this far the request session worked, so just label OK.
     out["db"] = {"status": "ok", "error": None}
@@ -117,7 +116,7 @@ def system_status(
             .first()
         )
         # Success / failure counts in the last 24h, for the at-a-glance number.
-        cutoff = _utcnow() - timedelta(hours=24)
+        cutoff = utc_now() - timedelta(hours=24)
         counts = dict(
             db.query(CronRun.status, func.count(CronRun.id))
             .filter(CronRun.job_name == name, CronRun.started_at >= cutoff)
@@ -147,7 +146,7 @@ def system_status(
         )
     ]
 
-    cutoff_24h = _utcnow() - timedelta(hours=24)
+    cutoff_24h = utc_now() - timedelta(hours=24)
     email_undeliverable_24h = (
         db.query(AuditLog)
         .filter(

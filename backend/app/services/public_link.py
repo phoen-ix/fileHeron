@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import hmac
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 from typing import NamedTuple
 
 from sqlalchemy import update
@@ -44,6 +44,7 @@ from ..utils.crypto import (
     random_token,
     sha256_hex,
 )
+from ..utils.timeutil import utc_now
 from . import notification as notif_svc
 from . import settings_registry
 from . import site as site_svc
@@ -52,8 +53,6 @@ from .audit import record_audit_event
 logger = logging.getLogger("fileheron.public_link")
 
 
-def _utcnow() -> datetime:
-    return datetime.now(tz=timezone.utc).replace(tzinfo=None)
 
 
 class CreatedLink(NamedTuple):
@@ -161,7 +160,7 @@ def assert_link_usable(db: Session, link: PublicLink) -> None:
     counter exhausted, or share revoked/expired/deleted."""
     if link.revoked_at is not None:
         raise AppError(410, "PUBLIC_LINK_REVOKED", "This public link has been revoked.")
-    if link.locked_until is not None and link.locked_until > _utcnow():
+    if link.locked_until is not None and link.locked_until > utc_now():
         raise AppError(
             423,
             "PUBLIC_LINK_LOCKED",
@@ -177,7 +176,7 @@ def assert_link_usable(db: Session, link: PublicLink) -> None:
     if share.state != ShareState.active:
         raise AppError(410, "SHARE_NOT_ACTIVE", "The underlying share is no longer active.")
     # NULL expires_at = never-expire (v1.1.4) — skip the time check.
-    if share.expires_at is not None and share.expires_at < _utcnow():
+    if share.expires_at is not None and share.expires_at < utc_now():
         raise AppError(410, "SHARE_EXPIRED", "The underlying share has expired.")
 
 
@@ -208,7 +207,7 @@ def _recent_failure_count(db: Session, link: PublicLink) -> int:
     window_sec = settings_registry.effective(
         db, settings_registry.K.PUBLIC_LINK_PASSWORD_WINDOW_SEC
     )
-    cutoff = _utcnow() - timedelta(seconds=window_sec)
+    cutoff = utc_now() - timedelta(seconds=window_sec)
     return (
         db.query(PublicLinkAttempt)
         .filter(
@@ -226,7 +225,7 @@ def recent_ip_failure_count(db: Session, link: PublicLink, ip: str | None) -> in
     window_sec = settings_registry.effective(
         db, settings_registry.K.PUBLIC_LINK_PASSWORD_WINDOW_SEC
     )
-    cutoff = _utcnow() - timedelta(seconds=window_sec)
+    cutoff = utc_now() - timedelta(seconds=window_sec)
     return (
         db.query(PublicLinkAttempt)
         .filter(
@@ -252,7 +251,7 @@ def _recent_distinct_failure_ips(db: Session, link: PublicLink) -> int:
     window_sec = settings_registry.effective(
         db, settings_registry.K.PUBLIC_LINK_PASSWORD_WINDOW_SEC
     )
-    cutoff = _utcnow() - timedelta(seconds=window_sec)
+    cutoff = utc_now() - timedelta(seconds=window_sec)
     return (
         db.query(PublicLinkAttempt.ip)
         .filter(
@@ -300,7 +299,7 @@ def verify_password(
         failures >= settings_registry.effective(db, settings_registry.K.PUBLIC_LINK_PASSWORD_RATE_LIMIT)
         and distinct_ips >= MIN_DISTINCT_IPS_FOR_LOCK
     ):
-        link.locked_until = _utcnow() + timedelta(
+        link.locked_until = utc_now() + timedelta(
             seconds=settings_registry.effective(db, settings_registry.K.PUBLIC_LINK_LOCKOUT_SEC)
         )
         _record_attempt(db, link=link, ip=ip, outcome=PublicLinkAttemptOutcome.locked)
@@ -352,7 +351,7 @@ def revoke(
         return  # idempotent
     if link.created_by_id != actor.id and actor.role != UserRole.admin:
         raise AppError(403, "FORBIDDEN", "Only the link owner or an admin can revoke.")
-    link.revoked_at = _utcnow()
+    link.revoked_at = utc_now()
     db.flush()
     record_audit_event(
         db,
@@ -411,7 +410,7 @@ def notify_owner_on_download(
             "subject": share.subject,
             "filename": file.original_filename,
             "size_bytes": file.size_bytes,
-            "at": _utcnow(),
+            "at": utc_now(),
             "downloads_remaining": downloads_remaining,
             "share_url": share_url,
         },

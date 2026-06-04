@@ -12,7 +12,7 @@ clients in /api/users/search.
 from __future__ import annotations
 
 import enum
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import TYPE_CHECKING
 
 from sqlalchemy import DateTime, ForeignKey, Integer
@@ -20,6 +20,7 @@ from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ..database import Base
+from ..utils.timeutil import utc_now
 
 if TYPE_CHECKING:
     from .user import User
@@ -30,8 +31,6 @@ class ConnectionSource(str, enum.Enum):
     shared_group = "shared_group"
 
 
-def _utcnow() -> datetime:
-    return datetime.now(tz=timezone.utc).replace(tzinfo=None)
 
 
 class ClientEmployeeConnection(Base):
@@ -48,7 +47,7 @@ class ClientEmployeeConnection(Base):
         primary_key=True,
     )
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(), nullable=False, default=_utcnow
+        DateTime(), nullable=False, default=utc_now
     )
 
     client: Mapped[User] = relationship("User", foreign_keys=[client_user_id])

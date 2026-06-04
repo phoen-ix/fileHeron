@@ -26,6 +26,49 @@ async def test_admin_list_users_filters(make_user, db, client, login_as):
 
 
 @pytest.mark.asyncio
+async def test_admin_list_users_bulk_hydration(make_user, db, client, login_as):
+    """The list endpoint hydrates has_2fa + requires_2fa in bulk; assert the
+    values are correct for a mixed page (regression for the N+1 refactor)."""
+    import json
+    from datetime import datetime, timezone
+
+    from app.models.user_totp import UserTOTP
+    from app.services import settings as settings_svc
+
+    make_user(email="admin@test.local", role=UserRole.admin, password="Pass12345678!")
+    with_totp = make_user(email="totp@test.local", role=UserRole.client, display_name="Has2FA")
+    make_user(email="no2fa@test.local", role=UserRole.employee, display_name="No2FA")
+    db.add(
+        UserTOTP(
+            user_id=with_totp.id,
+            secret_encrypted=b"dummy",
+            enabled_at=datetime.now(tz=timezone.utc).replace(tzinfo=None),
+            last_used_counter=0,
+        )
+    )
+    # Require 2FA for employees → `without` (employee, no TOTP) must show requires_2fa.
+    settings_svc.set_value(
+        db,
+        key=settings_svc.Keys.TWOFA_REQUIRED_ROLES,
+        value=json.dumps(["employee"]),
+        actor=None,
+    )
+    db.commit()
+    token, _ = await login_as("admin@test.local", "Pass12345678!")
+
+    resp = await client.get(
+        "/api/admin/users?page_size=200", headers={"Authorization": f"Bearer {token}"}
+    )
+    assert resp.status_code == 200
+    by_email = {u["email"]: u for u in resp.json()["items"]}
+    assert by_email["totp@test.local"]["has_2fa"] is True
+    assert by_email["totp@test.local"]["requires_2fa"] is False  # already enrolled
+    assert by_email["no2fa@test.local"]["has_2fa"] is False
+    assert by_email["no2fa@test.local"]["requires_2fa"] is True  # employee policy
+    assert by_email["admin@test.local"]["requires_2fa"] is False  # not in policy
+
+
+@pytest.mark.asyncio
 async def test_admin_patch_user_role_audits(make_user, db, client, login_as):
     admin = make_user(email="admin@test.local", role=UserRole.admin, password="Pass12345678!")
     target = make_user(email="t@test.local", role=UserRole.client)

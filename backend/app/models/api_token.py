@@ -14,20 +14,19 @@ Auth flow:
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import TYPE_CHECKING
 
 from sqlalchemy import DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ..database import Base
+from ..utils.timeutil import utc_now
 
 if TYPE_CHECKING:
     from .user import User
 
 
-def _utcnow() -> datetime:
-    return datetime.now(tz=timezone.utc).replace(tzinfo=None)
 
 
 class ApiToken(Base):
@@ -44,7 +43,7 @@ class ApiToken(Base):
     last4: Mapped[str] = mapped_column(String(4), nullable=False)
     secret_hash: Mapped[str] = mapped_column(String(64), nullable=False)
 
-    created_at: Mapped[datetime] = mapped_column(DateTime(), nullable=False, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(), nullable=False, default=utc_now)
     last_used_at: Mapped[datetime | None] = mapped_column(DateTime(), nullable=True)
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(), nullable=True)
     # Reversible disable, distinct from revoke (which is permanent).

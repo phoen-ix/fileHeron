@@ -21,7 +21,6 @@ shows the file count + total bytes about to disappear.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
 
@@ -41,6 +40,7 @@ from ..models.refresh_token import RefreshToken
 from ..models.user import User
 from ..models.user_recovery_code import UserRecoveryCode
 from ..models.user_totp import UserTOTP
+from ..utils.timeutil import utc_now
 from . import file as file_svc
 from .audit import record_audit_event
 
@@ -51,8 +51,6 @@ def _is_erased(user: User) -> bool:
 logger = logging.getLogger("fileheron.erasure")
 
 
-def _utcnow() -> datetime:
-    return datetime.now(tz=timezone.utc).replace(tzinfo=None)
 
 
 def erase_user(
@@ -216,7 +214,7 @@ def erase_user(
         "user_id": target.id,
         "deleted_files": deleted_count,
         "deleted_bytes": deleted_bytes,
-        "erased_at": _utcnow().isoformat(),
+        "erased_at": utc_now().isoformat(),
     }
 
 

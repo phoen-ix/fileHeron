@@ -9,12 +9,13 @@ canonical values are listed in the LoginOutcome enum.
 from __future__ import annotations
 
 import enum
-from datetime import datetime, timezone
+from datetime import datetime
 
-from sqlalchemy import BigInteger, DateTime, Integer, String
+from sqlalchemy import BigInteger, DateTime, Index, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from ..database import Base
+from ..utils.timeutil import utc_now
 
 # Same SQLite-vs-MariaDB workaround as audit_log.
 _BigIntPK = BigInteger().with_variant(Integer(), "sqlite")
@@ -32,17 +33,21 @@ class LoginOutcome(str, enum.Enum):
     email_not_verified = "email_not_verified"
 
 
-def _utcnow() -> datetime:
-    return datetime.now(tz=timezone.utc).replace(tzinfo=None)
 
 
 class LoginAttempt(Base):
     __tablename__ = "login_attempts"
+    __table_args__ = (
+        # Sliding-window rate-limit counts key on (ip, attempted_at) and
+        # (email, attempted_at).
+        Index("ix_login_attempts_ip_time", "ip", "attempted_at"),
+        Index("ix_login_attempts_email_time", "email", "attempted_at"),
+    )
 
     id: Mapped[int] = mapped_column(_BigIntPK, primary_key=True, autoincrement=True)
     email: Mapped[str | None] = mapped_column(String(254), nullable=True, index=True)
     ip: Mapped[str | None] = mapped_column(String(45), nullable=True, index=True)
     attempted_at: Mapped[datetime] = mapped_column(
-        DateTime(), nullable=False, default=_utcnow, index=True
+        DateTime(), nullable=False, default=utc_now, index=True
     )
     outcome: Mapped[str] = mapped_column(String(32), nullable=False, index=True)

@@ -1,16 +1,13 @@
 """Email verification token: single-use, 24h expiry, scoped to one user."""
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime
 
 from sqlalchemy import DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from ..database import Base
-
-
-def _utcnow() -> datetime:
-    return datetime.now(tz=timezone.utc).replace(tzinfo=None)
+from ..utils.timeutil import utc_now
 
 
 class EmailVerifyToken(Base):
@@ -22,6 +19,6 @@ class EmailVerifyToken(Base):
     )
     token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True, nullable=False)
 
-    created_at: Mapped[datetime] = mapped_column(DateTime(), nullable=False, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(), nullable=False, default=utc_now)
     expires_at: Mapped[datetime] = mapped_column(DateTime(), nullable=False)
     used_at: Mapped[datetime | None] = mapped_column(DateTime(), nullable=True)

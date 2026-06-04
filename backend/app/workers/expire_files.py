@@ -12,7 +12,8 @@ idempotent (silently no-ops on missing files).
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+
+from sqlalchemy.orm import selectinload
 
 from ..database import SessionLocal
 from ..models.audit_log import AuditEventType
@@ -20,12 +21,11 @@ from ..models.share import Share, ShareState
 from ..services.audit import record_audit_event
 from ..services.cron_tracker import track_cron
 from ..services.file import delete_file_for_expiry
+from ..utils.timeutil import utc_now
 
 logger = logging.getLogger("fileheron.workers.expire_files")
 
 
-def _utcnow() -> datetime:
-    return datetime.now(tz=timezone.utc).replace(tzinfo=None)
 
 
 @track_cron("expire_files")
@@ -39,9 +39,10 @@ async def expire_files(_ctx) -> dict:
     deleted_files = 0
     failed_shares = 0
     try:
-        now = _utcnow()
+        now = utc_now()
         shares = (
             db.query(Share)
+            .options(selectinload(Share.files))
             .filter(Share.state == ShareState.active, Share.expires_at < now)
             .all()
         )

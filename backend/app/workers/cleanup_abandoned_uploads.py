@@ -24,12 +24,11 @@ from ..config import settings
 from ..database import SessionLocal
 from ..models.file import File, FileState
 from ..services.cron_tracker import track_cron
+from ..utils.timeutil import utc_now
 
 logger = logging.getLogger("fileheron.workers.cleanup_abandoned_uploads")
 
 
-def _utcnow() -> datetime:
-    return datetime.now(tz=timezone.utc).replace(tzinfo=None)
 
 
 @track_cron("cleanup_abandoned_uploads")
@@ -45,7 +44,7 @@ async def cleanup_abandoned_uploads(_ctx) -> dict:
     db = SessionLocal()
     try:
         from ..services import settings_registry
-        cutoff = _utcnow() - timedelta(
+        cutoff = utc_now() - timedelta(
             hours=settings_registry.effective(
                 db, settings_registry.K.TUS_UPLOAD_ABANDONED_AFTER_HOURS
             )

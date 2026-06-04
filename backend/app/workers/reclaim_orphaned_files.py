@@ -25,7 +25,7 @@ reclaimed instantly.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 
 from sqlalchemy import update
 
@@ -36,6 +36,7 @@ from ..models.share import Share, ShareState
 from ..models.user import User, UserRole
 from ..services.cron_tracker import track_cron
 from ..services.notification import dispatch
+from ..utils.timeutil import utc_now
 
 logger = logging.getLogger("fileheron.workers.reclaim_orphaned_files")
 
@@ -43,8 +44,6 @@ _TERMINAL = [ShareState.revoked, ShareState.deleted]
 _RECLAIMABLE = [FileState.clean, FileState.ready_unscanned]
 
 
-def _utcnow() -> datetime:
-    return datetime.now(tz=timezone.utc).replace(tzinfo=None)
 
 
 def _notify_admins(db, *, count: int, bytes_freed: int, days: int) -> None:
@@ -60,7 +59,7 @@ def _notify_admins(db, *, count: int, bytes_freed: int, days: int) -> None:
             f"Reclaimed {count} orphaned file(s) ({mb:.1f} MB) from shares "
             f"revoked/deleted at least {days} day(s) ago."
         ),
-        "at": _utcnow().isoformat(),
+        "at": utc_now().isoformat(),
     }
     for admin in admins:
         try:
@@ -92,11 +91,11 @@ async def reclaim_orphaned_files(_ctx) -> dict:
         db.execute(
             update(Share)
             .where(Share.state.in_(_TERMINAL), Share.terminated_at.is_(None))
-            .values(terminated_at=_utcnow())
+            .values(terminated_at=utc_now())
         )
         db.commit()
 
-        cutoff = _utcnow() - timedelta(days=days)
+        cutoff = utc_now() - timedelta(days=days)
         orphans = (
             db.query(File)
             .join(Share, File.share_id == Share.id)

@@ -27,7 +27,7 @@ class ShareRecipientsRequest(APIBaseModel):
 class PublicLinkOnCreate(APIBaseModel):
     """Optional inline public-link block for `POST /api/shares`."""
     password: str | None = Field(default=None, min_length=1, max_length=255)
-    download_limit: int | None = Field(default=None, gt=0, le=100000)
+    download_limit: int | None = Field(default=None, gt=0, le=100_000)
     notify_on_download: bool = False
 
 

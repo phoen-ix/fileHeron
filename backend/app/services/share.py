@@ -38,13 +38,12 @@ from ..models.group_member import GroupMember
 from ..models.share import Share, ShareKind, ShareState
 from ..models.share_recipient import ShareRecipient
 from ..models.user import User, UserRole
+from ..utils.timeutil import utc_now
 from .audit import record_audit_event
 
 logger = logging.getLogger("fileheron.share")
 
 
-def _utcnow() -> datetime:
-    return datetime.now(tz=timezone.utc).replace(tzinfo=None)
 
 
 def _user_group_ids(db: Session, user_id: int) -> list[int]:
@@ -132,7 +131,7 @@ def create_share(
     if expires_at is not None:
         if expires_at.tzinfo is not None:
             expires_at = expires_at.astimezone(timezone.utc).replace(tzinfo=None)
-        if expires_at < _utcnow():
+        if expires_at < utc_now():
             raise AppError(400, "EXPIRY_IN_PAST", "Expiry must be in the future.")
 
     # Inbound (client → the company): the client never picks recipients. The
@@ -153,8 +152,15 @@ def create_share(
             raise AppError(
                 400, "NO_RECIPIENTS", "At least one user or group recipient is required."
             )
+        # Bulk-load recipients (was one query per id), then validate in the
+        # caller-supplied order so error messages still name the exact id.
+        users_by_id = (
+            {u.id: u for u in db.query(User).filter(User.id.in_(user_ids)).all()}
+            if user_ids
+            else {}
+        )
         for uid in user_ids:
-            u = db.query(User).filter(User.id == uid).one_or_none()
+            u = users_by_id.get(uid)
             if u is None or u.is_disabled:
                 raise AppError(
                     404, "RECIPIENT_NOT_FOUND", f"Recipient user {uid} is not available."
@@ -162,8 +168,13 @@ def create_share(
             if u.id == created_by.id:
                 raise AppError(400, "SELF_SHARE", "Cannot share with yourself.")
             users.append(u)
+        groups_by_id = (
+            {g.id: g for g in db.query(Group).filter(Group.id.in_(group_ids)).all()}
+            if group_ids
+            else {}
+        )
         for gid in group_ids:
-            g = db.query(Group).filter(Group.id == gid).one_or_none()
+            g = groups_by_id.get(gid)
             if g is None:
                 raise AppError(
                     404, "GROUP_NOT_FOUND", f"Recipient group {gid} is not available."
@@ -293,7 +304,7 @@ def assert_share_downloadable(share: Share) -> None:
     they can keep minting signed URLs and downloading a revoked share."""
     if share.state != ShareState.active:
         raise AppError(410, "SHARE_NOT_ACTIVE", "This share is no longer active.")
-    if share.expires_at is not None and share.expires_at < _utcnow():
+    if share.expires_at is not None and share.expires_at < utc_now():
         raise AppError(410, "SHARE_EXPIRED", "This share has expired.")
 
 
@@ -485,7 +496,7 @@ def revoke_share(db: Session, *, user: User, share: Share, request=None) -> None
     share.state = ShareState.revoked
     # Stamp the terminal transition so the orphan-reclaim cron can age its
     # grace window. Bytes are kept (soft revoke); the cron frees them later.
-    share.terminated_at = _utcnow()
+    share.terminated_at = utc_now()
     db.flush()
     record_audit_event(
         db,
@@ -616,7 +627,7 @@ def update_share_expiry(
         # Normalise to naive UTC (matches DB convention).
         if new_expires_at.tzinfo is not None:
             new_expires_at = new_expires_at.astimezone(timezone.utc).replace(tzinfo=None)
-        if new_expires_at < _utcnow():
+        if new_expires_at < utc_now():
             raise AppError(
                 400,
                 "INVALID_EXPIRY",
@@ -658,7 +669,7 @@ def expire_share_now(
     if share.created_by_id != user.id and user.role != UserRole.admin:
         raise AppError(403, "FORBIDDEN", "You cannot expire this share.")
 
-    now = _utcnow()
+    now = utc_now()
     result = db.execute(
         update(Share)
         .where(Share.id == share.id, Share.state == ShareState.active)

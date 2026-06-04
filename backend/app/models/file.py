@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import enum
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import TYPE_CHECKING
 
 from sqlalchemy import BigInteger, DateTime, ForeignKey, Integer, String
@@ -24,6 +24,7 @@ from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ..database import Base
+from ..utils.timeutil import utc_now
 
 if TYPE_CHECKING:
     from .share import Share
@@ -38,8 +39,6 @@ class FileState(str, enum.Enum):
     deleted = "deleted"
 
 
-def _utcnow() -> datetime:
-    return datetime.now(tz=timezone.utc).replace(tzinfo=None)
 
 
 def _new_uuid() -> str:
@@ -70,7 +69,7 @@ class File(Base):
         Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
 
-    created_at: Mapped[datetime] = mapped_column(DateTime(), nullable=False, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(), nullable=False, default=utc_now)
     finalized_at: Mapped[datetime | None] = mapped_column(DateTime(), nullable=True)
 
     # Set during the upload, cleared after post-finish move.

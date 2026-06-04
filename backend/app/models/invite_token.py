@@ -3,7 +3,7 @@ plaintext ``email`` so the consumer can be matched by the registration
 form."""
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import TYPE_CHECKING
 
 from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String
@@ -11,14 +11,13 @@ from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ..database import Base
+from ..utils.timeutil import utc_now
 from .user import UserRole
 
 if TYPE_CHECKING:
     from .user import User
 
 
-def _utcnow() -> datetime:
-    return datetime.now(tz=timezone.utc).replace(tzinfo=None)
 
 
 class InviteToken(Base):
@@ -35,7 +34,7 @@ class InviteToken(Base):
     )
     created_by: Mapped[User] = relationship("User", back_populates="invites_created", foreign_keys=[created_by_id])
 
-    created_at: Mapped[datetime] = mapped_column(DateTime(), nullable=False, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(), nullable=False, default=utc_now)
     expires_at: Mapped[datetime] = mapped_column(DateTime(), nullable=False)
     used_at: Mapped[datetime | None] = mapped_column(DateTime(), nullable=True)
 

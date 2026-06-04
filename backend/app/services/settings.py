@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Iterable
-from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
 
@@ -17,6 +16,7 @@ from ..models.app_setting import AppSetting
 from ..models.audit_log import AuditEventType
 from ..models.user import User
 from ..utils.crypto import decrypt_setting, encrypt_setting
+from ..utils.timeutil import utc_now
 from .audit import record_audit_event
 
 logger = logging.getLogger("fileheron.settings")
@@ -110,8 +110,6 @@ class Keys:
 _ENCRYPTED_KEYS: set[str] = {Keys.SMTP_PASSWORD}
 
 
-def _utcnow() -> datetime:
-    return datetime.now(tz=timezone.utc).replace(tzinfo=None)
 
 
 def get(db: Session, key: str) -> str | None:
@@ -157,14 +155,14 @@ def set_value(
             key=key,
             value=stored,
             is_encrypted=encrypted,
-            updated_at=_utcnow(),
+            updated_at=utc_now(),
             updated_by_id=actor.id if actor else None,
         )
         db.add(row)
     else:
         row.value = stored
         row.is_encrypted = encrypted
-        row.updated_at = _utcnow()
+        row.updated_at = utc_now()
         row.updated_by_id = actor.id if actor else None
     db.flush()
 

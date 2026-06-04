@@ -12,20 +12,19 @@ rows.
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import TYPE_CHECKING
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from ..database import Base
+from ..utils.timeutil import utc_now
 
 if TYPE_CHECKING:
     from .user import User  # noqa: F401  (only for type hints)
 
 
-def _utcnow() -> datetime:
-    return datetime.now(tz=timezone.utc).replace(tzinfo=None)
 
 
 class AppSetting(Base):
@@ -39,7 +38,7 @@ class AppSetting(Base):
         Boolean, nullable=False, default=False
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(), nullable=False, default=_utcnow
+        DateTime(), nullable=False, default=utc_now
     )
     updated_by_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True

@@ -47,6 +47,7 @@ from ..schemas.public_link import (
 from ..services import public_link as public_link_svc
 from ..services.audit import record_audit_event
 from ..utils.http_range import is_partial_continuation
+from ..utils.timeutil import utc_now
 from ..utils.ua_fingerprint import ua_fingerprint_hash
 
 logger = logging.getLogger("fileheron.public")
@@ -60,8 +61,6 @@ UNLOCK_TTL_SEC = 24 * 60 * 60  # 24h
 COOKIE_PATH_PREFIX = "/api/public"
 
 
-def _utcnow() -> datetime:
-    return datetime.now(tz=timezone.utc).replace(tzinfo=None)
 
 
 def _b64url(b: bytes) -> str:
@@ -181,7 +180,7 @@ def unlock(
     # can't outlive the share itself. NULL expires_at = never-expire
     # (v1.1.4) — in that case the share doesn't bound the cookie, so
     # the UNLOCK_TTL_SEC max-age (24h) is the only ceiling.
-    base_exp = _utcnow() + timedelta(seconds=UNLOCK_TTL_SEC)
+    base_exp = utc_now() + timedelta(seconds=UNLOCK_TTL_SEC)
     cookie_exp = base_exp if share.expires_at is None else min(base_exp, share.expires_at)
     cookie_value = _make_unlock_cookie(link.id, cookie_exp)
     response.set_cookie(

@@ -8,6 +8,7 @@ import { useApiError } from '@/composables/useApiError'
 import { useShareListState } from '@/composables/useShareListState'
 import { useUiStore } from '@/stores/ui'
 import type { ShareListItem, ShareRecipientRef, ShareState } from '@/types/api'
+import { formatBytes } from '@/utils/bytes'
 import { formatExpiryInSiteTime, formatInSiteTime } from '@/utils/datetime'
 
 const { t, locale } = useI18n()
@@ -117,15 +118,6 @@ function formatExpiry(iso: string | null): string {
   // Full date + HH:MM + tz (formatInSiteTime defaults) — a bare zone token
   // with no clock ("Jun 08, 2026, GMT+2") is meaningless.
   return formatExpiryInSiteTime(iso, locale.value, t('expiry.never_label'))
-}
-
-function formatBytes(n: number): string {
-  if (n < 1024) return `${n} B`
-  const k = n / 1024
-  if (k < 1024) return `${k.toFixed(1)} KB`
-  const m = k / 1024
-  if (m < 1024) return `${m.toFixed(1)} MB`
-  return `${(m / 1024).toFixed(2)} GB`
 }
 
 function open(s: ShareListItem) {

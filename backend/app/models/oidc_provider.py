@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import enum
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import TYPE_CHECKING
 
 from sqlalchemy import (
@@ -26,6 +26,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column
 
 from ..database import Base
+from ..utils.timeutil import utc_now
 
 if TYPE_CHECKING:
     from .user import User  # noqa: F401
@@ -41,8 +42,6 @@ class OIDCPreset(str, enum.Enum):
     custom = "custom"
 
 
-def _utcnow() -> datetime:
-    return datetime.now(tz=timezone.utc).replace(tzinfo=None)
 
 
 def _new_uuid() -> str:
@@ -74,10 +73,10 @@ class OIDCProvider(Base):
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(), nullable=False, default=_utcnow
+        DateTime(), nullable=False, default=utc_now
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(), nullable=False, default=_utcnow
+        DateTime(), nullable=False, default=utc_now
     )
     created_by_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True

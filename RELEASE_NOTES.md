@@ -1,51 +1,49 @@
-# file:Heron v1.7.0
+# file:Heron v1.8.0
 
-**Admins can now see and revoke every user's sessions.** Until now, session
-visibility was self-service only — each person could see their own signed-in
-devices on their Account page, but an admin had no way to audit who was signed
-in across the organisation or to forcibly sign someone out (a departed
-employee, a lost laptop, a suspicious device). This release adds a full admin
-session view with one-click revoke.
+**Performance & correctness pass — faster admin pages, leaner queries, and a
+fixed timezone bug when editing share expiry.** First of a short series of
+polish releases; everything here is invisible in behaviour except the bug fix
+and snappier admin lists.
 
-## What's new
+## Fixes
 
-- **New "Sessions" admin page** (`Admin → Sessions`). A live, paginated list of
-  every signed-in session across all users:
-  - **User, device, IP, Started, Last active, Expires** per session.
-  - **Search** by user name, email, or IP; **sort** by Started / Last active /
-    Expires.
-  - **Sorted by least-recently-active first by default** — the quickest way to
-    spot stale or forgotten sessions ("hanging" devices).
-  - **"Include expired/revoked"** toggle for forensics; revoked and expired
-    rows are dimmed and tagged.
-- **Revoke controls** — revoke a **single session** or **all sessions for one
-  user**. Every revoke is written to the audit log as
-  `refresh_token_admin_revoked` (with the target user + reason).
-- **Sessions section on the user detail page** (`Admin → Users → <user>`) — the
-  same list scoped to that one person, with per-device revoke and a
-  "Revoke all" button.
-- **Accurate "Last active" tracking.** Sessions now record a real
-  `last_used_at` timestamp that advances each time the session is used, while
-  `Started` keeps the original sign-in time. Your own Account page now shows
-  "Last active" for each device too.
+- **Editing a share's expiry no longer shifts the time** when your browser's
+  timezone differs from the site timezone. The Share detail page now converts
+  the picked time through the *site* timezone (matching the create-share form);
+  previously it used the browser's, so e.g. a GMT+2 admin editing a UTC-site
+  share could land the expiry two hours off.
 
-## Under the hood
+## Performance
 
-- New `refresh_tokens.last_used_at` column. **A database migration runs
-  automatically on update** and backfills existing sessions (no action
-  required). The token-rotation path now threads the original sign-in time
-  forward so "Started" and "Last active" are distinct, meaningful values.
+- **Admin → Users loads far fewer queries.** The list previously issued ~3
+  lookups *per user* (≈150 round-trips for a 50-user page); it now bulk-loads
+  2FA state, the enforcement policy, and storage usage in a handful of queries.
+- **Faster expiry crons.** The hourly "expiring in 24h" warning and the
+  file-expiry job now bulk-load recipients/users and eager-load files instead
+  of querying per row.
+- **Faster share creation** with many recipients (bulk-validated in one query).
+- **New database indexes** matching the hot query shapes: shares
+  `(state, expires_at)`, refresh_tokens `(user_id, revoked_at, expires_at)`,
+  notifications `(user_id, created_at)`, and login_attempts
+  `(ip, attempted_at)` / `(email, attempted_at)`. **A migration adds these
+  automatically on update.**
 
-No `.env` changes. No desktop-client change.
+## Code health
+
+- Consolidated the ~47 copies of the "UTC now" helper into a single
+  `app/utils/timeutil.py`, and the duplicated byte-size formatter into one
+  frontend `utils/bytes.ts` — no behaviour change.
+
+No `.env` changes. (No desktop-client change.)
 
 ## Container images
 
 Published to GitHub Container Registry:
 
-- `ghcr.io/phoen-ix/fileheron-backend:v1.7.0`
-- `ghcr.io/phoen-ix/fileheron-worker:v1.7.0`
-- `ghcr.io/phoen-ix/fileheron-frontend:v1.7.0`
-- `ghcr.io/phoen-ix/fileheron-updater-shim:v1.7.0`
-- `ghcr.io/phoen-ix/fileheron-updater-executor:v1.7.0`
+- `ghcr.io/phoen-ix/fileheron-backend:v1.8.0`
+- `ghcr.io/phoen-ix/fileheron-worker:v1.8.0`
+- `ghcr.io/phoen-ix/fileheron-frontend:v1.8.0`
+- `ghcr.io/phoen-ix/fileheron-updater-shim:v1.8.0`
+- `ghcr.io/phoen-ix/fileheron-updater-executor:v1.8.0`
 
 Click **Update** in `/admin/system` to roll forward.

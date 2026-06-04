@@ -16,7 +16,7 @@ atomically on each successful file download.
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import TYPE_CHECKING
 
 from sqlalchemy import (
@@ -30,6 +30,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ..database import Base
+from ..utils.timeutil import utc_now
 
 # BIGINT does not autoincrement under SQLite, fall through to ROWID.
 _BigIntPK = BigInteger().with_variant(Integer(), "sqlite")
@@ -39,8 +40,6 @@ if TYPE_CHECKING:
     from .user import User
 
 
-def _utcnow() -> datetime:
-    return datetime.now(tz=timezone.utc).replace(tzinfo=None)
 
 
 def _new_uuid() -> str:
@@ -87,7 +86,7 @@ class PublicLink(Base):
         Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(), nullable=False, default=_utcnow
+        DateTime(), nullable=False, default=utc_now
     )
 
     share: Mapped[Share] = relationship("Share")

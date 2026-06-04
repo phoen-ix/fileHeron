@@ -26,6 +26,7 @@ from ..models.audit_log import AuditEventType
 from ..models.group_member import GroupMember
 from ..models.user import User, UserRole
 from ..utils.crypto import constant_time_equals, sha256_hex
+from ..utils.timeutil import utc_now
 from .audit import record_audit_event
 
 TOKEN_PREFIX_BYTES = 4  # 8 hex chars
@@ -36,8 +37,6 @@ TOKEN_SECRET_BYTES = 32  # 43 b64url chars (no padding)
 LAST_USED_THROTTLE_SEC = 60
 
 
-def _utcnow() -> datetime:
-    return datetime.now(tz=timezone.utc).replace(tzinfo=None)
 
 
 def _gen_prefix() -> str:
@@ -59,7 +58,7 @@ def normalize_expiry(expires_at: datetime | None) -> datetime | None:
         return None
     if expires_at.tzinfo is not None:
         expires_at = expires_at.astimezone(timezone.utc).replace(tzinfo=None)
-    if expires_at < _utcnow():
+    if expires_at < utc_now():
         raise AppError(400, "INVALID_EXPIRY", "Expiry must be in the future.")
     return expires_at
 
@@ -120,7 +119,7 @@ def verify_token(db: Session, *, token_str: str) -> ApiToken:
         raise AppError(401, "INVALID_API_TOKEN", "Invalid API token.")
     if record.revoked_at is not None:
         raise AppError(401, "INVALID_API_TOKEN", "API token has been revoked.")
-    if record.expires_at is not None and _utcnow() > record.expires_at:
+    if record.expires_at is not None and utc_now() > record.expires_at:
         raise AppError(401, "API_TOKEN_EXPIRED", "API token has expired.")
     if record.disabled_at is not None:
         # Distinct code so admin/UX can tell "temporarily off" from "gone".
@@ -140,7 +139,7 @@ def _record_last_used(db: Session, record: ApiToken) -> None:
     the auth dependency, before the endpoint body, so only this update is
     pending. Throttled to one write per minute to avoid an UPDATE on every
     request; best-effort so a write failure never blocks authentication."""
-    now = _utcnow()
+    now = utc_now()
     last = record.last_used_at
     if last is not None and (now - last).total_seconds() < LAST_USED_THROTTLE_SEC:
         return
@@ -169,7 +168,7 @@ def revoke_token(db: Session, *, owner: User, token_id: int) -> None:
     if record is None:
         raise AppError(404, "TOKEN_NOT_FOUND", "API token not found.")
     if record.revoked_at is None:
-        record.revoked_at = _utcnow()
+        record.revoked_at = utc_now()
     # Once revoked, disabled is moot — clear it for cleanliness.
     record.disabled_at = None
     db.flush()
@@ -257,7 +256,7 @@ def disable_token(
             409, "TOKEN_REVOKED", "Token is already permanently revoked."
         )
     if record.disabled_at is None:
-        record.disabled_at = _utcnow()
+        record.disabled_at = utc_now()
         db.flush()
     record_audit_event(
         db,
@@ -301,7 +300,7 @@ def admin_revoke_token(
 ) -> ApiToken:
     record = _get_token_or_404(db, token_id)
     if record.revoked_at is None:
-        record.revoked_at = _utcnow()
+        record.revoked_at = utc_now()
     record.disabled_at = None
     db.flush()
     record_audit_event(
@@ -357,7 +356,7 @@ def list_all_tokens(
     owner display_name + email. Status precedence mirrors `_token_status`:
     revoked > expired > disabled > active.
     """
-    now = _utcnow()
+    now = utc_now()
     base = db.query(ApiToken).join(User, ApiToken.owner_user_id == User.id)
     if owner_id is not None:
         base = base.filter(ApiToken.owner_user_id == owner_id)

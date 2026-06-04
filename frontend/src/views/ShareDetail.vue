@@ -16,7 +16,8 @@ import { useApiError } from '@/composables/useApiError'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
 import type { ShareResponse } from '@/types/api'
-import { formatExpiryInSiteTime, formatInSiteTime } from '@/utils/datetime'
+import { formatBytes } from '@/utils/bytes'
+import { formatExpiryInSiteTime, formatInSiteTime, siteLocalIsoToUtcIso } from '@/utils/datetime'
 
 const route = useRoute()
 const auth = useAuthStore()
@@ -101,7 +102,9 @@ async function saveExpiry() {
       newExpiryLocal.value === null
         ? await updateShareExpiry(share.value.id, { clear: true })
         : await updateShareExpiry(share.value.id, {
-            expires_at: new Date(newExpiryLocal.value).toISOString(),
+            // newExpiryLocal is a site-tz wall-clock string from ExpiryPicker;
+            // convert via the site tz, not the browser's (matches ShareCreate).
+            expires_at: siteLocalIsoToUtcIso(newExpiryLocal.value),
           })
     share.value = data
     editingExpiry.value = false
@@ -168,17 +171,6 @@ function formatExpiry(iso: string | null): string {
   return formatExpiryInSiteTime(iso, locale.value, t('expiry.never_label'))
 }
 
-function formatBytes(n: number): string {
-  if (n < 1024) return `${n} B`
-  const units = ['KB', 'MB', 'GB', 'TB']
-  let size = n / 1024
-  let unitIdx = 0
-  while (size >= 1024 && unitIdx < units.length - 1) {
-    size /= 1024
-    unitIdx++
-  }
-  return `${size.toFixed(size < 10 ? 2 : 1)} ${units[unitIdx]}`
-}
 
 function pillForState(state: string): 'active' | 'warn' | 'danger' | undefined {
   if (state === 'active') return 'active'

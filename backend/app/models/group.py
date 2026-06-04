@@ -9,7 +9,7 @@ on share_recipients, kept for forward compatibility.
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import TYPE_CHECKING
 
 from sqlalchemy import (
@@ -24,6 +24,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ..database import Base
+from ..utils.timeutil import utc_now
 
 # Tests run on SQLite where BIGINT primary keys do NOT autoincrement;
 # fall back to INTEGER so ROWID handles it.
@@ -34,8 +35,6 @@ if TYPE_CHECKING:
     from .user import User
 
 
-def _utcnow() -> datetime:
-    return datetime.now(tz=timezone.utc).replace(tzinfo=None)
 
 
 class Group(Base):
@@ -56,7 +55,7 @@ class Group(Base):
         Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(), nullable=False, default=_utcnow
+        DateTime(), nullable=False, default=utc_now
     )
 
     created_by: Mapped[User] = relationship("User", foreign_keys=[created_by_id])

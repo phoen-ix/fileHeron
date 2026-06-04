@@ -22,7 +22,7 @@ deleted, because the predicate stays stable.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 
 from sqlalchemy import delete
 
@@ -31,12 +31,11 @@ from ..models.audit_log import AuditEventType
 from ..models.invite_token import InviteToken
 from ..services.audit import record_audit_event
 from ..services.cron_tracker import track_cron
+from ..utils.timeutil import utc_now
 
 logger = logging.getLogger("fileheron.workers.cleanup_pending_invites")
 
 
-def _utcnow() -> datetime:
-    return datetime.now(tz=timezone.utc).replace(tzinfo=None)
 
 
 @track_cron("cleanup_pending_invites")
@@ -49,7 +48,7 @@ async def cleanup_pending_invites(_ctx) -> dict:
         retention_days = settings_registry.effective(
             db, settings_registry.K.INVITE_RETENTION_DAYS
         )
-        cutoff = _utcnow() - timedelta(days=retention_days)
+        cutoff = utc_now() - timedelta(days=retention_days)
         result = db.execute(
             delete(InviteToken).where(
                 InviteToken.used_user_id.is_(None),

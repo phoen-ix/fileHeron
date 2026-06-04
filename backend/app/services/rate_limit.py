@@ -14,7 +14,7 @@ from __future__ import annotations
 import logging
 import threading
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 from typing import TYPE_CHECKING
 
 from sqlalchemy.orm import Session
@@ -23,6 +23,7 @@ from ..config import settings
 from ..models.user import User
 from ..redis_client import get_redis
 from ..utils.crypto import sha256_hex
+from ..utils.timeutil import utc_now
 
 if TYPE_CHECKING:
     pass
@@ -61,8 +62,6 @@ def _local_allow(key: str, limit: int, window_sec: int) -> bool:
     return count <= limit
 
 
-def _utcnow() -> datetime:
-    return datetime.now(tz=timezone.utc).replace(tzinfo=None)
 
 
 # ---------------------------------------------------------------------------
@@ -153,7 +152,7 @@ def check_ip_allowed(bucket: str, ip: str, limit: int, window_sec: int = _LOGIN_
 def is_account_locked(user: User) -> bool:
     if user.locked_until is None:
         return False
-    return user.locked_until > _utcnow()
+    return user.locked_until > utc_now()
 
 
 def record_failure(db: Session, *, user: User) -> tuple[bool, bool]:
@@ -176,7 +175,7 @@ def record_failure(db: Session, *, user: User) -> tuple[bool, bool]:
     duration = timedelta(
         minutes=settings_registry.effective(db, settings_registry.K.LOCKOUT_DURATION_MIN)
     )
-    now = _utcnow()
+    now = utc_now()
     # Re-read user with a row-level write lock so concurrent record_failure
     # calls on the same row serialize.
     db.refresh(user, with_for_update=True)
@@ -200,10 +199,10 @@ def record_success(db: Session, *, user: User) -> None:
     """Reset counter + clear lockout on a successful login."""
     user.failed_login_count = 0
     user.locked_until = None
-    user.last_login_at = _utcnow()
+    user.last_login_at = utc_now()
     db.flush()
 
 
 def mark_lockout_email_sent(db: Session, *, user: User) -> None:
-    user.lockout_email_sent_at = _utcnow()
+    user.lockout_email_sent_at = utc_now()
     db.flush()

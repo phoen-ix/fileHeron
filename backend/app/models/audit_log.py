@@ -8,12 +8,13 @@ because targets span tables (users, shares, files, public_links, ...).
 from __future__ import annotations
 
 import enum
-from datetime import datetime, timezone
+from datetime import datetime
 
 from sqlalchemy import JSON, BigInteger, DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from ..database import Base
+from ..utils.timeutil import utc_now
 
 
 class AuditEventType(str, enum.Enum):
@@ -111,8 +112,6 @@ class AuditEventType(str, enum.Enum):
     share_failed = "share_failed"
 
 
-def _utcnow() -> datetime:
-    return datetime.now(tz=timezone.utc).replace(tzinfo=None)
 
 
 # In SQLite, BigInteger PRIMARY KEY does NOT autoincrement — only INTEGER PK
@@ -125,7 +124,7 @@ class AuditLog(Base):
     __tablename__ = "audit_log"
 
     id: Mapped[int] = mapped_column(_BigIntPK, primary_key=True, autoincrement=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(), nullable=False, default=_utcnow, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(), nullable=False, default=utc_now, index=True)
 
     actor_user_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True

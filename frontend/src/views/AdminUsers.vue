@@ -15,6 +15,7 @@ import PasswordStrength from '@/components/PasswordStrength.vue'
 import { useApiError } from '@/composables/useApiError'
 import { useInviteForm } from '@/composables/useInviteForm'
 import { useUiStore } from '@/stores/ui'
+import { formatBytes } from '@/utils/bytes'
 import { formatDateInSiteTime } from '@/utils/datetime'
 import type {
   AdminInviteItem,
@@ -98,17 +99,6 @@ function formatDate(iso: string | null): string {
   return formatDateInSiteTime(iso, locale.value)
 }
 
-function formatBytes(n: number | null): string {
-  if (!n) return '0'
-  const units = ['B', 'KB', 'MB', 'GB', 'TB']
-  let v = n
-  let i = 0
-  while (v >= 1024 && i < units.length - 1) {
-    v /= 1024
-    i += 1
-  }
-  return `${v.toFixed(v >= 100 || i === 0 ? 0 : 1)} ${units[i]}`
-}
 
 // --- Pending invites section ---------------------------------------------
 

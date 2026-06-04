@@ -22,7 +22,7 @@ import logging
 import time
 import traceback
 from collections.abc import Awaitable, Callable
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 from typing import Any
 
 from sqlalchemy import delete, select
@@ -34,6 +34,7 @@ from ..models.cron_run import CronRun, CronRunStatus
 from ..models.notification import NotificationCategory
 from ..models.user import User, UserRole
 from ..redis_client import get_redis
+from ..utils.timeutil import utc_now
 from . import sse as sse_svc
 from .audit import record_audit_event
 from .notification import dispatch
@@ -49,8 +50,6 @@ _RESULT_SUMMARY_MAX_BYTES = 4096
 _DEDUP_TTL_SEC = 3600
 
 
-def _utcnow() -> datetime:
-    return datetime.now(tz=timezone.utc).replace(tzinfo=None)
 
 
 def _truncate(result: Any) -> Any:
@@ -69,7 +68,7 @@ def _truncate(result: Any) -> Any:
 
 
 def _prune_old_runs(db: Session, job_name: str) -> None:
-    cutoff = _utcnow() - timedelta(days=_PRUNE_AFTER_DAYS)
+    cutoff = utc_now() - timedelta(days=_PRUNE_AFTER_DAYS)
     db.execute(
         delete(CronRun)
         .where(CronRun.job_name == job_name, CronRun.started_at < cutoff)
@@ -117,7 +116,7 @@ def _maybe_alert_admins(db: Session, job_name: str, error_msg: str) -> None:
         "reason": "cron_failed",
         "job_name": job_name,
         "error": error_msg[:500],
-        "at": _utcnow().isoformat(),
+        "at": utc_now().isoformat(),
     }
     for admin in admins:
         try:
@@ -141,7 +140,7 @@ def track_cron(job_name: str) -> Callable[[Callable[..., Awaitable[Any]]], Calla
     def _decorator(fn: Callable[..., Awaitable[Any]]) -> Callable[..., Awaitable[Any]]:
         @functools.wraps(fn)
         async def _wrapper(*args: Any, **kwargs: Any) -> Any:
-            started = _utcnow()
+            started = utc_now()
             t0 = time.monotonic()
             db = SessionLocal()
             row: CronRun | None = None
@@ -167,7 +166,7 @@ def track_cron(job_name: str) -> Callable[[Callable[..., Awaitable[Any]]], Calla
                         live = db2.query(CronRun).filter(CronRun.id == row.id).one_or_none()
                         if live is not None:
                             live.status = CronRunStatus.failure
-                            live.completed_at = _utcnow()
+                            live.completed_at = utc_now()
                             live.duration_ms = duration_ms
                             live.error_msg = tb[:2000]
                     record_audit_event(
@@ -205,7 +204,7 @@ def track_cron(job_name: str) -> Callable[[Callable[..., Awaitable[Any]]], Calla
                     live = db3.query(CronRun).filter(CronRun.id == row.id).one_or_none()
                     if live is not None:
                         live.status = CronRunStatus.success
-                        live.completed_at = _utcnow()
+                        live.completed_at = utc_now()
                         live.duration_ms = duration_ms
                         live.result_summary = _truncate(result)
                 _prune_old_runs(db3, job_name)

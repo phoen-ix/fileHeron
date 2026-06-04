@@ -11,7 +11,7 @@
 from __future__ import annotations
 
 import enum
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import TYPE_CHECKING
 
 from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Integer, String
@@ -19,6 +19,7 @@ from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ..database import Base
+from ..utils.timeutil import utc_now
 
 if TYPE_CHECKING:
     from .invite_token import InviteToken
@@ -38,8 +39,6 @@ class Locale(str, enum.Enum):
     en = "en"
 
 
-def _utcnow() -> datetime:
-    return datetime.now(tz=timezone.utc).replace(tzinfo=None)
 
 
 class User(Base):
@@ -70,7 +69,7 @@ class User(Base):
     # Used to dedupe lockout warning emails (6h window).
     lockout_email_sent_at: Mapped[datetime | None] = mapped_column(DateTime(), nullable=True)
 
-    created_at: Mapped[datetime] = mapped_column(DateTime(), nullable=False, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(), nullable=False, default=utc_now)
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(), nullable=True)
 
     # Phase 7: populated when a user logs in via OIDC. Phase 10 makes

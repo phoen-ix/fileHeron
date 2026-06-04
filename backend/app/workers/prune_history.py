@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 
 from sqlalchemy import delete
 from sqlalchemy.orm import Session
@@ -27,6 +27,7 @@ from ..models.audit_log import AuditLog
 from ..models.download_log import DownloadLog
 from ..models.login_attempt import LoginAttempt
 from ..services.cron_tracker import track_cron
+from ..utils.timeutil import utc_now
 
 logger = logging.getLogger("fileheron.workers.prune_history")
 
@@ -34,8 +35,6 @@ _BATCH_SIZE = 10_000
 _INTER_BATCH_SLEEP_SEC = 5.0
 
 
-def _utcnow() -> datetime:
-    return datetime.now(tz=timezone.utc).replace(tzinfo=None)
 
 
 async def _prune_table(
@@ -48,7 +47,7 @@ async def _prune_table(
     """
     if days <= 0:
         return 0
-    cutoff = _utcnow() - timedelta(days=days)
+    cutoff = utc_now() - timedelta(days=days)
     total = 0
     while True:
         db: Session = SessionLocal()

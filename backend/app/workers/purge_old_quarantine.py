@@ -16,7 +16,7 @@ Set `QUARANTINE_PURGE_AFTER_DAYS=0` to disable.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 from pathlib import Path
 
 from ..database import SessionLocal
@@ -24,12 +24,11 @@ from ..models.audit_log import AuditEventType
 from ..models.file import File, FileState
 from ..services.audit import record_audit_event
 from ..services.cron_tracker import track_cron
+from ..utils.timeutil import utc_now
 
 logger = logging.getLogger("fileheron.workers.purge_old_quarantine")
 
 
-def _utcnow() -> datetime:
-    return datetime.now(tz=timezone.utc).replace(tzinfo=None)
 
 
 @track_cron("purge_old_quarantine")
@@ -44,7 +43,7 @@ async def purge_old_quarantine(_ctx) -> dict:
         )
         if days <= 0:
             return {"disabled": True, "purged": 0}
-        cutoff = _utcnow() - timedelta(days=days)
+        cutoff = utc_now() - timedelta(days=days)
         rows = (
             db.query(File)
             .filter(

@@ -28,7 +28,7 @@ from __future__ import annotations
 
 import logging
 import re
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 
 import httpx
 from sqlalchemy.orm import Session
@@ -37,6 +37,7 @@ from ..database import SessionLocal
 from ..models.notification import NotificationCategory
 from ..models.user import User, UserRole
 from ..utils.net import assert_public_http_url
+from ..utils.timeutil import utc_now
 from . import settings as settings_svc
 from .cron_tracker import track_cron
 from .notification import dispatch
@@ -78,12 +79,10 @@ class CacheKeys:
     NOTIFIED_VERSION = "release.notified_version"
 
 
-def _utcnow() -> datetime:
-    return datetime.now(tz=timezone.utc).replace(tzinfo=None)
 
 
 def _utcnow_iso() -> str:
-    return _utcnow().isoformat()
+    return utc_now().isoformat()
 
 
 def _configured_url(db: Session) -> str:
@@ -233,7 +232,7 @@ def _too_soon(db: Session) -> bool:
         last = datetime.fromisoformat(raw)
     except Exception:
         return False
-    return (_utcnow() - last) < _AUTO_INTERVAL
+    return (utc_now() - last) < _AUTO_INTERVAL
 
 
 async def run_check(db: Session, *, manual: bool) -> dict:

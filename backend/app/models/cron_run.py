@@ -14,13 +14,14 @@ forensic record.
 from __future__ import annotations
 
 import enum
-from datetime import datetime, timezone
+from datetime import datetime
 
 from sqlalchemy import JSON, BigInteger, DateTime, Integer, String, Text
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column
 
 from ..database import Base
+from ..utils.timeutil import utc_now
 
 
 class CronRunStatus(str, enum.Enum):
@@ -33,8 +34,6 @@ class CronRunStatus(str, enum.Enum):
 _BigIntPK = BigInteger().with_variant(Integer(), "sqlite")
 
 
-def _utcnow() -> datetime:
-    return datetime.now(tz=timezone.utc).replace(tzinfo=None)
 
 
 class CronRun(Base):
@@ -43,7 +42,7 @@ class CronRun(Base):
     id: Mapped[int] = mapped_column(_BigIntPK, primary_key=True, autoincrement=True)
     job_name: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     started_at: Mapped[datetime] = mapped_column(
-        DateTime(), nullable=False, default=_utcnow, index=True
+        DateTime(), nullable=False, default=utc_now, index=True
     )
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(), nullable=True)
     status: Mapped[CronRunStatus] = mapped_column(

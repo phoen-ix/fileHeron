@@ -11,7 +11,7 @@ bytes and let `webauthn` decode on verify.
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import TYPE_CHECKING
 
 from sqlalchemy import (
@@ -25,6 +25,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ..database import Base
+from ..utils.timeutil import utc_now
 
 _BigIntPK = BigInteger().with_variant(Integer(), "sqlite")
 
@@ -32,8 +33,6 @@ if TYPE_CHECKING:
     from .user import User
 
 
-def _utcnow() -> datetime:
-    return datetime.now(tz=timezone.utc).replace(tzinfo=None)
 
 
 class UserWebAuthnCredential(Base):
@@ -58,7 +57,7 @@ class UserWebAuthnCredential(Base):
     name: Mapped[str] = mapped_column(String(120), nullable=False, default="passkey")
 
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(), nullable=False, default=_utcnow
+        DateTime(), nullable=False, default=utc_now
     )
     last_used_at: Mapped[datetime | None] = mapped_column(
         DateTime(), nullable=True

@@ -9,13 +9,14 @@ strip patch versions — same value Phase 7 uses for the new-device alert.
 from __future__ import annotations
 
 import enum
-from datetime import datetime, timezone
+from datetime import datetime
 
 from sqlalchemy import BigInteger, DateTime, ForeignKey, Integer, String
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column
 
 from ..database import Base
+from ..utils.timeutil import utc_now
 
 # In SQLite, BigInteger PK does NOT autoincrement.
 _BigIntPK = BigInteger().with_variant(Integer(), "sqlite")
@@ -27,8 +28,6 @@ class DownloadVia(str, enum.Enum):
     public = "public"        # /d/{token} — Phase 5
 
 
-def _utcnow() -> datetime:
-    return datetime.now(tz=timezone.utc).replace(tzinfo=None)
 
 
 class DownloadLog(Base):
@@ -47,7 +46,7 @@ class DownloadLog(Base):
         Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
     )
     accessed_at: Mapped[datetime] = mapped_column(
-        DateTime(), nullable=False, default=_utcnow, index=True
+        DateTime(), nullable=False, default=utc_now, index=True
     )
 
     ip: Mapped[str | None] = mapped_column(String(45), nullable=True)

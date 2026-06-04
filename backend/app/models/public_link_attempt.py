@@ -6,7 +6,7 @@ on lockout. Append-only.
 from __future__ import annotations
 
 import enum
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import TYPE_CHECKING
 
 from sqlalchemy import (
@@ -22,6 +22,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ..database import Base
+from ..utils.timeutil import utc_now
 
 _BigIntPK = BigInteger().with_variant(Integer(), "sqlite")
 
@@ -35,8 +36,6 @@ class PublicLinkAttemptOutcome(str, enum.Enum):
     locked = "locked"
 
 
-def _utcnow() -> datetime:
-    return datetime.now(tz=timezone.utc).replace(tzinfo=None)
 
 
 class PublicLinkAttempt(Base):
@@ -55,7 +54,7 @@ class PublicLinkAttempt(Base):
         nullable=False,
     )
     attempted_at: Mapped[datetime] = mapped_column(
-        DateTime(), nullable=False, default=_utcnow, index=True
+        DateTime(), nullable=False, default=utc_now, index=True
     )
 
     public_link: Mapped[PublicLink] = relationship("PublicLink")

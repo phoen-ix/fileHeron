@@ -14,7 +14,7 @@ the per-share dispatch loop completes (best-effort but bounded).
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 
 from ..database import SessionLocal
 from ..models.notification import NotificationCategory
@@ -23,12 +23,11 @@ from ..models.share_recipient import ShareRecipient
 from ..models.user import User
 from ..services import notification as notif_svc
 from ..services.cron_tracker import track_cron
+from ..utils.timeutil import utc_now
 
 logger = logging.getLogger("fileheron.workers.share_expiring")
 
 
-def _utcnow() -> datetime:
-    return datetime.now(tz=timezone.utc).replace(tzinfo=None)
 
 
 @track_cron("share_expiring_24h_warning")
@@ -40,7 +39,7 @@ async def share_expiring_24h_warning(_ctx) -> dict:
     notified_shares = 0
     notified_users = 0
     try:
-        now = _utcnow()
+        now = utc_now()
         lower = now + timedelta(hours=24)
         upper = now + timedelta(hours=25)
         shares = (
@@ -54,30 +53,46 @@ async def share_expiring_24h_warning(_ctx) -> dict:
             .all()
         )
 
-        for share in shares:
-            recipients = (
+        # Bulk-load recipients for every share + every candidate user in two
+        # queries (was per-share recipients + per-recipient user lookups).
+        share_ids = [s.id for s in shares]
+        recipients_by_share: dict[str, list[int]] = {}
+        if share_ids:
+            for r in (
                 db.query(ShareRecipient)
-                .filter(ShareRecipient.share_id == share.id)
+                .filter(ShareRecipient.share_id.in_(share_ids))
                 .all()
-            )
-            target_user_ids: set[int] = {share.created_by_id}
-            for r in recipients:
-                if r.recipient_user_id is not None:
-                    target_user_ids.add(r.recipient_user_id)
+            ):
                 # Group recipients are deliberately NOT fanned out here —
                 # 50-member groups would generate 50 emails and the
-                # group-share recipient sees the share in their inbox
-                # anyway. A per-group expiry-alert opt-in could be added
-                # later if needed.
+                # group-share recipient sees the share in their inbox anyway.
+                if r.recipient_user_id is not None:
+                    recipients_by_share.setdefault(r.share_id, []).append(
+                        r.recipient_user_id
+                    )
 
-            from ..services import site as site_svc
+        all_user_ids = {s.created_by_id for s in shares}
+        for ids in recipients_by_share.values():
+            all_user_ids.update(ids)
+        users_by_id: dict[int, User] = {
+            u.id: u
+            for u in db.query(User).filter(User.id.in_(all_user_ids)).all()
+        } if all_user_ids else {}
+
+        from ..services import site as site_svc
+        site_url = site_svc.get_site_url(db)
+
+        for share in shares:
+            target_user_ids: set[int] = {share.created_by_id}
+            target_user_ids.update(recipients_by_share.get(share.id, []))
+
             payload = {
                 "subject": share.subject,
                 "expires_at": share.expires_at,
-                "share_url": f"{site_svc.get_site_url(db)}/share/{share.id}",
+                "share_url": f"{site_url}/share/{share.id}",
             }
             for uid in target_user_ids:
-                user = db.query(User).filter(User.id == uid).one_or_none()
+                user = users_by_id.get(uid)
                 if user is None or user.is_disabled:
                     continue
                 payload_for_user = dict(payload)

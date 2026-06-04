@@ -127,3 +127,15 @@ def used_bytes(*, user_id: int) -> int:
         return int(v) if v else 0
     except Exception:
         return 0
+
+
+def used_bytes_bulk(user_ids: list[int]) -> dict[int, int]:
+    """Read-only batch variant — one Redis MGET for a whole page of users.
+    Missing/uninitialized counters read as 0. Fail-open to all-zero."""
+    if not user_ids:
+        return {}
+    try:
+        vals = get_redis().mget([_key(uid) for uid in user_ids])
+        return {uid: (int(v) if v else 0) for uid, v in zip(user_ids, vals, strict=False)}
+    except Exception:
+        return dict.fromkeys(user_ids, 0)

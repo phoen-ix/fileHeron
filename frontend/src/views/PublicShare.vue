@@ -13,6 +13,7 @@ import {
   unlockPublicShare,
 } from '@/api/publicLinks'
 import type { PublicShareResponse } from '@/types/api'
+import { formatBytes } from '@/utils/bytes'
 import { formatExpiryInSiteTime } from '@/utils/datetime'
 
 const route = useRoute()
@@ -66,18 +67,6 @@ async function onUnlock() {
 
 function formatExpiry(iso: string | null): string {
   return formatExpiryInSiteTime(iso, locale.value, t('expiry.never_label'))
-}
-
-function formatBytes(n: number): string {
-  if (n < 1024) return `${n} B`
-  const units = ['KB', 'MB', 'GB', 'TB']
-  let size = n / 1024
-  let unitIdx = 0
-  while (size >= 1024 && unitIdx < units.length - 1) {
-    size /= 1024
-    unitIdx++
-  }
-  return `${size.toFixed(size < 10 ? 2 : 1)} ${units[unitIdx]}`
 }
 
 function fileEnabled(state: string): boolean {

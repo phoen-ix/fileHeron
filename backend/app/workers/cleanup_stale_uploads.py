@@ -25,7 +25,7 @@ Idempotent: a second run finds nothing (rows are `deleted`, shares out of
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 from pathlib import Path
 
 from ..config import settings
@@ -35,6 +35,7 @@ from ..models.file import File, FileState
 from ..models.share import Share, ShareState
 from ..services.audit import record_audit_event
 from ..services.cron_tracker import track_cron
+from ..utils.timeutil import utc_now
 
 logger = logging.getLogger("fileheron.workers.cleanup_stale_uploads")
 
@@ -46,8 +47,6 @@ _USABLE_FILE_STATES = {
 }
 
 
-def _utcnow() -> datetime:
-    return datetime.now(tz=timezone.utc).replace(tzinfo=None)
 
 
 def _unlink_partial_bytes(file: File) -> None:
@@ -82,7 +81,7 @@ async def cleanup_stale_uploads(_ctx) -> dict:
         hours = settings_registry.effective(
             db, settings_registry.K.UPLOAD_STALE_AFTER_HOURS
         )
-        cutoff = _utcnow() - timedelta(hours=hours)
+        cutoff = utc_now() - timedelta(hours=hours)
 
         stale = (
             db.query(File)
@@ -114,7 +113,7 @@ async def cleanup_stale_uploads(_ctx) -> dict:
 
         db.flush()
 
-        now = _utcnow()
+        now = utc_now()
         for share_id in share_ids:
             share = db.query(Share).filter(Share.id == share_id).first()
             if share is None or share.state != ShareState.active:

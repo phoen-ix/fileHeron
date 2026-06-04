@@ -32,6 +32,8 @@ def _has_2fa(db: Session, user_id: int) -> bool:
 
 
 def _to_user_item(db: Session, u: User) -> AdminUserItem:
+    """Single-user serialization (detail / invite responses). The list
+    endpoint uses `_hydrate_user_items` for bulk efficiency."""
     from ...services import quota as quota_svc
     from ...services import twofa_policy as twofa_policy_svc
 
@@ -50,6 +52,40 @@ def _to_user_item(db: Session, u: User) -> AdminUserItem:
     )
 
 
+def _hydrate_user_items(db: Session, rows: list[User]) -> list[AdminUserItem]:
+    """Serialize a page of users with bulk lookups — one TOTP query, one
+    policy resolve (+ at most one group query), one Redis MGET for quota —
+    instead of the old ~3 round-trips per row."""
+    from ...services import quota as quota_svc
+    from ...services import twofa_policy as twofa_policy_svc
+
+    if not rows:
+        return []
+    ids = [u.id for u in rows]
+    totp_enabled: dict[int, bool] = {
+        t.user_id: t.enabled_at is not None
+        for t in db.query(UserTOTP).filter(UserTOTP.user_id.in_(ids)).all()
+    }
+    requires_2fa = twofa_policy_svc.is_2fa_required_bulk(db, rows)
+    used = quota_svc.used_bytes_bulk(ids)
+    return [
+        AdminUserItem(
+            id=u.id,
+            display_name=u.display_name,
+            email=u.email,
+            role=u.role,
+            is_disabled=u.is_disabled,
+            requires_2fa=requires_2fa.get(u.id, False),
+            quota_bytes=u.quota_bytes,
+            storage_used_bytes=used.get(u.id, 0),
+            created_at=u.created_at,
+            last_login_at=u.last_login_at,
+            has_2fa=totp_enabled.get(u.id, False),
+        )
+        for u in rows
+    ]
+
+
 @router.get("/users", response_model=AdminUserListResponse)
 def list_users(
     q: str = Query("", max_length=120),
@@ -61,7 +97,7 @@ def list_users(
 ) -> AdminUserListResponse:
     rows, total = um_svc.list_users(db, q=q, role=role, page=page, page_size=page_size)
     return AdminUserListResponse(
-        items=[_to_user_item(db, u) for u in rows],
+        items=_hydrate_user_items(db, rows),
         total=total,
         page=page,
         page_size=page_size,

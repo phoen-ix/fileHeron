@@ -114,6 +114,41 @@ def is_2fa_required(db: Session, user: User) -> bool:
     return False
 
 
+def is_2fa_required_bulk(db: Session, users: list[User]) -> dict[int, bool]:
+    """Bulk equivalent of `is_2fa_required` for a page of users.
+
+    Resolves the policy once and issues at most one extra query (group
+    membership) instead of re-resolving + re-querying per user — the
+    admin-users list hydration path. Relies on each user's `totp`
+    relationship already being loaded/loadable; callers that bulk-load
+    UserTOTP first avoid the per-user lazy load.
+    """
+    if not users:
+        return {}
+    roles, group_ids, _ = _resolve_policy(db)
+    member_ids: set[int] = set()
+    if group_ids:
+        rows = (
+            db.query(GroupMember.user_id)
+            .filter(
+                GroupMember.user_id.in_([u.id for u in users]),
+                GroupMember.group_id.in_(group_ids),
+            )
+            .distinct()
+            .all()
+        )
+        member_ids = {r[0] for r in rows}
+    out: dict[int, bool] = {}
+    for u in users:
+        if has_totp_enabled(u):
+            out[u.id] = False
+        elif u.role.value in roles:
+            out[u.id] = True
+        else:
+            out[u.id] = u.id in member_ids
+    return out
+
+
 def write_policy(
     db: Session,
     *,

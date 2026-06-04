@@ -11,7 +11,7 @@ each category + payload into a UI line.
 from __future__ import annotations
 
 import enum
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import (
@@ -19,6 +19,7 @@ from sqlalchemy import (
     BigInteger,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     String,
 )
@@ -28,6 +29,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ..database import Base
+from ..utils.timeutil import utc_now
 
 # BIGINT does not autoincrement under SQLite; fall through to ROWID.
 _BigIntPK = BigInteger().with_variant(Integer(), "sqlite")
@@ -76,12 +78,14 @@ ADMIN_ONLY_CATEGORIES = frozenset(
 )
 
 
-def _utcnow() -> datetime:
-    return datetime.now(tz=timezone.utc).replace(tzinfo=None)
 
 
 class Notification(Base):
     __tablename__ = "notifications"
+    __table_args__ = (
+        # Bell list (user_id + created_at DESC) + the daily age-out cron.
+        Index("ix_notifications_user_created", "user_id", "created_at"),
+    )
 
     id: Mapped[int] = mapped_column(_BigIntPK, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(
@@ -97,7 +101,7 @@ class Notification(Base):
     )
     link_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(), nullable=False, default=_utcnow, index=True
+        DateTime(), nullable=False, default=utc_now, index=True
     )
     read_at: Mapped[datetime | None] = mapped_column(
         DateTime(), nullable=True

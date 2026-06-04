@@ -13,7 +13,6 @@ Chrome auto-update doesn't fire an alert.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
 
 from fastapi import Request
 from sqlalchemy.orm import Session
@@ -21,13 +20,12 @@ from sqlalchemy.orm import Session
 from ..models.notification import NotificationCategory
 from ..models.user import User
 from ..utils.geohash import ip_geohash5
+from ..utils.timeutil import utc_now
 from . import notification as notif_svc
 
 logger = logging.getLogger("fileheron.login_alert")
 
 
-def _utcnow() -> datetime:
-    return datetime.now(tz=timezone.utc).replace(tzinfo=None)
 
 
 def fire_new_device_alert(
@@ -56,7 +54,7 @@ def fire_new_device_alert(
                 # enough device-fingerprinting that emailing it back
                 # adds disclosure risk if the inbox is later breached.
                 "ua_summary": _summarize_ua(ua),
-                "at": _utcnow(),
+                "at": utc_now(),
                 "account_url": account_url,
             },
             link_url=account_url,

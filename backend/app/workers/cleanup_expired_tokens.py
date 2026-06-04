@@ -21,17 +21,16 @@ old enough", both of which are stable once a row is processed.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 
 from ..database import SessionLocal
 from ..models.refresh_token import RefreshToken
 from ..services.cron_tracker import track_cron
+from ..utils.timeutil import utc_now
 
 logger = logging.getLogger("fileheron.workers.cleanup_expired_tokens")
 
 
-def _utcnow() -> datetime:
-    return datetime.now(tz=timezone.utc).replace(tzinfo=None)
 
 
 @track_cron("cleanup_expired_tokens")
@@ -42,7 +41,7 @@ async def cleanup_expired_tokens(_ctx) -> dict:
     soft_revoked = 0
     deleted = 0
     try:
-        now = _utcnow()
+        now = utc_now()
 
         # 1. Past-TTL → soft-revoke. Bulk UPDATE with synchronize_session=False
         #    is safe because we don't use the affected rows in this session.

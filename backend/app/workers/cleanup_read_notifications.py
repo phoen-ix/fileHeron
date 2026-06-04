@@ -13,17 +13,16 @@ Idempotent — re-running matches no new rows once a batch is gone.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 
 from ..database import SessionLocal
 from ..models.notification import Notification
 from ..services.cron_tracker import track_cron
+from ..utils.timeutil import utc_now
 
 logger = logging.getLogger("fileheron.workers.cleanup_read_notifications")
 
 
-def _utcnow() -> datetime:
-    return datetime.now(tz=timezone.utc).replace(tzinfo=None)
 
 
 @track_cron("cleanup_read_notifications")
@@ -44,7 +43,7 @@ async def cleanup_read_notifications(_ctx) -> dict:
         )
         if days <= 0:
             return {"deleted": 0, "skipped": "disabled"}
-        cutoff = _utcnow() - timedelta(days=days)
+        cutoff = utc_now() - timedelta(days=days)
         deleted = (
             db.query(Notification)
             .filter(Notification.created_at < cutoff)

@@ -11,6 +11,7 @@ import {
 import { useApiError } from '@/composables/useApiError'
 import { useUiStore } from '@/stores/ui'
 import type { AdminFileItem } from '@/types/api'
+import { formatBytes } from '@/utils/bytes'
 import { formatInSiteTime } from '@/utils/datetime'
 
 const { t, locale } = useI18n()
@@ -74,14 +75,6 @@ function formatDate(iso: string | null): string {
   return formatInSiteTime(iso, locale.value)
 }
 
-function formatBytes(n: number): string {
-  if (n < 1024) return `${n} B`
-  const k = n / 1024
-  if (k < 1024) return `${k.toFixed(1)} KB`
-  const m = k / 1024
-  if (m < 1024) return `${m.toFixed(1)} MB`
-  return `${(m / 1024).toFixed(2)} GB`
-}
 
 async function onDownload(file: AdminFileItem) {
   try {

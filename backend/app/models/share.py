@@ -11,14 +11,15 @@ from __future__ import annotations
 
 import enum
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Text
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ..database import Base
+from ..utils.timeutil import utc_now
 
 if TYPE_CHECKING:
     from .file import File
@@ -45,8 +46,6 @@ class ShareState(str, enum.Enum):
     failed = "failed"
 
 
-def _utcnow() -> datetime:
-    return datetime.now(tz=timezone.utc).replace(tzinfo=None)
 
 
 def _new_uuid() -> str:
@@ -55,6 +54,11 @@ def _new_uuid() -> str:
 
 class Share(Base):
     __tablename__ = "shares"
+    __table_args__ = (
+        # Hot path: the hourly expire_files cron + list filtering both key on
+        # (state, expires_at).
+        Index("ix_shares_state_expires", "state", "expires_at"),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_uuid)
 
@@ -82,7 +86,7 @@ class Share(Base):
         index=True,
     )
 
-    created_at: Mapped[datetime] = mapped_column(DateTime(), nullable=False, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(), nullable=False, default=utc_now)
     # Set by the share_expiring_24h_warning cron when it has fired the
     # expiring-soon notification for this share — flag is what makes the
     # job idempotent across re-runs in the same hour.

@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import logging
 import shutil
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 
 from sqlalchemy.orm import Session
@@ -23,19 +23,18 @@ from ..models.audit_log import AuditEventType
 from ..models.file import File, FileState
 from ..models.share import Share
 from ..models.user import User
+from ..utils.timeutil import utc_now
 from .audit import record_audit_event
 from .quota import release_bytes
 
 logger = logging.getLogger("fileheron.file")
 
 
-def _utcnow() -> datetime:
-    return datetime.now(tz=timezone.utc).replace(tzinfo=None)
 
 
 def storage_path_for(file_id: str, when: datetime | None = None) -> Path:
     """Compute the deterministic on-disk path for a finalized file."""
-    when = when or _utcnow()
+    when = when or utc_now()
     return Path(settings.STORAGE_ROOT) / f"{when.year:04d}" / f"{when.month:02d}" / f"{file_id}.bin"
 
 
@@ -86,7 +85,7 @@ def finalize_to_disk(
         # If neither exists, the upload didn't actually land — bail out.
         raise AppError(500, "UPLOAD_MISSING", f"tusd upload {tus_upload_id} not found on disk.")
 
-    when = _utcnow()
+    when = utc_now()
     dest = storage_path_for(file.id, when)
     dest.parent.mkdir(parents=True, exist_ok=True)
     # shutil.move == os.rename if same fs, else copy2 + unlink.

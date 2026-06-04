@@ -19,7 +19,7 @@ can show "ops_check last ran 23 minutes ago".
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 
 from ..database import SessionLocal
 from ..models.audit_log import AuditEventType, AuditLog
@@ -28,6 +28,7 @@ from ..models.user import User, UserRole
 from ..redis_client import get_redis
 from ..services.cron_tracker import track_cron
 from ..services.notification import dispatch
+from ..utils.timeutil import utc_now
 
 logger = logging.getLogger("fileheron.workers.ops_check")
 
@@ -35,8 +36,6 @@ _DEDUP_TTL_SEC = 3600
 _SMTP_FAILURE_LOOKBACK = timedelta(hours=1)
 
 
-def _utcnow() -> datetime:
-    return datetime.now(tz=timezone.utc).replace(tzinfo=None)
 
 
 def _dedup_seen(reason: str) -> bool:
@@ -61,7 +60,7 @@ def _alert_admins(db, *, reason: str, detail: str) -> int:
         .filter(User.role == UserRole.admin, User.is_disabled.is_(False))
         .all()
     )
-    payload = {"reason": reason, "detail": detail[:500], "at": _utcnow().isoformat()}
+    payload = {"reason": reason, "detail": detail[:500], "at": utc_now().isoformat()}
     n = 0
     for admin in admins:
         try:
@@ -101,7 +100,7 @@ def _check_redis() -> str | None:
 
 
 def _check_smtp(db) -> str | None:
-    cutoff = _utcnow() - _SMTP_FAILURE_LOOKBACK
+    cutoff = utc_now() - _SMTP_FAILURE_LOOKBACK
     n = (
         db.query(AuditLog)
         .filter(

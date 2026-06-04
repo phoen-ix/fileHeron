@@ -9,24 +9,28 @@ hashed with SHA-256 (high entropy → no Argon2 needed). Rotation:
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ..database import Base
+from ..utils.timeutil import utc_now
 
 if TYPE_CHECKING:
     from .user import User
 
 
-def _utcnow() -> datetime:
-    return datetime.now(tz=timezone.utc).replace(tzinfo=None)
 
 
 class RefreshToken(Base):
     __tablename__ = "refresh_tokens"
+    __table_args__ = (
+        # Admin session list + active-session lookups filter on
+        # (user_id, revoked_at, expires_at).
+        Index("ix_refresh_tokens_user_active", "user_id", "revoked_at", "expires_at"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = mapped_column(
@@ -34,11 +38,11 @@ class RefreshToken(Base):
     )
     token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True, nullable=False)
 
-    created_at: Mapped[datetime] = mapped_column(DateTime(), nullable=False, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(), nullable=False, default=utc_now)
     # Last activity on this session. Because the token rotates on every refresh
     # (a new head row is minted), `created_at` is threaded forward to mean the
     # original sign-in time while `last_used_at` advances to the latest rotation.
-    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(), nullable=True, default=_utcnow)
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(), nullable=True, default=utc_now)
     expires_at: Mapped[datetime] = mapped_column(DateTime(), nullable=False)
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(), nullable=True)
 

@@ -36,7 +36,7 @@ shortening + transparent per-user session cap; the ~25-key runtime settings
 **registry** (`services/settings_registry.py`) that overlays env defaults so
 sessions/rate-limits/retention/uploads/HIBP/branding are admin-tunable live.
 
-**Post-1.4 backend (current `v1.10.2`):** admin **session management**
+**Post-1.4 backend (current `v1.10.4`):** admin **session management**
 (`/admin/sessions` + per-user section — list/revoke any user's sessions;
 `refresh_tokens.last_used_at` + `refresh_token_admin_revoked` audit); admin
 **file delete** in File History (`DELETE /api/admin/files/{id}` via shared
@@ -51,7 +51,10 @@ N+1 fixes; compound indexes on shares/refresh_tokens/notifications/
 login_attempts/files); rate-limit now also gates `reset-password` +
 `change-password`; SSE token TTL 120→300s + bell reconnect on tab refocus;
 shared frontend primitives (`Pager`, `useDebouncedSearch`, `statePill`,
-`utils/bytes`, `utils/timeutil::utc_now`).
+`utils/bytes`, `utils/timeutil::utc_now`). The **audit log** moved from
+cursor "Newer/Older" to **numbered-page** pagination (the shared `Pager`, like
+every other admin list; backend offset mode was already there); `Pager` now
+hides Prev on page 1 / Next on the last page instead of disabling them.
 
 **Desktop client (current `client-v0.9.9`):** CustomTkinter, single Windows
 .exe. v0.9.x reworked it to an in-window login overlay (no separate login

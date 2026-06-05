@@ -12,9 +12,9 @@ const totalPages = computed(() => Math.max(1, Math.ceil(props.total / props.page
 <template>
   <div v-if="totalPages > 1" class="pager">
     <button
+      v-if="page > 1"
       type="button"
       class="fh-btn-text"
-      :disabled="page <= 1"
       @click="emit('update:page', page - 1)"
     >
       ← {{ t('admin_users.prev') }}
@@ -23,9 +23,9 @@ const totalPages = computed(() => Math.max(1, Math.ceil(props.total / props.page
       {{ t('admin_users.page_of', { page, total: totalPages }) }}
     </span>
     <button
+      v-if="page < totalPages"
       type="button"
       class="fh-btn-text"
-      :disabled="page >= totalPages"
       @click="emit('update:page', page + 1)"
     >
       {{ t('admin_users.next') }} →

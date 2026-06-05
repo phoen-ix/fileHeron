@@ -26,7 +26,7 @@ self-service profile, admin-controlled API-token / public-link / 2FA
 policies, admin-editable SMTP, home-page enable toggle, per-user landing
 page picker. **Phase 10 + post-10 polish complete.** Security audit (Waves 1–4 + bonus), operational audit (Waves 1–4), and the follow-up comment-correctness sweep all shipped 2026-05-16.
 
-**Post-1.0 backend (current `v1.4.0`):** in-app self-update flow (GitHub
+**Post-1.0 backend (`v1.4.0`):** in-app self-update flow (GitHub
 release-check → updater shim/executor + one-click rollback); admin
 "create user directly" (skip invite, set password); orphaned-file reclaim
 (revoked-share bytes) with admin visibility; 24-hour timestamps with an
@@ -36,7 +36,24 @@ shortening + transparent per-user session cap; the ~25-key runtime settings
 **registry** (`services/settings_registry.py`) that overlays env defaults so
 sessions/rate-limits/retention/uploads/HIBP/branding are admin-tunable live.
 
-**Desktop client (current `client-v0.9.1`):** CustomTkinter, single Windows
+**Post-1.4 backend (current `v1.10.2`):** admin **session management**
+(`/admin/sessions` + per-user section — list/revoke any user's sessions;
+`refresh_tokens.last_used_at` + `refresh_token_admin_revoked` audit); admin
+**file delete** in File History (`DELETE /api/admin/files/{id}` via shared
+`hard_delete`, auto-revokes the parent share if last live file) + File History
+**hides deleted/abandoned by default** + a per-user **Current files** section on
+the user detail page; the admin **Storage** column now reads the authoritative
+**DB sum** (not the volatile Redis quota counter, which lost its 24h TTL +
+floors at 0); **Element Plus removed** (native `<input type=datetime-local>` in
+`ExpiryPicker.vue`); a11y pass (focus-on-route-change, `useConfirm` dialog
+replacing `window.confirm`, aria labels); perf (groups + admin-users + cron
+N+1 fixes; compound indexes on shares/refresh_tokens/notifications/
+login_attempts/files); rate-limit now also gates `reset-password` +
+`change-password`; SSE token TTL 120→300s + bell reconnect on tab refocus;
+shared frontend primitives (`Pager`, `useDebouncedSearch`, `statePill`,
+`utils/bytes`, `utils/timeutil::utc_now`).
+
+**Desktop client (current `client-v0.9.9`):** CustomTkinter, single Windows
 .exe. v0.9.x reworked it to an in-window login overlay (no separate login
 window), logout-returns-to-overlay (the app no longer quits on sign-out), and
 graceful session-expiry recovery. See `client/` + `client/RELEASE_NOTES.md`.
@@ -79,7 +96,7 @@ If `SMTP_HOST` is empty, all outgoing email is logged to backend stdout.
 | Antivirus | ClamAV | EICAR-tested |
 | Reverse proxy | Traefik **on host** (not in compose) | TLS + ACME, multi-app shared infra |
 | SPA static serve | `nginx:alpine` in compose | Tiny |
-| Frontend | Vue 3 + Vite + Pinia + Vue Router + selective Element Plus + Uppy + axios + dayjs + vue-i18n + vitest | Matches `REDACTED` |
+| Frontend | Vue 3 + Vite + Pinia + Vue Router + Uppy + axios + dayjs + vue-i18n + vitest | Matches `REDACTED`. Element Plus removed in v1.9.0 — date/time uses native `<input type=datetime-local>`. |
 | Auth (local) | Argon2id, JWT 15min + 7d refresh httpOnly cookie scoped to `/api/auth`, refresh rotation with reuse-detection | |
 | 2FA | TOTP (Fernet-encrypted secret) + 10 Argon2-hashed recovery codes; WebAuthn passkeys as alternate second factor | |
 | Auth (federation) | Multi-provider OIDC (Authlib-style code flow) | External clients always local |
@@ -112,7 +129,7 @@ Downloads: `browser → Traefik → FastAPI → FileResponse(path) → kernel se
 
 ## Conventions
 
-- **Timestamps:** stored as **naive UTC** (`datetime.now(tz=timezone.utc).replace(tzinfo=None)`). MariaDB DATETIME doesn't preserve TZ. JWT `iat`/`exp` use AWARE UTC so `.timestamp()` returns the correct epoch.
+- **Timestamps:** stored as **naive UTC** via the canonical `app/utils/timeutil.py::utc_now()` helper (`= datetime.now(tz=timezone.utc).replace(tzinfo=None)`; the ~50 ad-hoc `_utcnow` copies were consolidated into it in v1.8.0). MariaDB DATETIME doesn't preserve TZ. JWT `iat`/`exp` use AWARE UTC (`utc_now_aware()`) so `.timestamp()` returns the correct epoch.
 - **DB IDs:** `BigInteger` for high-volume tables (`audit_log`, `download_log`, `notifications`, `public_link_password_attempts`); `Integer` for low-volume; UUID where it leaves the system (share IDs, file IDs, public-link tokens, OIDC provider IDs).
 - **Compose env vars:** required ones use `${VAR:?error message}` to fail fast.
 - **Logging:** JSON one-line-per-event; `logging.driver: json-file, max-size: 50–100m, max-file: 3` on every service.
@@ -137,7 +154,7 @@ Downloads: `browser → Traefik → FastAPI → FileResponse(path) → kernel se
 - **Refresh rotation** — conditional UPDATE for atomic revoke; reuse → revoke entire user family + audit `refresh_token_reused`.
 - **Session cap** `MAX_ACTIVE_SESSIONS_PER_USER` (default 10). Oldest evicted on every new login → audit `refresh_token_evicted`. Cleanup cron (minute 23) soft-revokes expired tokens, hard-deletes revoked rows older than `REFRESH_TOKEN_RETENTION_DAYS` (default 30).
 - **Lockout:** 5 consecutive `INVALID_CREDENTIALS` → `users.locked_until = now + 15min` + lockout email (6h dedup). Successful login resets the counter.
-- **Per-IP rate limit:** 10 / 15min sliding window via Redis. Over → 429 `RATE_LIMITED`. Fail-open. Same `check_ip_allowed(bucket, ip, limit, window_sec)` helper also gates `register-from-invite`, `forgot-password`, `verify-email` (configurable via `RATE_LIMIT_*`).
+- **Per-IP rate limit:** 10 / 15min sliding window via Redis. Over → 429 `RATE_LIMITED`. Fail-open. Same `check_ip_allowed(bucket, ip, limit, window_sec)` helper also gates `register-from-invite`, `forgot-password`, `verify-email`, `reset-password`, `change-password` (configurable via `RATE_LIMIT_*`).
 - **Forensics:** every login attempt logged to `login_attempts` (outcome enum at `models/login_attempt.py::LoginOutcome`); every new device fingerprint to `known_devices` (UA-hash with patch-version stripped + IP /24 geohash) → `services/login_alert.py::fire_new_device_alert` emails on first sighting.
 - **2FA enrolment:** `POST /api/account/2fa/setup` → `{secret_b32, otpauth_uri, qr_svg}`; `POST /api/account/2fa/enable` body `{code}` → confirms + returns 10 plaintext recovery codes (one-time response). Disable: `POST /api/account/2fa/disable` body `{password, code_or_recovery}`.
 - **2FA enforcement** (`services/twofa_policy.py::is_2fa_required(db, user)` — computed live per request, no static column):
@@ -163,7 +180,7 @@ client → POST /api/uploads/init  (HMAC envelope, files row state=uploading)
 - **`tus_upload_id` regex:** `^[A-Za-z0-9_-]{1,128}$` validated at pre-create + post-finish (`tus_hooks.py::_check_tus_upload_id`).
 - **Finalize:** `shutil.move` (`os.rename` when same-fs, else copy2 + unlink) — portable across bind-mount layouts. Compose mounts uploads + files from the same host directory tree.
 - **Direct upload** (`POST /api/uploads/direct`, `≤ MAX_DIRECT_UPLOAD_BYTES` default 100 MB) — single multipart, skips tusd entirely.
-- **Quota:** per-user `users.quota_bytes` (NULL = unlimited), reserved at pre-create via Redis Lua (atomic), released on share revoke / quarantine / file delete.
+- **Quota:** per-user `users.quota_bytes` (NULL = unlimited), reserved at pre-create via Redis Lua (atomic), released on share revoke / quarantine / file delete. The Redis counter is the fast **enforcement** source (no TTL since v1.9.2 — kept honest by the hourly `quota_reconcile` cron; `used_bytes` floors at 0). For **display** (admin Storage column / per-user files) use `quota.storage_used_bytes[_bulk]` — the authoritative DB `SUM(file.size_bytes)` over uploading/ready_unscanned/clean — never the volatile counter.
 - **Browser orchestration** (`composables/useUpload.ts`): files <100 MB → direct multipart; ≥100 MB → init + Uppy/`@uppy/tus`. Per-file `Upload-Metadata` via Uppy's `headers: (file) => …` callback. Brief `'finalizing'` UI state because tusd's post-finish hook races with the file row state flip.
 - **Recipient picker access control:** `/api/users/lookup` (employees+admins only, legacy); `/api/users/search?q=` is the role-scoped union (clients see connected employees only; employees see all employees + connected clients; admins see everyone).
 - **API tokens:** `fh_<8-hex>_<43-b64url>`. SHA-256-hashed in DB; index by prefix; constant-time secret-half compare. `dependencies.get_actor` accepts JWT or API token on `Authorization: Bearer …`.
@@ -224,7 +241,7 @@ Failures logged but never propagate.
 
 - `frontend/src/components/NotificationBell.vue` mounts in `AppHeader` when authed. Pinia store `notifications` holds 20 most-recent + unread count.
 - `services/sse.py` Redis pubsub fanout per-user channel `fh:sse:{user_id}`. Dispatcher publishes a frame whenever channel is `in_app` or `both`.
-- **Connection lifetime 60s by design** — deterministic reconnect window beats unpredictable proxy timeouts. Server emits `: close\n\n` comment frame on TTL expiry, frontend reconnects with `Last-Event-Id`.
+- **Connection lifetime 60s by design** — deterministic reconnect window beats unpredictable proxy timeouts. Server emits `: close\n\n` comment frame on TTL expiry, frontend reconnects with `Last-Event-Id`. EventSource auth rides on `?token=` (a signed `services/sse_token.py` token, **300s TTL** since v1.10.2 so throttled/background-tab reconnects don't expire it); the bell also restarts the stream on tab refocus.
 - **Reverse-proxy headers:** `Cache-Control: no-cache, no-transform`, `X-Accel-Buffering: no`, `Connection: keep-alive`. **Don't add buffering middleware in Traefik labels.**
 
 ## SSO (multi-provider OIDC)
@@ -249,7 +266,7 @@ Failures logged but never propagate.
 ## Admin
 
 - **Shell:** `/admin` is `AdminLayout.vue` with left sidebar (Users / Groups / Audit log / File history / API tokens / Settings tree). All admin routes are nested children with `requireAdmin: true` route meta + `get_current_admin` backend dependency.
-- **Pages:** `/admin/users` (list + filter + paginate + inline invite form, ID column visible), `/admin/users/:id` (edit + force-reset + 2-step erasure with pre-flight + PDF receipt download), `/admin/groups`, `/admin/groups/:id`, `/admin/audit-log` (filter + paginate + streaming CSV export), `/admin/file-history` (cross-user file inventory), `/admin/api-tokens` (inventory: disable / reactivate / revoke / generate-on-behalf), `/admin/system` (health + self-update banner + on-demand cron run), `/admin/settings/{sso,api-tokens,public-links,twofa,email,home-page,site,motd,share-defaults,quarantine,updates,advanced,general}`.
+- **Pages:** `/admin/users` (list + filter + paginate + inline invite form, ID column visible), `/admin/users/:id` (edit + force-reset + 2-step erasure with pre-flight + PDF receipt download), `/admin/groups`, `/admin/groups/:id`, `/admin/audit-log` (filter + paginate + streaming CSV export), `/admin/file-history` (cross-user file inventory; **hides deleted/abandoned by default** — toggle to show; per-row **Delete** = `DELETE /api/admin/files/{id}` + Reclaim for orphans), `/admin/sessions` (all users' sessions — paginated/sortable/searchable; per-session + per-user revoke; also a per-user section + "Current files" list on `/admin/users/:id`), `/admin/api-tokens` (inventory: disable / reactivate / revoke / generate-on-behalf), `/admin/system` (health + self-update banner + on-demand cron run), `/admin/settings/{sso,api-tokens,public-links,twofa,email,home-page,site,motd,share-defaults,quarantine,updates,advanced,general}`.
 - **Audit log Actor cell** is a RouterLink to `/admin/users/:id`; bulk-loads display name + email per page (mirroring `shares.py`'s sender/recipient hydration). Erased / deleted users render ID + `(deleted)` tag.
 - **Admin nav location:** `Admin` link is in the user-menu dropdown (above `Account`), not in the top horizontal nav. EN/DE language switcher is **not** in the header — only on public auth pages (`AuthCanvas`); `users.locale` overrides on bootstrap, `localStorage.fh.locale` survives anonymous picks.
 
@@ -323,7 +340,7 @@ ARQ worker container. Config: `backend/app/workers/worker.py::WorkerSettings`. Q
 | `invite_tokens` | 24h single-use. `initial_group_ids` JSON column for pre-assigned groups. | |
 | `email_verify_tokens` | 24h single-use. | Invite path pre-verifies. |
 | `password_reset_tokens` | 1h single-use. Consume invalidates all refresh tokens. | |
-| `refresh_tokens` | 7d. SHA-256 hash; `replaced_by_id` self-FK forms rotation chain. | Reuse → revoke entire user family. |
+| `refresh_tokens` | 7d. SHA-256 hash; `replaced_by_id` self-FK forms rotation chain. `last_used_at` (v1.7.0) + `created_at` threaded across rotations = session "last active" vs "started". Index `(user_id, revoked_at, expires_at)`. | Reuse → revoke entire user family. Admin revoke via `/admin/sessions` audits `refresh_token_admin_revoked`. |
 | `audit_log` | Append-only. `event_type` string enum at `models/audit_log.py::AuditEventType`. | BigInteger PK. |
 | `shares` | UUID PK. `state` ∈ active/expired/revoked/deleted. `expires_at` indexed. `expiring_notified_at` for cron idempotency. | |
 | `files` | UUID PK = on-disk filename. `state` walks uploading → ready_unscanned → clean/infected → deleted. | |
@@ -357,7 +374,7 @@ ARQ worker container. Config: `backend/app/workers/worker.py::WorkerSettings`. Q
 
 Editorial Swiss-modernist foundation, **light theme only**. Self-hosted Instrument Serif (display) + Geist (body) + Geist Mono (data) — no Google Fonts CDN call. CSS variables in `src/styles/tokens.css`. Single warm-amber accent (`#b45309`) on warm off-white paper (`#faf8f3`). Density toggles via `[data-density="operator"]` attribute on `<main>` (set by router meta) — same tokens, denser rhythm for power-user surfaces.
 
-Element Plus is **selectively** wired: only `ElDatePicker` (in `ExpiryPicker.vue`); base CSS + per-component CSS loaded explicitly. EP CSS variables remapped to `--fh-*` in `src/styles/element-plus.css`. **No global EP registration.** No Tailwind, no purple gradients, no EP default theme.
+**No UI framework** — Element Plus was removed in v1.9.0 (it had been wired only for `ElDatePicker`); `ExpiryPicker.vue` now uses a native `<input type="datetime-local">` styled with `--fh-*` tokens, so the whole library + its global stylesheet are gone from the bundle. No Tailwind, no purple gradients, no component-framework theme. Shared UI primitives live in `src/components/` (`Pager.vue`, `ConfirmDialog.vue`) + `src/composables/` (`useDebouncedSearch`, `useConfirm` via the ui store) + `src/utils/` (`statePill`, `bytes`, `ua`).
 
 Page-load reveal staged via `.fh-rise[data-stagger]` classes. Heron line-art on auth pages draws itself in over ~1.6s via stroke-dashoffset. `BrandMark.vue` `linkable` prop (default true) — `AppHeader` passes false when home page is disabled.
 

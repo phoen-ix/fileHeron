@@ -4,7 +4,7 @@ A self-hosted, bidirectional file-sharing platform. Companies share files outbou
 
 > Display name is **file:Heron** (with the colon). The repository directory, container names, package names, code identifiers, and env-var names all use **fileHeron** without the colon — filesystems and most tools forbid `:` in identifiers.
 
-> **Status: shipped & in operation (backend `v1.4.0`, desktop client `client-v0.9.1`).** Auth, uploads (resumable + direct), shares (multi-recipient outbox/inbox), groups, public links, ClamAV scanning, email + in-app notifications, admin UI, multi-provider OIDC SSO with explicit Connect flow, WebAuthn/passkeys, GDPR right-to-erasure with PDF receipt, self-service profile (display name + locale + landing page) — all live. Post-1.0 added an in-app self-update flow, admin "create user directly" (skip the invite), orphaned-file reclaim, 24-hour timestamps with an admin-set site timezone, a login-page MOTD banner, a transparent per-user session cap, and a runtime **settings registry** that makes ~25 formerly env-only knobs admin-tunable without a redeploy. Single-org, three-role (admin / employee / client) operator-grade tool.
+> **Status: shipped & in operation (backend `v1.10.2`, desktop client `client-v0.9.9`).** Auth, uploads (resumable + direct), shares (multi-recipient outbox/inbox), groups, public links, ClamAV scanning, email + in-app notifications, admin UI, multi-provider OIDC SSO with explicit Connect flow, WebAuthn/passkeys, GDPR right-to-erasure with PDF receipt, self-service profile (display name + locale + landing page) — all live. Post-1.0 added an in-app self-update flow, admin "create user directly" (skip the invite), orphaned-file reclaim, 24-hour timestamps with an admin-set site timezone, a login-page MOTD banner, a transparent per-user session cap, and a runtime **settings registry** that makes ~25 formerly env-only knobs admin-tunable without a redeploy. Post-1.4 added admin **session management** (view/revoke any user's sessions), admin **file deletion** in File History (which now hides deleted/abandoned by default) plus a per-user "current files" view, a DB-authoritative storage column, and a round of performance, accessibility, and dependency-slimming work (Element Plus removed). Single-org, three-role (admin / employee / client) operator-grade tool.
 
 This README is also the user / admin / operator / developer manual — the full walkthrough lives below the phase tracker. Jump to: [Using file:Heron](#using-fileheron-end-user-guide) · [Admin guide](#admin-guide) · [Operator guide](#operator-guide) · [Developer guide](#developer-guide) · [Desktop client](client/README.md).
 
@@ -58,7 +58,7 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up
 - **Backend:** Python 3.12, FastAPI, SQLAlchemy 2.0, Alembic, Pydantic v2, ARQ, argon2-cffi, py_webauthn, Authlib-style OIDC code flow, aiosmtplib, reportlab
 - **Database / cache:** MariaDB 11, Redis 7-alpine
 - **Upload:** tusd (Go) + Uppy (browser) + tuspy (API clients)
-- **Frontend:** Vue 3, Vite, Pinia, Vue Router, Element Plus (selective — only `ElDatePicker`), vue-i18n, axios, dayjs, vitest
+- **Frontend:** Vue 3, Vite, Pinia, Vue Router, vue-i18n, axios, dayjs, vitest (no UI framework — Element Plus was removed in v1.9.0; date/time uses a native `<input type=datetime-local>`)
 - **Antivirus:** ClamAV
 - **Reverse proxy / TLS:** Traefik on the host
 - **Internal static serving:** nginx:alpine
@@ -66,7 +66,8 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up
 ## Highlights
 
 - **Public-link policy + inline-on-create + editable expiry + Expire-now** — admin gates who can mint shareable public links (mode + user/group allowlist, mirroring the API-token policy). Share creators add password/download-limit/notify in the same form they upload from. Active shares expose an editable expiry and an "Expire now" button that flips state + deletes file bytes immediately (same helper as the cron).
-- **Sortable, filterable, groupable share lists + admin "File history"** — `/outbox` and `/inbox` are paginated with click-to-sort columns, recipient/sender filter, and a "group by user/group" toggle. Admin gets a cross-user file archive (every file ever uploaded, including deleted/expired) with download stats joined from the access log.
+- **Sortable, filterable, groupable share lists + admin "File history"** — `/outbox` and `/inbox` are paginated with click-to-sort columns, recipient/sender filter, and a "group by user/group" toggle. Admin gets a cross-user file archive (every file ever uploaded) with download stats joined from the access log; deleted/abandoned files are hidden by default (toggle to show), and admins can **delete any file** directly from the list (frees the uploader's quota; auto-revokes the parent share if it was the last live file).
+- **Admin session management** — `/admin/sessions` lists every user's signed-in sessions (paginated, searchable, sortable by last-active to spot stale ones); revoke a single session or all of a user's sessions. The user-detail page mirrors this with a per-user sessions list and a "current files" view.
 - **Admin-controlled API tokens** — operator picks who can mint programmatic keys (everyone / employees / admins / disabled) plus an additive user/group allowlist. Cross-user inventory with last-used, reversible disable, permanent revoke, and generate-on-behalf (admin sees the plaintext once for out-of-band hand-off).
 - **Multi-provider OIDC SSO** — run 2-3 providers concurrently (Entra for employees, Google for partners, …); each user binds to one. Smart-prefill admin form for entra/google/authentik/keycloak presets. Explicit /account "Connect" flow refuses on email mismatch.
 - **GDPR right-to-erasure** with verifiable PDF receipts and pre-flight summary.
@@ -181,7 +182,13 @@ Filterable by event type, target type, target id, time window. Each row links th
 
 ## File history (`/admin/file-history`)
 
-Cross-user inventory of every file ever uploaded — including deleted, expired, and quarantined. Joins file + parent share + uploader + aggregated download stats (last download, count). Sortable / filterable / paginated. The intended use is "did this file get downloaded? when? by whom?" without leaving the admin shell.
+Cross-user inventory of every file ever uploaded. Joins file + parent share + uploader + aggregated download stats (last download, count). Sortable / filterable / paginated. The intended use is "did this file get downloaded? when? by whom?" without leaving the admin shell.
+
+By default the list **hides dead rows** — deleted files and abandoned (failed-share) uploads — to keep it focused on what's live; tick **"Show deleted / abandoned"** (or pick an explicit state in the dropdowns) to reveal them. Each live row has a **Delete** action (orphans keep the existing **Reclaim**): it hard-deletes the bytes, frees the uploader's quota, is audited with the admin as actor, and auto-revokes the parent share if it was the share's last live file. The user-detail page (`/admin/users/:id`) carries a per-user **Current files** section with the same delete action, alongside that user's **Storage** figure (summed authoritatively from the database).
+
+## Sessions (`/admin/sessions`)
+
+Every signed-in session across all users — a session being a live refresh-token row. Paginated, searchable (name / email / IP), and sortable by **Last active** (default ascending, so stale/forgotten devices surface first), Started, or Expires, with an optional "include expired/revoked" toggle. Each row shows the user, device (parsed from the user-agent), IP, when it started and was last active, and expiry. Revoke a single session, or all of one user's sessions ("Revoke all"); both are audited (`refresh_token_admin_revoked`). The user-detail page mirrors this for one user.
 
 ## Quarantine (`/admin/quarantine`)
 
@@ -743,7 +750,7 @@ The pytest conftest has two important autouse fixtures: `_disable_ip_rate_limit`
 - **Naive UTC** everywhere except the JWT `iat`/`exp` (those are aware UTC).
 - **Email lookup** uses the plaintext `users.email` column (always normalised on write via `utils/crypto.normalize_email`).
 - **No comments** unless the WHY is non-obvious. Don't explain WHAT the code does — well-named identifiers handle that.
-- **CSS variables** for everything — see `tokens.css`. Element Plus is selectively imported (just `ElDatePicker`); EP CSS variables are remapped to `--fh-*`.
+- **CSS variables** for everything — see `tokens.css`. No UI framework: Element Plus was removed in v1.9.0 (date/time uses a native `<input type=datetime-local>` styled with the `--fh-*` tokens).
 - **One service module per domain.** Keep routers thin: parse + delegate + serialise. Business logic lives in `services/`.
 
 

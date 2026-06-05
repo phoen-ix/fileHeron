@@ -79,6 +79,27 @@ def test_db_password_encrypted_round_trip(db, make_user):
     assert "hunter2" not in row.value
 
 
+def test_helo_hostname_env_and_db_override(db, make_user, monkeypatch):
+    monkeypatch.setattr("app.config.settings.SMTP_HELO_HOST", "helo.env.example")
+    # Env value flows through when no DB row is set.
+    assert email_svc.resolve_smtp_config(db).helo_hostname == "helo.env.example"
+    # DB override wins.
+    admin = make_user(role="admin")
+    settings_svc.set_value(
+        db,
+        key=settings_svc.Keys.SMTP_HELO_HOSTNAME,
+        value="helo.db.example",
+        actor=admin,
+    )
+    db.commit()
+    assert email_svc.resolve_smtp_config(db).helo_hostname == "helo.db.example"
+
+
+def test_helo_hostname_defaults_empty(db, monkeypatch):
+    monkeypatch.setattr("app.config.settings.SMTP_HELO_HOST", "")
+    assert email_svc.resolve_smtp_config(db).helo_hostname == ""
+
+
 def test_is_configured_flips_when_host_empty(db, monkeypatch):
     monkeypatch.setattr("app.config.settings.SMTP_HOST", "")
     cfg = email_svc.resolve_smtp_config(db)

@@ -39,6 +39,7 @@ class Keys:
     SMTP_FROM_EMAIL = "smtp.from_email"
     SMTP_FROM_NAME = "smtp.from_name"
     SMTP_TLS_MODE = "smtp.tls_mode"           # 'implicit' | 'starttls' | 'none'
+    SMTP_HELO_HOSTNAME = "smtp.helo_hostname"  # EHLO/HELO name; plaintext
     HOME_PAGE_ENABLED = "home_page.enabled"   # boolean: 'true' / 'false'
     # Login-page MOTD banner. When MOTD_ENABLED is true and MOTD_TEXT is
     # non-empty, /api/config-public surfaces both so the anonymous SPA

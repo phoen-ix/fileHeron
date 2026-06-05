@@ -27,6 +27,9 @@ const errorMsg = ref<string | null>(null)
 const current = ref<EmailSettingsResponse | null>(null)
 const testResult = ref<TestEmailResponse | null>(null)
 const testTo = ref('')
+// Most MTAs require SMTP AUTH. We block save/test on blank credentials
+// unless the admin explicitly opts into an anonymous (no-auth) relay.
+const allowAnonymous = ref(false)
 
 interface FormState {
   host: string
@@ -36,6 +39,7 @@ interface FormState {
   from_email: string
   from_name: string
   tls_mode: SmtpTlsMode
+  helo_hostname: string
 }
 
 const form = ref<FormState>({
@@ -46,6 +50,7 @@ const form = ref<FormState>({
   from_email: '',
   from_name: '',
   tls_mode: 'starttls',
+  helo_hostname: '',
 })
 
 const tlsOptions: { value: SmtpTlsMode; labelKey: string; helpKey: string }[] = [
@@ -72,6 +77,17 @@ const passwordPlaceholder = computed(() =>
     : t('admin_email.password_unset_placeholder'),
 )
 
+// Auth is "configured" when a username is present AND a password is either
+// typed now or already stored (blank password = keep existing).
+const authConfigured = computed(
+  () =>
+    form.value.user.trim() !== '' &&
+    (form.value.password !== '' || current.value?.is_password_set === true),
+)
+// Save/test are blocked when credentials are incomplete and the admin
+// hasn't ticked the anonymous-relay escape hatch.
+const authBlocked = computed(() => !allowAnonymous.value && !authConfigured.value)
+
 async function load() {
   loading.value = true
   errorMsg.value = null
@@ -85,6 +101,11 @@ async function load() {
     form.value.from_email = data.from_email
     form.value.from_name = data.from_name
     form.value.tls_mode = data.tls_mode
+    form.value.helo_hostname = data.helo_hostname
+    // Pre-tick "allow anonymous" only for an existing, already-saved config
+    // that deliberately runs without a username, so we don't retroactively
+    // block it. Fresh/unconfigured setups stay unchecked → creds required.
+    allowAnonymous.value = data.is_configured && data.user.trim() === ''
   } catch (err) {
     errorMsg.value = describe(err)
   } finally {
@@ -102,10 +123,15 @@ function buildPayload(): UpdateEmailSettingsRequest {
     from_email: form.value.from_email,
     from_name: form.value.from_name,
     tls_mode: form.value.tls_mode,
+    helo_hostname: form.value.helo_hostname,
   }
 }
 
 async function onSave() {
+  if (authBlocked.value) {
+    errorMsg.value = t('admin_email.auth_required_note')
+    return
+  }
   saving.value = true
   errorMsg.value = null
   try {
@@ -120,12 +146,23 @@ async function onSave() {
 }
 
 async function onTest() {
+  if (authBlocked.value) {
+    testResult.value = {
+      ok: false,
+      error_class: 'AuthRequired',
+      error_message: t('admin_email.auth_required_note'),
+      smtp_code: null,
+      hint: null,
+    }
+    return
+  }
   if (!testTo.value) {
     testResult.value = {
       ok: false,
       error_class: 'NoRecipient',
       error_message: t('admin_email.test_recipient_required'),
       smtp_code: null,
+      hint: null,
     }
     return
   }
@@ -143,6 +180,7 @@ async function onTest() {
       error_class: 'RequestError',
       error_message: describe(err),
       smtp_code: null,
+      hint: null,
     }
   } finally {
     testing.value = false
@@ -202,6 +240,18 @@ onMounted(load)
           />
         </label>
 
+        <label class="fh-field">
+          <span class="fh-field-label">{{ t('admin_email.helo_label') }}</span>
+          <input
+            v-model.trim="form.helo_hostname"
+            class="fh-field-input fh-field-mono"
+            type="text"
+            autocomplete="off"
+            placeholder="mail.example.com"
+          />
+          <span class="fh-field-help">{{ t('admin_email.helo_help') }}</span>
+        </label>
+
         <fieldset class="tls-fieldset">
           <legend class="fh-field-label">{{ t('admin_email.tls_label') }}</legend>
           <label v-for="opt in tlsOptions" :key="opt.value" class="tls-option">
@@ -235,6 +285,18 @@ onMounted(load)
           <span class="fh-field-help">{{ t('admin_email.password_help') }}</span>
         </label>
 
+        <label class="anon-option">
+          <input v-model="allowAnonymous" type="checkbox" />
+          <span>
+            <span class="tls-name">{{ t('admin_email.allow_anonymous_label') }}</span>
+            <span class="tls-help">{{ t('admin_email.allow_anonymous_help') }}</span>
+          </span>
+        </label>
+
+        <div v-if="authBlocked" class="fh-notice" data-tone="accent">
+          {{ t('admin_email.auth_required_note') }}
+        </div>
+
         <label class="fh-field">
           <span class="fh-field-label">{{ t('admin_email.from_email_label') }}</span>
           <input
@@ -258,7 +320,7 @@ onMounted(load)
         <div v-if="errorMsg" class="fh-notice" data-tone="error">{{ errorMsg }}</div>
 
         <div class="actions">
-          <button type="submit" class="fh-btn" :disabled="saving">
+          <button type="submit" class="fh-btn" :disabled="saving || authBlocked">
             {{ saving ? t('common.loading') : t('common.save') }}
           </button>
         </div>
@@ -281,7 +343,7 @@ onMounted(load)
           <button
             type="button"
             class="fh-btn"
-            :disabled="testing"
+            :disabled="testing || authBlocked"
             @click="onTest"
           >
             {{ testing ? t('common.loading') : t('admin_email.test_button') }}
@@ -301,6 +363,9 @@ onMounted(load)
               SMTP {{ testResult.smtp_code }}
             </div>
             <div>{{ testResult.error_message }}</div>
+          </div>
+          <div v-if="!testResult.ok && testResult.hint" class="test-hint">
+            <strong>{{ t('admin_email.hint_label') }}</strong> {{ testResult.hint }}
           </div>
         </div>
       </section>
@@ -350,14 +415,16 @@ onMounted(load)
   gap: var(--fh-space-2);
 }
 
-.tls-option {
+.tls-option,
+.anon-option {
   display: flex;
   align-items: flex-start;
   gap: var(--fh-space-2);
   cursor: pointer;
 }
 
-.tls-option > span {
+.tls-option > span,
+.anon-option > span {
   display: flex;
   flex-direction: column;
 }
@@ -408,5 +475,11 @@ onMounted(load)
   display: flex;
   flex-direction: column;
   gap: 2px;
+}
+
+.test-hint {
+  margin-top: var(--fh-space-2);
+  font-size: var(--fh-text-body-sm);
+  color: var(--fh-ink-soft);
 }
 </style>

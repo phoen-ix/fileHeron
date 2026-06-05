@@ -99,6 +99,11 @@ class Settings(BaseSettings):
     SMTP_PASSWORD: str = ""
     SMTP_FROM_EMAIL: str = "noreply@fileheron.local"
     SMTP_FROM_NAME: str = "fileHeron"
+    # EHLO/HELO name announced to the MTA. Empty = aiosmtplib uses the
+    # container's socket.getfqdn() (unpredictable). Set to a real,
+    # resolvable hostname when a strict MTA rejects with "Client host
+    # rejected". Admin-overridable via the smtp.helo_hostname kv key.
+    SMTP_HELO_HOST: str = ""
 
     # --- Rate limits ---------------------------------------------------------
     # LOGIN gates /api/auth/login + /login/recovery (services/rate_limit.py).

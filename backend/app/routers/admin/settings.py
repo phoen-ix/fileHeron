@@ -203,6 +203,7 @@ def _to_email_response(db: Session) -> EmailSettingsResponse:
             settings_svc.Keys.SMTP_FROM_EMAIL,
             settings_svc.Keys.SMTP_FROM_NAME,
             settings_svc.Keys.SMTP_TLS_MODE,
+            settings_svc.Keys.SMTP_HELO_HOSTNAME,
         )
     )
     return EmailSettingsResponse(
@@ -213,6 +214,7 @@ def _to_email_response(db: Session) -> EmailSettingsResponse:
         from_email=cfg.from_email,
         from_name=cfg.from_name,
         tls_mode=cfg.tls_mode,  # type: ignore[arg-type]
+        helo_hostname=cfg.helo_hostname,
         is_configured=cfg.is_configured,
         has_db_overrides=has_overrides,
     )
@@ -247,6 +249,7 @@ def update_email_settings(
         (settings_svc.Keys.SMTP_FROM_EMAIL, payload.from_email),
         (settings_svc.Keys.SMTP_FROM_NAME, payload.from_name),
         (settings_svc.Keys.SMTP_TLS_MODE, payload.tls_mode),
+        (settings_svc.Keys.SMTP_HELO_HOSTNAME, payload.helo_hostname),
     ]
     changed_keys: list[str] = []
     for key, value in pairs:
@@ -323,6 +326,7 @@ async def test_email_send(
             from_email=_o(ov.from_email, persisted.from_email),
             from_name=_o(ov.from_name, persisted.from_name),
             tls_mode=tls_mode,
+            helo_hostname=_o(ov.helo_hostname, persisted.helo_hostname),
         )
     result = await email_svc.test_send(db, to=payload.to, override=override)
     return TestEmailResponse(**result)

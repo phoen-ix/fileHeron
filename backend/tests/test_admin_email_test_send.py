@@ -82,6 +82,9 @@ async def test_test_send_surfaces_smtp_exception_class_and_message(
     assert body["error_class"] == "SMTPAuthenticationError"
     assert "wrong password" in body["error_message"]
     assert body["smtp_code"] == 535
+    # The actionable hint is surfaced alongside the raw diagnostic.
+    assert body["hint"] is not None
+    assert "authentication" in body["hint"].lower()
 
 
 @pytest.mark.asyncio
@@ -115,6 +118,7 @@ async def test_test_send_uses_override_without_persisting(
                 "from_email": "ov@example",
                 "from_name": "Override",
                 "tls_mode": "none",
+                "helo_hostname": "relay.override.example",
             },
         },
         headers={"Authorization": f"Bearer {token}"},
@@ -126,6 +130,8 @@ async def test_test_send_uses_override_without_persisting(
     assert captured.get("port") == 2525
     assert captured.get("username") == "ovuser"
     assert captured.get("password") == "ovpass"
+    # The configurable EHLO/HELO name flows through to aiosmtplib.
+    assert captured.get("local_hostname") == "relay.override.example"
 
     # Persisted settings remain empty.
     assert settings_svc.get(db, settings_svc.Keys.SMTP_HOST) is None

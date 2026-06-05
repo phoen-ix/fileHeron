@@ -38,6 +38,8 @@ class SmtpConfig:
     # 'starttls'  (upgrade after greeting, port 587 convention),
     # 'none'      (plain SMTP — only sane on localhost / private MTA)
     tls_mode: str = "starttls"
+    # EHLO/HELO name. Empty → aiosmtplib falls back to socket.getfqdn().
+    helo_hostname: str = ""
 
     @property
     def is_configured(self) -> bool:
@@ -97,5 +99,6 @@ async def send_email(
         password=cfg.password or None,
         use_tls=use_tls,
         start_tls=start_tls,
+        local_hostname=cfg.helo_hostname or None,
         timeout=20,
     )

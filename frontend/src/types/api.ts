@@ -694,6 +694,8 @@ export interface EmailSettingsResponse {
   from_email: string
   from_name: string
   tls_mode: SmtpTlsMode
+  /** EHLO/HELO name; '' = the server's auto-detected container FQDN is used. */
+  helo_hostname: string
   is_configured: boolean
   has_db_overrides: boolean
 }
@@ -707,6 +709,8 @@ export interface UpdateEmailSettingsRequest {
   from_email?: string
   from_name?: string
   tls_mode?: SmtpTlsMode
+  /** '' = clear (fall back to env/getfqdn); other = replace. */
+  helo_hostname?: string
 }
 
 export interface TestEmailRequest {
@@ -719,6 +723,8 @@ export interface TestEmailResponse {
   error_class: string | null
   error_message: string | null
   smtp_code: number | null
+  /** Human-readable next step for common SMTP failures; null when unmapped. */
+  hint: string | null
 }
 
 /* Admin home-page settings (post-Phase 10) */

@@ -36,7 +36,7 @@ shortening + transparent per-user session cap; the ~25-key runtime settings
 **registry** (`services/settings_registry.py`) that overlays env defaults so
 sessions/rate-limits/retention/uploads/HIBP/branding are admin-tunable live.
 
-**Post-1.4 backend (current `v1.10.4`):** admin **session management**
+**Post-1.4 backend (`v1.10.4`):** admin **session management**
 (`/admin/sessions` + per-user section — list/revoke any user's sessions;
 `refresh_tokens.last_used_at` + `refresh_token_admin_revoked` audit); admin
 **file delete** in File History (`DELETE /api/admin/files/{id}` via shared
@@ -55,6 +55,21 @@ shared frontend primitives (`Pager`, `useDebouncedSearch`, `statePill`,
 cursor "Newer/Older" to **numbered-page** pagination (the shared `Pager`, like
 every other admin list; backend offset mode was already there); `Pager` now
 hides Prev on page 1 / Next on the last page instead of disabling them.
+
+**Post-1.10 backend (current `v1.10.5`):** SMTP hardening on the admin **Email**
+settings page. (1) A configurable **HELO/EHLO hostname** (`smtp.helo_hostname`
+kv overlaying the `SMTP_HELO_HOST` env default) passed as `aiosmtplib`
+`local_hostname` — blank keeps the prior `socket.getfqdn()` behaviour; set it to
+a real name when a strict MTA rejects with "Client host rejected". (2) The
+**Send test email** result now carries an actionable `hint` (`services/email.py
+::_smtp_error_hint`) that classifies the common failures — bad credentials,
+client/relay refused (`554 5.7.1`), TLS-mode/port mismatch, unreachable host —
+instead of only the raw `aiosmtplib` traceback. (3) **Username + password are
+required by default**: blank credentials disable Save/Send-test until the admin
+ticks an explicit "Allow no authentication (anonymous)" checkbox (client-side
+guard; the API still accepts anonymous for trusted localhost relays, and
+existing user-less configs pre-tick the box so they aren't retroactively
+blocked).
 
 **Desktop client (current `client-v0.9.9`):** CustomTkinter, single Windows
 .exe. v0.9.x reworked it to an in-window login overlay (no separate login
@@ -282,7 +297,7 @@ Failures logged but never propagate.
 | API tokens (`/api-tokens`) | `api_token.policy_mode` + `..allowed_user_ids` + `..allowed_group_ids` | Mode ∈ everyone/employees_admins/admins_only/disabled. Admin always passes. Token states: active / disabled (reversible) / revoked (permanent). |
 | Public links (`/public-links`) | `public_link.policy_mode` + `..allowed_user_ids` + `..allowed_group_ids` | Same shape. Single gate `is_allowed_to_create`. |
 | 2FA enforcement (`/twofa`) | `twofa.required_roles` (JSON) + `twofa.required_group_ids` (JSON) | Computed live per request. No admin escape. |
-| SMTP (`/email`) | `smtp.{host,port,user,password,from_email,from_name,tls_mode}` | `smtp.password` is the **only** key in `_ENCRYPTED_KEYS` (Fernet). DB overlays env. |
+| SMTP (`/email`) | `smtp.{host,port,user,password,from_email,from_name,tls_mode,helo_hostname}` | `smtp.password` is the **only** key in `_ENCRYPTED_KEYS` (Fernet). DB overlays env. `helo_hostname` (plaintext) → `aiosmtplib` `local_hostname`; blank = `getfqdn()`. Test-send returns an actionable `hint`; UI requires user+password unless "allow anonymous" is ticked. |
 | Site (`/site`) | `site.url`, `site.timezone` | URL overrides `APP_URL` for user-facing links (not WebAuthn/OIDC redirect). Timezone (IANA) drives 24h timestamp render. `services/site.py`. |
 | Home page (`/home-page`) | `home_page.enabled` (bool) | When off: brand mark non-linkable, "Home" hidden from landing picker, `/` redirects forward. |
 | MOTD (`/motd`) | `motd.enabled` (bool), `motd.text` (plaintext) | Login-page banner; surfaced via `/api/config-public`. No Markdown. |

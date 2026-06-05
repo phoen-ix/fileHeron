@@ -195,6 +195,7 @@ def resolve_smtp_config(db: Session) -> SmtpConfig:
         from_email=_eff(settings_svc.Keys.SMTP_FROM_EMAIL, settings.SMTP_FROM_EMAIL),
         from_name=_eff(settings_svc.Keys.SMTP_FROM_NAME, settings.SMTP_FROM_NAME),
         tls_mode=tls_mode,
+        helo_hostname=_eff(settings_svc.Keys.SMTP_HELO_HOSTNAME, settings.SMTP_HELO_HOST),
     )
 
 
@@ -224,6 +225,62 @@ async def _send_resolved(
 # -------------------------------------------------------------------------
 
 
+def _smtp_error_hint(exc: Exception) -> str | None:
+    """Map a caught SMTP exception to a short, human-readable next step for
+    the admin test-send UI. Matches on type-name + SMTP code + lowercased
+    message (no aiosmtplib error-class imports) so it stays dependency-light
+    and testable. First match wins; never raises (it runs inside the error
+    path — a throw would turn a clean diagnostic into a 500)."""
+    code = getattr(exc, "code", None)
+    if not isinstance(code, int):
+        code = None
+    text = (str(getattr(exc, "message", "")) + " " + str(exc)).lower()
+    name = type(exc).__name__
+
+    # 1. Authentication — check before the relay rule below, since a 535 body
+    #    can also contain "access denied".
+    if name == "SMTPAuthenticationError" or code == 535 or "5.7.8" in text or "authentication" in text:
+        return (
+            "SMTP authentication failed (bad username or password). Re-enter "
+            "the SMTP user and password; some providers need an "
+            "app-specific password."
+        )
+    # 2. Client / relay refused — today's "554 5.7.1 Client host rejected" case.
+    if (
+        code == 554
+        or "5.7.1" in text
+        or "client host rejected" in text
+        or "relay access denied" in text
+        or "access denied" in text
+    ):
+        return (
+            "The server refused this client. Check the SMTP username and "
+            "password and that the server permits this sender to relay "
+            "(mynetworks / permit_sasl_authenticated). A correct EHLO/HELO "
+            "hostname (the HELO field) often resolves strict-MTA rejections."
+        )
+    # 3. TLS mismatch — require code is None so a coded 5xx relay/auth reject
+    #    can't be misclassified as TLS.
+    if name == "SMTPNotSupported" or "starttls" in text or (("tls" in text or "ssl" in text) and code is None):
+        return (
+            "TLS negotiation failed. The TLS mode likely doesn't match the "
+            "port: use 'implicit' for 465, 'starttls' for 587, 'none' only "
+            "on a trusted localhost relay."
+        )
+    # 4. Connection / timeout — last, since some TLS errors subclass these.
+    if (
+        name in ("SMTPConnectError", "SMTPServerDisconnected", "SMTPTimeoutError", "TimeoutError")
+        or isinstance(exc, OSError)
+        or "connect" in text
+        or "timed out" in text
+    ):
+        return (
+            "Could not reach the SMTP server. Check the host, port, and that "
+            "no firewall blocks the outbound connection."
+        )
+    return None
+
+
 def _smtp_error_payload(exc: Exception) -> dict:
     """Convert any aiosmtplib / OSError exception into the structured
     diagnostic the admin UI renders. Pulls SMTP code if available."""
@@ -232,6 +289,7 @@ def _smtp_error_payload(exc: Exception) -> dict:
         "error_class": type(exc).__name__,
         "error_message": str(exc) or repr(exc),
         "smtp_code": None,
+        "hint": _smtp_error_hint(exc),
     }
     code = getattr(exc, "code", None)
     if isinstance(code, int):
@@ -256,6 +314,7 @@ async def test_send(
             "error_class": "NotConfigured",
             "error_message": "SMTP host is empty. The dev logs-fallback would be used.",
             "smtp_code": None,
+            "hint": None,
         }
     from . import site as site_svc
 
@@ -276,7 +335,13 @@ async def test_send(
         )
     except Exception as exc:  # noqa: BLE001 — surface every error to the admin
         return _smtp_error_payload(exc)
-    return {"ok": True, "error_class": None, "error_message": None, "smtp_code": None}
+    return {
+        "ok": True,
+        "error_class": None,
+        "error_message": None,
+        "smtp_code": None,
+        "hint": None,
+    }
 
 
 # -------------------------------------------------------------------------

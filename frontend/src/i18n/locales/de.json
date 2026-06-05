@@ -445,6 +445,8 @@
     "host_label": "Host",
     "host_help": "Hostname oder IP des SMTP-Servers.",
     "port_label": "Port",
+    "helo_label": "HELO/EHLO-Hostname (optional)",
+    "helo_help": "Der Hostname, den fileHeron dem SMTP-Server beim HELO/EHLO mitteilt. Leer lassen, um den automatisch erkannten Namen des Containers zu verwenden (unvorhersehbar). Auf einen stabilen, gültigen Namen setzen, den dein Server akzeptiert — manche strengen Mailserver lehnen Sendungen mit unpassendem HELO-Namen ab (z. B. 554 5.7.1 … Access denied).",
     "tls_label": "TLS-Modus",
     "tls": {
       "starttls": "STARTTLS (Port 587)",
@@ -459,6 +461,9 @@
     "password_help": "Wird verschlüsselt gespeichert. Leer lassen, um das aktuelle Passwort beizubehalten.",
     "password_set_placeholder": "(gesetzt — leer lassen zum Beibehalten)",
     "password_unset_placeholder": "SMTP-Passwort einfügen",
+    "allow_anonymous_label": "Ohne Authentifizierung erlauben (anonym)",
+    "allow_anonymous_help": "Die meisten SMTP-Server benötigen Benutzername und Passwort. Nur für einen vertrauenswürdigen localhost- oder Private-Network-Relay aktivieren, der unauthentifizierte Mails annimmt.",
+    "auth_required_note": "Bitte SMTP-Benutzername und Passwort eingeben. Zum Senden ohne Zugangsdaten (nur vertrauenswürdiger Relay) \"Ohne Authentifizierung erlauben\" anhaken.",
     "from_email_label": "Absender-E-Mail",
     "from_name_label": "Absender-Name",
     "saved_toast": "SMTP-Einstellungen gespeichert.",
@@ -468,7 +473,8 @@
     "test_recipient_required": "Bitte eine Empfänger-Adresse eingeben.",
     "test_button": "Test-E-Mail senden",
     "test_ok": "Test-E-Mail erfolgreich versendet.",
-    "test_failed": "Test-E-Mail fehlgeschlagen."
+    "test_failed": "Test-E-Mail fehlgeschlagen.",
+    "hint_label": "Lösungsvorschlag:"
   },
   "admin_public_link_policy": {
     "title": "Öffentliche-Links-Richtlinie",

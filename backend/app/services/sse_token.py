@@ -33,11 +33,12 @@ from datetime import datetime, timezone
 from ..config import settings
 from ..middleware.errors import AppError
 
-# 2 minutes. Long enough for ~2 SSE reconnects (server closes every
-# 60s by design, see CLAUDE.md). The SPA refreshes the token on each
-# reconnect cycle, so the only failure window is "took longer than
-# 2 min between reconnects" — which itself signals a deeper problem.
-DEFAULT_TTL_SEC = 120
+# 5 minutes. The SPA mints a fresh token on every (re)connect and the
+# server closes the stream every 60s by design (see CLAUDE.md). A 2-minute
+# TTL used to expire during throttled/background-tab reconnects (browsers
+# defer the connect long past the mint), surfacing as a 401 on the stream;
+# 5 minutes comfortably outlives that window while staying short-lived.
+DEFAULT_TTL_SEC = 300
 
 
 def _now() -> int:

@@ -52,7 +52,7 @@
 
 <script setup lang="ts">
 import { onClickOutside } from '@vueuse/core'
-import { onMounted, ref, watch } from 'vue'
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
@@ -119,6 +119,22 @@ onMounted(() => {
     sse.start()
   }
 })
+
+// Background tabs get throttled, which can stall an SSE reconnect long enough
+// for the stream to drop and the composable to give up. On refocus, restart it
+// if we're authed but no longer connected so live notifications recover without
+// a page reload.
+function onVisible() {
+  if (
+    document.visibilityState === 'visible' &&
+    auth.isAuthenticated &&
+    !sse.connected.value
+  ) {
+    sse.start()
+  }
+}
+onMounted(() => document.addEventListener('visibilitychange', onVisible))
+onBeforeUnmount(() => document.removeEventListener('visibilitychange', onVisible))
 
 async function onDeleteAll() {
   await store.removeAll()

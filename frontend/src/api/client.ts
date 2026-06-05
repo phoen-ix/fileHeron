@@ -59,7 +59,7 @@ api.interceptors.request.use((config) => {
 
 let pendingRefresh: Promise<boolean> | null = null
 
-async function refreshOnce(): Promise<boolean> {
+export async function refreshOnce(): Promise<boolean> {
   if (pendingRefresh) return pendingRefresh
   pendingRefresh = (async () => {
     try {

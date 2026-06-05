@@ -7,7 +7,7 @@ import { computed, ref } from 'vue'
 
 import * as authApi from '@/api/auth'
 import { getMe } from '@/api/account'
-import { setAccessToken, setOnAuthLost } from '@/api/client'
+import { refreshOnce, setAccessToken, setOnAuthLost } from '@/api/client'
 import * as webauthnApi from '@/api/webauthn'
 import { performAuthentication } from '@/composables/useWebAuthn'
 import type { Locale, MeResponse, UserRole } from '@/types/api'
@@ -42,12 +42,17 @@ export const useAuthStore = defineStore('auth', () => {
     bootstrapping.value = true
     bootstrapPromise = (async () => {
       try {
-        // GET /me — succeeds if access token is still valid; otherwise the
-        // axios interceptor will try /auth/refresh and retry once. _skipAuthLost
-        // keeps a failed probe from redirecting to /login (e.g. an anonymous
-        // visitor on a public /d/:token page).
-        const resp = await getMe({ _skipAuthLost: true })
-        user.value = resp.data
+        // Cold load has no in-memory access token, so refresh FIRST (via the
+        // httpOnly cookie) instead of letting /me 401 then retry — that saves a
+        // request and avoids a visible 401 in devtools. `refreshOnce` swallows
+        // failure (returns false, never triggers onAuthLost), so an anonymous
+        // visitor on a public /d/:token page is not bounced to /login.
+        if (await refreshOnce()) {
+          const resp = await getMe()
+          user.value = resp.data
+        } else {
+          user.value = null
+        }
       } catch {
         user.value = null
       }

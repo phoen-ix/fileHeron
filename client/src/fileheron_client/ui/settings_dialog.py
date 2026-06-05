@@ -331,13 +331,15 @@ class SettingsOverlay(ctk.CTkFrame):
         from ..config import log_dir
 
         path = str(log_dir())
+        # Open the (app-owned) log folder in the OS file manager: fixed argv,
+        # no shell, no user-controlled command — scoped noqa for ruff-S.
         try:
             if sys.platform.startswith("win"):
-                os.startfile(path)  # type: ignore[attr-defined]
+                os.startfile(path)  # type: ignore[attr-defined]  # noqa: S606
             elif sys.platform == "darwin":
-                subprocess.Popen(["open", path])
+                subprocess.Popen(["open", path])  # noqa: S603, S607
             else:
-                subprocess.Popen(["xdg-open", path])
+                subprocess.Popen(["xdg-open", path])  # noqa: S603, S607
         except Exception:
             # Fall back to showing the path so the user can navigate manually.
             self._status_var.set(t("settings.open_logs_failed", path=path))

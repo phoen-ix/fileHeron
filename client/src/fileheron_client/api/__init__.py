@@ -1,8 +1,9 @@
 from .account import get_current_api_token, patch_locale
 from .client import ApiClient, ApiError, SessionExpiredError
 from .auth import login, login_with_recovery, refresh, logout, me
+from .download_resumable import download_file_resumable
 from .download_segmented import download_file_segmented
-from .files import DownloadCancelled, download_file, get_download_url
+from .files import DownloadCancelled, DownloadPaused, download_file, get_download_url
 from .groups import list_recipient_groups
 from .shares import (
     create_share,
@@ -40,7 +41,9 @@ __all__ = [
     "register_files_added",
     "download_file",
     "download_file_segmented",
+    "download_file_resumable",
     "DownloadCancelled",
+    "DownloadPaused",
     "get_download_url",
     "upload_direct",
     "upload_init",

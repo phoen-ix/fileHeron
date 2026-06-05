@@ -171,6 +171,51 @@ async def test_download_url_refuses_unauthorized(
 
 
 @pytest.mark.asyncio
+async def test_download_url_ttl_honors_setting_and_clamps(
+    make_user, db, client, login_as, monkeypatch
+):
+    """The signed-URL TTL is admin-tunable (downloads.signed_url_ttl_sec) so a
+    browser can resume an interrupted download within the window; the value is
+    clamped to the registry bounds (30s floor)."""
+    import time
+
+    from app.services import settings as settings_svc
+
+    _sender, _r, _s, file_row, _ = _setup_share_with_clean_file(
+        make_user, db, monkeypatch
+    )
+    token_auth, _ = await login_as("hr@test.local", "Pass12345678!")
+    hdr = {"Authorization": f"Bearer {token_auth}"}
+
+    def _ttl_of(url: str, at: int) -> int:
+        dt = url.split("dt=", 1)[1]
+        return int(dt.split(".")[1]) - at
+
+    # Default (env 900s).
+    now = int(time.time())
+    r = await client.get(f"/api/files/{file_row.id}/download-url", headers=hdr)
+    assert 880 <= _ttl_of(r.json()["url"], now) <= 905
+
+    # Admin override to 60s.
+    settings_svc.set_value(
+        db, key=settings_svc.Keys.DOWNLOAD_SIGNED_URL_TTL_SEC, value="60", actor=None
+    )
+    db.commit()
+    now = int(time.time())
+    r = await client.get(f"/api/files/{file_row.id}/download-url", headers=hdr)
+    assert 50 <= _ttl_of(r.json()["url"], now) <= 65
+
+    # Below the 30s floor → clamped to 30.
+    settings_svc.set_value(
+        db, key=settings_svc.Keys.DOWNLOAD_SIGNED_URL_TTL_SEC, value="5", actor=None
+    )
+    db.commit()
+    now = int(time.time())
+    r = await client.get(f"/api/files/{file_row.id}/download-url", headers=hdr)
+    assert 25 <= _ttl_of(r.json()["url"], now) <= 35
+
+
+@pytest.mark.asyncio
 async def test_existing_bearer_path_still_works(
     make_user, db, client, login_as, monkeypatch
 ):

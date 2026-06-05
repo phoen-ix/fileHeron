@@ -24,7 +24,7 @@ from pathlib import Path
 from typing import Callable, Optional
 
 from .client import ApiClient
-from .files import DownloadCancelled, download_file
+from .files import DownloadCancelled, DownloadPaused, download_file
 
 logger = logging.getLogger("fileheron_client.api.download_segmented")
 
@@ -150,6 +150,7 @@ def _fetch_segment(
     end: int,
     bump: Callable[[int], None],
     cancel: Optional[threading.Event] = None,
+    pause: Optional[threading.Event] = None,
 ) -> None:
     rng = {**headers, "Range": f"bytes={start}-{end}"}
     for attempt in range(MAX_RETRIES):
@@ -157,6 +158,8 @@ def _fetch_segment(
         try:
             if cancel is not None and cancel.is_set():
                 raise DownloadCancelled
+            if pause is not None and pause.is_set():
+                raise DownloadPaused
             with api._http.stream("GET", url, headers=rng) as resp:
                 if resp.status_code not in (206, 200):
                     resp.read()
@@ -166,12 +169,14 @@ def _fetch_segment(
                     for chunk in resp.iter_bytes(CHUNK):
                         if cancel is not None and cancel.is_set():
                             raise DownloadCancelled
+                        if pause is not None and pause.is_set():
+                            raise DownloadPaused
                         f.write(chunk)
                         written += len(chunk)
                         bump(len(chunk))
             return
-        except DownloadCancelled:
-            raise  # never retry a cancel
+        except (DownloadCancelled, DownloadPaused):
+            raise  # never retry a cancel/pause
         except Exception:
             if written:
                 bump(-written)  # this attempt's bytes will be re-fetched

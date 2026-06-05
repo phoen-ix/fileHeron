@@ -201,6 +201,14 @@ def main(argv: list[str] | None = None) -> int:
     trace("initialising async poller")
     init_async(root)
 
+    # Any download left "active" by a previous session (crash / force-quit) is
+    # promoted to "interrupted" so the share view offers a Resume button.
+    try:
+        from fileheron_client import downloads_registry
+        downloads_registry.reconcile_on_startup()
+    except Exception:
+        pass
+
     # The root is visible from the start; AppController places the login
     # overlay on top of it and owns every screen transition from here on
     # (sign-in → main, sign-out → overlay, session-expiry → overlay).

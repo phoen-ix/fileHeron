@@ -23,7 +23,9 @@ from typing import Callable, Optional
 import customtkinter as ctk
 
 from .. import api as api_pkg
-from ..api import ApiClient, DownloadCancelled
+from .. import downloads_registry as dlreg
+from ..api import ApiClient, DownloadCancelled, DownloadPaused
+from ..api import download_checkpoint as dlckpt
 from ..formatters import (
     RateEstimator,
     format_datetime,
@@ -69,7 +71,8 @@ class ShareDetailView(ctk.CTkFrame):
         self._on_mutated = on_mutated
         self._flash = flash
         self._share: Optional[ShareResponse] = None
-        # file_id -> {"bar": CTkProgressBar, "info_var": StringVar, "dl_btn": …}
+        # file_id -> {"bar", "info_var", "info_lbl", "action_cell", "filename",
+        #   "downloadable", "dest", "cancel", "pause", "last", "pause_btn"}
         self._file_rows: dict[str, dict] = {}
 
         self._build()
@@ -509,17 +512,11 @@ class ShareDetailView(ctk.CTkFrame):
                 row=0, column=1, padx=8
             )
             PillLabel(row, text=f.state, state=f.state).grid(row=0, column=2, padx=8)
-            # The action cell hosts a variable button set: Download → Cancel
-            # (while downloading) → Open + Folder (after a successful save).
+            # The action cell hosts a variable button set: Download → Pause +
+            # Cancel (while downloading) → Resume + Discard (paused/interrupted)
+            # → Open + Folder (after a successful save).
             action_cell = ctk.CTkFrame(row, fg_color="transparent")
             action_cell.grid(row=0, column=3, padx=(8, 0))
-            dl_btn = ctk.CTkButton(
-                action_cell, text=t("share_detail.download_btn"), width=110,
-                command=lambda fid=f.id, fname=f.original_filename: self._download_one(fid, fname),
-            )
-            if f.state not in ("clean", "ready_unscanned"):
-                dl_btn.configure(state="disabled")
-            dl_btn.pack(side="right")
 
             # Inline per-file progress (hidden until a download starts): a thin
             # bar spanning the row + a "rate · eta" readout.
@@ -535,13 +532,39 @@ class ShareDetailView(ctk.CTkFrame):
             info_lbl.grid_remove()
             self._file_rows[f.id] = {
                 "bar": bar, "info_var": info_var, "info_lbl": info_lbl,
-                "dl_btn": dl_btn, "action_cell": action_cell,
-                # Captured so the button can flip Download -> Cancel -> Download.
-                "download_cmd": (
-                    lambda fid=f.id, fn=f.original_filename: self._download_one(fid, fn)
-                ),
+                "action_cell": action_cell,
+                "filename": f.original_filename,
+                "downloadable": f.state in ("clean", "ready_unscanned"),
+                # Set when a download is spawned or a resumable partial is found.
+                "dest": None,
                 "cancel": None,
+                "pause": None,
+                "last": (0, 0),
             }
+            self._init_row_actions(f.id)
+
+    def _init_row_actions(self, file_id: str) -> None:
+        """Pick a row's initial buttons: a resumable partial (from the
+        persistent registry, validated against the on-disk checkpoint) shows
+        Resume + Discard; otherwise a plain Download."""
+        row = self._file_rows.get(file_id)
+        if row is None:
+            return
+        entry = dlreg.get(file_id) if row["downloadable"] else None
+        if entry and entry.get("status") in dlreg.RESUMABLE:
+            dest = Path(entry.get("dest", ""))
+            if dest.name and dlckpt.part_path(dest).exists() and dlckpt.read(dest):
+                row["dest"] = dest
+                done = int(entry.get("bytes_done", 0))
+                total = int(entry.get("total", 0))
+                row["last"] = (done, total)
+                self._set_actions_resumable(
+                    file_id, interrupted=entry.get("status") == dlreg.INTERRUPTED
+                )
+                return
+            # Stale registry entry (partial deleted externally) — clean it up.
+            dlreg.remove(file_id)
+        self._set_actions_idle(file_id)
 
     def _download_one(self, file_id: str, filename: str) -> None:
         dest_str = filedialog.asksaveasfilename(
@@ -602,13 +625,16 @@ class ShareDetailView(ctk.CTkFrame):
         import subprocess
         import sys
 
+        # Launch the just-downloaded local file in the OS default app via a
+        # fixed argv (no shell, no user-controlled command) on a path the user
+        # chose — the standard safe pattern, hence the scoped noqa for ruff-S.
         try:
             if sys.platform.startswith("win"):
-                os.startfile(str(path))  # type: ignore[attr-defined]
+                os.startfile(str(path))  # type: ignore[attr-defined]  # noqa: S606
             elif sys.platform == "darwin":
-                subprocess.Popen(["open", str(path)])
+                subprocess.Popen(["open", str(path)])  # noqa: S603, S607
             else:
-                subprocess.Popen(["xdg-open", str(path)])
+                subprocess.Popen(["xdg-open", str(path)])  # noqa: S603, S607
         except Exception as exc:
             self._toast(t("share_detail.open_failed", detail=str(exc)), kind="error")
 
@@ -618,25 +644,99 @@ class ShareDetailView(ctk.CTkFrame):
         import subprocess
         import sys
 
+        # Fixed-argv OS file-manager launch (no shell) on a user-chosen path —
+        # see _open_path; scoped noqa for the ruff-S subprocess false-positives.
         try:
             if sys.platform.startswith("win"):
-                subprocess.Popen(["explorer", "/select,", str(path)])
+                subprocess.Popen(["explorer", "/select,", str(path)])  # noqa: S603, S607
             elif sys.platform == "darwin":
-                subprocess.Popen(["open", "-R", str(path)])
+                subprocess.Popen(["open", "-R", str(path)])  # noqa: S603, S607
             else:
-                subprocess.Popen(["xdg-open", str(path.parent)])
+                subprocess.Popen(["xdg-open", str(path.parent)])  # noqa: S603, S607
         except Exception as exc:
             self._toast(t("share_detail.open_failed", detail=str(exc)), kind="error")
 
-    def _restore_dl_btn(self, row: dict) -> None:
-        """Flip the row's button back to 'Download' (from 'Cancel')."""
-        if alive(row["dl_btn"]):
-            row["dl_btn"].configure(
-                text=t("share_detail.download_btn"),
-                command=row["download_cmd"],
-                state="normal",
-            )
+    # ---- Per-row action-button state machine ----
+    #
+    # action_cell shows one of: [Download] · [Pause][Cancel] (running) ·
+    # [Resume][Discard] (paused/interrupted) · [Open][Folder] (saved). Each
+    # setter clears the cell and repacks; side="right" stacks right-to-left, so
+    # the secondary action is packed first (rightmost).
+
+    def _clear_actions(self, row: dict):
+        cell = row.get("action_cell")
+        if not alive(cell):
+            return None
+        for child in cell.winfo_children():
+            child.destroy()
+        return cell
+
+    def _set_actions_idle(self, file_id: str) -> None:
+        row = self._file_rows.get(file_id)
+        if row is None:
+            return
+        cell = self._clear_actions(row)
+        if cell is None:
+            return
+        btn = ctk.CTkButton(
+            cell, text=t("share_detail.download_btn"), width=110,
+            command=lambda fid=file_id: self._download_one(fid, row["filename"]),
+        )
+        if not row.get("downloadable"):
+            btn.configure(state="disabled")
+        btn.pack(side="right")
+        if alive(row["bar"]):
+            row["bar"].grid_remove()
+        if alive(row["info_lbl"]):
+            row["info_lbl"].grid_remove()
+        row["info_var"].set("")
         row["cancel"] = None
+        row["pause"] = None
+
+    def _set_actions_active(self, file_id: str) -> None:
+        row = self._file_rows.get(file_id)
+        if row is None:
+            return
+        cell = self._clear_actions(row)
+        if cell is None:
+            return
+        ctk.CTkButton(
+            cell, text=t("share_detail.cancel_btn"), width=72,
+            fg_color="transparent", border_width=1, hover_color=("gray85", "gray25"),
+            command=lambda fid=file_id: self._cancel_download(fid),
+        ).pack(side="right")
+        pause_btn = ctk.CTkButton(
+            cell, text=t("share_detail.pause_btn"), width=72,
+            command=lambda fid=file_id: self._pause_download(fid),
+        )
+        pause_btn.pack(side="right", padx=(0, 4))
+        row["pause_btn"] = pause_btn
+
+    def _set_actions_resumable(self, file_id: str, *, interrupted: bool) -> None:
+        row = self._file_rows.get(file_id)
+        if row is None:
+            return
+        cell = self._clear_actions(row)
+        if cell is None:
+            return
+        ctk.CTkButton(
+            cell, text=t("share_detail.discard_btn"), width=72,
+            fg_color="transparent", border_width=1, hover_color=("gray85", "gray25"),
+            command=lambda fid=file_id: self._discard_download(fid),
+        ).pack(side="right")
+        ctk.CTkButton(
+            cell, text=t("share_detail.resume_btn"), width=84,
+            command=lambda fid=file_id: self._resume_download(fid),
+        ).pack(side="right", padx=(0, 4))
+        done, total = row.get("last", (0, 0))
+        pct = int(done * 100 / total) if total else 0
+        if alive(row["bar"]):
+            row["bar"].grid()
+            row["bar"].set(min(1.0, done / total) if total else 0)
+        if alive(row["info_lbl"]):
+            row["info_lbl"].grid()
+        key = "dl_interrupted" if interrupted else "dl_paused"
+        row["info_var"].set(t(f"share_detail.{key}", pct=pct))
 
     def _cancel_download(self, file_id: str) -> None:
         row = self._file_rows.get(file_id)
@@ -645,48 +745,100 @@ class ShareDetailView(ctk.CTkFrame):
         ev = row.get("cancel")
         if ev is not None:
             ev.set()
-        if alive(row["dl_btn"]):
-            row["dl_btn"].configure(state="disabled", text=t("share_detail.cancelling"))
+        cell = row.get("action_cell")
+        if alive(cell):
+            for child in cell.winfo_children():
+                child.configure(state="disabled")
         row["info_var"].set(t("share_detail.cancelling"))
 
-    def _spawn_download(self, file_id: str, dest: Path) -> None:
+    def _pause_download(self, file_id: str) -> None:
+        row = self._file_rows.get(file_id)
+        if row is None:
+            return
+        ev = row.get("pause")
+        if ev is not None:
+            ev.set()
+        pb = row.get("pause_btn")
+        if alive(pb):
+            pb.configure(state="disabled", text=t("share_detail.pausing"))
+        row["info_var"].set(t("share_detail.pausing"))
+
+    def _resume_download(self, file_id: str) -> None:
+        row = self._file_rows.get(file_id)
+        if row is None:
+            return
+        dest = row.get("dest")
+        if dest is None:
+            self._download_one(file_id, row["filename"])
+            return
+        self._spawn_download(file_id, dest, resume=True)
+
+    def _discard_download(self, file_id: str) -> None:
+        row = self._file_rows.get(file_id)
+        if row is None:
+            return
+        if not mb.confirm(
+            self.winfo_toplevel(),
+            t("share_detail.discard_confirm_title"),
+            t("share_detail.discard_confirm_body", name=row["filename"]),
+        ):
+            return
+        dest = row.get("dest")
+        if dest is not None:
+            dlckpt.discard(dest)
+        dlreg.remove(file_id)
+        row["dest"] = None
+        row["last"] = (0, 0)
+        self._set_actions_idle(file_id)
+        self._toast(t("share_detail.discarded"), kind="info")
+
+    def _spawn_download(self, file_id: str, dest: Path, *, resume: bool = False) -> None:
         from ..config import load_config
         conns = load_config().download_connections
 
         row = self._file_rows.get(file_id)
         tracker = RateEstimator()
         cancel = threading.Event()
+        pause = threading.Event()
 
-        # Instant feedback: reveal the file's inline bar + "Starting…" and turn
-        # its Download button into Cancel before the worker (probe + first
-        # bytes) produces any progress.
+        # Instant feedback: reveal the inline bar + "Starting…/Resuming…" and
+        # show the Pause + Cancel buttons before the worker produces progress.
         if row is not None:
+            row["dest"] = dest
             row["cancel"] = cancel
-            row["bar"].set(0)
+            row["pause"] = pause
+            done0, total0 = row.get("last", (0, 0)) if resume else (0, 0)
+            row["bar"].set(min(1.0, done0 / total0) if (resume and total0) else 0)
             row["bar"].grid()
-            row["info_lbl"].grid()  # re-show the rate/ETA label (hidden by default)
-            row["info_var"].set(t("share_detail.dl_starting"))
-            row["dl_btn"].configure(
-                text=t("share_detail.cancel_btn"),
-                command=lambda fid=file_id: self._cancel_download(fid),
-                state="normal",
+            row["info_lbl"].grid()
+            row["info_var"].set(
+                t("share_detail.dl_resuming") if resume else t("share_detail.dl_starting")
             )
+            self._set_actions_active(file_id)
+
+        dlreg.upsert(
+            file_id,
+            dest=str(dest),
+            filename=row["filename"] if row else dest.name,
+            total=(row.get("last", (0, 0))[1] if row else 0),
+            bytes_done=(row.get("last", (0, 0))[0] if (resume and row) else 0),
+            status=dlreg.ACTIVE,
+            share_id=getattr(self, "_share_id", None),
+        )
 
         def _do(tick):
-            # Segmented (parallel-range) download for large files; falls back
-            # to a single stream when ranges aren't supported / file is small /
-            # connections <= 1.
-            api_pkg.download_file_segmented(
+            api_pkg.download_file_resumable(
                 self._api, file_id, dest=dest, connections=conns,
-                on_progress=tick, cancel=cancel,
+                on_progress=tick, cancel=cancel, pause=pause,
             )
             return str(dest)
 
         def _on_progress(done, total):
             if not alive(self) or row is None or not alive(row["bar"]):
                 return  # view/row torn down mid-download (C6)
-            if cancel.is_set():
-                return  # don't clobber the "Cancelling…" label
+            row["last"] = (done, total)
+            if cancel.is_set() or pause.is_set():
+                return  # don't clobber the "Cancelling…/Pausing…" label
             if total > 0:
                 row["bar"].set(min(1.0, done / total))
             rate, eta = tracker.update(done, total)
@@ -695,6 +847,7 @@ class ShareDetailView(ctk.CTkFrame):
         def _done(path):
             if not alive(self):
                 return
+            dlreg.remove(file_id)
             if row is not None and alive(row.get("action_cell")):
                 if alive(row["bar"]):
                     row["bar"].grid_remove()
@@ -702,27 +855,43 @@ class ShareDetailView(ctk.CTkFrame):
                     row["info_lbl"].grid_remove()
                 row["info_var"].set("")
                 row["cancel"] = None
-                # Saved — the button becomes Open (the file) + Folder (reveal it),
-                # not another Download.
+                row["pause"] = None
+                row["dest"] = None
+                # Saved — the buttons become Open (the file) + Folder (reveal it).
                 self._show_open_actions(row, Path(path))
             self._toast(t("share_detail.downloaded_body", path=path), kind="success")
 
         def _failed(exc):
             if not alive(self):
                 return
-            cancelled = isinstance(exc, DownloadCancelled)
-            if row is not None and alive(row["bar"]):
-                row["bar"].grid_remove()
-                row["info_lbl"].grid_remove()
-                row["info_var"].set("")
-                self._restore_dl_btn(row)
-            if cancelled:
+            done, total = row.get("last", (0, 0)) if row else (0, 0)
+            if isinstance(exc, DownloadPaused):
+                dlreg.set_status(file_id, dlreg.PAUSED, bytes_done=done)
+                self._set_actions_resumable(file_id, interrupted=False)
+                return
+            if isinstance(exc, DownloadCancelled):
+                dlreg.remove(file_id)
+                self._set_actions_idle(file_id)
                 self._toast(t("share_detail.dl_cancelled"), kind="info")
+                return
+            # Transport/server error → interrupted. Keep the partial for a
+            # later Resume if a checkpoint survived; otherwise reset to Download.
+            dest_now = row.get("dest") if row else None
+            resumable = (
+                dest_now is not None
+                and dlckpt.part_path(dest_now).exists()
+                and dlckpt.read(dest_now) is not None
+            )
+            if resumable:
+                dlreg.set_status(file_id, dlreg.INTERRUPTED, bytes_done=done)
+                self._set_actions_resumable(file_id, interrupted=True)
             else:
-                msg = getattr(exc, "message", None) or str(exc)
-                self._toast(
-                    f'{t("share_detail.download_failed_title")}: {msg}', kind="error"
-                )
+                dlreg.remove(file_id)
+                self._set_actions_idle(file_id)
+            msg = getattr(exc, "message", None) or str(exc)
+            self._toast(
+                f'{t("share_detail.download_failed_title")}: {msg}', kind="error"
+            )
 
         run_with_progress(
             self._app_root, _do,

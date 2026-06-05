@@ -14,7 +14,7 @@ is `README.md`; per-phase history is `git log`.
 
 ## Status
 
-Backend **`v1.13.0`**, desktop client **`client-v0.10.0`** — all shipped and in
+Backend **`v1.14.0`**, desktop client **`client-v0.11.0`** — all shipped and in
 production. Each subsystem below documents its current state. Capability surface:
 
 - **Auth:** password + TOTP + recovery codes + passkey + multi-provider OIDC;
@@ -282,7 +282,7 @@ Every outbound email → `email_log` (one row) via the single funnel `services/m
 | Quarantine (`/quarantine`) | `quarantine.notify_admins` (bool) | Fan out `file_quarantined` in-app notice to every non-disabled admin. |
 | Email change (`/email-change`) | `email_change.verification_mode` (immediate/verify_new/verify_both) + `..self_service` (bool) + `..oidc_mode` (reset_setpw/reset_only/keep) | Read live via `services/email_change_policy.py`, frozen onto the pending row. `self_service` off ⇒ admin-only. See **Email change**. |
 | Self-update (`/updates`) | `updates.api_url`, `updates.check_mode` (auto/manual) | Fork operators repoint the releases endpoint; `auto` polls every 24h. |
-| Advanced (`/advanced`) | `auth.*`, `rate_limit.*`, `public_link.*` (lockout), `retention.*`, `uploads.max_direct_bytes`, `security.hibp_enabled`, `branding.app_name` | `services/settings_registry.py::TUNABLES` — each overlays a `config.Settings` env default, clamped, read live via `effective(db, key)` (no boot cache). |
+| Advanced (`/advanced`) | `auth.*`, `rate_limit.*`, `public_link.*` (lockout), `retention.*`, `uploads.max_direct_bytes`, `downloads.signed_url_ttl_sec`, `security.hibp_enabled`, `branding.app_name` | `services/settings_registry.py::TUNABLES` — each overlays a `config.Settings` env default, clamped, read live via `effective(db, key)` (no boot cache). UI groups by `Tunable.group` (`downloads` group added v1.14.0). |
 
 `services/settings.py::Keys` is the authoritative key list; `_ENCRYPTED_KEYS = {smtp.password}`. PATCH for secret-bearing keys: `null` = leave, `""` = clear, other = replace. Settings-change audit events record counts/keys only (no allowlist IDs or values).
 
@@ -332,7 +332,7 @@ Editorial Swiss-modernist, **light theme only**. Self-hosted Instrument Serif (d
 - **Cross-filesystem finalize** — bind mounts appear cross-device in containers; code uses `shutil.move` (rename fast path + copy2 fallback). Don't revert to `os.rename`.
 - **axios array params** — the client needs `paramsSerializer: { indexes: null }` → `?state=active&state=expired` (FastAPI `Query(default=[])`), not `?state[]=active`.
 - **Default share-list filter is `active`** — a recently-revoked share missing from the list = the default filter, not a bug.
-- **Signed download URL** — `<a href>` can't carry a bearer; `GET /api/files/{id}/download-url` issues a short-lived HMAC token (`<user_id>.<exp>.<sig_b64url>`) consumed via `?dt=` (ungated `download_router` for `?dt=`, gated `router` for bearer).
+- **Signed download URL** — `<a href>` can't carry a bearer; `GET /api/files/{id}/download-url` issues a short-lived HMAC token (`<user_id>.<exp>.<sig_b64url>`) consumed via `?dt=` (ungated `download_router` for `?dt=`, gated `router` for bearer). TTL is admin-tunable `downloads.signed_url_ttl_sec` (v1.14.0, default 900s, was a fixed 60s) so a browser's native **Resume** of an interrupted download still validates the same URL — downloads already support HTTP Range via Starlette `FileResponse` + `utils/http_range.py::is_partial_continuation` (range continuations don't double-count the share budget / download_log). Longer TTL = bigger leaked-URL window; verify() reads `exp` from the token, so only mint reads the setting.
 - **`TEST_ACCOUNT_*`** used by `scripts/seed_dev.py` + `entrypoint.sh` — not dead (`OIDC_REDIRECT_URI` was the dead one, deleted).
 - **ClamAV slow first boot** — full `freshclam` mirror sync (~150 MB), then incremental.
 - **Self-update filter `^v\d+\.\d+\.\d+`** (`services/release_check.py`) counts only backend tags; default URL is the releases *list* (`?per_page=30`), an admin override may be `/releases/latest` (single object, auto-wrapped). Without the filter GitHub's "latest" is usually a `client-v*` desktop tag.
@@ -344,6 +344,7 @@ Editorial Swiss-modernist, **light theme only**. Self-hosted Instrument Serif (d
 - Auth: email+password (TOTP/recovery) OR an `fh_…` API token; refresh cookie + tokens in the OS keyring. Server URL per-install (`%APPDATA%\fileHeron\config.json` via `platformdirs`), asked at first launch, not baked in. Locale cached from last sign-in.
 - Builds: tag `client-v*` → `.github/workflows/client-release.yml` (windows-latest) runs tests + `pyinstaller pyinstaller.spec`, publishes the .exe with `client/RELEASE_NOTES.md` (hand-written). Tests are AST/structural (CI lacks tkinter).
 - Out of scope v1: OIDC, WebAuthn, admin shell, SSE. Direct multipart ≤100 MB; TUS for larger (own client `client/src/fileheron_client/tus.py`, no tuspy dep).
+- **Resumable/pausable downloads (client-v0.11.0):** `api/download_resumable.py::download_file_resumable` is the UI entry point — wraps single-stream + the parallel-range `download_segmented` with a checkpoint (`api/download_checkpoint.py`: `<dest>.part` + `<dest>.fhdownload` sidecar, validated by total + ETag). **Pause** keeps the partial (`DownloadPaused`); **Cancel** discards (`DownloadCancelled`); resume re-fetches only missing bytes (single: `Range` + `If-Range`; segmented: per-completed-segment). `downloads_registry.py` is a persistent JSON index (config dir) so the Resume button survives restarts; `reconcile_on_startup()` (called in `__main__`) promotes a crash-left `active` → `interrupted`. UI button machine in `ui/share_detail_view.py`: Download → Pause+Cancel → Resume+Discard → Open+Folder. The original `download_file`/`download_file_segmented` are unchanged (kept for back-compat).
 
 
 

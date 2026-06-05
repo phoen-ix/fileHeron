@@ -133,6 +133,12 @@ class Settings(BaseSettings):
     TUS_HOOK_ALLOWED_IPS: str = ""
     # Cap for the direct-upload endpoint. Larger files must use TUS.
     MAX_DIRECT_UPLOAD_BYTES: int = 104857600  # 100 MB
+    # TTL of the signed `?dt=` download URL the SPA hands to the browser.
+    # Longer = a dropped browser download can be resumed (the native
+    # download manager re-requests the SAME url with a Range header) for
+    # longer; shorter = a url leaked into a proxy/access log is usable for
+    # a smaller window. Admin-tunable via the registry. Default 15 min.
+    DOWNLOAD_SIGNED_URL_TTL_SEC: int = 900
     # Where finalized files live + tusd's working dir + AV quarantine.
     # Must all be on the SAME filesystem (atomic os.rename across them).
     STORAGE_ROOT: str = "/data/files"

@@ -63,6 +63,10 @@ TUNABLES: list[Tunable] = [
     Tunable(K.UPLOAD_STALE_AFTER_HOURS, "UPLOAD_STALE_AFTER_HOURS", "int", "retention", 1, 720),
     # --- Uploads / security / branding ---
     Tunable(K.MAX_DIRECT_UPLOAD_BYTES, "MAX_DIRECT_UPLOAD_BYTES", "int", "uploads", 1_000_000, 5_368_709_120),
+    # --- Downloads ---
+    # Signed-url TTL: 30s floor, 24h ceiling. Longer enables browser resume
+    # of interrupted downloads; shorter shrinks the leaked-url window.
+    Tunable(K.DOWNLOAD_SIGNED_URL_TTL_SEC, "DOWNLOAD_SIGNED_URL_TTL_SEC", "int", "downloads", 30, 86400),
     Tunable(K.HIBP_ENABLED, "HIBP_ENABLED", "bool", "security"),
     Tunable(K.APP_NAME, "APP_NAME", "str", "branding"),
 ]

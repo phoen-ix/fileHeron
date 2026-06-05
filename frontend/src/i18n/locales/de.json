@@ -344,6 +344,7 @@
       "rate_limits": "Rate-Limits & Sperren",
       "retention": "Datenaufbewahrung",
       "uploads": "Uploads",
+      "downloads": "Downloads",
       "security": "Sicherheit",
       "branding": "Branding"
     },
@@ -379,6 +380,9 @@
       "uploads": {
         "max_direct_bytes": "Größenlimit für Direkt-Upload (Bytes)"
       },
+      "downloads": {
+        "signed_url_ttl_sec": "Gültigkeitsdauer der signierten Download-URL (Sekunden)"
+      },
       "security": {
         "hibp_enabled": "Passwörter gegen Have I Been Pwned prüfen"
       },
@@ -389,6 +393,9 @@
     "help": {
       "uploads": {
         "max_direct_bytes": "Größere Dateien müssen den fortsetzbaren (TUS-)Upload-Pfad nutzen."
+      },
+      "downloads": {
+        "signed_url_ttl_sec": "Wie lange der einmalige Download-Link, den der Browser nutzt, gültig bleibt. Länger ermöglicht das Fortsetzen eines unterbrochenen Browser-Downloads (er fordert denselben Link erneut an); kürzer verkleinert das Zeitfenster, falls dieser Link je in einem Proxy-Log landet. Der Desktop-Client nutzt einen Bearer-Token und ist nicht betroffen."
       },
       "rate_limit": {
         "lockout_duration_min": "Wie lange ein Konto nach zu vielen Fehlversuchen gesperrt bleibt."

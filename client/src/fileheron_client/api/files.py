@@ -20,6 +20,12 @@ class DownloadCancelled(Exception):
     back to a single stream — it just unwinds + cleans up."""
 
 
+class DownloadPaused(Exception):
+    """Raised when a download is paused via its pause Event. Unlike
+    ``DownloadCancelled`` the partial ``.part`` file + checkpoint are KEPT so
+    the transfer can be resumed later. Never retried."""
+
+
 def download_file(
     api: ApiClient,
     file_id: str,

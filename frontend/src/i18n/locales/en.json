@@ -344,6 +344,7 @@
       "rate_limits": "Rate limits & lockout",
       "retention": "Data retention",
       "uploads": "Uploads",
+      "downloads": "Downloads",
       "security": "Security",
       "branding": "Branding"
     },
@@ -379,6 +380,9 @@
       "uploads": {
         "max_direct_bytes": "Direct-upload size cap (bytes)"
       },
+      "downloads": {
+        "signed_url_ttl_sec": "Signed download-URL lifetime (seconds)"
+      },
       "security": {
         "hibp_enabled": "Check passwords against Have I Been Pwned"
       },
@@ -389,6 +393,9 @@
     "help": {
       "uploads": {
         "max_direct_bytes": "Files larger than this must use the resumable (TUS) upload path."
+      },
+      "downloads": {
+        "signed_url_ttl_sec": "How long the one-time download link the browser uses stays valid. Longer lets a browser resume an interrupted download (it re-requests the same link); shorter shrinks the window if that link ever lands in a proxy log. The desktop client uses a bearer token and is unaffected."
       },
       "rate_limit": {
         "lockout_duration_min": "How long an account stays locked after too many failed logins."

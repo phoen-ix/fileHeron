@@ -121,6 +121,7 @@ class Keys:
     TUS_UPLOAD_ABANDONED_AFTER_HOURS = "retention.tus_abandoned_hours"
     UPLOAD_STALE_AFTER_HOURS = "retention.upload_stale_hours"
     MAX_DIRECT_UPLOAD_BYTES = "uploads.max_direct_bytes"
+    DOWNLOAD_SIGNED_URL_TTL_SEC = "downloads.signed_url_ttl_sec"
     HIBP_ENABLED = "security.hibp_enabled"
     APP_NAME = "branding.app_name"
 

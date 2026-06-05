@@ -23,7 +23,7 @@ const items = ref<AdvancedSettingItem[]>([])
 const draft = ref<Record<string, number | boolean | string>>({})
 
 // Stable group order; anything unknown falls to the end.
-const GROUP_ORDER = ['sessions', 'rate_limits', 'retention', 'uploads', 'security', 'branding']
+const GROUP_ORDER = ['sessions', 'rate_limits', 'retention', 'uploads', 'downloads', 'security', 'branding']
 
 const groups = computed(() => {
   const by: Record<string, AdvancedSettingItem[]> = {}

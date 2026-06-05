@@ -129,7 +129,12 @@ def get_download_url(
             "SHARE_DOWNLOAD_LIMIT_REACHED",
             "This share has reached its download limit.",
         )
-    token = download_token_svc.issue(file_id, user.id)
+    from ..services import settings_registry
+
+    ttl = settings_registry.effective(
+        db, settings_registry.K.DOWNLOAD_SIGNED_URL_TTL_SEC
+    )
+    token = download_token_svc.issue(file_id, user.id, ttl_sec=ttl)
     return {"url": f"/api/files/{file_id}/download?dt={token}"}
 
 

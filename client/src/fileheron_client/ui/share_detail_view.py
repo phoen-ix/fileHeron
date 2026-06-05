@@ -35,6 +35,7 @@ from ..i18n import t
 from ..models import FileInShareResponse, MeResponse, ShareResponse
 from ._async import run_in_background, run_with_progress
 from . import _messagebox as mb
+from .add_files_dialog import AddFilesDialog
 from .expiry_dialog import ExpiryDialog
 from .limit_dialog import LimitDialog
 from .widgets import PillLabel, alive, copy_to_clipboard_with_feedback, human_size
@@ -149,6 +150,13 @@ class ShareDetailView(ctk.CTkFrame):
         btns = ctk.CTkFrame(outer, fg_color="transparent")
         btns.pack(fill="x")
 
+        # v0.10.0: owner-only "Add files" — upload more files into this active
+        # share (the upload endpoints are owner-only; admins can't, so this is
+        # gated separately from the _can_manage() buttons below).
+        self.add_files_btn = ctk.CTkButton(
+            btns, text=t("share_detail.add_files_btn"),
+            command=self._add_files, width=140,
+        )
         self.edit_expiry_btn = ctk.CTkButton(
             btns, text=t("share_detail.edit_expiry_btn"),
             command=self._edit_expiry, width=140,
@@ -169,9 +177,11 @@ class ShareDetailView(ctk.CTkFrame):
             fg_color="#991b1b", hover_color="#7f1d1d",
         )
         # Initially hidden; _refresh_action_visibility shows them.
-        self.edit_expiry_btn.pack(side="left", padx=(0, 4))
+        self.add_files_btn.pack(side="left", padx=(0, 4))
+        self.edit_expiry_btn.pack(side="left", padx=4)
         self.edit_limit_btn.pack(side="left", padx=4)
         self.end_share_btn.pack(side="left", padx=4)
+        self.add_files_btn.pack_forget()
         self.edit_expiry_btn.pack_forget()
         self.edit_limit_btn.pack_forget()
         self.end_share_btn.pack_forget()
@@ -339,15 +349,39 @@ class ShareDetailView(ctk.CTkFrame):
         self._render_files(s.files)
         self._refresh_action_visibility()
 
+    def _is_owner(self) -> bool:
+        return self._share is not None and self._share.created_by_id == self._me.id
+
     def _refresh_action_visibility(self) -> None:
         manage = self._can_manage()
         active = self._share is not None and self._share.state == "active"
+        # Add-files is OWNER-only (uploads reject non-owners, incl. admins) and
+        # leads the row when shown.
+        if self._is_owner():
+            self.add_files_btn.pack(side="left", padx=(0, 4))
+            self.add_files_btn.configure(state="normal" if active else "disabled")
+        else:
+            self.add_files_btn.pack_forget()
         for btn in (self.edit_expiry_btn, self.edit_limit_btn, self.end_share_btn):
             if manage:
-                btn.pack(side="left", padx=(0, 4)) if btn is self.edit_expiry_btn else btn.pack(side="left", padx=4)
+                btn.pack(side="left", padx=4)
             else:
                 btn.pack_forget()
             btn.configure(state="normal" if (manage and active) else "disabled")
+
+    def _add_files(self) -> None:
+        s = self._share
+        if not s or not self._is_owner() or s.state != "active":
+            return
+        AddFilesDialog(
+            self._app_root,
+            self._api,
+            s.id,
+            s.effective_subject,
+            getattr(self._me, "share_notify_recipients_default", True),
+            on_added=self._load,
+            flash=self._flash,
+        )
 
     # ---- Manager actions ----
 

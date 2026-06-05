@@ -176,6 +176,7 @@
     "copy_failed_title": "Copy failed",
     "copy_failed_body": "Couldn't reach the clipboard. The URL is shown in the field above — copy it manually with Ctrl+C.",
     "files_heading": "Files",
+    "add_files_btn": "Add files…",
     "edit_expiry_btn": "Edit expiry…",
     "edit_limit_btn": "Edit limit…",
     "end_share_btn": "End share",
@@ -268,5 +269,23 @@
     "status_partial": "{failed} of {total} upload(s) failed.",
     "new_share_btn": "New share",
     "view_outbox_btn": "View in Outbox"
+  },
+  "add_files": {
+    "title": "Add files",
+    "intro": "Add more files to “{subject}”. They'll be scanned and added to the share.",
+    "add_btn": "Add files…",
+    "pick_title": "Choose files to add",
+    "no_files": "No files chosen yet.",
+    "notify_label": "Notify recipients of the new files",
+    "upload_btn": "Upload",
+    "close_btn": "Close",
+    "state_pending": "Pending",
+    "state_uploading": "Uploading…",
+    "state_done": "Done",
+    "state_failed": "Failed",
+    "status_uploading": "Uploading {n} file(s)…",
+    "status_all_failed": "All uploads failed — remove or retry.",
+    "toast_added": "Added {n} file(s) to the share.",
+    "notify_failed": "Files added, but recipients could not be notified."
   }
 }

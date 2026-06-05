@@ -12,6 +12,7 @@ from .shares import (
     list_shares,
     patch_share_download_limit,
     patch_share_expiry,
+    register_files_added,
     revoke_share,
 )
 from .uploads import upload_direct, upload_init
@@ -36,6 +37,7 @@ __all__ = [
     "expire_share_now",
     "patch_share_expiry",
     "patch_share_download_limit",
+    "register_files_added",
     "download_file",
     "download_file_segmented",
     "DownloadCancelled",

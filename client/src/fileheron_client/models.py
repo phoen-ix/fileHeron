@@ -35,6 +35,9 @@ class MeResponse(_Base):
     quota_bytes: Optional[int] = None
     requires_2fa: bool = False
     can_create_public_link: bool = True
+    # Admin-set default for the "notify recipients" toggle (share create +
+    # add-files). Backend surfaces it on /me; default True if absent.
+    share_notify_recipients_default: bool = True
 
 
 class ShareSenderRef(_Base):

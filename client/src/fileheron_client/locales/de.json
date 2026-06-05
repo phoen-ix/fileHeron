@@ -176,6 +176,7 @@
     "copy_failed_title": "Kopieren fehlgeschlagen",
     "copy_failed_body": "Die Zwischenablage war nicht erreichbar. Die URL steht im Feld oben — bitte mit Strg+C manuell kopieren.",
     "files_heading": "Dateien",
+    "add_files_btn": "Dateien hinzufügen…",
     "edit_expiry_btn": "Ablauf bearbeiten…",
     "edit_limit_btn": "Limit bearbeiten…",
     "end_share_btn": "Freigabe beenden",
@@ -268,5 +269,23 @@
     "status_partial": "{failed} von {total} Upload(s) fehlgeschlagen.",
     "new_share_btn": "Neue Freigabe",
     "view_outbox_btn": "Im Postausgang anzeigen"
+  },
+  "add_files": {
+    "title": "Dateien hinzufügen",
+    "intro": "Weitere Dateien zu „{subject}“ hinzufügen. Sie werden geprüft und der Freigabe hinzugefügt.",
+    "add_btn": "Dateien hinzufügen…",
+    "pick_title": "Dateien zum Hinzufügen wählen",
+    "no_files": "Noch keine Dateien gewählt.",
+    "notify_label": "Empfänger über die neuen Dateien benachrichtigen",
+    "upload_btn": "Hochladen",
+    "close_btn": "Schließen",
+    "state_pending": "Ausstehend",
+    "state_uploading": "Lädt hoch…",
+    "state_done": "Fertig",
+    "state_failed": "Fehlgeschlagen",
+    "status_uploading": "{n} Datei(en) werden hochgeladen…",
+    "status_all_failed": "Alle Uploads fehlgeschlagen — entfernen oder erneut versuchen.",
+    "toast_added": "{n} Datei(en) zur Freigabe hinzugefügt.",
+    "notify_failed": "Dateien hinzugefügt, aber Empfänger konnten nicht benachrichtigt werden."
   }
 }

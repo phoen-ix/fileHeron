@@ -108,10 +108,15 @@ recipients" box is ticked, fans a new `share_files_added` notification (+ en/de
 templates) out to the share's current recipients — same recipient resolution as
 `create_share`.
 
-**Desktop client (current `client-v0.9.9`):** CustomTkinter, single Windows
+**Desktop client (current `client-v0.10.0`):** CustomTkinter, single Windows
 .exe. v0.9.x reworked it to an in-window login overlay (no separate login
 window), logout-returns-to-overlay (the app no longer quits on sign-out), and
-graceful session-expiry recovery. See `client/` + `client/RELEASE_NOTES.md`.
+graceful session-expiry recovery. **v0.10.0** adds **"Add files" to an active
+share** (the v1.12.0 server feature): an owner-only `AddFilesDialog`
+(`ui/add_files_dialog.py`, a non-blocking Toplevel reusing `upload_worker.start_upload`)
+launched from `ShareDetailView`, with a "notify recipients" checkbox that calls
+`register_files_added` (best-effort). Requires server v1.12.0+. See `client/` +
+`client/RELEASE_NOTES.md`.
 
 Open follow-ups: per-file envelope encryption deferred until storage
 moves off single-server bind mounts (the KEK and ciphertext would

@@ -1,17 +1,23 @@
-# Desktop client 0.9.16
+# Desktop client 0.10.0
 
-Matches the new client→company share model (server v1.6.0).
+Add more files to a share you already created — no need to make a new one.
 
-## Clients submit to the company
+## Add files to an active share
 
-If you sign in as a **client**, the New-share screen no longer asks you to pick
-recipients — your upload goes to the **whole company** (everyone on the team).
-You just add files, optionally a subject/message/expiry, and send.
+Open one of your **active** outgoing shares (Outbox → click the share). If you
+created it, there's now an **Add files…** button next to the other manage
+actions. Click it, pick the files, and upload — they're scanned and added to the
+share alongside the originals (large files use the resumable path, same as
+creating a share).
 
-If you sign in as **staff** (employee/admin), nothing changes: you still pick
-recipients and groups and send outbound as before.
+A **"Notify recipients of the new files"** checkbox (on by default) sends the
+recipients a short heads-up email + in-app notice. Untick it to add files
+quietly — recipients will just see them next time they open the share.
 
-> Requires server **v1.6.0+**.
+Only the share's creator can add files, and only while the share is still
+active.
+
+> Requires server **v1.12.0+**.
 
 ---
 

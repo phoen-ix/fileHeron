@@ -120,6 +120,26 @@ def expire_share_now(api: ApiClient, share_id: str) -> ShareResponse:
     return ShareResponse.model_validate(out)
 
 
+def register_files_added(
+    api: ApiClient,
+    share_id: str,
+    *,
+    notify: bool,
+    file_ids: list[str],
+) -> ShareResponse:
+    """v1.12.0: the owner's batch-complete signal after uploading more files
+    into an active share (the files were already attached by the upload
+    pipeline). Records a share-level audit row and, when ``notify``, re-notifies
+    the share's recipients. Returns the refreshed share. Owner + active gated
+    server-side (403 FORBIDDEN / 409 SHARE_NOT_ACTIVE)."""
+    out = api.request_or_raise(
+        "POST",
+        f"/api/shares/{share_id}/files-added",
+        json={"notify": notify, "file_ids": list(file_ids)},
+    )
+    return ShareResponse.model_validate(out)
+
+
 def get_public_link(api: ApiClient, share_id: str) -> Optional[dict]:
     """Return the public-link metadata for an owned share (incl. the
     plaintext URL via the encrypted-token column shipped in

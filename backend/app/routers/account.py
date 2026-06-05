@@ -38,6 +38,8 @@ from ..services import api_token as api_token_svc
 from ..services import auth as auth_svc
 from ..services import email as email_svc
 from ..services import invite as invite_svc
+from ..services import rate_limit as rate_limit_svc
+from ..services import settings_registry
 from ..services import totp as totp_svc
 
 router = APIRouter(prefix="/api/account", tags=["account"])
@@ -157,6 +159,12 @@ async def change_password(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict:
+    ip = request.client.host if request.client else ""
+    if not rate_limit_svc.check_ip_allowed(
+        "change_password", ip,
+        settings_registry.effective(db, settings_registry.K.RATE_LIMIT_REGISTER),
+    ):
+        raise AppError(429, "RATE_LIMITED", "Too many attempts; try again shortly.")
     await auth_svc.change_password(
         db,
         user=user,

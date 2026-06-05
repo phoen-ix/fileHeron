@@ -19,7 +19,7 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import BigInteger, DateTime, ForeignKey, Integer, String
+from sqlalchemy import BigInteger, DateTime, ForeignKey, Index, Integer, String
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -47,6 +47,11 @@ def _new_uuid() -> str:
 
 class File(Base):
     __tablename__ = "files"
+    __table_args__ = (
+        # Per-user storage sum (quota display + reconcile) filters on
+        # (uploaded_by_id, state).
+        Index("ix_files_uploader_state", "uploaded_by_id", "state"),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_uuid)
     share_id: Mapped[str] = mapped_column(

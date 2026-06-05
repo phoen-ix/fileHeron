@@ -11,6 +11,7 @@ import {
   resendInvite,
   revokeInvite,
 } from '@/api/admin'
+import Pager from '@/components/Pager.vue'
 import PasswordStrength from '@/components/PasswordStrength.vue'
 import { useApiError } from '@/composables/useApiError'
 import { useInviteForm } from '@/composables/useInviteForm'
@@ -500,22 +501,7 @@ onMounted(() => {
 
     <p v-else class="empty-state fh-field-help">{{ t('admin_users.empty') }}</p>
 
-    <div v-if="total > pageSize" class="pager">
-      <button type="button" class="fh-btn-text" :disabled="page === 1" @click="page -= 1">
-        ← {{ t('admin_users.prev') }}
-      </button>
-      <span class="fh-mono page-info">
-        {{ t('admin_users.page_of', { page, total: Math.ceil(total / pageSize) }) }}
-      </span>
-      <button
-        type="button"
-        class="fh-btn-text"
-        :disabled="page * pageSize >= total"
-        @click="page += 1"
-      >
-        {{ t('admin_users.next') }} →
-      </button>
-    </div>
+    <Pager v-model:page="page" :total="total" :page-size="pageSize" />
     </template>
 
     <!-- Details modal -->
@@ -775,18 +761,6 @@ onMounted(() => {
 }
 
 .subtle {
-  color: var(--fh-subtle);
-}
-
-.pager {
-  display: flex;
-  gap: var(--fh-space-3);
-  align-items: center;
-  margin-top: var(--fh-space-4);
-}
-
-.page-info {
-  font-size: var(--fh-text-mono-sm);
   color: var(--fh-subtle);
 }
 

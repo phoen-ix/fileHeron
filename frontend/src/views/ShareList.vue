@@ -4,12 +4,14 @@ import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 
 import { bulkExpireShares } from '@/api/shares'
+import Pager from '@/components/Pager.vue'
 import { useApiError } from '@/composables/useApiError'
 import { useShareListState } from '@/composables/useShareListState'
 import { useUiStore } from '@/stores/ui'
-import type { ShareListItem, ShareRecipientRef, ShareState } from '@/types/api'
+import type { ShareListItem, ShareRecipientRef } from '@/types/api'
 import { formatBytes } from '@/utils/bytes'
 import { formatExpiryInSiteTime, formatInSiteTime } from '@/utils/datetime'
+import { shareStatePill } from '@/utils/statePill'
 
 const { t, locale } = useI18n()
 const route = useRoute()
@@ -99,14 +101,6 @@ async function confirmBulkExpire() {
   }
 }
 
-const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize.value)))
-
-function pillForState(state: ShareState): string | undefined {
-  if (state === 'active') return 'active'
-  if (state === 'expired') return 'warn'
-  if (state === 'revoked' || state === 'deleted' || state === 'failed') return 'danger'
-  return undefined
-}
 
 function formatDate(iso: string | null): string {
   // Date + time (+ site-tz token) so shares created on the same day are
@@ -347,7 +341,7 @@ onMounted(load)
                 <span class="fh-mono kind">{{ t(`share_kind.${item.kind}`) }}</span>
               </td>
               <td>
-                <span class="fh-pill" :data-state="pillForState(item.state)">
+                <span class="fh-pill" :data-state="shareStatePill(item.state)">
                   {{ t(`share_state.${item.state}`) }}
                 </span>
               </td>
@@ -359,22 +353,7 @@ onMounted(load)
         </table>
       </div>
 
-      <div v-if="totalPages > 1" class="pager">
-        <button type="button" class="fh-btn-text" :disabled="page === 1" @click="page -= 1">
-          ← {{ t('admin_users.prev') }}
-        </button>
-        <span class="fh-mono page-info">
-          {{ t('admin_users.page_of', { page, total: totalPages }) }}
-        </span>
-        <button
-          type="button"
-          class="fh-btn-text"
-          :disabled="page >= totalPages"
-          @click="page += 1"
-        >
-          {{ t('admin_users.next') }} →
-        </button>
-      </div>
+      <Pager v-model:page="page" :total="total" :page-size="pageSize" />
     </template>
 
     <div v-else class="empty-state">
@@ -628,14 +607,6 @@ onMounted(load)
 
 .empty-display {
   margin: 0;
-}
-
-.pager {
-  display: flex;
-  gap: var(--fh-space-3);
-  align-items: baseline;
-  justify-content: center;
-  margin-top: var(--fh-space-4);
 }
 
 .select-col {

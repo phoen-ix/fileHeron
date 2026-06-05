@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import {
@@ -11,7 +11,9 @@ import {
 } from '@/api/admin'
 import { searchUsers } from '@/api/users'
 import ExpiryPicker from '@/components/ExpiryPicker.vue'
+import Pager from '@/components/Pager.vue'
 import { useApiError } from '@/composables/useApiError'
+import { useDebouncedSearch } from '@/composables/useDebouncedSearch'
 import { useUiStore } from '@/stores/ui'
 import { formatInSiteTime, siteLocalIsoToUtcIso } from '@/utils/datetime'
 import type {
@@ -35,7 +37,6 @@ const loading = ref(true)
 const errorMsg = ref<string | null>(null)
 const busyTokenId = ref<number | null>(null)
 
-let searchTimer: ReturnType<typeof setTimeout> | null = null
 
 async function load() {
   loading.value = true
@@ -56,12 +57,9 @@ async function load() {
   }
 }
 
-watch(q, () => {
-  if (searchTimer) clearTimeout(searchTimer)
-  searchTimer = setTimeout(() => {
-    page.value = 1
-    void load()
-  }, 220)
+useDebouncedSearch(q, () => {
+  page.value = 1
+  void load()
 })
 watch(status, () => {
   page.value = 1
@@ -208,7 +206,6 @@ function dismissPlaintext() {
   plaintextResult.value = null
 }
 
-const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize.value)))
 
 onMounted(load)
 </script>
@@ -399,22 +396,7 @@ onMounted(load)
         {{ t('admin_api_tokens.empty') }}
       </p>
 
-      <div v-if="totalPages > 1" class="pager">
-        <button type="button" class="fh-btn-text" :disabled="page === 1" @click="page -= 1">
-          ← {{ t('admin_users.prev') }}
-        </button>
-        <span class="fh-mono page-info">
-          {{ t('admin_users.page_of', { page, total: totalPages }) }}
-        </span>
-        <button
-          type="button"
-          class="fh-btn-text"
-          :disabled="page >= totalPages"
-          @click="page += 1"
-        >
-          {{ t('admin_users.next') }} →
-        </button>
-      </div>
+      <Pager v-model:page="page" :total="total" :page-size="pageSize" />
     </template>
   </div>
 </template>
@@ -591,11 +573,4 @@ onMounted(load)
   margin: var(--fh-space-3) 0;
 }
 
-.pager {
-  display: flex;
-  gap: var(--fh-space-3);
-  align-items: baseline;
-  justify-content: center;
-  margin-top: var(--fh-space-4);
-}
 </style>

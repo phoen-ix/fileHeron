@@ -18,6 +18,7 @@ import { useUiStore } from '@/stores/ui'
 import type { ShareResponse } from '@/types/api'
 import { formatBytes } from '@/utils/bytes'
 import { formatExpiryInSiteTime, formatInSiteTime, siteLocalIsoToUtcIso } from '@/utils/datetime'
+import { shareStatePill } from '@/utils/statePill'
 
 const route = useRoute()
 const auth = useAuthStore()
@@ -172,12 +173,6 @@ function formatExpiry(iso: string | null): string {
 }
 
 
-function pillForState(state: string): 'active' | 'warn' | 'danger' | undefined {
-  if (state === 'active') return 'active'
-  if (state === 'expired') return 'warn'
-  if (state === 'revoked' || state === 'deleted') return 'danger'
-  return undefined
-}
 
 onMounted(load)
 </script>
@@ -198,7 +193,7 @@ onMounted(load)
       </h1>
 
       <div class="meta-row">
-        <span class="fh-pill" :data-state="pillForState(share.state)">
+        <span class="fh-pill" :data-state="shareStatePill(share.state)">
           {{ t(`share_state.${share.state}`) }}
         </span>
         <span class="fh-kv">

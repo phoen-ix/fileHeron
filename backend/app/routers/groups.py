@@ -8,7 +8,8 @@ memberships + company-inbox groups; admins see everything).
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Request
-from sqlalchemy.orm import Session
+from sqlalchemy import func
+from sqlalchemy.orm import Session, selectinload
 
 from ..dependencies import get_actor, get_current_admin, get_db
 from ..middleware.errors import AppError
@@ -44,6 +45,7 @@ def _to_response(group, member_count: int) -> GroupResponse:
 def _detail_response(db: Session, group) -> GroupDetailResponse:
     members = (
         db.query(GroupMember)
+        .options(selectinload(GroupMember.user))
         .filter(GroupMember.group_id == group.id)
         .all()
     )
@@ -100,12 +102,26 @@ def recipient_targets(
         )
     else:
         groups = []
-    items = [_to_response(g, _count_members(db, g.id)) for g in groups]
+    counts = _count_members_bulk(db, [g.id for g in groups])
+    items = [_to_response(g, counts.get(g.id, 0)) for g in groups]
     return GroupListResponse(items=items)
 
 
 def _count_members(db: Session, group_id: int) -> int:
     return db.query(GroupMember).filter(GroupMember.group_id == group_id).count()
+
+
+def _count_members_bulk(db: Session, group_ids: list[int]) -> dict[int, int]:
+    """Member counts for a set of groups in one query (was a COUNT per group)."""
+    if not group_ids:
+        return {}
+    rows = (
+        db.query(GroupMember.group_id, func.count())
+        .filter(GroupMember.group_id.in_(group_ids))
+        .group_by(GroupMember.group_id)
+        .all()
+    )
+    return {gid: int(n) for gid, n in rows}
 
 
 @router.get("", response_model=GroupListResponse)
@@ -114,12 +130,8 @@ def list_groups_endpoint(
     _admin: User = Depends(get_current_admin),
 ) -> GroupListResponse:
     groups = group_svc.list_groups(db)
-    items = []
-    for g in groups:
-        member_count = (
-            db.query(GroupMember).filter(GroupMember.group_id == g.id).count()
-        )
-        items.append(_to_response(g, member_count))
+    counts = _count_members_bulk(db, [g.id for g in groups])
+    items = [_to_response(g, counts.get(g.id, 0)) for g in groups]
     return GroupListResponse(items=items)
 
 

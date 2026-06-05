@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { adminListSessions, adminRevokeSession, adminRevokeUserSessions } from '@/api/admin'
+import Pager from '@/components/Pager.vue'
 import { useApiError } from '@/composables/useApiError'
+import { useDebouncedSearch } from '@/composables/useDebouncedSearch'
 import { useTableSort } from '@/composables/useTableSort'
 import { useUiStore } from '@/stores/ui'
 import type { AdminSessionRow } from '@/types/api'
@@ -25,7 +27,6 @@ const q = ref('')
 const includeInactive = ref(false)
 const revokingId = ref<number | null>(null)
 const revokingUserId = ref<number | null>(null)
-let searchTimer: ReturnType<typeof setTimeout> | null = null
 
 const sort = useTableSort({ defaultBy: 'last_used_at', defaultDir: 'asc' })
 
@@ -50,12 +51,9 @@ async function load() {
   }
 }
 
-watch(q, () => {
-  if (searchTimer) clearTimeout(searchTimer)
-  searchTimer = setTimeout(() => {
-    page.value = 1
-    void load()
-  }, 220)
+useDebouncedSearch(q, () => {
+  page.value = 1
+  void load()
 })
 watch(includeInactive, () => {
   page.value = 1
@@ -94,8 +92,6 @@ async function onRevokeAll(s: AdminSessionRow) {
     revokingUserId.value = null
   }
 }
-
-const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize.value)))
 
 function formatDate(iso: string | null): string {
   return formatInSiteTime(iso, locale.value)
@@ -218,22 +214,7 @@ onMounted(load)
 
     <p v-else class="fh-field-help empty">{{ t('admin_sessions.empty') }}</p>
 
-    <div v-if="totalPages > 1" class="pager">
-      <button type="button" class="fh-btn-text" :disabled="page === 1" @click="page -= 1">
-        ← {{ t('admin_users.prev') }}
-      </button>
-      <span class="fh-mono page-info">
-        {{ t('admin_users.page_of', { page, total: totalPages }) }}
-      </span>
-      <button
-        type="button"
-        class="fh-btn-text"
-        :disabled="page >= totalPages"
-        @click="page += 1"
-      >
-        {{ t('admin_users.next') }} →
-      </button>
-    </div>
+    <Pager v-model:page="page" :total="total" :page-size="pageSize" />
   </div>
 </template>
 
@@ -359,11 +340,4 @@ tr.inactive {
   margin: var(--fh-space-3) 0;
 }
 
-.pager {
-  display: flex;
-  gap: var(--fh-space-3);
-  align-items: baseline;
-  justify-content: center;
-  margin-top: var(--fh-space-4);
-}
 </style>

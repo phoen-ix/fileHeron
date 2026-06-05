@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import api from '@/api/client'
@@ -8,7 +8,9 @@ import {
   adminQuarantinePurge,
   adminQuarantineRelease,
 } from '@/api/admin'
+import Pager from '@/components/Pager.vue'
 import { useApiError } from '@/composables/useApiError'
+import { useDebouncedSearch } from '@/composables/useDebouncedSearch'
 import { useUiStore } from '@/stores/ui'
 import type { AdminFileItem } from '@/types/api'
 import { formatBytes } from '@/utils/bytes'
@@ -26,7 +28,6 @@ const loading = ref(true)
 const errorMsg = ref<string | null>(null)
 
 const q = ref('')
-let searchTimer: ReturnType<typeof setTimeout> | null = null
 
 type ConfirmKind = 'release' | 'purge'
 
@@ -58,18 +59,12 @@ async function load() {
   }
 }
 
-watch(q, () => {
-  if (searchTimer) clearTimeout(searchTimer)
-  searchTimer = setTimeout(() => {
-    page.value = 1
-    void load()
-  }, 220)
+useDebouncedSearch(q, () => {
+  page.value = 1
+  void load()
 })
 watch(page, load)
 
-const totalPages = computed(() =>
-  Math.max(1, Math.ceil(total.value / pageSize.value)),
-)
 
 function formatDate(iso: string | null): string {
   return formatInSiteTime(iso, locale.value)
@@ -212,22 +207,7 @@ onMounted(load)
 
     <p v-else class="fh-field-help empty">{{ t('admin_quarantine.empty') }}</p>
 
-    <div v-if="totalPages > 1" class="pager">
-      <button type="button" class="fh-btn-text" :disabled="page === 1" @click="page -= 1">
-        ← {{ t('admin_users.prev') }}
-      </button>
-      <span class="fh-mono page-info">
-        {{ t('admin_users.page_of', { page, total: totalPages }) }}
-      </span>
-      <button
-        type="button"
-        class="fh-btn-text"
-        :disabled="page >= totalPages"
-        @click="page += 1"
-      >
-        {{ t('admin_users.next') }} →
-      </button>
-    </div>
+    <Pager v-model:page="page" :total="total" :page-size="pageSize" />
 
     <div v-if="confirm" class="confirm-backdrop" @click.self="closeConfirm" @keydown.escape="closeConfirm">
       <div
@@ -376,17 +356,6 @@ onMounted(load)
   color: var(--fh-danger, #b91c1c);
 }
 
-.pager {
-  display: flex;
-  align-items: center;
-  gap: var(--fh-space-3);
-  margin-top: var(--fh-space-4);
-}
-
-.page-info {
-  color: var(--fh-subtle);
-  font-size: var(--fh-text-mono-sm);
-}
 
 .confirm-backdrop {
   position: fixed;

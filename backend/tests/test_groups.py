@@ -15,6 +15,27 @@ from app.services import group as group_svc
 
 
 @pytest.mark.asyncio
+async def test_admin_group_list_member_counts(make_user, db, client, login_as):
+    """Regression for the bulk member-count: the list endpoint must report the
+    right count per group (was a COUNT-per-group N+1)."""
+    admin = make_user(email="admin@test.local", role=UserRole.admin, password="Pass12345678!")
+    u1 = make_user(email="u1@test.local", role=UserRole.employee)
+    u2 = make_user(email="u2@test.local", role=UserRole.client)
+    g_two = group_svc.create_group(db, actor=admin, name="Two", description=None, is_company_inbox=False)
+    group_svc.create_group(db, actor=admin, name="Empty", description=None, is_company_inbox=False)
+    group_svc.add_member(db, actor=admin, group=g_two, user=u1)
+    group_svc.add_member(db, actor=admin, group=g_two, user=u2)
+    db.commit()
+
+    token, _ = await login_as("admin@test.local", "Pass12345678!")
+    resp = await client.get("/api/groups", headers={"Authorization": f"Bearer {token}"})
+    assert resp.status_code == 200
+    counts = {g["name"]: g["member_count"] for g in resp.json()["items"]}
+    assert counts["Two"] == 2
+    assert counts["Empty"] == 0
+
+
+@pytest.mark.asyncio
 async def test_create_group_persists_and_normalizes(make_user, db):
     admin = make_user(email="admin@test.local", role=UserRole.admin)
     g = group_svc.create_group(

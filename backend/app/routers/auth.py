@@ -195,6 +195,11 @@ async def reset_password(
     response: Response,
     db: Session = Depends(get_db),
 ) -> dict:
+    ip = request.client.host if request.client else ""
+    if not rate_limit_svc.check_ip_allowed(
+        "reset", ip, settings_registry.effective(db, settings_registry.K.RATE_LIMIT_REGISTER)
+    ):
+        raise AppError(429, "RATE_LIMITED", "Too many attempts; try again shortly.")
     await auth_svc.consume_password_reset(
         db, plaintext_token=payload.token, new_password=payload.new_password, request=request
     )

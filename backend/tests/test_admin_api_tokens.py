@@ -6,12 +6,15 @@ Covers route-level behavior for the new `/api/admin/api-tokens/*` and
 """
 from __future__ import annotations
 
+from datetime import timedelta
+
 import pytest
 
 from app.middleware.errors import AppError
 from app.models.audit_log import AuditEventType, AuditLog
 from app.models.user import UserRole
 from app.services import api_token as api_token_svc
+from app.utils.timeutil import utc_now
 
 
 @pytest.mark.asyncio
@@ -38,6 +41,33 @@ async def test_admin_can_list_all_tokens(make_user, db, client, login_as):
     for item in body["items"]:
         assert item["status"] == "active"
         assert "owner_display_name" in item
+
+
+@pytest.mark.asyncio
+async def test_admin_list_derives_expiry_status(make_user, db, client, login_as):
+    """Listing tokens that carry an `expires_at` must derive active/expired
+    without erroring (regression: `_token_status` called a non-existent
+    `api_token_svc._utcnow`, 500ing on any token with an expiry set)."""
+    admin = make_user(
+        email="a@test.local", role=UserRole.admin, password="Pass12345678!"
+    )
+    bob = make_user(email="b@test.local", role=UserRole.client)
+    api_token_svc.create_token(
+        db, owner=bob, name="past", expires_at=utc_now() - timedelta(hours=1)
+    )
+    api_token_svc.create_token(
+        db, owner=bob, name="future", expires_at=utc_now() + timedelta(days=7)
+    )
+    db.commit()
+
+    token, _ = await login_as("a@test.local", "Pass12345678!")
+    resp = await client.get(
+        "/api/admin/api-tokens",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200, resp.text
+    status_by_name = {item["name"]: item["status"] for item in resp.json()["items"]}
+    assert status_by_name == {"past": "expired", "future": "active"}
 
 
 @pytest.mark.asyncio

@@ -33,17 +33,13 @@ from ..models.audit_log import AuditEventType
 from ..models.refresh_token import RefreshToken
 from ..models.user import User
 from ..utils.crypto import random_token, refresh_token_hash
+from ..utils.timeutil import utc_now
 from .audit import record_audit_event
 
 if TYPE_CHECKING:
     from ..config import Settings
 
 logger = logging.getLogger("fileheron.jwt_session")
-
-
-def _utcnow() -> datetime:
-    # Naive UTC — matches what MariaDB returns for DATETIME columns.
-    return datetime.now(tz=timezone.utc).replace(tzinfo=None)
 
 
 # ---------------------------------------------------------------------------
@@ -115,7 +111,7 @@ def enforce_session_cap(
     Called once per `create_refresh_token` from any auth flow."""
     if cap <= 0:
         return 0
-    now = _utcnow()
+    now = utc_now()
     active_q = (
         db.query(RefreshToken)
         .filter(
@@ -180,7 +176,7 @@ def reclamp_refresh_expiry(
     expiry is revoked immediately. Sessions still inside the new window keep
     running, just with the shorter expiry. Returns ``{clamped, revoked}``.
     Caller commits."""
-    now = _utcnow()
+    now = utc_now()
     rows = (
         db.query(RefreshToken)
         .filter(RefreshToken.revoked_at.is_(None), RefreshToken.expires_at > now)
@@ -230,7 +226,7 @@ def create_refresh_token(db: Session, user: User, request: Request | None, setti
     )
 
     plaintext = random_token(48)  # 64 raw bytes → 86-char b64url
-    now = _utcnow()
+    now = utc_now()
     refresh_days = settings_registry.effective(
         db, settings_registry.K.REFRESH_TOKEN_EXPIRE_DAYS
     )
@@ -249,7 +245,7 @@ def create_refresh_token(db: Session, user: User, request: Request | None, setti
 def revoke_all_user_refresh_tokens(db: Session, user_id: int) -> int:
     """Coarse-but-safe family revoke. Used when reuse is detected or on
     password reset / change. Returns number of rows affected."""
-    now = _utcnow()
+    now = utc_now()
     result = db.execute(
         update(RefreshToken)
         .where(RefreshToken.user_id == user_id, RefreshToken.revoked_at.is_(None))
@@ -277,7 +273,7 @@ def rotate_refresh(
     )
     if record is None:
         raise AppError(401, "INVALID_REFRESH", "Invalid refresh token.")
-    if record.expires_at < _utcnow():
+    if record.expires_at < utc_now():
         raise AppError(401, "INVALID_REFRESH", "Refresh token expired.")
     if record.revoked_at is not None:
         # Reuse detected → kill all sessions for this user, audit, raise.
@@ -295,7 +291,7 @@ def rotate_refresh(
 
     # Conditional UPDATE → atomic check-and-revoke. If two requests race, the
     # second sees affected_rows=0 and we treat it as reuse.
-    now = _utcnow()
+    now = utc_now()
     result = db.execute(
         update(RefreshToken)
         .where(RefreshToken.id == record.id, RefreshToken.revoked_at.is_(None))
@@ -348,7 +344,7 @@ def logout(db: Session, *, refresh_token_plain: str, request: Request | None) ->
     )
     if record is None or record.revoked_at is not None:
         return  # idempotent
-    record.revoked_at = _utcnow()
+    record.revoked_at = utc_now()
     record_audit_event(
         db,
         event_type=AuditEventType.logout,

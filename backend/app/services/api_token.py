@@ -23,8 +23,7 @@ from sqlalchemy.orm import Session
 from ..middleware.errors import AppError
 from ..models.api_token import ApiToken
 from ..models.audit_log import AuditEventType
-from ..models.group_member import GroupMember
-from ..models.user import User, UserRole
+from ..models.user import User
 from ..utils.crypto import constant_time_equals, sha256_hex
 from ..utils.timeutil import utc_now
 from .audit import record_audit_event
@@ -175,64 +174,32 @@ def revoke_token(db: Session, *, owner: User, token_id: int) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Policy gate (post-Phase 10)
+# Policy gate (post-Phase 10) — shared logic lives in services/policy_gate.
 # ---------------------------------------------------------------------------
 
-POLICY_MODES = ("everyone", "employees_admins", "admins_only", "disabled")
-DEFAULT_POLICY_MODE = "everyone"
+
+def _policy_keys() -> dict[str, str]:
+    from . import settings as settings_svc
+
+    return {
+        "mode_key": settings_svc.Keys.API_TOKEN_POLICY_MODE,
+        "users_key": settings_svc.Keys.API_TOKEN_ALLOWED_USERS,
+        "groups_key": settings_svc.Keys.API_TOKEN_ALLOWED_GROUPS,
+    }
 
 
 def _resolve_policy(db: Session) -> tuple[str, list[int], list[int]]:
-    """Read policy from app_settings. Returns (mode, allowed_user_ids,
-    allowed_group_ids). Falls back to defaults for an unconfigured deploy
-    so existing CI scripts keep working until an admin sets a stricter
-    policy."""
-    from . import settings as settings_svc
+    from . import policy_gate
 
-    mode = settings_svc.get(db, settings_svc.Keys.API_TOKEN_POLICY_MODE) or DEFAULT_POLICY_MODE
-    if mode not in POLICY_MODES:
-        mode = DEFAULT_POLICY_MODE
-
-    raw_users = settings_svc.get(db, settings_svc.Keys.API_TOKEN_ALLOWED_USERS) or "[]"
-    raw_groups = settings_svc.get(db, settings_svc.Keys.API_TOKEN_ALLOWED_GROUPS) or "[]"
-    import json
-
-    try:
-        user_ids = [int(x) for x in json.loads(raw_users)]
-    except (ValueError, TypeError):
-        user_ids = []
-    try:
-        group_ids = [int(x) for x in json.loads(raw_groups)]
-    except (ValueError, TypeError):
-        group_ids = []
-    return mode, user_ids, group_ids
+    return policy_gate.resolve_policy(db, **_policy_keys())
 
 
 def is_allowed_to_create(db: Session, user: User) -> bool:
     """Returns True if the user can mint an API token under the current
     policy. Admin always passes (operator escape hatch)."""
-    if user.role == UserRole.admin:
-        return True
-    mode, allowed_users, allowed_groups = _resolve_policy(db)
-    if mode == "everyone":
-        return True
-    if mode == "employees_admins" and user.role == UserRole.employee:
-        return True
-    # Allowlist additive on top of the base mode.
-    if user.id in allowed_users:
-        return True
-    if allowed_groups:
-        hit = (
-            db.query(GroupMember.user_id)
-            .filter(
-                GroupMember.user_id == user.id,
-                GroupMember.group_id.in_(allowed_groups),
-            )
-            .first()
-        )
-        if hit is not None:
-            return True
-    return False
+    from . import policy_gate
+
+    return policy_gate.is_allowed(db, user, **_policy_keys())
 
 
 # ---------------------------------------------------------------------------

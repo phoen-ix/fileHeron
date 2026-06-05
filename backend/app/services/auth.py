@@ -14,7 +14,7 @@ Includes:
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 
 from fastapi import Request
 from sqlalchemy import update
@@ -36,6 +36,7 @@ from ..utils.crypto import (
     sha256_hex,
 )
 from ..utils.geohash import ip_geohash5
+from ..utils.timeutil import utc_now
 from ..utils.ua_fingerprint import ua_fingerprint_hash
 from . import rate_limit as rate_limit_svc
 from . import settings_registry
@@ -77,11 +78,6 @@ __all__ = [
 INVITE_TTL = timedelta(hours=24)
 EMAIL_VERIFY_TTL = timedelta(hours=24)
 PASSWORD_RESET_TTL = timedelta(hours=1)
-
-
-def _utcnow() -> datetime:
-    # Naive UTC — matches what MariaDB returns for DATETIME columns.
-    return datetime.now(tz=timezone.utc).replace(tzinfo=None)
 
 
 # ---------------------------------------------------------------------------
@@ -133,7 +129,7 @@ def _create_user_from_invite(
     db.add(user)
     db.flush()
 
-    invite.used_at = _utcnow()
+    invite.used_at = utc_now()
     invite.used_user_id = user.id
 
     # Apply pre-assigned group memberships, if any. A group deleted between
@@ -218,7 +214,7 @@ async def register_from_invite(
         raise AppError(404, "INVITE_INVALID", "Invite is invalid.")
     if invite.used_at is not None:
         raise AppError(410, "INVITE_USED", "Invite has already been used.")
-    if invite.expires_at < _utcnow():
+    if invite.expires_at < utc_now():
         raise AppError(410, "INVITE_EXPIRED", "Invite has expired.")
     await assert_password_not_breached(db, password)
     return _create_user_from_invite(
@@ -272,7 +268,7 @@ def _record_login_device(db: Session, *, user: User, request: Request | None) ->
         )
         .one_or_none()
     )
-    now = _utcnow()
+    now = utc_now()
     if existing is not None:
         existing.last_seen = now
         db.flush()
@@ -603,7 +599,7 @@ def begin_password_reset(
         return None
 
     plaintext = random_token(32)
-    now = _utcnow()
+    now = utc_now()
     record = PasswordResetToken(
         user_id=user.id,
         token_hash=sha256_hex(plaintext),
@@ -633,7 +629,7 @@ async def consume_password_reset(
         raise AppError(404, "RESET_TOKEN_INVALID", "Reset link is invalid.")
     if record.used_at is not None:
         raise AppError(410, "RESET_TOKEN_USED", "Reset link has already been used.")
-    if record.expires_at < _utcnow():
+    if record.expires_at < utc_now():
         raise AppError(410, "RESET_TOKEN_EXPIRED", "Reset link has expired.")
 
     await assert_password_not_breached(db, new_password)
@@ -648,7 +644,7 @@ async def consume_password_reset(
             PasswordResetToken.id == record.id,
             PasswordResetToken.used_at.is_(None),
         )
-        .values(used_at=_utcnow())
+        .values(used_at=utc_now())
     )
     if claimed.rowcount == 0:
         raise AppError(410, "RESET_TOKEN_USED", "Reset link has already been used.")
@@ -674,7 +670,7 @@ def begin_email_verification(db: Session, *, user: User) -> str:
     Caller is responsible for sending the email.
     """
     plaintext = random_token(32)
-    now = _utcnow()
+    now = utc_now()
     record = EmailVerifyToken(
         user_id=user.id,
         token_hash=sha256_hex(plaintext),
@@ -695,7 +691,7 @@ def consume_email_verification(db: Session, *, plaintext_token: str, request: Re
         raise AppError(404, "VERIFY_TOKEN_INVALID", "Verification link is invalid.")
     if record.used_at is not None:
         raise AppError(410, "VERIFY_TOKEN_USED", "Verification link has already been used.")
-    if record.expires_at < _utcnow():
+    if record.expires_at < utc_now():
         raise AppError(410, "VERIFY_TOKEN_EXPIRED", "Verification link has expired.")
 
     # Atomic single-use claim (see consume_password_reset for rationale).
@@ -705,7 +701,7 @@ def consume_email_verification(db: Session, *, plaintext_token: str, request: Re
             EmailVerifyToken.id == record.id,
             EmailVerifyToken.used_at.is_(None),
         )
-        .values(used_at=_utcnow())
+        .values(used_at=utc_now())
     )
     if claimed.rowcount == 0:
         raise AppError(410, "VERIFY_TOKEN_USED", "Verification link has already been used.")

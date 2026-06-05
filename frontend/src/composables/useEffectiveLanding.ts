@@ -23,8 +23,9 @@ export const ROUTE_NAME_TO_PATH: Record<LandingRouteName, string> = {
 }
 
 /** Resolve the path the user should land on when there's no explicit
- *  redirect intent (no `?redirect=` query param). Mirrors the backend
- *  `services/account_prefs.effective_landing_route()` logic.
+ *  redirect intent (no `?redirect=` query param). This is the sole owner
+ *  of post-login landing resolution; the backend only validates the saved
+ *  value against `services/account_prefs.ALLOWED_LANDING_ROUTES`.
  *
  *  Priority:
  *    1. Saved pref if reachable. ("home" is reachable only when

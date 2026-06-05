@@ -83,11 +83,12 @@ import {
   type WebAuthnCredentialItem,
 } from '@/api/webauthn'
 import { useApiError } from '@/composables/useApiError'
+import { useSiteDateFormat } from '@/composables/useSiteDateFormat'
 import { isWebAuthnSupported, performRegistration } from '@/composables/useWebAuthn'
 import { useUiStore } from '@/stores/ui'
-import { formatInSiteTime } from '@/utils/datetime'
 
-const { t, locale } = useI18n()
+const { t } = useI18n()
+const { formatDate } = useSiteDateFormat()
 const { describe } = useApiError()
 const ui = useUiStore()
 
@@ -167,9 +168,6 @@ async function onDelete(id: number) {
   }
 }
 
-function formatDate(iso: string): string {
-  return formatInSiteTime(iso, locale.value)
-}
 
 onMounted(() => {
   supported.value = isWebAuthnSupported()

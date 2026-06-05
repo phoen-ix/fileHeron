@@ -13,14 +13,15 @@ import {
 } from '@/api/groups'
 import { searchUsers } from '@/api/users'
 import { useApiError } from '@/composables/useApiError'
+import { useSiteDateFormat } from '@/composables/useSiteDateFormat'
 import { useUiStore } from '@/stores/ui'
 import type { GroupDetailResponse, UserSearchItem } from '@/types/api'
-import { formatInSiteTime } from '@/utils/datetime'
 
 const route = useRoute()
 const router = useRouter()
 const ui = useUiStore()
-const { t, locale } = useI18n()
+const { t } = useI18n()
+const { formatDateOnly: formatDate } = useSiteDateFormat()
 const { describe } = useApiError()
 
 const group = ref<GroupDetailResponse | null>(null)
@@ -126,13 +127,6 @@ async function onDeleteGroup() {
   } catch (err) {
     ui.pushToast(describe(err), 'error')
   }
-}
-
-function formatDate(iso: string): string {
-  return formatInSiteTime(iso, locale.value, {
-    year: 'numeric', month: 'short', day: '2-digit',
-    hour: undefined, minute: undefined,
-  })
 }
 
 onMounted(load)

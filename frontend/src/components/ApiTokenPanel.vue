@@ -113,15 +113,17 @@ import {
 } from '@/api/apiTokens'
 import ExpiryPicker from '@/components/ExpiryPicker.vue'
 import { useApiError } from '@/composables/useApiError'
+import { useSiteDateFormat } from '@/composables/useSiteDateFormat'
 import { useUiStore } from '@/stores/ui'
 import type { ApiTokenListItem, CreateApiTokenResponse } from '@/types/api'
-import { formatInSiteTime, siteLocalIsoToUtcIso } from '@/utils/datetime'
+import { siteLocalIsoToUtcIso } from '@/utils/datetime'
 
 // Token-appropriate durations; default null → the picker shows "Never" so a
 // token stays unlimited unless the user opts into an expiry.
 const TOKEN_PRESETS = ['7d', '30d', '90d', '1y', 'never'] as const
 
-const { t, locale } = useI18n()
+const { t } = useI18n()
+const { formatDate } = useSiteDateFormat()
 const { describe } = useApiError()
 const ui = useUiStore()
 
@@ -214,10 +216,6 @@ async function copyPlaintext() {
 
 function dismissPlaintext() {
   plaintext.value = null
-}
-
-function formatDate(iso: string): string {
-  return formatInSiteTime(iso, locale.value)
 }
 
 onMounted(refresh)

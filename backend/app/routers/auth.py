@@ -5,8 +5,6 @@ NEVER attached to other API routes (uploads, downloads, etc.).
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
-
 from fastapi import APIRouter, Cookie, Depends, Request, Response, status
 from sqlalchemy.orm import Session
 
@@ -31,6 +29,7 @@ from ..services import email as email_svc
 from ..services import jwt_session, settings_registry
 from ..services import rate_limit as rate_limit_svc
 from ..utils.crypto import refresh_token_hash
+from ..utils.timeutil import utc_now
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -248,10 +247,6 @@ async def resend_verification(
 # ---------------------------------------------------------------------------
 
 
-def _utcnow_naive() -> datetime:
-    return datetime.now(tz=timezone.utc).replace(tzinfo=None)
-
-
 @router.get("/sessions", response_model=SessionListResponse)
 def list_sessions(
     user: User = Depends(get_current_user),
@@ -266,7 +261,7 @@ def list_sessions(
         .filter(
             RefreshToken.user_id == user.id,
             RefreshToken.revoked_at.is_(None),
-            RefreshToken.expires_at > _utcnow_naive(),
+            RefreshToken.expires_at > utc_now(),
         )
         .order_by(RefreshToken.created_at.desc())
         .all()
@@ -301,7 +296,7 @@ def revoke_session(
     if row is None:
         raise AppError(404, "SESSION_NOT_FOUND", "Session not found.")
     if row.revoked_at is None:
-        row.revoked_at = _utcnow_naive()
+        row.revoked_at = utc_now()
     db.commit()
 
 
@@ -315,7 +310,7 @@ def revoke_other_sessions(
     (identified by the refresh cookie). The current session is left intact so
     the caller stays signed in. Returns {revoked: n}."""
     current_hash = refresh_token_hash(fh_refresh) if fh_refresh else None
-    now = _utcnow_naive()
+    now = utc_now()
     q = db.query(RefreshToken).filter(
         RefreshToken.user_id == user.id,
         RefreshToken.revoked_at.is_(None),

@@ -7,7 +7,6 @@ All revokes are audited as `refresh_token_admin_revoked`.
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
 from typing import Literal
 
 from fastapi import APIRouter, Depends, Query, Request
@@ -22,6 +21,7 @@ from ...models.user import User
 from ...schemas.admin import AdminSessionListResponse, AdminSessionRow
 from ...services.audit import record_audit_event
 from ...services.jwt_session import revoke_all_user_refresh_tokens
+from ...utils.timeutil import utc_now
 
 router = APIRouter()
 
@@ -30,10 +30,6 @@ _SORT_COLUMNS = {
     "last_used_at": RefreshToken.last_used_at,
     "expires_at": RefreshToken.expires_at,
 }
-
-
-def _utcnow_naive() -> datetime:
-    return datetime.now(tz=timezone.utc).replace(tzinfo=None)
 
 
 @router.get("/sessions", response_model=AdminSessionListResponse)
@@ -55,7 +51,7 @@ def list_sessions(
     `last_used_at asc` so the oldest/most-idle sessions surface first —
     the quickest way to spot stale or forgotten devices.
     """
-    now = _utcnow_naive()
+    now = utc_now()
     base = db.query(RefreshToken)
     if not include_inactive:
         base = base.filter(
@@ -136,7 +132,7 @@ def revoke_session(
     if row is None:
         raise AppError(404, "SESSION_NOT_FOUND", "Session not found.")
     if row.revoked_at is None:
-        row.revoked_at = _utcnow_naive()
+        row.revoked_at = utc_now()
     record_audit_event(
         db,
         event_type=AuditEventType.refresh_token_admin_revoked,

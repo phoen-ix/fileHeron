@@ -1,20 +1,7 @@
 """User-facing schemas."""
 from __future__ import annotations
 
-from pydantic import Field
-
 from .common import APIBaseModel
-from .types import EmailLike
-
-
-class UserLookupRequest(APIBaseModel):
-    email: EmailLike
-
-
-class UserLookupResponse(APIBaseModel):
-    user_id: int = Field(..., gt=0)
-    display_name: str
-    email: str
 
 
 class UserSearchItem(APIBaseModel):

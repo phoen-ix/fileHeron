@@ -6,22 +6,17 @@ import { adminListSessions, adminRevokeSession, adminRevokeUserSessions } from '
 import Pager from '@/components/Pager.vue'
 import { useApiError } from '@/composables/useApiError'
 import { useDebouncedSearch } from '@/composables/useDebouncedSearch'
+import { usePaginatedList } from '@/composables/usePaginatedList'
+import { useSiteDateFormat } from '@/composables/useSiteDateFormat'
 import { useTableSort } from '@/composables/useTableSort'
 import { useUiStore } from '@/stores/ui'
 import type { AdminSessionRow } from '@/types/api'
-import { formatInSiteTime } from '@/utils/datetime'
 import { uaShort } from '@/utils/ua'
 
-const { t, locale } = useI18n()
+const { t } = useI18n()
+const { formatDate } = useSiteDateFormat()
 const { describe } = useApiError()
 const ui = useUiStore()
-
-const items = ref<AdminSessionRow[]>([])
-const total = ref(0)
-const page = ref(1)
-const pageSize = ref(50)
-const loading = ref(true)
-const errorMsg = ref<string | null>(null)
 
 const q = ref('')
 const includeInactive = ref(false)
@@ -30,26 +25,17 @@ const revokingUserId = ref<number | null>(null)
 
 const sort = useTableSort({ defaultBy: 'last_used_at', defaultDir: 'asc' })
 
-async function load() {
-  loading.value = true
-  errorMsg.value = null
-  try {
-    const { data } = await adminListSessions({
+const { items, total, page, pageSize, loading, errorMsg, load } =
+  usePaginatedList<AdminSessionRow>(({ page, pageSize }) =>
+    adminListSessions({
       q: q.value || undefined,
       include_inactive: includeInactive.value || undefined,
       sort: sort.sortBy.value as 'created_at' | 'last_used_at' | 'expires_at',
       direction: sort.sortDir.value,
-      page: page.value,
-      page_size: pageSize.value,
-    })
-    items.value = data.items
-    total.value = data.total
-  } catch (err) {
-    errorMsg.value = describe(err)
-  } finally {
-    loading.value = false
-  }
-}
+      page,
+      page_size: pageSize,
+    }).then((r) => r.data),
+  )
 
 useDebouncedSearch(q, () => {
   page.value = 1
@@ -93,9 +79,6 @@ async function onRevokeAll(s: AdminSessionRow) {
   }
 }
 
-function formatDate(iso: string | null): string {
-  return formatInSiteTime(iso, locale.value)
-}
 
 onMounted(load)
 </script>

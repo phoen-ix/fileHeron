@@ -26,6 +26,7 @@ from ...schemas.api_token import (
 from ...services import api_token as api_token_svc
 from ...services import settings as settings_svc
 from ...services.audit import record_audit_event
+from ...utils.timeutil import utc_now
 
 router = APIRouter()
 
@@ -33,7 +34,7 @@ router = APIRouter()
 def _token_status(t: ApiToken) -> str:
     if t.revoked_at is not None:
         return "revoked"
-    if t.expires_at is not None and api_token_svc._utcnow() > t.expires_at:
+    if t.expires_at is not None and utc_now() > t.expires_at:
         return "expired"
     if t.disabled_at is not None:
         return "disabled"

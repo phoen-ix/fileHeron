@@ -7,13 +7,15 @@ import { bulkExpireShares } from '@/api/shares'
 import Pager from '@/components/Pager.vue'
 import { useApiError } from '@/composables/useApiError'
 import { useShareListState } from '@/composables/useShareListState'
+import { useSiteDateFormat } from '@/composables/useSiteDateFormat'
 import { useUiStore } from '@/stores/ui'
 import type { ShareListItem, ShareRecipientRef } from '@/types/api'
 import { formatBytes } from '@/utils/bytes'
-import { formatExpiryInSiteTime, formatInSiteTime } from '@/utils/datetime'
+import { formatExpiryInSiteTime } from '@/utils/datetime'
 import { shareStatePill } from '@/utils/statePill'
 
 const { t, locale } = useI18n()
+const { formatDate } = useSiteDateFormat()
 const route = useRoute()
 const router = useRouter()
 const ui = useUiStore()
@@ -101,12 +103,6 @@ async function confirmBulkExpire() {
   }
 }
 
-
-function formatDate(iso: string | null): string {
-  // Date + time (+ site-tz token) so shares created on the same day are
-  // distinguishable at a glance.
-  return formatInSiteTime(iso, locale.value)
-}
 
 function formatExpiry(iso: string | null): string {
   // Full date + HH:MM + tz (formatInSiteTime defaults) — a bare zone token

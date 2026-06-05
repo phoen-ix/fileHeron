@@ -6,10 +6,11 @@ import { auditCsvUrl, listAuditLog } from '@/api/admin'
 import Pager from '@/components/Pager.vue'
 import { useApiError } from '@/composables/useApiError'
 import { useDebouncedSearch } from '@/composables/useDebouncedSearch'
+import { useSiteDateFormat } from '@/composables/useSiteDateFormat'
 import type { AdminAuditRow } from '@/types/api'
-import { formatInSiteTime } from '@/utils/datetime'
 
-const { t, locale } = useI18n()
+const { t } = useI18n()
+const { formatDate } = useSiteDateFormat()
 const { describe } = useApiError()
 
 const items = ref<AdminAuditRow[]>([])
@@ -62,10 +63,6 @@ watch(page, load)
 
 const csvHref = computed(() => auditCsvUrl(filterParams.value))
 
-function formatDate(iso: string): string {
-  return formatInSiteTime(iso, locale.value, { second: '2-digit' })
-}
-
 onMounted(load)
 </script>
 
@@ -106,7 +103,7 @@ onMounted(load)
       </thead>
       <tbody>
         <tr v-for="r in items" :key="r.id">
-          <td class="fh-mono nowrap">{{ formatDate(r.created_at) }}</td>
+          <td class="fh-mono nowrap">{{ formatDate(r.created_at, { second: '2-digit' }) }}</td>
           <td><span class="fh-mono ev">{{ r.event_type }}</span></td>
           <td class="actor-cell">
             <template v-if="r.actor_user_id !== null">

@@ -13,17 +13,19 @@ import ExpiryPicker from '@/components/ExpiryPicker.vue'
 import FileRow from '@/components/FileRow.vue'
 import PublicLinkPanel from '@/components/PublicLinkPanel.vue'
 import { useApiError } from '@/composables/useApiError'
+import { useSiteDateFormat } from '@/composables/useSiteDateFormat'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
 import type { ShareResponse } from '@/types/api'
 import { formatBytes } from '@/utils/bytes'
-import { formatExpiryInSiteTime, formatInSiteTime, siteLocalIsoToUtcIso } from '@/utils/datetime'
+import { formatExpiryInSiteTime, siteLocalIsoToUtcIso } from '@/utils/datetime'
 import { shareStatePill } from '@/utils/statePill'
 
 const route = useRoute()
 const auth = useAuthStore()
 const ui = useUiStore()
 const { t, locale } = useI18n()
+const { formatDate } = useSiteDateFormat()
 const { describe } = useApiError()
 
 const share = ref<ShareResponse | null>(null)
@@ -162,10 +164,6 @@ async function onFileDeleted(_fileId: string) {
   // with audit reason `last_file_deleted`). A naive local filter would
   // hide the file row but leave the stale "active" badge.
   await load()
-}
-
-function formatDate(iso: string): string {
-  return formatInSiteTime(iso, locale.value)
 }
 
 function formatExpiry(iso: string | null): string {

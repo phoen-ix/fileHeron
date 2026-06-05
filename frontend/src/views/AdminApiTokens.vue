@@ -14,8 +14,10 @@ import ExpiryPicker from '@/components/ExpiryPicker.vue'
 import Pager from '@/components/Pager.vue'
 import { useApiError } from '@/composables/useApiError'
 import { useDebouncedSearch } from '@/composables/useDebouncedSearch'
+import { usePaginatedList } from '@/composables/usePaginatedList'
+import { useSiteDateFormat } from '@/composables/useSiteDateFormat'
 import { useUiStore } from '@/stores/ui'
-import { formatInSiteTime, siteLocalIsoToUtcIso } from '@/utils/datetime'
+import { siteLocalIsoToUtcIso } from '@/utils/datetime'
 import type {
   AdminApiTokenItem,
   CreateApiTokenResponse,
@@ -23,39 +25,24 @@ import type {
   UserSearchItem,
 } from '@/types/api'
 
-const { t, locale } = useI18n()
+const { t } = useI18n()
+const { formatDate } = useSiteDateFormat()
 const { describe } = useApiError()
 const ui = useUiStore()
 
-const items = ref<AdminApiTokenItem[]>([])
-const total = ref(0)
-const page = ref(1)
-const pageSize = ref(50)
 const q = ref('')
 const status = ref<TokenStatus | ''>('')
-const loading = ref(true)
-const errorMsg = ref<string | null>(null)
 const busyTokenId = ref<number | null>(null)
 
-
-async function load() {
-  loading.value = true
-  errorMsg.value = null
-  try {
-    const { data } = await adminListApiTokens({
+const { items, total, page, pageSize, loading, errorMsg, load } =
+  usePaginatedList<AdminApiTokenItem>(({ page, pageSize }) =>
+    adminListApiTokens({
       q: q.value || undefined,
       status: status.value || undefined,
-      page: page.value,
-      page_size: pageSize.value,
-    })
-    items.value = data.items
-    total.value = data.total
-  } catch (err) {
-    errorMsg.value = describe(err)
-  } finally {
-    loading.value = false
-  }
-}
+      page,
+      page_size: pageSize,
+    }).then((r) => r.data),
+  )
 
 useDebouncedSearch(q, () => {
   page.value = 1
@@ -66,10 +53,6 @@ watch(status, () => {
   void load()
 })
 watch(page, load)
-
-function formatDate(iso: string | null): string {
-  return formatInSiteTime(iso, locale.value)
-}
 
 async function onDisable(item: AdminApiTokenItem) {
   busyTokenId.value = item.id

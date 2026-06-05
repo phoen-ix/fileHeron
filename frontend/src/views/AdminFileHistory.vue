@@ -7,24 +7,19 @@ import { adminDeleteFile, adminListFiles, adminReclaimFile } from '@/api/admin'
 import Pager from '@/components/Pager.vue'
 import { useApiError } from '@/composables/useApiError'
 import { useDebouncedSearch } from '@/composables/useDebouncedSearch'
+import { usePaginatedList } from '@/composables/usePaginatedList'
+import { useSiteDateFormat } from '@/composables/useSiteDateFormat'
 import { useTableSort } from '@/composables/useTableSort'
 import { useUiStore } from '@/stores/ui'
 import type { AdminFileItem, FileState, ShareState } from '@/types/api'
 import { formatBytes } from '@/utils/bytes'
-import { formatInSiteTime } from '@/utils/datetime'
 import { shareStatePill } from '@/utils/statePill'
 
-const { t, locale } = useI18n()
+const { t } = useI18n()
+const { formatDate } = useSiteDateFormat()
 const { describe } = useApiError()
 const ui = useUiStore()
 const route = useRoute()
-
-const items = ref<AdminFileItem[]>([])
-const total = ref(0)
-const page = ref(1)
-const pageSize = ref(50)
-const loading = ref(true)
-const errorMsg = ref<string | null>(null)
 
 const q = ref('')
 const stateFilter = ref<FileState | ''>('')
@@ -40,11 +35,9 @@ const deleting = ref<string | null>(null)
 
 const sort = useTableSort({ defaultBy: 'uploaded_at', defaultDir: 'desc' })
 
-async function load() {
-  loading.value = true
-  errorMsg.value = null
-  try {
-    const { data } = await adminListFiles({
+const { items, total, page, pageSize, loading, errorMsg, load } =
+  usePaginatedList<AdminFileItem>(({ page, pageSize }) =>
+    adminListFiles({
       q: q.value || undefined,
       state: stateFilter.value || undefined,
       share_state: shareStateFilter.value || undefined,
@@ -53,17 +46,10 @@ async function load() {
       uploader_id: uploaderId.value ?? undefined,
       sort: sort.sortBy.value,
       direction: sort.sortDir.value,
-      page: page.value,
-      page_size: pageSize.value,
-    })
-    items.value = data.items
-    total.value = data.total
-  } catch (err) {
-    errorMsg.value = describe(err)
-  } finally {
-    loading.value = false
-  }
-}
+      page,
+      page_size: pageSize,
+    }).then((r) => r.data),
+  )
 
 useDebouncedSearch(q, () => {
   page.value = 1
@@ -111,9 +97,6 @@ async function onDelete(it: AdminFileItem) {
 }
 watch([sort.sortBy, sort.sortDir, page], load)
 
-function formatDate(iso: string | null): string {
-  return formatInSiteTime(iso, locale.value)
-}
 
 function pillForFileState(s: FileState): string | undefined {
   if (s === 'clean') return 'active'

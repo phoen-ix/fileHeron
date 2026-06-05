@@ -6,18 +6,15 @@ import { useRouter } from 'vue-router'
 
 import { createGroup, listGroups } from '@/api/groups'
 import { useApiError } from '@/composables/useApiError'
+import { useSiteDateFormat } from '@/composables/useSiteDateFormat'
 import { useUiStore } from '@/stores/ui'
 import type { GroupResponse } from '@/types/api'
-import { formatDateInSiteTime } from '@/utils/datetime'
 
 const router = useRouter()
 const ui = useUiStore()
-const { t, locale } = useI18n()
+const { t } = useI18n()
+const { formatDateOnly: formatDate } = useSiteDateFormat()
 const { describe } = useApiError()
-
-function formatDate(iso: string | null): string {
-  return formatDateInSiteTime(iso, locale.value)
-}
 
 const items = ref<GroupResponse[]>([])
 const loading = ref(true)

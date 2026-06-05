@@ -7,7 +7,7 @@ Default expiry is 24h. Sending the email is the caller's job (for create);
 """
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 
 from sqlalchemy.orm import Session
 
@@ -16,12 +16,8 @@ from ..models.audit_log import AuditEventType
 from ..models.invite_token import InviteToken
 from ..models.user import Locale, User, UserRole
 from ..utils.crypto import normalize_email, random_token, sha256_hex
+from ..utils.timeutil import utc_now
 from .audit import record_audit_event
-
-
-def _utcnow() -> datetime:
-    # Naive UTC — matches what MariaDB returns for DATETIME columns.
-    return datetime.now(tz=timezone.utc).replace(tzinfo=None)
 
 
 def create_invite(
@@ -40,7 +36,7 @@ def create_invite(
     consume. Caller is responsible for validating that the IDs exist.
     """
     plaintext = random_token(32)
-    expires_at = _utcnow() + ttl
+    expires_at = utc_now() + ttl
 
     record = InviteToken(
         token_hash=sha256_hex(plaintext),
@@ -63,7 +59,7 @@ def has_pending_invite(db: Session, *, email_value: str) -> bool:
         .filter(
             InviteToken.email == email_value,
             InviteToken.used_at.is_(None),
-            InviteToken.expires_at > _utcnow(),
+            InviteToken.expires_at > utc_now(),
         )
         .first()
     )
@@ -83,13 +79,13 @@ def consume_invite(db: Session, *, plaintext_token: str) -> InviteToken:
         raise AppError(404, "INVITE_INVALID", "Invite is invalid.")
     if record.used_at is not None:
         raise AppError(410, "INVITE_USED", "Invite has already been used.")
-    if record.expires_at < _utcnow():
+    if record.expires_at < utc_now():
         raise AppError(410, "INVITE_EXPIRED", "Invite has expired.")
     return record
 
 
 def mark_invite_consumed(db: Session, record: InviteToken, used_user_id: int) -> None:
-    record.used_at = _utcnow()
+    record.used_at = utc_now()
     record.used_user_id = used_user_id
     db.flush()
 
@@ -125,7 +121,7 @@ def list_invites(
     ``state_filter``: ``"pending"`` | ``"expired"`` | ``"all"``.
     Returns ``(items, total)``.
     """
-    now = _utcnow()
+    now = utc_now()
     base = db.query(InviteToken).filter(InviteToken.used_user_id.is_(None))
     if state_filter == "pending":
         base = base.filter(
@@ -211,7 +207,7 @@ def regenerate_invite(
             "Invite has been consumed; create a fresh invite instead.",
         )
     plaintext = random_token(32)
-    now = _utcnow()
+    now = utc_now()
     invite.token_hash = sha256_hex(plaintext)
     invite.created_at = now
     invite.expires_at = now + ttl

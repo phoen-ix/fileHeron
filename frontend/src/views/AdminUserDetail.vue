@@ -15,15 +15,16 @@ import {
   updateUser,
 } from '@/api/admin'
 import { useApiError } from '@/composables/useApiError'
+import { useSiteDateFormat } from '@/composables/useSiteDateFormat'
 import { useUiStore } from '@/stores/ui'
 import type { AdminFileItem, AdminSessionRow, AdminUserItem, UserRole } from '@/types/api'
 import { formatBytes } from '@/utils/bytes'
-import { formatInSiteTime } from '@/utils/datetime'
 import { uaShort } from '@/utils/ua'
 
 const route = useRoute()
 const router = useRouter()
-const { t, locale } = useI18n()
+const { t } = useI18n()
+const { formatDate } = useSiteDateFormat()
 const { describe } = useApiError()
 const ui = useUiStore()
 
@@ -219,9 +220,6 @@ async function onErase() {
   }
 }
 
-function formatDate(iso: string | null): string {
-  return formatInSiteTime(iso, locale.value)
-}
 
 onMounted(load)
 </script>

@@ -2,8 +2,7 @@
 from __future__ import annotations
 
 import time
-from datetime import datetime, timedelta, timezone
-from pathlib import Path
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, File, Form, Request, UploadFile, status
 from sqlalchemy.orm import Session
@@ -18,12 +17,9 @@ from ..services import file as file_svc
 from ..services import quota as quota_svc
 from ..services import share as share_svc
 from ..services import tus_signing as ts_svc
+from ..utils.timeutil import utc_now
 
 router = APIRouter(prefix="/api/uploads", tags=["uploads"])
-
-
-def _utcnow_aware() -> datetime:
-    return datetime.now(tz=timezone.utc)
 
 
 @router.post("/init", response_model=UploadInitResponse)
@@ -140,7 +136,7 @@ async def direct_upload(
     db.flush()
 
     # Write to permanent storage (no tusd involvement).
-    when = _utcnow_aware().replace(tzinfo=None)
+    when = utc_now()
     dest = file_svc.storage_path_for(file_row.id, when)
     dest.parent.mkdir(parents=True, exist_ok=True)
     with dest.open("wb") as out:
@@ -163,10 +159,3 @@ async def direct_upload(
     return DirectUploadResponse(
         file_id=file_row.id, size_bytes=received, sha256_hex=file_row.sha256_hex
     )
-
-
-# Suppress an unused-import for the file_id timedelta import — the linter
-# would otherwise complain since timedelta isn't used yet (it will be in P5
-# for public-link expiry math). Keep the import for forward consistency.
-_ = timedelta
-_ = Path

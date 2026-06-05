@@ -4,7 +4,6 @@ from __future__ import annotations
 import pytest
 
 from app.models.user import UserRole
-from app.services import account_prefs
 from app.services import settings as settings_svc
 
 
@@ -99,42 +98,3 @@ async def test_me_response_carries_new_fields(
     assert body["default_landing_page"] is None
     assert "home_page_enabled" in body
     assert body["home_page_enabled"] is True
-
-
-def test_effective_landing_route_matrix(make_user, db):
-    user = make_user(email="x@test.local", role=UserRole.client)
-
-    # No pref + home enabled → "home".
-    assert (
-        account_prefs.effective_landing_route(user, home_enabled=True) == "home"
-    )
-    # No pref + home disabled → fallback "share-create".
-    assert (
-        account_prefs.effective_landing_route(user, home_enabled=False)
-        == "share-create"
-    )
-
-    # Explicit pref honoured.
-    user.default_landing_page = "inbox"
-    assert (
-        account_prefs.effective_landing_route(user, home_enabled=True) == "inbox"
-    )
-    assert (
-        account_prefs.effective_landing_route(user, home_enabled=False) == "inbox"
-    )
-
-    # Pref = "home" with home disabled → fallback.
-    user.default_landing_page = "home"
-    assert (
-        account_prefs.effective_landing_route(user, home_enabled=False)
-        == "share-create"
-    )
-    assert (
-        account_prefs.effective_landing_route(user, home_enabled=True) == "home"
-    )
-
-    # Stale / unknown pref → ignored, fall through.
-    user.default_landing_page = "ghost-route"
-    assert (
-        account_prefs.effective_landing_route(user, home_enabled=True) == "home"
-    )

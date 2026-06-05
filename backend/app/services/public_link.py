@@ -28,7 +28,6 @@ from sqlalchemy.orm import Session
 from ..middleware.errors import AppError
 from ..models.audit_log import AuditEventType
 from ..models.file import File
-from ..models.group_member import GroupMember
 from ..models.notification import NotificationCategory
 from ..models.public_link import PublicLink
 from ..models.public_link_attempt import (
@@ -420,66 +419,29 @@ def notify_owner_on_download(
 
 
 # ---------------------------------------------------------------------------
-# Policy gate (post-Phase 10). Mirrors services/api_token.py exactly.
+# Policy gate (post-Phase 10) — shared logic lives in services/policy_gate.
 # ---------------------------------------------------------------------------
 
-POLICY_MODES = ("everyone", "employees_admins", "admins_only", "disabled")
-DEFAULT_POLICY_MODE = "everyone"
+
+def _policy_keys() -> dict[str, str]:
+    from . import settings as settings_svc
+
+    return {
+        "mode_key": settings_svc.Keys.PUBLIC_LINK_POLICY_MODE,
+        "users_key": settings_svc.Keys.PUBLIC_LINK_ALLOWED_USERS,
+        "groups_key": settings_svc.Keys.PUBLIC_LINK_ALLOWED_GROUPS,
+    }
 
 
 def _resolve_policy(db: Session) -> tuple[str, list[int], list[int]]:
-    """Read policy from app_settings. Returns (mode, allowed_user_ids,
-    allowed_group_ids). Falls back to defaults so an unconfigured deploy
-    keeps working."""
-    from . import settings as settings_svc
+    from . import policy_gate
 
-    mode = (
-        settings_svc.get(db, settings_svc.Keys.PUBLIC_LINK_POLICY_MODE)
-        or DEFAULT_POLICY_MODE
-    )
-    if mode not in POLICY_MODES:
-        mode = DEFAULT_POLICY_MODE
-
-    raw_users = (
-        settings_svc.get(db, settings_svc.Keys.PUBLIC_LINK_ALLOWED_USERS) or "[]"
-    )
-    raw_groups = (
-        settings_svc.get(db, settings_svc.Keys.PUBLIC_LINK_ALLOWED_GROUPS) or "[]"
-    )
-    import json
-
-    try:
-        user_ids = [int(x) for x in json.loads(raw_users)]
-    except (ValueError, TypeError):
-        user_ids = []
-    try:
-        group_ids = [int(x) for x in json.loads(raw_groups)]
-    except (ValueError, TypeError):
-        group_ids = []
-    return mode, user_ids, group_ids
+    return policy_gate.resolve_policy(db, **_policy_keys())
 
 
 def is_allowed_to_create(db: Session, user: User) -> bool:
     """True if `user` may create a public link under the active policy.
     Admin always passes (operator escape hatch)."""
-    if user.role == UserRole.admin:
-        return True
-    mode, allowed_users, allowed_groups = _resolve_policy(db)
-    if mode == "everyone":
-        return True
-    if mode == "employees_admins" and user.role == UserRole.employee:
-        return True
-    if user.id in allowed_users:
-        return True
-    if allowed_groups:
-        hit = (
-            db.query(GroupMember.user_id)
-            .filter(
-                GroupMember.user_id == user.id,
-                GroupMember.group_id.in_(allowed_groups),
-            )
-            .first()
-        )
-        if hit is not None:
-            return True
-    return False
+    from . import policy_gate
+
+    return policy_gate.is_allowed(db, user, **_policy_keys())

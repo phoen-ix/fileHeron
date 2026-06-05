@@ -15,9 +15,9 @@ import Pager from '@/components/Pager.vue'
 import PasswordStrength from '@/components/PasswordStrength.vue'
 import { useApiError } from '@/composables/useApiError'
 import { useInviteForm } from '@/composables/useInviteForm'
+import { useSiteDateFormat } from '@/composables/useSiteDateFormat'
 import { useUiStore } from '@/stores/ui'
 import { formatBytes } from '@/utils/bytes'
-import { formatDateInSiteTime } from '@/utils/datetime'
 import type {
   AdminInviteItem,
   AdminUserItem,
@@ -25,7 +25,8 @@ import type {
 } from '@/types/api'
 
 const router = useRouter()
-const { t, locale } = useI18n()
+const { t } = useI18n()
+const { formatDateOnly: formatDate } = useSiteDateFormat()
 const { describe } = useApiError()
 const ui = useUiStore()
 
@@ -96,9 +97,6 @@ const {
 } = useInviteForm({ onUserCreated: load })
 
 
-function formatDate(iso: string | null): string {
-  return formatDateInSiteTime(iso, locale.value)
-}
 
 
 // --- Pending invites section ---------------------------------------------

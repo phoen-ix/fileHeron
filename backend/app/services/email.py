@@ -18,7 +18,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from babel.dates import format_datetime
+from babel.dates import format_date, format_time
 from jinja2 import Environment, FileSystemLoader, pass_context, select_autoescape
 from sqlalchemy.orm import Session
 
@@ -83,7 +83,14 @@ def _format_dt_locale(jctx, value, locale_code: str = "en") -> str:
         tz_name = DEFAULT_TIMEZONE
         tz = ZoneInfo(DEFAULT_TIMEZONE)
     locale_str = "de_AT" if locale_code == "de" else "en_US"
-    rendered = format_datetime(dt, format="medium", locale=locale_str, tzinfo=tz)
+    # 24-hour time for every locale (convention), with the locale's own date
+    # style. en_US `medium` is 12-hour (AM/PM); forcing `HH:mm:ss` keeps it
+    # consistent with de_AT (already 24-hour) and the rest of the app.
+    local = dt.astimezone(tz)
+    rendered = (
+        f"{format_date(local, format='medium', locale=locale_str)}, "
+        f"{format_time(local, format='HH:mm:ss', locale=locale_str)}"
+    )
     return f"{rendered} ({tz_name})"
 
 

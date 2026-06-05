@@ -83,10 +83,17 @@ CSP), per-recipient filter + an "Emails to this user" panel on the user-detail
 page, **resend** (disabled for masked/test/dev rows), CSV export, a
 `retention.email_log_days` window (default 90), and a GDPR-erasure scrub.
 
-**Post-1.11 backend (current `v1.11.1`):** the SMTP **test email** now renders
+**Post-1.11 backend (`v1.11.1`):** the SMTP **test email** now renders
 its "Sent at" timestamp through the `dt_locale` filter (24-hour, admin-set
 `site.timezone`, with the tz label) instead of a raw UTC ISO string — the four
 `smtp_test` templates were the only ones that printed `now` un-filtered.
+
+**Post-1.11.1 backend (current `v1.11.2`):** the `dt_locale` email filter
+(`services/email.py::_format_dt_locale`) now forces **24-hour** time for every
+locale (locale-appropriate date + `HH:mm:ss`) — English emails were rendering
+12-hour AM/PM via babel's `en_US` *medium*; German (`de_AT`, already 24-hour) is
+unchanged. Applies to every `dt_locale` timestamp (share/expiry/login-alert/
+public-link/test).
 
 **Desktop client (current `client-v0.9.9`):** CustomTkinter, single Windows
 .exe. v0.9.x reworked it to an in-window login overlay (no separate login

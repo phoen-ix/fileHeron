@@ -9,6 +9,7 @@ from .app_setting import AppSetting
 from .audit_log import AuditEventType, AuditLog
 from .client_employee_connection import ClientEmployeeConnection, ConnectionSource
 from .download_log import DownloadLog, DownloadVia
+from .email_change_token import EmailChangeToken
 from .email_log import EmailLog, EmailStatus, EmailVia
 from .email_verify_token import EmailVerifyToken
 from .file import File, FileState
@@ -43,6 +44,7 @@ __all__ = [
     "ConnectionSource",
     "DownloadLog",
     "DownloadVia",
+    "EmailChangeToken",
     "EmailLog",
     "EmailStatus",
     "EmailVia",

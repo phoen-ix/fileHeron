@@ -26,10 +26,12 @@ from ..models.email_log import EmailLog, EmailStatus, EmailVia
 
 logger = logging.getLogger("fileheron.mail_log")
 
-# Token segment of the three one-time auth links built in services/email.py:
-#   {site}/reset-password/{token}, /verify-email/{token}, /register/{token}
+# Token segment of the one-time auth links built in services/email.py:
+#   {site}/reset-password/{token}, /verify-email/{token}, /register/{token},
+#   /confirm-email-change/{token}, /cancel-email-change/{token}
 _AUTH_LINK_RE = re.compile(
-    r"(/(?:reset-password|verify-email|register)/)([A-Za-z0-9._~\-]+)"
+    r"(/(?:reset-password|verify-email|register|confirm-email-change"
+    r"|cancel-email-change)/)([A-Za-z0-9._~\-]+)"
 )
 _REDACTED = r"\1<redacted>"
 
@@ -41,6 +43,9 @@ _AUTH_LINK_CATEGORIES = {
     "verify",
     "invite",
     "lockout_warning",
+    "email_change_confirm",
+    "email_change_verify_old",
+    "email_change_alert",
 }
 
 _BODY_UNAVAILABLE = "[body unavailable: masking error]"

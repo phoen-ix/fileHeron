@@ -149,6 +149,23 @@
     "ok_subtitle": "Du kannst dich jetzt anmelden.",
     "to_login": "Weiter zur Anmeldung"
   },
+  "confirm_email_change": {
+    "eyebrow": "E-Mail-Änderung",
+    "confirming": "E-Mail-Änderung wird bestätigt…",
+    "ok_title": "E-Mail geändert.",
+    "ok_subtitle": "Deine Anmelde-E-Mail wurde aktualisiert. Du musst dich erneut anmelden.",
+    "set_password_note": "Deine Single-Sign-On-Verknüpfung wurde im Zuge dieser Änderung zurückgesetzt. An deine neue Adresse wurde eine separate E-Mail mit einem Link zum Setzen eines Passworts gesendet, damit du dich anmelden kannst.",
+    "pending_title": "Ein Schritt erledigt.",
+    "pending_subtitle": "Danke — diese Adresse ist bestätigt. Die Änderung wird wirksam, sobald auch die andere Adresse bestätigt hat.",
+    "to_login": "Weiter zur Anmeldung"
+  },
+  "cancel_email_change": {
+    "eyebrow": "E-Mail-Änderung",
+    "cancelling": "E-Mail-Änderung wird abgebrochen…",
+    "ok_title": "Änderung abgebrochen.",
+    "ok_subtitle": "Die ausstehende E-Mail-Änderung wurde abgebrochen. Am Konto wurde nichts geändert.",
+    "to_login": "Weiter zur Anmeldung"
+  },
   "home": {
     "go_share": "Datei senden",
     "go_account": "Konto"
@@ -272,6 +289,7 @@
       "email": "E-Mail / SMTP",
       "twofa": "Zwei-Faktor-Pflicht",
       "quarantine": "Quarantäne-Alarme",
+      "email_change": "E-Mail-Änderung",
       "advanced": "Erweitert"
     },
     "sections": {
@@ -282,8 +300,38 @@
       "email": "Ausgehenden SMTP konfigurieren — Host, Port, Zugangsdaten, TLS-Modus, Absender. Test-E-Mail senden und tatsächlichen Fehler sehen, falls etwas nicht stimmt.",
       "twofa": "Festlegen, wer 2FA aktivieren muss — beliebige Kombination aus Rollen (Admin / Mitarbeiter / Client) und Gruppen. Betroffene Benutzer ohne TOTP werden bei jedem Seitenaufruf in den Einrichtungsfluss umgeleitet, bis sie sich registrieren.",
       "quarantine": "Wenn ClamAV einen Upload als infiziert markiert, optional zusätzlich eine Benachrichtigung (E-Mail + In-App-Glocke) an alle Admins senden.",
+      "email_change": "Festlegen, wie E-Mail-Änderungen bestätigt werden, ob Benutzer ihre eigene E-Mail ändern dürfen und was mit einer SSO-Verknüpfung bei einer E-Mail-Änderung passiert.",
       "advanced": "Werte für Sitzungen, Rate-Limits, Aufbewahrung, Uploads und Branding anpassen, die sonst in Umgebungsvariablen leben. Jeder Wert fällt auf seinen Standard zurück; Änderungen greifen sofort, ohne Neustart."
     }
+  },
+  "admin_settings_email_change": {
+    "title": "E-Mail-Änderung",
+    "intro": "Die E-Mail ist die Anmelde-Kennung. Lege fest, wie eine Änderung bestätigt wird, ob Benutzer ihre eigene Adresse ändern können und was mit einer Single-Sign-On-Verknüpfung (SSO) bei einer Adressänderung passiert.",
+    "mode_label": "Bestätigung",
+    "mode": {
+      "verify_new": "Über die neue Adresse bestätigen",
+      "verify_both": "Über beide Adressen bestätigen",
+      "immediate": "Sofort übernehmen (ohne Bestätigung)"
+    },
+    "mode_help": {
+      "verify_new": "Empfohlen. Die E-Mail ändert sich erst, nachdem ein Link an die neue Adresse angeklickt wurde. Die alte Adresse funktioniert weiter und erhält eine Sicherheitsmeldung mit Abbrechen-Link.",
+      "verify_both": "Am sichersten. Ein Link wird an die alte und die neue Adresse gesendet; die Änderung wird erst wirksam, wenn beide angeklickt wurden. Hinweis: Ist das alte Postfach nicht erreichbar, wird die Änderung blockiert — nutze dann eine Admin-Änderung mit „sofort übernehmen“.",
+      "immediate": "Die Adresse ändert sich sofort (Admins wird vertraut). Eine Sicherheitsmeldung geht trotzdem an die alte Adresse. Setzt voraus, dass die Adresse korrekt eingegeben wurde."
+    },
+    "oidc_label": "Wenn der Benutzer sich per SSO anmeldet",
+    "oidc": {
+      "reset_setpw": "SSO zurücksetzen + Link zum Passwort-Setzen senden",
+      "reset_only": "Nur SSO zurücksetzen",
+      "keep": "SSO-Verknüpfung behalten"
+    },
+    "oidc_help": {
+      "reset_setpw": "Empfohlen. Die SSO-Verknüpfung trennen und einen Link zum Passwort-Setzen an die neue Adresse senden, damit ein reiner SSO-Benutzer nicht ausgesperrt wird. SSO kann danach erneut verknüpft werden.",
+      "reset_only": "Die SSO-Verknüpfung trennen, ohne einen Link zum Passwort-Setzen zu senden. Der Benutzer benötigt ein bekanntes Passwort oder einen Admin-Zwangs-Reset.",
+      "keep": "Die SSO-Verknüpfung unberührt lassen. Die Anmeldung funktioniert weiter per SSO, aber die lokale E-Mail kann dann von der des Identity-Providers abweichen."
+    },
+    "self_service_label": "Benutzer dürfen ihre eigene E-Mail ändern",
+    "self_service_help": "Wenn aus, können nur Admins die E-Mail eines Benutzers ändern (Admins steht die Funktion immer zur Verfügung). Wenn an, erhalten Benutzer auf ihrer Konto-Seite die Option „E-Mail ändern“, abgesichert mit ihrem Passwort.",
+    "saved_toast": "E-Mail-Änderungs-Richtlinie gespeichert."
   },
   "admin_advanced": {
     "eyebrow": "Einstellungen",
@@ -811,6 +859,18 @@
     "force_reset_confirm": "Einmal-Token generieren? Das aktuelle Passwort bleibt gültig, bis der Link verwendet wird.",
     "reset_eyebrow": "Passwort-Reset-Link",
     "reset_warning": "Diesen Token über einen sicheren Kanal teilen. Der Link läuft in 1 Stunde ab.",
+    "email_unverified_pill": "Bestätigung ausstehend",
+    "change_email": "E-Mail ändern",
+    "change_email_placeholder": "neu{'@'}beispiel.de",
+    "change_email_help": "Folgt dem konfigurierten Bestätigungsmodus. Meldet sich der Benutzer per SSO an, wird diese Verknüpfung gemäß Richtlinie zurückgesetzt. Eine Sicherheitsmeldung geht an die alte Adresse.",
+    "change_email_skip": "Sofort übernehmen (Bestätigung überspringen)",
+    "change_email_submit": "E-Mail ändern",
+    "change_email_confirm": "Anmelde-E-Mail dieses Benutzers ändern? Je nach Richtlinie muss er über einen Link bestätigen, und eine SSO-Verknüpfung kann zurückgesetzt werden. Eine Sicherheitsmeldung geht an die alte Adresse.",
+    "change_email_applied": "E-Mail geändert.",
+    "change_email_pending": "Ein Bestätigungslink wurde gesendet. Die Änderung wird nach Bestätigung wirksam.",
+    "change_email_oidc_reset": "SSO-Verknüpfung wurde zurückgesetzt; ein Link zum Passwort-Setzen wurde an die neue Adresse gesendet.",
+    "change_email_link_eyebrow": "Bestätigungslink",
+    "change_email_link_help": "SMTP ist evtl. nicht konfiguriert — teile diesen Link mit dem Benutzer über einen anderen Kanal. Er läuft in 24 Stunden ab.",
     "danger": "Gefahrenbereich",
     "erase_help": "Recht auf Löschung anonymisiert den Benutzer dauerhaft und löscht jede hochgeladene Datei endgültig. Nicht umkehrbar.",
     "erase": "Benutzer löschen",
@@ -909,9 +969,16 @@
       "aria": "Schnell-Navigation"
     },
     "section_profile": "Profil",
+    "section_email": "E-Mail",
     "section_password": "Passwort",
     "section_2fa": "Zwei-Faktor-Authentifizierung",
     "section_sessions": "Aktive Sitzungen",
+    "email_change_help": "Für die Änderung deiner E-Mail ist dein aktuelles Passwort nötig. Du erhältst einen Link zur Bestätigung der neuen Adresse; deine E-Mail ändert sich erst, wenn du ihn anklickst. Meldest du dich per SSO an, wird diese Verknüpfung evtl. zurückgesetzt und du setzt ein Passwort.",
+    "email_change_new": "Neue E-Mail-Adresse",
+    "email_change_submit": "E-Mail ändern",
+    "email_change_unchanged": "Gib eine andere Adresse als deine aktuelle ein.",
+    "email_change_applied": "E-Mail geändert.",
+    "email_change_pending": "Prüfe deine neue Adresse auf einen Bestätigungslink.",
     "language_help": "Wird für E-Mails an dich und die UI-Sprache verwendet.",
     "display_name_help": "Wird auf Freigaben und in E-Mails angezeigt. 1–120 Zeichen.",
     "display_name_saved": "Anzeigename gespeichert.",

@@ -36,6 +36,10 @@ export interface MeResponse {
    * checkbox on the create-share form. Sourced from the kv
    * `share.notify_recipients_default` (admin-editable). */
   share_notify_recipients_default: boolean
+  /** v1.13.0: whether self-service email change is enabled
+   * (`email_change.self_service`). The Account page hides the
+   * "Change email" block when false. */
+  can_change_own_email: boolean
 }
 
 export interface ShareDefaultsResponse {
@@ -398,6 +402,8 @@ export interface AdminUserItem {
   created_at: string
   last_login_at: string | null
   has_2fa: boolean
+  /** v1.13.0: drives the "verification pending" pill on the detail page. */
+  email_verified: boolean
 }
 
 export interface AdminUserListResponse {
@@ -466,6 +472,38 @@ export interface CreateUserRequest {
 export interface ForcePasswordResetResponse {
   plaintext_token: string
   expires_at: string
+}
+
+/* Email change (v1.13.0). */
+
+export type EmailChangeVerificationMode = 'immediate' | 'verify_new' | 'verify_both'
+export type EmailChangeOidcMode = 'reset_setpw' | 'reset_only' | 'keep'
+
+export interface AdminChangeEmailRequest {
+  new_email: string
+  skip_verification?: boolean
+}
+
+export interface AdminChangeEmailResponse {
+  applied: boolean
+  mode: string
+  oidc_reset: boolean
+  set_password_token_issued: boolean
+  confirm_url: string | null
+  old_confirm_url: string | null
+  user: AdminUserItem
+}
+
+export interface EmailChangePolicyResponse {
+  verification_mode: EmailChangeVerificationMode
+  self_service: boolean
+  oidc_mode: EmailChangeOidcMode
+}
+
+export interface UpdateEmailChangePolicyRequest {
+  verification_mode: EmailChangeVerificationMode
+  self_service: boolean
+  oidc_mode: EmailChangeOidcMode
 }
 
 export interface EraseUserResponse {

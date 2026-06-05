@@ -1,0 +1,17 @@
+Hallo {{ display_name }},
+
+{% if applied %}Die E-Mail-Adresse deines {{ app_name }}-Kontos wurde {% if by_admin %}von einem Administrator {% endif %}geändert auf:
+
+    {{ new_email }}
+
+Dein Konto meldet sich jetzt mit dieser Adresse an. Ein Bestätigungslink wurde dorthin gesendet.
+
+Diese Nachricht ist ein Sicherheitsnachweis an deine bisherige Adresse. Falls du diese Änderung NICHT veranlasst hast, kontaktiere sofort deinen Administrator und setze dein Passwort zurück:
+
+{{ reset_url }}{% else %}Es wurde gerade angefordert, die E-Mail-Adresse deines {{ app_name }}-Kontos auf {{ new_email }} zu ändern{% if by_admin %} (durch einen Administrator){% endif %}. Deine aktuelle Adresse funktioniert weiter, und die Änderung wird NICHT wirksam, solange sie nicht von der neuen Adresse bestätigt wird.
+
+Falls du das NICHT angefordert hast, brich es jetzt ab:
+
+{{ cancel_url }}{% endif %}
+
+— {{ app_name }}

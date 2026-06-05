@@ -4,6 +4,8 @@ import type {
   AdminApiTokenItem,
   AdminApiTokenListResponse,
   AdminAuditResponse,
+  AdminChangeEmailRequest,
+  AdminChangeEmailResponse,
   AdminCreateApiTokenRequest,
   AdminFileListResponse,
   AdminMailDetail,
@@ -16,6 +18,7 @@ import type {
   AdminUserListResponse,
   CreateApiTokenResponse,
   CreateUserRequest,
+  EmailChangePolicyResponse,
   EmailSettingsResponse,
   AvReloadResponse,
   AvStatusResponse,
@@ -33,6 +36,7 @@ import type {
   TestEmailResponse,
   TokenPolicyResponse,
   TwofaPolicyResponse,
+  UpdateEmailChangePolicyRequest,
   UpdateEmailSettingsRequest,
   UpdateHomePageSettingsRequest,
   UpdatePublicLinkPolicyRequest,
@@ -308,6 +312,10 @@ export function forcePasswordReset(id: number) {
   )
 }
 
+export function changeUserEmail(id: number, payload: AdminChangeEmailRequest) {
+  return api.post<AdminChangeEmailResponse>(`/admin/users/${id}/email`, payload)
+}
+
 export function eraseUser(id: number) {
   return api.post<EraseUserResponse>(`/admin/users/${id}/erase`)
 }
@@ -508,6 +516,16 @@ export function getTwofaPolicy() {
 
 export function updateTwofaPolicy(payload: UpdateTwofaPolicyRequest) {
   return api.put<TwofaPolicyResponse>('/admin/settings/twofa', payload)
+}
+
+// Email-change policy (v1.13.0)
+
+export function getEmailChangePolicy() {
+  return api.get<EmailChangePolicyResponse>('/admin/settings/email-change')
+}
+
+export function updateEmailChangePolicy(payload: UpdateEmailChangePolicyRequest) {
+  return api.put<EmailChangePolicyResponse>('/admin/settings/email-change', payload)
 }
 
 // Quarantine — admin actions on infected files + notification toggle

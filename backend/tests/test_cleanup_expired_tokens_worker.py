@@ -100,6 +100,46 @@ async def test_worker_hard_deletes_old_revoked_tokens(
 
 
 @pytest.mark.asyncio
+async def test_worker_deletes_settled_email_change_tokens(make_user, db, monkeypatch):
+    from app.config import settings as cfg
+    from app.models.email_change_token import EmailChangeToken
+
+    user = make_user(email="ec@test.local", role=UserRole.client)
+    now = _now()
+    old = now - timedelta(days=cfg.REFRESH_TOKEN_RETENTION_DAYS + 1)
+
+    # Settled (used) + past retention → deleted.
+    used_old = EmailChangeToken(
+        user_id=user.id, new_email="n1@test.local", new_token_hash="h" * 64,
+        created_at=old, expires_at=old + timedelta(hours=24), used_at=old,
+    )
+    # Settled (cancelled) + past retention → deleted.
+    cancelled_old = EmailChangeToken(
+        user_id=user.id, new_email="n2@test.local", new_token_hash="i" * 64,
+        created_at=old, expires_at=old + timedelta(hours=24), cancelled_at=old,
+    )
+    # Still pending (recent) → kept.
+    pending = EmailChangeToken(
+        user_id=user.id, new_email="n3@test.local", new_token_hash="j" * 64,
+        created_at=now, expires_at=now + timedelta(hours=24),
+    )
+    db.add_all([used_old, cancelled_old, pending])
+    db.commit()
+    pending_id = pending.id
+
+    from app.workers import cleanup_expired_tokens as worker_mod
+
+    monkeypatch.setattr(worker_mod, "SessionLocal", lambda: db)
+    db.commit = lambda: None
+    db.close = lambda: None
+
+    result = await cleanup_expired_tokens(None)
+    assert result["email_change_deleted"] == 2
+    assert db.query(EmailChangeToken).count() == 1
+    assert db.query(EmailChangeToken).filter(EmailChangeToken.id == pending_id).count() == 1
+
+
+@pytest.mark.asyncio
 async def test_worker_is_idempotent(make_user, db, monkeypatch):
     user = make_user(email="c@test.local", role=UserRole.client)
     now = _now()

@@ -1,0 +1,13 @@
+Hi {{ display_name }},
+
+Your {{ app_name }} sign-in email is now:
+
+    {{ new_email }}
+{% if oidc_reset %}
+Because your account was linked to a single sign-on (SSO) provider, that link was reset as part of this change. A separate email with a set-password link was sent so you can sign in with a password. You can re-link SSO afterwards from your account settings.
+{% endif %}
+You can sign in here:
+
+{{ login_url }}
+
+— {{ app_name }}

@@ -24,6 +24,7 @@ import logging
 from datetime import timedelta
 
 from ..database import SessionLocal
+from ..models.email_change_token import EmailChangeToken
 from ..models.refresh_token import RefreshToken
 from ..services.cron_tracker import track_cron
 from ..utils.timeutil import utc_now
@@ -68,13 +69,35 @@ async def cleanup_expired_tokens(_ctx) -> dict:
             .delete(synchronize_session=False)
         )
 
+        # 3. Settled email-change tokens (used or cancelled) past the same
+        #    retention window → hard-delete. Expired-but-unconsumed rows are
+        #    harmless (consume checks expires_at) and left for forensics.
+        from sqlalchemy import or_
+
+        ec_deleted = (
+            db.query(EmailChangeToken)
+            .filter(
+                or_(
+                    EmailChangeToken.used_at.is_not(None),
+                    EmailChangeToken.cancelled_at.is_not(None),
+                ),
+                EmailChangeToken.created_at < cutoff,
+            )
+            .delete(synchronize_session=False)
+        )
+
         db.commit()
-        if soft_revoked or deleted:
+        if soft_revoked or deleted or ec_deleted:
             logger.info(
-                "cleanup_expired_tokens: soft_revoked=%d deleted=%d",
+                "cleanup_expired_tokens: soft_revoked=%d deleted=%d email_change_deleted=%d",
                 soft_revoked,
                 deleted,
+                ec_deleted,
             )
-        return {"soft_revoked": soft_revoked, "deleted": deleted}
+        return {
+            "soft_revoked": soft_revoked,
+            "deleted": deleted,
+            "email_change_deleted": ec_deleted,
+        }
     finally:
         db.close()

@@ -9,6 +9,7 @@ import {
   adminListSessions,
   adminRevokeSession,
   adminRevokeUserSessions,
+  changeUserEmail,
   eraseUser,
   forcePasswordReset,
   getUser,
@@ -48,6 +49,12 @@ const savingError = ref<string | null>(null)
 const resetting = ref(false)
 const resetTokenPlaintext = ref<string | null>(null)
 
+const newEmail = ref('')
+const skipVerification = ref(false)
+const changingEmail = ref(false)
+const changeEmailError = ref<string | null>(null)
+const changeEmailLink = ref<string | null>(null)
+
 const eraseStep = ref<0 | 1 | 2>(0)
 const erasing = ref(false)
 
@@ -63,7 +70,10 @@ const deletingFileId = ref<string | null>(null)
 const emails = ref<AdminMailRow[]>([])
 const emailsLoading = ref(false)
 
-const isErased = computed(() => user.value?.email === '[erased]')
+// Mirrors the backend's erased-sentinel test (services/erasure.py): erasure
+// rewrites email to `erased-<id>@erased.invalid` (display_name becomes
+// `[erased]`), so detect on the email suffix, not the display name.
+const isErased = computed(() => user.value?.email?.endsWith('@erased.invalid') ?? false)
 
 async function load() {
   loading.value = true
@@ -219,6 +229,38 @@ async function onForceReset() {
   }
 }
 
+async function onChangeEmail() {
+  if (!user.value || changingEmail.value) return
+  const next = newEmail.value.trim()
+  if (!next || next === user.value.email) return
+  if (!(await ui.confirm({ message: t('admin_user_detail.change_email_confirm') }))) return
+  changingEmail.value = true
+  changeEmailError.value = null
+  changeEmailLink.value = null
+  try {
+    const { data } = await changeUserEmail(user.value.id, {
+      new_email: next,
+      skip_verification: skipVerification.value,
+    })
+    if (data.applied) {
+      ui.pushToast(t('admin_user_detail.change_email_applied'), 'success')
+    } else {
+      ui.pushToast(t('admin_user_detail.change_email_pending'), 'success')
+      changeEmailLink.value = data.confirm_url
+    }
+    if (data.oidc_reset) {
+      ui.pushToast(t('admin_user_detail.change_email_oidc_reset'), 'info')
+    }
+    newEmail.value = ''
+    skipVerification.value = false
+    await load()
+  } catch (err) {
+    changeEmailError.value = describe(err)
+  } finally {
+    changingEmail.value = false
+  }
+}
+
 async function onErase() {
   if (!user.value) return
   if (eraseStep.value === 0) {
@@ -264,6 +306,9 @@ onMounted(load)
         <span v-if="user.has_2fa" class="fh-pill" data-state="active">2FA on</span>
         <span v-else class="fh-pill">2FA off</span>
         <span v-if="user.is_disabled" class="fh-pill" data-state="danger">disabled</span>
+        <span v-if="!user.email_verified" class="fh-pill" data-state="warn">
+          {{ t('admin_user_detail.email_unverified_pill') }}
+        </span>
       </p>
 
       <hr class="fh-rule" />
@@ -330,6 +375,41 @@ onMounted(load)
         <div class="reset-eyebrow">{{ t('admin_user_detail.reset_eyebrow') }}</div>
         <p class="warning">{{ t('admin_user_detail.reset_warning') }}</p>
         <pre class="token fh-mono">{{ resetTokenPlaintext }}</pre>
+      </div>
+
+      <form class="change-email-form" @submit.prevent="onChangeEmail">
+        <label class="fh-field">
+          <span class="fh-field-label">{{ t('admin_user_detail.change_email') }}</span>
+          <input
+            v-model.trim="newEmail"
+            class="fh-field-input"
+            type="email"
+            autocomplete="off"
+            :placeholder="t('admin_user_detail.change_email_placeholder')"
+            :disabled="isErased || changingEmail"
+          />
+          <span class="fh-field-help">{{ t('admin_user_detail.change_email_help') }}</span>
+        </label>
+        <label class="checkbox">
+          <input v-model="skipVerification" type="checkbox" :disabled="isErased || changingEmail" />
+          <span class="cb-label">{{ t('admin_user_detail.change_email_skip') }}</span>
+        </label>
+        <div v-if="changeEmailError" class="fh-notice" data-tone="error">{{ changeEmailError }}</div>
+        <div class="actions">
+          <button
+            type="submit"
+            class="fh-btn-ghost fh-btn"
+            :disabled="changingEmail || isErased || !newEmail"
+          >
+            {{ changingEmail ? t('common.loading') : t('admin_user_detail.change_email_submit') }}
+          </button>
+        </div>
+      </form>
+
+      <div v-if="changeEmailLink" class="reset-box fh-rise">
+        <div class="reset-eyebrow">{{ t('admin_user_detail.change_email_link_eyebrow') }}</div>
+        <p class="warning">{{ t('admin_user_detail.change_email_link_help') }}</p>
+        <pre class="token fh-mono">{{ changeEmailLink }}</pre>
       </div>
 
       <hr class="fh-rule" />
@@ -525,6 +605,11 @@ onMounted(load)
   justify-content: space-between;
   gap: var(--fh-space-4);
   align-items: flex-start;
+}
+
+.change-email-form {
+  margin-top: var(--fh-space-4);
+  max-width: 480px;
 }
 
 .reset-box {

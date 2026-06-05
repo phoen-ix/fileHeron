@@ -13,5 +13,9 @@
   "file_quarantined": "An infected file was quarantined",
   "session_evicted": "A session was signed out of your {app_name} account",
   "smtp_test": "{app_name} · SMTP test",
-  "release_available": "{app_name} {version} is available"
+  "release_available": "{app_name} {version} is available",
+  "email_change_confirm": "Confirm your new {app_name} email address",
+  "email_change_verify_old": "Approve your {app_name} email change",
+  "email_change_alert": "Your {app_name} email address is being changed",
+  "email_change_completed": "Your {app_name} sign-in email was changed"
 }

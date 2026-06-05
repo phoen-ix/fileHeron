@@ -46,6 +46,11 @@ const sections: SettingsSection[] = [
     description: 'admin_settings.sections.quarantine',
   },
   {
+    name: 'email_change',
+    to: { name: 'admin-settings-email-change' },
+    description: 'admin_settings.sections.email_change',
+  },
+  {
     name: 'advanced',
     to: { name: 'admin-settings-advanced' },
     description: 'admin_settings.sections.advanced',

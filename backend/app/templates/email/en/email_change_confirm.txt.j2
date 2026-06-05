@@ -1,0 +1,9 @@
+Hi {{ display_name }},
+
+{% if by_admin %}An administrator requested a change of the email address on your {{ app_name }} account to this address.{% else %}You asked to change the email address on your {{ app_name }} account to this address.{% endif %} To confirm and switch your sign-in email to {{ new_email }}, visit:
+
+{{ confirm_url }}
+
+This link expires in 24 hours and can only be used once. Your current email keeps working until you confirm. If you didn't expect this, you can ignore this message — nothing changes unless this link is clicked.
+
+— {{ app_name }}

@@ -72,6 +72,22 @@ class Keys:
     # the create-share form. When the sender doesn't override the field,
     # this kv decides whether `share_created` notifications fan out.
     SHARE_NOTIFY_RECIPIENTS_DEFAULT = "share.notify_recipients_default"  # boolean
+    # Email-change policy (v1.13.0). All three are admin-tunable and read
+    # live; see services/email_change.py.
+    #  - verification_mode: how a change is confirmed —
+    #      'immediate'   = apply at once, no token (admin-trusted);
+    #      'verify_new'  = pending; confirm via the NEW address (default);
+    #      'verify_both' = pending; confirm via BOTH old and new addresses.
+    #  - self_service: when true, non-admins may change their own email from
+    #      the Account page. Off ⇒ admin-only ("deactivate email change for
+    #      users"). Default off.
+    #  - oidc_mode: what happens to an OIDC binding on email change —
+    #      'reset_setpw' = unlink + mail a set-password link (default);
+    #      'reset_only'  = unlink only;
+    #      'keep'        = leave the binding intact.
+    EMAIL_CHANGE_VERIFICATION_MODE = "email_change.verification_mode"
+    EMAIL_CHANGE_SELF_SERVICE = "email_change.self_service"  # boolean
+    EMAIL_CHANGE_OIDC_MODE = "email_change.oidc_mode"
     # Phase 5 self-update: configurable update-check. URL is the full
     # GitHub-compatible releases endpoint a fork operator can repoint
     # at their own repo; mode is 'auto' (poll once every 24h) or

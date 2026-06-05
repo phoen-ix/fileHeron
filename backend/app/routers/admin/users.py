@@ -13,6 +13,8 @@ from ...models.audit_log import AuditEventType, AuditLog
 from ...models.user import User, UserRole
 from ...models.user_totp import UserTOTP
 from ...schemas.admin import (
+    AdminChangeEmailRequest,
+    AdminChangeEmailResponse,
     AdminUserItem,
     AdminUserListResponse,
     CreateUserRequest,
@@ -20,6 +22,7 @@ from ...schemas.admin import (
     ForcePasswordResetResponse,
     UpdateUserRequest,
 )
+from ...services import email_change as email_change_svc
 from ...services import erasure as erasure_svc
 from ...services import user_management as um_svc
 
@@ -49,6 +52,7 @@ def _to_user_item(db: Session, u: User) -> AdminUserItem:
         created_at=u.created_at,
         last_login_at=u.last_login_at,
         has_2fa=_has_2fa(db, u.id),
+        email_verified=u.email_verified,
     )
 
 
@@ -81,6 +85,7 @@ def _hydrate_user_items(db: Session, rows: list[User]) -> list[AdminUserItem]:
             created_at=u.created_at,
             last_login_at=u.last_login_at,
             has_2fa=totp_enabled.get(u.id, False),
+            email_verified=u.email_verified,
         )
         for u in rows
     ]
@@ -182,6 +187,49 @@ def force_password_reset(
         plaintext_token=plaintext,
         expires_at=datetime.now(tz=timezone.utc).replace(tzinfo=None)
         + timedelta(hours=1),
+    )
+
+
+@router.post("/users/{user_id}/email", response_model=AdminChangeEmailResponse)
+async def change_user_email(
+    user_id: int,
+    payload: AdminChangeEmailRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin),
+) -> AdminChangeEmailResponse:
+    """Change a user's email (the admin's own included). Follows the
+    configured verification mode unless `skip_verification` is set, and resets
+    the SSO binding per the configured OIDC mode when the user is bound."""
+    target = um_svc.get_or_404(db, user_id)
+    outcome = email_change_svc.request_email_change(
+        db,
+        target=target,
+        new_email=str(payload.new_email),
+        initiated_by=admin,
+        request=request,
+        skip_verification=payload.skip_verification,
+    )
+    db.commit()
+    await email_change_svc.dispatch_request_emails(db, outcome)
+
+    confirm_url = old_confirm_url = None
+    if not outcome.applied:
+        from ...services import site as site_svc
+
+        base = site_svc.get_site_url(db)
+        confirm_url = f"{base}/confirm-email-change/{outcome.new_token}"
+        if outcome.old_token:
+            old_confirm_url = f"{base}/confirm-email-change/{outcome.old_token}"
+    db.refresh(target)
+    return AdminChangeEmailResponse(
+        applied=outcome.applied,
+        mode=outcome.mode,
+        oidc_reset=outcome.oidc_reset,
+        set_password_token_issued=outcome.set_password_token is not None,
+        confirm_url=confirm_url,
+        old_confirm_url=old_confirm_url,
+        user=_to_user_item(db, target),
     )
 
 

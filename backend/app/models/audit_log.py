@@ -112,6 +112,14 @@ class AuditEventType(str, enum.Enum):
     file_upload_abandoned = "file_upload_abandoned"
     share_failed = "share_failed"
     email_resent = "email_resent"                          # v1.11.0 (admin resend from mail log)
+    # Email change (v1.13.0). `email_change_requested` on a staged pending
+    # change; `email_changed` when applied (immediate or on confirm);
+    # `email_change_cancelled` on old-email "it wasn't me" / admin revoke /
+    # supersede; `email_change_policy_changed` on the settings PUT.
+    email_change_requested = "email_change_requested"
+    email_changed = "email_changed"
+    email_change_cancelled = "email_change_cancelled"
+    email_change_policy_changed = "email_change_policy_changed"
 
 
 

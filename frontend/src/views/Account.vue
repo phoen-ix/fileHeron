@@ -55,6 +55,41 @@ async function saveDisplayName() {
   }
 }
 
+/* --- email change (self-service, when enabled by the admin) ------------- */
+const emailNew = ref('')
+const emailPw = ref('')
+const emailSubmitting = ref(false)
+const emailError = ref<string | null>(null)
+
+async function changeEmail() {
+  emailError.value = null
+  const next = emailNew.value.trim()
+  if (!next || next === auth.user?.email) {
+    emailError.value = t('account.email_change_unchanged')
+    return
+  }
+  emailSubmitting.value = true
+  try {
+    const { data } = await accountApi.requestEmailChange({
+      new_email: next,
+      current_password: emailPw.value,
+    })
+    emailNew.value = ''
+    emailPw.value = ''
+    ui.pushToast(
+      data.applied
+        ? t('account.email_change_applied')
+        : t('account.email_change_pending'),
+      'success',
+    )
+    if (data.applied) await auth.refreshMe()
+  } catch (e) {
+    emailError.value = describe(e)
+  } finally {
+    emailSubmitting.value = false
+  }
+}
+
 /* --- password change ---------------------------------------------------- */
 const currentPw = ref('')
 const newPw = ref('')
@@ -291,6 +326,46 @@ function jumpTo(id: string) {
         </select>
         <span class="fh-field-help">{{ $t('account.landing.help') }}</span>
       </div>
+    </section>
+
+    <!-- Email change (self-service — only when the admin enabled it) -->
+    <section
+      v-if="auth.user?.can_change_own_email"
+      id="email"
+      class="account-section"
+    >
+      <h2 class="account-h2">{{ $t('account.section_email') }}</h2>
+      <p class="fh-field-help" style="margin-bottom: var(--fh-space-3)">
+        {{ $t('account.email_change_help') }}
+      </p>
+      <form @submit.prevent="changeEmail">
+        <div class="fh-field">
+          <label class="fh-field-label" for="acc-email-new">{{ $t('account.email_change_new') }}</label>
+          <input
+            id="acc-email-new"
+            v-model="emailNew"
+            class="fh-field-input"
+            type="email"
+            autocomplete="off"
+            :placeholder="auth.user?.email"
+          />
+        </div>
+        <div class="fh-field">
+          <label class="fh-field-label" for="acc-email-pw">{{ $t('common.current_password') }}</label>
+          <input
+            id="acc-email-pw"
+            v-model="emailPw"
+            class="fh-field-input"
+            type="password"
+            autocomplete="current-password"
+            required
+          />
+        </div>
+        <div v-if="emailError" class="fh-notice" data-tone="error">{{ emailError }}</div>
+        <button class="fh-btn" :disabled="emailSubmitting || !emailNew">
+          {{ emailSubmitting ? $t('common.loading') : $t('account.email_change_submit') }}
+        </button>
+      </form>
     </section>
 
     <!-- Password -->

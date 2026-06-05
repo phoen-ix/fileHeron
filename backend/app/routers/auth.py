@@ -14,6 +14,8 @@ from ..middleware.errors import AppError
 from ..models.refresh_token import RefreshToken
 from ..models.user import User
 from ..schemas.auth import (
+    CancelEmailChangeRequest,
+    ConfirmEmailChangeRequest,
     ForgotPasswordRequest,
     LoginRecoveryRequest,
     LoginRequest,
@@ -26,6 +28,7 @@ from ..schemas.auth import (
 from ..schemas.two_factor import SessionListResponse, SessionResponse
 from ..services import auth as auth_svc
 from ..services import email as email_svc
+from ..services import email_change as email_change_svc
 from ..services import jwt_session, settings_registry
 from ..services import rate_limit as rate_limit_svc
 from ..utils.crypto import refresh_token_hash
@@ -216,6 +219,55 @@ def verify_email(payload: VerifyEmailRequest, request: Request, db: Session = De
     ):
         raise AppError(429, "RATE_LIMITED", "Too many attempts; try again shortly.")
     auth_svc.consume_email_verification(db, plaintext_token=payload.token, request=request)
+    db.commit()
+    return {"ok": True}
+
+
+@router.post("/confirm-email-change", status_code=status.HTTP_200_OK)
+async def confirm_email_change(
+    payload: ConfirmEmailChangeRequest,
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
+) -> dict:
+    """Public confirm of a pending email change (the token is the auth). In
+    verify_both mode this confirms one side; the change applies only once both
+    sides have confirmed. On apply, the user's sessions are revoked, so clear
+    the refresh cookie to force a fresh sign-in with the new identity."""
+    ip = request.client.host if request.client else ""
+    if not rate_limit_svc.check_ip_allowed(
+        "verify", ip, settings_registry.effective(db, settings_registry.K.RATE_LIMIT_REGISTER)
+    ):
+        raise AppError(429, "RATE_LIMITED", "Too many attempts; try again shortly.")
+    outcome = email_change_svc.confirm_email_change(
+        db, token=payload.token, request=request
+    )
+    db.commit()
+    if outcome.applied:
+        _clear_refresh_cookie(response)
+        await email_change_svc.dispatch_confirm_emails(db, outcome)
+    return {
+        "ok": True,
+        "applied": outcome.applied,
+        "pending_side": outcome.pending_side,
+        "oidc_reset": outcome.oidc_reset,
+        "set_password_required": outcome.set_password_token is not None,
+    }
+
+
+@router.post("/cancel-email-change", status_code=status.HTTP_200_OK)
+def cancel_email_change(
+    payload: CancelEmailChangeRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> dict:
+    """Old-address 'it wasn't me' kill switch for a pending email change."""
+    ip = request.client.host if request.client else ""
+    if not rate_limit_svc.check_ip_allowed(
+        "verify", ip, settings_registry.effective(db, settings_registry.K.RATE_LIMIT_REGISTER)
+    ):
+        raise AppError(429, "RATE_LIMITED", "Too many attempts; try again shortly.")
+    email_change_svc.cancel_email_change(db, token=payload.token, request=request)
     db.commit()
     return {"ok": True}
 

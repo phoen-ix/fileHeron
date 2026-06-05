@@ -149,6 +149,23 @@
     "ok_subtitle": "You can now sign in.",
     "to_login": "Continue to sign in"
   },
+  "confirm_email_change": {
+    "eyebrow": "email change",
+    "confirming": "Confirming your email change…",
+    "ok_title": "Email changed.",
+    "ok_subtitle": "Your sign-in email has been updated. You'll need to sign in again.",
+    "set_password_note": "Your single sign-on link was reset as part of this change. A separate email with a set-password link was sent to your new address so you can sign in.",
+    "pending_title": "One step done.",
+    "pending_subtitle": "Thanks — this address is confirmed. The change applies once the other address has confirmed too.",
+    "to_login": "Continue to sign in"
+  },
+  "cancel_email_change": {
+    "eyebrow": "email change",
+    "cancelling": "Cancelling the email change…",
+    "ok_title": "Change cancelled.",
+    "ok_subtitle": "The pending email change has been cancelled. Nothing was changed on the account.",
+    "to_login": "Continue to sign in"
+  },
   "home": {
     "go_share": "Send a file",
     "go_account": "Account"
@@ -272,6 +289,7 @@
       "email": "Email / SMTP",
       "twofa": "Two-factor enforcement",
       "quarantine": "Quarantine alerts",
+      "email_change": "Email change",
       "advanced": "Advanced"
     },
     "sections": {
@@ -282,8 +300,38 @@
       "email": "Configure outbound SMTP — host, port, credentials, TLS mode, From address. Send a test email and see the actual error if something's wrong.",
       "twofa": "Decide who must enable 2FA — pick any combination of roles (admin / employee / client) and groups. Affected users without TOTP get bounced into the setup flow on every page load until they enrol.",
       "quarantine": "When ClamAV flags an upload, optionally fan out a notification (email + in-app bell) to every admin in addition to the uploader.",
+      "email_change": "Decide how email changes are verified, whether users may change their own email, and what happens to an SSO link when an email changes.",
       "advanced": "Tune session, rate-limit, retention, upload and branding values that otherwise live in environment variables. Each falls back to its built-in default; changes apply live, no redeploy."
     }
+  },
+  "admin_settings_email_change": {
+    "title": "Email change",
+    "intro": "Email is the sign-in identifier. Choose how a change is verified, whether users can change their own address, and what happens to a single sign-on (SSO) link when the address changes.",
+    "mode_label": "Verification",
+    "mode": {
+      "verify_new": "Confirm via the new address",
+      "verify_both": "Confirm via both addresses",
+      "immediate": "Apply immediately (no verification)"
+    },
+    "mode_help": {
+      "verify_new": "Recommended. The email only changes after a link sent to the new address is clicked. The old address keeps working and gets a security notice with a cancel link.",
+      "verify_both": "Strongest. A link is sent to both the old and new address; the change applies only when both are clicked. Note: if the old mailbox is inaccessible, the change is blocked — use an admin change with 'apply immediately' instead.",
+      "immediate": "The address changes at once (admins are trusted). A security notice is still sent to the old address. Relies on the address being typed correctly."
+    },
+    "oidc_label": "When the user signs in via SSO",
+    "oidc": {
+      "reset_setpw": "Reset SSO + send a set-password link",
+      "reset_only": "Reset SSO only",
+      "keep": "Keep the SSO link"
+    },
+    "oidc_help": {
+      "reset_setpw": "Recommended. Disconnect the SSO link and email a set-password link to the new address so an SSO-only user isn't locked out. They can re-link SSO afterwards.",
+      "reset_only": "Disconnect the SSO link without sending a set-password link. The user needs a known password, or an admin force-reset.",
+      "keep": "Leave the SSO link untouched. Sign-in keeps working via SSO, but the local email may then differ from the identity provider's."
+    },
+    "self_service_label": "Let users change their own email",
+    "self_service_help": "When off, only admins can change a user's email (the core capability is always available to admins). When on, users get a 'Change email' option on their Account page, re-authenticated with their password.",
+    "saved_toast": "Email-change policy saved."
   },
   "admin_advanced": {
     "eyebrow": "Settings",
@@ -811,6 +859,18 @@
     "force_reset_confirm": "Generate a one-time reset token? The current password keeps working until the user clicks the link.",
     "reset_eyebrow": "Password reset link",
     "reset_warning": "Share this token via a secure out-of-band channel. The link expires in 1 hour.",
+    "email_unverified_pill": "verification pending",
+    "change_email": "Change email",
+    "change_email_placeholder": "new{'@'}example.com",
+    "change_email_help": "Follows the configured verification mode. If the user signs in via SSO, that link is reset per policy. A security notice goes to the old address.",
+    "change_email_skip": "Apply immediately (skip verification)",
+    "change_email_submit": "Change email",
+    "change_email_confirm": "Change this user's sign-in email? Depending on policy they may need to confirm via a link, and an SSO link may be reset. A security notice is sent to the old address.",
+    "change_email_applied": "Email changed.",
+    "change_email_pending": "A confirmation link was sent. The change applies once it's confirmed.",
+    "change_email_oidc_reset": "SSO link was reset; a set-password link was sent to the new address.",
+    "change_email_link_eyebrow": "Confirmation link",
+    "change_email_link_help": "SMTP may be unconfigured — share this link with the user out-of-band. It expires in 24 hours.",
     "danger": "Danger zone",
     "erase_help": "Right-to-erasure permanently anonymizes this user and hard-deletes every file they uploaded. The action cannot be undone.",
     "erase": "Erase user",
@@ -909,9 +969,16 @@
       "aria": "Quick navigation"
     },
     "section_profile": "Profile",
+    "section_email": "Email",
     "section_password": "Password",
     "section_2fa": "Two-factor authentication",
     "section_sessions": "Active sessions",
+    "email_change_help": "Changing your email needs your current password. You'll receive a link to confirm the new address; your email only changes once you click it. If you sign in via SSO, that link may be reset and you'll set a password.",
+    "email_change_new": "New email address",
+    "email_change_submit": "Change email",
+    "email_change_unchanged": "Enter an address different from your current one.",
+    "email_change_applied": "Email changed.",
+    "email_change_pending": "Check your new address for a confirmation link.",
     "language_help": "Used for emails sent to you and the UI language.",
     "display_name_help": "Shown on shares and emails. 1–120 characters.",
     "display_name_saved": "Display name saved.",

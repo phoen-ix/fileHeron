@@ -1,0 +1,9 @@
+Hallo {{ display_name }},
+
+{% if by_admin %}Ein Administrator hat eine Änderung der E-Mail-Adresse deines {{ app_name }}-Kontos auf diese Adresse angefordert.{% else %}Du hast angefordert, die E-Mail-Adresse deines {{ app_name }}-Kontos auf diese Adresse zu ändern.{% endif %} Um zu bestätigen und deine Anmelde-E-Mail auf {{ new_email }} umzustellen, öffne diesen Link:
+
+{{ confirm_url }}
+
+Der Link ist 24 Stunden gültig und kann nur einmal verwendet werden. Deine aktuelle E-Mail-Adresse funktioniert weiter, bis du bestätigst. Falls du das nicht erwartet hast, ignoriere diese Nachricht — es ändert sich nichts, solange dieser Link nicht angeklickt wird.
+
+— {{ app_name }}

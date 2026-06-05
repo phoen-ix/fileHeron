@@ -1,0 +1,17 @@
+Hi {{ display_name }},
+
+{% if applied %}The email address on your {{ app_name }} account was {% if by_admin %}changed by an administrator{% else %}changed{% endif %} to:
+
+    {{ new_email }}
+
+Your account now signs in with that address. A verification link was sent there.
+
+This message is a security record sent to your previous address. If you did NOT authorize this change, contact your administrator immediately and reset your password:
+
+{{ reset_url }}{% else %}A request to change the email address on your {{ app_name }} account to {{ new_email }} was just made{% if by_admin %} by an administrator{% endif %}. Your current address still works and the change will NOT take effect unless it is confirmed from the new address.
+
+If you did NOT request this, cancel it now:
+
+{{ cancel_url }}{% endif %}
+
+— {{ app_name }}

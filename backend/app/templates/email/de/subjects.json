@@ -13,5 +13,9 @@
   "file_quarantined": "Eine infizierte Datei wurde unter Quarantäne gestellt",
   "session_evicted": "Eine Sitzung wurde von deinem {app_name}-Konto abgemeldet",
   "smtp_test": "{app_name} · SMTP-Test",
-  "release_available": "{app_name} {version} ist verfügbar"
+  "release_available": "{app_name} {version} ist verfügbar",
+  "email_change_confirm": "Bestätige deine neue {app_name}-E-Mail-Adresse",
+  "email_change_verify_old": "Bestätige deine {app_name}-E-Mail-Änderung",
+  "email_change_alert": "Deine {app_name}-E-Mail-Adresse wird geändert",
+  "email_change_completed": "Deine {app_name}-Anmelde-E-Mail wurde geändert"
 }

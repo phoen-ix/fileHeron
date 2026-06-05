@@ -51,3 +51,13 @@ class ResetPasswordRequest(APIBaseModel):
 
 class VerifyEmailRequest(APIBaseModel):
     token: str = Field(..., min_length=10, max_length=128)
+
+
+class ConfirmEmailChangeRequest(APIBaseModel):
+    """Public confirm of a pending email change — the token IS the auth."""
+    token: str = Field(..., min_length=10, max_length=128)
+
+
+class CancelEmailChangeRequest(APIBaseModel):
+    """Old-address 'it wasn't me' kill switch for a pending email change."""
+    token: str = Field(..., min_length=10, max_length=128)

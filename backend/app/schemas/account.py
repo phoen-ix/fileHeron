@@ -45,11 +45,23 @@ class MeResponse(APIBaseModel):
     # this to pre-check the checkbox; the sender can still override
     # per share.
     share_notify_recipients_default: bool = True
+    # Whether self-service email change is enabled (kv
+    # `email_change.self_service`, admin-editable). When False the SPA
+    # hides the "Change email" block on the Account page. Admin-initiated
+    # email change is unaffected.
+    can_change_own_email: bool = False
 
 
 class ChangePasswordRequest(APIBaseModel):
     current_password: str = Field(..., min_length=1, max_length=256)
     new_password: str = Field(..., min_length=12, max_length=256)
+
+
+class RequestEmailChangeRequest(APIBaseModel):
+    """Body for POST /api/account/email — self-service email change.
+    Re-authenticates with the current password before staging the change."""
+    new_email: EmailLike
+    current_password: str = Field(..., min_length=1, max_length=256)
 
 
 class UpdateLocaleRequest(APIBaseModel):

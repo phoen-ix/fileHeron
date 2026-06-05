@@ -30,6 +30,8 @@ class AdminUserItem(APIBaseModel):
     created_at: datetime
     last_login_at: datetime | None
     has_2fa: bool
+    # Drives the "verification pending" pill on the admin user-detail page.
+    email_verified: bool = True
 
 
 class AdminUserListResponse(APIBaseModel):
@@ -59,6 +61,45 @@ class CreateUserRequest(APIBaseModel):
 class ForcePasswordResetResponse(APIBaseModel):
     plaintext_token: str
     expires_at: datetime
+
+
+class AdminChangeEmailRequest(APIBaseModel):
+    """Body for POST /api/admin/users/{id}/email."""
+    new_email: EmailLike
+    # Admin-only escape hatch: apply at once regardless of the configured
+    # verification mode (covers "user lost access to their old mailbox").
+    skip_verification: bool = False
+
+
+class AdminChangeEmailResponse(APIBaseModel):
+    # True ⇒ the change is already live (immediate mode / skip_verification).
+    applied: bool
+    mode: str
+    oidc_reset: bool
+    set_password_token_issued: bool
+    # Plaintext confirm link(s) for a staged change, so an admin can deliver
+    # them out-of-band when SMTP is unconfigured. None once applied.
+    confirm_url: str | None = None
+    old_confirm_url: str | None = None
+    user: AdminUserItem
+
+
+# --- Email-change policy settings (admin-tunable) ---------------------------
+
+EmailChangeVerificationMode = Literal["immediate", "verify_new", "verify_both"]
+EmailChangeOidcMode = Literal["reset_setpw", "reset_only", "keep"]
+
+
+class EmailChangePolicyResponse(APIBaseModel):
+    verification_mode: EmailChangeVerificationMode
+    self_service: bool
+    oidc_mode: EmailChangeOidcMode
+
+
+class UpdateEmailChangePolicyRequest(APIBaseModel):
+    verification_mode: EmailChangeVerificationMode
+    self_service: bool
+    oidc_mode: EmailChangeOidcMode
 
 
 class EraseUserResponse(APIBaseModel):

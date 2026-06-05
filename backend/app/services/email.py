@@ -523,3 +523,99 @@ async def send_lockout_warning_email(
     await _send_resolved(
         to=to, subject=subject, text_body=body, category="lockout_warning"
     )
+
+
+# -------------------------------------------------------------------------
+# Email-change senders (v1.13.0). The confirm/verify-old/alert mails carry
+# one-time tokens (masked at rest by mail_log via category); the completion
+# notice is token-free.
+# -------------------------------------------------------------------------
+
+
+async def send_email_change_confirm(
+    *, to: str, locale: Locale | str, display_name: str, token: str,
+    new_email: str, by_admin: bool = False,
+    app_url: str | None = None, site_timezone: str | None = None,
+) -> None:
+    """Confirm link to the NEW address (verify_new + verify_both modes)."""
+    base = _app_url(app_url)
+    tz = _site_tz(site_timezone)
+    ctx = {
+        "display_name": display_name,
+        "new_email": new_email,
+        "by_admin": by_admin,
+        "confirm_url": f"{base}/confirm-email-change/{token}",
+    }
+    body = _render(locale, "email_change_confirm", "txt", ctx, app_url=base, site_timezone=tz)
+    subject = _resolve_subject(_resolve_locale(locale), "email_change_confirm", ctx)
+    await _send_resolved(
+        to=to, subject=subject, text_body=body, category="email_change_confirm"
+    )
+
+
+async def send_email_change_verify_old(
+    *, to: str, locale: Locale | str, display_name: str,
+    confirm_token: str, cancel_token: str, new_email: str, by_admin: bool = False,
+    app_url: str | None = None, site_timezone: str | None = None,
+) -> None:
+    """Confirm + cancel links to the OLD address (verify_both mode only)."""
+    base = _app_url(app_url)
+    tz = _site_tz(site_timezone)
+    ctx = {
+        "display_name": display_name,
+        "new_email": new_email,
+        "by_admin": by_admin,
+        "confirm_url": f"{base}/confirm-email-change/{confirm_token}",
+        "cancel_url": f"{base}/cancel-email-change/{cancel_token}",
+    }
+    body = _render(locale, "email_change_verify_old", "txt", ctx, app_url=base, site_timezone=tz)
+    subject = _resolve_subject(_resolve_locale(locale), "email_change_verify_old", ctx)
+    await _send_resolved(
+        to=to, subject=subject, text_body=body, category="email_change_verify_old"
+    )
+
+
+async def send_email_change_alert(
+    *, to: str, locale: Locale | str, display_name: str, new_email: str,
+    cancel_token: str | None = None, by_admin: bool = False, applied: bool = False,
+    app_url: str | None = None, site_timezone: str | None = None,
+) -> None:
+    """Security notice to the OLD address. When ``applied`` (immediate mode)
+    the change is already live, so no cancel link; otherwise (verify_new) a
+    cancel link lets the old mailbox kill the pending change."""
+    base = _app_url(app_url)
+    tz = _site_tz(site_timezone)
+    ctx = {
+        "display_name": display_name,
+        "new_email": new_email,
+        "by_admin": by_admin,
+        "applied": applied,
+        "cancel_url": f"{base}/cancel-email-change/{cancel_token}" if cancel_token else None,
+        "reset_url": f"{base}/forgot-password",
+    }
+    body = _render(locale, "email_change_alert", "txt", ctx, app_url=base, site_timezone=tz)
+    subject = _resolve_subject(_resolve_locale(locale), "email_change_alert", ctx)
+    await _send_resolved(
+        to=to, subject=subject, text_body=body, category="email_change_alert"
+    )
+
+
+async def send_email_change_completed(
+    *, to: str, locale: Locale | str, display_name: str, new_email: str,
+    oidc_reset: bool = False,
+    app_url: str | None = None, site_timezone: str | None = None,
+) -> None:
+    """Token-free courtesy notice to the NEW (now current) address."""
+    base = _app_url(app_url)
+    tz = _site_tz(site_timezone)
+    ctx = {
+        "display_name": display_name,
+        "new_email": new_email,
+        "oidc_reset": oidc_reset,
+        "login_url": f"{base}/login",
+    }
+    body = _render(locale, "email_change_completed", "txt", ctx, app_url=base, site_timezone=tz)
+    subject = _resolve_subject(_resolve_locale(locale), "email_change_completed", ctx)
+    await _send_resolved(
+        to=to, subject=subject, text_body=body, category="email_change_completed"
+    )

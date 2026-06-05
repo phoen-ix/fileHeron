@@ -56,6 +56,18 @@ const router = createRouter({
       component: () => import('@/views/EmailVerify.vue'),
       meta: { public: true, density: 'editorial', title: 'Verify email' },
     },
+    {
+      path: '/confirm-email-change/:token',
+      name: 'confirm-email-change',
+      component: () => import('@/views/ConfirmEmailChange.vue'),
+      meta: { public: true, density: 'editorial', title: 'Confirm email change' },
+    },
+    {
+      path: '/cancel-email-change/:token',
+      name: 'cancel-email-change',
+      component: () => import('@/views/CancelEmailChange.vue'),
+      meta: { public: true, density: 'editorial', title: 'Cancel email change' },
+    },
 
     /* authed --------------------------------------------------------------- */
     {
@@ -245,6 +257,12 @@ const router = createRouter({
           name: 'admin-settings-quarantine',
           component: () => import('@/views/AdminSettingsQuarantine.vue'),
           meta: { density: 'operator', title: 'Quarantine', requiresRole: 'admin' },
+        },
+        {
+          path: 'settings/email-change',
+          name: 'admin-settings-email-change',
+          component: () => import('@/views/AdminSettingsEmailChange.vue'),
+          meta: { density: 'operator', title: 'Email change', requiresRole: 'admin' },
         },
         {
           path: 'settings/advanced',

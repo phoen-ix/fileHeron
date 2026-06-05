@@ -41,3 +41,17 @@ export function resetPassword(payload: { token: string; new_password: string }) 
 export function verifyEmail(payload: { token: string }) {
   return api.post('/auth/verify-email', payload)
 }
+
+export function confirmEmailChange(payload: { token: string }) {
+  return api.post<{
+    ok: boolean
+    applied: boolean
+    pending_side: string | null
+    oidc_reset: boolean
+    set_password_required: boolean
+  }>('/auth/confirm-email-change', payload)
+}
+
+export function cancelEmailChange(payload: { token: string }) {
+  return api.post<{ ok: boolean }>('/auth/cancel-email-change', payload)
+}

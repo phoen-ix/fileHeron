@@ -31,12 +31,29 @@ _CFG = SmtpConfig(
 
 
 def test_mask_redacts_each_auth_link():
-    for path in ("reset-password", "verify-email", "register"):
+    for path in (
+        "reset-password",
+        "verify-email",
+        "register",
+        "confirm-email-change",
+        "cancel-email-change",
+    ):
         text = f"Hello, visit https://x.test/{path}/abc.def-123_TOK to continue."
         out, redacted = mail_log.mask_sensitive(text)
         assert redacted is True
         assert f"/{path}/<redacted>" in out
         assert "abc.def-123_TOK" not in out
+
+
+def test_mask_bodies_email_change_categories_force_masked():
+    # A token-free body still masks because the category is a known
+    # token-bearer (resend stays disabled regardless).
+    for cat in ("email_change_confirm", "email_change_verify_old", "email_change_alert"):
+        _t, _h, masked = mail_log.mask_bodies("hi", "<p>hi</p>", cat)
+        assert masked is True, cat
+    # The completion notice is token-free → not forced masked.
+    _t, _h, masked = mail_log.mask_bodies("hi", "<p>hi</p>", "email_change_completed")
+    assert masked is False
 
 
 def test_mask_leaves_ordinary_text_untouched():

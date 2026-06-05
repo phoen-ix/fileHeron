@@ -15,6 +15,7 @@ from ..schemas.account import (
     ChangePasswordRequest,
     InviteRequest,
     MeResponse,
+    RequestEmailChangeRequest,
     UpdateDefaultLandingPageRequest,
     UpdateDisplayNameRequest,
     UpdateLocaleRequest,
@@ -62,6 +63,9 @@ def _me_response(db: Session, user: User) -> MeResponse:
     me_resp.share_notify_recipients_default = settings_svc.get_bool(
         db, settings_svc.Keys.SHARE_NOTIFY_RECIPIENTS_DEFAULT, default=True
     )
+    from ..services import email_change_policy
+
+    me_resp.can_change_own_email = email_change_policy.self_service_enabled(db)
     return me_resp
 
 
@@ -174,6 +178,49 @@ async def change_password(
     )
     db.commit()
     return {"ok": True}
+
+
+@router.post("/email", status_code=status.HTTP_200_OK)
+async def change_email(
+    payload: RequestEmailChangeRequest,
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Self-service email change. Gated on the `email_change.self_service`
+    policy; re-authenticates with the current password; then follows the
+    configured verification mode (a confirm link is mailed — the new address
+    must click it, and in verify_both the old one too)."""
+    from ..services import email_change as email_change_svc
+    from ..services import email_change_policy
+    from ..utils.crypto import argon2_verify
+
+    if not email_change_policy.self_service_enabled(db):
+        raise AppError(
+            403,
+            "EMAIL_CHANGE_DISABLED",
+            "Changing your own email is disabled by the administrator.",
+        )
+    ip = request.client.host if request.client else ""
+    if not rate_limit_svc.check_ip_allowed(
+        "change_password", ip,
+        settings_registry.effective(db, settings_registry.K.RATE_LIMIT_REGISTER),
+    ):
+        raise AppError(429, "RATE_LIMITED", "Too many attempts; try again shortly.")
+    if not argon2_verify(user.password_hash, payload.current_password):
+        raise AppError(401, "INVALID_CREDENTIALS", "Current password is incorrect.")
+
+    outcome = email_change_svc.request_email_change(
+        db,
+        target=user,
+        new_email=str(payload.new_email),
+        initiated_by=user,
+        request=request,
+        skip_verification=False,
+    )
+    db.commit()
+    await email_change_svc.dispatch_request_emails(db, outcome)
+    return {"ok": True, "applied": outcome.applied, "mode": outcome.mode}
 
 
 @router.post("/invite", status_code=status.HTTP_201_CREATED)

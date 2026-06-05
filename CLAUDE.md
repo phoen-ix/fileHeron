@@ -88,12 +88,25 @@ its "Sent at" timestamp through the `dt_locale` filter (24-hour, admin-set
 `site.timezone`, with the tz label) instead of a raw UTC ISO string — the four
 `smtp_test` templates were the only ones that printed `now` un-filtered.
 
-**Post-1.11.1 backend (current `v1.11.2`):** the `dt_locale` email filter
+**Post-1.11.1 backend (`v1.11.2`):** the `dt_locale` email filter
 (`services/email.py::_format_dt_locale`) now forces **24-hour** time for every
 locale (locale-appropriate date + `HH:mm:ss`) — English emails were rendering
 12-hour AM/PM via babel's `en_US` *medium*; German (`de_AT`, already 24-hour) is
 unchanged. Applies to every `dt_locale` timestamp (share/expiry/login-alert/
 public-link/test).
+
+**Post-1.11.2 backend (current `v1.12.0`):** a share's **creator can add files to
+an already-active share**. No new mechanism was needed server-side — the upload
+endpoints (`/api/uploads/init`, `/api/uploads/direct`) already gate on
+`state=active` + `created_by_id==owner` and attach the file via `share_id` at
+upload time, with no "new share" restriction. The frontend gains an **Add files**
+panel on the share detail page (`ShareDetail.vue`, owner+active only) reusing the
+existing `useUpload(shareId)` + `FileUploadArea`. New opt-in re-notification:
+`POST /api/shares/{id}/files-added` (`services/share.py::register_files_added`,
+owner+active) records a `share_files_added` audit row and, when the "also notify
+recipients" box is ticked, fans a new `share_files_added` notification (+ en/de
+templates) out to the share's current recipients — same recipient resolution as
+`create_share`.
 
 **Desktop client (current `client-v0.9.9`):** CustomTkinter, single Windows
 .exe. v0.9.x reworked it to an in-window login overlay (no separate login
@@ -235,6 +248,7 @@ client → POST /api/uploads/init  (HMAC envelope, files row state=uploading)
 - **Group deletion** refuses with `409 GROUP_IN_USE` if the group is the recipient of any active share — admin must revoke those first.
 - **Editable expiry:** `PATCH /api/shares/{id}` body `{expires_at}` (owner+admin). Refuses past timestamps (`400 INVALID_EXPIRY`) + non-active states (`409 SHARE_NOT_ACTIVE`). Audits `share_expiry_updated`.
 - **Expire-now:** `POST /api/shares/{id}/expire` flips state + sets `expires_at = now()` + hard-deletes file bytes via `services/file.py::delete_file_for_expiry` (same helper as the cron — single source of truth). Audits `share_expired` with `{via: "owner_action", file_count}`.
+- **Add files to an active share (v1.12.0):** files attach to a share at *upload* time (`files.share_id` set in `file_svc::create_pending`), not at share-create — so the owner can keep uploading into an active share they own via the normal upload endpoints (gated `state=active` + `created_by_id==owner`; **owner-only, no admin bypass**). The SPA's **Add files** panel (`ShareDetail.vue`) drives that, then calls `POST /api/shares/{id}/files-added` (`register_files_added`) to audit `share_files_added` and optionally dispatch the `share_files_added` notification to recipients.
 - **List route** `GET /api/shares` — paginated + sortable + filterable: `q`, `state[]`, `recipient_user_id`, `recipient_group_id`, `sender_user_id`, `via_group_id`, `sort`, `direction`, `page`, `page_size`. Each item carries compact `recipients[]` (kind+id+label+role) + `sender` (inbox only) so SPA renders group view without a follow-up. **Default state filter on the SPA is `active`** — was a recent UX fix.
 - **Subject fallback:** rows render `effective_subject` (file's name if subject blank).
 - **Inline public link on create:** `CreateShareRequest.public_link: {password?, download_limit?, notify_on_download}`. Created atomically; plaintext URL returned **once** on `ShareResponse.public_link`. Refuses with `403 PUBLIC_LINK_NOT_ALLOWED` *before* writing the share if policy denies.
@@ -277,7 +291,7 @@ Failures logged but never propagate.
 
 - **Templates:** `backend/app/templates/email/{en,de}/{slug}.{txt,html}.j2` + shared `layout.html.j2` (table-based for client compat) + per-locale `subjects.json`. `dt_locale(locale)` Jinja filter via `babel.dates.format_datetime`.
 - **Locale fallback:** tries `{locale}/...` first, falls back to `en/`.
-- **Categories** (`models/notification.py::NotificationCategory`, with `_DEFAULT_CHANNEL`): `share_created` (both), `share_expiring` (both), `public_link_downloaded` (email), `account_created` (email), `reset_password` (email), `login_alert` (email), `oidc_linked` (both), `file_quarantined` (both), `session_evicted` (in_app), `ops_alert` (in_app, admin-only), `release_available` (both, admin-only). Absent preference row → the per-category default.
+- **Categories** (`models/notification.py::NotificationCategory`, with `_DEFAULT_CHANNEL`): `share_created` (both), `share_files_added` (both), `share_expiring` (both), `public_link_downloaded` (email), `account_created` (email), `reset_password` (email), `login_alert` (email), `oidc_linked` (both), `file_quarantined` (both), `session_evicted` (in_app), `ops_alert` (in_app, admin-only), `release_available` (both, admin-only). Absent preference row → the per-category default.
 
 ### In-app bell + SSE
 

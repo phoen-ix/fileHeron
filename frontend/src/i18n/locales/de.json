@@ -1161,7 +1161,12 @@
     "download_limit_new_label": "Neues Limit",
     "download_limit_placeholder": "z. B. 10",
     "download_limit_clear": "Limit entfernen (unbegrenzt)",
-    "limit_saved_toast": "Download-Limit aktualisiert."
+    "limit_saved_toast": "Download-Limit aktualisiert.",
+    "add_files": "+ Dateien hinzufügen",
+    "add_files_notify": "Empfänger über die neuen Dateien benachrichtigen",
+    "add_files_cta": "Hochladen",
+    "add_files_has_errors": "Einige Uploads sind fehlgeschlagen — wiederholen oder entfernen, dann erneut versuchen.",
+    "files_added_toast": "{n} Datei(en) zur Freigabe hinzugefügt."
   },
   "public_link": {
     "title": "Öffentlicher Link",

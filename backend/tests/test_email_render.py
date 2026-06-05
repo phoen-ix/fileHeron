@@ -76,6 +76,22 @@ def test_subjects_book_loaded_for_both_locales():
     assert "share_created" in email_svc._SUBJECTS["de"]
 
 
+def test_render_email_share_files_added_en_de():
+    payload = {
+        "sender_name": "Alice",
+        "subject": "Q3 reports",
+        "added_count": 3,
+        "share_url": "https://example.com/share/abc",
+        "recipient_name": "Bob",
+    }
+    for locale in ("en", "de"):
+        subject, text, html = email_svc.render_email(locale, "share_files_added", payload)
+        assert "Alice" in subject
+        assert "3" in text
+        assert "Q3 reports" in html
+        assert "https://example.com/share/abc" in html
+
+
 def test_render_email_no_html_falls_back_gracefully(tmp_path, monkeypatch):
     # If the template lookup throws (e.g. missing html.j2), html should
     # come back as None — text path remains required.

@@ -18,6 +18,7 @@ from ..schemas.share import (
     BulkExpireResponse,
     CreateShareRequest,
     FileInShareResponse,
+    FilesAddedRequest,
     GroupRecipientRef,
     InlinePublicLinkResult,
     ShareListItem,
@@ -399,6 +400,32 @@ def expire_share_now_route(
     hourly cron uses."""
     share = share_svc.get_share_or_404(db, share_id)
     share_svc.expire_share_now(db, user=user, share=share, request=request)
+    db.commit()
+    db.refresh(share)
+    return _to_share_response(db, share)
+
+
+@router.post("/{share_id}/files-added", response_model=ShareResponse)
+def files_added_route(
+    share_id: str,
+    payload: FilesAddedRequest,
+    request: Request,
+    user: User = Depends(get_actor),
+    db: Session = Depends(get_db),
+) -> ShareResponse:
+    """Owner's batch-complete signal after uploading more files into an
+    active share. Records a share-level audit row and, when
+    `notify`, re-notifies the share's recipients. The files themselves were
+    already attached by the upload pipeline (owner + active gated)."""
+    share = share_svc.get_share_or_404(db, share_id)
+    share_svc.register_files_added(
+        db,
+        user=user,
+        share=share,
+        file_ids=payload.file_ids,
+        notify=payload.notify,
+        request=request,
+    )
     db.commit()
     db.refresh(share)
     return _to_share_response(db, share)

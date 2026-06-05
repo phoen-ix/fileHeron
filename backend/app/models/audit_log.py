@@ -72,6 +72,7 @@ class AuditEventType(str, enum.Enum):
     api_policy_changed = "api_policy_changed"              # post-Phase 10
     public_link_policy_changed = "public_link_policy_changed"  # post-Phase 10
     share_expiry_updated = "share_expiry_updated"            # post-Phase 10
+    share_files_added = "share_files_added"                  # v1.12.0 (owner added files to an active share)
     share_limit_updated = "share_limit_updated"              # v1.1.0 (per-share download budget)
     refresh_token_evicted = "refresh_token_evicted"          # post-Phase 10 (session cap)
     refresh_token_admin_revoked = "refresh_token_admin_revoked"  # v1.7.0 (admin session revoke)

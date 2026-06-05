@@ -40,6 +40,10 @@ if TYPE_CHECKING:
 
 class NotificationCategory(str, enum.Enum):
     share_created = "share_created"
+    # Fired when a share's owner adds more files to an already-active share
+    # (opt-in per add). Stored as a plain string (non-native enum) → no
+    # migration for the new value.
+    share_files_added = "share_files_added"
     share_expiring = "share_expiring"
     public_link_downloaded = "public_link_downloaded"
     account_created = "account_created"

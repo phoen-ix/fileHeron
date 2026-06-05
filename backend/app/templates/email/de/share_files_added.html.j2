@@ -1,0 +1,16 @@
+{% extends "layout.html.j2" %}
+{% block subject %}{{ sender_name }} hat Dateien zu einer Freigabe hinzugefügt{% endblock %}
+{% block content %}
+  <p style="margin:0 0 12px 0;color:#6b7280;font-family:Georgia,serif;font-style:italic;">Neue Dateien hinzugefügt</p>
+  <h1 style="font-family:Georgia,'Times New Roman',serif;font-weight:normal;font-size:28px;line-height:1.15;letter-spacing:-0.01em;margin:0 0 16px 0;color:#1a1d24;">
+    {% if subject %}{{ subject }}{% else %}{{ sender_name }} hat Dateien hinzugefügt{% endif %}
+  </h1>
+  <p style="margin:0 0 16px 0;">
+    <strong>{{ sender_name }}</strong> hat {{ added_count }} neue Datei{% if added_count != 1 %}en{% endif %} zu einer Freigabe mit dir hinzugefügt.
+  </p>
+  <p style="margin:0;">
+    <a href="{{ share_url }}" style="display:inline-block;background:#1a1d24;color:#faf8f3;text-decoration:none;padding:12px 24px;font-weight:500;">
+      Freigabe öffnen →
+    </a>
+  </p>
+{% endblock %}

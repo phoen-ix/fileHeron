@@ -50,6 +50,19 @@ export function expireShareNow(shareId: string) {
   return api.post<ShareResponse>(`/shares/${shareId}/expire`)
 }
 
+/** Owner's batch-complete signal after uploading more files into an active
+ *  share: records the add + (if `notify`) re-notifies recipients. Returns the
+ *  refreshed share so the file list updates from one response. */
+export function registerFilesAdded(
+  shareId: string,
+  opts: { notify: boolean; file_ids: string[] },
+) {
+  return api.post<ShareResponse>(`/shares/${shareId}/files-added`, {
+    notify: opts.notify,
+    file_ids: opts.file_ids,
+  })
+}
+
 export interface BulkExpireResult {
   expired: string[]
   failed: { id: string; code: string; message: string }[]

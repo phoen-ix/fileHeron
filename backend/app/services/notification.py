@@ -39,6 +39,7 @@ logger = logging.getLogger("fileheron.notification")
 # other surfaces) and `both` for the rest.
 _DEFAULT_CHANNEL: dict[NotificationCategory, NotificationChannel] = {
     NotificationCategory.share_created: NotificationChannel.both,
+    NotificationCategory.share_files_added: NotificationChannel.both,
     NotificationCategory.share_expiring: NotificationChannel.both,
     NotificationCategory.public_link_downloaded: NotificationChannel.email,
     NotificationCategory.account_created: NotificationChannel.email,

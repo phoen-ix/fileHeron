@@ -1,0 +1,7 @@
+Hi {{ recipient_name|default("there") }},
+
+{{ sender_name }} added {{ added_count }} new file{% if added_count != 1 %}s{% endif %} to a share{% if subject %} — "{{ subject }}"{% endif %}.
+
+Open it: {{ share_url }}
+
+— {{ app_name }}

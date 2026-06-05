@@ -1161,7 +1161,12 @@
     "download_limit_new_label": "New limit",
     "download_limit_placeholder": "e.g. 10",
     "download_limit_clear": "Remove limit (unlimited)",
-    "limit_saved_toast": "Download limit updated."
+    "limit_saved_toast": "Download limit updated.",
+    "add_files": "+ Add files",
+    "add_files_notify": "Also notify recipients of the new files",
+    "add_files_cta": "Upload",
+    "add_files_has_errors": "Some uploads failed — retry or remove them, then try again.",
+    "files_added_toast": "Added {n} file(s) to the share."
   },
   "public_link": {
     "title": "Public link",

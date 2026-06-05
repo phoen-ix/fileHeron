@@ -92,6 +92,15 @@ class UpdateShareRequest(APIBaseModel):
     download_limit_clear: bool = False
 
 
+class FilesAddedRequest(APIBaseModel):
+    """Body for `POST /api/shares/{id}/files-added` — the owner's
+    batch-complete signal after uploading more files into an active share.
+    `file_ids` are the freshly-uploaded file ids; `notify` opts into
+    re-notifying the share's recipients."""
+    notify: bool = False
+    file_ids: list[str] = Field(default_factory=list, max_length=1000)
+
+
 class BulkExpireRequest(APIBaseModel):
     share_ids: list[str]
 

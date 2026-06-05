@@ -6,14 +6,17 @@ import { useRoute } from 'vue-router'
 import {
   expireShareNow,
   getShare,
+  registerFilesAdded,
   updateShareDownloadLimit,
   updateShareExpiry,
 } from '@/api/shares'
 import ExpiryPicker from '@/components/ExpiryPicker.vue'
 import FileRow from '@/components/FileRow.vue'
+import FileUploadArea from '@/components/FileUploadArea.vue'
 import PublicLinkPanel from '@/components/PublicLinkPanel.vue'
 import { useApiError } from '@/composables/useApiError'
 import { useSiteDateFormat } from '@/composables/useSiteDateFormat'
+import { useUpload } from '@/composables/useUpload'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
 import type { ShareResponse } from '@/types/api'
@@ -51,6 +54,63 @@ const isOwner = computed(
 const canManage = computed(
   () => isOwner.value || auth.user?.role === 'admin',
 )
+
+// Add-files panel (owner + active only; uploads are owner-only server-side).
+const addUpload = useUpload(computed(() => share.value?.id ?? null))
+const showAddFiles = ref(false)
+const addingBusy = ref(false)
+const notifyOnAdd = ref(auth.user?.share_notify_recipients_default ?? true)
+
+// 'finalizing' counts as done (tusd post-finish races client-side; the
+// register response re-reads authoritative file state). Mirrors ShareCreate.
+const addAllDone = computed(
+  () =>
+    addUpload.items.value.length > 0 &&
+    addUpload.items.value.every(
+      (i) => i.state === 'done' || i.state === 'finalizing',
+    ),
+)
+
+function startAddFiles() {
+  addUpload.reset()
+  notifyOnAdd.value = auth.user?.share_notify_recipients_default ?? true
+  showAddFiles.value = true
+}
+
+function cancelAddFiles() {
+  addUpload.reset()
+  showAddFiles.value = false
+}
+
+async function onUploadAdded() {
+  if (!share.value || addUpload.isActive.value) return
+  addingBusy.value = true
+  try {
+    if (addUpload.items.value.some((i) => i.state === 'queued')) {
+      await addUpload.start()
+    }
+    if (!addAllDone.value) {
+      ui.pushToast(t('share_detail.add_files_has_errors'), 'error')
+      return
+    }
+    const fileIds = addUpload.items.value
+      .filter((i) => i.fileId && (i.state === 'done' || i.state === 'finalizing'))
+      .map((i) => i.fileId as string)
+    if (fileIds.length === 0) return
+    const { data } = await registerFilesAdded(share.value.id, {
+      notify: notifyOnAdd.value,
+      file_ids: fileIds,
+    })
+    share.value = data
+    addUpload.reset()
+    showAddFiles.value = false
+    ui.pushToast(t('share_detail.files_added_toast', { n: fileIds.length }), 'success')
+  } catch (err) {
+    ui.pushToast(describe(err), 'error')
+  } finally {
+    addingBusy.value = false
+  }
+}
 
 const totalSize = computed(() =>
   share.value
@@ -316,7 +376,49 @@ onMounted(load)
 
       <hr class="fh-rule" />
 
-      <h2 class="files-h2">{{ t('share_detail.files_heading', { n: share.files.length }) }}</h2>
+      <div class="files-head">
+        <h2 class="files-h2">{{ t('share_detail.files_heading', { n: share.files.length }) }}</h2>
+        <button
+          v-if="isOwner && share.state === 'active' && !showAddFiles"
+          type="button"
+          class="fh-btn-text edit-link"
+          @click="startAddFiles"
+        >
+          {{ t('share_detail.add_files') }}
+        </button>
+      </div>
+
+      <div v-if="showAddFiles" class="edit-expiry-panel add-files-panel">
+        <FileUploadArea
+          :items="addUpload.items.value"
+          :disabled="addingBusy"
+          @add="addUpload.add"
+          @remove="addUpload.remove"
+          @retry="addUpload.retry"
+        />
+        <label class="notify-row">
+          <input v-model="notifyOnAdd" type="checkbox" />
+          <span class="toggle-name">{{ t('share_detail.add_files_notify') }}</span>
+        </label>
+        <div class="edit-expiry-actions">
+          <button
+            type="button"
+            class="fh-btn"
+            :disabled="addingBusy || addUpload.isActive.value || addUpload.items.value.length === 0"
+            @click="onUploadAdded"
+          >
+            {{ addingBusy || addUpload.isActive.value ? t('common.loading') : t('share_detail.add_files_cta') }}
+          </button>
+          <button
+            type="button"
+            class="fh-btn-text"
+            :disabled="addingBusy || addUpload.isActive.value"
+            @click="cancelAddFiles"
+          >
+            {{ t('common.cancel') }}
+          </button>
+        </div>
+      </div>
 
       <ul v-if="share.files.length > 0" class="files">
         <FileRow
@@ -422,12 +524,31 @@ onMounted(load)
   color: var(--fh-accent);
 }
 
+.files-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--fh-space-3);
+}
+
 .files-h2 {
   font-family: var(--fh-font-display);
   font-size: 1.5rem;
   font-weight: 400;
   letter-spacing: -0.01em;
   margin: var(--fh-space-3) 0;
+}
+
+.add-files-panel {
+  max-width: none;
+}
+
+.notify-row {
+  display: flex;
+  align-items: center;
+  gap: var(--fh-space-2);
+  font-size: var(--fh-text-body-sm);
+  color: var(--fh-ink-soft);
 }
 
 .files {

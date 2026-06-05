@@ -712,3 +712,118 @@ def expire_share_now(
         request=request,
     )
     return share
+
+
+def register_files_added(
+    db: Session,
+    *,
+    user: User,
+    share: Share,
+    file_ids: list[str],
+    notify: bool,
+    request=None,
+) -> Share:
+    """Owner finished adding files to an already-active share. The files were
+    already attached by the upload pipeline (which gates on owner + active);
+    this is the batch-complete signal — it records a share-level audit row and,
+    when ``notify``, fans a ``share_files_added`` notification out to the same
+    recipient set ``create_share`` resolves (sourced from the share's current
+    recipients). Caller commits."""
+    if share.created_by_id != user.id:
+        raise AppError(403, "FORBIDDEN", "Only the share owner can add files.")
+    if share.state != ShareState.active:
+        raise AppError(
+            409, "SHARE_NOT_ACTIVE", "Only active shares can receive files."
+        )
+
+    from ..models.file import File
+
+    valid_ids = (
+        [
+            fid
+            for (fid,) in db.query(File.id)
+            .filter(File.share_id == share.id, File.id.in_(file_ids))
+            .all()
+        ]
+        if file_ids
+        else []
+    )
+    added_count = len(valid_ids)
+
+    record_audit_event(
+        db,
+        event_type=AuditEventType.share_files_added,
+        actor_user_id=user.id,
+        target_type="share",
+        target_id=share.id,
+        metadata={"count": added_count, "file_ids": valid_ids, "notified": bool(notify)},
+        request=request,
+    )
+
+    if notify and added_count > 0:
+        from ..models.notification import NotificationCategory
+        from . import notification as notif_svc
+        from . import site as site_svc
+
+        # Same recipient resolution as create_share's notify block, but
+        # sourced from the share's existing recipient rows.
+        notify_user_ids: set[int] = set()
+        if share.kind == ShareKind.inbound:
+            staff_rows = (
+                db.query(User.id)
+                .filter(
+                    User.role.in_([UserRole.employee, UserRole.admin]),
+                    User.is_disabled.is_(False),
+                )
+                .all()
+            )
+            notify_user_ids = {uid for (uid,) in staff_rows}
+        else:
+            direct_ids = [
+                r.recipient_user_id
+                for r in share.recipients
+                if r.recipient_user_id is not None
+            ]
+            group_ids = [
+                r.recipient_group_id
+                for r in share.recipients
+                if r.recipient_group_id is not None
+            ]
+            notify_user_ids = set(direct_ids)
+            if group_ids:
+                member_rows = (
+                    db.query(GroupMember.user_id)
+                    .join(User, User.id == GroupMember.user_id)
+                    .filter(
+                        GroupMember.group_id.in_(group_ids),
+                        User.is_disabled.is_(False),
+                    )
+                    .all()
+                )
+                for (uid,) in member_rows:
+                    notify_user_ids.add(uid)
+        notify_user_ids.discard(user.id)
+
+        if notify_user_ids:
+            base_url = site_svc.get_site_url(db)
+            payload_base = {
+                "sender_name": user.display_name,
+                "subject": share.subject,
+                "added_count": added_count,
+                "share_url": f"{base_url}/share/{share.id}",
+            }
+            recipients = db.query(User).filter(User.id.in_(notify_user_ids)).all()
+            for u in recipients:
+                payload = dict(payload_base)
+                payload["recipient_name"] = u.display_name
+                notif_svc.dispatch(
+                    db,
+                    user=u,
+                    category=NotificationCategory.share_files_added,
+                    payload=payload,
+                    link_url=payload["share_url"],
+                    email_to=u.email,
+                )
+
+    db.flush()
+    return share

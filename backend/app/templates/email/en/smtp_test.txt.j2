@@ -3,7 +3,7 @@ SMTP test from {{ app_name }}.
 If you're reading this, your SMTP configuration works. The send went
 through with the values currently in /admin/settings/email.
 
-Sent at: {{ now_iso }}
+Sent at: {{ now|dt_locale(locale) }}
 App URL: {{ app_url }}
 
 You can ignore this message. It's a routine connectivity check.

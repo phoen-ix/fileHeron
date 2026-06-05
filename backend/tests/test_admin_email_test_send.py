@@ -8,6 +8,22 @@ from app.models.user import UserRole
 from app.services import settings as settings_svc
 
 
+def test_smtp_test_template_renders_in_site_timezone():
+    """The test email's timestamp must go through the dt_locale filter (site
+    timezone + label), not print a raw ISO string."""
+    from datetime import datetime, timezone
+
+    from app.services import email as email_svc
+
+    dt = datetime(2026, 6, 5, 9, 26, 47, tzinfo=timezone.utc)
+    out = email_svc._render(
+        "en", "smtp_test", "txt", {"now": dt}, site_timezone="Europe/Vienna"
+    )
+    assert "(Europe/Vienna)" in out
+    assert "2026-06-05T09:26:47" not in out  # no raw ISO
+    assert "11:26" in out  # 09:26 UTC → 11:26 CEST
+
+
 @pytest.mark.asyncio
 async def test_test_send_returns_logs_fallback_when_unconfigured(
     make_user, db, client, login_as, monkeypatch

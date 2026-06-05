@@ -10,7 +10,7 @@
     <code>/admin/settings/email</code> work for outbound mail.
   </p>
   <p style="margin:0 0 8px 0;color:#6b7280;font-size:14px;">
-    Sent at <strong>{{ now_iso }}</strong>
+    Sent at <strong>{{ now|dt_locale(locale) }}</strong>
   </p>
   <p style="margin:0;color:#6b7280;font-size:14px;">
     You can ignore this message. It's a routine connectivity check.

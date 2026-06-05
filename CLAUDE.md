@@ -71,7 +71,7 @@ guard; the API still accepts anonymous for trusted localhost relays, and
 existing user-less configs pre-tick the box so they aren't retroactively
 blocked).
 
-**Post-1.10.5 backend (current `v1.11.0`):** the **Mail log** — every outbound
+**Post-1.10.5 backend (`v1.11.0`):** the **Mail log** — every outbound
 email is now recorded in a new append-only `email_log` table and browsable at
 **`/admin/mail-log`**. See the *Mail log* subsystem section below. One row per
 email across all send paths (queued notifications, the synchronous auth-flow
@@ -82,6 +82,11 @@ full-content detail view (text inline, HTML opened in a new tab to dodge the SPA
 CSP), per-recipient filter + an "Emails to this user" panel on the user-detail
 page, **resend** (disabled for masked/test/dev rows), CSV export, a
 `retention.email_log_days` window (default 90), and a GDPR-erasure scrub.
+
+**Post-1.11 backend (current `v1.11.1`):** the SMTP **test email** now renders
+its "Sent at" timestamp through the `dt_locale` filter (24-hour, admin-set
+`site.timezone`, with the tz label) instead of a raw UTC ISO string — the four
+`smtp_test` templates were the only ones that printed `now` un-filtered.
 
 **Desktop client (current `client-v0.9.9`):** CustomTkinter, single Windows
 .exe. v0.9.x reworked it to an in-window login overlay (no separate login

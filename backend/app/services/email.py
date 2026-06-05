@@ -372,9 +372,7 @@ async def test_send(
         }
     from . import site as site_svc
 
-    ctx = {
-        "now_iso": datetime.now(tz=timezone.utc).replace(microsecond=0).isoformat()
-    }
+    ctx = {"now": datetime.now(tz=timezone.utc).replace(microsecond=0)}
     locale_code = "en"
     tz = site_svc.get_site_timezone(db)
     subject = _resolve_subject(locale_code, "smtp_test", ctx)

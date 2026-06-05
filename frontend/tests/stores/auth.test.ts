@@ -11,6 +11,21 @@ import { useAuthStore } from '@/stores/auth'
 vi.mock('@/api/auth')
 vi.mock('@/api/account')
 
+// bootstrap() refreshes FIRST (cookie-based) and only loads /me when that
+// succeeds, and separately probes the first-admin wizard. Neither has a
+// running backend in unit tests — stub both so bootstrap reaches getMe()
+// instead of failing on a real network call. Keep the real `@/api/client`
+// otherwise (axios instance, interceptors) so the rest of the graph loads.
+vi.mock('@/api/client', async (importActual) => ({
+  ...(await importActual<typeof import('@/api/client')>()),
+  refreshOnce: vi.fn(async () => true),
+  setAccessToken: vi.fn(),
+  setOnAuthLost: vi.fn(),
+}))
+vi.mock('@/api/setup', () => ({
+  getSetupStatus: vi.fn(async () => ({ data: { required: false } })),
+}))
+
 const fakeMe = {
   id: 1,
   email_hint: 'a***@example.com',

@@ -16,6 +16,9 @@ vi.mock('@/api/notifications', () => ({
 
 beforeEach(() => {
   setActivePinia(createPinia())
+  // The api mocks are module-level vi.fn()s; without clearing, a delete call
+  // from one test leaks into the next test's call-count assertions.
+  vi.clearAllMocks()
 })
 
 function fakeNotif(id: number): any {

@@ -87,8 +87,8 @@ function canDownload(state: FileState): boolean {
 
 function pillForFile(state: FileState): 'active' | 'warn' | 'danger' | undefined {
   if (state === 'clean' || state === 'ready_unscanned') return 'active'
-  if (state === 'pending') return 'warn'
-  if (state === 'infected' || state === 'failed') return 'danger'
+  if (state === 'uploading') return 'warn'
+  if (state === 'infected') return 'danger'
   return undefined
 }
 

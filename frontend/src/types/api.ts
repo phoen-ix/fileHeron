@@ -175,12 +175,12 @@ export interface UpdateGroupRequest {
 
 export type ShareKind = 'outbound' | 'inbound'
 export type ShareState = 'active' | 'expired' | 'revoked' | 'deleted' | 'failed'
+// Mirrors backend app/models/file.py::FileState.
 export type FileState =
-  | 'pending'
+  | 'uploading'
   | 'ready_unscanned'
   | 'clean'
   | 'infected'
-  | 'failed'
   | 'deleted'
 
 export interface FileInShareResponse {

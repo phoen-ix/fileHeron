@@ -3,7 +3,9 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { auditCsvUrl, listAuditLog } from '@/api/admin'
+import Pager from '@/components/Pager.vue'
 import { useApiError } from '@/composables/useApiError'
+import { useDebouncedSearch } from '@/composables/useDebouncedSearch'
 import type { AdminAuditRow } from '@/types/api'
 import { formatInSiteTime } from '@/utils/datetime'
 
@@ -11,6 +13,8 @@ const { t, locale } = useI18n()
 const { describe } = useApiError()
 
 const items = ref<AdminAuditRow[]>([])
+const total = ref(0)
+const page = ref(1)
 const pageSize = ref(50)
 const eventType = ref('')
 const targetType = ref('')
@@ -20,16 +24,6 @@ const toTs = ref('')
 
 const loading = ref(true)
 const errorMsg = ref<string | null>(null)
-
-// Cursor-based pagination. The backend gives us a `next_cursor` for
-// the next older page. To go back to a previous page we pop the stack:
-// `cursorStack` holds the cursors we used to ARRIVE at each page, so
-// the previous page is one entry back.
-const cursorStack = ref<(string | null)[]>([null])
-const currentCursor = computed(() => cursorStack.value[cursorStack.value.length - 1])
-const nextCursor = ref<string | null>(null)
-
-let searchTimer: ReturnType<typeof setTimeout> | null = null
 
 const filterParams = computed(() => {
   const p: Record<string, string> = {}
@@ -45,14 +39,13 @@ async function load() {
   loading.value = true
   errorMsg.value = null
   try {
-    const params: Parameters<typeof listAuditLog>[0] = {
+    const { data } = await listAuditLog({
       ...filterParams.value,
+      page: page.value,
       page_size: pageSize.value,
-    }
-    if (currentCursor.value !== null) params.cursor = currentCursor.value
-    const { data } = await listAuditLog(params)
+    })
     items.value = data.items
-    nextCursor.value = data.next_cursor
+    total.value = data.total
   } catch (err) {
     errorMsg.value = describe(err)
   } finally {
@@ -60,35 +53,14 @@ async function load() {
   }
 }
 
-function resetAndReload() {
-  cursorStack.value = [null]
-  nextCursor.value = null
+// Filters reset to page 1 then reload (debounced); page changes reload directly.
+useDebouncedSearch(filterParams, () => {
+  page.value = 1
   void load()
-}
-
-function goNewer() {
-  if (cursorStack.value.length <= 1) return
-  cursorStack.value = cursorStack.value.slice(0, -1)
-  void load()
-}
-
-function goOlder() {
-  if (!nextCursor.value) return
-  cursorStack.value = [...cursorStack.value, nextCursor.value]
-  void load()
-}
-
-function debouncedReload() {
-  if (searchTimer) clearTimeout(searchTimer)
-  searchTimer = setTimeout(() => {
-    resetAndReload()
-  }, 220)
-}
-
-watch([eventType, targetType, targetId, fromTs, toTs], debouncedReload)
+})
+watch(page, load)
 
 const csvHref = computed(() => auditCsvUrl(filterParams.value))
-const isFirstPage = computed(() => cursorStack.value.length <= 1)
 
 function formatDate(iso: string): string {
   return formatInSiteTime(iso, locale.value, { second: '2-digit' })
@@ -162,19 +134,7 @@ onMounted(load)
       </tbody>
     </table>
 
-    <div v-if="!isFirstPage || nextCursor" class="pager">
-      <button type="button" class="fh-btn-text" :disabled="isFirstPage" @click="goNewer">
-        ← {{ t('admin_audit.pager.newer') }}
-      </button>
-      <button
-        type="button"
-        class="fh-btn-text"
-        :disabled="!nextCursor"
-        @click="goOlder"
-      >
-        {{ t('admin_audit.pager.older') }} →
-      </button>
-    </div>
+    <Pager v-model:page="page" :total="total" :page-size="pageSize" />
   </div>
 </template>
 
@@ -267,15 +227,4 @@ onMounted(load)
   margin-left: var(--fh-space-1);
 }
 
-.pager {
-  display: flex;
-  gap: var(--fh-space-3);
-  align-items: center;
-  margin-top: var(--fh-space-4);
-}
-
-.page-info {
-  font-size: var(--fh-text-mono-sm);
-  color: var(--fh-subtle);
-}
 </style>

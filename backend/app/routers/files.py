@@ -13,7 +13,7 @@ from ..middleware.errors import AppError
 from ..models.audit_log import AuditEventType
 from ..models.download_log import DownloadLog, DownloadVia
 from ..models.file import File, FileState
-from ..models.share import Share, ShareState
+from ..models.share import Share
 from ..models.user import User, UserRole
 from ..services import download_token as download_token_svc
 from ..services import file as file_svc
@@ -239,31 +239,13 @@ def delete_file(
         )
     share_id = file.share_id
     file_svc.hard_delete(db, file=file, reason="user_request", request=request)
-
-    # If this was the last non-deleted file in an active share, the share
-    # is now functionally useless — auto-revoke it. Audit metadata
-    # distinguishes this path from manual revoke or AV-triggered revoke.
-    share = db.query(Share).filter(Share.id == share_id).one_or_none()
-    if share is not None and share.state == ShareState.active:
-        remaining = (
-            db.query(File)
-            .filter(
-                File.share_id == share_id,
-                File.state != FileState.deleted,
-                File.id != file.id,
-            )
-            .count()
-        )
-        if remaining == 0:
-            share.state = ShareState.revoked
-            record_audit_event(
-                db,
-                event_type=AuditEventType.share_revoked,
-                actor_user_id=user.id,
-                target_type="share",
-                target_id=share.id,
-                metadata={"reason": "last_file_deleted"},
-                request=request,
-            )
-
+    # If this was the last non-deleted file in an active share, auto-revoke it
+    # (shared helper — same behavior as the admin delete path).
+    file_svc.revoke_share_if_empty(
+        db,
+        share_id=share_id,
+        just_deleted_file_id=file.id,
+        actor_user_id=user.id,
+        request=request,
+    )
     db.commit()

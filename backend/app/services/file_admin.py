@@ -68,6 +68,7 @@ def list_all_files(
     uploader_id: int | None = None,
     share_state: str | None = None,
     orphaned: bool = False,
+    include_inactive: bool = False,
     from_ts: datetime | None = None,
     to_ts: datetime | None = None,
     sort: str = "uploaded_at",
@@ -115,6 +116,15 @@ def list_all_files(
             File.state.in_(_ORPHAN_FILE_STATES),
             Share.state.in_(_ORPHAN_SHARE_STATES),
         )
+
+    # Default view hides dead rows: deleted files + abandoned (failed-share)
+    # uploads. Explicit state / share_state filters take precedence, so the
+    # dropdowns can still surface them on demand.
+    if not include_inactive:
+        if not state:
+            base = base.filter(File.state != FileState.deleted)
+        if not share_state:
+            base = base.filter(Share.state != ShareState.failed)
 
     if uploader_id is not None:
         base = base.filter(File.uploaded_by_id == uploader_id)

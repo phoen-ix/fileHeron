@@ -218,6 +218,104 @@ async def test_admin_files_search_q(make_user, db, client, login_as):
 
 
 @pytest.mark.asyncio
+async def test_admin_files_default_hides_deleted_and_abandoned(
+    make_user, db, client, login_as
+):
+    admin = make_user(
+        email="admin@test.local", role=UserRole.admin, password="Pass12345678!"
+    )
+    rec = make_user(email="r@test.local", role=UserRole.client)
+    live = share_svc.create_share(
+        db, created_by=admin, kind=ShareKind.outbound, recipient_user_ids=[rec.id],
+        recipient_group_ids=[], expires_at=_future(), subject="live", message=None,
+    )
+    _make_file(db, share=live, uploader=admin, name="live.bin")
+    # A deleted file (still on an active share).
+    _make_file(db, share=live, uploader=admin, name="gone.bin", state=FileState.deleted)
+    # An abandoned upload: file on a failed share.
+    failed = share_svc.create_share(
+        db, created_by=admin, kind=ShareKind.outbound, recipient_user_ids=[rec.id],
+        recipient_group_ids=[], expires_at=_future(), subject="failed", message=None,
+    )
+    failed.state = ShareState.failed
+    _make_file(db, share=failed, uploader=admin, name="abandoned.bin")
+    db.commit()
+
+    token, _ = await login_as("admin@test.local", "Pass12345678!")
+    h = {"Authorization": f"Bearer {token}"}
+
+    # Default: only the live file.
+    body = (await client.get("/api/admin/files", headers=h)).json()
+    assert [i["filename"] for i in body["items"]] == ["live.bin"]
+
+    # include_inactive: all three.
+    body = (await client.get("/api/admin/files?include_inactive=true", headers=h)).json()
+    assert body["total"] == 3
+
+    # Explicit state=deleted still surfaces the deleted one despite default-hide.
+    body = (await client.get("/api/admin/files?state=deleted", headers=h)).json()
+    assert [i["filename"] for i in body["items"]] == ["gone.bin"]
+
+
+@pytest.mark.asyncio
+async def test_admin_delete_file(make_user, db, client, login_as):
+    from app.models.audit_log import AuditEventType, AuditLog
+
+    admin = make_user(
+        email="admin@test.local", role=UserRole.admin, password="Pass12345678!"
+    )
+    rec = make_user(email="r@test.local", role=UserRole.client)
+    share = share_svc.create_share(
+        db, created_by=admin, kind=ShareKind.outbound, recipient_user_ids=[rec.id],
+        recipient_group_ids=[], expires_at=_future(), subject="x", message=None,
+    )
+    f = _make_file(db, share=share, uploader=rec, name="del.bin")
+    db.commit()
+
+    token, _ = await login_as("admin@test.local", "Pass12345678!")
+    h = {"Authorization": f"Bearer {token}"}
+
+    resp = await client.delete(f"/api/admin/files/{f.id}", headers=h)
+    assert resp.status_code == 204
+    db.refresh(f)
+    assert f.state == FileState.deleted
+    # Audit records the ADMIN as actor (not the uploader) with reason.
+    audit = (
+        db.query(AuditLog)
+        .filter(AuditLog.event_type == AuditEventType.file_deleted.value,
+                AuditLog.target_id == f.id)
+        .one()
+    )
+    assert audit.actor_user_id == admin.id
+    assert audit.extra["reason"] == "admin_delete"
+    # Last live file → parent share auto-revoked.
+    db.refresh(share)
+    assert share.state == ShareState.revoked
+
+    # Idempotent on already-deleted.
+    assert (await client.delete(f"/api/admin/files/{f.id}", headers=h)).status_code == 204
+    # Unknown → 404.
+    assert (await client.delete("/api/admin/files/nope", headers=h)).status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_admin_delete_file_non_admin_forbidden(make_user, db, client, login_as):
+    admin = make_user(email="admin@test.local", role=UserRole.admin)
+    client_u = make_user(email="c@test.local", role=UserRole.client, password="Pass12345678!")
+    share = share_svc.create_share(
+        db, created_by=admin, kind=ShareKind.outbound, recipient_user_ids=[client_u.id],
+        recipient_group_ids=[], expires_at=_future(), subject="x", message=None,
+    )
+    f = _make_file(db, share=share, uploader=admin, name="x.bin")
+    db.commit()
+    token, _ = await login_as("c@test.local", "Pass12345678!")
+    resp = await client.delete(
+        f"/api/admin/files/{f.id}", headers={"Authorization": f"Bearer {token}"}
+    )
+    assert resp.status_code == 403
+
+
+@pytest.mark.asyncio
 async def test_admin_files_admin_only(make_user, client, login_as):
     make_user(email="c@test.local", role=UserRole.client, password="Pass12345678!")
     token, _ = await login_as("c@test.local", "Pass12345678!")

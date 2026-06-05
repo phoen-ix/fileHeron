@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from ...dependencies import get_current_admin, get_db
 from ...middleware.errors import AppError
-from ...models.file import File
+from ...models.file import File, FileState
 from ...models.share import Share
 from ...models.user import User
 from ...schemas.file_admin import (
@@ -29,6 +29,7 @@ def admin_list_files(
     uploader_id: int | None = Query(None, ge=1),
     share_state: str | None = Query(None),
     orphaned: bool = Query(False),
+    include_inactive: bool = Query(False),
     from_ts: datetime | None = Query(None, alias="from"),
     to_ts: datetime | None = Query(None, alias="to"),
     sort: str = Query("uploaded_at"),
@@ -45,6 +46,7 @@ def admin_list_files(
         uploader_id=uploader_id,
         share_state=share_state,
         orphaned=orphaned,
+        include_inactive=include_inactive,
         from_ts=from_ts,
         to_ts=to_ts,
         sort=sort,
@@ -98,6 +100,42 @@ def admin_reclaim_orphan(
 
     from ...services import file as file_svc
 
-    file_svc.hard_delete(db, file=file, reason="admin_reclaim", request=request)
+    file_svc.hard_delete(
+        db, file=file, reason="admin_reclaim", actor_user_id=admin.id, request=request
+    )
+    db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.delete("/files/{file_id}", status_code=status.HTTP_204_NO_CONTENT)
+def admin_delete_file(
+    file_id: str,
+    request: Request,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin),
+) -> Response:
+    """Admin hard-deletes any file's bytes from the File History view. Frees the
+    uploader's quota, audits `file_deleted` with the admin as actor, and
+    auto-revokes the parent share if this was its last live file. Idempotent on
+    already-deleted files."""
+    file = db.query(File).filter(File.id == file_id).one_or_none()
+    if file is None:
+        raise AppError(404, "FILE_NOT_FOUND", "File not found.")
+    if file.state == FileState.deleted:
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+    from ...services import file as file_svc
+
+    share_id = file.share_id
+    file_svc.hard_delete(
+        db, file=file, reason="admin_delete", actor_user_id=admin.id, request=request
+    )
+    file_svc.revoke_share_if_empty(
+        db,
+        share_id=share_id,
+        just_deleted_file_id=file.id,
+        actor_user_id=admin.id,
+        request=request,
+    )
     db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)

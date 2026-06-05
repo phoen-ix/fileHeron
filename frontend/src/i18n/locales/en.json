@@ -817,7 +817,12 @@
     "sessions_help": "Devices currently signed in as this user, oldest activity first. Revoke a single device or all of them.",
     "sessions_revoke_all": "Revoke all",
     "sessions_revoke_all_confirm": "Revoke every active session for this user? They will be signed out on every device.",
-    "sessions_empty": "No active sessions."
+    "sessions_empty": "No active sessions.",
+    "files": "Current files",
+    "files_help": "Files this user currently has stored (counts toward their storage). Delete frees the bytes immediately.",
+    "files_view_all": "View in File History →",
+    "files_empty": "No stored files.",
+    "files_delete_confirm": "Permanently delete “{name}” from disk and free this user's quota? This cannot be undone."
   },
   "admin_audit": {
     "eyebrow": "Admin / Audit log",
@@ -1314,9 +1319,14 @@
     "share_state_all": "Any share state",
     "orphaned_only": "Orphaned only",
     "orphaned_badge": "orphaned",
+    "show_inactive": "Show deleted / abandoned",
+    "uploader_filter": "Filtered to user #{id}",
     "reclaim": "Reclaim",
     "reclaim_confirm": "Permanently delete the bytes of “{name}” and free the uploader's quota? The share is already revoked/deleted, so this only removes dead storage.",
     "reclaimed_toast": "Reclaimed “{name}” — bytes freed.",
+    "delete": "Delete",
+    "delete_confirm": "Permanently delete “{name}” from disk and free the uploader's quota? If it is the last file in its share, the share is revoked. This cannot be undone.",
+    "deleted_toast": "Deleted “{name}”.",
     "empty": "No files match the current filters.",
     "col": {
       "filename": "Filename",

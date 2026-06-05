@@ -376,6 +376,7 @@ export function adminListFiles(params: {
   uploader_id?: number
   share_state?: string
   orphaned?: boolean
+  include_inactive?: boolean
   from?: string
   to?: string
   sort?: string
@@ -389,6 +390,11 @@ export function adminListFiles(params: {
 /** Free an orphaned file's bytes + the uploader's quota immediately. */
 export function adminReclaimFile(fileId: string) {
   return api.post<void>(`/admin/files/${fileId}/reclaim`)
+}
+
+/** Admin hard-delete any file's bytes (frees quota, audits as admin). */
+export function adminDeleteFile(fileId: string) {
+  return api.delete<void>(`/admin/files/${fileId}`)
 }
 
 // Admin session oversight (v1.7.0)

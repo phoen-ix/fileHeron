@@ -1,32 +1,34 @@
-# file:Heron v1.9.2
+# file:Heron v1.10.0
 
-**Fixes the Storage column under Admin → Users.** It could show 0 for a user who
-actually has gigabytes stored, or a small negative number. The column was reading
-the internal quota-reservation counter (a fast cache used for upload limits),
-which expires after 24 h and can drift — not the real stored total.
+**Admin file management.** File History is tidier, admins can delete files, and
+each user's detail page now shows what they currently have stored.
 
-## What changed
+## What's new
 
-- **Storage is now computed from the database** (the actual sum of a user's file
-  sizes), so the Admin → Users list and the user detail page always show the
-  correct figure, independent of the quota cache.
-- **Hardened the quota counter** that enforces upload limits:
-  - It no longer expires (it's kept correct by the existing hourly reconcile
-    job), so limits can't be briefly mis-evaluated after 24 h of inactivity.
-  - It can no longer go negative, and the reconcile job now repairs any
-    negative/stale counter on its next run (within the hour after update).
+- **File History hides dead files by default.** Deleted files and abandoned
+  (failed) uploads are no longer shown unless you tick **"Show deleted /
+  abandoned"**. Picking a specific state from the dropdowns still surfaces them
+  on demand.
+- **Admins can delete a file.** Each File History row now has a **Delete**
+  action (orphans keep their existing **Reclaim** action). It hard-deletes the
+  bytes, frees the uploader's storage, is recorded in the audit log with the
+  admin as the actor, and — if it was the last live file in a share — revokes
+  that share automatically.
+- **"Current files" on the user page.** `Admin → Users → <user>` now lists the
+  files that user currently has stored (with sizes), explaining their Storage
+  figure, with a per-file **Delete** button and a link to the full File History
+  filtered to that user.
 
-No `.env` change, no migration, no visible change beyond correct numbers.
-(No desktop-client change.)
+No `.env` change, no database migration. (No desktop-client change.)
 
 ## Container images
 
 Published to GitHub Container Registry:
 
-- `ghcr.io/phoen-ix/fileheron-backend:v1.9.2`
-- `ghcr.io/phoen-ix/fileheron-worker:v1.9.2`
-- `ghcr.io/phoen-ix/fileheron-frontend:v1.9.2`
-- `ghcr.io/phoen-ix/fileheron-updater-shim:v1.9.2`
-- `ghcr.io/phoen-ix/fileheron-updater-executor:v1.9.2`
+- `ghcr.io/phoen-ix/fileheron-backend:v1.10.0`
+- `ghcr.io/phoen-ix/fileheron-worker:v1.10.0`
+- `ghcr.io/phoen-ix/fileheron-frontend:v1.10.0`
+- `ghcr.io/phoen-ix/fileheron-updater-shim:v1.10.0`
+- `ghcr.io/phoen-ix/fileheron-updater-executor:v1.10.0`
 
 Click **Update** in `/admin/system` to roll forward.

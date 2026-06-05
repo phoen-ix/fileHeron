@@ -21,7 +21,7 @@ from ..config import settings
 from ..middleware.errors import AppError
 from ..models.audit_log import AuditEventType
 from ..models.file import File, FileState
-from ..models.share import Share
+from ..models.share import Share, ShareState
 from ..models.user import User
 from ..utils.timeutil import utc_now
 from .audit import record_audit_event
@@ -119,9 +119,18 @@ def finalize_to_disk(
 
 
 def hard_delete(
-    db: Session, *, file: File, reason: str = "user_request", request=None
+    db: Session,
+    *,
+    file: File,
+    reason: str = "user_request",
+    actor_user_id: int | None = None,
+    request=None,
 ) -> None:
     """Hard-delete from disk + DB row marker.
+
+    `actor_user_id` defaults to the uploader (a self-service delete); pass an
+    admin's id for an admin-initiated delete so the audit records the real
+    actor, not the file's owner.
 
     Raises OSError if the disk unlink fails — callers MUST decide whether
     to abort the surrounding transaction (e.g. GDPR erasure: stop, don't
@@ -155,12 +164,49 @@ def hard_delete(
     record_audit_event(
         db,
         event_type=AuditEventType.file_deleted,
-        actor_user_id=file.uploaded_by_id,
+        actor_user_id=actor_user_id if actor_user_id is not None else file.uploaded_by_id,
         target_type="file",
         target_id=file.id,
         metadata={"reason": reason, "size_bytes": file.size_bytes},
         request=request,
     )
+
+
+def revoke_share_if_empty(
+    db: Session,
+    *,
+    share_id: str,
+    just_deleted_file_id: str,
+    actor_user_id: int,
+    request=None,
+) -> None:
+    """If the share has no remaining non-deleted files, revoke it (a share with
+    nothing left to download is dead). Shared by owner-delete and admin-delete.
+    Caller commits."""
+    share = db.query(Share).filter(Share.id == share_id).one_or_none()
+    if share is None or share.state != ShareState.active:
+        return
+    remaining = (
+        db.query(File)
+        .filter(
+            File.share_id == share_id,
+            File.state != FileState.deleted,
+            File.id != just_deleted_file_id,
+        )
+        .count()
+    )
+    if remaining == 0:
+        share.state = ShareState.revoked
+        share.terminated_at = utc_now()
+        record_audit_event(
+            db,
+            event_type=AuditEventType.share_revoked,
+            actor_user_id=actor_user_id,
+            target_type="share",
+            target_id=share.id,
+            metadata={"reason": "last_file_deleted"},
+            request=request,
+        )
 
 
 def delete_file_for_expiry(db: Session, *, file: File) -> None:

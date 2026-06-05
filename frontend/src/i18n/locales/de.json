@@ -817,7 +817,12 @@
     "sessions_help": "Geräte, die derzeit als dieser Benutzer angemeldet sind, älteste Aktivität zuerst. Einzelne Geräte oder alle abmelden.",
     "sessions_revoke_all": "Alle widerrufen",
     "sessions_revoke_all_confirm": "Alle aktiven Sitzungen dieses Benutzers widerrufen? Er wird auf allen Geräten abgemeldet.",
-    "sessions_empty": "Keine aktiven Sitzungen."
+    "sessions_empty": "Keine aktiven Sitzungen.",
+    "files": "Aktuelle Dateien",
+    "files_help": "Dateien, die dieser Benutzer derzeit gespeichert hat (zählen zum Speicher). Löschen gibt die Bytes sofort frei.",
+    "files_view_all": "Im Dateiverlauf ansehen →",
+    "files_empty": "Keine gespeicherten Dateien.",
+    "files_delete_confirm": "„{name}“ endgültig von der Festplatte löschen und das Kontingent dieses Benutzers freigeben? Dies kann nicht rückgängig gemacht werden."
   },
   "admin_audit": {
     "eyebrow": "Admin / Audit-Protokoll",
@@ -1314,9 +1319,14 @@
     "share_state_all": "Beliebiger Freigabe-Status",
     "orphaned_only": "Nur verwaiste",
     "orphaned_badge": "verwaist",
+    "show_inactive": "Gelöschte / abgebrochene anzeigen",
+    "uploader_filter": "Gefiltert auf Benutzer #{id}",
     "reclaim": "Freigeben",
     "reclaim_confirm": "Bytes von „{name}“ endgültig löschen und das Kontingent des Hochladers freigeben? Die Freigabe ist bereits widerrufen/gelöscht — dies entfernt nur toten Speicher.",
     "reclaimed_toast": "„{name}“ freigegeben — Bytes gelöscht.",
+    "delete": "Löschen",
+    "delete_confirm": "„{name}“ endgültig von der Festplatte löschen und das Kontingent des Hochladers freigeben? Ist es die letzte Datei der Freigabe, wird die Freigabe widerrufen. Dies kann nicht rückgängig gemacht werden.",
+    "deleted_toast": "„{name}“ gelöscht.",
     "empty": "Keine Dateien passen zu den Filtern.",
     "col": {
       "filename": "Dateiname",

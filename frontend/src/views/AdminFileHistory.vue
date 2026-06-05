@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRoute } from 'vue-router'
 
-import { adminListFiles, adminReclaimFile } from '@/api/admin'
+import { adminDeleteFile, adminListFiles, adminReclaimFile } from '@/api/admin'
 import { useApiError } from '@/composables/useApiError'
 import { useTableSort } from '@/composables/useTableSort'
 import { useUiStore } from '@/stores/ui'
@@ -13,6 +14,7 @@ import { formatInSiteTime } from '@/utils/datetime'
 const { t, locale } = useI18n()
 const { describe } = useApiError()
 const ui = useUiStore()
+const route = useRoute()
 
 const items = ref<AdminFileItem[]>([])
 const total = ref(0)
@@ -25,7 +27,13 @@ const q = ref('')
 const stateFilter = ref<FileState | ''>('')
 const shareStateFilter = ref<ShareState | ''>('')
 const orphanedOnly = ref(false)
+const includeInactive = ref(false)
+// Deep-link from the admin user-detail "View in File History" link.
+const uploaderId = ref<number | null>(
+  route.query.uploader_id ? Number(route.query.uploader_id) : null,
+)
 const reclaiming = ref<string | null>(null)
+const deleting = ref<string | null>(null)
 let searchTimer: ReturnType<typeof setTimeout> | null = null
 
 const sort = useTableSort({ defaultBy: 'uploaded_at', defaultDir: 'desc' })
@@ -39,6 +47,8 @@ async function load() {
       state: stateFilter.value || undefined,
       share_state: shareStateFilter.value || undefined,
       orphaned: orphanedOnly.value || undefined,
+      include_inactive: includeInactive.value || undefined,
+      uploader_id: uploaderId.value ?? undefined,
       sort: sort.sortBy.value,
       direction: sort.sortDir.value,
       page: page.value,
@@ -60,10 +70,16 @@ watch(q, () => {
     void load()
   }, 220)
 })
-watch([stateFilter, shareStateFilter, orphanedOnly], () => {
+watch([stateFilter, shareStateFilter, orphanedOnly, includeInactive], () => {
   page.value = 1
   void load()
 })
+
+function clearUploaderFilter() {
+  uploaderId.value = null
+  page.value = 1
+  void load()
+}
 
 async function onReclaim(it: AdminFileItem) {
   if (reclaiming.value) return
@@ -77,6 +93,21 @@ async function onReclaim(it: AdminFileItem) {
     ui.pushToast(describe(err), 'error')
   } finally {
     reclaiming.value = null
+  }
+}
+
+async function onDelete(it: AdminFileItem) {
+  if (deleting.value) return
+  if (!(await ui.confirm({ message: t('admin_file_history.delete_confirm', { name: it.filename }), danger: true }))) return
+  deleting.value = it.file_id
+  try {
+    await adminDeleteFile(it.file_id)
+    ui.pushToast(t('admin_file_history.deleted_toast', { name: it.filename }), 'success')
+    await load()
+  } catch (err) {
+    ui.pushToast(describe(err), 'error')
+  } finally {
+    deleting.value = null
   }
 }
 watch([sort.sortBy, sort.sortDir, page], load)
@@ -143,6 +174,18 @@ onMounted(load)
         <input v-model="orphanedOnly" type="checkbox" />
         {{ t('admin_file_history.orphaned_only') }}
       </label>
+      <label class="orphan-toggle">
+        <input v-model="includeInactive" type="checkbox" />
+        {{ t('admin_file_history.show_inactive') }}
+      </label>
+      <button
+        v-if="uploaderId !== null"
+        type="button"
+        class="fh-btn-text uploader-chip"
+        @click="clearUploaderFilter"
+      >
+        {{ t('admin_file_history.uploader_filter', { id: uploaderId }) }} ✕
+      </button>
     </div>
 
     <div v-if="loading" class="loading">{{ t('common.loading') }}</div>
@@ -257,6 +300,15 @@ onMounted(load)
               @click="onReclaim(it)"
             >
               {{ reclaiming === it.file_id ? t('common.loading') : t('admin_file_history.reclaim') }}
+            </button>
+            <button
+              v-else-if="it.state !== 'deleted'"
+              type="button"
+              class="fh-btn-text reclaim-btn"
+              :disabled="deleting === it.file_id"
+              @click="onDelete(it)"
+            >
+              {{ deleting === it.file_id ? t('common.loading') : t('admin_file_history.delete') }}
             </button>
             <span v-else class="row-hint">—</span>
           </td>

@@ -4,6 +4,8 @@ import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 
 import {
+  adminDeleteFile,
+  adminListFiles,
   adminListSessions,
   adminRevokeSession,
   adminRevokeUserSessions,
@@ -14,7 +16,8 @@ import {
 } from '@/api/admin'
 import { useApiError } from '@/composables/useApiError'
 import { useUiStore } from '@/stores/ui'
-import type { AdminSessionRow, AdminUserItem, UserRole } from '@/types/api'
+import type { AdminFileItem, AdminSessionRow, AdminUserItem, UserRole } from '@/types/api'
+import { formatBytes } from '@/utils/bytes'
 import { formatInSiteTime } from '@/utils/datetime'
 import { uaShort } from '@/utils/ua'
 
@@ -45,6 +48,10 @@ const sessionsLoading = ref(false)
 const revokingSessionId = ref<number | null>(null)
 const revokingAll = ref(false)
 
+const files = ref<AdminFileItem[]>([])
+const filesLoading = ref(false)
+const deletingFileId = ref<string | null>(null)
+
 const isErased = computed(() => user.value?.email === '[erased]')
 
 async function load() {
@@ -57,8 +64,44 @@ async function load() {
     editQuota.value = data.quota_bytes
     editDisabled.value = data.is_disabled
     await loadSessions()
+    await loadFiles()
   } finally {
     loading.value = false
+  }
+}
+
+async function loadFiles() {
+  if (!user.value) return
+  filesLoading.value = true
+  try {
+    const { data } = await adminListFiles({
+      uploader_id: user.value.id,
+      include_inactive: false,
+      sort: 'uploaded_at',
+      direction: 'desc',
+      page_size: 100,
+    })
+    files.value = data.items
+  } catch (err) {
+    ui.pushToast(describe(err), 'error')
+  } finally {
+    filesLoading.value = false
+  }
+}
+
+async function onDeleteFile(f: AdminFileItem) {
+  if (deletingFileId.value) return
+  if (!(await ui.confirm({ message: t('admin_user_detail.files_delete_confirm', { name: f.filename }), danger: true }))) return
+  deletingFileId.value = f.file_id
+  try {
+    await adminDeleteFile(f.file_id)
+    ui.pushToast(t('admin_file_history.deleted_toast', { name: f.filename }), 'success')
+    await loadFiles()
+    await load()  // refresh the Storage figure
+  } catch (err) {
+    ui.pushToast(describe(err), 'error')
+  } finally {
+    deletingFileId.value = null
   }
 }
 
@@ -304,6 +347,42 @@ onMounted(load)
 
       <hr class="fh-rule" />
 
+      <div class="files-head">
+        <h2 class="section-h2">{{ t('admin_user_detail.files') }}</h2>
+        <RouterLink
+          class="fh-btn-text"
+          :to="{ name: 'admin-file-history', query: { uploader_id: user.id } }"
+        >
+          {{ t('admin_user_detail.files_view_all') }}
+        </RouterLink>
+      </div>
+      <p class="fh-field-help">{{ t('admin_user_detail.files_help') }}</p>
+
+      <div v-if="filesLoading" class="loading">{{ t('common.loading') }}</div>
+      <ul v-else-if="files.length > 0" class="file-list">
+        <li v-for="f in files" :key="f.file_id" class="file-item">
+          <div class="file-info">
+            <span class="file-name">{{ f.filename }}</span>
+            <span class="fh-mono file-meta">
+              <span>{{ formatBytes(f.size_bytes) }}</span>
+              <span class="fh-pill" :data-state="f.state === 'clean' ? 'active' : 'warn'">{{ f.state }}</span>
+              <span v-if="f.share_subject">{{ f.share_subject }}</span>
+            </span>
+          </div>
+          <button
+            type="button"
+            class="fh-btn-text revoke-btn"
+            :disabled="deletingFileId === f.file_id"
+            @click="onDeleteFile(f)"
+          >
+            {{ deletingFileId === f.file_id ? t('common.loading') : t('admin_file_history.delete') }}
+          </button>
+        </li>
+      </ul>
+      <p v-else class="fh-field-help empty">{{ t('admin_user_detail.files_empty') }}</p>
+
+      <hr class="fh-rule" />
+
       <div class="danger-zone">
         <h2 class="section-h2">{{ t('admin_user_detail.danger') }}</h2>
         <p class="fh-field-help">{{ t('admin_user_detail.erase_help') }}</p>
@@ -422,7 +501,8 @@ onMounted(load)
   margin-top: var(--fh-space-4);
 }
 
-.sessions-head {
+.sessions-head,
+.files-head {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
@@ -432,6 +512,39 @@ onMounted(load)
 .revoke-btn {
   color: var(--fh-accent);
   white-space: nowrap;
+}
+
+.file-list {
+  list-style: none;
+  padding: 0;
+  margin: var(--fh-space-2) 0 0;
+}
+
+.file-item {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--fh-space-3);
+  padding: var(--fh-space-2) 0;
+  border-top: 1px solid var(--fh-hairline);
+}
+
+.file-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.file-name {
+  color: var(--fh-ink);
+}
+
+.file-meta {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--fh-space-3);
+  font-size: var(--fh-text-mono-sm);
+  color: var(--fh-subtle);
 }
 
 .session-list {

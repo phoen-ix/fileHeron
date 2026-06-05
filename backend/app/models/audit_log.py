@@ -110,6 +110,7 @@ class AuditEventType(str, enum.Enum):
     # past retention.upload_stale_hours, and the share it left empty.
     file_upload_abandoned = "file_upload_abandoned"
     share_failed = "share_failed"
+    email_resent = "email_resent"                          # v1.11.0 (admin resend from mail log)
 
 
 

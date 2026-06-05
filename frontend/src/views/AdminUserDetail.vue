@@ -12,12 +12,19 @@ import {
   eraseUser,
   forcePasswordReset,
   getUser,
+  listMailLog,
   updateUser,
 } from '@/api/admin'
 import { useApiError } from '@/composables/useApiError'
 import { useSiteDateFormat } from '@/composables/useSiteDateFormat'
 import { useUiStore } from '@/stores/ui'
-import type { AdminFileItem, AdminSessionRow, AdminUserItem, UserRole } from '@/types/api'
+import type {
+  AdminFileItem,
+  AdminMailRow,
+  AdminSessionRow,
+  AdminUserItem,
+  UserRole,
+} from '@/types/api'
 import { formatBytes } from '@/utils/bytes'
 import { uaShort } from '@/utils/ua'
 
@@ -53,6 +60,9 @@ const files = ref<AdminFileItem[]>([])
 const filesLoading = ref(false)
 const deletingFileId = ref<string | null>(null)
 
+const emails = ref<AdminMailRow[]>([])
+const emailsLoading = ref(false)
+
 const isErased = computed(() => user.value?.email === '[erased]')
 
 async function load() {
@@ -66,8 +76,25 @@ async function load() {
     editDisabled.value = data.is_disabled
     await loadSessions()
     await loadFiles()
+    await loadEmails()
   } finally {
     loading.value = false
+  }
+}
+
+async function loadEmails() {
+  if (!user.value) return
+  emailsLoading.value = true
+  try {
+    const { data } = await listMailLog({
+      recipient_user_id: user.value.id,
+      page_size: 50,
+    })
+    emails.value = data.items
+  } catch (err) {
+    ui.pushToast(describe(err), 'error')
+  } finally {
+    emailsLoading.value = false
   }
 }
 
@@ -381,6 +408,40 @@ onMounted(load)
 
       <hr class="fh-rule" />
 
+      <div class="files-head">
+        <h2 class="section-h2">{{ t('admin_user_detail.emails') }}</h2>
+        <RouterLink
+          class="fh-btn-text"
+          :to="{ name: 'admin-mail-log', query: { recipient_user_id: user.id } }"
+        >
+          {{ t('admin_user_detail.emails_view_all') }}
+        </RouterLink>
+      </div>
+      <p class="fh-field-help">{{ t('admin_user_detail.emails_help') }}</p>
+
+      <div v-if="emailsLoading" class="loading">{{ t('common.loading') }}</div>
+      <ul v-else-if="emails.length > 0" class="file-list">
+        <li v-for="m in emails" :key="m.id" class="file-item">
+          <RouterLink
+            class="file-info email-link"
+            :to="{ name: 'admin-mail-detail', params: { id: m.id } }"
+          >
+            <span class="file-name">{{ m.subject }}</span>
+            <span class="fh-mono file-meta">
+              <span>{{ formatDate(m.created_at, { second: '2-digit' }) }}</span>
+              <span
+                class="fh-pill"
+                :data-state="m.status === 'sent' ? 'active' : (m.status === 'queued' ? 'warn' : 'danger')"
+              >{{ m.status }}</span>
+              <span>{{ m.category }}</span>
+            </span>
+          </RouterLink>
+        </li>
+      </ul>
+      <p v-else class="fh-field-help empty">{{ t('admin_user_detail.emails_empty') }}</p>
+
+      <hr class="fh-rule" />
+
       <div class="danger-zone">
         <h2 class="section-h2">{{ t('admin_user_detail.danger') }}</h2>
         <p class="fh-field-help">{{ t('admin_user_detail.erase_help') }}</p>
@@ -531,6 +592,15 @@ onMounted(load)
   display: flex;
   flex-direction: column;
   gap: 2px;
+}
+
+.email-link {
+  text-decoration: none;
+  color: inherit;
+}
+
+.email-link:hover .file-name {
+  color: var(--fh-accent);
 }
 
 .file-name {

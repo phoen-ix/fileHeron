@@ -25,6 +25,7 @@ from sqlalchemy.orm import Session
 from ..database import SessionLocal
 from ..models.audit_log import AuditLog
 from ..models.download_log import DownloadLog
+from ..models.email_log import EmailLog
 from ..models.login_attempt import LoginAttempt
 from ..services.cron_tracker import track_cron
 from ..utils.timeutil import utc_now
@@ -83,6 +84,7 @@ async def prune_history(_ctx) -> dict:
     try:
         audit_days = _sr.effective(_db0, _sr.K.AUDIT_LOG_RETENTION_DAYS)
         download_days = _sr.effective(_db0, _sr.K.DOWNLOAD_LOG_RETENTION_DAYS)
+        email_days = _sr.effective(_db0, _sr.K.EMAIL_LOG_RETENTION_DAYS)
         login_days = _sr.effective(_db0, _sr.K.LOGIN_ATTEMPT_RETENTION_DAYS)
     finally:
         _db0.close()
@@ -91,6 +93,9 @@ async def prune_history(_ctx) -> dict:
     )
     download_pruned = await _prune_table(
         "download_log", download_days, DownloadLog.accessed_at, DownloadLog
+    )
+    email_pruned = await _prune_table(
+        "email_log", email_days, EmailLog.created_at, EmailLog
     )
     login_pruned = await _prune_table(
         "login_attempts",
@@ -101,5 +106,6 @@ async def prune_history(_ctx) -> dict:
     return {
         "audit_log": audit_pruned,
         "download_log": download_pruned,
+        "email_log": email_pruned,
         "login_attempts": login_pruned,
     }

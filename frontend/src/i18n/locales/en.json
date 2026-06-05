@@ -169,6 +169,7 @@
       "users": "Users",
       "groups": "Groups",
       "audit": "Audit log",
+      "mail_log": "Mail log",
       "file_history": "File history",
       "sessions": "Sessions",
       "quarantine": "Quarantine",
@@ -828,7 +829,55 @@
     "files_help": "Files this user currently has stored (counts toward their storage). Delete frees the bytes immediately.",
     "files_view_all": "View in File History →",
     "files_empty": "No stored files.",
-    "files_delete_confirm": "Permanently delete “{name}” from disk and free this user's quota? This cannot be undone."
+    "files_delete_confirm": "Permanently delete “{name}” from disk and free this user's quota? This cannot be undone.",
+    "emails": "Emails to this user",
+    "emails_help": "The most recent emails file:Heron sent to this user.",
+    "emails_view_all": "View in Mail log →",
+    "emails_empty": "No emails sent to this user."
+  },
+  "admin_mail": {
+    "eyebrow": "Admin / Mail log",
+    "intro": "Every email file:Heron sends is recorded here with its delivery outcome. One-time auth links (password reset, invite, verify) are redacted at rest.",
+    "export_csv": "Export CSV",
+    "empty": "No emails match these filters.",
+    "masked": "redacted",
+    "filter": {
+      "q": "Search subject / recipient",
+      "recipient": "recipient email",
+      "category": "category",
+      "status_any": "Any status",
+      "from": "from",
+      "to": "to"
+    },
+    "col": {
+      "when": "When",
+      "recipient": "Recipient",
+      "category": "Category",
+      "subject": "Subject",
+      "status": "Status"
+    },
+    "status": {
+      "queued": "Queued",
+      "sent": "Sent",
+      "failed": "Failed",
+      "error": "Error"
+    },
+    "detail": {
+      "back": "Back to Mail log",
+      "resend": "Resend",
+      "resend_disabled": "This email can't be resent — its one-time auth link was redacted at rest (or it was a test/dev entry).",
+      "resend_ok": "Email re-queued for delivery.",
+      "status": "Status",
+      "recipient": "Recipient",
+      "when": "When",
+      "category": "Category / via",
+      "attempts": "Attempts",
+      "masked": "Redacted",
+      "error": "Error",
+      "body": "Body (text)",
+      "open_html": "Open HTML version",
+      "no_body": "(no text body stored)"
+    }
   },
   "admin_audit": {
     "eyebrow": "Admin / Audit log",

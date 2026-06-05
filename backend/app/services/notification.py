@@ -176,14 +176,28 @@ def dispatch(
 
     if _wants_email(channel) and email_to:
         try:
+            from . import mail_log
             from . import site as site_svc
 
             slug = template_slug or category.value
+            # Render ONCE: the same (subject, text, html) is both logged (masked)
+            # and enqueued (unmasked, for the real send) — never re-rendered, so
+            # the stored body matches what was sent.
             subject, text, html = email_svc.render_email(
                 user.locale, slug, payload,
                 app_url=site_svc.get_site_url(db),
                 site_timezone=site_svc.get_site_timezone(db),
                 app_name=site_svc.get_app_name(db),
+            )
+            eid = mail_log.record_queued(
+                db,
+                recipient_email=email_to,
+                recipient_user_id=user.id,
+                category=category.value,
+                template_slug=slug,
+                subject=subject,
+                text_body=text,
+                html_body=html,
             )
             job_queue.enqueue(
                 "send_email_job",
@@ -191,6 +205,7 @@ def dispatch(
                 subject=subject,
                 text_body=text,
                 html_body=html,
+                email_log_id=eid,
             )
         except Exception:
             logger.exception(

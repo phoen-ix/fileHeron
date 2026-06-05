@@ -101,6 +101,49 @@ class AdminAuditResponse(APIBaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Mail log (v1.11.0). One row per outbound email; bodies omitted from the
+# list/CSV rows (loaded only by the detail endpoint).
+class AdminMailRow(APIBaseModel):
+    id: int
+    created_at: datetime
+    recipient_email: str
+    recipient_user_id: int | None
+    # Hydrated server-side (bulk per page); null for non-users / erased.
+    recipient_display_name: str | None = None
+    category: str | None
+    template_slug: str | None
+    via: str
+    status: str
+    subject: str
+    masked: bool
+    attempts: int
+    smtp_code: int | None
+    error_class: str | None
+    # Resend is disabled for masked (auth-link) rows and for test/dev rows.
+    can_resend: bool
+
+
+class AdminMailDetail(AdminMailRow):
+    body_text: str | None
+    body_html: str | None
+    error_message: str | None
+    source_log_id: int | None
+
+
+class AdminMailListResponse(APIBaseModel):
+    items: list[AdminMailRow]
+    total: int
+    page: int
+    page_size: int
+    next_cursor: str | None = None
+
+
+class AdminMailResendResponse(APIBaseModel):
+    ok: bool
+    new_log_id: int
+
+
+# ---------------------------------------------------------------------------
 # Admin session oversight (v1.7.0). A session = a `refresh_tokens` row.
 # ---------------------------------------------------------------------------
 

@@ -205,19 +205,73 @@ async def _send_resolved(
     subject: str,
     text_body: str,
     html_body: str | None = None,
+    category: str | None = None,
 ) -> None:
     """Helper for the direct senders below. Opens its own short-lived
     session, resolves SMTP config from DB-overlay-env, then sends.
     Keeps callers free of DB plumbing for one-off transactional sends.
-    """
+
+    When ``category`` is supplied, records the send to the mail log
+    (best-effort, masked at rest) and re-raises any send error so the
+    auth flow still sees the failure. The recipient user is resolved by
+    email lookup so direct sends (reset / invite / lockout) still link to
+    a user in the admin 'Emails to this user' panel."""
     db = SessionLocal()
     try:
         cfg = resolve_smtp_config(db)
     finally:
         db.close()
-    await send_email(
-        cfg=cfg, to=to, subject=subject, text_body=text_body, html_body=html_body
-    )
+
+    err: Exception | None = None
+    try:
+        await send_email(
+            cfg=cfg, to=to, subject=subject, text_body=text_body, html_body=html_body
+        )
+    except Exception as exc:  # noqa: BLE001 — re-raised below after logging
+        err = exc
+
+    if category is not None:
+        from ..models.email_log import EmailStatus, EmailVia
+        from ..models.user import User
+        from . import mail_log
+
+        if err is None:
+            status = EmailStatus.sent
+            via = EmailVia.direct if cfg.is_configured else EmailVia.dev_fallback
+            smtp_code = error_class = error_message = None
+        else:
+            status = EmailStatus.failed
+            via = EmailVia.direct
+            code = getattr(err, "code", None)
+            smtp_code = code if isinstance(code, int) else None
+            error_class = type(err).__name__
+            error_message = str(err)
+        log_db = SessionLocal()
+        try:
+            ruid = log_db.query(User.id).filter(User.email == to).scalar()
+            mail_log.record_direct(
+                log_db,
+                recipient_email=to,
+                recipient_user_id=ruid,
+                category=category,
+                template_slug=category,
+                via=via,
+                subject=subject,
+                text_body=text_body,
+                html_body=html_body,
+                status=status,
+                smtp_code=smtp_code,
+                error_class=error_class,
+                error_message=error_message,
+            )
+            log_db.commit()
+        except Exception:
+            logger.exception("mail_log direct write failed for %s", to)
+        finally:
+            log_db.close()
+
+    if err is not None:
+        raise err
 
 
 # -------------------------------------------------------------------------
@@ -334,7 +388,9 @@ async def test_send(
             cfg=cfg, to=to, subject=subject, text_body=text, html_body=html
         )
     except Exception as exc:  # noqa: BLE001 — surface every error to the admin
+        _log_test_send(to, subject, text, html, exc=exc)
         return _smtp_error_payload(exc)
+    _log_test_send(to, subject, text, html, exc=None)
     return {
         "ok": True,
         "error_class": None,
@@ -342,6 +398,39 @@ async def test_send(
         "smtp_code": None,
         "hint": None,
     }
+
+
+def _log_test_send(
+    to: str, subject: str, text: str, html: str | None, *, exc: Exception | None
+) -> None:
+    """Best-effort mail-log entry for the admin SMTP test-send (via=test).
+    Never alters the diagnostic returned to the admin UI."""
+    from ..models.email_log import EmailStatus, EmailVia
+    from . import mail_log
+
+    code = getattr(exc, "code", None)
+    log_db = SessionLocal()
+    try:
+        mail_log.record_direct(
+            log_db,
+            recipient_email=to,
+            recipient_user_id=None,
+            category="smtp_test",
+            template_slug="smtp_test",
+            via=EmailVia.test,
+            subject=subject,
+            text_body=text,
+            html_body=html,
+            status=EmailStatus.sent if exc is None else EmailStatus.failed,
+            smtp_code=code if isinstance(code, int) else None,
+            error_class=type(exc).__name__ if exc else None,
+            error_message=str(exc) if exc else None,
+        )
+        log_db.commit()
+    except Exception:
+        logger.exception("mail_log test write failed for %s", to)
+    finally:
+        log_db.close()
 
 
 # -------------------------------------------------------------------------
@@ -373,7 +462,7 @@ async def send_verify_email(
     ctx = {"display_name": display_name, "verify_url": f"{base}/verify-email/{token}"}
     body = _render(locale, "verify", "txt", ctx, app_url=base, site_timezone=tz)
     subject = _resolve_subject(_resolve_locale(locale), "verify", ctx)
-    await _send_resolved(to=to, subject=subject, text_body=body)
+    await _send_resolved(to=to, subject=subject, text_body=body, category="verify")
 
 
 async def send_password_reset_email(
@@ -385,7 +474,9 @@ async def send_password_reset_email(
     ctx = {"display_name": display_name, "reset_url": f"{base}/reset-password/{token}"}
     body = _render(locale, "reset_password", "txt", ctx, app_url=base, site_timezone=tz)
     subject = _resolve_subject(_resolve_locale(locale), "reset_password", ctx)
-    await _send_resolved(to=to, subject=subject, text_body=body)
+    await _send_resolved(
+        to=to, subject=subject, text_body=body, category="reset_password"
+    )
 
 
 async def send_invite_email(
@@ -401,7 +492,7 @@ async def send_invite_email(
     }
     body = _render(locale, "invite", "txt", ctx, app_url=base, site_timezone=tz)
     subject = _resolve_subject(_resolve_locale(locale), "invite", ctx)
-    await _send_resolved(to=to, subject=subject, text_body=body)
+    await _send_resolved(to=to, subject=subject, text_body=body, category="invite")
 
 
 async def send_lockout_warning_email(
@@ -424,4 +515,6 @@ async def send_lockout_warning_email(
     }
     body = _render(locale, "lockout_warning", "txt", ctx, app_url=base, site_timezone=tz)
     subject = _resolve_subject(_resolve_locale(locale), "lockout_warning", ctx)
-    await _send_resolved(to=to, subject=subject, text_body=body)
+    await _send_resolved(
+        to=to, subject=subject, text_body=body, category="lockout_warning"
+    )

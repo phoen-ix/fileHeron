@@ -500,6 +500,47 @@ export interface AdminAuditResponse {
   next_cursor: string | null
 }
 
+/* Mail log (v1.11.0) — outbound email send log. */
+export interface AdminMailRow {
+  id: number
+  created_at: string
+  recipient_email: string
+  recipient_user_id: number | null
+  /** Hydrated server-side; null for non-users / erased recipients. */
+  recipient_display_name: string | null
+  category: string | null
+  template_slug: string | null
+  via: string
+  status: string
+  subject: string
+  /** True when auth-link tokens were redacted at rest → resend disabled. */
+  masked: boolean
+  attempts: number
+  smtp_code: number | null
+  error_class: string | null
+  can_resend: boolean
+}
+
+export interface AdminMailDetail extends AdminMailRow {
+  body_text: string | null
+  body_html: string | null
+  error_message: string | null
+  source_log_id: number | null
+}
+
+export interface AdminMailListResponse {
+  items: AdminMailRow[]
+  total: number
+  page: number
+  page_size: number
+  next_cursor: string | null
+}
+
+export interface AdminMailResendResponse {
+  ok: boolean
+  new_log_id: number
+}
+
 export interface ShareRecipientRef {
   kind: 'user' | 'group' | 'company'
   id: number

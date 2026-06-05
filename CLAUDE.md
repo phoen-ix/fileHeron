@@ -56,7 +56,7 @@ cursor "Newer/Older" to **numbered-page** pagination (the shared `Pager`, like
 every other admin list; backend offset mode was already there); `Pager` now
 hides Prev on page 1 / Next on the last page instead of disabling them.
 
-**Post-1.10 backend (current `v1.10.5`):** SMTP hardening on the admin **Email**
+**Post-1.10 backend (`v1.10.5`):** SMTP hardening on the admin **Email**
 settings page. (1) A configurable **HELO/EHLO hostname** (`smtp.helo_hostname`
 kv overlaying the `SMTP_HELO_HOST` env default) passed as `aiosmtplib`
 `local_hostname` — blank keeps the prior `socket.getfqdn()` behaviour; set it to
@@ -70,6 +70,18 @@ ticks an explicit "Allow no authentication (anonymous)" checkbox (client-side
 guard; the API still accepts anonymous for trusted localhost relays, and
 existing user-less configs pre-tick the box so they aren't retroactively
 blocked).
+
+**Post-1.10.5 backend (current `v1.11.0`):** the **Mail log** — every outbound
+email is now recorded in a new append-only `email_log` table and browsable at
+**`/admin/mail-log`**. See the *Mail log* subsystem section below. One row per
+email across all send paths (queued notifications, the synchronous auth-flow
+direct senders, the admin test-send, the dev logs-fallback), created `queued`
+and UPDATEd in place to `sent`/`failed`/`error` (so retries don't multiply
+rows); bodies stored with one-time auth-link tokens **masked at rest**; a
+full-content detail view (text inline, HTML opened in a new tab to dodge the SPA
+CSP), per-recipient filter + an "Emails to this user" panel on the user-detail
+page, **resend** (disabled for masked/test/dev rows), CSV export, a
+`retention.email_log_days` window (default 90), and a GDPR-erasure scrub.
 
 **Desktop client (current `client-v0.9.9`):** CustomTkinter, single Windows
 .exe. v0.9.x reworked it to an in-window login overlay (no separate login
@@ -262,6 +274,42 @@ Failures logged but never propagate.
 - **Connection lifetime 60s by design** — deterministic reconnect window beats unpredictable proxy timeouts. Server emits `: close\n\n` comment frame on TTL expiry, frontend reconnects with `Last-Event-Id`. EventSource auth rides on `?token=` (a signed `services/sse_token.py` token, **300s TTL** since v1.10.2 so throttled/background-tab reconnects don't expire it); the bell also restarts the stream on tab refocus.
 - **Reverse-proxy headers:** `Cache-Control: no-cache, no-transform`, `X-Accel-Buffering: no`, `Connection: keep-alive`. **Don't add buffering middleware in Traefik labels.**
 
+## Mail log
+
+Every outbound email is recorded in `email_log` (one row per email) via the
+single funnel `services/mail_log.py`. Admin-browsable at `/admin/mail-log`.
+
+- **Chokepoints:**
+  - *Queued* (notifications): `services/notification.py::dispatch` renders the
+    email **once** and passes the *same* `(subject, text, html)` to both
+    `mail_log.record_queued` (creates a `queued` row, masked) **and**
+    `job_queue.enqueue("send_email_job", …, email_log_id=eid)`. The worker
+    (`workers/send_email.py`) finalizes that row by id at each terminal branch —
+    `sent` / `failed`+code (5xx) / stays `queued` on transient retry (attempts
+    climbs) / `error`. `email_log_id=None` ⇒ finalize is skipped (back-compat).
+  - *Direct* (auth-flow senders reset/invite/lockout/verify): logged inside
+    `services/email.py::_send_resolved` (best-effort, `via=direct`); recipient
+    user resolved by email lookup so they show in the user-detail panel.
+  - *Test-send* → `via=test`; *SMTP unconfigured* (logs-fallback) → `via=dev_fallback`.
+- **Masking (fail-closed):** `mail_log.mask_sensitive` redacts the token in
+  `/reset-password|verify-email|register/{token}` URLs in both bodies; `masked`
+  is also forced for the auth-link categories. On any regex error the body is
+  dropped to a placeholder (never persist a live token). `masked` (or
+  `via ∈ {test, dev_fallback}`) **disables resend**.
+- **Admin API** (`routers/admin/mail.py`, clones `audit.py`): `GET /mail-log`
+  (filter/paginate, bodies **deferred** so never loaded), `GET /mail-log/{id}`
+  (full row incl. body), `GET /mail-log/export.csv` (metadata only),
+  `POST /mail-log/{id}/resend` (refuses `409 MAIL_RESEND_MASKED`; creates a new
+  `via=resend` row with `source_log_id`, `await aenqueue`s it, audits
+  `email_resent`).
+- **Frontend:** `AdminMailLog.vue` (list) + `AdminMailDetail.vue` (detail — text
+  inline; HTML opened in a new tab via a Blob URL so the SPA `default-src 'self'`
+  CSP can't blank it and it can't script the admin page) + an "Emails to this
+  user" panel on `AdminUserDetail.vue`.
+- **Retention:** `retention.email_log_days` (default 90, 0 disables) pruned by
+  `prune_history`. **Erasure:** `erase_user` scrubs the target's rows in place
+  (null FK + redact email + drop bodies/subject) — PII gone, flow counts kept.
+
 ## SSO (multi-provider OIDC)
 
 - **Table** `oidc_providers` (UUID PK): `(name, preset, issuer_url, client_id, client_secret_encrypted, groups_claim, admin_groups, employee_groups, redirect_uri, enabled, …)`. `preset` ∈ `entra | google | authentik | keycloak | custom`.
@@ -284,7 +332,7 @@ Failures logged but never propagate.
 ## Admin
 
 - **Shell:** `/admin` is `AdminLayout.vue` with left sidebar (Users / Groups / Audit log / File history / API tokens / Settings tree). All admin routes are nested children with `requireAdmin: true` route meta + `get_current_admin` backend dependency.
-- **Pages:** `/admin/users` (list + filter + paginate + inline invite form, ID column visible), `/admin/users/:id` (edit + force-reset + 2-step erasure with pre-flight + PDF receipt download), `/admin/groups`, `/admin/groups/:id`, `/admin/audit-log` (filter + paginate + streaming CSV export), `/admin/file-history` (cross-user file inventory; **hides deleted/abandoned by default** — toggle to show; per-row **Delete** = `DELETE /api/admin/files/{id}` + Reclaim for orphans), `/admin/sessions` (all users' sessions — paginated/sortable/searchable; per-session + per-user revoke; also a per-user section + "Current files" list on `/admin/users/:id`), `/admin/api-tokens` (inventory: disable / reactivate / revoke / generate-on-behalf), `/admin/system` (health + self-update banner + on-demand cron run), `/admin/settings/{sso,api-tokens,public-links,twofa,email,home-page,site,motd,share-defaults,quarantine,updates,advanced,general}`.
+- **Pages:** `/admin/users` (list + filter + paginate + inline invite form, ID column visible), `/admin/users/:id` (edit + force-reset + 2-step erasure with pre-flight + PDF receipt download), `/admin/groups`, `/admin/groups/:id`, `/admin/audit-log` (filter + paginate + streaming CSV export), `/admin/mail-log` (outbound email log — filter/paginate + detail view + resend + CSV; see *Mail log*), `/admin/file-history` (cross-user file inventory; **hides deleted/abandoned by default** — toggle to show; per-row **Delete** = `DELETE /api/admin/files/{id}` + Reclaim for orphans), `/admin/sessions` (all users' sessions — paginated/sortable/searchable; per-session + per-user revoke; also a per-user section + "Current files" list on `/admin/users/:id`), `/admin/api-tokens` (inventory: disable / reactivate / revoke / generate-on-behalf), `/admin/system` (health + self-update banner + on-demand cron run), `/admin/settings/{sso,api-tokens,public-links,twofa,email,home-page,site,motd,share-defaults,quarantine,updates,advanced,general}`.
 - **Audit log Actor cell** is a RouterLink to `/admin/users/:id`; bulk-loads display name + email per page (mirroring `shares.py`'s sender/recipient hydration). Erased / deleted users render ID + `(deleted)` tag.
 - **Admin nav location:** `Admin` link is in the user-menu dropdown (above `Account`), not in the top horizontal nav. EN/DE language switcher is **not** in the header — only on public auth pages (`AuthCanvas`); `users.locale` overrides on bootstrap, `localStorage.fh.locale` survives anonymous picks.
 
@@ -343,7 +391,7 @@ ARQ worker container. Config: `backend/app/workers/worker.py::WorkerSettings`. Q
 - `purge_old_quarantine` (02:13) — unlink infected bytes (keep row marker) older than `retention.quarantine_purge_days`.
 - `cleanup_pending_invites` (02:15) — delete unconsumed/expired invites older than `retention.invite_days`.
 - `cleanup_read_notifications` (02:29) — hard-delete read notifications older than `retention.notification_read_days`.
-- `prune_history` (02:43) — delete `audit_log` / `download_log` / `login_attempts` rows older than their `retention.*` windows (0 disables a table).
+- `prune_history` (02:43) — delete `audit_log` / `download_log` / `email_log` / `login_attempts` rows older than their `retention.*` windows (0 disables a table).
 - `reclaim_orphaned_files` (02:51) — free bytes + quota for files whose share was revoked/deleted longer than `retention.orphan_reclaim_days` ago.
 
 **Event-driven:**
@@ -365,6 +413,7 @@ ARQ worker container. Config: `backend/app/workers/worker.py::WorkerSettings`. Q
 | `share_recipients` | (share, recipient_user_id OR recipient_group_id). | |
 | `api_tokens` | `fh_<8-hex>_<43-b64url>`. Prefix indexed; SHA-256 of secret. `disabled_at`, `revoked_at`, `last_used_at`. | |
 | `download_log` | One row per successful download. `via` ∈ auth/api_token/public. | BigInteger PK. |
+| `email_log` | One row per outbound email (v1.11.0). `status` ∈ queued/sent/failed/error; `via` ∈ queued/direct/test/dev_fallback/resend. Bodies (`body_text`/`body_html`, `deferred`) masked at rest; `masked` gates resend; `source_log_id` self-FK on resend rows. | BigInteger PK. |
 | `user_totp` | One-to-one. Fernet-encrypted secret. `enabled_at NULL` = pending. `last_used_counter` for anti-replay. | |
 | `user_recovery_codes` | 10 per 2FA-enabled user, Argon2-hashed. Single-use. | |
 | `webauthn_credentials` | Per-user credentials. `sign_count` enforced (strictly increasing). | |

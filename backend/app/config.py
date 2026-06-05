@@ -56,6 +56,9 @@ class Settings(BaseSettings):
     # to 0 to disable that table's pruning.
     AUDIT_LOG_RETENTION_DAYS: int = 365
     DOWNLOAD_LOG_RETENTION_DAYS: int = 90
+    # Mail log rows carry (masked) email content, so a tighter default than the
+    # audit log is appropriate. 0 disables pruning.
+    EMAIL_LOG_RETENTION_DAYS: int = 90
     LOGIN_ATTEMPT_RETENTION_DAYS: int = 30
     # In-app notifications: once read, the bell hides them on next load; this
     # is how long a READ notification lingers in the DB before the daily

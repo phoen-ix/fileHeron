@@ -24,6 +24,8 @@ from arq import Retry
 
 from ..database import SessionLocal
 from ..models.audit_log import AuditEventType
+from ..models.email_log import EmailStatus, EmailVia
+from ..services import mail_log
 from ..services.audit import record_audit_event
 from ..services.email import resolve_smtp_config
 from ..utils.emailing import send_email
@@ -38,13 +40,55 @@ _TRANSIENT_ERRORS = (
 )
 
 
+def _finalize_log(
+    email_log_id: int | None,
+    status: EmailStatus,
+    attempt: int,
+    *,
+    via: EmailVia | None = None,
+    smtp_code: int | None = None,
+    error_class: str | None = None,
+    error_message: str | None = None,
+) -> None:
+    """Best-effort UPDATE of the pre-created mail-log row. No-op when the
+    job carries no email_log_id (e.g. an admin resend, or a job enqueued
+    before this feature shipped)."""
+    if email_log_id is None:
+        return
+    log_db = SessionLocal()
+    try:
+        mail_log.finalize(
+            log_db,
+            email_log_id=email_log_id,
+            status=status,
+            attempt=attempt,
+            via=via,
+            smtp_code=smtp_code,
+            error_class=error_class,
+            error_message=error_message,
+        )
+        log_db.commit()
+    except Exception:
+        logger.exception("could not finalize email_log row %s", email_log_id)
+    finally:
+        log_db.close()
+
+
 async def send_email_job(
-    ctx, *, to: str, subject: str, text_body: str, html_body: str | None = None
+    ctx,
+    *,
+    to: str,
+    subject: str,
+    text_body: str,
+    html_body: str | None = None,
+    email_log_id: int | None = None,
 ) -> dict:
     """Worker entry point. Returns a small status dict for diagnostics.
 
     Resolves SMTP config per-job so admin-saved settings take effect
-    on the next send without a worker restart.
+    on the next send without a worker restart. When ``email_log_id`` is
+    supplied (the notification + resend paths), finalizes that mail-log
+    row to the delivery outcome — one row per email, ``attempts`` climbs.
     """
     db = SessionLocal()
     try:
@@ -54,6 +98,14 @@ async def send_email_job(
     try:
         await send_email(
             cfg=cfg, to=to, subject=subject, text_body=text_body, html_body=html_body
+        )
+        # `send_email` returns without sending when SMTP is unconfigured (it
+        # logs to stdout) — surface that distinctly in the mail log.
+        _finalize_log(
+            email_log_id,
+            EmailStatus.sent,
+            ctx.get("job_try", 1),
+            via=None if cfg.is_configured else EmailVia.dev_fallback,
         )
         return {"to": to, "subject": subject, "status": "sent"}
     except _TRANSIENT_ERRORS as e:
@@ -66,6 +118,14 @@ async def send_email_job(
             attempt,
             e,
             defer,
+        )
+        # Stay queued; record the in-flight attempt so a stuck row is visible.
+        _finalize_log(
+            email_log_id,
+            EmailStatus.queued,
+            attempt,
+            error_class=type(e).__name__,
+            error_message=str(e),
         )
         raise Retry(defer=defer) from e
     except SMTPResponseException as e:
@@ -82,6 +142,14 @@ async def send_email_job(
                 attempt,
                 e.message,
                 defer,
+            )
+            _finalize_log(
+                email_log_id,
+                EmailStatus.queued,
+                attempt,
+                smtp_code=e.code,
+                error_class=type(e).__name__,
+                error_message=e.message,
             )
             raise Retry(defer=defer) from e
         logger.error(
@@ -113,7 +181,22 @@ async def send_email_job(
                 audit_db.close()
         except Exception:
             logger.exception("could not record email_undeliverable audit event for %s", to)
+        _finalize_log(
+            email_log_id,
+            EmailStatus.failed,
+            ctx.get("job_try", 1),
+            smtp_code=e.code,
+            error_class=type(e).__name__,
+            error_message=e.message,
+        )
         return {"to": to, "subject": subject, "status": "failed", "code": e.code}
-    except Exception:
+    except Exception as e:
         logger.exception("unexpected error sending email to %s", to)
+        _finalize_log(
+            email_log_id,
+            EmailStatus.error,
+            ctx.get("job_try", 1),
+            error_class=type(e).__name__,
+            error_message=str(e),
+        )
         return {"to": to, "subject": subject, "status": "error"}

@@ -1,38 +1,51 @@
-# file:Heron v1.10.5
+# file:Heron v1.11.0
 
-**SMTP hardening on the admin Email settings page.** Three changes that make
-configuring outgoing mail harder to get wrong and easier to diagnose.
+**New: Mail log.** file:Heron now keeps a record of every email it sends, so you
+can confirm a user received their share notice / invite / password-reset, see
+exactly what was sent, and diagnose delivery problems — all from a new admin
+page at **Admin → Mail log**.
 
-- **Test emails now explain failures in plain language.** When *Send test email*
-  fails, the result shows a *"What to try:"* hint alongside the raw SMTP error —
-  e.g. bad username/password, the server refusing this client (`554 5.7.1 …
-  Client host rejected`), a TLS-mode/port mismatch, or an unreachable host.
-  No more decoding a bare `aiosmtplib` traceback.
+### What you get
 
-- **Username and password are now required by default.** Most SMTP servers
-  reject unauthenticated mail, so the form no longer lets you save or test with
-  blank credentials unless you explicitly tick **"Allow no authentication
-  (anonymous)"** — reserved for a trusted localhost or private-network relay.
-  Existing setups that already run without a username keep working (the box is
-  pre-ticked for them).
+- **A searchable, filterable list** of every outbound email — by recipient,
+  category, status, or date. Each row shows the delivery outcome
+  (queued → sent / failed) with the SMTP error code when something went wrong.
+- **Full-content detail view.** Click any email to see its headers, status, SMTP
+  result, and body. The plain-text body is shown inline; an *Open HTML version*
+  button renders the HTML email in a new tab.
+- **"Emails to this user" panel** on each user's detail page, plus a recipient
+  filter on the log — the quickest way to answer "did this person get it?".
+- **Resend** any ordinary notification straight from the log.
+- **CSV export** of the filtered rows, like the audit log.
 
-- **Configurable HELO/EHLO hostname (optional).** A new field sets the hostname
-  file:Heron announces to your SMTP server. Leave it blank to keep the current
-  behaviour (the container's auto-detected name). Set it to a real, resolvable
-  name when a strict mail server rejects sends because the announced name
-  doesn't match.
+### Privacy & safety
 
-No migration required. New optional env var `SMTP_HELO_HOST` (blank by default);
-everything is also editable live under **Admin → Settings → Email**.
+- **One-time auth links are redacted at rest.** Password-reset, invite, and
+  verify emails have their single-use token masked in the stored copy, so the
+  log can never be used to take over an account. Resend is therefore disabled
+  for those emails (their token is gone) and enabled for ordinary notifications.
+- **90-day retention** by default — admin-tunable via the new
+  `retention.email_log_days` setting (Advanced settings); set to 0 to keep
+  forever. The nightly cleanup prunes older rows.
+- **GDPR-aware:** erasing a user scrubs their mail-log rows (recipient address
+  and bodies removed) while preserving aggregate delivery counts.
+
+### Notes
+
+- One DB migration adds the `email_log` table (applied automatically on update).
+- New optional env var `EMAIL_LOG_RETENTION_DAYS` (default 90); everything is
+  also tunable live in the admin UI.
+- Delivery tracking records that the message was **accepted by your SMTP
+  server** — it does not track inbox delivery, bounces, or opens.
 
 ## Container images
 
 Published to GitHub Container Registry:
 
-- `ghcr.io/phoen-ix/fileheron-backend:v1.10.5`
-- `ghcr.io/phoen-ix/fileheron-worker:v1.10.5`
-- `ghcr.io/phoen-ix/fileheron-frontend:v1.10.5`
-- `ghcr.io/phoen-ix/fileheron-updater-shim:v1.10.5`
-- `ghcr.io/phoen-ix/fileheron-updater-executor:v1.10.5`
+- `ghcr.io/phoen-ix/fileheron-backend:v1.11.0`
+- `ghcr.io/phoen-ix/fileheron-worker:v1.11.0`
+- `ghcr.io/phoen-ix/fileheron-frontend:v1.11.0`
+- `ghcr.io/phoen-ix/fileheron-updater-shim:v1.11.0`
+- `ghcr.io/phoen-ix/fileheron-updater-executor:v1.11.0`
 
 Click **Update** in `/admin/system` to roll forward.

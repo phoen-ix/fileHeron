@@ -97,6 +97,7 @@ class Keys:
     INVITE_RETENTION_DAYS = "retention.invite_days"
     AUDIT_LOG_RETENTION_DAYS = "retention.audit_log_days"
     DOWNLOAD_LOG_RETENTION_DAYS = "retention.download_log_days"
+    EMAIL_LOG_RETENTION_DAYS = "retention.email_log_days"
     LOGIN_ATTEMPT_RETENTION_DAYS = "retention.login_attempt_days"
     NOTIFICATION_READ_RETENTION_DAYS = "retention.notification_read_days"
     QUARANTINE_PURGE_AFTER_DAYS = "retention.quarantine_purge_days"

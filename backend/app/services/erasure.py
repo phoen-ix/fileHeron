@@ -29,6 +29,7 @@ from ..models.api_token import ApiToken
 from ..models.audit_log import AuditEventType
 from ..models.client_employee_connection import ClientEmployeeConnection
 from ..models.download_log import DownloadLog
+from ..models.email_log import EmailLog
 from ..models.email_verify_token import EmailVerifyToken
 from ..models.file import File, FileState
 from ..models.invite_token import InviteToken
@@ -172,6 +173,28 @@ def erase_user(
         .filter(DownloadLog.accessed_by_user_id == target.id)
         .update(
             {DownloadLog.ip: None, DownloadLog.ua_fingerprint_hash: None},
+            synchronize_session=False,
+        )
+    )
+    # Scrub the mail log: drop recipient PII (email + bodies/subject can embed
+    # display_name / filenames) but KEEP the row so per-flow counts survive.
+    # Match on user_id OR the plaintext email (invite/verify rows logged before
+    # the invitee had an account carry recipient_user_id=NULL).
+    pii_purged["email_log_scrubbed"] = (
+        db.query(EmailLog)
+        .filter(
+            (EmailLog.recipient_user_id == target.id)
+            | (EmailLog.recipient_email == original_email)
+        )
+        .update(
+            {
+                EmailLog.recipient_user_id: None,
+                EmailLog.recipient_email: f"erased-{target.id}@erased.invalid",
+                EmailLog.body_text: None,
+                EmailLog.body_html: None,
+                EmailLog.subject: "[erased]",
+                EmailLog.masked: True,
+            },
             synchronize_session=False,
         )
     )

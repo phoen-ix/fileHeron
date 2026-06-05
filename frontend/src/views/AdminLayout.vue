@@ -12,6 +12,9 @@
         <RouterLink :to="{ name: 'admin-audit' }" class="nav-link">
           {{ t('admin.nav.audit') }}
         </RouterLink>
+        <RouterLink :to="{ name: 'admin-mail-log' }" class="nav-link">
+          {{ t('admin.nav.mail_log') }}
+        </RouterLink>
         <RouterLink :to="{ name: 'admin-file-history' }" class="nav-link">
           {{ t('admin.nav.file_history') }}
         </RouterLink>

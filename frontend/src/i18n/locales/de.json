@@ -169,6 +169,7 @@
       "users": "Benutzer",
       "groups": "Gruppen",
       "audit": "Audit-Protokoll",
+      "mail_log": "E-Mail-Protokoll",
       "file_history": "Dateiverlauf",
       "sessions": "Sitzungen",
       "quarantine": "Quarantäne",
@@ -828,7 +829,55 @@
     "files_help": "Dateien, die dieser Benutzer derzeit gespeichert hat (zählen zum Speicher). Löschen gibt die Bytes sofort frei.",
     "files_view_all": "Im Dateiverlauf ansehen →",
     "files_empty": "Keine gespeicherten Dateien.",
-    "files_delete_confirm": "„{name}“ endgültig von der Festplatte löschen und das Kontingent dieses Benutzers freigeben? Dies kann nicht rückgängig gemacht werden."
+    "files_delete_confirm": "„{name}“ endgültig von der Festplatte löschen und das Kontingent dieses Benutzers freigeben? Dies kann nicht rückgängig gemacht werden.",
+    "emails": "E-Mails an diese:n Nutzer:in",
+    "emails_help": "Die zuletzt von file:Heron an diese:n Nutzer:in gesendeten E-Mails.",
+    "emails_view_all": "Im E-Mail-Protokoll ansehen →",
+    "emails_empty": "Keine E-Mails an diese:n Nutzer:in gesendet."
+  },
+  "admin_mail": {
+    "eyebrow": "Admin / E-Mail-Protokoll",
+    "intro": "Jede von file:Heron gesendete E-Mail wird hier mit ihrem Zustellergebnis erfasst. Einmal-Auth-Links (Passwort-Reset, Einladung, Verifizierung) werden gespeichert geschwärzt.",
+    "export_csv": "CSV exportieren",
+    "empty": "Keine E-Mails passen zu diesen Filtern.",
+    "masked": "geschwärzt",
+    "filter": {
+      "q": "Betreff / Empfänger suchen",
+      "recipient": "Empfänger-E-Mail",
+      "category": "Kategorie",
+      "status_any": "Beliebiger Status",
+      "from": "von",
+      "to": "bis"
+    },
+    "col": {
+      "when": "Wann",
+      "recipient": "Empfänger",
+      "category": "Kategorie",
+      "subject": "Betreff",
+      "status": "Status"
+    },
+    "status": {
+      "queued": "In Warteschlange",
+      "sent": "Gesendet",
+      "failed": "Fehlgeschlagen",
+      "error": "Fehler"
+    },
+    "detail": {
+      "back": "Zurück zum E-Mail-Protokoll",
+      "resend": "Erneut senden",
+      "resend_disabled": "Diese E-Mail kann nicht erneut gesendet werden — ihr Einmal-Auth-Link wurde gespeichert geschwärzt (oder es war ein Test-/Dev-Eintrag).",
+      "resend_ok": "E-Mail erneut zur Zustellung eingereiht.",
+      "status": "Status",
+      "recipient": "Empfänger",
+      "when": "Wann",
+      "category": "Kategorie / via",
+      "attempts": "Versuche",
+      "masked": "Geschwärzt",
+      "error": "Fehler",
+      "body": "Inhalt (Text)",
+      "open_html": "HTML-Version öffnen",
+      "no_body": "(kein Text-Inhalt gespeichert)"
+    }
   },
   "admin_audit": {
     "eyebrow": "Admin / Audit-Protokoll",

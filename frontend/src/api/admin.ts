@@ -6,6 +6,9 @@ import type {
   AdminAuditResponse,
   AdminCreateApiTokenRequest,
   AdminFileListResponse,
+  AdminMailDetail,
+  AdminMailListResponse,
+  AdminMailResendResponse,
   AdminInviteListResponse,
   AdminInviteState,
   AdminSessionListResponse,
@@ -327,6 +330,37 @@ export function auditCsvUrl(params: Record<string, string> = {}): string {
   const sp = new URLSearchParams(params)
   const qs = sp.toString()
   return `/api/admin/audit-log/export.csv${qs ? `?${qs}` : ''}`
+}
+
+// Mail log (v1.11.0)
+
+export function listMailLog(params: {
+  q?: string
+  recipient_email?: string
+  recipient_user_id?: number
+  category?: string
+  status?: string
+  from?: string
+  to?: string
+  page?: number
+  page_size?: number
+  cursor?: string
+} = {}) {
+  return api.get<AdminMailListResponse>('/admin/mail-log', { params })
+}
+
+export function getMailLogDetail(id: number) {
+  return api.get<AdminMailDetail>(`/admin/mail-log/${id}`)
+}
+
+export function resendMailLog(id: number) {
+  return api.post<AdminMailResendResponse>(`/admin/mail-log/${id}/resend`)
+}
+
+export function mailCsvUrl(params: Record<string, string> = {}): string {
+  const sp = new URLSearchParams(params)
+  const qs = sp.toString()
+  return `/api/admin/mail-log/export.csv${qs ? `?${qs}` : ''}`
 }
 
 // API token policy + admin inventory (post-Phase 10)

@@ -17,6 +17,8 @@ from .email_verify_token import EmailVerifyToken
 from .file import File, FileState
 from .group import Group
 from .group_member import GroupMember
+from .inbound_attachment import AttachmentAVState, InboundAttachment
+from .inbound_message import InboundMessage, MessageClass, MessageStatus
 from .invite_token import InviteToken
 from .known_device import KnownDevice
 from .login_attempt import LoginAttempt, LoginOutcome
@@ -58,6 +60,11 @@ __all__ = [
     "FileState",
     "Group",
     "GroupMember",
+    "AttachmentAVState",
+    "InboundAttachment",
+    "InboundMessage",
+    "MessageClass",
+    "MessageStatus",
     "InviteToken",
     "KnownDevice",
     "Locale",

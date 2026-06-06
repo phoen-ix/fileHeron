@@ -1119,3 +1119,96 @@ export interface TestSendEmailTemplateResponse {
   hint: string | null
   sent_to: string | null
 }
+
+// Inbound mailbox / IMAP (v1.27.0)
+export interface ImapSettingsResponse {
+  enabled: boolean
+  check_mode: 'auto' | 'manual'
+  host: string
+  port: number
+  user: string
+  is_password_set: boolean
+  tls_mode: 'implicit' | 'starttls' | 'none'
+  mailbox: string
+  post_fetch_action: 'mark_read' | 'untouched' | 'move' | 'delete'
+  move_folder: string
+  notify_mode: 'off' | 'human' | 'all'
+  poll_interval_minutes: number
+  last_poll_at: string | null
+  last_success_at: string | null
+}
+
+export interface UpdateImapSettingsRequest {
+  enabled: boolean
+  check_mode: 'auto' | 'manual'
+  host: string
+  port: number
+  user: string
+  password: string | null
+  tls_mode: 'implicit' | 'starttls' | 'none'
+  mailbox: string
+  post_fetch_action: 'mark_read' | 'untouched' | 'move' | 'delete'
+  move_folder: string
+  notify_mode: 'off' | 'human' | 'all'
+  poll_interval_minutes: number
+}
+
+export interface ImapTestResponse {
+  ok: boolean
+  error: string | null
+  hint: string | null
+  folders: string[]
+}
+
+export interface ImapFetchNowResponse {
+  ok: boolean
+  skipped: string | null
+  error: string | null
+  fetched: number | null
+  ingested: number | null
+}
+
+export type InboxClass = 'normal' | 'bounce' | 'auto_reply'
+export type InboxStatus = 'new' | 'read' | 'archived'
+
+export interface InboxListItem {
+  id: number
+  created_at: string
+  received_at: string | null
+  sender_email: string
+  sender_name: string | null
+  sender_user_id: number | null
+  subject: string
+  classification: InboxClass
+  status: InboxStatus
+  has_attachments: boolean
+}
+
+export interface InboxListResponse {
+  items: InboxListItem[]
+  total: number
+  page: number
+  page_size: number
+  unread: number
+}
+
+export interface InboxAttachmentItem {
+  id: number
+  filename: string
+  content_type: string | null
+  size_bytes: number
+  av_state: 'pending' | 'clean' | 'infected'
+}
+
+export interface InboxDetail extends InboxListItem {
+  to_addr: string | null
+  message_id: string | null
+  in_reply_to: string | null
+  body_text: string | null
+  body_html: string | null
+  attachments: InboxAttachmentItem[]
+}
+
+export interface UpdateInboxStatusRequest {
+  status: InboxStatus
+}

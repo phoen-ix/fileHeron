@@ -164,6 +164,16 @@ Admins can edit the **subject and body of every outbound email, per language**, 
 - **Locale-agnostic** — the language tabs are driven by the app's locale set (EN/DE today), so a future language becomes editable with no code change.
 - **Safety** — overrides are sanitised (no scripts/handlers/unsafe schemes); the editor rejects saving an auth email (password reset / verify / invite / email-change) that drops its required link placeholder, so those flows can't be bricked. The 8 token-bearing auth categories stay force-masked in the mail log regardless.
 
+## Inbound mailbox (`/admin/inbox` + `/admin/settings/imap`)
+
+file:Heron can **read** the configured mail account over IMAP, not just send. When enabled it polls the mailbox, ingests messages into an admin-only **Inbox**, and labels each as **REPLY**, **BOUNCE** (delivery-status notification) or **AUTO** (out-of-office / auto-reply) — so user replies, dead addresses and bounces surface in-app. Off by default; uses Python's stdlib `imaplib` (no third-party dependency). Config at *Settings → Inbound mail (IMAP)*:
+
+- **Connection** — host, port, encryption (implicit TLS / STARTTLS / none), user, password (Fernet-encrypted, never echoed), source mailbox. **Test connection** lists the server's folders; **Fetch now** runs a poll immediately.
+- **Fetching** — `auto` (cron ticks every 5 min, self-gated to your interval) or `manual` only. Mirrors the `release_check` enable/auto-manual/interval pattern.
+- **After fetch** (admin-selectable) — `mark_read` · `untouched` · `move` (to a subfolder) · `delete`. Dedup is by IMAP `(UIDVALIDITY, UID)` + `Message-ID`, so re-polling never double-ingests even in `untouched` mode.
+- **Notifications** — `off` (unread badge only) · `human` (genuine replies) · `all`.
+- **Attachments** are stored via the storage backend, **ClamAV-scanned**, and download-gated on a clean result. Inbound HTML is **nh3-sanitised on ingest and shown in a sandboxed iframe**. Messages are pruned by `retention.inbound_message_days` (default 90) via `prune_history`.
+
 ## Account page (`/account`)
 
 A single scrollable page with these sections (left-side quick-nav with scroll-spy):
@@ -291,7 +301,7 @@ Companion setting at **`/admin/settings/quarantine`** — single toggle "Notify 
 - **Shares / files:** `share_created`, `share_revoked`, `share_expired`, `share_expiry_updated`, `share_limit_updated`, `share_submitted_for_approval`, `share_approved`, `share_rejected`, `share_resubmitted`, `file_finalized`, `file_downloaded`, `file_deleted`, `file_expired`, `file_quarantined`, `file_quarantine_released`, `file_quarantine_purged`, `av_reload_triggered`.
 - **Public links / groups:** `public_link_created`, `public_link_revoked`, `public_link_consumed`, `group_created`, `group_updated`, `group_deleted`, `group_member_added`, `group_member_removed`.
 - **API tokens / OIDC:** `api_token_created`/`_revoked`/`_disabled`/`_reactivated`/`_admin_revoked`/`_admin_created`, `oidc_linked`, `oidc_unlinked`, `oidc_provider_created`/`_updated`/`_deleted`.
-- **Settings / policy:** `api_policy_changed`, `public_link_policy_changed`, `twofa_policy_changed`, `quarantine_policy_changed`, `share_defaults_policy_changed`, `smtp_config_changed`, `home_page_toggled`, `file_preview_toggled`, `share_approval_policy_changed`, `email_template_changed`, `email_template_reset`, `motd_changed`, `site_url_changed`, `site_timezone_changed`, `updates_settings_changed`, `settings_changed`.
+- **Settings / policy:** `api_policy_changed`, `public_link_policy_changed`, `twofa_policy_changed`, `quarantine_policy_changed`, `share_defaults_policy_changed`, `smtp_config_changed`, `imap_config_changed`, `home_page_toggled`, `file_preview_toggled`, `share_approval_policy_changed`, `email_template_changed`, `email_template_reset`, `motd_changed`, `site_url_changed`, `site_timezone_changed`, `updates_settings_changed`, `settings_changed`.
 - **Ops / self-update:** `cron_failed`, `cron_run_triggered`, `ops_alert_dispatched`, `email_undeliverable`, `update_triggered`/`_completed`/`_failed`, `rollback_triggered`/`_completed`/`_failed`.
 
 ---
@@ -627,6 +637,7 @@ Edited under `/admin/settings/*`; stored in `app_settings`. Authoritative key li
 | **2FA** `/twofa` | `twofa.required_roles` + `twofa.required_group_ids` | Which roles/groups must enrol TOTP (computed live; no admin escape). |
 | **Email** `/email` | `smtp.{host,port,user,password,from_email,from_name,tls_mode}` | Live SMTP override (DB beats env). Password encrypted; never echoed. Has a "test send". |
 | **Email templates** `/email-templates` | *(own table `email_template_override`, not kv)* | Per-(template, language) subject/body Markdown overrides; built-in templates are the fallback. WYSIWYG editor, placeholders, preview, test-send, reset-to-default. |
+| **Inbound mail** `/imap` | `imap.{enabled,check_mode,host,port,user,password,tls_mode,mailbox,post_fetch_action,move_folder,notify_mode}` + `imap.poll_interval_minutes` | IMAP fetch into the admin Inbox. Password encrypted; never echoed. Test-connection + fetch-now. Off by default. |
 | **Site** `/site` | `site.url`, `site.timezone` | Public URL used in links; IANA timezone for the 24-hour timestamps shown in UI + emails. |
 | **Home page** `/home-page` | `home_page.enabled` | Toggle the welcome home page (off → brand mark non-linkable, `/` redirects forward). |
 | **File preview** `/general#file-preview` | `file_preview.enabled` | Toggle in-browser preview of PDFs/images/text (off → Preview buttons hidden, endpoints refuse). |
@@ -734,6 +745,7 @@ Hourly:
 - `quota_reconcile` (:37) — recomputes per-user used-bytes from disk to correct drift.
 - `cleanup_abandoned_uploads` (:47) — unlinks partial/stuck TUS uploads older than `retention.tus_abandoned_hours`.
 - `release_check` (:53) — polls GitHub releases (filtered to `^v\d+\.\d+\.\d+`) for the in-app update banner.
+- `imap_poll` (every 5 min, :x4) — fetches the configured IMAP mailbox into the admin Inbox; self-gated on `imap.enabled` / `imap.check_mode` / `imap.poll_interval_minutes` (no-op unless enabled + due).
 
 Daily (≈02:xx):
 

@@ -65,9 +65,11 @@ export const ADMIN_NAV: AdminNavCategory[] = [
     key: 'messaging',
     labelKey: 'admin.nav_cat.messaging',
     items: [
+      { routeName: 'admin-inbox', labelKey: 'admin.nav.inbox', matchNames: ['admin-inbox', 'admin-inbox-detail'] },
       { routeName: 'admin-mail-log', labelKey: 'admin.nav.mail_log', matchNames: ['admin-mail-log', 'admin-mail-detail'] },
       { routeName: 'admin-settings-email', labelKey: 'admin.nav_item.email', matchNames: ['admin-settings-email'] },
       { routeName: 'admin-settings-email-templates', labelKey: 'admin.nav_item.email_templates', matchNames: ['admin-settings-email-templates'] },
+      { routeName: 'admin-settings-imap', labelKey: 'admin.nav_item.imap', matchNames: ['admin-settings-imap'] },
       { routeName: 'admin-settings-email-change', labelKey: 'admin.nav_item.email_change', matchNames: ['admin-settings-email-change'] },
     ],
   },

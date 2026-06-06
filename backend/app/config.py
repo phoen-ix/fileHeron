@@ -117,6 +117,17 @@ class Settings(BaseSettings):
     # rejected". Admin-overridable via the smtp.helo_hostname kv key.
     SMTP_HELO_HOST: str = ""
 
+    # --- IMAP (inbound mailbox, v1.27.0) -------------------------------------
+    # All admin-overridable via imap.* kv keys; off until imap.enabled is set.
+    IMAP_HOST: str = ""
+    IMAP_PORT: int = 993
+    IMAP_USER: str = ""
+    IMAP_PASSWORD: str = ""
+    IMAP_TLS_MODE: str = "implicit"  # 'implicit' (993) | 'starttls' (143) | 'none'
+    IMAP_MAILBOX: str = "INBOX"
+    IMAP_POLL_INTERVAL_MINUTES: int = 5
+    IMAP_MESSAGE_RETENTION_DAYS: int = 90
+
     # --- Rate limits ---------------------------------------------------------
     # LOGIN gates /api/auth/login + /login/recovery (services/rate_limit.py).
     # REGISTER gates /register-from-invite, /forgot-password, /verify-email

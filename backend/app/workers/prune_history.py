@@ -88,6 +88,7 @@ async def prune_history(_ctx) -> dict:
         email_days = _sr.effective(_db0, _sr.K.EMAIL_LOG_RETENTION_DAYS)
         login_days = _sr.effective(_db0, _sr.K.LOGIN_ATTEMPT_RETENTION_DAYS)
         webhook_days = _sr.effective(_db0, _sr.K.WEBHOOK_DELIVERY_RETENTION_DAYS)
+        inbound_days = _sr.effective(_db0, _sr.K.IMAP_MESSAGE_RETENTION_DAYS)
     finally:
         _db0.close()
     audit_pruned = await _prune_table(
@@ -108,10 +109,45 @@ async def prune_history(_ctx) -> dict:
     webhook_pruned = await _prune_table(
         "webhook_deliveries", webhook_days, WebhookDelivery.created_at, WebhookDelivery
     )
+    inbound_pruned = await _prune_inbound(inbound_days)
     return {
         "audit_log": audit_pruned,
         "download_log": download_pruned,
         "email_log": email_pruned,
         "login_attempts": login_pruned,
         "webhook_deliveries": webhook_pruned,
+        "inbound_messages": inbound_pruned,
     }
+
+
+async def _prune_inbound(days: int) -> int:
+    """Prune inbound messages older than ``days`` — deleting their attachment
+    blobs from the storage backend first (the DB cascade only removes rows)."""
+    if days <= 0:
+        return 0
+    from ..models.inbound_attachment import InboundAttachment
+    from ..models.inbound_message import InboundMessage
+    from ..services import storage_backend as storage_svc
+
+    cutoff = utc_now() - timedelta(days=days)
+    db: Session = SessionLocal()
+    try:
+        keys = [
+            k
+            for (k,) in db.query(InboundAttachment.storage_key)
+            .join(InboundMessage, InboundMessage.id == InboundAttachment.message_id)
+            .filter(InboundMessage.created_at < cutoff)
+            .all()
+        ]
+    finally:
+        db.close()
+    if keys:
+        backend = storage_svc.get_storage_backend()
+        for k in keys:
+            try:
+                backend.delete(k)
+            except Exception:
+                logger.warning("prune_history: failed to delete inbound blob %s", k)
+    return await _prune_table(
+        "inbound_messages", days, InboundMessage.created_at, InboundMessage
+    )

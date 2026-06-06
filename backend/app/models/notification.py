@@ -78,12 +78,20 @@ class NotificationCategory(str, enum.Enum):
     # default channel is `both` so admins get the email too without
     # opening the app.
     release_available = "release_available"
+    # Inbound mailbox (v1.27.0): a message was fetched into the admin inbox.
+    # Admin-only; in-app only (no stored admin plaintext email). The admin
+    # `imap.notify_mode` setting gates whether/which messages dispatch this.
+    inbound_message = "inbound_message"
 
 
 # Categories only ever dispatched to admins (the dispatch sites filter on
 # role). Non-admins must not see preference toggles for them — they'd be inert.
 ADMIN_ONLY_CATEGORIES = frozenset(
-    {NotificationCategory.ops_alert, NotificationCategory.release_available}
+    {
+        NotificationCategory.ops_alert,
+        NotificationCategory.release_available,
+        NotificationCategory.inbound_message,
+    }
 )
 
 

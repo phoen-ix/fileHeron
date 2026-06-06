@@ -49,6 +49,7 @@ _KNOWN_CRONS = [
     "cleanup_stale_uploads",
     "cleanup_abandoned_uploads",
     "release_check",
+    "imap_poll",
     "purge_old_quarantine",
     "cleanup_pending_invites",
     "cleanup_read_notifications",

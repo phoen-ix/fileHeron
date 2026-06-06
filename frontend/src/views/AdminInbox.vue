@@ -1,0 +1,184 @@
+<script setup lang="ts">
+import { onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
+
+import { listInbox } from '@/api/admin'
+import Pager from '@/components/Pager.vue'
+import { useApiError } from '@/composables/useApiError'
+import { useSiteDateFormat } from '@/composables/useSiteDateFormat'
+import type { InboxClass, InboxListItem } from '@/types/api'
+
+const { t } = useI18n()
+const { describe } = useApiError()
+const { formatDate } = useSiteDateFormat()
+const router = useRouter()
+
+const loading = ref(true)
+const errorMsg = ref<string | null>(null)
+const items = ref<InboxListItem[]>([])
+const total = ref(0)
+const page = ref(1)
+const pageSize = 50
+
+const q = ref('')
+const classification = ref('')
+const status = ref('')
+
+const classTone: Record<InboxClass, string> = {
+  normal: 'reply',
+  bounce: 'bounce',
+  auto_reply: 'auto',
+}
+
+async function load() {
+  loading.value = true
+  errorMsg.value = null
+  try {
+    const { data } = await listInbox({
+      q: q.value || undefined,
+      classification: classification.value || undefined,
+      status: status.value || undefined,
+      page: page.value,
+      page_size: pageSize,
+    })
+    items.value = data.items
+    total.value = data.total
+  } catch (err) {
+    errorMsg.value = describe(err)
+  } finally {
+    loading.value = false
+  }
+}
+
+function applyFilters() {
+  page.value = 1
+  load()
+}
+
+function open(id: number) {
+  router.push({ name: 'admin-inbox-detail', params: { id } })
+}
+
+onMounted(load)
+</script>
+
+<template>
+  <div class="inbox-page" data-density="operator">
+    <span class="fh-eyebrow">{{ t('admin_inbox.eyebrow') }}</span>
+    <h1 class="page-title">{{ t('admin_inbox.title') }}</h1>
+    <p class="fh-field-help intro">{{ t('admin_inbox.intro') }}</p>
+
+    <div class="filters">
+      <input
+        v-model.trim="q"
+        type="search"
+        class="fh-field-input"
+        :placeholder="t('admin_inbox.search_placeholder')"
+        @keyup.enter="applyFilters"
+      />
+      <select v-model="classification" class="fh-field-input" @change="applyFilters">
+        <option value="">{{ t('admin_inbox.class_all') }}</option>
+        <option value="normal">{{ t('admin_inbox.class_normal') }}</option>
+        <option value="bounce">{{ t('admin_inbox.class_bounce') }}</option>
+        <option value="auto_reply">{{ t('admin_inbox.class_auto') }}</option>
+      </select>
+      <select v-model="status" class="fh-field-input" @change="applyFilters">
+        <option value="">{{ t('admin_inbox.status_all') }}</option>
+        <option value="new">{{ t('admin_inbox.status_new') }}</option>
+        <option value="read">{{ t('admin_inbox.status_read') }}</option>
+        <option value="archived">{{ t('admin_inbox.status_archived') }}</option>
+      </select>
+    </div>
+
+    <div v-if="errorMsg" class="fh-notice" data-tone="danger">{{ errorMsg }}</div>
+    <div v-if="loading" class="loading">{{ t('common.loading') }}</div>
+    <p v-else-if="!items.length" class="empty">{{ t('admin_inbox.empty') }}</p>
+
+    <table v-else class="fh-table">
+      <thead>
+        <tr>
+          <th>{{ t('admin_inbox.col_type') }}</th>
+          <th>{{ t('admin_inbox.col_from') }}</th>
+          <th>{{ t('admin_inbox.col_subject') }}</th>
+          <th>{{ t('admin_inbox.col_received') }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr
+          v-for="m in items"
+          :key="m.id"
+          class="row"
+          :class="{ unread: m.status === 'new' }"
+          @click="open(m.id)"
+        >
+          <td><span class="badge" :data-tone="classTone[m.classification]">{{ t(`admin_inbox.tag_${m.classification}`) }}</span></td>
+          <td>
+            <span class="from">{{ m.sender_name || m.sender_email }}</span>
+            <span v-if="m.sender_name" class="fh-mono addr">{{ m.sender_email }}</span>
+          </td>
+          <td>
+            {{ m.subject }}
+            <span v-if="m.has_attachments" class="clip" :title="t('admin_inbox.has_attachments')">📎</span>
+          </td>
+          <td class="fh-mono">{{ formatDate(m.received_at || m.created_at) }}</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <Pager v-if="!loading && total > pageSize" :page="page" :total="total" :page-size="pageSize" @update:page="(n) => { page = n; load() }" />
+  </div>
+</template>
+
+<style scoped>
+.page-title {
+  font-family: var(--fh-font-display);
+  font-weight: normal;
+  font-size: var(--fh-text-display-md);
+  margin: var(--fh-space-1) 0;
+}
+.intro {
+  margin-bottom: var(--fh-space-4);
+}
+.filters {
+  display: flex;
+  gap: var(--fh-space-2);
+  margin-bottom: var(--fh-space-3);
+}
+.filters .fh-field-input {
+  width: auto;
+}
+.row {
+  cursor: pointer;
+}
+.row:hover {
+  background: var(--fh-paper-sunk);
+}
+.row.unread {
+  font-weight: 600;
+}
+.badge {
+  font-size: var(--fh-text-mono-sm);
+  font-family: var(--fh-font-mono);
+  padding: 0.1rem 0.4rem;
+  border-radius: var(--fh-radius-sm);
+  border: 1px solid var(--fh-hairline);
+}
+.badge[data-tone='bounce'] {
+  color: var(--fh-danger);
+  border-color: var(--fh-danger);
+}
+.badge[data-tone='auto'] {
+  color: var(--fh-warning);
+  border-color: var(--fh-warning);
+}
+.addr {
+  display: block;
+  color: var(--fh-ink-soft);
+  font-size: var(--fh-text-mono-sm);
+}
+.empty {
+  color: var(--fh-ink-soft);
+  padding: var(--fh-space-4) 0;
+}
+</style>

@@ -41,6 +41,11 @@
                 :aria-current="isItemActive(item, route.name) ? 'page' : undefined"
               >
                 {{ t(item.labelKey) }}
+                <span
+                  v-if="item.routeName === 'admin-inbox' && inboxUnread > 0"
+                  class="nav-badge"
+                  >{{ inboxUnread }}</span
+                >
               </RouterLink>
             </div>
           </div>
@@ -54,15 +59,28 @@
 </template>
 
 <script setup lang="ts">
+import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 
+import { getInboxUnreadCount } from '@/api/admin'
 import { useAdminNavCollapse } from '@/composables/useAdminNavCollapse'
 import { ADMIN_NAV, isItemActive } from '@/config/adminNav'
 
 const { t } = useI18n()
 const route = useRoute()
 const { isOpen, toggle } = useAdminNavCollapse()
+
+// Unread badge on the Inbox nav item (best-effort; silent on failure).
+const inboxUnread = ref(0)
+onMounted(async () => {
+  try {
+    const { data } = await getInboxUnreadCount()
+    inboxUnread.value = data.unread
+  } catch {
+    inboxUnread.value = 0
+  }
+})
 </script>
 
 <style scoped>
@@ -95,6 +113,20 @@ const { isOpen, toggle } = useAdminNavCollapse()
   display: flex;
   flex-direction: column;
   gap: var(--fh-space-1);
+}
+
+.nav-badge {
+  display: inline-block;
+  margin-left: 0.4rem;
+  min-width: 1.1rem;
+  padding: 0 0.3rem;
+  border-radius: 0.6rem;
+  background: var(--fh-accent);
+  color: var(--fh-paper);
+  font-size: var(--fh-text-mono-sm);
+  font-family: var(--fh-font-mono);
+  text-align: center;
+  line-height: 1.1rem;
 }
 
 .nav-cat {

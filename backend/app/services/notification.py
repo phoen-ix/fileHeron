@@ -65,6 +65,9 @@ _DEFAULT_CHANNEL: dict[NotificationCategory, NotificationChannel] = {
     # without opening the app; dedup at the call site means at most one
     # notification per detected version transition.
     NotificationCategory.release_available: NotificationChannel.both,
+    # Inbound mail: in-app only (no stored admin plaintext email); the
+    # `imap.notify_mode` setting decides whether it fires at all.
+    NotificationCategory.inbound_message: NotificationChannel.in_app,
 }
 
 

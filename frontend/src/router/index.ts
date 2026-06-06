@@ -186,6 +186,18 @@ const router = createRouter({
           meta: { density: 'operator', title: 'Mail', requiresRole: 'admin' },
         },
         {
+          path: 'inbox',
+          name: 'admin-inbox',
+          component: () => import('@/views/AdminInbox.vue'),
+          meta: { density: 'operator', title: 'Inbox', requiresRole: 'admin' },
+        },
+        {
+          path: 'inbox/:id',
+          name: 'admin-inbox-detail',
+          component: () => import('@/views/AdminInboxDetail.vue'),
+          meta: { density: 'operator', title: 'Message', requiresRole: 'admin' },
+        },
+        {
           path: 'file-history',
           name: 'admin-file-history',
           component: () => import('@/views/AdminFileHistory.vue'),
@@ -264,6 +276,12 @@ const router = createRouter({
           name: 'admin-settings-email-templates',
           component: () => import('@/views/AdminSettingsEmailTemplates.vue'),
           meta: { density: 'operator', title: 'Email templates', requiresRole: 'admin' },
+        },
+        {
+          path: 'settings/imap',
+          name: 'admin-settings-imap',
+          component: () => import('@/views/AdminSettingsImap.vue'),
+          meta: { density: 'operator', title: 'Inbound mail', requiresRole: 'admin' },
         },
         {
           path: 'settings/general',

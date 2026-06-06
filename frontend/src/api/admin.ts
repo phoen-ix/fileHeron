@@ -12,6 +12,13 @@ import type {
   PreviewEmailTemplateResponse,
   TestSendEmailTemplateRequest,
   TestSendEmailTemplateResponse,
+  ImapSettingsResponse,
+  UpdateImapSettingsRequest,
+  ImapTestResponse,
+  ImapFetchNowResponse,
+  InboxListResponse,
+  InboxDetail,
+  UpdateInboxStatusRequest,
   WebhookItem,
   WebhookCreateResponse,
   WebhookDeliveryItem,
@@ -696,4 +703,56 @@ export function testSendEmailTemplate(
   payload: TestSendEmailTemplateRequest,
 ) {
   return api.post<TestSendEmailTemplateResponse>(`${_et(slug, locale)}/test-send`, payload)
+}
+
+// Inbound mailbox / IMAP (v1.27.0)
+export function getImapSettings() {
+  return api.get<ImapSettingsResponse>('/admin/settings/imap')
+}
+
+export function updateImapSettings(payload: UpdateImapSettingsRequest) {
+  return api.put<ImapSettingsResponse>('/admin/settings/imap', payload)
+}
+
+export function testImap() {
+  return api.post<ImapTestResponse>('/admin/settings/imap/test')
+}
+
+export function fetchInboxNow() {
+  return api.post<ImapFetchNowResponse>('/admin/settings/imap/fetch-now')
+}
+
+export function listInbox(
+  params: {
+    q?: string
+    classification?: string
+    status?: string
+    sender_email?: string
+    page?: number
+    page_size?: number
+  } = {},
+) {
+  return api.get<InboxListResponse>('/admin/inbox', { params })
+}
+
+export function getInboxUnreadCount() {
+  return api.get<{ unread: number }>('/admin/inbox/unread-count')
+}
+
+export function getInboxMessage(id: number) {
+  return api.get<InboxDetail>(`/admin/inbox/${id}`)
+}
+
+export function updateInboxStatus(id: number, payload: UpdateInboxStatusRequest) {
+  return api.patch<InboxDetail>(`/admin/inbox/${id}`, payload)
+}
+
+export function deleteInboxMessage(id: number) {
+  return api.delete(`/admin/inbox/${id}`)
+}
+
+export function downloadInboxAttachment(msgId: number, attId: number) {
+  return api.get(`/admin/inbox/${msgId}/attachments/${attId}/download`, {
+    responseType: 'blob',
+  })
 }

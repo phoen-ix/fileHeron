@@ -41,6 +41,7 @@ from .cleanup_read_notifications import cleanup_read_notifications
 from .cleanup_stale_uploads import cleanup_stale_uploads
 from .disk_check import disk_check
 from .expire_files import expire_files
+from .imap_poll import imap_poll
 from .ops_check import ops_check
 from .prune_history import prune_history
 from .purge_old_quarantine import purge_old_quarantine
@@ -77,6 +78,7 @@ class WorkerSettings:
         analytics_aggregate,
         webhook_deliver,
         anomaly_check,
+        imap_poll,
     ]
     cron_jobs = [
         # Stagger so they don't pile up at minute 0. ops_check sits at :15
@@ -98,6 +100,9 @@ class WorkerSettings:
         cron(cleanup_abandoned_uploads, hour=None, minute={47}, run_at_startup=False),
         # GitHub releases poll for in-app "update available" surface.
         cron(release_check, hour=None, minute={53}, run_at_startup=False),
+        # Inbound IMAP poll — ticks every 5 min (offset to :04), self-gates on
+        # the admin enabled/mode/interval settings.
+        cron(imap_poll, hour=None, minute={m for m in range(60) if m % 5 == 4}, run_at_startup=False),
         # Daily-ish housekeeping (hour=2 keeps it well clear of business hours).
         cron(purge_old_quarantine, hour={2}, minute={13}, run_at_startup=False),
         cron(cleanup_pending_invites, hour={2}, minute={15}, run_at_startup=False),

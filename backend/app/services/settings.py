@@ -108,6 +108,29 @@ class Keys:
     # 'manual' (only when admin clicks Check now).
     UPDATES_API_URL = "updates.api_url"        # plain string
     UPDATES_CHECK_MODE = "updates.check_mode"  # 'auto' | 'manual'
+    # Inbound mailbox / IMAP fetch (v1.27.0). Admin-editable; password is the
+    # only encrypted field (mirrors SMTP). Read via services/imap_config.py.
+    IMAP_ENABLED = "imap.enabled"              # boolean master switch (default false)
+    IMAP_CHECK_MODE = "imap.check_mode"        # 'auto' | 'manual'
+    IMAP_HOST = "imap.host"
+    IMAP_PORT = "imap.port"
+    IMAP_USER = "imap.user"
+    IMAP_PASSWORD = "imap.password"            # encrypted at rest
+    IMAP_TLS_MODE = "imap.tls_mode"            # 'implicit' | 'starttls' | 'none'
+    IMAP_MAILBOX = "imap.mailbox"              # source folder, default 'INBOX'
+    # What to do with a message on the server after ingest:
+    #   'mark_read' (default) | 'untouched' | 'move' | 'delete'
+    IMAP_POST_FETCH_ACTION = "imap.post_fetch_action"
+    IMAP_MOVE_FOLDER = "imap.move_folder"      # target folder when action='move'
+    IMAP_NOTIFY_MODE = "imap.notify_mode"      # 'off' (default) | 'human' | 'all'
+    # Cron state (set with actor=None; not user-facing settings).
+    IMAP_LAST_POLL_AT = "imap.last_poll_at"
+    IMAP_LAST_SUCCESS_AT = "imap.last_success_at"
+    IMAP_LAST_UID = "imap.last_uid"
+    IMAP_UIDVALIDITY = "imap.uidvalidity"
+    # Registry tunables (overlay config.Settings env; see settings_registry).
+    IMAP_POLL_INTERVAL_MINUTES = "imap.poll_interval_minutes"
+    IMAP_MESSAGE_RETENTION_DAYS = "retention.inbound_message_days"
 
     # --- Advanced runtime-tunable knobs (registry-driven, see
     # services/settings_registry.py). Each overlays the matching env
@@ -153,7 +176,7 @@ class Keys:
     ANOMALY_LOGIN_FAILURE_THRESHOLD = "anomaly.login_failure_threshold"
 
 
-_ENCRYPTED_KEYS: set[str] = {Keys.SMTP_PASSWORD}
+_ENCRYPTED_KEYS: set[str] = {Keys.SMTP_PASSWORD, Keys.IMAP_PASSWORD}
 
 
 

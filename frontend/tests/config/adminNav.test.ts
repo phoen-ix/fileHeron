@@ -30,9 +30,9 @@ describe('ADMIN_NAV taxonomy', () => {
     expect(ADMIN_CATEGORY_KEYS).toEqual(['access', 'sharing', 'messaging', 'system'])
   })
 
-  it('places 22 items distributed 7 / 5 / 4 / 6', () => {
-    expect(ADMIN_NAV.map((c) => c.items.length)).toEqual([7, 5, 4, 6])
-    expect(allItems()).toHaveLength(22)
+  it('places 24 items distributed 7 / 5 / 6 / 6', () => {
+    expect(ADMIN_NAV.map((c) => c.items.length)).toEqual([7, 5, 6, 6])
+    expect(allItems()).toHaveLength(24)
   })
 
   it('lists each primary route exactly once', () => {

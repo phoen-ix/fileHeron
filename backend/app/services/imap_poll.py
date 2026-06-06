@@ -70,11 +70,12 @@ def run_poll(*, manual: bool, db: Session | None = None, session_opener=open_ses
         last_uid = _int_setting(db, K.IMAP_LAST_UID)
         prev_validity = _int_setting(db, K.IMAP_UIDVALIDITY)
 
-        fetched = ingested = 0
+        fetched = ingested = total = 0
         with session_opener(cfg) as sess:
             uidvalidity = sess.select(cfg.mailbox)
+            total = getattr(sess, "message_count", 0)
             if uidvalidity != prev_validity:
-                last_uid = 0  # mailbox reset → re-evaluate from the start
+                last_uid = 0  # mailbox reset -> re-evaluate from the start
             for uid in sess.search_uids_after(last_uid):
                 raw = sess.fetch_raw(uid)
                 if raw is None:
@@ -103,7 +104,14 @@ def run_poll(*, manual: bool, db: Session | None = None, session_opener=open_ses
         settings_svc.set_value(db, key=K.IMAP_LAST_POLL_AT, value=now_iso, actor=None)
         settings_svc.set_value(db, key=K.IMAP_LAST_SUCCESS_AT, value=now_iso, actor=None)
         db.commit()
-        return {"ok": True, "fetched": fetched, "ingested": ingested, "last_uid": last_uid}
+        logger.info(
+            "imap poll: mailbox=%s total=%d fetched=%d ingested=%d last_uid=%d",
+            cfg.mailbox, total, fetched, ingested, last_uid,
+        )
+        return {
+            "ok": True, "fetched": fetched, "ingested": ingested,
+            "last_uid": last_uid, "mailbox": cfg.mailbox, "total": total,
+        }
     except Exception as exc:  # noqa: BLE001 - surface to caller/cron tracker
         with contextlib.suppress(Exception):
             settings_svc.set_value(

@@ -23,13 +23,20 @@ class ImapSession:
 
     def __init__(self, conn: imaplib.IMAP4):
         self._c = conn
+        # EXISTS count of the last-selected mailbox (total messages in it).
+        self.message_count = 0
 
     # --- mailbox selection -------------------------------------------------
     def select(self, mailbox: str) -> int:
-        """Select ``mailbox`` (read-write) and return its UIDVALIDITY."""
-        typ, _ = self._c.select(mailbox)
+        """Select ``mailbox`` (read-write) and return its UIDVALIDITY. Also
+        records the mailbox's EXISTS (total message) count on ``message_count``."""
+        typ, data = self._c.select(mailbox)
         if typ != "OK":
             raise RuntimeError(f"IMAP SELECT {mailbox!r} failed: {typ}")
+        try:
+            self.message_count = int(data[0]) if data and data[0] else 0
+        except (TypeError, ValueError):
+            self.message_count = 0
         typ, data = self._c.response("UIDVALIDITY")
         if typ == "OK" and data and data[0]:
             try:
@@ -62,7 +69,10 @@ class ImapSession:
 
     # --- fetch -------------------------------------------------------------
     def search_uids_after(self, last_uid: int) -> list[int]:
-        typ, data = self._c.uid("SEARCH", None, f"UID {last_uid + 1}:*")
+        # First run (no highwater) -> "ALL" is the most portable; incremental
+        # runs use a UID range. UID SEARCH returns UIDs either way.
+        criterion = "ALL" if last_uid <= 0 else f"UID {last_uid + 1}:*"
+        typ, data = self._c.uid("SEARCH", None, criterion)
         if typ != "OK" or not data or not data[0]:
             return []
         uids = [int(x) for x in data[0].split()]

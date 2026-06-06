@@ -1168,6 +1168,8 @@ export interface ImapFetchNowResponse {
   error: string | null
   fetched: number | null
   ingested: number | null
+  mailbox: string | null
+  total: number | null
 }
 
 export type InboxClass = 'normal' | 'bounce' | 'auto_reply'

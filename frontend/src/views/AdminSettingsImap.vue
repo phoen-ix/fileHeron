@@ -111,8 +111,13 @@ async function onFetchNow() {
     const { data } = await fetchInboxNow()
     if (data.ok && data.skipped) {
       ui.pushToast(t('admin_imap.fetch_skipped', { reason: data.skipped }), 'warn')
-    } else if (data.ok) {
+    } else if (data.ok && (data.ingested ?? 0) > 0) {
       ui.pushToast(t('admin_imap.fetch_done', { n: data.ingested ?? 0 }), 'success')
+    } else if (data.ok) {
+      ui.pushToast(
+        t('admin_imap.fetch_empty', { mailbox: data.mailbox ?? 'INBOX', total: data.total ?? 0 }),
+        'success',
+      )
     } else {
       ui.pushToast(data.error || t('admin_imap.fetch_failed'), 'warn')
     }

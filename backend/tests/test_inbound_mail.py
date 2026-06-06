@@ -75,6 +75,7 @@ class _FakeSession:
     def __init__(self, msgs: dict[int, bytes], uidvalidity: int = 100):
         self.msgs = msgs
         self.uidvalidity = uidvalidity
+        self.message_count = len(msgs)
         self.seen: list[int] = []
         self.moved: list[tuple[int, str]] = []
         self.deleted: list[int] = []
@@ -193,6 +194,7 @@ def test_poll_ingests_and_marks_seen(db, monkeypatch):
     sess = _FakeSession({5: NORMAL, 6: BOUNCE})
     r = imap_poll.run_poll(manual=True, db=db, session_opener=_opener(sess))
     assert r["ingested"] == 2
+    assert r["total"] == 2 and r["mailbox"] == "INBOX"
     assert set(sess.seen) == {5, 6}
     assert db.query(InboundMessage).count() == 2
     # re-poll: highwater means nothing new

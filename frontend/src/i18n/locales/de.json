@@ -614,6 +614,7 @@
     "folders": "Ordner",
     "saved_toast": "Posteingang-Einstellungen gespeichert",
     "fetch_done": "Abgerufen - {n} neue Nachricht(en)",
+    "fetch_empty": "Keine neue Mail - {mailbox} hat {total} Nachricht(en)",
     "fetch_skipped": "Übersprungen: {reason}",
     "fetch_failed": "Abruf fehlgeschlagen"
   },
@@ -621,6 +622,9 @@
     "eyebrow": "Nachrichten",
     "title": "Posteingang",
     "intro": "Aus dem konfigurierten Postfach abgerufene Nachrichten - Antworten, Unzustellbarkeitsmeldungen und automatische Antworten.",
+    "fetch_now": "Jetzt abrufen",
+    "fetch_done": "{n} neue Nachricht(en) abgerufen",
+    "fetch_empty": "Keine neue Mail - {mailbox} hat {total} Nachricht(en)",
     "search_placeholder": "Betreff oder Absender suchen…",
     "class_all": "Alle Typen",
     "class_normal": "Antworten",

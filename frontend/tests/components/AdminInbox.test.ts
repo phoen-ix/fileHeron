@@ -17,10 +17,19 @@ const LIST = {
 }
 
 const listInbox = vi.fn(async (_params?: unknown) => ({ data: LIST }))
-vi.mock('@/api/admin', () => ({ listInbox: (p: unknown) => listInbox(p) }))
+const fetchInboxNow = vi.fn(async () => ({
+  data: { ok: true, skipped: null, error: null, fetched: 0, ingested: 0, mailbox: 'INBOX', total: 0 },
+}))
+vi.mock('@/api/admin', () => ({
+  listInbox: (p: unknown) => listInbox(p),
+  fetchInboxNow: () => fetchInboxNow(),
+}))
 
 const push = vi.fn()
 vi.mock('vue-router', () => ({ useRouter: () => ({ push }) }))
+
+const pushToast = vi.fn()
+vi.mock('@/stores/ui', () => ({ useUiStore: () => ({ pushToast }) }))
 
 import AdminInbox from '@/views/AdminInbox.vue'
 
@@ -34,6 +43,19 @@ describe('AdminInbox', () => {
   beforeEach(() => {
     listInbox.mockClear()
     push.mockClear()
+    fetchInboxNow.mockClear()
+    pushToast.mockClear()
+  })
+
+  it('Fetch now triggers a fetch, reloads, and explains an empty result', async () => {
+    const w = makeWrapper()
+    await flushPromises()
+    listInbox.mockClear()
+    await w.findAll('button').find((b) => b.text() === 'Fetch now')!.trigger('click')
+    await flushPromises()
+    expect(fetchInboxNow).toHaveBeenCalled()
+    expect(listInbox).toHaveBeenCalled() // reloaded
+    expect(pushToast).toHaveBeenCalled()
   })
 
   it('lists messages with classification badges', async () => {

@@ -614,6 +614,7 @@
     "folders": "Folders",
     "saved_toast": "Inbound mail settings saved",
     "fetch_done": "Fetched - {n} new message(s)",
+    "fetch_empty": "No new mail - {mailbox} has {total} message(s)",
     "fetch_skipped": "Skipped: {reason}",
     "fetch_failed": "Fetch failed"
   },
@@ -621,6 +622,9 @@
     "eyebrow": "Messaging",
     "title": "Inbox",
     "intro": "Messages fetched from the configured mailbox - replies, bounces and auto-replies.",
+    "fetch_now": "Fetch now",
+    "fetch_done": "Fetched {n} new message(s)",
+    "fetch_empty": "No new mail - {mailbox} has {total} message(s)",
     "search_placeholder": "Search subject or sender…",
     "class_all": "All types",
     "class_normal": "Replies",

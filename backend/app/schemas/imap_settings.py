@@ -62,6 +62,8 @@ class ImapFetchNowResponse(APIBaseModel):
     error: str | None = None
     fetched: int | None = None
     ingested: int | None = None
+    mailbox: str | None = None
+    total: int | None = None
 
 
 # ---- Inbox -----------------------------------------------------------------

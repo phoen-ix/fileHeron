@@ -3,18 +3,21 @@ import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 
-import { listInbox } from '@/api/admin'
+import { fetchInboxNow, listInbox } from '@/api/admin'
 import Pager from '@/components/Pager.vue'
 import { useApiError } from '@/composables/useApiError'
 import { useSiteDateFormat } from '@/composables/useSiteDateFormat'
+import { useUiStore } from '@/stores/ui'
 import type { InboxClass, InboxListItem } from '@/types/api'
 
 const { t } = useI18n()
 const { describe } = useApiError()
 const { formatDate } = useSiteDateFormat()
+const ui = useUiStore()
 const router = useRouter()
 
 const loading = ref(true)
+const fetching = ref(false)
 const errorMsg = ref<string | null>(null)
 const items = ref<InboxListItem[]>([])
 const total = ref(0)
@@ -60,13 +63,48 @@ function open(id: number) {
   router.push({ name: 'admin-inbox-detail', params: { id } })
 }
 
+async function onFetchNow() {
+  fetching.value = true
+  try {
+    const { data } = await fetchInboxNow()
+    if (data.ok && data.skipped) {
+      ui.pushToast(t('admin_imap.fetch_skipped', { reason: data.skipped }), 'warn')
+    } else if (data.ok && (data.ingested ?? 0) > 0) {
+      ui.pushToast(t('admin_inbox.fetch_done', { n: data.ingested ?? 0 }), 'success')
+    } else if (data.ok) {
+      ui.pushToast(
+        t('admin_inbox.fetch_empty', {
+          mailbox: data.mailbox ?? 'INBOX',
+          total: data.total ?? 0,
+        }),
+        'success',
+      )
+    } else {
+      ui.pushToast(data.error || t('admin_imap.fetch_failed'), 'warn')
+    }
+    page.value = 1
+    await load()
+  } catch (err) {
+    ui.pushToast(describe(err), 'warn')
+  } finally {
+    fetching.value = false
+  }
+}
+
 onMounted(load)
 </script>
 
 <template>
   <div class="inbox-page" data-density="operator">
-    <span class="fh-eyebrow">{{ t('admin_inbox.eyebrow') }}</span>
-    <h1 class="page-title">{{ t('admin_inbox.title') }}</h1>
+    <div class="page-head">
+      <div>
+        <span class="fh-eyebrow">{{ t('admin_inbox.eyebrow') }}</span>
+        <h1 class="page-title">{{ t('admin_inbox.title') }}</h1>
+      </div>
+      <button type="button" class="fh-btn" :disabled="fetching" @click="onFetchNow">
+        {{ t('admin_inbox.fetch_now') }}
+      </button>
+    </div>
     <p class="fh-field-help intro">{{ t('admin_inbox.intro') }}</p>
 
     <div class="filters">
@@ -131,6 +169,12 @@ onMounted(load)
 </template>
 
 <style scoped>
+.page-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--fh-space-3);
+}
 .page-title {
   font-family: var(--fh-font-display);
   font-weight: normal;

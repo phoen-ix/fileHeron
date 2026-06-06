@@ -146,6 +146,8 @@ async def fetch_now(
         error=result.get("error"),
         fetched=result.get("fetched"),
         ingested=result.get("ingested"),
+        mailbox=result.get("mailbox"),
+        total=result.get("total"),
     )
 
 

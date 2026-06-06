@@ -124,6 +124,12 @@ class Keys:
     DOWNLOAD_SIGNED_URL_TTL_SEC = "downloads.signed_url_ttl_sec"
     HIBP_ENABLED = "security.hibp_enabled"
     APP_NAME = "branding.app_name"
+    # Low-disk degradation. The two thresholds are registry tunables (overlay
+    # the config.Settings env defaults); `critical_low` is a plain runtime flag
+    # the disk_check cron flips (not a tunable — never user-set).
+    STORAGE_LOW_THRESHOLD_PERCENT = "storage.low_threshold_percent"
+    STORAGE_LOW_THRESHOLD_BYTES = "storage.low_threshold_bytes"
+    STORAGE_CRITICAL_LOW = "storage.critical_low"  # boolean flag, cron-managed
 
 
 _ENCRYPTED_KEYS: set[str] = {Keys.SMTP_PASSWORD}

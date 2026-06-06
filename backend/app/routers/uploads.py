@@ -22,6 +22,19 @@ from ..utils.timeutil import utc_now
 router = APIRouter(prefix="/api/uploads", tags=["uploads"])
 
 
+def _refuse_if_storage_critical(db: Session) -> None:
+    """Block NEW uploads when the disk_check cron has flagged the storage
+    volume critically low. Downloads are deliberately unaffected. The flag is
+    the fast path (no statvfs on the hot path); the cron keeps it current."""
+    from ..services import settings as settings_svc
+    if settings_svc.get_bool(db, settings_svc.Keys.STORAGE_CRITICAL_LOW, default=False):
+        raise AppError(
+            507,
+            "STORAGE_CRITICAL_LOW",
+            "Server storage is critically low. Uploads are temporarily unavailable.",
+        )
+
+
 @router.post("/init", response_model=UploadInitResponse)
 def init_upload(
     payload: UploadInitRequest,
@@ -35,6 +48,8 @@ def init_upload(
         raise AppError(409, "SHARE_NOT_ACTIVE", "Share is not active.")
     if share.created_by_id != user.id:
         raise AppError(403, "FORBIDDEN", "Only the share owner can upload to it.")
+
+    _refuse_if_storage_critical(db)
 
     # Pre-flight quota check (best-effort; pre-create hook re-checks).
     quota_limit = user.quota_bytes if user.quota_bytes is not None else 0
@@ -98,6 +113,8 @@ async def direct_upload(
         raise AppError(409, "SHARE_NOT_ACTIVE", "Share is not active.")
     if share.created_by_id != user.id:
         raise AppError(403, "FORBIDDEN", "Only the share owner can upload to it.")
+
+    _refuse_if_storage_critical(db)
 
     # Stream-check size as we read.
     from ..services import settings_registry

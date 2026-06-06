@@ -1285,6 +1285,8 @@
     "url_label": "Öffentliche URL",
     "url_copy": "URL kopieren",
     "url_copied": "URL kopiert",
+    "qr_label": "QR-Code",
+    "qr_download": "Als PNG herunterladen",
     "url_legacy_hint": "URL nicht gespeichert — dieser Link wurde vor dem Anzeige-Feature erstellt. Widerrufen und neu erstellen, um eine sichtbare URL zu erhalten.",
     "url_lost": "Die vollständige URL wurde nur bei der Erstellung angezeigt — bewahre sie sicher auf. Falls verloren: widerrufen und neu erstellen.",
     "revoke": "Link widerrufen",
@@ -1404,6 +1406,7 @@
         "inbox": "Über Gruppe"
       },
       "user_placeholder": "Suche nach Name oder E-Mail …",
+      "subject_placeholder": "Nach Betreff suchen …",
       "group_pick": "Gruppe wählen …",
       "clear": "Filter löschen"
     },

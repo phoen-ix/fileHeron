@@ -215,6 +215,7 @@ export interface GroupRecipientRef {
 export interface InlinePublicLinkResult {
   id: string
   url: string
+  qr_svg?: string | null
   download_limit: number | null
   downloads_remaining: number | null
   notify_on_download: boolean
@@ -303,6 +304,8 @@ export interface PublicLinkResponse {
   /** Decrypted public URL for owner display. Null on legacy rows
    *  written before the encrypted-token column shipped. */
   url: string | null
+  /** Inline SVG QR of the public URL. Null when there's no URL to encode. */
+  qr_svg?: string | null
   download_limit: number | null
   downloads_remaining: number | null
   notify_on_download: boolean

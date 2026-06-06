@@ -69,6 +69,9 @@ TUNABLES: list[Tunable] = [
     Tunable(K.DOWNLOAD_SIGNED_URL_TTL_SEC, "DOWNLOAD_SIGNED_URL_TTL_SEC", "int", "downloads", 30, 86400),
     Tunable(K.HIBP_ENABLED, "HIBP_ENABLED", "bool", "security"),
     Tunable(K.APP_NAME, "APP_NAME", "str", "branding"),
+    # --- Storage / low-disk degradation (≤ 1 TiB byte ceiling) ---
+    Tunable(K.STORAGE_LOW_THRESHOLD_PERCENT, "STORAGE_LOW_THRESHOLD_PERCENT", "int", "storage", 0, 50),
+    Tunable(K.STORAGE_LOW_THRESHOLD_BYTES, "STORAGE_LOW_THRESHOLD_BYTES", "int", "storage", 0, 1_099_511_627_776),
 ]
 
 BY_KEY: dict[str, Tunable] = {t.key: t for t in TUNABLES}

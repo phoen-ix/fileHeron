@@ -1285,6 +1285,8 @@
     "url_label": "Public URL",
     "url_copy": "Copy URL",
     "url_copied": "URL copied",
+    "qr_label": "QR code",
+    "qr_download": "Download as PNG",
     "url_legacy_hint": "URL not stored — this link was created before the viewable-URL feature shipped. Revoke and re-create to get a viewable URL.",
     "url_lost": "The full URL was shown only when the link was created — keep it somewhere safe. Revoke and re-create if you've lost it.",
     "revoke": "Revoke link",
@@ -1404,6 +1406,7 @@
         "inbox": "Via group"
       },
       "user_placeholder": "Search by name or email…",
+      "subject_placeholder": "Search by subject…",
       "group_pick": "Pick a group…",
       "clear": "Clear filters"
     },

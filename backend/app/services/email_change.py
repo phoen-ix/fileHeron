@@ -143,7 +143,7 @@ def _apply_email_change(
         db.flush()
     except IntegrityError:
         db.rollback()
-        raise AppError(409, "EMAIL_TAKEN", "That email address is already in use.")
+        raise AppError(409, "EMAIL_TAKEN", "That email address is already in use.") from None
 
     oidc_reset = False
     set_password_token: str | None = None

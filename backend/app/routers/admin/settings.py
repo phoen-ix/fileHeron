@@ -67,10 +67,9 @@ from ...schemas.updates_settings import (
     UpdateUpdatesSettingsRequest,
 )
 from ...services import email as email_svc
-from ...services import email_change_policy
+from ...services import email_change_policy, settings_registry
 from ...services import public_link as public_link_svc
 from ...services import settings as settings_svc
-from ...services import settings_registry
 from ...services import site as site_svc
 from ...services import twofa_policy as twofa_policy_svc
 from ...services.audit import record_audit_event

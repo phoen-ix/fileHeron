@@ -165,9 +165,12 @@ def create_share(
             notify_on_download=payload.public_link.notify_on_download,
             request=request,
         )
+        inline_url = _public_link_url(created.plaintext_token, db)
+        from ..utils.qr import render_qr_svg
         public_link_inline = InlinePublicLinkResult(
             id=created.record.id,
-            url=_public_link_url(created.plaintext_token, db),
+            url=inline_url,
+            qr_svg=render_qr_svg(inline_url),
             download_limit=created.record.download_limit,
             downloads_remaining=created.record.downloads_remaining,
             notify_on_download=created.record.notify_on_download,

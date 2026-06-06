@@ -26,6 +26,7 @@ from .routers import (
     files,
     groups,
     health,
+    metrics,
     notifications,
     oidc,
     oidc_connect,
@@ -91,6 +92,7 @@ _gate = [Depends(require_2fa_complete)]
 
 # Exempt: needs to be reachable for setup / login / health-checks.
 app.include_router(health.router)
+app.include_router(metrics.router)               # gated internally (scraper token / IP allowlist)
 app.include_router(setup.router)                 # anonymous wizard for first admin
 app.include_router(auth.router)
 app.include_router(account.router)               # /me + /2fa/* must be reachable

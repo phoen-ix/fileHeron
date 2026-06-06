@@ -7,6 +7,7 @@ Hourly, staggered so they don't pile up at minute 0:
 - expire_files: minute=0
 - share_expiring_24h_warning: minute=7
 - ops_check: minute=15            (sees the :00/:07 outcomes when scanning for failures)
+- disk_check: minute=19           (low-disk guard → storage.critical_low + admin alert)
 - cleanup_expired_tokens: minute=23
 - quota_reconcile: minute=37
 - cleanup_stale_uploads: minute=41
@@ -34,6 +35,7 @@ from .cleanup_expired_tokens import cleanup_expired_tokens
 from .cleanup_pending_invites import cleanup_pending_invites
 from .cleanup_read_notifications import cleanup_read_notifications
 from .cleanup_stale_uploads import cleanup_stale_uploads
+from .disk_check import disk_check
 from .expire_files import expire_files
 from .ops_check import ops_check
 from .prune_history import prune_history
@@ -59,6 +61,7 @@ class WorkerSettings:
         cleanup_pending_invites,
         quota_reconcile,
         ops_check,
+        disk_check,
         cleanup_abandoned_uploads,
         cleanup_stale_uploads,
         purge_old_quarantine,
@@ -74,6 +77,8 @@ class WorkerSettings:
         cron(expire_files, hour=None, minute={0}, run_at_startup=False),
         cron(share_expiring_24h_warning, hour=None, minute={7}, run_at_startup=False),
         cron(ops_check, hour=None, minute={15}, run_at_startup=False),
+        # Disk-space guard: flips storage.critical_low + alerts admins.
+        cron(disk_check, hour=None, minute={19}, run_at_startup=False),
         cron(cleanup_expired_tokens, hour=None, minute={23}, run_at_startup=False),
         cron(quota_reconcile, hour=None, minute={37}, run_at_startup=False),
         # Reap DB `files` rows stuck in `uploading` (abandoned uploads) +

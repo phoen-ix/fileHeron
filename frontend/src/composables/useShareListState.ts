@@ -72,6 +72,10 @@ export function useShareListState(box: ComputedRef<'outbox' | 'inbox'>) {
   const userSuggestions = ref<UserSearchItem[]>([])
   const myGroups = ref<GroupResponse[]>([])
 
+  // Free-text subject search. The backend already filters
+  // Share.subject ILIKE %q% (services/share.py); this just feeds it.
+  const subjectQuery = ref('')
+
   const groupBy = ref<GroupBy>('none')
   const sort = useTableSort({ defaultBy: 'created_at', defaultDir: 'desc' })
 
@@ -90,6 +94,15 @@ export function useShareListState(box: ComputedRef<'outbox' | 'inbox'>) {
         userSuggestions.value = []
       }
     }, 200)
+  })
+
+  let subjectSearchTimer: ReturnType<typeof setTimeout> | null = null
+  watch(subjectQuery, () => {
+    if (subjectSearchTimer) clearTimeout(subjectSearchTimer)
+    subjectSearchTimer = setTimeout(() => {
+      page.value = 1
+      void load()
+    }, 250)
   })
 
   function pickUser(u: UserSearchItem) {
@@ -113,6 +126,7 @@ export function useShareListState(box: ComputedRef<'outbox' | 'inbox'>) {
 
   function clearAllFilters() {
     stateFilter.value = 'active'
+    subjectQuery.value = ''
     clearParty()
   }
 
@@ -162,6 +176,7 @@ export function useShareListState(box: ComputedRef<'outbox' | 'inbox'>) {
         direction: sort.sortDir.value,
       }
       if (stateFilter.value) params.state = [stateFilter.value]
+      if (subjectQuery.value.trim()) params.q = subjectQuery.value.trim()
 
       if (box.value === 'outbox') {
         if (partyKind.value === 'user' && partyUser.value) {
@@ -192,6 +207,7 @@ export function useShareListState(box: ComputedRef<'outbox' | 'inbox'>) {
     clearParty()
     groupBy.value = 'none'
     stateFilter.value = 'active'
+    subjectQuery.value = ''
     sort.reset()
     clearSelection()
   })
@@ -285,6 +301,7 @@ export function useShareListState(box: ComputedRef<'outbox' | 'inbox'>) {
     userQuery,
     userSuggestions,
     myGroups,
+    subjectQuery,
     groupBy,
     sort,
     selectedIds,

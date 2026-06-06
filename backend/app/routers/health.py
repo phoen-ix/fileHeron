@@ -26,10 +26,15 @@ def health_check() -> JSONResponse:
     — the app still serves JWT requests with rate-limit and AV
     fail-open semantics. Operators should alert on `degraded` even
     when status is `ok`."""
+    db_latency_ms: float | None = None
     try:
+        import time
+
         db = SessionLocal()
         try:
+            t0 = time.monotonic()
             db.execute(text("SELECT 1"))
+            db_latency_ms = round((time.monotonic() - t0) * 1000, 2)
         finally:
             db.close()
     except Exception:
@@ -66,6 +71,13 @@ def health_check() -> JSONResponse:
         "running_version": VERSION,
         "running_sha": GIT_SHA,
     }
+
+    from ..database import pool_stats
+    pool = pool_stats()
+    if pool is not None:
+        pool["latency_ms"] = db_latency_ms
+        body["db_pool"] = pool
+
     if degraded:
         body["degraded"] = degraded
     return JSONResponse(status_code=200, content=body)

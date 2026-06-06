@@ -22,6 +22,14 @@
       <p v-else class="fh-field-help token-note">
         {{ t('public_link.url_legacy_hint') }}
       </p>
+      <div v-if="active.qr_svg" class="qr-section">
+        <span class="kv-label">{{ t('public_link.qr_label') }}</span>
+        <!-- eslint-disable-next-line vue/no-v-html -- server-rendered, deterministic QR SVG (no user input) -->
+        <div class="qr-svg" v-html="active.qr_svg" />
+        <button type="button" class="fh-btn-text" @click="downloadQr(active.qr_svg)">
+          {{ t('public_link.qr_download') }}
+        </button>
+      </div>
       <div class="kvs">
         <div class="kv">
           <span class="kv-label">{{ t('public_link.password') }}</span>
@@ -65,6 +73,14 @@
       <div class="created-eyebrow">{{ t('public_link.just_created') }}</div>
       <p class="warning">{{ t('public_link.url_warning') }}</p>
       <pre class="url fh-mono">{{ justCreated.url }}</pre>
+      <div v-if="justCreated.qr_svg" class="qr-section">
+        <span class="kv-label">{{ t('public_link.qr_label') }}</span>
+        <!-- eslint-disable-next-line vue/no-v-html -- server-rendered, deterministic QR SVG (no user input) -->
+        <div class="qr-svg" v-html="justCreated.qr_svg" />
+        <button type="button" class="fh-btn-text" @click="downloadQr(justCreated.qr_svg)">
+          {{ t('public_link.qr_download') }}
+        </button>
+      </div>
       <div class="actions">
         <button type="button" class="fh-btn-text" @click="copyUrl">
           {{ copiedTimer ? t('public_link.copied') : t('public_link.copy') }}
@@ -177,6 +193,7 @@ async function onCreate() {
     active.value = {
       id: data.id,
       url: data.url,
+      qr_svg: data.qr_svg,
       download_limit: data.download_limit,
       downloads_remaining: data.downloads_remaining,
       notify_on_download: data.notify_on_download,
@@ -233,6 +250,31 @@ async function copyActiveUrl() {
 
 function dismissJustCreated() {
   justCreated.value = null
+}
+
+function downloadQr(svg: string | null | undefined) {
+  if (!svg) return
+  const blobUrl = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }))
+  const img = new Image()
+  img.onload = () => {
+    const size = 512
+    const canvas = document.createElement('canvas')
+    canvas.width = size
+    canvas.height = size
+    const ctx = canvas.getContext('2d')
+    if (ctx) {
+      ctx.fillStyle = '#ffffff'
+      ctx.fillRect(0, 0, size, size)
+      ctx.drawImage(img, 0, 0, size, size)
+      const a = document.createElement('a')
+      a.href = canvas.toDataURL('image/png')
+      a.download = 'public-link-qr.png'
+      a.click()
+    }
+    URL.revokeObjectURL(blobUrl)
+  }
+  img.onerror = () => URL.revokeObjectURL(blobUrl)
+  img.src = blobUrl
 }
 
 onMounted(load)
@@ -383,5 +425,27 @@ onMounted(load)
   display: flex;
   gap: var(--fh-space-3);
   margin-top: var(--fh-space-1);
+}
+
+.qr-section {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--fh-space-2);
+}
+
+.qr-svg {
+  width: 180px;
+  max-width: 100%;
+  background: #fff;
+  padding: var(--fh-space-2);
+  border: var(--fh-border);
+  border-radius: var(--fh-radius-sm);
+}
+
+.qr-svg :deep(svg) {
+  display: block;
+  width: 100%;
+  height: auto;
 }
 </style>

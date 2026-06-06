@@ -26,6 +26,13 @@ class Settings(BaseSettings):
     DB_USER: str = "fileheron_app"
     DB_PASSWORD: str = "change_me_in_production"
     DB_NAME: str = "fileheron"
+    # SQLAlchemy connection-pool sizing. Defaults raise SQLAlchemy's own
+    # 5+10 to 10+20 so a burst of concurrent share-list / admin requests
+    # doesn't churn temp overflow connections. Ensure MariaDB
+    # `max_connections` >= app_replicas * (DB_POOL_SIZE + DB_POOL_MAX_OVERFLOW).
+    DB_POOL_SIZE: int = 10
+    DB_POOL_MAX_OVERFLOW: int = 20
+    DB_POOL_TIMEOUT_SEC: int = 30
 
     # --- Redis ---------------------------------------------------------------
     REDIS_HOST: str = "localhost"
@@ -147,6 +154,22 @@ class Settings(BaseSettings):
     # Public path the browser uses to reach tusd (proxied by nginx in prod /
     # Vite in dev). Trailing slash matters for tusd's -base-path.
     TUS_PUBLIC_BASE: str = "/uploads/"
+    # Low-disk degradation: when free space on STORAGE_ROOT drops below
+    # EITHER threshold, the hourly disk_check cron flips the
+    # `storage.critical_low` kv flag + alerts admins, and new uploads are
+    # refused with 507. Downloads are unaffected. Both admin-tunable.
+    STORAGE_LOW_THRESHOLD_PERCENT: int = 5
+    STORAGE_LOW_THRESHOLD_BYTES: int = 10 * 1024**3  # 10 GiB
+
+    # --- Metrics endpoint (Prometheus) ---------------------------------------
+    # GET /api/metrics is gated: a request must carry
+    # `Authorization: Bearer <METRICS_BEARER_TOKEN>` OR originate from an IP in
+    # METRICS_ALLOWED_IPS (comma-separated IPs / CIDRs). With both empty the
+    # endpoint is effectively disabled (every request 401s). The rendered text
+    # is cached for METRICS_CACHE_TTL_SEC to bound DB load under frequent scrapes.
+    METRICS_BEARER_TOKEN: str = ""
+    METRICS_ALLOWED_IPS: str = ""
+    METRICS_CACHE_TTL_SEC: int = 60
 
     # --- Phase 6b — 2FA enforcement (env fallback) ----------------------------
     # `none` = optional (default), `admins` = required for admins, `all` = required

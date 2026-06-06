@@ -48,7 +48,7 @@ async def test_admin_list_derives_expiry_status(make_user, db, client, login_as)
     """Listing tokens that carry an `expires_at` must derive active/expired
     without erroring (regression: `_token_status` called a non-existent
     `api_token_svc._utcnow`, 500ing on any token with an expiry set)."""
-    admin = make_user(
+    make_user(
         email="a@test.local", role=UserRole.admin, password="Pass12345678!"
     )
     bob = make_user(email="b@test.local", role=UserRole.client)

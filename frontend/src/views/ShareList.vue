@@ -41,6 +41,7 @@ const {
   userQuery,
   userSuggestions,
   myGroups,
+  subjectQuery,
   groupBy,
   sort,
   groupedItems,
@@ -150,6 +151,15 @@ onMounted(load)
     <hr class="fh-rule" />
 
     <div class="filters">
+      <input
+        v-model="subjectQuery"
+        type="search"
+        class="fh-field-input subject-search"
+        autocomplete="off"
+        :aria-label="t('share_list.filter.subject_placeholder')"
+        :placeholder="t('share_list.filter.subject_placeholder')"
+      />
+
       <select
         v-model="stateFilter"
         class="filter-select"
@@ -211,7 +221,7 @@ onMounted(load)
       </select>
 
       <button
-        v-if="partyKind !== 'any' || stateFilter"
+        v-if="partyKind !== 'any' || stateFilter || subjectQuery"
         type="button"
         class="fh-btn-text"
         @click="clearAllFilters"
@@ -439,6 +449,12 @@ onMounted(load)
   border-radius: var(--fh-radius-sm);
   padding: 4px 8px;
   color: var(--fh-ink);
+}
+
+.subject-search {
+  flex: 1 1 220px;
+  min-width: 180px;
+  max-width: 320px;
 }
 
 .party-picker {

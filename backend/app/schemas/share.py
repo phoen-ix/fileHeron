@@ -138,6 +138,7 @@ class InlinePublicLinkResult(APIBaseModel):
     in the request — plaintext URL shown ONCE."""
     id: str
     url: str
+    qr_svg: str | None = None
     download_limit: int | None
     downloads_remaining: int | None
     notify_on_download: bool

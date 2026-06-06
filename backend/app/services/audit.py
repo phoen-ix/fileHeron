@@ -52,6 +52,7 @@ def record_audit_event(
             "target_type": target_type,
             "target_id": target_id,
             "request_id": request_id,
+            "ip": ip,
         },
     )
     return row

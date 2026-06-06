@@ -24,6 +24,8 @@ class CreatePublicLinkResponse(APIBaseModel):
     URL are not retrievable later — owner must keep them."""
     id: str
     url: str  # absolute or path-relative; depends on APP_URL config
+    # Inline SVG QR encoding `url` (no secret beyond the public URL itself).
+    qr_svg: str | None = None
     download_limit: int | None
     downloads_remaining: int | None
     notify_on_download: bool
@@ -38,6 +40,9 @@ class PublicLinkResponse(APIBaseModel):
     falls back to the "URL not stored" hint."""
     id: str
     url: str | None = None
+    # Inline SVG QR of `url`; null for legacy rows where the URL can't be
+    # reconstructed (token not stored encrypted).
+    qr_svg: str | None = None
     download_limit: int | None
     downloads_remaining: int | None
     notify_on_download: bool

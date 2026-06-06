@@ -42,6 +42,7 @@ _KNOWN_CRONS = [
     "expire_files",
     "share_expiring_24h_warning",
     "ops_check",
+    "disk_check",
     "cleanup_expired_tokens",
     "quota_reconcile",
     "cleanup_stale_uploads",

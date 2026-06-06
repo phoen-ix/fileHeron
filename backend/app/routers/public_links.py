@@ -29,6 +29,16 @@ def _public_url(token: str, db: Session) -> str:
     return f"{site_svc.get_site_url(db)}{settings.PUBLIC_LINK_BASE_PATH}/{token}"
 
 
+def _qr_for(url: str | None) -> str | None:
+    """Server-render an inline SVG QR of the public URL (reuses the same
+    helper as 2FA enrolment). None when there's no URL to encode."""
+    if not url:
+        return None
+    from ..utils.qr import render_qr_svg
+
+    return render_qr_svg(url)
+
+
 def _to_metadata(link, db: Session) -> PublicLinkResponse:
     # Decrypt the token + build the URL for the owner-facing view.
     # Legacy rows (no encrypted column) get url=None; the SPA renders
@@ -52,6 +62,7 @@ def _to_metadata(link, db: Session) -> PublicLinkResponse:
     return PublicLinkResponse(
         id=link.id,
         url=url,
+        qr_svg=_qr_for(url),
         download_limit=link.download_limit,
         downloads_remaining=link.downloads_remaining,
         notify_on_download=link.notify_on_download,
@@ -85,9 +96,11 @@ def create_public_link(
         request=request,
     )
     db.commit()
+    created_url = _public_url(created.plaintext_token, db)
     return CreatePublicLinkResponse(
         id=created.record.id,
-        url=_public_url(created.plaintext_token, db),
+        url=created_url,
+        qr_svg=_qr_for(created_url),
         download_limit=created.record.download_limit,
         downloads_remaining=created.record.downloads_remaining,
         notify_on_download=created.record.notify_on_download,

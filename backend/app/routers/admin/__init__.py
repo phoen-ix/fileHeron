@@ -34,8 +34,13 @@ from . import (
     settings,
     system,
     users,
+    webhooks,
 )
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
-for _sub in (analytics, api_tokens, audit, files, invites, mail, oidc, quarantine, sessions, settings, system, users):
+_SUBROUTERS = (
+    analytics, api_tokens, audit, files, invites, mail, oidc,
+    quarantine, sessions, settings, system, users, webhooks,
+)
+for _sub in _SUBROUTERS:
     router.include_router(_sub.router)

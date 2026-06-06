@@ -594,6 +594,31 @@ export interface AnalyticsResponse {
   quota_warnings: AnalyticsQuotaWarning[]
 }
 
+/* Outbound webhooks (v1.19.0). */
+export interface WebhookItem {
+  id: number
+  name: string
+  url: string
+  event_types: string[]
+  active: boolean
+  secret_set: boolean
+  created_at: string
+}
+export interface WebhookCreateResponse extends WebhookItem {
+  /** Plaintext signing secret — returned only on create / rotate. */
+  secret: string
+}
+export interface WebhookDeliveryItem {
+  id: number
+  event_type: string
+  status: 'pending' | 'sent' | 'failed'
+  response_code: number | null
+  attempts: number
+  error: string | null
+  created_at: string
+  delivered_at: string | null
+}
+
 /* Mail log (v1.11.0) — outbound email send log. */
 export interface AdminMailRow {
   id: number

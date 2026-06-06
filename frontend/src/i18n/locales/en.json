@@ -210,6 +210,7 @@
       "email": "Email / SMTP",
       "quarantine_alerts": "Quarantine alerts",
       "email_change": "Email change",
+      "webhooks": "Webhooks",
       "advanced": "Advanced"
     }
   },
@@ -963,6 +964,39 @@
       "open_html": "Open HTML version",
       "no_body": "(no text body stored)"
     }
+  },
+  "admin_webhooks": {
+    "eyebrow": "Admin / Webhooks",
+    "title": "Webhooks",
+    "intro": "Send a signed HTTP POST to an external URL when chosen events happen (a share is created, a file is downloaded, a quarantine, an ops alert). Point one at a Slack/Teams incoming-webhook URL, an automation tool, or your own collector.",
+    "add": "Add a webhook",
+    "name": "Name",
+    "name_ph": "e.g. Slack #ops",
+    "url": "Endpoint URL",
+    "events": "Events",
+    "create": "Create webhook",
+    "create_incomplete": "Enter a name, a URL, and at least one event.",
+    "secret_created": "Signing secret — shown once",
+    "secret_warning": "Copy this secret now. It's used to verify the X-Webhook-Signature header and is never shown again.",
+    "copy": "Copy",
+    "acknowledged": "I've saved it",
+    "none": "No webhooks yet.",
+    "on": "Active",
+    "off": "Disabled",
+    "test": "Test",
+    "deliveries": "Deliveries",
+    "disable": "Disable",
+    "enable": "Enable",
+    "delete": "Delete",
+    "delete_confirm": "Delete the webhook \"{name}\"? Events will stop being delivered to it.",
+    "test_queued": "Test event queued.",
+    "retry_queued": "Delivery re-queued.",
+    "no_deliveries": "No deliveries yet.",
+    "col_event": "Event",
+    "col_status": "Status",
+    "col_code": "Code",
+    "col_attempts": "Tries",
+    "retry": "Retry"
   },
   "admin_analytics": {
     "eyebrow": "Admin / Analytics",

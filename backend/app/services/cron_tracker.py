@@ -132,6 +132,12 @@ def _maybe_alert_admins(db: Session, job_name: str, error_msg: str) -> None:
                 "ops_alert dispatch to admin=%d failed", admin.id
             )
 
+    from . import webhook as webhook_svc
+    webhook_svc.emit(
+        db, webhook_svc.OPS_ALERT_EVENT,
+        {"target_type": "ops", "target_id": "cron_failed", "metadata": payload},
+    )
+
 
 def track_cron(job_name: str) -> Callable[[Callable[..., Awaitable[Any]]], Callable[..., Awaitable[Any]]]:
     """Decorator. Wrap every ARQ cron entry point in

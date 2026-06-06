@@ -27,6 +27,7 @@ from ..models.audit_log import AuditLog
 from ..models.download_log import DownloadLog
 from ..models.email_log import EmailLog
 from ..models.login_attempt import LoginAttempt
+from ..models.webhook import WebhookDelivery
 from ..services.cron_tracker import track_cron
 from ..utils.timeutil import utc_now
 
@@ -86,6 +87,7 @@ async def prune_history(_ctx) -> dict:
         download_days = _sr.effective(_db0, _sr.K.DOWNLOAD_LOG_RETENTION_DAYS)
         email_days = _sr.effective(_db0, _sr.K.EMAIL_LOG_RETENTION_DAYS)
         login_days = _sr.effective(_db0, _sr.K.LOGIN_ATTEMPT_RETENTION_DAYS)
+        webhook_days = _sr.effective(_db0, _sr.K.WEBHOOK_DELIVERY_RETENTION_DAYS)
     finally:
         _db0.close()
     audit_pruned = await _prune_table(
@@ -103,9 +105,13 @@ async def prune_history(_ctx) -> dict:
         LoginAttempt.attempted_at,
         LoginAttempt,
     )
+    webhook_pruned = await _prune_table(
+        "webhook_deliveries", webhook_days, WebhookDelivery.created_at, WebhookDelivery
+    )
     return {
         "audit_log": audit_pruned,
         "download_log": download_pruned,
         "email_log": email_pruned,
         "login_attempts": login_pruned,
+        "webhook_deliveries": webhook_pruned,
     }

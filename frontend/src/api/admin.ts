@@ -5,6 +5,9 @@ import type {
   AdminApiTokenListResponse,
   AdminAuditResponse,
   AnalyticsResponse,
+  WebhookItem,
+  WebhookCreateResponse,
+  WebhookDeliveryItem,
   AdminChangeEmailRequest,
   AdminChangeEmailResponse,
   AdminCreateApiTokenRequest,
@@ -333,6 +336,39 @@ export function listAuditLog(params: {
   cursor?: string
 } = {}) {
   return api.get<AdminAuditResponse>('/admin/audit-log', { params })
+}
+
+// Outbound webhooks (v1.19.0).
+export function listWebhooks() {
+  return api.get<WebhookItem[]>('/admin/webhooks')
+}
+export function getWebhookEvents() {
+  return api.get<{ events: string[] }>('/admin/webhooks/events')
+}
+export function createWebhook(payload: { name: string; url: string; event_types: string[] }) {
+  return api.post<WebhookCreateResponse>('/admin/webhooks', payload)
+}
+export function updateWebhook(
+  id: number,
+  payload: Partial<{ name: string; url: string; event_types: string[]; active: boolean }>,
+  rotateSecret = false,
+) {
+  return api.patch<WebhookCreateResponse>(
+    `/admin/webhooks/${id}${rotateSecret ? '?rotate_secret=true' : ''}`,
+    payload,
+  )
+}
+export function deleteWebhook(id: number) {
+  return api.delete(`/admin/webhooks/${id}`)
+}
+export function testWebhook(id: number) {
+  return api.post(`/admin/webhooks/${id}/test`)
+}
+export function listWebhookDeliveries(id: number) {
+  return api.get<WebhookDeliveryItem[]>(`/admin/webhooks/${id}/deliveries`)
+}
+export function retryWebhookDelivery(deliveryId: number) {
+  return api.post(`/admin/webhook-deliveries/${deliveryId}/retry`)
 }
 
 // Analytics dashboard (v1.18.0). CSV goes through axios (responseType blob) so

@@ -210,6 +210,7 @@
       "email": "E-Mail / SMTP",
       "quarantine_alerts": "Quarantäne-Alarme",
       "email_change": "E-Mail-Änderung",
+      "webhooks": "Webhooks",
       "advanced": "Erweitert"
     }
   },
@@ -963,6 +964,39 @@
       "open_html": "HTML-Version öffnen",
       "no_body": "(kein Text-Inhalt gespeichert)"
     }
+  },
+  "admin_webhooks": {
+    "eyebrow": "Admin / Webhooks",
+    "title": "Webhooks",
+    "intro": "Sende einen signierten HTTP-POST an eine externe URL, wenn ausgewählte Ereignisse eintreten (Freigabe erstellt, Datei heruntergeladen, Quarantäne, Ops-Alarm). Richte ihn auf eine Slack/Teams-Incoming-Webhook-URL, ein Automatisierungstool oder deinen eigenen Collector.",
+    "add": "Webhook hinzufügen",
+    "name": "Name",
+    "name_ph": "z. B. Slack #ops",
+    "url": "Endpunkt-URL",
+    "events": "Ereignisse",
+    "create": "Webhook erstellen",
+    "create_incomplete": "Name, URL und mindestens ein Ereignis angeben.",
+    "secret_created": "Signaturschlüssel — wird einmalig angezeigt",
+    "secret_warning": "Kopiere diesen Schlüssel jetzt. Er verifiziert den X-Webhook-Signature-Header und wird nie wieder angezeigt.",
+    "copy": "Kopieren",
+    "acknowledged": "Gespeichert",
+    "none": "Noch keine Webhooks.",
+    "on": "Aktiv",
+    "off": "Deaktiviert",
+    "test": "Test",
+    "deliveries": "Zustellungen",
+    "disable": "Deaktivieren",
+    "enable": "Aktivieren",
+    "delete": "Löschen",
+    "delete_confirm": "Webhook \"{name}\" löschen? Es werden keine Ereignisse mehr zugestellt.",
+    "test_queued": "Test-Ereignis eingereiht.",
+    "retry_queued": "Zustellung erneut eingereiht.",
+    "no_deliveries": "Noch keine Zustellungen.",
+    "col_event": "Ereignis",
+    "col_status": "Status",
+    "col_code": "Code",
+    "col_attempts": "Versuche",
+    "retry": "Erneut"
   },
   "admin_analytics": {
     "eyebrow": "Admin / Analysen",

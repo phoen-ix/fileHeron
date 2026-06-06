@@ -67,6 +67,8 @@ class Settings(BaseSettings):
     # audit log is appropriate. 0 disables pruning.
     EMAIL_LOG_RETENTION_DAYS: int = 90
     LOGIN_ATTEMPT_RETENTION_DAYS: int = 30
+    # Webhook delivery attempt log (v1.19.0). 0 disables pruning.
+    WEBHOOK_DELIVERY_RETENTION_DAYS: int = 30
     # In-app notifications: once read, the bell hides them on next load; this
     # is how long a READ notification lingers in the DB before the daily
     # cleanup_read_notifications cron hard-deletes it (not instant — keeps a

@@ -35,6 +35,7 @@ from .user_notification_preference import (
 from .user_recovery_code import UserRecoveryCode
 from .user_totp import UserTOTP
 from .user_webauthn_credential import UserWebAuthnCredential
+from .webhook import Webhook, WebhookDelivery, WebhookDeliveryStatus
 
 __all__ = [
     "AnalyticsSnapshot",
@@ -80,4 +81,7 @@ __all__ = [
     "UserRole",
     "UserTOTP",
     "UserWebAuthnCredential",
+    "Webhook",
+    "WebhookDelivery",
+    "WebhookDeliveryStatus",
 ]

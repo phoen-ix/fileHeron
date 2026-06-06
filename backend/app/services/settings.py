@@ -115,6 +115,7 @@ class Keys:
     DOWNLOAD_LOG_RETENTION_DAYS = "retention.download_log_days"
     EMAIL_LOG_RETENTION_DAYS = "retention.email_log_days"
     LOGIN_ATTEMPT_RETENTION_DAYS = "retention.login_attempt_days"
+    WEBHOOK_DELIVERY_RETENTION_DAYS = "retention.webhook_delivery_days"
     NOTIFICATION_READ_RETENTION_DAYS = "retention.notification_read_days"
     QUARANTINE_PURGE_AFTER_DAYS = "retention.quarantine_purge_days"
     ORPHAN_RECLAIM_AFTER_DAYS = "retention.orphan_reclaim_days"

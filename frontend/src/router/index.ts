@@ -162,6 +162,12 @@ const router = createRouter({
           meta: { density: 'operator', title: 'Analytics', requiresRole: 'admin' },
         },
         {
+          path: 'settings/webhooks',
+          name: 'admin-settings-webhooks',
+          component: () => import('@/views/AdminSettingsWebhooks.vue'),
+          meta: { density: 'operator', title: 'Webhooks', requiresRole: 'admin' },
+        },
+        {
           path: 'mail-log',
           name: 'admin-mail-log',
           component: () => import('@/views/AdminMailLog.vue'),

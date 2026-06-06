@@ -74,6 +74,12 @@ def _alert_admins(db, *, payload: dict) -> int:
             n += 1
         except Exception:
             logger.exception("ops_alert dispatch failed admin=%d", admin.id)
+
+    from ..services import webhook as webhook_svc
+    webhook_svc.emit(
+        db, webhook_svc.OPS_ALERT_EVENT,
+        {"target_type": "ops", "target_id": "storage_critical_low", "metadata": payload},
+    )
     return n
 
 

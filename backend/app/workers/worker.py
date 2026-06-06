@@ -46,6 +46,7 @@ from .quota_reconcile import quota_reconcile
 from .reclaim_orphaned_files import reclaim_orphaned_files
 from .send_email import send_email_job
 from .share_expiring import share_expiring_24h_warning
+from .webhook_deliver import webhook_deliver
 
 
 async def startup(_ctx) -> None:
@@ -72,6 +73,7 @@ class WorkerSettings:
         cleanup_read_notifications,
         reclaim_orphaned_files,
         analytics_aggregate,
+        webhook_deliver,
     ]
     cron_jobs = [
         # Stagger so they don't pile up at minute 0. ops_check sits at :15

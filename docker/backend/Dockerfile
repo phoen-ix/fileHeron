@@ -29,6 +29,14 @@ COPY backend/alembic ./alembic
 COPY backend/alembic.ini ./alembic.ini
 COPY backend/scripts ./scripts
 
+# Import-smoke against the exact dependency closure `pip install .` produced.
+# Fails the build if any module reachable from the app (uvicorn) or the worker
+# (arq) is imported in code but absent from pyproject [project].dependencies —
+# the gap that shipped v1.25.0/.1 without nh3 and crash-looped prod. Pure import
+# resolution: ENVIRONMENT defaults to development, engines/clients connect lazily,
+# so it needs no DB/Redis/network. This image backs both the backend and worker.
+RUN python -c "import app.main; import app.workers.worker"
+
 # Entrypoint (must be +x AND owned by appuser)
 COPY docker/backend/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh

@@ -1,55 +1,51 @@
-# file:Heron v1.25.1
+# file:Heron v1.25.2
 
-**Editable email templates.** Admins can now rewrite the wording of every email
-file:Heron sends — subject and body — **per language**, from a new editor in the
-admin area. A built-in WYSIWYG editor, friendly placeholders, live preview, and a
-"send a test to myself" button make it safe to change copy without touching code
-or shipping a release.
+**Stability hotfix for the v1.25.0 / v1.25.1 update.** Those two releases shipped
+the new editable-email-templates feature, but the backend image was missing one
+packaging dependency (`nh3`, the HTML sanitiser the feature uses). As a result the
+backend failed to start after updating and the site returned **502 Bad Gateway**.
+This release fixes that. **Every v1.25.0 feature is unchanged — this release just
+makes them install and run.**
 
-## What's new
+> If your update to v1.25.0 or v1.25.1 failed with a Bad Gateway, update to
+> **v1.25.2**: it starts cleanly. No data was affected by the failed update.
 
-- **Edit any email, in any language** at *Settings → Email templates*. Pick a
-  template, switch between languages (English / German today; any future language
-  appears automatically), and edit the subject and body.
-- **A real WYSIWYG editor** (bold, italic, headings, lists) — no HTML or template
-  syntax to learn. Built on the MIT-licensed Milkdown editor; loaded only on this
-  page so the rest of the app stays lean.
-- **Friendly placeholders.** Insert tokens like `[RECIPIENT]`, `[SHARE_LINK]` or
-  `[RESET_LINK]` from a toolbar menu; each template shows a collapsible list of the
-  placeholders it supports. They're replaced with the real values when the email
-  is sent.
-- **Live preview & test send.** Preview the rendered email (HTML and plain-text)
-  with sample data right in the page, or send a test to your own address through
-  the configured SMTP server.
-- **Reset to default.** Every customisation can be reverted to the built-in text
-  per template and language, any time.
+## What's fixed
 
-## Good to know
+- **The failed update now succeeds.** The missing `nh3` library is now declared
+  and baked into the backend and worker images, so the backend boots normally
+  after updating. Editable email templates, the WYSIWYG editor, friendly
+  placeholders, live preview, test-send and reset-to-default — everything from
+  v1.25.0 — work exactly as described in those notes.
+- **Hardened packaging.** Two other libraries the backend uses directly
+  (`markdown-it-py` and `httpx`) are now declared explicitly instead of relying on
+  another package to pull them in, so a future dependency change can't silently
+  remove them.
 
-- **Nothing changes until you save.** Each template falls back to its built-in
-  default until an admin saves a custom version; existing installs are unaffected.
-- **Security is preserved.** Your text is sanitised before sending (no scripts or
-  unsafe markup), dynamic values are always escaped, and the one-time links in
-  password-reset / verify / invite / email-change mails keep working and stay
-  masked in the mail log — the editor won't let you remove a required link from
-  those mails.
-- **Auth emails gain a branded look.** The handful of security emails that were
-  previously plain-text only (password reset, verify, invite, lockout,
-  email-change) get the standard branded HTML layout once you customise them.
+## Under the hood
+
+- **New build-time safety check.** Each backend/worker image now imports the whole
+  application (web server *and* background worker) while it is being built. If a
+  required library is ever missing again, the image build fails immediately — a
+  broken image can no longer be published or installed. This is the guard that
+  would have caught the v1.25.0 problem before it ever shipped.
 
 ## Upgrade notes
 
-- **One small migration** adds a table to store template overrides. It's
-  re-runnable and applied automatically on update; no existing data changes.
+- **No new database changes.** v1.25.2 carries the same one-time table introduced
+  in v1.25.0; it is applied automatically, is re-runnable, and leaves existing
+  data untouched.
+- **Updating from a failed v1.25.0 / v1.25.1 attempt is safe** — just click
+  **Update** in `/admin/system`.
 
 ## Container images
 
 Published to GitHub Container Registry:
 
-- `ghcr.io/phoen-ix/fileheron-backend:v1.25.1`
-- `ghcr.io/phoen-ix/fileheron-worker:v1.25.1`
-- `ghcr.io/phoen-ix/fileheron-frontend:v1.25.1`
-- `ghcr.io/phoen-ix/fileheron-updater-shim:v1.25.1`
-- `ghcr.io/phoen-ix/fileheron-updater-executor:v1.25.1`
+- `ghcr.io/phoen-ix/fileheron-backend:v1.25.2`
+- `ghcr.io/phoen-ix/fileheron-worker:v1.25.2`
+- `ghcr.io/phoen-ix/fileheron-frontend:v1.25.2`
+- `ghcr.io/phoen-ix/fileheron-updater-shim:v1.25.2`
+- `ghcr.io/phoen-ix/fileheron-updater-executor:v1.25.2`
 
 Click **Update** in `/admin/system` to roll forward.

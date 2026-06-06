@@ -22,6 +22,11 @@ dependencies = [
     "qrcode>=7.4",
     "pyjwt[crypto]>=2.8",
     "jinja2>=3.1",
+    # email.py imports these directly (Markdown→HTML render + nh3 sanitise for the
+    # admin-editable templates, v1.25.0). nh3 has no transitive puller — omitting
+    # it crash-looped v1.25.0/.1; markdown-it-py only rode in via rich. Pin both.
+    "markdown-it-py>=3.0",
+    "nh3>=0.2.18",
     "python-multipart>=0.0.9",
     "redis>=5.0",
     "arq>=0.26",
@@ -30,6 +35,9 @@ dependencies = [
     "python-dotenv>=1.0",
     "babel>=2.16",
     "authlib>=1.3",
+    # Direct dep of 6 app modules (oidc/jwks/hibp/release_check/webhook); was
+    # [dev]-only, surviving in prod only transitively via fastapi[standard].
+    "httpx>=0.27",
     "itsdangerous>=2.2",
     "webauthn>=2.0",
     "reportlab>=4.0",
@@ -45,7 +53,6 @@ dev = [
     "ruff>=0.6",
     "mypy>=1.10",
     "aiosqlite>=0.20",
-    "httpx>=0.27",
     "moto[s3]>=5.0",
 ]
 

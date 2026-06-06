@@ -348,10 +348,10 @@ export function exportAnalyticsCsv(days: number) {
   })
 }
 
-export function auditCsvUrl(params: Record<string, string> = {}): string {
-  const sp = new URLSearchParams(params)
-  const qs = sp.toString()
-  return `/api/admin/audit-log/export.csv${qs ? `?${qs}` : ''}`
+// CSV export goes through axios (responseType blob) so the in-memory bearer is
+// attached — a plain <a href> can't authenticate a bearer-gated admin GET.
+export function exportAuditCsv(params: Record<string, string> = {}) {
+  return api.get('/admin/audit-log/export.csv', { params, responseType: 'blob' })
 }
 
 // Mail log (v1.11.0)
@@ -379,10 +379,8 @@ export function resendMailLog(id: number) {
   return api.post<AdminMailResendResponse>(`/admin/mail-log/${id}/resend`)
 }
 
-export function mailCsvUrl(params: Record<string, string> = {}): string {
-  const sp = new URLSearchParams(params)
-  const qs = sp.toString()
-  return `/api/admin/mail-log/export.csv${qs ? `?${qs}` : ''}`
+export function exportMailCsv(params: Record<string, string> = {}) {
+  return api.get('/admin/mail-log/export.csv', { params, responseType: 'blob' })
 }
 
 // API token policy + admin inventory (post-Phase 10)

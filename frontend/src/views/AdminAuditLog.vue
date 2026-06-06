@@ -2,16 +2,19 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import { auditCsvUrl, listAuditLog } from '@/api/admin'
+import { exportAuditCsv, listAuditLog } from '@/api/admin'
 import Pager from '@/components/Pager.vue'
 import { useApiError } from '@/composables/useApiError'
 import { useDebouncedSearch } from '@/composables/useDebouncedSearch'
 import { useSiteDateFormat } from '@/composables/useSiteDateFormat'
+import { useUiStore } from '@/stores/ui'
 import type { AdminAuditRow } from '@/types/api'
+import { downloadBlob } from '@/utils/downloadBlob'
 
 const { t } = useI18n()
 const { formatDate } = useSiteDateFormat()
 const { describe } = useApiError()
+const ui = useUiStore()
 
 const items = ref<AdminAuditRow[]>([])
 const total = ref(0)
@@ -61,7 +64,18 @@ useDebouncedSearch(filterParams, () => {
 })
 watch(page, load)
 
-const csvHref = computed(() => auditCsvUrl(filterParams.value))
+const exporting = ref(false)
+async function onExportCsv() {
+  exporting.value = true
+  try {
+    const { data } = await exportAuditCsv(filterParams.value)
+    downloadBlob(data as Blob, 'audit-log.csv')
+  } catch (err) {
+    ui.pushToast(describe(err), 'error')
+  } finally {
+    exporting.value = false
+  }
+}
 
 onMounted(load)
 </script>
@@ -72,9 +86,9 @@ onMounted(load)
       <div>
         <span class="fh-eyebrow">{{ t('admin_audit.eyebrow') }}</span>
       </div>
-      <a :href="csvHref" class="fh-btn fh-btn-ghost" download>
+      <button type="button" class="fh-btn fh-btn-ghost" :disabled="exporting" @click="onExportCsv">
         {{ t('admin_audit.export_csv') }}
-      </a>
+      </button>
     </div>
 
     <hr class="fh-rule" />

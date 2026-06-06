@@ -8,6 +8,7 @@ import { linePoints, scaleBars } from '@/composables/useAnalyticsCharts'
 import { useUiStore } from '@/stores/ui'
 import type { AnalyticsDayPoint, AnalyticsResponse } from '@/types/api'
 import { formatBytes } from '@/utils/bytes'
+import { downloadBlob } from '@/utils/downloadBlob'
 
 const { t } = useI18n()
 const { describe } = useApiError()
@@ -74,12 +75,7 @@ async function onExport() {
   downloading.value = true
   try {
     const { data: blob } = await exportAnalyticsCsv(days.value)
-    const url = URL.createObjectURL(blob as Blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `analytics-${days.value}d.csv`
-    a.click()
-    URL.revokeObjectURL(url)
+    downloadBlob(blob as Blob, `analytics-${days.value}d.csv`)
   } catch (err) {
     ui.pushToast(describe(err), 'error')
   } finally {

@@ -3,16 +3,19 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 
-import { listMailLog, mailCsvUrl } from '@/api/admin'
+import { exportMailCsv, listMailLog } from '@/api/admin'
 import Pager from '@/components/Pager.vue'
 import { useApiError } from '@/composables/useApiError'
 import { useDebouncedSearch } from '@/composables/useDebouncedSearch'
 import { useSiteDateFormat } from '@/composables/useSiteDateFormat'
+import { useUiStore } from '@/stores/ui'
 import type { AdminMailRow } from '@/types/api'
+import { downloadBlob } from '@/utils/downloadBlob'
 
 const { t } = useI18n()
 const { formatDate } = useSiteDateFormat()
 const { describe } = useApiError()
+const ui = useUiStore()
 const route = useRoute()
 
 const items = ref<AdminMailRow[]>([])
@@ -77,7 +80,18 @@ useDebouncedSearch(filterParams, () => {
 })
 watch(page, load)
 
-const csvHref = computed(() => mailCsvUrl(filterParams.value))
+const exporting = ref(false)
+async function onExportCsv() {
+  exporting.value = true
+  try {
+    const { data } = await exportMailCsv(filterParams.value)
+    downloadBlob(data as Blob, 'mail-log.csv')
+  } catch (err) {
+    ui.pushToast(describe(err), 'error')
+  } finally {
+    exporting.value = false
+  }
+}
 
 onMounted(() => {
   const ruid = route.query.recipient_user_id
@@ -95,9 +109,9 @@ onMounted(() => {
         <span class="fh-eyebrow">{{ t('admin_mail.eyebrow') }}</span>
         <p class="fh-field-help intro">{{ t('admin_mail.intro') }}</p>
       </div>
-      <a :href="csvHref" class="fh-btn fh-btn-ghost" download>
+      <button type="button" class="fh-btn fh-btn-ghost" :disabled="exporting" @click="onExportCsv">
         {{ t('admin_mail.export_csv') }}
-      </a>
+      </button>
     </div>
 
     <hr class="fh-rule" />

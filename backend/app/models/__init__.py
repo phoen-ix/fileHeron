@@ -4,6 +4,7 @@ Importing `from app.models import *` in `alembic/env.py` registers every model
 on `Base.metadata` so autogenerate (and `Base.metadata.create_all` in tests)
 sees the full schema.
 """
+from .analytics_snapshot import AnalyticsSnapshot
 from .api_token import ApiToken
 from .app_setting import AppSetting
 from .audit_log import AuditEventType, AuditLog
@@ -36,6 +37,7 @@ from .user_totp import UserTOTP
 from .user_webauthn_credential import UserWebAuthnCredential
 
 __all__ = [
+    "AnalyticsSnapshot",
     "ApiToken",
     "AppSetting",
     "AuditEventType",

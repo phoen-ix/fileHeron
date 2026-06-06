@@ -549,6 +549,51 @@ export interface AdminAuditResponse {
   next_cursor: string | null
 }
 
+/* Admin analytics dashboard (v1.18.0). */
+export interface AnalyticsDayPoint {
+  date: string
+  count: number
+}
+export interface AnalyticsStoragePoint {
+  date: string
+  storage_bytes: number
+  files_clean: number
+  files_infected: number
+  files_total: number
+}
+export interface AnalyticsTopUploader {
+  user_id: number
+  display_name: string
+  email: string
+  bytes: number
+}
+export interface AnalyticsTopShare {
+  share_id: string
+  subject: string | null
+  downloads: number
+}
+export interface AnalyticsQuotaWarning {
+  user_id: number
+  display_name: string
+  email: string
+  used_bytes: number
+  quota_bytes: number
+  pct: number
+}
+export interface AnalyticsResponse {
+  days: number
+  range: { from: string; to: string }
+  storage_trend: AnalyticsStoragePoint[]
+  storage_as_of: string | null
+  shares_created: AnalyticsDayPoint[]
+  downloads: AnalyticsDayPoint[]
+  av_quarantines: AnalyticsDayPoint[]
+  file_states: Record<string, number>
+  top_uploaders: AnalyticsTopUploader[]
+  top_shares: AnalyticsTopShare[]
+  quota_warnings: AnalyticsQuotaWarning[]
+}
+
 /* Mail log (v1.11.0) — outbound email send log. */
 export interface AdminMailRow {
   id: number

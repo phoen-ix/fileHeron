@@ -185,6 +185,7 @@
     "nav": {
       "users": "Users",
       "groups": "Groups",
+      "analytics": "Analytics",
       "audit": "Audit log",
       "mail_log": "Mail log",
       "file_history": "File history",
@@ -962,6 +963,31 @@
       "open_html": "Open HTML version",
       "no_body": "(no text body stored)"
     }
+  },
+  "admin_analytics": {
+    "eyebrow": "Admin / Analytics",
+    "title": "Analytics",
+    "range_label": "Time range",
+    "range_days": "{n} days",
+    "export_csv": "Export CSV",
+    "storage_trend": "Storage used",
+    "peak": "peak {v}",
+    "storage_as_of": "as of {d}",
+    "no_storage_yet": "No storage snapshots yet — the nightly job records the first one tonight (or run it from System).",
+    "shares_created": "Shares created",
+    "downloads": "Downloads",
+    "av_quarantines": "Quarantines",
+    "file_states": "Files by state",
+    "top_uploaders": "Top uploaders",
+    "top_shares": "Most-downloaded shares",
+    "quota_warnings": "Quota warnings",
+    "col_user": "User",
+    "col_stored": "Stored",
+    "col_share": "Share",
+    "col_downloads": "Downloads",
+    "col_usage": "Usage",
+    "untitled": "(untitled)",
+    "no_data": "No data"
   },
   "admin_audit": {
     "eyebrow": "Admin / Audit log",

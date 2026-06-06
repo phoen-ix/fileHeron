@@ -185,6 +185,7 @@
     "nav": {
       "users": "Benutzer",
       "groups": "Gruppen",
+      "analytics": "Analysen",
       "audit": "Audit-Protokoll",
       "mail_log": "E-Mail-Protokoll",
       "file_history": "Dateiverlauf",
@@ -962,6 +963,31 @@
       "open_html": "HTML-Version öffnen",
       "no_body": "(kein Text-Inhalt gespeichert)"
     }
+  },
+  "admin_analytics": {
+    "eyebrow": "Admin / Analysen",
+    "title": "Analysen",
+    "range_label": "Zeitraum",
+    "range_days": "{n} Tage",
+    "export_csv": "CSV exportieren",
+    "storage_trend": "Belegter Speicher",
+    "peak": "Maximum {v}",
+    "storage_as_of": "Stand {d}",
+    "no_storage_yet": "Noch keine Speicher-Momentaufnahmen — der nächtliche Job erfasst die erste heute Nacht (oder unter System manuell starten).",
+    "shares_created": "Erstellte Freigaben",
+    "downloads": "Downloads",
+    "av_quarantines": "Quarantänen",
+    "file_states": "Dateien nach Status",
+    "top_uploaders": "Top-Uploader",
+    "top_shares": "Meistgeladene Freigaben",
+    "quota_warnings": "Kontingent-Warnungen",
+    "col_user": "Benutzer",
+    "col_stored": "Belegt",
+    "col_share": "Freigabe",
+    "col_downloads": "Downloads",
+    "col_usage": "Auslastung",
+    "untitled": "(ohne Betreff)",
+    "no_data": "Keine Daten"
   },
   "admin_audit": {
     "eyebrow": "Admin / Audit-Protokoll",

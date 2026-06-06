@@ -156,6 +156,12 @@ const router = createRouter({
           meta: { density: 'operator', title: 'Audit log', requiresRole: 'admin' },
         },
         {
+          path: 'analytics',
+          name: 'admin-analytics',
+          component: () => import('@/views/AdminAnalytics.vue'),
+          meta: { density: 'operator', title: 'Analytics', requiresRole: 'admin' },
+        },
+        {
           path: 'mail-log',
           name: 'admin-mail-log',
           component: () => import('@/views/AdminMailLog.vue'),

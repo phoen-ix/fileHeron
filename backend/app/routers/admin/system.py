@@ -53,6 +53,7 @@ _KNOWN_CRONS = [
     "cleanup_read_notifications",
     "prune_history",
     "reclaim_orphaned_files",
+    "analytics_aggregate",
 ]
 
 

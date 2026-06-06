@@ -73,6 +73,7 @@ export const ADMIN_NAV: AdminNavCategory[] = [
     key: 'system',
     labelKey: 'admin.nav_cat.system',
     items: [
+      { routeName: 'admin-analytics', labelKey: 'admin.nav.analytics', matchNames: ['admin-analytics'] },
       { routeName: 'admin-audit', labelKey: 'admin.nav.audit', matchNames: ['admin-audit'] },
       { routeName: 'admin-system', labelKey: 'admin.nav.system', matchNames: ['admin-system'] },
       { routeName: 'admin-settings-general', labelKey: 'admin.nav_item.general', matchNames: ['admin-settings-general'] },

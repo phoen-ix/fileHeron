@@ -14,6 +14,7 @@ Hourly, staggered so they don't pile up at minute 0:
 - cleanup_abandoned_uploads: minute=47
 - release_check: minute=53
 Daily housekeeping at 02:xx (well clear of business hours):
+- analytics_aggregate: 02:05  (storage snapshot for the admin analytics trend)
 - purge_old_quarantine: 02:13
 - cleanup_pending_invites: 02:15
 - cleanup_read_notifications: 02:29
@@ -29,6 +30,7 @@ from arq.cron import cron
 from ..config import settings
 from ..services.release_check import release_check
 from ..utils.logger import configure_logging
+from .analytics_aggregate import analytics_aggregate
 from .av_scan import av_scan_file
 from .cleanup_abandoned_uploads import cleanup_abandoned_uploads
 from .cleanup_expired_tokens import cleanup_expired_tokens
@@ -69,6 +71,7 @@ class WorkerSettings:
         release_check,
         cleanup_read_notifications,
         reclaim_orphaned_files,
+        analytics_aggregate,
     ]
     cron_jobs = [
         # Stagger so they don't pile up at minute 0. ops_check sits at :15
@@ -94,6 +97,8 @@ class WorkerSettings:
         cron(cleanup_read_notifications, hour={2}, minute={29}, run_at_startup=False),
         cron(prune_history, hour={2}, minute={43}, run_at_startup=False),
         cron(reclaim_orphaned_files, hour={2}, minute={51}, run_at_startup=False),
+        # Daily storage snapshot feeding the admin analytics trend.
+        cron(analytics_aggregate, hour={2}, minute={5}, run_at_startup=False),
     ]
     on_startup = startup
     # Use a dedicated queue so the worker doesn't accidentally pick up

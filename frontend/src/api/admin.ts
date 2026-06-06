@@ -4,6 +4,7 @@ import type {
   AdminApiTokenItem,
   AdminApiTokenListResponse,
   AdminAuditResponse,
+  AnalyticsResponse,
   AdminChangeEmailRequest,
   AdminChangeEmailResponse,
   AdminCreateApiTokenRequest,
@@ -332,6 +333,19 @@ export function listAuditLog(params: {
   cursor?: string
 } = {}) {
   return api.get<AdminAuditResponse>('/admin/audit-log', { params })
+}
+
+// Analytics dashboard (v1.18.0). CSV goes through axios (responseType blob) so
+// the bearer is attached — a plain <a href> can't authenticate an admin GET.
+export function getAnalytics(days: number) {
+  return api.get<AnalyticsResponse>('/admin/analytics', { params: { days } })
+}
+
+export function exportAnalyticsCsv(days: number) {
+  return api.get('/admin/analytics/export.csv', {
+    params: { days },
+    responseType: 'blob',
+  })
 }
 
 export function auditCsvUrl(params: Record<string, string> = {}): string {

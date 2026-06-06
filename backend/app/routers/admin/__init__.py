@@ -22,6 +22,7 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from . import (
+    analytics,
     api_tokens,
     audit,
     files,
@@ -36,5 +37,5 @@ from . import (
 )
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
-for _sub in (api_tokens, audit, files, invites, mail, oidc, quarantine, sessions, settings, system, users):
+for _sub in (analytics, api_tokens, audit, files, invites, mail, oidc, quarantine, sessions, settings, system, users):
     router.include_router(_sub.router)

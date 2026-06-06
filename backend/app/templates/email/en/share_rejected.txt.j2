@@ -1,0 +1,9 @@
+Hi {{ recipient_name|default("there") }},
+
+Your share{% if subject %} "{{ subject }}"{% endif %} was not approved.
+{% if reason %}
+Reason: {{ reason }}
+{% endif %}
+The files are kept — you can revise and resubmit it: {{ share_url }}
+
+— {{ app_name }}

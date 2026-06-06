@@ -5,9 +5,13 @@ import { useRoute } from 'vue-router'
 
 import { getDownloadUrl, getPreviewUrl, getShareZipUrl } from '@/api/files'
 import {
+  approveShare,
+  deleteShare,
   expireShareNow,
   getShare,
   registerFilesAdded,
+  rejectShare,
+  resubmitShare,
   updateShareDownloadLimit,
   updateShareExpiry,
 } from '@/api/shares'
@@ -56,6 +60,73 @@ const isOwner = computed(
 const canManage = computed(
   () => isOwner.value || auth.user?.role === 'admin',
 )
+
+// Share-approval workflow (v1.24.0).
+const approving = ref(false)
+const rejecting = ref(false)
+const resubmitting = ref(false)
+const showRejectForm = ref(false)
+const rejectReason = ref('')
+
+async function onApprove() {
+  if (!share.value) return
+  approving.value = true
+  try {
+    const { data } = await approveShare(share.value.id)
+    share.value = data
+    ui.pushToast(t('approvals.approved_toast'), 'success')
+  } catch (err) {
+    ui.pushToast(describe(err), 'error')
+  } finally {
+    approving.value = false
+  }
+}
+
+async function onReject() {
+  if (!share.value) return
+  rejecting.value = true
+  try {
+    const { data } = await rejectShare(
+      share.value.id,
+      rejectReason.value.trim() || null,
+    )
+    share.value = data
+    showRejectForm.value = false
+    rejectReason.value = ''
+    ui.pushToast(t('approvals.rejected_toast'), 'success')
+  } catch (err) {
+    ui.pushToast(describe(err), 'error')
+  } finally {
+    rejecting.value = false
+  }
+}
+
+async function onResubmit() {
+  if (!share.value) return
+  resubmitting.value = true
+  try {
+    const { data } = await resubmitShare(share.value.id)
+    share.value = data
+    ui.pushToast(t('approvals.resubmitted_toast'), 'success')
+  } catch (err) {
+    ui.pushToast(describe(err), 'error')
+  } finally {
+    resubmitting.value = false
+  }
+}
+
+async function onDiscard() {
+  if (!share.value) return
+  if (!(await ui.confirm({ message: t('approvals.discard_confirm'), danger: true }))) return
+  try {
+    await deleteShare(share.value.id)
+    const { data } = await getShare(share.value.id)
+    share.value = data
+    ui.pushToast(t('approvals.discarded_toast'), 'success')
+  } catch (err) {
+    ui.pushToast(describe(err), 'error')
+  }
+}
 
 // Bulk-ZIP download of every clean file. Hidden when nothing is downloadable
 // or the share's download budget is spent.
@@ -431,6 +502,98 @@ onMounted(load)
 
       <div v-if="share.message" class="message">{{ share.message }}</div>
 
+      <!-- Share-approval (v1.24.0): owner banners + approver actions. -->
+      <div
+        v-if="isOwner && share.state === 'pending_approval'"
+        class="approval-box"
+      >
+        <p class="fh-notice" data-tone="info">
+          {{ t('approvals.pending_owner_banner') }}
+        </p>
+        <button type="button" class="fh-btn-text" @click="onDiscard">
+          {{ t('approvals.discard_cta') }}
+        </button>
+      </div>
+
+      <div
+        v-if="isOwner && share.state === 'rejected'"
+        class="approval-box"
+      >
+        <p class="fh-notice" data-tone="error">
+          {{ t('approvals.rejected_owner_banner') }}
+        </p>
+        <p v-if="share.rejection_reason" class="reject-reason">
+          <span class="fh-kv-label">{{ t('approvals.reason_label') }}</span>
+          {{ share.rejection_reason }}
+        </p>
+        <div class="approver-buttons">
+          <button
+            type="button"
+            class="fh-btn"
+            :disabled="resubmitting"
+            @click="onResubmit"
+          >
+            {{ resubmitting ? t('common.loading') : t('approvals.resubmit_cta') }}
+          </button>
+          <button type="button" class="fh-btn-text" @click="onDiscard">
+            {{ t('approvals.discard_cta') }}
+          </button>
+        </div>
+      </div>
+
+      <div
+        v-if="share.viewer_can_approve && share.state === 'pending_approval'"
+        class="approval-box approver-actions"
+      >
+        <p class="fh-field-help">{{ t('approvals.decide_help') }}</p>
+        <div v-if="!showRejectForm" class="approver-buttons">
+          <button
+            type="button"
+            class="fh-btn"
+            :disabled="approving"
+            @click="onApprove"
+          >
+            {{ approving ? t('common.loading') : t('approvals.approve_cta') }}
+          </button>
+          <button
+            type="button"
+            class="fh-btn-ghost fh-btn"
+            @click="showRejectForm = true"
+          >
+            {{ t('approvals.reject_cta') }}
+          </button>
+        </div>
+        <form v-else class="reject-form" @submit.prevent="onReject">
+          <label class="fh-field">
+            <span class="fh-field-label">{{ t('approvals.reason_label') }}</span>
+            <textarea
+              v-model="rejectReason"
+              class="fh-field-input"
+              rows="3"
+              maxlength="1000"
+              :placeholder="t('approvals.reason_placeholder')"
+            />
+          </label>
+          <div class="approver-buttons">
+            <button
+              type="submit"
+              class="fh-btn-danger fh-btn"
+              :disabled="rejecting"
+            >
+              {{ rejecting ? t('common.loading') : t('approvals.confirm_reject_cta') }}
+            </button>
+            <button
+              type="button"
+              class="fh-btn-ghost fh-btn"
+              :disabled="rejecting"
+              @click="showRejectForm = false"
+            >
+              {{ t('common.cancel') }}
+            </button>
+          </div>
+        </form>
+      </div>
+
       <hr class="fh-rule" />
 
       <div class="files-head">
@@ -660,5 +823,34 @@ onMounted(load)
   display: flex;
   gap: var(--fh-space-3);
   align-items: baseline;
+}
+
+.approval-box {
+  margin: var(--fh-space-3) 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--fh-space-2);
+  align-items: flex-start;
+}
+
+.approver-buttons {
+  display: flex;
+  gap: var(--fh-space-3);
+  align-items: center;
+}
+
+.reject-reason {
+  background: var(--fh-paper-raised);
+  border-left: 2px solid var(--fh-hairline-strong);
+  padding: var(--fh-space-2) var(--fh-space-3);
+  margin: 0;
+}
+
+.reject-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fh-space-2);
+  width: 100%;
+  max-width: 480px;
 }
 </style>

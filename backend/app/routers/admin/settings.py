@@ -53,6 +53,12 @@ from ...schemas.quarantine import (
     QuarantineSettingsResponse,
     UpdateQuarantineSettingsRequest,
 )
+from ...schemas.share_approval_settings import (
+    ApproverGroupRef,
+    ApproverUserRef,
+    ShareApprovalSettingsResponse,
+    UpdateShareApprovalSettingsRequest,
+)
 from ...schemas.share_defaults_settings import (
     ShareDefaultsResponse,
     UpdateShareDefaultsRequest,
@@ -74,6 +80,7 @@ from ...services import email as email_svc
 from ...services import email_change_policy, settings_registry
 from ...services import public_link as public_link_svc
 from ...services import settings as settings_svc
+from ...services import share_approval as share_approval_svc
 from ...services import site as site_svc
 from ...services import twofa_policy as twofa_policy_svc
 from ...services.audit import record_audit_event
@@ -573,6 +580,128 @@ def update_share_defaults_settings(
     return ShareDefaultsResponse(
         notify_recipients_default=payload.notify_recipients_default
     )
+
+
+# ---- Share-approval policy (v1.24.0) ---------------------------------------
+
+
+def _share_approval_response(db: Session) -> ShareApprovalSettingsResponse:
+    mode, user_ids, group_ids = share_approval_svc.resolve_approver_policy(db)
+    users = db.query(User).filter(User.id.in_(user_ids)).all() if user_ids else []
+    groups = db.query(Group).filter(Group.id.in_(group_ids)).all() if group_ids else []
+    return ShareApprovalSettingsResponse(
+        enabled=share_approval_svc.is_enabled(db),
+        approver_mode=mode,  # type: ignore[arg-type]
+        approver_user_ids=user_ids,
+        approver_group_ids=group_ids,
+        approver_users=[
+            ApproverUserRef(
+                id=u.id, display_name=u.display_name, email=u.email, role=u.role.value
+            )
+            for u in users
+        ],
+        approver_groups=[ApproverGroupRef(id=g.id, name=g.name) for g in groups],
+        scope=share_approval_svc.effective_scope(db),  # type: ignore[arg-type]
+        exempt_approvers=share_approval_svc.exempt_approvers(db),
+        allow_content_review=share_approval_svc.allow_content_review(db),
+    )
+
+
+@router.get("/settings/share-approval", response_model=ShareApprovalSettingsResponse)
+def get_share_approval_settings(
+    db: Session = Depends(get_db),
+    _admin: User = Depends(get_current_admin),
+) -> ShareApprovalSettingsResponse:
+    return _share_approval_response(db)
+
+
+@router.put("/settings/share-approval", response_model=ShareApprovalSettingsResponse)
+def update_share_approval_settings(
+    payload: UpdateShareApprovalSettingsRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin),
+) -> ShareApprovalSettingsResponse:
+    if payload.approver_user_ids:
+        found = {
+            row[0]
+            for row in db.query(User.id)
+            .filter(User.id.in_(payload.approver_user_ids))
+            .all()
+        }
+        missing = [i for i in payload.approver_user_ids if i not in found]
+        if missing:
+            raise AppError(
+                400,
+                "USER_NOT_FOUND",
+                "One or more selected users do not exist.",
+                details={"missing_user_ids": missing},
+            )
+    if payload.approver_group_ids:
+        found = {
+            row[0]
+            for row in db.query(Group.id)
+            .filter(Group.id.in_(payload.approver_group_ids))
+            .all()
+        }
+        missing = [i for i in payload.approver_group_ids if i not in found]
+        if missing:
+            raise AppError(
+                400,
+                "GROUP_NOT_FOUND",
+                "One or more selected groups do not exist.",
+                details={"missing_group_ids": missing},
+            )
+
+    keys = settings_svc.Keys
+    settings_svc.set_value(
+        db, key=keys.SHARE_APPROVAL_ENABLED, value="true" if payload.enabled else "false", actor=admin
+    )
+    settings_svc.set_value(db, key=keys.SHARE_APPROVAL_APPROVER_MODE, value=payload.approver_mode, actor=admin)
+    settings_svc.set_value(
+        db,
+        key=keys.SHARE_APPROVAL_APPROVER_USERS,
+        value=json.dumps(payload.approver_user_ids) if payload.approver_user_ids else None,
+        actor=admin,
+    )
+    settings_svc.set_value(
+        db,
+        key=keys.SHARE_APPROVAL_APPROVER_GROUPS,
+        value=json.dumps(payload.approver_group_ids) if payload.approver_group_ids else None,
+        actor=admin,
+    )
+    settings_svc.set_value(db, key=keys.SHARE_APPROVAL_SCOPE, value=payload.scope, actor=admin)
+    settings_svc.set_value(
+        db,
+        key=keys.SHARE_APPROVAL_EXEMPT_APPROVERS,
+        value="true" if payload.exempt_approvers else "false",
+        actor=admin,
+    )
+    settings_svc.set_value(
+        db,
+        key=keys.SHARE_APPROVAL_ALLOW_CONTENT_REVIEW,
+        value="true" if payload.allow_content_review else "false",
+        actor=admin,
+    )
+    record_audit_event(
+        db,
+        event_type=AuditEventType.share_approval_policy_changed,
+        actor_user_id=admin.id,
+        target_type="settings",
+        target_id="share_approval",
+        metadata={
+            "enabled": payload.enabled,
+            "mode": payload.approver_mode,
+            "scope": payload.scope,
+            "user_count": len(payload.approver_user_ids),
+            "group_count": len(payload.approver_group_ids),
+            "exempt_approvers": payload.exempt_approvers,
+            "allow_content_review": payload.allow_content_review,
+        },
+        request=request,
+    )
+    db.commit()
+    return _share_approval_response(db)
 
 
 # ---- Email-change policy ---------------------------------------------------

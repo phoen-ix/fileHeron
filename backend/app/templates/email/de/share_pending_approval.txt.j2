@@ -1,0 +1,7 @@
+Hallo {{ recipient_name|default("zusammen") }},
+
+{{ sender_name }} hat eine Freigabe erstellt, die deine Genehmigung benötigt{% if subject %} – „{{ subject }}“{% endif %}, bevor die Empfänger darauf zugreifen können.
+
+Prüfe sie und genehmige oder lehne sie ab: {{ share_url }}
+
+— {{ app_name }}

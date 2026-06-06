@@ -168,6 +168,19 @@ class ShareResponse(APIBaseModel):
     # Populated only on creation when `public_link` was set in the
     # request body. Plaintext URL is returned ONCE here and never again.
     public_link: InlinePublicLinkResult | None = None
+    # Share-approval workflow (v1.24.0). `rejection_reason` is the approver's
+    # note (set when state==rejected). `viewer_can_approve` is True when the
+    # current viewer may approve/reject THIS share now (approver, pending, not
+    # their own) — drives the Approve/Reject buttons.
+    rejection_reason: str | None = None
+    approval_decided_at: datetime | None = None
+    viewer_can_approve: bool = False
+
+
+class RejectShareRequest(APIBaseModel):
+    """Body for `POST /api/shares/{id}/reject` — optional reason shown to the
+    sender."""
+    reason: str | None = Field(default=None, max_length=1000)
 
 
 class ShareRecipientRef(APIBaseModel):

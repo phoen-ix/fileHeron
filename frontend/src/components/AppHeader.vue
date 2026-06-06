@@ -48,6 +48,13 @@ async function doLogout() {
           <RouterLink :to="{ name: 'inbox' }" class="nav-link">
             {{ $t('header.inbox') }}
           </RouterLink>
+          <RouterLink
+            v-if="auth.user?.can_approve_shares"
+            :to="{ name: 'approvals' }"
+            class="nav-link"
+          >
+            {{ $t('header.approvals') }}
+          </RouterLink>
           <RouterLink :to="{ name: 'share-create' }" class="nav-link nav-cta">
             {{ $t('header.new_share') }}
           </RouterLink>

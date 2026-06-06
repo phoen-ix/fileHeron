@@ -58,6 +58,7 @@ export const ADMIN_NAV: AdminNavCategory[] = [
       { routeName: 'admin-quarantine', labelKey: 'admin.nav.quarantine', matchNames: ['admin-quarantine'] },
       { routeName: 'admin-settings-quarantine', labelKey: 'admin.nav_item.quarantine_alerts', matchNames: ['admin-settings-quarantine'] },
       { routeName: 'admin-settings-public-links', labelKey: 'admin.nav_item.public_links', matchNames: ['admin-settings-public-links'] },
+      { routeName: 'admin-settings-share-approval', labelKey: 'admin.nav_item.share_approval', matchNames: ['admin-settings-share-approval'] },
     ],
   },
   {

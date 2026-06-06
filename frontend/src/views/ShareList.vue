@@ -166,7 +166,9 @@ onMounted(load)
         :aria-label="t('share_list.filter.state_all')"
       >
         <option value="">{{ t('share_list.filter.state_all') }}</option>
+        <option value="pending_approval">{{ t('share_state.pending_approval') }}</option>
         <option value="active">{{ t('share_state.active') }}</option>
+        <option value="rejected">{{ t('share_state.rejected') }}</option>
         <option value="expired">{{ t('share_state.expired') }}</option>
         <option value="revoked">{{ t('share_state.revoked') }}</option>
         <option value="deleted">{{ t('share_state.deleted') }}</option>

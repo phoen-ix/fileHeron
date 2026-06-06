@@ -177,6 +177,7 @@
     "outbox": "Gesendet",
     "inbox": "Empfangen",
     "new_share": "Neue Freigabe",
+    "approvals": "Genehmigungen",
     "admin": "Admin"
   },
   "admin": {
@@ -207,6 +208,7 @@
       "twofa": "2FA-Pflicht",
       "api_token_policy": "Token-Richtlinie",
       "public_links": "Öffentliche Links",
+      "share_approval": "Freigabe-Genehmigung",
       "email": "E-Mail / SMTP",
       "quarantine_alerts": "Quarantäne-Alarme",
       "email_change": "E-Mail-Änderung",
@@ -558,6 +560,35 @@
     "test_ok": "Test-E-Mail erfolgreich versendet.",
     "test_failed": "Test-E-Mail fehlgeschlagen.",
     "hint_label": "Lösungsvorschlag:"
+  },
+  "admin_share_approval": {
+    "title": "Freigabe-Genehmigung",
+    "intro": "Verlange ein Vier-Augen-Prinzip, bevor Freigaben hinausgehen. Wenn aktiviert, wartet eine neue Freigabe im Status „Wartet auf Genehmigung“, bis ein Genehmiger sie genehmigt oder ablehnt.",
+    "enable_label": "Genehmigung für neue Freigaben verlangen",
+    "enable_help": "Wenn deaktiviert, gehen Freigaben wie bisher sofort live.",
+    "mode_label": "Wer darf genehmigen",
+    "mode": {
+      "admins_only": "Nur Admins",
+      "admins_only_help": "Nur Administratoren können Freigaben genehmigen oder ablehnen.",
+      "employees_admins": "Mitarbeiter und Admins",
+      "employees_admins_help": "Jeder Mitarbeiter oder Admin kann Freigaben genehmigen oder ablehnen."
+    },
+    "allowlist_heading": "Zusätzliche Genehmiger",
+    "allowlist_help": "Optional bestimmte Benutzer oder Gruppen zusätzlich zur Basis oben als Genehmiger hinzufügen.",
+    "users_label": "Benutzer",
+    "users_placeholder": "Benutzer nach Name oder E-Mail suchen…",
+    "groups_label": "Gruppen",
+    "scope_label": "Welche Freigaben brauchen Genehmigung",
+    "scope": {
+      "outbound": "Nur ausgehend (Team → Empfänger)",
+      "all": "Alle Freigaben (auch Client-Uploads)",
+      "outbound_to_clients": "Nur ausgehend an Clients"
+    },
+    "exempt_label": "Eigene Freigaben von Genehmigern überspringen die Genehmigung",
+    "exempt_help": "Wenn aktiviert, geht eine Freigabe, die von einem Genehmiger erstellt wurde, sofort live (keine Selbst-Genehmigung, kein Deadlock).",
+    "review_label": "Genehmiger dürfen Dateiinhalte prüfen",
+    "review_help": "Wenn aktiviert, können Genehmiger die Dateien einer ausstehenden Freigabe vor der Entscheidung ansehen oder herunterladen.",
+    "saved_toast": "Freigabe-Genehmigungsrichtlinie gespeichert."
   },
   "admin_public_link_policy": {
     "title": "Öffentliche-Links-Richtlinie",
@@ -1267,7 +1298,34 @@
     "outbound": "Ausgehend",
     "inbound": "Eingehend"
   },
+  "approvals": {
+    "eyebrow": "Genehmigungen",
+    "title": "Ausstehende Genehmigungen",
+    "intro": "Freigaben, die auf deine Genehmigung warten, bevor die Empfänger darauf zugreifen können.",
+    "empty": "Es wartet nichts auf deine Genehmigung.",
+    "no_subject": "(kein Betreff)",
+    "from": "Von {name}",
+    "file_count": "{n} Datei(en)",
+    "review_cta": "Prüfen",
+    "decide_help": "Prüfe die Dateien und Empfänger und genehmige die Freigabe oder lehne sie an den Absender ab.",
+    "approve_cta": "Genehmigen",
+    "reject_cta": "Ablehnen",
+    "confirm_reject_cta": "Freigabe ablehnen",
+    "reason_label": "Grund",
+    "reason_placeholder": "Optional — wird dem Absender angezeigt.",
+    "resubmit_cta": "Erneut zur Genehmigung einreichen",
+    "discard_cta": "Freigabe verwerfen",
+    "discard_confirm": "Diese Freigabe verwerfen? Die Empfänger werden sie nie sehen.",
+    "pending_owner_banner": "Diese Freigabe wartet auf Genehmigung. Empfänger sehen sie erst, wenn ein Genehmiger sie freigibt.",
+    "rejected_owner_banner": "Diese Freigabe wurde nicht genehmigt.",
+    "approved_toast": "Freigabe genehmigt.",
+    "rejected_toast": "Freigabe abgelehnt.",
+    "resubmitted_toast": "Freigabe erneut zur Genehmigung eingereicht.",
+    "discarded_toast": "Freigabe verworfen."
+  },
   "share_state": {
+    "pending_approval": "Wartet auf Genehmigung",
+    "rejected": "Abgelehnt",
     "active": "Aktiv",
     "expired": "Abgelaufen",
     "revoked": "Widerrufen",
@@ -1296,6 +1354,7 @@
     "send": "Erstellen und senden",
     "sending": "Wird gesendet…",
     "toast_done": "Freigabe erstellt.",
+    "toast_pending": "Freigabe zur Genehmigung eingereicht.",
     "toast_partial": "{n} Datei(en) konnten nicht hochgeladen werden. Unten erneut versuchen.",
     "public_link": {
       "toggle_label": "Auch einen öffentlichen Download-Link erstellen",

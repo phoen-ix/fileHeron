@@ -94,6 +94,28 @@ export function getShare(shareId: string) {
   return api.get<ShareResponse>(`/shares/${shareId}`)
 }
 
+/* Share-approval workflow (v1.24.0). */
+
+export function listPendingApprovals(
+  params: { page?: number; page_size?: number } = {},
+) {
+  return api.get<ShareListResponse>('/shares/pending-approval', { params })
+}
+
+export function approveShare(shareId: string) {
+  return api.post<ShareResponse>(`/shares/${shareId}/approve`)
+}
+
+export function rejectShare(shareId: string, reason?: string | null) {
+  return api.post<ShareResponse>(`/shares/${shareId}/reject`, {
+    reason: reason ?? null,
+  })
+}
+
+export function resubmitShare(shareId: string) {
+  return api.post<ShareResponse>(`/shares/${shareId}/resubmit`)
+}
+
 export function deleteShare(shareId: string) {
   return api.delete(`/shares/${shareId}`)
 }

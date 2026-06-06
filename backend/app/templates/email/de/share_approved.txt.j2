@@ -1,0 +1,7 @@
+Hallo {{ recipient_name|default("zusammen") }},
+
+Deine Freigabe{% if subject %} „{{ subject }}“{% endif %} wurde genehmigt und steht den Empfängern nun zur Verfügung.
+
+Ansehen: {{ share_url }}
+
+— {{ app_name }}

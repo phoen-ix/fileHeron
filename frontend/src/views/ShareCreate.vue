@@ -61,6 +61,8 @@ const notifyRecipients = ref(
 )
 
 const shareId = ref<string | null>(null)
+// v1.24.0: the created share landed in `pending_approval` (approval workflow).
+const createdPending = ref(false)
 const upload = useUpload(shareId)
 const submitting = ref(false)
 const errorMsg = ref<string | null>(null)
@@ -149,6 +151,7 @@ async function onSubmit() {
       download_limit: shareDownloadLimit.value || null,
     })
     shareId.value = data.id
+    createdPending.value = data.state === 'pending_approval'
     if (data.public_link) {
       plResult.value = data.public_link
     }
@@ -159,7 +162,12 @@ async function onSubmit() {
     phase.value = 'progress'
     await upload.start()
     if (allUploadsDone.value) {
-      ui.pushToast(t('share_create.toast_done'), 'success')
+      ui.pushToast(
+        createdPending.value
+          ? t('share_create.toast_pending')
+          : t('share_create.toast_done'),
+        'success',
+      )
     } else {
       ui.pushToast(t('share_create.toast_partial', { n: errorCount.value }), 'warn')
     }

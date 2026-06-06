@@ -79,7 +79,10 @@ def create_link(
             "PUBLIC_LINK_NOT_ALLOWED",
             "Your administrator has restricted public-link creation.",
         )
-    if share.state != ShareState.active:
+    # `pending_approval` is allowed so an inline-public-link-on-create share that
+    # the approval policy holds for review still gets its link attached; the link
+    # stays unusable (assert_link_usable is active-only) until the share is approved.
+    if share.state not in (ShareState.active, ShareState.pending_approval):
         raise AppError(
             409, "SHARE_NOT_ACTIVE", "Cannot create a public link for a non-active share."
         )

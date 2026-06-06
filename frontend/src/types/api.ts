@@ -46,6 +46,9 @@ export interface MeResponse {
    * admin-set, default true). When false the SPA hides every Preview
    * button; the preview endpoints also refuse server-side. */
   file_preview_enabled: boolean
+  /** v1.24.0: true when the share-approval workflow is on AND this user is in
+   * the approver set. Drives the Approvals nav entry + approve/reject UI. */
+  can_approve_shares: boolean
   /** v1.15.0: per-admin collapsible-sidebar mode. null = system default
    * (accordion). Only meaningful for admins. */
   admin_nav_collapse_mode: AdminNavCollapseMode | null
@@ -68,6 +71,43 @@ export interface FilePreviewSettingsResponse {
 
 export interface UpdateFilePreviewSettingsRequest {
   enabled: boolean
+}
+
+export type ApproverMode = 'admins_only' | 'employees_admins'
+export type ApprovalScope = 'outbound' | 'all' | 'outbound_to_clients'
+
+export interface ApproverUserRef {
+  id: number
+  display_name: string
+  email: string
+  role: string
+}
+
+export interface ApproverGroupRef {
+  id: number
+  name: string
+}
+
+export interface ShareApprovalSettingsResponse {
+  enabled: boolean
+  approver_mode: ApproverMode
+  approver_user_ids: number[]
+  approver_group_ids: number[]
+  approver_users: ApproverUserRef[]
+  approver_groups: ApproverGroupRef[]
+  scope: ApprovalScope
+  exempt_approvers: boolean
+  allow_content_review: boolean
+}
+
+export interface UpdateShareApprovalSettingsRequest {
+  enabled: boolean
+  approver_mode: ApproverMode
+  approver_user_ids: number[]
+  approver_group_ids: number[]
+  scope: ApprovalScope
+  exempt_approvers: boolean
+  allow_content_review: boolean
 }
 
 export interface LoginResponse {
@@ -198,7 +238,14 @@ export interface UpdateGroupRequest {
 /* Shares */
 
 export type ShareKind = 'outbound' | 'inbound'
-export type ShareState = 'active' | 'expired' | 'revoked' | 'deleted' | 'failed'
+export type ShareState =
+  | 'active'
+  | 'expired'
+  | 'revoked'
+  | 'deleted'
+  | 'failed'
+  | 'pending_approval'
+  | 'rejected'
 // Mirrors backend app/models/file.py::FileState.
 export type FileState =
   | 'uploading'
@@ -257,6 +304,12 @@ export interface ShareResponse {
   downloads_remaining: number | null
   /** Populated only when `public_link` was set in the create request. */
   public_link?: InlinePublicLinkResult | null
+  /** v1.24.0 share-approval. `rejection_reason` set when state==='rejected';
+   *  `viewer_can_approve` true when the current viewer may approve/reject this
+   *  pending share now (approver, not their own). */
+  rejection_reason?: string | null
+  approval_decided_at?: string | null
+  viewer_can_approve?: boolean
 }
 
 export interface ShareRecipientsRequest {

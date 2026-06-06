@@ -177,6 +177,7 @@
     "outbox": "Sent",
     "inbox": "Received",
     "new_share": "New share",
+    "approvals": "Approvals",
     "admin": "Admin"
   },
   "admin": {
@@ -207,6 +208,7 @@
       "twofa": "2FA enforcement",
       "api_token_policy": "Token policy",
       "public_links": "Public links",
+      "share_approval": "Share approval",
       "email": "Email / SMTP",
       "quarantine_alerts": "Quarantine alerts",
       "email_change": "Email change",
@@ -558,6 +560,35 @@
     "test_ok": "Test email sent successfully.",
     "test_failed": "Test email failed.",
     "hint_label": "What to try:"
+  },
+  "admin_share_approval": {
+    "title": "Share approval",
+    "intro": "Require a second pair of eyes before shares go out. When enabled, a new share waits in 'pending approval' until a designated approver approves or rejects it.",
+    "enable_label": "Require approval for new shares",
+    "enable_help": "When off, shares go live immediately as before.",
+    "mode_label": "Who can approve",
+    "mode": {
+      "admins_only": "Admins only",
+      "admins_only_help": "Only administrators can approve or reject shares.",
+      "employees_admins": "Employees and admins",
+      "employees_admins_help": "Any employee or admin can approve or reject shares."
+    },
+    "allowlist_heading": "Additional approvers",
+    "allowlist_help": "Optionally add specific users or groups as approvers on top of the base set above.",
+    "users_label": "Users",
+    "users_placeholder": "Search users by name or email…",
+    "groups_label": "Groups",
+    "scope_label": "Which shares need approval",
+    "scope": {
+      "outbound": "Outbound only (staff → recipients)",
+      "all": "All shares (including client uploads)",
+      "outbound_to_clients": "Outbound to clients only"
+    },
+    "exempt_label": "Approvers' own shares skip approval",
+    "exempt_help": "When on, a share created by someone who can approve goes live immediately (no self-approval, no deadlock).",
+    "review_label": "Approvers can review file contents",
+    "review_help": "When on, approvers can preview or download a pending share's files to inspect them before deciding.",
+    "saved_toast": "Share-approval policy saved."
   },
   "admin_public_link_policy": {
     "title": "Public link policy",
@@ -1267,7 +1298,34 @@
     "outbound": "Outbound",
     "inbound": "Inbound"
   },
+  "approvals": {
+    "eyebrow": "Approvals",
+    "title": "Pending approvals",
+    "intro": "Shares waiting for your approval before their recipients can access them.",
+    "empty": "Nothing is waiting for your approval.",
+    "no_subject": "(no subject)",
+    "from": "From {name}",
+    "file_count": "{n} file(s)",
+    "review_cta": "Review",
+    "decide_help": "Review the files and recipients, then approve to release the share or reject it back to the sender.",
+    "approve_cta": "Approve",
+    "reject_cta": "Reject",
+    "confirm_reject_cta": "Reject share",
+    "reason_label": "Reason",
+    "reason_placeholder": "Optional — shown to the sender.",
+    "resubmit_cta": "Resubmit for approval",
+    "discard_cta": "Discard share",
+    "discard_confirm": "Discard this share? Its recipients will never see it.",
+    "pending_owner_banner": "This share is awaiting approval. Recipients can't see it until an approver releases it.",
+    "rejected_owner_banner": "This share was not approved.",
+    "approved_toast": "Share approved.",
+    "rejected_toast": "Share rejected.",
+    "resubmitted_toast": "Share resubmitted for approval.",
+    "discarded_toast": "Share discarded."
+  },
   "share_state": {
+    "pending_approval": "Pending approval",
+    "rejected": "Rejected",
     "active": "Active",
     "expired": "Expired",
     "revoked": "Revoked",
@@ -1296,6 +1354,7 @@
     "send": "Create + send",
     "sending": "Sending…",
     "toast_done": "Share created.",
+    "toast_pending": "Share submitted for approval.",
     "toast_partial": "{n} file(s) failed to upload. Retry below.",
     "public_link": {
       "toggle_label": "Also create a public download link",

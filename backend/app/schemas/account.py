@@ -54,6 +54,9 @@ class MeResponse(APIBaseModel):
     # default true). When False the SPA hides every Preview button; the preview
     # endpoints also refuse server-side (403). Re-read on each /me hydration.
     file_preview_enabled: bool = True
+    # v1.24.0: True when the share-approval workflow is on AND this user is in
+    # the approver set. Drives the "Approvals" nav entry + approve/reject UI.
+    can_approve_shares: bool = False
     # Per-admin collapsible-sidebar mode. NULL = system default (accordion).
     # Validated against `services/account_prefs.ADMIN_NAV_MODES` in the PATCH
     # endpoint. Only meaningful for admins; harmless null for everyone else.

@@ -14,7 +14,7 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, Text
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -42,8 +42,14 @@ class ShareState(str, enum.Enum):
     # Upload never completed — the cleanup_stale_uploads cron reaps the
     # abandoned file(s) and flips the otherwise-empty share here so it leaves
     # the active sent folder. Stored as VARCHAR (native_enum=False) so adding
-    # this value needs no migration; "failed" (6) fits length=10.
+    # this value needs no migration; "failed" (6) fit the original length=10.
     failed = "failed"
+    # Share-approval workflow (v1.24.0). When the policy requires it a new share
+    # lands in `pending_approval` until an approver approves (→ active) or
+    # rejects (→ rejected, bytes kept; the owner can resubmit). "pending_approval"
+    # (16 chars) is why the `state` column widened to VARCHAR(20).
+    pending_approval = "pending_approval"
+    rejected = "rejected"
 
 
 
@@ -80,7 +86,7 @@ class Share(Base):
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(), nullable=True, index=True)
 
     state: Mapped[ShareState] = mapped_column(
-        SAEnum(ShareState, native_enum=False, length=10),
+        SAEnum(ShareState, native_enum=False, length=20),
         nullable=False,
         default=ShareState.active,
         index=True,
@@ -105,6 +111,18 @@ class Share(Base):
     # uses. Single shared budget across all recipients + sender + admins.
     download_limit: Mapped[int | None] = mapped_column(Integer, nullable=True)
     downloads_remaining: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    # Share-approval workflow (v1.24.0). Set on the approve/reject decision;
+    # `rejection_reason` carries the approver's note to the sender.
+    # `notify_on_activation` freezes the sender's "notify recipients" choice at
+    # create time so the deferred `share_created` dispatch (fired on approval)
+    # honours it. All NULL for shares that never went through approval.
+    approval_decided_by_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    approval_decided_at: Mapped[datetime | None] = mapped_column(DateTime(), nullable=True)
+    rejection_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    notify_on_activation: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
 
     created_by: Mapped[User] = relationship("User", foreign_keys=[created_by_id])
     files: Mapped[list[File]] = relationship(

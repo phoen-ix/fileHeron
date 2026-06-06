@@ -45,6 +45,11 @@ class NotificationCategory(str, enum.Enum):
     # migration for the new value.
     share_files_added = "share_files_added"
     share_expiring = "share_expiring"
+    # Share-approval workflow (v1.24.0). pending_approval → the approvers;
+    # approved/rejected → the share's creator. Plain strings → no migration.
+    share_pending_approval = "share_pending_approval"
+    share_approved = "share_approved"
+    share_rejected = "share_rejected"
     public_link_downloaded = "public_link_downloaded"
     account_created = "account_created"
     # Kept for parity with the rest of the categories even though the actual

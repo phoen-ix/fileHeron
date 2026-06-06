@@ -78,6 +78,12 @@ class AuditEventType(str, enum.Enum):
     public_link_policy_changed = "public_link_policy_changed"  # post-Phase 10
     share_expiry_updated = "share_expiry_updated"            # post-Phase 10
     share_files_added = "share_files_added"                  # v1.12.0 (owner added files to an active share)
+    # Share-approval workflow (v1.24.0).
+    share_submitted_for_approval = "share_submitted_for_approval"
+    share_approved = "share_approved"
+    share_rejected = "share_rejected"
+    share_resubmitted = "share_resubmitted"
+    share_approval_policy_changed = "share_approval_policy_changed"
     share_limit_updated = "share_limit_updated"              # v1.1.0 (per-share download budget)
     refresh_token_evicted = "refresh_token_evicted"          # post-Phase 10 (session cap)
     refresh_token_admin_revoked = "refresh_token_admin_revoked"  # v1.7.0 (admin session revoke)

@@ -143,6 +143,17 @@ Supported files get a **Preview** button — in the share view *and* the public 
 - **Security.** Inline content is served from a strict server-side allowlist with `X-Content-Type-Options: nosniff` and a restrictive `Content-Security-Policy`. SVG is never inline-rendered (it can carry script), and anything `text/*` — including HTML — is served as `text/plain`, i.e. shown as source, never executed. On the S3 backend the bytes are served by a presigned redirect that can't carry those headers, so the type allowlist is the defense there.
 - **Global switch.** Admins can turn the whole feature off at *Settings → General → File preview* (`file_preview.enabled`); when off the Preview buttons disappear and the preview endpoints refuse server-side.
 
+## Share approval (four-eyes)
+
+Optional, admin-controlled. When enabled, a newly created share enters **pending approval** instead of going live — recipients aren't notified and can't access anything until a designated **approver** approves it (or rejects it back to the sender). Off by default; when off, shares go live immediately as before. Configure it at *Settings → Share approval*:
+
+- **Who approves** — admins only, employees + admins, or specific users/groups (an allowlist on top).
+- **Which shares need it** — outbound only, all shares (incl. client uploads), or outbound-to-clients only.
+- **Approvers' own shares** — auto-approve (no deadlock) or require a different approver. (No one can ever approve their own share.)
+- **Content review** — whether approvers may open the pending files to inspect them before deciding (otherwise they decide on metadata: filenames, types, recipients, sender, subject).
+
+Approvers get an **Approvals** entry in the top nav — a queue of everything waiting on them. A sender sees "pending approval" on a held share, and on a rejected one the **reason** plus a **Resubmit** button (the files are kept). Notifications (email + in-app, EN/DE) fire to the approvers ("needs your approval") and back to the sender ("approved" / "rejected"). A pending or rejected share is invisible to recipients and to any public link until approved.
+
 ## Account page (`/account`)
 
 A single scrollable page with these sections (left-side quick-nav with scroll-spy):
@@ -267,10 +278,10 @@ Companion setting at **`/admin/settings/quarantine`** — single toggle "Notify 
 
 - **Auth / accounts:** `user_registered`, `user_created_by_admin`, `email_verified`, `login_success`, `login_failure`, `logout`, `account_locked`, `rate_limited`, `password_changed`, `password_reset_requested`, `password_reset_consumed`, `totp_enabled`, `totp_disabled`, `recovery_code_used`, `role_changed`, `user_disabled`, `user_erased`, `admin_bootstrapped`.
 - **Sessions / invites:** `refresh_token_rotated`, `refresh_token_reused`, `refresh_token_evicted`, `invite_created`, `invite_consumed`, `invite_revoked`, `invite_purged`.
-- **Shares / files:** `share_created`, `share_revoked`, `share_expired`, `share_expiry_updated`, `share_limit_updated`, `file_finalized`, `file_downloaded`, `file_deleted`, `file_expired`, `file_quarantined`, `file_quarantine_released`, `file_quarantine_purged`, `av_reload_triggered`.
+- **Shares / files:** `share_created`, `share_revoked`, `share_expired`, `share_expiry_updated`, `share_limit_updated`, `share_submitted_for_approval`, `share_approved`, `share_rejected`, `share_resubmitted`, `file_finalized`, `file_downloaded`, `file_deleted`, `file_expired`, `file_quarantined`, `file_quarantine_released`, `file_quarantine_purged`, `av_reload_triggered`.
 - **Public links / groups:** `public_link_created`, `public_link_revoked`, `public_link_consumed`, `group_created`, `group_updated`, `group_deleted`, `group_member_added`, `group_member_removed`.
 - **API tokens / OIDC:** `api_token_created`/`_revoked`/`_disabled`/`_reactivated`/`_admin_revoked`/`_admin_created`, `oidc_linked`, `oidc_unlinked`, `oidc_provider_created`/`_updated`/`_deleted`.
-- **Settings / policy:** `api_policy_changed`, `public_link_policy_changed`, `twofa_policy_changed`, `quarantine_policy_changed`, `share_defaults_policy_changed`, `smtp_config_changed`, `home_page_toggled`, `file_preview_toggled`, `motd_changed`, `site_url_changed`, `site_timezone_changed`, `updates_settings_changed`, `settings_changed`.
+- **Settings / policy:** `api_policy_changed`, `public_link_policy_changed`, `twofa_policy_changed`, `quarantine_policy_changed`, `share_defaults_policy_changed`, `smtp_config_changed`, `home_page_toggled`, `file_preview_toggled`, `share_approval_policy_changed`, `motd_changed`, `site_url_changed`, `site_timezone_changed`, `updates_settings_changed`, `settings_changed`.
 - **Ops / self-update:** `cron_failed`, `cron_run_triggered`, `ops_alert_dispatched`, `email_undeliverable`, `update_triggered`/`_completed`/`_failed`, `rollback_triggered`/`_completed`/`_failed`.
 
 ---
@@ -602,6 +613,7 @@ Edited under `/admin/settings/*`; stored in `app_settings`. Authoritative key li
 |---|---|---|
 | **API tokens** `/api-tokens` | `api_token.policy_mode` + `..allowed_user_ids` + `..allowed_group_ids` | Who may mint API tokens (`everyone`/`employees_admins`/`admins_only`/`disabled`) + additive allowlist. Admins always pass. |
 | **Public links** `/public-links` | `public_link.policy_mode` + allowlists | Same shape, for creating public share links. |
+| **Share approval** `/share-approval` | `share_approval.enabled` + `..approver_mode` + allowlists + `..scope` + `..exempt_approvers` + `..allow_content_review` | Four-eyes gate: which shares need approval, who approves, and whether approvers may review file contents. Off by default. |
 | **2FA** `/twofa` | `twofa.required_roles` + `twofa.required_group_ids` | Which roles/groups must enrol TOTP (computed live; no admin escape). |
 | **Email** `/email` | `smtp.{host,port,user,password,from_email,from_name,tls_mode}` | Live SMTP override (DB beats env). Password encrypted; never echoed. Has a "test send". |
 | **Site** `/site` | `site.url`, `site.timezone` | Public URL used in links; IANA timezone for the 24-hour timestamps shown in UI + emails. |

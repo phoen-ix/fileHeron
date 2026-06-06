@@ -37,6 +37,7 @@ const BASE_ME = {
   share_notify_recipients_default: true,
   can_change_own_email: false,
   file_preview_enabled: true,
+  can_approve_shares: false,
   admin_nav_collapse_mode: null as AdminNavCollapseMode | null,
   admin_nav_open_categories: null as string[] | null,
 }

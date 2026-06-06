@@ -1,0 +1,7 @@
+Hi {{ recipient_name|default("there") }},
+
+Your share{% if subject %} "{{ subject }}"{% endif %} was approved and is now available to its recipients.
+
+View it: {{ share_url }}
+
+— {{ app_name }}

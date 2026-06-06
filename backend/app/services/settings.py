@@ -72,6 +72,16 @@ class Keys:
     # the create-share form. When the sender doesn't override the field,
     # this kv decides whether `share_created` notifications fan out.
     SHARE_NOTIFY_RECIPIENTS_DEFAULT = "share.notify_recipients_default"  # boolean
+    # Share-approval workflow (v1.24.0). All admin-tunable, read live via
+    # services/share_approval.py. The approver set reuses the policy_gate shape
+    # (mode + additive user/group allowlist; admin always passes).
+    SHARE_APPROVAL_ENABLED = "share_approval.enabled"            # boolean master switch
+    SHARE_APPROVAL_APPROVER_MODE = "share_approval.approver_mode"  # admins_only | employees_admins
+    SHARE_APPROVAL_APPROVER_USERS = "share_approval.approver_user_ids"   # JSON list[int]
+    SHARE_APPROVAL_APPROVER_GROUPS = "share_approval.approver_group_ids"  # JSON list[int]
+    SHARE_APPROVAL_SCOPE = "share_approval.scope"                # outbound | all | outbound_to_clients
+    SHARE_APPROVAL_EXEMPT_APPROVERS = "share_approval.exempt_approvers"   # boolean (default true)
+    SHARE_APPROVAL_ALLOW_CONTENT_REVIEW = "share_approval.allow_content_review"  # boolean (default true)
     # Global on/off for in-browser file preview (v1.23.0). Default true. When
     # false the SPA hides Preview buttons AND the preview endpoints refuse with
     # 403 (server-enforced, not just UI-hidden). See services/preview.py.

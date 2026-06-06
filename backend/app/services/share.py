@@ -107,6 +107,159 @@ def _shares_group(db: Session, user_a_id: int, user_b_id: int) -> bool:
     return bool(a_groups & set(_user_group_ids(db, user_b_id)))
 
 
+def _resolved_notify_flag(db: Session, notify_recipients: bool | None) -> bool:
+    """The effective 'notify recipients' choice — the explicit per-share flag,
+    else the admin default. Frozen onto a pending share so the deferred
+    share_created (fired on approval) honours it."""
+    if notify_recipients is None:
+        from . import settings as settings_svc
+        return settings_svc.get_bool(
+            db, settings_svc.Keys.SHARE_NOTIFY_RECIPIENTS_DEFAULT, default=True
+        )
+    return notify_recipients
+
+
+def _recipient_notify_ids(
+    db: Session, share: Share, *, notify_recipients: bool
+) -> set[int]:
+    """User IDs to notify for a share_created event, resolved from the share's
+    persisted recipient rows + kind. Sender excluded. Inbound notifies all
+    non-disabled staff regardless of the flag."""
+    if share.kind == ShareKind.inbound:
+        rows = (
+            db.query(User.id)
+            .filter(
+                User.role.in_([UserRole.employee, UserRole.admin]),
+                User.is_disabled.is_(False),
+            )
+            .all()
+        )
+        ids = {uid for (uid,) in rows}
+    else:
+        if not notify_recipients:
+            return set()
+        recs = (
+            db.query(ShareRecipient)
+            .filter(ShareRecipient.share_id == share.id)
+            .all()
+        )
+        ids = {r.recipient_user_id for r in recs if r.recipient_user_id is not None}
+        group_ids = [r.recipient_group_id for r in recs if r.recipient_group_id is not None]
+        if group_ids:
+            member_rows = (
+                db.query(GroupMember.user_id)
+                .join(User, User.id == GroupMember.user_id)
+                .filter(
+                    GroupMember.group_id.in_(group_ids),
+                    User.is_disabled.is_(False),
+                )
+                .all()
+            )
+            ids.update(uid for (uid,) in member_rows)
+    ids.discard(share.created_by_id)
+    return ids
+
+
+def _dispatch_share_created(
+    db: Session, share: Share, *, notify_recipients: bool
+) -> None:
+    """Fan a share_created notification to the share's recipients. Used by the
+    active-on-create path AND the approval path (deferred until approve)."""
+    from ..models.file import FileState
+    from ..models.notification import NotificationCategory
+    from . import notification as notif_svc
+    from . import site as site_svc
+
+    notify_user_ids = _recipient_notify_ids(
+        db, share, notify_recipients=notify_recipients
+    )
+    if not notify_user_ids:
+        return
+    base_url = site_svc.get_site_url(db)
+    sender = share.created_by or db.query(User).get(share.created_by_id)
+    payload_base = {
+        "sender_name": sender.display_name if sender else "",
+        "subject": share.subject,
+        "message": share.message,
+        "expires_at": share.expires_at,
+        "file_count": sum(1 for f in share.files if f.state != FileState.deleted),
+        "share_url": f"{base_url}/share/{share.id}",
+    }
+    recipients = db.query(User).filter(User.id.in_(notify_user_ids)).all()
+    for u in recipients:
+        payload = dict(payload_base)
+        payload["recipient_name"] = u.display_name
+        notif_svc.dispatch(
+            db,
+            user=u,
+            category=NotificationCategory.share_created,
+            payload=payload,
+            link_url=payload["share_url"],
+            email_to=u.email,
+        )
+
+
+def _notify_approvers_pending(db: Session, share: Share) -> None:
+    """Fan a share_pending_approval notification to every eligible approver
+    (minus the creator)."""
+    from ..models.notification import NotificationCategory
+    from . import notification as notif_svc
+    from . import share_approval as approval_svc
+    from . import site as site_svc
+
+    approver_ids = approval_svc.approver_user_ids(db)
+    approver_ids.discard(share.created_by_id)
+    if not approver_ids:
+        return
+    base_url = site_svc.get_site_url(db)
+    sender = share.created_by or db.query(User).get(share.created_by_id)
+    payload_base = {
+        "sender_name": sender.display_name if sender else "",
+        "subject": share.subject,
+        "share_url": f"{base_url}/share/{share.id}",
+    }
+    approvers = db.query(User).filter(User.id.in_(approver_ids)).all()
+    for u in approvers:
+        payload = dict(payload_base)
+        payload["recipient_name"] = u.display_name
+        notif_svc.dispatch(
+            db,
+            user=u,
+            category=NotificationCategory.share_pending_approval,
+            payload=payload,
+            link_url=payload["share_url"],
+            email_to=u.email,
+        )
+
+
+def _notify_share_decision(
+    db: Session, share: Share, *, category, reason: str | None
+) -> None:
+    """Tell the creator their share was approved / rejected."""
+    from . import notification as notif_svc
+    from . import site as site_svc
+
+    creator = share.created_by or db.query(User).get(share.created_by_id)
+    if creator is None:
+        return
+    base_url = site_svc.get_site_url(db)
+    payload = {
+        "recipient_name": creator.display_name,
+        "subject": share.subject,
+        "share_url": f"{base_url}/share/{share.id}",
+    }
+    if reason:
+        payload["reason"] = reason
+    notif_svc.dispatch(
+        db,
+        user=creator,
+        category=category,
+        payload=payload,
+        link_url=payload["share_url"],
+        email_to=creator.email,
+    )
+
+
 def create_share(
     db: Session,
     *,
@@ -203,87 +356,45 @@ def create_share(
         db.add(ShareRecipient(share_id=share.id, recipient_group_id=g.id))
     db.flush()
 
+    audit_meta = {
+        "kind": kind.value,
+        "recipient_user_ids": [u.id for u in users],
+        "recipient_group_ids": [g.id for g in groups],
+    }
+    resolved_notify = _resolved_notify_flag(db, notify_recipients)
+
+    from . import share_approval as approval_svc
+
+    if approval_svc.is_approval_required(db, share):
+        # Hold the share for review: freeze the notify choice, ping the
+        # approvers, and DON'T notify recipients yet — that happens on approval.
+        share.state = ShareState.pending_approval
+        share.notify_on_activation = resolved_notify
+        db.flush()
+        record_audit_event(
+            db,
+            event_type=AuditEventType.share_submitted_for_approval,
+            actor_user_id=created_by.id,
+            target_type="share",
+            target_id=share.id,
+            metadata=audit_meta,
+            request=request,
+        )
+        _notify_approvers_pending(db, share)
+        return share
+
     record_audit_event(
         db,
         event_type=AuditEventType.share_created,
         actor_user_id=created_by.id,
         target_type="share",
         target_id=share.id,
-        metadata={
-            "kind": kind.value,
-            "recipient_user_ids": [u.id for u in users],
-            "recipient_group_ids": [g.id for g in groups],
-        },
+        metadata=audit_meta,
         request=request,
     )
-
-    # Build the notify set. Inbound (client → company): every non-disabled
-    # employee + admin (the company), regardless of the per-share flag —
-    # group-peers are intentionally NOT notified, they see it in their inbox.
-    # Outbound: the per-share notify flag gates direct users UNION active
-    # group members. Each recipient still honours their own per-user
-    # notification preference at dispatch time. Sender always excluded.
-    from ..models.notification import NotificationCategory
-    from . import notification as notif_svc
-    from . import settings as settings_svc
-    from . import site as site_svc
-
-    notify_user_ids: set[int] = set()
-    if kind == ShareKind.inbound:
-        staff_rows = (
-            db.query(User.id)
-            .filter(
-                User.role.in_([UserRole.employee, UserRole.admin]),
-                User.is_disabled.is_(False),
-            )
-            .all()
-        )
-        notify_user_ids = {uid for (uid,) in staff_rows}
-    else:
-        if notify_recipients is None:
-            notify_recipients = settings_svc.get_bool(
-                db,
-                settings_svc.Keys.SHARE_NOTIFY_RECIPIENTS_DEFAULT,
-                default=True,
-            )
-        if notify_recipients:
-            notify_user_ids = {u.id for u in users}
-            if groups:
-                member_rows = (
-                    db.query(GroupMember.user_id)
-                    .join(User, User.id == GroupMember.user_id)
-                    .filter(
-                        GroupMember.group_id.in_([g.id for g in groups]),
-                        User.is_disabled.is_(False),
-                    )
-                    .all()
-                )
-                for (uid,) in member_rows:
-                    notify_user_ids.add(uid)
-    notify_user_ids.discard(created_by.id)
-
-    if notify_user_ids:
-        base_url = site_svc.get_site_url(db)
-        payload_base = {
-            "sender_name": created_by.display_name,
-            "subject": share.subject,
-            "message": share.message,
-            "expires_at": share.expires_at,
-            "file_count": 0,  # files added after the share row; stays 0 here
-            "share_url": f"{base_url}/share/{share.id}",
-        }
-        recipients = db.query(User).filter(User.id.in_(notify_user_ids)).all()
-        for u in recipients:
-            payload = dict(payload_base)
-            payload["recipient_name"] = u.display_name
-            notif_svc.dispatch(
-                db,
-                user=u,
-                category=NotificationCategory.share_created,
-                payload=payload,
-                link_url=payload["share_url"],
-                email_to=u.email,
-            )
+    # Inbound notifies all staff regardless of the flag; outbound honours it.
+    # Each recipient still applies their own per-category preference.
+    _dispatch_share_created(db, share, notify_recipients=resolved_notify)
     return share
 
 
@@ -341,6 +452,35 @@ def is_authorized_to_download(db: Session, *, user: User, share: Share) -> bool:
         .first()
     )
     return rec is not None
+
+
+def is_authorized_to_view(db: Session, *, user: User, share: Share) -> bool:
+    """Who may open a share's detail (metadata only). Same as download for
+    active/terminal shares, plus approvers may view a PENDING share to decide.
+    A recipient can't see a pending or rejected share they were never granted."""
+    if user.role == UserRole.admin or share.created_by_id == user.id:
+        return True
+    from . import share_approval as approval_svc
+    if share.state == ShareState.pending_approval and approval_svc.can_approve(
+        db, user
+    ):
+        return True
+    if share.state in (ShareState.pending_approval, ShareState.rejected):
+        return False
+    return is_authorized_to_download(db, user=user, share=share)
+
+
+def assert_share_file_access(db: Session, *, user: User, share: Share) -> None:
+    """Gate access to a share's file BYTES (download / preview / zip). An
+    approver reviewing a pending share is allowed when content review is on;
+    otherwise normal authorization + the active-lifecycle gate apply (so a
+    recipient still can't fetch a pending/rejected share's bytes)."""
+    from . import share_approval as approval_svc
+    if approval_svc.can_review_pending(db, user, share):
+        return
+    if not is_authorized_to_download(db, user=user, share=share):
+        raise AppError(403, "FORBIDDEN", "You don't have access to this file.")
+    assert_share_downloadable(share)
 
 
 VALID_SORT_COLUMNS = {
@@ -447,6 +587,14 @@ def list_shares_for_user(
                     ShareRecipient.recipient_group_id == via_group_id
                 )
         base = base.distinct()
+        # Recipients never see a share that hasn't been approved (or was
+        # rejected) — those aren't 'received'. The sender's outbox shows them;
+        # approvers use the dedicated approval queue.
+        base = base.filter(
+            Share.state.notin_(
+                [ShareState.pending_approval, ShareState.rejected]
+            )
+        )
     else:
         raise AppError(400, "INVALID_BOX", "box must be 'outbox' or 'inbox'.")
 
@@ -506,6 +654,169 @@ def revoke_share(db: Session, *, user: User, share: Share, request=None) -> None
         target_id=share.id,
         request=request,
     )
+
+
+# ---------------------------------------------------------------------------
+# Share-approval workflow (v1.24.0)
+# ---------------------------------------------------------------------------
+
+
+def _assert_can_decide(db: Session, user: User, share: Share) -> None:
+    """Common guard for approve/reject: an approver, not the creator (no
+    self-approval ever), on a share that's still pending."""
+    from . import share_approval as approval_svc
+    if not approval_svc.can_approve(db, user):
+        raise AppError(403, "FORBIDDEN", "You're not allowed to decide on shares.")
+    if share.created_by_id == user.id:
+        raise AppError(403, "SELF_APPROVAL", "You can't decide on your own share.")
+    if share.state != ShareState.pending_approval:
+        raise AppError(409, "SHARE_NOT_PENDING", "This share isn't awaiting approval.")
+
+
+def approve_share(db: Session, *, user: User, share: Share, request=None) -> Share:
+    """Approver flips a pending share live, fires the deferred recipient
+    notifications, and tells the creator. Atomic flip guards double-approve."""
+    from ..models.notification import NotificationCategory
+
+    _assert_can_decide(db, user, share)
+    if share.expires_at is not None and share.expires_at < utc_now():
+        raise AppError(
+            409,
+            "SHARE_EXPIRY_PASSED",
+            "This share's expiry has already passed — ask the sender to resubmit with a later expiry.",
+        )
+    now = utc_now()
+    result = db.execute(
+        update(Share)
+        .where(Share.id == share.id, Share.state == ShareState.pending_approval)
+        .values(
+            state=ShareState.active,
+            approval_decided_by_id=user.id,
+            approval_decided_at=now,
+            rejection_reason=None,
+        )
+    )
+    if result.rowcount == 0:
+        raise AppError(409, "SHARE_NOT_PENDING", "This share isn't awaiting approval.")
+    db.flush()
+    db.refresh(share)
+    record_audit_event(
+        db,
+        event_type=AuditEventType.share_approved,
+        actor_user_id=user.id,
+        target_type="share",
+        target_id=share.id,
+        metadata={"creator_id": share.created_by_id},
+        request=request,
+    )
+    notify = share.notify_on_activation if share.notify_on_activation is not None else True
+    _dispatch_share_created(db, share, notify_recipients=notify)
+    _notify_share_decision(
+        db, share, category=NotificationCategory.share_approved, reason=None
+    )
+    return share
+
+
+def reject_share(
+    db: Session, *, user: User, share: Share, reason: str | None = None, request=None
+) -> Share:
+    """Approver rejects a pending share → `rejected`. Bytes are kept (the owner
+    can resubmit); the creator is notified with the reason."""
+    from ..models.notification import NotificationCategory
+
+    _assert_can_decide(db, user, share)
+    reason = (reason or "").strip()[:1000] or None
+    now = utc_now()
+    result = db.execute(
+        update(Share)
+        .where(Share.id == share.id, Share.state == ShareState.pending_approval)
+        .values(
+            state=ShareState.rejected,
+            approval_decided_by_id=user.id,
+            approval_decided_at=now,
+            rejection_reason=reason,
+        )
+    )
+    if result.rowcount == 0:
+        raise AppError(409, "SHARE_NOT_PENDING", "This share isn't awaiting approval.")
+    db.flush()
+    db.refresh(share)
+    record_audit_event(
+        db,
+        event_type=AuditEventType.share_rejected,
+        actor_user_id=user.id,
+        target_type="share",
+        target_id=share.id,
+        metadata={"creator_id": share.created_by_id, "has_reason": reason is not None},
+        request=request,
+    )
+    _notify_share_decision(
+        db, share, category=NotificationCategory.share_rejected, reason=reason
+    )
+    return share
+
+
+def resubmit_share(db: Session, *, user: User, share: Share, request=None) -> Share:
+    """Owner re-queues a rejected share for approval (as-is). Clears the prior
+    decision + re-notifies approvers."""
+    if share.created_by_id != user.id:
+        raise AppError(403, "FORBIDDEN", "Only the share owner can resubmit it.")
+    if share.state != ShareState.rejected:
+        raise AppError(
+            409, "SHARE_NOT_REJECTED", "Only a rejected share can be resubmitted."
+        )
+    result = db.execute(
+        update(Share)
+        .where(Share.id == share.id, Share.state == ShareState.rejected)
+        .values(
+            state=ShareState.pending_approval,
+            approval_decided_by_id=None,
+            approval_decided_at=None,
+            rejection_reason=None,
+        )
+    )
+    if result.rowcount == 0:
+        raise AppError(
+            409, "SHARE_NOT_REJECTED", "Only a rejected share can be resubmitted."
+        )
+    db.flush()
+    db.refresh(share)
+    record_audit_event(
+        db,
+        event_type=AuditEventType.share_resubmitted,
+        actor_user_id=user.id,
+        target_type="share",
+        target_id=share.id,
+        request=request,
+    )
+    _notify_approvers_pending(db, share)
+    return share
+
+
+def list_pending_approvals(
+    db: Session, *, user: User, page: int = 1, page_size: int = 50
+) -> tuple[list[Share], int]:
+    """Shares awaiting approval that `user` may act on (approver, not own),
+    oldest first. Empty when the user can't approve."""
+    from . import share_approval as approval_svc
+    if not approval_svc.can_approve(db, user):
+        return [], 0
+    base = (
+        db.query(Share)
+        .options(joinedload(Share.files))
+        .filter(
+            Share.state == ShareState.pending_approval,
+            Share.created_by_id != user.id,
+        )
+    )
+    total = base.count()
+    rows = (
+        base.order_by(Share.created_at.asc())
+        .offset(max(0, (page - 1) * page_size))
+        .limit(page_size)
+        .all()
+    )
+    return rows, total
 
 
 # ---------------------------------------------------------------------------

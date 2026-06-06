@@ -11,7 +11,13 @@ export type PillTone = 'active' | 'warn' | 'danger' | undefined
  */
 export function shareStatePill(state: ShareState | string): PillTone {
   if (state === 'active') return 'active'
-  if (state === 'expired') return 'warn'
-  if (state === 'revoked' || state === 'deleted' || state === 'failed') return 'danger'
+  if (state === 'expired' || state === 'pending_approval') return 'warn'
+  if (
+    state === 'revoked' ||
+    state === 'deleted' ||
+    state === 'failed' ||
+    state === 'rejected'
+  )
+    return 'danger'
   return undefined
 }

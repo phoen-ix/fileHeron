@@ -109,6 +109,12 @@ const router = createRouter({
       meta: { density: 'operator', title: 'New share' },
     },
     {
+      path: '/approvals',
+      name: 'approvals',
+      component: () => import('@/views/Approvals.vue'),
+      meta: { density: 'operator', title: 'Approvals' },
+    },
+    {
       path: '/share/:id',
       name: 'share-detail',
       component: () => import('@/views/ShareDetail.vue'),
@@ -240,6 +246,12 @@ const router = createRouter({
           name: 'admin-settings-public-links',
           component: () => import('@/views/AdminSettingsPublicLinks.vue'),
           meta: { density: 'operator', title: 'Public link policy', requiresRole: 'admin' },
+        },
+        {
+          path: 'settings/share-approval',
+          name: 'admin-settings-share-approval',
+          component: () => import('@/views/AdminSettingsShareApproval.vue'),
+          meta: { density: 'operator', title: 'Share approval', requiresRole: 'admin' },
         },
         {
           path: 'settings/email',

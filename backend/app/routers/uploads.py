@@ -46,7 +46,8 @@ def init_upload(
     """Authorise an upload. Returns a signed envelope the client embeds in
     Upload-Metadata. tusd validates on every hook by re-HMAC-ing."""
     share = share_svc.get_share_or_404(db, payload.share_id)
-    if share.state != ShareState.active:
+    if share.state not in (ShareState.active, ShareState.pending_approval):
+        # The owner may keep assembling a share that's awaiting approval.
         raise AppError(409, "SHARE_NOT_ACTIVE", "Share is not active.")
     if share.created_by_id != user.id:
         raise AppError(403, "FORBIDDEN", "Only the share owner can upload to it.")
@@ -111,7 +112,8 @@ async def direct_upload(
     round-trip; for scripts that don't want a TUS dependency.
     Files larger than the cap MUST go through /api/uploads/init + TUS."""
     share = share_svc.get_share_or_404(db, share_id)
-    if share.state != ShareState.active:
+    if share.state not in (ShareState.active, ShareState.pending_approval):
+        # The owner may keep assembling a share that's awaiting approval.
         raise AppError(409, "SHARE_NOT_ACTIVE", "Share is not active.")
     if share.created_by_id != user.id:
         raise AppError(403, "FORBIDDEN", "Only the share owner can upload to it.")

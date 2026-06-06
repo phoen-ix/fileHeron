@@ -68,6 +68,9 @@ def _me_response(db: Session, user: User) -> MeResponse:
     me_resp.file_preview_enabled = settings_svc.get_bool(
         db, settings_svc.Keys.FILE_PREVIEW_ENABLED, default=True
     )
+    from ..services import share_approval as share_approval_svc
+
+    me_resp.can_approve_shares = share_approval_svc.can_approve(db, user)
     from ..services import email_change_policy
 
     me_resp.can_change_own_email = email_change_policy.self_service_enabled(db)

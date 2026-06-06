@@ -12,7 +12,7 @@ from ..middleware.errors import AppError
 from ..models.audit_log import AuditEventType
 from ..models.download_log import DownloadLog, DownloadVia
 from ..models.file import File, FileState
-from ..models.share import Share
+from ..models.share import Share, ShareState
 from ..models.user import User, UserRole
 from ..services import download_token as download_token_svc
 from ..services import file as file_svc
@@ -121,9 +121,7 @@ def get_download_url(
     than a confusing browser error after navigation."""
     file = _get_file_or_404(db, file_id)
     share = db.query(Share).filter(Share.id == file.share_id).one()
-    if not share_svc.is_authorized_to_download(db, user=user, share=share):
-        raise AppError(403, "FORBIDDEN", "You don't have access to this file.")
-    share_svc.assert_share_downloadable(share)
+    share_svc.assert_share_file_access(db, user=user, share=share)
     if file.state == FileState.uploading:
         raise AppError(409, "STILL_UPLOADING", "File hasn't finished uploading yet.")
     if file.state == FileState.deleted:
@@ -172,9 +170,7 @@ def get_preview_url(
 
     file = _get_file_or_404(db, file_id)
     share = db.query(Share).filter(Share.id == file.share_id).one()
-    if not share_svc.is_authorized_to_download(db, user=user, share=share):
-        raise AppError(403, "FORBIDDEN", "You don't have access to this file.")
-    share_svc.assert_share_downloadable(share)
+    share_svc.assert_share_file_access(db, user=user, share=share)
     _assert_file_state_servable(file)
     if not settings_svc.get_bool(
         db, settings_svc.Keys.FILE_PREVIEW_ENABLED, default=True
@@ -215,9 +211,7 @@ def preview_file(
     user = _resolve_download_user(request, db, file_id, dt, authorization)
     file = _get_file_or_404(db, file_id)
     share = db.query(Share).filter(Share.id == file.share_id).one()
-    if not share_svc.is_authorized_to_download(db, user=user, share=share):
-        raise AppError(403, "FORBIDDEN", "You don't have access to this file.")
-    share_svc.assert_share_downloadable(share)
+    share_svc.assert_share_file_access(db, user=user, share=share)
     _assert_file_state_servable(file)
     if not settings_svc.get_bool(
         db, settings_svc.Keys.FILE_PREVIEW_ENABLED, default=True
@@ -259,9 +253,7 @@ def download_file(
     file = _get_file_or_404(db, file_id)
     share = db.query(Share).filter(Share.id == file.share_id).one()
 
-    if not share_svc.is_authorized_to_download(db, user=user, share=share):
-        raise AppError(403, "FORBIDDEN", "You don't have access to this file.")
-    share_svc.assert_share_downloadable(share)
+    share_svc.assert_share_file_access(db, user=user, share=share)
 
     if file.state == FileState.uploading:
         raise AppError(409, "STILL_UPLOADING", "File hasn't finished uploading yet.")
@@ -283,7 +275,9 @@ def download_file(
     # Parallel/segmented downloads send several ranged GETs for one logical
     # download; the byte-0 (or full) request counts it, the continuation
     # ranges must not re-decrement or re-log. See utils/http_range.
-    if not is_partial_continuation(request):
+    # A pending share only reaches here for an approver reviewing it (content
+    # review) — that must not consume the not-yet-live recipient budget or log.
+    if not is_partial_continuation(request) and share.state == ShareState.active:
         # v1.1.0: per-share download budget. Atomic decrement; if the
         # counter is already at 0 we refuse with 410 before logging/sending.
         # NULL limit = unlimited, the helper's WHERE clause skips the case.
@@ -343,9 +337,7 @@ def get_share_zip_url(
     access checks so the user gets a clean 4xx now rather than a broken-looking
     URL later, then issues a `?dt=` token bound to the SHARE id."""
     share = share_svc.get_share_or_404(db, share_id)
-    if not share_svc.is_authorized_to_download(db, user=user, share=share):
-        raise AppError(403, "FORBIDDEN", "You don't have access to this share.")
-    share_svc.assert_share_downloadable(share)
+    share_svc.assert_share_file_access(db, user=user, share=share)
 
     if not file_svc.downloadable_files(db, share.id):
         raise AppError(400, "NO_DOWNLOADABLE_FILES", "This share has no downloadable files.")
@@ -379,15 +371,13 @@ def download_share_zip(
     user = _resolve_download_user(request, db, share_id, dt, authorization)
     share = share_svc.get_share_or_404(db, share_id)
 
-    if not share_svc.is_authorized_to_download(db, user=user, share=share):
-        raise AppError(403, "FORBIDDEN", "You don't have access to this share.")
-    share_svc.assert_share_downloadable(share)
+    share_svc.assert_share_file_access(db, user=user, share=share)
 
     files = file_svc.downloadable_files(db, share.id)
     if not files:
         raise AppError(400, "NO_DOWNLOADABLE_FILES", "This share has no downloadable files.")
 
-    if not is_partial_continuation(request):
+    if not is_partial_continuation(request) and share.state == ShareState.active:
         if share.download_limit is not None and not share_svc.try_decrement_share_counter(
             db, share=share
         ):

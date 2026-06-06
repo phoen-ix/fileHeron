@@ -1,0 +1,9 @@
+Hallo {{ recipient_name|default("zusammen") }},
+
+Deine Freigabe{% if subject %} „{{ subject }}“{% endif %} wurde nicht genehmigt.
+{% if reason %}
+Grund: {{ reason }}
+{% endif %}
+Die Dateien bleiben erhalten – du kannst sie überarbeiten und erneut einreichen: {{ share_url }}
+
+— {{ app_name }}

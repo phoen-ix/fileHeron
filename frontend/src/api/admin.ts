@@ -35,6 +35,7 @@ import type {
   QuarantineSettingsResponse,
   RegenerateInviteResponse,
   ResendInviteResponse,
+  ShareApprovalSettingsResponse,
   ShareDefaultsResponse,
   SiteSettingsResponse,
   TestEmailRequest,
@@ -47,6 +48,7 @@ import type {
   UpdateHomePageSettingsRequest,
   UpdatePublicLinkPolicyRequest,
   UpdateQuarantineSettingsRequest,
+  UpdateShareApprovalSettingsRequest,
   UpdateShareDefaultsRequest,
   UpdateSiteSettingsRequest,
   UpdateTokenPolicyRequest,
@@ -559,6 +561,21 @@ export function updateFilePreviewSettings(
 ) {
   return api.put<FilePreviewSettingsResponse>(
     '/admin/settings/file-preview',
+    payload,
+  )
+}
+
+// Share-approval policy (v1.24.0)
+
+export function getShareApprovalSettings() {
+  return api.get<ShareApprovalSettingsResponse>('/admin/settings/share-approval')
+}
+
+export function updateShareApprovalSettings(
+  payload: UpdateShareApprovalSettingsRequest,
+) {
+  return api.put<ShareApprovalSettingsResponse>(
+    '/admin/settings/share-approval',
     payload,
   )
 }

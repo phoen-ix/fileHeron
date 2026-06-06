@@ -21,6 +21,7 @@ from ..schemas.share import (
     FilesAddedRequest,
     GroupRecipientRef,
     InlinePublicLinkResult,
+    RejectShareRequest,
     ShareListItem,
     ShareListResponse,
     ShareRecipientRef,
@@ -30,6 +31,7 @@ from ..schemas.share import (
 )
 from ..services import public_link as public_link_svc
 from ..services import share as share_svc
+from ..services import share_approval as share_approval_svc
 
 router = APIRouter(prefix="/api/shares", tags=["shares"])
 
@@ -57,9 +59,10 @@ def _effective_subject(share, files) -> str:
     return ""
 
 
-def _to_share_response(db: Session, share) -> ShareResponse:
+def _to_share_response(db: Session, share, *, viewer: User | None = None) -> ShareResponse:
     """Build a fully-hydrated ShareResponse: file list + user recipients +
-    group recipients (resolved to id/name/is_company_inbox)."""
+    group recipients (resolved to id/name/is_company_inbox). `viewer` (the
+    requesting user) populates `viewer_can_approve` for the Approve/Reject UI."""
     recipients = (
         db.query(ShareRecipient).filter(ShareRecipient.share_id == share.id).all()
     )
@@ -101,6 +104,13 @@ def _to_share_response(db: Session, share) -> ShareResponse:
         ],
         download_limit=share.download_limit,
         downloads_remaining=share.downloads_remaining,
+        rejection_reason=share.rejection_reason,
+        approval_decided_at=share.approval_decided_at,
+        viewer_can_approve=(
+            share_approval_svc.can_decide(db, viewer, share)
+            if viewer is not None
+            else False
+        ),
     )
 
 
@@ -180,7 +190,7 @@ def create_share(
 
     db.commit()
     db.refresh(share)
-    response = _to_share_response(db, share)
+    response = _to_share_response(db, share, viewer=user)
     if public_link_inline is not None:
         response.public_link = public_link_inline
     return response
@@ -315,6 +325,136 @@ def list_shares(
     )
 
 
+@router.get("/pending-approval", response_model=ShareListResponse)
+def list_pending_approval(
+    page: int = Query(1, ge=1, le=10_000),
+    page_size: int = Query(50, ge=1, le=200),
+    user: User = Depends(get_actor),
+    db: Session = Depends(get_db),
+) -> ShareListResponse:
+    """Shares awaiting the current user's approval (approver, not their own),
+    oldest first. Empty when the user isn't an approver. Defined BEFORE
+    `/{share_id}` so the literal path wins over the wildcard."""
+    rows, total = share_svc.list_pending_approvals(
+        db, user=user, page=page, page_size=page_size
+    )
+    share_ids = [s.id for s in rows]
+    recipient_rows = (
+        db.query(ShareRecipient).filter(ShareRecipient.share_id.in_(share_ids)).all()
+        if share_ids
+        else []
+    )
+    rec_user_ids = {r.recipient_user_id for r in recipient_rows if r.recipient_user_id}
+    rec_group_ids = {r.recipient_group_id for r in recipient_rows if r.recipient_group_id}
+    sender_ids = {s.created_by_id for s in rows}
+    users_by_id = (
+        {u.id: u for u in db.query(User).filter(User.id.in_(rec_user_ids | sender_ids)).all()}
+        if (rec_user_ids | sender_ids)
+        else {}
+    )
+    groups_by_id = (
+        {g.id: g for g in db.query(Group).filter(Group.id.in_(rec_group_ids)).all()}
+        if rec_group_ids
+        else {}
+    )
+    recips_by_share: dict[str, list[ShareRecipientRef]] = {sid: [] for sid in share_ids}
+    for r in recipient_rows:
+        if r.recipient_user_id is not None:
+            u = users_by_id.get(r.recipient_user_id)
+            if u is not None:
+                recips_by_share[r.share_id].append(
+                    ShareRecipientRef(kind="user", id=u.id, label=u.display_name, role=u.role.value)
+                )
+        elif r.recipient_group_id is not None:
+            g = groups_by_id.get(r.recipient_group_id)
+            if g is not None:
+                recips_by_share[r.share_id].append(
+                    ShareRecipientRef(kind="group", id=g.id, label=g.name)
+                )
+    items: list[ShareListItem] = []
+    for s in rows:
+        all_files = list(s.files)
+        files = [f for f in all_files if f.state != FileState.deleted]
+        su = users_by_id.get(s.created_by_id)
+        sender = (
+            ShareSenderRef(id=su.id, display_name=su.display_name, email=su.email)
+            if su is not None
+            else None
+        )
+        recips = (
+            [ShareRecipientRef(kind="company", id=0, label="Company")]
+            if s.kind == ShareKind.inbound
+            else recips_by_share.get(s.id, [])
+        )
+        items.append(
+            ShareListItem(
+                id=s.id,
+                kind=s.kind,
+                state=s.state,
+                subject=s.subject,
+                effective_subject=_effective_subject(s, all_files),
+                created_at=s.created_at,
+                expires_at=s.expires_at,
+                created_by_id=s.created_by_id,
+                file_count=len(files),
+                total_size_bytes=sum(f.size_bytes for f in files),
+                download_limit=s.download_limit,
+                downloads_remaining=s.downloads_remaining,
+                recipients=recips,
+                sender=sender,
+            )
+        )
+    return ShareListResponse(items=items, total=total, page=page, page_size=page_size)
+
+
+@router.post("/{share_id}/approve", response_model=ShareResponse)
+def approve_share_route(
+    share_id: str,
+    request: Request,
+    user: User = Depends(get_actor),
+    db: Session = Depends(get_db),
+) -> ShareResponse:
+    """Approver approves a pending share → active; recipients are notified now."""
+    share = share_svc.get_share_or_404(db, share_id)
+    share_svc.approve_share(db, user=user, share=share, request=request)
+    db.commit()
+    db.refresh(share)
+    return _to_share_response(db, share, viewer=user)
+
+
+@router.post("/{share_id}/reject", response_model=ShareResponse)
+def reject_share_route(
+    share_id: str,
+    payload: RejectShareRequest,
+    request: Request,
+    user: User = Depends(get_actor),
+    db: Session = Depends(get_db),
+) -> ShareResponse:
+    """Approver rejects a pending share → rejected (files kept); sender notified."""
+    share = share_svc.get_share_or_404(db, share_id)
+    share_svc.reject_share(
+        db, user=user, share=share, reason=payload.reason, request=request
+    )
+    db.commit()
+    db.refresh(share)
+    return _to_share_response(db, share, viewer=user)
+
+
+@router.post("/{share_id}/resubmit", response_model=ShareResponse)
+def resubmit_share_route(
+    share_id: str,
+    request: Request,
+    user: User = Depends(get_actor),
+    db: Session = Depends(get_db),
+) -> ShareResponse:
+    """Owner re-queues a rejected share for approval."""
+    share = share_svc.get_share_or_404(db, share_id)
+    share_svc.resubmit_share(db, user=user, share=share, request=request)
+    db.commit()
+    db.refresh(share)
+    return _to_share_response(db, share, viewer=user)
+
+
 @router.get("/{share_id}", response_model=ShareResponse)
 def get_share(
     share_id: str,
@@ -322,9 +462,9 @@ def get_share(
     db: Session = Depends(get_db),
 ) -> ShareResponse:
     share = share_svc.get_share_or_404(db, share_id)
-    if not share_svc.is_authorized_to_download(db, user=user, share=share):
+    if not share_svc.is_authorized_to_view(db, user=user, share=share):
         raise AppError(403, "FORBIDDEN", "You don't have access to this share.")
-    return _to_share_response(db, share)
+    return _to_share_response(db, share, viewer=user)
 
 
 @router.delete("/{share_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -388,7 +528,7 @@ def patch_share(
         )
     db.commit()
     db.refresh(share)
-    return _to_share_response(db, share)
+    return _to_share_response(db, share, viewer=user)
 
 
 @router.post("/{share_id}/expire", response_model=ShareResponse)
@@ -405,7 +545,7 @@ def expire_share_now_route(
     share_svc.expire_share_now(db, user=user, share=share, request=request)
     db.commit()
     db.refresh(share)
-    return _to_share_response(db, share)
+    return _to_share_response(db, share, viewer=user)
 
 
 @router.post("/{share_id}/files-added", response_model=ShareResponse)
@@ -431,7 +571,7 @@ def files_added_route(
     )
     db.commit()
     db.refresh(share)
-    return _to_share_response(db, share)
+    return _to_share_response(db, share, viewer=user)
 
 
 _BULK_EXPIRE_CAP = 100

@@ -4,14 +4,32 @@
  *
  * Pages slot their form into the default slot. */
 
+import { computed } from 'vue'
+
 import LanguageSwitcher from '@/components/LanguageSwitcher.vue'
+import BrandLogo from '@/components/BrandLogo.vue'
 import BrandMark from '@/components/BrandMark.vue'
+import { useSiteStore } from '@/stores/site'
+
+const site = useSiteStore()
+const showLogo = computed(
+  () => site.branding.show_login && !!site.branding.logo_url,
+)
 </script>
 
 <template>
   <div class="auth">
     <header class="auth-top">
-      <BrandMark size="sm" />
+      <div class="auth-brand">
+        <BrandLogo
+          v-if="showLogo"
+          :src="site.branding.logo_url as string"
+          :alt="site.appName"
+          :link-url="site.branding.link_url"
+          size="sm"
+        />
+        <BrandMark size="sm" />
+      </div>
       <LanguageSwitcher />
     </header>
 
@@ -41,6 +59,12 @@ import BrandMark from '@/components/BrandMark.vue'
   justify-content: space-between;
   gap: var(--fh-space-3);
   padding-bottom: var(--fh-space-3);
+}
+
+.auth-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--fh-space-2);
 }
 
 .auth-inner {

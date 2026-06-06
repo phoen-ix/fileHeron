@@ -189,6 +189,7 @@ def _wrap_layout(
         # Footer links (present only when render_email injected them).
         manage_subscriptions_url=ctx.get("manage_subscriptions_url"),
         unsubscribe_url=ctx.get("unsubscribe_url"),
+        brand_logo_url=ctx.get("brand_logo_url"),
     )
 
 
@@ -268,6 +269,24 @@ def list_unsubscribe_header(
     if settings.SMTP_FROM_EMAIL:
         parts.append(f"<mailto:{settings.SMTP_FROM_EMAIL}?subject=unsubscribe%20{category}>")
     return ", ".join(parts)
+
+
+def _brand_logo_url(db: Session | None, app_url: str | None) -> str | None:
+    """Absolute URL of the admin logo for the email header, or None when no
+    logo is set or the email surface is off. Best-effort - never raises."""
+    if db is None:
+        return None
+    try:
+        from . import settings as settings_svc
+
+        if not settings_svc.get_bool(db, settings_svc.Keys.BRANDING_SHOW_EMAIL, default=False):
+            return None
+        if not settings_svc.get(db, settings_svc.Keys.BRANDING_LOGO_LOCATOR):
+            return None
+    except Exception:
+        return None
+    base = (app_url if app_url is not None else settings.APP_URL).rstrip("/")
+    return f"{base}/api/branding/logo"
 
 
 def _append_text_footer(
@@ -383,6 +402,10 @@ def render_email(
     if uid is not None:
         manage_url, unsub_url = _subscription_urls(uid, category, app_url)
         ctx = {**ctx, "manage_subscriptions_url": manage_url, "unsubscribe_url": unsub_url}
+
+    logo_url = _brand_logo_url(db, app_url)
+    if logo_url:
+        ctx = {**ctx, "brand_logo_url": logo_url}
 
     override = _load_override(slug, code, db)
     if override is not None:

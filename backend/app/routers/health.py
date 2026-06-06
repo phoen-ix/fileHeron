@@ -112,12 +112,27 @@ def public_config(db: Session = Depends(get_db)) -> dict:
         if text:
             motd = {"text": text}
 
+    has_logo = bool(settings_svc.get(db, settings_svc.Keys.BRANDING_LOGO_LOCATOR))
+    branding = {
+        "logo_url": "/api/branding/logo" if has_logo else None,
+        "link_url": settings_svc.get(db, settings_svc.Keys.BRANDING_LINK_URL) or None,
+        "show_header": settings_svc.get_bool(db, settings_svc.Keys.BRANDING_SHOW_HEADER, default=False),
+        "show_login": settings_svc.get_bool(db, settings_svc.Keys.BRANDING_SHOW_LOGIN, default=False),
+        "show_public": settings_svc.get_bool(db, settings_svc.Keys.BRANDING_SHOW_PUBLIC, default=False),
+    }
+    legal = {
+        "imprint_enabled": settings_svc.get_bool(db, settings_svc.Keys.LEGAL_IMPRINT_ENABLED, default=False),
+        "privacy_enabled": settings_svc.get_bool(db, settings_svc.Keys.LEGAL_PRIVACY_ENABLED, default=False),
+    }
+
     body: dict = {
         "app_name": site_svc.get_app_name(db),
         "default_locale": "en",
         "providers": providers,
         "running_version": VERSION,
         "site_timezone": site_svc.get_site_timezone(db),
+        "branding": branding,
+        "legal": legal,
     }
     if motd is not None:
         body["motd"] = motd

@@ -164,6 +164,23 @@ Admins can edit the **subject and body of every outbound email, per language**, 
 - **Locale-agnostic** - the language tabs are driven by the app's locale set (EN/DE today), so a future language becomes editable with no code change.
 - **Safety** - overrides are sanitised (no scripts/handlers/unsafe schemes); the editor rejects saving an auth email (password reset / verify / invite / email-change) that drops its required link placeholder, so those flows can't be bricked. The 8 token-bearing auth categories stay force-masked in the mail log regardless.
 
+## Branding & legal pages (`/admin/settings/branding`)
+
+White-label the instance and publish the legally-required footer pages, no redeploy.
+
+- **Logo** - upload a PNG/JPEG/WebP (≤ 2 MB; validated by magic bytes, not the
+  declared type). Choose where it appears - **app header, login page, public-link
+  pages, and emails** - each toggled independently; it shows **alongside** the app
+  name. An optional **link** makes the logo open a URL of your choice in a new tab.
+  Served at `/api/branding/logo` (cached), so it's reachable anonymously and embeds
+  in email by absolute URL.
+- **Imprint + Privacy policy** - two independently enable-able pages, each edited
+  **per language (EN/DE)** in the same Milkdown editor used for email templates
+  (Markdown in, server-sanitised HTML out via nh3). When enabled, a footer link
+  appears on **every** page - signed-in, login, and public-link - opening
+  `/imprint` / `/privacy`. The viewer sees their language, falling back to the
+  other when one side is blank.
+
 ## Inbound mailbox (`/admin/inbox` + `/admin/settings/imap`)
 
 file:Heron can **read** the configured mail account over IMAP, not just send. When enabled it polls the mailbox, ingests messages into an admin-only **Inbox**, and labels each as **REPLY**, **BOUNCE** (delivery-status notification) or **AUTO** (out-of-office / auto-reply) - so user replies, dead addresses and bounces surface in-app. Off by default; uses Python's stdlib `imaplib` (no third-party dependency). Config at *Settings → Inbound mail (IMAP)*:

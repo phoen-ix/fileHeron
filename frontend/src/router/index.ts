@@ -290,6 +290,12 @@ const router = createRouter({
           meta: { density: 'operator', title: 'General settings', requiresRole: 'admin' },
         },
         {
+          path: 'settings/branding',
+          name: 'admin-settings-branding',
+          component: () => import('@/views/AdminSettingsBranding.vue'),
+          meta: { density: 'operator', title: 'Branding & legal', requiresRole: 'admin' },
+        },
+        {
           // Legacy bookmark: the dedicated home-page view was folded
           // into the General settings page as a section. Redirect
           // anchors to that section.
@@ -358,6 +364,20 @@ const router = createRouter({
       name: 'manage-notifications',
       component: () => import('@/views/ManageNotifications.vue'),
       meta: { public: true, density: 'editorial', title: 'Manage subscriptions' },
+    },
+
+    /* legal pages (footer links; mandatory in much of the EU) -------------- */
+    {
+      path: '/imprint',
+      name: 'imprint',
+      component: () => import('@/views/LegalPage.vue'),
+      meta: { public: true, density: 'editorial', title: 'Imprint' },
+    },
+    {
+      path: '/privacy',
+      name: 'privacy',
+      component: () => import('@/views/LegalPage.vue'),
+      meta: { public: true, density: 'editorial', title: 'Privacy' },
     },
 
     /* fallback ------------------------------------------------------------- */

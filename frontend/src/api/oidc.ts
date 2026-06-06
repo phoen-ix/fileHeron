@@ -8,6 +8,21 @@ export interface PublicProvider {
   preset: OIDCPreset
 }
 
+export interface PublicBranding {
+  /** URL of the uploaded logo, or null when none is set. */
+  logo_url: string | null
+  /** Optional URL the logo links to. */
+  link_url: string | null
+  show_header: boolean
+  show_login: boolean
+  show_public: boolean
+}
+
+export interface PublicLegal {
+  imprint_enabled: boolean
+  privacy_enabled: boolean
+}
+
 export interface PublicConfigResponse {
   app_name: string
   default_locale: 'en' | 'de'
@@ -21,6 +36,10 @@ export interface PublicConfigResponse {
    *  defaults to "UTC" when unset. Drives every timestamp formatter via
    *  the site Pinia store. */
   site_timezone: string
+  /** Site branding (logo + display surfaces + link). */
+  branding: PublicBranding
+  /** Which legal footer pages are enabled. */
+  legal: PublicLegal
 }
 
 export function getPublicConfig() {

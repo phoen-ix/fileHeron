@@ -14,7 +14,10 @@ import {
   publicZipUrl,
   unlockPublicShare,
 } from '@/api/publicLinks'
+import BrandLogo from '@/components/BrandLogo.vue'
+import BrandMark from '@/components/BrandMark.vue'
 import FilePreviewModal from '@/components/FilePreviewModal.vue'
+import { useSiteStore } from '@/stores/site'
 import type { PublicShareFile, PublicShareResponse } from '@/types/api'
 import { formatBytes } from '@/utils/bytes'
 import { formatExpiryInSiteTime } from '@/utils/datetime'
@@ -22,6 +25,10 @@ import { previewKind } from '@/utils/preview'
 
 const route = useRoute()
 const { t, locale } = useI18n()
+const site = useSiteStore()
+
+const showBrand = computed(() => site.branding.show_public)
+const showLogo = computed(() => showBrand.value && !!site.branding.logo_url)
 
 const share = ref<PublicShareResponse | null>(null)
 const loading = ref(true)
@@ -123,6 +130,17 @@ onMounted(load)
 
 <template>
   <div class="fh-prose public-share">
+    <div v-if="showBrand" class="public-brand">
+      <BrandLogo
+        v-if="showLogo"
+        :src="site.branding.logo_url as string"
+        :alt="site.appName"
+        :link-url="site.branding.link_url"
+        size="sm"
+      />
+      <BrandMark size="sm" :linkable="false" />
+    </div>
+
     <div v-if="loading" class="loading">{{ t('common.loading') }}</div>
 
     <div v-else-if="errorMsg" class="error-state">
@@ -248,6 +266,13 @@ onMounted(load)
   max-width: 720px;
   padding-top: var(--fh-space-6);
   padding-bottom: var(--fh-space-6);
+}
+
+.public-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--fh-space-2);
+  margin-bottom: var(--fh-space-5);
 }
 
 .loading {

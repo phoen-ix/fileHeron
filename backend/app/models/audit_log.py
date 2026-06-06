@@ -92,6 +92,8 @@ class AuditEventType(str, enum.Enum):
     home_page_toggled = "home_page_toggled"                  # post-Phase 10
     file_preview_toggled = "file_preview_toggled"            # v1.23.0 (in-browser preview on/off)
     motd_changed = "motd_changed"                            # login-page banner
+    branding_changed = "branding_changed"                    # v1.31.0 (logo + surfaces + link)
+    legal_changed = "legal_changed"                          # v1.31.0 (imprint / privacy)
     share_defaults_policy_changed = "share_defaults_policy_changed"  # post-Phase 10
     site_url_changed = "site_url_changed"                    # post-Phase 10
     site_timezone_changed = "site_timezone_changed"          # v1.1.3

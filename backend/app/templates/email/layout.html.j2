@@ -16,7 +16,7 @@
           <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" style="max-width:600px;width:100%;background:#fffaf0;border:1px solid #e5e1d8;border-collapse:separate;">
             <tr>
               <td style="padding:24px 32px 8px 32px;border-bottom:1px solid #e5e1d8;">
-                <span style="font-family:Georgia,'Times New Roman',serif;font-style:italic;font-size:22px;color:#1a1d24;">
+                {% if brand_logo_url %}<img src="{{ brand_logo_url }}" alt="{{ app_name }}" height="28" style="height:28px;width:auto;vertical-align:middle;margin-right:10px;border:0;">{% endif %}<span style="font-family:Georgia,'Times New Roman',serif;font-style:italic;font-size:22px;color:#1a1d24;vertical-align:middle;">
                   file:<span style="color:#b45309;">Heron</span>
                 </span>
               </td>

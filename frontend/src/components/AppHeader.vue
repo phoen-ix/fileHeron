@@ -3,12 +3,19 @@ import { computed, ref } from 'vue'
 import { onClickOutside } from '@vueuse/core'
 import { useRouter } from 'vue-router'
 
+import BrandLogo from '@/components/BrandLogo.vue'
 import BrandMark from '@/components/BrandMark.vue'
 import NotificationBell from '@/components/NotificationBell.vue'
 import { useAuthStore } from '@/stores/auth'
+import { useSiteStore } from '@/stores/site'
 
 const auth = useAuthStore()
+const site = useSiteStore()
 const router = useRouter()
+
+const showLogo = computed(
+  () => site.branding.show_header && !!site.branding.logo_url,
+)
 
 const menuOpen = ref(false)
 const menuRoot = ref<HTMLElement | null>(null)
@@ -37,6 +44,13 @@ async function doLogout() {
   <header class="app-header">
     <div class="app-header-inner">
       <div class="app-header-left">
+        <BrandLogo
+          v-if="showLogo"
+          :src="site.branding.logo_url as string"
+          :alt="site.appName"
+          :link-url="site.branding.link_url"
+          size="sm"
+        />
         <BrandMark
           size="sm"
           :linkable="auth.user?.home_page_enabled !== false"

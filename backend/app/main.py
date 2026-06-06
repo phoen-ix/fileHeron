@@ -23,6 +23,7 @@ from .routers import (
     account,
     admin,
     auth,
+    branding,
     files,
     groups,
     health,
@@ -99,6 +100,7 @@ app.include_router(auth.router)
 app.include_router(account.router)               # /me + /2fa/* must be reachable
 app.include_router(public.router)                # anonymous public-link landing
 app.include_router(notification_subscriptions.router)  # anonymous, token-authed
+app.include_router(branding.router)              # anonymous logo + legal pages
 app.include_router(tus_hooks.router)             # internal HMAC-gated
 app.include_router(oidc.router)                  # anonymous OIDC login
 app.include_router(webauthn.auth_router)         # WebAuthn login flow

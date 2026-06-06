@@ -605,6 +605,69 @@ export function updateSiteSettings(payload: UpdateSiteSettingsRequest) {
   return api.put<SiteSettingsResponse>('/admin/settings/site', payload)
 }
 
+// Branding (logo + surfaces + link) + legal pages (v1.31.0)
+
+export interface BrandingLogoMeta {
+  present: boolean
+  filename: string | null
+  content_type: string | null
+  url: string | null
+}
+
+export interface BrandingSettingsResponse {
+  logo: BrandingLogoMeta
+  show_header: boolean
+  show_login: boolean
+  show_public: boolean
+  show_email: boolean
+  link_url: string | null
+}
+
+export interface UpdateBrandingSettingsRequest {
+  show_header?: boolean
+  show_login?: boolean
+  show_public?: boolean
+  show_email?: boolean
+  link_url?: string | null
+}
+
+export function getBrandingSettings() {
+  return api.get<BrandingSettingsResponse>('/admin/settings/branding')
+}
+
+export function updateBrandingSettings(payload: UpdateBrandingSettingsRequest) {
+  return api.put<BrandingSettingsResponse>('/admin/settings/branding', payload)
+}
+
+export function uploadBrandingLogo(file: File) {
+  const form = new FormData()
+  form.append('file', file)
+  return api.post<BrandingSettingsResponse>('/admin/settings/branding/logo', form)
+}
+
+export function deleteBrandingLogo() {
+  return api.delete<BrandingSettingsResponse>('/admin/settings/branding/logo')
+}
+
+export interface LegalDoc {
+  enabled: boolean
+  en: string
+  de: string
+}
+
+export interface LegalSettingsResponse {
+  imprint: LegalDoc
+  privacy: LegalDoc
+}
+
+export function getLegalSettings() {
+  return api.get<LegalSettingsResponse>('/admin/settings/legal')
+}
+
+export function updateLegalSettings(payload: LegalSettingsResponse) {
+  return api.put<LegalSettingsResponse>('/admin/settings/legal', payload)
+}
+
 // 2FA enforcement policy (post-Phase 10)
 
 export function getTwofaPolicy() {

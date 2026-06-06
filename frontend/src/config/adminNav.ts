@@ -83,6 +83,7 @@ export const ADMIN_NAV: AdminNavCategory[] = [
       { routeName: 'admin-scheduled-tasks', labelKey: 'admin.nav.scheduled_tasks', matchNames: ['admin-scheduled-tasks'] },
       { routeName: 'admin-settings-webhooks', labelKey: 'admin.nav_item.webhooks', matchNames: ['admin-settings-webhooks'] },
       { routeName: 'admin-settings-general', labelKey: 'admin.nav_item.general', matchNames: ['admin-settings-general'] },
+      { routeName: 'admin-settings-branding', labelKey: 'admin.nav_item.branding', matchNames: ['admin-settings-branding'] },
       { routeName: 'admin-settings-advanced', labelKey: 'admin.nav_item.advanced', matchNames: ['admin-settings-advanced'] },
     ],
   },

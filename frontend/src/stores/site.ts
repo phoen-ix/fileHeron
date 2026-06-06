@@ -12,9 +12,24 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 
-import { getPublicConfig, type PublicConfigResponse, type PublicProvider } from '@/api/oidc'
+import {
+  getPublicConfig,
+  type PublicBranding,
+  type PublicConfigResponse,
+  type PublicLegal,
+  type PublicProvider,
+} from '@/api/oidc'
 
 const DEFAULT_TIMEZONE = 'UTC'
+
+const EMPTY_BRANDING: PublicBranding = {
+  logo_url: null,
+  link_url: null,
+  show_header: false,
+  show_login: false,
+  show_public: false,
+}
+const EMPTY_LEGAL: PublicLegal = { imprint_enabled: false, privacy_enabled: false }
 
 export const useSiteStore = defineStore('site', () => {
   const appName = ref<string>('file:Heron')
@@ -23,6 +38,8 @@ export const useSiteStore = defineStore('site', () => {
   const motd = ref<{ text: string } | null>(null)
   const runningVersion = ref<string>('')
   const timezone = ref<string>(DEFAULT_TIMEZONE)
+  const branding = ref<PublicBranding>({ ...EMPTY_BRANDING })
+  const legal = ref<PublicLegal>({ ...EMPTY_LEGAL })
   const loaded = ref(false)
 
   function _apply(cfg: PublicConfigResponse) {
@@ -32,6 +49,8 @@ export const useSiteStore = defineStore('site', () => {
     motd.value = cfg.motd ?? null
     runningVersion.value = cfg.running_version
     timezone.value = cfg.site_timezone || DEFAULT_TIMEZONE
+    branding.value = cfg.branding ?? { ...EMPTY_BRANDING }
+    legal.value = cfg.legal ?? { ...EMPTY_LEGAL }
     loaded.value = true
   }
 
@@ -53,6 +72,8 @@ export const useSiteStore = defineStore('site', () => {
     motd,
     runningVersion,
     timezone,
+    branding,
+    legal,
     loaded,
     loadConfig,
   }

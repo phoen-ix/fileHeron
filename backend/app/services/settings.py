@@ -165,6 +165,25 @@ class Keys:
     DOWNLOAD_SIGNED_URL_TTL_SEC = "downloads.signed_url_ttl_sec"
     HIBP_ENABLED = "security.hibp_enabled"
     APP_NAME = "branding.app_name"
+    # Site branding (v1.31.0): an admin-uploaded logo + where it shows + an
+    # optional link. Logo bytes live in the storage backend; these keep the
+    # pointer + display surfaces.
+    BRANDING_LOGO_LOCATOR = "branding.logo_locator"
+    BRANDING_LOGO_FILENAME = "branding.logo_filename"
+    BRANDING_LOGO_CONTENT_TYPE = "branding.logo_content_type"
+    BRANDING_SHOW_HEADER = "branding.show_header"   # boolean
+    BRANDING_SHOW_LOGIN = "branding.show_login"     # boolean
+    BRANDING_SHOW_PUBLIC = "branding.show_public"   # boolean
+    BRANDING_SHOW_EMAIL = "branding.show_email"     # boolean
+    BRANDING_LINK_URL = "branding.link_url"         # optional URL the logo links to
+    # Legal pages (v1.31.0): admin-editable Imprint + Privacy, per-locale
+    # markdown, each independently enabled. Shown as footer links on every page.
+    LEGAL_IMPRINT_ENABLED = "legal.imprint_enabled"  # boolean
+    LEGAL_IMPRINT_EN = "legal.imprint_en"            # markdown
+    LEGAL_IMPRINT_DE = "legal.imprint_de"            # markdown
+    LEGAL_PRIVACY_ENABLED = "legal.privacy_enabled"  # boolean
+    LEGAL_PRIVACY_EN = "legal.privacy_en"            # markdown
+    LEGAL_PRIVACY_DE = "legal.privacy_de"            # markdown
     # Low-disk degradation. The two thresholds are registry tunables (overlay
     # the config.Settings env defaults); `critical_low` is a plain runtime flag
     # the disk_check cron flips (not a tunable - never user-set).

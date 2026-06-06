@@ -206,6 +206,7 @@
     },
     "nav_item": {
       "general": "Allgemein",
+      "branding": "Branding & Rechtliches",
       "sso": "SSO / OIDC",
       "twofa": "2FA-Pflicht",
       "api_token_policy": "Token-Richtlinie",
@@ -1011,6 +1012,52 @@
       "in_app": "Nur in der App",
       "both": "Beides"
     }
+  },
+  "admin_branding": {
+    "title": "Branding & Rechtliches",
+    "intro": "Lade ein Logo hoch, lege fest, wo es erscheint, und pflege Impressum und Datenschutzerklärung.",
+    "logo": {
+      "title": "Logo",
+      "help": "PNG, JPEG oder WebP, bis 2 MB. Es erscheint neben dem App-Namen auf den unten aktivierten Flächen.",
+      "none": "Kein Logo",
+      "upload": "Logo hochladen",
+      "remove": "Entfernen",
+      "uploaded": "Logo hochgeladen.",
+      "deleted": "Logo entfernt.",
+      "invalid_type": "Das Logo muss ein PNG-, JPEG- oder WebP-Bild sein.",
+      "too_large": "Das Logo darf höchstens 2 MB groß sein."
+    },
+    "surfaces": {
+      "title": "Logo anzeigen auf",
+      "help": "Wähle, wo das Logo neben dem Namen erscheint.",
+      "header": "App-Kopfzeile (angemeldet)",
+      "login": "Anmeldeseite",
+      "public": "Öffentliche Link-Seiten",
+      "email": "E-Mails"
+    },
+    "link": {
+      "label": "Logo-Link (optional)",
+      "help": "Wenn gesetzt, öffnet ein Klick auf das Logo diese URL in einem neuen Tab."
+    },
+    "legal": {
+      "title": "Rechtliche Seiten",
+      "help": "Wenn aktiviert, erscheint auf jeder Seite ein Footer-Link. Der Inhalt wird in der Sprache des Betrachters angezeigt, mit Rückfall auf die andere.",
+      "imprint_enable": "Impressum aktivieren",
+      "privacy_enable": "Datenschutzerklärung aktivieren",
+      "lang_en": "Englisch",
+      "lang_de": "Deutsch"
+    }
+  },
+  "footer": {
+    "aria": "Rechtliches",
+    "imprint": "Impressum",
+    "privacy": "Datenschutz"
+  },
+  "legal": {
+    "eyebrow": "Rechtliches",
+    "imprint": "Impressum",
+    "privacy": "Datenschutzerklärung",
+    "not_available": "Diese Seite wurde noch nicht veröffentlicht."
   },
   "manage_notifications": {
     "eyebrow": "E-Mail-Einstellungen",

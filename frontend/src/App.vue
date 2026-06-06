@@ -3,6 +3,7 @@ import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { RouterView, useRoute } from 'vue-router'
 
 import AppHeader from '@/components/AppHeader.vue'
+import SiteFooter from '@/components/SiteFooter.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import KeyboardShortcutsModal from '@/components/KeyboardShortcutsModal.vue'
 import ToastStack from '@/components/ToastStack.vue'
@@ -48,6 +49,7 @@ onMounted(() => {
       </Transition>
     </RouterView>
   </main>
+  <SiteFooter />
   <ToastStack />
   <ConfirmDialog />
   <KeyboardShortcutsModal

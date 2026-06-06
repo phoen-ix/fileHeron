@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import json
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, File, Request, UploadFile, status
 from sqlalchemy.orm import Session
 
 from ...config import settings as _env_settings
@@ -25,6 +25,11 @@ from ...schemas.advanced_settings import (
     AdvancedSettingsResponse,
     UpdateAdvancedSettingsRequest,
 )
+from ...schemas.branding_settings import (
+    BrandingLogoMeta,
+    BrandingSettingsResponse,
+    UpdateBrandingSettingsRequest,
+)
 from ...schemas.email_settings import (
     EmailSettingsResponse,
     TestEmailRequest,
@@ -38,6 +43,11 @@ from ...schemas.file_preview_settings import (
 from ...schemas.home_page_settings import (
     HomePageSettingsResponse,
     UpdateHomePageSettingsRequest,
+)
+from ...schemas.legal_settings import (
+    LegalDoc,
+    LegalSettingsResponse,
+    UpdateLegalSettingsRequest,
 )
 from ...schemas.motd_settings import (
     MotdSettingsResponse,
@@ -1045,3 +1055,262 @@ def update_advanced_settings(
 
     db.commit()
     return get_advanced_settings(db=db, _admin=admin)
+
+
+# ---- Branding (logo + surfaces + link) -------------------------------------
+
+_LOGO_MAX_BYTES = 2 * 1024 * 1024  # 2 MiB
+
+
+def _sniff_image_type(head: bytes) -> str | None:
+    """Return the canonical content-type from magic bytes, or None if the bytes
+    aren't an allowed raster image. Don't trust the client-declared type."""
+    if head.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "image/png"
+    if head.startswith(b"\xff\xd8\xff"):
+        return "image/jpeg"
+    if len(head) >= 12 and head[0:4] == b"RIFF" and head[8:12] == b"WEBP":
+        return "image/webp"
+    return None
+
+
+def _branding_response(db: Session) -> BrandingSettingsResponse:
+    locator = settings_svc.get(db, settings_svc.Keys.BRANDING_LOGO_LOCATOR)
+    present = bool(locator)
+    return BrandingSettingsResponse(
+        logo=BrandingLogoMeta(
+            present=present,
+            filename=settings_svc.get(db, settings_svc.Keys.BRANDING_LOGO_FILENAME),
+            content_type=settings_svc.get(db, settings_svc.Keys.BRANDING_LOGO_CONTENT_TYPE),
+            url="/api/branding/logo" if present else None,
+        ),
+        show_header=settings_svc.get_bool(db, settings_svc.Keys.BRANDING_SHOW_HEADER, default=False),
+        show_login=settings_svc.get_bool(db, settings_svc.Keys.BRANDING_SHOW_LOGIN, default=False),
+        show_public=settings_svc.get_bool(db, settings_svc.Keys.BRANDING_SHOW_PUBLIC, default=False),
+        show_email=settings_svc.get_bool(db, settings_svc.Keys.BRANDING_SHOW_EMAIL, default=False),
+        link_url=settings_svc.get(db, settings_svc.Keys.BRANDING_LINK_URL) or None,
+    )
+
+
+@router.get("/settings/branding", response_model=BrandingSettingsResponse)
+def get_branding_settings(
+    db: Session = Depends(get_db),
+    _admin: User = Depends(get_current_admin),
+) -> BrandingSettingsResponse:
+    return _branding_response(db)
+
+
+@router.put("/settings/branding", response_model=BrandingSettingsResponse)
+def update_branding_settings(
+    payload: UpdateBrandingSettingsRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin),
+) -> BrandingSettingsResponse:
+    fields = payload.model_fields_set
+    bool_map = {
+        "show_header": settings_svc.Keys.BRANDING_SHOW_HEADER,
+        "show_login": settings_svc.Keys.BRANDING_SHOW_LOGIN,
+        "show_public": settings_svc.Keys.BRANDING_SHOW_PUBLIC,
+        "show_email": settings_svc.Keys.BRANDING_SHOW_EMAIL,
+    }
+    for attr, key in bool_map.items():
+        if attr in fields:
+            settings_svc.set_value(
+                db, key=key, value="true" if getattr(payload, attr) else "false",
+                actor=admin, request=request,
+            )
+    if "link_url" in fields:
+        # Validator turns "" into the clear sentinel; store None to drop the row.
+        settings_svc.set_value(
+            db, key=settings_svc.Keys.BRANDING_LINK_URL,
+            value=(payload.link_url or None), actor=admin, request=request,
+        )
+    record_audit_event(
+        db,
+        event_type=AuditEventType.branding_changed,
+        actor_user_id=admin.id,
+        target_type="settings",
+        target_id="branding",
+        metadata={"keys": sorted(fields)},
+        request=request,
+    )
+    db.commit()
+    return _branding_response(db)
+
+
+@router.post(
+    "/settings/branding/logo",
+    response_model=BrandingSettingsResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def upload_branding_logo(
+    request: Request,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin),
+) -> BrandingSettingsResponse:
+    import os
+    import tempfile
+    import uuid
+
+    from ...config import settings as _cfg
+    from ...services.storage_backend import get_storage_backend
+
+    chunks: list[bytes] = []
+    received = 0
+    while True:
+        chunk = await file.read(256 * 1024)
+        if not chunk:
+            break
+        received += len(chunk)
+        if received > _LOGO_MAX_BYTES:
+            raise AppError(413, "LOGO_TOO_LARGE", "Logo must be 2 MB or smaller.")
+        chunks.append(chunk)
+    content = b"".join(chunks)
+    content_type = _sniff_image_type(content[:16])
+    if content_type is None:
+        raise AppError(415, "INVALID_LOGO_TYPE", "Logo must be a PNG, JPEG, or WebP image.")
+
+    backend = get_storage_backend()
+    locator = backend.generate_locator(f"branding-logo-{uuid.uuid4().hex}")
+    from pathlib import Path
+    Path(_cfg.TUS_UPLOAD_DIR).mkdir(parents=True, exist_ok=True)
+    fd, tmp_path = tempfile.mkstemp(dir=_cfg.TUS_UPLOAD_DIR, suffix=".logo")
+    try:
+        with os.fdopen(fd, "wb") as out:
+            out.write(content)
+        backend.finalize(tmp_path, locator)
+    except Exception:
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+        raise
+
+    previous = settings_svc.get(db, settings_svc.Keys.BRANDING_LOGO_LOCATOR)
+    settings_svc.set_value(db, key=settings_svc.Keys.BRANDING_LOGO_LOCATOR, value=locator, actor=admin, request=request)
+    settings_svc.set_value(
+        db, key=settings_svc.Keys.BRANDING_LOGO_FILENAME,
+        value=(file.filename or "logo")[:255], actor=admin, request=request,
+    )
+    settings_svc.set_value(
+        db, key=settings_svc.Keys.BRANDING_LOGO_CONTENT_TYPE,
+        value=content_type, actor=admin, request=request,
+    )
+    record_audit_event(
+        db,
+        event_type=AuditEventType.branding_changed,
+        actor_user_id=admin.id,
+        target_type="settings",
+        target_id="branding_logo",
+        metadata={"action": "upload", "content_type": content_type, "size_bytes": received},
+        request=request,
+    )
+    db.commit()
+    # Best-effort clean-up of the replaced bytes (after commit so a delete
+    # failure can't roll back the new pointer).
+    if previous and previous != locator:
+        try:
+            backend.delete(previous)
+        except Exception:
+            pass
+    return _branding_response(db)
+
+
+@router.delete("/settings/branding/logo", response_model=BrandingSettingsResponse)
+def delete_branding_logo(
+    request: Request,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin),
+) -> BrandingSettingsResponse:
+    from ...services.storage_backend import get_storage_backend
+
+    locator = settings_svc.get(db, settings_svc.Keys.BRANDING_LOGO_LOCATOR)
+    for key in (
+        settings_svc.Keys.BRANDING_LOGO_LOCATOR,
+        settings_svc.Keys.BRANDING_LOGO_FILENAME,
+        settings_svc.Keys.BRANDING_LOGO_CONTENT_TYPE,
+    ):
+        settings_svc.set_value(db, key=key, value=None, actor=admin, request=request)
+    if locator:
+        record_audit_event(
+            db,
+            event_type=AuditEventType.branding_changed,
+            actor_user_id=admin.id,
+            target_type="settings",
+            target_id="branding_logo",
+            metadata={"action": "delete"},
+            request=request,
+        )
+    db.commit()
+    if locator:
+        try:
+            get_storage_backend().delete(locator)
+        except Exception:
+            pass
+    return _branding_response(db)
+
+
+# ---- Legal pages (imprint + privacy) ---------------------------------------
+
+
+def _legal_doc(db: Session, enabled_key: str, en_key: str, de_key: str) -> LegalDoc:
+    return LegalDoc(
+        enabled=settings_svc.get_bool(db, enabled_key, default=False),
+        en=settings_svc.get(db, en_key) or "",
+        de=settings_svc.get(db, de_key) or "",
+    )
+
+
+def _legal_response(db: Session) -> LegalSettingsResponse:
+    keys = settings_svc.Keys
+    return LegalSettingsResponse(
+        imprint=_legal_doc(
+            db, keys.LEGAL_IMPRINT_ENABLED, keys.LEGAL_IMPRINT_EN, keys.LEGAL_IMPRINT_DE
+        ),
+        privacy=_legal_doc(
+            db, keys.LEGAL_PRIVACY_ENABLED, keys.LEGAL_PRIVACY_EN, keys.LEGAL_PRIVACY_DE
+        ),
+    )
+
+
+@router.get("/settings/legal", response_model=LegalSettingsResponse)
+def get_legal_settings(
+    db: Session = Depends(get_db),
+    _admin: User = Depends(get_current_admin),
+) -> LegalSettingsResponse:
+    return _legal_response(db)
+
+
+@router.put("/settings/legal", response_model=LegalSettingsResponse)
+def update_legal_settings(
+    payload: UpdateLegalSettingsRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin),
+) -> LegalSettingsResponse:
+    keys = settings_svc.Keys
+    plan = [
+        (payload.imprint, keys.LEGAL_IMPRINT_ENABLED, keys.LEGAL_IMPRINT_EN, keys.LEGAL_IMPRINT_DE),
+        (payload.privacy, keys.LEGAL_PRIVACY_ENABLED, keys.LEGAL_PRIVACY_EN, keys.LEGAL_PRIVACY_DE),
+    ]
+    for doc, enabled_key, en_key, de_key in plan:
+        settings_svc.set_value(
+            db, key=enabled_key, value="true" if doc.enabled else "false",
+            actor=admin, request=request,
+        )
+        settings_svc.set_value(db, key=en_key, value=(doc.en or None), actor=admin, request=request)
+        settings_svc.set_value(db, key=de_key, value=(doc.de or None), actor=admin, request=request)
+    record_audit_event(
+        db,
+        event_type=AuditEventType.legal_changed,
+        actor_user_id=admin.id,
+        target_type="settings",
+        target_id="legal",
+        metadata={
+            "imprint_enabled": payload.imprint.enabled,
+            "privacy_enabled": payload.privacy.enabled,
+        },
+        request=request,
+    )
+    db.commit()
+    return _legal_response(db)

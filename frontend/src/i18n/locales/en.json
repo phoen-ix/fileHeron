@@ -206,6 +206,7 @@
     },
     "nav_item": {
       "general": "General",
+      "branding": "Branding & legal",
       "sso": "SSO / OIDC",
       "twofa": "2FA enforcement",
       "api_token_policy": "Token policy",
@@ -1011,6 +1012,52 @@
       "in_app": "In-app only",
       "both": "Both"
     }
+  },
+  "admin_branding": {
+    "title": "Branding & legal",
+    "intro": "Upload a logo, choose where it appears, and maintain your imprint and privacy pages.",
+    "logo": {
+      "title": "Logo",
+      "help": "PNG, JPEG or WebP, up to 2 MB. It shows next to the app name on the surfaces you enable below.",
+      "none": "No logo",
+      "upload": "Upload logo",
+      "remove": "Remove",
+      "uploaded": "Logo uploaded.",
+      "deleted": "Logo removed.",
+      "invalid_type": "Logo must be a PNG, JPEG or WebP image.",
+      "too_large": "Logo must be 2 MB or smaller."
+    },
+    "surfaces": {
+      "title": "Show the logo on",
+      "help": "Pick where the logo appears alongside the name.",
+      "header": "App header (signed-in)",
+      "login": "Login page",
+      "public": "Public link pages",
+      "email": "Emails"
+    },
+    "link": {
+      "label": "Logo link (optional)",
+      "help": "When set, clicking the logo opens this URL in a new tab."
+    },
+    "legal": {
+      "title": "Legal pages",
+      "help": "When enabled, a footer link appears on every page. Content is shown in the viewer's language, falling back to the other.",
+      "imprint_enable": "Enable Imprint",
+      "privacy_enable": "Enable Privacy policy",
+      "lang_en": "English",
+      "lang_de": "German"
+    }
+  },
+  "footer": {
+    "aria": "Legal",
+    "imprint": "Imprint",
+    "privacy": "Privacy"
+  },
+  "legal": {
+    "eyebrow": "Legal",
+    "imprint": "Imprint",
+    "privacy": "Privacy policy",
+    "not_available": "This page has not been published."
   },
   "manage_notifications": {
     "eyebrow": "Email preferences",

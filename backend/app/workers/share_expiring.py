@@ -40,8 +40,13 @@ async def share_expiring_24h_warning(_ctx) -> dict:
     notified_users = 0
     try:
         now = utc_now()
+        # Warn ~24h ahead. The window width tracks this cron's configured cadence
+        # so no share slips through the band between runs (v1.28.0: cadence is
+        # admin-tunable). expiring_notified_at still prevents double-notifying.
+        from ..services import cron_schedule as cron_sched
+        width = max(60, cron_sched.effective_cadence_minutes(db, "share_expiring_24h_warning"))
         lower = now + timedelta(hours=24)
-        upper = now + timedelta(hours=25)
+        upper = now + timedelta(hours=24, minutes=width)
         shares = (
             db.query(Share)
             .filter(

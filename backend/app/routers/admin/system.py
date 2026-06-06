@@ -30,33 +30,15 @@ from ...models.audit_log import AuditEventType, AuditLog
 from ...models.cron_run import CronRun, CronRunStatus
 from ...models.user import User, UserRole
 from ...redis_client import get_redis
+from ...services import cron_schedule
 from ...utils.timeutil import utc_now
 
 router = APIRouter()
 
-# Every scheduled cron (worker.py::WorkerSettings.cron_jobs), in schedule
-# order. Doubles as the allowlist for the on-demand run endpoint - each is
-# registered in WorkerSettings.functions, so enqueueable by name, and each
-# is idempotent (acts only on already-eligible rows).
-_KNOWN_CRONS = [
-    "expire_files",
-    "share_expiring_24h_warning",
-    "ops_check",
-    "disk_check",
-    "anomaly_check",
-    "cleanup_expired_tokens",
-    "quota_reconcile",
-    "cleanup_stale_uploads",
-    "cleanup_abandoned_uploads",
-    "release_check",
-    "imap_poll",
-    "purge_old_quarantine",
-    "cleanup_pending_invites",
-    "cleanup_read_notifications",
-    "prune_history",
-    "reclaim_orphaned_files",
-    "analytics_aggregate",
-]
+# Allowlist for the on-demand run endpoint = the cron schedule registry (single
+# source of truth, v1.28.0). Each is in WorkerSettings.functions (enqueueable by
+# name) and idempotent.
+_KNOWN_CRONS = list(cron_schedule.REGISTRY)
 
 
 

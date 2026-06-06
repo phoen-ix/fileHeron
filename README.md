@@ -302,7 +302,7 @@ Companion setting at **`/admin/settings/quarantine`** - single toggle "Notify al
 - **Public links / groups:** `public_link_created`, `public_link_revoked`, `public_link_consumed`, `group_created`, `group_updated`, `group_deleted`, `group_member_added`, `group_member_removed`.
 - **API tokens / OIDC:** `api_token_created`/`_revoked`/`_disabled`/`_reactivated`/`_admin_revoked`/`_admin_created`, `oidc_linked`, `oidc_unlinked`, `oidc_provider_created`/`_updated`/`_deleted`.
 - **Settings / policy:** `api_policy_changed`, `public_link_policy_changed`, `twofa_policy_changed`, `quarantine_policy_changed`, `share_defaults_policy_changed`, `smtp_config_changed`, `imap_config_changed`, `home_page_toggled`, `file_preview_toggled`, `share_approval_policy_changed`, `email_template_changed`, `email_template_reset`, `motd_changed`, `site_url_changed`, `site_timezone_changed`, `updates_settings_changed`, `settings_changed`.
-- **Ops / self-update:** `cron_failed`, `cron_run_triggered`, `ops_alert_dispatched`, `email_undeliverable`, `update_triggered`/`_completed`/`_failed`, `rollback_triggered`/`_completed`/`_failed`.
+- **Ops / self-update:** `cron_failed`, `cron_run_triggered`, `cron_schedule_changed`, `ops_alert_dispatched`, `email_undeliverable`, `update_triggered`/`_completed`/`_failed`, `rollback_triggered`/`_completed`/`_failed`.
 
 ---
 
@@ -734,7 +734,9 @@ Finalize uses `shutil.move` (== `os.rename` when same-fs, else copy2 + unlink) -
 
 ## ARQ workers + cron
 
-Worker config: `backend/app/workers/worker.py::WorkerSettings`. Queue: `fileheron:default`. **12 cron jobs**, all idempotent and staggered so they don't pile up at minute 0. Retention-driven jobs read the `retention.*` / `*_RETENTION_*` settings (see the Settings reference).
+Worker config: `backend/app/workers/worker.py::WorkerSettings`. Queue: `fileheron:default`. All jobs are idempotent. Retention-driven jobs read the `retention.*` / `*_RETENTION_*` settings (see the Settings reference).
+
+**Admin-tunable schedules (v1.28.0).** Each cron's cadence is no longer hard-coded: a single **minute dispatcher** (`workers/cron_dispatch.py`) reads a per-cron schedule registry (`services/cron_schedule.py` + `cron.<name>.*` settings) and enqueues jobs that are due. Admins set each job to *every N minutes* or *daily at HH:MM* (site timezone), or disable it, from **Admin -> System -> Scheduled tasks** (`/admin/scheduled-tasks`); on-demand "Run now" stays at `/admin/system/crons/{name}/run`. Defaults below reproduce the historical cadence, so an upgrade is behaviour-neutral. The schedules in the lists below are the **defaults**.
 
 Hourly:
 

@@ -19,6 +19,9 @@ import type {
   InboxListResponse,
   InboxDetail,
   UpdateInboxStatusRequest,
+  CronListResponse,
+  CronScheduleItem,
+  UpdateCronScheduleRequest,
   WebhookItem,
   WebhookCreateResponse,
   WebhookDeliveryItem,
@@ -102,17 +105,14 @@ export function updateMotdSettings(payload: UpdateMotdSettingsRequest) {
 
 
 // --- Updates (release-check) settings ------------------------------------
-
-export type UpdatesCheckMode = 'auto' | 'manual'
+// Cadence/enable for the release-check cron lives on the Scheduled tasks page.
 
 export interface UpdatesSettingsResponse {
   api_url: string
-  check_mode: UpdatesCheckMode
 }
 
 export interface UpdateUpdatesSettingsRequest {
   api_url: string
-  check_mode: UpdatesCheckMode
 }
 
 export function getUpdatesSettings() {
@@ -755,4 +755,13 @@ export function downloadInboxAttachment(msgId: number, attId: number) {
   return api.get(`/admin/inbox/${msgId}/attachments/${attId}/download`, {
     responseType: 'blob',
   })
+}
+
+// --- Scheduled tasks / crons (v1.28.0) -----------------------------------
+export function getCrons() {
+  return api.get<CronListResponse>('/admin/crons')
+}
+
+export function updateCronSchedule(name: string, payload: UpdateCronScheduleRequest) {
+  return api.put<CronScheduleItem>(`/admin/crons/${encodeURIComponent(name)}`, payload)
 }

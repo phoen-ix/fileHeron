@@ -39,6 +39,7 @@ from .cleanup_expired_tokens import cleanup_expired_tokens
 from .cleanup_pending_invites import cleanup_pending_invites
 from .cleanup_read_notifications import cleanup_read_notifications
 from .cleanup_stale_uploads import cleanup_stale_uploads
+from .cron_dispatch import cron_dispatch
 from .disk_check import disk_check
 from .expire_files import expire_files
 from .imap_poll import imap_poll
@@ -79,38 +80,14 @@ class WorkerSettings:
         webhook_deliver,
         anomaly_check,
         imap_poll,
+        cron_dispatch,
     ]
     cron_jobs = [
-        # Stagger so they don't pile up at minute 0. ops_check sits at :15
-        # so it sees the most recent expire_files (:00) + share_expiring
-        # (:07) outcomes when it scans for failures.
-        cron(expire_files, hour=None, minute={0}, run_at_startup=False),
-        cron(share_expiring_24h_warning, hour=None, minute={7}, run_at_startup=False),
-        cron(ops_check, hour=None, minute={15}, run_at_startup=False),
-        # Disk-space guard: flips storage.critical_low + alerts admins.
-        cron(disk_check, hour=None, minute={19}, run_at_startup=False),
-        cron(cleanup_expired_tokens, hour=None, minute={23}, run_at_startup=False),
-        # Heuristic anomaly scan (mass-download / multi-network / stuffing).
-        cron(anomaly_check, hour=None, minute={33}, run_at_startup=False),
-        cron(quota_reconcile, hour=None, minute={37}, run_at_startup=False),
-        # Reap DB `files` rows stuck in `uploading` (abandoned uploads) +
-        # fail their now-empty shares.
-        cron(cleanup_stale_uploads, hour=None, minute={41}, run_at_startup=False),
-        # Hourly TUS orphan sweep (disk working dir).
-        cron(cleanup_abandoned_uploads, hour=None, minute={47}, run_at_startup=False),
-        # GitHub releases poll for in-app "update available" surface.
-        cron(release_check, hour=None, minute={53}, run_at_startup=False),
-        # Inbound IMAP poll - ticks every 5 min (offset to :04), self-gates on
-        # the admin enabled/mode/interval settings.
-        cron(imap_poll, hour=None, minute={m for m in range(60) if m % 5 == 4}, run_at_startup=False),
-        # Daily-ish housekeeping (hour=2 keeps it well clear of business hours).
-        cron(purge_old_quarantine, hour={2}, minute={13}, run_at_startup=False),
-        cron(cleanup_pending_invites, hour={2}, minute={15}, run_at_startup=False),
-        cron(cleanup_read_notifications, hour={2}, minute={29}, run_at_startup=False),
-        cron(prune_history, hour={2}, minute={43}, run_at_startup=False),
-        cron(reclaim_orphaned_files, hour={2}, minute={51}, run_at_startup=False),
-        # Daily storage snapshot feeding the admin analytics trend.
-        cron(analytics_aggregate, hour={2}, minute={5}, run_at_startup=False),
+        # v1.28.0: cadence/enable/disable for every job is admin-editable. A single
+        # dispatcher ticks every minute and enqueues jobs whose configured schedule
+        # is due (services/cron_schedule.py + workers/cron_dispatch.py). The job
+        # functions above stay enqueueable (dispatcher + on-demand "Run now").
+        cron(cron_dispatch, hour=None, minute=set(range(60)), run_at_startup=False),
     ]
     on_startup = startup
     # Use a dedicated queue so the worker doesn't accidentally pick up

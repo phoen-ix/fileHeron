@@ -32,7 +32,6 @@ from ...schemas.imap_settings import (
 from ...services import imap_config
 from ...services import imap_poll as imap_poll_svc
 from ...services import settings as settings_svc
-from ...services import settings_registry as _sr
 from ...services import storage_backend as storage_svc
 from ...services.audit import record_audit_event
 
@@ -53,7 +52,6 @@ def _settings_response(db: Session) -> ImapSettingsResponse:
     )
     return ImapSettingsResponse(
         enabled=imap_config.is_enabled(db),
-        check_mode=imap_config.check_mode(db),
         use_smtp_credentials=uses_smtp,
         host=cfg.host,
         port=cfg.port,
@@ -64,7 +62,6 @@ def _settings_response(db: Session) -> ImapSettingsResponse:
         post_fetch_action=imap_config.post_fetch_action(db),
         move_folder=imap_config.move_folder(db),
         notify_mode=imap_config.notify_mode(db),
-        poll_interval_minutes=int(_sr.effective(db, K.IMAP_POLL_INTERVAL_MINUTES)),
         last_poll_at=settings_svc.get(db, K.IMAP_LAST_POLL_AT),
         last_success_at=settings_svc.get(db, K.IMAP_LAST_SUCCESS_AT),
     )
@@ -86,7 +83,6 @@ def update_imap_settings(
 ) -> ImapSettingsResponse:
     pairs: list[tuple[str, str | None]] = [
         (K.IMAP_ENABLED, "true" if payload.enabled else "false"),
-        (K.IMAP_CHECK_MODE, payload.check_mode),
         (K.IMAP_USE_SMTP_CREDENTIALS, "true" if payload.use_smtp_credentials else "false"),
         (K.IMAP_HOST, payload.host or None),
         (K.IMAP_PORT, str(payload.port)),
@@ -95,7 +91,6 @@ def update_imap_settings(
         (K.IMAP_POST_FETCH_ACTION, payload.post_fetch_action),
         (K.IMAP_MOVE_FOLDER, payload.move_folder or None),
         (K.IMAP_NOTIFY_MODE, payload.notify_mode),
-        (K.IMAP_POLL_INTERVAL_MINUTES, str(payload.poll_interval_minutes)),
     ]
     for key, value in pairs:
         settings_svc.set_value(db, key=key, value=value, actor=admin, request=request)
@@ -117,7 +112,7 @@ def update_imap_settings(
         actor_user_id=admin.id,
         target_type="settings",
         target_id="imap",
-        metadata={"enabled": payload.enabled, "check_mode": payload.check_mode,
+        metadata={"enabled": payload.enabled,
                   "post_fetch_action": payload.post_fetch_action,
                   "notify_mode": payload.notify_mode},
         request=request,

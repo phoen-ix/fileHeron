@@ -111,6 +111,7 @@ class AuditEventType(str, enum.Enum):
     email_undeliverable = "email_undeliverable"            # SMTP 5xx → audit + admin alert (was silently swallowed)
     cron_failed = "cron_failed"                            # cron_tracker logs the failure to audit + admin alert
     cron_run_triggered = "cron_run_triggered"              # admin ran a cron on demand from /admin/system
+    cron_schedule_changed = "cron_schedule_changed"        # v1.28.0 admin edited a cron's schedule
     ops_alert_dispatched = "ops_alert_dispatched"          # per-admin in-app ops notification fired
     # Self-update flow (Phase 4). `update_triggered` and `rollback_triggered`
     # record the admin actor + target tag. The terminal events are written

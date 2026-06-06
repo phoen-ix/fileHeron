@@ -9,7 +9,6 @@ import {
   getSystemStatus,
   getUpdaterJob,
   getUpdaterStatus,
-  runCron,
   runLiveChecks,
   type SystemStatusResponse,
   type UpdaterJob,
@@ -102,25 +101,8 @@ async function load() {
   }
 }
 
-// --- On-demand cron + live-check triggers ---
-const runningCron = ref<string | null>(null)
+// --- Live-check trigger ---
 const liveRunning = ref(false)
-
-async function onRunCron(jobName: string) {
-  if (runningCron.value) return
-  runningCron.value = jobName
-  try {
-    await runCron(jobName)
-    ui.pushToast(t('admin_system.crons.run_queued', { job: jobName }), 'success')
-    // Pick up the 'running' row shortly; the SSE 'cron_run' event reloads
-    // again on completion (with the final status + duration + result).
-    setTimeout(() => void load(), 1500)
-  } catch (err) {
-    ui.pushToast(describe(err), 'error')
-  } finally {
-    runningCron.value = null
-  }
-}
 
 async function onRunLiveChecks() {
   liveRunning.value = true
@@ -287,12 +269,6 @@ function fmtTime(iso: string | null): string {
   return formatInSiteTime(iso, locale.value, { second: '2-digit' })
 }
 
-function fmtDuration(ms: number | null): string {
-  if (ms === null || ms === undefined) return '-'
-  if (ms < 1000) return `${ms}ms`
-  return `${(ms / 1000).toFixed(2)}s`
-}
-
 function statusClass(s: string): string {
   if (s === 'ok') return 'pill ok'
   if (s === 'skipped') return 'pill warn'
@@ -306,19 +282,6 @@ function statusClass(s: string): string {
 function softFailed(c: SystemStatusResponse['crons'][number]): boolean {
   const r = c.last_run?.result_summary as { ok?: boolean } | null | undefined
   return r?.ok === false
-}
-
-function cronStatusClass(c: SystemStatusResponse['crons'][number]): string {
-  const s = c.last_run?.status
-  if (s === 'running') return 'pill warn'
-  // A soft-failed run gets a red pill even when cron_tracker said 'success'
-  // (the function returned cleanly but reported ok=false).
-  if (s === 'success' && !softFailed(c)) return 'pill ok'
-  return 'pill danger'
-}
-
-function cronStatusLabel(c: SystemStatusResponse['crons'][number]): string {
-  return softFailed(c) ? 'failed' : c.last_run?.status ?? ''
 }
 
 const headlineFailures = computed(() => {
@@ -522,54 +485,15 @@ const headlineFailures = computed(() => {
         </div>
       </section>
 
-      <!-- crons -->
+      <!-- Scheduled tasks (crons) live on their own page now. -->
       <section class="card">
         <h2>{{ t('admin_system.crons.heading') }}</h2>
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>{{ t('admin_system.crons.job') }}</th>
-              <th>{{ t('admin_system.crons.last_status') }}</th>
-              <th>{{ t('admin_system.crons.last_run') }}</th>
-              <th>{{ t('admin_system.crons.duration') }}</th>
-              <th>{{ t('admin_system.crons.last_24h') }}</th>
-              <th>{{ t('admin_system.crons.result') }}</th>
-              <th>{{ t('admin_system.crons.actions') }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="c in status.crons" :key="c.job_name">
-              <td><code>{{ c.job_name }}</code></td>
-              <td>
-                <span v-if="c.last_run" :class="cronStatusClass(c)">
-                  {{ cronStatusLabel(c) }}
-                </span>
-                <span v-else class="muted">{{ t('admin_system.crons.no_runs') }}</span>
-              </td>
-              <td>{{ c.last_run ? fmtTime(c.last_run.started_at) : '-' }}</td>
-              <td>{{ c.last_run ? fmtDuration(c.last_run.duration_ms) : '-' }}</td>
-              <td>
-                <span class="pill ok">{{ c.last_24h.success }}</span>
-                <span v-if="c.last_24h.failure > 0" class="pill danger">{{ c.last_24h.failure }}</span>
-                <span v-if="c.last_24h.running > 0" class="pill warn">{{ c.last_24h.running }}</span>
-              </td>
-              <td class="result">
-                <code v-if="c.last_run?.result_summary">{{ JSON.stringify(c.last_run.result_summary) }}</code>
-                <span v-else class="muted">-</span>
-              </td>
-              <td>
-                <button
-                  type="button"
-                  class="btn-secondary run-btn"
-                  :disabled="runningCron === c.job_name || c.last_run?.status === 'running'"
-                  @click="onRunCron(c.job_name)"
-                >
-                  {{ runningCron === c.job_name ? t('common.loading') : t('admin_system.crons.run_now') }}
-                </button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+        <p class="muted">
+          {{ t('admin_system.crons.moved') }}
+          <RouterLink :to="{ name: 'admin-scheduled-tasks' }">
+            {{ t('admin.nav.scheduled_tasks') }}
+          </RouterLink>
+        </p>
       </section>
 
       <!-- update / rollback confirm modal -->

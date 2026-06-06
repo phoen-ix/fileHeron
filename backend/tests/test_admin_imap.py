@@ -68,12 +68,12 @@ async def test_settings_put_masks_password(make_user, db, client, login_as):
     r = await client.put(
         "/api/admin/settings/imap",
         json={
-            "enabled": True, "check_mode": "auto", "use_smtp_credentials": False,
+            "enabled": True, "use_smtp_credentials": False,
             "host": "imap.example.com",
             "port": 993, "user": "bot", "password": "s3cret",
             "tls_mode": "implicit", "mailbox": "INBOX",
             "post_fetch_action": "mark_read", "move_folder": "fileHeron/Processed",
-            "notify_mode": "off", "poll_interval_minutes": 10,
+            "notify_mode": "off",
         },
         headers=_h(t),
     )
@@ -87,12 +87,11 @@ async def test_settings_put_masks_password(make_user, db, client, login_as):
     r2 = await client.put(
         "/api/admin/settings/imap",
         json={
-            "enabled": True, "check_mode": "auto", "use_smtp_credentials": False,
+            "enabled": True, "use_smtp_credentials": False,
             "host": "imap.example.com",
             "port": 993, "user": "bot", "password": None, "tls_mode": "implicit",
             "mailbox": "INBOX", "post_fetch_action": "mark_read",
             "move_folder": "fileHeron/Processed", "notify_mode": "off",
-            "poll_interval_minutes": 10,
         },
         headers=_h(t),
     )

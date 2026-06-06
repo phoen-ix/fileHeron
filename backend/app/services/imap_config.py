@@ -87,10 +87,6 @@ def is_enabled(db: Session) -> bool:
     return settings_svc.get_bool(db, settings_svc.Keys.IMAP_ENABLED, default=False)
 
 
-def check_mode(db: Session) -> str:
-    return settings_svc.get(db, settings_svc.Keys.IMAP_CHECK_MODE) or "auto"
-
-
 def post_fetch_action(db: Session) -> str:
     v = settings_svc.get(db, settings_svc.Keys.IMAP_POST_FETCH_ACTION)
     return v if v in POST_FETCH_ACTIONS else "mark_read"

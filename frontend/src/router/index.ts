@@ -326,6 +326,12 @@ const router = createRouter({
           component: () => import('@/views/AdminSystem.vue'),
           meta: { density: 'operator', title: 'System', requiresRole: 'admin' },
         },
+        {
+          path: 'scheduled-tasks',
+          name: 'admin-scheduled-tasks',
+          component: () => import('@/views/AdminScheduledTasks.vue'),
+          meta: { density: 'operator', title: 'Scheduled tasks', requiresRole: 'admin' },
+        },
       ],
     },
     {

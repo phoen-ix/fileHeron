@@ -195,6 +195,7 @@
       "quarantine": "Quarantäne",
       "api_tokens": "API-Tokens",
       "system": "System",
+      "scheduled_tasks": "Geplante Aufgaben",
       "save_failed": "Seitenleisten-Status konnte nicht gespeichert werden."
     },
     "nav_cat": {
@@ -218,6 +219,29 @@
       "webhooks": "Webhooks",
       "advanced": "Erweitert"
     }
+  },
+  "admin_scheduled_tasks": {
+    "title": "Geplante Aufgaben",
+    "intro": "Lege fest, wie oft jeder Hintergrundjob läuft, fixiere eine tägliche Uhrzeit oder deaktiviere ihn. Tägliche Zeiten verwenden die Seiten-Zeitzone ({tz}).",
+    "group": {
+      "shares": "Freigaben & Dateien",
+      "mail": "E-Mail",
+      "maintenance": "Wartung",
+      "ops": "Betrieb & System"
+    },
+    "col_task": "Aufgabe",
+    "col_schedule": "Zeitplan",
+    "col_status": "Zuletzt (letzte / 24h ok-Fehler)",
+    "col_next": "Nächster Lauf",
+    "kind_interval": "Alle",
+    "kind_daily": "Täglich um",
+    "every": "alle",
+    "minutes": "Min.",
+    "at": "um",
+    "run_now": "Jetzt ausführen",
+    "saved": "Zeitplan gespeichert",
+    "run_queued": "{name} eingereiht",
+    "disabled": "deaktiviert"
   },
   "admin_system": {
     "eyebrow": "Admin / System",
@@ -286,7 +310,8 @@
       "email_undeliverable_24h": "E-Mails nicht zustellbar (24h)"
     },
     "crons": {
-      "heading": "Crons",
+      "heading": "Geplante Aufgaben",
+      "moved": "Zeitpläne, Status und Jetzt ausführen findest du jetzt unter",
       "job": "Job",
       "last_status": "Letzter Status",
       "last_run": "Letzter Lauf",
@@ -517,7 +542,8 @@
   },
   "admin_updates": {
     "title": "Updates",
-    "intro": "Wo und wie oft nach neuen fileHeron-Releases gesucht wird. Bei eigenen Forks auf das passende Releases-Endpoint zeigen. Nur Admins erhalten Update-Benachrichtigungen.",
+    "intro": "Wo nach neuen fileHeron-Releases gesucht wird. Bei eigenen Forks auf das passende Releases-Endpoint zeigen. Nur Admins erhalten Update-Benachrichtigungen.",
+    "schedule_moved": "Wie oft die Update-Prüfung läuft, findest du unter",
     "url_label": "Release-API-URL",
     "url_placeholder": "https://api.github.com/repos/phoen-ix/fileHeron/releases/latest",
     "url_help": "Standardmäßig auf das Upstream-Repo gesetzt. Forks können auf das eigene Releases-Endpoint zeigen - Antwort muss GitHub-kompatibel sein (tag_name, html_url, body, published_at).",
@@ -589,6 +615,7 @@
     "password_set_help": "Ein Passwort ist gespeichert. Leer lassen zum Beibehalten, oder ein neues eingeben zum Ersetzen.",
     "mailbox": "Postfach / Ordner",
     "behaviour": "Verhalten",
+    "schedule_moved": "Abruf-Intervall und Aktivierung findest du unter",
     "check_mode": "Abruf",
     "mode_auto": "Automatisch (nach Zeitplan)",
     "mode_manual": "Nur manuell",

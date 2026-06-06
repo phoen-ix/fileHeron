@@ -28,7 +28,6 @@ from __future__ import annotations
 
 import logging
 import re
-from datetime import datetime, timedelta
 
 import httpx
 from sqlalchemy.orm import Session
@@ -48,10 +47,6 @@ _DEFAULT_URL = (
     "https://api.github.com/repos/phoen-ix/fileHeron/releases?per_page=30"
 )
 _HTTP_TIMEOUT_SEC = 10
-# Fudge: re-check whenever last_check_at is older than this. Slightly
-# less than 24h so the daily cadence doesn't slip by one tick because
-# the previous run ran a few seconds late.
-_AUTO_INTERVAL = timedelta(hours=23, minutes=55)
 _BODY_MAX_BYTES = 8192
 
 # Backend releases are tagged ``vX.Y.Z`` (the server-release.yml CI
@@ -87,10 +82,6 @@ def _utcnow_iso() -> str:
 
 def _configured_url(db: Session) -> str:
     return settings_svc.get(db, settings_svc.Keys.UPDATES_API_URL) or _DEFAULT_URL
-
-
-def _check_mode(db: Session) -> str:
-    return settings_svc.get(db, settings_svc.Keys.UPDATES_CHECK_MODE) or "auto"
 
 
 async def _fetch_releases(url: str):
@@ -217,46 +208,14 @@ def _maybe_notify_admins(db: Session, new_version: str, release_url: str | None)
     return sent
 
 
-def _too_soon(db: Session) -> bool:
-    """True when the last SUCCESSFUL check was less than `_AUTO_INTERVAL`
-    ago. Used by the cron's auto-mode guard; the on-demand button skips
-    this entirely.
-
-    Reads `last_success_at` rather than `last_check_at` so a failed
-    attempt doesn't block the next hourly retry - we want failures to
-    self-heal as soon as the upstream is reachable again."""
-    raw = settings_svc.get(db, CacheKeys.LAST_SUCCESS_AT)
-    if not raw:
-        return False
-    try:
-        last = datetime.fromisoformat(raw)
-    except Exception:
-        return False
-    return (utc_now() - last) < _AUTO_INTERVAL
-
-
 async def run_check(db: Session, *, manual: bool) -> dict:
     """Core: fetch the configured URL, cache it, maybe-notify admins.
 
-    `manual=True` skips both the mode guard (so the button works even
-    when mode=manual) and the 24h-since-last-check guard (so 'I just
-    cut a release, check now' actually does something).
+    Cadence/enable is owned by the cron scheduler (services/cron_schedule.py
+    'release_check', v1.28.0) - this no longer self-gates on a mode/interval.
+    ``manual`` is retained for the on-demand "Check now" button (same behaviour
+    now that the gate is gone).
     """
-    if not manual:
-        if _check_mode(db) == "manual":
-            return {"ok": True, "skipped": "manual_mode"}
-        if _too_soon(db):
-            return {
-                "ok": True,
-                "skipped": "too_soon",
-                "next_eligible_at": (
-                    datetime.fromisoformat(
-                        settings_svc.get(db, CacheKeys.LAST_SUCCESS_AT) or _utcnow_iso()
-                    )
-                    + _AUTO_INTERVAL
-                ).isoformat(),
-            }
-
     url = _configured_url(db)
     try:
         payload = await _fetch_releases(url)

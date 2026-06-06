@@ -1,34 +1,47 @@
-# file:Heron v1.27.3
+# file:Heron v1.28.0
 
-**Inbox: Fetch now, where you'd expect it.** The **Fetch now** button is now on the
-**Inbox** page itself (not just the IMAP settings page), and a fetch that finds
-nothing now says so clearly instead of a bare "0".
+**Scheduled tasks - every background job is now yours to tune.** A new admin page
+lets you set how often each cron runs, pin a daily time for heavy jobs, or disable
+any of them outright - no redeploy. All cron controls now live in one place.
 
 ## What's new
 
-- **Fetch now on the Inbox** - poll the mailbox and refresh the list in one click,
-  right from *Messaging -> Inbox*.
-- **Clearer result.** When a fetch brings in nothing, the message now reads
-  "No new mail - INBOX has N message(s)", so an empty mailbox is obvious rather
-  than looking like a failure. The poll also logs the mailbox total for operators.
+- **Scheduled tasks page** at *Admin -> System -> Scheduled tasks*: every background
+  job (expiry, cleanups, history pruning, quota reconcile, IMAP fetch, update check,
+  and more) listed with:
+  - an **enable/disable** toggle,
+  - a **schedule** you choose - *every N minutes* or *daily at a fixed time*,
+  - live **status** (last run, last-24h success/failure) and **next run**,
+  - a **Run now** button.
+- **Daily times honour your site timezone**, so heavy housekeeping can be pinned to
+  off-hours (e.g. 02:30 local).
+- **One home for crons.** The cron table left the System page, and the polling
+  controls left the Inbound mail and Updates settings pages - it's all on Scheduled
+  tasks now. Those pages keep only their own config (mailbox connection; release API
+  URL).
 
 ## Good to know
 
-- An empty result usually means the mailbox really is empty. Note that an
-  **auto-reply is outbound** - it's sent to whoever writes to you and lands in
-  their inbox, not yours - so configuring one doesn't put anything in this mailbox.
-  To see a message here, have someone send a real email to the address, then
-  Fetch now.
-- No database changes, no new dependencies.
+- **Nothing changes on upgrade** until you edit a schedule: every job keeps its
+  previous cadence by default (hourly jobs hourly, daily housekeeping at its usual
+  ~02:xx, IMAP every 5 minutes).
+- Disabling a job stops its automatic runs; you can still trigger it with **Run now**.
+- Changes take effect within a minute (a lightweight scheduler checks each job's
+  configured cadence).
+- Every schedule change is recorded in the audit log.
+
+## Upgrade notes
+
+- **No database migration.** Schedules are stored as settings.
 
 ## Container images
 
 Published to GitHub Container Registry:
 
-- `ghcr.io/phoen-ix/fileheron-backend:v1.27.3`
-- `ghcr.io/phoen-ix/fileheron-worker:v1.27.3`
-- `ghcr.io/phoen-ix/fileheron-frontend:v1.27.3`
-- `ghcr.io/phoen-ix/fileheron-updater-shim:v1.27.3`
-- `ghcr.io/phoen-ix/fileheron-updater-executor:v1.27.3`
+- `ghcr.io/phoen-ix/fileheron-backend:v1.28.0`
+- `ghcr.io/phoen-ix/fileheron-worker:v1.28.0`
+- `ghcr.io/phoen-ix/fileheron-frontend:v1.28.0`
+- `ghcr.io/phoen-ix/fileheron-updater-shim:v1.28.0`
+- `ghcr.io/phoen-ix/fileheron-updater-executor:v1.28.0`
 
 Click **Update** in `/admin/system` to roll forward.

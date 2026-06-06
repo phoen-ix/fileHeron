@@ -231,68 +231,10 @@ async def test_url_override_is_used(db, monkeypatch):
     assert captured["url"] == "https://example.com/fork/releases/latest"
 
 
-@pytest.mark.asyncio
-async def test_manual_mode_skips_cron_work(db, monkeypatch):
-    """When check_mode=manual, the cron returns without HTTP."""
-    called = {"n": 0}
-
-    class _ShouldNeverGet:
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, *a):
-            return None
-
-        async def get(self, *_a, **_kw):
-            called["n"] += 1
-            return _StubResponse({"tag_name": "v0.0.0"})
-
-    monkeypatch.setattr(rc.httpx, "AsyncClient", lambda **_kw: _ShouldNeverGet())
-    settings_svc.set_value(
-        db, key=settings_svc.Keys.UPDATES_CHECK_MODE, value="manual", actor=None
-    )
-    db.commit()
-
-    result = await rc.run_check(db, manual=False)
-    assert result == {"ok": True, "skipped": "manual_mode"}
-    assert called["n"] == 0
-
-
-@pytest.mark.asyncio
-async def test_24h_guard_skips_recent_success(db, monkeypatch):
-    """When the last SUCCESSFUL check was less than 24h ago, the cron
-    short-circuits without an HTTP call. Reads LAST_SUCCESS_AT, not
-    LAST_CHECK_AT, so failures don't block retries."""
-    called = {"n": 0}
-
-    class _ShouldNeverGet:
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, *a):
-            return None
-
-        async def get(self, *_a, **_kw):
-            called["n"] += 1
-            return _StubResponse({"tag_name": "v0.0.0"})
-
-    monkeypatch.setattr(rc.httpx, "AsyncClient", lambda **_kw: _ShouldNeverGet())
-    from datetime import datetime, timedelta, timezone
-    # CLAUDE.md convention: naive UTC. datetime.utcnow() is deprecated
-    # in Python 3.12; build aware UTC then drop tzinfo to match the
-    # codebase's on-disk shape.
-    one_hour_ago = (
-        datetime.now(tz=timezone.utc).replace(tzinfo=None) - timedelta(hours=1)
-    ).isoformat()
-    settings_svc.set_value(
-        db, key=rc.CacheKeys.LAST_SUCCESS_AT, value=one_hour_ago, actor=None
-    )
-    db.commit()
-
-    result = await rc.run_check(db, manual=False)
-    assert result["ok"] is True
-    assert result["skipped"] == "too_soon"
-    assert called["n"] == 0
+# NOTE (v1.28.0): release_check no longer self-gates on check_mode or a 24h
+# "too_soon" guard - cadence/enable is owned by the cron scheduler + dispatcher
+# (see test_cron_schedule / test_cron_dispatch). The old manual-mode and
+# too_soon tests were removed; the cache-timer behaviour below still holds.
 
 
 @pytest.mark.asyncio
@@ -319,8 +261,7 @@ async def test_failure_does_not_advance_success_timer(db, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_success_advances_both_timers(db, monkeypatch):
-    """Successful check advances both last_check_at AND last_success_at,
-    so subsequent ticks within 24h skip."""
+    """A successful check advances both last_check_at AND last_success_at."""
     monkeypatch.setattr(
         rc.httpx, "AsyncClient",
         lambda **_kw: _StubClient(_StubResponse({
@@ -335,11 +276,6 @@ async def test_success_advances_both_timers(db, monkeypatch):
     assert r1["ok"] is True
     assert settings_svc.get(db, rc.CacheKeys.LAST_CHECK_AT)
     assert settings_svc.get(db, rc.CacheKeys.LAST_SUCCESS_AT)
-
-    # Second attempt within the window: skipped.
-    r2 = await rc.run_check(db, manual=False)
-    assert r2["ok"] is True
-    assert r2["skipped"] == "too_soon"
 
 
 @pytest.mark.asyncio

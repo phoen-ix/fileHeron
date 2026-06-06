@@ -1123,7 +1123,6 @@ export interface TestSendEmailTemplateResponse {
 // Inbound mailbox / IMAP (v1.27.0)
 export interface ImapSettingsResponse {
   enabled: boolean
-  check_mode: 'auto' | 'manual'
   use_smtp_credentials: boolean
   host: string
   port: number
@@ -1134,14 +1133,12 @@ export interface ImapSettingsResponse {
   post_fetch_action: 'mark_read' | 'untouched' | 'move' | 'delete'
   move_folder: string
   notify_mode: 'off' | 'human' | 'all'
-  poll_interval_minutes: number
   last_poll_at: string | null
   last_success_at: string | null
 }
 
 export interface UpdateImapSettingsRequest {
   enabled: boolean
-  check_mode: 'auto' | 'manual'
   use_smtp_credentials: boolean
   host: string
   port: number
@@ -1152,7 +1149,42 @@ export interface UpdateImapSettingsRequest {
   post_fetch_action: 'mark_read' | 'untouched' | 'move' | 'delete'
   move_folder: string
   notify_mode: 'off' | 'human' | 'all'
-  poll_interval_minutes: number
+}
+
+// Scheduled tasks / crons (v1.28.0)
+export interface CronCounts {
+  success: number
+  failure: number
+  running: number
+}
+
+export interface CronScheduleItem {
+  name: string
+  group: string
+  description: string
+  enabled: boolean
+  kind: 'interval' | 'daily'
+  interval_minutes: number
+  daily_time: string
+  min_interval_minutes: number
+  last_run_at: string | null
+  last_status: 'running' | 'success' | 'failure' | null
+  last_duration_ms: number | null
+  last_error: string | null
+  next_run_at: string | null
+  last_24h: CronCounts
+}
+
+export interface CronListResponse {
+  items: CronScheduleItem[]
+  site_timezone: string
+}
+
+export interface UpdateCronScheduleRequest {
+  enabled: boolean
+  kind: 'interval' | 'daily'
+  interval_minutes: number
+  daily_time: string
 }
 
 export interface ImapTestResponse {

@@ -195,6 +195,7 @@
       "quarantine": "Quarantine",
       "api_tokens": "API tokens",
       "system": "System",
+      "scheduled_tasks": "Scheduled tasks",
       "save_failed": "Couldn't save sidebar state."
     },
     "nav_cat": {
@@ -218,6 +219,29 @@
       "webhooks": "Webhooks",
       "advanced": "Advanced"
     }
+  },
+  "admin_scheduled_tasks": {
+    "title": "Scheduled tasks",
+    "intro": "Set how often each background job runs, pin a daily time, or disable it. Daily times use the site timezone ({tz}).",
+    "group": {
+      "shares": "Shares & files",
+      "mail": "Mail",
+      "maintenance": "Maintenance",
+      "ops": "Operations & system"
+    },
+    "col_task": "Task",
+    "col_schedule": "Schedule",
+    "col_status": "Recent (last / 24h ok-fail)",
+    "col_next": "Next run",
+    "kind_interval": "Every",
+    "kind_daily": "Daily at",
+    "every": "every",
+    "minutes": "min",
+    "at": "at",
+    "run_now": "Run now",
+    "saved": "Schedule saved",
+    "run_queued": "{name} queued",
+    "disabled": "disabled"
   },
   "admin_system": {
     "eyebrow": "Admin / System",
@@ -286,7 +310,8 @@
       "email_undeliverable_24h": "Emails undeliverable (24h)"
     },
     "crons": {
-      "heading": "Crons",
+      "heading": "Scheduled tasks",
+      "moved": "Cron schedules, status and Run now have moved to",
       "job": "Job",
       "last_status": "Last status",
       "last_run": "Last run",
@@ -517,7 +542,8 @@
   },
   "admin_updates": {
     "title": "Updates",
-    "intro": "Where to check for new fileHeron releases and how often. Point this at your own fork's API if you self-publish images. Only admins receive update notifications.",
+    "intro": "Where to check for new fileHeron releases. Point this at your own fork's API if you self-publish images. Only admins receive update notifications.",
+    "schedule_moved": "How often the update check runs is on the",
     "url_label": "Release API URL",
     "url_placeholder": "https://api.github.com/repos/phoen-ix/fileHeron/releases/latest",
     "url_help": "Pre-filled with the upstream repo. Forks can point this at their own releases endpoint - must return a GitHub-compatible JSON shape (tag_name, html_url, body, published_at).",
@@ -589,6 +615,7 @@
     "password_set_help": "A password is saved. Leave blank to keep it, or type a new one to replace it.",
     "mailbox": "Mailbox / folder",
     "behaviour": "Behaviour",
+    "schedule_moved": "Polling cadence and enable/disable are on the",
     "check_mode": "Fetching",
     "mode_auto": "Automatic (on a schedule)",
     "mode_manual": "Manual only",

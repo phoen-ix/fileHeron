@@ -1,5 +1,6 @@
-"""Inbound poll orchestration (v1.27.0) - mirrors release_check's gating
-(enabled / auto-vs-manual / interval) and on-demand bypass.
+"""Inbound poll orchestration. Cadence/enable is owned by the cron scheduler
+(services/cron_schedule.py 'imap_poll', v1.28.0); this only does the work + a
+feature guard. ``run_poll(manual=True)`` powers the admin "Fetch now" button.
 
 Sync (stdlib IMAP + DB); the worker runs it via ``asyncio.to_thread``. The IMAP
 session is injectable (``session_opener``) so tests drive it with a fake.
@@ -8,34 +9,18 @@ from __future__ import annotations
 
 import contextlib
 import logging
-from datetime import datetime, timedelta
 
 from sqlalchemy.orm import Session
 
 from ..database import SessionLocal
-from . import imap_config
-from . import inbound_mail
-from . import inbound_parse
-from . import settings as settings_svc
-from . import settings_registry as _sr
-from .imap_client import open_session
 from ..utils.timeutil import utc_now
+from . import imap_config, inbound_mail, inbound_parse
+from . import settings as settings_svc
+from .imap_client import open_session
 
 logger = logging.getLogger("fileheron.imap")
 
 K = settings_svc.Keys
-
-
-def _too_soon(db: Session) -> bool:
-    raw = settings_svc.get(db, K.IMAP_LAST_SUCCESS_AT)
-    if not raw:
-        return False
-    try:
-        last = datetime.fromisoformat(raw)
-    except ValueError:
-        return False
-    interval = _sr.effective(db, K.IMAP_POLL_INTERVAL_MINUTES)
-    return (utc_now() - last) < timedelta(minutes=int(interval))
 
 
 def _int_setting(db: Session, key: str) -> int:
@@ -47,19 +32,17 @@ def _int_setting(db: Session, key: str) -> int:
 
 
 def run_poll(*, manual: bool, db: Session | None = None, session_opener=open_session) -> dict:
-    """Fetch new mail and ingest it. ``manual=True`` bypasses the manual-mode and
-    interval guards (the admin "Fetch now" button). Opens its own DB session when
-    one isn't supplied (the worker thread case)."""
+    """Fetch new mail and ingest it. ``manual`` marks the admin "Fetch now" call
+    (kept for symmetry; scheduling is handled by the cron dispatcher now). Opens
+    its own DB session when one isn't supplied (the worker thread case)."""
     own = db is None
     db = db or SessionLocal()
     try:
+        # Feature guard only. Cadence/enable is owned by the cron scheduler
+        # (services/cron_schedule.py 'imap_poll') as of v1.28.0; this no longer
+        # self-gates on interval/mode.
         if not imap_config.is_enabled(db):
             return {"ok": True, "skipped": "disabled"}
-        if not manual:
-            if imap_config.check_mode(db) == "manual":
-                return {"ok": True, "skipped": "manual_mode"}
-            if _too_soon(db):
-                return {"ok": True, "skipped": "too_soon"}
 
         cfg = imap_config.resolve_imap_config(db)
         if not cfg.is_configured:
@@ -125,7 +108,7 @@ def run_poll(*, manual: bool, db: Session | None = None, session_opener=open_ses
             db.close()
 
 
-def test_connection(db: Session, *, override: "imap_config.ImapConfig | None" = None) -> dict:
+def test_connection(db: Session, *, override: imap_config.ImapConfig | None = None) -> dict:
     """Admin diagnostic: connect, log in, list folders. Never raises."""
     cfg = override or imap_config.resolve_imap_config(db)
     if not cfg.is_configured:

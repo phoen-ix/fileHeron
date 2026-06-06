@@ -15,7 +15,6 @@ CheckMode = ("auto", "manual")
 
 class ImapSettingsResponse(APIBaseModel):
     enabled: bool
-    check_mode: str
     use_smtp_credentials: bool
     host: str
     port: int
@@ -26,14 +25,13 @@ class ImapSettingsResponse(APIBaseModel):
     post_fetch_action: str
     move_folder: str
     notify_mode: str
-    poll_interval_minutes: int
+    # Polling cadence/enable now lives on the Scheduled tasks page (cron 'imap_poll').
     last_poll_at: str | None
     last_success_at: str | None
 
 
 class UpdateImapSettingsRequest(APIBaseModel):
     enabled: bool
-    check_mode: str = Field(pattern="^(auto|manual)$")
     # When true, IMAP reuses the SMTP login; user/password below are ignored.
     use_smtp_credentials: bool = True
     host: str = Field(default="", max_length=255)
@@ -46,7 +44,6 @@ class UpdateImapSettingsRequest(APIBaseModel):
     post_fetch_action: str = Field(pattern="^(mark_read|untouched|move|delete)$")
     move_folder: str = Field(default="fileHeron/Processed", max_length=255)
     notify_mode: str = Field(pattern="^(off|human|all)$")
-    poll_interval_minutes: int = Field(default=5, ge=1, le=1440)
 
 
 class ImapTestResponse(APIBaseModel):

@@ -28,7 +28,6 @@ const passwordTouched = ref(false)
 
 const form = ref({
   enabled: false,
-  check_mode: 'auto' as 'auto' | 'manual',
   use_smtp_credentials: true,
   host: '',
   port: 993,
@@ -39,13 +38,11 @@ const form = ref({
   post_fetch_action: 'mark_read' as 'mark_read' | 'untouched' | 'move' | 'delete',
   move_folder: 'fileHeron/Processed',
   notify_mode: 'off' as 'off' | 'human' | 'all',
-  poll_interval_minutes: 5,
 })
 
 function hydrate(s: ImapSettingsResponse) {
   form.value = {
     enabled: s.enabled,
-    check_mode: s.check_mode,
     use_smtp_credentials: s.use_smtp_credentials,
     host: s.host,
     port: s.port,
@@ -56,7 +53,6 @@ function hydrate(s: ImapSettingsResponse) {
     post_fetch_action: s.post_fetch_action,
     move_folder: s.move_folder,
     notify_mode: s.notify_mode,
-    poll_interval_minutes: s.poll_interval_minutes,
   }
   isPasswordSet.value = s.is_password_set
   lastPollAt.value = s.last_poll_at
@@ -209,19 +205,10 @@ onMounted(load)
       </label>
 
       <h2 class="form-h2">{{ t('admin_imap.behaviour') }}</h2>
-      <div class="row-2">
-        <label class="fh-field">
-          <span class="fh-field-label">{{ t('admin_imap.check_mode') }}</span>
-          <select v-model="form.check_mode" class="fh-field-input">
-            <option value="auto">{{ t('admin_imap.mode_auto') }}</option>
-            <option value="manual">{{ t('admin_imap.mode_manual') }}</option>
-          </select>
-        </label>
-        <label class="fh-field">
-          <span class="fh-field-label">{{ t('admin_imap.interval') }}</span>
-          <input v-model.number="form.poll_interval_minutes" type="number" class="fh-field-input" min="1" max="1440" />
-        </label>
-      </div>
+      <p class="fh-field-help">
+        {{ t('admin_imap.schedule_moved') }}
+        <RouterLink :to="{ name: 'admin-scheduled-tasks' }">{{ t('admin.nav.scheduled_tasks') }}</RouterLink>
+      </p>
       <label class="fh-field">
         <span class="fh-field-label">{{ t('admin_imap.post_fetch') }}</span>
         <select v-model="form.post_fetch_action" class="fh-field-input">

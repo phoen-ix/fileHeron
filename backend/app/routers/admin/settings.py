@@ -386,9 +386,6 @@ def get_updates_settings(
     return UpdatesSettingsResponse(
         api_url=settings_svc.get(db, settings_svc.Keys.UPDATES_API_URL)
         or _DEFAULT_UPDATES_API_URL,
-        check_mode=(
-            settings_svc.get(db, settings_svc.Keys.UPDATES_CHECK_MODE) or "auto"
-        ),  # type: ignore[arg-type]
     )
 
 
@@ -414,26 +411,17 @@ def update_updates_settings(
         actor=admin,
         request=request,
     )
-    settings_svc.set_value(
-        db,
-        key=settings_svc.Keys.UPDATES_CHECK_MODE,
-        value=payload.check_mode,
-        actor=admin,
-        request=request,
-    )
     record_audit_event(
         db,
         event_type=AuditEventType.updates_settings_changed,
         actor_user_id=admin.id,
         target_type="settings",
         target_id="updates",
-        metadata={"check_mode": payload.check_mode, "url_changed": True},
+        metadata={"url_changed": True},
         request=request,
     )
     db.commit()
-    return UpdatesSettingsResponse(
-        api_url=payload.api_url, check_mode=payload.check_mode
-    )
+    return UpdatesSettingsResponse(api_url=payload.api_url)
 
 
 @router.put("/settings/motd", response_model=MotdSettingsResponse)

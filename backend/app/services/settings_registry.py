@@ -79,8 +79,6 @@ TUNABLES: list[Tunable] = [
     Tunable(K.ANOMALY_MASS_DOWNLOAD_THRESHOLD, "ANOMALY_MASS_DOWNLOAD_THRESHOLD", "int", "anomaly", 1, 100_000),
     Tunable(K.ANOMALY_MULTI_NETWORK_THRESHOLD, "ANOMALY_MULTI_NETWORK_THRESHOLD", "int", "anomaly", 2, 1000),
     Tunable(K.ANOMALY_LOGIN_FAILURE_THRESHOLD, "ANOMALY_LOGIN_FAILURE_THRESHOLD", "int", "anomaly", 1, 100_000),
-    # --- Inbound mailbox / IMAP poll ---
-    Tunable(K.IMAP_POLL_INTERVAL_MINUTES, "IMAP_POLL_INTERVAL_MINUTES", "int", "inbound_mail", 1, 1440),
 ]
 
 BY_KEY: dict[str, Tunable] = {t.key: t for t in TUNABLES}

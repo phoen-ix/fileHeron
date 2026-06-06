@@ -172,15 +172,9 @@ def test_poll_skips_when_disabled(db):
     assert imap_poll.run_poll(manual=False, db=db, session_opener=_opener(_FakeSession({})))["skipped"] == "disabled"
 
 
-def test_poll_skips_manual_mode(db):
-    _enable(db)
-    s.set_value(db, key=s.Keys.IMAP_CHECK_MODE, value="manual", actor=None)
-    db.commit()
-    r = imap_poll.run_poll(manual=False, db=db, session_opener=_opener(_FakeSession({})))
-    assert r["skipped"] == "manual_mode"
-    # manual=True bypasses the gate
-    r2 = imap_poll.run_poll(manual=True, db=db, session_opener=_opener(_FakeSession({})))
-    assert r2.get("skipped") != "manual_mode"
+# NOTE (v1.28.0): imap_poll no longer self-gates on check_mode/interval -
+# cadence/enable is owned by the cron scheduler. Only the imap.enabled feature
+# guard remains (test_poll_skips_when_disabled covers it).
 
 
 def test_poll_ingests_and_marks_seen(db, monkeypatch):

@@ -996,7 +996,19 @@
     "col_status": "Status",
     "col_code": "Code",
     "col_attempts": "Tries",
-    "retry": "Retry"
+    "retry": "Retry",
+    "event": {
+      "share_created": "Share created",
+      "share_downloaded": "Share downloaded (ZIP)",
+      "file_downloaded": "File downloaded",
+      "share_revoked": "Share revoked",
+      "share_expired": "Share expired",
+      "file_quarantined": "File quarantined",
+      "public_link_consumed": "Public link used",
+      "oidc_linked": "SSO account linked",
+      "user_erased": "User erased",
+      "ops_alert": "Operational alert"
+    }
   },
   "admin_analytics": {
     "eyebrow": "Admin / Analytics",

@@ -142,6 +142,14 @@ const pillTone: Record<string, 'active' | 'warn' | 'danger'> = {
   failed: 'danger',
 }
 
+// Friendly label for an event id; falls back to the raw id for any event the
+// backend adds before it's translated (vue-i18n returns the key path on miss).
+function eventLabel(e: string): string {
+  const key = `admin_webhooks.event.${e.replace(/\./g, '_')}`
+  const label = t(key)
+  return label === key ? e : label
+}
+
 onMounted(load)
 </script>
 
@@ -178,9 +186,9 @@ onMounted(load)
       <div class="fh-field">
         <span class="fh-field-label">{{ t('admin_webhooks.events') }}</span>
         <div class="events-grid">
-          <label v-for="e in events" :key="e" class="event-check">
+          <label v-for="e in events" :key="e" class="event-check" :title="e">
             <input v-model="newEvents[e]" type="checkbox" />
-            <span class="fh-mono">{{ e }}</span>
+            <span>{{ eventLabel(e) }}</span>
           </label>
         </div>
       </div>
@@ -216,7 +224,7 @@ onMounted(load)
         </div>
         <pre class="hook-url fh-mono">{{ w.url }}</pre>
         <div class="hook-events">
-          <span v-for="e in w.event_types" :key="e" class="event-tag fh-mono">{{ e }}</span>
+          <span v-for="e in w.event_types" :key="e" class="event-tag" :title="e">{{ eventLabel(e) }}</span>
         </div>
 
         <div v-if="openDeliveries === w.id" class="deliveries">
@@ -234,7 +242,7 @@ onMounted(load)
             </thead>
             <tbody>
               <tr v-for="d in deliveries" :key="d.id">
-                <td class="fh-mono">{{ d.event_type }}</td>
+                <td :title="d.event_type">{{ eventLabel(d.event_type) }}</td>
                 <td><span class="fh-pill" :data-state="pillTone[d.status]">{{ d.status }}</span></td>
                 <td class="num fh-mono">{{ d.response_code ?? '—' }}</td>
                 <td class="num fh-mono">{{ d.attempts }}</td>

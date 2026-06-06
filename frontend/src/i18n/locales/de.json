@@ -996,7 +996,19 @@
     "col_status": "Status",
     "col_code": "Code",
     "col_attempts": "Versuche",
-    "retry": "Erneut"
+    "retry": "Erneut",
+    "event": {
+      "share_created": "Freigabe erstellt",
+      "share_downloaded": "Freigabe heruntergeladen (ZIP)",
+      "file_downloaded": "Datei heruntergeladen",
+      "share_revoked": "Freigabe widerrufen",
+      "share_expired": "Freigabe abgelaufen",
+      "file_quarantined": "Datei in Quarantäne",
+      "public_link_consumed": "Öffentlicher Link genutzt",
+      "oidc_linked": "SSO-Konto verknüpft",
+      "user_erased": "Benutzer gelöscht",
+      "ops_alert": "Betriebs-Alarm"
+    }
   },
   "admin_analytics": {
     "eyebrow": "Admin / Analysen",

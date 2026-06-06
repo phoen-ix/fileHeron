@@ -363,10 +363,11 @@ def revoke(
 
 
 def record_consumption(
-    db: Session, *, link: PublicLink, file_id: str, ip: str | None, request=None
+    db: Session, *, link: PublicLink, file_id: str | None, ip: str | None, request=None
 ) -> None:
     """Audit row for a successful download. Caller has already done the
-    counter decrement and DownloadLog insert."""
+    counter decrement and DownloadLog insert. `file_id` is None for a bulk-ZIP
+    download (no single file)."""
     record_audit_event(
         db,
         event_type=AuditEventType.public_link_consumed,
@@ -409,6 +410,42 @@ def notify_owner_on_download(
             "subject": share.subject,
             "filename": file.original_filename,
             "size_bytes": file.size_bytes,
+            "at": utc_now(),
+            "downloads_remaining": downloads_remaining,
+            "share_url": share_url,
+        },
+        link_url=share_url,
+        email_to=owner.email,
+    )
+
+
+def notify_owner_on_archive_download(
+    db: Session,
+    *,
+    link: PublicLink,
+    file_count: int,
+    total_bytes: int,
+    downloads_remaining: int | None,
+) -> None:
+    """Bulk-ZIP variant of `notify_owner_on_download`. A ZIP names no single
+    file, so the payload reports a synthetic '<n> files (ZIP)' label + the
+    combined size instead of one filename — never leak the file list."""
+    if not link.notify_on_download:
+        return
+    owner = db.query(User).filter(User.id == link.created_by_id).one_or_none()
+    if owner is None or owner.is_disabled:
+        return
+    share = db.query(Share).filter(Share.id == link.share_id).one()
+    share_url = f"{site_svc.get_site_url(db)}/share/{share.id}"
+    notif_svc.dispatch(
+        db,
+        user=owner,
+        category=NotificationCategory.public_link_downloaded,
+        payload={
+            "owner_name": owner.display_name,
+            "subject": share.subject,
+            "filename": f"{file_count} files (ZIP)",
+            "size_bytes": total_bytes,
             "at": utc_now(),
             "downloads_remaining": downloads_remaining,
             "share_url": share_url,

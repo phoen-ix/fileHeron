@@ -5,7 +5,7 @@ import logging
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, Header, Request, status
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.orm import Session
 
 from ..dependencies import get_actor, get_db
@@ -18,6 +18,7 @@ from ..models.user import User, UserRole
 from ..services import download_token as download_token_svc
 from ..services import file as file_svc
 from ..services import share as share_svc
+from ..services import zip_stream as zip_stream_svc
 from ..services.audit import record_audit_event
 from ..utils.http_range import is_partial_continuation
 from ..utils.ua_fingerprint import ua_fingerprint_hash
@@ -221,6 +222,104 @@ def download_file(
         # Force download (don't render in-browser).
         content_disposition_type="attachment",
     )
+
+
+@router.get("/{share_id}/download-zip-url")
+def get_share_zip_url(
+    share_id: str,
+    user: User = Depends(get_actor),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Mint a short-lived signed URL for a bulk-ZIP of every downloadable file
+    in a share. Mirrors `get_download_url` (single file): pre-flights the same
+    access checks so the user gets a clean 4xx now rather than a broken-looking
+    URL later, then issues a `?dt=` token bound to the SHARE id."""
+    share = share_svc.get_share_or_404(db, share_id)
+    if not share_svc.is_authorized_to_download(db, user=user, share=share):
+        raise AppError(403, "FORBIDDEN", "You don't have access to this share.")
+    share_svc.assert_share_downloadable(share)
+
+    if not file_svc.downloadable_files(db, share.id):
+        raise AppError(400, "NO_DOWNLOADABLE_FILES", "This share has no downloadable files.")
+
+    # Refuse to mint when the budget is already spent (NULL = unlimited). The
+    # atomic decrement at consume time still closes the mint→consume race.
+    if share.download_limit is not None and (share.downloads_remaining or 0) <= 0:
+        raise AppError(
+            410, "SHARE_DOWNLOAD_LIMIT_REACHED", "This share has reached its download limit."
+        )
+
+    from ..services import settings_registry
+    ttl = settings_registry.effective(db, settings_registry.K.DOWNLOAD_SIGNED_URL_TTL_SEC)
+    token = download_token_svc.issue(share.id, user.id, ttl_sec=ttl)
+    return {"url": f"/api/files/{share.id}/download-zip?dt={token}"}
+
+
+@download_router.get("/{share_id}/download-zip")
+def download_share_zip(
+    share_id: str,
+    request: Request,
+    db: Session = Depends(get_db),
+    dt: str | None = None,
+    authorization: str | None = Header(default=None),
+) -> StreamingResponse:
+    """Stream a single ZIP of all downloadable files in a share. On-the-fly,
+    ZIP_STORED, O(1) memory (see services/zip_stream). Auth mirrors the
+    single-file path: signed `?dt=` (bound to the share id) or bearer. One ZIP
+    counts as ONE download against the share budget — parallel/segmented range
+    continuations don't re-decrement or re-log."""
+    user = _resolve_download_user(request, db, share_id, dt, authorization)
+    share = share_svc.get_share_or_404(db, share_id)
+
+    if not share_svc.is_authorized_to_download(db, user=user, share=share):
+        raise AppError(403, "FORBIDDEN", "You don't have access to this share.")
+    share_svc.assert_share_downloadable(share)
+
+    files = file_svc.downloadable_files(db, share.id)
+    if not files:
+        raise AppError(400, "NO_DOWNLOADABLE_FILES", "This share has no downloadable files.")
+
+    if not is_partial_continuation(request):
+        if share.download_limit is not None and not share_svc.try_decrement_share_counter(
+            db, share=share
+        ):
+            raise AppError(
+                410, "SHARE_DOWNLOAD_LIMIT_REACHED", "This share has reached its download limit."
+            )
+
+        via = (
+            DownloadVia.api_token
+            if getattr(request.state, "auth_via", "") == "api_token"
+            else DownloadVia.auth
+        )
+        ip = request.client.host if request.client else None
+        ua = ua_fingerprint_hash(request.headers.get("user-agent", ""))
+        # One DownloadLog row per included file (file_id is NOT NULL) — keeps
+        # per-file download attribution; the budget still moved only once above.
+        for f in files:
+            db.add(
+                DownloadLog(
+                    file_id=f.id,
+                    share_id=share.id,
+                    accessed_by_user_id=user.id,
+                    ip=ip,
+                    ua_fingerprint_hash=ua,
+                    bytes_served=f.size_bytes,
+                    via=via,
+                )
+            )
+        record_audit_event(
+            db,
+            event_type=AuditEventType.share_downloaded,
+            actor_user_id=user.id,
+            target_type="share",
+            target_id=share.id,
+            metadata={"via": via.value, "file_count": len(files), "archive": True},
+            request=request,
+        )
+        db.commit()
+
+    return zip_stream_svc.zip_streaming_response(files, f"share-{share.id[:8]}")
 
 
 @router.delete("/{file_id}", status_code=status.HTTP_204_NO_CONTENT)

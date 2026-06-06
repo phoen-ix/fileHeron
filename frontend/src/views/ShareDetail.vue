@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 
+import { getShareZipUrl } from '@/api/files'
 import {
   expireShareNow,
   getShare,
@@ -54,6 +55,28 @@ const isOwner = computed(
 const canManage = computed(
   () => isOwner.value || auth.user?.role === 'admin',
 )
+
+// Bulk-ZIP download of every clean file. Hidden when nothing is downloadable
+// or the share's download budget is spent.
+const downloadingZip = ref(false)
+const canDownloadZip = computed(
+  () =>
+    !!share.value &&
+    share.value.files.some((f) => f.state === 'clean') &&
+    (share.value.download_limit === null || (share.value.downloads_remaining ?? 0) > 0),
+)
+async function onDownloadZip() {
+  if (!share.value) return
+  downloadingZip.value = true
+  try {
+    const { data } = await getShareZipUrl(share.value.id)
+    window.location.href = data.url
+  } catch (err) {
+    ui.pushToast(describe(err), 'error')
+  } finally {
+    downloadingZip.value = false
+  }
+}
 
 // Add-files panel (owner + active only; uploads are owner-only server-side).
 const addUpload = useUpload(computed(() => share.value?.id ?? null))
@@ -378,6 +401,15 @@ onMounted(load)
 
       <div class="files-head">
         <h2 class="files-h2">{{ t('share_detail.files_heading', { n: share.files.length }) }}</h2>
+        <button
+          v-if="canDownloadZip"
+          type="button"
+          class="fh-btn-text edit-link"
+          :disabled="downloadingZip"
+          @click="onDownloadZip"
+        >
+          {{ downloadingZip ? t('common.loading') : t('share_detail.download_all_zip') }}
+        </button>
         <button
           v-if="isOwner && share.state === 'active' && !showAddFiles"
           type="button"

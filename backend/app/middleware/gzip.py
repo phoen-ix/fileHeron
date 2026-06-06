@@ -7,11 +7,15 @@ download that is disastrous: it (a) gzips large, already-incompressible blobs
 (e.g. a multi-GB ISO) at a few KB/s, and (b) defeats ``FileResponse``'s
 zero-copy ``os.sendfile`` path. Both make large downloads crawl.
 
-File-download endpoints all end in ``/download`` (``/api/files/{id}/download``,
+File-download endpoints end in ``/download`` (``/api/files/{id}/download``,
 ``/api/public/{token}/files/{id}/download``,
-``/api/admin/files/{id}/quarantine/download``), so we bypass gzip for those and
-delegate everything else to the real GZipMiddleware. JSON responses — including
-``/api/files/{id}/download-url`` — keep compression.
+``/api/admin/files/{id}/quarantine/download``) or ``/download-zip`` (the bulk-ZIP
+streams, ``/api/files/{share_id}/download-zip`` + ``/api/public/{token}/download-zip``),
+so we bypass gzip for those and delegate everything else to the real
+GZipMiddleware. Gzip-ing a streamed ZIP is doubly wrong: it re-compresses an
+already-incompressible archive AND strips the Content-Length we computed for the
+progress bar. JSON responses — including the ``…/download-zip-url`` mint — keep
+compression.
 """
 from __future__ import annotations
 
@@ -20,7 +24,9 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 
 
 def _is_download(scope: Scope) -> bool:
-    return scope["type"] == "http" and scope.get("path", "").endswith("/download")
+    return scope["type"] == "http" and scope.get("path", "").endswith(
+        ("/download", "/download-zip")
+    )
 
 
 class SelectiveGZipMiddleware:

@@ -55,3 +55,9 @@ export function publicDownloadUrl(token: string, fileId: string): string {
   // download UI.
   return `/api/public/${token}/files/${fileId}/download`
 }
+
+export function publicZipUrl(token: string): string {
+  // Bulk-ZIP of every downloadable file in the share. Same unlock-cookie
+  // gate as the single-file anchor above.
+  return `/api/public/${token}/download-zip`
+}

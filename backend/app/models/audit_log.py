@@ -46,6 +46,7 @@ class AuditEventType(str, enum.Enum):
     share_revoked = "share_revoked"                        # Phase 3a/4
     share_expired = "share_expired"                        # Phase 4
     file_downloaded = "file_downloaded"                    # Phase 3a
+    share_downloaded = "share_downloaded"                  # bulk ZIP (v1.17.0)
     file_deleted = "file_deleted"                          # Phase 3a/4
     file_quarantined = "file_quarantined"                  # Phase 5
     file_quarantine_released = "file_quarantine_released"  # post-Phase 10

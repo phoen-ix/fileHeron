@@ -8,6 +8,12 @@ export function getDownloadUrl(fileId: string) {
   return api.get<{ url: string }>(`/files/${fileId}/download-url`)
 }
 
+/** Mint a one-shot signed URL for a bulk-ZIP of every downloadable file in a
+ * share (same `?dt=` mechanism as a single file, bound to the share id). */
+export function getShareZipUrl(shareId: string) {
+  return api.get<{ url: string }>(`/files/${shareId}/download-zip-url`)
+}
+
 export function deleteFile(fileId: string) {
   return api.delete(`/files/${fileId}`)
 }

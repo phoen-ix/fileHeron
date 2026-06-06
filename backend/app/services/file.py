@@ -38,6 +38,25 @@ def storage_path_for(file_id: str, when: datetime | None = None) -> Path:
     return Path(settings.STORAGE_ROOT) / f"{when.year:04d}" / f"{when.month:02d}" / f"{file_id}.bin"
 
 
+def downloadable_files(db: Session, share_id: str) -> list[File]:
+    """The `clean` files of a share whose bytes are actually present on disk —
+    the set a bulk-ZIP download includes. Scanning / infected / deleted files
+    are skipped (not an error); a missing-on-disk row is skipped + logged."""
+    out: list[File] = []
+    rows = (
+        db.query(File)
+        .filter(File.share_id == share_id, File.state == FileState.clean)
+        .order_by(File.created_at.asc())
+        .all()
+    )
+    for f in rows:
+        if f.storage_path and Path(f.storage_path).is_file():
+            out.append(f)
+        else:
+            logger.error("downloadable_files: %s missing on disk: %r", f.id, f.storage_path)
+    return out
+
+
 def create_pending(
     db: Session,
     *,

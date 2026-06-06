@@ -10,6 +10,7 @@ import { useRoute } from 'vue-router'
 import {
   fetchPublicShare,
   publicDownloadUrl,
+  publicZipUrl,
   unlockPublicShare,
 } from '@/api/publicLinks'
 import type { PublicShareResponse } from '@/types/api'
@@ -72,6 +73,15 @@ function formatExpiry(iso: string | null): string {
 function fileEnabled(state: string): boolean {
   return state === 'clean' || state === 'ready_unscanned'
 }
+
+// Bulk-ZIP includes only `clean` files; offer it when there's ≥1 and the
+// link's download budget isn't spent.
+const canDownloadZip = computed(
+  () =>
+    !!share.value &&
+    share.value.files.some((f) => f.state === 'clean') &&
+    (share.value.downloads_remaining === null || share.value.downloads_remaining > 0),
+)
 
 onMounted(load)
 </script>
@@ -139,6 +149,15 @@ onMounted(load)
         >
           {{ t('public_share.downloads_remaining', { n: share.downloads_remaining }) }}
         </p>
+
+        <a
+          v-if="canDownloadZip"
+          :href="publicZipUrl(token)"
+          class="fh-btn-text zip-all"
+          :download="`share-${token.slice(0, 8)}.zip`"
+        >
+          {{ t('public_share.download_all_zip') }} <span aria-hidden="true">↓</span>
+        </a>
 
         <ul class="files">
           <li v-for="f in share.files" :key="f.id" class="file-row" :data-state="f.state">

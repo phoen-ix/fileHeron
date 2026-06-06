@@ -27,7 +27,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from fastapi import APIRouter, Cookie, Depends, Request, Response
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.orm import Session
 
 from ..config import settings
@@ -44,7 +44,9 @@ from ..schemas.public_link import (
     UnlockPublicLinkRequest,
     UnlockPublicLinkResponse,
 )
+from ..services import file as file_svc
 from ..services import public_link as public_link_svc
+from ..services import zip_stream as zip_stream_svc
 from ..services.audit import record_audit_event
 from ..utils.http_range import is_partial_continuation
 from ..utils.timeutil import utc_now
@@ -279,3 +281,75 @@ def public_download(
         filename=file.original_filename,
         content_disposition_type="attachment",
     )
+
+
+@router.get("/{token}/download-zip")
+def public_download_zip(
+    token: str,
+    request: Request,
+    db: Session = Depends(get_db),
+    fh_dl_unlock: str | None = Cookie(default=None),
+) -> StreamingResponse:
+    """Stream a single ZIP of every downloadable file behind a public link.
+    Same unlock gate as the single-file path; ONE ZIP counts as ONE download
+    against the link budget (range continuations don't re-decrement/re-log)."""
+    link = public_link_svc.get_link_by_token(db, token)
+    public_link_svc.assert_link_usable(db, link)
+
+    if not _is_unlocked(link, fh_dl_unlock):
+        raise AppError(401, "UNLOCK_REQUIRED", "Submit the password first.")
+
+    files = file_svc.downloadable_files(db, link.share_id)
+    if not files:
+        raise AppError(400, "NO_DOWNLOADABLE_FILES", "This share has no downloadable files.")
+
+    if not is_partial_continuation(request):
+        allowed, downloads_remaining = public_link_svc.decrement_counter(db, link=link)
+        if not allowed:
+            db.commit()
+            raise AppError(
+                410, "PUBLIC_LINK_EXHAUSTED", "This public link's download limit has been reached."
+            )
+
+        ip = request.client.host if request.client else None
+        ua = ua_fingerprint_hash(request.headers.get("user-agent", ""))
+        for f in files:
+            db.add(
+                DownloadLog(
+                    file_id=f.id,
+                    share_id=link.share_id,
+                    accessed_by_user_id=None,
+                    ip=ip,
+                    ua_fingerprint_hash=ua,
+                    bytes_served=f.size_bytes,
+                    via=DownloadVia.public,
+                )
+            )
+        record_audit_event(
+            db,
+            event_type=AuditEventType.share_downloaded,
+            actor_user_id=None,
+            target_type="share",
+            target_id=link.share_id,
+            metadata={
+                "via": "public",
+                "file_count": len(files),
+                "archive": True,
+                "public_link_id": link.id,
+            },
+            request=request,
+        )
+        public_link_svc.record_consumption(
+            db, link=link, file_id=None, ip=ip, request=request
+        )
+        public_link_svc.notify_owner_on_archive_download(
+            db,
+            link=link,
+            file_count=len(files),
+            total_bytes=sum(f.size_bytes for f in files),
+            downloads_remaining=downloads_remaining,
+        )
+        db.commit()
+
+    share = db.query(Share).filter(Share.id == link.share_id).one()
+    return zip_stream_svc.zip_streaming_response(files, f"share-{share.id[:8]}")

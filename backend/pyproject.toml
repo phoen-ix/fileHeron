@@ -33,6 +33,7 @@ dependencies = [
     "itsdangerous>=2.2",
     "webauthn>=2.0",
     "reportlab>=4.0",
+    "zipstream-ng>=1.8",
 ]
 
 [project.optional-dependencies]

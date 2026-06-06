@@ -5,10 +5,8 @@ Also surfaces v1.1.6 read-only AV-engine info + manual reload at
 """
 from __future__ import annotations
 
-from pathlib import Path
-
 from fastapi import APIRouter, Depends, Request, status
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from ...dependencies import get_current_admin, get_db
@@ -44,28 +42,26 @@ def admin_quarantine_download(
     file_id: str,
     db: Session = Depends(get_db),
     _admin: User = Depends(get_current_admin),
-) -> FileResponse:
+) -> Response:
     """Stream the quarantined bytes for forensic inspection. The
     ``.quarantined`` suffix is a belt-and-braces hint not to double-click
     the resulting download — the admin's own AV should also flag it."""
+    from ...services import settings_registry
+    from ...services.storage_backend import get_storage_backend, serve_response
+
     file = _get_infected_file_or_404(db, file_id)
+    backend = get_storage_backend()
     if not file.storage_path:
-        raise AppError(
-            404,
-            "QUARANTINE_BYTES_MISSING",
-            "Bytes already purged for this file.",
-        )
-    if not Path(file.storage_path).is_file():
-        raise AppError(
-            404,
-            "QUARANTINE_BYTES_MISSING",
-            "Quarantine file is missing on disk.",
-        )
-    suggested = f"{file.original_filename}.quarantined"
-    return FileResponse(
-        file.storage_path,
-        media_type="application/octet-stream",
-        filename=suggested,
+        raise AppError(404, "QUARANTINE_BYTES_MISSING", "Bytes already purged for this file.")
+    if not backend.exists(file.storage_path):
+        raise AppError(404, "QUARANTINE_BYTES_MISSING", "Quarantine bytes are missing.")
+    ttl = settings_registry.effective(db, settings_registry.K.DOWNLOAD_SIGNED_URL_TTL_SEC)
+    return serve_response(
+        backend,
+        locator=file.storage_path,
+        filename=f"{file.original_filename}.quarantined",
+        mime_type="application/octet-stream",
+        ttl_sec=ttl,
     )
 
 

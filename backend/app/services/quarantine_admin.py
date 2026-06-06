@@ -10,8 +10,6 @@ Caller commits in both operations.
 from __future__ import annotations
 
 import logging
-import shutil
-from pathlib import Path
 
 from sqlalchemy.orm import Session
 
@@ -21,8 +19,8 @@ from ..models.file import File, FileState
 from ..models.share import Share, ShareState
 from ..models.user import User
 from .audit import record_audit_event
-from .file import storage_path_for
 from .quota import reserve_bytes
+from .storage_backend import get_storage_backend
 
 logger = logging.getLogger("fileheron.quarantine_admin")
 
@@ -45,15 +43,13 @@ def release(
     after the fact), and re-reserve uploader quota."""
     _refuse_unless_infected(file)
 
-    # Move bytes back to the deterministic storage path. Use shutil.move
-    # so cross-fs bind mounts still work (same handling as finalize).
-    src = Path(file.storage_path) if file.storage_path else None
-    new_path: Path | None = None
-    if src is not None and src.is_file():
-        new_path = storage_path_for(file.id)
-        new_path.parent.mkdir(parents=True, exist_ok=True)
-        shutil.move(str(src), str(new_path))
-        file.storage_path = str(new_path)
+    # Move bytes back to active storage via the backend (local: rename/copy;
+    # object store: server-side copy between prefixes).
+    backend = get_storage_backend()
+    if file.storage_path and backend.exists(file.storage_path):
+        new_loc = backend.generate_locator(file.id)
+        backend.move(file.storage_path, new_loc)
+        file.storage_path = new_loc
     else:
         # Bytes already gone (manual cleanup, prior purge, etc.) — refuse
         # rather than silently flip state on a missing file. Admin should
@@ -137,13 +133,9 @@ def purge(
 
     if file.storage_path:
         try:
-            path = Path(file.storage_path)
-            if path.is_file():
-                path.unlink()
-        except OSError as e:
-            logger.warning(
-                "purge: could not unlink %s: %s", file.storage_path, e
-            )
+            get_storage_backend().delete(file.storage_path)
+        except Exception as e:
+            logger.warning("purge: could not delete %s: %s", file.storage_path, e)
     file.storage_path = None
     file.state = FileState.deleted
     db.flush()

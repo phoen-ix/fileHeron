@@ -85,6 +85,10 @@ def _alert_admins(db, *, payload: dict) -> int:
 
 @track_cron("disk_check")
 async def disk_check(_ctx) -> dict:
+    from ..services.storage_backend import get_storage_backend
+    if not get_storage_backend().supports_disk_stats:
+        # Object-store backend — "local disk full" is meaningless; nothing to do.
+        return {"skipped": True, "reason": "non-disk backend"}
     db = SessionLocal()
     try:
         stats = storage_svc.get_disk_stats(settings.STORAGE_ROOT)

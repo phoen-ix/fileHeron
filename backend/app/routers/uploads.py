@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import time
 from datetime import datetime, timezone
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, Request, UploadFile, status
 from sqlalchemy.orm import Session
@@ -17,6 +18,7 @@ from ..services import file as file_svc
 from ..services import quota as quota_svc
 from ..services import share as share_svc
 from ..services import tus_signing as ts_svc
+from ..services.storage_backend import get_storage_backend
 from ..utils.timeutil import utc_now
 
 router = APIRouter(prefix="/api/uploads", tags=["uploads"])
@@ -152,15 +154,29 @@ async def direct_upload(
     )
     db.flush()
 
-    # Write to permanent storage (no tusd involvement).
-    when = utc_now()
-    dest = file_svc.storage_path_for(file_row.id, when)
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    with dest.open("wb") as out:
-        for chunk in chunks:
-            out.write(chunk)
+    # Write to a temp file then hand the bytes to the storage backend (no tusd
+    # involvement). Local backend renames it into place (same fast path as TUS);
+    # an object backend uploads it. Staging in TUS_UPLOAD_DIR keeps the local
+    # move same-filesystem.
+    import os
+    import tempfile
 
-    file_row.storage_path = str(dest)
+    when = utc_now()
+    backend = get_storage_backend()
+    locator = backend.generate_locator(file_row.id, when)
+    Path(settings.TUS_UPLOAD_DIR).mkdir(parents=True, exist_ok=True)
+    fd, tmp_path = tempfile.mkstemp(dir=settings.TUS_UPLOAD_DIR, suffix=".part")
+    try:
+        with os.fdopen(fd, "wb") as out:
+            for chunk in chunks:
+                out.write(chunk)
+        backend.finalize(tmp_path, locator)
+    except Exception:
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+        raise
+
+    file_row.storage_path = locator
     file_row.state = file_row.state.__class__.ready_unscanned
     file_row.sha256_hex = sha.hexdigest()
     file_row.finalized_at = when

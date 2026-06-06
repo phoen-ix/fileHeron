@@ -89,10 +89,8 @@ async def test_av_scan_infected_quarantines_and_revokes(make_user, db, tmp_path,
             state="infected", signature="Eicar-Test-Signature", raw="..."
         ),
     )
-    # Quarantine reads QUARANTINE_DIR from app.config.settings — patch
-    # there too (the import in services.quarantine is a fresh symbol).
-    from app.services import quarantine as q
-    monkeypatch.setattr(q.settings, "QUARANTINE_DIR", str(tmp_path / "quarantine"))
+    # Quarantine reads QUARANTINE_DIR via the storage backend → app.config.settings.
+    monkeypatch.setattr("app.config.settings.QUARANTINE_DIR", str(tmp_path / "quarantine"))
 
     from app.workers import av_scan as worker_mod
     monkeypatch.setattr(worker_mod, "SessionLocal", lambda: db)
@@ -146,9 +144,7 @@ def test_quarantine_releases_quota_and_audits(make_user, db, tmp_path, monkeypat
     _, file, _ = _seed_file_for_scan(
         db, sender, recipient, tmp_path, content=b"x" * 1234
     )
-    monkeypatch.setattr(av_scan_svc.settings, "QUARANTINE_DIR", str(tmp_path / "q"))
-    from app.services import quarantine as q
-    monkeypatch.setattr(q.settings, "QUARANTINE_DIR", str(tmp_path / "q"))
+    monkeypatch.setattr("app.config.settings.QUARANTINE_DIR", str(tmp_path / "q"))
 
     quarantine_file(db, file=file, signature="Test-Sig")
     db.commit()

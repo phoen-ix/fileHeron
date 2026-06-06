@@ -24,10 +24,9 @@ import hmac as hmac_mod
 import json
 import logging
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 
 from fastapi import APIRouter, Cookie, Depends, Request, Response
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from ..config import settings
@@ -48,6 +47,7 @@ from ..services import file as file_svc
 from ..services import public_link as public_link_svc
 from ..services import zip_stream as zip_stream_svc
 from ..services.audit import record_audit_event
+from ..services.storage_backend import get_storage_backend
 from ..utils.http_range import is_partial_continuation
 from ..utils.timeutil import utc_now
 from ..utils.ua_fingerprint import ua_fingerprint_hash
@@ -207,7 +207,7 @@ def public_download(
     request: Request,
     db: Session = Depends(get_db),
     fh_dl_unlock: str | None = Cookie(default=None),
-) -> FileResponse:
+) -> Response:
     link = public_link_svc.get_link_by_token(db, token)
     public_link_svc.assert_link_usable(db, link)
 
@@ -228,9 +228,10 @@ def public_download(
     if file.state == FileState.deleted:
         raise AppError(410, "FILE_DELETED", "File has been deleted.")
 
-    if not file.storage_path or not Path(file.storage_path).is_file():
+    backend = get_storage_backend()
+    if not file.storage_path or not backend.exists(file.storage_path):
         logger.error("public download: storage missing for %s", file.id)
-        raise AppError(500, "STORAGE_MISSING", "File data is missing on disk.")
+        raise AppError(500, "STORAGE_MISSING", "File data is missing.")
 
     # Parallel/segmented downloads send several ranged GETs for one logical
     # download; the byte-0 (or full) request counts it + logs, the continuation
@@ -275,11 +276,15 @@ def public_download(
 
         db.commit()
 
-    return FileResponse(
-        path=file.storage_path,
-        media_type=file.mime_type,
+    from ..services import settings_registry
+    from ..services.storage_backend import serve_response
+    ttl = settings_registry.effective(db, settings_registry.K.DOWNLOAD_SIGNED_URL_TTL_SEC)
+    return serve_response(
+        backend,
+        locator=file.storage_path,
         filename=file.original_filename,
-        content_disposition_type="attachment",
+        mime_type=file.mime_type,
+        ttl_sec=ttl,
     )
 
 

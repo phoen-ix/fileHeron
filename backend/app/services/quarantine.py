@@ -17,17 +17,15 @@ routers/admin.py.
 from __future__ import annotations
 
 import logging
-import os
-from pathlib import Path
 
 from sqlalchemy.orm import Session
 
-from ..config import settings
 from ..models.audit_log import AuditEventType
 from ..models.file import File, FileState
 from ..models.share import Share, ShareState
 from .audit import record_audit_event
 from .quota import release_bytes
+from .storage_backend import get_storage_backend
 
 logger = logging.getLogger("fileheron.quarantine")
 
@@ -41,41 +39,48 @@ def _safe_filename(name: str) -> str:
 
 def quarantine_file(
     db: Session, *, file: File, signature: str | None = None
-) -> Path | None:
+) -> str | None:
     """Move the file into quarantine + revoke the share. Returns the
-    quarantine path on success; None if the file was already gone.
+    quarantine locator on success; None if the file was already gone.
 
     Caller commits."""
     if file.state == FileState.deleted:
         logger.info("quarantine_file: %s already deleted; skipping", file.id)
         return None
 
-    src = Path(file.storage_path) if file.storage_path else None
-    dest: Path | None = None
+    backend = get_storage_backend()
+    src_loc = (
+        file.storage_path
+        if (file.storage_path and backend.exists(file.storage_path))
+        else None
+    )
+    dest_loc: str | None = None
     moved = False
     move_error: str | None = None
-    if src is not None and src.is_file():
-        dest_dir = Path(settings.QUARANTINE_DIR) / file.share_id
-        dest_dir.mkdir(parents=True, exist_ok=True)
-        dest = dest_dir / _safe_filename(file.original_filename)
+    if src_loc is not None:
+        dest_loc = backend.quarantine_locator(
+            file.share_id, _safe_filename(file.original_filename)
+        )
         # If a stale name collision exists (re-quarantine of same name),
         # append the file id to disambiguate. Not a hot path; readability wins.
-        if dest.exists():
-            dest = dest_dir / f"{file.id}__{_safe_filename(file.original_filename)}"
+        if backend.exists(dest_loc):
+            dest_loc = backend.quarantine_locator(
+                file.share_id, f"{file.id}__{_safe_filename(file.original_filename)}"
+            )
         try:
-            os.rename(str(src), str(dest))
+            backend.move(src_loc, dest_loc)
             moved = True
         except OSError as e:
             move_error = str(e)
             logger.error("quarantine move failed for %s: %s", file.id, e)
             # Fall through — we still mark the file infected even if the
-            # move failed; admins can clean disk manually. The DB row's
+            # move failed; admins can clean storage manually. The DB row's
             # storage_path stays at the pre-quarantine location (NOT the
             # would-be dest) so admin tooling can still find the bytes.
 
     file.state = FileState.infected
-    if moved and dest is not None:
-        file.storage_path = str(dest)
+    if moved and dest_loc is not None:
+        file.storage_path = dest_loc
     # else: leave storage_path unchanged — points at the original location
     # (or remains None if there was no file on disk to begin with).
     db.flush()
@@ -88,7 +93,7 @@ def quarantine_file(
         "signature": signature,
         "size_bytes": file.size_bytes,
         "filename": file.original_filename,
-        "quarantine_path": str(dest) if moved and dest else None,
+        "quarantine_path": dest_loc if moved else None,
     }
     if move_error is not None:
         audit_meta["move_failed"] = True
@@ -183,4 +188,4 @@ def quarantine_file(
         except Exception:
             logger.exception("could not record dispatch-failed audit for file=%s", file.id)
 
-    return dest if moved else None
+    return dest_loc if moved else None

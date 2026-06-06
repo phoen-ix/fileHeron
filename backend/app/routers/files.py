@@ -2,10 +2,9 @@
 from __future__ import annotations
 
 import logging
-from pathlib import Path
 
 from fastapi import APIRouter, Depends, Header, Request, status
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 from sqlalchemy.orm import Session
 
 from ..dependencies import get_actor, get_db
@@ -20,6 +19,7 @@ from ..services import file as file_svc
 from ..services import share as share_svc
 from ..services import zip_stream as zip_stream_svc
 from ..services.audit import record_audit_event
+from ..services.storage_backend import get_storage_backend
 from ..utils.http_range import is_partial_continuation
 from ..utils.ua_fingerprint import ua_fingerprint_hash
 
@@ -146,7 +146,7 @@ def download_file(
     db: Session = Depends(get_db),
     dt: str | None = None,
     authorization: str | None = Header(default=None),
-) -> FileResponse:
+) -> Response:
     user = _resolve_download_user(request, db, file_id, dt, authorization)
     file = _get_file_or_404(db, file_id)
     share = db.query(Share).filter(Share.id == file.share_id).one()
@@ -167,9 +167,10 @@ def download_file(
             425, "SCAN_IN_PROGRESS", "Antivirus scan still in progress; try again shortly."
         )
 
-    if not file.storage_path or not Path(file.storage_path).is_file():
+    backend = get_storage_backend()
+    if not file.storage_path or not backend.exists(file.storage_path):
         logger.error("file %s has missing storage_path: %r", file.id, file.storage_path)
-        raise AppError(500, "STORAGE_MISSING", "File data is missing on disk.")
+        raise AppError(500, "STORAGE_MISSING", "File data is missing.")
 
     # Parallel/segmented downloads send several ranged GETs for one logical
     # download; the byte-0 (or full) request counts it, the continuation
@@ -211,16 +212,15 @@ def download_file(
         )
         db.commit()
 
-    # FastAPI's FileResponse uses os.sendfile under uvicorn — kernel-level
-    # zero-copy from the disk fd to the socket. The Content-Disposition
-    # forces a download dialog; the original filename is sanitized via
-    # python's email.utils.format_addr-ish quoting that FileResponse does.
-    return FileResponse(
-        path=file.storage_path,
-        media_type=file.mime_type,
+    from ..services import settings_registry
+    from ..services.storage_backend import serve_response
+    ttl = settings_registry.effective(db, settings_registry.K.DOWNLOAD_SIGNED_URL_TTL_SEC)
+    return serve_response(
+        backend,
+        locator=file.storage_path,
         filename=file.original_filename,
-        # Force download (don't render in-browser).
-        content_disposition_type="attachment",
+        mime_type=file.mime_type,
+        ttl_sec=ttl,
     )
 
 

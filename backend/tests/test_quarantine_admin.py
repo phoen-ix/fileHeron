@@ -63,7 +63,7 @@ def _seed_share_with_quarantined_file(
 
     qdir = tmp_path / "quarantine"
     if monkeypatch is not None:
-        monkeypatch.setattr(q_svc.settings, "QUARANTINE_DIR", str(qdir))
+        monkeypatch.setattr("app.config.settings.QUARANTINE_DIR", str(qdir))
     q_svc.quarantine_file(db, file=f, signature="Eicar-Test-Signature")
     db.commit()
     db.refresh(f)
@@ -91,7 +91,7 @@ def test_release_restores_file_share_and_quota(
 ):
     sender = make_user(email="up@test.local", role=UserRole.employee)
     admin = make_user(email="admin@test.local", role=UserRole.admin)
-    monkeypatch.setattr(qadmin_svc, "storage_path_for", lambda fid, **_kw: tmp_path / "out" / f"{fid}.bin")
+    monkeypatch.setattr("app.config.settings.STORAGE_ROOT", str(tmp_path / "out"))
     share, file = _seed_share_with_quarantined_file(
         db, sender, tmp_path, monkeypatch=monkeypatch
     )
@@ -148,7 +148,7 @@ def test_release_does_not_restore_share_revoked_for_other_reason(
 ):
     admin = make_user(email="admin@test.local", role=UserRole.admin)
     sender = make_user(email="up@test.local", role=UserRole.employee)
-    monkeypatch.setattr(qadmin_svc, "storage_path_for", lambda fid, **_kw: tmp_path / "out" / f"{fid}.bin")
+    monkeypatch.setattr("app.config.settings.STORAGE_ROOT", str(tmp_path / "out"))
     share, file = _seed_share_with_quarantined_file(
         db, sender, tmp_path,
         revoke_reason="manual_admin_action",

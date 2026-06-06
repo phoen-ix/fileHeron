@@ -42,14 +42,22 @@ def safe_arcname(name: str, taken: set[str]) -> str:
 
 
 def build_zip_stream(files: list[File]) -> ZipStream:
-    """Build a sized `ZipStream` over `files` (each must have on-disk bytes).
+    """Build a sized `ZipStream` over `files` (each must have bytes in storage).
     `len(zs)` gives the exact Content-Length; iterating it streams the archive.
     The caller filters to downloadable (`clean`, bytes-present) files first."""
+    from .storage_backend import get_storage_backend
+
+    backend = get_storage_backend()
     zs = ZipStream(compress_type=ZIP_STORED, sized=True)
     taken: set[str] = set()
     for f in files:
         arcname = safe_arcname(f.original_filename or "file", taken)
-        zs.add_path(f.storage_path, arcname)
+        lp = backend.local_path(f.storage_path)
+        if lp is not None:
+            zs.add_path(lp, arcname)  # local disk → add by path (today's path)
+        else:
+            # Object store → stream the object; sized mode needs an explicit size.
+            zs.add(backend.open(f.storage_path), arcname, size=f.size_bytes)
     return zs
 
 

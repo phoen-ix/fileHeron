@@ -92,8 +92,14 @@ def _render(db: Session) -> str:
         or 0
     )
     from ..services import storage as storage_svc
+    from ..services.storage_backend import get_storage_backend
 
-    disk = storage_svc.get_disk_stats(settings.STORAGE_ROOT)
+    # Disk free/total only make sense for a local-disk backend.
+    disk = (
+        storage_svc.get_disk_stats(settings.STORAGE_ROOT)
+        if get_storage_backend().supports_disk_stats
+        else None
+    )
 
     # --- counts ---
     users_total = db.query(func.count(User.id)).scalar() or 0
@@ -140,10 +146,6 @@ def _render(db: Session) -> str:
     parts: list[str] = [
         _line("fileheron_storage_used_bytes", storage_used,
               help_="Bytes allocated by non-deleted files (DB sum)."),
-        _line("fileheron_storage_free_bytes", disk.get("free_bytes", 0),
-              help_="Free bytes on the storage volume."),
-        _line("fileheron_storage_total_bytes", disk.get("total_bytes", 0),
-              help_="Total bytes on the storage volume."),
         _line("fileheron_users_total", users_total, help_="Total user accounts."),
         _line("fileheron_users_active_24h", users_active_24h,
               help_="Users with a login in the last 24h."),
@@ -157,6 +159,12 @@ def _render(db: Session) -> str:
         _line("fileheron_clamav_status", clamav_status,
               help_="ClamAV reachable/skipped (1) or down (0)."),
     ]
+
+    if disk is not None:
+        parts.append(_line("fileheron_storage_free_bytes", disk.get("free_bytes", 0),
+                           help_="Free bytes on the local storage volume."))
+        parts.append(_line("fileheron_storage_total_bytes", disk.get("total_bytes", 0),
+                           help_="Total bytes on the local storage volume."))
 
     pool = pool_stats()
     if pool is not None:

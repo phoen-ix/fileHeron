@@ -50,23 +50,28 @@ _USABLE_FILE_STATES = {
 
 
 def _unlink_partial_bytes(file: File) -> None:
-    """Best-effort removal of any on-disk remnants of an abandoned upload."""
-    paths: list[Path] = []
+    """Best-effort removal of any remnants of an abandoned upload."""
+    # Finalized bytes (if any) live in the storage backend.
     if file.storage_path:
-        paths.append(Path(file.storage_path))
+        from ..services.storage_backend import get_storage_backend
+        try:
+            get_storage_backend().delete(file.storage_path)
+        except Exception as e:
+            logger.warning(
+                "cleanup_stale_uploads: storage delete failed file=%s: %s", file.id, e
+            )
+    # The tusd working files always stage on the local disk regardless of backend.
     if file.tus_upload_id:
         base = Path(settings.TUS_UPLOAD_DIR)
-        paths.append(base / file.tus_upload_id)
-        paths.append(base / f"{file.tus_upload_id}.info")
-    for p in paths:
-        try:
-            if p.is_file():
-                p.unlink()
-        except OSError as e:
-            logger.warning(
-                "cleanup_stale_uploads: unlink failed file=%s path=%s: %s",
-                file.id, p, e,
-            )
+        for p in (base / file.tus_upload_id, base / f"{file.tus_upload_id}.info"):
+            try:
+                if p.is_file():
+                    p.unlink()
+            except OSError as e:
+                logger.warning(
+                    "cleanup_stale_uploads: unlink failed file=%s path=%s: %s",
+                    file.id, p, e,
+                )
 
 
 @track_cron("cleanup_stale_uploads")

@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import logging
 from datetime import timedelta
-from pathlib import Path
 
 from ..database import SessionLocal
 from ..models.audit_log import AuditEventType
@@ -54,11 +53,11 @@ async def purge_old_quarantine(_ctx) -> dict:
             )
             .all()
         )
+        from ..services.storage_backend import get_storage_backend
+        backend = get_storage_backend()
         for f in rows:
-            path = Path(f.storage_path)
             try:
-                if path.is_file():
-                    path.unlink()
+                backend.delete(f.storage_path)
                 f.storage_path = None
                 record_audit_event(
                     db,

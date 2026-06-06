@@ -44,7 +44,7 @@ def _seed_and_quarantine(db, sender, tmp_path, monkeypatch, file_id="qn-uuid-1")
     db.add(f)
     db.commit()
 
-    monkeypatch.setattr(q_svc.settings, "QUARANTINE_DIR", str(tmp_path / "quarantine"))
+    monkeypatch.setattr("app.config.settings.QUARANTINE_DIR", str(tmp_path / "quarantine"))
     q_svc.quarantine_file(db, file=f, signature="Eicar-Test-Signature")
     db.commit()
     return f

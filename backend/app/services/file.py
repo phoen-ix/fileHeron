@@ -11,7 +11,6 @@ distinct filesystems inside the container, hence the fallback.
 from __future__ import annotations
 
 import logging
-import shutil
 from datetime import datetime
 from pathlib import Path
 
@@ -26,6 +25,7 @@ from ..models.user import User
 from ..utils.timeutil import utc_now
 from .audit import record_audit_event
 from .quota import release_bytes
+from .storage_backend import get_storage_backend
 
 logger = logging.getLogger("fileheron.file")
 
@@ -33,9 +33,9 @@ logger = logging.getLogger("fileheron.file")
 
 
 def storage_path_for(file_id: str, when: datetime | None = None) -> Path:
-    """Compute the deterministic on-disk path for a finalized file."""
-    when = when or utc_now()
-    return Path(settings.STORAGE_ROOT) / f"{when.year:04d}" / f"{when.month:02d}" / f"{file_id}.bin"
+    """Deterministic local on-disk path for a finalized file. Thin wrapper over
+    the active backend's locator (local backend → the same path as always)."""
+    return Path(get_storage_backend().generate_locator(file_id, when))
 
 
 def downloadable_files(db: Session, share_id: str) -> list[File]:
@@ -43,6 +43,7 @@ def downloadable_files(db: Session, share_id: str) -> list[File]:
     the set a bulk-ZIP download includes. Scanning / infected / deleted files
     are skipped (not an error); a missing-on-disk row is skipped + logged."""
     out: list[File] = []
+    backend = get_storage_backend()
     rows = (
         db.query(File)
         .filter(File.share_id == share_id, File.state == FileState.clean)
@@ -50,10 +51,10 @@ def downloadable_files(db: Session, share_id: str) -> list[File]:
         .all()
     )
     for f in rows:
-        if f.storage_path and Path(f.storage_path).is_file():
+        if f.storage_path and backend.exists(f.storage_path):
             out.append(f)
         else:
-            logger.error("downloadable_files: %s missing on disk: %r", f.id, f.storage_path)
+            logger.error("downloadable_files: %s missing in storage: %r", f.id, f.storage_path)
     return out
 
 
@@ -105,10 +106,11 @@ def finalize_to_disk(
         raise AppError(500, "UPLOAD_MISSING", f"tusd upload {tus_upload_id} not found on disk.")
 
     when = utc_now()
-    dest = storage_path_for(file.id, when)
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    # shutil.move == os.rename if same fs, else copy2 + unlink.
-    shutil.move(str(src), str(dest))
+    backend = get_storage_backend()
+    locator = backend.generate_locator(file.id, when)
+    # Backend moves/uploads the bytes from the tusd working file and consumes it
+    # (local = atomic rename / copy fallback; object store = multipart upload).
+    backend.finalize(str(src), locator)
 
     # tusd also writes a sidecar .info — clean it up.
     info_sidecar = src.with_suffix(".info")
@@ -118,7 +120,7 @@ def finalize_to_disk(
         except OSError:
             pass
 
-    file.storage_path = str(dest)
+    file.storage_path = locator
     file.finalized_at = when
     file.state = FileState.ready_unscanned
     file.tus_upload_id = None
@@ -133,8 +135,8 @@ def finalize_to_disk(
         metadata={"size_bytes": file.size_bytes, "filename": file.original_filename},
         request=request,
     )
-    logger.info("file finalized id=%s path=%s size=%d", file.id, dest, file.size_bytes)
-    return dest
+    logger.info("file finalized id=%s locator=%s size=%d", file.id, locator, file.size_bytes)
+    return Path(locator)
 
 
 def hard_delete(
@@ -170,9 +172,7 @@ def hard_delete(
     was_infected = file.state == FileState.infected
 
     if file.storage_path:
-        path = Path(file.storage_path)
-        if path.is_file():
-            path.unlink()
+        get_storage_backend().delete(file.storage_path)
 
     file.state = FileState.deleted
     db.flush()
@@ -236,9 +236,7 @@ def delete_file_for_expiry(db: Session, *, file: File) -> None:
     if file.state == FileState.deleted:
         return
     if file.storage_path:
-        path = Path(file.storage_path)
-        if path.is_file():
-            path.unlink()
+        get_storage_backend().delete(file.storage_path)
 
     file.state = FileState.deleted
     db.flush()

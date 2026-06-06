@@ -40,8 +40,12 @@ async def av_scan_file(_ctx, file_id: str) -> dict:
             logger.warning("av_scan: file %s has no storage_path", file_id)
             return {"file_id": file_id, "state": "no_path"}
 
+        # Local backend → path-scan (clamd reads the shared mount). PR-B adds the
+        # INSTREAM branch for object stores (local_path() is None there).
+        from ..services.storage_backend import get_storage_backend
+        scan_target = get_storage_backend().local_path(file.storage_path)
         try:
-            result = av_scan_svc.scan_path(file.storage_path)
+            result = av_scan_svc.scan_path(scan_target)
         except av_scan_svc.AVUnavailableError as e:
             # Re-raise so ARQ retries with backoff. Worker config picks
             # the retry count.

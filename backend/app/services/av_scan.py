@@ -109,6 +109,37 @@ def scan_path(abs_path: str) -> ScanResult:
         s.close()
 
 
+_INSTREAM_CHUNK = 64 * 1024
+
+
+def scan_stream(fh) -> ScanResult:
+    """Scan a readable binary stream via clamd INSTREAM — used when the bytes
+    aren't on a clamd-visible local path (object-store backends). `fh` is any
+    object with ``.read(n)``.
+
+    Caveat: INSTREAM is bounded by clamd's ``StreamMaxLength`` (default 25 MB).
+    Operators using the s3 backend with larger files must raise it; a file that
+    exceeds the limit comes back as ``state='error'`` (fail-safe — not served)."""
+    import struct
+
+    if settings.AV_SKIP:
+        return ScanResult(state="clean", signature=None, raw="AV_SKIP set")
+
+    s = _open_clamd_socket()
+    try:
+        s.sendall(b"zINSTREAM\0")
+        while True:
+            chunk = fh.read(_INSTREAM_CHUNK)
+            if not chunk:
+                break
+            s.sendall(struct.pack("!I", len(chunk)) + chunk)
+        s.sendall(struct.pack("!I", 0))  # zero-length chunk terminates the stream
+        reply = _read_reply(s)
+        return _parse_reply(reply, prefix="stream")
+    finally:
+        s.close()
+
+
 def ping() -> bool:
     """Healthcheck — returns True if clamd answers PONG."""
     try:

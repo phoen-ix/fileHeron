@@ -366,6 +366,27 @@ The `!PathPrefix(/api/internal)` clause is the **defence-in-depth** layer protec
 
 **Critical:** `uploads/` and `files/` MUST be on the same filesystem. Finalize is `os.rename` for the atomic case, falling back to `shutil.move` (copy + unlink) — but a cross-device rename used to fail outright. The current code is portable; this is documented because past pre-release deployments hit it.
 
+### Storage backend (`STORAGE_BACKEND`, v1.22.0)
+
+Default `local` (the bind mount above). Set `STORAGE_BACKEND=s3` for any S3-compatible store (AWS S3, MinIO, …):
+
+| Var | Notes |
+|---|---|
+| `STORAGE_BACKEND` | `local` (default) or `s3` |
+| `S3_BUCKET` | required when `s3` (boot fails fast in production if unset) |
+| `S3_REGION` | default `us-east-1` |
+| `S3_ENDPOINT_URL` | blank = AWS; set for MinIO/localstack |
+| `S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY` | blank = boto3 default credential chain (IAM role, env, …) |
+| `S3_KEY_PREFIX` | optional key namespace within the bucket |
+
+On `s3`: uploads stream to the bucket (multipart for large files), downloads **307-redirect to a presigned URL** (the browser fetches/resumes from the store; the app still does auth + the single download-budget decrement first), AV scans via **clamd INSTREAM**, and quarantine is a server-side copy between key prefixes. Caveats:
+
+- **Pick the backend at install time.** Switching `local`↔`s3` with existing data is **not** automatic — the locators differ; you'd copy the bytes and rewrite `files.storage_path` once (an operator script). `uploads/` (tusd staging) always stays local.
+- **Backups:** `scripts/backup.sh` tars `./data/files` (local only). With `s3`, the file bytes' durability/versioning is your **bucket policy's** responsibility; back up the DB as usual.
+- **Antivirus:** INSTREAM is bounded by clamd's `StreamMaxLength` (default 25 MB) — raise it if you store larger files on s3; a file exceeding it scans as `error` (fail-safe, not served).
+- The local-disk guard (low-space 507 + `/api/metrics` free/total bytes) is a no-op on `s3`.
+- At-rest encryption is now possible via your bucket's SSE (out of scope here).
+
 ## Backups
 
 ```bash

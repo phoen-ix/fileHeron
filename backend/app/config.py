@@ -153,6 +153,18 @@ class Settings(BaseSettings):
     STORAGE_ROOT: str = "/data/files"
     TUS_UPLOAD_DIR: str = "/data/uploads"
     QUARANTINE_DIR: str = "/data/quarantine"
+
+    # --- Storage backend (v1.22.0) -------------------------------------------
+    # "local" (default — the bind mount above) or "s3" (any S3-compatible store).
+    # On s3, uploads stream to the bucket, downloads 307-redirect to a presigned
+    # URL, AV scans via clamd INSTREAM, and quarantine moves between key prefixes.
+    STORAGE_BACKEND: str = "local"
+    S3_ENDPOINT_URL: str = ""        # blank = AWS default; set for MinIO/localstack
+    S3_BUCKET: str = ""
+    S3_REGION: str = "us-east-1"
+    S3_ACCESS_KEY_ID: str = ""       # blank = boto3 default credential chain
+    S3_SECRET_ACCESS_KEY: str = ""
+    S3_KEY_PREFIX: str = ""          # optional key namespace within the bucket
     # Public path the browser uses to reach tusd (proxied by nginx in prod /
     # Vite in dev). Trailing slash matters for tusd's -base-path.
     TUS_PUBLIC_BASE: str = "/uploads/"
@@ -296,6 +308,10 @@ if os.environ.get("PYTEST_CURRENT_TEST") is None:
         _fail_or_warn("JWT_SECRET is too short (min 32 chars).")
     if len(settings.TUS_HOOK_SECRET) < 32:
         _fail_or_warn("TUS_HOOK_SECRET is too short (min 32 chars).")
+
+    # S3 backend selected but unconfigured → fail fast rather than 500 on first upload.
+    if settings.STORAGE_BACKEND.strip().lower() == "s3" and not settings.S3_BUCKET:
+        _fail_or_warn("STORAGE_BACKEND=s3 but S3_BUCKET is unset.")
 
     # AV_SKIP is meant for tests — in production, uploads must be
     # scanned before they're available for download. If both are

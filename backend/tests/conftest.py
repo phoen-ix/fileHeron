@@ -223,6 +223,16 @@ def _no_op_job_queue(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _reset_storage_backend():
+    """The storage backend is a cached singleton chosen by STORAGE_BACKEND. Reset
+    it after every test so a test that selects `s3` can't leak that backend into
+    the next (which expects the default local backend)."""
+    yield
+    from app.services.storage_backend import reset_storage_backend_cache
+    reset_storage_backend_cache()
+
+
+@pytest.fixture(autouse=True)
 def _hibp_offline(monkeypatch):
     """Default the HIBP breach check to fail-open (not breached) for the
     whole suite. `is_password_breached` is now enforced on every

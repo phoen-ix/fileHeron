@@ -132,6 +132,89 @@ class LocalFilesystemBackend(StorageBackend):
         return str(Path(settings.QUARANTINE_DIR) / share_id / filename)
 
 
+class S3Backend(StorageBackend):
+    """Opt-in S3-compatible object store (AWS S3, MinIO, etc.). `File.storage_path`
+    holds the object key. Downloads 307-redirect to a presigned GET; AV scans via
+    clamd INSTREAM (no shared mount); quarantine is a server-side copy between
+    key prefixes. `STORAGE_BACKEND=s3` selects it; local stays the default."""
+
+    name = "s3"
+    supports_disk_stats = False
+
+    def __init__(self) -> None:
+        import boto3
+
+        self._bucket = settings.S3_BUCKET
+        self._prefix = settings.S3_KEY_PREFIX
+        kwargs: dict = {"region_name": settings.S3_REGION}
+        if settings.S3_ENDPOINT_URL:
+            kwargs["endpoint_url"] = settings.S3_ENDPOINT_URL
+        if settings.S3_ACCESS_KEY_ID:
+            kwargs["aws_access_key_id"] = settings.S3_ACCESS_KEY_ID
+            kwargs["aws_secret_access_key"] = settings.S3_SECRET_ACCESS_KEY
+        self._s3 = boto3.client("s3", **kwargs)
+
+    def generate_locator(self, file_id: str, when: datetime | None = None) -> str:
+        when = when or utc_now()
+        return f"{self._prefix}{when.year:04d}/{when.month:02d}/{file_id}.bin"
+
+    def finalize(self, src_temp_path: str, locator: str) -> None:
+        import os
+
+        # boto3 upload_file does multipart automatically for large files.
+        self._s3.upload_file(src_temp_path, self._bucket, locator)
+        try:
+            os.unlink(src_temp_path)
+        except OSError:
+            pass
+
+    def open(self, locator: str) -> BinaryIO:
+        return self._s3.get_object(Bucket=self._bucket, Key=locator)["Body"]
+
+    def local_path(self, locator: str) -> str | None:
+        return None
+
+    def download_url(self, *, locator, filename, mime_type, ttl_sec) -> str | None:
+        return self._s3.generate_presigned_url(
+            "get_object",
+            Params={
+                "Bucket": self._bucket,
+                "Key": locator,
+                "ResponseContentDisposition": f'attachment; filename="{filename}"',
+                "ResponseContentType": mime_type,
+            },
+            ExpiresIn=ttl_sec,
+        )
+
+    def delete(self, locator: str) -> None:
+        self._s3.delete_object(Bucket=self._bucket, Key=locator)  # idempotent on s3
+
+    def exists(self, locator: str) -> bool:
+        from botocore.exceptions import ClientError
+
+        if not locator:
+            return False
+        try:
+            self._s3.head_object(Bucket=self._bucket, Key=locator)
+            return True
+        except ClientError:
+            return False
+
+    def size(self, locator: str) -> int:
+        return int(self._s3.head_object(Bucket=self._bucket, Key=locator)["ContentLength"])
+
+    def move(self, src_locator: str, dst_locator: str) -> None:
+        self._s3.copy_object(
+            Bucket=self._bucket,
+            Key=dst_locator,
+            CopySource={"Bucket": self._bucket, "Key": src_locator},
+        )
+        self._s3.delete_object(Bucket=self._bucket, Key=src_locator)
+
+    def quarantine_locator(self, share_id: str, filename: str) -> str:
+        return f"{self._prefix}quarantine/{share_id}/{filename}"
+
+
 def serve_response(
     backend: StorageBackend, *, locator: str, filename: str, mime_type: str, ttl_sec: int
 ):
@@ -157,10 +240,14 @@ _backend: StorageBackend | None = None
 
 
 def get_storage_backend() -> StorageBackend:
-    """Cached singleton chosen by config (PR-B adds the s3 branch)."""
+    """Cached singleton chosen by the STORAGE_BACKEND config (local | s3)."""
     global _backend
     if _backend is None:
-        _backend = LocalFilesystemBackend()
+        if settings.STORAGE_BACKEND.strip().lower() == "s3":
+            _backend = S3Backend()
+            logger.info("storage backend: s3 (bucket=%s)", settings.S3_BUCKET)
+        else:
+            _backend = LocalFilesystemBackend()
     return _backend
 
 

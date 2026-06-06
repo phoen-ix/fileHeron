@@ -1206,6 +1206,8 @@
     "name_ph": "z. B. Slack #ops",
     "url": "Endpunkt-URL",
     "events": "Ereignisse",
+    "select_all": "Alle auswählen",
+    "deselect_all": "Alle abwählen",
     "create": "Webhook erstellen",
     "create_incomplete": "Name, URL und mindestens ein Ereignis angeben.",
     "secret_created": "Signaturschlüssel - wird einmalig angezeigt",

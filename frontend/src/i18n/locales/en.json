@@ -1206,6 +1206,8 @@
     "name_ph": "e.g. Slack #ops",
     "url": "Endpoint URL",
     "events": "Events",
+    "select_all": "Select all",
+    "deselect_all": "Deselect all",
     "create": "Create webhook",
     "create_incomplete": "Enter a name, a URL, and at least one event.",
     "secret_created": "Signing secret - shown once",

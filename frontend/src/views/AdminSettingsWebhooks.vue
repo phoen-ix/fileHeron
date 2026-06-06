@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import {
@@ -31,6 +31,14 @@ const newUrl = ref('')
 const newEvents = reactive<Record<string, boolean>>({})
 const creating = ref(false)
 const justCreatedSecret = ref<string | null>(null)
+
+const allEventsSelected = computed(
+  () => events.value.length > 0 && events.value.every((e) => newEvents[e]),
+)
+function toggleAllEvents() {
+  const next = !allEventsSelected.value
+  events.value.forEach((e) => (newEvents[e] = next))
+}
 
 // Per-webhook deliveries panel.
 const openDeliveries = ref<number | null>(null)
@@ -184,7 +192,12 @@ onMounted(load)
         <input v-model="newUrl" class="fh-field-input fh-mono" type="url" placeholder="https://example.com/hook" />
       </label>
       <div class="fh-field">
-        <span class="fh-field-label">{{ t('admin_webhooks.events') }}</span>
+        <div class="events-head">
+          <span class="fh-field-label">{{ t('admin_webhooks.events') }}</span>
+          <button v-if="events.length" type="button" class="fh-btn-text" @click="toggleAllEvents">
+            {{ allEventsSelected ? t('admin_webhooks.deselect_all') : t('admin_webhooks.select_all') }}
+          </button>
+        </div>
         <div class="events-grid">
           <label v-for="e in events" :key="e" class="event-check" :title="e">
             <input v-model="newEvents[e]" type="checkbox" />
@@ -280,6 +293,12 @@ onMounted(load)
   display: flex;
   flex-direction: column;
   gap: var(--fh-space-3);
+}
+.events-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--fh-space-2);
 }
 .events-grid {
   display: grid;

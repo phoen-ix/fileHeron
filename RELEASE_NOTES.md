@@ -1,61 +1,66 @@
-# file:Heron v1.15.0
+# file:Heron v1.16.0
 
-**One unified admin menu — Settings is no longer a place you go, it's part of
-the sidebar.** Until now `/admin` had two competing navigation styles: top-level
-pages (Users, Groups, Audit log…) *plus* a separate **Settings** hub you had to
-click into and then navigate its own list. Every settings page was second-class
-— two clicks deep and disconnected from the operational page it relates to.
+**A batch of small, high-leverage improvements — find shares faster, share
+public links by QR, and run the server with real visibility and guardrails.**
+Nothing here changes how sharing works; it sharpens the everyday edges and gives
+operators the signals they've been missing.
 
-This release folds all of that into a single, categorized, collapsible left menu:
+## For everyone
 
-- **Every settings page is now a first-class sidebar entry.** No more hub page.
-- **Grouped by topic into four collapsible categories** — *Access · Sharing ·
-  Messaging · System* — so related config sits next to the page it affects.
-  Email / SMTP lives under **Messaging** beside the Mail log; Quarantine alerts
-  under **Sharing** beside the Quarantine queue; 2FA, SSO and the API-token
-  policy under **Access** beside Users, Groups and Sessions.
-- **You choose how the categories collapse** — a new preference under
-  **Account → Admin sidebar**:
-  - **Accordion** (default) — one category open at a time; opening one closes
-    the rest. Most compact.
-  - **Manual** — open as many as you like; each group toggles independently and
-    your choices stick.
-  - **Always expanded** — everything open, closest to a flat list with headers.
-- **Your open/closed groups sync to your account**, so the sidebar looks the
-  same on every browser and device you sign in from.
+- **Search your shares by subject.** The Outbox and Inbox now have a search box
+  that filters by subject as you type. No more paging through long lists to find
+  "Q3 budget" or "invoice 2024" — it works alongside the existing state and
+  recipient/sender filters.
+- **QR code for every public link.** When you create or view a public link, you
+  now get a scannable QR alongside the URL, with a **Download as PNG** button.
+  Hand it to someone in person, drop it in a slide, or print it — they scan and
+  land on the download page. The QR encodes only the public URL, nothing secret.
+
+## For operators
+
+- **Prometheus metrics endpoint.** A new `GET /api/metrics` exposes
+  storage used / free / total, user and share counts, clean vs. quarantined
+  files, and DB / Redis / ClamAV health as standard Prometheus gauges — ready to
+  wire into Grafana or your alerting stack. It's access-controlled: a request
+  must carry a scraper bearer token (`METRICS_BEARER_TOKEN`) **or** come from an
+  allow-listed IP (`METRICS_ALLOWED_IPS`); with neither set the endpoint stays
+  closed. Results are cached for 60s so frequent scrapes don't load the database.
+- **Low-disk protection.** A full storage volume used to fail uploads with an
+  opaque server error and leave quota reservations stranded. Now an hourly check
+  watches free space; when it crosses the threshold the server **refuses new
+  uploads cleanly (HTTP 507)** and sends every admin an in-app **ops alert** —
+  while **downloads keep working** so recipients are never cut off. Both
+  thresholds (percent-free and bytes-free) are tunable live under
+  **Settings → Advanced**.
+- **Database connection-pool tuning.** Pool size, overflow, and timeout are now
+  configurable (`DB_POOL_SIZE` / `DB_POOL_MAX_OVERFLOW` / `DB_POOL_TIMEOUT_SEC`,
+  default 10 + 20), and `GET /api/health` now reports live pool stats (size,
+  overflow, checked-out, query latency) so connection pressure is visible before
+  it turns into slowness.
 
 ### Good to know
 
-- **It always shows you where you are.** The current page's category expands
-  automatically, and detail screens (a specific user, a mail-log entry, an SSO
-  provider) highlight their parent entry and open its group.
-- **Clearer labels.** The two pairs that used to read identically are now
-  disambiguated: **API tokens** (the token list) vs **Token policy** (the rule),
-  and **Quarantine** (the queue) vs **Quarantine alerts** (the notification
-  setting).
-- **Nothing moved or disappeared.** Every settings page keeps its URL —
-  bookmarks to a specific settings page still work. The old **Settings** hub
-  bookmark now lands on **General**.
-- Smooth expand/collapse, keyboard-operable category headers, and it respects
-  *reduce motion*. **Admins only** — employees and clients see no change.
+- **Audit log lines now carry the client IP** alongside the request ID, so
+  central log aggregation can correlate an action to its source.
+- The new disk-space check appears as `disk_check` in the **System → Cron** table
+  and can be run on demand like any other job.
+- New interface strings (the subject search box, the QR labels) ship in English
+  and German. **No behavioural change to sharing, links, or permissions.**
 
 ### Upgrade notes
 
-- **One small migration, no `.env` change.** Two columns are added to the
-  `users` table to remember each admin's sidebar mode and open groups; this runs
-  automatically when you update. New interface strings ship in English and
-  German.
-- First load after updating uses the default (**Accordion**) until you pick a
-  different mode under **Account → Admin sidebar**.
+- **No database migration and no required `.env` change.** The metrics endpoint
+  stays closed until you set `METRICS_BEARER_TOKEN` or `METRICS_ALLOWED_IPS`; the
+  disk thresholds and DB-pool sizes ship with safe defaults you can leave alone.
 
 ## Container images
 
 Published to GitHub Container Registry:
 
-- `ghcr.io/phoen-ix/fileheron-backend:v1.15.0`
-- `ghcr.io/phoen-ix/fileheron-worker:v1.15.0`
-- `ghcr.io/phoen-ix/fileheron-frontend:v1.15.0`
-- `ghcr.io/phoen-ix/fileheron-updater-shim:v1.15.0`
-- `ghcr.io/phoen-ix/fileheron-updater-executor:v1.15.0`
+- `ghcr.io/phoen-ix/fileheron-backend:v1.16.0`
+- `ghcr.io/phoen-ix/fileheron-worker:v1.16.0`
+- `ghcr.io/phoen-ix/fileheron-frontend:v1.16.0`
+- `ghcr.io/phoen-ix/fileheron-updater-shim:v1.16.0`
+- `ghcr.io/phoen-ix/fileheron-updater-executor:v1.16.0`
 
 Click **Update** in `/admin/system` to roll forward.

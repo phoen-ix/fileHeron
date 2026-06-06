@@ -50,6 +50,7 @@ class AuditEventType(str, enum.Enum):
     webhook_created = "webhook_created"                    # webhooks (v1.19.0)
     webhook_updated = "webhook_updated"                    # webhooks (v1.19.0)
     webhook_deleted = "webhook_deleted"                    # webhooks (v1.19.0)
+    anomaly_detected = "anomaly_detected"                  # anomaly detection (v1.20.0)
     file_deleted = "file_deleted"                          # Phase 3a/4
     file_quarantined = "file_quarantined"                  # Phase 5
     file_quarantine_released = "file_quarantine_released"  # post-Phase 10

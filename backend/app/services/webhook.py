@@ -41,6 +41,7 @@ WEBHOOK_EVENTS: list[str] = [
     AuditEventType.public_link_consumed.value,
     AuditEventType.oidc_linked.value,
     AuditEventType.user_erased.value,
+    AuditEventType.anomaly_detected.value,
     OPS_ALERT_EVENT,
 ]
 _WEBHOOK_EVENTS_SET = set(WEBHOOK_EVENTS)

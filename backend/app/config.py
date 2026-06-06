@@ -221,6 +221,14 @@ class Settings(BaseSettings):
     PUBLIC_LINK_PASSWORD_WINDOW_SEC: int = 900  # 15 minutes
     PUBLIC_LINK_LOCKOUT_SEC: int = 900  # link locked for 15 min after lockout
 
+    # --- Anomaly detection (v1.20.0, heuristic / GeoIP-free) ------------------
+    # Hourly anomaly_check cron; thresholds admin-tunable. Alerts only, never
+    # auto-blocks. Set ANOMALY_ENABLED=false to disable the cron entirely.
+    ANOMALY_ENABLED: bool = True
+    ANOMALY_MASS_DOWNLOAD_THRESHOLD: int = 100   # downloads / user / 15 min
+    ANOMALY_MULTI_NETWORK_THRESHOLD: int = 4     # distinct networks / user / 30 min
+    ANOMALY_LOGIN_FAILURE_THRESHOLD: int = 50    # failed logins / IP / 15 min
+
     @property
     def database_url(self) -> str:
         return (

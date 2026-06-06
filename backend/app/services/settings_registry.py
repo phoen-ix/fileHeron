@@ -73,6 +73,11 @@ TUNABLES: list[Tunable] = [
     # --- Storage / low-disk degradation (≤ 1 TiB byte ceiling) ---
     Tunable(K.STORAGE_LOW_THRESHOLD_PERCENT, "STORAGE_LOW_THRESHOLD_PERCENT", "int", "storage", 0, 50),
     Tunable(K.STORAGE_LOW_THRESHOLD_BYTES, "STORAGE_LOW_THRESHOLD_BYTES", "int", "storage", 0, 1_099_511_627_776),
+    # --- Anomaly detection (heuristic; alerts only) ---
+    Tunable(K.ANOMALY_ENABLED, "ANOMALY_ENABLED", "bool", "anomaly"),
+    Tunable(K.ANOMALY_MASS_DOWNLOAD_THRESHOLD, "ANOMALY_MASS_DOWNLOAD_THRESHOLD", "int", "anomaly", 1, 100_000),
+    Tunable(K.ANOMALY_MULTI_NETWORK_THRESHOLD, "ANOMALY_MULTI_NETWORK_THRESHOLD", "int", "anomaly", 2, 1000),
+    Tunable(K.ANOMALY_LOGIN_FAILURE_THRESHOLD, "ANOMALY_LOGIN_FAILURE_THRESHOLD", "int", "anomaly", 1, 100_000),
 ]
 
 BY_KEY: dict[str, Tunable] = {t.key: t for t in TUNABLES}

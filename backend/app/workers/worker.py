@@ -9,6 +9,7 @@ Hourly, staggered so they don't pile up at minute 0:
 - ops_check: minute=15            (sees the :00/:07 outcomes when scanning for failures)
 - disk_check: minute=19           (low-disk guard → storage.critical_low + admin alert)
 - cleanup_expired_tokens: minute=23
+- anomaly_check: minute=33        (heuristic mass-download / multi-network / stuffing scan)
 - quota_reconcile: minute=37
 - cleanup_stale_uploads: minute=41
 - cleanup_abandoned_uploads: minute=47
@@ -31,6 +32,7 @@ from ..config import settings
 from ..services.release_check import release_check
 from ..utils.logger import configure_logging
 from .analytics_aggregate import analytics_aggregate
+from .anomaly_check import anomaly_check
 from .av_scan import av_scan_file
 from .cleanup_abandoned_uploads import cleanup_abandoned_uploads
 from .cleanup_expired_tokens import cleanup_expired_tokens
@@ -74,6 +76,7 @@ class WorkerSettings:
         reclaim_orphaned_files,
         analytics_aggregate,
         webhook_deliver,
+        anomaly_check,
     ]
     cron_jobs = [
         # Stagger so they don't pile up at minute 0. ops_check sits at :15
@@ -85,6 +88,8 @@ class WorkerSettings:
         # Disk-space guard: flips storage.critical_low + alerts admins.
         cron(disk_check, hour=None, minute={19}, run_at_startup=False),
         cron(cleanup_expired_tokens, hour=None, minute={23}, run_at_startup=False),
+        # Heuristic anomaly scan (mass-download / multi-network / stuffing).
+        cron(anomaly_check, hour=None, minute={33}, run_at_startup=False),
         cron(quota_reconcile, hour=None, minute={37}, run_at_startup=False),
         # Reap DB `files` rows stuck in `uploading` (abandoned uploads) +
         # fail their now-empty shares.

@@ -43,6 +43,7 @@ _KNOWN_CRONS = [
     "share_expiring_24h_warning",
     "ops_check",
     "disk_check",
+    "anomaly_check",
     "cleanup_expired_tokens",
     "quota_reconcile",
     "cleanup_stale_uploads",

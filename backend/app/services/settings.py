@@ -131,6 +131,12 @@ class Keys:
     STORAGE_LOW_THRESHOLD_PERCENT = "storage.low_threshold_percent"
     STORAGE_LOW_THRESHOLD_BYTES = "storage.low_threshold_bytes"
     STORAGE_CRITICAL_LOW = "storage.critical_low"  # boolean flag, cron-managed
+    # Anomaly detection (v1.20.0). Thresholds are registry tunables; enabled is
+    # the master switch.
+    ANOMALY_ENABLED = "anomaly.enabled"
+    ANOMALY_MASS_DOWNLOAD_THRESHOLD = "anomaly.mass_download_threshold"
+    ANOMALY_MULTI_NETWORK_THRESHOLD = "anomaly.multi_network_threshold"
+    ANOMALY_LOGIN_FAILURE_THRESHOLD = "anomaly.login_failure_threshold"
 
 
 _ENCRYPTED_KEYS: set[str] = {Keys.SMTP_PASSWORD}

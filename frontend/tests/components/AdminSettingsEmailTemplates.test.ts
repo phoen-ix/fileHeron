@@ -39,13 +39,20 @@ function detail(slug: string, locale: string, hasOverride = false) {
 }
 
 const getEmailTemplates = vi.fn(async () => ({ data: SUMMARY }))
-const getEmailTemplate = vi.fn(async (slug: string, locale: string) =>
-  detail(slug, locale, SUMMARY.items.find((i) => i.slug === slug)?.has_override[locale] ?? false),
-)
+const getEmailTemplate = vi.fn(async (slug: string, locale: string) => {
+  const ov = SUMMARY.items.find((i) => i.slug === slug)?.has_override as
+    | Record<string, boolean>
+    | undefined
+  return detail(slug, locale, ov?.[locale] ?? false)
+})
 const updateEmailTemplate = vi.fn(async (slug: string, locale: string) => detail(slug, locale, true))
 const resetEmailTemplate = vi.fn(async (slug: string, locale: string) => detail(slug, locale, false))
-const previewEmailTemplate = vi.fn(async () => ({ data: { subject: 'S', text: 'T', html: '<p>H</p>' } }))
-const testSendEmailTemplate = vi.fn(async () => ({ data: { ok: true, sent_to: 'admin@x', error_class: null, error_message: null, smtp_code: null, hint: null } }))
+const previewEmailTemplate = vi.fn(async (_slug: string, _locale: string) => ({
+  data: { subject: 'S', text: 'T', html: '<p>H</p>' },
+}))
+const testSendEmailTemplate = vi.fn(async (_slug: string, _locale: string) => ({
+  data: { ok: true, sent_to: 'admin@x', error_class: null, error_message: null, smtp_code: null, hint: null },
+}))
 
 vi.mock('@/api/admin', () => ({
   getEmailTemplates: () => getEmailTemplates(),

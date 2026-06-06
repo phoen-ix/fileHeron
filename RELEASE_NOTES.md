@@ -1,4 +1,4 @@
-# file:Heron v1.25.0
+# file:Heron v1.25.1
 
 **Editable email templates.** Admins can now rewrite the wording of every email
 file:Heron sends — subject and body — **per language**, from a new editor in the
@@ -46,10 +46,10 @@ or shipping a release.
 
 Published to GitHub Container Registry:
 
-- `ghcr.io/phoen-ix/fileheron-backend:v1.25.0`
-- `ghcr.io/phoen-ix/fileheron-worker:v1.25.0`
-- `ghcr.io/phoen-ix/fileheron-frontend:v1.25.0`
-- `ghcr.io/phoen-ix/fileheron-updater-shim:v1.25.0`
-- `ghcr.io/phoen-ix/fileheron-updater-executor:v1.25.0`
+- `ghcr.io/phoen-ix/fileheron-backend:v1.25.1`
+- `ghcr.io/phoen-ix/fileheron-worker:v1.25.1`
+- `ghcr.io/phoen-ix/fileheron-frontend:v1.25.1`
+- `ghcr.io/phoen-ix/fileheron-updater-shim:v1.25.1`
+- `ghcr.io/phoen-ix/fileheron-updater-executor:v1.25.1`
 
 Click **Update** in `/admin/system` to roll forward.

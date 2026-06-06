@@ -18,9 +18,12 @@ HOST_STATE="${UPDATER_HOST_STATE:-/opt/fileHeron/data/updater}"
 GHCR_OWNER="${GHCR_OWNER:-phoen-ix}"
 COMPOSE_PROJECT="${COMPOSE_PROJECT_NAME:-fileheron}"
 POLL_INTERVAL_SEC="${SHIM_POLL_INTERVAL_SEC:-5}"
-# Mark stuck (status=running for > this many seconds) jobs failed so
-# the next /apply isn't blocked forever by a crashed executor.
-STUCK_THRESHOLD_SEC="${SHIM_STUCK_THRESHOLD_SEC:-900}"
+# Mark stuck (in-flight for > this many seconds) jobs failed so the next
+# /apply isn't blocked forever by a crashed executor. 1200s (20min) gives
+# headroom for a failed update + self-healing auto-rollback, which runs a
+# second ~90s health wait plus a stamp + compose up on top of the forward
+# attempt and any slow image pulls.
+STUCK_THRESHOLD_SEC="${SHIM_STUCK_THRESHOLD_SEC:-1200}"
 
 mkdir -p "$STATE_DIR"
 
@@ -53,7 +56,7 @@ NETWORK_NAME="${COMPOSE_PROJECT}_internal"
 # mid-run", not "executor is still happily running somewhere".
 if [ -f "$STATE_FILE" ]; then
     status=$(jq -r '.status // ""' "$STATE_FILE" 2>/dev/null || echo "")
-    if [ "$status" = "pulling" ] || [ "$status" = "running" ] || [ "$status" = "restarting" ]; then
+    if [ "$status" = "pulling" ] || [ "$status" = "running" ] || [ "$status" = "restarting" ] || [ "$status" = "rolling_back" ]; then
         log "found in-flight job (status=$status) on startup — marking failed"
         tmp=$(mktemp)
         jq '. + {status: "failed", error: "shim restarted mid-job", finished_at: now | todate}' \
@@ -137,7 +140,7 @@ while true; do
             # a terminal status, mark it failed here.
             if [ -f "$STATE_FILE" ]; then
                 final=$(jq -r '.status // ""' "$STATE_FILE")
-                if [ "$final" != "healthy" ] && [ "$final" != "failed" ]; then
+                if [ "$final" != "healthy" ] && [ "$final" != "failed" ] && [ "$final" != "rolled_back" ]; then
                     log "executor exited without terminal status; marking failed"
                     tmp=$(mktemp)
                     jq --arg err "executor crashed (exit $exit_code) without writing status" \
@@ -148,7 +151,7 @@ while true; do
             fi
             ;;
 
-        pulling|running|restarting|claiming)
+        pulling|running|restarting|claiming|rolling_back)
             # In-flight. Watch for stuck executors (executor crashed
             # mid-run without us seeing the exit). If `started_at` is
             # older than the threshold, mark failed.
@@ -166,7 +169,7 @@ while true; do
             fi
             ;;
 
-        healthy|failed|"")
+        healthy|failed|rolled_back|"")
             : # nothing to do — terminal or empty
             ;;
 

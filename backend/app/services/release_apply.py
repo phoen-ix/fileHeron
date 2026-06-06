@@ -89,7 +89,7 @@ def get_version() -> dict:
     current_tag = os.environ.get("FH_TAG", "latest")
     state = _read_state() or {}
     status = state.get("status")
-    in_flight_states = {"pending", "claiming", "pulling", "restarting"}
+    in_flight_states = {"pending", "claiming", "pulling", "restarting", "rolling_back"}
     return {
         "current_tag": current_tag,
         "rollback_target": _read_rollback_target(),
@@ -116,13 +116,16 @@ def get_job(job_id: str) -> dict:
         "log_tail": state.get("log_tail", []),
         "error": state.get("error"),
         "previous_tag": state.get("previous_tag"),
+        "rollback_reason": state.get("rollback_reason"),
     }
 
 
 def _normalize_state(s: str) -> str:
     """Map internal status names to the SPA's expected enum. The SPA
-    expects: queued | pulling | restarting | healthy | failed. We add
-    one internal `claiming` state that we map to `queued` for the UI."""
+    expects: queued | pulling | restarting | rolling_back | healthy |
+    rolled_back | failed. We map the internal `pending`/`claiming` to
+    `queued`; the self-heal states (`rolling_back` in-flight, `rolled_back`
+    terminal) pass through unchanged."""
     if s == "pending" or s == "claiming":
         return "queued"
     return s
@@ -142,7 +145,7 @@ def apply(*, action: str, target_tag: str | None) -> dict:
     existing = _read_state()
     if existing is not None:
         s = existing.get("status")
-        if s in {"pending", "claiming", "pulling", "restarting"}:
+        if s in {"pending", "claiming", "pulling", "restarting", "rolling_back"}:
             raise AppError(
                 409,
                 "UPDATE_IN_PROGRESS",

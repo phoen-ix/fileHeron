@@ -187,7 +187,7 @@ async function pollJob(jobId: string) {
     try {
       const { data } = await getUpdaterJob(jobId)
       activeJob.value = data
-      if (data.state === 'healthy' || data.state === 'failed') {
+      if (data.state === 'healthy' || data.state === 'failed' || data.state === 'rolled_back') {
         if (jobPollHandle) clearInterval(jobPollHandle)
         jobPollHandle = null
         // Backend reports the new running_version after restart — refresh.
@@ -197,6 +197,16 @@ async function pollJob(jobId: string) {
           ui.pushToast(
             t('admin_system.update.toast.done', { tag: data.target_tag }),
             'success',
+          )
+        } else if (data.state === 'rolled_back') {
+          // Self-heal: the update failed but the updater restored the previous
+          // version automatically. Prod is up — warn, don't alarm.
+          ui.pushToast(
+            t('admin_system.update.toast.rolled_back', {
+              tag: data.target_tag,
+              prev: data.previous_tag ?? '—',
+            }),
+            'warn',
           )
         } else {
           ui.pushToast(
@@ -260,7 +270,7 @@ async function submitConfirm() {
 const jobInFlight = computed(
   () =>
     activeJob.value !== null &&
-    ['queued', 'pulling', 'restarting'].includes(activeJob.value.state),
+    ['queued', 'pulling', 'restarting', 'rolling_back'].includes(activeJob.value.state),
 )
 
 onMounted(() => {
@@ -736,6 +746,9 @@ const headlineFailures = computed(() => {
 }
 .job-banner[data-state="failed"] { background: #f8d7da; border-color: #f5c6cb; }
 .job-banner[data-state="healthy"] { background: #d4edda; border-color: #c3e6cb; }
+/* Self-heal: update failed but the previous version was restored — amber, not red. */
+.job-banner[data-state="rolling_back"],
+.job-banner[data-state="rolled_back"] { background: #fff3cd; border-color: #ffeeba; }
 .job-header { display: flex; flex-direction: column; gap: var(--fh-space-1); }
 .job-log { margin-top: var(--fh-space-2); }
 .job-log summary { cursor: pointer; color: var(--fh-subtle); font-size: var(--fh-text-body-sm); }

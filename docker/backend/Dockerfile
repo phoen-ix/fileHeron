@@ -22,6 +22,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Python deps first (cache layer)
 COPY backend/pyproject.toml ./pyproject.toml
 RUN --mount=type=cache,target=/root/.cache/pip pip install .
+# Fail the build on a broken/conflicting dependency closure. Complements the
+# import-smoke below: pip check catches version conflicts among declared deps;
+# the import-smoke catches modules imported in code but not declared at all.
+RUN pip check
 
 # App code
 COPY backend/app ./app

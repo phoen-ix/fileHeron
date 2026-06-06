@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shlex
 import subprocess
 import sys
@@ -25,6 +26,7 @@ STATE_FILE = Path(os.environ.get("EXECUTOR_STATE_FILE", "/state/current_job.json
 WORKSPACE = Path(os.environ.get("EXECUTOR_WORKSPACE", "/workspace"))
 COMPOSE_FILE = WORKSPACE / "docker-compose.yml"
 ENV_FILE = WORKSPACE / ".env"
+ROLLBACK_FILE = STATE_FILE.parent / "rollback_target.json"
 COMPOSE_PROJECT = os.environ.get("COMPOSE_PROJECT_NAME", "fileheron")
 GHCR_OWNER = os.environ.get("GHCR_OWNER", "phoen-ix")
 BACKEND_HEALTH_URL = os.environ.get(
@@ -142,6 +144,68 @@ def write_current_tag(new_tag: str) -> None:
     ENV_FILE.write_text("\n".join(lines) + "\n")
 
 
+def _compose_env(tag: str) -> dict[str, str]:
+    """Env for a `docker compose` invocation: pin FH_TAG (which image to
+    use) and forward COMPOSE_HOST_ROOT so bind-mount sources resolve to
+    the HOST compose dir, not the executor's /workspace (see the up -d
+    call below — omitting it silently forks the data layer)."""
+    env = {"FH_TAG": tag}
+    host_root = os.environ.get("COMPOSE_HOST_ROOT")
+    if host_root:
+        env["COMPOSE_HOST_ROOT"] = host_root
+    return env
+
+
+_REV_RE = re.compile(r"^([0-9a-f]+)")
+
+
+def _parse_alembic_revision(text: str) -> str | None:
+    """First revision id on the first real line of `alembic current`
+    output, e.g. '202606090001 (head)' -> '202606090001'. Skips empty
+    lines and alembic's INFO/log preamble."""
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line or line.startswith("INFO") or line.startswith("["):
+            continue
+        m = _REV_RE.match(line)
+        if m:
+            return m.group(1)
+    return None
+
+
+def capture_alembic_head() -> str | None:
+    """Read the DB's current alembic revision from the RUNNING (pre-update,
+    old-image) backend so a rollback can stamp the pointer back to it.
+    Returns None on failure — auto_rollback then skips the stamp and warns.
+    Safe even against a future broken image: alembic/env.py imports only
+    app.config, never app.main (the layer that an nh3-style miss breaks)."""
+    try:
+        result = subprocess.run(
+            ["docker", "compose", "-f", str(COMPOSE_FILE),
+             "exec", "-T", "backend", "alembic", "current"],
+            capture_output=True, text=True, cwd=str(WORKSPACE), timeout=30,
+        )
+    except Exception as e:
+        log_line(f"WARN could not capture alembic head: {type(e).__name__}: {e}")
+        return None
+    if result.returncode != 0:
+        log_line(f"WARN `alembic current` failed (exit {result.returncode}): {result.stderr.strip()[:200]}")
+        return None
+    rev = _parse_alembic_revision(result.stdout)
+    log_line(f"captured pre-update alembic head: {rev}" if rev
+             else "WARN `alembic current` produced no parseable revision")
+    return rev
+
+
+def _read_rollback_file() -> dict:
+    if not ROLLBACK_FILE.exists():
+        return {}
+    try:
+        return json.loads(ROLLBACK_FILE.read_text())
+    except Exception:
+        return {}
+
+
 def wait_for_backend_health(expected_tag: str) -> bool:
     """Poll backend /api/health until running_version == expected_tag
     or timeout. Returns True on success."""
@@ -168,6 +232,74 @@ def wait_for_backend_health(expected_tag: str) -> bool:
     return False
 
 
+def auto_rollback(previous_tag: str, previous_head: str | None, target_tag: str, reason: str) -> int:
+    """Self-heal after a failed UPDATE: restore the previous (known-good)
+    version with no backend/GUI dependency. Ordering is load-bearing:
+    stamp the DB pointer back FIRST using the NEW image (its alembic tree
+    is the superset, so it can resolve the current revision), THEN flip
+    FH_TAG to the old tag, THEN compose up, THEN re-verify health. `stamp`
+    only moves the version pointer (never runs downgrade()), so additive
+    new tables stay in place — harmless under the old code and reconciled
+    by the migrations' `_has_table` guards on the next forward upgrade.
+
+    Returns 0 when prod is healthy again on previous_tag; non-zero if the
+    rollback itself failed (operator must intervene). It NEVER reports
+    success while prod is on a known-broken tag."""
+    log_line(f"AUTO-ROLLBACK: update to {target_tag} failed ({reason}); restoring {previous_tag}")
+    write_job_field(status="rolling_back", rollback_reason=reason)
+
+    # (i) Move the DB version pointer back. .env still holds target_tag here,
+    # so this one-shot runs the NEW image (the superset tree).
+    if previous_head:
+        if run_capture(
+            ["docker", "compose", "-f", str(COMPOSE_FILE), "run", "--rm",
+             "--no-deps", "--entrypoint", "alembic", "backend", "stamp", previous_head],
+            env=_compose_env(target_tag),
+        ) != 0:
+            write_job_field(
+                status="failed",
+                error=f"auto-rollback FAILED: could not stamp DB back to {previous_head} "
+                      f"(update to {target_tag} had failed: {reason})",
+                finished_at=utcnow_iso(),
+            )
+            return 10
+    else:
+        log_line("WARN no pre-update alembic head captured — skipping DB stamp "
+                 "(rollback may hit the migration trap if a migration was applied)")
+
+    # (ii) Restore the previous tag, then (iii) bring prod back up on it.
+    write_current_tag(previous_tag)
+    if run_capture(
+        ["docker", "compose", "-f", str(COMPOSE_FILE), "up", "-d"] + SERVICES,
+        env=_compose_env(previous_tag),
+    ) != 0:
+        write_job_field(
+            status="failed",
+            error=f"auto-rollback FAILED: `compose up` on {previous_tag} failed "
+                  f"(update to {target_tag} had failed: {reason})",
+            finished_at=utcnow_iso(),
+        )
+        return 11
+
+    # (iv) Re-verify health on the restored tag.
+    if not wait_for_backend_health(expected_tag=previous_tag):
+        write_job_field(
+            status="failed",
+            error=f"auto-rollback FAILED: {previous_tag} did not become healthy "
+                  f"(update to {target_tag} had failed: {reason})",
+            finished_at=utcnow_iso(),
+        )
+        return 12
+
+    write_job_field(
+        status="rolled_back",
+        error=f"update to {target_tag} failed ({reason}); automatically rolled back to {previous_tag}",
+        finished_at=utcnow_iso(),
+    )
+    log_line(f"AUTO-ROLLBACK complete — prod healthy on {previous_tag}")
+    return 0
+
+
 def main() -> int:
     job = read_job()
     target_tag = job.get("target_tag")
@@ -178,12 +310,17 @@ def main() -> int:
         return 1
 
     previous_tag = read_current_tag()
+    # Capture the DB's current head from the still-running OLD backend, so a
+    # rollback (auto or manual) can stamp the version pointer back across any
+    # migration the new image applies.
+    previous_head = capture_alembic_head()
     write_job_field(
         status="pulling",
         previous_tag=previous_tag,
+        previous_alembic_head=previous_head,
         started_at=utcnow_iso(),
     )
-    log_line(f"previous tag was {previous_tag}; target {target_tag} (action={action})")
+    log_line(f"previous tag={previous_tag} alembic_head={previous_head}; target {target_tag} (action={action})")
 
     # Pull every image (including updater-shim/-executor) so the local
     # cache stays warm for the next click.
@@ -197,55 +334,70 @@ def main() -> int:
             )
             return 2
 
+    # Manual rollback: reconcile the DB pointer to the target's recorded head
+    # using the CURRENT (new) image (superset tree) BEFORE swapping .env down —
+    # otherwise the old image's boot-time `alembic upgrade head` dies with
+    # "Can't locate revision". .env still holds previous_tag (the new image)
+    # here. stamp is non-destructive (see auto_rollback).
+    if action == "rollback":
+        rb_head = _read_rollback_file().get("alembic_head")
+        if rb_head:
+            log_line(f"rollback: stamping DB back to {rb_head} using current image ({previous_tag})")
+            if run_capture(
+                ["docker", "compose", "-f", str(COMPOSE_FILE), "run", "--rm",
+                 "--no-deps", "--entrypoint", "alembic", "backend", "stamp", rb_head],
+                env=_compose_env(previous_tag),
+            ) != 0:
+                write_job_field(status="failed", error="rollback: alembic stamp failed",
+                                finished_at=utcnow_iso())
+                return 5
+        else:
+            log_line("WARN rollback target has no alembic_head (legacy) — skipping stamp "
+                     "(pre-fix behavior; may hit the migration trap)")
+
     # Persist FH_TAG before up -d so a mid-recreate crash leaves the
     # next `docker compose up` consistent with the requested tag.
     write_current_tag(target_tag)
-    # Record rollback target on update (rolling back doesn't update it).
+    # Record rollback target on update (rolling back doesn't update it),
+    # including the pre-update alembic head so a later rollback can stamp the
+    # DB pointer back across any migration this update applies.
     if action == "update" and previous_tag != target_tag:
         try:
-            ROLLBACK_FILE = STATE_FILE.parent / "rollback_target.json"
-            ROLLBACK_FILE.write_text(json.dumps({"tag": previous_tag}))
+            ROLLBACK_FILE.write_text(json.dumps({"tag": previous_tag, "alembic_head": previous_head}))
             try:
                 os.chmod(ROLLBACK_FILE, 0o644)
             except OSError:
                 pass
-            log_line(f"rollback target recorded: {previous_tag}")
+            log_line(f"rollback target recorded: {previous_tag} (head={previous_head})")
         except Exception as e:
             log_line(f"WARN rollback-target write failed: {e}")
 
     write_job_field(status="restarting")
-    # COMPOSE_HOST_ROOT is set by the shim to the host-absolute path
-    # of the compose project. Without it, compose would substitute
-    # ${PWD} = `/workspace` (the executor's view) into the bind-mount
-    # sources, and the docker daemon would auto-create shadow data
-    # dirs at `/workspace/data/*` on the host — silently forking the
-    # data layer. With it, mounts resolve to the canonical host paths.
-    compose_env = {"FH_TAG": target_tag}
-    host_root = os.environ.get("COMPOSE_HOST_ROOT")
-    if host_root:
-        compose_env["COMPOSE_HOST_ROOT"] = host_root
-    if (
-        run_capture(
-            ["docker", "compose", "-f", str(COMPOSE_FILE), "up", "-d"] + SERVICES,
-            env=compose_env,
-        )
-        != 0
-    ):
-        # Best-effort: revert FH_TAG so the next attempt doesn't loop on the bad tag.
-        write_current_tag(previous_tag)
-        write_job_field(
-            status="failed",
-            error="docker compose up -d failed",
-            finished_at=utcnow_iso(),
-        )
+    # _compose_env forwards COMPOSE_HOST_ROOT so bind-mount sources resolve
+    # against the HOST compose dir, not the executor's /workspace (omitting
+    # it auto-creates shadow data dirs at /workspace/data/* and forks the
+    # data layer).
+    if run_capture(
+        ["docker", "compose", "-f", str(COMPOSE_FILE), "up", "-d"] + SERVICES,
+        env=_compose_env(target_tag),
+    ) != 0:
+        # An UPDATE that won't even start self-heals to the previous tag; a
+        # ROLLBACK that won't start must NOT auto-forward to the version it's
+        # fleeing — fail loudly for the operator (DB already stamped to the
+        # target's head, .env left at the requested target).
+        if action == "update":
+            return auto_rollback(previous_tag, previous_head, target_tag,
+                                 reason="docker compose up -d failed")
+        write_job_field(status="failed", error="rollback: docker compose up -d failed",
+                        finished_at=utcnow_iso())
         return 3
 
     if not wait_for_backend_health(expected_tag=target_tag):
-        write_job_field(
-            status="failed",
-            error="backend health check timed out",
-            finished_at=utcnow_iso(),
-        )
+        if action == "update":
+            return auto_rollback(previous_tag, previous_head, target_tag,
+                                 reason="backend health check timed out")
+        write_job_field(status="failed", error="rollback: backend health check timed out",
+                        finished_at=utcnow_iso())
         return 4
 
     write_job_field(status="healthy", finished_at=utcnow_iso())

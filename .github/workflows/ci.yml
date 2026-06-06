@@ -1,0 +1,39 @@
+name: CI
+
+# Tests on every push to main and every PR — so a broken backend (missing
+# dep, broken migration, failed downgrade) surfaces BEFORE a release tag is
+# cut, not during the tag build. Runs entirely on GitHub-hosted runners
+# (never the production host).
+on:
+  push:
+    branches: [main]
+  pull_request: {}
+
+jobs:
+  backend-tests:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+      # [dev] adds pytest/httpx/aiosqlite/moto — CI-only; the runtime image
+      # still installs only [project].dependencies via `pip install .`.
+      - name: Install (with dev extras)
+        run: pip install .[dev]
+      # pip check guards the declared dependency closure (same gate the
+      # backend image build runs).
+      - name: pip check
+        run: pip check
+      # The suite uses in-memory SQLite (conftest) and includes test_import_boot
+      # (app.main + app.workers.worker import cleanly against the declared deps).
+      # (The alembic downgrade roundtrip stays opt-in/skipped: the migration
+      # chain isn't SQLite-runnable, and the rollback feature uses non-destructive
+      # `alembic stamp`, not downgrade(), so it isn't a release gate.)
+      - name: Pytest
+        run: pytest -q -p no:cacheprovider

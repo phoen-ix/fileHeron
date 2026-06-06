@@ -25,6 +25,9 @@ jobs:
         include:
           - image: fileheron-backend
             dockerfile: docker/backend/Dockerfile
+            # Boot-gate: build to the local daemon, actually run it against a
+            # throwaway DB and require /api/health 200 before pushing.
+            boot_smoke: true
           - image: fileheron-worker
             # Worker shares the backend image — same Python, same code,
             # different ENTRYPOINT (ARQ vs uvicorn). Building both lets
@@ -83,7 +86,12 @@ jobs:
         with:
           context: .
           file: ${{ matrix.dockerfile }}
-          push: true
+          # The backend leg builds to the local daemon (load) so it can be
+          # boot-smoked before publishing — a broken backend image never
+          # reaches GHCR. Every other leg pushes directly. (The Dockerfile's
+          # import-smoke RUN still runs for both backend and worker builds.)
+          push: ${{ matrix.boot_smoke != true }}
+          load: ${{ matrix.boot_smoke == true }}
           tags: ${{ steps.tags.outputs.tags }}
           build-args: |
             FH_VERSION=${{ steps.meta.outputs.version }}
@@ -96,6 +104,75 @@ jobs:
           # build time without callers asking for it today. Add arm64
           # when a self-hoster requests it.
           platforms: linux/amd64
+
+      # --- Boot-gate (backend only) -------------------------------------
+      # Actually run the freshly-built image: the entrypoint runs
+      # `alembic upgrade head` then uvicorn, and we require /api/health to
+      # return 200. Catches missing runtime deps, broken migrations, missing
+      # files, and prod-config fail-fasts BEFORE the image is pushed or a
+      # GitHub Release is created — the exact class of failure that shipped
+      # in v1.25.0/.1 and took prod down.
+      - name: Boot-smoke the backend image
+        if: ${{ matrix.boot_smoke == true }}
+        run: |
+          set -euo pipefail
+          IMG="$(echo '${{ steps.tags.outputs.tags }}' | cut -d, -f1)"
+          echo "::group::boot-smoke $IMG"
+          docker network create fhsmoke
+          docker run -d --name fhsmoke-db --network fhsmoke \
+            -e MARIADB_ROOT_PASSWORD=ci-root-not-a-secret \
+            -e MARIADB_DATABASE=fileheron \
+            -e MARIADB_USER=fileheron_app \
+            -e MARIADB_PASSWORD=ci-db-not-a-secret \
+            mariadb:11
+          echo "waiting for MariaDB to accept connections..."
+          for i in $(seq 1 60); do
+            if docker exec fhsmoke-db healthcheck.sh --connect --innodb_initialized 2>/dev/null; then
+              echo "MariaDB ready"; break
+            fi
+            [ "$i" = 60 ] && { echo "FATAL: MariaDB never came up"; docker logs fhsmoke-db; exit 1; }
+            sleep 2
+          done
+          # ENVIRONMENT=production exercises the real prod boot path (the
+          # insecure-default fail-fasts only WARN in development), so we pass
+          # real >=32-char non-placeholder secrets. Redis/ClamAV are absent;
+          # /api/health degrades those subfields but still returns 200 once
+          # `SELECT 1` succeeds — which proves migrations ran and the app booted.
+          docker run -d --name fhsmoke-app --network fhsmoke -p 127.0.0.1:8000:8000 \
+            -e ENVIRONMENT=production \
+            -e DB_HOST=fhsmoke-db -e DB_PORT=3306 \
+            -e DB_USER=fileheron_app -e DB_PASSWORD=ci-db-not-a-secret -e DB_NAME=fileheron \
+            -e JWT_SECRET=ci-boot-smoke-jwt-secret-aaaaaaaaaaaaaaaaaa \
+            -e TUS_HOOK_SECRET=ci-boot-smoke-tus-hook-secret-bbbbbbbbbbbb \
+            "$IMG"
+          echo "waiting for /api/health == 200..."
+          ok=0
+          for i in $(seq 1 60); do
+            code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 3 http://127.0.0.1:8000/api/health || true)"
+            if [ "$code" = "200" ]; then echo "health 200 after ~$((i*2))s"; ok=1; break; fi
+            sleep 2
+          done
+          if [ "$ok" != "1" ]; then
+            echo "FATAL: /api/health never returned 200"; exit 1
+          fi
+          echo "boot-smoke OK"
+          echo "::endgroup::"
+      - name: Boot-smoke logs on failure
+        if: ${{ failure() && matrix.boot_smoke == true }}
+        run: |
+          echo "=== app logs ==="; docker logs fhsmoke-app 2>&1 | tail -120 || true
+          echo "=== db logs ===";  docker logs fhsmoke-db  2>&1 | tail -40  || true
+      - name: Boot-smoke cleanup
+        if: ${{ always() && matrix.boot_smoke == true }}
+        run: docker rm -f fhsmoke-app fhsmoke-db >/dev/null 2>&1 || true
+
+      # Publish the backend image only AFTER it booted cleanly.
+      - name: Push backend image (post-smoke)
+        if: ${{ matrix.boot_smoke == true }}
+        run: |
+          set -euo pipefail
+          IFS=',' read -ra TAGS <<< "${{ steps.tags.outputs.tags }}"
+          for t in "${TAGS[@]}"; do echo "pushing $t"; docker push "$t"; done
 
   release:
     # Only when a real `v*` tag triggered the workflow — manual runs

@@ -1,51 +1,45 @@
-# file:Heron v1.25.2
+# file:Heron v1.26.0
 
-**Stability hotfix for the v1.25.0 / v1.25.1 update.** Those two releases shipped
-the new editable-email-templates feature, but the backend image was missing one
-packaging dependency (`nh3`, the HTML sanitiser the feature uses). As a result the
-backend failed to start after updating and the site returned **502 Bad Gateway**.
-This release fixes that. **Every v1.25.0 feature is unchanged — this release just
-makes them install and run.**
+**Safer in-app updates: automatic rollback + a release boot-gate.** After the
+v1.25 update incident — a packaging bug took the site down and the in-app
+rollback couldn't recover it — this release makes updates **self-healing** and
+stops a broken build from ever being offered in the first place.
 
-> If your update to v1.25.0 or v1.25.1 failed with a Bad Gateway, update to
-> **v1.25.2**: it starts cleanly. No data was affected by the failed update.
+## What's new
 
-## What's fixed
+- **Failed updates roll themselves back.** If an update doesn't come up healthy,
+  the updater now automatically restores the previous version and brings the
+  site back — no manual rollback, no command line, no waiting. Instead of a
+  "Bad Gateway" you'll see an amber *"update failed — automatically rolled back
+  to <version>"* notice on the System page.
+- **Rollback survives database changes.** Rolling back across a database update
+  used to get stuck. The updater now records the database revision before each
+  update and moves it back on rollback **without deleting anything** — your data
+  is preserved. This also repairs the manual **Roll back** button for the same
+  case.
+- **Broken releases can't be installed.** Every release now boots the actual
+  backend image against a throwaway database and confirms it answers *before* the
+  image is published. A build that can't start — a missing dependency, a broken
+  migration — fails the release and never appears in your Update banner. This is
+  the safeguard that would have caught the v1.25.0 problem.
 
-- **The failed update now succeeds.** The missing `nh3` library is now declared
-  and baked into the backend and worker images, so the backend boots normally
-  after updating. Editable email templates, the WYSIWYG editor, friendly
-  placeholders, live preview, test-send and reset-to-default — everything from
-  v1.25.0 — work exactly as described in those notes.
-- **Hardened packaging.** Two other libraries the backend uses directly
-  (`markdown-it-py` and `httpx`) are now declared explicitly instead of relying on
-  another package to pull them in, so a future dependency change can't silently
-  remove them.
+## Good to know
 
-## Under the hood
-
-- **New build-time safety check.** Each backend/worker image now imports the whole
-  application (web server *and* background worker) while it is being built. If a
-  required library is ever missing again, the image build fails immediately — a
-  broken image can no longer be published or installed. This is the guard that
-  would have caught the v1.25.0 problem before it ever shipped.
-
-## Upgrade notes
-
-- **No new database changes.** v1.25.2 carries the same one-time table introduced
-  in v1.25.0; it is applied automatically, is re-runnable, and leaves existing
-  data untouched.
-- **Updating from a failed v1.25.0 / v1.25.1 attempt is safe** — just click
-  **Update** in `/admin/system`.
+- **No action needed** — these protections apply automatically from this version
+  onward, including the update *to* v1.26.0 itself.
+- **If automatic rollback can't recover** (rare — e.g. the previous version also
+  refuses to start), the System page shows a clear failure with the reason and
+  asks for operator help. It never silently leaves the site on a broken version.
+- **No database changes** in this release.
 
 ## Container images
 
 Published to GitHub Container Registry:
 
-- `ghcr.io/phoen-ix/fileheron-backend:v1.25.2`
-- `ghcr.io/phoen-ix/fileheron-worker:v1.25.2`
-- `ghcr.io/phoen-ix/fileheron-frontend:v1.25.2`
-- `ghcr.io/phoen-ix/fileheron-updater-shim:v1.25.2`
-- `ghcr.io/phoen-ix/fileheron-updater-executor:v1.25.2`
+- `ghcr.io/phoen-ix/fileheron-backend:v1.26.0`
+- `ghcr.io/phoen-ix/fileheron-worker:v1.26.0`
+- `ghcr.io/phoen-ix/fileheron-frontend:v1.26.0`
+- `ghcr.io/phoen-ix/fileheron-updater-shim:v1.26.0`
+- `ghcr.io/phoen-ix/fileheron-updater-executor:v1.26.0`
 
 Click **Update** in `/admin/system` to roll forward.

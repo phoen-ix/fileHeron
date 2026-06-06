@@ -252,12 +252,13 @@ export interface UpdaterJob {
   id: string
   action: 'update' | 'rollback'
   target_tag: string
-  state: 'queued' | 'pulling' | 'restarting' | 'healthy' | 'failed'
+  state: 'queued' | 'pulling' | 'restarting' | 'rolling_back' | 'healthy' | 'rolled_back' | 'failed'
   started_at: string
   finished_at: string | null
   log_tail: string[]
   error: string | null
   previous_tag: string | null
+  rollback_reason: string | null
 }
 
 export function getUpdaterStatus() {

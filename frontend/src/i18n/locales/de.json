@@ -257,13 +257,16 @@
         "queued": "Update auf {tag} in der Warteschlange …",
         "pulling": "Images für {tag} werden geladen …",
         "restarting": "Dienste werden auf {tag} neu gestartet …",
+        "rolling_back": "Update auf {tag} fehlgeschlagen – wird zurückgerollt …",
         "done": "Fertig — läuft auf {tag}.",
+        "rolled_back": "Update fehlgeschlagen – auf die vorherige Version zurückgerollt.",
         "failed": "Update auf {tag} fehlgeschlagen.",
         "log": "Log anzeigen"
       },
       "toast": {
         "done": "Erfolgreich auf {tag} aktualisiert.",
         "failed": "Update fehlgeschlagen: {err}",
+        "rolled_back": "Update auf {tag} fehlgeschlagen; automatisch auf {prev} zurückgerollt.",
         "no_target": "Kein Release-Tag zum Aktualisieren."
       }
     },

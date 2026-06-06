@@ -257,13 +257,16 @@
         "queued": "Update to {tag} queued…",
         "pulling": "Pulling images for {tag}…",
         "restarting": "Restarting services on {tag}…",
+        "rolling_back": "Update to {tag} failed — rolling back…",
         "done": "Done — running on {tag}.",
+        "rolled_back": "Update failed — rolled back to the previous version.",
         "failed": "Failed to roll to {tag}.",
         "log": "Show log"
       },
       "toast": {
         "done": "Successfully updated to {tag}.",
         "failed": "Update failed: {err}",
+        "rolled_back": "Update to {tag} failed; automatically rolled back to {prev}.",
         "no_target": "No release tag to update to."
       }
     },

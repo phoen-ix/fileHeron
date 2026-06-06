@@ -16,6 +16,7 @@ CheckMode = ("auto", "manual")
 class ImapSettingsResponse(APIBaseModel):
     enabled: bool
     check_mode: str
+    use_smtp_credentials: bool
     host: str
     port: int
     user: str
@@ -33,6 +34,8 @@ class ImapSettingsResponse(APIBaseModel):
 class UpdateImapSettingsRequest(APIBaseModel):
     enabled: bool
     check_mode: str = Field(pattern="^(auto|manual)$")
+    # When true, IMAP reuses the SMTP login; user/password below are ignored.
+    use_smtp_credentials: bool = True
     host: str = Field(default="", max_length=255)
     port: int = Field(default=993, ge=1, le=65535)
     user: str = Field(default="", max_length=320)

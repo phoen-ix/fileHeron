@@ -168,7 +168,7 @@ Admins can edit the **subject and body of every outbound email, per language**, 
 
 file:Heron can **read** the configured mail account over IMAP, not just send. When enabled it polls the mailbox, ingests messages into an admin-only **Inbox**, and labels each as **REPLY**, **BOUNCE** (delivery-status notification) or **AUTO** (out-of-office / auto-reply) — so user replies, dead addresses and bounces surface in-app. Off by default; uses Python's stdlib `imaplib` (no third-party dependency). Config at *Settings → Inbound mail (IMAP)*:
 
-- **Connection** — host, port, encryption (implicit TLS / STARTTLS / none), user, password (Fernet-encrypted, never echoed), source mailbox. **Test connection** lists the server's folders; **Fetch now** runs a poll immediately.
+- **Connection** — host, port, encryption (implicit TLS / STARTTLS / none), user, password (Fernet-encrypted, never echoed), source mailbox. By default (`imap.use_smtp_credentials`, on) IMAP **reuses the SMTP username + password** (and the SMTP host when no IMAP host is set) so you don't re-enter the sending account; turn it off for a dedicated fetch account. **Test connection** lists the server's folders; **Fetch now** runs a poll immediately.
 - **Fetching** — `auto` (cron ticks every 5 min, self-gated to your interval) or `manual` only. Mirrors the `release_check` enable/auto-manual/interval pattern.
 - **After fetch** (admin-selectable) — `mark_read` · `untouched` · `move` (to a subfolder) · `delete`. Dedup is by IMAP `(UIDVALIDITY, UID)` + `Message-ID`, so re-polling never double-ingests even in `untouched` mode.
 - **Notifications** — `off` (unread badge only) · `human` (genuine replies) · `all`.
@@ -637,7 +637,7 @@ Edited under `/admin/settings/*`; stored in `app_settings`. Authoritative key li
 | **2FA** `/twofa` | `twofa.required_roles` + `twofa.required_group_ids` | Which roles/groups must enrol TOTP (computed live; no admin escape). |
 | **Email** `/email` | `smtp.{host,port,user,password,from_email,from_name,tls_mode}` | Live SMTP override (DB beats env). Password encrypted; never echoed. Has a "test send". |
 | **Email templates** `/email-templates` | *(own table `email_template_override`, not kv)* | Per-(template, language) subject/body Markdown overrides; built-in templates are the fallback. WYSIWYG editor, placeholders, preview, test-send, reset-to-default. |
-| **Inbound mail** `/imap` | `imap.{enabled,check_mode,host,port,user,password,tls_mode,mailbox,post_fetch_action,move_folder,notify_mode}` + `imap.poll_interval_minutes` | IMAP fetch into the admin Inbox. Password encrypted; never echoed. Test-connection + fetch-now. Off by default. |
+| **Inbound mail** `/imap` | `imap.{enabled,check_mode,use_smtp_credentials,host,port,user,password,tls_mode,mailbox,post_fetch_action,move_folder,notify_mode}` + `imap.poll_interval_minutes` | IMAP fetch into the admin Inbox. Reuses SMTP login by default. Password encrypted; never echoed. Test-connection + fetch-now. Off by default. |
 | **Site** `/site` | `site.url`, `site.timezone` | Public URL used in links; IANA timezone for the 24-hour timestamps shown in UI + emails. |
 | **Home page** `/home-page` | `home_page.enabled` | Toggle the welcome home page (off → brand mark non-linkable, `/` redirects forward). |
 | **File preview** `/general#file-preview` | `file_preview.enabled` | Toggle in-browser preview of PDFs/images/text (off → Preview buttons hidden, endpoints refuse). |

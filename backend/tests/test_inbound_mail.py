@@ -201,6 +201,35 @@ def test_poll_ingests_and_marks_seen(db, monkeypatch):
     assert r2["ingested"] == 0
 
 
+def test_reuses_smtp_credentials_by_default(db):
+    from app.services import imap_config
+    s.set_value(db, key=s.Keys.SMTP_HOST, value="mail.example.com", actor=None)
+    s.set_value(db, key=s.Keys.SMTP_USER, value="bot@example.com", actor=None)
+    s.set_value(db, key=s.Keys.SMTP_PASSWORD, value="smtp-pass", actor=None)
+    db.commit()
+    cfg = imap_config.resolve_imap_config(db)
+    assert cfg.user == "bot@example.com"
+    assert cfg.password == "smtp-pass"
+    assert cfg.host == "mail.example.com"  # falls back when no IMAP host set
+    # A distinct IMAP host overrides, but creds still come from SMTP.
+    s.set_value(db, key=s.Keys.IMAP_HOST, value="imap.example.com", actor=None)
+    db.commit()
+    cfg = imap_config.resolve_imap_config(db)
+    assert cfg.host == "imap.example.com" and cfg.user == "bot@example.com"
+
+
+def test_toggle_off_uses_imap_specific_credentials(db):
+    from app.services import imap_config
+    s.set_value(db, key=s.Keys.SMTP_USER, value="bot@example.com", actor=None)
+    s.set_value(db, key=s.Keys.SMTP_PASSWORD, value="smtp-pass", actor=None)
+    s.set_value(db, key=s.Keys.IMAP_USE_SMTP_CREDENTIALS, value="false", actor=None)
+    s.set_value(db, key=s.Keys.IMAP_USER, value="imapuser", actor=None)
+    s.set_value(db, key=s.Keys.IMAP_PASSWORD, value="imap-pass", actor=None)
+    db.commit()
+    cfg = imap_config.resolve_imap_config(db)
+    assert cfg.user == "imapuser" and cfg.password == "imap-pass"
+
+
 def test_poll_move_action(db):
     _enable(db)
     s.set_value(db, key=s.Keys.IMAP_POST_FETCH_ACTION, value="move", actor=None)

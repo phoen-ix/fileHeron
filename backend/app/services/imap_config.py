@@ -51,13 +51,35 @@ def resolve_imap_config(db: Session) -> ImapConfig:
     if tls_mode not in TLS_MODES:
         tls_mode = "starttls" if port == 143 else "implicit"
 
+    host = _eff(settings_svc.Keys.IMAP_HOST, settings.IMAP_HOST)
+    user = _eff(settings_svc.Keys.IMAP_USER, settings.IMAP_USER)
+    password = _eff(settings_svc.Keys.IMAP_PASSWORD, settings.IMAP_PASSWORD)
+
+    # Reuse the outgoing-email (SMTP) login by default, so the admin doesn't
+    # re-enter it. Username/password come from SMTP; host falls back to the SMTP
+    # host only when no IMAP host is set (it often differs, e.g. imap. vs smtp.).
+    # Port/TLS/mailbox stay IMAP-specific (SMTP 587/starttls is wrong for IMAP).
+    if uses_smtp_credentials(db):
+        from .email import resolve_smtp_config
+
+        smtp = resolve_smtp_config(db)
+        user = smtp.user
+        password = smtp.password
+        host = host or smtp.host
+
     return ImapConfig(
-        host=_eff(settings_svc.Keys.IMAP_HOST, settings.IMAP_HOST),
+        host=host,
         port=port,
-        user=_eff(settings_svc.Keys.IMAP_USER, settings.IMAP_USER),
-        password=_eff(settings_svc.Keys.IMAP_PASSWORD, settings.IMAP_PASSWORD),
+        user=user,
+        password=password,
         tls_mode=tls_mode,
         mailbox=_eff(settings_svc.Keys.IMAP_MAILBOX, settings.IMAP_MAILBOX),
+    )
+
+
+def uses_smtp_credentials(db: Session) -> bool:
+    return settings_svc.get_bool(
+        db, settings_svc.Keys.IMAP_USE_SMTP_CREDENTIALS, default=True
     )
 
 

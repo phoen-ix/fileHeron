@@ -8,6 +8,7 @@ import en from '@/i18n/locales/en.json'
 const SETTINGS = {
   enabled: false,
   check_mode: 'auto',
+  use_smtp_credentials: false,
   host: 'imap.example.com',
   port: 993,
   user: 'bot',
@@ -69,6 +70,23 @@ describe('AdminSettingsImap', () => {
     expect(updateImapSettings).toHaveBeenCalled()
     expect(updateImapSettings.mock.calls[0][0]).toMatchObject({ password: null })
     expect(pushToast).toHaveBeenCalled()
+  })
+
+  it('shows username/password when NOT reusing the SMTP account', async () => {
+    // SETTINGS has use_smtp_credentials: false.
+    const w = makeWrapper()
+    await flushPromises()
+    expect(w.find('input[type="password"]').exists()).toBe(true)
+  })
+
+  it('hides username/password and shows the SMTP login when reusing', async () => {
+    getImapSettings.mockResolvedValueOnce({
+      data: { ...SETTINGS, use_smtp_credentials: true, user: 'bot@example.com' },
+    })
+    const w = makeWrapper()
+    await flushPromises()
+    expect(w.find('input[type="password"]').exists()).toBe(false)
+    expect(w.text()).toContain('bot@example.com')
   })
 
   it('Test connection shows the folder list', async () => {

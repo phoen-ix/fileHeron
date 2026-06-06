@@ -29,6 +29,7 @@ const passwordTouched = ref(false)
 const form = ref({
   enabled: false,
   check_mode: 'auto' as 'auto' | 'manual',
+  use_smtp_credentials: true,
   host: '',
   port: 993,
   user: '',
@@ -45,6 +46,7 @@ function hydrate(s: ImapSettingsResponse) {
   form.value = {
     enabled: s.enabled,
     check_mode: s.check_mode,
+    use_smtp_credentials: s.use_smtp_credentials,
     host: s.host,
     port: s.port,
     user: s.user,
@@ -146,6 +148,15 @@ onMounted(load)
       <div v-if="errorMsg" class="fh-notice" data-tone="danger">{{ errorMsg }}</div>
 
       <h2 class="form-h2">{{ t('admin_imap.connection') }}</h2>
+
+      <label class="toggle-row">
+        <input v-model="form.use_smtp_credentials" type="checkbox" />
+        <span>
+          <span class="mode-name">{{ t('admin_imap.use_smtp') }}</span>
+          <span class="mode-help">{{ t('admin_imap.use_smtp_help') }}</span>
+        </span>
+      </label>
+
       <label class="fh-field">
         <span class="fh-field-label">{{ t('admin_imap.host') }}</span>
         <input v-model.trim="form.host" type="text" class="fh-field-input" autocomplete="off" />
@@ -164,24 +175,29 @@ onMounted(load)
           </select>
         </label>
       </div>
-      <label class="fh-field">
-        <span class="fh-field-label">{{ t('admin_imap.user') }}</span>
-        <input v-model.trim="form.user" type="text" class="fh-field-input" autocomplete="off" />
-      </label>
-      <label class="fh-field">
-        <span class="fh-field-label">{{ t('admin_imap.password') }}</span>
-        <input
-          v-model="form.password"
-          type="password"
-          class="fh-field-input"
-          autocomplete="new-password"
-          :placeholder="isPasswordSet ? '••••••••' : ''"
-          @input="passwordTouched = true"
-        />
-        <span class="fh-field-help">
-          {{ isPasswordSet ? t('admin_imap.password_set_help') : t('admin_imap.password_help') }}
-        </span>
-      </label>
+      <p v-if="form.use_smtp_credentials" class="fh-field-help using-login">
+        {{ t('admin_imap.using_login', { user: form.user || t('admin_imap.using_login_unset') }) }}
+      </p>
+      <template v-else>
+        <label class="fh-field">
+          <span class="fh-field-label">{{ t('admin_imap.user') }}</span>
+          <input v-model.trim="form.user" type="text" class="fh-field-input" autocomplete="off" />
+        </label>
+        <label class="fh-field">
+          <span class="fh-field-label">{{ t('admin_imap.password') }}</span>
+          <input
+            v-model="form.password"
+            type="password"
+            class="fh-field-input"
+            autocomplete="new-password"
+            :placeholder="isPasswordSet ? '••••••••' : ''"
+            @input="passwordTouched = true"
+          />
+          <span class="fh-field-help">
+            {{ isPasswordSet ? t('admin_imap.password_set_help') : t('admin_imap.password_help') }}
+          </span>
+        </label>
+      </template>
       <label class="fh-field">
         <span class="fh-field-label">{{ t('admin_imap.mailbox') }}</span>
         <input v-model.trim="form.mailbox" type="text" class="fh-field-input" />

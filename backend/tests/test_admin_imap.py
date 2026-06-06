@@ -49,12 +49,27 @@ async def test_settings_get_default(make_user, client, login_as):
 
 
 @pytest.mark.asyncio
+async def test_settings_reuse_smtp_credentials(make_user, db, client, login_as):
+    t = await _admin_token(make_user, login_as)
+    s.set_value(db, key=s.Keys.SMTP_PASSWORD, value="smtp-pass", actor=None)
+    s.set_value(db, key=s.Keys.SMTP_USER, value="bot@example.com", actor=None)
+    db.commit()
+    r = await client.get("/api/admin/settings/imap", headers=_h(t))
+    body = r.json()
+    # Default on → reuses the SMTP login, so a password is effectively set.
+    assert body["use_smtp_credentials"] is True
+    assert body["is_password_set"] is True
+    assert body["user"] == "bot@example.com"
+
+
+@pytest.mark.asyncio
 async def test_settings_put_masks_password(make_user, db, client, login_as):
     t = await _admin_token(make_user, login_as)
     r = await client.put(
         "/api/admin/settings/imap",
         json={
-            "enabled": True, "check_mode": "auto", "host": "imap.example.com",
+            "enabled": True, "check_mode": "auto", "use_smtp_credentials": False,
+            "host": "imap.example.com",
             "port": 993, "user": "bot", "password": "s3cret",
             "tls_mode": "implicit", "mailbox": "INBOX",
             "post_fetch_action": "mark_read", "move_folder": "fileHeron/Processed",
@@ -72,7 +87,8 @@ async def test_settings_put_masks_password(make_user, db, client, login_as):
     r2 = await client.put(
         "/api/admin/settings/imap",
         json={
-            "enabled": True, "check_mode": "auto", "host": "imap.example.com",
+            "enabled": True, "check_mode": "auto", "use_smtp_credentials": False,
+            "host": "imap.example.com",
             "port": 993, "user": "bot", "password": None, "tls_mode": "implicit",
             "mailbox": "INBOX", "post_fetch_action": "mark_read",
             "move_folder": "fileHeron/Processed", "notify_mode": "off",

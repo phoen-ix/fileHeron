@@ -45,13 +45,20 @@ K = settings_svc.Keys
 
 def _settings_response(db: Session) -> ImapSettingsResponse:
     cfg = imap_config.resolve_imap_config(db)
+    uses_smtp = imap_config.uses_smtp_credentials(db)
+    # Effective: a password exists if one is stored for IMAP, or (when reusing
+    # SMTP) the SMTP password is set — `cfg.password` already reflects that.
+    is_password_set = bool(settings_svc.get(db, K.IMAP_PASSWORD)) or (
+        uses_smtp and bool(cfg.password)
+    )
     return ImapSettingsResponse(
         enabled=imap_config.is_enabled(db),
         check_mode=imap_config.check_mode(db),
+        use_smtp_credentials=uses_smtp,
         host=cfg.host,
         port=cfg.port,
         user=cfg.user,
-        is_password_set=bool(settings_svc.get(db, K.IMAP_PASSWORD)),
+        is_password_set=is_password_set,
         tls_mode=cfg.tls_mode,
         mailbox=cfg.mailbox,
         post_fetch_action=imap_config.post_fetch_action(db),
@@ -80,9 +87,9 @@ def update_imap_settings(
     pairs: list[tuple[str, str | None]] = [
         (K.IMAP_ENABLED, "true" if payload.enabled else "false"),
         (K.IMAP_CHECK_MODE, payload.check_mode),
+        (K.IMAP_USE_SMTP_CREDENTIALS, "true" if payload.use_smtp_credentials else "false"),
         (K.IMAP_HOST, payload.host or None),
         (K.IMAP_PORT, str(payload.port)),
-        (K.IMAP_USER, payload.user or None),
         (K.IMAP_TLS_MODE, payload.tls_mode),
         (K.IMAP_MAILBOX, payload.mailbox or "INBOX"),
         (K.IMAP_POST_FETCH_ACTION, payload.post_fetch_action),
@@ -92,12 +99,18 @@ def update_imap_settings(
     ]
     for key, value in pairs:
         settings_svc.set_value(db, key=key, value=value, actor=admin, request=request)
-    if payload.password is not None:
+    # When reusing the SMTP login, IMAP-specific user/password are ignored (SMTP
+    # stays the single source of truth) — don't store what the form sent.
+    if not payload.use_smtp_credentials:
         settings_svc.set_value(
-            db, key=K.IMAP_PASSWORD,
-            value=payload.password if payload.password else None,
-            actor=admin, request=request,
+            db, key=K.IMAP_USER, value=payload.user or None, actor=admin, request=request
         )
+        if payload.password is not None:
+            settings_svc.set_value(
+                db, key=K.IMAP_PASSWORD,
+                value=payload.password if payload.password else None,
+                actor=admin, request=request,
+            )
     record_audit_event(
         db,
         event_type=AuditEventType.imap_config_changed,

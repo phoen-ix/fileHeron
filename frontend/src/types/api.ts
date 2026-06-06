@@ -1124,6 +1124,7 @@ export interface TestSendEmailTemplateResponse {
 export interface ImapSettingsResponse {
   enabled: boolean
   check_mode: 'auto' | 'manual'
+  use_smtp_credentials: boolean
   host: string
   port: number
   user: string
@@ -1141,6 +1142,7 @@ export interface ImapSettingsResponse {
 export interface UpdateImapSettingsRequest {
   enabled: boolean
   check_mode: 'auto' | 'manual'
+  use_smtp_credentials: boolean
   host: string
   port: number
   user: string

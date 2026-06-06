@@ -112,6 +112,9 @@ class Keys:
     # only encrypted field (mirrors SMTP). Read via services/imap_config.py.
     IMAP_ENABLED = "imap.enabled"              # boolean master switch (default false)
     IMAP_CHECK_MODE = "imap.check_mode"        # 'auto' | 'manual'
+    # When true (default), IMAP borrows the SMTP username/password (and host as a
+    # default) so the admin doesn't re-enter the outgoing-email login.
+    IMAP_USE_SMTP_CREDENTIALS = "imap.use_smtp_credentials"  # boolean
     IMAP_HOST = "imap.host"
     IMAP_PORT = "imap.port"
     IMAP_USER = "imap.user"

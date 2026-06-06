@@ -1033,7 +1033,8 @@
       "header": "App-Kopfzeile (angemeldet)",
       "login": "Anmeldeseite",
       "public": "Öffentliche Link-Seiten",
-      "email": "E-Mails"
+      "email": "E-Mails",
+      "client": "Desktop-Client"
     },
     "link": {
       "label": "Logo-Link (optional)",

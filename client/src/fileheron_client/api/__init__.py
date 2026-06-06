@@ -1,6 +1,7 @@
 from .account import get_current_api_token, patch_locale
 from .client import ApiClient, ApiError, SessionExpiredError
 from .auth import login, login_with_recovery, refresh, logout, me
+from .branding import branding_logo_png
 from .download_resumable import download_file_resumable
 from .download_segmented import download_file_segmented
 from .files import DownloadCancelled, DownloadPaused, download_file, get_download_url
@@ -49,4 +50,5 @@ __all__ = [
     "upload_init",
     "list_recipient_groups",
     "search_users",
+    "branding_logo_png",
 ]

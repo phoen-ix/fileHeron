@@ -1074,6 +1074,35 @@ def _sniff_image_type(head: bytes) -> str | None:
     return None
 
 
+def _store_client_png(backend, content: bytes) -> str | None:
+    """Transcode the logo to a header-sized PNG and store it via the backend.
+    Returns the locator, or None if transcoding/storing fails (non-fatal)."""
+    import os
+    import tempfile
+    import uuid
+    from pathlib import Path
+
+    from ...config import settings as _cfg
+    from ...services import image as image_svc
+
+    try:
+        png = image_svc.to_client_png(content)
+    except Exception:
+        return None
+    locator = backend.generate_locator(f"branding-logo-png-{uuid.uuid4().hex}")
+    Path(_cfg.TUS_UPLOAD_DIR).mkdir(parents=True, exist_ok=True)
+    fd, tmp_path = tempfile.mkstemp(dir=_cfg.TUS_UPLOAD_DIR, suffix=".png")
+    try:
+        with os.fdopen(fd, "wb") as out:
+            out.write(png)
+        backend.finalize(tmp_path, locator)
+    except Exception:
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+        return None
+    return locator
+
+
 def _branding_response(db: Session) -> BrandingSettingsResponse:
     locator = settings_svc.get(db, settings_svc.Keys.BRANDING_LOGO_LOCATOR)
     present = bool(locator)
@@ -1088,6 +1117,7 @@ def _branding_response(db: Session) -> BrandingSettingsResponse:
         show_login=settings_svc.get_bool(db, settings_svc.Keys.BRANDING_SHOW_LOGIN, default=False),
         show_public=settings_svc.get_bool(db, settings_svc.Keys.BRANDING_SHOW_PUBLIC, default=False),
         show_email=settings_svc.get_bool(db, settings_svc.Keys.BRANDING_SHOW_EMAIL, default=False),
+        show_client=settings_svc.get_bool(db, settings_svc.Keys.BRANDING_SHOW_CLIENT, default=False),
         link_url=settings_svc.get(db, settings_svc.Keys.BRANDING_LINK_URL) or None,
     )
 
@@ -1113,6 +1143,7 @@ def update_branding_settings(
         "show_login": settings_svc.Keys.BRANDING_SHOW_LOGIN,
         "show_public": settings_svc.Keys.BRANDING_SHOW_PUBLIC,
         "show_email": settings_svc.Keys.BRANDING_SHOW_EMAIL,
+        "show_client": settings_svc.Keys.BRANDING_SHOW_CLIENT,
     }
     for attr, key in bool_map.items():
         if attr in fields:
@@ -1186,7 +1217,12 @@ async def upload_branding_logo(
             os.unlink(tmp_path)
         raise
 
+    # Header-sized PNG rendition for the desktop client (best-effort - a
+    # transcode failure must not block the upload; web/email use the original).
+    png_locator = _store_client_png(backend, content)
+
     previous = settings_svc.get(db, settings_svc.Keys.BRANDING_LOGO_LOCATOR)
+    previous_png = settings_svc.get(db, settings_svc.Keys.BRANDING_LOGO_PNG_LOCATOR)
     settings_svc.set_value(db, key=settings_svc.Keys.BRANDING_LOGO_LOCATOR, value=locator, actor=admin, request=request)
     settings_svc.set_value(
         db, key=settings_svc.Keys.BRANDING_LOGO_FILENAME,
@@ -1195,6 +1231,10 @@ async def upload_branding_logo(
     settings_svc.set_value(
         db, key=settings_svc.Keys.BRANDING_LOGO_CONTENT_TYPE,
         value=content_type, actor=admin, request=request,
+    )
+    settings_svc.set_value(
+        db, key=settings_svc.Keys.BRANDING_LOGO_PNG_LOCATOR,
+        value=png_locator, actor=admin, request=request,
     )
     record_audit_event(
         db,
@@ -1208,11 +1248,12 @@ async def upload_branding_logo(
     db.commit()
     # Best-effort clean-up of the replaced bytes (after commit so a delete
     # failure can't roll back the new pointer).
-    if previous and previous != locator:
-        try:
-            backend.delete(previous)
-        except Exception:
-            pass
+    for old in (previous if previous != locator else None, previous_png if previous_png != png_locator else None):
+        if old:
+            try:
+                backend.delete(old)
+            except Exception:
+                pass
     return _branding_response(db)
 
 
@@ -1225,10 +1266,12 @@ def delete_branding_logo(
     from ...services.storage_backend import get_storage_backend
 
     locator = settings_svc.get(db, settings_svc.Keys.BRANDING_LOGO_LOCATOR)
+    png_locator = settings_svc.get(db, settings_svc.Keys.BRANDING_LOGO_PNG_LOCATOR)
     for key in (
         settings_svc.Keys.BRANDING_LOGO_LOCATOR,
         settings_svc.Keys.BRANDING_LOGO_FILENAME,
         settings_svc.Keys.BRANDING_LOGO_CONTENT_TYPE,
+        settings_svc.Keys.BRANDING_LOGO_PNG_LOCATOR,
     ):
         settings_svc.set_value(db, key=key, value=None, actor=admin, request=request)
     if locator:
@@ -1242,11 +1285,13 @@ def delete_branding_logo(
             request=request,
         )
     db.commit()
-    if locator:
-        try:
-            get_storage_backend().delete(locator)
-        except Exception:
-            pass
+    backend = get_storage_backend()
+    for loc in (locator, png_locator):
+        if loc:
+            try:
+                backend.delete(loc)
+            except Exception:
+                pass
     return _branding_response(db)
 
 

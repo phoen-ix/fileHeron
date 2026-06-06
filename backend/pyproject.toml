@@ -43,6 +43,9 @@ dependencies = [
     "reportlab>=4.0",
     "zipstream-ng>=1.8",
     "boto3>=1.34",
+    # services/image.py: transcode the branding logo to a header-sized PNG for
+    # the desktop client (v1.32.0).
+    "pillow>=10.4",
 ]
 
 [project.optional-dependencies]

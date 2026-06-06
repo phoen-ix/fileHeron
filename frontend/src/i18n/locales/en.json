@@ -1033,7 +1033,8 @@
       "header": "App header (signed-in)",
       "login": "Login page",
       "public": "Public link pages",
-      "email": "Emails"
+      "email": "Emails",
+      "client": "Desktop client"
     },
     "link": {
       "label": "Logo link (optional)",

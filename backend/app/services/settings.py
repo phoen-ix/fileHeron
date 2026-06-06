@@ -171,10 +171,14 @@ class Keys:
     BRANDING_LOGO_LOCATOR = "branding.logo_locator"
     BRANDING_LOGO_FILENAME = "branding.logo_filename"
     BRANDING_LOGO_CONTENT_TYPE = "branding.logo_content_type"
+    # Header-sized PNG rendition for the desktop client (Tk PhotoImage needs
+    # PNG + can't resize). Generated at upload time from the original.
+    BRANDING_LOGO_PNG_LOCATOR = "branding.logo_png_locator"
     BRANDING_SHOW_HEADER = "branding.show_header"   # boolean
     BRANDING_SHOW_LOGIN = "branding.show_login"     # boolean
     BRANDING_SHOW_PUBLIC = "branding.show_public"   # boolean
     BRANDING_SHOW_EMAIL = "branding.show_email"     # boolean
+    BRANDING_SHOW_CLIENT = "branding.show_client"   # boolean (desktop client)
     BRANDING_LINK_URL = "branding.link_url"         # optional URL the logo links to
     # Legal pages (v1.31.0): admin-editable Imprint + Privacy, per-locale
     # markdown, each independently enabled. Shown as footer links on every page.

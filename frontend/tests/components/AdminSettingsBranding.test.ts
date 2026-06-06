@@ -8,6 +8,7 @@ import en from '@/i18n/locales/en.json'
 const NO_LOGO = {
   logo: { present: false, filename: null, content_type: null, url: null },
   show_header: false, show_login: false, show_public: false, show_email: false,
+  show_client: false,
   link_url: null,
 }
 const WITH_LOGO = { ...NO_LOGO, logo: { present: true, filename: 'l.png', content_type: 'image/png', url: '/api/branding/logo' } }
@@ -88,6 +89,19 @@ describe('AdminSettingsBranding', () => {
       expect.objectContaining({ show_header: true }),
     )
     expect(loadConfig).toHaveBeenCalled()
+  })
+
+  it('saves the desktop-client toggle', async () => {
+    const w = makeWrapper()
+    await flushPromises()
+    const checks = w.findAll('.surfaces input[type="checkbox"]')
+    // Order: header, login, public, email, client -> client is the 5th.
+    await checks[4].setValue(true)
+    await w.findAll('button').find((b) => b.text() === 'Save')!.trigger('click')
+    await flushPromises()
+    expect(updateBrandingSettings).toHaveBeenCalledWith(
+      expect.objectContaining({ show_client: true }),
+    )
   })
 
   it('uploads a logo then offers delete', async () => {

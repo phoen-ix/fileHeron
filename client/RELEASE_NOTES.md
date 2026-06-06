@@ -1,3 +1,22 @@
+# Desktop client 0.12.0
+
+Your organisation's logo, right in the app.
+
+## Branding logo
+
+If your administrator has uploaded a logo and enabled it for the desktop client,
+it now appears in the top-left of the main window after you sign in. Nothing to
+configure on your side - the app checks with your server after login and shows
+the logo if one is available, or stays blank if not.
+
+- The logo is fetched from your server (the one you signed in to) and shown at a
+  tidy header size; the server sends a ready-to-display image, so the app stays
+  small (no extra image libraries bundled).
+- Admins control this from *Settings -> Branding & legal -> Show the logo on ->
+  Desktop client* on the web app.
+
+---
+
 # Desktop client 0.11.0
 
 Pause and resume downloads - and pick up where you left off, even after a

@@ -22,6 +22,7 @@ class BrandingSettingsResponse(APIBaseModel):
     show_login: bool
     show_public: bool
     show_email: bool
+    show_client: bool
     link_url: str | None = None
 
 
@@ -34,6 +35,7 @@ class UpdateBrandingSettingsRequest(APIBaseModel):
     show_login: bool | None = None
     show_public: bool | None = None
     show_email: bool | None = None
+    show_client: bool | None = None
     link_url: str | None = None
 
     @field_validator("link_url")

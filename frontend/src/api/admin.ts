@@ -620,6 +620,7 @@ export interface BrandingSettingsResponse {
   show_login: boolean
   show_public: boolean
   show_email: boolean
+  show_client: boolean
   link_url: string | null
 }
 
@@ -628,6 +629,7 @@ export interface UpdateBrandingSettingsRequest {
   show_login?: boolean
   show_public?: boolean
   show_email?: boolean
+  show_client?: boolean
   link_url?: string | null
 }
 

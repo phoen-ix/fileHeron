@@ -62,6 +62,30 @@ def get_branding_logo(db: Session = Depends(get_db)):
     )
 
 
+@router.get("/api/branding/logo.png")
+def get_branding_logo_png(db: Session = Depends(get_db)):
+    """Header-sized PNG rendition for the desktop client. Gated by the
+    ``show_client`` toggle so the client only needs a 200/404 check - returns
+    404 when the client surface is off or no logo (PNG) is stored."""
+    if not settings_svc.get_bool(db, settings_svc.Keys.BRANDING_SHOW_CLIENT, default=False):
+        raise AppError(404, "LOGO_NOT_FOUND", "No client logo configured.")
+    locator = settings_svc.get(db, settings_svc.Keys.BRANDING_LOGO_PNG_LOCATOR)
+    if not locator:
+        raise AppError(404, "LOGO_NOT_FOUND", "No client logo configured.")
+    backend = get_storage_backend()
+    if not backend.exists(locator):
+        raise AppError(404, "LOGO_NOT_FOUND", "No client logo configured.")
+    return serve_response(
+        backend,
+        locator=locator,
+        filename="logo.png",
+        mime_type="image/png",
+        ttl_sec=_LOGO_CACHE_SEC,
+        disposition="inline",
+        extra_headers={"Cache-Control": f"public, max-age={_LOGO_CACHE_SEC}"},
+    )
+
+
 @router.get("/api/legal/{kind}", response_model=LegalContentResponse)
 def get_legal(kind: str, db: Session = Depends(get_db)) -> LegalContentResponse:
     keys = _LEGAL_KINDS.get(kind)

@@ -170,10 +170,13 @@ White-label the instance and publish the legally-required footer pages, no redep
 
 - **Logo** - upload a PNG/JPEG/WebP (≤ 2 MB; validated by magic bytes, not the
   declared type). Choose where it appears - **app header, login page, public-link
-  pages, and emails** - each toggled independently; it shows **alongside** the app
-  name. An optional **link** makes the logo open a URL of your choice in a new tab.
-  Served at `/api/branding/logo` (cached), so it's reachable anonymously and embeds
-  in email by absolute URL.
+  pages, emails, and the desktop client** - each toggled independently; it shows
+  **alongside** the app name. An optional **link** makes the logo open a URL of your
+  choice in a new tab. Served at `/api/branding/logo` (cached), so it's reachable
+  anonymously and embeds in email by absolute URL. For the **desktop client** the
+  server also keeps a small PNG rendition (served at `/api/branding/logo.png`, gated
+  by the desktop-client toggle); the client downloads it after sign-in and shows it
+  in the window header, or stays blank if none is set.
 - **Imprint + Privacy policy** - two independently enable-able pages, each edited
   **per language (EN/DE)** in the same Milkdown editor used for email templates
   (Markdown in, server-sanitised HTML out via nh3). When enabled, a footer link

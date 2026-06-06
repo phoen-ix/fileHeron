@@ -113,6 +113,7 @@ async function saveBranding() {
       show_login: b.show_login,
       show_public: b.show_public,
       show_email: b.show_email,
+      show_client: b.show_client,
       link_url: b.link_url ?? '',
     })
     branding.value = data
@@ -194,6 +195,7 @@ onMounted(load)
           <label class="check"><input v-model="branding!.show_login" type="checkbox" /><span>{{ t('admin_branding.surfaces.login') }}</span></label>
           <label class="check"><input v-model="branding!.show_public" type="checkbox" /><span>{{ t('admin_branding.surfaces.public') }}</span></label>
           <label class="check"><input v-model="branding!.show_email" type="checkbox" /><span>{{ t('admin_branding.surfaces.email') }}</span></label>
+          <label class="check"><input v-model="branding!.show_client" type="checkbox" /><span>{{ t('admin_branding.surfaces.client') }}</span></label>
         </fieldset>
 
         <label class="fh-field">

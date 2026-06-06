@@ -54,6 +54,10 @@ class MainWindow:
         self._on_signed_out = on_signed_out
         self._settings_overlay: Optional[SettingsOverlay] = None
         self._toast: Optional[Toast] = None
+        # Branding logo (admin-optional). Populated post-login by
+        # _load_branding_logo; refs held to survive Tk image GC.
+        self._logo_label: Optional[ctk.CTkLabel] = None
+        self._logo_image: Optional[tk.PhotoImage] = None
         root.title(
             t("app.title_template",
               name=me.display_name, role=me.role, version=self._version)
@@ -179,6 +183,39 @@ class MainWindow:
         # window on Windows; poll for 3s and force it back to normal.
         reassert_visible(self._app_root, 60)
         self.inbox.refresh()
+        self._load_branding_logo()
+
+    def _load_branding_logo(self) -> None:
+        """Fetch the admin branding logo (if any) in the background and place it
+        at the left of the top bar. Best-effort - 404/error just leaves it
+        blank. The server returns a PNG sized for the header, so the client
+        needs no image library or resizing (Tk PhotoImage renders PNG)."""
+        from ..api.branding import branding_logo_png
+        from ._async import run_in_background
+
+        api = self._api
+
+        def _fetch():
+            return branding_logo_png(api)
+
+        run_in_background(self._app_root, _fetch, on_done=self._apply_branding_logo)
+
+    def _apply_branding_logo(self, png_bytes) -> None:
+        if not png_bytes:
+            return
+        import base64
+        try:
+            img = tk.PhotoImage(data=base64.b64encode(png_bytes).decode("ascii"))
+        except Exception:
+            return
+        # _top_bar may be gone if the user signed out during the fetch.
+        try:
+            self._logo_image = img  # keep a ref so Tk doesn't GC it
+            self._logo_label = ctk.CTkLabel(self._top_bar, image=img, text="")
+            self._logo_label.pack(side="left", padx=(2, 8))
+        except Exception:
+            self._logo_image = None
+            self._logo_label = None
 
     def teardown(self) -> None:
         """Destroy the main UI (top bar + tabview) on sign-out / session
@@ -200,6 +237,10 @@ class MainWindow:
             self._top_bar.destroy()
         except Exception:
             pass
+        # The logo label is a child of _top_bar (destroyed above); drop the
+        # image ref so Tk can GC it.
+        self._logo_label = None
+        self._logo_image = None
         try:
             self.tabs.destroy()
         except Exception:

@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, Request, status
 from sqlalchemy.orm import Session
 
-from ..dependencies import get_actor, get_current_user, get_db
+from ..dependencies import get_actor, get_current_admin, get_current_user, get_db
 from ..middleware.errors import AppError
 from ..models.api_token import ApiToken
 from ..models.user import User, UserRole
@@ -16,6 +16,8 @@ from ..schemas.account import (
     InviteRequest,
     MeResponse,
     RequestEmailChangeRequest,
+    UpdateAdminNavModeRequest,
+    UpdateAdminNavOpenRequest,
     UpdateDefaultLandingPageRequest,
     UpdateDisplayNameRequest,
     UpdateLocaleRequest,
@@ -151,6 +153,70 @@ def update_default_landing_page(
             )
 
     user.default_landing_page = name
+    db.commit()
+    db.refresh(user)
+    return _me_response(db, user)
+
+
+@router.patch("/admin-nav-mode", response_model=MeResponse)
+def update_admin_nav_mode(
+    payload: UpdateAdminNavModeRequest,
+    user: User = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+) -> MeResponse:
+    """Save the admin's preferred sidebar collapse mode. `null` clears the
+    preference (system default = accordion takes over). Changing the mode
+    resets `admin_nav_open_categories` to NULL so the new mode's default
+    open-set applies on the next render."""
+    from ..models.user import AdminNavCollapseMode
+    from ..services import account_prefs
+
+    mode = payload.mode
+    if mode is not None and mode not in account_prefs.ADMIN_NAV_MODES:
+        raise AppError(
+            400,
+            "INVALID_ADMIN_NAV_MODE",
+            "Unknown admin sidebar mode.",
+            details={"value": mode},
+        )
+
+    user.admin_nav_collapse_mode = (
+        AdminNavCollapseMode(mode) if mode is not None else None
+    )
+    # Mode change invalidates the persisted open-set; reset to NULL so the
+    # new mode's default applies.
+    user.admin_nav_open_categories = None
+    db.commit()
+    db.refresh(user)
+    return _me_response(db, user)
+
+
+@router.patch("/admin-nav-open", response_model=MeResponse)
+def update_admin_nav_open(
+    payload: UpdateAdminNavOpenRequest,
+    user: User = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+) -> MeResponse:
+    """Save the set of currently-open sidebar category keys, synced across
+    devices. An empty list is a valid explicit value (all collapsed) and is
+    stored as `[]` (distinct from NULL = never set)."""
+    from ..services import account_prefs
+
+    keys = set(payload.open)
+    unknown = sorted(keys - account_prefs.ADMIN_NAV_CATEGORIES)
+    if unknown:
+        raise AppError(
+            400,
+            "INVALID_ADMIN_NAV_CATEGORY",
+            "Unknown sidebar category key.",
+            details={"invalid": unknown},
+        )
+
+    # De-dupe + normalize to a deterministic order so the stored JSON is
+    # comparable across writes.
+    user.admin_nav_open_categories = [
+        k for k in account_prefs.ADMIN_NAV_CATEGORIES_ORDER if k in keys
+    ]
     db.commit()
     db.refresh(user)
     return _me_response(db, user)

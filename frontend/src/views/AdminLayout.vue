@@ -3,36 +3,48 @@
     <aside class="admin-sidebar">
       <span class="sidebar-eyebrow">{{ t('admin.eyebrow') }}</span>
       <nav class="sidebar-nav" :aria-label="t('admin.nav_label')">
-        <RouterLink :to="{ name: 'admin-users' }" class="nav-link">
-          {{ t('admin.nav.users') }}
-        </RouterLink>
-        <RouterLink :to="{ name: 'admin-groups' }" class="nav-link">
-          {{ t('admin.nav.groups') }}
-        </RouterLink>
-        <RouterLink :to="{ name: 'admin-audit' }" class="nav-link">
-          {{ t('admin.nav.audit') }}
-        </RouterLink>
-        <RouterLink :to="{ name: 'admin-mail-log' }" class="nav-link">
-          {{ t('admin.nav.mail_log') }}
-        </RouterLink>
-        <RouterLink :to="{ name: 'admin-file-history' }" class="nav-link">
-          {{ t('admin.nav.file_history') }}
-        </RouterLink>
-        <RouterLink :to="{ name: 'admin-sessions' }" class="nav-link">
-          {{ t('admin.nav.sessions') }}
-        </RouterLink>
-        <RouterLink :to="{ name: 'admin-quarantine' }" class="nav-link">
-          {{ t('admin.nav.quarantine') }}
-        </RouterLink>
-        <RouterLink :to="{ name: 'admin-api-tokens' }" class="nav-link">
-          {{ t('admin.nav.api_tokens') }}
-        </RouterLink>
-        <RouterLink :to="{ name: 'admin-settings' }" class="nav-link">
-          {{ t('admin.nav.settings') }}
-        </RouterLink>
-        <RouterLink :to="{ name: 'admin-system' }" class="nav-link">
-          {{ t('admin.nav.system') }}
-        </RouterLink>
+        <div v-for="cat in ADMIN_NAV" :key="cat.key" class="nav-cat">
+          <button
+            type="button"
+            class="nav-cat-header"
+            :aria-expanded="isOpen(cat.key)"
+            :aria-controls="`nav-cat-${cat.key}`"
+            @click="toggle(cat.key)"
+          >
+            <span>{{ t(cat.labelKey) }}</span>
+            <svg
+              class="nav-chevron"
+              :class="{ open: isOpen(cat.key) }"
+              viewBox="0 0 16 16"
+              width="12"
+              height="12"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.6"
+              aria-hidden="true"
+            >
+              <path d="M4 6l4 4 4-4" />
+            </svg>
+          </button>
+          <div
+            :id="`nav-cat-${cat.key}`"
+            class="nav-cat-panel"
+            :data-open="isOpen(cat.key)"
+          >
+            <div class="nav-cat-panel-inner">
+              <RouterLink
+                v-for="item in cat.items"
+                :key="item.routeName"
+                :to="{ name: item.routeName }"
+                class="nav-link"
+                :class="{ 'is-active': isItemActive(item, route.name) }"
+                :aria-current="isItemActive(item, route.name) ? 'page' : undefined"
+              >
+                {{ t(item.labelKey) }}
+              </RouterLink>
+            </div>
+          </div>
+        </div>
       </nav>
     </aside>
     <div class="admin-content">
@@ -43,8 +55,14 @@
 
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
+import { useRoute } from 'vue-router'
+
+import { useAdminNavCollapse } from '@/composables/useAdminNavCollapse'
+import { ADMIN_NAV, isItemActive } from '@/config/adminNav'
 
 const { t } = useI18n()
+const route = useRoute()
+const { isOpen, toggle } = useAdminNavCollapse()
 </script>
 
 <style scoped>
@@ -76,6 +94,66 @@ const { t } = useI18n()
 .sidebar-nav {
   display: flex;
   flex-direction: column;
+  gap: var(--fh-space-1);
+}
+
+.nav-cat {
+  display: flex;
+  flex-direction: column;
+}
+
+.nav-cat-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  font-family: var(--fh-font-mono);
+  font-size: var(--fh-text-mono-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--fh-subtle);
+  padding: var(--fh-space-2) var(--fh-space-3);
+  transition: color var(--fh-duration-fast) var(--fh-easing);
+}
+
+.nav-cat-header:hover {
+  color: var(--fh-ink);
+}
+
+.nav-cat-header:focus-visible {
+  outline: 2px solid var(--fh-accent);
+  outline-offset: 2px;
+}
+
+.nav-chevron {
+  flex: none;
+  transition: transform var(--fh-duration-fast) var(--fh-easing);
+}
+
+.nav-chevron.open {
+  transform: rotate(180deg);
+}
+
+/* Animate height 0→auto via grid-template-rows interpolation — no JS
+ * measuring. The inner wrapper must clip + allow 0 min-height. */
+.nav-cat-panel {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--fh-duration) var(--fh-easing);
+}
+
+.nav-cat-panel[data-open='true'] {
+  grid-template-rows: 1fr;
+}
+
+.nav-cat-panel-inner {
+  overflow: hidden;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   gap: 2px;
 }
 
@@ -85,6 +163,7 @@ const { t } = useI18n()
   color: var(--fh-ink-soft);
   text-decoration: none;
   padding: var(--fh-space-2) var(--fh-space-3);
+  padding-left: var(--fh-space-4);
   border-left: 2px solid transparent;
   transition:
     color var(--fh-duration-fast) var(--fh-easing),
@@ -97,7 +176,7 @@ const { t } = useI18n()
   background: var(--fh-paper-raised);
 }
 
-.nav-link.router-link-active {
+.nav-link.is-active {
   color: var(--fh-ink);
   border-left-color: var(--fh-accent);
   background: var(--fh-paper-raised);
@@ -105,6 +184,13 @@ const { t } = useI18n()
 
 .admin-content {
   padding: var(--fh-space-4) 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nav-cat-panel,
+  .nav-chevron {
+    transition: none;
+  }
 }
 
 @media (max-width: 720px) {
@@ -115,19 +201,6 @@ const { t } = useI18n()
     border-right: none;
     border-bottom: 1px solid var(--fh-hairline);
     padding: var(--fh-space-3) 0;
-  }
-  .sidebar-nav {
-    flex-direction: row;
-    flex-wrap: wrap;
-    gap: var(--fh-space-2);
-  }
-  .nav-link {
-    border-left: none;
-    border-bottom: 2px solid transparent;
-  }
-  .nav-link.router-link-active {
-    border-left: none;
-    border-bottom-color: var(--fh-accent);
   }
 }
 </style>

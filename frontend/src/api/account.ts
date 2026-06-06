@@ -1,7 +1,13 @@
 import type { AxiosRequestConfig } from 'axios'
 
 import api from './client'
-import type { Locale, MeResponse, SessionListResponse, UserRole } from '@/types/api'
+import type {
+  AdminNavCollapseMode,
+  Locale,
+  MeResponse,
+  SessionListResponse,
+  UserRole,
+} from '@/types/api'
 
 export interface InviteRequest {
   email: string
@@ -32,6 +38,18 @@ export function updateDefaultLandingPage(default_landing_page: string | null) {
   return api.patch<MeResponse>('/account/default-landing-page', {
     default_landing_page,
   })
+}
+
+/** Admin-only: set the sidebar collapse mode. `null` clears to the system
+ *  default (accordion). The backend resets the open-set on a mode change. */
+export function updateAdminNavMode(mode: AdminNavCollapseMode | null) {
+  return api.patch<MeResponse>('/account/admin-nav-mode', { mode })
+}
+
+/** Admin-only: persist the set of open sidebar category keys (synced across
+ *  devices). An empty array is a valid "all collapsed" value. */
+export function updateAdminNavOpenCategories(open: string[]) {
+  return api.patch<MeResponse>('/account/admin-nav-open', { open })
 }
 
 export function changePassword(payload: { current_password: string; new_password: string }) {

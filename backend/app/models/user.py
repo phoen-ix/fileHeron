@@ -14,7 +14,7 @@ import enum
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Integer, String
+from sqlalchemy import JSON, BigInteger, Boolean, DateTime, ForeignKey, Integer, String
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -37,6 +37,14 @@ class UserRole(str, enum.Enum):
 class Locale(str, enum.Enum):
     de = "de"
     en = "en"
+
+
+class AdminNavCollapseMode(str, enum.Enum):
+    """How the admin sidebar's collapsible categories behave. NULL on the
+    column means "system default" (accordion)."""
+    expanded = "expanded"
+    accordion = "accordion"
+    manual = "manual"
 
 
 
@@ -93,6 +101,22 @@ class User(Base):
     # in the PATCH endpoint.
     default_landing_page: Mapped[str | None] = mapped_column(
         String(40), nullable=True
+    )
+
+    # Per-admin collapsible-sidebar preference. NULL = system default
+    # (accordion). Validated against `services/account_prefs.ADMIN_NAV_MODES`
+    # in the PATCH endpoint. Only meaningful for admins (only they render the
+    # admin sidebar); harmless NULL for everyone else.
+    admin_nav_collapse_mode: Mapped[AdminNavCollapseMode | None] = mapped_column(
+        SAEnum(AdminNavCollapseMode, native_enum=False, length=20), nullable=True
+    )
+    # Which sidebar category keys are currently open, synced across devices.
+    # NULL = never set (client uses the mode's default). [] = explicit "all
+    # collapsed" (distinct from NULL). Mirrors the JSON precedent on
+    # `invite_tokens.initial_group_ids`. Validated against
+    # `services/account_prefs.ADMIN_NAV_CATEGORIES` in the PATCH endpoint.
+    admin_nav_open_categories: Mapped[list[str] | None] = mapped_column(
+        JSON, nullable=True
     )
 
     # The inviter. NULL for the bootstrapped admin.

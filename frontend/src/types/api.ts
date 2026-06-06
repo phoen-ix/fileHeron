@@ -4,6 +4,8 @@
 
 export type Locale = 'en' | 'de'
 export type UserRole = 'admin' | 'employee' | 'client'
+/** v1.15.0: how the admin sidebar's collapsible categories behave. */
+export type AdminNavCollapseMode = 'expanded' | 'accordion' | 'manual'
 
 export interface MeResponse {
   id: number
@@ -40,6 +42,12 @@ export interface MeResponse {
    * (`email_change.self_service`). The Account page hides the
    * "Change email" block when false. */
   can_change_own_email: boolean
+  /** v1.15.0: per-admin collapsible-sidebar mode. null = system default
+   * (accordion). Only meaningful for admins. */
+  admin_nav_collapse_mode: AdminNavCollapseMode | null
+  /** v1.15.0: open sidebar category keys, synced across devices. null =
+   * never set (client uses the mode's default); [] = all collapsed. */
+  admin_nav_open_categories: string[] | null
 }
 
 export interface ShareDefaultsResponse {

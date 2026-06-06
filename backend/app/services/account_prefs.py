@@ -12,3 +12,19 @@ from __future__ import annotations
 ALLOWED_LANDING_ROUTES = frozenset(
     {"home", "outbox", "inbox", "share-create", "account"}
 )
+
+# Admin sidebar collapse behaviour for `users.admin_nav_collapse_mode`.
+# NULL on the column means "system default" (accordion); these are the
+# explicit choices. Single source of truth — the PATCH endpoint validates
+# against this set.
+ADMIN_NAV_MODES = frozenset({"expanded", "accordion", "manual"})
+
+# Valid sidebar category keys for `users.admin_nav_open_categories`. The
+# PATCH endpoint rejects any key not in this set. An empty set is a valid
+# explicit value (all categories collapsed). Keep in sync with the frontend
+# nav config (`frontend/src/config/adminNav.ts`).
+ADMIN_NAV_CATEGORIES = frozenset({"access", "sharing", "messaging", "system"})
+
+# Canonical display order for the sidebar categories — used to normalize the
+# stored open-set so writes are deterministic (frozensets are unordered).
+ADMIN_NAV_CATEGORIES_ORDER = ("access", "sharing", "messaging", "system")

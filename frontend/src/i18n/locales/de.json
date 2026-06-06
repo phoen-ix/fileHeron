@@ -191,8 +191,25 @@
       "sessions": "Sitzungen",
       "quarantine": "Quarantäne",
       "api_tokens": "API-Tokens",
-      "settings": "Einstellungen",
+      "system": "System",
+      "save_failed": "Seitenleisten-Status konnte nicht gespeichert werden."
+    },
+    "nav_cat": {
+      "access": "Zugriff",
+      "sharing": "Freigabe",
+      "messaging": "Nachrichten",
       "system": "System"
+    },
+    "nav_item": {
+      "general": "Allgemein",
+      "sso": "SSO / OIDC",
+      "twofa": "2FA-Pflicht",
+      "api_token_policy": "Token-Richtlinie",
+      "public_links": "Öffentliche Links",
+      "email": "E-Mail / SMTP",
+      "quarantine_alerts": "Quarantäne-Alarme",
+      "email_change": "E-Mail-Änderung",
+      "advanced": "Erweitert"
     }
   },
   "admin_system": {
@@ -1010,6 +1027,18 @@
       "account": "Konto",
       "saved_toast": "Standard-Startseite gespeichert.",
       "save_failed": "Standard-Startseite konnte nicht gespeichert werden."
+    },
+    "admin_nav": {
+      "title": "Admin-Seitenleiste",
+      "label": "Einklapp-Verhalten",
+      "help": "Wie die Kategorie-Gruppen der Admin-Seitenleiste einklappen. „Akkordeon\" hält jeweils eine Gruppe offen; „Manuell\" lässt mehrere unabhängig offen; „Immer ausgeklappt\" öffnet alle.",
+      "saved_toast": "Einstellung der Admin-Seitenleiste gespeichert.",
+      "save_failed": "Einstellung der Admin-Seitenleiste konnte nicht gespeichert werden.",
+      "mode": {
+        "accordion": "Akkordeon",
+        "manual": "Manuell",
+        "expanded": "Immer ausgeklappt"
+      }
     },
     "change_password_help": "Nach dem Ändern musst du dich auf jedem Gerät neu anmelden.",
     "change_password_submit": "Passwort ändern",

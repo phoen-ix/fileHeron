@@ -50,6 +50,14 @@ class MeResponse(APIBaseModel):
     # hides the "Change email" block on the Account page. Admin-initiated
     # email change is unaffected.
     can_change_own_email: bool = False
+    # Per-admin collapsible-sidebar mode. NULL = system default (accordion).
+    # Validated against `services/account_prefs.ADMIN_NAV_MODES` in the PATCH
+    # endpoint. Only meaningful for admins; harmless null for everyone else.
+    admin_nav_collapse_mode: str | None = None
+    # Set of currently-open sidebar category keys, synced across devices.
+    # NULL = never set (client uses the mode's default). [] = all collapsed
+    # (explicit, distinct from NULL).
+    admin_nav_open_categories: list[str] | None = None
 
 
 class ChangePasswordRequest(APIBaseModel):
@@ -83,6 +91,28 @@ class UpdateDefaultLandingPageRequest(APIBaseModel):
     has disabled the home page.
     """
     default_landing_page: str | None = None
+
+
+class UpdateAdminNavModeRequest(APIBaseModel):
+    """Body for PATCH /api/account/admin-nav-mode.
+
+    `null` clears the preference (system default = accordion). Otherwise must
+    be one of `services/account_prefs.ADMIN_NAV_MODES`; the route handler
+    validates and returns 400 INVALID_ADMIN_NAV_MODE on a bad value (rather
+    than a Pydantic 422, mirroring how `default-landing-page` validates).
+    """
+    mode: str | None = None
+
+
+class UpdateAdminNavOpenRequest(APIBaseModel):
+    """Body for PATCH /api/account/admin-nav-open.
+
+    `open` is the set of open category keys. `[]` is a valid explicit value
+    (all collapsed). Each key must be in
+    `services/account_prefs.ADMIN_NAV_CATEGORIES`; the route returns 400
+    INVALID_ADMIN_NAV_CATEGORY otherwise.
+    """
+    open: list[str] = Field(default_factory=list)
 
 
 class InviteRequest(APIBaseModel):

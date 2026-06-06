@@ -37,6 +37,8 @@ const fakeMe = {
   created_at: '2026-05-02T00:00:00',
   last_login_at: null,
   quota_bytes: null,
+  admin_nav_collapse_mode: null,
+  admin_nav_open_categories: null,
 }
 
 beforeEach(() => {

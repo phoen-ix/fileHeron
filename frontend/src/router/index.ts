@@ -192,10 +192,12 @@ const router = createRouter({
           meta: { density: 'operator', title: 'API tokens', requiresRole: 'admin' },
         },
         {
+          // The dedicated Settings hub page was flattened into the sidebar —
+          // every sub-page is now a first-class nav item. Keep the name so any
+          // `{ name: 'admin-settings' }` link still resolves.
           path: 'settings',
           name: 'admin-settings',
-          component: () => import('@/views/AdminSettings.vue'),
-          meta: { density: 'operator', title: 'Settings', requiresRole: 'admin' },
+          redirect: { name: 'admin-settings-general' },
         },
         {
           path: 'settings/sso',

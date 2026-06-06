@@ -18,7 +18,12 @@ import { useScrollSpy } from '@/composables/useScrollSpy'
 import { setLocale } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
-import type { Locale, SessionRecord, TotpStatusResponse } from '@/types/api'
+import type {
+  AdminNavCollapseMode,
+  Locale,
+  SessionRecord,
+  TotpStatusResponse,
+} from '@/types/api'
 
 const auth = useAuthStore()
 const ui = useUiStore()
@@ -30,6 +35,8 @@ const displayName = ref('')
 const locale = ref<Locale>('en')
 const landingPage = ref<string | null>(null)
 const nameSaving = ref(false)
+/* --- admin sidebar collapse mode (admins only) ------------------------- */
+const navMode = ref<AdminNavCollapseMode>('accordion')
 
 const nameDirty = computed(() => {
   const trimmed = displayName.value.trim()
@@ -105,9 +112,24 @@ onMounted(async () => {
     displayName.value = auth.user.display_name
     locale.value = auth.user.locale
     landingPage.value = auth.user.default_landing_page
+    navMode.value = auth.user.admin_nav_collapse_mode ?? 'accordion'
   }
   await Promise.all([loadTotp(), loadSessions()])
 })
+
+async function changeNavMode(m: AdminNavCollapseMode) {
+  if (navMode.value === m) return
+  const previous = navMode.value
+  navMode.value = m
+  try {
+    await accountApi.updateAdminNavMode(m)
+    await auth.refreshMe()
+    ui.pushToast(t('account.admin_nav.saved_toast'), 'success')
+  } catch (e) {
+    navMode.value = previous
+    ui.pushToast(t('account.admin_nav.save_failed') + ' ' + describe(e), 'error')
+  }
+}
 
 async function changeLandingPage(value: string | null) {
   if (value === landingPage.value) return
@@ -210,6 +232,9 @@ async function changeLocale(l: Locale) {
 // re-binds the observer.
 const sections = computed<QuickNavSection[]>(() => [
   { id: 'profile', labelKey: 'account.section_profile' },
+  ...(auth.user?.role === 'admin'
+    ? [{ id: 'admin-nav', labelKey: 'account.admin_nav.title' } as QuickNavSection]
+    : []),
   { id: 'password', labelKey: 'account.section_password' },
   { id: '2fa', labelKey: 'account.section_2fa' },
   { id: 'sessions', labelKey: 'account.section_sessions' },
@@ -325,6 +350,45 @@ function jumpTo(id: string) {
           <option value="account">{{ $t('account.landing.account') }}</option>
         </select>
         <span class="fh-field-help">{{ $t('account.landing.help') }}</span>
+      </div>
+    </section>
+
+    <!-- Admin sidebar collapse mode (admins only) -->
+    <section
+      v-if="auth.user?.role === 'admin'"
+      id="admin-nav"
+      class="account-section"
+    >
+      <h2 class="account-h2">{{ $t('account.admin_nav.title') }}</h2>
+      <div class="fh-field">
+        <label class="fh-field-label">{{ $t('account.admin_nav.label') }}</label>
+        <div class="locale-pick">
+          <button
+            type="button"
+            class="locale-opt"
+            :class="{ active: navMode === 'accordion' }"
+            @click="changeNavMode('accordion')"
+          >
+            {{ $t('account.admin_nav.mode.accordion') }}
+          </button>
+          <button
+            type="button"
+            class="locale-opt"
+            :class="{ active: navMode === 'manual' }"
+            @click="changeNavMode('manual')"
+          >
+            {{ $t('account.admin_nav.mode.manual') }}
+          </button>
+          <button
+            type="button"
+            class="locale-opt"
+            :class="{ active: navMode === 'expanded' }"
+            @click="changeNavMode('expanded')"
+          >
+            {{ $t('account.admin_nav.mode.expanded') }}
+          </button>
+        </div>
+        <span class="fh-field-help">{{ $t('account.admin_nav.help') }}</span>
       </div>
     </section>
 

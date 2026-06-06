@@ -191,8 +191,25 @@
       "sessions": "Sessions",
       "quarantine": "Quarantine",
       "api_tokens": "API tokens",
-      "settings": "Settings",
+      "system": "System",
+      "save_failed": "Couldn't save sidebar state."
+    },
+    "nav_cat": {
+      "access": "Access",
+      "sharing": "Sharing",
+      "messaging": "Messaging",
       "system": "System"
+    },
+    "nav_item": {
+      "general": "General",
+      "sso": "SSO / OIDC",
+      "twofa": "2FA enforcement",
+      "api_token_policy": "Token policy",
+      "public_links": "Public links",
+      "email": "Email / SMTP",
+      "quarantine_alerts": "Quarantine alerts",
+      "email_change": "Email change",
+      "advanced": "Advanced"
     }
   },
   "admin_system": {
@@ -1010,6 +1027,18 @@
       "account": "Account",
       "saved_toast": "Default landing page saved.",
       "save_failed": "Couldn't save default landing page."
+    },
+    "admin_nav": {
+      "title": "Admin sidebar",
+      "label": "Collapse behaviour",
+      "help": "How the admin sidebar's category groups collapse. Accordion keeps one group open at a time; Manual lets you open several independently; Always expanded opens them all.",
+      "saved_toast": "Admin sidebar preference saved.",
+      "save_failed": "Couldn't save admin sidebar preference.",
+      "mode": {
+        "accordion": "Accordion",
+        "manual": "Manual",
+        "expanded": "Always expanded"
+      }
     },
     "change_password_help": "After changing, you'll need to sign in again on every device.",
     "change_password_submit": "Change password",

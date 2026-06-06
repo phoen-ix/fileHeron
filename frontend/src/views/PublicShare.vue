@@ -10,12 +10,15 @@ import { useRoute } from 'vue-router'
 import {
   fetchPublicShare,
   publicDownloadUrl,
+  publicPreviewUrl,
   publicZipUrl,
   unlockPublicShare,
 } from '@/api/publicLinks'
-import type { PublicShareResponse } from '@/types/api'
+import FilePreviewModal from '@/components/FilePreviewModal.vue'
+import type { PublicShareFile, PublicShareResponse } from '@/types/api'
 import { formatBytes } from '@/utils/bytes'
 import { formatExpiryInSiteTime } from '@/utils/datetime'
+import { previewKind } from '@/utils/preview'
 
 const route = useRoute()
 const { t, locale } = useI18n()
@@ -72,6 +75,38 @@ function formatExpiry(iso: string | null): string {
 
 function fileEnabled(state: string): boolean {
   return state === 'clean' || state === 'ready_unscanned'
+}
+
+// In-browser preview (gated on the global admin switch + a supported type +
+// clean state). The cookie-scoped URL is built synchronously — no token mint.
+const previewOpen = ref(false)
+const previewFile = ref<PublicShareFile | null>(null)
+const previewUrl = ref<string | null>(null)
+
+function canPreview(f: PublicShareFile): boolean {
+  return (
+    !!share.value?.preview_enabled &&
+    f.state === 'clean' &&
+    previewKind(f.mime_type) !== null
+  )
+}
+
+function openPreview(f: PublicShareFile) {
+  previewFile.value = f
+  previewUrl.value = publicPreviewUrl(token.value, f.id)
+  previewOpen.value = true
+}
+
+function closePreview() {
+  previewOpen.value = false
+  previewFile.value = null
+  previewUrl.value = null
+}
+
+function onPreviewDownload() {
+  if (previewFile.value) {
+    window.location.href = publicDownloadUrl(token.value, previewFile.value.id)
+  }
 }
 
 // Bulk-ZIP includes only `clean` files; offer it when there's ≥1 and the
@@ -176,6 +211,14 @@ onMounted(load)
               </span>
             </div>
             <div class="action">
+              <button
+                v-if="canPreview(f)"
+                type="button"
+                class="fh-btn-text"
+                @click="openPreview(f)"
+              >
+                {{ t('file_preview.open') }}
+              </button>
               <a
                 v-if="fileEnabled(f.state)"
                 :href="publicDownloadUrl(token, f.id)"
@@ -189,6 +232,14 @@ onMounted(load)
         </ul>
       </div>
     </template>
+
+    <FilePreviewModal
+      :open="previewOpen"
+      :file="previewFile"
+      :url="previewUrl"
+      @close="closePreview"
+      @download="onPreviewDownload"
+    />
   </div>
 </template>
 

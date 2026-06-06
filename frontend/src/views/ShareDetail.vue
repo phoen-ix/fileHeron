@@ -3,7 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 
-import { getShareZipUrl } from '@/api/files'
+import { getDownloadUrl, getPreviewUrl, getShareZipUrl } from '@/api/files'
 import {
   expireShareNow,
   getShare,
@@ -12,6 +12,7 @@ import {
   updateShareExpiry,
 } from '@/api/shares'
 import ExpiryPicker from '@/components/ExpiryPicker.vue'
+import FilePreviewModal from '@/components/FilePreviewModal.vue'
 import FileRow from '@/components/FileRow.vue'
 import FileUploadArea from '@/components/FileUploadArea.vue'
 import PublicLinkPanel from '@/components/PublicLinkPanel.vue'
@@ -20,7 +21,7 @@ import { useSiteDateFormat } from '@/composables/useSiteDateFormat'
 import { useUpload } from '@/composables/useUpload'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
-import type { ShareResponse } from '@/types/api'
+import type { FileInShareResponse, ShareResponse } from '@/types/api'
 import { formatBytes } from '@/utils/bytes'
 import { formatExpiryInSiteTime, siteLocalIsoToUtcIso } from '@/utils/datetime'
 import { shareStatePill } from '@/utils/statePill'
@@ -253,7 +254,40 @@ function formatExpiry(iso: string | null): string {
   return formatExpiryInSiteTime(iso, locale.value, t('expiry.never_label'))
 }
 
+// In-browser preview. Mint an inline `?dt=` URL on open; preview never
+// consumes the share's download budget (separate endpoint).
+const previewOpen = ref(false)
+const previewFile = ref<FileInShareResponse | null>(null)
+const previewUrl = ref<string | null>(null)
 
+async function openPreview(file: FileInShareResponse) {
+  previewFile.value = file
+  previewUrl.value = null
+  previewOpen.value = true
+  try {
+    const { data } = await getPreviewUrl(file.id)
+    previewUrl.value = data.url
+  } catch (err) {
+    previewOpen.value = false
+    ui.pushToast(describe(err), 'error')
+  }
+}
+
+function closePreview() {
+  previewOpen.value = false
+  previewFile.value = null
+  previewUrl.value = null
+}
+
+async function onPreviewDownload() {
+  if (!previewFile.value) return
+  try {
+    const { data } = await getDownloadUrl(previewFile.value.id)
+    window.location.href = data.url
+  } catch (err) {
+    ui.pushToast(describe(err), 'error')
+  }
+}
 
 onMounted(load)
 </script>
@@ -459,6 +493,7 @@ onMounted(load)
           :file="f"
           :can-delete="isOwner && f.state !== 'infected'"
           @deleted="onFileDeleted"
+          @preview="openPreview"
         />
       </ul>
       <p v-else class="fh-field-help">{{ t('share_detail.empty') }}</p>
@@ -479,6 +514,14 @@ onMounted(load)
         </button>
       </div>
     </template>
+
+    <FilePreviewModal
+      :open="previewOpen"
+      :file="previewFile"
+      :url="previewUrl"
+      @close="closePreview"
+      @download="onPreviewDownload"
+    />
   </div>
 </template>
 

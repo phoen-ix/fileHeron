@@ -53,10 +53,17 @@ class StorageBackend(ABC):
 
     @abstractmethod
     def download_url(
-        self, *, locator: str, filename: str, mime_type: str, ttl_sec: int
+        self,
+        *,
+        locator: str,
+        filename: str,
+        mime_type: str,
+        ttl_sec: int,
+        disposition: str = "attachment",
     ) -> str | None:
         """A presigned URL to redirect the browser to (object stores); None when
-        the file is served directly via FileResponse(local_path)."""
+        the file is served directly via FileResponse(local_path). `disposition`
+        is "attachment" (download) or "inline" (preview)."""
 
     @abstractmethod
     def delete(self, locator: str) -> None:
@@ -107,7 +114,9 @@ class LocalFilesystemBackend(StorageBackend):
     def local_path(self, locator: str) -> str | None:
         return locator
 
-    def download_url(self, *, locator, filename, mime_type, ttl_sec) -> str | None:
+    def download_url(
+        self, *, locator, filename, mime_type, ttl_sec, disposition="attachment"
+    ) -> str | None:
         return None  # served via FileResponse(local_path)
 
     def delete(self, locator: str) -> None:
@@ -174,13 +183,15 @@ class S3Backend(StorageBackend):
     def local_path(self, locator: str) -> str | None:
         return None
 
-    def download_url(self, *, locator, filename, mime_type, ttl_sec) -> str | None:
+    def download_url(
+        self, *, locator, filename, mime_type, ttl_sec, disposition="attachment"
+    ) -> str | None:
         return self._s3.generate_presigned_url(
             "get_object",
             Params={
                 "Bucket": self._bucket,
                 "Key": locator,
-                "ResponseContentDisposition": f'attachment; filename="{filename}"',
+                "ResponseContentDisposition": f'{disposition}; filename="{filename}"',
                 "ResponseContentType": mime_type,
             },
             ExpiresIn=ttl_sec,
@@ -216,15 +227,32 @@ class S3Backend(StorageBackend):
 
 
 def serve_response(
-    backend: StorageBackend, *, locator: str, filename: str, mime_type: str, ttl_sec: int
+    backend: StorageBackend,
+    *,
+    locator: str,
+    filename: str,
+    mime_type: str,
+    ttl_sec: int,
+    disposition: str = "attachment",
+    extra_headers: dict[str, str] | None = None,
 ):
-    """The HTTP download response for a file. Local backend → FileResponse
-    (kernel sendfile, Range-capable); object backend → 307 redirect to a
-    presigned URL so the browser fetches/resumes bytes from the store directly."""
+    """The HTTP response for a file. Local backend → FileResponse (kernel
+    sendfile, Range-capable); object backend → 307 redirect to a presigned URL
+    so the browser fetches/resumes bytes from the store directly.
+
+    `disposition` is "attachment" (download, default — preserves every existing
+    caller) or "inline" (preview). `extra_headers` (preview hardening:
+    nosniff/CSP) ride on the local FileResponse; on the S3 redirect the bytes
+    come from the store and can't carry them, so the previewable-type allowlist
+    is the defense there (documented caveat)."""
     from fastapi.responses import FileResponse, RedirectResponse
 
     url = backend.download_url(
-        locator=locator, filename=filename, mime_type=mime_type, ttl_sec=ttl_sec
+        locator=locator,
+        filename=filename,
+        mime_type=mime_type,
+        ttl_sec=ttl_sec,
+        disposition=disposition,
     )
     if url is not None:
         return RedirectResponse(url, status_code=307)
@@ -232,7 +260,8 @@ def serve_response(
         path=backend.local_path(locator),
         media_type=mime_type,
         filename=filename,
-        content_disposition_type="attachment",
+        content_disposition_type=disposition,
+        headers=extra_headers or None,
     )
 
 

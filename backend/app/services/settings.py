@@ -72,6 +72,10 @@ class Keys:
     # the create-share form. When the sender doesn't override the field,
     # this kv decides whether `share_created` notifications fan out.
     SHARE_NOTIFY_RECIPIENTS_DEFAULT = "share.notify_recipients_default"  # boolean
+    # Global on/off for in-browser file preview (v1.23.0). Default true. When
+    # false the SPA hides Preview buttons AND the preview endpoints refuse with
+    # 403 (server-enforced, not just UI-hidden). See services/preview.py.
+    FILE_PREVIEW_ENABLED = "file_preview.enabled"  # boolean: 'true' / 'false'
     # Email-change policy (v1.13.0). All three are admin-tunable and read
     # live; see services/email_change.py.
     #  - verification_mode: how a change is confirmed —

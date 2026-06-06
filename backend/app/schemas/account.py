@@ -50,6 +50,10 @@ class MeResponse(APIBaseModel):
     # hides the "Change email" block on the Account page. Admin-initiated
     # email change is unaffected.
     can_change_own_email: bool = False
+    # Global in-browser-preview switch (kv `file_preview.enabled`, admin-set,
+    # default true). When False the SPA hides every Preview button; the preview
+    # endpoints also refuse server-side (403). Re-read on each /me hydration.
+    file_preview_enabled: bool = True
     # Per-admin collapsible-sidebar mode. NULL = system default (accordion).
     # Validated against `services/account_prefs.ADMIN_NAV_MODES` in the PATCH
     # endpoint. Only meaningful for admins; harmless null for everyone else.

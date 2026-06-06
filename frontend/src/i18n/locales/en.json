@@ -482,6 +482,14 @@
     "effect_redirect": "Anyone hitting / is redirected to their saved landing page or to /share/new.",
     "saved_toast": "Home page setting saved."
   },
+  "admin_file_preview": {
+    "title": "File preview",
+    "intro": "Let users preview supported files directly in the browser without downloading them. Applies to both the share view and public links.",
+    "toggle_label": "Enable in-browser file preview",
+    "toggle_help": "When off, the Preview buttons disappear and the preview endpoints are disabled — users can only download. Previewing never counts against a share's download limit.",
+    "types_note": "Previewable types: PDF, PNG / JPEG / GIF / WebP images, and plain text. Everything else — including SVG and HTML, for safety — stays download-only.",
+    "saved_toast": "File preview setting saved."
+  },
   "admin_share_defaults": {
     "title": "Share defaults",
     "intro": "Controls the initial state of the \"Notify recipient(s)\" checkbox on the new-share form. Senders can still flip it per share.",
@@ -1206,6 +1214,14 @@
     "in_past": "already past — pick a future time",
     "never_label": "Never",
     "never_help": "This share will not expire automatically. Revoke it manually when you're done."
+  },
+  "file_preview": {
+    "open": "Preview",
+    "close": "Close",
+    "download": "Download",
+    "not_supported": "This file can't be previewed.",
+    "error_loading": "Couldn't load the preview.",
+    "too_large": "This file is too large to preview — download it instead."
   },
   "files": {
     "state": {

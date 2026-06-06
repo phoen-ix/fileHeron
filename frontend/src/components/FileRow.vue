@@ -19,6 +19,14 @@
     </div>
     <div class="actions">
       <button
+        v-if="canPreview"
+        type="button"
+        class="fh-btn-text"
+        @click="emit('preview', file)"
+      >
+        {{ t('file_preview.open') }}
+      </button>
+      <button
         v-if="canDownload(file.state)"
         type="button"
         class="fh-btn-text"
@@ -41,13 +49,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { deleteFile, getDownloadUrl } from '@/api/files'
 import { useApiError } from '@/composables/useApiError'
+import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
 import type { FileInShareResponse, FileState } from '@/types/api'
+import { previewKind } from '@/utils/preview'
 
 const props = defineProps<{
   file: FileInShareResponse
@@ -56,13 +66,24 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   deleted: [fileId: string]
+  preview: [file: FileInShareResponse]
 }>()
 
 const { t } = useI18n()
 const { describe } = useApiError()
 const ui = useUiStore()
+const auth = useAuthStore()
 const deleting = ref(false)
 const downloading = ref(false)
+
+// Preview only clean (AV-passed) files of a supported type, and only while the
+// admin global switch is on. previewKind mirrors the backend allowlist.
+const canPreview = computed(
+  () =>
+    auth.user?.file_preview_enabled !== false &&
+    props.file.state === 'clean' &&
+    previewKind(props.file.mime_type) !== null,
+)
 
 async function onDownload() {
   downloading.value = true

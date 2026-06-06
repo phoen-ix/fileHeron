@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import FilePreviewSection from '@/components/admin/FilePreviewSection.vue'
 import HomePageSection from '@/components/admin/HomePageSection.vue'
 import MotdSection from '@/components/admin/MotdSection.vue'
 import ShareDefaultsSection from '@/components/admin/ShareDefaultsSection.vue'
@@ -22,6 +23,7 @@ const sections = computed<QuickNavSection[]>(() => [
   { id: 'site-url', labelKey: 'admin_site_url.title' },
   { id: 'site-timezone', labelKey: 'admin_site_timezone.title' },
   { id: 'home-page', labelKey: 'admin_home_page.title' },
+  { id: 'file-preview', labelKey: 'admin_file_preview.title' },
   { id: 'share-defaults', labelKey: 'admin_share_defaults.title' },
   { id: 'motd', labelKey: 'admin_motd.title' },
   { id: 'updates', labelKey: 'admin_updates.title' },
@@ -66,6 +68,11 @@ function jumpTo(id: string) {
       <section id="home-page" class="settings-section">
         <h2 class="settings-h2">{{ t('admin_home_page.title') }}</h2>
         <HomePageSection />
+      </section>
+
+      <section id="file-preview" class="settings-section">
+        <h2 class="settings-h2">{{ t('admin_file_preview.title') }}</h2>
+        <FilePreviewSection />
       </section>
 
       <section id="share-defaults" class="settings-section">

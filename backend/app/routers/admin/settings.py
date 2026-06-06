@@ -31,6 +31,10 @@ from ...schemas.email_settings import (
     TestEmailResponse,
     UpdateEmailSettingsRequest,
 )
+from ...schemas.file_preview_settings import (
+    FilePreviewSettingsResponse,
+    UpdateFilePreviewSettingsRequest,
+)
 from ...schemas.home_page_settings import (
     HomePageSettingsResponse,
     UpdateHomePageSettingsRequest,
@@ -484,6 +488,48 @@ def update_home_page_settings(
     )
     db.commit()
     return HomePageSettingsResponse(enabled=payload.enabled)
+
+
+# ---- File preview (in-browser) ---------------------------------------------
+
+
+@router.get("/settings/file-preview", response_model=FilePreviewSettingsResponse)
+def get_file_preview_settings(
+    db: Session = Depends(get_db),
+    _admin: User = Depends(get_current_admin),
+) -> FilePreviewSettingsResponse:
+    return FilePreviewSettingsResponse(
+        enabled=settings_svc.get_bool(
+            db, settings_svc.Keys.FILE_PREVIEW_ENABLED, default=True
+        )
+    )
+
+
+@router.put("/settings/file-preview", response_model=FilePreviewSettingsResponse)
+def update_file_preview_settings(
+    payload: UpdateFilePreviewSettingsRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin),
+) -> FilePreviewSettingsResponse:
+    settings_svc.set_value(
+        db,
+        key=settings_svc.Keys.FILE_PREVIEW_ENABLED,
+        value="true" if payload.enabled else "false",
+        actor=admin,
+        request=request,
+    )
+    record_audit_event(
+        db,
+        event_type=AuditEventType.file_preview_toggled,
+        actor_user_id=admin.id,
+        target_type="settings",
+        target_id="file_preview",
+        metadata={"enabled": payload.enabled},
+        request=request,
+    )
+    db.commit()
+    return FilePreviewSettingsResponse(enabled=payload.enabled)
 
 
 # ---- Share defaults --------------------------------------------------------

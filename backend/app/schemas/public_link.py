@@ -70,6 +70,10 @@ class PublicShareResponse(APIBaseModel):
     requires_password: bool
     unlocked: bool
     downloads_remaining: int | None
+    # Global in-browser-preview switch (kv `file_preview.enabled`, admin-set,
+    # default true). Gates the Preview buttons in the anonymous /d/{token} view;
+    # the preview endpoint enforces it server-side too.
+    preview_enabled: bool = True
     files: list[PublicShareFile]
 
 

@@ -56,6 +56,14 @@ export function publicDownloadUrl(token: string, fileId: string): string {
   return `/api/public/${token}/files/${fileId}/download`
 }
 
+export function publicPreviewUrl(token: string, fileId: string): string {
+  // Inline preview source for <img>/<iframe> (or text fetch). The unlock
+  // cookie rides on the same-origin subresource request (path-scoped to
+  // /api/public/{token}); the endpoint serves it inline without consuming
+  // the link's download budget.
+  return `/api/public/${token}/files/${fileId}/preview`
+}
+
 export function publicZipUrl(token: string): string {
   // Bulk-ZIP of every downloadable file in the share. Same unlock-cookie
   // gate as the single-file anchor above.

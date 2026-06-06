@@ -27,6 +27,7 @@ import type {
   AvReloadResponse,
   AvStatusResponse,
   EraseUserResponse,
+  FilePreviewSettingsResponse,
   ForcePasswordResetResponse,
   HomePageSettingsResponse,
   PublicLinkPolicyResponse,
@@ -42,6 +43,7 @@ import type {
   TwofaPolicyResponse,
   UpdateEmailChangePolicyRequest,
   UpdateEmailSettingsRequest,
+  UpdateFilePreviewSettingsRequest,
   UpdateHomePageSettingsRequest,
   UpdatePublicLinkPolicyRequest,
   UpdateQuarantineSettingsRequest,
@@ -544,6 +546,21 @@ export function getHomePageSettings() {
 
 export function updateHomePageSettings(payload: UpdateHomePageSettingsRequest) {
   return api.put<HomePageSettingsResponse>('/admin/settings/home-page', payload)
+}
+
+// In-browser file preview enable/disable (v1.23.0)
+
+export function getFilePreviewSettings() {
+  return api.get<FilePreviewSettingsResponse>('/admin/settings/file-preview')
+}
+
+export function updateFilePreviewSettings(
+  payload: UpdateFilePreviewSettingsRequest,
+) {
+  return api.put<FilePreviewSettingsResponse>(
+    '/admin/settings/file-preview',
+    payload,
+  )
 }
 
 // Site URL (kv override of APP_URL env)

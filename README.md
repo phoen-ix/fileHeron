@@ -135,6 +135,14 @@ Downloads are streamed by the backend with kernel `sendfile()` — fast even for
 
 Whoever you sent the URL to opens `/d/{token}`. They see the share's subject + file list, no login required. If you set a password, they're prompted to unlock first (10 wrong tries within 15 minutes locks the link itself, not just their IP). Each download decrements the counter atomically; once it hits zero the link refuses further downloads.
 
+## In-browser preview
+
+Supported files get a **Preview** button — in the share view *and* the public `/d/{token}` page — that renders them inline in a lightbox instead of downloading. Previewable types: **PDF**, raster images (**PNG / JPEG / GIF / WebP**), and **plain text** (any `text/*`, shown as source). Everything else stays download-only.
+
+- **Preview ≠ download.** Previewing never consumes a share's or public link's download-count budget and isn't written to the download log. (A link whose budget is already fully spent serves neither, though.) Only virus-scanned (`clean`) files preview.
+- **Security.** Inline content is served from a strict server-side allowlist with `X-Content-Type-Options: nosniff` and a restrictive `Content-Security-Policy`. SVG is never inline-rendered (it can carry script), and anything `text/*` — including HTML — is served as `text/plain`, i.e. shown as source, never executed. On the S3 backend the bytes are served by a presigned redirect that can't carry those headers, so the type allowlist is the defense there.
+- **Global switch.** Admins can turn the whole feature off at *Settings → General → File preview* (`file_preview.enabled`); when off the Preview buttons disappear and the preview endpoints refuse server-side.
+
 ## Account page (`/account`)
 
 A single scrollable page with these sections (left-side quick-nav with scroll-spy):
@@ -251,7 +259,7 @@ Companion setting at **`/admin/settings/quarantine`** — single toggle "Notify 
 
 ## General settings
 
-`/admin/settings/general` — small grouped settings page (the SectionQuickNav skeleton other small admin views are migrating onto). Houses the home-page toggle and similar "single-knob" settings.
+`/admin/settings/general` — small grouped settings page (the SectionQuickNav skeleton other small admin views are migrating onto). Houses the home-page toggle, the in-browser **file-preview** on/off switch, share defaults, MOTD, and similar "single-knob" settings.
 
 ## Audit events you can filter on
 
@@ -262,7 +270,7 @@ Companion setting at **`/admin/settings/quarantine`** — single toggle "Notify 
 - **Shares / files:** `share_created`, `share_revoked`, `share_expired`, `share_expiry_updated`, `share_limit_updated`, `file_finalized`, `file_downloaded`, `file_deleted`, `file_expired`, `file_quarantined`, `file_quarantine_released`, `file_quarantine_purged`, `av_reload_triggered`.
 - **Public links / groups:** `public_link_created`, `public_link_revoked`, `public_link_consumed`, `group_created`, `group_updated`, `group_deleted`, `group_member_added`, `group_member_removed`.
 - **API tokens / OIDC:** `api_token_created`/`_revoked`/`_disabled`/`_reactivated`/`_admin_revoked`/`_admin_created`, `oidc_linked`, `oidc_unlinked`, `oidc_provider_created`/`_updated`/`_deleted`.
-- **Settings / policy:** `api_policy_changed`, `public_link_policy_changed`, `twofa_policy_changed`, `quarantine_policy_changed`, `share_defaults_policy_changed`, `smtp_config_changed`, `home_page_toggled`, `motd_changed`, `site_url_changed`, `site_timezone_changed`, `updates_settings_changed`, `settings_changed`.
+- **Settings / policy:** `api_policy_changed`, `public_link_policy_changed`, `twofa_policy_changed`, `quarantine_policy_changed`, `share_defaults_policy_changed`, `smtp_config_changed`, `home_page_toggled`, `file_preview_toggled`, `motd_changed`, `site_url_changed`, `site_timezone_changed`, `updates_settings_changed`, `settings_changed`.
 - **Ops / self-update:** `cron_failed`, `cron_run_triggered`, `ops_alert_dispatched`, `email_undeliverable`, `update_triggered`/`_completed`/`_failed`, `rollback_triggered`/`_completed`/`_failed`.
 
 ---
@@ -598,6 +606,7 @@ Edited under `/admin/settings/*`; stored in `app_settings`. Authoritative key li
 | **Email** `/email` | `smtp.{host,port,user,password,from_email,from_name,tls_mode}` | Live SMTP override (DB beats env). Password encrypted; never echoed. Has a "test send". |
 | **Site** `/site` | `site.url`, `site.timezone` | Public URL used in links; IANA timezone for the 24-hour timestamps shown in UI + emails. |
 | **Home page** `/home-page` | `home_page.enabled` | Toggle the welcome home page (off → brand mark non-linkable, `/` redirects forward). |
+| **File preview** `/general#file-preview` | `file_preview.enabled` | Toggle in-browser preview of PDFs/images/text (off → Preview buttons hidden, endpoints refuse). |
 | **MOTD** `/motd` | `motd.enabled`, `motd.text` | Plain-text banner on the login page. |
 | **Share defaults** `/share-defaults` | `share.notify_recipients_default` | Default of the create-share "Notify recipient(s)" checkbox. |
 | **Quarantine** `/quarantine` | `quarantine.notify_admins` | Fan out a `file_quarantined` in-app notice to all admins. |

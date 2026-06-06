@@ -42,6 +42,10 @@ export interface MeResponse {
    * (`email_change.self_service`). The Account page hides the
    * "Change email" block when false. */
   can_change_own_email: boolean
+  /** v1.23.0: global in-browser-preview switch (`file_preview.enabled`,
+   * admin-set, default true). When false the SPA hides every Preview
+   * button; the preview endpoints also refuse server-side. */
+  file_preview_enabled: boolean
   /** v1.15.0: per-admin collapsible-sidebar mode. null = system default
    * (accordion). Only meaningful for admins. */
   admin_nav_collapse_mode: AdminNavCollapseMode | null
@@ -56,6 +60,14 @@ export interface ShareDefaultsResponse {
 
 export interface UpdateShareDefaultsRequest {
   notify_recipients_default: boolean
+}
+
+export interface FilePreviewSettingsResponse {
+  enabled: boolean
+}
+
+export interface UpdateFilePreviewSettingsRequest {
+  enabled: boolean
 }
 
 export interface LoginResponse {
@@ -343,6 +355,9 @@ export interface PublicShareResponse {
   requires_password: boolean
   unlocked: boolean
   downloads_remaining: number | null
+  /** v1.23.0: global in-browser-preview switch. Gates the Preview buttons
+   * in the anonymous /d/{token} view (the endpoint enforces it too). */
+  preview_enabled: boolean
   files: PublicShareFile[]
 }
 

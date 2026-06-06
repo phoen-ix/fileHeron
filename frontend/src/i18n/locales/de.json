@@ -482,6 +482,14 @@
     "effect_redirect": "Wer / aufruft, wird auf die gespeicherte Startseite oder /share/new umgeleitet.",
     "saved_toast": "Startseiten-Einstellung gespeichert."
   },
+  "admin_file_preview": {
+    "title": "Dateivorschau",
+    "intro": "Erlaubt Benutzern, unterstützte Dateien direkt im Browser anzusehen, ohne sie herunterzuladen. Gilt sowohl für die Freigabeansicht als auch für öffentliche Links.",
+    "toggle_label": "In-Browser-Dateivorschau aktivieren",
+    "toggle_help": "Wenn deaktiviert, verschwinden die Vorschau-Schaltflächen und die Vorschau-Endpunkte sind abgeschaltet – Benutzer können nur herunterladen. Eine Vorschau zählt nie zum Download-Limit einer Freigabe.",
+    "types_note": "Vorschaufähige Typen: PDF, PNG- / JPEG- / GIF- / WebP-Bilder und reiner Text. Alles andere – einschließlich SVG und HTML, aus Sicherheitsgründen – bleibt reiner Download.",
+    "saved_toast": "Einstellung zur Dateivorschau gespeichert."
+  },
   "admin_share_defaults": {
     "title": "Freigabe-Voreinstellungen",
     "intro": "Steuert den Standardzustand der Checkbox „Empfänger benachrichtigen\" im Formular für neue Freigaben. Absender können pro Freigabe weiterhin umschalten.",
@@ -1206,6 +1214,14 @@
     "in_past": "bereits vorbei — bitte zukünftigen Zeitpunkt wählen",
     "never_label": "Nie",
     "never_help": "Diese Freigabe läuft nicht automatisch ab. Manuell widerrufen, wenn nicht mehr benötigt."
+  },
+  "file_preview": {
+    "open": "Vorschau",
+    "close": "Schließen",
+    "download": "Herunterladen",
+    "not_supported": "Diese Datei kann nicht in der Vorschau angezeigt werden.",
+    "error_loading": "Vorschau konnte nicht geladen werden.",
+    "too_large": "Diese Datei ist zu groß für die Vorschau – bitte herunterladen."
   },
   "files": {
     "state": {

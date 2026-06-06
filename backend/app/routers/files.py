@@ -44,6 +44,21 @@ def _get_file_or_404(db: Session, file_id: str) -> File:
     return file
 
 
+def _assert_file_state_servable(file: File) -> None:
+    """Same AV/state gate the download path applies — only `clean` files are
+    servable; we never hand out (or render inline) unscanned/quarantined bytes."""
+    if file.state == FileState.uploading:
+        raise AppError(409, "STILL_UPLOADING", "File hasn't finished uploading yet.")
+    if file.state == FileState.deleted:
+        raise AppError(410, "FILE_DELETED", "File has been deleted.")
+    if file.state == FileState.infected:
+        raise AppError(410, "FILE_INFECTED", "File was quarantined.")
+    if file.state == FileState.ready_unscanned:
+        raise AppError(
+            425, "SCAN_IN_PROGRESS", "Antivirus scan still in progress; try again shortly."
+        )
+
+
 def _resolve_download_user(
     request: Request,
     db: Session,
@@ -137,6 +152,99 @@ def get_download_url(
     )
     token = download_token_svc.issue(file_id, user.id, ttl_sec=ttl)
     return {"url": f"/api/files/{file_id}/download?dt={token}"}
+
+
+@router.get("/{file_id}/preview-url")
+def get_preview_url(
+    file_id: str,
+    user: User = Depends(get_actor),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Mint a short-lived signed URL the SPA passes to an <img>/<iframe> src (or
+    fetches as text) to render a file INLINE. Same access + AV gates as the
+    download mint, plus the previewable-type allowlist and the global
+    file-preview kill switch. It deliberately does NOT pre-flight the download
+    budget — preview never consumes it — but still refuses when the budget is
+    already fully spent, so a used-up share serves neither downloads nor
+    previews. Reuses the download token (same scope: this user, this file)."""
+    from ..services import preview as preview_svc
+    from ..services import settings as settings_svc
+
+    file = _get_file_or_404(db, file_id)
+    share = db.query(Share).filter(Share.id == file.share_id).one()
+    if not share_svc.is_authorized_to_download(db, user=user, share=share):
+        raise AppError(403, "FORBIDDEN", "You don't have access to this file.")
+    share_svc.assert_share_downloadable(share)
+    _assert_file_state_servable(file)
+    if not settings_svc.get_bool(
+        db, settings_svc.Keys.FILE_PREVIEW_ENABLED, default=True
+    ):
+        raise AppError(403, "PREVIEW_DISABLED", "In-browser preview is disabled.")
+    if not preview_svc.is_previewable(file.mime_type):
+        raise AppError(415, "PREVIEW_UNSUPPORTED", "This file type can't be previewed.")
+    if share.download_limit is not None and (share.downloads_remaining or 0) <= 0:
+        raise AppError(
+            410, "SHARE_DOWNLOAD_LIMIT_REACHED", "This share has reached its download limit."
+        )
+
+    from ..services import settings_registry
+    ttl = settings_registry.effective(db, settings_registry.K.DOWNLOAD_SIGNED_URL_TTL_SEC)
+    token = download_token_svc.issue(file_id, user.id, ttl_sec=ttl)
+    return {"url": f"/api/files/{file_id}/preview?dt={token}"}
+
+
+@download_router.get("/{file_id}/preview")
+def preview_file(
+    file_id: str,
+    request: Request,
+    db: Session = Depends(get_db),
+    dt: str | None = None,
+    authorization: str | None = Header(default=None),
+) -> Response:
+    """Serve a file INLINE for in-browser preview. Same auth + AV gates as the
+    download endpoint, but **never** decrements the share download budget,
+    writes a `download_log` row, or audits — preview is "look", download is
+    "take". A share whose budget is fully spent serves neither (410). The bytes
+    are served with a server-chosen safe Content-Type + nosniff/CSP hardening
+    (see services/preview.py)."""
+    from ..services import preview as preview_svc
+    from ..services import settings as settings_svc
+    from ..services import settings_registry
+    from ..services.storage_backend import serve_response
+
+    user = _resolve_download_user(request, db, file_id, dt, authorization)
+    file = _get_file_or_404(db, file_id)
+    share = db.query(Share).filter(Share.id == file.share_id).one()
+    if not share_svc.is_authorized_to_download(db, user=user, share=share):
+        raise AppError(403, "FORBIDDEN", "You don't have access to this file.")
+    share_svc.assert_share_downloadable(share)
+    _assert_file_state_servable(file)
+    if not settings_svc.get_bool(
+        db, settings_svc.Keys.FILE_PREVIEW_ENABLED, default=True
+    ):
+        raise AppError(403, "PREVIEW_DISABLED", "In-browser preview is disabled.")
+    if not preview_svc.is_previewable(file.mime_type):
+        raise AppError(415, "PREVIEW_UNSUPPORTED", "This file type can't be previewed.")
+    if share.download_limit is not None and (share.downloads_remaining or 0) <= 0:
+        raise AppError(
+            410, "SHARE_DOWNLOAD_LIMIT_REACHED", "This share has reached its download limit."
+        )
+
+    backend = get_storage_backend()
+    if not file.storage_path or not backend.exists(file.storage_path):
+        logger.error("preview: missing storage_path for %s: %r", file.id, file.storage_path)
+        raise AppError(500, "STORAGE_MISSING", "File data is missing.")
+
+    ttl = settings_registry.effective(db, settings_registry.K.DOWNLOAD_SIGNED_URL_TTL_SEC)
+    return serve_response(
+        backend,
+        locator=file.storage_path,
+        filename=file.original_filename,
+        mime_type=preview_svc.safe_content_type(file.mime_type),
+        ttl_sec=ttl,
+        disposition="inline",
+        extra_headers=preview_svc.SECURITY_HEADERS,
+    )
 
 
 @download_router.get("/{file_id}/download")

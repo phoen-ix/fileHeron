@@ -65,6 +65,9 @@ def _me_response(db: Session, user: User) -> MeResponse:
     me_resp.share_notify_recipients_default = settings_svc.get_bool(
         db, settings_svc.Keys.SHARE_NOTIFY_RECIPIENTS_DEFAULT, default=True
     )
+    me_resp.file_preview_enabled = settings_svc.get_bool(
+        db, settings_svc.Keys.FILE_PREVIEW_ENABLED, default=True
+    )
     from ..services import email_change_policy
 
     me_resp.can_change_own_email = email_change_policy.self_service_enabled(db)

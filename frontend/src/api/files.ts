@@ -14,6 +14,13 @@ export function getShareZipUrl(shareId: string) {
   return api.get<{ url: string }>(`/files/${shareId}/download-zip-url`)
 }
 
+/** Mint a short-lived signed URL that serves the file INLINE for preview
+ * (`<img>`/`<iframe>` src, or fetched as text). Same `?dt=` mechanism as
+ * download; the preview endpoint never consumes the share's download budget. */
+export function getPreviewUrl(fileId: string) {
+  return api.get<{ url: string }>(`/files/${fileId}/preview-url`)
+}
+
 export function deleteFile(fileId: string) {
   return api.delete(`/files/${fileId}`)
 }

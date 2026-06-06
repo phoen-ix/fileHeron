@@ -45,6 +45,7 @@ from ..schemas.public_link import (
 )
 from ..services import file as file_svc
 from ..services import public_link as public_link_svc
+from ..services import settings as settings_svc
 from ..services import zip_stream as zip_stream_svc
 from ..services.audit import record_audit_event
 from ..services.storage_backend import get_storage_backend
@@ -137,6 +138,9 @@ def landing(
         requires_password=link.password_hash is not None,
         unlocked=_is_unlocked(link, fh_dl_unlock),
         downloads_remaining=link.downloads_remaining,
+        preview_enabled=settings_svc.get_bool(
+            db, settings_svc.Keys.FILE_PREVIEW_ENABLED, default=True
+        ),
         files=[
             PublicShareFile(
                 id=f.id,
@@ -285,6 +289,69 @@ def public_download(
         filename=file.original_filename,
         mime_type=file.mime_type,
         ttl_sec=ttl,
+    )
+
+
+@router.get("/{token}/files/{file_id}/preview")
+def public_preview(
+    token: str,
+    file_id: str,
+    request: Request,
+    db: Session = Depends(get_db),
+    fh_dl_unlock: str | None = Cookie(default=None),
+) -> Response:
+    """Serve a public-share file INLINE for in-browser preview. Same unlock gate
+    as the download path, but **never** decrements the link counter, writes a
+    `download_log` row, records consumption, or notifies the owner — preview is
+    "look". An exhausted link serves neither download nor preview (410). Bytes
+    are served with a server-chosen safe Content-Type + nosniff/CSP hardening."""
+    from ..services import preview as preview_svc
+    from ..services import settings_registry
+    from ..services.storage_backend import serve_response
+
+    link = public_link_svc.get_link_by_token(db, token)
+    public_link_svc.assert_link_usable(db, link)
+    if not _is_unlocked(link, fh_dl_unlock):
+        raise AppError(401, "UNLOCK_REQUIRED", "Submit the password first.")
+    if not settings_svc.get_bool(
+        db, settings_svc.Keys.FILE_PREVIEW_ENABLED, default=True
+    ):
+        raise AppError(403, "PREVIEW_DISABLED", "In-browser preview is disabled.")
+
+    file = db.query(File).filter(File.id == file_id).one_or_none()
+    if file is None or file.share_id != link.share_id:
+        raise AppError(404, "FILE_NOT_FOUND", "File not found in this public share.")
+    if file.state == FileState.uploading:
+        raise AppError(409, "STILL_UPLOADING", "File hasn't finished uploading yet.")
+    if file.state == FileState.ready_unscanned:
+        raise AppError(
+            425, "SCAN_IN_PROGRESS", "Antivirus scan still in progress; try again shortly."
+        )
+    if file.state == FileState.infected:
+        raise AppError(410, "FILE_INFECTED", "File was quarantined.")
+    if file.state == FileState.deleted:
+        raise AppError(410, "FILE_DELETED", "File has been deleted.")
+    if not preview_svc.is_previewable(file.mime_type):
+        raise AppError(415, "PREVIEW_UNSUPPORTED", "This file type can't be previewed.")
+    if link.download_limit is not None and (link.downloads_remaining or 0) <= 0:
+        raise AppError(
+            410, "PUBLIC_LINK_EXHAUSTED", "This public link's download limit has been reached."
+        )
+
+    backend = get_storage_backend()
+    if not file.storage_path or not backend.exists(file.storage_path):
+        logger.error("public preview: storage missing for %s", file.id)
+        raise AppError(500, "STORAGE_MISSING", "File data is missing.")
+
+    ttl = settings_registry.effective(db, settings_registry.K.DOWNLOAD_SIGNED_URL_TTL_SEC)
+    return serve_response(
+        backend,
+        locator=file.storage_path,
+        filename=file.original_filename,
+        mime_type=preview_svc.safe_content_type(file.mime_type),
+        ttl_sec=ttl,
+        disposition="inline",
+        extra_headers=preview_svc.SECURITY_HEADERS,
     )
 
 

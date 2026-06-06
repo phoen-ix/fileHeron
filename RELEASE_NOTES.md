@@ -1,51 +1,50 @@
-# file:Heron v1.22.0
+# file:Heron v1.23.0
 
-**Optional S3-compatible object storage.** Building on the pluggable storage
-backend from v1.21.0, you can now keep file bytes in any S3-compatible store
-(AWS S3, MinIO, …) instead of the local disk. It's strictly **opt-in** — local
-disk remains the default and nothing changes unless you turn it on.
+**In-browser file preview.** Recipients can now glance at a shared file without
+downloading it. Supported files get a **Preview** button — in the share view
+*and* on the public `/d/{token}` page — that opens the file inline in a
+lightbox. It's on by default and can be switched off globally by an admin.
 
 ## What's new
 
-- **`STORAGE_BACKEND=s3`** points file storage at an object store. Configure the
-  bucket, region, optional endpoint (for MinIO/localstack) and credentials (or use
-  the instance's IAM role). Local disk stays the default with zero config.
-- On S3, uploads stream to the bucket (multipart for large files), **downloads are
-  served by a short-lived presigned link** straight from the store (so your app
-  doesn't relay every byte — and resume still works), antivirus scans stream to
-  ClamAV, and quarantine moves objects between prefixes inside the bucket.
-- Access checks, download limits, expiry, quarantine, and GDPR delete all behave
-  the same — only *where the bytes live* changes.
+- **Preview PDFs, images, and text inline.** Previewable types are **PDF**,
+  raster images (**PNG / JPEG / GIF / WebP**), and **plain text** (any `text/*`,
+  rendered as source). Everything else keeps the usual download-only behaviour.
+- **A Download button is always one click away** inside the preview, and large
+  text files fall back to "download instead" rather than loading megabytes into
+  the tab.
+- **Global on/off switch** at *Admin → Settings → General → File preview*. Turn
+  it off and the Preview buttons disappear everywhere and the preview endpoints
+  refuse — it's enforced on the server, not just hidden in the UI.
 
 ## Good to know
 
-- **Choose the backend at install time.** Moving existing files between local and
-  S3 isn't automatic (a one-time operator copy); the in-progress upload staging
-  always stays local.
-- **Backups:** with S3, the file bytes' durability is your bucket's responsibility
-  (versioning / lifecycle); keep backing up the database as usual. The local
-  `backup.sh` tar covers local-disk storage only.
-- **Antivirus over S3** streams to ClamAV, which has a default 25 MB scan-size cap
-  (`StreamMaxLength`) — raise it on the ClamAV side if you store larger files;
-  anything over the limit is treated as unscannable and not served (fail-safe).
-- See **README → Storage layout → Storage backend** for the full variable list and
-  caveats.
+- **Previewing is not downloading.** A preview never consumes a share's or a
+  public link's download-count budget and isn't recorded in the download log or
+  the owner's "downloaded" notification. (A link whose budget is already fully
+  spent won't preview either — a used-up link serves nothing.)
+- **Only virus-scanned files preview.** A file still being scanned, quarantined,
+  or deleted can't be previewed, exactly like download.
+- **Security first.** Inline content is served from a strict allowlist with
+  `X-Content-Type-Options: nosniff` and a restrictive `Content-Security-Policy`.
+  SVG is never inline-rendered (it can carry script), and any `text/*` —
+  including HTML — is shown as plain-text source, never executed. On the
+  **S3 storage backend** the bytes come from a presigned redirect that can't
+  carry those headers, so the type allowlist is the defense there.
 
 ## Upgrade notes
 
-- **No database migration.** Existing local-disk installs are unaffected and need
-  no changes. To adopt S3, set `STORAGE_BACKEND=s3` + the `S3_*` variables on a
-  fresh install (or after migrating bytes). Boot fails fast if `s3` is selected in
-  production without a bucket configured.
+- **No database migration.** The feature is on by default; nothing to configure.
+  To disable it, toggle *Settings → General → File preview* off.
 
 ## Container images
 
 Published to GitHub Container Registry:
 
-- `ghcr.io/phoen-ix/fileheron-backend:v1.22.0`
-- `ghcr.io/phoen-ix/fileheron-worker:v1.22.0`
-- `ghcr.io/phoen-ix/fileheron-frontend:v1.22.0`
-- `ghcr.io/phoen-ix/fileheron-updater-shim:v1.22.0`
-- `ghcr.io/phoen-ix/fileheron-updater-executor:v1.22.0`
+- `ghcr.io/phoen-ix/fileheron-backend:v1.23.0`
+- `ghcr.io/phoen-ix/fileheron-worker:v1.23.0`
+- `ghcr.io/phoen-ix/fileheron-frontend:v1.23.0`
+- `ghcr.io/phoen-ix/fileheron-updater-shim:v1.23.0`
+- `ghcr.io/phoen-ix/fileheron-updater-executor:v1.23.0`
 
 Click **Update** in `/admin/system` to roll forward.

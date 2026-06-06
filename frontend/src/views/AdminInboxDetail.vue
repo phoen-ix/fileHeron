@@ -124,7 +124,7 @@ onMounted(load)
         <ul>
           <li v-for="a in msg.attachments" :key="a.id" class="att">
             <span class="att-name">{{ a.filename }}</span>
-            <span class="fh-mono att-meta">{{ formatBytes(a.size_bytes) }} · {{ a.content_type || '—' }}</span>
+            <span class="fh-mono att-meta">{{ formatBytes(a.size_bytes) }} · {{ a.content_type || '-' }}</span>
             <button
               v-if="a.av_state === 'clean'"
               type="button"

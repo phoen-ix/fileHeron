@@ -1,5 +1,5 @@
 """PATCH /api/shares/{id} (editable expiry) + POST /{id}/expire
-(force-expire-now) — post-Phase 10."""
+(force-expire-now) - post-Phase 10."""
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone

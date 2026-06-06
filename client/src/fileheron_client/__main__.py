@@ -3,23 +3,23 @@
 
 v0.9.1 architecture: one ``ctk.CTk`` root is created up-front and shown
 immediately. ``AppController`` places a ``LoginOverlay`` (a CTkFrame) on top
-of it and swaps overlay ⇄ main window inside that single root — one mainloop,
+of it and swaps overlay ⇄ main window inside that single root - one mainloop,
 no separate login toplevel, no ``wait_window``. (Pre-v0.9.1 the root was
 hidden during a modal login toplevel and revealed after sign-in.)
 
 **Two-layer logging (v0.4.16):**
 
-Layer 1 — **always on**. Crash reporting only.
-- ``crash.log`` — uncaught Python exceptions (sys/threading/Tk
+Layer 1 - **always on**. Crash reporting only.
+- ``crash.log`` - uncaught Python exceptions (sys/threading/Tk
   excepthooks) AND native-level crashes (via ``faulthandler``).
   Cheap, silent in normal operation; the only post-mortem we have
   when the .exe (``console=False``) dies.
 
-Layer 2 — **gated on ``ClientConfig.enable_diagnostic_logging``,
+Layer 2 - **gated on ``ClientConfig.enable_diagnostic_logging``,
 default OFF**. Verbose diagnostics added across v0.4.12 → v0.4.15
 to debug the invisible-window bug:
-- ``trace.log`` — explicit lifecycle breadcrumbs.
-- ``app.log``   — ``logging`` output (``_log.exception`` etc.).
+- ``trace.log`` - explicit lifecycle breadcrumbs.
+- ``app.log``   - ``logging`` output (``_log.exception`` etc.).
 - Heartbeat polling root window state every 2s for 10s after
   mainloop entry.
 
@@ -52,7 +52,7 @@ def _log_dir() -> Path:
 
 def _install_crash_logging(log_path: Path) -> None:
     """Capture uncaught Python exceptions from every thread + Tk
-    callback dispatch into ``crash.log``. Always installed — this is
+    callback dispatch into ``crash.log``. Always installed - this is
     the post-mortem safety net, not verbose diagnostics."""
 
     def _write(prefix: str, exc_type, exc, tb) -> None:
@@ -98,7 +98,7 @@ def _selfcheck() -> int:
     in the frozen image, so a packaging regression FAILS the release
     instead of shipping a .exe that crashes on a user's machine.
 
-    Deliberately does NOT construct a Tk root — creating a GUI window can
+    Deliberately does NOT construct a Tk root - creating a GUI window can
     hang on a session-less CI runner (the process never exits under
     `Start-Process -Wait`). Importing the packages + checking their bundled
     data dirs on disk is enough to catch a missing-collect regression and
@@ -106,7 +106,7 @@ def _selfcheck() -> int:
     from pathlib import Path
 
     import customtkinter
-    import tkcalendar  # noqa: F401 — import must resolve in the bundle
+    import tkcalendar  # noqa: F401 - import must resolve in the bundle
     import tkinterdnd2
 
     problems: list[str] = []
@@ -187,7 +187,7 @@ def main(argv: list[str] | None = None) -> int:
     root = build_root()
 
     def _tk_report(exc_type, exc, tb):
-        # Tk callback exception handler — always writes crash.log
+        # Tk callback exception handler - always writes crash.log
         # regardless of the diagnostics flag.
         try:
             with crash_log.open("a", encoding="utf-8") as f:

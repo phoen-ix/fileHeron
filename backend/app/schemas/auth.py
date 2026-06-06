@@ -54,7 +54,7 @@ class VerifyEmailRequest(APIBaseModel):
 
 
 class ConfirmEmailChangeRequest(APIBaseModel):
-    """Public confirm of a pending email change — the token IS the auth."""
+    """Public confirm of a pending email change - the token IS the auth."""
     token: str = Field(..., min_length=10, max_length=128)
 
 

@@ -210,7 +210,7 @@ async function copyPlaintext() {
       copiedTimer.value = null
     }, 1600)
   } catch {
-    /* clipboard blocked — user can still select-and-copy */
+    /* clipboard blocked - user can still select-and-copy */
   }
 }
 

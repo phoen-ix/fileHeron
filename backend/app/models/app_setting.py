@@ -5,7 +5,7 @@ the web UI. Cleartext for non-sensitive values; Fernet-encrypted (via
 `utils.crypto.encrypt_setting` / `decrypt_setting`) for secrets like
 `oidc_client_secret`.
 
-The settings table is the *override* layer — `services/settings.py`
+The settings table is the *override* layer - `services/settings.py`
 falls back to `config.settings` (env) when no DB row exists. So
 existing env-driven deployments keep working without writing any
 rows.

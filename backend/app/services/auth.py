@@ -105,7 +105,7 @@ def _create_user_from_invite(
       expired invites; only the `used_at` check is honoured by them.
 
     `via` discriminates the two in the `invite_consumed` audit
-    extra (`"self_register"` vs `"admin_direct"`) — same pattern as
+    extra (`"self_register"` vs `"admin_direct"`) - same pattern as
     `oidc_linked` extra.via.
 
     Raises ``AppError(409, USER_EXISTS)`` if a registered account
@@ -318,13 +318,13 @@ async def login(
 
     Returns (user, access_token, expires_in_seconds, refresh_token_plain) on
     success. Raises AppError otherwise. Possible error codes:
-    - RATE_LIMITED      — per-IP login rate exceeded
-    - INVALID_CREDENTIALS — bad email or bad password
-    - ACCOUNT_LOCKED    — account-level lockout active (15min)
+    - RATE_LIMITED      - per-IP login rate exceeded
+    - INVALID_CREDENTIALS - bad email or bad password
+    - ACCOUNT_LOCKED    - account-level lockout active (15min)
     - ACCOUNT_DISABLED
     - EMAIL_NOT_VERIFIED
-    - TOTP_REQUIRED     — 2FA is on, totp_code missing
-    - INVALID_TOTP      — totp_code wrong (also bumps failure counter)
+    - TOTP_REQUIRED     - 2FA is on, totp_code missing
+    - INVALID_TOTP      - totp_code wrong (also bumps failure counter)
     """
     ip = _request_ip(request)
 
@@ -583,7 +583,7 @@ async def login_with_recovery(
     return user, access, expires_in, refresh_plain
 
 
-# `rotate_refresh` and `logout` live in services/jwt_session.py — routers
+# `rotate_refresh` and `logout` live in services/jwt_session.py - routers
 # call them directly.
 
 
@@ -592,7 +592,7 @@ def begin_password_reset(
 ) -> tuple[User, str] | None:
     """Returns (user, plaintext_token) or None if no user with that email
     exists. Caller awaits the email send. We never reveal account existence
-    to the client — the API endpoint always returns 200 regardless.
+    to the client - the API endpoint always returns 200 regardless.
     """
     em_email = normalize_email(email)
     user = db.query(User).filter(User.email == em_email).one_or_none()
@@ -637,7 +637,7 @@ async def consume_password_reset(
 
     # Atomically CLAIM the token: the conditional UPDATE + rowcount check
     # is the single-use gate. Two concurrent requests with the same token
-    # both pass the read checks above, but only one wins this UPDATE — the
+    # both pass the read checks above, but only one wins this UPDATE - the
     # loser gets 410 and never resets the password (finding M6).
     claimed = db.execute(
         update(PasswordResetToken)
@@ -740,5 +740,5 @@ async def change_password(
     )
 
 
-# Convenience: re-export user role (kept simple — services have flat exports)
+# Convenience: re-export user role (kept simple - services have flat exports)
 _ALL_ROLES = (UserRole.admin, UserRole.employee, UserRole.client)

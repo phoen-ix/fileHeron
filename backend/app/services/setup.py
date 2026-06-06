@@ -43,7 +43,7 @@ async def complete_setup(
     display_name: str,
 ) -> User:
     """Create the first admin via the web wizard. Race-safe via the
-    is_setup_complete check + the unique email constraint — second
+    is_setup_complete check + the unique email constraint - second
     submission gets 409.
 
     Caller commits."""
@@ -60,7 +60,7 @@ async def complete_setup(
     await assert_password_not_breached(db, password)
 
     # Belt-and-braces: refuse if a user (any role) with this email already
-    # exists — the unique constraint would catch it, but we want a clean
+    # exists - the unique constraint would catch it, but we want a clean
     # AppError envelope rather than IntegrityError → 500.
     existing = db.query(User).filter(User.email == em).one_or_none()
     if existing is not None:

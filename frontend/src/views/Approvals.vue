@@ -1,5 +1,5 @@
 <script setup lang="ts">
-/* /approvals — the approver's work queue: shares awaiting this user's
+/* /approvals - the approver's work queue: shares awaiting this user's
  * approval. Click through to the share detail to review + approve/reject. */
 import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'

@@ -59,7 +59,7 @@ def test_security_headers_present():
 
 
 # ---------------------------------------------------------------------------
-# Shared setup — sender + recipient + active share + one file.
+# Shared setup - sender + recipient + active share + one file.
 # ---------------------------------------------------------------------------
 
 
@@ -154,7 +154,7 @@ async def test_preview_unsupported_type_415(make_user, db, client, login_as, mon
 
 @pytest.mark.asyncio
 async def test_preview_svg_refused(make_user, db, client, login_as, monkeypatch):
-    """SVG can carry script — must never be inline-previewable."""
+    """SVG can carry script - must never be inline-previewable."""
     _, _, _, file_row = _setup(make_user, db, monkeypatch, mime="image/svg+xml")
     token, _ = await login_as("rec@test.local", "Pass12345678!")
     r = await client.get(
@@ -212,7 +212,7 @@ async def test_preview_does_not_consume_budget_but_respects_exhaustion(
     token, _ = await login_as("rec@test.local", "Pass12345678!")
     headers = {"Authorization": f"Bearer {token}"}
 
-    # Preview twice — budget untouched, no download_log rows.
+    # Preview twice - budget untouched, no download_log rows.
     for _ in range(2):
         r = await client.get(f"/api/files/{file_row.id}/preview-url", headers=headers)
         assert r.status_code == 200, r.text

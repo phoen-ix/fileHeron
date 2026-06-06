@@ -8,7 +8,7 @@
  *
  * The browser's EventSource attaches the Last-Event-Id header on
  * reconnect automatically when an `id:` field has been observed in
- * the stream — we cooperate with that by emitting `id:` in the
+ * the stream - we cooperate with that by emitting `id:` in the
  * server's frames (see services/sse.py). On a manual reconnect we
  * pass the last seen id explicitly via a query param so the server
  * can catch up.
@@ -78,7 +78,7 @@ export function useSSE(opts: UseSSEOptions) {
       u = await _resolveUrl()
     } catch {
       // URL factory rejected (e.g. token mint failed because the user
-      // logged out). Treat as a soft error and back off — but count
+      // logged out). Treat as a soft error and back off - but count
       // toward the give-up budget so a permanently-broken token route
       // doesn't loop indefinitely.
       _onFailure()

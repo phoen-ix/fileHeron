@@ -157,7 +157,7 @@ onMounted(() => {
             </RouterLink>
             <span v-else class="fh-mono">{{ r.recipient_email }}</span>
           </td>
-          <td class="fh-mono">{{ r.category ?? '—' }}</td>
+          <td class="fh-mono">{{ r.category ?? '-' }}</td>
           <td>
             <RouterLink
               :to="{ name: 'admin-mail-detail', params: { id: r.id } }"

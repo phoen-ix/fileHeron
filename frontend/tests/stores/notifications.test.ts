@@ -1,4 +1,4 @@
-/* Notifications store — push / remove / removeAll behaviour. The HTTP + SSE
+/* Notifications store - push / remove / removeAll behaviour. The HTTP + SSE
  * plumbing is mocked so we test only the local state transitions the bell
  * relies on. The bell is a delete-to-dismiss inbox (no read/unread). */
 import { setActivePinia, createPinia } from 'pinia'

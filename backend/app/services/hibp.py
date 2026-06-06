@@ -43,7 +43,7 @@ async def _fetch_range(prefix5: str) -> str | None:
     None on network/upstream/cache failure.
 
     Fail-open everywhere: Redis unreachable, HIBP unreachable, HIBP
-    non-200 — all return None so the caller treats the password as
+    non-200 - all return None so the caller treats the password as
     not-breached. The security checklist commitment is that HIBP is a
     best-effort gate, not a hard blocker."""
     cache_key = CACHE_KEY_PREFIX + prefix5
@@ -52,7 +52,7 @@ async def _fetch_range(prefix5: str) -> str | None:
         try:
             cached = await r.get(cache_key)
         except Exception as e:
-            # Redis down — skip the cache, go straight to HIBP.
+            # Redis down - skip the cache, go straight to HIBP.
             logger.warning("HIBP cache GET failed for prefix %s: %s", prefix5, e)
             cached = None
         if cached is not None:
@@ -138,7 +138,7 @@ async def is_password_breached(password: str, db=None) -> bool:
 async def assert_password_not_breached(db, password: str) -> None:
     """Raise 422 PASSWORD_BREACHED when HIBP is enabled and the password is
     in the breach corpus. No-op when disabled or upstream unreachable
-    (fail-open — same contract as is_password_breached).
+    (fail-open - same contract as is_password_breached).
 
     The single definition of the breach-reject behavior; every password-set
     path (register, reset, change, setup) routes through here so the code +

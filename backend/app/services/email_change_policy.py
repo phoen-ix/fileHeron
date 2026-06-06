@@ -1,4 +1,4 @@
-"""Email-change policy resolvers — the live read layer over the three
+"""Email-change policy resolvers - the live read layer over the three
 ``email_change.*`` kv settings. Kept separate from ``services.email_change``
 (the orchestrator) so the settings router and ``_me_response`` can read the
 policy without importing the heavier service.

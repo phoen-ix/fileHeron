@@ -1,4 +1,4 @@
-"""cleanup_read_notifications worker — age-out in-app notifications by
+"""cleanup_read_notifications worker - age-out in-app notifications by
 ``created_at`` (read state retired in v1.6.1); recent ones are kept, and the
 ``days <= 0`` setting disables it. Read state no longer matters."""
 from __future__ import annotations

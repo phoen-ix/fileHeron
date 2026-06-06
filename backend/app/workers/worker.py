@@ -100,7 +100,7 @@ class WorkerSettings:
         cron(cleanup_abandoned_uploads, hour=None, minute={47}, run_at_startup=False),
         # GitHub releases poll for in-app "update available" surface.
         cron(release_check, hour=None, minute={53}, run_at_startup=False),
-        # Inbound IMAP poll — ticks every 5 min (offset to :04), self-gates on
+        # Inbound IMAP poll - ticks every 5 min (offset to :04), self-gates on
         # the admin enabled/mode/interval settings.
         cron(imap_poll, hour=None, minute={m for m in range(60) if m % 5 == 4}, run_at_startup=False),
         # Daily-ish housekeeping (hour=2 keeps it well clear of business hours).

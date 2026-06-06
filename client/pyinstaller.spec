@@ -49,7 +49,7 @@ datas += _ctk_datas + _dnd_datas
 datas += collect_data_files("tkcalendar")
 
 # tkcalendar pulls Babel for its date rendering, and Babel ships the FULL
-# CLDR locale database — ~30 MB across 1000+ `locale-data/*.dat` files, the
+# CLDR locale database - ~30 MB across 1000+ `locale-data/*.dat` files, the
 # single biggest chunk of the .exe. The app only ever renders the date picker
 # in en/de (DateEntry is pinned to the app locale in the UI code), so keep
 # only `root` (Babel's ultimate fallback) + `en*` + `de*` and drop the rest.
@@ -99,7 +99,7 @@ a = Analysis(
     # picks up the wrong OpenSSL build and crashes with ACCESS_VIOLATION.
     runtime_hooks=[str(HERE / "runtime_hooks" / "dll_search_path.py")],
     excludes=[
-        # Belt-and-braces — if PySide6 sneaks in via a transitive
+        # Belt-and-braces - if PySide6 sneaks in via a transitive
         # dep (it shouldn't, but it has happened in the wild), keep
         # it out of the bundle. Comment out if PyInstaller complains.
         "PySide6",
@@ -108,7 +108,7 @@ a = Analysis(
         # Pillow (~17 MB) is pulled in only by customtkinter's CTkImage,
         # which this app never uses (the window icon goes through
         # tkinter.PhotoImage, not PIL). CTkImage's `from PIL import ...`
-        # is wrapped in try/except ImportError, so excluding PIL is safe —
+        # is wrapped in try/except ImportError, so excluding PIL is safe -
         # `import customtkinter` still works; only CTkImage would be
         # unavailable. Saves a large chunk of the bundle.
         "PIL",
@@ -135,25 +135,25 @@ exe = EXE(
     bootloader_ignore_signals=False,
     # v0.4.8: strip DISABLED. PyInstaller invokes MSYS/GNU `strip` on
     # every native binary in the bundle (visible in the build log as
-    # `Executing: strip ...`). On Windows PE files — particularly
+    # `Executing: strip ...`). On Windows PE files - particularly
     # Python C extensions like _ssl.pyd + their OpenSSL dependencies
-    # libssl-3.dll + libcrypto-3.dll — this can corrupt the section
+    # libssl-3.dll + libcrypto-3.dll - this can corrupt the section
     # layout, leaving DLLs that LOAD successfully but ACCESS_VIOLATE
     # the moment a function inside them is called. That's exactly the
     # "DLL load failed while importing _ssl: ACCESS_VIOLATION" crash
-    # users hit in v0.4.0–v0.4.7 (we only saw it post-v0.4.4 because
+    # users hit in v0.4.0-v0.4.7 (we only saw it post-v0.4.4 because
     # earlier versions had different sign-in bugs blocking the
     # network path before _ssl was needed).
     strip=False,
     # v0.4.5: UPX disabled. We learned the hard way that:
     #   1. In PyInstaller --onefile mode the outer bootloader ZIP layer
-    #      largely un-does UPX's gains — the v0.4.2 build with UPX on
+    #      largely un-does UPX's gains - the v0.4.2 build with UPX on
     #      every DLL came out the same 31 MB as v0.4.0 without UPX.
-    #   2. UPX broke _ssl.pyd in v0.4.2/0.4.3/0.4.4 — SSL imports failed
+    #   2. UPX broke _ssl.pyd in v0.4.2/0.4.3/0.4.4 - SSL imports failed
     #      with "DLL load failed... Invalid access to a memory region"
     #      (Windows ACCESS_VIOLATION). Likely also affects other native
     #      crypto / openssl DLLs that depend on aligned-load semantics.
-    # No size cost from disabling — the v0.4.5 .exe is the same ~31 MB
+    # No size cost from disabling - the v0.4.5 .exe is the same ~31 MB
     # as the broken v0.4.2-0.4.4 builds, just functional.
     upx=False,
     upx_exclude=[],

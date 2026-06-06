@@ -56,7 +56,7 @@ onMounted(async () => {
     </template>
 
     <template v-else>
-      <h1 class="fh-display fh-rise" data-stagger="2">—</h1>
+      <h1 class="fh-display fh-rise" data-stagger="2">-</h1>
       <div class="fh-notice fh-rise" data-stagger="2" data-tone="error" role="alert">
         {{ error }}
       </div>

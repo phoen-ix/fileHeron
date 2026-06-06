@@ -1,4 +1,4 @@
-"""AppController — owns the single root and swaps between the login overlay
+"""AppController - owns the single root and swaps between the login overlay
 and the main window inside it (v0.9.1).
 
 Before v0.9.1 the entry point ran a modal ``LoginWindow`` toplevel, then on
@@ -37,7 +37,7 @@ class AppController:
         self._api: Optional[ApiClient] = None
 
     def start(self) -> None:
-        """Show the root (visible from the start now — no withdraw) with the
+        """Show the root (visible from the start now - no withdraw) with the
         login overlay placed on top, and enter the single mainloop (run by
         the caller)."""
         set_session_expired_handler(self.session_expired)
@@ -53,12 +53,12 @@ class AppController:
         """Window-manager close (the X button) handler. On a normal close
         while signed in with a PASSWORD session, revoke that session
         server-side (best-effort, short timeout) so it doesn't linger until
-        the cleanup cron. API-token logins have no session to revoke — and we
+        the cleanup cron. API-token logins have no session to revoke - and we
         must NOT touch the persistent token (it's reused on the next launch).
         A crash skips this entirely; the cron reaps those."""
         api = self._api
         if api is not None and self._main is not None and api.api_token is None:
-            trace("normal close — revoking password session")
+            trace("normal close - revoking password session")
             try:
                 from ..api import auth as auth_pkg
 
@@ -97,7 +97,7 @@ class AppController:
         trace(f"_on_signed_in (role={me.role}, locale={me.locale!r})")
         # v0.8.0: apply + cache the server-side locale so the main window
         # renders correctly and subsequent launches start in the right
-        # language. Failure to persist isn't fatal — the in-memory
+        # language. Failure to persist isn't fatal - the in-memory
         # set_locale call has already taken effect.
         try:
             set_locale(me.locale or "en")
@@ -113,7 +113,7 @@ class AppController:
         # Build the main UI behind the overlay, THEN remove the overlay so the
         # root is never momentarily empty. If MainWindow construction raises,
         # the exception propagates back into LoginOverlay._done, which keeps
-        # the overlay up and shows the error — so don't swallow it here.
+        # the overlay up and shows the error - so don't swallow it here.
         self._api = api
         self._main = MainWindow(self._root, api, me, on_signed_out=self.logout)
         if self._overlay is not None:
@@ -130,17 +130,17 @@ class AppController:
         already called ``api.logout()`` + ``clear_secret()``; we just tear the
         main UI down and return to a fresh login overlay (the app no longer
         quits on logout)."""
-        trace("logout — returning to login overlay")
+        trace("logout - returning to login overlay")
         self._teardown_main()
         self._show_overlay()
 
     def session_expired(self) -> None:
         """Invoked (on the main thread) when a worker hit a 401 that couldn't
-        be refreshed. Idempotent — concurrent 401s coalesce because the first
+        be refreshed. Idempotent - concurrent 401s coalesce because the first
         call nulls ``self._main`` synchronously."""
         if self._main is None:
             return
-        trace("session expired — bouncing to login overlay")
+        trace("session expired - bouncing to login overlay")
         if self._api is not None:
             try:
                 clear_secret("refresh", self._api.server_url)

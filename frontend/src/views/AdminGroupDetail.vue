@@ -1,5 +1,5 @@
 <script setup lang="ts">
-/* /admin/groups/:id — group detail with member management. */
+/* /admin/groups/:id - group detail with member management. */
 import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'

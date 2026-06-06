@@ -1,4 +1,4 @@
-"""/api/admin — inbound mailbox: IMAP settings + the admin inbox (v1.27.0).
+"""/api/admin - inbound mailbox: IMAP settings + the admin inbox (v1.27.0).
 
 Settings mirror the SMTP page (password null=keep/""=clear/other=replace, never
 echoed). The inbox list/detail mirror the mail-log (deferred bodies on the list,
@@ -47,7 +47,7 @@ def _settings_response(db: Session) -> ImapSettingsResponse:
     cfg = imap_config.resolve_imap_config(db)
     uses_smtp = imap_config.uses_smtp_credentials(db)
     # Effective: a password exists if one is stored for IMAP, or (when reusing
-    # SMTP) the SMTP password is set — `cfg.password` already reflects that.
+    # SMTP) the SMTP password is set - `cfg.password` already reflects that.
     is_password_set = bool(settings_svc.get(db, K.IMAP_PASSWORD)) or (
         uses_smtp and bool(cfg.password)
     )
@@ -100,7 +100,7 @@ def update_imap_settings(
     for key, value in pairs:
         settings_svc.set_value(db, key=key, value=value, actor=admin, request=request)
     # When reusing the SMTP login, IMAP-specific user/password are ignored (SMTP
-    # stays the single source of truth) — don't store what the form sent.
+    # stays the single source of truth) - don't store what the form sent.
     if not payload.use_smtp_credentials:
         settings_svc.set_value(
             db, key=K.IMAP_USER, value=payload.user or None, actor=admin, request=request

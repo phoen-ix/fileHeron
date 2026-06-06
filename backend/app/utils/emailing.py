@@ -26,7 +26,7 @@ logger = logging.getLogger("fileheron.email")
 @dataclass(frozen=True)
 class SmtpConfig:
     """Resolved SMTP settings used by the send pipeline. Build via
-    `services/email.py::resolve_smtp_config(db)` — never read
+    `services/email.py::resolve_smtp_config(db)` - never read
     `app.config.settings.SMTP_*` directly outside that resolver."""
     host: str
     port: int
@@ -36,7 +36,7 @@ class SmtpConfig:
     from_name: str
     # 'implicit' (TLS from connect, port 465 convention),
     # 'starttls'  (upgrade after greeting, port 587 convention),
-    # 'none'      (plain SMTP — only sane on localhost / private MTA)
+    # 'none'      (plain SMTP - only sane on localhost / private MTA)
     tls_mode: str = "starttls"
     # EHLO/HELO name. Empty → aiosmtplib falls back to socket.getfqdn().
     helo_hostname: str = ""
@@ -64,7 +64,7 @@ async def send_email(
     if not cfg.is_configured:
         # Logs-fallback: print the email body block to stdout for dev visibility.
         logger.info(
-            "EMAIL DEV (no SMTP_HOST configured) — would send",
+            "EMAIL DEV (no SMTP_HOST configured) - would send",
             extra={
                 "to": to,
                 "subject": subject,

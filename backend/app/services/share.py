@@ -1,7 +1,7 @@
 """Share lifecycle.
 
 Phase 4 model: a share has N user-recipients and M group-recipients.
-Inbox resolution is dynamic — group membership at query time decides
+Inbox resolution is dynamic - group membership at query time decides
 whether a user sees a group-targeted share. Authorization to download
 follows the same rule.
 
@@ -76,7 +76,7 @@ def _validate_outbound_targets(
     if sender.role == UserRole.admin:
         return
     # Employee: target users must be connected clients (or any user not a
-    # client at all, e.g. another employee — also allowed). Groups must be
+    # client at all, e.g. another employee - also allowed). Groups must be
     # ones the employee is a member of OR a company_inbox group.
     connected = _connected_client_ids_of(db, sender.id)
     for u in users:
@@ -108,7 +108,7 @@ def _shares_group(db: Session, user_a_id: int, user_b_id: int) -> bool:
 
 
 def _resolved_notify_flag(db: Session, notify_recipients: bool | None) -> bool:
-    """The effective 'notify recipients' choice — the explicit per-share flag,
+    """The effective 'notify recipients' choice - the explicit per-share flag,
     else the admin default. Frozen onto a pending share so the deferred
     share_created (fired on approval) honours it."""
     if notify_recipients is None:
@@ -278,7 +278,7 @@ def create_share(
     # expires_at = None means "never expires" (v1.1.4). Otherwise:
     # Pydantic preserves tz info from ISO strings ending in Z / +HH:MM
     # (which is what dayjs.toISOString() produces on the frontend).
-    # Normalise to naive UTC before comparing or storing — mirrors the
+    # Normalise to naive UTC before comparing or storing - mirrors the
     # convention every other write site follows. See update_expiry()
     # below for the same guard at the PATCH boundary.
     if expires_at is not None:
@@ -288,7 +288,7 @@ def create_share(
             raise AppError(400, "EXPIRY_IN_PAST", "Expiry must be in the future.")
 
     # Inbound (client → the company): the client never picks recipients. The
-    # audience — every employee/admin, plus the creator's group-peers — is
+    # audience - every employee/admin, plus the creator's group-peers - is
     # resolved at read time (see is_authorized_to_download / list_shares_for_user),
     # so no recipient rows are written and any client-supplied recipients are
     # ignored. Outbound (staff → client/group) resolves + validates recipients
@@ -300,7 +300,7 @@ def create_share(
         group_ids = list(dict.fromkeys(recipient_group_ids or []))
         # Empty recipients are only OK when the caller explicitly opted in
         # (e.g., the router did so because an inline public link is being
-        # attached — the link is the access path).
+        # attached - the link is the access path).
         if not user_ids and not group_ids and not allow_no_recipients:
             raise AppError(
                 400, "NO_RECIPIENTS", "At least one user or group recipient is required."
@@ -367,7 +367,7 @@ def create_share(
 
     if approval_svc.is_approval_required(db, share):
         # Hold the share for review: freeze the notify choice, ping the
-        # approvers, and DON'T notify recipients yet — that happens on approval.
+        # approvers, and DON'T notify recipients yet - that happens on approval.
         share.state = ShareState.pending_approval
         share.notify_on_activation = resolved_notify
         db.flush()
@@ -515,7 +515,7 @@ def list_shares_for_user(
     Filters apply after the base box query; sorts are validated against
     `VALID_SORT_COLUMNS` and silently coerced to the default if invalid.
     """
-    # Eager-load files to avoid N+1 — the router serializer iterates
+    # Eager-load files to avoid N+1 - the router serializer iterates
     # `s.files` for file_count, total_size, and effective_subject. With
     # 50 shares per page, lazy-load would fire 50 extra queries per
     # list call.
@@ -533,7 +533,7 @@ def list_shares_for_user(
             )
     elif box == "inbox":
         user_group_ids = _user_group_ids(db, user.id)
-        # (a) Outbound shares addressed to me — direct, or via a group I'm in.
+        # (a) Outbound shares addressed to me - direct, or via a group I'm in.
         recipient_match = ShareRecipient.recipient_user_id == user.id
         if user_group_ids:
             recipient_match = or_(
@@ -588,7 +588,7 @@ def list_shares_for_user(
                 )
         base = base.distinct()
         # Recipients never see a share that hasn't been approved (or was
-        # rejected) — those aren't 'received'. The sender's outbox shows them;
+        # rejected) - those aren't 'received'. The sender's outbox shows them;
         # approvers use the dedicated approval queue.
         base = base.filter(
             Share.state.notin_(
@@ -626,7 +626,7 @@ def list_shares_for_user(
     order = sort_target.asc() if direction == "asc" else sort_target.desc()
     # NULL expires_at = "never". MariaDB sorts NULL first by default
     # (ASC) or last (DESC). For user-facing list display, "Never" should
-    # consistently appear AFTER the dated rows regardless of direction —
+    # consistently appear AFTER the dated rows regardless of direction -
     # so prepend an `IS NULL` ordering hint that pushes NULLs to the end.
     base = base.order_by(Share.expires_at.is_(None).asc(), order) if sort_col == "expires_at" else base.order_by(order)
 
@@ -683,7 +683,7 @@ def approve_share(db: Session, *, user: User, share: Share, request=None) -> Sha
         raise AppError(
             409,
             "SHARE_EXPIRY_PASSED",
-            "This share's expiry has already passed — ask the sender to resubmit with a later expiry.",
+            "This share's expiry has already passed - ask the sender to resubmit with a later expiry.",
         )
     now = utc_now()
     result = db.execute(
@@ -830,7 +830,7 @@ def try_decrement_share_counter(db: Session, *, share: Share) -> bool:
     success, False when the budget is exhausted (caller raises 410).
 
     Caller is responsible for the `share.download_limit is not None`
-    pre-check — this function is a no-op-on-call for unlimited shares
+    pre-check - this function is a no-op-on-call for unlimited shares
     because the WHERE clause filters them out.
     """
     from sqlalchemy import update as _update
@@ -924,7 +924,7 @@ def update_share_expiry(
     """Owner-or-admin extends, shortens, or clears an active share's expiry.
     Refuses non-active shares (bytes might be gone) or past timestamps
     (use `expire_share_now` for that). new_expires_at=None clears the
-    field — the share becomes never-expire (v1.1.4).
+    field - the share becomes never-expire (v1.1.4).
     """
     if share.created_by_id != user.id and user.role != UserRole.admin:
         raise AppError(403, "FORBIDDEN", "You cannot edit this share.")
@@ -975,7 +975,7 @@ def expire_share_now(
     the cron uses (`services/file.py::delete_file_for_expiry`).
 
     Concurrent expire-now calls on the same share are guarded by an
-    atomic conditional UPDATE — only the first wins the state flip; the
+    atomic conditional UPDATE - only the first wins the state flip; the
     others see 409 SHARE_NOT_ACTIVE."""
     if share.created_by_id != user.id and user.role != UserRole.admin:
         raise AppError(403, "FORBIDDEN", "You cannot expire this share.")
@@ -993,7 +993,7 @@ def expire_share_now(
     db.flush()
     db.refresh(share)
 
-    # Lazy import — services.file imports services.share elsewhere; keep
+    # Lazy import - services.file imports services.share elsewhere; keep
     # the dependency direction loose.
     from .file import delete_file_for_expiry
 
@@ -1036,7 +1036,7 @@ def register_files_added(
 ) -> Share:
     """Owner finished adding files to an already-active share. The files were
     already attached by the upload pipeline (which gates on owner + active);
-    this is the batch-complete signal — it records a share-level audit row and,
+    this is the batch-complete signal - it records a share-level audit row and,
     when ``notify``, fans a ``share_files_added`` notification out to the same
     recipient set ``create_share`` resolves (sourced from the share's current
     recipients). Caller commits."""

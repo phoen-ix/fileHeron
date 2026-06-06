@@ -1,4 +1,4 @@
-"""ARQ worker — send a pre-rendered email.
+"""ARQ worker - send a pre-rendered email.
 
 The notification dispatcher renders subject + text + html on the
 producing side (where the user's locale and the template payload are
@@ -88,7 +88,7 @@ async def send_email_job(
     Resolves SMTP config per-job so admin-saved settings take effect
     on the next send without a worker restart. When ``email_log_id`` is
     supplied (the notification + resend paths), finalizes that mail-log
-    row to the delivery outcome — one row per email, ``attempts`` climbs.
+    row to the delivery outcome - one row per email, ``attempts`` climbs.
     """
     db = SessionLocal()
     try:
@@ -100,7 +100,7 @@ async def send_email_job(
             cfg=cfg, to=to, subject=subject, text_body=text_body, html_body=html_body
         )
         # `send_email` returns without sending when SMTP is unconfigured (it
-        # logs to stdout) — surface that distinctly in the mail log.
+        # logs to stdout) - surface that distinctly in the mail log.
         _finalize_log(
             email_log_id,
             EmailStatus.sent,
@@ -110,10 +110,10 @@ async def send_email_job(
         return {"to": to, "subject": subject, "status": "sent"}
     except _TRANSIENT_ERRORS as e:
         attempt = ctx.get("job_try", 1)
-        # 1s, 5s, 30s — exponential-ish.
+        # 1s, 5s, 30s - exponential-ish.
         defer = (1, 5, 30)[min(attempt - 1, 2)]
         logger.warning(
-            "transient SMTP error sending to %s (attempt %d/3): %s — retrying in %ds",
+            "transient SMTP error sending to %s (attempt %d/3): %s - retrying in %ds",
             to,
             attempt,
             e,
@@ -131,12 +131,12 @@ async def send_email_job(
     except SMTPResponseException as e:
         # 4xx is technically transient; 5xx permanent. Treat 4xx like the
         # transient block above; 5xx → log and give up (return success
-        # so ARQ doesn't keep retrying — the job's outcome is "we tried").
+        # so ARQ doesn't keep retrying - the job's outcome is "we tried").
         if 400 <= e.code < 500:
             attempt = ctx.get("job_try", 1)
             defer = (1, 5, 30)[min(attempt - 1, 2)]
             logger.warning(
-                "SMTP 4xx (%s) sending to %s (attempt %d/3): %s — retrying in %ds",
+                "SMTP 4xx (%s) sending to %s (attempt %d/3): %s - retrying in %ds",
                 e.code,
                 to,
                 attempt,
@@ -153,7 +153,7 @@ async def send_email_job(
             )
             raise Retry(defer=defer) from e
         logger.error(
-            "permanent SMTP failure (%s) sending to %s: %s — giving up",
+            "permanent SMTP failure (%s) sending to %s: %s - giving up",
             e.code,
             to,
             e.message,

@@ -37,20 +37,20 @@ export function parseServerDate(iso: string): Date {
 
 /** Format a backend ISO datetime in the admin-set site timezone using
  *  the caller's locale. `opts` overrides any field; defaults to
- *  year + short-month + day + hour + minute. Returns `'—'` when the
+ *  year + short-month + day + hour + minute. Returns `'-'` when the
  *  input is null or unparseable so callers can drop it into a table
  *  cell without further nil-checks.
  *
- *  Locale is the user's i18n locale (de | en) — separate concept from
+ *  Locale is the user's i18n locale (de | en) - separate concept from
  *  the timezone (de-AT user could be in Asia/Tokyo). */
 export function formatInSiteTime(
   iso: string | null | undefined,
   locale: string,
   opts?: Intl.DateTimeFormatOptions,
 ): string {
-  if (!iso) return '—'
+  if (!iso) return '-'
   const date = parseServerDate(iso)
-  if (Number.isNaN(date.getTime())) return '—'
+  if (Number.isNaN(date.getTime())) return '-'
   const site = useSiteStore()
   return new Intl.DateTimeFormat(locale === 'de' ? 'de-AT' : 'en-US', {
     timeZone: site.timezone || 'UTC',
@@ -60,7 +60,7 @@ export function formatInSiteTime(
     hour: '2-digit',
     minute: '2-digit',
     // 24-hour + a DST-aware zone token ("GMT+2"/"CEST" in summer, "UTC" if
-    // the site zone is UTC) so timestamps are unambiguous — a 12-hour
+    // the site zone is UTC) so timestamps are unambiguous - a 12-hour
     // "1:00 PM" with no zone reads like it might be UTC when it's already
     // the admin-set site timezone.
     hour12: false,
@@ -114,7 +114,7 @@ export function siteLocalIsoToEpochMs(siteLocal: string): number {
   return dayjs.tz(siteLocal, siteTz()).valueOf()
 }
 
-/** Share expiry display: null means "Never" (v1.1.4 — admin-set
+/** Share expiry display: null means "Never" (v1.1.4 - admin-set
  *  no-expiry shares). Renders the localized "Never" label instead of
  *  the em-dash fallback used by `formatInSiteTime`. For dated rows,
  *  delegates to formatInSiteTime so the same site-tz + locale rules

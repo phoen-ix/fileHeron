@@ -69,14 +69,14 @@ app = FastAPI(
 
 # Outer-most first to inner-most: security_headers wraps everything (so error
 # responses still get the headers); request_id provides correlation; gzip is
-# innermost so error envelopes get compressed too. Gzip is SELECTIVE — it skips
+# innermost so error envelopes get compressed too. Gzip is SELECTIVE - it skips
 # file-download responses (gzipping a multi-GB binary is pointless + defeats
 # FileResponse sendfile, making downloads crawl).
 app.add_middleware(SelectiveGZipMiddleware, minimum_size=1024)
 app.add_middleware(RequestIdMiddleware)
 app.add_middleware(SecurityHeadersMiddleware, is_production=settings.is_production)
 
-# Exception handlers — AppError envelopes; everything else → 500 with envelope.
+# Exception handlers - AppError envelopes; everything else → 500 with envelope.
 app.add_exception_handler(AppError, app_error_handler)
 app.add_exception_handler(Exception, unhandled_exception_handler)
 

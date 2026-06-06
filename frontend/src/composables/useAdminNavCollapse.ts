@@ -69,7 +69,7 @@ export function useAdminNavCollapse() {
 
   // External re-sync: when the persisted value or mode changes (refreshMe,
   // cross-device sync, or a mode switch that resets the set to null), re-seed.
-  // Only re-apply auto-expand when nothing is explicitly persisted — otherwise
+  // Only re-apply auto-expand when nothing is explicitly persisted - otherwise
   // we'd re-open the active category and undo a just-made collapse.
   watch(
     () => [mode.value, auth.user?.admin_nav_open_categories] as const,

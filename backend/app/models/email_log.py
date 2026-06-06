@@ -1,6 +1,6 @@
 """Append-only outbound email log (v1.11.0).
 
-One row per email across every send path — queued notifications (ARQ
+One row per email across every send path - queued notifications (ARQ
 `send_email_job`), the synchronous auth-flow direct senders, the admin
 test-send, and the dev logs-fallback. The row is created with
 `status=queued` and UPDATEd in place to its terminal status, so worker
@@ -10,7 +10,7 @@ Bodies are stored with one-time auth-link tokens **masked at rest** (see
 `services/mail_log.py`), so the log can never be used to take over an
 account and a short-lived token doesn't outlive its TTL in a browsable
 log. `masked` gates the admin resend action. Body columns are
-`deferred=True` so the high-volume list + CSV queries never load them —
+`deferred=True` so the high-volume list + CSV queries never load them -
 only the single-row detail endpoint pulls a body.
 """
 from __future__ import annotations

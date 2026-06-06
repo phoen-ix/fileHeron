@@ -55,7 +55,7 @@ def _same_origin(server_url: str, location: str) -> str:
     forwarded headers. If the reverse proxy passes ``X-Forwarded-Proto: http``
     (e.g. nginx overriding it with ``$scheme`` on the internal hop), tusd hands
     back an ``http://`` Location even though the client is on https. PATCHing
-    that triggers an http→https **308 redirect** that httpx won't follow — and
+    that triggers an http→https **308 redirect** that httpx won't follow - and
     following it would strip the ``Authorization`` header across the scheme
     change. The upload is always same-origin, so we keep only the path + query
     from the Location and graft on our own scheme + host."""
@@ -81,7 +81,7 @@ def upload_tus(
     """Upload ``file_path`` via the TUS resumable protocol. Returns the
     final upload URL (for debugging / log correlation)."""
     # Snapshot the size once and declare it as Upload-Length. If the user
-    # edits the file mid-upload (finding C9 — TOCTOU), the streamed bytes
+    # edits the file mid-upload (finding C9 - TOCTOU), the streamed bytes
     # will diverge from this length and the server rejects the final chunk;
     # we don't try to recover (re-statting mid-stream would just race
     # again). The caller should treat the file as immutable for the upload.
@@ -111,7 +111,7 @@ def upload_tus(
         # forwards X-Forwarded-Proto: http makes tusd emit an http:// Location;
         # PATCHing it 308-redirects to https and the upload dies. See
         # _same_origin. (Handles full-URL, root-relative, and bare-relative
-        # Locations — superset of the old _absolute resolution.)
+        # Locations - superset of the old _absolute resolution.)
         upload_url = _same_origin(server_url, location)
 
         # 2. Stream chunks (with resume on failure).
@@ -169,7 +169,7 @@ def _send_chunk_with_retry(
             return int(resp.headers.get("Upload-Offset", expected_offset + len(chunk)))
 
         if resp.status_code in (409, 410, 423, 460):
-            # Offset mismatch / locked — re-sync via HEAD and retry from
+            # Offset mismatch / locked - re-sync via HEAD and retry from
             # the server's reported position.
             head = cli.head(upload_url, headers=base_headers)
             if head.status_code != 200:
@@ -186,7 +186,7 @@ def _send_chunk_with_retry(
             time.sleep(BACKOFF_SECONDS[min(attempt, len(BACKOFF_SECONDS) - 1)])
             continue
 
-        # Server-side hard failure — don't retry, surface the body.
+        # Server-side hard failure - don't retry, surface the body.
         raise TusError(
             f"TUS PATCH failed: HTTP {resp.status_code} {resp.text[:200]}",
             status_code=resp.status_code,

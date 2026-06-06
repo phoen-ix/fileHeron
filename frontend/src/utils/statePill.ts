@@ -5,7 +5,7 @@ export type PillTone = 'active' | 'warn' | 'danger' | undefined
 /**
  * Map a share state to a design-system pill tone. Shared by the share lists +
  * detail (was duplicated as `pillForState` / `pillForShareState`).
- * File-state pills are intentionally NOT unified here — they differ by context
+ * File-state pills are intentionally NOT unified here - they differ by context
  * (e.g. ready_unscanned reads as active in the recipient view but warn in the
  * admin inventory).
  */

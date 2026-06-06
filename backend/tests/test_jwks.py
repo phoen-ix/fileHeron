@@ -1,6 +1,6 @@
 """JWKS cache + IdP key-rotation handling.
 
-Pure unit coverage — we don't talk to a real IdP. `_fetch_jwks` and
+Pure unit coverage - we don't talk to a real IdP. `_fetch_jwks` and
 `oidc._discovery` are monkeypatched per test so we exercise the cache
 state machine without httpx round-trips.
 """
@@ -31,7 +31,7 @@ def _make_provider() -> OIDCProvider:
 
 
 class _StubKey:
-    """Stand-in for jwt.PyJWK — we don't decode anything, just check
+    """Stand-in for jwt.PyJWK - we don't decode anything, just check
     that the right key gets returned for the right kid."""
     def __init__(self, marker: str):
         self.key = marker
@@ -82,7 +82,7 @@ async def test_unknown_kid_triggers_refresh(monkeypatch):
     assert await jwks_svc.get_signing_key(provider, "kid-a") == "key-a"
     assert call_count["n"] == 1
 
-    # Now ask for kid-b — cache miss triggers refresh, which picks up the new key.
+    # Now ask for kid-b - cache miss triggers refresh, which picks up the new key.
     assert await jwks_svc.get_signing_key(provider, "kid-b") == "key-b"
     assert call_count["n"] == 2
 
@@ -137,7 +137,7 @@ async def test_missing_jwks_uri_in_discovery_raises(monkeypatch):
 @pytest.mark.asyncio
 async def test_jwks_endpoint_http_error_raises(monkeypatch):
     """When httpx fails on the JWKS endpoint, _fetch_jwks raises
-    OIDC_JWKS_UNAVAILABLE — not silently caching an empty key set."""
+    OIDC_JWKS_UNAVAILABLE - not silently caching an empty key set."""
     provider = _make_provider()
 
     async def fake_discovery(_p):

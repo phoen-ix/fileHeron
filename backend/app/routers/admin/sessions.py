@@ -1,4 +1,4 @@
-"""/api/admin/sessions — cross-user session oversight (v1.7.0).
+"""/api/admin/sessions - cross-user session oversight (v1.7.0).
 
 A session is a row in `refresh_tokens`. Admins list every user's sessions
 (paginated, sortable, filterable), spot stale/hanging ones by sorting on
@@ -48,7 +48,7 @@ def list_sessions(
 
     `include_inactive=false` (default) shows only live sessions
     (`revoked_at IS NULL AND expires_at > now`). Sorting defaults to
-    `last_used_at asc` so the oldest/most-idle sessions surface first —
+    `last_used_at asc` so the oldest/most-idle sessions surface first -
     the quickest way to spot stale or forgotten devices.
     """
     now = utc_now()

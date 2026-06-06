@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# fileHeron backup — produces a dated archive under ./backups/<stamp>/.
+# fileHeron backup - produces a dated archive under ./backups/<stamp>/.
 #
 # Contents:
-#   db.sql                — mysqldump of the MariaDB database
-#   files.tar.gz          — gzipped tar of ./data/files (finalized uploads)
-#   quarantine.tar.gz     — gzipped tar of ./data/quarantine (AV positives)
-#   redis.rdb             — Redis snapshot (rate-limit counters, ARQ queue)
-#   manifest.txt          — sha256 of every artifact + counts
+#   db.sql                - mysqldump of the MariaDB database
+#   files.tar.gz          - gzipped tar of ./data/files (finalized uploads)
+#   quarantine.tar.gz     - gzipped tar of ./data/quarantine (AV positives)
+#   redis.rdb             - Redis snapshot (rate-limit counters, ARQ queue)
+#   manifest.txt          - sha256 of every artifact + counts
 #
 # If $BACKUP_RESTIC_REPO is set (e.g. "s3:s3.amazonaws.com/my-bucket/repo",
 # "rest:https://restic.example.com/", or a local path), the produced archive
@@ -37,7 +37,7 @@ STAMP="$(date -u +%Y-%m-%d_%H%M%S)"
 DEST="$ROOT/backups/$STAMP"
 mkdir -p "$DEST"
 
-echo "[backup] $STAMP — starting"
+echo "[backup] $STAMP - starting"
 
 # 1. MariaDB dump.
 # Pass the password via the MYSQL_PWD env var rather than `-p"$pwd"` on
@@ -58,7 +58,7 @@ tar -C "$ROOT/data" -czf "$DEST/files.tar.gz" files
 echo "[backup] archiving data/quarantine …"
 tar -C "$ROOT/data" -czf "$DEST/quarantine.tar.gz" quarantine
 
-# 3. Redis snapshot — issue SAVE then copy dump.rdb out of the container.
+# 3. Redis snapshot - issue SAVE then copy dump.rdb out of the container.
 echo "[backup] saving Redis …"
 docker compose exec -T redis redis-cli SAVE > /dev/null
 REDIS_CID="$(docker compose ps -q redis)"
@@ -74,9 +74,9 @@ echo "[backup] hashing artifacts …"
 # 5. Optional restic push.
 if [ -n "${BACKUP_RESTIC_REPO:-}" ]; then
     if [ -z "${BACKUP_RESTIC_PASSWORD:-}" ]; then
-        echo "[backup] BACKUP_RESTIC_REPO set but BACKUP_RESTIC_PASSWORD missing — skipping push" >&2
+        echo "[backup] BACKUP_RESTIC_REPO set but BACKUP_RESTIC_PASSWORD missing - skipping push" >&2
     elif ! command -v restic >/dev/null 2>&1; then
-        echo "[backup] restic not installed on host — skipping push" >&2
+        echo "[backup] restic not installed on host - skipping push" >&2
     else
         echo "[backup] pushing to restic repo $BACKUP_RESTIC_REPO …"
         # Stash the password in a 0600 temp file and pass it via
@@ -99,13 +99,13 @@ if [ -n "${BACKUP_RESTIC_REPO:-}" ]; then
     fi
 fi
 
-# 6. Local retention — keep last 7 dated dirs. Restic remote (if
+# 6. Local retention - keep last 7 dated dirs. Restic remote (if
 # configured) holds older snapshots via its own keep-* policy below.
 echo "[backup] pruning local backups (keep last 7) …"
 # shellcheck disable=SC2012
 ls -1dt "$ROOT/backups"/*/ 2>/dev/null | tail -n +8 | xargs -r rm -rf
 
-# 7. Restic forget + prune — drops snapshots beyond the retention
+# 7. Restic forget + prune - drops snapshots beyond the retention
 # window so the remote repo doesn't grow without bound. Mirrors the
 # password-via-file pattern from step 5; reuses the same temp file
 # when restic is enabled.
@@ -122,6 +122,6 @@ if [ -n "${BACKUP_RESTIC_REPO:-}" ] && [ -n "${BACKUP_RESTIC_PASSWORD:-}" ] && c
     trap - EXIT
 fi
 
-echo "[backup] done — $DEST"
+echo "[backup] done - $DEST"
 echo "[backup] sizes:"
 du -h "$DEST"/* | sed 's/^/[backup]   /'

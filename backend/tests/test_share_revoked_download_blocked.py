@@ -1,6 +1,6 @@
 """Regression: authenticated downloads must honour share lifecycle state.
 
-Audit finding H1 — `revoke_share` only flips `share.state`; it leaves the
+Audit finding H1 - `revoke_share` only flips `share.state`; it leaves the
 bytes + `file.state` intact. The authenticated download path
 (`/api/files/{id}/download` and `/download-url`) checked only `file.state`,
 never `share.state`, so a recipient of a REVOKED (or expired) share could

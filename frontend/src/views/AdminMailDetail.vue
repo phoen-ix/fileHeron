@@ -124,7 +124,7 @@ onMounted(load)
         </div>
         <div>
           <dt>{{ t('admin_mail.detail.category') }}</dt>
-          <dd class="fh-mono">{{ row.category ?? '—' }} / {{ row.via }}</dd>
+          <dd class="fh-mono">{{ row.category ?? '-' }} / {{ row.via }}</dd>
         </div>
         <div>
           <dt>{{ t('admin_mail.detail.attempts') }}</dt>

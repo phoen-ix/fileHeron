@@ -1,4 +1,4 @@
-"""File records — create / finalize / delete.
+"""File records - create / finalize / delete.
 
 Storage layout: ``{STORAGE_ROOT}/{yyyy}/{mm}/{file_id}.bin``
                 e.g. /data/files/2026/05/abc-123-...-def.bin
@@ -39,7 +39,7 @@ def storage_path_for(file_id: str, when: datetime | None = None) -> Path:
 
 
 def downloadable_files(db: Session, share_id: str) -> list[File]:
-    """The `clean` files of a share whose bytes are actually present on disk —
+    """The `clean` files of a share whose bytes are actually present on disk -
     the set a bulk-ZIP download includes. Scanning / infected / deleted files
     are skipped (not an error); a missing-on-disk row is skipped + logged."""
     out: list[File] = []
@@ -97,12 +97,12 @@ def finalize_to_disk(
     - Atomic rename when TUS_UPLOAD_DIR and STORAGE_ROOT share a
       filesystem; otherwise shutil.move falls back to copy + unlink
       (Docker bind mounts often look cross-device inside the
-      container even on the same host disk — Errno 18 EXDEV).
+      container even on the same host disk - Errno 18 EXDEV).
     """
     src = Path(settings.TUS_UPLOAD_DIR) / tus_upload_id
     if not src.is_file():
         # tusd may store metadata as `<id>.info`. The data file is just <id>.
-        # If neither exists, the upload didn't actually land — bail out.
+        # If neither exists, the upload didn't actually land - bail out.
         raise AppError(500, "UPLOAD_MISSING", f"tusd upload {tus_upload_id} not found on disk.")
 
     when = utc_now()
@@ -112,7 +112,7 @@ def finalize_to_disk(
     # (local = atomic rename / copy fallback; object store = multipart upload).
     backend.finalize(str(src), locator)
 
-    # tusd also writes a sidecar .info — clean it up.
+    # tusd also writes a sidecar .info - clean it up.
     info_sidecar = src.with_suffix(".info")
     if info_sidecar.is_file():
         try:
@@ -153,7 +153,7 @@ def hard_delete(
     admin's id for an admin-initiated delete so the audit records the real
     actor, not the file's owner.
 
-    Raises OSError if the disk unlink fails — callers MUST decide whether
+    Raises OSError if the disk unlink fails - callers MUST decide whether
     to abort the surrounding transaction (e.g. GDPR erasure: stop, don't
     lie in the receipt PDF) or to swallow + audit + continue (e.g. cron
     expire: keep processing remaining shares). Pre-fix this function
@@ -162,7 +162,7 @@ def hard_delete(
     """
     # Idempotency guard: a second hard_delete on an already-deleted file
     # would re-run release_bytes and double-credit the uploader's quota
-    # (finding L11). Bail out — the row is already a deleted marker.
+    # (finding L11). Bail out - the row is already a deleted marker.
     if file.state == FileState.deleted:
         return
 

@@ -1,4 +1,4 @@
-"""Per-user storage quota — Redis-backed atomic INCRBY-with-bound.
+"""Per-user storage quota - Redis-backed atomic INCRBY-with-bound.
 
 Counter key: ``fh:quota:user:{user_id}`` holds the user's currently-allocated
 bytes (sum of in-flight + finalized files that haven't been deleted).
@@ -69,7 +69,7 @@ def _initialize_from_db(db: Session, user_id: int) -> int:
         # which both mis-displayed usage and loosened enforcement.
         get_redis().set(_key(user_id), used, nx=True)
     except Exception:
-        # Redis unreachable — quota check will fail-open below.
+        # Redis unreachable - quota check will fail-open below.
         logger.warning("redis unreachable during quota init for user %d", user_id)
     return used
 
@@ -78,7 +78,7 @@ def reserve_bytes(db: Session, *, user: User, additional_bytes: int) -> int:
     """Atomically reserve ``additional_bytes`` against the user's quota.
     Returns the new allocated total. Raises AppError(413, QUOTA_EXCEEDED).
 
-    If Redis is unreachable, this fails OPEN — the upload is allowed.
+    If Redis is unreachable, this fails OPEN - the upload is allowed.
     Quota is a "user fairness" control, not an "absolute storage cap".
     The hourly `workers/quota_reconcile.py` cron rebuilds the Redis
     counter from the DB sum on a schedule so drift never compounds
@@ -112,7 +112,7 @@ def reserve_bytes(db: Session, *, user: User, additional_bytes: int) -> int:
 
 def release_bytes(*, user_id: int, bytes_to_free: int) -> None:
     """Decrement the Redis counter when an upload is abandoned (post-terminate)
-    or a file is deleted. Best-effort — if Redis is down, we accept the
+    or a file is deleted. Best-effort - if Redis is down, we accept the
     counter will drift; the hourly `workers/quota_reconcile.py` cron
     repairs drift > 1 MiB."""
     if bytes_to_free <= 0:
@@ -120,7 +120,7 @@ def release_bytes(*, user_id: int, bytes_to_free: int) -> None:
     try:
         remaining = get_redis().decrby(_key(user_id), bytes_to_free)
         # A release for bytes that were never reserved (counter uninitialized at
-        # reserve time) must not drive the counter negative — floor at 0.
+        # reserve time) must not drive the counter negative - floor at 0.
         if remaining < 0:
             get_redis().set(_key(user_id), 0)
     except Exception:
@@ -128,7 +128,7 @@ def release_bytes(*, user_id: int, bytes_to_free: int) -> None:
 
 
 def used_bytes(*, user_id: int) -> int:
-    """Read-only — the current Redis counter (the fast quota-enforcement
+    """Read-only - the current Redis counter (the fast quota-enforcement
     source). Floored at 0 so a drifted negative counter can never *loosen*
     enforcement. For an accurate storage figure to display, use
     `storage_used_bytes` (DB-authoritative) instead."""
@@ -140,7 +140,7 @@ def used_bytes(*, user_id: int) -> int:
 
 
 def _used_bytes_query(db: Session, user_ids: list[int]):
-    """Authoritative allocated-bytes per user from the DB — same filter as
+    """Authoritative allocated-bytes per user from the DB - same filter as
     `_initialize_from_db` / `quota_reconcile` (in-flight + finalized, not
     deleted). Grouped so a whole page is one query."""
     return (
@@ -157,13 +157,13 @@ def _used_bytes_query(db: Session, user_ids: list[int]):
 
 def storage_used_bytes(db: Session, *, user_id: int) -> int:
     """Authoritative storage used by a user, summed from the DB. Use for
-    display (admin UI) — unlike `used_bytes` it never lapses or drifts."""
+    display (admin UI) - unlike `used_bytes` it never lapses or drifts."""
     row = _used_bytes_query(db, [user_id]).one_or_none()
     return int(row[1]) if row else 0
 
 
 def storage_used_bytes_bulk(db: Session, user_ids: list[int]) -> dict[int, int]:
-    """Bulk DB-authoritative storage — one grouped query for a page of users.
+    """Bulk DB-authoritative storage - one grouped query for a page of users.
     Users with no files default to 0."""
     if not user_ids:
         return {}

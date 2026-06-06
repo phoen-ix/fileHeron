@@ -2,13 +2,13 @@
 
 A self-hosted, bidirectional file-sharing platform. Companies share files outbound to clients; clients send files inbound to specific employees or to a generic company inbox. Designed for resumable transfers up to ~30 GB, group-based access control, time-limited shares, and optional public links protected by token + password + download-count limit.
 
-> Display name is **file:Heron** (with the colon). The repository directory, container names, package names, code identifiers, and env-var names all use **fileHeron** without the colon — filesystems and most tools forbid `:` in identifiers.
+> Display name is **file:Heron** (with the colon). The repository directory, container names, package names, code identifiers, and env-var names all use **fileHeron** without the colon - filesystems and most tools forbid `:` in identifiers.
 
-> **Status: shipped & in operation (backend `v1.12.0`, desktop client `client-v0.9.9`).** Auth, uploads (resumable + direct), shares (multi-recipient outbox/inbox), groups, public links, ClamAV scanning, email + in-app notifications, admin UI, multi-provider OIDC SSO with explicit Connect flow, WebAuthn/passkeys, GDPR right-to-erasure with PDF receipt, self-service profile (display name + locale + landing page) — all live. Post-1.0 added an in-app self-update flow, admin "create user directly" (skip the invite), orphaned-file reclaim, 24-hour timestamps with an admin-set site timezone, a login-page MOTD banner, a transparent per-user session cap, and a runtime **settings registry** that makes ~25 formerly env-only knobs admin-tunable without a redeploy. Post-1.4 added admin **session management** (view/revoke any user's sessions), admin **file deletion** in File History (which now hides deleted/abandoned by default) plus a per-user "current files" view, a DB-authoritative storage column, and a round of performance, accessibility, and dependency-slimming work (Element Plus removed). Post-1.10 hardened the admin **Email/SMTP** page: a configurable HELO/EHLO hostname, actionable test-send error hints, and required SMTP credentials by default (with an explicit anonymous-relay opt-out). v1.11 added a **Mail log** — every outbound email is recorded with its delivery outcome and browsable at `/admin/mail-log` (full-content detail, per-recipient view, resend, CSV), with one-time auth links masked at rest. v1.12 lets a share's **creator add more files to an active share** (with an optional "notify recipients" toggle). Single-org, three-role (admin / employee / client) operator-grade tool.
+> **Status: shipped & in operation (backend `v1.12.0`, desktop client `client-v0.9.9`).** Auth, uploads (resumable + direct), shares (multi-recipient outbox/inbox), groups, public links, ClamAV scanning, email + in-app notifications, admin UI, multi-provider OIDC SSO with explicit Connect flow, WebAuthn/passkeys, GDPR right-to-erasure with PDF receipt, self-service profile (display name + locale + landing page) - all live. Post-1.0 added an in-app self-update flow, admin "create user directly" (skip the invite), orphaned-file reclaim, 24-hour timestamps with an admin-set site timezone, a login-page MOTD banner, a transparent per-user session cap, and a runtime **settings registry** that makes ~25 formerly env-only knobs admin-tunable without a redeploy. Post-1.4 added admin **session management** (view/revoke any user's sessions), admin **file deletion** in File History (which now hides deleted/abandoned by default) plus a per-user "current files" view, a DB-authoritative storage column, and a round of performance, accessibility, and dependency-slimming work (Element Plus removed). Post-1.10 hardened the admin **Email/SMTP** page: a configurable HELO/EHLO hostname, actionable test-send error hints, and required SMTP credentials by default (with an explicit anonymous-relay opt-out). v1.11 added a **Mail log** - every outbound email is recorded with its delivery outcome and browsable at `/admin/mail-log` (full-content detail, per-recipient view, resend, CSV), with one-time auth links masked at rest. v1.12 lets a share's **creator add more files to an active share** (with an optional "notify recipients" toggle). Single-org, three-role (admin / employee / client) operator-grade tool.
 
-This README is also the user / admin / operator / developer manual — the full walkthrough lives below the phase tracker. Jump to: [Using file:Heron](#using-fileheron-end-user-guide) · [Admin guide](#admin-guide) · [Operator guide](#operator-guide) · [Developer guide](#developer-guide) · [Desktop client](client/README.md).
+This README is also the user / admin / operator / developer manual - the full walkthrough lives below the phase tracker. Jump to: [Using file:Heron](#using-fileheron-end-user-guide) · [Admin guide](#admin-guide) · [Operator guide](#operator-guide) · [Developer guide](#developer-guide) · [Desktop client](client/README.md).
 
-A native CustomTkinter desktop client (single Windows .exe) lives under [`client/`](client/) — see its [README](client/README.md) and [release notes](client/RELEASE_NOTES.md). Sign in with email + password (+ TOTP/recovery) or an API token; the server URL is asked once and saved per install. As of `client-v0.9.1` the login is an in-window overlay (no separate login window), signing out returns to that overlay instead of quitting, and an expired session bounces you back to sign-in with a message. Releases are built by GitHub Actions on `client-v*` tags and attached to the matching release.
+A native CustomTkinter desktop client (single Windows .exe) lives under [`client/`](client/) - see its [README](client/README.md) and [release notes](client/RELEASE_NOTES.md). Sign in with email + password (+ TOTP/recovery) or an API token; the server URL is asked once and saved per install. As of `client-v0.9.1` the login is an in-window overlay (no separate login window), signing out returns to that overlay instead of quitting, and an expired session bounces you back to sign-in with a message. Releases are built by GitHub Actions on `client-v*` tags and attached to the matching release.
 
 ## Quickstart (production target)
 
@@ -48,7 +48,7 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up
  └─────────┴──────────┴──────┘
 ```
 
-- Browser uses Uppy with TUS for resumable upload — works through any HTTP proxy that doesn't buffer.
+- Browser uses Uppy with TUS for resumable upload - works through any HTTP proxy that doesn't buffer.
 - API clients (CI scripts, CLIs) use any TUS-protocol library (`tuspy`, `go-tus`, raw curl) against the same endpoint.
 - Downloads are served by FastAPI via `FileResponse` + kernel `sendfile()`.
 - ClamAV scans every upload asynchronously; infected files quarantined, share auto-revoked.
@@ -58,24 +58,24 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up
 - **Backend:** Python 3.12, FastAPI, SQLAlchemy 2.0, Alembic, Pydantic v2, ARQ, argon2-cffi, py_webauthn, Authlib-style OIDC code flow, aiosmtplib, reportlab
 - **Database / cache:** MariaDB 11, Redis 7-alpine
 - **Upload:** tusd (Go) + Uppy (browser) + tuspy (API clients)
-- **Frontend:** Vue 3, Vite, Pinia, Vue Router, vue-i18n, axios, dayjs, vitest (no UI framework — Element Plus was removed in v1.9.0; date/time uses a native `<input type=datetime-local>`)
+- **Frontend:** Vue 3, Vite, Pinia, Vue Router, vue-i18n, axios, dayjs, vitest (no UI framework - Element Plus was removed in v1.9.0; date/time uses a native `<input type=datetime-local>`)
 - **Antivirus:** ClamAV
 - **Reverse proxy / TLS:** Traefik on the host
 - **Internal static serving:** nginx:alpine
 
 ## Highlights
 
-- **Public-link policy + inline-on-create + editable expiry + Expire-now** — admin gates who can mint shareable public links (mode + user/group allowlist, mirroring the API-token policy). Share creators add password/download-limit/notify in the same form they upload from. Active shares expose an editable expiry and an "Expire now" button that flips state + deletes file bytes immediately (same helper as the cron).
-- **Sortable, filterable, groupable share lists + admin "File history"** — `/outbox` and `/inbox` are paginated with click-to-sort columns, recipient/sender filter, and a "group by user/group" toggle. Admin gets a cross-user file archive (every file ever uploaded) with download stats joined from the access log; deleted/abandoned files are hidden by default (toggle to show), and admins can **delete any file** directly from the list (frees the uploader's quota; auto-revokes the parent share if it was the last live file).
-- **Admin session management** — `/admin/sessions` lists every user's signed-in sessions (paginated, searchable, sortable by last-active to spot stale ones); revoke a single session or all of a user's sessions. The user-detail page mirrors this with a per-user sessions list and a "current files" view.
-- **Admin-controlled API tokens** — operator picks who can mint programmatic keys (everyone / employees / admins / disabled) plus an additive user/group allowlist. Cross-user inventory with last-used, reversible disable, permanent revoke, and generate-on-behalf (admin sees the plaintext once for out-of-band hand-off).
-- **Multi-provider OIDC SSO** — run 2-3 providers concurrently (Entra for employees, Google for partners, …); each user binds to one. Smart-prefill admin form for entra/google/authentik/keycloak presets. Explicit /account "Connect" flow refuses on email mismatch.
+- **Public-link policy + inline-on-create + editable expiry + Expire-now** - admin gates who can mint shareable public links (mode + user/group allowlist, mirroring the API-token policy). Share creators add password/download-limit/notify in the same form they upload from. Active shares expose an editable expiry and an "Expire now" button that flips state + deletes file bytes immediately (same helper as the cron).
+- **Sortable, filterable, groupable share lists + admin "File history"** - `/outbox` and `/inbox` are paginated with click-to-sort columns, recipient/sender filter, and a "group by user/group" toggle. Admin gets a cross-user file archive (every file ever uploaded) with download stats joined from the access log; deleted/abandoned files are hidden by default (toggle to show), and admins can **delete any file** directly from the list (frees the uploader's quota; auto-revokes the parent share if it was the last live file).
+- **Admin session management** - `/admin/sessions` lists every user's signed-in sessions (paginated, searchable, sortable by last-active to spot stale ones); revoke a single session or all of a user's sessions. The user-detail page mirrors this with a per-user sessions list and a "current files" view.
+- **Admin-controlled API tokens** - operator picks who can mint programmatic keys (everyone / employees / admins / disabled) plus an additive user/group allowlist. Cross-user inventory with last-used, reversible disable, permanent revoke, and generate-on-behalf (admin sees the plaintext once for out-of-band hand-off).
+- **Multi-provider OIDC SSO** - run 2-3 providers concurrently (Entra for employees, Google for partners, …); each user binds to one. Smart-prefill admin form for entra/google/authentik/keycloak presets. Explicit /account "Connect" flow refuses on email mismatch.
 - **GDPR right-to-erasure** with verifiable PDF receipts and pre-flight summary.
 - **In-app + email notifications** via a single dispatch funnel; per-user channel prefs (email / in-app / both / off) per category. SSE long-poll bell.
 - **Public links** with optional password (Argon2 + brute-force lockout) and download-count limit (atomic counter).
 - **WebAuthn / passkeys** as alternative second factor (sign-count enforced).
-- **In-app self-update + runtime settings registry** — admins update the stack from `/admin/system` (GitHub release-check → one-click update with automatic previous-version rollback), and tune ~25 operational knobs (session cap, rate limits, retention windows, upload cap, …) live at `/admin/settings/advanced` with no redeploy.
-- **24-hour timestamps with an admin-set site timezone** — one IANA timezone setting renders consistent, labelled times across the SPA and every email.
+- **In-app self-update + runtime settings registry** - admins update the stack from `/admin/system` (GitHub release-check → one-click update with automatic previous-version rollback), and tune ~25 operational knobs (session cap, rate limits, retention windows, upload cap, …) live at `/admin/settings/advanced` with no redeploy.
+- **24-hour timestamps with an admin-set site timezone** - one IANA timezone setting renders consistent, labelled times across the SPA and every email.
 - **Backups** via dated dirs + optional `restic` push to S3/B2/SFTP.
 - **i18n** EN + DE everywhere; user-saved `users.locale` overrides browser language; anonymous picks persist via localStorage.
 
@@ -83,53 +83,53 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up
 
 # Using file:Heron (end-user guide)
 
-Audience: anyone with an account — admin, employee, or client. The same UI serves all three roles; admin-only links are hidden for the others.
+Audience: anyone with an account - admin, employee, or client. The same UI serves all three roles; admin-only links are hidden for the others.
 
 ## Logging in
 
 Open the app URL (e.g. `https://files.example.com`) and you'll land on **Login**. There are up to four ways to authenticate, depending on what an admin has configured:
 
-1. **Email + password** — the default. If you've enabled 2FA, submitting your password reveals a single **Authentication code** field. Enter the 6-digit code from your authenticator app **or** one of your recovery codes (`XXXX-XXXX`, each works once) — the same field accepts either, no toggle. The desktop client uses the identical two-step flow.
-2. **Passkey** — if you've registered one on `/account`, click **Sign in with passkey** after entering email + password (the passkey acts as your second factor instead of TOTP).
-3. **SSO (OIDC)** — if your admin enabled one or more providers, you'll see one **Sign in with {provider}** button per provider above the password form. Clicking redirects to the provider, you authenticate there, and you come back logged in.
+1. **Email + password** - the default. If you've enabled 2FA, submitting your password reveals a single **Authentication code** field. Enter the 6-digit code from your authenticator app **or** one of your recovery codes (`XXXX-XXXX`, each works once) - the same field accepts either, no toggle. The desktop client uses the identical two-step flow.
+2. **Passkey** - if you've registered one on `/account`, click **Sign in with passkey** after entering email + password (the passkey acts as your second factor instead of TOTP).
+3. **SSO (OIDC)** - if your admin enabled one or more providers, you'll see one **Sign in with {provider}** button per provider above the password form. Clicking redirects to the provider, you authenticate there, and you come back logged in.
 
 After 5 wrong passwords in a row your account is **locked for 15 minutes**. You'll receive an email when this happens (deduplicated to once per 6 hours so the inbox doesn't flood).
 
-After login, you land on your **default landing page** (set in `/account` — defaults to the Home welcome card; can be Outbox, Inbox, "New share", or Account). If your admin disabled the global home page, "Home" is silently skipped.
+After login, you land on your **default landing page** (set in `/account` - defaults to the Home welcome card; can be Outbox, Inbox, "New share", or Account). If your admin disabled the global home page, "Home" is silently skipped.
 
 ## The page layout
 
-- Top **brand mark** ("file:Heron") — clicks back to home (or is a static label if home is disabled).
+- Top **brand mark** ("file:Heron") - clicks back to home (or is a static label if home is disabled).
 - Centre nav: **Outbox** (shares you sent), **Inbox** (shares you received), **New share**.
 - Right side: 🔔 **notification bell** (live updates via SSE; click to mark-as-read), then your **avatar / name menu** with **Account**, **Admin** (admins only), **Sign out**.
 - Page bodies use a single warm-amber accent on warm off-white. There is no dark mode.
 
 ## Sending a share (`/share/new`)
 
-1. **Pick recipients.** Type in the search box; results show people you're allowed to send to (employees see all employees + connected clients; clients see connected employees and any company-inbox group). You can also pick a **group** — every current member of that group will be a recipient (and adding/removing members later changes who can read the share).
+1. **Pick recipients.** Type in the search box; results show people you're allowed to send to (employees see all employees + connected clients; clients see connected employees and any company-inbox group). You can also pick a **group** - every current member of that group will be a recipient (and adding/removing members later changes who can read the share).
 2. **Drop or pick files.** Files under 100 MB go via a single multipart POST; larger files use the resumable TUS protocol (you can close the tab and resume later from the same browser). Total size is capped by your per-user quota (see your name on /account).
-3. **Subject** (optional) — defaults to the first file's name if left blank.
-4. **Expiry** — required; pick a date/time. The cron job hard-deletes the bytes the hour after expiry passes.
-5. **Public link** (optional, if your admin allows you) — toggle "Create public link" and you can set: a password (Argon2-hashed, brute-force-locked), a download-count limit, and "notify me when someone downloads". On submit you'll get a one-time copy panel with the public URL — it's the **only** time the URL is shown; copy it before navigating away.
-6. **Submit.** You land on `/share/{id}` — the share's detail page.
+3. **Subject** (optional) - defaults to the first file's name if left blank.
+4. **Expiry** - required; pick a date/time. The cron job hard-deletes the bytes the hour after expiry passes.
+5. **Public link** (optional, if your admin allows you) - toggle "Create public link" and you can set: a password (Argon2-hashed, brute-force-locked), a download-count limit, and "notify me when someone downloads". On submit you'll get a one-time copy panel with the public URL - it's the **only** time the URL is shown; copy it before navigating away.
+6. **Submit.** You land on `/share/{id}` - the share's detail page.
 
 ## Receiving a share (`/inbox`)
 
 The inbox lists shares addressed to you (directly or via any group you're in). Click a row to open it. For each file you'll see one of:
 
-- ✅ a **Download** button — the file is scanned-clean and ready
-- ⏳ "Scan in progress" (HTTP 425 if you try anyway) — the antivirus is still working; refresh in a few seconds
-- 🛑 "Quarantined" (HTTP 410) — ClamAV flagged the file; the share has been auto-revoked and the uploader notified
-- "Deleted" (HTTP 410) — the share expired or was revoked; the bytes are gone
+- ✅ a **Download** button - the file is scanned-clean and ready
+- ⏳ "Scan in progress" (HTTP 425 if you try anyway) - the antivirus is still working; refresh in a few seconds
+- 🛑 "Quarantined" (HTTP 410) - ClamAV flagged the file; the share has been auto-revoked and the uploader notified
+- "Deleted" (HTTP 410) - the share expired or was revoked; the bytes are gone
 
-Downloads are streamed by the backend with kernel `sendfile()` — fast even for 30 GB files. Each successful download is logged (your IP, your user, the file, timestamp).
+Downloads are streamed by the backend with kernel `sendfile()` - fast even for 30 GB files. Each successful download is logged (your IP, your user, the file, timestamp).
 
 ## Managing your shares (`/outbox`)
 
 - **Sort** by clicking column headers (cycles asc → desc → off).
 - **Filter** by recipient, sender (admin view), state pill (default = active only), or free-text search.
 - **Group** by recipient or group with the toggle above the table.
-- Per-row actions on the detail page: **Edit expiry** (extend or shorten), **Expire now** (immediately deletes file bytes — same effect as the cron, just earlier), **Revoke share** (recipients lose access; bytes deleted), and the **Public link panel** (create / view / copy / revoke).
+- Per-row actions on the detail page: **Edit expiry** (extend or shorten), **Expire now** (immediately deletes file bytes - same effect as the cron, just earlier), **Revoke share** (recipients lose access; bytes deleted), and the **Public link panel** (create / view / copy / revoke).
 
 ## Public links (anonymous recipients)
 
@@ -137,61 +137,61 @@ Whoever you sent the URL to opens `/d/{token}`. They see the share's subject + f
 
 ## In-browser preview
 
-Supported files get a **Preview** button — in the share view *and* the public `/d/{token}` page — that renders them inline in a lightbox instead of downloading. Previewable types: **PDF**, raster images (**PNG / JPEG / GIF / WebP**), and **plain text** (any `text/*`, shown as source). Everything else stays download-only.
+Supported files get a **Preview** button - in the share view *and* the public `/d/{token}` page - that renders them inline in a lightbox instead of downloading. Previewable types: **PDF**, raster images (**PNG / JPEG / GIF / WebP**), and **plain text** (any `text/*`, shown as source). Everything else stays download-only.
 
 - **Preview ≠ download.** Previewing never consumes a share's or public link's download-count budget and isn't written to the download log. (A link whose budget is already fully spent serves neither, though.) Only virus-scanned (`clean`) files preview.
-- **Security.** Inline content is served from a strict server-side allowlist with `X-Content-Type-Options: nosniff` and a restrictive `Content-Security-Policy`. SVG is never inline-rendered (it can carry script), and anything `text/*` — including HTML — is served as `text/plain`, i.e. shown as source, never executed. On the S3 backend the bytes are served by a presigned redirect that can't carry those headers, so the type allowlist is the defense there.
+- **Security.** Inline content is served from a strict server-side allowlist with `X-Content-Type-Options: nosniff` and a restrictive `Content-Security-Policy`. SVG is never inline-rendered (it can carry script), and anything `text/*` - including HTML - is served as `text/plain`, i.e. shown as source, never executed. On the S3 backend the bytes are served by a presigned redirect that can't carry those headers, so the type allowlist is the defense there.
 - **Global switch.** Admins can turn the whole feature off at *Settings → General → File preview* (`file_preview.enabled`); when off the Preview buttons disappear and the preview endpoints refuse server-side.
 
 ## Share approval (four-eyes)
 
-Optional, admin-controlled. When enabled, a newly created share enters **pending approval** instead of going live — recipients aren't notified and can't access anything until a designated **approver** approves it (or rejects it back to the sender). Off by default; when off, shares go live immediately as before. Configure it at *Settings → Share approval*:
+Optional, admin-controlled. When enabled, a newly created share enters **pending approval** instead of going live - recipients aren't notified and can't access anything until a designated **approver** approves it (or rejects it back to the sender). Off by default; when off, shares go live immediately as before. Configure it at *Settings → Share approval*:
 
-- **Who approves** — admins only, employees + admins, or specific users/groups (an allowlist on top).
-- **Which shares need it** — outbound only, all shares (incl. client uploads), or outbound-to-clients only.
-- **Approvers' own shares** — auto-approve (no deadlock) or require a different approver. (No one can ever approve their own share.)
-- **Content review** — whether approvers may open the pending files to inspect them before deciding (otherwise they decide on metadata: filenames, types, recipients, sender, subject).
+- **Who approves** - admins only, employees + admins, or specific users/groups (an allowlist on top).
+- **Which shares need it** - outbound only, all shares (incl. client uploads), or outbound-to-clients only.
+- **Approvers' own shares** - auto-approve (no deadlock) or require a different approver. (No one can ever approve their own share.)
+- **Content review** - whether approvers may open the pending files to inspect them before deciding (otherwise they decide on metadata: filenames, types, recipients, sender, subject).
 
-Approvers get an **Approvals** entry in the top nav — a queue of everything waiting on them. A sender sees "pending approval" on a held share, and on a rejected one the **reason** plus a **Resubmit** button (the files are kept). Notifications (email + in-app, EN/DE) fire to the approvers ("needs your approval") and back to the sender ("approved" / "rejected"). A pending or rejected share is invisible to recipients and to any public link until approved.
+Approvers get an **Approvals** entry in the top nav - a queue of everything waiting on them. A sender sees "pending approval" on a held share, and on a rejected one the **reason** plus a **Resubmit** button (the files are kept). Notifications (email + in-app, EN/DE) fire to the approvers ("needs your approval") and back to the sender ("approved" / "rejected"). A pending or rejected share is invisible to recipients and to any public link until approved.
 
 ## Email templates (`/admin/settings/email-templates`)
 
-Admins can edit the **subject and body of every outbound email, per language**, from a dedicated editor — no code change or release needed. Built-in templates remain the default; an override only takes effect once saved, and **Reset to default** removes it.
+Admins can edit the **subject and body of every outbound email, per language**, from a dedicated editor - no code change or release needed. Built-in templates remain the default; an override only takes effect once saved, and **Reset to default** removes it.
 
 - **WYSIWYG editor** (bold/italic/headings/lists) via the MIT-licensed Milkdown editor, lazy-loaded only on this page. The body is authored as Markdown and stored as Markdown; on send it becomes the plain-text part *and* a sanitised HTML part wrapped in the standard branded layout.
-- **Friendly placeholders** — insert `[RECIPIENT]`, `[SHARE_LINK]`, `[RESET_LINK]`, etc. from a toolbar menu; each template lists the placeholders it supports. The server maps them to real values, HTML-escaping dynamic data and keeping one-time auth links in their canonical (masked-in-mail-log) form.
+- **Friendly placeholders** - insert `[RECIPIENT]`, `[SHARE_LINK]`, `[RESET_LINK]`, etc. from a toolbar menu; each template lists the placeholders it supports. The server maps them to real values, HTML-escaping dynamic data and keeping one-time auth links in their canonical (masked-in-mail-log) form.
 - **Live preview** (HTML + plain-text, sample data, rendered in a sandboxed iframe) and **test send** to your own address via the configured SMTP.
-- **Locale-agnostic** — the language tabs are driven by the app's locale set (EN/DE today), so a future language becomes editable with no code change.
-- **Safety** — overrides are sanitised (no scripts/handlers/unsafe schemes); the editor rejects saving an auth email (password reset / verify / invite / email-change) that drops its required link placeholder, so those flows can't be bricked. The 8 token-bearing auth categories stay force-masked in the mail log regardless.
+- **Locale-agnostic** - the language tabs are driven by the app's locale set (EN/DE today), so a future language becomes editable with no code change.
+- **Safety** - overrides are sanitised (no scripts/handlers/unsafe schemes); the editor rejects saving an auth email (password reset / verify / invite / email-change) that drops its required link placeholder, so those flows can't be bricked. The 8 token-bearing auth categories stay force-masked in the mail log regardless.
 
 ## Inbound mailbox (`/admin/inbox` + `/admin/settings/imap`)
 
-file:Heron can **read** the configured mail account over IMAP, not just send. When enabled it polls the mailbox, ingests messages into an admin-only **Inbox**, and labels each as **REPLY**, **BOUNCE** (delivery-status notification) or **AUTO** (out-of-office / auto-reply) — so user replies, dead addresses and bounces surface in-app. Off by default; uses Python's stdlib `imaplib` (no third-party dependency). Config at *Settings → Inbound mail (IMAP)*:
+file:Heron can **read** the configured mail account over IMAP, not just send. When enabled it polls the mailbox, ingests messages into an admin-only **Inbox**, and labels each as **REPLY**, **BOUNCE** (delivery-status notification) or **AUTO** (out-of-office / auto-reply) - so user replies, dead addresses and bounces surface in-app. Off by default; uses Python's stdlib `imaplib` (no third-party dependency). Config at *Settings → Inbound mail (IMAP)*:
 
-- **Connection** — host, port, encryption (implicit TLS / STARTTLS / none), user, password (Fernet-encrypted, never echoed), source mailbox. By default (`imap.use_smtp_credentials`, on) IMAP **reuses the SMTP username + password** (and the SMTP host when no IMAP host is set) so you don't re-enter the sending account; turn it off for a dedicated fetch account. **Test connection** lists the server's folders; **Fetch now** runs a poll immediately.
-- **Fetching** — `auto` (cron ticks every 5 min, self-gated to your interval) or `manual` only. Mirrors the `release_check` enable/auto-manual/interval pattern.
-- **After fetch** (admin-selectable) — `mark_read` · `untouched` · `move` (to a subfolder) · `delete`. Dedup is by IMAP `(UIDVALIDITY, UID)` + `Message-ID`, so re-polling never double-ingests even in `untouched` mode.
-- **Notifications** — `off` (unread badge only) · `human` (genuine replies) · `all`.
+- **Connection** - host, port, encryption (implicit TLS / STARTTLS / none), user, password (Fernet-encrypted, never echoed), source mailbox. By default (`imap.use_smtp_credentials`, on) IMAP **reuses the SMTP username + password** (and the SMTP host when no IMAP host is set) so you don't re-enter the sending account; turn it off for a dedicated fetch account. **Test connection** lists the server's folders; **Fetch now** runs a poll immediately.
+- **Fetching** - `auto` (cron ticks every 5 min, self-gated to your interval) or `manual` only. Mirrors the `release_check` enable/auto-manual/interval pattern.
+- **After fetch** (admin-selectable) - `mark_read` · `untouched` · `move` (to a subfolder) · `delete`. Dedup is by IMAP `(UIDVALIDITY, UID)` + `Message-ID`, so re-polling never double-ingests even in `untouched` mode.
+- **Notifications** - `off` (unread badge only) · `human` (genuine replies) · `all`.
 - **Attachments** are stored via the storage backend, **ClamAV-scanned**, and download-gated on a clean result. Inbound HTML is **nh3-sanitised on ingest and shown in a sandboxed iframe**. Messages are pruned by `retention.inbound_message_days` (default 90) via `prune_history`.
 
 ## Account page (`/account`)
 
 A single scrollable page with these sections (left-side quick-nav with scroll-spy):
 
-- **Profile** — display name + UI language (EN / DE). Both save instantly with a toast.
-- **Default landing page** — pick where you go after login.
-- **Password** — change with current + new + confirm. Checked against haveibeenpwned (k-anonymity, no plaintext sent).
-- **Sessions** — every active refresh token (browser + last-seen IP, timestamps shown 24-hour in the site timezone). Revoke any to log that device out. There's a per-user cap (default 10): signing in on an 11th device transparently signs out your oldest session, and you get a notification when that happens.
-- **Two-factor (TOTP)** — show QR + secret, confirm with a 6-digit code, get 10 recovery codes (shown once — save them in a password manager). Disable requires your password + a current code.
-- **Recovery codes** — regenerate (invalidates the previous set).
-- **Passkeys** — register a platform / cross-platform authenticator. Multiple per account; each can be removed individually.
-- **SSO connections** — connect to or disconnect from any OIDC provider your admin configured. The connect flow refuses if the provider's email doesn't match your fileHeron email.
-- **Notifications** — per-category channel pick (off / email / in-app / both).
-- **API tokens** — if your admin's policy allows you to mint them; each token's plaintext is shown once at creation.
+- **Profile** - display name + UI language (EN / DE). Both save instantly with a toast.
+- **Default landing page** - pick where you go after login.
+- **Password** - change with current + new + confirm. Checked against haveibeenpwned (k-anonymity, no plaintext sent).
+- **Sessions** - every active refresh token (browser + last-seen IP, timestamps shown 24-hour in the site timezone). Revoke any to log that device out. There's a per-user cap (default 10): signing in on an 11th device transparently signs out your oldest session, and you get a notification when that happens.
+- **Two-factor (TOTP)** - show QR + secret, confirm with a 6-digit code, get 10 recovery codes (shown once - save them in a password manager). Disable requires your password + a current code.
+- **Recovery codes** - regenerate (invalidates the previous set).
+- **Passkeys** - register a platform / cross-platform authenticator. Multiple per account; each can be removed individually.
+- **SSO connections** - connect to or disconnect from any OIDC provider your admin configured. The connect flow refuses if the provider's email doesn't match your fileHeron email.
+- **Notifications** - per-category channel pick (off / email / in-app / both).
+- **API tokens** - if your admin's policy allows you to mint them; each token's plaintext is shown once at creation.
 
 ## When 2FA is required (forced enrolment)
 
-If your admin sets a 2FA policy that includes your role or one of your groups, every page navigation forwards you to `/account/2fa`. The QR is launched automatically — scan it, type the code, save your recovery codes. After enrolment you continue to wherever you were going (`?redirect=` is honoured).
+If your admin sets a 2FA policy that includes your role or one of your groups, every page navigation forwards you to `/account/2fa`. The QR is launched automatically - scan it, type the code, save your recovery codes. After enrolment you continue to wherever you were going (`?redirect=` is honoured).
 
 ---
 
@@ -201,96 +201,96 @@ Audience: users with the **admin** role. Everything here lives under `/admin` (s
 
 ## User management
 
-- **`/admin/users`** — paginated list, role / status filter, free-text search. Each row shows ID, name + email, role, status, 2FA pill, created, last-login.
-- **Invite a user** — inline form on the list page. Fields: email, optional display-name hint, role, optional **initial groups** (lazy-loaded; "company inbox" pill where applicable). Pre-flight refuses with `USER_EXISTS` (already registered) or `INVITE_PENDING` (unconsumed invite already exists). Invitee gets an email with a one-time link valid for 24 hours.
-- **Create a user directly** — skip the invite entirely: set the email, display name, role, and a password yourself. The account is active immediately (pre-verified), so you can hand the credentials over out-of-band — useful for air-gapped setups or when email isn't wired up yet.
-- **`/admin/users/:id`** — edit display name, role, quota (NULL = unlimited), disabled flag. Three irreversible actions:
-  - **Force password reset** — invalidates current password, returns a one-time plaintext reset token you hand to the user out-of-band.
-  - **Erase user (GDPR)** — two-step confirmation. Pre-flight shows files / bytes / shares-created / shares-received counts. Confirm runs: hard-delete every uploaded file from disk, delete TOTP / recovery codes / refresh tokens / API tokens, anonymize the row (`email → erased-<id>@erased.invalid`, display → `[erased]`), audit `user_erased`. **Irreversible.**
-  - **Erasure receipt PDF** — download a one-page verifiable receipt of the audit row.
+- **`/admin/users`** - paginated list, role / status filter, free-text search. Each row shows ID, name + email, role, status, 2FA pill, created, last-login.
+- **Invite a user** - inline form on the list page. Fields: email, optional display-name hint, role, optional **initial groups** (lazy-loaded; "company inbox" pill where applicable). Pre-flight refuses with `USER_EXISTS` (already registered) or `INVITE_PENDING` (unconsumed invite already exists). Invitee gets an email with a one-time link valid for 24 hours.
+- **Create a user directly** - skip the invite entirely: set the email, display name, role, and a password yourself. The account is active immediately (pre-verified), so you can hand the credentials over out-of-band - useful for air-gapped setups or when email isn't wired up yet.
+- **`/admin/users/:id`** - edit display name, role, quota (NULL = unlimited), disabled flag. Three irreversible actions:
+  - **Force password reset** - invalidates current password, returns a one-time plaintext reset token you hand to the user out-of-band.
+  - **Erase user (GDPR)** - two-step confirmation. Pre-flight shows files / bytes / shares-created / shares-received counts. Confirm runs: hard-delete every uploaded file from disk, delete TOTP / recovery codes / refresh tokens / API tokens, anonymize the row (`email → erased-<id>@erased.invalid`, display → `[erased]`), audit `user_erased`. **Irreversible.**
+  - **Erasure receipt PDF** - download a one-page verifiable receipt of the audit row.
 
 ## Groups
 
-- **`/admin/groups`** — list, create, search.
-- **`/admin/groups/:id`** — edit name, the **company-inbox** flag (a `company_inbox=true` group is addressable by every connected client), members. Removing a member instantly revokes their access to past group-targeted shares (the SPA warns about this in the confirm).
-- **Deletion safety** — refuses with `GROUP_IN_USE` (409) if the group is the recipient of any active share. Revoke those first.
+- **`/admin/groups`** - list, create, search.
+- **`/admin/groups/:id`** - edit name, the **company-inbox** flag (a `company_inbox=true` group is addressable by every connected client), members. Removing a member instantly revokes their access to past group-targeted shares (the SPA warns about this in the confirm).
+- **Deletion safety** - refuses with `GROUP_IN_USE` (409) if the group is the recipient of any active share. Revoke those first.
 
 ## Audit log (`/admin/audit-log`)
 
-Filterable by event type, target type, target id, time window, and **numbered-page** paginated (newest first, "page X of Y" — same pager as every other admin list). Each row links the actor to `/admin/users/:id`; you can see the IP, request_id (for log correlation), and target. Use the **Export CSV** button (top-right) to download the current filter result as a stream.
+Filterable by event type, target type, target id, time window, and **numbered-page** paginated (newest first, "page X of Y" - same pager as every other admin list). Each row links the actor to `/admin/users/:id`; you can see the IP, request_id (for log correlation), and target. Use the **Export CSV** button (top-right) to download the current filter result as a stream.
 
 ## File history (`/admin/file-history`)
 
 Cross-user inventory of every file ever uploaded. Joins file + parent share + uploader + aggregated download stats (last download, count). Sortable / filterable / paginated. The intended use is "did this file get downloaded? when? by whom?" without leaving the admin shell.
 
-By default the list **hides dead rows** — deleted files and abandoned (failed-share) uploads — to keep it focused on what's live; tick **"Show deleted / abandoned"** (or pick an explicit state in the dropdowns) to reveal them. Each live row has a **Delete** action (orphans keep the existing **Reclaim**): it hard-deletes the bytes, frees the uploader's quota, is audited with the admin as actor, and auto-revokes the parent share if it was the share's last live file. The user-detail page (`/admin/users/:id`) carries a per-user **Current files** section with the same delete action, alongside that user's **Storage** figure (summed authoritatively from the database).
+By default the list **hides dead rows** - deleted files and abandoned (failed-share) uploads - to keep it focused on what's live; tick **"Show deleted / abandoned"** (or pick an explicit state in the dropdowns) to reveal them. Each live row has a **Delete** action (orphans keep the existing **Reclaim**): it hard-deletes the bytes, frees the uploader's quota, is audited with the admin as actor, and auto-revokes the parent share if it was the share's last live file. The user-detail page (`/admin/users/:id`) carries a per-user **Current files** section with the same delete action, alongside that user's **Storage** figure (summed authoritatively from the database).
 
 ## Sessions (`/admin/sessions`)
 
-Every signed-in session across all users — a session being a live refresh-token row. Paginated, searchable (name / email / IP), and sortable by **Last active** (default ascending, so stale/forgotten devices surface first), Started, or Expires, with an optional "include expired/revoked" toggle. Each row shows the user, device (parsed from the user-agent), IP, when it started and was last active, and expiry. Revoke a single session, or all of one user's sessions ("Revoke all"); both are audited (`refresh_token_admin_revoked`). The user-detail page mirrors this for one user.
+Every signed-in session across all users - a session being a live refresh-token row. Paginated, searchable (name / email / IP), and sortable by **Last active** (default ascending, so stale/forgotten devices surface first), Started, or Expires, with an optional "include expired/revoked" toggle. Each row shows the user, device (parsed from the user-agent), IP, when it started and was last active, and expiry. Revoke a single session, or all of one user's sessions ("Revoke all"); both are audited (`refresh_token_admin_revoked`). The user-detail page mirrors this for one user.
 
 ## Quarantine (`/admin/quarantine`)
 
 Files ClamAV flagged as infected. The bytes stay on disk under `./data/quarantine/{share_id}/{filename}` so you can act on them rather than just losing them. Each row carries three actions:
 
-- **Download** — pulls the bytes for forensic review. The suggested filename has a `.quarantined` suffix; double-click protection comes from your own host AV, which should also flag it.
-- **Release** — moves the bytes back to active storage, marks the file `clean`, re-reserves the uploader's quota, and **conditionally restores the parent share** (only if ClamAV was the most-recent revoke reason; if an admin revoked manually after the fact, the share stays revoked). Requires a free-text reason (10–500 chars), recorded in the audit log.
-- **Purge** — unlinks the bytes from disk and keeps the row at `state=infected` as the historical marker. Irreversible; requires a reason.
+- **Download** - pulls the bytes for forensic review. The suggested filename has a `.quarantined` suffix; double-click protection comes from your own host AV, which should also flag it.
+- **Release** - moves the bytes back to active storage, marks the file `clean`, re-reserves the uploader's quota, and **conditionally restores the parent share** (only if ClamAV was the most-recent revoke reason; if an admin revoked manually after the fact, the share stays revoked). Requires a free-text reason (10-500 chars), recorded in the audit log.
+- **Purge** - unlinks the bytes from disk and keeps the row at `state=infected` as the historical marker. Irreversible; requires a reason.
 
-Companion setting at **`/admin/settings/quarantine`** — single toggle "Notify all admins when a virus is detected". When on, every infection fans out an additional `file_quarantined` notification to every non-disabled admin. **Default channel is `both` per admin** (in-app bell + email; backed by `users.email`). Admins who want to mute the alert can set their own `file_quarantined` notification preference to `off` or `in_app`.
+Companion setting at **`/admin/settings/quarantine`** - single toggle "Notify all admins when a virus is detected". When on, every infection fans out an additional `file_quarantined` notification to every non-disabled admin. **Default channel is `both` per admin** (in-app bell + email; backed by `users.email`). Admins who want to mute the alert can set their own `file_quarantined` notification preference to `off` or `in_app`.
 
 ## API token policy + inventory
 
-- **`/admin/settings/api-tokens`** — policy editor. Mode picker: `everyone | employees_admins | admins_only | disabled`. Optional additive allowlist of user IDs and group IDs (so you can run "admins-only" plus a single permitted client). **Admins always pass** regardless of mode (operator escape hatch).
-- **`/admin/api-tokens`** — paginated cross-user inventory. Each row: name, owner, status pill (active / disabled / revoked), last-used. Per-row: **Disable** (reversible), **Reactivate**, **Revoke** (permanent — once revoked, no reactivate). Header CTA **Generate token for user…** — pick a target user, name the token, the plaintext is shown once.
+- **`/admin/settings/api-tokens`** - policy editor. Mode picker: `everyone | employees_admins | admins_only | disabled`. Optional additive allowlist of user IDs and group IDs (so you can run "admins-only" plus a single permitted client). **Admins always pass** regardless of mode (operator escape hatch).
+- **`/admin/api-tokens`** - paginated cross-user inventory. Each row: name, owner, status pill (active / disabled / revoked), last-used. Per-row: **Disable** (reversible), **Reactivate**, **Revoke** (permanent - once revoked, no reactivate). Header CTA **Generate token for user…** - pick a target user, name the token, the plaintext is shown once.
 
 ## Public-link policy
 
-- **`/admin/settings/public-links`** — same shape as the API-token policy (mode + user/group allowlist). When the user is outside the policy, the inline "Create public link" toggle on `/share/new` is hidden and the standalone create endpoint refuses with `PUBLIC_LINK_NOT_ALLOWED`.
+- **`/admin/settings/public-links`** - same shape as the API-token policy (mode + user/group allowlist). When the user is outside the policy, the inline "Create public link" toggle on `/share/new` is hidden and the standalone create endpoint refuses with `PUBLIC_LINK_NOT_ALLOWED`.
 
 ## 2FA enforcement policy
 
-- **`/admin/settings/twofa`** — pick which **roles** (admin / employee / client) and which **groups** must enrol in TOTP. Effects panel below the form lists who's affected and whether anyone is currently logged-out-effective until they enrol. There is **no admin escape hatch** in the gate — if you require admins, you yourself will be redirected into `/account/2fa` until you finish, then sent back where you were going. Recovery codes still bypass login one-time for true authenticator loss. The env-var `REQUIRE_2FA` is the back-compat fallback when no kv policy is set.
+- **`/admin/settings/twofa`** - pick which **roles** (admin / employee / client) and which **groups** must enrol in TOTP. Effects panel below the form lists who's affected and whether anyone is currently logged-out-effective until they enrol. There is **no admin escape hatch** in the gate - if you require admins, you yourself will be redirected into `/account/2fa` until you finish, then sent back where you were going. Recovery codes still bypass login one-time for true authenticator loss. The env-var `REQUIRE_2FA` is the back-compat fallback when no kv policy is set.
 
 ## Home page + landing
 
-- **`/admin/settings/home-page`** — single toggle. Disabling: the brand wordmark becomes plain text, the "Home" option disappears from each user's landing-page picker, and `/` redirects every user forward to their effective landing.
+- **`/admin/settings/home-page`** - single toggle. Disabling: the brand wordmark becomes plain text, the "Home" option disappears from each user's landing-page picker, and `/` redirects every user forward to their effective landing.
 
 ## SSO providers (multi-provider OIDC)
 
-- **`/admin/settings/sso`** — list every provider, with status (enabled / disabled, users-bound count). The user count protects against accidental deletion: the API refuses `DELETE` with `OIDC_PROVIDER_HAS_USERS` while anyone is still bound.
-- **Add / edit** — pick a preset (`entra | google | authentik | keycloak | custom`). The preset drives **smart prefill**: filling a Keycloak `host` + `realm` builds the issuer URL automatically. Google's preset hides the group-mapping fields entirely (Google doesn't ship groups in the ID token). Group-claim path is dot-walkable (e.g. `realm_access.roles` for Keycloak).
-- **Test connection** — probes the discovery doc for an existing provider. **Test discovery** — same probe against an arbitrary URL, useful before saving.
-- **Connect flow semantics** — anonymous SSO callback refuses unknown identities (`OIDC_NO_ACCOUNT`); auto-link by *verified* email is preserved (existing local user, IdP-asserted `email_verified=true`). The /account explicit Connect flow refuses on `OIDC_EMAIL_MISMATCH` or `OIDC_ALREADY_LINKED`.
+- **`/admin/settings/sso`** - list every provider, with status (enabled / disabled, users-bound count). The user count protects against accidental deletion: the API refuses `DELETE` with `OIDC_PROVIDER_HAS_USERS` while anyone is still bound.
+- **Add / edit** - pick a preset (`entra | google | authentik | keycloak | custom`). The preset drives **smart prefill**: filling a Keycloak `host` + `realm` builds the issuer URL automatically. Google's preset hides the group-mapping fields entirely (Google doesn't ship groups in the ID token). Group-claim path is dot-walkable (e.g. `realm_access.roles` for Keycloak).
+- **Test connection** - probes the discovery doc for an existing provider. **Test discovery** - same probe against an arbitrary URL, useful before saving.
+- **Connect flow semantics** - anonymous SSO callback refuses unknown identities (`OIDC_NO_ACCOUNT`); auto-link by *verified* email is preserved (existing local user, IdP-asserted `email_verified=true`). The /account explicit Connect flow refuses on `OIDC_EMAIL_MISMATCH` or `OIDC_ALREADY_LINKED`.
 
 ## SMTP configuration
 
-- **`/admin/settings/email`** — seven fields (host / port / user / password / from-email / from-name / TLS-mode = implicit / starttls / none). DB overrides env, so `.env`-driven deploys keep working until you save here. Password is stored Fernet-encrypted; never echoed back.
-- **Test send** — sends a real test email using the form's *current* (possibly unsaved) values. On failure the panel surfaces the SMTP error class + response code in mono font (e.g. `SMTPAuthenticationError 535`) so you can fix it without reading container logs.
+- **`/admin/settings/email`** - seven fields (host / port / user / password / from-email / from-name / TLS-mode = implicit / starttls / none). DB overrides env, so `.env`-driven deploys keep working until you save here. Password is stored Fernet-encrypted; never echoed back.
+- **Test send** - sends a real test email using the form's *current* (possibly unsaved) values. On failure the panel surfaces the SMTP error class + response code in mono font (e.g. `SMTPAuthenticationError 535`) so you can fix it without reading container logs.
 
 ## Site (URL + timezone)
 
-- **`/admin/settings/site`** — two fields. **Site URL** overrides `APP_URL` for every user-facing link (emails, public links, in-app notification targets) without a redeploy — the WebAuthn and OIDC redirect origins deliberately stay on the env value. **Timezone** is an IANA name (e.g. `Europe/Vienna`); all human-facing timestamps render **24-hour with that timezone's label**, both in the SPA and in emails. Default `UTC`.
+- **`/admin/settings/site`** - two fields. **Site URL** overrides `APP_URL` for every user-facing link (emails, public links, in-app notification targets) without a redeploy - the WebAuthn and OIDC redirect origins deliberately stay on the env value. **Timezone** is an IANA name (e.g. `Europe/Vienna`); all human-facing timestamps render **24-hour with that timezone's label**, both in the SPA and in emails. Default `UTC`.
 
 ## MOTD (login banner)
 
-- **`/admin/settings/motd`** — a plain-text "message of the day" shown on the login page (enable toggle + text). Surfaced anonymously via `/api/config-public`. No Markdown/HTML (kept plain so the public login surface needs no sanitizer).
+- **`/admin/settings/motd`** - a plain-text "message of the day" shown on the login page (enable toggle + text). Surfaced anonymously via `/api/config-public`. No Markdown/HTML (kept plain so the public login surface needs no sanitizer).
 
 ## Share defaults
 
-- **`/admin/settings/share-defaults`** — `share.notify_recipients_default`: the default state of the per-share "Notify recipient(s)" checkbox on the create-share form. A sender can still flip it per share; this just sets the default.
+- **`/admin/settings/share-defaults`** - `share.notify_recipients_default`: the default state of the per-share "Notify recipient(s)" checkbox on the create-share form. A sender can still flip it per share; this just sets the default.
 
 ## Self-update
 
-- **`/admin/system`** surfaces the update banner; **`/admin/settings/updates`** configures it: the **releases API URL** (fork operators repoint it at their own repo) and **check mode** — `auto` (poll every 24 h) or `manual` (only when you click "Check now"). The check filters to backend `^v\d+\.\d+\.\d+` tags so a `client-v*` desktop release never shows as a server update. Clicking **Update** drives the updater shim/executor and records the previous `FH_TAG` for one-click rollback.
+- **`/admin/system`** surfaces the update banner; **`/admin/settings/updates`** configures it: the **releases API URL** (fork operators repoint it at their own repo) and **check mode** - `auto` (poll every 24 h) or `manual` (only when you click "Check now"). The check filters to backend `^v\d+\.\d+\.\d+` tags so a `client-v*` desktop release never shows as a server update. Clicking **Update** drives the updater shim/executor and records the previous `FH_TAG` for one-click rollback.
 
 ## Advanced (runtime tunables)
 
-- **`/admin/settings/advanced`** — the **registry overlay**: ~25 settings that otherwise live in `.env` (session cap + token TTLs, rate-limit + lockout knobs, public-link lockout, all retention windows, the direct-upload cap, the HIBP toggle, the app name) become editable **live, no restart**. The saved value wins over the env default and is clamped to a safe range. This is the page to reach for when an operator asks "can I change X without redeploying?" — if X is in this list, yes.
+- **`/admin/settings/advanced`** - the **registry overlay**: ~25 settings that otherwise live in `.env` (session cap + token TTLs, rate-limit + lockout knobs, public-link lockout, all retention windows, the direct-upload cap, the HIBP toggle, the app name) become editable **live, no restart**. The saved value wins over the env default and is clamped to a safe range. This is the page to reach for when an operator asks "can I change X without redeploying?" - if X is in this list, yes.
 
 ## General settings
 
-`/admin/settings/general` — small grouped settings page (the SectionQuickNav skeleton other small admin views are migrating onto). Houses the home-page toggle, the in-browser **file-preview** on/off switch, share defaults, MOTD, and similar "single-knob" settings.
+`/admin/settings/general` - small grouped settings page (the SectionQuickNav skeleton other small admin views are migrating onto). Houses the home-page toggle, the in-browser **file-preview** on/off switch, share defaults, MOTD, and similar "single-knob" settings.
 
 ## Audit events you can filter on
 
@@ -324,7 +324,7 @@ git clone <repo> fileHeron && cd fileHeron
 cp .env.example .env
 ```
 
-Rotate **at minimum** these four secrets in `.env` — the stack refuses to start with placeholders in production:
+Rotate **at minimum** these four secrets in `.env` - the stack refuses to start with placeholders in production:
 
 | Variable | Purpose | Generate with |
 |---|---|---|
@@ -342,7 +342,7 @@ curl http://127.0.0.1:8000/api/health
 
 ## Compose ports
 
-The compose file binds **everything to 127.0.0.1** — no service is publicly exposed. The host's reverse proxy (Traefik) is responsible for TLS termination and routing.
+The compose file binds **everything to 127.0.0.1** - no service is publicly exposed. The host's reverse proxy (Traefik) is responsible for TLS termination and routing.
 
 - `127.0.0.1:${APP_BACKEND_PORT}` (default 8000) → FastAPI
 - `127.0.0.1:${APP_FRONTEND_PORT}` (default 8080) → nginx serving the SPA + tusd proxy
@@ -368,7 +368,7 @@ providers:
 ```
 
 ```yaml
-# dynamic.yml — routes + the internal-deny rule
+# dynamic.yml - routes + the internal-deny rule
 http:
   routers:
     fileheron-spa:
@@ -403,7 +403,7 @@ The `!PathPrefix(/api/internal)` clause is the **defence-in-depth** layer protec
 └── quarantine/   # ClamAV-flagged files; admin can release/purge/download via /admin/quarantine
 ```
 
-**Critical:** `uploads/` and `files/` MUST be on the same filesystem. Finalize is `os.rename` for the atomic case, falling back to `shutil.move` (copy + unlink) — but a cross-device rename used to fail outright. The current code is portable; this is documented because past pre-release deployments hit it.
+**Critical:** `uploads/` and `files/` MUST be on the same filesystem. Finalize is `os.rename` for the atomic case, falling back to `shutil.move` (copy + unlink) - but a cross-device rename used to fail outright. The current code is portable; this is documented because past pre-release deployments hit it.
 
 ### Storage backend (`STORAGE_BACKEND`, v1.22.0)
 
@@ -420,9 +420,9 @@ Default `local` (the bind mount above). Set `STORAGE_BACKEND=s3` for any S3-comp
 
 On `s3`: uploads stream to the bucket (multipart for large files), downloads **307-redirect to a presigned URL** (the browser fetches/resumes from the store; the app still does auth + the single download-budget decrement first), AV scans via **clamd INSTREAM**, and quarantine is a server-side copy between key prefixes. Caveats:
 
-- **Pick the backend at install time.** Switching `local`↔`s3` with existing data is **not** automatic — the locators differ; you'd copy the bytes and rewrite `files.storage_path` once (an operator script). `uploads/` (tusd staging) always stays local.
+- **Pick the backend at install time.** Switching `local`↔`s3` with existing data is **not** automatic - the locators differ; you'd copy the bytes and rewrite `files.storage_path` once (an operator script). `uploads/` (tusd staging) always stays local.
 - **Backups:** `scripts/backup.sh` tars `./data/files` (local only). With `s3`, the file bytes' durability/versioning is your **bucket policy's** responsibility; back up the DB as usual.
-- **Antivirus:** INSTREAM is bounded by clamd's `StreamMaxLength` (default 25 MB) — raise it if you store larger files on s3; a file exceeding it scans as `error` (fail-safe, not served).
+- **Antivirus:** INSTREAM is bounded by clamd's `StreamMaxLength` (default 25 MB) - raise it if you store larger files on s3; a file exceeding it scans as `error` (fail-safe, not served).
 - The local-disk guard (low-space 507 + `/api/metrics` free/total bytes) is a no-op on `s3`.
 - At-rest encryption is now possible via your bucket's SSE (out of scope here).
 
@@ -459,9 +459,9 @@ docker compose pull          # if you bumped image tags
 docker compose up -d --build
 ```
 
-Alembic migrations run from the backend `entrypoint.sh` on every boot — idempotent, safe to re-run. Migrations are written with `_has_table` / `_has_column` / `_has_index` helpers so a partial-failure mid-migration can be re-run without manual cleanup. Roll-forward only — there is no `downgrade` story; backup before upgrading and restore if needed.
+Alembic migrations run from the backend `entrypoint.sh` on every boot - idempotent, safe to re-run. Migrations are written with `_has_table` / `_has_column` / `_has_index` helpers so a partial-failure mid-migration can be re-run without manual cleanup. Roll-forward only - there is no `downgrade` story; backup before upgrading and restore if needed.
 
-**In-app self-update.** `/admin/system` polls GitHub for the most recent backend release every 24h (admin-configurable to `manual`) and surfaces an "Update available" banner + an **Update** button that delegates to the updater shim/executor pair. The release check filters by `^v\d+\.\d+\.\d+` — `client-v*` desktop-client tags do not surface as backend updates. Per-version notes shipped from `softprops/action-gh-release` populate the banner body so admins can read changelog before clicking. **Previous version** is recorded automatically for a one-click rollback (`updater-executor/run.py` stores the prior `FH_TAG` on every successful update).
+**In-app self-update.** `/admin/system` polls GitHub for the most recent backend release every 24h (admin-configurable to `manual`) and surfaces an "Update available" banner + an **Update** button that delegates to the updater shim/executor pair. The release check filters by `^v\d+\.\d+\.\d+` - `client-v*` desktop-client tags do not surface as backend updates. Per-version notes shipped from `softprops/action-gh-release` populate the banner body so admins can read changelog before clicking. **Previous version** is recorded automatically for a one-click rollback (`updater-executor/run.py` stores the prior `FH_TAG` on every successful update).
 
 ## Health checks
 
@@ -470,38 +470,38 @@ Alembic migrations run from the backend `entrypoint.sh` on every boot — idempo
 
 ## Background jobs & housekeeping
 
-The ARQ `worker` container runs **12 staggered cron jobs** plus the event-driven AV scan + email sender — no host crontab needed; they start with the stack. They handle share expiry, the 24-hour expiry warning, and all data housekeeping (token/invite/notification cleanup, quarantine purge, orphaned-file reclaim, quota reconcile, log pruning, GitHub release polling, and an `ops_check` self-monitor that alerts admins on a failed job). Every retention window is a setting (`*_RETENTION_DAYS` / `retention.*` in the Settings reference — set to `0` to disable a log-pruning job). Full list with schedules is in the [Developer guide](#arq-workers--cron). Admins can also trigger a job on demand from `/admin/system`.
+The ARQ `worker` container runs **12 staggered cron jobs** plus the event-driven AV scan + email sender - no host crontab needed; they start with the stack. They handle share expiry, the 24-hour expiry warning, and all data housekeeping (token/invite/notification cleanup, quarantine purge, orphaned-file reclaim, quota reconcile, log pruning, GitHub release polling, and an `ops_check` self-monitor that alerts admins on a failed job). Every retention window is a setting (`*_RETENTION_DAYS` / `retention.*` in the Settings reference - set to `0` to disable a log-pruning job). Full list with schedules is in the [Developer guide](#arq-workers--cron). Admins can also trigger a job on demand from `/admin/system`.
 
 ## Real client IPs in the audit log
 
-Uvicorn must be told to honour the proxy's `X-Forwarded-For` — both Dockerfile (prod) and `docker-compose.dev.yml` (dev) set `--proxy-headers --forwarded-allow-ips=*`. Safe because the backend port is bound to 127.0.0.1; only Traefik can reach it. Without these flags, every audit row records the Docker bridge gateway (e.g. `172.26.0.1`).
+Uvicorn must be told to honour the proxy's `X-Forwarded-For` - both Dockerfile (prod) and `docker-compose.dev.yml` (dev) set `--proxy-headers --forwarded-allow-ips=*`. Safe because the backend port is bound to 127.0.0.1; only Traefik can reach it. Without these flags, every audit row records the Docker bridge gateway (e.g. `172.26.0.1`).
 
 ## Common operational issues
 
-- **ClamAV `clamd` slow to come up** — first boot does a full `freshclam` mirror sync (~150 MB). Watch `docker compose logs clamav`. Updates afterwards are incremental.
-- **tusd 500 on upload finalize** — usually the HMAC secret is mismatched between backend + tusd. Both read `TUS_HOOK_SECRET` from `.env`; restart both after changing.
-- **Login lockout email floods** — there's a 6-hour dedup. If you see more than that, an attacker is rate-pivoting; check `login_attempts` table.
-- **SPA stuck on white screen after deploy** — check the browser console for a hash-mismatched JS chunk; force-reload or bump the cache via the nginx asset path.
-- **Upload stalls at 99% then "finalising"** — almost always the cross-filesystem case above; check that `data/uploads` and `data/files` resolve to the same mount point inside the backend container.
+- **ClamAV `clamd` slow to come up** - first boot does a full `freshclam` mirror sync (~150 MB). Watch `docker compose logs clamav`. Updates afterwards are incremental.
+- **tusd 500 on upload finalize** - usually the HMAC secret is mismatched between backend + tusd. Both read `TUS_HOOK_SECRET` from `.env`; restart both after changing.
+- **Login lockout email floods** - there's a 6-hour dedup. If you see more than that, an attacker is rate-pivoting; check `login_attempts` table.
+- **SPA stuck on white screen after deploy** - check the browser console for a hash-mismatched JS chunk; force-reload or bump the cache via the nginx asset path.
+- **Upload stalls at 99% then "finalising"** - almost always the cross-filesystem case above; check that `data/uploads` and `data/files` resolve to the same mount point inside the backend container.
 
 ## Operator escape hatches
 
-- **Lost admin access (no recovery codes either)** — `docker compose exec backend python scripts/promote_user.py <email>` promotes any existing user to admin without going through the API.
-- **Bypass ClamAV in CI / dev** — `AV_SKIP=true` marks every upload clean instantly. The boot fail-fast check refuses to start with `ENVIRONMENT=production AND AV_SKIP=true`.
+- **Lost admin access (no recovery codes either)** - `docker compose exec backend python scripts/promote_user.py <email>` promotes any existing user to admin without going through the API.
+- **Bypass ClamAV in CI / dev** - `AV_SKIP=true` marks every upload clean instantly. The boot fail-fast check refuses to start with `ENVIRONMENT=production AND AV_SKIP=true`.
 
 ## Settings reference
 
 fileHeron has **three layers** of configuration:
 
-1. **Environment variables** (`backend/app/config.py`, set via `.env`) — read at
+1. **Environment variables** (`backend/app/config.py`, set via `.env`) - read at
    **boot**. Changing one needs a restart (`docker compose up -d`). These are the
    only place for secrets and infrastructure (DB/Redis hosts, JWT/TUS secrets,
    storage paths).
 2. **Admin runtime settings** (`app_settings` kv table, edited under `/admin/settings/*`)
-   — applied **live, no restart**. Two kinds: admin-only knobs (policies, SMTP,
+   - applied **live, no restart**. Two kinds: admin-only knobs (policies, SMTP,
    site, MOTD, …) and the **registry overlay**, where ~25 env vars become
-   admin-tunable — the kv value wins when set, otherwise the env default applies.
-3. **Per-user preferences** (`/account`) — each user's own locale, landing page,
+   admin-tunable - the kv value wins when set, otherwise the env default applies.
+3. **Per-user preferences** (`/account`) - each user's own locale, landing page,
    notification channels, 2FA, etc.
 
 So a value like the login rate limit has an env default (`RATE_LIMIT_LOGIN`) that
@@ -522,28 +522,28 @@ via `/admin/settings/advanced` (the env value is just the boot default).
 | `APP_URL` | `http://localhost:8080` | Public URL baked into email links / share URLs when no `site.url` override is set. Also the WebAuthn/OIDC origin fallback. |
 | `APP_NAME` | `fileHeron` | Brand name in emails, subjects, page titles. ↻ (`branding.app_name`). Use the `file:Heron` spelling in `.env`. |
 
-**Database & Redis** — infra only, env-only.
+**Database & Redis** - infra only, env-only.
 
 | Variable | Default | What it does |
 |---|---|---|
 | `DB_HOST` / `DB_PORT` | `db` / `3306` | MariaDB location. |
 | `DB_NAME` / `DB_USER` | `fileheron` / `fileheron_app` | Database + app user. |
-| `DB_PASSWORD` | — (**required**) | App DB password. Compose fail-fasts on the placeholder. |
-| `DB_ROOT_PASSWORD` | — (**required**, compose) | MariaDB root password (container init only). |
+| `DB_PASSWORD` | - (**required**) | App DB password. Compose fail-fasts on the placeholder. |
+| `DB_ROOT_PASSWORD` | - (**required**, compose) | MariaDB root password (container init only). |
 | `REDIS_HOST` / `REDIS_PORT` | `redis` / `6379` | Redis (ARQ queue, rate-limit buckets, quota Lua, SSE pubsub). |
 
 **Auth: JWT, cookies, sessions**
 
 | Variable | Default | What it does |
 |---|---|---|
-| `JWT_SECRET` | — (**required**, ≥32 chars) | HS256 signing key for access tokens + various HMACs. `openssl rand -hex 32`. |
+| `JWT_SECRET` | - (**required**, ≥32 chars) | HS256 signing key for access tokens + various HMACs. `openssl rand -hex 32`. |
 | `JWT_ALGORITHM` | `HS256` | Access-token algorithm. |
-| `ACCESS_TOKEN_EXPIRE_MINUTES` | `15` | Access-JWT lifetime. ↻ (`auth.*`, 5–1440). |
-| `REFRESH_TOKEN_EXPIRE_DAYS` | `7` | Refresh-cookie lifetime. ↻ (1–365). Shortening it retroactively caps existing tokens. |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | `15` | Access-JWT lifetime. ↻ (`auth.*`, 5-1440). |
+| `REFRESH_TOKEN_EXPIRE_DAYS` | `7` | Refresh-cookie lifetime. ↻ (1-365). Shortening it retroactively caps existing tokens. |
 | `COOKIE_SECURE` | `false` | `Secure` flag on cookies; **forced `true`** in production. |
-| `MAX_ACTIVE_SESSIONS_PER_USER` | `10` | Concurrent-session cap; oldest evicted on login (user notified). ↻ (1–100). |
-| `REFRESH_TOKEN_RETENTION_DAYS` | `30` | How long revoked refresh rows linger for forensics before cleanup. ↻ (1–3650). |
-| `INVITE_RETENTION_DAYS` | `14` | Pending/expired invite TTL before the daily purge (consumed invites kept forever). ↻ (1–3650). |
+| `MAX_ACTIVE_SESSIONS_PER_USER` | `10` | Concurrent-session cap; oldest evicted on login (user notified). ↻ (1-100). |
+| `REFRESH_TOKEN_RETENTION_DAYS` | `30` | How long revoked refresh rows linger for forensics before cleanup. ↻ (1-3650). |
+| `INVITE_RETENTION_DAYS` | `14` | Pending/expired invite TTL before the daily purge (consumed invites kept forever). ↻ (1-3650). |
 | `ARGON2_TIME_COST` / `ARGON2_MEMORY_COST_KIB` / `ARGON2_PARALLELISM` | `3` / `65536` / `2` | Argon2id password-hash cost (OWASP baseline). |
 
 **Bootstrap & dev seed**
@@ -562,7 +562,7 @@ via `/admin/settings/advanced` (the env value is just the boot default).
 | `SMTP_PORT` / `SMTP_USER` / `SMTP_PASSWORD` | `587` / empty / empty | Connection + auth. |
 | `SMTP_FROM_EMAIL` / `SMTP_FROM_NAME` | `noreply@fileheron.local` / `fileHeron` | Envelope sender. |
 
-**Rate limits & lockout** — all ↻ via `rate_limit.*`
+**Rate limits & lockout** - all ↻ via `rate_limit.*`
 
 | Variable | Default | What it does |
 |---|---|---|
@@ -576,9 +576,9 @@ via `/admin/settings/advanced` (the env value is just the boot default).
 
 | Variable | Default | What it does |
 |---|---|---|
-| `TUS_HOOK_SECRET` | — (**required**, ≥32) | HMAC secret for the tusd↔backend hook envelope. `openssl rand -hex 32`. |
+| `TUS_HOOK_SECRET` | - (**required**, ≥32) | HMAC secret for the tusd↔backend hook envelope. `openssl rand -hex 32`. |
 | `TUS_HOOK_ALLOWED_IPS` | empty | Optional source-IP allowlist for `/api/internal/tus-hooks` (defense-in-depth; HMAC still required). |
-| `MAX_DIRECT_UPLOAD_BYTES` | `104857600` (100 MB) | Direct-multipart cap; larger files must use TUS. ↻ (`uploads.max_direct_bytes`, 1 MB–5 GB). |
+| `MAX_DIRECT_UPLOAD_BYTES` | `104857600` (100 MB) | Direct-multipart cap; larger files must use TUS. ↻ (`uploads.max_direct_bytes`, 1 MB-5 GB). |
 | `STORAGE_ROOT` / `TUS_UPLOAD_DIR` / `QUARANTINE_DIR` | `/data/files` / `/data/uploads` / `/data/quarantine` | Finalized files, tusd working dir, quarantine. **Must share one filesystem.** |
 | `TUS_PUBLIC_BASE` | `/uploads/` | Browser-facing tusd path (trailing slash matters). |
 | `CLAMAV_HOST` / `CLAMAV_PORT` | `clamav` / `3310` | clamd endpoint. |
@@ -590,11 +590,11 @@ via `/admin/settings/advanced` (the env value is just the boot default).
 |---|---|---|
 | `REQUIRE_2FA` | `none` | Env fallback for 2FA enforcement (`none`/`admins`/`all`); the kv policy at `/admin/settings/twofa` overrides it. |
 | `HIBP_ENABLED` | `true` | HaveIBeenPwned k-anonymity breach check on new passwords. ↻ (`security.hibp_enabled`). `false` for air-gapped. |
-| `WEBAUTHN_RP_ID` | `localhost` | Passkey relying-party ID — **must equal the public hostname** (no scheme/port). Changing it invalidates every registered passkey. |
+| `WEBAUTHN_RP_ID` | `localhost` | Passkey relying-party ID - **must equal the public hostname** (no scheme/port). Changing it invalidates every registered passkey. |
 | `WEBAUTHN_RP_NAME` | `fileHeron` | Passkey RP display name. |
 | `WEBAUTHN_ORIGINS` | empty | Allowed WebAuthn origins (CSV). Empty → `APP_URL`. |
 
-**Public links** — password tunables ↻ via `public_link.*`
+**Public links** - password tunables ↻ via `public_link.*`
 
 | Variable | Default | What it does |
 |---|---|---|
@@ -603,7 +603,7 @@ via `/admin/settings/advanced` (the env value is just the boot default).
 | `PUBLIC_LINK_PASSWORD_WINDOW_SEC` | `900` | The attempt window (15 min). |
 | `PUBLIC_LINK_LOCKOUT_SEC` | `900` | How long the link stays locked (all IPs). |
 
-**Operational retention** (cron housekeeping; `0` disables a job where noted) — all ↻ via `retention.*`
+**Operational retention** (cron housekeeping; `0` disables a job where noted) - all ↻ via `retention.*`
 
 | Variable | Default | What it does |
 |---|---|---|
@@ -622,9 +622,9 @@ via `/admin/settings/advanced` (the env value is just the boot default).
 | `FH_TAG` | `latest` | GHCR image tag compose pulls. The in-app updater rewrites this (pin a SemVer to disable drift). |
 | `UPDATER_HOST_WORKSPACE` / `UPDATER_HOST_STATE` | `${PWD}` / `${PWD}/data/updater` | Host-side paths the updater shim needs to resolve bind mounts (override only if compose lives off `/opt/fileHeron`). |
 | `BACKUP_RESTIC_REPO` / `BACKUP_RESTIC_PASSWORD` | empty | Optional offsite restic push from `scripts/backup.sh` (S3/B2/SFTP/REST/local). |
-| `OIDC_*` | empty | **Legacy/superseded** — multi-provider SSO now lives in the DB; use `/admin/settings/sso` instead. |
+| `OIDC_*` | empty | **Legacy/superseded** - multi-provider SSO now lives in the DB; use `/admin/settings/sso` instead. |
 
-### 2. Admin runtime settings (hot — no restart)
+### 2. Admin runtime settings (hot - no restart)
 
 Edited under `/admin/settings/*`; stored in `app_settings`. Authoritative key list:
 `backend/app/services/settings.py::Keys`. Only `smtp.password` is encrypted at rest.
@@ -645,7 +645,7 @@ Edited under `/admin/settings/*`; stored in `app_settings`. Authoritative key li
 | **Share defaults** `/share-defaults` | `share.notify_recipients_default` | Default of the create-share "Notify recipient(s)" checkbox. |
 | **Quarantine** `/quarantine` | `quarantine.notify_admins` | Fan out a `file_quarantined` in-app notice to all admins. |
 | **Self-update** `/updates` | `updates.api_url`, `updates.check_mode` | Releases endpoint (forks repoint it) + `auto` (24 h poll) vs `manual`. |
-| **Advanced** `/advanced` | the **registry overlay** | Live overrides for the `↻` env vars above: `auth.*`, `rate_limit.*`, `public_link.*` (lockout), `retention.*`, `uploads.max_direct_bytes`, `security.hibp_enabled`, `branding.app_name` — each clamped to safe bounds. |
+| **Advanced** `/advanced` | the **registry overlay** | Live overrides for the `↻` env vars above: `auth.*`, `rate_limit.*`, `public_link.*` (lockout), `retention.*`, `uploads.max_direct_bytes`, `security.hibp_enabled`, `branding.app_name` - each clamped to safe bounds. |
 
 ### 3. Per-user preferences (`/account`)
 
@@ -671,14 +671,14 @@ Audience: anyone modifying the code. Detail-level reference also lives in `CLAUD
 backend/
 ├── app/
 │   ├── main.py              # FastAPI factory + middleware mount
-│   ├── config.py            # Pydantic Settings — fail-fast on insecure prod defaults
+│   ├── config.py            # Pydantic Settings - fail-fast on insecure prod defaults
 │   ├── database.py          # SQLAlchemy 2.0 engine + Base + get_db
 │   ├── dependencies.py      # get_current_user, get_current_admin, get_actor, require_2fa_complete
 │   ├── middleware/          # errors, request_id, security_headers
 │   ├── models/              # SQLAlchemy models, one per domain
 │   ├── schemas/             # Pydantic request/response shapes
 │   ├── routers/             # FastAPI routers, mounted in main.py
-│   ├── services/            # business logic — keep routers thin
+│   ├── services/            # business logic - keep routers thin
 │   ├── workers/             # ARQ worker config + cron functions
 │   ├── templates/email/{en,de}/  # Jinja2 templates + subjects.json
 │   └── utils/               # crypto, logger, emailing, ua_fingerprint
@@ -707,13 +707,13 @@ SPA  →  axios (with refresh interceptor + paramsSerializer { indexes: null })
      →  MariaDB
 ```
 
-The frontend's axios client is configured with `paramsSerializer: { indexes: null }` so array query params serialise as `?state=active&state=expired` instead of `?state[]=active` — required for FastAPI's `Query(default=[])` to work.
+The frontend's axios client is configured with `paramsSerializer: { indexes: null }` so array query params serialise as `?state=active&state=expired` instead of `?state[]=active` - required for FastAPI's `Query(default=[])` to work.
 
 ## Auth specifics
 
 - Access JWT: HS256, 15 min, `{sub, iat, exp, jti, type:"access"}`. `jti` makes two same-second tokens distinguishable.
 - Refresh: 64 random bytes, SHA-256-hashed in DB, 7 days, httpOnly cookie scoped to `/api/auth`. Rotation on every refresh; a re-use of a rotated token revokes the **entire user family** and audits `refresh_token_reused`.
-- `_create_refresh_token` enforces the per-user session cap (`MAX_ACTIVE_SESSIONS_PER_USER`) by evicting the oldest token before issuing — single chokepoint covers all five login flows (password / recovery / OIDC / WebAuthn / register-from-invite).
+- `_create_refresh_token` enforces the per-user session cap (`MAX_ACTIVE_SESSIONS_PER_USER`) by evicting the oldest token before issuing - single chokepoint covers all five login flows (password / recovery / OIDC / WebAuthn / register-from-invite).
 - Cookie is `Secure` in production (forced) and `SameSite=Lax`.
 
 ## Upload pipeline
@@ -728,9 +728,9 @@ client → POST /api/uploads/init (HMAC envelope returned, files row created sta
                             → enqueue av_scan_file (ARQ job → clamd scan_path → state=clean | infected)
 ```
 
-Direct uploads (≤ `MAX_DIRECT_UPLOAD_BYTES`) skip tusd entirely via `POST /api/uploads/direct` — useful for scripts.
+Direct uploads (≤ `MAX_DIRECT_UPLOAD_BYTES`) skip tusd entirely via `POST /api/uploads/direct` - useful for scripts.
 
-Finalize uses `shutil.move` (== `os.rename` when same-fs, else copy2 + unlink) — portable across bind-mount layouts.
+Finalize uses `shutil.move` (== `os.rename` when same-fs, else copy2 + unlink) - portable across bind-mount layouts.
 
 ## ARQ workers + cron
 
@@ -738,27 +738,27 @@ Worker config: `backend/app/workers/worker.py::WorkerSettings`. Queue: `filehero
 
 Hourly:
 
-- `expire_files` (:00) — walks expired-active shares, hard-deletes file bytes, transitions to `expired`.
-- `share_expiring_24h_warning` (:07) — notifies sender + recipients when `expires_at` is in (now+24h, now+25h) and not yet notified.
-- `ops_check` (:15) — scans recent cron outcomes + Redis health; raises an `ops_alert` to admins on failure.
-- `cleanup_expired_tokens` (:23) — soft-revokes refresh tokens past `expires_at`; hard-deletes revoked rows older than the retention window.
-- `quota_reconcile` (:37) — recomputes per-user used-bytes from disk to correct drift.
-- `cleanup_abandoned_uploads` (:47) — unlinks partial/stuck TUS uploads older than `retention.tus_abandoned_hours`.
-- `release_check` (:53) — polls GitHub releases (filtered to `^v\d+\.\d+\.\d+`) for the in-app update banner.
-- `imap_poll` (every 5 min, :x4) — fetches the configured IMAP mailbox into the admin Inbox; self-gated on `imap.enabled` / `imap.check_mode` / `imap.poll_interval_minutes` (no-op unless enabled + due).
+- `expire_files` (:00) - walks expired-active shares, hard-deletes file bytes, transitions to `expired`.
+- `share_expiring_24h_warning` (:07) - notifies sender + recipients when `expires_at` is in (now+24h, now+25h) and not yet notified.
+- `ops_check` (:15) - scans recent cron outcomes + Redis health; raises an `ops_alert` to admins on failure.
+- `cleanup_expired_tokens` (:23) - soft-revokes refresh tokens past `expires_at`; hard-deletes revoked rows older than the retention window.
+- `quota_reconcile` (:37) - recomputes per-user used-bytes from disk to correct drift.
+- `cleanup_abandoned_uploads` (:47) - unlinks partial/stuck TUS uploads older than `retention.tus_abandoned_hours`.
+- `release_check` (:53) - polls GitHub releases (filtered to `^v\d+\.\d+\.\d+`) for the in-app update banner.
+- `imap_poll` (every 5 min, :x4) - fetches the configured IMAP mailbox into the admin Inbox; self-gated on `imap.enabled` / `imap.check_mode` / `imap.poll_interval_minutes` (no-op unless enabled + due).
 
 Daily (≈02:xx):
 
-- `purge_old_quarantine` (02:13) — unlinks infected bytes (keeps the DB row as a marker).
-- `cleanup_pending_invites` (02:15) — deletes unconsumed/expired invites.
-- `cleanup_read_notifications` (02:29) — deletes read in-app notifications past their window.
-- `prune_history` (02:43) — prunes `audit_log` / `download_log` / `login_attempts` (each window `0` disables).
-- `reclaim_orphaned_files` (02:51) — frees bytes + quota for files whose share was revoked/deleted past the grace window.
+- `purge_old_quarantine` (02:13) - unlinks infected bytes (keeps the DB row as a marker).
+- `cleanup_pending_invites` (02:15) - deletes unconsumed/expired invites.
+- `cleanup_read_notifications` (02:29) - deletes read in-app notifications past their window.
+- `prune_history` (02:43) - prunes `audit_log` / `download_log` / `login_attempts` (each window `0` disables).
+- `reclaim_orphaned_files` (02:51) - frees bytes + quota for files whose share was revoked/deleted past the grace window.
 
 Event-driven jobs:
 
-- `av_scan_file(file_id)` — enqueued from tusd post-finish + direct upload. Quarantines on infected (moves to `./data/quarantine/<share_id>/<filename>`, revokes share, releases quota, notifies uploader).
-- `send_email_job(to, subject, text, html)` — generic SMTP sender; resolves config DB-overlay-env per job so admin SMTP changes apply without restart. Permanent 5xx → audit `email_undeliverable` + admin alert.
+- `av_scan_file(file_id)` - enqueued from tusd post-finish + direct upload. Quarantines on infected (moves to `./data/quarantine/<share_id>/<filename>`, revokes share, releases quota, notifies uploader).
+- `send_email_job(to, subject, text, html)` - generic SMTP sender; resolves config DB-overlay-env per job so admin SMTP changes apply without restart. Permanent 5xx → audit `email_undeliverable` + admin alert.
 
 ## Adding a new admin setting
 
@@ -766,9 +766,9 @@ The pattern is well-trod (API tokens, public links, SMTP, home page, 2FA, … al
 
 1. Pick a kv key in `services/settings.py::Keys` (e.g. `Keys.MY_FEATURE_FLAG`).
 2. Use `settings_svc.get(db, key)` / `get_bool` / `set_value` from your service. Add to `_ENCRYPTED_KEYS` only if it's a secret.
-3. Add `GET /api/admin/settings/<feature>` + `PUT /api/admin/settings/<feature>` endpoints in `routers/admin.py` (or a sub-router). Always audit on PUT — pick or add an event in `models/audit_log.py::AuditEventType`.
+3. Add `GET /api/admin/settings/<feature>` + `PUT /api/admin/settings/<feature>` endpoints in `routers/admin.py` (or a sub-router). Always audit on PUT - pick or add an event in `models/audit_log.py::AuditEventType`.
 4. Pydantic schema in `schemas/<feature>.py`.
-5. Vue view at `frontend/src/views/AdminSettings<Feature>.vue` — mirror an existing one (the SMTP and SSO editors are the canonical examples for forms; the API-token policy editor is canonical for mode-plus-allowlist).
+5. Vue view at `frontend/src/views/AdminSettings<Feature>.vue` - mirror an existing one (the SMTP and SSO editors are the canonical examples for forms; the API-token policy editor is canonical for mode-plus-allowlist).
 6. Add the route to `router/index.ts` under the admin layout, with `requireAdmin: true` meta.
 7. Add an i18n key per locale (`en.json` + `de.json`); the i18n parity test will catch missing pairs.
 
@@ -776,7 +776,7 @@ The pattern is well-trod (API tokens, public links, SMTP, home page, 2FA, … al
 
 1. Add the string constant to `models/audit_log.py::AuditEventType`.
 2. From your service module: `audit_svc.record_audit_event(db, actor=..., event_type=AuditEventType.my_event, target_type=..., target_id=..., extra={...})`.
-3. The audit-log frontend view is generic — it'll display the new event without changes. If you want a special icon / colour, edit `views/AdminAuditLog.vue::eventDisplay` (or its successor).
+3. The audit-log frontend view is generic - it'll display the new event without changes. If you want a special icon / colour, edit `views/AdminAuditLog.vue::eventDisplay` (or its successor).
 
 ## Notifications
 
@@ -797,7 +797,7 @@ To add a new notification category:
 
 - Every migration in `alembic/versions/` uses the `_has_table` / `_has_column` / `_has_index` helpers from `alembic/env.py` so it's safe to re-run. A partially-applied migration after a crash can be re-applied without manual cleanup.
 - All timestamp columns store **naive UTC**. Convention: `datetime.now(tz=timezone.utc).replace(tzinfo=None)` at write time.
-- Roll-forward only — write `upgrade()`; the `downgrade()` is left empty. Restore from backup if you need to roll back.
+- Roll-forward only - write `upgrade()`; the `downgrade()` is left empty. Restore from backup if you need to roll back.
 
 ## Running tests
 
@@ -811,25 +811,25 @@ The pytest conftest has two important autouse fixtures: `_disable_ip_rate_limit`
 
 ## Coding conventions
 
-- **Error envelope** on every 4xx/5xx: `{error, code, details, request_id}` — raise `AppError(status, code, message, details=...)` from `app/errors.py`.
+- **Error envelope** on every 4xx/5xx: `{error, code, details, request_id}` - raise `AppError(status, code, message, details=...)` from `app/errors.py`.
 - **Naive UTC** everywhere except the JWT `iat`/`exp` (those are aware UTC).
 - **Email lookup** uses the plaintext `users.email` column (always normalised on write via `utils/crypto.normalize_email`).
-- **No comments** unless the WHY is non-obvious. Don't explain WHAT the code does — well-named identifiers handle that.
-- **CSS variables** for everything — see `tokens.css`. No UI framework: Element Plus was removed in v1.9.0 (date/time uses a native `<input type=datetime-local>` styled with the `--fh-*` tokens).
+- **No comments** unless the WHY is non-obvious. Don't explain WHAT the code does - well-named identifiers handle that.
+- **CSS variables** for everything - see `tokens.css`. No UI framework: Element Plus was removed in v1.9.0 (date/time uses a native `<input type=datetime-local>` styled with the `--fh-*` tokens).
 - **One service module per domain.** Keep routers thin: parse + delegate + serialise. Business logic lives in `services/`.
 
 
 
 
 
-- `REDACTED` — `config.py` fail-fast, SQLAlchemy session, Dockerfile multi-stage, Pinia auth store + axios refresh interceptor.
+- `REDACTED` - `config.py` fail-fast, SQLAlchemy session, Dockerfile multi-stage, Pinia auth store + axios refresh interceptor.
 
 
 ---
 
 ## License
 
-TBD — likely MIT.
+TBD - likely MIT.
 
 ## Author
 

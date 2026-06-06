@@ -91,7 +91,7 @@ async function onDownload() {
     const { data } = await getDownloadUrl(props.file.id)
     // Browser navigates to the signed URL; server's
     // Content-Disposition forces the download dialog. We don't
-    // open a new tab — same-tab navigation lets the browser
+    // open a new tab - same-tab navigation lets the browser
     // re-use the existing connection and the page restores when
     // the download dialog appears.
     window.location.href = data.url

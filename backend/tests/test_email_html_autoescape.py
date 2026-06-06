@@ -1,6 +1,6 @@
 """Regression: HTML email templates must autoescape user-controlled fields.
 
-Audit finding M1 — the Jinja env used `select_autoescape(["html"])`, but
+Audit finding M1 - the Jinja env used `select_autoescape(["html"])`, but
 templates end in `.html.j2`, so autoescape silently never fired and
 user-controlled `subject`/`message`/`sender_name`/`filename` were injected
 raw into HTML mail (phishing / webmail XSS). The env now matches `.html.j2`.

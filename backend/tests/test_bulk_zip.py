@@ -1,4 +1,4 @@
-"""Bulk ZIP download — authed (mint + consume) and public endpoints.
+"""Bulk ZIP download - authed (mint + consume) and public endpoints.
 
 Mirrors test_share_download_limit.py's on-disk file seeding. One ZIP =
 one download-budget decrement; the archive contains every `clean` file.

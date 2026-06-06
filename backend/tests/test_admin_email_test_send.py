@@ -1,4 +1,4 @@
-"""POST /api/admin/settings/email/test — synchronous SMTP smoke
+"""POST /api/admin/settings/email/test - synchronous SMTP smoke
 that returns structured diagnostics."""
 from __future__ import annotations
 
@@ -110,7 +110,7 @@ async def test_test_send_surfaces_smtp_exception_class_and_message(
 async def test_test_send_uses_override_without_persisting(
     make_user, db, client, login_as, monkeypatch
 ):
-    """If `override` is supplied, those values are used for the test —
+    """If `override` is supplied, those values are used for the test -
     persisted settings are not touched."""
     monkeypatch.setattr("app.config.settings.SMTP_HOST", "")  # would log-fallback
     captured: dict = {}

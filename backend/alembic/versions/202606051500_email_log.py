@@ -1,4 +1,4 @@
-"""email_log — append-only outbound email log (v1.11.0).
+"""email_log - append-only outbound email log (v1.11.0).
 
 One row per email across all send paths; `status` walks queued →
 sent/failed/error and is UPDATEd in place. Bodies stored with one-time
@@ -7,7 +7,7 @@ auth-link tokens masked at rest.
 Note: the BigInteger PK is created as plain BigInteger here (like
 `audit_log`). On SQLite that does not autoincrement, but the test suite
 builds the schema via `Base.metadata.create_all` (which uses the model's
-INTEGER variant), not this migration — so this runs against MySQL in
+INTEGER variant), not this migration - so this runs against MySQL in
 practice. Guards make it re-runnable after a partial failure.
 
 Revision ID: 202606051500

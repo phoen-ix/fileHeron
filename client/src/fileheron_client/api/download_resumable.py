@@ -103,7 +103,7 @@ def download_file_resumable(
     part = ckpt.part_path(dest)
     if cp is not None and part.exists():
         if not ranges_ok:
-            # We have a partial but couldn't re-probe — refuse to restart from
+            # We have a partial but couldn't re-probe - refuse to restart from
             # scratch (would throw away the user's bytes) or guess; surface a
             # transient error so a retry re-probes and resumes.
             raise ApiError(
@@ -288,7 +288,7 @@ def _run_segmented(
         ckpt.discard(dest)
         raise
     except Exception:
-        # Hard failure after retries — keep the partial + checkpoint so the
+        # Hard failure after retries - keep the partial + checkpoint so the
         # user can resume rather than restart from scratch.
         _persist()
         raise

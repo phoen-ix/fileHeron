@@ -1,4 +1,4 @@
-"""/api/admin/files — cross-user file history inventory."""
+"""/api/admin/files - cross-user file history inventory."""
 from __future__ import annotations
 
 from datetime import datetime

@@ -2,7 +2,7 @@
 
 Wraps the existing `_record_login_device` machinery (Phase 1b stored
 the rows; Phase 7 fires the email/notification). The detection itself
-already runs inside `services/auth.py` — this module is just the
+already runs inside `services/auth.py` - this module is just the
 dispatcher hook.
 
 Triggered after a successful login when `_record_login_device` returns
@@ -50,7 +50,7 @@ def fire_new_device_alert(
                 "display_name": user.display_name,
                 "via": via,
                 "ip_hint": f"~{ip_geohash5(ip)}" if ip else "unknown",
-                # We deliberately don't ship the full UA string — that's
+                # We deliberately don't ship the full UA string - that's
                 # enough device-fingerprinting that emailing it back
                 # adds disclosure risk if the inbox is later breached.
                 "ua_summary": _summarize_ua(ua),

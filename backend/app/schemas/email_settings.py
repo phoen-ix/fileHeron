@@ -14,7 +14,7 @@ class EmailSettingsResponse(APIBaseModel):
     """Returned by GET /api/admin/settings/email.
 
     The password is never echoed. `is_password_set` lets the UI render
-    the right placeholder ("(set — leave blank to keep)" vs
+    the right placeholder ("(set - leave blank to keep)" vs
     "Paste the SMTP password")."""
     host: str
     port: int
@@ -26,7 +26,7 @@ class EmailSettingsResponse(APIBaseModel):
     # EHLO/HELO name announced to the MTA. Empty = the container's
     # auto-detected FQDN is used.
     helo_hostname: str
-    # True when at least the host is non-empty — i.e. the live config
+    # True when at least the host is non-empty - i.e. the live config
     # would attempt a real send. False = logs-fallback in dev.
     is_configured: bool
     # True when the *effective* value comes from a DB row (vs the env

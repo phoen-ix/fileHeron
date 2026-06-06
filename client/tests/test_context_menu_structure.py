@@ -1,6 +1,6 @@
 """Structural guards for the right-click context menu (client-v0.9.13).
 
-AST/substring only — CI lacks system tkinter (CustomTkinter needs it), so we
+AST/substring only - CI lacks system tkinter (CustomTkinter needs it), so we
 don't import ``ui``. Mirrors ``test_login_overlay_structure.py``.
 
 The i18n keys (``context_menu.cut`` etc.) are covered by ``test_i18n.py``'s

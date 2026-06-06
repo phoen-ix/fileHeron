@@ -1,4 +1,4 @@
-/* WebAuthn helpers — base64url<->ArrayBuffer marshalling and the two
+/* WebAuthn helpers - base64url<->ArrayBuffer marshalling and the two
  * navigator.credentials calls. The backend speaks PublicKeyCredential
  * options in the JSON shape the spec defines (challenge + ids are
  * base64url strings); the browser API expects the same fields as

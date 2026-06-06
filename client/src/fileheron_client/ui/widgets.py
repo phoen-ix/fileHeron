@@ -1,4 +1,4 @@
-"""Small shared widgets — CustomTkinter port (v0.4.0)."""
+"""Small shared widgets - CustomTkinter port (v0.4.0)."""
 from __future__ import annotations
 
 import logging
@@ -12,7 +12,7 @@ _log = logging.getLogger("fileheron_client.ui.widgets")
 
 
 # State pill colours, mirroring the SPA's design tokens. (bg, fg) per
-# state — picked to read well on both light + dark CTk themes.
+# state - picked to read well on both light + dark CTk themes.
 _PILL_COLOURS: dict[str, tuple[str, str]] = {
     # state -> (background, text)
     "active": ("#dcfce7", "#166534"),
@@ -29,7 +29,7 @@ _PILL_COLOURS: dict[str, tuple[str, str]] = {
 class PillLabel(ctk.CTkLabel):
     """Compact rounded chip for share / file states.
 
-    CTk's ``corner_radius`` does the rounded edge for free — much
+    CTk's ``corner_radius`` does the rounded edge for free - much
     cleaner than the Qt stylesheet hack the v0.3.x version used."""
 
     def __init__(
@@ -80,7 +80,7 @@ def alive(widget) -> bool:
     thread via ui/_async. If the user navigated away (the view/window was
     destroyed) while the fetch was in flight, the callback would touch a
     dead widget. The async poll loop catches the resulting TclError, but it
-    spams crash.log and the update is wasted — so callbacks that mutate
+    spams crash.log and the update is wasted - so callbacks that mutate
     widgets should early-return on `not alive(self)`."""
     try:
         return bool(widget.winfo_exists())
@@ -99,7 +99,7 @@ def copy_to_clipboard_with_feedback(
     """Copy ``text`` to the OS clipboard and flash a transient "✓ Copied".
 
     The ``clipboard_clear()`` + ``clipboard_append()`` + ``update()`` sequence
-    is required on Linux/X11 — the X selection is a live protocol owned by the
+    is required on Linux/X11 - the X selection is a live protocol owned by the
     source app; without pumping the event loop the data is dropped when focus
     leaves. (Harmless on Windows.) On failure ``on_fail`` is invoked (callers
     pass an ``mb.warn`` closure). Returns True on success."""

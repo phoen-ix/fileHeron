@@ -1,13 +1,13 @@
-"""Modal message boxes — Y/N confirm and info popup.
+"""Modal message boxes - Y/N confirm and info popup.
 
 CustomTkinter doesn't ship its own message-box widget. Rather than
 add the third-party ``CTkMessagebox`` package, we roll a small wrapper
-around ``CTkToplevel`` here — it's ~80 lines and matches the rest of
+around ``CTkToplevel`` here - it's ~80 lines and matches the rest of
 the app's CTk styling exactly.
 
 Both helpers block (``wait_window``) and return the user's choice
 (True/False for confirm, None for info). Call from the Tk main thread
-only — the threading primitive in ``_async.py`` already marshals
+only - the threading primitive in ``_async.py`` already marshals
 worker results back onto the main thread before any UI code runs."""
 from __future__ import annotations
 
@@ -45,7 +45,7 @@ def info(parent, title: str, body: str, *, ok_text: Optional[str] = None) -> Non
 
 
 def warn(parent, title: str, body: str, *, ok_text: Optional[str] = None) -> None:
-    """Modal warning popup — same shape as info; the caller picks the
+    """Modal warning popup - same shape as info; the caller picks the
     title/body wording, the visual treatment is the same as info today.
     Separate function so future styling (red accent, ! icon) can
     diverge without touching call sites."""
@@ -98,7 +98,7 @@ def _modal(
     ok_btn = ctk.CTkButton(btn_row, text=ok_text, command=_on_ok, width=100)
     ok_btn.pack(side="right")
 
-    # Esc cancels, Enter confirms — keyboard parity with native dialogs.
+    # Esc cancels, Enter confirms - keyboard parity with native dialogs.
     win.bind("<Escape>", lambda _e: _on_cancel())
     win.bind("<Return>", lambda _e: _on_ok())
 

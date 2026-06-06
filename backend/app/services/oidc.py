@@ -1,4 +1,4 @@
-"""OIDC SSO — provider-aware (Phase 10).
+"""OIDC SSO - provider-aware (Phase 10).
 
 Replaces the Phase 7/9 single-provider singleton with a multi-provider
 model. An admin can enable 2-3 OIDC providers concurrently for different
@@ -7,10 +7,10 @@ binds to **one** provider via `users.oidc_provider_id`.
 
 Two callback paths:
 
-- ``handle_callback`` — anonymous login flow. Matches by
+- ``handle_callback`` - anonymous login flow. Matches by
   (provider_id, sub) → auto-link by verified email → otherwise refuses
   with ``OIDC_NO_ACCOUNT`` (admin must invite first).
-- ``handle_connect_callback`` — authed flow from /account. Refuses if
+- ``handle_connect_callback`` - authed flow from /account. Refuses if
   the IdP-asserted email doesn't match the authed user's email
   (``OIDC_EMAIL_MISMATCH``), or if the (provider, sub) is already bound
   to another user (``OIDC_SUBJECT_TAKEN``), or if the user is already
@@ -20,7 +20,7 @@ Security boundaries:
 
 - ID-token signature is verified via pyjwt against the IdP's JWKS keys
   (see `services/jwks.py`). Algorithm allowlist: RS256/384/512,
-  ES256/384 — `none` and `HS*` are refused (downgrade defense).
+  ES256/384 - `none` and `HS*` are refused (downgrade defense).
 - Issuer + audience + expiry + nonce are all verified.
 - Linking is gated on `email_verified=true` from the IdP. If unverified,
   we refuse to auto-link an existing local account.
@@ -49,7 +49,7 @@ from .audit import record_audit_event
 from .oidc_admin import get_client_secret, is_provider_usable
 
 # Algorithm allowlist: asymmetric only. Refusing `none` and `HS*` is
-# the textbook downgrade-attack defense — an attacker who tampers the
+# the textbook downgrade-attack defense - an attacker who tampers the
 # token can't downgrade to a symmetric or unsigned token, because pyjwt
 # checks `alg` against this list before doing anything else.
 _ALLOWED_ID_TOKEN_ALGS = ("RS256", "RS384", "RS512", "ES256", "ES384")
@@ -77,7 +77,7 @@ async def _discovery(provider: OIDCProvider) -> dict[str, Any]:
     issuer = provider.issuer_url.rstrip("/")
     url = f"{issuer}/.well-known/openid-configuration"
     # SSRF guard: block loopback / link-local (metadata) / multicast etc.
-    # allow_private=True — self-hosted IdPs on a private LAN are legitimate.
+    # allow_private=True - self-hosted IdPs on a private LAN are legitimate.
     assert_public_http_url(url, allow_private=True, require_https=False)
     try:
         async with httpx.AsyncClient(timeout=5.0) as cli:
@@ -199,7 +199,7 @@ async def _verify_id_token(
     `expected_nonce` is required for first-party flows (login + connect)
     so a leaked ID token can't be replayed across login attempts. It's
     only None when the caller has its own replay protection."""
-    # Avoid circular import — jwks imports oidc for _discovery.
+    # Avoid circular import - jwks imports oidc for _discovery.
     from . import jwks as jwks_svc
 
     try:
@@ -263,7 +263,7 @@ def _extract_email(
     for Google, Authentik, Keycloak (when configured to emit email).
 
     Microsoft Entra (work/school accounts, v2 endpoint) is a special case:
-    - ``email_verified`` is **not** issued by default — Entra's reasoning is
+    - ``email_verified`` is **not** issued by default - Entra's reasoning is
       that the tenant owns the UPN so a separate verification flag is
       redundant.
     - ``email`` itself may be absent unless the operator added it as an
@@ -273,7 +273,7 @@ def _extract_email(
     Because the issuer URL we pin in ``provider.issuer_url`` is
     ``https://login.microsoftonline.com/<specific-tenant>/v2.0`` (never
     ``/common``), and the JWKS-verified token was issued by THAT tenant,
-    the UPN is authoritative — Microsoft enforces UPN uniqueness within a
+    the UPN is authoritative - Microsoft enforces UPN uniqueness within a
     tenant and the tenant admin controls user provisioning. Treat as
     verified.
     """
@@ -374,17 +374,17 @@ async def handle_callback(
     expected_nonce: str | None,
     request=None,
 ) -> User:
-    """Anonymous login. Returns the resolved user — never auto-creates.
+    """Anonymous login. Returns the resolved user - never auto-creates.
 
     Resolution order:
     1. (provider.id, sub) match → return that user
     2. Verified email match against an existing local account that is
        NOT yet linked to any provider → set `oidc_provider_id` +
        `oidc_subject` on it, audit `oidc_linked`, return.
-    3. Otherwise raise ``OIDC_NO_ACCOUNT`` — admin must invite first.
+    3. Otherwise raise ``OIDC_NO_ACCOUNT`` - admin must invite first.
     """
     if not state_cookie or state_cookie != state_param:
-        raise AppError(401, "OIDC_STATE_MISMATCH", "OIDC state mismatch — try again.")
+        raise AppError(401, "OIDC_STATE_MISMATCH", "OIDC state mismatch - try again.")
 
     token_resp = await _exchange_code(provider, code, kind="login")
     claims = await _verify_token_response(
@@ -408,7 +408,7 @@ async def handle_callback(
 
     email, email_verified = _extract_email(claims, provider)
 
-    # 2. Auto-link via verified email — only if the local account isn't
+    # 2. Auto-link via verified email - only if the local account isn't
     # already bound to a different provider. Row-lock the user so two
     # concurrent callbacks (e.g. an attacker's provider racing the user's
     # real one) can't both pass the `oidc_provider_id is None` check and
@@ -475,13 +475,13 @@ async def handle_connect_callback(
     Refuses on email mismatch, on subject already taken, or if user
     is already linked to a different provider."""
     if not state_cookie or state_cookie != state_param:
-        raise AppError(401, "OIDC_STATE_MISMATCH", "OIDC state mismatch — try again.")
+        raise AppError(401, "OIDC_STATE_MISMATCH", "OIDC state mismatch - try again.")
 
     if user.oidc_provider_id and user.oidc_provider_id != provider.id:
         raise AppError(
             409,
             "OIDC_ALREADY_LINKED",
-            "You're already linked to another OIDC provider — disconnect that first.",
+            "You're already linked to another OIDC provider - disconnect that first.",
         )
 
     token_resp = await _exchange_code(provider, code, kind="connect")
@@ -544,7 +544,7 @@ async def handle_connect_callback(
 
 
 def unlink(db: Session, *, user: User, request=None) -> None:
-    """Clear the user's OIDC link. Idempotent — no-op if not linked."""
+    """Clear the user's OIDC link. Idempotent - no-op if not linked."""
     if not user.oidc_provider_id:
         return
     prev_provider_id = user.oidc_provider_id

@@ -2,7 +2,7 @@
 
 Most analytics are reconstructed live from persisted timestamps (share/download/
 audit `created_at`), so they need no snapshot. The ONE thing that can't be
-reconstructed is *storage / file-state over time* — once a file is hard-deleted
+reconstructed is *storage / file-state over time* - once a file is hard-deleted
 its bytes are gone and the past can't be recomputed. So we keep a tiny org-level
 row per day (written by the `analytics_aggregate` cron) purely for the
 storage-growth trend; everything else the endpoint computes on the fly.

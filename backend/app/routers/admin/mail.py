@@ -1,8 +1,8 @@
-"""/api/admin/mail-log — outbound email log: list + detail + CSV + resend.
+"""/api/admin/mail-log - outbound email log: list + detail + CSV + resend.
 
 Mirrors routers/admin/audit.py (cursor/offset pagination, recipient
 hydration, CSV-injection-safe streaming export). Bodies are deferred on
-the model, so the list + CSV never load them — only the detail endpoint.
+the model, so the list + CSV never load them - only the detail endpoint.
 """
 from __future__ import annotations
 
@@ -199,7 +199,7 @@ def get_mail(
     db: Session = Depends(get_db),
     _admin: User = Depends(get_current_admin),
 ) -> AdminMailDetail:
-    """Full row including the (masked) bodies — the only endpoint that loads
+    """Full row including the (masked) bodies - the only endpoint that loads
     the deferred body columns."""
     row = db.get(EmailLog, log_id)
     if row is None:
@@ -293,7 +293,7 @@ def export_mail_csv(
     db: Session = Depends(get_db),
     _admin: User = Depends(get_current_admin),
 ) -> StreamingResponse:
-    """Stream the filtered result as CSV — metadata only, never bodies."""
+    """Stream the filtered result as CSV - metadata only, never bodies."""
     query = _mail_query(
         db,
         q=q,

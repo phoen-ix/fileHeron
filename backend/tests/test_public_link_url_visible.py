@@ -1,6 +1,6 @@
 """GET /api/shares/{id}/public-link returns the URL for owner display.
 
-Bug: the URL was treated like a token — shown ONCE on creation and
+Bug: the URL was treated like a token - shown ONCE on creation and
 hash-only thereafter. Owners who lost the URL had to revoke + recreate
 to recover it. New behaviour: encrypted-at-rest token, decrypted for
 the owner on the share detail page.
@@ -60,7 +60,7 @@ async def test_get_public_link_returns_url_after_create(
     create_url = create_resp.json()["url"]
     assert create_url.startswith("http")
 
-    # Re-fetching the metadata returns the same URL — no need to
+    # Re-fetching the metadata returns the same URL - no need to
     # revoke + recreate.
     get_resp = await client.get(
         f"/api/shares/{share.id}/public-link",
@@ -77,7 +77,7 @@ async def test_get_public_link_url_is_null_for_legacy_rows(
     make_user, db, client, login_as
 ):
     """A row written before the token_encrypted column shipped has
-    that column NULL — the GET response surfaces url=None and the
+    that column NULL - the GET response surfaces url=None and the
     SPA renders the legacy hint."""
     sender = make_user(
         email="s@test.local", role=UserRole.admin, password="Pass12345678!"

@@ -4,7 +4,7 @@ Phase 3a logs every successful auth-gated download. Phase 5 adds public-link
 downloads (with `accessed_by_user_id=NULL` and `via=public`).
 
 `ua_fingerprint_hash` reuses utils/ua_fingerprint:ua_fingerprint_hash to
-strip patch versions — same value Phase 7 uses for the new-device alert.
+strip patch versions - same value Phase 7 uses for the new-device alert.
 """
 from __future__ import annotations
 
@@ -23,9 +23,9 @@ _BigIntPK = BigInteger().with_variant(Integer(), "sqlite")
 
 
 class DownloadVia(str, enum.Enum):
-    auth = "auth"            # session/JWT — recipient on the share
+    auth = "auth"            # session/JWT - recipient on the share
     api_token = "api_token"  # programmatic
-    public = "public"        # /d/{token} — Phase 5
+    public = "public"        # /d/{token} - Phase 5
 
 
 

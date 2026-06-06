@@ -1,6 +1,6 @@
 """Structural guards for the v0.9.x upload-progress screen.
 
-Like the other client tests, these inspect source via AST / substring —
+Like the other client tests, these inspect source via AST / substring -
 no ``ui`` import (CI may lack system tkinter; see conftest). They pin the
 contract of the new dedicated post-send screen:
 

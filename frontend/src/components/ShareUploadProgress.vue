@@ -2,7 +2,7 @@
 /* Dedicated post-"Send" screen: per-file upload progress, the one-time
  * public link (if created), and a timestamped per-file activity log.
  *
- * Purely presentational — the parent (ShareCreate) owns useUpload and feeds
+ * Purely presentational - the parent (ShareCreate) owns useUpload and feeds
  * everything in via props. Action buttons appear only once nothing is in
  * flight (gated on isActive, NOT allDone, because the 800ms 'finalizing'
  * timer keeps isActive true until the last file truly settles). */

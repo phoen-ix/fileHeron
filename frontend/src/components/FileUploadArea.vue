@@ -90,7 +90,7 @@ function onDrop(e: DragEvent) {
   gap: var(--fh-space-4);
 }
 
-/* Dropzone — editorial framing: hairline rules above and below an
+/* Dropzone - editorial framing: hairline rules above and below an
    centered serif headline. Becomes a tighter band once files exist. */
 .dropzone {
   display: block;

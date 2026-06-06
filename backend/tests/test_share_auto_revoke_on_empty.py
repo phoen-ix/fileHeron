@@ -1,6 +1,6 @@
 """Deleting the last non-deleted file from an active share auto-revokes it.
 
-An empty active share is functionally useless — recipients see "no
+An empty active share is functionally useless - recipients see "no
 files in this share", the owner can't add files later (no such API).
 Auto-revoke on last-file-delete keeps the lifecycle honest. Audit
 metadata `reason: last_file_deleted` distinguishes this path from
@@ -66,13 +66,13 @@ async def test_delete_last_file_revokes_share(
     token, _ = await login_as("s@test.local", "Pass12345678!")
     headers = {"Authorization": f"Bearer {token}"}
 
-    # Delete the first file — share stays active.
+    # Delete the first file - share stays active.
     r1 = await client.delete(f"/api/files/{files[0].id}", headers=headers)
     assert r1.status_code == 204
     db.expire_all()
     assert db.query(Share).filter(Share.id == share.id).one().state == ShareState.active
 
-    # Delete the second — share auto-revokes.
+    # Delete the second - share auto-revokes.
     r2 = await client.delete(f"/api/files/{files[1].id}", headers=headers)
     assert r2.status_code == 204
     db.expire_all()

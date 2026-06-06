@@ -24,7 +24,7 @@ const email = ref('')
 const password = ref('')
 // One second-factor field that accepts EITHER a 6-digit TOTP code or a
 // recovery code (formatted XXXX-XXXX). The two shapes never collide, so
-// onSubmit routes to the right endpoint — the user never has to choose.
+// onSubmit routes to the right endpoint - the user never has to choose.
 const code = ref('')
 const mode = ref<Mode>('creds')
 const error = ref<string | null>(null)
@@ -74,7 +74,7 @@ async function onSubmit() {
   try {
     if (mode.value === 'creds') {
       // Step 1: email + password only. If 2FA is on, the server answers
-      // TOTP_REQUIRED and we reveal the code step below (no penalty — the
+      // TOTP_REQUIRED and we reveal the code step below (no penalty - the
       // password was already verified).
       await auth.login(email.value, password.value)
     } else {

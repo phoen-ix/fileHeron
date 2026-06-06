@@ -1,4 +1,4 @@
-"""Shares — one user wraps one or more files for one or more recipients.
+"""Shares - one user wraps one or more files for one or more recipients.
 
 Phase 3a creates a basic single-recipient model (single user_id allowed via
 ShareRecipient). Phase 4 extends to multiple users + groups + the
@@ -39,7 +39,7 @@ class ShareState(str, enum.Enum):
     expired = "expired"
     revoked = "revoked"
     deleted = "deleted"
-    # Upload never completed — the cleanup_stale_uploads cron reaps the
+    # Upload never completed - the cleanup_stale_uploads cron reaps the
     # abandoned file(s) and flips the otherwise-empty share here so it leaves
     # the active sent folder. Stored as VARCHAR (native_enum=False) so adding
     # this value needs no migration; "failed" (6) fit the original length=10.
@@ -94,7 +94,7 @@ class Share(Base):
 
     created_at: Mapped[datetime] = mapped_column(DateTime(), nullable=False, default=utc_now)
     # Set by the share_expiring_24h_warning cron when it has fired the
-    # expiring-soon notification for this share — flag is what makes the
+    # expiring-soon notification for this share - flag is what makes the
     # job idempotent across re-runs in the same hour.
     expiring_notified_at: Mapped[datetime | None] = mapped_column(
         DateTime(), nullable=True

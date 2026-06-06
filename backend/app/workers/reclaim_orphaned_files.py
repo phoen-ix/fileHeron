@@ -1,13 +1,13 @@
 """Daily cron: reclaim orphaned file bytes after a grace window.
 
-Revoking a share is a soft state-flip (services/share.py::revoke_share) — it
+Revoking a share is a soft state-flip (services/share.py::revoke_share) - it
 keeps the file bytes as a recovery margin, unlike expiry which hard-deletes
 them. So a revoked (or deleted) share's files linger on disk in state
 ``clean``/``ready_unscanned``, still counting the uploader's quota, invisible
 in the default active-only Sent/Received view. These are "orphans".
 
 This cron frees them once their share has been terminal for
-``ORPHAN_RECLAIM_AFTER_DAYS`` (admin-tunable; 0 disables auto-reclaim — admins
+``ORPHAN_RECLAIM_AFTER_DAYS`` (admin-tunable; 0 disables auto-reclaim - admins
 can still reclaim manually from /admin/file-history). It reuses the canonical
 ``services/file.py::hard_delete`` helper (unlink + state=deleted + release
 quota + audit) and notifies admins of what it freed.

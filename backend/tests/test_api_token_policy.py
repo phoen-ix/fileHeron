@@ -86,7 +86,7 @@ def test_employees_admins_blocks_clients(make_user, db):
 
 
 def test_disabled_blocks_everyone_except_admin_escape_hatch(make_user, db):
-    """Mode=disabled means no token creation by anyone — except admin
+    """Mode=disabled means no token creation by anyone - except admin
     keeps an escape hatch (operator should always be able to create one)."""
     admin = make_user(email="a@test.local", role=UserRole.admin)
     employee = make_user(email="e@test.local", role=UserRole.employee)

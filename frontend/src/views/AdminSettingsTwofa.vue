@@ -91,7 +91,7 @@ async function onSave() {
     // themselves or relaxed it).
     await auth.refreshMe()
     ui.pushToast(t('admin_twofa_policy.saved_toast'), 'success')
-    // Saving admin just made themselves required + isn't enrolled —
+    // Saving admin just made themselves required + isn't enrolled -
     // jump straight into the QR enrolment wizard so they don't need
     // to navigate manually (the route guard would catch them on the
     // next nav anyway, but this avoids briefly seeing a now-gated

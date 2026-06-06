@@ -4,7 +4,7 @@ This is the deterministic proof behind the v1.18.1 fix: the audit/mail/analytics
 CSV exports used to be triggered by a plain `<a href download>`, which carries
 no Authorization header (the access token lives only in memory, attached by the
 axios interceptor) and no useful cookie (the refresh cookie is path-scoped to
-/api/auth). So an unauthenticated GET — exactly what the browser anchor sent —
+/api/auth). So an unauthenticated GET - exactly what the browser anchor sent -
 401s. The frontend now fetches these through axios (responseType blob); these
 tests guard that the endpoints stay admin-gated.
 """
@@ -24,7 +24,7 @@ _EXPORTS = [
 @pytest.mark.asyncio
 @pytest.mark.parametrize("path", _EXPORTS)
 async def test_csv_export_requires_auth(client, path):
-    # No Authorization header — what the old `<a href download>` actually sent.
+    # No Authorization header - what the old `<a href download>` actually sent.
     resp = await client.get(path)
     assert resp.status_code == 401, f"{path} should require auth, got {resp.status_code}"
 

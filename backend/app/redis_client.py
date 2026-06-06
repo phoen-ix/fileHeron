@@ -1,8 +1,8 @@
 """Redis client. Lazy connection pool initialized on first call.
 
 Used by:
-- services/rate_limit.py — login attempt sliding window
-- services/auth.py — (Phase 1b indirect) lockout cache misses fall back to Redis
+- services/rate_limit.py - login attempt sliding window
+- services/auth.py - (Phase 1b indirect) lockout cache misses fall back to Redis
 - Phase 4+: ARQ jobs.
 """
 from __future__ import annotations

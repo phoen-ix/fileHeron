@@ -2,7 +2,7 @@
 
 Cron filters using `WHERE expires_at < now()` or
 `WHERE expires_at IN (now+24h, now+25h)` exclude NULL rows by SQL
-NULL semantics, so never-expire shares simply sit untouched — no
+NULL semantics, so never-expire shares simply sit untouched - no
 worker logic change is needed.
 
 Revision ID: 202605170200
@@ -41,7 +41,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    # Reverting requires every existing NULL row to be back-filled — the
+    # Reverting requires every existing NULL row to be back-filled - the
     # operator must decide on the policy. We refuse to silently invent a
     # default (e.g. now+1y), so the downgrade is a no-op and a comment
     # is the contract.

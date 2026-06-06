@@ -1,4 +1,4 @@
-"""Admin-editable site URL — kv override beats the APP_URL env."""
+"""Admin-editable site URL - kv override beats the APP_URL env."""
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone

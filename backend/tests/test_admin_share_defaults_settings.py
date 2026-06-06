@@ -1,4 +1,4 @@
-"""GET/PUT /api/admin/settings/share-defaults — admin-controlled default
+"""GET/PUT /api/admin/settings/share-defaults - admin-controlled default
 state for the per-share `notify_recipients` checkbox."""
 from __future__ import annotations
 

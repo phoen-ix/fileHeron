@@ -1,4 +1,4 @@
-"""/api/shares/* — Phase 4 (multi-recipient + group recipients)."""
+"""/api/shares/* - Phase 4 (multi-recipient + group recipients)."""
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Query, Request, status
@@ -38,7 +38,7 @@ router = APIRouter(prefix="/api/shares", tags=["shares"])
 
 def _visible_files(share) -> list:
     """Files the share's *current owner / recipients* should see. Excludes
-    rows in ``state=deleted`` — the audit log + admin file history keep
+    rows in ``state=deleted`` - the audit log + admin file history keep
     the historical record; user-facing surfaces shouldn't echo back what
     the user just deleted."""
     return [f for f in share.files if f.state != FileState.deleted]
@@ -50,7 +50,7 @@ def _effective_subject(share, files) -> str:
 
     Callers should pass ``list(share.files)`` (every file ever in the
     share, including deleted ones) so a share whose last file the
-    owner just deleted still has an identifiable label — otherwise
+    owner just deleted still has an identifiable label - otherwise
     the row turns into a faceless "(no subject)" tombstone."""
     if share.subject:
         return share.subject
@@ -127,7 +127,7 @@ def create_share(
     user: User = Depends(get_actor),
     db: Session = Depends(get_db),
 ) -> ShareResponse:
-    # Pre-flight the public-link policy gate before any DB writes — no
+    # Pre-flight the public-link policy gate before any DB writes - no
     # half-created share if the user can't add the link they asked for.
     if payload.public_link is not None and not public_link_svc.is_allowed_to_create(
         db, user
@@ -154,7 +154,7 @@ def create_share(
         subject=payload.subject,
         message=payload.message,
         # Service-level recipients-required guard is relaxed when an
-        # inline public link is being attached — the link is the access
+        # inline public link is being attached - the link is the access
         # mechanism. The schema validator enforces "recipients OR
         # public_link" at the API boundary; this kwarg keeps the service
         # honest for direct callers.
@@ -295,7 +295,7 @@ def list_shares(
                 sender = ShareSenderRef(
                     id=su.id, display_name=su.display_name, email=su.email
                 )
-        # Inbound (client → company) shares carry no recipient rows — the
+        # Inbound (client → company) shares carry no recipient rows - the
         # audience is "the company". Surface a single synthetic recipient so the
         # UI renders "→ Company" (the SPA translates on kind="company").
         if s.kind == ShareKind.inbound:
@@ -488,11 +488,11 @@ def patch_share(
     db: Session = Depends(get_db),
 ) -> ShareResponse:
     """Editable fields on an active share: expires_at, download_limit.
-    All optional — only supplied fields change.
+    All optional - only supplied fields change.
 
     For expires_at: supply a datetime to set, or `expires_at_clear: true`
     to remove the expiry (share becomes never-expire). The two are
-    mutually exclusive — sending both is a 400.
+    mutually exclusive - sending both is a 400.
     """
     share = share_svc.get_share_or_404(db, share_id)
     if payload.expires_at_clear and payload.expires_at is not None:

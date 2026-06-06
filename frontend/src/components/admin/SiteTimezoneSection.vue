@@ -22,7 +22,7 @@ const draft = ref('')
 /* IANA zone catalogue for the <datalist> typeahead. supportedValuesOf
  * is well-supported since 2022 (Chrome 99, FF 93, Safari 15.4). Falls
  * back to a short curated list if the browser is too old to expose it
- * — the admin can still type any value, server-side validation is the
+ * - the admin can still type any value, server-side validation is the
  * gate that matters. */
 const ALL_ZONES: readonly string[] = (() => {
   const sv = (Intl as unknown as { supportedValuesOf?: (k: string) => string[] }).supportedValuesOf

@@ -4,7 +4,7 @@ CSP is intentionally relaxed for `style-src 'self' 'unsafe-inline'` to support
 Element Plus (it injects scoped styles inline). Documented in CLAUDE.md.
 
 Implemented as **pure ASGI** (not BaseHTTPMiddleware) so it doesn't wrap the
-response body — preserving ``FileResponse``'s zero-copy ``os.sendfile`` for
+response body - preserving ``FileResponse``'s zero-copy ``os.sendfile`` for
 large downloads (BaseHTTPMiddleware throttled them to a crawl).
 """
 from __future__ import annotations

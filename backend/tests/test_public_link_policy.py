@@ -1,6 +1,6 @@
 """Public-link policy gate (post-Phase 10).
 
-Mirrors test_api_token_policy.py — same policy shape, different verb.
+Mirrors test_api_token_policy.py - same policy shape, different verb.
 """
 from __future__ import annotations
 

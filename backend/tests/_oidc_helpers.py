@@ -3,13 +3,13 @@
 Generates an RSA keypair once per test (cheap enough at 2048 bits) and
 exposes:
 
-- ``sign_id_token(claims, *, kid="kid-1", alg="RS256")`` — produces a
+- ``sign_id_token(claims, *, kid="kid-1", alg="RS256")`` - produces a
   signed JWT under the test private key.
-- ``install_jwks_mock(monkeypatch, *, kid="kid-1")`` — patches
+- ``install_jwks_mock(monkeypatch, *, kid="kid-1")`` - patches
   ``services.jwks.get_signing_key`` so verification finds the test
   public key.
 - ``patch_exchange(monkeypatch, claims, *, kid="kid-1", alg="RS256")``
-  — single-call helper that wires both the token-endpoint stub and the
+  - single-call helper that wires both the token-endpoint stub and the
   JWKS mock for the most common test pattern (one fake login round
   trip).
 
@@ -26,7 +26,7 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 
 def make_claims(provider, *, sub: str, email: str, email_verified: bool = True, **extra: Any) -> dict[str, Any]:
     """Build a base claims dict with iss/aud/exp/iat already filled in
-    against the given provider — pyjwt's `require` rejects tokens
+    against the given provider - pyjwt's `require` rejects tokens
     missing exp/iat, so every test claim set needs them."""
     now = int(time.time())
     claims: dict[str, Any] = {
@@ -63,7 +63,7 @@ def sign_id_token(
     key: rsa.RSAPrivateKey | None = None,
 ) -> str:
     """Sign claims into a JWT with our test private key (or an override
-    key — used by the wrong-signature test case)."""
+    key - used by the wrong-signature test case)."""
     return jwt.encode(
         claims,
         key or _key(),

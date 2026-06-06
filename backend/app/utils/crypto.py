@@ -2,10 +2,10 @@
 be audited in one place and unit-tested.
 
 - argon2_hash / argon2_verify: passwords, recovery codes (Phase 1b).
-  NOT used for refresh tokens (those use SHA-256 — see refresh_token_hash).
+  NOT used for refresh tokens (those use SHA-256 - see refresh_token_hash).
 - random_token(n): urlsafe base64-encoded random bytes.
 - sha256_hex: deterministic hash of high-entropy strings (refresh tokens, public
-  link tokens — Phase 5).
+  link tokens - Phase 5).
 - normalize_email: lower + strip; use this every time you write or
   query against ``users.email`` / ``invite_tokens.email``.
 - hmac_sign(payload, secret): used for tusd metadata signing (Phase 3a).
@@ -123,7 +123,7 @@ def decrypt_totp_secret(ciphertext: bytes) -> str:
 
 
 # Generic alias for the Phase 9 app_settings table. Same Fernet key, same
-# crypto — separate names so callsites read self-documenting.
+# crypto - separate names so callsites read self-documenting.
 def encrypt_setting(plaintext: str) -> str:
     return _get_fernet().encrypt(plaintext.encode("utf-8")).decode("ascii")
 
@@ -136,7 +136,7 @@ def decrypt_setting(ciphertext: str) -> str:
 # Recovery codes (10 × 8-char alphanumeric, "K7XQ-2L9P" style)
 # ---------------------------------------------------------------------------
 
-# Crockford-ish alphabet — drop ambiguous chars (0/O, 1/I/L) so users can read
+# Crockford-ish alphabet - drop ambiguous chars (0/O, 1/I/L) so users can read
 # codes from a printed page without confusion.
 _RECOVERY_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
 

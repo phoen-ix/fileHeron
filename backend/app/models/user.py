@@ -54,7 +54,7 @@ class User(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
 
-    # Email — plaintext, always lowercased + stripped on write.
+    # Email - plaintext, always lowercased + stripped on write.
     email: Mapped[str] = mapped_column(String(254), unique=True, index=True, nullable=False)
 
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)

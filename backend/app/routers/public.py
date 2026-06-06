@@ -1,14 +1,14 @@
 """Anonymous public-share routes mounted at /d/{token}.
 
 Three endpoints, no auth:
-- GET  /d/{token}                              — landing metadata
-- POST /d/{token}/unlock                       — password unlock
-- GET  /d/{token}/files/{file_id}/download     — actual file fetch
+- GET  /d/{token}                              - landing metadata
+- POST /d/{token}/unlock                       - password unlock
+- GET  /d/{token}/files/{file_id}/download     - actual file fetch
 
 Unlock flow:
 - If the link has a password, /unlock checks it and sets a short-lived
   signed cookie scoped to /d/{token}. The cookie payload is an HMAC of
-  (link_id, exp) under JWT_SECRET — no DB lookup on subsequent download
+  (link_id, exp) under JWT_SECRET - no DB lookup on subsequent download
   requests (the cookie itself is the proof).
 - The cookie expires when the share expires or in 24h, whichever comes
   first.
@@ -184,7 +184,7 @@ def unlock(
     share = db.query(Share).filter(Share.id == link.share_id).one()
     # Cap the unlock cookie at the share's expiry so a leaked cookie
     # can't outlive the share itself. NULL expires_at = never-expire
-    # (v1.1.4) — in that case the share doesn't bound the cookie, so
+    # (v1.1.4) - in that case the share doesn't bound the cookie, so
     # the UNLOCK_TTL_SEC max-age (24h) is the only ceiling.
     base_exp = utc_now() + timedelta(seconds=UNLOCK_TTL_SEC)
     cookie_exp = base_exp if share.expires_at is None else min(base_exp, share.expires_at)
@@ -302,7 +302,7 @@ def public_preview(
 ) -> Response:
     """Serve a public-share file INLINE for in-browser preview. Same unlock gate
     as the download path, but **never** decrements the link counter, writes a
-    `download_log` row, records consumption, or notifies the owner — preview is
+    `download_log` row, records consumption, or notifies the owner - preview is
     "look". An exhausted link serves neither download nor preview (410). Bytes
     are served with a server-chosen safe Content-Type + nosniff/CSP hardening."""
     from ..services import preview as preview_svc

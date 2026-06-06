@@ -140,7 +140,7 @@ const loading = ref(false)
 const errorMsg = ref<string | null>(null)
 const cursorIdx = ref(0)
 
-// Local mirrors of the selected entities — needed so we can show their
+// Local mirrors of the selected entities - needed so we can show their
 // display_name / email / etc on the chips without re-fetching.
 const selectedUsersLocal = ref<UserSearchItem[]>([...(props.selectedUsers ?? [])])
 const selectedGroupsLocal = ref<GroupResponse[]>([...(props.selectedGroups ?? [])])

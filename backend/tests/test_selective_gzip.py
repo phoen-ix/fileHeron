@@ -1,7 +1,7 @@
 """SelectiveGZipMiddleware: gzip normal responses, never file downloads.
 
 Gzipping a download response is pointless (binaries don't compress) and
-catastrophic in practice — it defeats FileResponse's zero-copy sendfile and
+catastrophic in practice - it defeats FileResponse's zero-copy sendfile and
 crawls on multi-GB files. Download endpoints all end in /download.
 """
 from __future__ import annotations

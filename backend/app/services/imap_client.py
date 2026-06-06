@@ -1,6 +1,6 @@
 """Thin IMAP session over stdlib ``imaplib`` (v1.27.0).
 
-Sync — the poll runs it in a worker thread (``asyncio.to_thread``). All raw IMAP
+Sync - the poll runs it in a worker thread (``asyncio.to_thread``). All raw IMAP
 I/O lives behind ``ImapSession`` so the poll logic can be driven by a fake in
 tests. No third-party dependency (``aioimaplib`` is GPLv3; avoided).
 """
@@ -66,7 +66,7 @@ class ImapSession:
         if typ != "OK" or not data or not data[0]:
             return []
         uids = [int(x) for x in data[0].split()]
-        # `<n>:*` returns the highest message when n exceeds it — filter.
+        # `<n>:*` returns the highest message when n exceeds it - filter.
         return sorted(u for u in uids if u > last_uid)
 
     def fetch_raw(self, uid: int) -> bytes | None:

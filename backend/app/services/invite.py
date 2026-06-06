@@ -30,7 +30,7 @@ def create_invite(
     ttl: timedelta = timedelta(hours=24),
 ) -> tuple[InviteToken, str]:
     """Create a new invite. Returns (record, plaintext_token). The plaintext
-    is only available here — store the hash, send the plaintext over email.
+    is only available here - store the hash, send the plaintext over email.
 
     `initial_group_ids` (optional): groups the invitee is added to on
     consume. Caller is responsible for validating that the IDs exist.
@@ -92,7 +92,7 @@ def mark_invite_consumed(db: Session, record: InviteToken, used_user_id: int) ->
 
 # ---------------------------------------------------------------------------
 # Admin views over pending / expired invites (post-Phase 10; v1.1.5
-# dropped the soft-revoke tombstone — admin delete is now a hard delete).
+# dropped the soft-revoke tombstone - admin delete is now a hard delete).
 #
 # An invite has two observable states for the admin list:
 #   - pending: used_at IS NULL AND expires_at > now()
@@ -112,7 +112,7 @@ def list_invites(
 ) -> tuple[list[InviteToken], int]:
     """List invites that have NOT been consumed by a real user.
 
-    The base filter is ``used_user_id IS NULL`` — this captures the two
+    The base filter is ``used_user_id IS NULL`` - this captures the two
     visible states:
 
     - **pending**:  ``used_at IS NULL AND expires_at > now()``
@@ -148,11 +148,11 @@ def revoke_invite(
 ) -> None:
     """Hard-delete an invite. Audit log retains {email, target_role}
     so the admin trail survives even though the row is gone (v1.1.5
-    behaviour change — previously this was a soft tombstone).
+    behaviour change - previously this was a soft tombstone).
 
     Refuses to operate on consumed invites (which would either orphan
-    the consuming user's link to their original invite or — pre-FK-
-    cascade — fail at the constraint).
+    the consuming user's link to their original invite or - pre-FK-
+    cascade - fail at the constraint).
     """
     if invite.used_user_id is not None:
         raise AppError(
@@ -211,7 +211,7 @@ def regenerate_invite(
     invite.token_hash = sha256_hex(plaintext)
     invite.created_at = now
     invite.expires_at = now + ttl
-    # Defensive reset of the lifecycle fields on the existing row — no
+    # Defensive reset of the lifecycle fields on the existing row - no
     # row in the post-v1.1.5 DB should have used_at set without
     # used_user_id, but we don't want stale state on an in-flight
     # regenerate to leak through.
@@ -248,7 +248,7 @@ async def resend_invite(
 
     Uses the same template + dispatch funnel as the original create-invite
     flow (``send_invite_email``). Until SMTP is wired the mail body lands
-    in backend stdout — same behaviour as the create flow, so admins who
+    in backend stdout - same behaviour as the create flow, so admins who
     are familiar with that workflow can still recover the link.
 
     Returns the new ``expires_at``. The plaintext token never leaves
@@ -308,7 +308,7 @@ def activate_invite_as_admin(
 
     Server generates a placeholder password (a 32-byte urlsafe-base64
     string, never returned, only the Argon2 hash is stored). The user
-    can never authenticate with this password — admins must rely on
+    can never authenticate with this password - admins must rely on
     SSO or a follow-up "force password reset" if a usable local
     password is needed.
 
@@ -317,7 +317,7 @@ def activate_invite_as_admin(
       - USER_EXISTS if a real user already exists for invite.email
         (raised inside _create_user_from_invite)
 
-    Allowed on expired invites — admin override.
+    Allowed on expired invites - admin override.
     """
     from .auth import _create_user_from_invite
 

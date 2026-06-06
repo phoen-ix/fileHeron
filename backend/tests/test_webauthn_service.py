@@ -1,6 +1,6 @@
 """WebAuthn service surface tests.
 
-We don't try to exercise the cryptographic ceremony end-to-end here —
+We don't try to exercise the cryptographic ceremony end-to-end here -
 that requires a real authenticator. Instead we test the lifecycle around
 it: list, delete, "no credentials" error, options shape.
 """
@@ -88,13 +88,13 @@ def test_sign_count_atomic_update_rejects_concurrent_overwrite(make_user, db):
     """Wave 1 P1-3 regression. The atomic UPDATE in
     authenticate_complete (`WHERE sign_count == record.sign_count`)
     closes the cloned-authenticator gap: two concurrent verifications
-    both seeing sign_count=5 can't both write new values — the second's
+    both seeing sign_count=5 can't both write new values - the second's
     WHERE clause no longer matches after the first commits, so its
     rowcount=0 triggers WEBAUTHN_VERIFY_FAILED. Pre-fix unconditional
     assignment would silently let both succeed, defeating the whole
     point of sign-count clone detection.
 
-    SQLite + asyncio is cooperative — we can't reproduce true thread
+    SQLite + asyncio is cooperative - we can't reproduce true thread
     parallelism. Instead we exercise the atomic primitive directly: two
     UPDATEs with the same expected-sign-count, second one returns
     rowcount=0 (which the production code converts to AppError).

@@ -33,7 +33,7 @@ os.environ.setdefault("ARGON2_TIME_COST", "1")
 os.environ.setdefault("ARGON2_MEMORY_COST_KIB", "8192")
 os.environ.setdefault("ARGON2_PARALLELISM", "1")
 
-# Phase 3a — upload pipeline. Tests don't actually run tusd / read disk,
+# Phase 3a - upload pipeline. Tests don't actually run tusd / read disk,
 # but services/tus_signing.py needs TUS_HOOK_SECRET at import / call time.
 os.environ.setdefault(
     "TUS_HOOK_SECRET", "test_tus_hook_secret_at_least_thirty_two_characters_long_xx"
@@ -119,7 +119,7 @@ def _rebind_session_local(engine):
     socket that isn't there.
 
     Rebind the existing sessionmaker to the per-test SQLite engine via
-    `.configure(bind=...)` — every module that imported `SessionLocal`
+    `.configure(bind=...)` - every module that imported `SessionLocal`
     holds a reference to the SAME sessionmaker instance, so this one
     call retargets all of them in lockstep. Restore on teardown so we
     don't leave a global pointing at a disposed engine.
@@ -142,7 +142,7 @@ def _disable_ip_rate_limit(monkeypatch):
     lockout (DB-backed) is what these tests target anyway.
 
     Also covers the generic `check_ip_allowed(bucket, ip, limit)` used
-    by register-from-invite / forgot-password / verify-email — same
+    by register-from-invite / forgot-password / verify-email - same
     rationale, same fix."""
     from app.services import rate_limit
     monkeypatch.setattr(rate_limit, "check_login_ip_allowed", lambda *_a, **_kw: True)
@@ -169,7 +169,7 @@ def _reset_oidc_caches():
 def _no_op_sse_publish(monkeypatch):
     """SSE delivery is fire-and-forget against Redis. In tests Redis
     isn't always reachable, and even when it is the publish task is
-    scheduled inside the event loop with no awaiter — pytest's
+    scheduled inside the event loop with no awaiter - pytest's
     unraisable-exception hook flags the GeneratorExit at teardown.
     Patch the publish helpers to no-ops; the durable in-app
     `notifications` row is what tests actually assert on."""
@@ -190,7 +190,7 @@ def _no_op_email_send(monkeypatch):
     to look up SMTP config. With our SQLite + StaticPool test setup all
     sessions share the one connection, and the side session's
     close()-time rollback wipes pending writes from the main request
-    session — including audit rows the test then expects to see.
+    session - including audit rows the test then expects to see.
     Skip the side-session entirely in tests; the email body is already
     rendered by the caller, so we just no-op the actual send."""
     from app.services import email as email_svc
@@ -238,11 +238,11 @@ def _hibp_offline(monkeypatch):
     whole suite. `is_password_breached` is now enforced on every
     password-set path (register / setup / reset / change), so without this
     the tests would depend on live network access to pwnedpasswords.com and
-    on whether a given fixture password happens to be in the breach corpus —
+    on whether a given fixture password happens to be in the breach corpus -
     flaky and environment-coupled. We stub the lowest level (`_fetch_range`)
     so the real k-anonymity logic still runs; tests that exercise HIBP
     directly (test_hibp.py) re-monkeypatch `_fetch_range`, and tests that
-    want a breach stub `is_password_breached` itself — both override this."""
+    want a breach stub `is_password_breached` itself - both override this."""
     from app.services import hibp as hibp_svc
 
     async def _no_range(_prefix5):

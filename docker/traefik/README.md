@@ -5,7 +5,7 @@ compose file) so it can serve multiple apps from one TLS endpoint.
 This directory holds copy-paste-ready configs for that setup.
 
 The compose stack publishes on `127.0.0.1:${APP_BACKEND_PORT}` (default
-8000) and `127.0.0.1:${APP_FRONTEND_PORT}` (default 8080) — Traefik
+8000) and `127.0.0.1:${APP_FRONTEND_PORT}` (default 8080) - Traefik
 proxies external HTTPS to those local ports.
 
 ---
@@ -17,10 +17,10 @@ proxies external HTTPS to those local ports.
    optional source-IP allowlist (see `TUS_HOOK_ALLOWED_IPS`), but
    defense-in-depth requires the proxy to also refuse the path.
 2. **TLS terminates at Traefik.** The backend reads
-   `X-Forwarded-Proto` to decide whether to issue Secure cookies —
+   `X-Forwarded-Proto` to decide whether to issue Secure cookies -
    if the proxy strips that header, login silently breaks. Make
    sure Traefik forwards it (the snippet below does).
-3. **Body-size limits matter for uploads — but scope them to the
+3. **Body-size limits matter for uploads - but scope them to the
    direct-upload path only.** The SPA uploads <100 MB files via
    `POST /api/uploads/direct`; cap that with the `buffering` middleware
    at `MAX_DIRECT_UPLOAD_BYTES + 10%`. (The backend also enforces the
@@ -29,14 +29,14 @@ proxies external HTTPS to those local ports.
    Traefik's `buffering` middleware buffers **responses** too
    (`maxResponseBodyBytes` defaults to *unlimited*), so a multi-GB
    download is spooled to disk on the Traefik host **before the first
-   byte reaches the client** — minutes of latency and flaky/aborted
+   byte reaches the client** - minutes of latency and flaky/aborted
    downloads. TUS (`/uploads/`) must likewise stream, not buffer.
    Attach `fileheron-large-body` ONLY to a dedicated
    `Path('/api/uploads/direct')` router (see below).
 
 ---
 
-## `traefik/dynamic/fileheron.yml` — dynamic config example
+## `traefik/dynamic/fileheron.yml` - dynamic config example
 
 ```yaml
 http:
@@ -75,7 +75,7 @@ http:
       service: fileheron-backend
       tls:
         certResolver: letsencrypt
-      # NO fileheron-large-body here — buffering would spool every download
+      # NO fileheron-large-body here - buffering would spool every download
       # response to disk before the first byte (operator rule 4).
       middlewares:
         - fileheron-headers
@@ -87,7 +87,7 @@ http:
         - websecure
       service: fileheron-backend
       # tusd is reached via the SPA container's nginx proxy. TUS streams
-      # 5 MB chunks and tusd enforces its own limits — NO buffering here,
+      # 5 MB chunks and tusd enforces its own limits - NO buffering here,
       # or large resumable uploads (and any download) stall.
       tls:
         certResolver: letsencrypt
@@ -126,7 +126,7 @@ http:
       stripPrefix:
         prefixes:
           - "/api/internal"
-      # Note: stripPrefix would alias them to other paths — better
+      # Note: stripPrefix would alias them to other paths - better
       # is to use plugin or chain to return 404. The cleanest
       # approach is to put a separate router with a higher priority:
       #   rule: "PathPrefix(`/api/internal/`)"
@@ -136,7 +136,7 @@ http:
 
     fileheron-large-body:
       # Adjust to MAX_DIRECT_UPLOAD_BYTES + headroom (~110 MiB for the
-      # 100 MB default). Attach ONLY to fileheron-api-upload — Traefik's
+      # 100 MB default). Attach ONLY to fileheron-api-upload - Traefik's
       # buffering middleware ALSO buffers responses (memResponseBodyBytes
       # 1 MB in RAM, the rest spooled to disk, maxResponseBodyBytes
       # unlimited by default), which would break large downloads. The

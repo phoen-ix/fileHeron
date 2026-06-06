@@ -8,7 +8,7 @@ created with a 24h-and-a-bit expiry that the previous run already
 notified about; the NULL check is the durable barrier.
 
 Failures during dispatch are caught + logged so a single bad recipient
-doesn't poison the whole batch — and the column is only marked once
+doesn't poison the whole batch - and the column is only marked once
 the per-share dispatch loop completes (best-effort but bounded).
 """
 from __future__ import annotations
@@ -63,7 +63,7 @@ async def share_expiring_24h_warning(_ctx) -> dict:
                 .filter(ShareRecipient.share_id.in_(share_ids))
                 .all()
             ):
-                # Group recipients are deliberately NOT fanned out here —
+                # Group recipients are deliberately NOT fanned out here -
                 # 50-member groups would generate 50 emails and the
                 # group-share recipient sees the share in their inbox anyway.
                 if r.recipient_user_id is not None:

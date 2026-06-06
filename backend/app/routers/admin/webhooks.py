@@ -1,4 +1,4 @@
-"""/api/admin/webhooks — manage outbound webhook subscriptions + deliveries.
+"""/api/admin/webhooks - manage outbound webhook subscriptions + deliveries.
 
 Admin-only. The signing secret is generated server-side, stored Fernet-encrypted,
 and returned exactly once (on create / rotate); thereafter only `secret_set` is

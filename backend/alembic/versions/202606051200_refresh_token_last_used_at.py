@@ -1,4 +1,4 @@
-"""Add refresh_tokens.last_used_at — per-session last-activity timestamp.
+"""Add refresh_tokens.last_used_at - per-session last-activity timestamp.
 
 Session = a `refresh_tokens` row. The token rotates on every refresh (a new
 head row is minted), so `created_at` is threaded forward to mean the original

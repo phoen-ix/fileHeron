@@ -64,7 +64,7 @@ def _channel(user_id: int) -> str:
     return f"fh:sse:{user_id}"
 
 
-# Shared admin channel — every admin watching /admin/system subscribes
+# Shared admin channel - every admin watching /admin/system subscribes
 # to the same Redis pubsub key. Producers (cron_tracker on success
 # and failure, ops_alert dispatch) publish here so the view auto-
 # refreshes without polling.
@@ -104,7 +104,7 @@ async def publish(user_id: int, event: dict) -> None:
 def publish_sync(user_id: int, event: dict) -> None:
     """Sync wrapper for callers in non-async contexts (the notification
     dispatcher, called from sync FastAPI routes that run in the
-    threadpool). Failures are swallowed — SSE delivery is best-effort;
+    threadpool). Failures are swallowed - SSE delivery is best-effort;
     the in-app row is the durable record."""
     try:
         loop = asyncio.get_running_loop()
@@ -143,7 +143,7 @@ async def publish_admin(event: dict) -> None:
 
 
 def publish_admin_sync(event: dict) -> None:
-    """Sync wrapper for the admin channel — mirrors `publish_sync`'s
+    """Sync wrapper for the admin channel - mirrors `publish_sync`'s
     loop-aware behavior so callers in worker / sync contexts can both
     invoke it without ceremony."""
     try:
@@ -226,7 +226,7 @@ async def stream_for_user(user_id: int, last_event_id: int | None = None) -> Asy
             now = asyncio.get_running_loop().time()
             if now >= deadline:
                 # Tell the client to reconnect (default per the spec is
-                # 3000ms — we leave that as-is).
+                # 3000ms - we leave that as-is).
                 yield b": close\n\n"
                 return
             timeout = max(0.5, min(KEEPALIVE_SEC, deadline - now))
@@ -234,7 +234,7 @@ async def stream_for_user(user_id: int, last_event_id: int | None = None) -> Asy
                 ignore_subscribe_messages=True, timeout=timeout
             )
             if msg is None:
-                # Keepalive comment — keeps proxies from killing the connection.
+                # Keepalive comment - keeps proxies from killing the connection.
                 yield b": keepalive\n\n"
                 continue
 

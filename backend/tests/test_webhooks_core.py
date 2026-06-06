@@ -1,4 +1,4 @@
-"""Outbound webhooks — emit fan-out, signing, delivery worker, audit hook."""
+"""Outbound webhooks - emit fan-out, signing, delivery worker, audit hook."""
 from __future__ import annotations
 
 import hashlib
@@ -57,7 +57,7 @@ def test_emit_never_raises(db, monkeypatch):
 
     monkeypatch.setattr("app.services.job_queue.enqueue", boom)
     _mk_webhook(db, events=["*"])
-    # Must swallow the enqueue error — an action must never break on a webhook.
+    # Must swallow the enqueue error - an action must never break on a webhook.
     assert webhook_svc.emit(db, "share_created", {}) == 0
 
 

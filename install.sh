@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# fileHeron installer — clones (or updates) the repo, generates random
+# fileHeron installer - clones (or updates) the repo, generates random
 # secrets, writes .env, and brings up the compose stack.
 #
 # Usage:
@@ -81,7 +81,7 @@ APP_URL="${APP_URL%/}"
 # ---- clone / update --------------------------------------------------
 
 if [ -d "$INSTALL_DIR/.git" ]; then
-    echo "[install] $INSTALL_DIR already exists — pulling latest"
+    echo "[install] $INSTALL_DIR already exists - pulling latest"
     git -C "$INSTALL_DIR" fetch --tags
     git -C "$INSTALL_DIR" pull --ff-only
 elif [ -e "$INSTALL_DIR" ]; then
@@ -101,7 +101,7 @@ if [ ! -f .env ]; then
     cp .env.example .env
     echo "[install] created .env from .env.example"
 else
-    echo "[install] .env already exists — preserving existing values"
+    echo "[install] .env already exists - preserving existing values"
 fi
 
 # Generate any secret that's still at the placeholder value.
@@ -151,7 +151,7 @@ chmod 600 .env
 # needs to write the update-request JSON. If we let the shim create
 # the dir first, it ends up root-owned and backend can't write. Force
 # UID 1000 here so backend wins from the first compose up.
-# (A one-shot privileged container does the chown — saves us from
+# (A one-shot privileged container does the chown - saves us from
 #  requiring `sudo` in the installer itself.)
 echo "[install] ensuring data/updater is writable by the backend (UID 1000)"
 mkdir -p data/updater

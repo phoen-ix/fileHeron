@@ -26,7 +26,7 @@ watch(
   async () => {
     await nextTick()
     // Only reset focus if a view hasn't already claimed it (e.g. an autofocused
-    // input on a form/login page) — otherwise we'd steal that focus.
+    // input on a form/login page) - otherwise we'd steal that focus.
     const active = document.activeElement
     if (!active || active === document.body) {
       mainEl.value?.focus({ preventScroll: true })
@@ -57,7 +57,7 @@ onMounted(() => {
 </template>
 
 <style>
-/* Programmatic focus target on route change — no visible outline. */
+/* Programmatic focus target on route change - no visible outline. */
 main:focus {
   outline: none;
 }

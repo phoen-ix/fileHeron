@@ -1,4 +1,4 @@
-"""Site admin settings — URL + display timezone. See ``services/site.py``."""
+"""Site admin settings - URL + display timezone. See ``services/site.py``."""
 from __future__ import annotations
 
 from urllib.parse import urlparse
@@ -53,11 +53,11 @@ class UpdateSiteSettingsRequest(BaseModel):
             return None
         v = v.strip()
         if not v:
-            return ""  # explicit clear sentinel — router resets to default
+            return ""  # explicit clear sentinel - router resets to default
         try:
             ZoneInfo(v)
         except ZoneInfoNotFoundError as e:
             raise ValueError(
-                f"Unknown timezone {v!r} — must be an IANA name like 'Europe/Vienna' or 'UTC'."
+                f"Unknown timezone {v!r} - must be an IANA name like 'Europe/Vienna' or 'UTC'."
             ) from e
         return v

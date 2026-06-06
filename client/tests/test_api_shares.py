@@ -184,7 +184,7 @@ def test_list_shares_passes_sort_direction_and_party_filters():
 
 @respx.mock
 def test_list_shares_omits_optional_params_when_unset():
-    """Default call (the v0.5.x shape) must not regress — no sort,
+    """Default call (the v0.5.x shape) must not regress - no sort,
     direction, or party params on the wire when caller didn't set
     them. Backend has its own defaults; injecting client defaults
     would shadow future server-side changes."""

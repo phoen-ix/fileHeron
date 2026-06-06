@@ -1,12 +1,12 @@
-"""Edit-download-limit modal — integer entry + Unlimited checkbox.
+"""Edit-download-limit modal - integer entry + Unlimited checkbox.
 
 v0.7.1. The caller invokes ``show_modal()`` which blocks and returns:
 
-- ``("set", int)`` — user entered a positive integer
-- ``("clear", None)`` — user checked the Unlimited box
-- ``None`` — dialog was cancelled (no-op)
+- ``("set", int)`` - user entered a positive integer
+- ``("clear", None)`` - user checked the Unlimited box
+- ``None`` - dialog was cancelled (no-op)
 
-Twin of ``expiry_dialog.py`` — same modal pattern, same return shape
+Twin of ``expiry_dialog.py`` - same modal pattern, same return shape
 so ``share_detail_view._edit_limit`` can mirror ``_edit_expiry``."""
 from __future__ import annotations
 

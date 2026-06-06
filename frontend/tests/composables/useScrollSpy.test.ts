@@ -93,11 +93,11 @@ describe('useScrollSpy', () => {
     fireIntersection('password', true)
     expect(wrapper.vm.handle.active.value).toBe('password')
 
-    // Both visible — declared order wins, so 'password' beats 'sessions'.
+    // Both visible - declared order wins, so 'password' beats 'sessions'.
     fireIntersection('sessions', true)
     expect(wrapper.vm.handle.active.value).toBe('password')
 
-    // Password leaves the viewport — sessions takes over.
+    // Password leaves the viewport - sessions takes over.
     fireIntersection('password', false)
     expect(wrapper.vm.handle.active.value).toBe('sessions')
   })

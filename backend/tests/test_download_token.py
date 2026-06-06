@@ -1,4 +1,4 @@
-"""Signed download URL — issuance, verification, end-to-end download."""
+"""Signed download URL - issuance, verification, end-to-end download."""
 from __future__ import annotations
 
 import tempfile
@@ -124,7 +124,7 @@ async def test_get_download_url_then_download(
     url = resp.json()["url"]
     assert url.startswith(f"/api/files/{file_row.id}/download?dt=")
 
-    # Browser navigates — no Authorization header on this hop.
+    # Browser navigates - no Authorization header on this hop.
     resp = await client.get(url)
     assert resp.status_code == 200, resp.text
     assert resp.content == b"hello, downloaded world"

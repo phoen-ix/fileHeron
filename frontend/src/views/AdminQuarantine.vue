@@ -94,8 +94,8 @@ function closeConfirm() {
 async function submitConfirm() {
   const c = confirm.value
   if (c == null) return
-  // Release still requires a justification — admin is reactivating
-  // a file the AV scanner flagged. Purge does not — it's the cleanup
+  // Release still requires a justification - admin is reactivating
+  // a file the AV scanner flagged. Purge does not - it's the cleanup
   // path for a row the admin has already reviewed.
   if (c.kind === 'release' && c.reason.trim().length < 10) return
   c.busy = true
@@ -168,7 +168,7 @@ onMounted(load)
             <div class="fh-mono row-hint">{{ it.uploader.email }} · {{ it.uploader.role }}</div>
           </td>
           <td>
-            <div class="row-name">{{ it.share_subject || '—' }}</div>
+            <div class="row-name">{{ it.share_subject || '-' }}</div>
           </td>
           <td class="fh-mono">{{ formatDate(it.uploaded_at) }}</td>
           <td class="actions-cell">

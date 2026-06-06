@@ -29,7 +29,7 @@ def format_expiry(value: Optional[datetime]) -> str:
     """Render a share's ``expires_at`` (in local time) for the detail
     dialog + list view.
 
-    ``None`` is intentional in the backend (v1.1.4 "Never" preset) —
+    ``None`` is intentional in the backend (v1.1.4 "Never" preset) -
     render it as the word ``"Never"`` rather than an em-dash or empty
     string so the row reads as a deliberate choice, not missing data."""
     if value is None:
@@ -55,7 +55,7 @@ def format_rate(bytes_per_sec: float) -> str:
 def format_eta(seconds: Optional[float]) -> str:
     """``"0:42"`` / ``"1:23:45"``; em-dash when unknown or non-positive."""
     if seconds is None or seconds <= 0 or seconds != seconds:  # None / <=0 / NaN
-        return "—"
+        return "-"
     s = int(seconds)
     h, rem = divmod(s, 3600)
     m, sec = divmod(rem, 60)

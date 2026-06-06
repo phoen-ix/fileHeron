@@ -1,4 +1,4 @@
-"""/api/admin/system — operator-facing health + cron history.
+"""/api/admin/system - operator-facing health + cron history.
 
 Closes the "no admin observability" gap from the operational audit.
 Surfaces:
@@ -11,7 +11,7 @@ Surfaces:
 - Count of email_undeliverable audit events in the last 24h (the
   signal that ops_check picks up to alert admins).
 
-Read-only. No mutating endpoints — the cron_tracker writes the rows.
+Read-only. No mutating endpoints - the cron_tracker writes the rows.
 """
 from __future__ import annotations
 
@@ -35,7 +35,7 @@ from ...utils.timeutil import utc_now
 router = APIRouter()
 
 # Every scheduled cron (worker.py::WorkerSettings.cron_jobs), in schedule
-# order. Doubles as the allowlist for the on-demand run endpoint — each is
+# order. Doubles as the allowlist for the on-demand run endpoint - each is
 # registered in WorkerSettings.functions, so enqueueable by name, and each
 # is idempotent (acts only on already-eligible rows).
 _KNOWN_CRONS = [
@@ -62,11 +62,11 @@ _KNOWN_CRONS = [
 
 
 def _live_checks(db: Session) -> dict:
-    """Mirror /api/health's probes — DB, Redis, AV. Probes run fresh on every
+    """Mirror /api/health's probes - DB, Redis, AV. Probes run fresh on every
     call; `checked_at` records when, so the UI can show 'checked <time>'."""
     out: dict = {"checked_at": utc_now().isoformat()}
 
-    # DB — if we got this far the request session worked, so just label OK.
+    # DB - if we got this far the request session worked, so just label OK.
     out["db"] = {"status": "ok", "error": None}
 
     try:
@@ -237,7 +237,7 @@ async def check_updates_now(
     _admin: User = Depends(get_current_admin),
 ) -> dict:
     """Admin-triggered release check. Bypasses both the manual-mode guard
-    and the 24h cadence — fires a real HTTP call and writes the cache.
+    and the 24h cadence - fires a real HTTP call and writes the cache.
     Returns the same shape as the cron's result so the SPA can toast
     'found vX.Y.Z' / 'up to date' / error."""
     from ...services import release_check as release_check_svc
@@ -265,7 +265,7 @@ def live_checks_now(
     _admin: User = Depends(get_current_admin),
 ) -> dict:
     """On-demand re-run of the liveness probes (DB / Redis / AV). Lightweight
-    sibling of /system/status that skips the cron + version queries — backs
+    sibling of /system/status that skips the cron + version queries - backs
     the 'Re-run' button on the Live checks card."""
     return {"live": _live_checks(db)}
 
@@ -324,7 +324,7 @@ class UpdateApplyRequest(BaseModel):
 
 def _verify_password_or_403(user: User, password: str) -> None:
     from ...utils.crypto import argon2_verify
-    # 403 (not 401) on a wrong confirm-password: the admin IS authenticated —
+    # 403 (not 401) on a wrong confirm-password: the admin IS authenticated -
     # this is a re-auth gate, not a session failure. A 401 here collides with
     # the SPA's global access-token-refresh interceptor, which would silently
     # refresh the session and re-submit the update with the same wrong
@@ -428,7 +428,7 @@ def apply_rollback(
     admin: User = Depends(get_current_admin),
 ) -> dict:
     """Roll back to the previously-running tag. Target is read from the
-    updater's state file — caller doesn't pass it."""
+    updater's state file - caller doesn't pass it."""
     from ...services import release_apply
     from ...services.audit import record_audit_event
 

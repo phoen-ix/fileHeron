@@ -3,7 +3,7 @@ purge the bytes from disk while keeping the historical row.
 
 Both actions require an `infected` file. Both audit with the admin as
 actor and a free-text reason that the admin types into the SPA confirm
-dialog (10–500 chars, validated at the schema layer).
+dialog (10-500 chars, validated at the schema layer).
 
 Caller commits in both operations.
 """
@@ -51,7 +51,7 @@ def release(
         backend.move(file.storage_path, new_loc)
         file.storage_path = new_loc
     else:
-        # Bytes already gone (manual cleanup, prior purge, etc.) — refuse
+        # Bytes already gone (manual cleanup, prior purge, etc.) - refuse
         # rather than silently flip state on a missing file. Admin should
         # purge instead.
         raise AppError(
@@ -71,7 +71,7 @@ def release(
             reserve_bytes(db, user=uploader, additional_bytes=file.size_bytes)
         except AppError:
             # If the uploader is now over quota (admin tightened it after
-            # the upload), still allow the release — the bytes already
+            # the upload), still allow the release - the bytes already
             # exist on disk; rejecting would leave the file in a
             # half-released state. Log it for ops awareness.
             logger.warning(
@@ -80,7 +80,7 @@ def release(
                 uploader.id,
             )
 
-    # Restore the parent share — but only if it was revoked specifically
+    # Restore the parent share - but only if it was revoked specifically
     # because of THIS quarantine, not by a separate admin action.
     share = db.query(Share).filter(Share.id == file.share_id).one_or_none()
     share_restored = False

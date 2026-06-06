@@ -9,7 +9,7 @@ as ShareListPanel's detail drill-in) and shows:
 Uploads run here: ``start_uploads()`` kicks off one worker per file and the
 ``on_*`` callbacks (marshalled to the Tk main loop by upload_worker) drive the
 matching row. When everything settles the screen STAYS and reveals the action
-buttons — the form is restored only when the user picks "New share"
+buttons - the form is restored only when the user picks "New share"
 (``on_new_share``)."""
 from __future__ import annotations
 
@@ -40,7 +40,7 @@ class UploadProgressView(ctk.CTkFrame):
         on_view_outbox: Optional[Callable[[], None]] = None,
         flash: Optional[Callable[[str], None]] = None,
     ) -> None:
-        # Never assign self._root — it shadows tkinter.Misc and breaks event
+        # Never assign self._root - it shadows tkinter.Misc and breaks event
         # dispatch. Mirror the rest of the UI: keep the root on _app_root.
         super().__init__(master, fg_color="transparent")
         self._app_root = root

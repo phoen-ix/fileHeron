@@ -2,7 +2,7 @@
 
 Writes one org-level row/day (storage bytes + file-state counts) so the
 storage-growth trend has history that deletes can't erase. Every other
-analytic is computed live in the endpoint — this cron only feeds the trend.
+analytic is computed live in the endpoint - this cron only feeds the trend.
 Idempotent: re-running overwrites today's row.
 """
 from __future__ import annotations

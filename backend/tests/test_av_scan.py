@@ -1,4 +1,4 @@
-"""AV scan worker — quarantine flow + state transitions.
+"""AV scan worker - quarantine flow + state transitions.
 
 Mocks the clamd network call so tests don't need a live ClamAV.
 """
@@ -24,7 +24,7 @@ def _now_naive() -> datetime:
 
 def _seed_file_for_scan(db, sender, recipient, tmp_path, content=b"hello"):
     """Create a share + file with a real on-disk artifact, in
-    ready_unscanned state — exactly what the worker would see."""
+    ready_unscanned state - exactly what the worker would see."""
     share = Share(
         created_by_id=sender.id,
         kind=ShareKind.outbound,
@@ -137,7 +137,7 @@ async def test_av_scan_skip_in_unexpected_state(make_user, db, tmp_path, monkeyp
 
 
 def test_quarantine_releases_quota_and_audits(make_user, db, tmp_path, monkeypatch):
-    """Direct test of services/quarantine.py — bypasses the worker so we
+    """Direct test of services/quarantine.py - bypasses the worker so we
     can confirm the audit + quota plumbing without async."""
     sender = make_user(email="hr@test.local", role=UserRole.admin)
     recipient = make_user(email="cli@test.local", role=UserRole.client)

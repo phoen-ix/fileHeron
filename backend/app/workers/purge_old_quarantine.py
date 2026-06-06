@@ -8,7 +8,7 @@ the bytes accumulate.
 This cron walks `files` rows in `state=infected` whose `finalized_at`
 is older than `QUARANTINE_PURGE_AFTER_DAYS`, unlinks the bytes, and
 leaves the row at `state=infected` with `storage_path=None` as a
-historical marker — same semantics as the existing admin "purge"
+historical marker - same semantics as the existing admin "purge"
 action in services/quarantine_admin.py.
 
 Set `QUARANTINE_PURGE_AFTER_DAYS=0` to disable.

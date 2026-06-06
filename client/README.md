@@ -1,8 +1,8 @@
 # file:Heron desktop client
 
 CustomTkinter desktop client for the file:Heron platform (migrated off
-PySide6 in v0.4.0 — pure-Python GUI, ~10 MB of deps vs Qt6's ~150 MB).
-Talks to the same REST API as the SPA — login (email/password + TOTP or
+PySide6 in v0.4.0 - pure-Python GUI, ~10 MB of deps vs Qt6's ~150 MB).
+Talks to the same REST API as the SPA - login (email/password + TOTP or
 API token), browse Inbox & Outbox, download files, and create new
 shares (direct multipart for ≤100 MB, TUS resumable for larger).
 

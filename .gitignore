@@ -52,7 +52,7 @@ Thumbs.db
 .env.local
 .env.*.local
 
-# Project data — bind mounts, never commit user files
+# Project data - bind mounts, never commit user files
 data/db/*
 !data/db/.gitkeep
 data/redis/*

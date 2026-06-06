@@ -2,8 +2,8 @@
 
 Design (see plan Thread 3): storage/file-state over time is the ONLY thing that
 can't be reconstructed after deletes, so a nightly cron writes one row/day into
-`analytics_snapshots`. Everything else — share activity, downloads, AV events,
-top-N, quota warnings — is computed live here from persisted timestamps and
+`analytics_snapshots`. Everything else - share activity, downloads, AV events,
+top-N, quota warnings - is computed live here from persisted timestamps and
 current state, so it's always fresh (no staleness, no cron dependency).
 
 Day-bucketing uses ``func.date(...)`` which is portable across SQLite (tests)
@@ -93,7 +93,7 @@ def compute_analytics(db: Session, days: int = 30) -> dict:
     """The live analytics bundle for the last `days` days."""
     start_date, start_dt = _cutoff(days)
 
-    # Storage trend — from the daily snapshots (the only non-reconstructable bit).
+    # Storage trend - from the daily snapshots (the only non-reconstructable bit).
     snaps = (
         db.query(AnalyticsSnapshot)
         .filter(AnalyticsSnapshot.snapshot_date >= start_date)
@@ -170,7 +170,7 @@ def compute_analytics(db: Session, days: int = 30) -> dict:
         )
     ]
 
-    # Quota warnings — users over 90% of a set quota.
+    # Quota warnings - users over 90% of a set quota.
     quota_users = db.query(User).filter(User.quota_bytes.isnot(None)).all()
     used = quota_svc.storage_used_bytes_bulk(db, [u.id for u in quota_users])
     quota_warnings = []

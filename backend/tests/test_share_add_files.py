@@ -1,4 +1,4 @@
-"""POST /api/shares/{id}/files-added — owner's batch-complete signal after
+"""POST /api/shares/{id}/files-added - owner's batch-complete signal after
 adding files to an active share: audit + opt-in recipient notification."""
 from __future__ import annotations
 

@@ -57,7 +57,7 @@ def record_audit_event(
     )
 
     # Fan out to outbound webhooks subscribed to this event (best-effort, never
-    # raises). Lazy import — webhook → models → audit would be a cycle at import.
+    # raises). Lazy import - webhook → models → audit would be a cycle at import.
     try:
         from . import webhook as webhook_svc
 

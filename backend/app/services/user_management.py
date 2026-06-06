@@ -1,7 +1,7 @@
 """Admin-side user CRUD: list/search/update/disable/force-password-reset.
 
 Right-to-erasure lives in `services/erasure.py` because it does more
-than mutate the row — it walks files + share recipients.
+than mutate the row - it walks files + share recipients.
 """
 from __future__ import annotations
 
@@ -84,7 +84,7 @@ def update_user(
         )
         if cleaned:
             changed["connections_pruned"] = cleaned
-        # 2FA-enforcement reflagging is no longer needed — the policy is
+        # 2FA-enforcement reflagging is no longer needed - the policy is
         # evaluated live (services.twofa_policy.is_2fa_required) so the
         # next request from `target` will redirect them through the
         # forced-setup flow without any column writes here.
@@ -178,7 +178,7 @@ async def create_user_as_admin(
     initial_group_ids: list[int] | None = None,
     request=None,
 ) -> User:
-    """Create a user account immediately — no invite, email pre-verified,
+    """Create a user account immediately - no invite, email pre-verified,
     with an admin-set password the user can sign in with right away.
 
     Mirrors the invite flow's invariants (uniqueness / pending-invite /
@@ -202,7 +202,7 @@ async def create_user_as_admin(
         raise AppError(
             409,
             "INVITE_PENDING",
-            "A pending invite exists for this email — revoke it first, or activate it.",
+            "A pending invite exists for this email - revoke it first, or activate it.",
         )
 
     group_ids = list(initial_group_ids or [])

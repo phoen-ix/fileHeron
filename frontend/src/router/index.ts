@@ -222,7 +222,7 @@ const router = createRouter({
           meta: { density: 'operator', title: 'API tokens', requiresRole: 'admin' },
         },
         {
-          // The dedicated Settings hub page was flattened into the sidebar —
+          // The dedicated Settings hub page was flattened into the sidebar -
           // every sub-page is now a first-class nav item. Keep the name so any
           // `{ name: 'admin-settings' }` link still resolves.
           path: 'settings',
@@ -329,7 +329,7 @@ const router = createRouter({
       ],
     },
     {
-      // Legacy notice page — superseded by auto-launch on /account/2fa
+      // Legacy notice page - superseded by auto-launch on /account/2fa
       // when requires_2fa is true. Kept as a redirect so any existing
       // bookmarks or external links still resolve. The interstitial
       // notice + extra "Set up 2FA" click made the enrolment flow
@@ -391,7 +391,7 @@ router.beforeEach(async (to, _from) => {
     return { path: effectiveLandingPath(auth.user) }
   }
 
-  // Admin-only routes — bounce non-admins to their effective landing.
+  // Admin-only routes - bounce non-admins to their effective landing.
   if (
     to.meta.requiresRole === 'admin' &&
     auth.isAuthenticated &&

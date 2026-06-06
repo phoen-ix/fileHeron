@@ -1,9 +1,9 @@
-"""Inbound mailbox — messages fetched from the configured account over IMAP
+"""Inbound mailbox - messages fetched from the configured account over IMAP
 (v1.27.0).
 
 One row per ingested message. Dedup is by ``(uidvalidity, imap_uid)`` (the IMAP
 server's stable identity) plus ``message_id`` as a backstop, so re-polling never
-double-ingests — even in the "leave untouched" post-fetch mode. Bodies are
+double-ingests - even in the "leave untouched" post-fetch mode. Bodies are
 ``deferred`` so the list + count queries never load them; only the detail
 endpoint pulls them. Inbound HTML is sanitised (nh3) at ingest time.
 """
@@ -84,7 +84,7 @@ class InboundMessage(Base):
     )
 
     body_text: Mapped[str | None] = mapped_column(_Body, nullable=True, deferred=True)
-    # Sanitised (nh3) at ingest — safe to render in a sandboxed iframe.
+    # Sanitised (nh3) at ingest - safe to render in a sandboxed iframe.
     body_html: Mapped[str | None] = mapped_column(_Body, nullable=True, deferred=True)
     has_attachments: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 

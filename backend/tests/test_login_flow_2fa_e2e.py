@@ -6,8 +6,8 @@ The SPA (`frontend/src/views/Login.vue`) and the desktop client
   1. submit email + password ALONE. If 2FA is on, the server answers
      ``TOTP_REQUIRED`` and the UI reveals one "authentication code" field.
   2. That single field accepts a 6-digit TOTP code OR a recovery code
-     (``XXXX-XXXX``) and routes itself — 6 digits → ``/api/auth/login``,
-     anything else → ``/api/auth/login/recovery`` — with no toggle.
+     (``XXXX-XXXX``) and routes itself - 6 digits → ``/api/auth/login``,
+     anything else → ``/api/auth/login/recovery`` - with no toggle.
 
 This test drives that exact sequence against the real backend (TestClient on
 isolated in-memory SQLite) with a real synthetic 2FA account, and asserts the
@@ -66,7 +66,7 @@ async def _enable_2fa(client, email, password):
 @pytest.mark.asyncio
 async def test_routing_predicate_classifies_real_artifacts(make_user, client):
     """A real TOTP routes to /login; a real recovery code (XXXX-XXXX) never
-    does — so one field can serve both with no toggle."""
+    does - so one field can serve both with no toggle."""
     make_user(email=EMAIL, password=PW)
     secret, codes = await _enable_2fa(client, EMAIL, PW)
     assert _routes_to_totp(pyotp.TOTP(secret).now()) is True
@@ -110,7 +110,7 @@ async def test_two_step_recovery_path(make_user, client):
 
 @pytest.mark.asyncio
 async def test_no_2fa_is_single_step(make_user, client):
-    """Without 2FA, step 1 logs in directly — the code step never appears."""
+    """Without 2FA, step 1 logs in directly - the code step never appears."""
     make_user(email=EMAIL, password=PW)
     resp = await _frontend_submit(client, EMAIL, PW, None)
     assert resp.status_code == 200

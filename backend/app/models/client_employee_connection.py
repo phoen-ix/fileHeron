@@ -2,7 +2,7 @@
 
 A client and an employee are "connected" if either:
 - the employee invited the client (source=invite, sticky), or
-- both belong to at least one common group (source=shared_group, dynamic —
+- both belong to at least one common group (source=shared_group, dynamic -
   removed when the last shared group is left).
 
 Connections are the basis for the recipient-search ACL: clients can only

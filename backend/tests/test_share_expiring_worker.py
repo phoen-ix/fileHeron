@@ -1,4 +1,4 @@
-"""share_expiring_24h_warning worker — window correctness + idempotency."""
+"""share_expiring_24h_warning worker - window correctness + idempotency."""
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
@@ -81,7 +81,7 @@ async def test_idempotent_via_expiring_notified_at(make_user, db, monkeypatch):
 async def test_outside_window_skipped(make_user, db, monkeypatch):
     sender = make_user(email="hr@test.local", role=UserRole.admin)
     recipient = make_user(email="cli@test.local", role=UserRole.client)
-    # 3 days from now — way outside the (24h, 25h) window.
+    # 3 days from now - way outside the (24h, 25h) window.
     _make_share(db, sender, recipient.id, _now() + timedelta(days=3))
 
     monkeypatch.setattr(

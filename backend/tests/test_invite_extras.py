@@ -151,7 +151,7 @@ async def test_invite_with_deleted_group_silently_skips(
 ):
     """If a group is deleted between invite creation and consume, the
     consume succeeds and just skips the missing group rather than
-    failing. Defensive — better UX for the invitee."""
+    failing. Defensive - better UX for the invitee."""
     admin = make_user(
         email="admin@test.local", role=UserRole.admin, password="Pass12345678!"
     )

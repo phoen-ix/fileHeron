@@ -76,7 +76,7 @@ function pillState(state: UploadState): 'active' | 'warn' | 'danger' | undefined
 
 function percentLabel(item: UploadItem): string {
   if (item.state === 'done') return '100%'
-  if (item.state === 'queued') return '—'
+  if (item.state === 'queued') return '-'
   if (item.state === 'error') return '!'
   return `${item.progress}%`
 }

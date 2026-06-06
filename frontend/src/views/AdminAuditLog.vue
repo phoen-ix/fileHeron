@@ -133,14 +133,14 @@ onMounted(load)
                 <span v-if="r.actor_email" class="actor-hint fh-mono">{{ r.actor_email }}</span>
               </RouterLink>
             </template>
-            <span v-else class="fh-mono">—</span>
+            <span v-else class="fh-mono">-</span>
           </td>
           <td class="fh-mono">
             <span v-if="r.target_type">{{ r.target_type }}:{{ r.target_id }}</span>
-            <span v-else>—</span>
+            <span v-else>-</span>
           </td>
-          <td class="fh-mono">{{ r.ip ?? '—' }}</td>
-          <td class="fh-mono small">{{ r.request_id?.slice(0, 8) ?? '—' }}</td>
+          <td class="fh-mono">{{ r.ip ?? '-' }}</td>
+          <td class="fh-mono small">{{ r.request_id?.slice(0, 8) ?? '-' }}</td>
         </tr>
       </tbody>
     </table>

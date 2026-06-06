@@ -1,6 +1,6 @@
 """Test fixtures.
 
-Tests deliberately avoid importing the ``ui`` package — that would
+Tests deliberately avoid importing the ``ui`` package - that would
 pull in PySide6, which we don't want as a hard test dep. Pytest
 discovers modules under ``tests/`` only, so as long as we don't
 ``import fileheron_client.ui`` here we're fine.
@@ -29,7 +29,7 @@ def tmp_keyring(monkeypatch) -> Iterator[dict]:
     from keyring.errors import PasswordDeleteError
 
     class _MemKeyring(KeyringBackend):
-        priority = 1  # noqa: F841 — required by KeyringBackend metaclass
+        priority = 1  # noqa: F841 - required by KeyringBackend metaclass
 
         def get_password(self, service: str, username: str) -> str | None:
             return store.get(f"{service}\x00{username}")

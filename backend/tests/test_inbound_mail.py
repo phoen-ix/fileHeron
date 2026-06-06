@@ -1,4 +1,4 @@
-"""Inbound mailbox service tests (v1.27.0) — classify, parse, ingest dedup,
+"""Inbound mailbox service tests (v1.27.0) - classify, parse, ingest dedup,
 poll gating + fake IMAP, attachment AV gating."""
 from __future__ import annotations
 

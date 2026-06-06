@@ -4,7 +4,7 @@ v0.4.0 / v0.4.3 attempted this with worker threads calling
 ``root.after(0, callback)`` directly. That broke sign-in on Windows:
 ``root.after()`` goes through ``tk.call`` which acquires Tcl's
 interpreter lock, but the main thread sitting in ``wait_window()`` or
-``mainloop()`` holds that lock — the worker either deadlocks waiting
+``mainloop()`` holds that lock - the worker either deadlocks waiting
 for it or the scheduled callback never gets serviced.
 
 v0.4.4 switches to the canonical Tk-threading pattern:
@@ -60,7 +60,7 @@ _POLL_INTERVAL_MS = 50
 
 
 def init_async(root) -> None:
-    """Wire the main-thread polling loop. Idempotent — calling more
+    """Wire the main-thread polling loop. Idempotent - calling more
     than once just re-schedules the next tick."""
     def _poll() -> None:
         try:
@@ -108,7 +108,7 @@ def run_in_background(
     or ``on_failed`` for the next main-thread poll.
 
     ``root`` is accepted but unused in v0.4.4 (the queue is module-
-    scoped) — kept in the signature so call sites don't need to change."""
+    scoped) - kept in the signature so call sites don't need to change."""
     def _runner() -> None:
         try:
             result = fn()
@@ -138,7 +138,7 @@ def run_with_progress(
     Progress is **coalesced**: a fast producer (e.g. a multi-GB segmented
     download reading 1 MiB chunks across several threads) would otherwise
     enqueue thousands of callbacks, and the main-thread poller drains the
-    queue until empty — so it would never return to the Tk event loop and the
+    queue until empty - so it would never return to the Tk event loop and the
     UI would freeze until the transfer finished. We keep only the latest
     (done, total) with at most one flush queued, capping redraws to ~the poll
     rate while always delivering the final value."""

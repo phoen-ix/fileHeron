@@ -6,7 +6,7 @@ Wire format: ``fh_<8-hex-prefix>_<43-char-base64url-secret>``.
 - secret is 32 bytes of crypto-random urlsafe-base64 (rstrip "=" → 43 chars).
 
 Backend stores: prefix, last4 (display only), secret_hash (SHA-256 of the
-secret half — high-entropy random, no Argon2 needed).
+secret half - high-entropy random, no Argon2 needed).
 
 Verify:
     parse "fh_<prefix>_<secret>"
@@ -31,7 +31,7 @@ from .audit import record_audit_event
 TOKEN_PREFIX_BYTES = 4  # 8 hex chars
 TOKEN_SECRET_BYTES = 32  # 43 b64url chars (no padding)
 
-# Granularity for the `last_used_at` write — one update per minute is plenty for
+# Granularity for the `last_used_at` write - one update per minute is plenty for
 # a human-facing "last used" while avoiding an UPDATE on every single request.
 LAST_USED_THROTTLE_SEC = 60
 
@@ -132,7 +132,7 @@ def verify_token(db: Session, *, token_str: str) -> ApiToken:
 
 def _record_last_used(db: Session, record: ApiToken) -> None:
     """Persist token usage. Most API-token requests are GETs, and ``get_db``
-    never commits (it rolls back on close) — so a bare ``flush()`` here was
+    never commits (it rolls back on close) - so a bare ``flush()`` here was
     discarded when the request ended, and ``last_used_at`` only ever advanced
     on write endpoints that happened to commit. Commit it instead: this runs in
     the auth dependency, before the endpoint body, so only this update is
@@ -168,13 +168,13 @@ def revoke_token(db: Session, *, owner: User, token_id: int) -> None:
         raise AppError(404, "TOKEN_NOT_FOUND", "API token not found.")
     if record.revoked_at is None:
         record.revoked_at = utc_now()
-    # Once revoked, disabled is moot — clear it for cleanliness.
+    # Once revoked, disabled is moot - clear it for cleanliness.
     record.disabled_at = None
     db.flush()
 
 
 # ---------------------------------------------------------------------------
-# Policy gate (post-Phase 10) — shared logic lives in services/policy_gate.
+# Policy gate (post-Phase 10) - shared logic lives in services/policy_gate.
 # ---------------------------------------------------------------------------
 
 

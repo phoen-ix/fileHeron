@@ -4,7 +4,7 @@ A reverse proxy that forwards ``X-Forwarded-Proto: http`` makes tusd
 (``-behind-proxy``) hand back an ``http://`` Location; PATCHing it triggers an
 http→https 308 that the client can't follow (and following it strips auth).
 ``_same_origin`` keeps only the Location's path + query and grafts on our own
-scheme + host. (Pure function — no tkinter, safe in CI.)
+scheme + host. (Pure function - no tkinter, safe in CI.)
 """
 from __future__ import annotations
 

@@ -123,7 +123,7 @@ def normalize_server_url(raw: str) -> str:
     parsed = urlparse(s)
     host = (parsed.hostname or "").lower()
     # Reject embedded credentials (finding C8): https://user:pass@host hides
-    # the real host and is a phishing/confusion vector — never legitimate here.
+    # the real host and is a phishing/confusion vector - never legitimate here.
     if parsed.username or parsed.password:
         raise ValueError("Server URL must not contain a username or password.")
     if parsed.scheme == "https":
@@ -155,7 +155,7 @@ def get_secret(kind: str, server_url: str) -> Optional[str]:
 
 def set_secret(kind: str, server_url: str, value: str) -> None:
     """Persist a secret. Best-effort: if the keyring backend is
-    unavailable/locked, log and return rather than raising (finding C1) —
+    unavailable/locked, log and return rather than raising (finding C1) -
     the token is still live in memory for the session; the only cost is
     re-authenticating next launch. Crashing sign-in here surfaced as a
     false 'could not reach server' error even though auth had succeeded."""
@@ -173,6 +173,6 @@ def clear_secret(kind: str, server_url: str) -> None:
             KEYRING_SERVICE, _secret_username(kind, server_url)
         )
     except keyring.errors.PasswordDeleteError:
-        pass  # nothing stored — fine
+        pass  # nothing stored - fine
     except Exception as exc:
         _log.warning("keyring clear_secret(%s) failed: %r", kind, exc)

@@ -19,7 +19,7 @@ def test_acquire_release_caps_per_user():
     sse_svc.release_user_stream(uid)
     assert sse_svc.try_acquire_user_stream(uid) is True
 
-    # Drain back to zero — the key is removed (no unbounded dict growth).
+    # Drain back to zero - the key is removed (no unbounded dict growth).
     for _ in range(sse_svc.MAX_STREAMS_PER_USER):
         sse_svc.release_user_stream(uid)
     assert uid not in sse_svc._active_streams

@@ -1,4 +1,4 @@
-"""anomaly_check cron — flags, alerts, dedups, honours the kill switch."""
+"""anomaly_check cron - flags, alerts, dedups, honours the kill switch."""
 from __future__ import annotations
 
 import pytest

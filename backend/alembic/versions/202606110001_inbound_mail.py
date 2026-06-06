@@ -1,4 +1,4 @@
-"""inbound mailbox — inbound_messages + inbound_attachments (v1.27.0).
+"""inbound mailbox - inbound_messages + inbound_attachments (v1.27.0).
 
 Stores messages fetched from the configured account over IMAP, plus their
 attachments (bytes live in the storage backend; rows track AV state). Re-runnable:

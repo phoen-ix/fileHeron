@@ -1,9 +1,9 @@
-"""OIDC providers — Phase 10 multi-provider model.
+"""OIDC providers - Phase 10 multi-provider model.
 
 Replaces the singleton `app_settings.oidc.*` rows from Phase 9. An
 operator can enable 2-3 providers concurrently for different user
 populations (employees on Entra, partners on Google, …). Each user
-binds to one provider only — `users.oidc_provider_id` is a single FK.
+binds to one provider only - `users.oidc_provider_id` is a single FK.
 """
 from __future__ import annotations
 

@@ -30,7 +30,7 @@ from ._oidc_helpers import (
 @pytest.mark.asyncio
 async def test_wrong_signature_refused(make_provider, db, monkeypatch):
     p = make_provider()
-    # Sign with an unrelated key — install_jwks_mock publishes a different key.
+    # Sign with an unrelated key - install_jwks_mock publishes a different key.
     other = rsa.generate_private_key(public_exponent=65537, key_size=2048)
     install_jwks_mock(monkeypatch)
     bad_token = sign_id_token(

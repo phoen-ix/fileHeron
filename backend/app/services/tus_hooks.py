@@ -69,7 +69,7 @@ def _extract_upload(event_body: dict[str, Any]) -> tuple[dict[str, Any], dict[st
 
 
 # ---------------------------------------------------------------------------
-# pre-create — happens before tusd accepts any bytes. Validate envelope,
+# pre-create - happens before tusd accepts any bytes. Validate envelope,
 # load file/share rows, check quota, return 200 (allow) or 4xx (deny).
 # ---------------------------------------------------------------------------
 
@@ -105,7 +105,7 @@ def handle_pre_create(db: Session, body: dict[str, Any]) -> None:
 
 
 # ---------------------------------------------------------------------------
-# pre-finish — happens just before tusd marks the upload complete. We can
+# pre-finish - happens just before tusd marks the upload complete. We can
 # still 4xx here to refuse the upload. Last sanity check on size.
 # ---------------------------------------------------------------------------
 
@@ -134,7 +134,7 @@ def handle_pre_finish(db: Session, body: dict[str, Any]) -> None:
 
 
 # ---------------------------------------------------------------------------
-# post-finish — tusd has finalized the upload. Move the file into permanent
+# post-finish - tusd has finalized the upload. Move the file into permanent
 # storage, mark ready_unscanned. (Phase 5 will additionally enqueue an AV
 # scan here.)
 # ---------------------------------------------------------------------------
@@ -158,14 +158,14 @@ def handle_post_finish(db: Session, body: dict[str, Any]) -> None:
 
     # Enqueue the AV scan. The file is in `ready_unscanned` after
     # finalize_to_disk; downloads are blocked until the worker flips it
-    # to `clean`. Failures here are logged but don't fail the upload —
+    # to `clean`. Failures here are logged but don't fail the upload -
     # a manual rescan can recover.
     from . import job_queue
     job_queue.enqueue("av_scan_file", file_row.id)
 
 
 # ---------------------------------------------------------------------------
-# post-terminate — upload was abandoned. Release the quota reservation, mark
+# post-terminate - upload was abandoned. Release the quota reservation, mark
 # the file row deleted (not finalized). The bytes that did land in tusd's
 # working dir are cleaned up by tusd itself.
 # ---------------------------------------------------------------------------

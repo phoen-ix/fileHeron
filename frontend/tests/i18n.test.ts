@@ -1,7 +1,7 @@
 /* Loads the locale JSON files through vue-i18n's message compiler and asserts
  * that messages containing literal "@" render correctly. Without escaping,
  * vue-i18n treats "@" as a linked-message prefix and throws "Invalid linked
- * format" on first render — a real regression we already shipped once.
+ * format" on first render - a real regression we already shipped once.
  *
  * This test exercises the same compilation path as the running app. */
 

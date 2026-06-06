@@ -4,7 +4,7 @@ A fast producer used to enqueue one progress callback per chunk; the main-thread
 poller drains until empty, so it never returned to the event loop and the UI
 froze until the transfer finished. run_with_progress now keeps only the latest
 (done, total) with at most one flush queued. With no poller running in the test,
-the pending flag never clears, so exactly ONE progress flush is enqueued — and it
+the pending flag never clears, so exactly ONE progress flush is enqueued - and it
 carries the LAST value.
 """
 from __future__ import annotations

@@ -1,6 +1,6 @@
 """Group CRUD + membership.
 
-`name_normalized` is the lowercased mirror of `name` and the unique key —
+`name_normalized` is the lowercased mirror of `name` and the unique key -
 two callers can't race-create groups whose names differ only by case.
 
 Adding/removing a member calls into the connection service to keep the
@@ -116,7 +116,7 @@ def delete_group(
     db: Session, *, actor: User, group: Group, request=None
 ) -> None:
     """Block deletion if the group is currently a recipient of any active
-    share — admin must revoke those first. Default per Phase 4 policy."""
+    share - admin must revoke those first. Default per Phase 4 policy."""
     active_shares = (
         db.query(Share.id)
         .join(ShareRecipient, ShareRecipient.share_id == Share.id)

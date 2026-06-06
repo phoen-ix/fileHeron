@@ -3,7 +3,7 @@
 Timestamps are stored as **naive UTC** (MariaDB DATETIME drops tz). This
 module is the single source of truth for "now" so the ~50 ad-hoc `_utcnow`
 redefinitions don't drift. JWT iat/exp need an AWARE value so `.timestamp()`
-returns the correct epoch — use `utc_now_aware()` there.
+returns the correct epoch - use `utc_now_aware()` there.
 """
 from __future__ import annotations
 
@@ -11,10 +11,10 @@ from datetime import datetime, timezone
 
 
 def utc_now() -> datetime:
-    """Naive UTC — the stored-timestamp convention across the app."""
+    """Naive UTC - the stored-timestamp convention across the app."""
     return datetime.now(tz=timezone.utc).replace(tzinfo=None)
 
 
 def utc_now_aware() -> datetime:
-    """Timezone-aware UTC — for JWT iat/exp where epoch math matters."""
+    """Timezone-aware UTC - for JWT iat/exp where epoch math matters."""
     return datetime.now(tz=timezone.utc)

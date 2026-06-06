@@ -21,7 +21,7 @@ function detectInitialLocale(): SupportedLocale {
       const stored = window.localStorage?.getItem(LOCALE_STORAGE_KEY)
       if (isSupported(stored)) return stored
     } catch {
-      /* private mode / disabled storage — fall through to browser sniff */
+      /* private mode / disabled storage - fall through to browser sniff */
     }
   }
   if (typeof navigator !== 'undefined') {
@@ -42,7 +42,7 @@ export const i18n = createI18n({
 export function setLocale(locale: SupportedLocale) {
   i18n.global.locale.value = locale
   document.documentElement.lang = locale
-  // Persist so the same browser shows the same language on next load —
+  // Persist so the same browser shows the same language on next load -
   // both for anonymous visitors (Login etc.) and as a fallback for
   // returning authenticated users before User.locale loads.
   if (typeof window !== 'undefined') {

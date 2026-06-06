@@ -3,8 +3,8 @@
 Each `Tunable` maps an `app_settings` kv key to its `config.Settings`
 env-default attribute, a type, a UI group, and (for ints) safe bounds.
 `effective(db, key)` returns the live value: the kv override if present
-(clamped to bounds), otherwise the env default. Reads are live per call —
-no boot cache — so an admin change applies without a redeploy, exactly
+(clamped to bounds), otherwise the env default. Reads are live per call -
+no boot cache - so an admin change applies without a redeploy, exactly
 like the other kv-overlay settings (SMTP, 2FA, site URL, …).
 
 Secrets and infra/boot-critical settings are deliberately NOT in here;

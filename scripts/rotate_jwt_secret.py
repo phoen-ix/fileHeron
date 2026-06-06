@@ -9,7 +9,7 @@ JWT_SECRET is the seed for the HKDF-derived Fernet key that protects:
 - ``app_settings`` rows where ``is_encrypted=True``  (today: SMTP_PASSWORD)
 
 If you rotate JWT_SECRET without this script, all of the above become
-unreadable — TOTP-enrolled users lock out, OIDC SSO breaks, the SMTP
+unreadable - TOTP-enrolled users lock out, OIDC SSO breaks, the SMTP
 password disappears, and admins can't re-view public-link URLs.
 
 USAGE
@@ -35,7 +35,7 @@ USAGE
 
 ROLLBACK
 --------
-If the script aborts mid-table, re-run with the SAME OLD/NEW pair —
+If the script aborts mid-table, re-run with the SAME OLD/NEW pair -
 already-re-encrypted rows will fail to decrypt with the OLD key and
 are skipped automatically (logged as "already-rotated"). Run again
 until "rotated=0 skipped=N already-rotated".
@@ -44,7 +44,7 @@ SAFETY
 ------
 - Each table is rewritten in its own transaction. Crash mid-table
   leaves that table partially rotated; re-run cleans up. No row is
-  left in an unreadable state — every row is either OLD-key or NEW-key
+  left in an unreadable state - every row is either OLD-key or NEW-key
   encrypted, never half.
 - ``--dry-run`` performs all the decrypt+re-encrypt work in memory but
   rolls back. Verify the row counts before committing.
@@ -213,7 +213,7 @@ def main() -> int:
 
         if args.dry_run:
             db.rollback()
-            print("[rotate] dry-run complete — changes ROLLED BACK")
+            print("[rotate] dry-run complete - changes ROLLED BACK")
         else:
             db.commit()
             print("[rotate] committed")
@@ -224,7 +224,7 @@ def main() -> int:
         db.close()
 
     if total_errors:
-        print(f"[rotate] {total_errors} row(s) could not be decrypted with EITHER key — investigate", file=sys.stderr)
+        print(f"[rotate] {total_errors} row(s) could not be decrypted with EITHER key - investigate", file=sys.stderr)
         return 1
     return 0
 

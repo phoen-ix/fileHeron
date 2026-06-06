@@ -1,18 +1,18 @@
-"""Mail log — record every outbound email (v1.11.0).
+"""Mail log - record every outbound email (v1.11.0).
 
 Single funnel for the `email_log` table. Every send path calls one of:
 
-- ``record_queued()`` — the notification dispatcher creates a queued row and
+- ``record_queued()`` - the notification dispatcher creates a queued row and
   threads its id into the ARQ job; the worker ``finalize()``s it.
-- ``finalize()`` — the worker UPDATEs the queued row to its terminal status
-  (sent/failed/error). **One row per email** — retries bump ``attempts``.
-- ``record_direct()`` — single-shot create+finalize for the synchronous direct
+- ``finalize()`` - the worker UPDATEs the queued row to its terminal status
+  (sent/failed/error). **One row per email** - retries bump ``attempts``.
+- ``record_direct()`` - single-shot create+finalize for the synchronous direct
   senders, the admin test-send, and the dev logs-fallback.
 
 Bodies are stored with one-time auth-link tokens **masked at rest** so the log
 can never be used to take over an account and a short-lived token doesn't
 outlive its TTL in a browsable log. Masking fails **closed**. A log-write
-failure must never break the actual send — every public helper swallows and
+failure must never break the actual send - every public helper swallows and
 logs its own errors.
 """
 from __future__ import annotations
@@ -35,7 +35,7 @@ _AUTH_LINK_RE = re.compile(
 )
 _REDACTED = r"\1<redacted>"
 
-# Categories whose emails always carry a one-time token — RESEND is hard-disabled
+# Categories whose emails always carry a one-time token - RESEND is hard-disabled
 # on these even if a future template tweak moves the token out of regex reach.
 _AUTH_LINK_CATEGORIES = {
     "reset_password",
@@ -55,7 +55,7 @@ def mask_sensitive(text: str | None) -> tuple[str | None, bool]:
     """Redact one-time auth-link tokens. Returns ``(text, did_redact)``.
 
     Fails **closed**: on any error, drop the body to a placeholder and mark it
-    redacted — never return a body that might still contain a live token."""
+    redacted - never return a body that might still contain a live token."""
     if text is None:
         return None, False
     try:
@@ -127,7 +127,7 @@ def finalize(
 ) -> None:
     """UPDATE the queued row to its in-flight / terminal status. A missing row
     is logged and skipped (handles the enqueue-then-rollback orphan). One row
-    per email — ``attempts`` only ever climbs."""
+    per email - ``attempts`` only ever climbs."""
     try:
         row = db.get(EmailLog, email_log_id)
         if row is None:

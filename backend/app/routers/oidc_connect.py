@@ -1,4 +1,4 @@
-"""Authed OIDC connect flow — `/api/account/oidc/...` (Phase 10).
+"""Authed OIDC connect flow - `/api/account/oidc/...` (Phase 10).
 
 Lets a user who already has a fileHeron account (via password +
 optional 2FA) bind their account to one of the configured OIDC
@@ -14,15 +14,15 @@ Endpoints:
   IdP returns here. Validates state, validates the cookie's actor
   matches the currently-authed user, and hands off to
   ``handle_connect_callback``.
-- ``GET    /api/account/oidc/links`` — current user's link (0 or 1).
-- ``DELETE /api/account/oidc/links`` — unlink.
+- ``GET    /api/account/oidc/links`` - current user's link (0 or 1).
+- ``DELETE /api/account/oidc/links`` - unlink.
 
 The callback validates the actor in two ways:
 1. The state cookie carries the user_id who initiated the round-trip.
 2. The user is required to be authenticated when hitting the callback,
    and we cross-check `cookie_user_id == authed.id`.
 
-Both checks must pass — defense-in-depth against a confused-deputy
+Both checks must pass - defense-in-depth against a confused-deputy
 where a malicious IdP would somehow learn another user's auth.
 """
 from __future__ import annotations
@@ -114,7 +114,7 @@ async def connect_start(
         raise AppError(
             409,
             "OIDC_ALREADY_LINKED",
-            "You're already linked to another OIDC provider — disconnect that first.",
+            "You're already linked to another OIDC provider - disconnect that first.",
         )
     provider = oidc_admin_svc.get_enabled_provider(db, provider_id)
     url, state, nonce = await oidc_svc.build_authorize_url(
@@ -151,7 +151,7 @@ async def connect_callback(
         raise AppError(
             401,
             "OIDC_STATE_MISMATCH",
-            "OIDC connect state mismatch — please retry.",
+            "OIDC connect state mismatch - please retry.",
         )
 
     provider = oidc_admin_svc.get_enabled_provider(db, provider_id)

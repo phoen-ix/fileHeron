@@ -7,7 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class QuarantineActionRequest(BaseModel):
-    """Body for release / purge — admin must justify the action so the
+    """Body for release / purge - admin must justify the action so the
     audit row carries forensic context."""
     model_config = ConfigDict(extra="forbid")
 
@@ -26,7 +26,7 @@ class UpdateQuarantineSettingsRequest(BaseModel):
 
 class AvStatusResponse(BaseModel):
     """Read-only snapshot of the running ClamAV engine. Always
-    renderable — `available=False` rows still carry context (av_skip
+    renderable - `available=False` rows still carry context (av_skip
     for dev, error for "unreachable")."""
     available: bool
     av_skip: bool

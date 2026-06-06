@@ -1,4 +1,4 @@
-"""send_email_job — retry semantics + permanent vs transient failure."""
+"""send_email_job - retry semantics + permanent vs transient failure."""
 from __future__ import annotations
 
 import pytest
@@ -43,7 +43,7 @@ async def test_send_email_job_retries_on_transient(monkeypatch):
             text_body="t",
         )
     # We don't introspect Retry.defer (the attribute name varies across
-    # ARQ versions); raising the Retry is the contract that matters —
+    # ARQ versions); raising the Retry is the contract that matters -
     # ARQ then schedules the next attempt.
 
 

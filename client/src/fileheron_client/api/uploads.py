@@ -49,7 +49,7 @@ def upload_direct(
     # v0.5.2: backend returns 201 Created on success (uploads.py is a
     # creation endpoint, status_code=HTTP_201_CREATED). Treating only
     # 200 as success made the success body get raised as a fake
-    # "error" — the dialog showed the file_id JSON as the error text.
+    # "error" - the dialog showed the file_id JSON as the error text.
     if resp.status_code not in (200, 201):
         raise _envelope_from_response(resp)
     if on_progress is not None:

@@ -1,4 +1,4 @@
-"""GET /api/metrics — auth gate + Prometheus exposition."""
+"""GET /api/metrics - auth gate + Prometheus exposition."""
 from __future__ import annotations
 
 import pytest

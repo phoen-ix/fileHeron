@@ -1,4 +1,4 @@
-"""/api/admin/settings/* — all kv-store admin settings.
+"""/api/admin/settings/* - all kv-store admin settings.
 
 Groups: public-link policy, SMTP/email, home page, share defaults, site
 URL, 2FA enforcement, quarantine notify-admins toggle.
@@ -977,7 +977,7 @@ def update_quarantine_settings(
 
 
 # ---------------------------------------------------------------------------
-# Generic registry-driven "Advanced settings" — one GET/PUT for every
+# Generic registry-driven "Advanced settings" - one GET/PUT for every
 # runtime-tunable knob in services/settings_registry.py. Only keys present
 # in the registry are ever exposed or accepted (secrets/infra stay env-only).
 # ---------------------------------------------------------------------------
@@ -1015,7 +1015,7 @@ def update_advanced_settings(
     """Set or reset registry knobs. `null` resets a key to its env default.
     Unknown keys and out-of-bounds/typed-wrong values are rejected (400)
     before any write, so the PUT is all-or-nothing."""
-    # Validate everything first (atomic — reject the whole PUT on any error).
+    # Validate everything first (atomic - reject the whole PUT on any error).
     to_set: dict[str, str | None] = {}
     for key, value in payload.updates.items():
         spec = settings_registry.BY_KEY.get(key)

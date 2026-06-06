@@ -40,7 +40,7 @@ from app.models.user import User  # noqa: E402
 
 def _check(name: str, ok: bool, detail: str = "") -> bool:
     marker = "PASS" if ok else "FAIL"
-    print(f"  {marker}: {name}" + (f" — {detail}" if detail else ""))
+    print(f"  {marker}: {name}" + (f" - {detail}" if detail else ""))
     return ok
 
 

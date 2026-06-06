@@ -1,6 +1,6 @@
 """Close-on-exit logout (client-v0.9.12) + the /current API-token lookup.
 
-- Structural (AST / substring, no ``ui`` import — CI may lack system tkinter):
+- Structural (AST / substring, no ``ui`` import - CI may lack system tkinter):
   ``AppController`` registers a WM_DELETE_WINDOW handler and ``_on_root_close``
   revokes a password session (guarded so API-token logins are a no-op).
 - Behavioural (respx): ``logout`` accepts a per-call timeout; the

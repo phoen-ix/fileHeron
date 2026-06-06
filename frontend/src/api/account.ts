@@ -64,8 +64,8 @@ export function requestEmailChange(payload: { new_email: string; current_passwor
   )
 }
 
-// Sessions live under /auth (not /account) so the refresh cookie — which is
-// path-scoped to /api/auth — is sent, letting the backend flag the current
+// Sessions live under /auth (not /account) so the refresh cookie - which is
+// path-scoped to /api/auth - is sent, letting the backend flag the current
 // session and keep it on "sign out others".
 export function listSessions() {
   return api.get<SessionListResponse>('/auth/sessions')

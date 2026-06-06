@@ -1,4 +1,4 @@
-"""invite_tokens.initial_group_ids — pre-assign groups at invite time
+"""invite_tokens.initial_group_ids - pre-assign groups at invite time
 
 Revision ID: 202605020923
 Revises: 202605020922

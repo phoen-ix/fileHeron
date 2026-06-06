@@ -36,10 +36,10 @@ def login_with_recovery(
     LoginResponse shape as ``login()``. Error envelope codes the user
     surface should know about:
 
-    - ``INVALID_RECOVERY`` (401) — code is wrong or already used
-    - ``INVALID_CREDENTIALS`` (401) — wrong email/password
-    - ``RATE_LIMITED`` (429) — IP exceeded the sliding window
-    - ``ACCOUNT_LOCKED`` (401) — soft lockout from too many failures
+    - ``INVALID_RECOVERY`` (401) - code is wrong or already used
+    - ``INVALID_CREDENTIALS`` (401) - wrong email/password
+    - ``RATE_LIMITED`` (429) - IP exceeded the sliding window
+    - ``ACCOUNT_LOCKED`` (401) - soft lockout from too many failures
     """
     body = {
         "email": email,
@@ -64,7 +64,7 @@ def refresh(api: ApiClient) -> RefreshResponse:
 
 
 def logout(api: ApiClient, *, timeout: float | None = None) -> None:
-    # Best-effort — server clears the cookie regardless. ``timeout`` caps the
+    # Best-effort - server clears the cookie regardless. ``timeout`` caps the
     # call so a normal program close can't hang on an unreachable server.
     api.request("POST", "/api/auth/logout", retry_on_401=False, timeout=timeout)
     api.set_access_token(None)

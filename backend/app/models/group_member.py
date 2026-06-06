@@ -1,4 +1,4 @@
-"""Group membership — composite PK on (group_id, user_id)."""
+"""Group membership - composite PK on (group_id, user_id)."""
 from __future__ import annotations
 
 from datetime import datetime

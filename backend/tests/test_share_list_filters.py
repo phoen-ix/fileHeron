@@ -77,7 +77,7 @@ async def test_list_effective_subject_falls_back_to_filename(
         recipient_user_ids=[rec.id],
         recipient_group_ids=[],
         expires_at=_future(),
-        subject=None,  # no subject — should fall back to filename
+        subject=None,  # no subject - should fall back to filename
         message=None,
     )
     # Add a file directly so the filename is testable without

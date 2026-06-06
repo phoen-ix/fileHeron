@@ -1,4 +1,4 @@
-"""HIBP k-anonymity check — happy/sad paths + fail-open."""
+"""HIBP k-anonymity check - happy/sad paths + fail-open."""
 from __future__ import annotations
 
 import hashlib
@@ -48,7 +48,7 @@ async def test_upstream_failure_fails_open(monkeypatch):
 
     monkeypatch.setattr(hibp_svc, "_fetch_range", fake_fetch)
     # Even though the fetch returned None (network down), we don't
-    # block the password change — fail-open by design.
+    # block the password change - fail-open by design.
     assert await hibp_svc.is_password_breached("password") is False
 
 

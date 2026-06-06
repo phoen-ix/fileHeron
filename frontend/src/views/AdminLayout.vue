@@ -169,7 +169,7 @@ onMounted(async () => {
   transform: rotate(180deg);
 }
 
-/* Animate height 0→auto via grid-template-rows interpolation — no JS
+/* Animate height 0→auto via grid-template-rows interpolation - no JS
  * measuring. The inner wrapper must clip + allow 0 min-height. */
 .nav-cat-panel {
   display: grid;

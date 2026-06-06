@@ -121,7 +121,7 @@ async def prune_history(_ctx) -> dict:
 
 
 async def _prune_inbound(days: int) -> int:
-    """Prune inbound messages older than ``days`` — deleting their attachment
+    """Prune inbound messages older than ``days`` - deleting their attachment
     blobs from the storage backend first (the DB cascade only removes rows)."""
     if days <= 0:
         return 0

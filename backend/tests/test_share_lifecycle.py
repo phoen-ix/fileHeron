@@ -55,7 +55,7 @@ async def test_create_share_rejects_self(make_user, db):
 async def test_create_share_accepts_tz_aware_expiry(make_user, db):
     """Frontend sends expires_at as ISO with Z (dayjs.toISOString),
     so Pydantic produces a tz-aware datetime. The service must
-    accept it — comparing tz-aware to naive _utcnow() used to crash
+    accept it - comparing tz-aware to naive _utcnow() used to crash
     with TypeError."""
     sender = make_user(email="hr@test.local", role=UserRole.admin)
     recipient = make_user(email="customer@test.local")

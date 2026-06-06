@@ -2,7 +2,7 @@
 
 Redis is mocked with an in-memory dict that implements the subset of
 the redis client surface that `services/quota.py` and the Lua reserve
-script touch. Pure unit coverage — no fakeredis dependency.
+script touch. Pure unit coverage - no fakeredis dependency.
 """
 from __future__ import annotations
 
@@ -157,7 +157,7 @@ def test_initialize_from_db_sets_no_ttl(make_user, db, fake_redis):
     db.commit()
     used = quota_svc._initialize_from_db(db, user.id)
     assert used == 4096
-    # No expiry — the counter must not silently lapse between reconcile runs.
+    # No expiry - the counter must not silently lapse between reconcile runs.
     assert fake_redis.ttl(quota_svc._key(user.id)) == -1
 
 
@@ -170,7 +170,7 @@ def test_storage_used_bytes_sums_from_db(make_user, db, fake_redis):
     _seed_file(db, owner_id=user.id, share_id=sid, fid="q-b", size=500, state=FileState.ready_unscanned)
     _seed_file(db, owner_id=user.id, share_id=sid, fid="q-c", size=9999, state=FileState.deleted)
     db.commit()
-    # Redis counter deliberately wrong — DB sum is authoritative, excludes deleted.
+    # Redis counter deliberately wrong - DB sum is authoritative, excludes deleted.
     fake_redis._store[quota_svc._key(user.id)] = 7
     assert quota_svc.storage_used_bytes(db, user_id=user.id) == 1500
     assert quota_svc.storage_used_bytes_bulk(db, [user.id, 999]) == {user.id: 1500, 999: 0}

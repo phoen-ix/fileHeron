@@ -1,4 +1,4 @@
-"""Mail log (v1.11.0) — masking, queued/finalize lifecycle, dispatch wiring,
+"""Mail log (v1.11.0) - masking, queued/finalize lifecycle, dispatch wiring,
 resend gating, erasure scrub, and retention pruning."""
 from __future__ import annotations
 

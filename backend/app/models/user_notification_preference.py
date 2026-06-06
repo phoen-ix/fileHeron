@@ -4,7 +4,7 @@ One row per (user, category) pair. Channel ∈ off | email | in_app |
 both. Absence of a row = default `both`.
 
 Defaults are applied at read time (services/notification.py), so we
-don't need to seed rows on user creation — keeps user creation cheap
+don't need to seed rows on user creation - keeps user creation cheap
 and lets us add new categories without a backfill.
 """
 from __future__ import annotations

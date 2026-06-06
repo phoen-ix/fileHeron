@@ -1,4 +1,4 @@
-"""phase9 — app_settings
+"""phase9 - app_settings
 
 Revision ID: 202605020921
 Revises: 202605020920

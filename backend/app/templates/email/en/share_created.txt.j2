@@ -1,6 +1,6 @@
 Hi {{ recipient_name|default("there") }},
 
-{{ sender_name }} sent you {{ file_count }} file{% if file_count != 1 %}s{% endif %}{% if subject %} — "{{ subject }}"{% endif %}.
+{{ sender_name }} sent you {{ file_count }} file{% if file_count != 1 %}s{% endif %}{% if subject %} - "{{ subject }}"{% endif %}.
 
 {% if message %}Message:
 {{ message }}
@@ -9,4 +9,4 @@ Hi {{ recipient_name|default("there") }},
 
 {% endif %}Open it: {{ share_url }}
 
-— {{ app_name }}
+- {{ app_name }}

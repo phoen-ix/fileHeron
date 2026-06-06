@@ -1,4 +1,4 @@
-# Dev image — same as prod but with watchdog and source-mountable layout.
+# Dev image - same as prod but with watchdog and source-mountable layout.
 FROM python:3.12-slim
 
 WORKDIR /app

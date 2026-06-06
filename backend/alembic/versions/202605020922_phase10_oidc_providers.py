@@ -1,4 +1,4 @@
-"""phase10 — oidc_providers + users.oidc_provider_id + data migrate
+"""phase10 - oidc_providers + users.oidc_provider_id + data migrate
 
 Revision ID: 202605020922
 Revises: 202605020921
@@ -66,7 +66,7 @@ def _has_index(bind, table: str, index: str) -> bool:
 def upgrade() -> None:
     bind = op.get_bind()
 
-    # 1. Create oidc_providers table (idempotent — earlier broken run may
+    # 1. Create oidc_providers table (idempotent - earlier broken run may
     #    have already created it).
     if not _has_table(bind, "oidc_providers"):
         op.create_table(

@@ -3,7 +3,7 @@ and can never reach another client.
 
 Clients no longer pick recipients. The server forces `kind` from role
 (client → inbound, staff → outbound) and inbound shares store **no** recipient
-rows — the audience (all staff + the creator's group-peers) is resolved at read
+rows - the audience (all staff + the creator's group-peers) is resolved at read
 time. So even a hand-crafted payload naming another client as a recipient can't
 leak: the recipients are ignored entirely.
 """
@@ -66,7 +66,7 @@ async def test_employee_share_forced_outbound(make_user, db, client, login_as):
     db.commit()
     token, _ = await login_as("alice@test.local", "Pass12345678!")
 
-    # Employee posts kind=inbound — server forces outbound (staff direction).
+    # Employee posts kind=inbound - server forces outbound (staff direction).
     resp = await client.post(
         "/api/shares",
         json={

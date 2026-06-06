@@ -1,4 +1,4 @@
-"""/api/admin/analytics — usage + observability dashboard data.
+"""/api/admin/analytics - usage + observability dashboard data.
 
 Read-only. Most numbers are computed live from persisted timestamps; only the
 storage-growth trend reads the nightly `analytics_snapshots` rows. See

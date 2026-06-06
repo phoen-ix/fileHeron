@@ -1,9 +1,9 @@
-"""IMAP config resolution (v1.27.0) — DB-overlay-env, mirrors
+"""IMAP config resolution (v1.27.0) - DB-overlay-env, mirrors
 ``services/email.py::resolve_smtp_config``.
 
 The behaviour knobs (enabled / check_mode / post-fetch action / notify mode) are
 read here too so the worker and admin layers share one source of truth. Read live
-per call — an admin change applies without a redeploy.
+per call - an admin change applies without a redeploy.
 """
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ TLS_MODES = ("implicit", "starttls", "none")
 
 @dataclass(frozen=True)
 class ImapConfig:
-    """Resolved IMAP connection settings. Build via ``resolve_imap_config(db)`` —
+    """Resolved IMAP connection settings. Build via ``resolve_imap_config(db)`` -
     never read ``app.config.settings.IMAP_*`` directly outside that resolver."""
     host: str
     port: int

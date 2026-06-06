@@ -84,7 +84,7 @@ async def test_invite_source_persists_after_shared_group_loss(make_user, db):
     }
     assert sources == {ConnectionSource.invite, ConnectionSource.shared_group}
 
-    # Remove one party — shared_group goes; invite stays.
+    # Remove one party - shared_group goes; invite stays.
     group_svc.remove_member(db, actor=admin, group=g, user=client_user)
     db.commit()
     sources = {

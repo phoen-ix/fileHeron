@@ -65,7 +65,7 @@ class WebhookResponse(APIBaseModel):
 
 
 class WebhookCreateResponse(WebhookResponse):
-    """Adds the plaintext signing secret — returned ONCE, on create / rotate."""
+    """Adds the plaintext signing secret - returned ONCE, on create / rotate."""
     secret: str
 
 

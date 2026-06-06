@@ -1,4 +1,4 @@
-"""Quarantine notification fan-out — behavior of the
+"""Quarantine notification fan-out - behavior of the
 `quarantine.notify_admins` setting and its admin-facing endpoint."""
 from __future__ import annotations
 
@@ -64,7 +64,7 @@ def _quarantined_rows_for(db, user_id: int) -> list[Notification]:
 def test_notify_admins_off_only_uploader_gets_row(
     make_user, db, tmp_path, monkeypatch
 ):
-    """Default (toggle off) — only the uploader sees a notification row."""
+    """Default (toggle off) - only the uploader sees a notification row."""
     sender = make_user(email="up@test.local", role=UserRole.employee)
     admin1 = make_user(email="ad1@test.local", role=UserRole.admin)
     admin2 = make_user(email="ad2@test.local", role=UserRole.admin)

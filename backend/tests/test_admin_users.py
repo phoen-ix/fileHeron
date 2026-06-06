@@ -70,7 +70,7 @@ async def test_admin_list_users_bulk_hydration(make_user, db, client, login_as):
 
 @pytest.mark.asyncio
 async def test_admin_users_storage_is_db_authoritative(make_user, db, client, login_as):
-    """The Storage column sums file bytes from the DB (excludes deleted) — it
+    """The Storage column sums file bytes from the DB (excludes deleted) - it
     must not depend on the volatile Redis quota counter."""
     from datetime import datetime, timedelta, timezone
 
@@ -165,7 +165,7 @@ async def test_erase_user_hard_deletes_files_and_anonymizes(
     admin = make_user(email="admin@test.local", role=UserRole.admin, password="Pass12345678!")
     target = make_user(email="t@test.local", role=UserRole.client)
 
-    # Seed an uploaded file (no share needed for the erasure walk —
+    # Seed an uploaded file (no share needed for the erasure walk -
     # it queries by uploaded_by_id directly).
     on_disk = tmp_path / "file.bin"
     on_disk.write_bytes(b"x" * 100)

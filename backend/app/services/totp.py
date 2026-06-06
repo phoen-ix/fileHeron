@@ -48,7 +48,7 @@ from .audit import record_audit_event
 
 # Acceptance window in 30s steps either side of the current step. 2 ⇒ ±60s,
 # which tolerates mild authenticator-device clock drift (the common cause of
-# "valid code rejected") without meaningfully weakening 2FA — the anti-replay
+# "valid code rejected") without meaningfully weakening 2FA - the anti-replay
 # counter in verify_at_login still allows only one login per server 30s window.
 _TOTP_VALID_WINDOW = 2
 
@@ -68,7 +68,7 @@ def is_enabled(user: User) -> bool:
 
 
 def begin_setup(db: Session, *, user: User, request) -> dict:
-    """Returns {secret_b32, otpauth_uri, qr_svg}. Does NOT activate 2FA — the
+    """Returns {secret_b32, otpauth_uri, qr_svg}. Does NOT activate 2FA - the
     caller must follow up with confirm_enable.
     """
     if is_enabled(user):
@@ -126,7 +126,7 @@ def confirm_enable(db: Session, *, user: User, code: str, request) -> list[str]:
     # after enable would otherwise be rejected as replay until the next 30s
     # window. Anti-replay only kicks in once a code is accepted by login.
 
-    # Replace any existing recovery codes (defensive — should be none).
+    # Replace any existing recovery codes (defensive - should be none).
     for rc in list(user.recovery_codes):
         db.delete(rc)
     db.flush()
@@ -153,7 +153,7 @@ def verify_at_login(db: Session, *, user: User, code: str) -> bool:
 
     Anti-replay uses an atomic conditional UPDATE so two concurrent
     requests presenting the same code in the same 30s window can't
-    both succeed — only the first wins, the rest get rowcount=0.
+    both succeed - only the first wins, the rest get rowcount=0.
     """
     if user.totp is None or user.totp.enabled_at is None:
         return False
@@ -200,7 +200,7 @@ def consume_recovery_code(db: Session, *, user: User, code: str, request) -> boo
                 .values(used_at=utc_now())
             )
             if claimed.rowcount == 0:
-                # Lost the race — another request already consumed it.
+                # Lost the race - another request already consumed it.
                 return False
             db.flush()
             record_audit_event(

@@ -23,7 +23,7 @@ def health_check() -> JSONResponse:
 
     DB outage → 503 (the app is unusable). Redis / ClamAV outages
     are reported as `degraded` subfields but the response stays 200
-    — the app still serves JWT requests with rate-limit and AV
+    - the app still serves JWT requests with rate-limit and AV
     fail-open semantics. Operators should alert on `degraded` even
     when status is `ok`."""
     db_latency_ms: float | None = None
@@ -49,14 +49,14 @@ def health_check() -> JSONResponse:
 
     degraded: list[str] = []
 
-    # Redis (rate limit + quota) — failure is non-fatal but worth surfacing.
+    # Redis (rate limit + quota) - failure is non-fatal but worth surfacing.
     try:
         from ..redis_client import get_redis
         get_redis().ping()
     except Exception:
         degraded.append("redis")
 
-    # ClamAV — only ping when AV scanning is on. Scoped import to avoid
+    # ClamAV - only ping when AV scanning is on. Scoped import to avoid
     # pulling the AV module in test contexts that monkeypatch it.
     if not getattr(settings, "AV_SKIP", False):
         try:

@@ -4,10 +4,10 @@ A full storage volume used to surface as a silent 500 from the finalize path
 that ALSO left the user's quota reservation orphaned. This module turns that
 into an explicit, observable signal:
 
-- `get_disk_stats(path)` — `os.statvfs` snapshot (fail-open: returns zeros +
+- `get_disk_stats(path)` - `os.statvfs` snapshot (fail-open: returns zeros +
   an `error` key rather than raising, so a transient/unmounted-path hiccup
   never blocks the whole upload pipeline).
-- `is_storage_critical_low(db, root)` — true when free space breaches EITHER
+- `is_storage_critical_low(db, root)` - true when free space breaches EITHER
   the percent or the bytes threshold (both live-tunable via the settings
   registry). The hourly `workers/disk_check.py` cron consults this, flips the
   `storage.critical_low` flag, and alerts admins; `routers/uploads.py` gates
@@ -28,7 +28,7 @@ logger = logging.getLogger("fileheron.storage")
 
 def get_disk_stats(path: str) -> dict:
     """Return {total_bytes, free_bytes, used_bytes, percent_free}. On error,
-    returns zeros plus an `error` key — callers must treat that as 'unknown',
+    returns zeros plus an `error` key - callers must treat that as 'unknown',
     not 'full' (fail-open)."""
     try:
         st = os.statvfs(path)

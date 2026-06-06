@@ -5,7 +5,7 @@ substring so no ``ui`` import is needed (CI may lack system tkinter that
 customtkinter requires). They pin the new contract:
 
 - ``LoginWindow`` (a CTkToplevel wrapper, modal via wait_window) became
-  ``LoginOverlay`` — a CTkFrame placed over the root, no grab/wait_window.
+  ``LoginOverlay`` - a CTkFrame placed over the root, no grab/wait_window.
 - ``AppController`` owns the overlay⇄main swap, logout, and session-expiry.
 - ``MainWindow`` gained teardown()/post_show() and no longer destroys the
   root on sign-out (logout returns to the overlay instead of quitting).
@@ -66,7 +66,7 @@ def test_login_overlay_constructor_takes_callbacks() -> None:
 
 
 def _identifiers(tree: ast.Module) -> set[str]:
-    """Every name/attribute/def identifier used in the module — ignores
+    """Every name/attribute/def identifier used in the module - ignores
     docstrings + comments (which legitimately describe the old design)."""
     ids: set[str] = set()
     for node in ast.walk(tree):

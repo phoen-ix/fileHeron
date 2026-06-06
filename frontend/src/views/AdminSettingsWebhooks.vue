@@ -244,7 +244,7 @@ onMounted(load)
               <tr v-for="d in deliveries" :key="d.id">
                 <td :title="d.event_type">{{ eventLabel(d.event_type) }}</td>
                 <td><span class="fh-pill" :data-state="pillTone[d.status]">{{ d.status }}</span></td>
-                <td class="num fh-mono">{{ d.response_code ?? '—' }}</td>
+                <td class="num fh-mono">{{ d.response_code ?? '-' }}</td>
                 <td class="num fh-mono">{{ d.attempts }}</td>
                 <td class="num">
                   <button type="button" class="fh-btn-text" @click="onRetry(d)">{{ t('admin_webhooks.retry') }}</button>

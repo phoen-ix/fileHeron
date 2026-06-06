@@ -2,8 +2,8 @@
 
 The checkpoint sidecars (``<dest>.part`` + ``<dest>.fhdownload``) hold the
 bytes and the resume offsets, but they live next to a user-chosen destination
-that the app doesn't otherwise remember. This small JSON registry — stored in
-the config dir — maps ``file_id -> {dest, …, status}`` so the share view can
+that the app doesn't otherwise remember. This small JSON registry - stored in
+the config dir - maps ``file_id -> {dest, …, status}`` so the share view can
 surface a **Resume** button for a partial download even after the app has been
 closed and reopened.
 

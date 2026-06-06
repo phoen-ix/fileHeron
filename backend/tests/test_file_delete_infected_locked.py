@@ -1,6 +1,6 @@
 """DELETE /api/files/{id} on an infected file is admin-only.
 
-ClamAV-flagged files belong to the admin's forensic surface — the
+ClamAV-flagged files belong to the admin's forensic surface - the
 uploader shouldn't be able to delete the row out from under
 /admin/quarantine. Also pins the no-double-release-of-quota fix in
 services/file.py::hard_delete: quarantine_file already released the
@@ -106,7 +106,7 @@ async def test_admin_delete_infected_does_not_release_quota_again(
 ):
     """quarantine_file already released the bytes when it moved the
     file to quarantine. hard_delete on a state=infected file must NOT
-    release again — otherwise the user's Redis counter drifts."""
+    release again - otherwise the user's Redis counter drifts."""
     from app.services import file as file_svc
 
     sender = make_user(email="up@test.local", role=UserRole.employee)

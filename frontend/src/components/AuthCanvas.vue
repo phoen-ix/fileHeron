@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /* Shared layout for public auth pages. Single column, form-centered,
- * deliberately minimal — no decorative aside, no caption.
+ * deliberately minimal - no decorative aside, no caption.
  *
  * Pages slot their form into the default slot. */
 

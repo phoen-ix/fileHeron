@@ -31,7 +31,7 @@ class Keys:
     PUBLIC_LINK_POLICY_MODE = "public_link.policy_mode"
     PUBLIC_LINK_ALLOWED_USERS = "public_link.allowed_user_ids"   # JSON list[int]
     PUBLIC_LINK_ALLOWED_GROUPS = "public_link.allowed_group_ids"  # JSON list[int]
-    # SMTP — admin-editable; password is the only encrypted field.
+    # SMTP - admin-editable; password is the only encrypted field.
     SMTP_HOST = "smtp.host"
     SMTP_PORT = "smtp.port"
     SMTP_USER = "smtp.user"
@@ -65,7 +65,7 @@ class Keys:
     TWOFA_REQUIRED_GROUPS = "twofa.required_group_ids"   # JSON list[int]
     # When true, ClamAV-detected infections fan out an in-app
     # `file_quarantined` notification to every non-disabled admin in
-    # addition to the uploader. Email is not sent — admin plaintext
+    # addition to the uploader. Email is not sent - admin plaintext
     # email isn't stored.
     QUARANTINE_NOTIFY_ADMINS = "quarantine.notify_admins"  # boolean: 'true' / 'false'
     # Default state for the per-share "Notify recipient(s)" checkbox on
@@ -88,14 +88,14 @@ class Keys:
     FILE_PREVIEW_ENABLED = "file_preview.enabled"  # boolean: 'true' / 'false'
     # Email-change policy (v1.13.0). All three are admin-tunable and read
     # live; see services/email_change.py.
-    #  - verification_mode: how a change is confirmed —
+    #  - verification_mode: how a change is confirmed -
     #      'immediate'   = apply at once, no token (admin-trusted);
     #      'verify_new'  = pending; confirm via the NEW address (default);
     #      'verify_both' = pending; confirm via BOTH old and new addresses.
     #  - self_service: when true, non-admins may change their own email from
     #      the Account page. Off ⇒ admin-only ("deactivate email change for
     #      users"). Default off.
-    #  - oidc_mode: what happens to an OIDC binding on email change —
+    #  - oidc_mode: what happens to an OIDC binding on email change -
     #      'reset_setpw' = unlink + mail a set-password link (default);
     #      'reset_only'  = unlink only;
     #      'keep'        = leave the binding intact.
@@ -167,7 +167,7 @@ class Keys:
     APP_NAME = "branding.app_name"
     # Low-disk degradation. The two thresholds are registry tunables (overlay
     # the config.Settings env defaults); `critical_low` is a plain runtime flag
-    # the disk_check cron flips (not a tunable — never user-set).
+    # the disk_check cron flips (not a tunable - never user-set).
     STORAGE_LOW_THRESHOLD_PERCENT = "storage.low_threshold_percent"
     STORAGE_LOW_THRESHOLD_BYTES = "storage.low_threshold_bytes"
     STORAGE_CRITICAL_LOW = "storage.critical_low"  # boolean flag, cron-managed
@@ -195,7 +195,7 @@ def get(db: Session, key: str) -> str | None:
             return decrypt_setting(row.value)
         except Exception:
             # Decryption failure (e.g. JWT_SECRET was rotated without
-            # re-encrypting). Treat as missing rather than crashing —
+            # re-encrypting). Treat as missing rather than crashing -
             # the env fallback will kick in.
             logger.warning(
                 "settings.get: decryption failed for key=%s", key
@@ -246,7 +246,7 @@ def audit_settings_change(
     changed_keys: Iterable[str],
     request=None,
 ) -> None:
-    """Single audit row covering the entire PUT — captures which keys
+    """Single audit row covering the entire PUT - captures which keys
     moved without ever logging the values."""
     record_audit_event(
         db,

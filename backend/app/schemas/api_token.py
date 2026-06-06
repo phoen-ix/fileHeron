@@ -16,7 +16,7 @@ class CreateApiTokenRequest(APIBaseModel):
 
 
 class CreateApiTokenResponse(APIBaseModel):
-    """Plaintext shown ONCE — server only stores the SHA-256 hash."""
+    """Plaintext shown ONCE - server only stores the SHA-256 hash."""
     id: int
     name: str
     last4: str

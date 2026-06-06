@@ -1,6 +1,6 @@
 <script setup lang="ts">
-/* /d/:token — anonymous landing page for a public share. No auth, no
- * Pinia. Light editorial framing — this is what a recipient sees,
+/* /d/:token - anonymous landing page for a public share. No auth, no
+ * Pinia. Light editorial framing - this is what a recipient sees,
  * potentially someone less technical than the senders, so the feel
  * leans calm and unsurprising. */
 import { computed, onMounted, ref } from 'vue'
@@ -78,7 +78,7 @@ function fileEnabled(state: string): boolean {
 }
 
 // In-browser preview (gated on the global admin switch + a supported type +
-// clean state). The cookie-scoped URL is built synchronously — no token mint.
+// clean state). The cookie-scoped URL is built synchronously - no token mint.
 const previewOpen = ref(false)
 const previewFile = ref<PublicShareFile | null>(null)
 const previewUrl = ref<string | null>(null)

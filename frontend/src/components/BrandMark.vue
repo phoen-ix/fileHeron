@@ -2,13 +2,13 @@
 /* The file:Heron wordmark.
  *
  * "file" + ":" + "Heron" set in Instrument Serif. The colon is the project's
- * single signature flourish — set in the warm-amber accent so it carries
+ * single signature flourish - set in the warm-amber accent so it carries
  * weight without leaning on italics or color on the letters themselves.
  * Sized via the `size` prop.
  *
  * `linkable` (default true) controls whether the wordmark is a router
  * link. The authed AppHeader passes `false` when an admin disables the
- * default home page — the wordmark still renders, just without the link
+ * default home page - the wordmark still renders, just without the link
  * back to `/`. */
 const props = withDefaults(
   defineProps<{

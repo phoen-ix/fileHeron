@@ -95,7 +95,7 @@ def test_try_decrement_succeeds_then_exhausts(make_user, db, monkeypatch):
         assert share_svc.try_decrement_share_counter(db, share=share) is True
     db.refresh(share)
     assert share.downloads_remaining == 0
-    # Fourth attempt fails — atomic UPDATE rowcount==0.
+    # Fourth attempt fails - atomic UPDATE rowcount==0.
     assert share_svc.try_decrement_share_counter(db, share=share) is False
 
 
@@ -242,7 +242,7 @@ async def test_download_decrements_and_410_on_exhaust(
     assert r.status_code == 410, r.text
     assert r.json()["code"] == "SHARE_DOWNLOAD_LIMIT_REACHED"
 
-    # Counter is at 0 — confirms decrement happened.
+    # Counter is at 0 - confirms decrement happened.
     db.refresh(share)
     assert share.downloads_remaining == 0
 
@@ -268,7 +268,7 @@ async def test_download_url_refuses_when_exhausted(
 
 
 # ---------------------------------------------------------------------------
-# Partial-range (parallel/segmented download) counting — utils/http_range.
+# Partial-range (parallel/segmented download) counting - utils/http_range.
 # ---------------------------------------------------------------------------
 
 
@@ -330,7 +330,7 @@ async def test_parallel_ranges_count_once_and_log_once(
 
     # Two segments of one logical download against a limit-1 share: the byte-0
     # segment counts, the start>0 segment must still succeed (not 410) and not
-    # re-count — i.e. a parallel download of a limited share works.
+    # re-count - i.e. a parallel download of a limited share works.
     r0 = await client.get(
         f"/api/files/{file_row.id}/download",
         headers={**headers, "Range": "bytes=0-9"},

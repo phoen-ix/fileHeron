@@ -2,8 +2,8 @@
 
 A `files` row is created in `state=uploading` at upload init, then flips to
 `ready_unscanned` once the bytes land (TUS post-finish hook or the direct
-endpoint). If the client never finishes — tab closed, network drop, a failed
-or cancelled transfer — the row sits in `uploading` forever, and because the
+endpoint). If the client never finishes - tab closed, network drop, a failed
+or cancelled transfer - the row sits in `uploading` forever, and because the
 sent folder lists by *share* state the parent share shows as a perpetual
 upload.
 
@@ -11,7 +11,7 @@ upload.
 skips uploads whose row is still `uploading`, so nothing here overlaps. This
 job is the DB-side reaper: it finds `files` rows stuck in `uploading` past
 `retention.upload_stale_hours`, deletes any partial bytes, marks the file
-`deleted`, and — when the share has no usable file left — flips the share to
+`deleted`, and - when the share has no usable file left - flips the share to
 `failed` so it drops out of the active sent folder.
 
 Quota: we intentionally do NOT release_bytes here. Some abandoned rows never

@@ -28,12 +28,12 @@ class ApiError(Exception):
     details: dict[str, Any] = field(default_factory=dict)
     request_id: Optional[str] = None
 
-    def __str__(self) -> str:  # pragma: no cover — trivial
+    def __str__(self) -> str:  # pragma: no cover - trivial
         return f"[{self.status_code} {self.code}] {self.message}"
 
 
 class SessionExpiredError(ApiError):
-    """Raised when a 401 could not be recovered by a token refresh — the
+    """Raised when a 401 could not be recovered by a token refresh - the
     session is truly dead (revoked refresh token, disabled account, …).
 
     Subclasses ``ApiError`` so existing ``isinstance(exc, ApiError)`` checks
@@ -113,7 +113,7 @@ class ApiClient:
 
     @property
     def bearer(self) -> Optional[str]:
-        # API token wins when set — never used together.
+        # API token wins when set - never used together.
         return self.api_token or self.access_token
 
     def _headers(self, extra: Optional[dict[str, str]] = None) -> dict[str, str]:
@@ -141,10 +141,10 @@ class ApiClient:
     ) -> httpx.Response:
         """Issue a request relative to ``self.server_url``. Auto-handles
         a single 401 → refresh → retry cycle when an access token is in
-        play (not for API-token sessions — those never refresh).
+        play (not for API-token sessions - those never refresh).
 
         ``timeout`` overrides the client default for this one call. Only set
-        it when given — passing ``timeout=None`` to httpx means *infinite*,
+        it when given - passing ``timeout=None`` to httpx means *infinite*,
         the opposite of what a short-deadline caller (e.g. logout-on-close)
         wants."""
         extra_kw: dict[str, Any] = {}
@@ -174,7 +174,7 @@ class ApiClient:
             )
             if ref.status_code == 200:
                 # Defensive parse (finding C3): a non-JSON 200 from a
-                # misconfigured proxy must not raise here — fall through to
+                # misconfigured proxy must not raise here - fall through to
                 # returning the original 401, which the UI turns into a
                 # clean re-login prompt.
                 try:

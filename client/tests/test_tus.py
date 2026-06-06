@@ -66,7 +66,7 @@ def test_tus_resync_on_offset_mismatch(tmp_path):
     respx.head(NEW_UPLOAD_URL).mock(side_effect=_on_head)
 
     patch_responses = [
-        # First PATCH — server says conflict.
+        # First PATCH - server says conflict.
         httpx.Response(409, text="offset mismatch"),
         # After resync, succeeds.
         httpx.Response(204, headers={"Upload-Offset": "4096"}),
@@ -92,7 +92,7 @@ def test_tus_relative_location_without_slash_is_resolved(tmp_path):
     f.write_bytes(b"X" * 4000)
 
     respx.post(TUS_URL).mock(
-        # Note: "uploads/rel-id" — NO leading slash.
+        # Note: "uploads/rel-id" - NO leading slash.
         return_value=httpx.Response(201, headers={"Location": "uploads/rel-id"})
     )
     resolved = f"{SERVER}/uploads/rel-id"

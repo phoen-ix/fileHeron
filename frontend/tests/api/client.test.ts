@@ -48,7 +48,7 @@ async function loadFreshWith401() {
   const axios = (await import('axios')).default
   const client = await import('@/api/client')
   // The api instance copies axios.defaults.adapter at create time, and
-  // refreshOnce() uses the global axios — force both to 401.
+  // refreshOnce() uses the global axios - force both to 401.
   axios.defaults.adapter = reject401 as any
   ;(client.default as any).defaults.adapter = reject401
   return client

@@ -1,4 +1,4 @@
-"""share-approval workflow — widen shares.state + approval tracking columns (v1.24.0).
+"""share-approval workflow - widen shares.state + approval tracking columns (v1.24.0).
 
 Revision ID: 202606090001
 Revises: 202606080001

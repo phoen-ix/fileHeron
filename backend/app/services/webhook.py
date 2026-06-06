@@ -1,14 +1,14 @@
 """Outbound webhook fan-out (v1.19.0).
 
 `emit` is the single entry point: given an event name + payload it enqueues a
-delivery job per subscribed, active webhook. It is **best-effort** — it never
+delivery job per subscribed, active webhook. It is **best-effort** - it never
 raises into the caller, because a webhook config problem must never break a
 share / download / quarantine.
 
 Deliberately it does NOT write a `webhook_deliveries` row: the caller's
 transaction hasn't committed yet, so a row written here could be invisible (or
 rolled back) when the worker runs. The worker creates + owns the delivery row
-from the enqueued args instead — no cross-transaction dependency, no race.
+from the enqueued args instead - no cross-transaction dependency, no race.
 """
 from __future__ import annotations
 
@@ -57,7 +57,7 @@ def generate_secret() -> str:
 
 
 def sign(secret: str, body: bytes) -> str:
-    """`sha256=<hex>` — the X-Webhook-Signature header value."""
+    """`sha256=<hex>` - the X-Webhook-Signature header value."""
     digest = hmac.new(secret.encode("utf-8"), body, hashlib.sha256).hexdigest()
     return f"sha256={digest}"
 

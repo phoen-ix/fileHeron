@@ -1,4 +1,4 @@
-"""Site URL resolver — kv override beats the ``APP_URL`` env.
+"""Site URL resolver - kv override beats the ``APP_URL`` env.
 
 Every place that puts a fileHeron URL in front of a user (email
 templates, public-link builders, in-app notification ``link_url``,
@@ -8,10 +8,10 @@ restarting the container.
 
 Two surfaces deliberately stay on the env value:
 
-- ``services/webauthn.py`` RP origin allowlist — credentials are
+- ``services/webauthn.py`` RP origin allowlist - credentials are
   bound to the RP ID; runtime change silently invalidates every
   registered passkey.
-- ``services/oidc.py`` redirect_uri builder — IdPs validate exact
+- ``services/oidc.py`` redirect_uri builder - IdPs validate exact
   match against the URI registered at provider-config time;
   runtime change silently breaks SSO until the IdP allowlist is
   updated.
@@ -47,7 +47,7 @@ def get_app_name(db: Session) -> str:
 def get_site_timezone(db: Session) -> str:
     """Return the effective site-wide display timezone as an IANA name.
     Defaults to ``"UTC"`` when unset. Falls back to ``"UTC"`` on a
-    stored value that isn't a recognized zone — settings PUT validates
+    stored value that isn't a recognized zone - settings PUT validates
     on write, but a row hand-edited out-of-band must not crash readers
     (the read path runs on every email render and every page load)."""
     stored = settings_svc.get(db, settings_svc.Keys.SITE_TIMEZONE)

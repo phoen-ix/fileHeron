@@ -1,4 +1,4 @@
-# Production image — minimal, non-root, slim Python.
+# Production image - minimal, non-root, slim Python.
 FROM python:3.12-slim
 
 WORKDIR /app
@@ -35,7 +35,7 @@ COPY backend/scripts ./scripts
 
 # Import-smoke against the exact dependency closure `pip install .` produced.
 # Fails the build if any module reachable from the app (uvicorn) or the worker
-# (arq) is imported in code but absent from pyproject [project].dependencies —
+# (arq) is imported in code but absent from pyproject [project].dependencies -
 # the gap that shipped v1.25.0/.1 without nh3 and crash-looped prod. Pure import
 # resolution: ENVIRONMENT defaults to development, engines/clients connect lazily,
 # so it needs no DB/Redis/network. This image backs both the backend and worker.
@@ -46,7 +46,7 @@ COPY docker/backend/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 # Non-root. UID 1000 is conventional for the first user on most
-# Linux distros — chosen so bind-mounted volumes (./data/*) end up
+# Linux distros - chosen so bind-mounted volumes (./data/*) end up
 # owned by the host's first user without extra chown gymnastics.
 # If your host's UID != 1000, override at build time with
 # `--build-arg APP_UID=<n>` (then surface it here as a numeric).
@@ -56,7 +56,7 @@ USER appuser
 EXPOSE 8000
 ENTRYPOINT ["/entrypoint.sh"]
 # --proxy-headers tells uvicorn to honor X-Forwarded-For/Proto from the
-# reverse proxy. --forwarded-allow-ips="*" trusts any source — safe here
+# reverse proxy. --forwarded-allow-ips="*" trusts any source - safe here
 # because the backend port is bound to 127.0.0.1 in compose; external
 # clients can never reach uvicorn directly, so any incoming connection
 # is by definition from a trusted proxy (Traefik on the host, or the

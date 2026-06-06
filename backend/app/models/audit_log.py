@@ -104,7 +104,7 @@ class AuditEventType(str, enum.Enum):
     group_member_removed = "group_member_removed"          # Phase 4
     file_expired = "file_expired"                          # Phase 4
     settings_changed = "settings_changed"                  # Phase 9
-    # Admin-editable email templates (v1.25.0). slug+locale only — never the body.
+    # Admin-editable email templates (v1.25.0). slug+locale only - never the body.
     email_template_changed = "email_template_changed"
     email_template_reset = "email_template_reset"
     # Operational audit additions (2026-05-16):
@@ -123,7 +123,7 @@ class AuditEventType(str, enum.Enum):
     rollback_failed = "rollback_failed"
     # Phase 5: admin-editable Updates settings (URL + check_mode).
     updates_settings_changed = "updates_settings_changed"
-    # v1.5.1: cleanup_stale_uploads reaper — an upload abandoned in `uploading`
+    # v1.5.1: cleanup_stale_uploads reaper - an upload abandoned in `uploading`
     # past retention.upload_stale_hours, and the share it left empty.
     file_upload_abandoned = "file_upload_abandoned"
     share_failed = "share_failed"
@@ -140,7 +140,7 @@ class AuditEventType(str, enum.Enum):
 
 
 
-# In SQLite, BigInteger PRIMARY KEY does NOT autoincrement — only INTEGER PK
+# In SQLite, BigInteger PRIMARY KEY does NOT autoincrement - only INTEGER PK
 # does (via ROWID alias). Use a type variant so prod gets BIGINT and tests
 # (SQLite) get INTEGER which DOES autoincrement.
 _BigIntPK = BigInteger().with_variant(Integer(), "sqlite")

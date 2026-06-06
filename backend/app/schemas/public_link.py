@@ -21,7 +21,7 @@ class CreatePublicLinkRequest(APIBaseModel):
 
 class CreatePublicLinkResponse(APIBaseModel):
     """Returned exactly once on creation. The plaintext token + the full
-    URL are not retrievable later — owner must keep them."""
+    URL are not retrievable later - owner must keep them."""
     id: str
     url: str  # absolute or path-relative; depends on APP_URL config
     # Inline SVG QR encoding `url` (no secret beyond the public URL itself).

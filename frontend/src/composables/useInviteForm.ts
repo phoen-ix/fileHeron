@@ -15,8 +15,8 @@ import { formatDateInSiteTime } from '@/utils/datetime'
  * toast-on-success side effect. The view binds inputs to the returned
  * refs and calls `openInviteForm()` / `closeInviteForm()` / `onInvite()`.
  *
- * Two modes share the form: send an invite email (default), or — when
- * `createDirectly` is on — create the account immediately with an
+ * Two modes share the form: send an invite email (default), or - when
+ * `createDirectly` is on - create the account immediately with an
  * admin-set password (email pre-verified, no invite). `onUserCreated`
  * lets the view refresh its user list after a direct create.
  */
@@ -60,7 +60,7 @@ export function useInviteForm(opts: { onUserCreated?: () => void } = {}) {
         const { data } = await listGroups()
         availableGroups.value = data.items
       } catch {
-        /* leave empty — checkbox section just won't render */
+        /* leave empty - checkbox section just won't render */
       }
     }
   }

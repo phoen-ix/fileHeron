@@ -6,7 +6,7 @@ JSON-per-locale dict + ``t(key, **kwargs)`` covers what we need with
 no extra deps.
 
 Conventions:
-- Keys are dotted namespaces mirroring the SPA where possible —
+- Keys are dotted namespaces mirroring the SPA where possible -
   ``login.sign_in``, ``share_detail.edit_expiry``, ``common.ok``.
 - Values are Python ``str.format``-style templates: ``"Hello {name}"``.
 - Missing key in the active locale → fall back to English. Missing in
@@ -29,7 +29,7 @@ _SUPPORTED = ("en", "de")
 
 _LOCALES_DIR = Path(__file__).resolve().parent / "locales"
 
-# Module-global state — the UI is single-threaded under Tk so a global
+# Module-global state - the UI is single-threaded under Tk so a global
 # is the simplest dispatch. Re-entrancy isn't a concern; the only
 # writer is set_locale, called from the Tk main thread.
 _active: str = _DEFAULT_LOCALE
@@ -40,7 +40,7 @@ _fallback_table: dict[str, Any] = {}
 def _load(code: str) -> dict[str, Any]:
     path = _LOCALES_DIR / f"{code}.json"
     if not path.is_file():
-        _log.warning("locale file missing: %s — falling back to %s",
+        _log.warning("locale file missing: %s - falling back to %s",
                      path, _DEFAULT_LOCALE)
         return {}
     try:
@@ -58,7 +58,7 @@ def set_locale(code: str) -> None:
     global _active, _active_table, _fallback_table
     code = (code or "").lower()
     if code not in _SUPPORTED:
-        _log.info("unsupported locale %r — using %s", code, _DEFAULT_LOCALE)
+        _log.info("unsupported locale %r - using %s", code, _DEFAULT_LOCALE)
         code = _DEFAULT_LOCALE
     _active = code
     _active_table = _load(code)

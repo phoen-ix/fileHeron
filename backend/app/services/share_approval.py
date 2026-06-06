@@ -2,7 +2,7 @@
 
 Admin-tunable, all read live from ``app_settings`` (no boot cache):
 - whether approval is required at all (master switch),
-- **who may approve** — `admins_only` (default) or `employees_admins`, plus an
+- **who may approve** - `admins_only` (default) or `employees_admins`, plus an
   additive user/group allowlist (the "special group"); admins always pass,
 - **which shares** are in scope (`outbound` / `all` / `outbound_to_clients`),
 - whether an approver's **own** shares are exempt (auto-approved),
@@ -99,7 +99,7 @@ def can_approve(db: Session, user: User) -> bool:
 
 
 def approver_user_ids(db: Session) -> set[int]:
-    """Every non-disabled user who may approve — used to fan out the
+    """Every non-disabled user who may approve - used to fan out the
     `share_pending_approval` notification. Empty when the feature is off."""
     if not is_enabled(db):
         return set()

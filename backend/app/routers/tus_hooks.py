@@ -1,4 +1,4 @@
-"""tusd webhook receiver. Internal-only — only reachable from inside the
+"""tusd webhook receiver. Internal-only - only reachable from inside the
 Docker `internal` network.
 
 Auth (defense in depth):
@@ -7,14 +7,14 @@ Auth (defense in depth):
    services.tus_signing on every event. This is the load-bearing check.
 2. Optional source-IP allowlist enforced here. Set
    ``TUS_HOOK_ALLOWED_IPS`` (CSV of IPs / CIDR-less hosts) to require
-   the request's client to come from an expected source — typically
+   the request's client to come from an expected source - typically
    the tusd container's IP. Empty (default) accepts anything; the
    HMAC envelope is still required.
 
 **Critical operator note**: ``/api/internal/*`` MUST never be exposed
 by the reverse proxy. Traefik should not have a route that matches
 this prefix. The path is internal-only by convention, not by network
-isolation alone — review your proxy config.
+isolation alone - review your proxy config.
 
 Behaviour by hook event:
 - pre-create   → return 200 to allow, 4xx to reject.

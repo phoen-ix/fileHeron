@@ -1,4 +1,4 @@
-"""Regression: hard_delete is idempotent — a second call on an already
+"""Regression: hard_delete is idempotent - a second call on an already
 deleted file must NOT release quota again (finding L11)."""
 from __future__ import annotations
 
@@ -45,6 +45,6 @@ def test_hard_delete_releases_quota_once(make_user, db, monkeypatch):
     assert f.state == FileState.deleted
     assert calls == [5]  # released once
 
-    # Second call is a no-op — no double release.
+    # Second call is a no-op - no double release.
     file_svc.hard_delete(db, file=f, reason="user_request")
     assert calls == [5]

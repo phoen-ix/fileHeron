@@ -1,4 +1,4 @@
-"""phase5 — public_links + public_link_password_attempts
+"""phase5 - public_links + public_link_password_attempts
 
 Revision ID: 202605020917
 Revises: 202605020916

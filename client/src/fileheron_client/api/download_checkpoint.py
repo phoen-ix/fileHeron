@@ -3,7 +3,7 @@
 A download writes its bytes into ``<dest>.part`` and a small JSON
 ``<dest>.fhdownload`` checkpoint that records enough to resume after an
 interruption or a pause: the remote total + validator (ETag) so we can prove
-the file hasn't changed, the transfer mode, and — for the segmented path —
+the file hasn't changed, the transfer mode, and - for the segmented path -
 which 16 MiB segments are already fully written. Single-stream mode needs no
 per-segment bookkeeping (the ``.part`` size IS the contiguous offset).
 
@@ -81,7 +81,7 @@ def write(dest: Path, cp: Checkpoint) -> None:
 
 def clear(dest: Path) -> None:
     """Remove the checkpoint sidecar (call after a successful rename). Leaves
-    the ``.part`` alone — on success it's already been renamed away."""
+    the ``.part`` alone - on success it's already been renamed away."""
     try:
         ckpt_path(dest).unlink(missing_ok=True)
     except OSError:

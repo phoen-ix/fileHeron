@@ -4,7 +4,7 @@ One job = one logical delivery, tracked by a single `webhook_deliveries` row.
 On a transient failure the job updates the row and **self-re-enqueues** with an
 increasing `_defer_by` backoff (rather than relying on ARQ's generic retry,
 which would re-run with the original args and lose the row). It never raises for
-HTTP/timeout failures — webhooks are best-effort.
+HTTP/timeout failures - webhooks are best-effort.
 """
 from __future__ import annotations
 

@@ -1,6 +1,6 @@
 name: CI
 
-# Tests on every push to main and every PR — so a broken backend (missing
+# Tests on every push to main and every PR - so a broken backend (missing
 # dep, broken migration, failed downgrade) surfaces BEFORE a release tag is
 # cut, not during the tag build. Runs entirely on GitHub-hosted runners
 # (never the production host).
@@ -22,7 +22,7 @@ jobs:
           python-version: '3.12'
           cache: pip
           cache-dependency-path: backend/pyproject.toml
-      # [dev] adds pytest/httpx/aiosqlite/moto — CI-only; the runtime image
+      # [dev] adds pytest/httpx/aiosqlite/moto - CI-only; the runtime image
       # still installs only [project].dependencies via `pip install .`.
       - name: Install (with dev extras)
         run: pip install .[dev]

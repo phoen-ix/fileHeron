@@ -1,5 +1,5 @@
 <script setup lang="ts">
-/* /admin/groups — list + create groups (admin only). */
+/* /admin/groups - list + create groups (admin only). */
 import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'

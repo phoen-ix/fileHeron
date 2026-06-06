@@ -3,7 +3,7 @@ services:
     image: mariadb:11
     container_name: ${COMPOSE_PROJECT_NAME:-fileheron}-db
     restart: unless-stopped
-    # Resource ceilings — defense against runaway query / OOM. Tune
+    # Resource ceilings - defense against runaway query / OOM. Tune
     # via `${DB_MEM_LIMIT:-2g}` etc. in your env if the defaults
     # don't fit your VPS. mem_limit + cpus are honored by docker
     # compose CLI in non-swarm mode.
@@ -38,7 +38,7 @@ services:
     cpus: ${REDIS_CPUS:-1.0}
     # noeviction + larger maxmemory so we never silently drop rate-limit
     # buckets or ARQ jobs under load. Under pressure, Redis writes start
-    # erroring loudly — the ops_check cron surfaces those to admins
+    # erroring loudly - the ops_check cron surfaces those to admins
     # rather than silently breaking the per-IP login lockout.
     command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy noeviction
     volumes:
@@ -121,7 +121,7 @@ services:
       - ${COMPOSE_HOST_ROOT:-${PWD:-/opt/fileHeron}}/data/quarantine:/data/quarantine
       # Shared with the updater-shim. Backend writes update requests
       # to /state/current_job.json; shim polls + spawns the executor.
-      # No HMAC/HTTP between backend and shim — the file IS the message.
+      # No HMAC/HTTP between backend and shim - the file IS the message.
       - ${COMPOSE_HOST_ROOT:-${PWD:-/opt/fileHeron}}/data/updater:/state
     depends_on:
       db:
@@ -145,7 +145,7 @@ services:
         max-file: "3"
 
   clamav:
-    # Pinned to a specific patch — `:stable` drifts and breaks
+    # Pinned to a specific patch - `:stable` drifts and breaks
     # reproducibility. Bump deliberately; check ClamAV release notes
     # for signature-DB format changes before moving.
     image: clamav/clamav:1.5.2
@@ -239,7 +239,7 @@ services:
         max-file: "3"
 
   tusd:
-    # Pinned — `:latest` is a moving pointer; tusd has had protocol-version
+    # Pinned - `:latest` is a moving pointer; tusd has had protocol-version
     # bumps that can desync from @uppy/tus on the SPA side.
     image: tusproject/tusd:v2.9.2
     container_name: ${COMPOSE_PROJECT_NAME:-fileheron}-tusd
@@ -311,7 +311,7 @@ services:
     # access. Polls /state/current_job.json (written by backend on
     # admin Update click) and spawns the matching `updater-executor`
     # container to do the real work. Designed to never need updating
-    # itself — ~50 lines of bash. Reachable only from the internal
+    # itself - ~50 lines of bash. Reachable only from the internal
     # network (no Traefik, no published port). Trust to backend is
     # filesystem-membership via the shared /state bind mount.
     image: ghcr.io/phoen-ix/fileheron-updater-shim:${FH_TAG:-latest}
@@ -320,7 +320,7 @@ services:
     mem_limit: ${UPDATER_SHIM_MEM_LIMIT:-128m}
     cpus: ${UPDATER_SHIM_CPUS:-0.5}
     environment:
-      # Host-side absolute paths — the shim spawns the executor via
+      # Host-side absolute paths - the shim spawns the executor via
       # `docker run`, which talks to the host docker daemon; mount
       # sources need to be host paths, not container paths.
       UPDATER_HOST_WORKSPACE: ${UPDATER_HOST_WORKSPACE:-${PWD:-/opt/fileHeron}}

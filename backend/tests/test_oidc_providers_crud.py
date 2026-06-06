@@ -83,7 +83,7 @@ async def test_create_get_patch_provider(make_user, client, login_as, db):
     assert get_resp.status_code == 200
     assert get_resp.json()["client_secret_set"] is True
 
-    # PATCH name only — secret unchanged.
+    # PATCH name only - secret unchanged.
     patch_resp = await client.patch(
         f"/api/admin/settings/sso/providers/{pid}",
         json={"name": "Corp Entra (renamed)"},

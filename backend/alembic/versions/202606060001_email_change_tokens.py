@@ -1,8 +1,8 @@
-"""email_change_tokens — pending email-change staging (v1.13.0).
+"""email_change_tokens - pending email-change staging (v1.13.0).
 
 Stages a pending email change (target address + per-side confirmation flags)
-so ``users.email`` is only mutated once the new address — and, in
-``verify_both`` mode, the old address too — has proven control. Mirrors the
+so ``users.email`` is only mutated once the new address - and, in
+``verify_both`` mode, the old address too - has proven control. Mirrors the
 ``password_reset_tokens`` / ``email_verify_tokens`` token tables (plain
 INTEGER PK, not BigInteger). Guards make it re-runnable after a partial
 failure.

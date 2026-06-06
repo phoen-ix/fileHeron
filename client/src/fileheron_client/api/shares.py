@@ -1,4 +1,4 @@
-"""Share endpoints — list, get, create, revoke, expire-now, patch-expiry."""
+"""Share endpoints - list, get, create, revoke, expire-now, patch-expiry."""
 from __future__ import annotations
 
 from datetime import datetime
@@ -147,10 +147,10 @@ def get_public_link(api: ApiClient, share_id: str) -> Optional[dict]:
     link / the request fails. Backend enforces owner+admin auth on
     GET ``/api/shares/{id}/public-link``.
 
-    Returns a raw dict rather than a typed model — the desktop client
+    Returns a raw dict rather than a typed model - the desktop client
     only reads a few fields and a permissive shape lets backend
     schema changes land without a client release. Notable keys:
-    ``url`` (Optional[str] — None for legacy rows where the token
+    ``url`` (Optional[str] - None for legacy rows where the token
     wasn't encrypted), ``has_password``, ``download_limit``,
     ``downloads_remaining``, ``locked_until``, ``revoked_at``.
     """
@@ -172,7 +172,7 @@ def patch_share_download_limit(
     """v0.7.1: edit a share's per-recipient download budget.
 
     Same backend route as ``patch_share_expiry`` (``PATCH /api/shares/{id}``)
-    — body keys are ``download_limit`` (int > 0) and
+    - body keys are ``download_limit`` (int > 0) and
     ``download_limit_clear`` (true → no limit, mutually exclusive with
     ``download_limit``).
     """

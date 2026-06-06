@@ -10,13 +10,13 @@
  *      the upload at that endpoint with that header; tusd verifies
  *      the envelope on pre-create.
  *
- * The composable exposes a flat list of items the UI iterates over —
+ * The composable exposes a flat list of items the UI iterates over -
  * the small/large split is invisible to the consumer.
  *
  * What this composable deliberately does NOT do:
  *   - It doesn't poll the server for finalization. tusd's post-finish
  *     hook runs after returning to the client, so upload-success is
- *     racy with file.state — but the ShareDetail page re-fetches the
+ *     racy with file.state - but the ShareDetail page re-fetches the
  *     authoritative share+files on navigation, and that's where users
  *     read final state. Adding polling here would couple two layers. */
 import Uppy, { type Body, type Meta, type UppyFile } from '@uppy/core'
@@ -26,7 +26,7 @@ import { computed, onBeforeUnmount, ref, type Ref } from 'vue'
 import { directUpload, initUpload } from '@/api/uploads'
 
 // Mirror backend's MAX_DIRECT_UPLOAD_BYTES default. Cheap-enough for the
-// smallest VPS — files above this take the chunked path with resume.
+// smallest VPS - files above this take the chunked path with resume.
 const DIRECT_UPLOAD_THRESHOLD = 100 * 1024 * 1024 // 100 MB
 const TUS_CHUNK_BYTES = 8 * 1024 * 1024 // 8 MB chunks → balanced for big files + slow links
 const TUS_RETRY_DELAYS = [0, 1000, 3000, 5000, 10000] // ms
@@ -239,7 +239,7 @@ export function useUpload(shareId: Ref<string | null>) {
       try {
         uppy.removeFile(uppyId)
       } catch {
-        /* ignore — already removed on success */
+        /* ignore - already removed on success */
       }
     } catch (err) {
       const msg =

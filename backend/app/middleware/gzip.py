@@ -14,7 +14,7 @@ streams, ``/api/files/{share_id}/download-zip`` + ``/api/public/{token}/download
 so we bypass gzip for those and delegate everything else to the real
 GZipMiddleware. Gzip-ing a streamed ZIP is doubly wrong: it re-compresses an
 already-incompressible archive AND strips the Content-Length we computed for the
-progress bar. JSON responses — including the ``…/download-zip-url`` mint — keep
+progress bar. JSON responses - including the ``…/download-zip-url`` mint - keep
 compression.
 """
 from __future__ import annotations

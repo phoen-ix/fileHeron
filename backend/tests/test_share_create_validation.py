@@ -1,7 +1,7 @@
 """POST /api/shares: recipient + public-link validation.
 
 A share without recipients used to be flat-out refused. Now it's
-allowed iff an inline public_link is attached — the public link IS
+allowed iff an inline public_link is attached - the public link IS
 the access mechanism for an anonymous-link share.
 """
 from __future__ import annotations

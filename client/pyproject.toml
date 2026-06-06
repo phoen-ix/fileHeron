@@ -12,7 +12,7 @@ authors = [{ name = "file:Heron contributors" }]
 readme = "README.md"
 dependencies = [
     # GUI stack (v0.4.0 migration from PySide6; v0.5.0 brought
-    # tkinterdnd2 back after v0.4.11 fixed the actual culprit — a
+    # tkinterdnd2 back after v0.4.11 fixed the actual culprit - a
     # self._root attribute shadowing tkinter.Misc._root in widget
     # subclasses, not the library itself):
     #   customtkinter: modern themeable wrapper over stdlib tkinter

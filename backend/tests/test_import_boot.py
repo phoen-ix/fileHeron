@@ -1,7 +1,7 @@
 """Import-completeness smoke.
 
-Both application entry points — the web app (`app.main`, served by uvicorn)
-and the background worker (`app.workers.worker`, run by ARQ) — must import
+Both application entry points - the web app (`app.main`, served by uvicorn)
+and the background worker (`app.workers.worker`, run by ARQ) - must import
 cleanly against the declared dependency closure. This mirrors the Dockerfile's
 build-time `python -c "import app.main; import app.workers.worker"` so the exact
 class of failure that took prod down in v1.25.0/.1 (a module imported in code

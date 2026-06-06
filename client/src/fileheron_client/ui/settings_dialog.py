@@ -1,7 +1,7 @@
-"""Settings — in-window overlay (v0.9.4).
+"""Settings - in-window overlay (v0.9.4).
 
 Was a ``CTkToplevel`` modal; now a ``CTkFrame`` placed full-cover over the root
-(dimmed backdrop + centered card), the same pattern as ``LoginOverlay`` — no
+(dimmed backdrop + centered card), the same pattern as ``LoginOverlay`` - no
 popup. Content (server/account/role/version rows, appearance + language pickers,
 diagnostics toggle, sign-out) and its handlers are unchanged; only the container
 and the close mechanism (place_forget/destroy instead of wait_window) differ."""
@@ -80,7 +80,7 @@ class SettingsOverlay(ctk.CTkFrame):
         outer.grid_columnconfigure(1, weight=1)
         next_row = base + len(rows)
 
-        # API-token identity (v0.9.12) — only when signed in via an API token.
+        # API-token identity (v0.9.12) - only when signed in via an API token.
         # Shows WHICH token this client runs on so the user can find + revoke
         # it in the web app (Account → Connected API clients). The prefix/last4
         # is derived locally (instant); the name + status are filled in async.
@@ -103,7 +103,7 @@ class SettingsOverlay(ctk.CTkFrame):
             next_row += 1
             self._load_token_meta()
 
-        # Appearance mode picker (v0.4.0 — CTk's built-in theming).
+        # Appearance mode picker (v0.4.0 - CTk's built-in theming).
         appearance_row = next_row
         ctk.CTkLabel(outer, text=t("settings.appearance"), anchor="w").grid(
             row=appearance_row, column=0, sticky="w", padx=(0, 12), pady=(12, 4)
@@ -154,10 +154,10 @@ class SettingsOverlay(ctk.CTkFrame):
         lang_menu.grid(row=lang_row, column=1, sticky="w", pady=(12, 4))
         self._esc_targets.append(lang_menu)
 
-        # Diagnostic logging toggle (v0.4.16). Default OFF — the verbose
+        # Diagnostic logging toggle (v0.4.16). Default OFF - the verbose
         # trace.log + app.log + heartbeat plumbing only fires when this
         # is on. crash.log (uncaught exceptions + native faulthandler)
-        # writes either way. Effect on next launch — loggers are wired
+        # writes either way. Effect on next launch - loggers are wired
         # at startup.
         diag_row = lang_row + 1
         ctk.CTkLabel(outer, text=t("settings.diagnostics"), anchor="w").grid(
@@ -204,7 +204,7 @@ class SettingsOverlay(ctk.CTkFrame):
         signout_btn.pack(side="right", padx=(0, 8))
         self._esc_targets.extend([self._close_btn, signout_btn])
 
-        # Inline status line (e.g. a failed language save) — no popup.
+        # Inline status line (e.g. a failed language save) - no popup.
         self._status_var = ctk.StringVar(value="")
         ctk.CTkLabel(
             outer, textvariable=self._status_var, text_color="#991b1b",
@@ -219,7 +219,7 @@ class SettingsOverlay(ctk.CTkFrame):
 
     def _local_token_label(self) -> str:
         """``fh_<prefix>_…<last4>`` derived from the in-memory token, with no
-        network call — so the row renders instantly."""
+        network call - so the row renders instantly."""
         tok = self._api.api_token or ""
         parts = tok.split("_", 2)
         if len(parts) == 3 and parts[1]:
@@ -291,7 +291,7 @@ class SettingsOverlay(ctk.CTkFrame):
     def _on_language(self, label: str) -> None:
         """v0.8.0: persist the picked locale to users.locale and apply
         it immediately in the running app. The panel itself doesn't
-        repaint — labels update on next open. The fallback to local-only
+        repaint - labels update on next open. The fallback to local-only
         set_locale on a failed PATCH keeps the UI usable when the server
         is unreachable."""
         from .. import api as api_pkg
@@ -332,7 +332,7 @@ class SettingsOverlay(ctk.CTkFrame):
 
         path = str(log_dir())
         # Open the (app-owned) log folder in the OS file manager: fixed argv,
-        # no shell, no user-controlled command — scoped noqa for ruff-S.
+        # no shell, no user-controlled command - scoped noqa for ruff-S.
         try:
             if sys.platform.startswith("win"):
                 os.startfile(path)  # type: ignore[attr-defined]  # noqa: S606

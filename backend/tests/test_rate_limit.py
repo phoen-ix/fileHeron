@@ -22,7 +22,7 @@ async def test_lockout_after_five_failed_passwords(make_user, client, db):
         assert r.status_code == 401, f"attempt {i+1}: {r.text}"
         assert r.json()["code"] == "INVALID_CREDENTIALS"
 
-    # 6th attempt — even with the CORRECT password — is blocked by the lockout.
+    # 6th attempt - even with the CORRECT password - is blocked by the lockout.
     locked = await client.post(
         "/api/auth/login",
         json={"email": "alice@test.local", "password": "LongCorrectHorse123!"},

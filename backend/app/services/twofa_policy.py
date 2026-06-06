@@ -6,7 +6,7 @@ for any subset of {admin, employee, client} roles, plus any number
 of groups. When neither key is set, falls back to the static env knob
 ``REQUIRE_2FA`` so existing .env-driven deploys keep working.
 
-Replaces the static `users.requires_2fa_setup` flag — the column is
+Replaces the static `users.requires_2fa_setup` flag - the column is
 gone (migration 202605021000) and `is_2fa_required` computes the
 answer per request from the policy + the user's TOTP state. That
 sidesteps the "flag never cleared" bug the old design had
@@ -118,7 +118,7 @@ def is_2fa_required_bulk(db: Session, users: list[User]) -> dict[int, bool]:
     """Bulk equivalent of `is_2fa_required` for a page of users.
 
     Resolves the policy once and issues at most one extra query (group
-    membership) instead of re-resolving + re-querying per user — the
+    membership) instead of re-resolving + re-querying per user - the
     admin-users list hydration path. Relies on each user's `totp`
     relationship already being loaded/loadable; callers that bulk-load
     UserTOTP first avoid the per-user lazy load.
@@ -159,9 +159,9 @@ def write_policy(
     """Persist the policy. Caller commits + audits.
 
     `required_roles=[]` and `required_group_ids=[]` together clear
-    enforcement (kv-set, env fallback no longer applies — the kv
+    enforcement (kv-set, env fallback no longer applies - the kv
     override wins). To revert to env fallback, delete both keys
-    explicitly via `settings_svc.set_value(... value=None)` — which
+    explicitly via `settings_svc.set_value(... value=None)` - which
     is what passing empty lists triggers below.
     """
     role_list = sorted({r for r in required_roles if r in ALLOWED_ROLES})

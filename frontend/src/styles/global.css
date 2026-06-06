@@ -35,7 +35,7 @@ body,
 }
 
 body {
-  /* Subtle paper grain — single SVG noise overlay. Less is more. */
+  /* Subtle paper grain - single SVG noise overlay. Less is more. */
   background-image:
     radial-gradient(1200px 800px at 80% -10%, rgba(180, 83, 9, 0.025), transparent 60%),
     radial-gradient(900px 600px at -10% 90%, rgba(75, 85, 99, 0.02), transparent 70%);
@@ -147,7 +147,7 @@ hr {
   padding-bottom: var(--fh-space-4);
 }
 
-/* Editorial display heading — lets us put a serif title at huge sizes
+/* Editorial display heading - lets us put a serif title at huge sizes
    without leaning on h1 (so semantic levels stay flexible). */
 .fh-display {
   font-family: var(--fh-font-display);
@@ -176,7 +176,7 @@ hr {
   margin-bottom: var(--fh-space-2);
 }
 
-/* Page-load reveal — staged: eyebrow → display → form. Single delight moment. */
+/* Page-load reveal - staged: eyebrow → display → form. Single delight moment. */
 @keyframes fh-rise {
   from {
     opacity: 0;

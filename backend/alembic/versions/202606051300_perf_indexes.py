@@ -1,10 +1,10 @@
 """Performance: compound indexes for hot query paths (v1.8.0).
 
 Adds covering compound indexes that match the actual filter/sort shapes:
-- shares (state, expires_at)               — hourly expire_files cron + list
-- refresh_tokens (user_id, revoked_at, expires_at) — admin session list
-- notifications (user_id, created_at)       — bell list + daily age-out cron
-- login_attempts (ip, attempted_at) + (email, attempted_at) — rate-limit counts
+- shares (state, expires_at)               - hourly expire_files cron + list
+- refresh_tokens (user_id, revoked_at, expires_at) - admin session list
+- notifications (user_id, created_at)       - bell list + daily age-out cron
+- login_attempts (ip, attempted_at) + (email, attempted_at) - rate-limit counts
 
 All guarded by `_has_index` so the migration is re-runnable after a partial
 failure. No data change.

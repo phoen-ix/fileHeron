@@ -7,7 +7,7 @@ from .common import APIBaseModel
 
 
 class SetupStatusResponse(APIBaseModel):
-    # True when no admin exists yet — SPA shows the wizard.
+    # True when no admin exists yet - SPA shows the wizard.
     required: bool
 
 

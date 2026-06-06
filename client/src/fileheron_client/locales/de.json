@@ -20,11 +20,11 @@
   },
 
   "app": {
-    "title_template": "file:Heron — {name} ({role})  ·  v{version}"
+    "title_template": "file:Heron - {name} ({role})  ·  v{version}"
   },
 
   "login": {
-    "title": "Bei file:Heron anmelden  —  Client v{version}",
+    "title": "Bei file:Heron anmelden  -  Client v{version}",
     "intro": "Mit einem file:Heron-Server verbinden. Anmeldedaten werden im OS-Schlüsselbund gespeichert; auf der Festplatte landet nur die Server-URL.",
     "server_url_label": "Server-URL",
     "server_url_placeholder": "https://files.example.com",
@@ -42,7 +42,7 @@
     "sign_in": "Anmelden",
     "signing_in": "Wird angemeldet…",
     "quit": "Beenden",
-    "session_expired": "Ihre Sitzung ist abgelaufen — bitte erneut anmelden.",
+    "session_expired": "Ihre Sitzung ist abgelaufen - bitte erneut anmelden.",
 
     "err_server_required": "Server-URL ist erforderlich.",
     "err_email_required": "E-Mail ist erforderlich.",
@@ -112,7 +112,7 @@
     "never_label": "Läuft nie ab",
     "never_help": "Wenn aktiviert, wird die Freigabe nicht automatisch vom Cron gelöscht. Manuell beenden, wenn fertig.",
     "err_invalid_time_title": "Ungültige Uhrzeit",
-    "err_invalid_time_body": "Stunde 00–23 und Minute 00–59 verwenden.",
+    "err_invalid_time_body": "Stunde 00-23 und Minute 00-59 verwenden.",
     "err_past_title": "Zeitpunkt in der Vergangenheit",
     "err_past_body": "Bitte einen Zeitpunkt in der Zukunft wählen."
   },
@@ -174,7 +174,7 @@
     "pl_revoked": "WIDERRUFEN",
     "pl_downloads": "Downloads: {remaining}/{limit}",
     "copy_failed_title": "Kopieren fehlgeschlagen",
-    "copy_failed_body": "Die Zwischenablage war nicht erreichbar. Die URL steht im Feld oben — bitte mit Strg+C manuell kopieren.",
+    "copy_failed_body": "Die Zwischenablage war nicht erreichbar. Die URL steht im Feld oben - bitte mit Strg+C manuell kopieren.",
     "files_heading": "Dateien",
     "add_files_btn": "Dateien hinzufügen…",
     "edit_expiry_btn": "Ablauf bearbeiten…",
@@ -222,10 +222,10 @@
 
   "upload": {
     "subject_label": "Betreff",
-    "subject_placeholder": "(optional — entspricht dem ersten Dateinamen)",
+    "subject_placeholder": "(optional - entspricht dem ersten Dateinamen)",
     "message_label": "Nachricht",
     "recipients_label": "Empfänger",
-    "to_company": "Geht an das Unternehmen — das gesamte Team kann es sehen. Du wählst keine Empfänger.",
+    "to_company": "Geht an das Unternehmen - das gesamte Team kann es sehen. Du wählst keine Empfänger.",
     "expires_label": "Läuft ab",
     "never_label": "Läuft nie ab (manuell beenden)",
     "download_limit_label": "Download-Limit",
@@ -250,19 +250,19 @@
     "err_no_recipients_title": "Keine Empfänger",
     "err_no_recipients_body": "Mindestens einen Benutzer oder eine Gruppe als Empfänger hinzufügen oder einen öffentlichen Link beifügen.",
     "err_invalid_time_title": "Ungültige Uhrzeit",
-    "err_invalid_time_body": "Stunde 00–23 und Minute 00–59 verwenden.",
+    "err_invalid_time_body": "Stunde 00-23 und Minute 00-59 verwenden.",
     "err_invalid_limit_title": "Ungültiges Download-Limit",
     "err_invalid_limit_body": "Download-Limit muss eine positive ganze Zahl sein (oder leer für unbegrenzt).",
     "err_invalid_pl_limit_title": "Ungültiges Limit",
     "err_invalid_pl_limit_body": "Download-Limit muss eine positive ganze Zahl sein (oder leer für unbegrenzt).",
-    "public_link_result_note": "Öffentlicher Link erstellt. Unten kopieren — er ist auch auf der Detailseite der Freigabe verfügbar.",
-    "status_uploading": "Freigabe {short_id} erstellt — {n} Datei(en) werden hochgeladen…",
+    "public_link_result_note": "Öffentlicher Link erstellt. Unten kopieren - er ist auch auf der Detailseite der Freigabe verfügbar.",
+    "status_uploading": "Freigabe {short_id} erstellt - {n} Datei(en) werden hochgeladen…",
     "status_err": "Fehler: {detail}",
     "status_success": "Freigabe erstellt und alle Dateien hochgeladen.",
-    "status_partial": "Einige Uploads fehlgeschlagen — siehe Hinweise oben.",
+    "status_partial": "Einige Uploads fehlgeschlagen - siehe Hinweise oben.",
     "upload_failed_title": "Upload fehlgeschlagen",
     "upload_failed_body": "{name}\n\n{detail}",
-    "upload_failed_toast": "Upload fehlgeschlagen — {name}: {detail}"
+    "upload_failed_toast": "Upload fehlgeschlagen - {name}: {detail}"
   },
   "upload_progress": {
     "title": "Dateien werden hochgeladen",
@@ -272,9 +272,9 @@
     "state_uploading": "Wird hochgeladen…",
     "state_done": "Fertig",
     "state_failed": "Fehlgeschlagen",
-    "log_started": "Upload gestartet — {name}",
-    "log_done": "Upload abgeschlossen — {name}",
-    "log_failed": "Upload fehlgeschlagen — {name}: {detail}",
+    "log_started": "Upload gestartet - {name}",
+    "log_done": "Upload abgeschlossen - {name}",
+    "log_failed": "Upload fehlgeschlagen - {name}: {detail}",
     "status_all_done": "Alle {n} Datei(en) hochgeladen.",
     "status_partial": "{failed} von {total} Upload(s) fehlgeschlagen.",
     "new_share_btn": "Neue Freigabe",
@@ -294,7 +294,7 @@
     "state_done": "Fertig",
     "state_failed": "Fehlgeschlagen",
     "status_uploading": "{n} Datei(en) werden hochgeladen…",
-    "status_all_failed": "Alle Uploads fehlgeschlagen — entfernen oder erneut versuchen.",
+    "status_all_failed": "Alle Uploads fehlgeschlagen - entfernen oder erneut versuchen.",
     "toast_added": "{n} Datei(en) zur Freigabe hinzugefügt.",
     "notify_failed": "Dateien hinzugefügt, aber Empfänger konnten nicht benachrichtigt werden."
   }

@@ -5,7 +5,7 @@ import { defineComponent, h, ref, type Ref } from 'vue'
 import { mount } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
 
-// Stub Uppy's plugin chain — the composable's add/remove/retry
+// Stub Uppy's plugin chain - the composable's add/remove/retry
 // branches don't call into Uppy until start(), and we never call
 // start() here.
 vi.mock('@uppy/tus', () => ({ default: class {} }))
@@ -48,7 +48,7 @@ function fakeFile(name: string, size: number): File {
 
 // useUpload calls onBeforeUnmount internally to cancel in-flight
 // Uppy uploads on teardown. Vue requires lifecycle hooks be
-// registered during a component's setup() — calling the composable
+// registered during a component's setup() - calling the composable
 // bare emits a "no active component instance" warning. Mounting it
 // inside a tiny host binds the hook to a real lifecycle.
 function makeHost(shareId: Ref<string | null>) {
@@ -100,7 +100,7 @@ describe('useUpload', () => {
     // Make startItem fail without hitting the network.
     const promise = u.retry(item.uid)
     // After retry resets, state should be queued/preparing/error depending
-    // on async timing — at minimum the previous error is cleared synchronously.
+    // on async timing - at minimum the previous error is cleared synchronously.
     expect(item.error).toBeNull()
     expect(item.progress).toBe(0)
     await promise

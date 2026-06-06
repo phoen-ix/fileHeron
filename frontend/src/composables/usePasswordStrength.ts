@@ -1,5 +1,5 @@
 /* Password strength heuristic. Length-biased per NIST 800-63B
- * direction. Score 0–3 maps to weak / fair / good / strong; UI renders
+ * direction. Score 0-3 maps to weak / fair / good / strong; UI renders
  * four bars. Real defense is server-side: min length, HIBP k-anonymity
  * breach lookup on every change, and lockout. This meter is a UX hint. */
 
@@ -26,7 +26,7 @@ export function scorePassword(pw: string): Strength {
   const len = pw.length
   const classes = classCount(pw)
 
-  // Heuristic — biased towards length over complexity, matches NIST 800-63B
+  // Heuristic - biased towards length over complexity, matches NIST 800-63B
   // direction. Min length 12 enforced server-side; we score progressively.
   if (len < 8) return { score: 0, label: 'weak' }
   if (len < 12) return { score: classes >= 3 ? 1 : 0, label: classes >= 3 ? 'fair' : 'weak' }

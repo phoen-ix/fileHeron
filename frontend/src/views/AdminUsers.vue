@@ -105,7 +105,7 @@ const invites = ref<AdminInviteItem[]>([])
 const invitesLoading = ref(false)
 const invitesErrorMsg = ref<string | null>(null)
 
-// Modal state — only one of these is non-null at a time.
+// Modal state - only one of these is non-null at a time.
 const detailsInvite = ref<AdminInviteItem | null>(null)
 const activateInviteRow = ref<AdminInviteItem | null>(null)
 const activateDisplayName = ref('')
@@ -218,7 +218,7 @@ async function onConfirmActivate() {
     })
     ui.pushToast(t('admin_users.invites.toast.activated'), 'success')
     closeActivate()
-    // Refresh both lists — invite row vanishes, new user appears.
+    // Refresh both lists - invite row vanishes, new user appears.
     void loadInvites()
     void load()
   } catch (err) {

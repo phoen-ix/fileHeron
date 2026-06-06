@@ -1,4 +1,4 @@
-# fileHeron updater-shim — perpetual, ~50 lines of bash.
+# fileHeron updater-shim - perpetual, ~50 lines of bash.
 #
 # Polls /state/current_job.json every 5s. When status == "pending",
 # pulls the matching `fileheron-updater-executor:<target_tag>` image
@@ -8,7 +8,7 @@
 # Why so simple? Because this is the ONE container that can't update
 # itself (containers can't `docker compose up -d` themselves without
 # committing suicide mid-command). Keeping it trivial means it
-# shouldn't ever need to be updated — there's nothing in it to break.
+# shouldn't ever need to be updated - there's nothing in it to break.
 # The executor (changeable per-release) does all the real logic.
 FROM alpine:3.20
 

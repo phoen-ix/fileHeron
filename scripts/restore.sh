@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# fileHeron restore — reverses scripts/backup.sh.
+# fileHeron restore - reverses scripts/backup.sh.
 #
 # Usage:
 #   scripts/restore.sh ./backups/2026-05-15_021500
@@ -7,7 +7,7 @@
 # What it does (with confirmations):
 #   1. Verifies sha256s in manifest.txt
 #   2. Stops the docker stack
-#   3. Wipes ./data/{db,files,quarantine,redis} — DESTRUCTIVE
+#   3. Wipes ./data/{db,files,quarantine,redis} - DESTRUCTIVE
 #   4. Restores DB via mariadb client (drops and re-imports DB_NAME)
 #   5. Restores files.tar.gz + quarantine.tar.gz under ./data/
 #   6. Restores redis.rdb into the redis container's volume
@@ -91,4 +91,4 @@ unset MYSQL_PWD
 echo "[restore] starting full stack …"
 docker compose up -d
 
-echo "[restore] done — verify by hitting /api/health and signing in."
+echo "[restore] done - verify by hitting /api/health and signing in."

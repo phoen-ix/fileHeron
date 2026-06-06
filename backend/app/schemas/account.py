@@ -36,7 +36,7 @@ class MeResponse(APIBaseModel):
     # True when the active 2FA policy applies to this user and they
     # haven't enabled TOTP yet. The SPA route guard reads this and
     # redirects to /account/2fa/forced. Computed live by
-    # `services.twofa_policy.is_2fa_required` — flips false on the
+    # `services.twofa_policy.is_2fa_required` - flips false on the
     # next /me hydration after the user finishes setup.
     requires_2fa: bool = False
     # Default state for the per-share "Notify recipient(s)" checkbox on
@@ -73,7 +73,7 @@ class ChangePasswordRequest(APIBaseModel):
 
 
 class RequestEmailChangeRequest(APIBaseModel):
-    """Body for POST /api/account/email — self-service email change.
+    """Body for POST /api/account/email - self-service email change.
     Re-authenticates with the current password before staging the change."""
     new_email: EmailLike
     current_password: str = Field(..., min_length=1, max_length=256)

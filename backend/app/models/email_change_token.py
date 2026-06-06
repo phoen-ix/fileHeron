@@ -7,14 +7,14 @@ Single-use, 24h expiry, scoped to one user. Mirrors
 address plus a per-side confirmation flag so the change applies only when all
 required sides have clicked their link.
 
-- ``new_token_hash`` — always present; the confirm link mailed to the NEW
+- ``new_token_hash`` - always present; the confirm link mailed to the NEW
   address.
-- ``old_token_hash`` — only set in ``verify_both`` mode; the confirm link
+- ``old_token_hash`` - only set in ``verify_both`` mode; the confirm link
   mailed to the OLD address. Its presence is what makes old-side confirmation
   *required*.
-- ``cancel_token_hash`` — set in the pending modes; the "it wasn't me" kill
+- ``cancel_token_hash`` - set in the pending modes; the "it wasn't me" kill
   switch mailed to the OLD address. Clicking it cancels the pending change.
-- ``oidc_mode`` — the OIDC-reset policy frozen at request time so a mid-flight
+- ``oidc_mode`` - the OIDC-reset policy frozen at request time so a mid-flight
   policy change can't alter an in-progress confirmation.
 - ``used_at`` set ⇒ the change has been applied. ``cancelled_at`` set ⇒ the
   pending change was killed (old-email "it wasn't me", admin revoke, or

@@ -283,7 +283,7 @@ onMounted(load)
             >
               {{ deleting === it.file_id ? t('common.loading') : t('admin_file_history.delete') }}
             </button>
-            <span v-else class="row-hint">—</span>
+            <span v-else class="row-hint">-</span>
           </td>
         </tr>
       </tbody>

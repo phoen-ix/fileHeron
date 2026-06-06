@@ -1,4 +1,4 @@
-"""Pydantic-Settings config — fail-fast on insecure defaults in production.
+"""Pydantic-Settings config - fail-fast on insecure defaults in production.
 
 Environment variables that must be set in production are validated below.
 ENVIRONMENT=production additionally forces COOKIE_SECURE=true.
@@ -71,7 +71,7 @@ class Settings(BaseSettings):
     WEBHOOK_DELIVERY_RETENTION_DAYS: int = 30
     # In-app notifications: once read, the bell hides them on next load; this
     # is how long a READ notification lingers in the DB before the daily
-    # cleanup_read_notifications cron hard-deletes it (not instant — keeps a
+    # cleanup_read_notifications cron hard-deletes it (not instant - keeps a
     # short read-history window for support/debug). 0 disables the cron.
     NOTIFICATION_READ_RETENTION_DAYS: int = 3
     # The purge_old_quarantine cron unlinks bytes (keeps the file row as a
@@ -143,7 +143,7 @@ class Settings(BaseSettings):
     LOCKOUT_THRESHOLD: int = 5
     LOCKOUT_DURATION_MIN: int = 15
 
-    # --- Phase 3a — upload pipeline ------------------------------------------
+    # --- Phase 3a - upload pipeline ------------------------------------------
     # Shared HMAC secret for tusd ↔ backend (envelope authorisation).
     TUS_HOOK_SECRET: str = "change-me-tus-hook-secret-min-32-chars-_______________"
     # Optional CSV allowlist for the source IP of `/api/internal/tus-hooks`
@@ -166,7 +166,7 @@ class Settings(BaseSettings):
     QUARANTINE_DIR: str = "/data/quarantine"
 
     # --- Storage backend (v1.22.0) -------------------------------------------
-    # "local" (default — the bind mount above) or "s3" (any S3-compatible store).
+    # "local" (default - the bind mount above) or "s3" (any S3-compatible store).
     # On s3, uploads stream to the bucket, downloads 307-redirect to a presigned
     # URL, AV scans via clamd INSTREAM, and quarantine moves between key prefixes.
     STORAGE_BACKEND: str = "local"
@@ -196,13 +196,13 @@ class Settings(BaseSettings):
     METRICS_ALLOWED_IPS: str = ""
     METRICS_CACHE_TTL_SEC: int = 60
 
-    # --- Phase 6b — 2FA enforcement (env fallback) ----------------------------
+    # --- Phase 6b - 2FA enforcement (env fallback) ----------------------------
     # `none` = optional (default), `admins` = required for admins, `all` = required
     # for every user. Used as the fallback when `app_settings.twofa.required_*`
     # kv keys are unset (admin can override at runtime via /admin/settings/twofa).
     REQUIRE_2FA: str = "none"
 
-    # --- Phase 7 — HIBP / OIDC / backup --------------------------------------
+    # --- Phase 7 - HIBP / OIDC / backup --------------------------------------
     # When false, password-breach checks are disabled (air-gapped deploys).
     HIBP_ENABLED: bool = True
     # Empty issuer URL = OIDC disabled. Operator sets this to e.g.
@@ -220,10 +220,10 @@ class Settings(BaseSettings):
     BACKUP_RESTIC_REPO: str = ""
     BACKUP_RESTIC_PASSWORD: str = ""
 
-    # --- Phase 8 — WebAuthn / passkeys ---------------------------------------
+    # --- Phase 8 - WebAuthn / passkeys ---------------------------------------
     # Relying-Party identifier MUST match the public hostname (no scheme,
     # no port). Platform authenticators (Touch ID, Windows Hello) bind
-    # credentials to this string forever — change it and you invalidate
+    # credentials to this string forever - change it and you invalidate
     # every registered credential.
     WEBAUTHN_RP_ID: str = "localhost"
     WEBAUTHN_RP_NAME: str = "fileHeron"
@@ -231,7 +231,7 @@ class Settings(BaseSettings):
     # falls back to APP_URL.
     WEBAUTHN_ORIGINS: str = ""
 
-    # --- Phase 5 — antivirus + public links ----------------------------------
+    # --- Phase 5 - antivirus + public links ----------------------------------
     # ClamAV daemon endpoint inside the docker network.
     CLAMAV_HOST: str = "clamav"
     CLAMAV_PORT: int = 3310
@@ -303,7 +303,7 @@ if os.environ.get("PYTEST_CURRENT_TEST") is None:
         ("change-me-in-production-min-32-chars", "JWT_SECRET", settings.JWT_SECRET),
         ("change_me_in_production", "DB_PASSWORD", settings.DB_PASSWORD),
         # TUS_HOOK_SECRET is the load-bearing HMAC secret for the internal
-        # tusd webhook — at its default an attacker who knows the placeholder
+        # tusd webhook - at its default an attacker who knows the placeholder
         # could forge upload envelopes. Fail fast like the others (finding L1/M-tus).
         (
             "change-me-tus-hook-secret-min-32-chars-_______________",
@@ -324,7 +324,7 @@ if os.environ.get("PYTEST_CURRENT_TEST") is None:
     if settings.STORAGE_BACKEND.strip().lower() == "s3" and not settings.S3_BUCKET:
         _fail_or_warn("STORAGE_BACKEND=s3 but S3_BUCKET is unset.")
 
-    # AV_SKIP is meant for tests — in production, uploads must be
+    # AV_SKIP is meant for tests - in production, uploads must be
     # scanned before they're available for download. If both are
     # set, we crash on boot rather than ship infected files.
     if settings.AV_SKIP:

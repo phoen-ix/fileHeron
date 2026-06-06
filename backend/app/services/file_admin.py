@@ -1,7 +1,7 @@
 """Admin file-inventory query.
 
-A read-only cross-user view that lists every file ever uploaded —
-including deleted/expired/quarantined ones — joined with its parent
+A read-only cross-user view that lists every file ever uploaded -
+including deleted/expired/quarantined ones - joined with its parent
 share, the uploader, and aggregated download stats from
 `download_log`. Designed to be paginated, sortable, and filterable
 without N+1 queries.
@@ -77,7 +77,7 @@ def list_all_files(
     page_size: int = 50,
 ) -> tuple[list[dict], int]:
     """Return (rows, total). Each row is a dict with all the fields
-    needed for `AdminFileItem` plus pre-formatted recipients_summary —
+    needed for `AdminFileItem` plus pre-formatted recipients_summary -
     the route handler maps it into the schema."""
     base = (
         db.query(

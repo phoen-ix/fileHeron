@@ -1,4 +1,4 @@
-"""Outbound webhooks — admin-registered endpoints that receive a signed HTTP
+"""Outbound webhooks - admin-registered endpoints that receive a signed HTTP
 POST on chosen events (v1.19.0).
 
 `webhooks` is the (low-volume) subscription registry; `webhook_deliveries` is the
@@ -63,7 +63,7 @@ class WebhookDelivery(Base):
         Integer, ForeignKey("webhooks.id", ondelete="CASCADE"), nullable=False, index=True
     )
     event_type: Mapped[str] = mapped_column(String(64), nullable=False)
-    # The signed payload — kept so a failed delivery can be retried verbatim.
+    # The signed payload - kept so a failed delivery can be retried verbatim.
     payload: Mapped[dict] = mapped_column(JSON, nullable=False)
     status: Mapped[WebhookDeliveryStatus] = mapped_column(
         SAEnum(WebhookDeliveryStatus, native_enum=False, length=12),

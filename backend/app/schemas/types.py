@@ -1,6 +1,6 @@
 """Custom field types used across schemas.
 
-`EmailLike` is a permissive email type — it accepts `.local`, `.test`, `.dev`
+`EmailLike` is a permissive email type - it accepts `.local`, `.test`, `.dev`
 domains that strict EmailStr (Pydantic + email-validator) reject. fileHeron
 hashes and stores emails for indexed lookup but never *delivers* via DNS, so
 strict deliverability validation is overkill and wrong for internal/dev use.

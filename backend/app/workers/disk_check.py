@@ -1,6 +1,6 @@
 """Hourly disk-space monitor.
 
-Runs at minute :19 — after ops_check (:15), before cleanup_expired_tokens (:23).
+Runs at minute :19 - after ops_check (:15), before cleanup_expired_tokens (:23).
 Reads free space on STORAGE_ROOT and maintains the `storage.critical_low` kv
 flag that routers/uploads.py gates new uploads on:
 
@@ -9,7 +9,7 @@ flag that routers/uploads.py gates new uploads on:
 - On transition critical → healthy: flip the flag back to false + clear the
   dedup key so a future dip re-alerts immediately.
 
-Downloads never consult the flag — only new uploads are refused, so a full
+Downloads never consult the flag - only new uploads are refused, so a full
 disk degrades gracefully instead of 500-ing and orphaning quota reservations.
 """
 from __future__ import annotations
@@ -87,7 +87,7 @@ def _alert_admins(db, *, payload: dict) -> int:
 async def disk_check(_ctx) -> dict:
     from ..services.storage_backend import get_storage_backend
     if not get_storage_backend().supports_disk_stats:
-        # Object-store backend — "local disk full" is meaningless; nothing to do.
+        # Object-store backend - "local disk full" is meaningless; nothing to do.
         return {"skipped": True, "reason": "non-disk backend"}
     db = SessionLocal()
     try:

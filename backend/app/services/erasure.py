@@ -2,18 +2,18 @@
 
 When admin requests erasure of user X:
 
-1. **User row anonymized** — `email` rewritten to
+1. **User row anonymized** - `email` rewritten to
    `erased-<id>@erased.invalid` so it never collides with a future
    signup; `display_name` set to `[erased]`; `password_hash` blanked
    (login impossible); `is_disabled` set true; `oidc_subject` cleared.
-2. **Files uploaded by X hard-deleted** — every `files` row where
+2. **Files uploaded by X hard-deleted** - every `files` row where
    `uploaded_by_id == X.id`. Disk unlink + `state=deleted` + audit.
-3. **Recipient references kept** — `share_recipients.recipient_user_id`
+3. **Recipient references kept** - `share_recipients.recipient_user_id`
    stays as the FK; the row's display value is now `[erased]`. The
    sender's data (the share itself, files in it) is preserved.
 4. **TOTP / recovery codes / refresh tokens / API tokens / sessions
-   wiped** — anything that could grant ongoing access.
-5. **Audit event** — `user_erased` with the admin as actor.
+   wiped** - anything that could grant ongoing access.
+5. **Audit event** - `user_erased` with the admin as actor.
 
 The flow is irreversible. Admin UI confirms with a two-step modal that
 shows the file count + total bytes about to disappear.
@@ -68,7 +68,7 @@ def erase_user(
         raise AppError(409, "ALREADY_ERASED", "This user has already been erased.")
 
     # 1. Hard-delete files this user uploaded. If any unlink fails, abort
-    # the whole erasure — partial erasure would leave the user
+    # the whole erasure - partial erasure would leave the user
     # half-anonymised AND lie in the receipt PDF that admins hand back.
     # Better: raise, let admin clean the disk, retry.
     files = (
@@ -112,7 +112,7 @@ def erase_user(
         synchronize_session=False
     )
 
-    # 3. Drop ClientEmployeeConnection rows pointing at this user — the
+    # 3. Drop ClientEmployeeConnection rows pointing at this user - the
     # FK CASCADE doesn't fire because erasure anonymises rather than
     # deletes the row.
     db.query(ClientEmployeeConnection).filter(
@@ -122,7 +122,7 @@ def erase_user(
 
     # 3b. Purge personal data that lives OUTSIDE the users row. Because
     # erasure anonymises (UPDATE) rather than DELETEs the user, no FK
-    # CASCADE fires — these rows would otherwise retain plaintext email /
+    # CASCADE fires - these rows would otherwise retain plaintext email /
     # device fingerprints / IPs of a supposedly-erased user (GDPR Art. 17).
     # Captured BEFORE the email is rewritten below so the email-keyed
     # deletes still match.
@@ -134,7 +134,7 @@ def erase_user(
         .filter(LoginAttempt.email == original_email)
         .delete(synchronize_session=False)
     )
-    # Plaintext email in invites — both invites sent TO this user and
+    # Plaintext email in invites - both invites sent TO this user and
     # invites this user created (the latter also carry third-party emails).
     pii_purged["invite_tokens"] = (
         db.query(InviteToken)
@@ -150,7 +150,7 @@ def erase_user(
         .filter(KnownDevice.user_id == target.id)
         .delete(synchronize_session=False)
     )
-    # This user's own bell notifications — payloads can embed names /
+    # This user's own bell notifications - payloads can embed names /
     # filenames. (Notifications to OTHER users that merely reference this
     # user by then-current name are their data, not ours to delete.)
     pii_purged["notifications"] = (
@@ -199,7 +199,7 @@ def erase_user(
         )
     )
     # Deliberately retained: `share_recipients` rows reference the (now
-    # anonymised) user by integer FK only — no plaintext PII — so the
+    # anonymised) user by integer FK only - no plaintext PII - so the
     # sender's recipient list stays intact. `audit_log` is the append-only
     # legal record the erasure receipt verifies against; it references the
     # user by anonymised id.
@@ -335,7 +335,7 @@ def generate_receipt_pdf(audit_event) -> bytes:
     )
 
     body = []
-    body.append(Paragraph("file:Heron — Right-to-erasure receipt", title_style))
+    body.append(Paragraph("file:Heron - Right-to-erasure receipt", title_style))
     body.append(Spacer(1, 4 * mm))
     body.append(
         Paragraph(

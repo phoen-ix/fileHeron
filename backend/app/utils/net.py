@@ -4,12 +4,12 @@ Several endpoints fetch admin-controlled URLs server-side: OIDC discovery /
 token / JWKS (issuer URL configured by an admin) and the self-update release
 check (`updates.api_url`). Without a guard, an admin (or a compromised admin
 session) can point these at `http://169.254.169.254/...` (cloud metadata),
-`http://127.0.0.1:6379/` (internal Redis), etc. — classic SSRF.
+`http://127.0.0.1:6379/` (internal Redis), etc. - classic SSRF.
 
 `assert_public_http_url` resolves the host and rejects loopback, link-local
 (incl. the 169.254.169.254 metadata range), multicast, reserved and
 unspecified addresses **always**. Private LAN ranges (10/8, 172.16/12,
-192.168/16, ULA) are rejected unless `allow_private=True` — which the OIDC
+192.168/16, ULA) are rejected unless `allow_private=True` - which the OIDC
 path sets, because self-hosting an IdP (Keycloak/Authentik) on the same
 private network is a legitimate and common deployment.
 
@@ -51,7 +51,7 @@ def assert_public_http_url(
 
     for info in infos:
         ip = ipaddress.ip_address(info[4][0])
-        # Always blocked — never a legitimate IdP / release host.
+        # Always blocked - never a legitimate IdP / release host.
         if (
             ip.is_loopback
             or ip.is_link_local  # incl. 169.254.169.254 cloud-metadata

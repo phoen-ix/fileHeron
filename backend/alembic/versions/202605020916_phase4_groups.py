@@ -1,4 +1,4 @@
-"""phase4 — groups, group_members, client_employee_connections, share_recipients fk
+"""phase4 - groups, group_members, client_employee_connections, share_recipients fk
 
 Revision ID: 202605020916
 Revises: 202605020915

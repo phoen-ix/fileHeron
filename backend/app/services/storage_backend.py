@@ -1,6 +1,6 @@
 """Pluggable storage backend (v1.21.0).
 
-All file-byte I/O — finalize, download, read (zip / AV), delete, quarantine —
+All file-byte I/O - finalize, download, read (zip / AV), delete, quarantine -
 routes through a `StorageBackend` so the bytes can live on the local bind mount
 (default) or, opt-in, an object store, without the upload / download / AV /
 quarantine / delete code knowing which.
@@ -9,7 +9,7 @@ quarantine / delete code knowing which.
 uses the absolute on-disk path (identical to before this abstraction, so existing
 rows keep working with no migration); an object backend uses its object key.
 
-PR-A (this) ships only `LocalFilesystemBackend` — a byte-for-byte wrapper of the
+PR-A (this) ships only `LocalFilesystemBackend` - a byte-for-byte wrapper of the
 prior behaviour. PR-B adds an opt-in `S3Backend` and `STORAGE_BACKEND` selection.
 """
 from __future__ import annotations
@@ -29,7 +29,7 @@ logger = logging.getLogger("fileheron.storage_backend")
 
 class StorageBackend(ABC):
     name: str = "base"
-    # True when bytes live on a local filesystem — enables kernel-sendfile
+    # True when bytes live on a local filesystem - enables kernel-sendfile
     # downloads, clamd path-scan, and the disk-space guard. False for object stores.
     supports_disk_stats: bool = False
 
@@ -67,7 +67,7 @@ class StorageBackend(ABC):
 
     @abstractmethod
     def delete(self, locator: str) -> None:
-        """Idempotent — a missing object is not an error."""
+        """Idempotent - a missing object is not an error."""
 
     @abstractmethod
     def exists(self, locator: str) -> bool: ...
@@ -85,7 +85,7 @@ class StorageBackend(ABC):
 
 
 class LocalFilesystemBackend(StorageBackend):
-    """The bind-mount backend — byte-for-byte the behaviour before the
+    """The bind-mount backend - byte-for-byte the behaviour before the
     abstraction existed (so the full test suite must stay green)."""
 
     name = "local"
@@ -105,7 +105,7 @@ class LocalFilesystemBackend(StorageBackend):
         dest.parent.mkdir(parents=True, exist_ok=True)
         # shutil.move == os.rename when same-fs (the documented STORAGE_ROOT /
         # TUS_UPLOAD_DIR requirement), else copy2 + unlink (bind mounts look
-        # cross-device inside the container — Errno 18 EXDEV).
+        # cross-device inside the container - Errno 18 EXDEV).
         shutil.move(str(src_temp_path), str(dest))
 
     def open(self, locator: str) -> BinaryIO:
@@ -240,7 +240,7 @@ def serve_response(
     sendfile, Range-capable); object backend → 307 redirect to a presigned URL
     so the browser fetches/resumes bytes from the store directly.
 
-    `disposition` is "attachment" (download, default — preserves every existing
+    `disposition` is "attachment" (download, default - preserves every existing
     caller) or "inline" (preview). `extra_headers` (preview hardening:
     nosniff/CSP) ride on the local FileResponse; on the S3 redirect the bytes
     come from the store and can't carry them, so the previewable-type allowlist
@@ -281,6 +281,6 @@ def get_storage_backend() -> StorageBackend:
 
 
 def reset_storage_backend_cache() -> None:
-    """Test hook — drop the cached backend so a test can swap config/backend."""
+    """Test hook - drop the cached backend so a test can swap config/backend."""
     global _backend
     _backend = None

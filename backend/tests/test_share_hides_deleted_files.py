@@ -7,7 +7,7 @@ away and back made the files reappear. Cause: the share router's
 ``_to_share_response`` iterated ``share.files`` with no state filter,
 so deleted rows kept being echoed in the response.
 
-This test pins the fix in two places — the detail response (file
+This test pins the fix in two places - the detail response (file
 list + effective subject) and the list response (file_count + total
 size)."""
 from __future__ import annotations
@@ -82,7 +82,7 @@ async def test_detail_hides_deleted_files(make_user, db, client, login_as):
     assert len(body2["files"]) == 1
     assert body2["files"][0]["id"] == "file-uuid-1"
 
-    # Delete the second too — list goes empty, share stays active (deletion
+    # Delete the second too - list goes empty, share stays active (deletion
     # doesn't auto-revoke; that's separate behaviour).
     f2 = db.query(File).filter(File.id == "file-uuid-1").one()
     f2.state = FileState.deleted
@@ -93,7 +93,7 @@ async def test_detail_hides_deleted_files(make_user, db, client, login_as):
     body3 = resp3.json()
     assert body3["files"] == []
     assert body3["state"] == "active"
-    # Subject set explicitly so it stays — the empty-files fallback
+    # Subject set explicitly so it stays - the empty-files fallback
     # doesn't kick in here.
     assert body3["effective_subject"] == "Phase 3a smoke test"
 
@@ -109,7 +109,7 @@ async def test_no_subject_share_keeps_filename_label_after_all_files_deleted(
     sender = make_user(email="s@test.local", role=UserRole.employee, password="Pass12345678!")
     recipient = make_user(email="r@test.local", role=UserRole.client)
     share = _seed_share_with_files(db, sender, recipient, n=1)
-    share.subject = None  # no explicit subject — fall back to filename
+    share.subject = None  # no explicit subject - fall back to filename
     db.commit()
     token, _ = await login_as("s@test.local", "Pass12345678!")
     headers = {"Authorization": f"Bearer {token}"}
@@ -126,7 +126,7 @@ async def test_no_subject_share_keeps_filename_label_after_all_files_deleted(
     assert body["files"] == []
     assert body["effective_subject"] == "smoke-0.bin"
 
-    # List view does too — what the user sees as the row title.
+    # List view does too - what the user sees as the row title.
     resp2 = await client.get("/api/shares?box=outbox", headers=headers)
     items = resp2.json()["items"]
     row = next(i for i in items if i["id"] == share.id)

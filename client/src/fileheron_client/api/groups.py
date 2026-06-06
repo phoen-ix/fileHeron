@@ -1,6 +1,6 @@
-"""Group listing — backs the v0.3.0 recipient picker.
+"""Group listing - backs the v0.3.0 recipient picker.
 
-Backend endpoint: GET /api/groups/recipient-targets — returns the
+Backend endpoint: GET /api/groups/recipient-targets - returns the
 groups the caller can target in a share (role-scoped server-side:
 admins see all; employees see their memberships + every
 company_inbox; clients see only company_inbox groups)."""

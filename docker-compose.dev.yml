@@ -51,7 +51,7 @@ services:
     build:
       context: .
       dockerfile: docker/frontend/Dockerfile.dev
-    # Compose merges `ports` lists by appending — that would leave both 80 and
+    # Compose merges `ports` lists by appending - that would leave both 80 and
     # 5173 mapped to host:8080, which Docker refuses. !override replaces the
     # prod list completely.
     ports: !override

@@ -248,7 +248,7 @@ onMounted(load)
       <div v-if="testResult" class="fh-notice" :data-tone="testResult.ok ? 'success' : 'danger'">
         <strong>{{ testResult.ok ? t('admin_imap.test_ok') : t('admin_imap.test_fail') }}</strong>
         <template v-if="testResult.ok">
-          <span> — {{ t('admin_imap.folders') }}: {{ testResult.folders.join(', ') }}</span>
+          <span> - {{ t('admin_imap.folders') }}: {{ testResult.folders.join(', ') }}</span>
         </template>
         <template v-else>
           <div class="fh-mono">{{ testResult.error }}</div>

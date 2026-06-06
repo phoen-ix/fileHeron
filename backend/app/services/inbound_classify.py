@@ -1,5 +1,5 @@
 """Classify an inbound message as a genuine reply, a bounce (DSN), or an
-auto-reply (vacation / out-of-office / auto-ack) — from headers only. Pure +
+auto-reply (vacation / out-of-office / auto-ack) - from headers only. Pure +
 side-effect free so it's exhaustively testable on raw sample emails (v1.27.0).
 """
 from __future__ import annotations

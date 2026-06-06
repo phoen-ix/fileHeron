@@ -17,6 +17,6 @@ class OIDCLinkItem(APIBaseModel):
 
 
 class OIDCLinkResponse(APIBaseModel):
-    """Returned by GET /api/account/oidc/links — at most one link per
+    """Returned by GET /api/account/oidc/links - at most one link per
     user, reflecting the locked single-provider-per-user design."""
     link: OIDCLinkItem | None

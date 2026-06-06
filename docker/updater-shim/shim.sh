@@ -7,7 +7,7 @@
 # double-spawned by the next poll tick.
 #
 # Trust model: filesystem-membership. Anything writing to /state is
-# inside the compose project — the backend container or this shim
+# inside the compose project - the backend container or this shim
 # itself. No HTTP, no HMAC, no port.
 set -euo pipefail
 
@@ -51,13 +51,13 @@ log "workspace host=$HOST_WORKSPACE state host=$HOST_STATE"
 # the backend's healthcheck URL.
 NETWORK_NAME="${COMPOSE_PROJECT}_internal"
 
-# Mark any in-flight job as failed on startup — we just lost any
+# Mark any in-flight job as failed on startup - we just lost any
 # tracking state, and the safer assumption is "executor was killed
 # mid-run", not "executor is still happily running somewhere".
 if [ -f "$STATE_FILE" ]; then
     status=$(jq -r '.status // ""' "$STATE_FILE" 2>/dev/null || echo "")
     if [ "$status" = "pulling" ] || [ "$status" = "running" ] || [ "$status" = "restarting" ] || [ "$status" = "rolling_back" ]; then
-        log "found in-flight job (status=$status) on startup — marking failed"
+        log "found in-flight job (status=$status) on startup - marking failed"
         tmp=$(mktemp)
         jq '. + {status: "failed", error: "shim restarted mid-job", finished_at: now | todate}' \
             "$STATE_FILE" > "$tmp" && install_state "$tmp"
@@ -77,7 +77,7 @@ while true; do
             job_id=$(jq -r '.id // ""' "$STATE_FILE")
             action=$(jq -r '.action // "update"' "$STATE_FILE")
             if [ -z "$target_tag" ]; then
-                log "ERROR pending job has no target_tag — marking failed"
+                log "ERROR pending job has no target_tag - marking failed"
                 tmp=$(mktemp)
                 jq '. + {status: "failed", error: "missing target_tag", finished_at: now | todate}' \
                     "$STATE_FILE" > "$tmp" && install_state "$tmp"
@@ -108,7 +108,7 @@ while true; do
                 continue
             fi
 
-            # Spawn the executor. The shim BLOCKS on this — only one
+            # Spawn the executor. The shim BLOCKS on this - only one
             # job runs at a time, no concurrent updates.
             log "spawning executor for $target_tag"
             container_name="${COMPOSE_PROJECT}-executor-$(date +%s)"
@@ -134,7 +134,7 @@ while true; do
 
             log "executor exited (code=$exit_code)"
             # The executor updates status itself (healthy/failed/etc.)
-            # via the state file. We don't override what it wrote — it
+            # via the state file. We don't override what it wrote - it
             # has more context than we do about WHY it failed.
             # The only safety net: if the executor died without writing
             # a terminal status, mark it failed here.
@@ -160,7 +160,7 @@ while true; do
                 started_epoch=$(date -d "$started_raw" +%s 2>/dev/null || echo 0)
                 now_epoch=$(date -u +%s)
                 if [ "$started_epoch" -gt 0 ] && [ $((now_epoch - started_epoch)) -gt "$STUCK_THRESHOLD_SEC" ]; then
-                    log "job in-flight for > ${STUCK_THRESHOLD_SEC}s — marking failed"
+                    log "job in-flight for > ${STUCK_THRESHOLD_SEC}s - marking failed"
                     tmp=$(mktemp)
                     jq --arg now "$(date -u +%Y-%m-%dT%H:%M:%S)" \
                        '. + {status: "failed", error: "stuck (no progress)", finished_at: $now}' \
@@ -170,7 +170,7 @@ while true; do
             ;;
 
         healthy|failed|rolled_back|"")
-            : # nothing to do — terminal or empty
+            : # nothing to do - terminal or empty
             ;;
 
         *)

@@ -57,8 +57,8 @@ def _to_user_item(db: Session, u: User) -> AdminUserItem:
 
 
 def _hydrate_user_items(db: Session, rows: list[User]) -> list[AdminUserItem]:
-    """Serialize a page of users with bulk lookups — one TOTP query, one
-    policy resolve (+ at most one group query), one Redis MGET for quota —
+    """Serialize a page of users with bulk lookups - one TOTP query, one
+    policy resolve (+ at most one group query), one Redis MGET for quota -
     instead of the old ~3 round-trips per row."""
     from ...services import quota as quota_svc
     from ...services import twofa_policy as twofa_policy_svc
@@ -116,7 +116,7 @@ async def create_user(
     db: Session = Depends(get_db),
     admin: User = Depends(get_current_admin),
 ) -> AdminUserItem:
-    """Create a user immediately — no invite email, email pre-verified, with
+    """Create a user immediately - no invite email, email pre-verified, with
     an admin-set password. The 'skip invite' path of the admin invite form."""
     user = await um_svc.create_user_as_admin(
         db,

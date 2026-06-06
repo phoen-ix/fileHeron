@@ -12,7 +12,7 @@ export interface AdminNavItem {
   routeName: string
   /** i18n key for the link label. */
   labelKey: string
-  /** Route names that light up this item + auto-expand its category — its own
+  /** Route names that light up this item + auto-expand its category - its own
    *  route plus any detail/child routes (which RouterLink can't match alone). */
   matchNames: string[]
 }
@@ -23,7 +23,7 @@ export interface AdminNavCategory {
   items: AdminNavItem[]
 }
 
-/** Canonical category order — mirrors
+/** Canonical category order - mirrors
  *  `services/account_prefs.ADMIN_NAV_CATEGORIES_ORDER`. */
 export const ADMIN_CATEGORY_KEYS: AdminNavCategoryKey[] = [
   'access',

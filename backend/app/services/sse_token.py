@@ -1,7 +1,7 @@
 """Short-lived signed token for SSE auth.
 
 The browser's ``EventSource`` API cannot attach custom HTTP headers,
-only cookies — and our refresh cookie is scoped to ``/api/auth/`` so
+only cookies - and our refresh cookie is scoped to ``/api/auth/`` so
 it never reaches ``/api/notifications/stream``. Without this token
 flow, every SSE connect would 401, and the SPA would burn CPU in a
 reconnect storm (the Bell component starts the stream the moment the

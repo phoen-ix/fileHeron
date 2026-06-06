@@ -22,7 +22,7 @@ class PreferencesResponse(APIBaseModel):
 
 class UpdatePreferencesRequest(APIBaseModel):
     """Body shape: `{<category>: <channel>}`. We don't enumerate keys
-    here — Pydantic's dict-keyed model would be awkward — so the router
+    here - Pydantic's dict-keyed model would be awkward - so the router
     validates each pair after parse."""
     preferences: dict[str, str] = Field(default_factory=dict)
 

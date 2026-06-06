@@ -1,4 +1,4 @@
-"""phase6b — users.requires_2fa_setup
+"""phase6b - users.requires_2fa_setup
 
 Revision ID: 202605020919
 Revises: 202605020918

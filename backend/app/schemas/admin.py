@@ -17,14 +17,14 @@ class AdminUserItem(APIBaseModel):
     email: str
     role: UserRole
     is_disabled: bool
-    # Computed live against the 2FA policy — was a static column
+    # Computed live against the 2FA policy - was a static column
     # (`users.requires_2fa_setup`) before; the column was dropped
     # because it wasn't kept consistent across policy / membership /
     # role changes.
     requires_2fa: bool
     quota_bytes: int | None
     # Authoritative storage used, summed from the DB (uploading +
-    # ready_unscanned + clean files). Display-only — distinct from the fast
+    # ready_unscanned + clean files). Display-only - distinct from the fast
     # Redis quota counter used for upload enforcement, which can lapse/drift.
     storage_used_bytes: int
     created_at: datetime
@@ -49,7 +49,7 @@ class UpdateUserRequest(APIBaseModel):
 
 
 class CreateUserRequest(APIBaseModel):
-    """Admin creates a user directly — no invite, email pre-verified, with an
+    """Admin creates a user directly - no invite, email pre-verified, with an
     admin-set password. Password floor matches every other set-password path."""
     email: EmailLike
     display_name: str = Field(..., min_length=1, max_length=120)

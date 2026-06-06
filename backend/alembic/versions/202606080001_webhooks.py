@@ -1,4 +1,4 @@
-"""webhooks + webhook_deliveries — outbound signed webhooks (v1.19.0).
+"""webhooks + webhook_deliveries - outbound signed webhooks (v1.19.0).
 
 Revision ID: 202606080001
 Revises: 202606070001

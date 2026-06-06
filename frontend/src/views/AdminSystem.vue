@@ -153,7 +153,7 @@ const sse = useSSE({
     return `/api/admin/system/stream?token=${encodeURIComponent(data.token)}`
   },
   onMessage() {
-    // We don't try to reconstruct the table from the event payload —
+    // We don't try to reconstruct the table from the event payload -
     // simpler to re-fetch the whole status and let the existing
     // render path do its thing.
     scheduleReload()
@@ -190,7 +190,7 @@ async function pollJob(jobId: string) {
       if (data.state === 'healthy' || data.state === 'failed' || data.state === 'rolled_back') {
         if (jobPollHandle) clearInterval(jobPollHandle)
         jobPollHandle = null
-        // Backend reports the new running_version after restart — refresh.
+        // Backend reports the new running_version after restart - refresh.
         void load()
         void loadUpdaterStatus()
         if (data.state === 'healthy') {
@@ -200,11 +200,11 @@ async function pollJob(jobId: string) {
           )
         } else if (data.state === 'rolled_back') {
           // Self-heal: the update failed but the updater restored the previous
-          // version automatically. Prod is up — warn, don't alarm.
+          // version automatically. Prod is up - warn, don't alarm.
           ui.pushToast(
             t('admin_system.update.toast.rolled_back', {
               tag: data.target_tag,
-              prev: data.previous_tag ?? '—',
+              prev: data.previous_tag ?? '-',
             }),
             'warn',
           )
@@ -218,7 +218,7 @@ async function pollJob(jobId: string) {
         }
       }
     } catch {
-      // Network blip — try again on next tick.
+      // Network blip - try again on next tick.
     }
   }
   await tick()
@@ -288,7 +288,7 @@ function fmtTime(iso: string | null): string {
 }
 
 function fmtDuration(ms: number | null): string {
-  if (ms === null || ms === undefined) return '—'
+  if (ms === null || ms === undefined) return '-'
   if (ms < 1000) return `${ms}ms`
   return `${(ms / 1000).toFixed(2)}s`
 }
@@ -546,8 +546,8 @@ const headlineFailures = computed(() => {
                 </span>
                 <span v-else class="muted">{{ t('admin_system.crons.no_runs') }}</span>
               </td>
-              <td>{{ c.last_run ? fmtTime(c.last_run.started_at) : '—' }}</td>
-              <td>{{ c.last_run ? fmtDuration(c.last_run.duration_ms) : '—' }}</td>
+              <td>{{ c.last_run ? fmtTime(c.last_run.started_at) : '-' }}</td>
+              <td>{{ c.last_run ? fmtDuration(c.last_run.duration_ms) : '-' }}</td>
               <td>
                 <span class="pill ok">{{ c.last_24h.success }}</span>
                 <span v-if="c.last_24h.failure > 0" class="pill danger">{{ c.last_24h.failure }}</span>
@@ -555,7 +555,7 @@ const headlineFailures = computed(() => {
               </td>
               <td class="result">
                 <code v-if="c.last_run?.result_summary">{{ JSON.stringify(c.last_run.result_summary) }}</code>
-                <span v-else class="muted">—</span>
+                <span v-else class="muted">-</span>
               </td>
               <td>
                 <button
@@ -746,7 +746,7 @@ const headlineFailures = computed(() => {
 }
 .job-banner[data-state="failed"] { background: #f8d7da; border-color: #f5c6cb; }
 .job-banner[data-state="healthy"] { background: #d4edda; border-color: #c3e6cb; }
-/* Self-heal: update failed but the previous version was restored — amber, not red. */
+/* Self-heal: update failed but the previous version was restored - amber, not red. */
 .job-banner[data-state="rolling_back"],
 .job-banner[data-state="rolled_back"] { background: #fff3cd; border-color: #ffeeba; }
 .job-header { display: flex; flex-direction: column; gap: var(--fh-space-1); }

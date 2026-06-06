@@ -1,4 +1,4 @@
-"""Public download links — anonymous access to a share's files via a
+"""Public download links - anonymous access to a share's files via a
 URL-safe token, optionally protected by a password and/or limited by a
 download counter.
 
@@ -55,7 +55,7 @@ class PublicLink(Base):
         ForeignKey("shares.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
-        unique=True,  # one public link per share — keeps the URL story simple
+        unique=True,  # one public link per share - keeps the URL story simple
     )
     token_hash: Mapped[str] = mapped_column(
         String(64), nullable=False, unique=True, index=True

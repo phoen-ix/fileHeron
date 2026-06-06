@@ -1,6 +1,6 @@
 """WebAuthn / passkey service.
 
-Wraps the `webauthn` Python lib (py_webauthn) — handles the four
+Wraps the `webauthn` Python lib (py_webauthn) - handles the four
 ceremony endpoints (register-begin, register-complete,
 authenticate-begin, authenticate-complete).
 
@@ -105,7 +105,7 @@ async def register_begin(db: Session, *, user: User) -> dict[str, Any]:
         ],
     )
 
-    # Stash the challenge keyed by user — same user can't register
+    # Stash the challenge keyed by user - same user can't register
     # twice in parallel, but two browsers for two users absolutely can.
     r = _redis()
     try:
@@ -139,7 +139,7 @@ async def register_complete(
         raise AppError(
             400,
             "WEBAUTHN_NO_CHALLENGE",
-            "Registration challenge expired — start over.",
+            "Registration challenge expired - start over.",
         )
     challenge = _b64url_decode(challenge_b64)
 
@@ -191,7 +191,7 @@ async def authenticate_begin(
     a per-flow id (e.g. JWT jti from a temporary auth session) so the
     challenge isn't tied to user-only.
 
-    For the 2FA-after-password flow, we don't yet have a JWT — the
+    For the 2FA-after-password flow, we don't yet have a JWT - the
     caller can pass any cryptographically random session id and pass
     it back on complete."""
     creds = (
@@ -247,7 +247,7 @@ async def authenticate_complete(
         raise AppError(
             400,
             "WEBAUTHN_NO_CHALLENGE",
-            "Authentication challenge expired — start over.",
+            "Authentication challenge expired - start over.",
         )
     state = json.loads(stored)
     challenge = _b64url_decode(state["challenge"])
@@ -294,7 +294,7 @@ async def authenticate_complete(
 
     # Atomic conditional UPDATE: only commit the new sign_count if the
     # row hasn't moved since we read it. Otherwise another concurrent
-    # auth (potentially a clone) raced us — fail closed.
+    # auth (potentially a clone) raced us - fail closed.
     from datetime import datetime, timezone
     now = datetime.now(tz=timezone.utc).replace(tzinfo=None)
     result = db.execute(

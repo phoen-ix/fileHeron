@@ -29,7 +29,7 @@ jobs:
             # throwaway DB and require /api/health 200 before pushing.
             boot_smoke: true
           - image: fileheron-worker
-            # Worker shares the backend image — same Python, same code,
+            # Worker shares the backend image - same Python, same code,
             # different ENTRYPOINT (ARQ vs uvicorn). Building both lets
             # us pin versions independently if we ever split them.
             dockerfile: docker/backend/Dockerfile
@@ -38,12 +38,12 @@ jobs:
           - image: fileheron-updater-shim
             # v1.0.0: tiny perpetual shim (~50 lines bash). Polls the
             # state file, spawns the matching executor image. Designed
-            # to never need updating — no business logic.
+            # to never need updating - no business logic.
             dockerfile: docker/updater-shim/Dockerfile
           - image: fileheron-updater-executor
             # v1.0.0: ephemeral worker. Spawned by the shim per update,
             # pulls images + runs `compose up -d` + exits. Can change
-            # freely between releases — the shim always pulls the
+            # freely between releases - the shim always pulls the
             # matching version per request.
             dockerfile: docker/updater-executor/Dockerfile
     steps:
@@ -87,7 +87,7 @@ jobs:
           context: .
           file: ${{ matrix.dockerfile }}
           # The backend leg builds to the local daemon (load) so it can be
-          # boot-smoked before publishing — a broken backend image never
+          # boot-smoked before publishing - a broken backend image never
           # reaches GHCR. Every other leg pushes directly. (The Dockerfile's
           # import-smoke RUN still runs for both backend and worker builds.)
           push: ${{ matrix.boot_smoke != true }}
@@ -110,7 +110,7 @@ jobs:
       # `alembic upgrade head` then uvicorn, and we require /api/health to
       # return 200. Catches missing runtime deps, broken migrations, missing
       # files, and prod-config fail-fasts BEFORE the image is pushed or a
-      # GitHub Release is created — the exact class of failure that shipped
+      # GitHub Release is created - the exact class of failure that shipped
       # in v1.25.0/.1 and took prod down.
       - name: Boot-smoke the backend image
         if: ${{ matrix.boot_smoke == true }}
@@ -137,7 +137,7 @@ jobs:
           # insecure-default fail-fasts only WARN in development), so we pass
           # real >=32-char non-placeholder secrets. Redis/ClamAV are absent;
           # /api/health degrades those subfields but still returns 200 once
-          # `SELECT 1` succeeds — which proves migrations ran and the app booted.
+          # `SELECT 1` succeeds - which proves migrations ran and the app booted.
           docker run -d --name fhsmoke-app --network fhsmoke -p 127.0.0.1:8000:8000 \
             -e ENVIRONMENT=production \
             -e DB_HOST=fhsmoke-db -e DB_PORT=3306 \
@@ -175,7 +175,7 @@ jobs:
           for t in "${TAGS[@]}"; do echo "pushing $t"; docker push "$t"; done
 
   release:
-    # Only when a real `v*` tag triggered the workflow — manual runs
+    # Only when a real `v*` tag triggered the workflow - manual runs
     # skip the release publish.
     if: startsWith(github.ref, 'refs/tags/v')
     needs: build
@@ -187,7 +187,7 @@ jobs:
         with:
           tag_name: ${{ github.ref_name }}
           name: 'Server ${{ github.ref_name }}'
-          # Hand-written changelog — admins read this from the in-app Update
+          # Hand-written changelog - admins read this from the in-app Update
           # banner (/admin/system), so it must NOT be auto-generated. Update
           # RELEASE_NOTES.md per release; it also lists the published images.
           body_path: RELEASE_NOTES.md

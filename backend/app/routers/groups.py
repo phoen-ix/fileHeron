@@ -1,7 +1,7 @@
 """Groups CRUD + member management.
 
 CRUD itself is admin-only. The `/recipient-targets` endpoint is open to
-any authenticated user — it returns the groups they can target as a
+any authenticated user - it returns the groups they can target as a
 share recipient (clients see company-inbox groups; employees see their
 memberships + company-inbox groups; admins see everything).
 """

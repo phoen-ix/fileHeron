@@ -3,7 +3,7 @@
 The Redis counter at ``fh:quota:user:{id}`` is the source of truth for
 the quota check in ``services/quota.py``. On Redis restart/flush, the
 lazy DB seed (``_initialize_from_db``) only runs on next access AND only
-seeds from finalized files — in-flight ``uploading`` rows aren't yet
+seeds from finalized files - in-flight ``uploading`` rows aren't yet
 visible at seed time in many race orderings, so the counter under-reports
 the user's true commitment.
 
@@ -68,7 +68,7 @@ async def quota_reconcile(_ctx) -> dict:
                     user_id, abs(db_sum - redis_val), db_sum, redis_val,
                 )
                 try:
-                    # No TTL — the counter must not silently lapse to 0 between
+                    # No TTL - the counter must not silently lapse to 0 between
                     # reconcile runs (Redis is persistent; this cron is the
                     # authority).
                     redis.set(_key(user_id), db_sum)

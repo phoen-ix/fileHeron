@@ -1,4 +1,4 @@
-"""/api/notifications/* endpoints — list / unread / mark / read-all."""
+"""/api/notifications/* endpoints - list / unread / mark / read-all."""
 from __future__ import annotations
 
 import pytest

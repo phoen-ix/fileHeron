@@ -1,4 +1,4 @@
-"""/api/users/* — recipient resolution + search.
+"""/api/users/* - recipient resolution + search.
 
 Phase 4 model:
 - /api/users/search?q= returns the union of users I'm allowed to target,

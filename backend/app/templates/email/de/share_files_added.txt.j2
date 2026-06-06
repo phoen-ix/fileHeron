@@ -1,7 +1,7 @@
 Hallo {{ recipient_name|default("zusammen") }},
 
-{{ sender_name }} hat {{ added_count }} neue Datei{% if added_count != 1 %}en{% endif %} zu einer Freigabe hinzugefügt{% if subject %} — „{{ subject }}"{% endif %}.
+{{ sender_name }} hat {{ added_count }} neue Datei{% if added_count != 1 %}en{% endif %} zu einer Freigabe hinzugefügt{% if subject %} - „{{ subject }}"{% endif %}.
 
 Öffnen: {{ share_url }}
 
-— {{ app_name }}
+- {{ app_name }}

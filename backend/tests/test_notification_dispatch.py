@@ -1,4 +1,4 @@
-"""Notification dispatch service — channel resolution + persistence."""
+"""Notification dispatch service - channel resolution + persistence."""
 from __future__ import annotations
 
 from app.models.notification import Notification, NotificationCategory
@@ -37,7 +37,7 @@ def test_dispatch_writes_in_app_row_default(make_user, db, monkeypatch):
     rows = db.query(Notification).filter(Notification.user_id == user.id).all()
     assert len(rows) == 1
     assert rows[0].category == NotificationCategory.share_created
-    # `both` includes email — the worker job should have been enqueued too.
+    # `both` includes email - the worker job should have been enqueued too.
     assert any(args == ("send_email_job",) for args, _kwargs in enqueued)
 
 
@@ -142,7 +142,7 @@ def test_dispatch_skips_disabled_user(make_user, db, monkeypatch):
 
 def test_dispatch_serializes_datetime_in_payload(make_user, db, monkeypatch):
     """The `expires_at` datetime must round-trip through the JSON column
-    as an ISO string. Regression — without _json_safe, this raises."""
+    as an ISO string. Regression - without _json_safe, this raises."""
     from datetime import datetime, timezone
 
     user = make_user(email="u@test.local", role=UserRole.client)

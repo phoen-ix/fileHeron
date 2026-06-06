@@ -17,7 +17,7 @@ def _now_naive() -> datetime:
 
 
 def _make_expired_share(db, sender, recipient_id: int) -> Share:
-    """Bypass create_share's "expiry in past" guard — we need to seed a
+    """Bypass create_share's "expiry in past" guard - we need to seed a
     share that's already past its expiry."""
     past = _now_naive() - timedelta(hours=1)
     share = Share(
@@ -66,7 +66,7 @@ async def test_expire_files_transitions_share_and_deletes(make_user, db, tmp_pat
     assert result["expired_shares"] == 1
     assert result["deleted_files"] == 1
     assert not on_disk.exists()
-    # Re-fetch — the worker's commit detached our previous handles.
+    # Re-fetch - the worker's commit detached our previous handles.
     share_after = db.query(Share).filter(Share.id == share.id).one()
     f_after = db.query(File).filter(File.id == f.id).one()
     assert share_after.state == ShareState.expired
@@ -85,7 +85,7 @@ async def test_expire_files_idempotent(make_user, db, tmp_path, monkeypatch):
     r1 = await expire_files(None)
     r2 = await expire_files(None)
     assert r1["expired_shares"] == 1
-    # Re-run picks up nothing — idempotent.
+    # Re-run picks up nothing - idempotent.
     assert r2["expired_shares"] == 0
     assert r2["deleted_files"] == 0
 

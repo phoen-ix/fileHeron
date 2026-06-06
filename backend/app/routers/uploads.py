@@ -1,4 +1,4 @@
-"""Upload endpoints — TUS-init + small-file direct multipart."""
+"""Upload endpoints - TUS-init + small-file direct multipart."""
 from __future__ import annotations
 
 import time

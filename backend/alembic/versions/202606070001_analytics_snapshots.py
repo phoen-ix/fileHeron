@@ -1,4 +1,4 @@
-"""analytics_snapshots — daily point-in-time storage/file-state series for the
+"""analytics_snapshots - daily point-in-time storage/file-state series for the
 admin analytics dashboard's storage-growth trend.
 
 Revision ID: 202606070001

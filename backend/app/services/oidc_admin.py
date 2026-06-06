@@ -2,7 +2,7 @@
 
 Separated from `services/oidc.py` (which now houses the auth callback
 flow + JWKS/discovery/claim helpers) so admins editing providers don't
-drag in the entire login pipeline. The two modules are independent —
+drag in the entire login pipeline. The two modules are independent -
 `oidc.py` imports `get_client_secret` from here (one-way dependency).
 """
 from __future__ import annotations

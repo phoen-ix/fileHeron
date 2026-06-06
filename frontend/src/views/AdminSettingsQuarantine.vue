@@ -22,7 +22,7 @@ const saving = ref(false)
 const errorMsg = ref<string | null>(null)
 const notifyAdmins = ref(false)
 
-// v1.1.6 — AV engine status
+// v1.1.6 - AV engine status
 const avStatus = ref<AvStatusResponse | null>(null)
 const avLoading = ref(true)
 const avReloading = ref(false)
@@ -46,7 +46,7 @@ async function loadAvStatus() {
     const { data } = await getAvStatus()
     avStatus.value = data
   } catch (err) {
-    // Render the failure inline rather than toasting — the section
+    // Render the failure inline rather than toasting - the section
     // header still wants to be visible even if the status fetch failed.
     avStatus.value = {
       available: false,
@@ -152,18 +152,18 @@ onMounted(() => {
           class="fh-notice"
           data-tone="error"
         >
-          {{ t('admin_av.unavailable_notice', { error: avStatus.error ?? '—' }) }}
+          {{ t('admin_av.unavailable_notice', { error: avStatus.error ?? '-' }) }}
         </div>
 
         <dl class="av-kv">
           <dt>{{ t('admin_av.daemon_label') }}</dt>
-          <dd class="fh-mono">{{ avStatus.version ?? '—' }}</dd>
+          <dd class="fh-mono">{{ avStatus.version ?? '-' }}</dd>
 
           <dt>{{ t('admin_av.sigs_version_label') }}</dt>
-          <dd class="fh-mono">{{ avStatus.sigs_version ?? '—' }}</dd>
+          <dd class="fh-mono">{{ avStatus.sigs_version ?? '-' }}</dd>
 
           <dt>{{ t('admin_av.sigs_date_label') }}</dt>
-          <dd class="fh-mono">{{ avStatus.sigs_date ?? '—' }}</dd>
+          <dd class="fh-mono">{{ avStatus.sigs_date ?? '-' }}</dd>
 
           <dt>{{ t('admin_av.last_reload_label') }}</dt>
           <dd class="fh-mono">{{ fmtLastReload(avStatus.last_reload_at) }}</dd>

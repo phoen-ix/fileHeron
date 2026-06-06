@@ -1,6 +1,6 @@
 """Structural guard: the desktop upload panel is role-aware (client-v0.9.16).
 
-AST/substring only (CI lacks system tkinter). A client submits to the company —
+AST/substring only (CI lacks system tkinter). A client submits to the company -
 no recipient picker, kind="inbound", recipients empty; staff keep the outbound
 picker flow.
 """

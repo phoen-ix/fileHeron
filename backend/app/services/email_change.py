@@ -7,9 +7,9 @@ endpoints. The policy (verification mode + OIDC behaviour) is read live from
 settings change can't alter an in-progress confirmation.
 
 The shared ``_apply_email_change`` is the only place ``users.email`` is
-mutated. It always lands the new address with ``email_verified=True`` — in the
+mutated. It always lands the new address with ``email_verified=True`` - in the
 verified modes because control was just proven, in ``immediate`` because the
-admin is trusted — so the email-verified login gate is never tripped (which
+admin is trusted - so the email-verified login gate is never tripped (which
 would otherwise lock the user out).
 
 Services do the DB work; routers do the awaited email sends *after commit*.

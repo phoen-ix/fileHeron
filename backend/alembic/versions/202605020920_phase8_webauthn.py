@@ -1,4 +1,4 @@
-"""phase8 — user_webauthn_credentials
+"""phase8 - user_webauthn_credentials
 
 Revision ID: 202605020920
 Revises: 202605020919

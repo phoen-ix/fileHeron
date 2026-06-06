@@ -3,7 +3,7 @@
 v0.9.3: standard two-step second factor. Step 1 collects email + password
 only (no code field up front). If the server answers TOTP_REQUIRED we reveal a
 single "authentication code" field that accepts EITHER a 6-digit TOTP code or a
-recovery code (XXXX-XXXX) and routes to the right endpoint automatically — the
+recovery code (XXXX-XXXX) and routes to the right endpoint automatically - the
 user never has to choose between them.
 
 v0.9.0 made this an in-window overlay (a ``CTkFrame`` placed full-cover over the
@@ -43,7 +43,7 @@ class LoginOverlay(ctk.CTkFrame):
     field that takes a TOTP or recovery code. Calls ``on_signed_in(api, me)``
     on success and ``on_cancel()`` when the user quits.
 
-    Is a ``CTkFrame`` parented to the root — the frame is the dimmed backdrop;
+    Is a ``CTkFrame`` parented to the root - the frame is the dimmed backdrop;
     an inner card holds the form. ``show()``/``hide()`` toggle the full-cover
     ``place``. ``info`` renders a neutral banner above the form (session-expiry
     re-show)."""
@@ -65,7 +65,7 @@ class LoginOverlay(ctk.CTkFrame):
         self._on_cancel = on_cancel
         self._info = info
         # One-shot: when True (initial startup only), if a stored API token is
-        # present we sign in automatically — no click. Cleared after the first
+        # present we sign in automatically - no click. Cleared after the first
         # attempt so a failure (revoked token / server down) drops to the form
         # without looping. Never set on logout/session-expiry re-shows.
         self._auto_login = auto_login
@@ -217,7 +217,7 @@ class LoginOverlay(ctk.CTkFrame):
         if self._step != "creds" or self._cfg.auth_kind != "api_token":
             return
         if self.server_url_var.get().strip() and self.api_token_var.get().strip():
-            trace("auto-login: stored API token present — signing in")
+            trace("auto-login: stored API token present - signing in")
             self._on_signin()
 
     def hide(self) -> None:
@@ -303,7 +303,7 @@ class LoginOverlay(ctk.CTkFrame):
 
     def _on_signin(self) -> None:
         self.error_var.set("")
-        # Snapshot Tk vars on the main thread BEFORE spawning the worker —
+        # Snapshot Tk vars on the main thread BEFORE spawning the worker -
         # reading StringVar.get() off-thread deadlocks Tk on Windows.
         server_raw = self.server_url_var.get().strip().rstrip("/")
         if not server_raw:
@@ -410,7 +410,7 @@ class LoginOverlay(ctk.CTkFrame):
         trace(f"_failed: {type(exc).__name__}: {exc!r}")
         self._set_busy(False)
         # v0.4.6: write every caught sign-in failure to crash.log with a full
-        # traceback — the surface message alone isn't enough to debug DLL-load
+        # traceback - the surface message alone isn't enough to debug DLL-load
         # / SSL-import / OS-level failures.
         try:
             import platformdirs

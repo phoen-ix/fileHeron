@@ -6,8 +6,8 @@ Phase 6a: HTML variants, locale-aware date formatting, the
 calls into, plus a shared `subjects.json` per locale so subject lines
 live in i18n alongside the bodies.
 
-Direct senders (verify / reset / invite / lockout) stay synchronous —
-the auth flow doesn't depend on a worker being up — but the new
+Direct senders (verify / reset / invite / lockout) stay synchronous -
+the auth flow doesn't depend on a worker being up - but the new
 notification flows enqueue via the ARQ `send_email_job` task.
 """
 from __future__ import annotations
@@ -37,10 +37,10 @@ _TEMPLATE_ROOT = Path(__file__).resolve().parent.parent / "templates" / "email"
 
 # Templates are named `<slug>.<kind>.j2` (e.g. `share_created.html.j2`),
 # so the final extension is always `.j2`. `select_autoescape(["html"])`
-# keys on the *trailing* extension and would therefore NEVER autoescape —
+# keys on the *trailing* extension and would therefore NEVER autoescape -
 # leaving user-controlled fields (subject, message, display_name, filename)
 # injected raw into HTML mail. Match on the compound `.html.j2` extension
-# (and explicitly leave `.txt.j2` un-escaped — plain text needs raw output).
+# (and explicitly leave `.txt.j2` un-escaped - plain text needs raw output).
 _env = Environment(
     loader=FileSystemLoader(str(_TEMPLATE_ROOT)),
     autoescape=select_autoescape(
@@ -119,7 +119,7 @@ def _render(
 
     ``site_timezone``: db-resolved IANA name (via
     ``services.site.get_site_timezone``). Falls back to UTC when not
-    provided — safe default for tests + auth paths that haven't been
+    provided - safe default for tests + auth paths that haven't been
     threaded through yet."""
     code = _resolve_locale(locale)
     candidate = f"{code}/{slug}.{kind}.j2"
@@ -154,7 +154,7 @@ def _resolve_subject(
 
 def _sub(text: str, mapping: dict[str, str]) -> str:
     """Single-pass replace of friendly ``[TOKEN]`` occurrences from ``mapping``;
-    unknown tokens are left untouched (no cascade — a substituted value can't be
+    unknown tokens are left untouched (no cascade - a substituted value can't be
     re-scanned)."""
     from . import email_placeholders as ep
 
@@ -290,7 +290,7 @@ def render_email(
 
 
 # -------------------------------------------------------------------------
-# SMTP config resolution (post-Phase 10 — admin-editable in app_settings,
+# SMTP config resolution (post-Phase 10 - admin-editable in app_settings,
 # falls back to env vars for unmodified deploys).
 # -------------------------------------------------------------------------
 
@@ -359,7 +359,7 @@ async def _send_resolved(
         await send_email(
             cfg=cfg, to=to, subject=subject, text_body=text_body, html_body=html_body
         )
-    except Exception as exc:  # noqa: BLE001 — re-raised below after logging
+    except Exception as exc:  # noqa: BLE001 - re-raised below after logging
         err = exc
 
     if category is not None:
@@ -407,7 +407,7 @@ async def _send_resolved(
 
 
 # -------------------------------------------------------------------------
-# Test-send (admin diagnostic — synchronous, never queued)
+# Test-send (admin diagnostic - synchronous, never queued)
 # -------------------------------------------------------------------------
 
 
@@ -416,14 +416,14 @@ def _smtp_error_hint(exc: Exception) -> str | None:
     the admin test-send UI. Matches on type-name + SMTP code + lowercased
     message (no aiosmtplib error-class imports) so it stays dependency-light
     and testable. First match wins; never raises (it runs inside the error
-    path — a throw would turn a clean diagnostic into a 500)."""
+    path - a throw would turn a clean diagnostic into a 500)."""
     code = getattr(exc, "code", None)
     if not isinstance(code, int):
         code = None
     text = (str(getattr(exc, "message", "")) + " " + str(exc)).lower()
     name = type(exc).__name__
 
-    # 1. Authentication — check before the relay rule below, since a 535 body
+    # 1. Authentication - check before the relay rule below, since a 535 body
     #    can also contain "access denied".
     if name == "SMTPAuthenticationError" or code == 535 or "5.7.8" in text or "authentication" in text:
         return (
@@ -431,7 +431,7 @@ def _smtp_error_hint(exc: Exception) -> str | None:
             "the SMTP user and password; some providers need an "
             "app-specific password."
         )
-    # 2. Client / relay refused — today's "554 5.7.1 Client host rejected" case.
+    # 2. Client / relay refused - today's "554 5.7.1 Client host rejected" case.
     if (
         code == 554
         or "5.7.1" in text
@@ -445,7 +445,7 @@ def _smtp_error_hint(exc: Exception) -> str | None:
             "(mynetworks / permit_sasl_authenticated). A correct EHLO/HELO "
             "hostname (the HELO field) often resolves strict-MTA rejections."
         )
-    # 3. TLS mismatch — require code is None so a coded 5xx relay/auth reject
+    # 3. TLS mismatch - require code is None so a coded 5xx relay/auth reject
     #    can't be misclassified as TLS.
     if name == "SMTPNotSupported" or "starttls" in text or (("tls" in text or "ssl" in text) and code is None):
         return (
@@ -453,7 +453,7 @@ def _smtp_error_hint(exc: Exception) -> str | None:
             "port: use 'implicit' for 465, 'starttls' for 587, 'none' only "
             "on a trusted localhost relay."
         )
-    # 4. Connection / timeout — last, since some TLS errors subclass these.
+    # 4. Connection / timeout - last, since some TLS errors subclass these.
     if (
         name in ("SMTPConnectError", "SMTPServerDisconnected", "SMTPTimeoutError", "TimeoutError")
         or isinstance(exc, OSError)
@@ -517,7 +517,7 @@ async def test_send(
         await send_email(
             cfg=cfg, to=to, subject=subject, text_body=text, html_body=html
         )
-    except Exception as exc:  # noqa: BLE001 — surface every error to the admin
+    except Exception as exc:  # noqa: BLE001 - surface every error to the admin
         _log_test_send(to, subject, text, html, exc=exc)
         return _smtp_error_payload(exc)
     _log_test_send(to, subject, text, html, exc=None)
@@ -565,7 +565,7 @@ def _log_test_send(
 
 # -------------------------------------------------------------------------
 # Phase 1a-style direct senders (verify / reset / invite / lockout) stay
-# in place — they're called from auth flows that should not depend on
+# in place - they're called from auth flows that should not depend on
 # the queue being up. Each opens its own SMTP-config resolution session.
 # -------------------------------------------------------------------------
 

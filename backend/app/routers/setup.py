@@ -1,4 +1,4 @@
-"""/api/setup — first-admin bootstrap wizard.
+"""/api/setup - first-admin bootstrap wizard.
 
 Anonymous-accessible until the first admin exists. After that,
 GET returns required=false and POST returns 409. SPA renders the

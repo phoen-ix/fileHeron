@@ -58,7 +58,7 @@ def get_actor(
     token = authorization.split(" ", 1)[1].strip()
 
     if token.startswith("fh_"):
-        # Lazy import — services.api_token imports models which import here.
+        # Lazy import - services.api_token imports models which import here.
         from .services import api_token as api_token_svc
 
         record = api_token_svc.verify_token(db, token_str=token)

@@ -165,7 +165,7 @@ async def test_get_returns_resolved_shape(
 ):
     admin = make_user(email="a@test.local", role=UserRole.admin, password="Pass12345678!")
     # Admin needs TOTP enrolled to pass the gate before they can view
-    # the policy editor — the editor UI warns about this when saving.
+    # the policy editor - the editor UI warns about this when saving.
     _enable_totp(db, admin.id)
     g = _make_group(db, "ops", created_by_id=admin.id)
     _set_kv_policy(db, roles=["admin"], group_ids=[g.id])
@@ -244,7 +244,7 @@ async def test_put_persists_and_audits(
         .filter(AuditLog.event_type == AuditEventType.twofa_policy_changed.value)
         .one()
     )
-    # Counts only — no IDs leaked into the audit metadata.
+    # Counts only - no IDs leaked into the audit metadata.
     assert audit.extra == {"role_count": 2, "group_count": 1}
 
 
@@ -268,7 +268,7 @@ async def test_me_response_reflects_requirement(
     assert resp.status_code == 200
     assert resp.json()["requires_2fa"] is True
 
-    # Simulate the user finishing setup — flip to false on next read.
+    # Simulate the user finishing setup - flip to false on next read.
     user = (
         db.query(__import__("app.models.user", fromlist=["User"]).User)
         .filter_by(email="e@test.local")

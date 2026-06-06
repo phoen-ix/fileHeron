@@ -75,7 +75,7 @@ const root = ref<HTMLElement | null>(null)
 onClickOutside(root, () => (open.value = false))
 
 const sse = useSSE({
-  // Mint a fresh signed token on every (re)connect — EventSource can't
+  // Mint a fresh signed token on every (re)connect - EventSource can't
   // send Authorization headers, so auth rides on `?token=`. The token
   // has a 2-minute TTL so a long-running tab still works as the SSE
   // composable cycles every 60s.
@@ -141,7 +141,7 @@ async function onDeleteAll() {
 }
 
 function onItemClick(item: NItem) {
-  // Single click dismisses the notification (hard delete) — navigate to its
+  // Single click dismisses the notification (hard delete) - navigate to its
   // target first, then delete. Deletion is optimistic in the store.
   open.value = false
   navigateToLink(item)
@@ -170,7 +170,7 @@ function navigateToLink(item: NItem) {
       return
     }
   } catch {
-    /* malformed URL — refuse to follow */
+    /* malformed URL - refuse to follow */
   }
   // External / suspicious URL → silently ignore (don't navigate).
 }

@@ -6,13 +6,13 @@ mapping each template's tokens to the underlying render-context keys, and turns 
 render context into the concrete substitution values.
 
 Security notes:
-- ``build_substitutions`` returns two value maps — ``text_values`` (raw, for the
+- ``build_substitutions`` returns two value maps - ``text_values`` (raw, for the
   plain-text part and the subject) and ``html_values`` (HTML-escaped for text
   tokens, attribute-escaped URLs) so user-controlled values can never inject
   markup into the HTML body.
 - ``auth_link`` tokens carry one-time tokens; their value keeps the canonical URL
   path (e.g. ``/reset-password/<token>``) so ``mail_log`` masking still redacts
-  them at rest. The senders already build these links — we only pass them through.
+  them at rest. The senders already build these links - we only pass them through.
 """
 from __future__ import annotations
 
@@ -32,7 +32,7 @@ TOKEN_RE = re.compile(r"\[[A-Z_]+\]")
 
 @dataclass(frozen=True)
 class Placeholder:
-    token: str  # e.g. "[SHARE_LINK]" — what the admin types
+    token: str  # e.g. "[SHARE_LINK]" - what the admin types
     label: str
     description: str
     context_key: str  # key in the render ctx this maps to
@@ -189,7 +189,7 @@ REGISTRY: dict[str, TemplateSpec] = {
 
 
 # ---------------------------------------------------------------------------
-# Datetime formatting (single source — email.py's Jinja filter delegates here).
+# Datetime formatting (single source - email.py's Jinja filter delegates here).
 # ---------------------------------------------------------------------------
 
 
@@ -206,7 +206,7 @@ def format_dt_locale(value, locale_code: str = "en", tz_name: str | None = None)
             dt = datetime.fromisoformat(str(value))
         except (ValueError, TypeError):
             # Non-datetime input (e.g. a friendly [TOKEN] used when seeding the
-            # editor's default body) — pass it through unchanged.
+            # editor's default body) - pass it through unchanged.
             return str(value)
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
@@ -352,7 +352,7 @@ def sample_ctx(slug: str, *, app_url: str) -> dict:
         "account_url": f"{app_url}/admin/users/1",
         "login_url": f"{app_url}/login",
         "release_url": f"{app_url}/admin/system",
-        # auth links — canonical paths with a dummy token
+        # auth links - canonical paths with a dummy token
         "verify_url": f"{app_url}/verify-email/SAMPLETOKEN",
         "reset_url": f"{app_url}/reset-password/SAMPLETOKEN",
         "register_url": f"{app_url}/register/SAMPLETOKEN",

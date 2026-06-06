@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Thin Milkdown wrapper — ALL Milkdown imports are confined to this file so the
+// Thin Milkdown wrapper - ALL Milkdown imports are confined to this file so the
 // rest of the app is insulated from API churn, and this component is loaded via
 // defineAsyncComponent so Milkdown lands in its own lazy chunk.
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
@@ -39,7 +39,7 @@ const emit = defineEmits<{
 
 const host = ref<HTMLElement | null>(null)
 let editor: Editor | null = null
-// The last markdown value we set/emitted — guards the external-update watcher
+// The last markdown value we set/emitted - guards the external-update watcher
 // from echoing the editor's own changes back into a loop.
 let lastValue = props.modelValue
 let emitTimer: ReturnType<typeof setTimeout> | null = null
@@ -132,7 +132,7 @@ onBeforeUnmount(() => {
       >
         <option value="">{{ $t('admin_email_templates.toolbar.insert_placeholder') }}</option>
         <option v-for="p in placeholders" :key="p.token" :value="p.token">
-          {{ p.label }} — {{ p.token }}
+          {{ p.label }} - {{ p.token }}
         </option>
       </select>
     </div>

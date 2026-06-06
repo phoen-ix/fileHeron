@@ -6,14 +6,14 @@ SHA-256 hex; the plaintext is shown to the creator exactly once.
 
 Counter: `downloads_remaining` is the source of truth and is decremented
 atomically via a conditional UPDATE (`WHERE downloads_remaining > 0`).
-The session sees a fresh row only after re-querying — callers that
+The session sees a fresh row only after re-querying - callers that
 need the post-decrement value should re-fetch.
 
 Password rate limit: per-(link, ip), counted from
 `public_link_password_attempts` rows in the last
 `PUBLIC_LINK_PASSWORD_WINDOW_SEC` window. Hitting the cap sets
 `locked_until` on the link itself (so all IPs are blocked, not just the
-attacking one) — defense against distributed brute-forcing.
+attacking one) - defense against distributed brute-forcing.
 """
 from __future__ import annotations
 
@@ -177,7 +177,7 @@ def assert_link_usable(db: Session, link: PublicLink) -> None:
         raise AppError(404, "SHARE_NOT_FOUND", "Share for this public link is missing.")
     if share.state != ShareState.active:
         raise AppError(410, "SHARE_NOT_ACTIVE", "The underlying share is no longer active.")
-    # NULL expires_at = never-expire (v1.1.4) — skip the time check.
+    # NULL expires_at = never-expire (v1.1.4) - skip the time check.
     if share.expires_at is not None and share.expires_at < utc_now():
         raise AppError(410, "SHARE_EXPIRED", "The underlying share has expired.")
 
@@ -198,10 +198,10 @@ def _record_attempt(
 
 
 # A single IP that fails repeatedly throttles ITSELF (the router returns
-# 429) but must NOT be able to set the link-wide lock — otherwise anyone
+# 429) but must NOT be able to set the link-wide lock - otherwise anyone
 # holding the URL can DoS the legitimate recipients with ~10 bad guesses
 # (audit finding M5). The link-wide lock only escalates when failures span
-# several distinct IPs — the genuine distributed-brute-force signal.
+# several distinct IPs - the genuine distributed-brute-force signal.
 MIN_DISTINCT_IPS_FOR_LOCK = 3
 
 
@@ -276,7 +276,7 @@ def verify_password(
     """Returns True on match. On miss, records the attempt and may set
     `locked_until` if the failure count crosses the threshold."""
     if link.password_hash is None:
-        # No password set — treat any unlock attempt as immediate success.
+        # No password set - treat any unlock attempt as immediate success.
         # (Caller shouldn't be asking, but be permissive.)
         return True
 
@@ -396,7 +396,7 @@ def notify_owner_on_download(
     payload reports the count the recipient actually has left, not the
     pre-decrement value off by one (the in-memory ``link`` is refreshed
     by ``decrement_counter`` on success, but routes that pass NULL-limit
-    links never see a refresh — explicit param keeps both paths honest)."""
+    links never see a refresh - explicit param keeps both paths honest)."""
     if not link.notify_on_download:
         return
     owner = db.query(User).filter(User.id == link.created_by_id).one_or_none()
@@ -432,7 +432,7 @@ def notify_owner_on_archive_download(
 ) -> None:
     """Bulk-ZIP variant of `notify_owner_on_download`. A ZIP names no single
     file, so the payload reports a synthetic '<n> files (ZIP)' label + the
-    combined size instead of one filename — never leak the file list."""
+    combined size instead of one filename - never leak the file list."""
     if not link.notify_on_download:
         return
     owner = db.query(User).filter(User.id == link.created_by_id).one_or_none()
@@ -459,7 +459,7 @@ def notify_owner_on_archive_download(
 
 
 # ---------------------------------------------------------------------------
-# Policy gate (post-Phase 10) — shared logic lives in services/policy_gate.
+# Policy gate (post-Phase 10) - shared logic lives in services/policy_gate.
 # ---------------------------------------------------------------------------
 
 

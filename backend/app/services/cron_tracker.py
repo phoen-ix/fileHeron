@@ -73,7 +73,7 @@ def _prune_old_runs(db: Session, job_name: str) -> None:
         delete(CronRun)
         .where(CronRun.job_name == job_name, CronRun.started_at < cutoff)
     )
-    # Also cap rows per job — last write wins. Find the oldest started_at
+    # Also cap rows per job - last write wins. Find the oldest started_at
     # of the rows we want to keep; delete anything older.
     rows_to_keep = (
         db.execute(

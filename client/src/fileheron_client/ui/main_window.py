@@ -1,4 +1,4 @@
-"""Tabbed main window — Inbox · Outbox · New share (v0.4.0 CTk port).
+"""Tabbed main window - Inbox · Outbox · New share (v0.4.0 CTk port).
 
 In the v0.3.x Qt version, MainWindow was a QMainWindow + the login was
 a separate QDialog. Here, the same ``ctk.CTk`` root we built in
@@ -23,7 +23,7 @@ from .share_list_panel import ShareListPanel
 from .upload_panel import UploadPanel
 from .widgets import Toast
 
-# Tab keys — the lookup keys CTk uses for tab switching and that
+# Tab keys - the lookup keys CTk uses for tab switching and that
 # ``_on_tab_changed`` matches against. The displayed label is the same
 # string for now (localised labels would require remapping the segmented
 # button text without changing the lookup key).
@@ -34,7 +34,7 @@ TAB_NEW_SHARE = "New share"
 
 class MainWindow:
     """Wraps a pre-built ``ctk.CTk`` root + populates it with the three
-    tabs. Not itself a widget (the root is the widget) — but exposes
+    tabs. Not itself a widget (the root is the widget) - but exposes
     methods the entry point calls (``show``, etc.) so the rest of the
     code reads naturally."""
 
@@ -60,7 +60,7 @@ class MainWindow:
         )
         # v0.4.27: removed the tk.Menu menu bar. On Windows the menu
         # bar strip is a Win32 control that ignores DWM dark-mode and
-        # stayed light below the (now dark) title bar — broke the
+        # stayed light below the (now dark) title bar - broke the
         # visual. Settings moved to a ⚙ button in the top-right of
         # the central area; Quit is the window close button.
         self._build_central()
@@ -110,15 +110,15 @@ class MainWindow:
 
         # CTkTabview's tab change callback. Refresh the active list
         # panel so newly-created/expired shares show up without a
-        # manual click. CTk's API surface is a bit awkward — the
+        # manual click. CTk's API surface is a bit awkward - the
         # tab-change signal is fired via a configure of the segmented
-        # button — we poll via a simple StringVar trace.
+        # button - we poll via a simple StringVar trace.
         self._active_tab = tk.StringVar(value=TAB_INBOX)
         # v0.4.22: WRAP CTk's segmented-button command instead of
         # overwriting it. Earlier code just did
         #     self.tabs._segmented_button.configure(command=our_cb)
         # which replaced CTk's internal callback. That callback is the
-        # thing that actually SHOWS the right tab frame — without it,
+        # thing that actually SHOWS the right tab frame - without it,
         # clicking a tab updates the highlight but the visible content
         # never swaps. Inbox stayed on screen forever; the "New share"
         # tab looked empty because its frame was never gridded in.
@@ -143,7 +143,7 @@ class MainWindow:
             self.outbox.refresh()
 
     def _go_to_outbox(self) -> None:
-        """Switch to the Outbox tab + refresh — wired into the upload-progress
+        """Switch to the Outbox tab + refresh - wired into the upload-progress
         view's 'View in Outbox' action. Uses the public CTkTabview.set (not the
         wrapped _segmented_button command); .set doesn't fire that wrapped
         auto-refresh callback, so refresh explicitly."""
@@ -175,7 +175,7 @@ class MainWindow:
         the tabs to front, runs the titlebar-withdraw safety net, and kicks
         the first list load so the user doesn't see empty tabs."""
         self._app_root.lift()
-        # Safety net — CTk's _windows_set_titlebar_color can withdraw the
+        # Safety net - CTk's _windows_set_titlebar_color can withdraw the
         # window on Windows; poll for 3s and force it back to normal.
         reassert_visible(self._app_root, 60)
         self.inbox.refresh()
@@ -187,7 +187,7 @@ class MainWindow:
         panels, the upload panel, any drilled-in detail view, and the
         wrapped segmented-button callback (all descendants of self.tabs)."""
         # Settings overlay + toast parent to the root, not self.tabs, so they
-        # survive a tabview destroy — tear them down explicitly.
+        # survive a tabview destroy - tear them down explicitly.
         for w in (self._settings_overlay, self._toast):
             if w is not None:
                 try:

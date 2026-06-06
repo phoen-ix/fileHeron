@@ -1,4 +1,4 @@
-"""Per-file upload worker — v0.4.0 CTk port.
+"""Per-file upload worker - v0.4.0 CTk port.
 
 Replaces the v0.3.x ``UploadWorker(QThread)`` with a plain function
 that wraps the existing ``run_with_progress`` async helper. The

@@ -1,5 +1,5 @@
 /* TypeScript shapes mirroring the FastAPI Pydantic schemas. Hand-written
- * (not generated) — small surface, one place to update when the API shape
+ * (not generated) - small surface, one place to update when the API shape
  * shifts. */
 
 export type Locale = 'en' | 'de'
@@ -328,7 +328,7 @@ export interface UpdateShareRequest {
    *  expires_at_clear. */
   expires_at?: string
   /** Send true to clear the expiry (share becomes never-expire, v1.1.4).
-   *  Mutually exclusive with expires_at — sending both is a 400. */
+   *  Mutually exclusive with expires_at - sending both is a 400. */
   expires_at_clear?: boolean
 }
 
@@ -381,7 +381,7 @@ export interface PublicLinkResponse {
 }
 
 export interface CreatePublicLinkResponse extends PublicLinkResponse {
-  /** Always set on create — narrows the parent's nullable url. */
+  /** Always set on create - narrows the parent's nullable url. */
   url: string
 }
 
@@ -474,7 +474,7 @@ export interface AdminUserItem {
    * column was dropped because it wasn't kept consistent. */
   requires_2fa: boolean
   quota_bytes: number | null
-  /** Live Redis quota counter — kept honest by the hourly
+  /** Live Redis quota counter - kept honest by the hourly
    * `quota_reconcile` cron. Useful for spotting who's eating disk on
    * the /admin/users list without drilling into file history. */
   storage_used_bytes: number
@@ -494,7 +494,7 @@ export interface AdminUserListResponse {
 
 /* Admin pending-invites views (post-Phase 10). */
 
-/** v1.1.5: 'revoked' dropped — admin delete is now a hard delete. */
+/** v1.1.5: 'revoked' dropped - admin delete is now a hard delete. */
 export type AdminInviteState = 'pending' | 'expired'
 
 export interface AdminInviteItem {
@@ -673,7 +673,7 @@ export interface WebhookItem {
   created_at: string
 }
 export interface WebhookCreateResponse extends WebhookItem {
-  /** Plaintext signing secret — returned only on create / rotate. */
+  /** Plaintext signing secret - returned only on create / rotate. */
   secret: string
 }
 export interface WebhookDeliveryItem {
@@ -687,7 +687,7 @@ export interface WebhookDeliveryItem {
   delivered_at: string | null
 }
 
-/* Mail log (v1.11.0) — outbound email send log. */
+/* Mail log (v1.11.0) - outbound email send log. */
 export interface AdminMailRow {
   id: number
   created_at: string
@@ -899,7 +899,7 @@ export interface AdminFileItem {
   last_downloaded_at: string | null
   download_count: number
   /** Bytes still on disk + counting quota, but the parent share is
-   * revoked/deleted — reclaimable to free the uploader's quota. */
+   * revoked/deleted - reclaimable to free the uploader's quota. */
   is_orphaned: boolean
 }
 
@@ -1033,7 +1033,7 @@ export interface AvStatusResponse {
   /** Signature revision number (e.g. "27543"); null when unavailable. */
   sigs_version: string | null
   /** ctime-style date string from clamd (e.g. "Fri Apr 26 10:23:45 2026").
-   *  Free-text — NOT an ISO datetime, so don't run it through
+   *  Free-text - NOT an ISO datetime, so don't run it through
    *  formatInSiteTime. */
   sigs_date: string | null
   /** Full VERSION reply for debugging when the parser splits weirdly. */

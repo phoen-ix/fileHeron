@@ -3,10 +3,10 @@
 A connection exists when a client and an employee can address each other in
 shares. Two flavors live in the same table, distinguished by `source`:
 
-- `invite` — set when an employee/admin invites a client. **Sticky:** stays
+- `invite` - set when an employee/admin invites a client. **Sticky:** stays
   forever (until explicit erasure flow), since the invite is the original
   trust anchor.
-- `shared_group` — set whenever a client and an employee share at least one
+- `shared_group` - set whenever a client and an employee share at least one
   group. **Dynamic:** disappears as soon as the last shared group is left.
 
 Both rows can coexist for the same pair; the recipient-search ACL is the
@@ -46,7 +46,7 @@ def record_invite_connection(
 
     Idempotent: returns silently if the row already exists. Skips silently
     if the pair is not a client↔employee combination (admin invites
-    employee, etc. — no connection needed)."""
+    employee, etc. - no connection needed)."""
     pair = _classify_pair(inviter, invitee)
     if pair is None:
         return
@@ -178,7 +178,7 @@ def cleanup_connections_for_role_change(
     `recompute_shared_group_connections_for_user` so any group-derived
     pairings appropriate for the new role get repopulated. Invite-source
     rows for the new role can't be reconstructed (they only exist when an
-    actual invite happened) — that's correct, the trust anchor is gone.
+    actual invite happened) - that's correct, the trust anchor is gone.
 
     Slot-preserving transitions (employee↔admin) are no-ops.
 

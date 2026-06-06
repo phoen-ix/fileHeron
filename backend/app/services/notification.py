@@ -1,4 +1,4 @@
-"""Notification dispatch — single funnel for every user-visible event.
+"""Notification dispatch - single funnel for every user-visible event.
 
 Every callsite (share creation, password reset, public-link download,
 …) calls `dispatch(db, user, category, payload)`. This:
@@ -7,11 +7,11 @@ Every callsite (share creation, password reset, public-link download,
    always written regardless of email channel choice, so we have
    history even when the user has opted out of email for that category.
 2. Reads the user's `user_notification_preferences` row for this
-   category — defaulting to `both` when no row exists. If the channel
+   category - defaulting to `both` when no row exists. If the channel
    includes email, renders the template via `services/email.py` and
    enqueues the `send_email_job` task.
 
-Failures in either step are logged but don't propagate — a missing
+Failures in either step are logged but don't propagate - a missing
 notification should never fail the original action (creating a share,
 resetting a password, …).
 """
@@ -48,7 +48,7 @@ _DEFAULT_CHANNEL: dict[NotificationCategory, NotificationChannel] = {
     NotificationCategory.account_created: NotificationChannel.email,
     NotificationCategory.reset_password: NotificationChannel.email,
     NotificationCategory.login_alert: NotificationChannel.email,
-    # Security notice — surface an SSO auto-link on both channels so an
+    # Security notice - surface an SSO auto-link on both channels so an
     # unauthorised link is hard to miss.
     NotificationCategory.oidc_linked: NotificationChannel.both,
     NotificationCategory.file_quarantined: NotificationChannel.both,
@@ -98,7 +98,7 @@ def _wants_in_app(channel: NotificationChannel) -> bool:
 def _json_safe(value: Any) -> Any:
     """Convert datetimes to ISO strings so the payload survives the JSON
     column. Original payload (with datetime instances) is what we pass
-    to email rendering — Jinja's dt_locale filter wants datetimes."""
+    to email rendering - Jinja's dt_locale filter wants datetimes."""
     if isinstance(value, datetime):
         return value.isoformat()
     if isinstance(value, dict):
@@ -129,7 +129,7 @@ def dispatch(
     `user.email` because some callers (e.g. invite consume) have a
     freshly-supplied address that hasn't landed in `users.email`
     yet. The pre-`202605031600_email_plaintext` design stored only a
-    masked hint and required callers to carry the plaintext through —
+    masked hint and required callers to carry the plaintext through -
     the column-and-hint setup is gone but the `email_to` parameter
     shape stuck around.
 
@@ -160,7 +160,7 @@ def dispatch(
         db.add(notif)
         db.flush()
 
-        # Push live to SSE listeners (the bell). Best-effort — the
+        # Push live to SSE listeners (the bell). Best-effort - the
         # in-app row is the durable record; SSE is real-time UX only.
         if _wants_in_app(channel):
             from . import sse as sse_svc
@@ -188,7 +188,7 @@ def dispatch(
 
             slug = template_slug or category.value
             # Render ONCE: the same (subject, text, html) is both logged (masked)
-            # and enqueued (unmasked, for the real send) — never re-rendered, so
+            # and enqueued (unmasked, for the real send) - never re-rendered, so
             # the stored body matches what was sent.
             subject, text, html = email_svc.render_email(
                 user.locale, slug, payload,

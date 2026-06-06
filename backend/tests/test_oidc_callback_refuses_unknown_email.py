@@ -1,7 +1,7 @@
 """Phase 10 anonymous-login callback: refuses to auto-create.
 
 Phase 9 created a brand-new user when an OIDC ID token referenced an
-unknown email. Phase 10 explicitly drops that path — admin must invite
+unknown email. Phase 10 explicitly drops that path - admin must invite
 first. The callback now raises ``OIDC_NO_ACCOUNT``."""
 from __future__ import annotations
 

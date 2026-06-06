@@ -4,7 +4,7 @@ v0.6.1 collapsed the separate Revoke + Expire-now buttons into a
 single "End share" button that calls expire-now (state → expired,
 files hard-deleted). The user feedback was that the two-button
 distinction was unintuitive. These AST-level tests pin the
-simplification — if a future change re-introduces a second
+simplification - if a future change re-introduces a second
 destructive button on the share detail, these fail loudly."""
 from __future__ import annotations
 
@@ -29,13 +29,13 @@ def _share_detail_view_class() -> ast.ClassDef:
 
 
 def test_no_revoke_method() -> None:
-    """The old ``_revoke`` method must be gone — its semantics fold
+    """The old ``_revoke`` method must be gone - its semantics fold
     into ``_end_share`` which calls expire-now."""
     cls = _share_detail_view_class()
     for node in cls.body:
         if isinstance(node, ast.FunctionDef):
             assert node.name != "_revoke", (
-                "ShareDetailView._revoke should be removed in v0.6.1 — "
+                "ShareDetailView._revoke should be removed in v0.6.1 - "
                 "use the single _end_share action instead."
             )
 
@@ -80,7 +80,7 @@ def test_init_calls_load_and_binds_destroy() -> None:
     cls = _share_detail_view_class()
     init = _method(cls, "__init__")
     assert _calls_self_method(init, "_load"), (
-        "ShareDetailView.__init__ must call self._load() — otherwise the detail "
+        "ShareDetailView.__init__ must call self._load() - otherwise the detail "
         "view never loads the share (regression shipped in client-v0.9.4)."
     )
     init_src = ast.get_source_segment(VIEW.read_text(encoding="utf-8"), init) or ""
@@ -90,7 +90,7 @@ def test_init_calls_load_and_binds_destroy() -> None:
 
 
 def test_toast_does_not_call_load() -> None:
-    """The _load() call must live in __init__, never in _toast — the latter is
+    """The _load() call must live in __init__, never in _toast - the latter is
     exactly the client-v0.9.4 boundary bug that broke share-detail loading."""
     cls = _share_detail_view_class()
     toast = _method(cls, "_toast")
@@ -119,11 +119,11 @@ def test_done_swaps_to_open_actions_not_redownload() -> None:
 
 def test_no_revoke_btn_or_expire_now_btn_assignments() -> None:
     """The old widget attributes ``self.revoke_btn`` and
-    ``self.expire_now_btn`` should both be gone — replaced by
+    ``self.expire_now_btn`` should both be gone - replaced by
     ``self.end_share_btn``."""
     src = VIEW.read_text(encoding="utf-8")
     assert "self.revoke_btn" not in src, (
-        "self.revoke_btn must not survive v0.6.1 — only end_share_btn."
+        "self.revoke_btn must not survive v0.6.1 - only end_share_btn."
     )
     assert "self.expire_now_btn" not in src, (
         "self.expire_now_btn renamed to self.end_share_btn in v0.6.1."

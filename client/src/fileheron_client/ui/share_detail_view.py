@@ -1,6 +1,6 @@
-"""Share detail — files + per-file download + manager actions.
+"""Share detail - files + per-file download + manager actions.
 
-v0.6.0 refactor: this used to be ``ShareDetailDialog`` — a separate
+v0.6.0 refactor: this used to be ``ShareDetailDialog`` - a separate
 ``CTkToplevel`` window with ``transient`` + ``grab_set``. Users
 disliked the extra window. The class is now ``ShareDetailView``, a
 ``CTkFrame`` that packs into the parent ``ShareListPanel`` in place
@@ -46,7 +46,7 @@ from .widgets import PillLabel, alive, copy_to_clipboard_with_feedback, human_si
 class ShareDetailView(ctk.CTkFrame):
     """In-window share detail (v0.6.0+, was ``ShareDetailDialog``).
 
-    Constructor arguments mirror the old dialog plus ``on_back`` — the
+    Constructor arguments mirror the old dialog plus ``on_back`` - the
     drill-out callback the host ``ShareListPanel`` provides. Pack into
     the parent yourself; the view doesn't do its own geometry."""
 
@@ -153,7 +153,7 @@ class ShareDetailView(ctk.CTkFrame):
         btns = ctk.CTkFrame(outer, fg_color="transparent")
         btns.pack(fill="x")
 
-        # v0.10.0: owner-only "Add files" — upload more files into this active
+        # v0.10.0: owner-only "Add files" - upload more files into this active
         # share (the upload endpoints are owner-only; admins can't, so this is
         # gated separately from the _can_manage() buttons below).
         self.add_files_btn = ctk.CTkButton(
@@ -171,7 +171,7 @@ class ShareDetailView(ctk.CTkFrame):
         )
         # v0.6.1: single destructive "End share" replaces the old
         # Revoke + Expire-now pair. Same backend call as before
-        # (POST /api/shares/{id}/expire) — state → expired, files
+        # (POST /api/shares/{id}/expire) - state → expired, files
         # hard-deleted. Red styling because this is now the only
         # destructive manager action.
         self.end_share_btn = ctk.CTkButton(
@@ -189,7 +189,7 @@ class ShareDetailView(ctk.CTkFrame):
         self.edit_limit_btn.pack_forget()
         self.end_share_btn.pack_forget()
 
-        # Right-aligned button. "Close" gone — Back at the top replaces it.
+        # Right-aligned button. "Close" gone - Back at the top replaces it.
         ctk.CTkButton(
             btns, text=t("share_detail.save_all_btn"),
             command=self._save_all, width=180,
@@ -240,7 +240,7 @@ class ShareDetailView(ctk.CTkFrame):
             return
         url = pl.get("url")
         if not url:
-            # Legacy row with the token only stored as hash — no
+            # Legacy row with the token only stored as hash - no
             # plaintext to show. Skip rather than misleading the user
             # with an empty box.
             return
@@ -389,7 +389,7 @@ class ShareDetailView(ctk.CTkFrame):
     # ---- Manager actions ----
 
     def _end_share(self) -> None:
-        """v0.6.1: single destructive action — calls expire-now
+        """v0.6.1: single destructive action - calls expire-now
         (state → expired, files hard-deleted, uploader quota released).
         Replaces the old separate Revoke and Expire-now buttons."""
         s = self._share
@@ -562,7 +562,7 @@ class ShareDetailView(ctk.CTkFrame):
                     file_id, interrupted=entry.get("status") == dlreg.INTERRUPTED
                 )
                 return
-            # Stale registry entry (partial deleted externally) — clean it up.
+            # Stale registry entry (partial deleted externally) - clean it up.
             dlreg.remove(file_id)
         self._set_actions_idle(file_id)
 
@@ -627,7 +627,7 @@ class ShareDetailView(ctk.CTkFrame):
 
         # Launch the just-downloaded local file in the OS default app via a
         # fixed argv (no shell, no user-controlled command) on a path the user
-        # chose — the standard safe pattern, hence the scoped noqa for ruff-S.
+        # chose - the standard safe pattern, hence the scoped noqa for ruff-S.
         try:
             if sys.platform.startswith("win"):
                 os.startfile(str(path))  # type: ignore[attr-defined]  # noqa: S606
@@ -644,7 +644,7 @@ class ShareDetailView(ctk.CTkFrame):
         import subprocess
         import sys
 
-        # Fixed-argv OS file-manager launch (no shell) on a user-chosen path —
+        # Fixed-argv OS file-manager launch (no shell) on a user-chosen path -
         # see _open_path; scoped noqa for the ruff-S subprocess false-positives.
         try:
             if sys.platform.startswith("win"):
@@ -857,7 +857,7 @@ class ShareDetailView(ctk.CTkFrame):
                 row["cancel"] = None
                 row["pause"] = None
                 row["dest"] = None
-                # Saved — the buttons become Open (the file) + Folder (reveal it).
+                # Saved - the buttons become Open (the file) + Folder (reveal it).
                 self._show_open_actions(row, Path(path))
             self._toast(t("share_detail.downloaded_body", path=path), kind="success")
 

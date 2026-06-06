@@ -1,5 +1,5 @@
 """Phase 10: when an existing local user's verified email matches the
-IdP-asserted email, the callback auto-links them — sets
+IdP-asserted email, the callback auto-links them - sets
 oidc_provider_id + oidc_subject and returns the user. Subsequent
 logins through the same provider go via the (provider, sub) match.
 
@@ -71,7 +71,7 @@ async def test_callback_returns_existing_link_via_provider_sub(
     )
     assert resolved.id == user.id
 
-    # No `oidc_linked` audit on a plain re-login — the link already existed.
+    # No `oidc_linked` audit on a plain re-login - the link already existed.
     rows = (
         db.query(AuditLog)
         .filter(AuditLog.event_type == AuditEventType.oidc_linked.value)

@@ -21,7 +21,7 @@ const { te } = useI18n()
 
 const headline = computed(() => {
   // Each category has its own template under notif_bell.headline.{category}
-  // with the payload spread. Use $t with arguments — fall back to the
+  // with the payload spread. Use $t with arguments - fall back to the
   // generic line if the key is missing entirely.
   const payload = props.item.payload || {}
   // ops_alert is a single category with a `reason` field that picks the
@@ -57,7 +57,7 @@ const relTime = computed(() => {
   /* Containing block for the unread `::before` dot. Without this the dot
      is positioned against the dropdown panel instead of its own row, so
      it neither scrolls with the list nor gets clipped by the bell-list
-     overflow — the off-screen rows' dots leak onto the page. */
+     overflow - the off-screen rows' dots leak onto the page. */
   position: relative;
   display: grid;
   grid-template-columns: 1fr auto;

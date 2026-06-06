@@ -1,4 +1,4 @@
-"""api_tokens.disabled_at — reversible disable distinct from revoke
+"""api_tokens.disabled_at - reversible disable distinct from revoke
 
 Revision ID: 202605020924
 Revises: 202605020923

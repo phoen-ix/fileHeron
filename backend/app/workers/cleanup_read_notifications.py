@@ -8,7 +8,7 @@ unbounded for users who never clear the bell.
 
 The cron identifier + registry key keep their historical names for
 cron-history continuity. Set ``NOTIFICATION_READ_RETENTION_DAYS=0`` to disable.
-Idempotent — re-running matches no new rows once a batch is gone.
+Idempotent - re-running matches no new rows once a batch is gone.
 """
 from __future__ import annotations
 
@@ -30,7 +30,7 @@ async def cleanup_read_notifications(_ctx) -> dict:
     """Age-out old in-app notifications by creation time.
 
     The bell is now a delete-to-dismiss inbox (the read/unread concept was
-    retired in v1.6.1) — `read_at` is no longer set, so pruning is based on
+    retired in v1.6.1) - `read_at` is no longer set, so pruning is based on
     `created_at`: hard-delete any notification older than the retention window
     so the table can't grow unbounded for users who never clear the bell. The
     cron identifier + registry key are kept for continuity. `days <= 0`

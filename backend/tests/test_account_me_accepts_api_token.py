@@ -2,7 +2,7 @@
 
 The desktop client uses ``/api/account/me`` right after sign-in to
 populate the title bar (display name + role). When the user signs in
-with an API token, the call MUST work — otherwise the client gets
+with an API token, the call MUST work - otherwise the client gets
 401 INVALID_TOKEN and bounces back to the login screen.
 
 Bug: /me used ``get_current_user`` (JWT-only). Fixed by switching to

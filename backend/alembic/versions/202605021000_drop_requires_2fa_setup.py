@@ -1,4 +1,4 @@
-"""Drop users.requires_2fa_setup — the static flag is replaced by
+"""Drop users.requires_2fa_setup - the static flag is replaced by
 on-the-fly computation against the new admin-editable 2FA policy
 (`twofa.required_roles` + `twofa.required_group_ids` in app_settings).
 

@@ -2,7 +2,7 @@
 
 A session = a `refresh_tokens` row. Admins list every user's sessions, filter
 by user, toggle expired/revoked in/out, sort by last activity, and revoke a
-single session or all of one user's sessions — each audited.
+single session or all of one user's sessions - each audited.
 """
 from __future__ import annotations
 

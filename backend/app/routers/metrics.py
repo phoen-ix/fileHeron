@@ -1,6 +1,6 @@
-"""Prometheus metrics — GET /api/metrics (text/plain exposition format).
+"""Prometheus metrics - GET /api/metrics (text/plain exposition format).
 
-Hand-rendered (no prometheus_client dep). System-level gauges only — no
+Hand-rendered (no prometheus_client dep). System-level gauges only - no
 per-user series, to keep cardinality bounded. The endpoint is gated INSIDE the
 handler (not via the 2FA/bearer router stack) so a scraper can reach it with a
 dedicated token or from an allow-listed IP:

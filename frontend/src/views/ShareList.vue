@@ -106,7 +106,7 @@ async function confirmBulkExpire() {
 
 
 function formatExpiry(iso: string | null): string {
-  // Full date + HH:MM + tz (formatInSiteTime defaults) — a bare zone token
+  // Full date + HH:MM + tz (formatInSiteTime defaults) - a bare zone token
   // with no clock ("Jun 08, 2026, GMT+2") is meaningless.
   return formatExpiryInSiteTime(iso, locale.value, t('expiry.never_label'))
 }
@@ -119,12 +119,12 @@ function open(s: ShareListItem) {
 // two labels; collapses the rest as "+N" so multi-recipient shares
 // don't blow up the row width.
 function recipientLabel(r: ShareRecipientRef): string {
-  // Inbound submissions carry a synthetic "company" recipient — translate it.
+  // Inbound submissions carry a synthetic "company" recipient - translate it.
   return r.kind === 'company' ? t('share_list.company') : r.label
 }
 
 function recipientSummary(rs: ShareRecipientRef[]): string {
-  if (!rs || rs.length === 0) return '—'
+  if (!rs || rs.length === 0) return '-'
   if (rs.length <= 2) return rs.map(recipientLabel).join(', ')
   return `${recipientLabel(rs[0])}, ${recipientLabel(rs[1])} +${rs.length - 2}`
 }
@@ -340,7 +340,7 @@ onMounted(load)
               </td>
               <td v-if="box === 'inbox'">
                 <span v-if="item.sender" class="row-name">{{ item.sender.display_name }}</span>
-                <span v-else class="fh-mono row-hint">—</span>
+                <span v-else class="fh-mono row-hint">-</span>
               </td>
               <td v-if="box === 'outbox'" class="recipients-cell">
                 {{ recipientSummary(item.recipients) }}

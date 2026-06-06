@@ -31,7 +31,7 @@ def test_blocks_private_when_not_allowed():
 
 
 def test_allows_private_when_permitted():
-    # Self-hosted IdP on a LAN — must be allowed under allow_private=True.
+    # Self-hosted IdP on a LAN - must be allowed under allow_private=True.
     assert_public_http_url("http://10.0.0.5/realms/fh", allow_private=True, require_https=False)
     assert_public_http_url("http://192.168.1.10:8080/", allow_private=True, require_https=False)
 
@@ -42,5 +42,5 @@ def test_requires_https_when_demanded():
 
 
 def test_allows_public_https():
-    # api.github.com etc. — public, routable, https. Should not raise.
+    # api.github.com etc. - public, routable, https. Should not raise.
     assert_public_http_url("https://api.github.com/repos/x/y/releases", allow_private=False)

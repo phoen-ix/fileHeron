@@ -1,4 +1,4 @@
-"""users.default_landing_page — per-user post-login destination
+"""users.default_landing_page - per-user post-login destination
 
 Revision ID: 202605020925
 Revises: 202605020924

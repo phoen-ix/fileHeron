@@ -63,7 +63,7 @@ async def test_create_share_with_inline_public_link(
 async def test_create_share_without_public_link_block(
     make_user, db, client, login_as
 ):
-    """The optional block is truly optional — no link created."""
+    """The optional block is truly optional - no link created."""
     make_user(
         email="hr@test.local", role=UserRole.admin, password="Pass12345678!"
     )
@@ -123,7 +123,7 @@ async def test_create_share_with_inline_link_password(
 async def test_create_share_inline_link_blocked_by_policy(
     make_user, db, client, login_as
 ):
-    """A user under a restrictive policy gets 403 — and the share is NOT
+    """A user under a restrictive policy gets 403 - and the share is NOT
     created (atomicity)."""
     employee = make_user(
         email="e@test.local",

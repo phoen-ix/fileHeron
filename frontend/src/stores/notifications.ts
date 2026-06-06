@@ -36,7 +36,7 @@ export const useNotificationsStore = defineStore('notifications', () => {
   }
 
   function pushFromSSE(item: NotificationItem) {
-    // Drop duplicates (same id) — SSE may deliver an item the list
+    // Drop duplicates (same id) - SSE may deliver an item the list
     // already has during a race with the initial fetch.
     items.value = items.value.filter((i) => i.id !== item.id)
     items.value.unshift(item)

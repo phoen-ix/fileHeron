@@ -1,4 +1,4 @@
-"""Groups — user-defined collections of users used as share recipients.
+"""Groups - user-defined collections of users used as share recipients.
 
 A group whose `is_company_inbox` flag is true is treated as a landing zone
 that any client connected to the org can target with an inbound share. The

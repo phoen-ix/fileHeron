@@ -1,4 +1,4 @@
-"""admin-editable email templates — email_template_override table (v1.25.0).
+"""admin-editable email templates - email_template_override table (v1.25.0).
 
 Stores per-(slug, locale) Markdown overrides for outbound email templates. The
 renderer consults this table first and falls back to the built-in filesystem

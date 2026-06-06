@@ -78,7 +78,7 @@ def test_me_response_parses_notify_default():
 
 
 def test_add_files_dialog_is_non_blocking():
-    """The dialog must NOT call wait_window — the uploads run async and need
+    """The dialog must NOT call wait_window - the uploads run async and need
     the Tk main loop free to process their marshalled callbacks."""
     tree = ast.parse((_SRC / "ui" / "add_files_dialog.py").read_text(encoding="utf-8"))
     for node in ast.walk(tree):

@@ -1,4 +1,4 @@
-"""/api/account/* endpoints — self-service for the authenticated user."""
+"""/api/account/* endpoints - self-service for the authenticated user."""
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -83,7 +83,7 @@ def me(
     db: Session = Depends(get_db),
 ) -> MeResponse:
     """Bearer's own profile. Accepts both JWT (browser session) and
-    API token bearers — the response is identical for both, and an
+    API token bearers - the response is identical for both, and an
     API token is just a stable bearer for the same User principal."""
     return _me_response(db, user)
 
@@ -261,7 +261,7 @@ async def change_email(
 ) -> dict:
     """Self-service email change. Gated on the `email_change.self_service`
     policy; re-authenticates with the current password; then follows the
-    configured verification mode (a confirm link is mailed — the new address
+    configured verification mode (a confirm link is mailed - the new address
     must click it, and in verify_both the old one too)."""
     from ..services import email_change as email_change_svc
     from ..services import email_change_policy
@@ -323,7 +323,7 @@ async def create_invite(
         raise AppError(
             409,
             "INVITE_PENDING",
-            "An invite for this email is already pending — wait for it to expire or be consumed.",
+            "An invite for this email is already pending - wait for it to expire or be consumed.",
         )
 
     # Validate all initial_group_ids exist before creating the invite.

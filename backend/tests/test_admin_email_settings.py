@@ -1,4 +1,4 @@
-"""Admin email/SMTP settings endpoints — GET masking, PUT semantics,
+"""Admin email/SMTP settings endpoints - GET masking, PUT semantics,
 audit row (post-Phase 10)."""
 from __future__ import annotations
 

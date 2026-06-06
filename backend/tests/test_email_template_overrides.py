@@ -1,4 +1,4 @@
-"""Override-aware email rendering (v1.25.0) — precedence, fallback, escaping,
+"""Override-aware email rendering (v1.25.0) - precedence, fallback, escaping,
 sanitization, auth-link masking."""
 from __future__ import annotations
 

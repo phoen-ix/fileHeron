@@ -53,7 +53,7 @@ const storageLine = computed(() =>
 )
 const storageMax = computed(() => {
   const vals = (data.value?.storage_trend ?? []).map((s) => s.storage_bytes)
-  return vals.length ? formatBytes(Math.max(...vals)) : '—'
+  return vals.length ? formatBytes(Math.max(...vals)) : '-'
 })
 const sharesBars = computed(() =>
   scaleBars((data.value?.shares_created ?? []).map((p) => p.count), CHART_W, CHART_H),

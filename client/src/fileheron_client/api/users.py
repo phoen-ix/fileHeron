@@ -1,6 +1,6 @@
-"""User search — backs the v0.3.0 recipient picker.
+"""User search - backs the v0.3.0 recipient picker.
 
-Backend endpoint: GET /api/users/search?q=<needle> — returns the union
+Backend endpoint: GET /api/users/search?q=<needle> - returns the union
 of users the caller can address as a recipient, filtered by substring
 on display_name + email. Role-scoped server-side (clients see
 connected employees only; employees see all employees + connected

@@ -3,7 +3,7 @@
 A parallel/segmented download (or a resume) fetches byte ranges that do not
 start at 0. The byte-0 request (or a non-ranged full request) already counted
 the download against the share / public-link budget and wrote the DownloadLog,
-so these continuation ranges must NOT re-decrement the counter or re-log —
+so these continuation ranges must NOT re-decrement the counter or re-log -
 otherwise one parallel download would count as N and could trip the limit.
 
 Trusted-admin model: a client could in principle send only ``bytes=1-`` to dodge

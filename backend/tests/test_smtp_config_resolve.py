@@ -1,4 +1,4 @@
-"""resolve_smtp_config(db) — DB-overlay-env matrix (post-Phase 10)."""
+"""resolve_smtp_config(db) - DB-overlay-env matrix (post-Phase 10)."""
 from __future__ import annotations
 
 from app.services import email as email_svc

@@ -135,11 +135,11 @@ async def test_run_check_no_backend_release_writes_error(db, monkeypatch):
     assert "no backend release" in result["error"]
 
     cached = rc.read_cached(db)
-    # Prior good value preserved — _write_cache(version=None) doesn't
+    # Prior good value preserved - _write_cache(version=None) doesn't
     # overwrite the kv.
     assert cached["latest_version"] == "v1.1.6"
     assert cached["last_check_error"] and "no backend release" in cached["last_check_error"]
-    # last_success_at must NOT advance — failures should retry next hour.
+    # last_success_at must NOT advance - failures should retry next hour.
     assert cached["last_success_at"] is None
 
 
@@ -187,7 +187,7 @@ async def test_release_check_records_upstream_failure(db, monkeypatch):
     assert "network down" in result["error"]
 
     cached = rc.read_cached(db)
-    # No version overwrite on failure — last successful version stays.
+    # No version overwrite on failure - last successful version stays.
     # (here there was no prior version, so it remains None.)
     assert cached["latest_version"] is None
     assert cached["last_check_error"]
@@ -429,7 +429,7 @@ async def test_new_version_dispatches_to_all_admins_once(db, make_user, monkeypa
 @pytest.mark.asyncio
 async def test_no_notification_when_target_equals_running(db, make_user, monkeypatch):
     """If the upstream `latest` matches the running VERSION, skip the
-    notification fan-out — you don't notify admins about their own
+    notification fan-out - you don't notify admins about their own
     deployed version."""
     from app import version as version_mod
     from app.models.notification import Notification, NotificationCategory

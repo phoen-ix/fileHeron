@@ -1,6 +1,6 @@
 """Admin creates a user directly (no invite, email pre-verified, set password).
 
-POST /api/admin/users — the "skip invite" path of the admin invite form.
+POST /api/admin/users - the "skip invite" path of the admin invite form.
 """
 from __future__ import annotations
 

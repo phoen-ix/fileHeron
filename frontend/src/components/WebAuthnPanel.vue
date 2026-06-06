@@ -104,7 +104,7 @@ async function load() {
     const { data } = await listCredentials()
     credentials.value = data.items
   } catch {
-    /* non-fatal — section may just stay empty */
+    /* non-fatal - section may just stay empty */
   }
 }
 

@@ -1,4 +1,4 @@
-"""Admin webhooks CRUD — secret shown once, admin-gated, validation."""
+"""Admin webhooks CRUD - secret shown once, admin-gated, validation."""
 from __future__ import annotations
 
 import pytest

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# fileHeron rollback — re-tag a prior tag as :latest and roll.
+# fileHeron rollback - re-tag a prior tag as :latest and roll.
 #
 # Usage:
 #   scripts/rollback.sh                  # list available local image tags
@@ -85,7 +85,7 @@ while :; do
         exit 0
     fi
     if [ "$(date +%s)" -gt "$DEADLINE" ]; then
-        echo "[rollback] FAIL: healthcheck timeout —$UNHEALTHY" >&2
+        echo "[rollback] FAIL: healthcheck timeout -$UNHEALTHY" >&2
         docker compose logs --tail=20 backend worker frontend >&2
         exit 1
     fi

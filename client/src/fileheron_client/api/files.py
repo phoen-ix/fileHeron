@@ -11,13 +11,13 @@ from .client import ApiClient, ApiError, _envelope_from_response
 
 logger = logging.getLogger("fileheron_client.files")
 
-CHUNK = 1024 * 1024  # 1 MiB — fewer progress ticks / less per-chunk overhead
+CHUNK = 1024 * 1024  # 1 MiB - fewer progress ticks / less per-chunk overhead
 
 
 class DownloadCancelled(Exception):
     """Raised when a download is aborted via its cancel Event. Distinct from
     transport errors so the segmented downloader neither retries it nor falls
-    back to a single stream — it just unwinds + cleans up."""
+    back to a single stream - it just unwinds + cleans up."""
 
 
 class DownloadPaused(Exception):

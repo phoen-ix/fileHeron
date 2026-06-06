@@ -96,7 +96,7 @@ async def test_session_cap_ignores_revoked_and_expired(
     make_user, db, client, login_as, monkeypatch
 ):
     """An old revoked or expired token should NOT count toward the
-    cap — only currently-active sessions do."""
+    cap - only currently-active sessions do."""
     from datetime import datetime, timedelta, timezone
 
     monkeypatch.setattr(

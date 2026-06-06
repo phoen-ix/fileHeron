@@ -1,11 +1,11 @@
 """ClamAV scanning over the network.
 
 Two scan paths:
-- ``scan_path(abs_path)`` — sends ``zSCAN /abs/path\\0`` to clamd. clamd
+- ``scan_path(abs_path)`` - sends ``zSCAN /abs/path\\0`` to clamd. clamd
   reads the file directly. Requires the file to be visible at the same
   absolute path inside the clamav container (we bind-mount ./data/files
   into both backend and clamav at /data/files, so this just works).
-- ``scan_stream(file_handle)`` — INSTREAM fallback if path-based scan
+- ``scan_stream(file_handle)`` - INSTREAM fallback if path-based scan
   refuses (e.g. permissions). Used by tests + a fallback in production.
 
 We deliberately do not pull in pyclamd / clamd. The protocol is small,
@@ -113,13 +113,13 @@ _INSTREAM_CHUNK = 64 * 1024
 
 
 def scan_stream(fh) -> ScanResult:
-    """Scan a readable binary stream via clamd INSTREAM — used when the bytes
+    """Scan a readable binary stream via clamd INSTREAM - used when the bytes
     aren't on a clamd-visible local path (object-store backends). `fh` is any
     object with ``.read(n)``.
 
     Caveat: INSTREAM is bounded by clamd's ``StreamMaxLength`` (default 25 MB).
     Operators using the s3 backend with larger files must raise it; a file that
-    exceeds the limit comes back as ``state='error'`` (fail-safe — not served)."""
+    exceeds the limit comes back as ``state='error'`` (fail-safe - not served)."""
     import struct
 
     if settings.AV_SKIP:
@@ -141,7 +141,7 @@ def scan_stream(fh) -> ScanResult:
 
 
 def ping() -> bool:
-    """Healthcheck — returns True if clamd answers PONG."""
+    """Healthcheck - returns True if clamd answers PONG."""
     try:
         s = _open_clamd_socket()
     except AVUnavailableError:
@@ -169,7 +169,7 @@ def get_version() -> dict:
         }
 
     Short-circuits to ``available=False, av_skip=True`` when ``AV_SKIP``
-    is set (dev / CI mode — no clamd running). Never raises; the admin
+    is set (dev / CI mode - no clamd running). Never raises; the admin
     surface always wants to render *something*."""
     if settings.AV_SKIP:
         return {
@@ -220,7 +220,7 @@ def reload_signatures() -> dict:
     running engine without a container restart.
 
     Returns ``{"ok": bool, "av_skip": bool, "raw": str}``. Short-circuits
-    on ``AV_SKIP``. Raises AVUnavailableError if clamd is unreachable — the
+    on ``AV_SKIP``. Raises AVUnavailableError if clamd is unreachable - the
     router converts that into a 503 ``AV_UNAVAILABLE`` response."""
     if settings.AV_SKIP:
         return {"ok": False, "av_skip": True, "raw": "AV_SKIP set"}

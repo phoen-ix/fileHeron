@@ -75,7 +75,7 @@ def verify_envelope(payload_b64: str, sig_hex: str) -> UploadEnvelope:
 
 
 # ---------------------------------------------------------------------------
-# Upload-Metadata helpers — the TUS protocol metadata format.
+# Upload-Metadata helpers - the TUS protocol metadata format.
 # `Upload-Metadata: key1 base64,key2 base64`. Values are base64-of-utf8.
 # ---------------------------------------------------------------------------
 

@@ -35,7 +35,7 @@ class CreateShareRequest(APIBaseModel):
     kind: ShareKind
     recipients: ShareRecipientsRequest
     # None = "never expires" (v1.1.4). Caller must pick this
-    # explicitly — there's no default, so old clients that omit the
+    # explicitly - there's no default, so old clients that omit the
     # field still get the original 422 "field required" response.
     expires_at: datetime | None
     subject: str | None = Field(default=None, max_length=255)
@@ -53,13 +53,13 @@ class CreateShareRequest(APIBaseModel):
 
     @model_validator(mode="after")
     def _recipients_or_public_link(self):
-        # Inbound (client → company) shares never carry recipients — the
-        # audience (the whole company + group-peers) is implicit — so the
+        # Inbound (client → company) shares never carry recipients - the
+        # audience (the whole company + group-peers) is implicit - so the
         # rule below only applies to outbound shares.
         if self.kind == ShareKind.inbound:
             return self
         # Outbound: recipients are optional iff an inline public link is
-        # attached — the link IS the access mechanism. Without either, the
+        # attached - the link IS the access mechanism. Without either, the
         # share has no path to a consumer and shouldn't exist.
         if (
             not self.recipients.user_ids
@@ -74,7 +74,7 @@ class CreateShareRequest(APIBaseModel):
 
 
 class UpdateShareRequest(APIBaseModel):
-    """Body for `PATCH /api/shares/{id}`. All fields optional — only
+    """Body for `PATCH /api/shares/{id}`. All fields optional - only
     the supplied ones change.
 
     For the download_limit field: None means "no change" (PATCH
@@ -93,7 +93,7 @@ class UpdateShareRequest(APIBaseModel):
 
 
 class FilesAddedRequest(APIBaseModel):
-    """Body for `POST /api/shares/{id}/files-added` — the owner's
+    """Body for `POST /api/shares/{id}/files-added` - the owner's
     batch-complete signal after uploading more files into an active share.
     `file_ids` are the freshly-uploaded file ids; `notify` opts into
     re-notifying the share's recipients."""
@@ -135,7 +135,7 @@ class GroupRecipientRef(APIBaseModel):
 
 class InlinePublicLinkResult(APIBaseModel):
     """Returned only on `POST /api/shares` when `public_link` was set
-    in the request — plaintext URL shown ONCE."""
+    in the request - plaintext URL shown ONCE."""
     id: str
     url: str
     qr_svg: str | None = None
@@ -151,7 +151,7 @@ class ShareResponse(APIBaseModel):
     kind: ShareKind
     state: ShareState
     subject: str | None
-    # Same display-fallback rule as ShareListItem.effective_subject —
+    # Same display-fallback rule as ShareListItem.effective_subject -
     # subject if set, else first filename, else empty string.
     effective_subject: str = ""
     message: str | None
@@ -171,14 +171,14 @@ class ShareResponse(APIBaseModel):
     # Share-approval workflow (v1.24.0). `rejection_reason` is the approver's
     # note (set when state==rejected). `viewer_can_approve` is True when the
     # current viewer may approve/reject THIS share now (approver, pending, not
-    # their own) — drives the Approve/Reject buttons.
+    # their own) - drives the Approve/Reject buttons.
     rejection_reason: str | None = None
     approval_decided_at: datetime | None = None
     viewer_can_approve: bool = False
 
 
 class RejectShareRequest(APIBaseModel):
-    """Body for `POST /api/shares/{id}/reject` — optional reason shown to the
+    """Body for `POST /api/shares/{id}/reject` - optional reason shown to the
     sender."""
     reason: str | None = Field(default=None, max_length=1000)
 
@@ -205,7 +205,7 @@ class ShareListItem(APIBaseModel):
     subject: str | None
     # Display fallback: subject if set, else first file's filename,
     # else empty string (frontend localises to "(no subject)").
-    # Computed server-side so the rule lives in one place — the
+    # Computed server-side so the rule lives in one place - the
     # list endpoint doesn't expose filenames otherwise.
     effective_subject: str = ""
     created_at: datetime

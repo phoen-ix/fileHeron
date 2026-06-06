@@ -1,4 +1,4 @@
-"""/api/admin/files/{id}/quarantine — admin actions on infected files.
+"""/api/admin/files/{id}/quarantine - admin actions on infected files.
 
 Also surfaces v1.1.6 read-only AV-engine info + manual reload at
 /api/admin/quarantine/{av-status,av-reload}.
@@ -45,7 +45,7 @@ def admin_quarantine_download(
 ) -> Response:
     """Stream the quarantined bytes for forensic inspection. The
     ``.quarantined`` suffix is a belt-and-braces hint not to double-click
-    the resulting download — the admin's own AV should also flag it."""
+    the resulting download - the admin's own AV should also flag it."""
     from ...services import settings_registry
     from ...services.storage_backend import get_storage_backend, serve_response
 
@@ -93,7 +93,7 @@ def admin_quarantine_purge(
     db: Session = Depends(get_db),
     admin: User = Depends(get_current_admin),
 ) -> Response:
-    """Purge takes no body — admin already saw the file in the
+    """Purge takes no body - admin already saw the file in the
     quarantine list and clicked through a confirm dialog. The
     file_quarantine_purged audit row records the actor + file
     metadata; that's enough provenance."""
@@ -104,7 +104,7 @@ def admin_quarantine_purge(
 
 
 # ---------------------------------------------------------------------------
-# v1.1.6 — AV engine status + manual signature reload
+# v1.1.6 - AV engine status + manual signature reload
 # ---------------------------------------------------------------------------
 
 

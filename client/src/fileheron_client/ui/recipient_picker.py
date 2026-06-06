@@ -1,13 +1,13 @@
-"""Recipient picker — inline search (v0.9.4).
+"""Recipient picker - inline search (v0.9.4).
 
 ``RecipientPickerWidget`` keeps its external API (``user_ids()``,
 ``group_ids()``, ``has_any()``, ``reset()``) so ``upload_panel`` is untouched.
 The user/group search used to open a ``CTkToplevel`` modal; it now reveals an
-**inline** bounded panel inside the recipients section (one open at a time) —
+**inline** bounded panel inside the recipients section (one open at a time) -
 no popup.
 
-- ``_InlineUserSearch`` — type-to-search against /api/users/search (debounced).
-- ``_InlineGroupSearch`` — one-shot /api/groups/recipient-targets + local filter.
+- ``_InlineUserSearch`` - type-to-search against /api/users/search (debounced).
+- ``_InlineGroupSearch`` - one-shot /api/groups/recipient-targets + local filter.
 """
 from __future__ import annotations
 
@@ -62,7 +62,7 @@ class _InlineMultiSelectPanel(ctk.CTkFrame):
         self._search.bind("<Return>", lambda _e: self._on_add())
         self._search.bind("<Escape>", lambda _e: self._on_cancel())
 
-        # Bounded scroll list (the single CTkScrollableFrame — leaf only).
+        # Bounded scroll list (the single CTkScrollableFrame - leaf only).
         self._scroll = ctk.CTkScrollableFrame(outer, fg_color="transparent", height=_LIST_HEIGHT)
         self._scroll.pack(fill="x")
 
@@ -86,7 +86,7 @@ class _InlineMultiSelectPanel(ctk.CTkFrame):
 
     def _on_search_change(self, *_args) -> None:
         self._cancel_debounce()
-        # 200ms debounce — matches the SPA's recipient-picker debounce.
+        # 200ms debounce - matches the SPA's recipient-picker debounce.
         self._debounce_token = self.after(200, self._reload)
 
     def _cancel_debounce(self) -> None:
@@ -164,7 +164,7 @@ class _InlineUserSearch(_InlineMultiSelectPanel):
 
 
 class _InlineGroupSearch(_InlineMultiSelectPanel):
-    """One-shot fetch + local substring filter — groups are few."""
+    """One-shot fetch + local substring filter - groups are few."""
 
     def __init__(self, master, root, api, **kw) -> None:
         super().__init__(master, root, api, **kw)

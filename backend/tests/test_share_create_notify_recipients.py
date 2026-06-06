@@ -221,7 +221,7 @@ def test_group_fan_out_excludes_disabled_member(
     )
     db.commit()
     group_svc.add_member(db, actor=admin, group=g, user=active)
-    # Add while active, then disable — mirrors the realistic lifecycle
+    # Add while active, then disable - mirrors the realistic lifecycle
     # (admin disables a user who was already in groups). The fan-out
     # filter must skip them at SQL level.
     group_svc.add_member(db, actor=admin, group=g, user=later_disabled)
@@ -287,7 +287,7 @@ def test_direct_and_group_overlap_dedupes_to_single_dispatch(
 def test_recipient_with_off_preference_still_blocked_when_notify_true(
     make_user, db, monkeypatch
 ):
-    """Per-user channel `off` is honoured by the dispatch funnel — confirms
+    """Per-user channel `off` is honoured by the dispatch funnel - confirms
     the new gate didn't bypass the funnel."""
     admin = make_user(email="admin@test.local", role=UserRole.admin)
     rec = make_user(email="rec@test.local", role=UserRole.client)
@@ -349,6 +349,6 @@ async def test_http_endpoint_passes_field_through(
         db.query(Notification).filter(Notification.user_id == rec.id).count() == 0
     )
     # First login can fire a `login_alert` to the sender; filter to
-    # mails actually destined for the recipient — that's what this gate
+    # mails actually destined for the recipient - that's what this gate
     # is responsible for.
     assert all(kw.get("to") != rec.email for kw in enqueued)

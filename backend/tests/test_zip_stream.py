@@ -37,7 +37,7 @@ def test_build_zip_stream_sized_roundtrip(tmp_path):
     for chunk in zs:
         buf += chunk
 
-    # Exact length match is the whole point — enables a real Content-Length.
+    # Exact length match is the whole point - enables a real Content-Length.
     assert declared_len == len(buf)
 
     zf = zipfile.ZipFile(io.BytesIO(bytes(buf)))

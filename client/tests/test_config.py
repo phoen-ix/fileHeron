@@ -80,7 +80,7 @@ def test_set_secret_swallows_keyring_failure(monkeypatch):
         raise _kr.errors.KeyringError("backend unavailable")
 
     monkeypatch.setattr(_kr, "set_password", _boom)
-    # Must NOT raise — sign-in continues; token stays in memory.
+    # Must NOT raise - sign-in continues; token stays in memory.
     config.set_secret("api_token", "https://srv.example", "tok123")
 
 

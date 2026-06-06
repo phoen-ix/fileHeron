@@ -79,7 +79,7 @@ async def test_create_link_refuses_double(make_user, db):
 async def test_password_verify_locks_on_distributed_attack(make_user, db, monkeypatch):
     # Tighten the threshold so the test runs fast.
     # The threshold/window are now read via settings_registry.effective(),
-    # which falls back to the env config — patch that.
+    # which falls back to the env config - patch that.
     from app.config import settings as cfg
     monkeypatch.setattr(cfg, "PUBLIC_LINK_PASSWORD_RATE_LIMIT", 3)
     monkeypatch.setattr(cfg, "PUBLIC_LINK_PASSWORD_WINDOW_SEC", 900)
@@ -122,7 +122,7 @@ async def test_single_ip_failures_do_not_lock_link_for_everyone(make_user, db, m
     """Finding M5: one IP must not be able to DoS the link for others.
     It throttles itself (ip_is_rate_limited) but never sets the global lock."""
     # The threshold/window are now read via settings_registry.effective(),
-    # which falls back to the env config — patch that.
+    # which falls back to the env config - patch that.
     from app.config import settings as cfg
     monkeypatch.setattr(cfg, "PUBLIC_LINK_PASSWORD_RATE_LIMIT", 3)
     monkeypatch.setattr(cfg, "PUBLIC_LINK_PASSWORD_WINDOW_SEC", 900)
@@ -202,7 +202,7 @@ async def test_decrement_counter_atomic_and_terminating(make_user, db):
     db.refresh(link)
     assert link.downloads_remaining == 0
 
-    # Third call returns False — exhausted.
+    # Third call returns False - exhausted.
     allowed, _ = public_link_svc.decrement_counter(db, link=link)
     assert allowed is False
 

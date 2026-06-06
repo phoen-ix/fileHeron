@@ -1,4 +1,4 @@
-"""users.admin_nav_collapse_mode + admin_nav_open_categories — per-admin
+"""users.admin_nav_collapse_mode + admin_nav_open_categories - per-admin
 collapsible sidebar preference.
 
 Revision ID: 202606060002

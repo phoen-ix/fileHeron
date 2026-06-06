@@ -34,7 +34,7 @@ class UploadPanel(ctk.CTkFrame):
         super().__init__(master)
         self._app_root = root
         self._api = api
-        # Clients submit to the whole company — no recipient picker, kind=inbound.
+        # Clients submit to the whole company - no recipient picker, kind=inbound.
         # Staff pick recipients and send outbound. Mirrors the web SPA.
         self._is_client = me.role == "client"
         self._flash = flash
@@ -53,10 +53,10 @@ class UploadPanel(ctk.CTkFrame):
             self.status_var.set(text)
 
     def _build(self) -> None:
-        # v0.4.25 layout — designed to fit in 1000x640 without clipping:
+        # v0.4.25 layout - designed to fit in 1000x640 without clipping:
         #   row 0: Subject (full width)
         #   row 1: Message textbox (full width, 50px tall)
-        #   row 2: 2-col grid — Recipients (left) | Expires (right)
+        #   row 2: 2-col grid - Recipients (left) | Expires (right)
         #   row 3: Public link as ONE compact inline row
         #   row 4: Files header + scrollable list (fills slack)
         #   row 5 (PINNED BOTTOM): Add files / Clear list /
@@ -131,7 +131,7 @@ class UploadPanel(ctk.CTkFrame):
         right_col.grid(row=0, column=1, sticky="nsew", padx=(8, 0))
         self._build_expiry_section(right_col)
 
-        # Public link — one compact inline row instead of a boxed
+        # Public link - one compact inline row instead of a boxed
         # 4-row sub-form. Saves ~110 px of vertical space.
         self._build_public_link_section(self._form_outer)
 
@@ -222,7 +222,7 @@ class UploadPanel(ctk.CTkFrame):
         # Initially only the [✓] Public link checkbox shows inside
         # the box. Ticking the checkbox packs the Password / Limit /
         # Notify row; unticking it hides them again (no more
-        # always-greyed-out controls — pack/forget instead of
+        # always-greyed-out controls - pack/forget instead of
         # disable/enable). _collect_public_link() returns None when
         # the checkbox is off, so the submit path is unchanged.
         ctk.CTkLabel(parent, text=t("upload.public_link_label"), anchor="w").pack(fill="x")
@@ -237,9 +237,9 @@ class UploadPanel(ctk.CTkFrame):
             variable=self._pl_enabled, command=self._on_public_link_toggled,
         ).pack(anchor="w")
 
-        # Fields row — packed only when _pl_enabled is on.
+        # Fields row - packed only when _pl_enabled is on.
         self._pl_fields_row = ctk.CTkFrame(inner, fg_color="transparent")
-        # NOT packed here — _on_public_link_toggled controls visibility.
+        # NOT packed here - _on_public_link_toggled controls visibility.
 
         ctk.CTkLabel(self._pl_fields_row, text=t("upload.pl_password"), anchor="w").pack(side="left", padx=(0, 4))
         self._pl_password = ctk.StringVar()

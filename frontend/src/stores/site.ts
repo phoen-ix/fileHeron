@@ -1,7 +1,7 @@
 /* Pinia store for instance-wide site config (the response of
  * /api/config-public). Hydrated once at app bootstrap so display-time
- * code — most importantly the `formatInSiteTime` helper in
- * utils/datetime.ts — can read the admin-set timezone synchronously
+ * code - most importantly the `formatInSiteTime` helper in
+ * utils/datetime.ts - can read the admin-set timezone synchronously
  * without re-fetching per render.
  *
  * Distinct from `auth.ts` (which is per-user) because the values here

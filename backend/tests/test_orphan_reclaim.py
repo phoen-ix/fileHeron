@@ -107,10 +107,10 @@ async def test_cron_skips_quarantined_and_active(make_user, db):
     from app.workers.reclaim_orphaned_files import reclaim_orphaned_files
 
     owner = make_user(email="u@test.local", role=UserRole.employee)
-    # Quarantined file (infected) under a revoked share — must NOT be swept.
+    # Quarantined file (infected) under a revoked share - must NOT be swept.
     q_share = _make_share(db, owner.id, state=ShareState.revoked, terminated_ago_days=10)
     qf = _make_file(db, q_share.id, owner.id, state=FileState.infected)
-    # Active share's clean file — must NOT be swept.
+    # Active share's clean file - must NOT be swept.
     a_share = _make_share(db, owner.id, state=ShareState.active)
     af = _make_file(db, a_share.id, owner.id, state=FileState.clean)
     db.commit()

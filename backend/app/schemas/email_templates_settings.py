@@ -27,7 +27,7 @@ class EmailTemplateItem(APIBaseModel):
     # Effective subject (override if set, else built-in default).
     subject: str
     # The override body markdown, or "" when none exists yet (the editor seeds
-    # from the built-in default text in that case — see `default_body`).
+    # from the built-in default text in that case - see `default_body`).
     body_markdown: str
     default_subject: str
     default_body: str

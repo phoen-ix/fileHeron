@@ -39,9 +39,9 @@ describe('formatInSiteTime', () => {
   })
 
   it('returns the em-dash placeholder for null / undefined / empty', () => {
-    expect(formatInSiteTime(null, 'en')).toBe('—')
-    expect(formatInSiteTime(undefined, 'en')).toBe('—')
-    expect(formatInSiteTime('', 'en')).toBe('—')
+    expect(formatInSiteTime(null, 'en')).toBe('-')
+    expect(formatInSiteTime(undefined, 'en')).toBe('-')
+    expect(formatInSiteTime('', 'en')).toBe('-')
   })
 
   it('renders the same instant differently for UTC vs Europe/Vienna vs Pacific/Auckland', () => {
@@ -78,7 +78,7 @@ describe('formatInSiteTime', () => {
     const site = useSiteStore()
     site.timezone = '' // simulate pre-bootstrap default
     const out = formatInSiteTime('2026-05-16T23:46:00', 'en')
-    expect(out).toMatch(/2026/) // smoke — should produce some output
+    expect(out).toMatch(/2026/) // smoke - should produce some output
   })
 
   it('renders 24-hour with a zone label in the site timezone (not 12-hour, not UTC)', () => {
@@ -131,7 +131,7 @@ describe('site-tz expiry pipeline (siteNowPlusIso / siteLocalIsoToUtcIso)', () =
   it('interprets the picker wall-clock in the site tz, not the browser tz', () => {
     const site = useSiteStore()
     site.timezone = 'Europe/Vienna' // CEST = +02:00 in June
-    // 15:10 Vienna == 13:10 UTC — independent of the test runner's TZ.
+    // 15:10 Vienna == 13:10 UTC - independent of the test runner's TZ.
     expect(siteLocalIsoToUtcIso('2026-06-08T15:10:00')).toBe('2026-06-08T13:10:00.000Z')
   })
 

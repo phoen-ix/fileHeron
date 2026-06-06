@@ -168,7 +168,7 @@ onMounted(load)
               {{ s.revoked_at ? t('admin_sessions.state_revoked') : t('admin_sessions.state_expired') }}
             </span>
           </td>
-          <td class="fh-mono">{{ s.created_ip || '—' }}</td>
+          <td class="fh-mono">{{ s.created_ip || '-' }}</td>
           <td class="fh-mono">{{ formatDate(s.created_at) }}</td>
           <td class="fh-mono">{{ formatDate(s.last_used_at) }}</td>
           <td class="fh-mono">{{ formatDate(s.expires_at) }}</td>

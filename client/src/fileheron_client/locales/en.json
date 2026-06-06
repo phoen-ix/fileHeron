@@ -20,11 +20,11 @@
   },
 
   "app": {
-    "title_template": "file:Heron — {name} ({role})  ·  v{version}"
+    "title_template": "file:Heron - {name} ({role})  ·  v{version}"
   },
 
   "login": {
-    "title": "Sign in to file:Heron  —  client v{version}",
+    "title": "Sign in to file:Heron  -  client v{version}",
     "intro": "Connect to a file:Heron server. Your credentials live in your OS credential store; only the server URL is saved on disk.",
     "server_url_label": "Server URL",
     "server_url_placeholder": "https://files.example.com",
@@ -42,7 +42,7 @@
     "sign_in": "Sign in",
     "signing_in": "Signing in…",
     "quit": "Quit",
-    "session_expired": "Your session expired — please sign in again.",
+    "session_expired": "Your session expired - please sign in again.",
 
     "err_server_required": "Server URL is required.",
     "err_email_required": "Email is required.",
@@ -174,7 +174,7 @@
     "pl_revoked": "REVOKED",
     "pl_downloads": "Downloads: {remaining}/{limit}",
     "copy_failed_title": "Copy failed",
-    "copy_failed_body": "Couldn't reach the clipboard. The URL is shown in the field above — copy it manually with Ctrl+C.",
+    "copy_failed_body": "Couldn't reach the clipboard. The URL is shown in the field above - copy it manually with Ctrl+C.",
     "files_heading": "Files",
     "add_files_btn": "Add files…",
     "edit_expiry_btn": "Edit expiry…",
@@ -222,10 +222,10 @@
 
   "upload": {
     "subject_label": "Subject",
-    "subject_placeholder": "(optional — defaults to first filename)",
+    "subject_placeholder": "(optional - defaults to first filename)",
     "message_label": "Message",
     "recipients_label": "Recipients",
-    "to_company": "Goes to the company — everyone on the team can see it. You don't pick recipients.",
+    "to_company": "Goes to the company - everyone on the team can see it. You don't pick recipients.",
     "expires_label": "Expires",
     "never_label": "Never expires (end manually)",
     "download_limit_label": "Download limit",
@@ -255,14 +255,14 @@
     "err_invalid_limit_body": "Download limit must be a positive integer, or blank for unlimited.",
     "err_invalid_pl_limit_title": "Invalid limit",
     "err_invalid_pl_limit_body": "Download limit must be a positive integer, or blank for unlimited.",
-    "public_link_result_note": "Public link created. Copy it below — it's also on the share's detail page.",
-    "status_uploading": "Share {short_id} created — uploading {n} file(s)…",
+    "public_link_result_note": "Public link created. Copy it below - it's also on the share's detail page.",
+    "status_uploading": "Share {short_id} created - uploading {n} file(s)…",
     "status_err": "Error: {detail}",
     "status_success": "Share created and all files uploaded.",
-    "status_partial": "Some uploads failed — see dialogs above.",
+    "status_partial": "Some uploads failed - see dialogs above.",
     "upload_failed_title": "Upload failed",
     "upload_failed_body": "{name}\n\n{detail}",
-    "upload_failed_toast": "Upload failed — {name}: {detail}"
+    "upload_failed_toast": "Upload failed - {name}: {detail}"
   },
   "upload_progress": {
     "title": "Uploading files",
@@ -272,9 +272,9 @@
     "state_uploading": "Uploading…",
     "state_done": "Done",
     "state_failed": "Failed",
-    "log_started": "Upload started — {name}",
-    "log_done": "Upload complete — {name}",
-    "log_failed": "Upload failed — {name}: {detail}",
+    "log_started": "Upload started - {name}",
+    "log_done": "Upload complete - {name}",
+    "log_failed": "Upload failed - {name}: {detail}",
     "status_all_done": "All {n} file(s) uploaded.",
     "status_partial": "{failed} of {total} upload(s) failed.",
     "new_share_btn": "New share",
@@ -294,7 +294,7 @@
     "state_done": "Done",
     "state_failed": "Failed",
     "status_uploading": "Uploading {n} file(s)…",
-    "status_all_failed": "All uploads failed — remove or retry.",
+    "status_all_failed": "All uploads failed - remove or retry.",
     "toast_added": "Added {n} file(s) to the share.",
     "notify_failed": "Files added, but recipients could not be notified."
   }

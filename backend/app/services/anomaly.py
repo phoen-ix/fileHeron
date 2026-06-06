@@ -1,12 +1,12 @@
 """Heuristic anomaly detection (GeoIP-free).
 
-Pure detectors over existing tables — no geolocation, no new dependency. Each
+Pure detectors over existing tables - no geolocation, no new dependency. Each
 returns a list of `Finding`s; the `anomaly_check` cron dedups + alerts on them.
 file:Heron has no real geo (utils/geohash.ip_geohash5 is an IP-prefix *hash*,
 not lat/lon), so "multi-network" stands in for impossible-travel: one account's
 token used from several distinct networks in a short window.
 
-These are advisory signals — the action is always to ALERT an admin, never to
+These are advisory signals - the action is always to ALERT an admin, never to
 auto-block.
 """
 from __future__ import annotations
@@ -29,7 +29,7 @@ _MIN_DISTINCT_EMAILS = 3
 @dataclass(frozen=True)
 class Finding:
     type: str          # "mass_download" | "multi_network" | "login_stuffing"
-    subject: str       # str(user_id) or ip — the dedup key
+    subject: str       # str(user_id) or ip - the dedup key
     count: int
     detail: dict = field(default_factory=dict)
 

@@ -3,7 +3,7 @@
 A single TLS/TCP stream over a high-latency/lossy path is window-limited and
 rarely saturates a fast link. This splits a large download into N byte-range
 requests fetched in parallel, each written to its offset in a pre-allocated
-``.part`` file, then atomically renamed into place — N streams saturate the
+``.part`` file, then atomically renamed into place - N streams saturate the
 link.
 
 Requires backend >= v1.5.2, which counts a download once (the byte-0 segment)
@@ -28,7 +28,7 @@ from .files import DownloadCancelled, DownloadPaused, download_file
 
 logger = logging.getLogger("fileheron_client.api.download_segmented")
 
-CHUNK = 1024 * 1024  # 1 MiB — fewer iterations → less per-chunk overhead/GIL churn
+CHUNK = 1024 * 1024  # 1 MiB - fewer iterations → less per-chunk overhead/GIL churn
 SEGMENT_THRESHOLD = 16 * 1024 * 1024  # below this, single stream isn't worth it
 SEGMENT_SIZE = 16 * 1024 * 1024       # bytes per segment (bounds segment count)
 MAX_CONNECTIONS = 8
@@ -87,7 +87,7 @@ def download_file_segmented(
             for fut in as_completed(futs):
                 fut.result()  # re-raise the first segment failure
     except DownloadCancelled:
-        # User aborted — stop any straggler segments, drop the partial, and
+        # User aborted - stop any straggler segments, drop the partial, and
         # propagate (do NOT fall back to a single-stream re-download).
         if cancel is not None:
             cancel.set()

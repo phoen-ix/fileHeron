@@ -1,4 +1,4 @@
-# fileHeron updater-executor — ephemeral. Spawned per-update by the
+# fileHeron updater-executor - ephemeral. Spawned per-update by the
 # shim (`docker/updater-shim/`), does one job (pull images, rewrite
 # FH_TAG, `docker compose up -d backend worker frontend`, poll backend
 # health), then exits. The exit code is the job status; progress

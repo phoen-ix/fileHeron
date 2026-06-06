@@ -8,7 +8,7 @@ Two ceremony pairs:
   string the client passes back on complete):
   /api/auth/webauthn/begin → /api/auth/webauthn/complete
 
-The login flow gates on a successful password check first — passkeys
+The login flow gates on a successful password check first - passkeys
 in this codebase are an *additional* factor (or a TOTP replacement),
 not a passwordless first-factor. That's a deliberate scope choice;
 true passwordless can be a follow-up.
@@ -43,7 +43,7 @@ from ..utils.crypto import argon2_verify, normalize_email
 
 logger = logging.getLogger("fileheron.webauthn_router")
 
-# Two routers in one module — different prefixes.
+# Two routers in one module - different prefixes.
 account_router = APIRouter(prefix="/api/account/webauthn", tags=["webauthn"])
 auth_router = APIRouter(prefix="/api/auth/webauthn", tags=["webauthn"])
 

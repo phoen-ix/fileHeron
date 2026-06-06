@@ -1,4 +1,4 @@
-"""/api/admin/audit-log — list + streaming CSV export."""
+"""/api/admin/audit-log - list + streaming CSV export."""
 from __future__ import annotations
 
 import base64

@@ -1,4 +1,4 @@
-"""_smtp_error_hint(exc) — maps caught SMTP exceptions to an actionable
+"""_smtp_error_hint(exc) - maps caught SMTP exceptions to an actionable
 admin hint. Pure function; first-match-wins ordering matters."""
 from __future__ import annotations
 
@@ -24,7 +24,7 @@ def test_client_rejected_554_gives_relay_hint():
 
 def test_auth_checked_before_relay_when_text_contains_access_denied():
     # A 535 whose body also says "access denied" must still be classified as
-    # an auth problem, not relay — rule order guards this.
+    # an auth problem, not relay - rule order guards this.
     hint = _smtp_error_hint(
         SMTPResponseException(535, "5.7.8 access denied: authentication required")
     )

@@ -1,13 +1,13 @@
 """Verify every alembic migration can downgrade cleanly.
 
 Many migrations have non-trivial downgrade() paths. Without a test,
-they sit untested until the day an operator needs to roll back —
+they sit untested until the day an operator needs to roll back -
 and finds out the path doesn't work. This walks the migration chain
 backwards step-by-step against a temporary SQLite engine, then
 re-upgrades to confirm no schema drift.
 
 Slow-ish (creates and destroys ~30 tables N times). Lives in tests/
-but not run by default — gate with `RUN_ALEMBIC_ROUNDTRIP=1` env var
+but not run by default - gate with `RUN_ALEMBIC_ROUNDTRIP=1` env var
 so the default pytest run stays under 20s.
 """
 from __future__ import annotations

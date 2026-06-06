@@ -12,7 +12,7 @@ PATH, ``import _ssl`` would fail with::
 
 The bundled `_ssl.pyd` is loaded from the PyInstaller extract dir,
 but its dependent DLLs are resolved via Windows' default search order
-— which can pick the WRONG OpenSSL build from a PATH dir. Its symbol
+- which can pick the WRONG OpenSSL build from a PATH dir. Its symbol
 offsets don't match what `_ssl.pyd` expects, so its initialiser
 crashes the loader.
 
@@ -34,7 +34,7 @@ if sys.platform == "win32":
             os.add_dll_directory(bundle)
         except (FileNotFoundError, OSError):
             # If the bundle dir isn't a valid directory (shouldn't
-            # happen post-extract) just continue — better to crash
+            # happen post-extract) just continue - better to crash
             # later with the legible "DLL load failed" message than
             # to crash here with no diagnostic.
             pass

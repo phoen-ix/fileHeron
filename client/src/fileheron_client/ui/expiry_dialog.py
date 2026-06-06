@@ -1,10 +1,10 @@
-"""Edit-expiry modal — date picker + Never checkbox. v0.4.0 CTk port.
+"""Edit-expiry modal - date picker + Never checkbox. v0.4.0 CTk port.
 
 The caller invokes ``show_modal()`` which blocks and returns:
 
-- ``("set", datetime)`` — user picked a future datetime
-- ``("clear", None)`` — user checked the Never box
-- ``None`` — dialog was cancelled (no-op)
+- ``("set", datetime)`` - user picked a future datetime
+- ``("clear", None)`` - user checked the Never box
+- ``None`` - dialog was cancelled (no-op)
 
 Pre-fills the picker from ``current`` if non-None; otherwise defaults
 to ``now + 7 days`` (matches the SPA's ExpiryPicker default) and ticks
@@ -56,7 +56,7 @@ class ExpiryDialog:
             mindate=datetime.now().date(),
             date_pattern="yyyy-mm-dd",
             # Pin to the app locale (en/de) so the bundled .exe only needs
-            # those Babel CLDR files — the spec trims the rest. Without this,
+            # those Babel CLDR files - the spec trims the rest. Without this,
             # tkcalendar defaults to the host's system locale and would raise
             # UnknownLocaleError on a machine whose locale was trimmed away.
             locale=get_locale(),
@@ -115,7 +115,7 @@ class ExpiryDialog:
             if not (0 <= hh < 24) or not (0 <= mm < 60):
                 raise ValueError
         except ValueError:
-            # Cheap inline validation — clear the result and bail.
+            # Cheap inline validation - clear the result and bail.
             from ._messagebox import warn
             warn(
                 self._win,

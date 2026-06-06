@@ -60,7 +60,7 @@ async def cleanup_abandoned_uploads(_ctx) -> dict:
 
             tus_id = info_path.stem  # filename without `.info`
             # If the DB still has a live `files` row pointing at this
-            # tus_id, leave it alone — the finalize hook may yet land.
+            # tus_id, leave it alone - the finalize hook may yet land.
             row = (
                 db.query(File)
                 .filter(

@@ -1,4 +1,4 @@
-"""Admin quarantine flow — release + purge + download.
+"""Admin quarantine flow - release + purge + download.
 
 Service-level tests for `services/quarantine_admin.py` and an API-level
 test for the download endpoint.
@@ -202,7 +202,7 @@ def test_purge_transitions_to_deleted_and_unlinks_bytes(
     )
     assert len(audits) == 1
     assert audits[0].actor_user_id == admin.id
-    # No reason field — purge is no longer justification-gated.
+    # No reason field - purge is no longer justification-gated.
     assert "reason" not in audits[0].extra
     assert audits[0].extra["filename"] == "upload.bin"
 

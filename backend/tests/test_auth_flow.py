@@ -79,7 +79,7 @@ async def test_refresh_rotates_and_returns_new_access_token(make_user, client):
 @pytest.mark.asyncio
 async def test_refresh_threads_created_at_and_advances_last_used(make_user, client, db):
     """Rotation carries the original sign-in time forward (created_at) while
-    last_used_at advances to the rotation — the basis for the admin session
+    last_used_at advances to the rotation - the basis for the admin session
     'started' vs 'last active' columns."""
     user = make_user(email="alice@test.local", password="LongCorrectHorse123!")
 
@@ -128,8 +128,8 @@ async def test_refresh_reuse_revokes_entire_family(make_user, client, db):
     # Replay the ORIGINAL refresh token → reuse detection must fire.
     # The jar now holds the rotated cookie; clear it and send the original
     # explicitly via the Cookie header so the replayed value is deterministic.
-    # (httpx 0.28's cookie-jar dedup otherwise lets the rotated cookie — same
-    # name, different domain — shadow a re-set original, so the server sees a
+    # (httpx 0.28's cookie-jar dedup otherwise lets the rotated cookie - same
+    # name, different domain - shadow a re-set original, so the server sees a
     # still-valid token and returns 200 instead of detecting reuse.)
     client.cookies.clear()
     replay = await client.post(
@@ -264,7 +264,7 @@ async def test_forgot_then_reset_password(make_user, client, db):
     resp = await client.post("/api/auth/forgot-password", json={"email": "alice@test.local"})
     assert resp.status_code == 200
 
-    # The plaintext is in the most recent password_reset_tokens row's token_hash —
+    # The plaintext is in the most recent password_reset_tokens row's token_hash -
     # but we only stored the hash. For testing, generate a token manually via the service.
     # (In the real flow the token is delivered via email.)
     from app.services.auth import begin_password_reset

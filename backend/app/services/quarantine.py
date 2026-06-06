@@ -1,4 +1,4 @@
-"""Quarantine flow — what happens after AV says "infected".
+"""Quarantine flow - what happens after AV says "infected".
 
 Steps:
 1. Move the on-disk file from STORAGE_ROOT/.../{file_id}.bin to
@@ -73,7 +73,7 @@ def quarantine_file(
         except OSError as e:
             move_error = str(e)
             logger.error("quarantine move failed for %s: %s", file.id, e)
-            # Fall through — we still mark the file infected even if the
+            # Fall through - we still mark the file infected even if the
             # move failed; admins can clean storage manually. The DB row's
             # storage_path stays at the pre-quarantine location (NOT the
             # would-be dest) so admin tooling can still find the bytes.
@@ -81,11 +81,11 @@ def quarantine_file(
     file.state = FileState.infected
     if moved and dest_loc is not None:
         file.storage_path = dest_loc
-    # else: leave storage_path unchanged — points at the original location
+    # else: leave storage_path unchanged - points at the original location
     # (or remains None if there was no file on disk to begin with).
     db.flush()
 
-    # Release uploader's quota — they shouldn't be charged for the bytes
+    # Release uploader's quota - they shouldn't be charged for the bytes
     # we just moved out of their share into the org's quarantine bucket.
     release_bytes(user_id=file.uploaded_by_id, bytes_to_free=file.size_bytes)
 
@@ -121,7 +121,7 @@ def quarantine_file(
             metadata={"reason": "av_quarantine", "trigger_file_id": file.id},
         )
 
-    # Tell the uploader + (optionally) fan out to admins. Wrapped —
+    # Tell the uploader + (optionally) fan out to admins. Wrapped -
     # never fail the quarantine because of a notification path.
     try:
         from ..models.notification import NotificationCategory
@@ -144,7 +144,7 @@ def quarantine_file(
                 email_to=uploader.email,
             )
 
-        # Optional admin fan-out — gated by the runtime setting. Admin
+        # Optional admin fan-out - gated by the runtime setting. Admin
         # email IS stored in users.email (the early hash+hint design was
         # retired), so we pass `email_to=admin.email` and let each admin's
         # per-category preference (default `both`) decide channel.

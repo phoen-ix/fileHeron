@@ -7,7 +7,7 @@ admin UI.
 
 Trust model: filesystem-membership. The /state bind mount is shared
 ONLY between backend and shim (both declared in compose). No HMAC,
-no HTTP, no port — the file IS the message. Backend's existing
+no HTTP, no port - the file IS the message. Backend's existing
 admin-auth + password re-prompt + audit chain stays at the user-facing
 boundary; the file is just plumbing on this side of that gate.
 
@@ -52,7 +52,7 @@ def _write_state_text(text: str) -> None:
     the previous file may be root-owned because the shim and
     updater-executor both write it as root via the docker socket.
     `Path.write_text` does open('w') which truncates the existing
-    inode in place — requiring +w on the FILE — so it fails the
+    inode in place - requiring +w on the FILE - so it fails the
     moment shim/executor have written. tempfile + os.replace only
     requires +w on the DIRECTORY (which appuser owns), so it works
     regardless of the existing file's ownership. chmod before
@@ -170,7 +170,7 @@ def apply(*, action: str, target_tag: str | None) -> dict:
         STATE_DIR.mkdir(parents=True, exist_ok=True)
     except Exception as e:
         # If we can't create the state dir, the shim can't read it
-        # either — surface clearly.
+        # either - surface clearly.
         raise AppError(
             503,
             "UPDATER_NOT_CONFIGURED",

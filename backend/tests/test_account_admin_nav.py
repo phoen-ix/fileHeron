@@ -1,4 +1,4 @@
-"""PATCH /api/account/admin-nav-mode + /admin-nav-open — per-admin sidebar prefs."""
+"""PATCH /api/account/admin-nav-mode + /admin-nav-open - per-admin sidebar prefs."""
 from __future__ import annotations
 
 import pytest

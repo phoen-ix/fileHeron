@@ -1,7 +1,7 @@
 """In-browser preview policy (v1.23.0).
 
-Serving user-uploaded bytes *inline* — so the browser renders them in place
-rather than downloading — is the classic stored-XSS vector for a file host.
+Serving user-uploaded bytes *inline* - so the browser renders them in place
+rather than downloading - is the classic stored-XSS vector for a file host.
 The defense lives here and is reused by every preview endpoint (authed +
 public):
 
@@ -17,7 +17,7 @@ public):
 Callers MUST gate on ``is_previewable`` before serving and apply
 ``SECURITY_HEADERS`` to the inline response.
 
-PDF trust model: a CSP does not govern JavaScript embedded *inside* a PDF — that
+PDF trust model: a CSP does not govern JavaScript embedded *inside* a PDF - that
 runs in the browser's PDF viewer, not the page. Modern viewers (Firefox's
 PDF.js, Chrome's sandboxed PDFium) disable or sandbox PDF JS by default, and we
 only ever preview AV-``clean`` files, so the residual risk is the browser
@@ -34,7 +34,7 @@ PDF_TYPE = "application/pdf"
 
 # Hardening headers for every inline preview response (local backend). On the
 # S3 backend the bytes are served by a presigned redirect and can't carry
-# these — there the allowlist (never html/svg) is the sole defense.
+# these - there the allowlist (never html/svg) is the sole defense.
 SECURITY_HEADERS: dict[str, str] = {
     "X-Content-Type-Options": "nosniff",
     "Content-Security-Policy": (
@@ -54,8 +54,8 @@ def _normalize(mime_type: str | None) -> str:
 
 
 def preview_kind(mime_type: str | None) -> str | None:
-    """Render strategy for ``mime_type`` — ``"image"`` | ``"pdf"`` | ``"text"``
-    — or ``None`` when the type isn't previewable."""
+    """Render strategy for ``mime_type`` - ``"image"`` | ``"pdf"`` | ``"text"``
+    - or ``None`` when the type isn't previewable."""
     mime = _normalize(mime_type)
     if mime in PREVIEWABLE_IMAGE_TYPES:
         return "image"
@@ -71,7 +71,7 @@ def is_previewable(mime_type: str | None) -> bool:
 
 
 def safe_content_type(mime_type: str | None) -> str:
-    """The Content-Type we actually serve inline — a safe canonical value, NOT
+    """The Content-Type we actually serve inline - a safe canonical value, NOT
     the untrusted stored type. Text of any flavour (incl. ``text/html``) is
     pinned to ``text/plain`` so it renders as source, never as a document."""
     kind = preview_kind(mime_type)

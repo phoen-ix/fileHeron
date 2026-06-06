@@ -3,7 +3,7 @@
  *
  * Flow:
  *   1. user fills metadata + drops files
- *   2. clicks "Send" — POST /api/shares creates the share
+ *   2. clicks "Send" - POST /api/shares creates the share
  *   3. uploads start, routed to that share_id (direct + TUS)
  *   4. when all files done, navigate to /share/{id} for authoritative view
  *
@@ -41,14 +41,14 @@ const { describe } = useApiError()
 const kind = computed<ShareKind>(() =>
   auth.user?.role === 'client' ? 'inbound' : 'outbound',
 )
-// Clients submit to the whole company — they don't pick recipients (the
+// Clients submit to the whole company - they don't pick recipients (the
 // server ignores any and resolves the audience by role/group at read time).
 const isClient = computed(() => auth.user?.role === 'client')
 
 const subject = ref('')
 const message = ref('')
 const recipients = ref<ShareRecipientsRequest>({ user_ids: [], group_ids: [] })
-// null = user picked the "Never" preset (v1.1.4 — share never auto-deletes).
+// null = user picked the "Never" preset (v1.1.4 - share never auto-deletes).
 // Initial state is undefined so the picker's auto-emit on mount fills it
 // with the default 7-day preset; from then on the picker always emits a
 // concrete value (string OR null).
@@ -97,7 +97,7 @@ const canSubmit = computed(() => {
   // as the user has the toggle on AND policy lets them create one.
   const hasPublicLink = includePublicLink.value && canCreatePublicLink.value
   // Clients always submit to the company, so they need neither a recipient
-  // nor a public link — just files. Staff still require one of the two.
+  // nor a public link - just files. Staff still require one of the two.
   if (!isClient.value && !hasRecipients && !hasPublicLink) return false
   // Picker emits a value on mount (default 7d preset), so by the time
   // the user can click submit, expiresAtLocal is either a string (some
@@ -114,7 +114,7 @@ const canSubmit = computed(() => {
 // flight; the next view (/share/{id}) re-fetches authoritative state
 // on mount, so a brief flash we'd never see is fine. Without this,
 // the TUS path raced because upload-success sets 'finalizing' then
-// flips to 'done' on a 800ms timer in useUpload.ts —
+// flips to 'done' on a 800ms timer in useUpload.ts -
 // the check fires before that timer.
 const allUploadsDone = computed(() =>
   upload.items.value.length > 0 &&
@@ -139,7 +139,7 @@ async function onSubmit() {
       kind: kind.value,
       recipients: recipients.value,
       // null = "Never expires" (user picked the Never preset); else the
-      // picker emits a site-tz wall-clock string — convert it to a UTC
+      // picker emits a site-tz wall-clock string - convert it to a UTC
       // instant interpreting it in the site tz (matches display).
       expires_at: expiresAtLocal.value === null
         ? null
@@ -172,7 +172,7 @@ async function onSubmit() {
       ui.pushToast(t('share_create.toast_partial', { n: errorCount.value }), 'warn')
     }
   } catch (err) {
-    // createShare failed before any swap — stay on the form with the error.
+    // createShare failed before any swap - stay on the form with the error.
     errorMsg.value = describe(err)
     submitting.value = false
   }

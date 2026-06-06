@@ -1,4 +1,4 @@
-"""cleanup_expired_tokens worker — soft-revoke expired + hard-delete
+"""cleanup_expired_tokens worker - soft-revoke expired + hard-delete
 revoked-old refresh_tokens. Idempotent."""
 from __future__ import annotations
 
@@ -22,13 +22,13 @@ async def test_worker_soft_revokes_expired_tokens(
     user = make_user(email="a@test.local", role=UserRole.client)
     now = _now()
 
-    # Active (not expired) — should be left alone.
+    # Active (not expired) - should be left alone.
     active = RefreshToken(
         user_id=user.id,
         token_hash="a" * 64,
         expires_at=now + timedelta(days=7),
     )
-    # Expired but not revoked — should be soft-revoked.
+    # Expired but not revoked - should be soft-revoked.
     expired = RefreshToken(
         user_id=user.id,
         token_hash="b" * 64,

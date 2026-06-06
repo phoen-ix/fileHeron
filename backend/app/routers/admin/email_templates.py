@@ -1,4 +1,4 @@
-"""/api/admin/settings/email-templates/* — admin-editable email templates.
+"""/api/admin/settings/email-templates/* - admin-editable email templates.
 
 Per (slug, locale) Markdown overrides for outbound emails. The built-in
 filesystem templates remain the default; an override only takes effect once
@@ -72,14 +72,14 @@ def _default_subject(slug: str, locale: str) -> str:
 
 
 def _default_body(slug: str, locale: str) -> str:
-    """The built-in text template rendered with friendly tokens — the editor's
+    """The built-in text template rendered with friendly tokens - the editor's
     starting point when no override exists. Best-effort."""
     try:
         return email_svc._render(
             locale, slug, "txt", _seed_ctx(slug),
             app_url="[APP_URL]", app_name="[APP_NAME]",
         ).strip() + "\n"
-    except Exception:  # noqa: BLE001 — seeding is non-critical
+    except Exception:  # noqa: BLE001 - seeding is non-critical
         return ""
 
 
@@ -282,8 +282,8 @@ async def test_send_email_template(
     admin: User = Depends(get_current_admin),
 ) -> TestSendEmailTemplateResponse:
     """Render the (possibly unsaved) edits with sample data and send to the
-    requesting admin's own address. Recipient is server-resolved — never client
-    supplied — so this can't be used to mail arbitrary people."""
+    requesting admin's own address. Recipient is server-resolved - never client
+    supplied - so this can't be used to mail arbitrary people."""
     _assert_slug(slug)
     _assert_locale(locale)
     subject = (payload.subject or "").strip() or None
@@ -309,7 +309,7 @@ async def test_send_email_template(
             to=admin.email, subject=rendered_subject,
             text_body=text, html_body=html, category=slug,
         )
-    except Exception as exc:  # noqa: BLE001 — surface the SMTP error to the admin
+    except Exception as exc:  # noqa: BLE001 - surface the SMTP error to the admin
         payload_out = email_svc._smtp_error_payload(exc)
         return TestSendEmailTemplateResponse(**payload_out, sent_to=admin.email)
     return TestSendEmailTemplateResponse(ok=True, sent_to=admin.email)

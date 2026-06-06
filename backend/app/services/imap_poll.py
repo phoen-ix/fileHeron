@@ -1,4 +1,4 @@
-"""Inbound poll orchestration (v1.27.0) — mirrors release_check's gating
+"""Inbound poll orchestration (v1.27.0) - mirrors release_check's gating
 (enabled / auto-vs-manual / interval) and on-demand bypass.
 
 Sync (stdlib IMAP + DB); the worker runs it via ``asyncio.to_thread``. The IMAP
@@ -104,7 +104,7 @@ def run_poll(*, manual: bool, db: Session | None = None, session_opener=open_ses
         settings_svc.set_value(db, key=K.IMAP_LAST_SUCCESS_AT, value=now_iso, actor=None)
         db.commit()
         return {"ok": True, "fetched": fetched, "ingested": ingested, "last_uid": last_uid}
-    except Exception as exc:  # noqa: BLE001 — surface to caller/cron tracker
+    except Exception as exc:  # noqa: BLE001 - surface to caller/cron tracker
         with contextlib.suppress(Exception):
             settings_svc.set_value(
                 db, key=K.IMAP_LAST_POLL_AT, value=utc_now().isoformat(), actor=None
@@ -132,9 +132,9 @@ def test_connection(db: Session, *, override: "imap_config.ImapConfig | None" = 
         hint = None
         low = text.lower()
         if "authentication" in low or "login" in low or "auth" in low:
-            hint = "Authentication failed — check the IMAP user and password."
+            hint = "Authentication failed - check the IMAP user and password."
         elif "ssl" in low or "tls" in low or "wrong version" in low:
-            hint = "TLS mismatch — use 'implicit' for port 993, 'starttls' for 143."
+            hint = "TLS mismatch - use 'implicit' for port 993, 'starttls' for 143."
         elif "timed out" in low or "refused" in low or "name or service" in low:
-            hint = "Could not reach the server — check host, port, and firewall."
+            hint = "Could not reach the server - check host, port, and firewall."
         return {"ok": False, "error": f"{name}: {text}", "hint": hint, "folders": []}

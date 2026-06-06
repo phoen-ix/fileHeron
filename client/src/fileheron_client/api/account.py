@@ -1,4 +1,4 @@
-"""Self-service profile endpoints — currently just the locale switch.
+"""Self-service profile endpoints - currently just the locale switch.
 
 v0.8.0: factored out so the desktop language picker has a clean
 helper instead of inlining the PATCH call into settings_dialog. As
@@ -24,7 +24,7 @@ def patch_locale(api: ApiClient, locale: str) -> MeResponse:
 
 
 def get_current_api_token(api: ApiClient) -> dict | None:
-    """GET ``/api/account/api-tokens/current`` — metadata about the API token
+    """GET ``/api/account/api-tokens/current`` - metadata about the API token
     this client is authenticated with (``id, name, last4, created_at,
     last_used_at, status``), so Settings can show which token it's running on.
 

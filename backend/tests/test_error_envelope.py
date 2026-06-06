@@ -53,7 +53,7 @@ async def test_unauthenticated_account_me(client):
 
 @pytest.mark.asyncio
 async def test_validation_error_has_envelope_shape_or_422(client):
-    """Pydantic validation errors are FastAPI's default 422 — these don't use
+    """Pydantic validation errors are FastAPI's default 422 - these don't use
     the AppError envelope but DO have a stable shape (the FastAPI {"detail":[…]}
     structure). This test pins that contract."""
     r = await client.post("/api/auth/login", json={"email": "not-an-email"})

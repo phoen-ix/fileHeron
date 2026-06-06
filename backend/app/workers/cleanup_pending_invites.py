@@ -2,7 +2,7 @@
 retention window.
 
 Invites are 24h-TTL by design (services/invite.py::create_invite). After
-that they're useless — the consume path refuses an expired token — but
+that they're useless - the consume path refuses an expired token - but
 the row stays in `invite_tokens` forever unless the admin clicks Delete.
 This cron sweeps the abandoned ones so the table doesn't grow
 monotonically.

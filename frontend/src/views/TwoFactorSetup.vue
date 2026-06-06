@@ -45,7 +45,7 @@ const formattedSecret = computed(() => {
 
 onMounted(async () => {
   await refreshStatus()
-  // Forced mode: skip the inactive-intro click — the user is here
+  // Forced mode: skip the inactive-intro click - the user is here
   // because policy demands enrolment, so show the QR immediately.
   if (forced.value && stage.value === 'inactive-intro') {
     await startSetup()
@@ -111,7 +111,7 @@ async function finishCodes() {
     return
   }
   if (auth.user?.requires_2fa === false && forced.value === false) {
-    // Wasn't forced — this is a normal voluntary enrolment from
+    // Wasn't forced - this is a normal voluntary enrolment from
     // /account; settle into the active-management view.
     await refreshStatus()
     return
@@ -184,7 +184,7 @@ async function disable() {
       <div class="qr-pair">
         <!-- v-html trusts the backend-rendered SVG. The qr_svg field
              on TotpSetupResponse is generated server-side from the
-             secret — NEVER allow user-supplied content into that
+             secret - NEVER allow user-supplied content into that
              field, or this becomes a stored XSS sink. -->
         <!-- eslint-disable-next-line vue/no-v-html -- trusted server-generated TOTP QR SVG, never user input (see above) -->
         <div class="qr-svg" v-html="setup.qr_svg" />

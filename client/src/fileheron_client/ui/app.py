@@ -49,7 +49,7 @@ def build_root() -> ctk.CTk:
     # in the OS default top-left corner.
     center_window(root, 1000, 640)
 
-    # Window icon — fall back to PNG if .ico missing in dev. iconbitmap
+    # Window icon - fall back to PNG if .ico missing in dev. iconbitmap
     # only works on Windows + uses .ico; iconphoto is cross-platform
     # but takes a PhotoImage. Try both so dev on Linux + prod on
     # Windows both look right.
@@ -77,7 +77,7 @@ def center_window(win, w: int, h: int) -> None:
 
     Multi-monitor caveat: ``winfo_screenwidth/height`` report the primary
     screen only, so on a multi-head setup the window centers on the primary
-    display even if launched elsewhere — acceptable for this app."""
+    display even if launched elsewhere - acceptable for this app."""
     win.update_idletasks()
     sw = win.winfo_screenwidth()
     sh = win.winfo_screenheight()

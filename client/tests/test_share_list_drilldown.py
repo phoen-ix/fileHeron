@@ -1,6 +1,6 @@
 """Structural guards for the v0.6.0 drill-down refactor.
 
-Tests inspect the source via AST — no ``ui`` import needed (the
+Tests inspect the source via AST - no ``ui`` import needed (the
 existing conftest is explicit that ``tests/`` must not import the ui
 package because customtkinter requires system tkinter that CI may
 lack). The asserts pin the contract:
@@ -82,7 +82,7 @@ def test_share_list_panel_has_drill_methods() -> None:
 
 
 def test_share_list_panel_no_longer_takes_on_open_share() -> None:
-    """The v0.5.x ``on_open_share=callable`` kwarg is gone — drilling
+    """The v0.5.x ``on_open_share=callable`` kwarg is gone - drilling
     is internal to the panel now."""
     cls = _has_class(_tree("share_list_panel.py"), "ShareListPanel")
     init = _has_method(cls, "__init__")
@@ -110,7 +110,7 @@ def test_main_window_no_share_detail_dialog_import() -> None:
 
 def test_refresh_done_skips_render_while_drilled_in() -> None:
     """v0.6.2: background list-refresh that completes while the user
-    is drilled into a share detail must NOT call _render() — the list
+    is drilled into a share detail must NOT call _render() - the list
     frame is pack_forgot, the work is wasted, and a future refactor
     could assume _render only runs while visible.
 
@@ -118,6 +118,6 @@ def test_refresh_done_skips_render_while_drilled_in() -> None:
     src = _source("share_list_panel.py")
     assert "if self._detail_view is None:" in src, (
         "share_list_panel.py refresh._done must guard _render() with "
-        "`if self._detail_view is None:` (v0.6.2 — skip wasted render "
+        "`if self._detail_view is None:` (v0.6.2 - skip wasted render "
         "while drilled in)."
     )

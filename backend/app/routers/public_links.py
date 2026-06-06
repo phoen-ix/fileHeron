@@ -42,7 +42,7 @@ def _qr_for(url: str | None) -> str | None:
 def _to_metadata(link, db: Session) -> PublicLinkResponse:
     # Decrypt the token + build the URL for the owner-facing view.
     # Legacy rows (no encrypted column) get url=None; the SPA renders
-    # a "URL not stored — revoke + recreate" hint in that case.
+    # a "URL not stored - revoke + recreate" hint in that case.
     url: str | None = None
     if link.token_encrypted:
         from ..utils.crypto import decrypt_setting
@@ -132,7 +132,7 @@ def revoke_public_link(
     db: Session = Depends(get_db),
 ) -> None:
     share = share_svc.get_share_or_404(db, share_id)
-    # Explicit route-level ownership check, mirroring GET (finding L5) —
+    # Explicit route-level ownership check, mirroring GET (finding L5) -
     # don't rely solely on the service-layer created_by check.
     if share.created_by_id != user.id and user.role != UserRole.admin:
         raise AppError(403, "FORBIDDEN", "Only the share owner or an admin can do that.")

@@ -4,7 +4,7 @@ on:
   push:
     tags:
       - 'client-v*'
-  # Allow manual runs for testing without a tag — they won't publish.
+  # Allow manual runs for testing without a tag - they won't publish.
   workflow_dispatch: {}
 
 permissions:

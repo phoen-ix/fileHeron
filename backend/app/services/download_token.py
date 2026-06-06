@@ -12,7 +12,7 @@ Token format (compact, URL-safe):
 
 where sig = HMAC-SHA256(b"<file_id>|<user_id>|<exp_unix>", JWT_SECRET).
 
-Lives ~60 seconds — long enough to start a multi-GB download but
+Lives ~60 seconds - long enough to start a multi-GB download but
 short enough that a leaked URL doesn't keep working. The token
 authenticates the caller as the embedded user_id; once the request
 hits the download endpoint, the same authorization checks
@@ -22,7 +22,7 @@ request.
 **Audit-trail attribution caveat**: a signed URL minted by Alice
 can be forwarded to Bob (within its 60-second window). Bob's IP
 and user-agent will appear in the `download_log` row, but
-`accessed_by_user_id` will say Alice — because the token is the
+`accessed_by_user_id` will say Alice - because the token is the
 proof of identity, not the request. This is by design (the SPA
 flow needs a bearer-less navigation path) and the short TTL keeps
 the abuse window small. If stricter attribution is needed in the
@@ -40,7 +40,7 @@ from ..config import settings
 from ..middleware.errors import AppError
 
 # 60 seconds. Long enough to start the download (the FileResponse
-# stream then runs to completion regardless of token expiry — the
+# stream then runs to completion regardless of token expiry - the
 # token only gates the initial GET).
 DEFAULT_TTL_SEC = 60
 

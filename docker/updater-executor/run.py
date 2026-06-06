@@ -1,4 +1,4 @@
-"""fileHeron updater-executor — single-shot update worker.
+"""fileHeron updater-executor - single-shot update worker.
 
 Spawned by the shim (`docker/updater-shim/shim.sh`) per update request.
 Reads `/state/current_job.json` for the target tag + action, does the
@@ -6,7 +6,7 @@ work, writes incremental status back, exits 0 (success) or non-zero
 (failure). The shim picks up the exit code; the backend reads the
 status file to show live progress in the admin UI.
 
-The executor doesn't recreate the shim — the shim is perpetual, by
+The executor doesn't recreate the shim - the shim is perpetual, by
 design. The executor IS itself recreated each run (it's spawned with
 `docker run --rm`).
 """
@@ -34,7 +34,7 @@ BACKEND_HEALTH_URL = os.environ.get(
 )
 HEALTH_TIMEOUT_SEC = int(os.environ.get("EXECUTOR_HEALTH_TIMEOUT_SEC", "90"))
 
-# Services compose recreates per update. Shim is intentionally excluded —
+# Services compose recreates per update. Shim is intentionally excluded -
 # the perpetual shim never updates itself (architectural decision: keep
 # the shim trivial enough that it doesn't need updating).
 SERVICES = ["backend", "worker", "frontend"]
@@ -57,7 +57,7 @@ def _write_state_text(text: str) -> None:
     """Write+chmod helper. The state file is read by the backend
     process (uid 1000 appuser); the executor runs as root. Without an
     explicit chmod, the file's mode is whatever the previous writer
-    left — and shim writes via mktemp+mv default to 0600, which
+    left - and shim writes via mktemp+mv default to 0600, which
     silently breaks the backend's _read_state on every subsequent
     poll. Set 0644 on every write so the state file stays readable
     regardless of who wrote it last."""
@@ -148,7 +148,7 @@ def _compose_env(tag: str) -> dict[str, str]:
     """Env for a `docker compose` invocation: pin FH_TAG (which image to
     use) and forward COMPOSE_HOST_ROOT so bind-mount sources resolve to
     the HOST compose dir, not the executor's /workspace (see the up -d
-    call below — omitting it silently forks the data layer)."""
+    call below - omitting it silently forks the data layer)."""
     env = {"FH_TAG": tag}
     host_root = os.environ.get("COMPOSE_HOST_ROOT")
     if host_root:
@@ -176,7 +176,7 @@ def _parse_alembic_revision(text: str) -> str | None:
 def capture_alembic_head() -> str | None:
     """Read the DB's current alembic revision from the RUNNING (pre-update,
     old-image) backend so a rollback can stamp the pointer back to it.
-    Returns None on failure — auto_rollback then skips the stamp and warns.
+    Returns None on failure - auto_rollback then skips the stamp and warns.
     Safe even against a future broken image: alembic/env.py imports only
     app.config, never app.main (the layer that an nh3-style miss breaks)."""
     try:
@@ -239,7 +239,7 @@ def auto_rollback(previous_tag: str, previous_head: str | None, target_tag: str,
     is the superset, so it can resolve the current revision), THEN flip
     FH_TAG to the old tag, THEN compose up, THEN re-verify health. `stamp`
     only moves the version pointer (never runs downgrade()), so additive
-    new tables stay in place — harmless under the old code and reconciled
+    new tables stay in place - harmless under the old code and reconciled
     by the migrations' `_has_table` guards on the next forward upgrade.
 
     Returns 0 when prod is healthy again on previous_tag; non-zero if the
@@ -264,7 +264,7 @@ def auto_rollback(previous_tag: str, previous_head: str | None, target_tag: str,
             )
             return 10
     else:
-        log_line("WARN no pre-update alembic head captured — skipping DB stamp "
+        log_line("WARN no pre-update alembic head captured - skipping DB stamp "
                  "(rollback may hit the migration trap if a migration was applied)")
 
     # (ii) Restore the previous tag, then (iii) bring prod back up on it.
@@ -296,7 +296,7 @@ def auto_rollback(previous_tag: str, previous_head: str | None, target_tag: str,
         error=f"update to {target_tag} failed ({reason}); automatically rolled back to {previous_tag}",
         finished_at=utcnow_iso(),
     )
-    log_line(f"AUTO-ROLLBACK complete — prod healthy on {previous_tag}")
+    log_line(f"AUTO-ROLLBACK complete - prod healthy on {previous_tag}")
     return 0
 
 
@@ -335,7 +335,7 @@ def main() -> int:
             return 2
 
     # Manual rollback: reconcile the DB pointer to the target's recorded head
-    # using the CURRENT (new) image (superset tree) BEFORE swapping .env down —
+    # using the CURRENT (new) image (superset tree) BEFORE swapping .env down -
     # otherwise the old image's boot-time `alembic upgrade head` dies with
     # "Can't locate revision". .env still holds previous_tag (the new image)
     # here. stamp is non-destructive (see auto_rollback).
@@ -352,7 +352,7 @@ def main() -> int:
                                 finished_at=utcnow_iso())
                 return 5
         else:
-            log_line("WARN rollback target has no alembic_head (legacy) — skipping stamp "
+            log_line("WARN rollback target has no alembic_head (legacy) - skipping stamp "
                      "(pre-fix behavior; may hit the migration trap)")
 
     # Persist FH_TAG before up -d so a mid-recreate crash leaves the
@@ -383,7 +383,7 @@ def main() -> int:
     ) != 0:
         # An UPDATE that won't even start self-heals to the previous tag; a
         # ROLLBACK that won't start must NOT auto-forward to the version it's
-        # fleeing — fail loudly for the operator (DB already stamped to the
+        # fleeing - fail loudly for the operator (DB already stamped to the
         # target's head, .env left at the requested target).
         if action == "update":
             return auto_rollback(previous_tag, previous_head, target_tag,
@@ -401,7 +401,7 @@ def main() -> int:
         return 4
 
     write_job_field(status="healthy", finished_at=utcnow_iso())
-    log_line(f"DONE — running on {target_tag}")
+    log_line(f"DONE - running on {target_tag}")
     return 0
 
 

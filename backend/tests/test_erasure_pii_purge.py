@@ -1,6 +1,6 @@
 """Regression: GDPR erasure must purge plaintext PII outside the users row.
 
-Audit finding M2 — `erase_user` anonymised the users row but left plaintext
+Audit finding M2 - `erase_user` anonymised the users row but left plaintext
 email in `login_attempts` / `invite_tokens`, device fingerprints in
 `known_devices`, and the user's own `notifications`, because anonymise-by-
 UPDATE never fires the FK CASCADEs. After erasure, querying for the original

@@ -1,4 +1,4 @@
-"""OIDC login endpoints — `/api/auth/oidc/start/{provider_id}` and
+"""OIDC login endpoints - `/api/auth/oidc/start/{provider_id}` and
 `/api/auth/oidc/callback/{provider_id}`.
 
 Browser flow:
@@ -15,7 +15,7 @@ Phase 10 changes vs Phase 7/9:
 - The state cookie stores `{state}::{provider_id}` so a stale cookie
   pointing at provider A can't be replayed against provider B's
   callback.
-- Anonymous callback never creates a user — see
+- Anonymous callback never creates a user - see
   `services/oidc.py::handle_callback`.
 """
 from __future__ import annotations
@@ -51,7 +51,7 @@ def _unpack_state(
         return None, None, None
     parts = packed.split("::")
     if len(parts) != 3:
-        # Old-format cookie (pre-nonce deploy) — refuse cleanly so the
+        # Old-format cookie (pre-nonce deploy) - refuse cleanly so the
         # user retries; better than silently skipping nonce check.
         return None, None, None
     state, provider_id, nonce = parts
@@ -94,7 +94,7 @@ async def callback(
         raise AppError(
             401,
             "OIDC_STATE_MISMATCH",
-            "OIDC state mismatch — try again.",
+            "OIDC state mismatch - try again.",
         )
 
     user = await oidc_svc.handle_callback(
@@ -135,7 +135,7 @@ async def callback(
     response.delete_cookie(oidc_svc.STATE_COOKIE, path="/api/auth/oidc")
     return response
 
-# (Removed an unauthenticated `_test_reset_discovery` HTTP hook — finding
+# (Removed an unauthenticated `_test_reset_discovery` HTTP hook - finding
 # L2. Tests clear the cache by calling `oidc_svc.reset_discovery_cache()`
 # directly via the conftest autouse fixture, so the endpoint was dead
 # weight that let anyone flush the discovery cache repeatedly.)

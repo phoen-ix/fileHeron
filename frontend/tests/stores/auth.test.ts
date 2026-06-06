@@ -1,4 +1,4 @@
-/* Pinia auth store unit tests — exercises the public methods with mocked
+/* Pinia auth store unit tests - exercises the public methods with mocked
  * api modules so we don't need a running backend. */
 
 import { setActivePinia, createPinia } from 'pinia'
@@ -13,7 +13,7 @@ vi.mock('@/api/account')
 
 // bootstrap() refreshes FIRST (cookie-based) and only loads /me when that
 // succeeds, and separately probes the first-admin wizard. Neither has a
-// running backend in unit tests — stub both so bootstrap reaches getMe()
+// running backend in unit tests - stub both so bootstrap reaches getMe()
 // instead of failing on a real network call. Keep the real `@/api/client`
 // otherwise (axios instance, interceptors) so the rest of the graph loads.
 vi.mock('@/api/client', async (importActual) => ({

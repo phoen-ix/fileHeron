@@ -1,4 +1,4 @@
-"""/api/files/* — download a file (auth-gated) and delete a file."""
+"""/api/files/* - download a file (auth-gated) and delete a file."""
 from __future__ import annotations
 
 import logging
@@ -45,7 +45,7 @@ def _get_file_or_404(db: Session, file_id: str) -> File:
 
 
 def _assert_file_state_servable(file: File) -> None:
-    """Same AV/state gate the download path applies — only `clean` files are
+    """Same AV/state gate the download path applies - only `clean` files are
     servable; we never hand out (or render inline) unscanned/quarantined bytes."""
     if file.state == FileState.uploading:
         raise AppError(409, "STILL_UPLOADING", "File hasn't finished uploading yet.")
@@ -72,11 +72,11 @@ def _resolve_download_user(
       token (lives in memory, not a cookie). They get a one-shot
       signed URL via /download-url and pass `?dt=<token>` here.
       The mint endpoint already enforced 2FA, so the signed URL
-      is a token of past 2FA — no further check needed here.
+      is a token of past 2FA - no further check needed here.
     - API / curl callers continue to use the bearer header. For
       session-authed bearer (JWT, not API token), enforce 2FA
       inline so the same policy applies as for other gated
-      routes — this router skips the global gate because the
+      routes - this router skips the global gate because the
       gate requires bearer.
     """
     if dt:
@@ -95,7 +95,7 @@ def _resolve_download_user(
         return user
     # Bearer path (JWT or API token).
     user = get_actor(request=request, authorization=authorization, db=db)
-    # Mirror the global require_2fa_complete gate for JWT users —
+    # Mirror the global require_2fa_complete gate for JWT users -
     # API tokens are session-less and trusted-at-issuance per the
     # existing convention.
     if getattr(request.state, "auth_via", "") == "session":
@@ -162,7 +162,7 @@ def get_preview_url(
     fetches as text) to render a file INLINE. Same access + AV gates as the
     download mint, plus the previewable-type allowlist and the global
     file-preview kill switch. It deliberately does NOT pre-flight the download
-    budget — preview never consumes it — but still refuses when the budget is
+    budget - preview never consumes it - but still refuses when the budget is
     already fully spent, so a used-up share serves neither downloads nor
     previews. Reuses the download token (same scope: this user, this file)."""
     from ..services import preview as preview_svc
@@ -199,7 +199,7 @@ def preview_file(
 ) -> Response:
     """Serve a file INLINE for in-browser preview. Same auth + AV gates as the
     download endpoint, but **never** decrements the share download budget,
-    writes a `download_log` row, or audits — preview is "look", download is
+    writes a `download_log` row, or audits - preview is "look", download is
     "take". A share whose budget is fully spent serves neither (410). The bytes
     are served with a server-chosen safe Content-Type + nosniff/CSP hardening
     (see services/preview.py)."""
@@ -276,7 +276,7 @@ def download_file(
     # download; the byte-0 (or full) request counts it, the continuation
     # ranges must not re-decrement or re-log. See utils/http_range.
     # A pending share only reaches here for an approver reviewing it (content
-    # review) — that must not consume the not-yet-live recipient budget or log.
+    # review) - that must not consume the not-yet-live recipient budget or log.
     if not is_partial_continuation(request) and share.state == ShareState.active:
         # v1.1.0: per-share download budget. Atomic decrement; if the
         # counter is already at 0 we refuse with 410 before logging/sending.
@@ -366,7 +366,7 @@ def download_share_zip(
     """Stream a single ZIP of all downloadable files in a share. On-the-fly,
     ZIP_STORED, O(1) memory (see services/zip_stream). Auth mirrors the
     single-file path: signed `?dt=` (bound to the share id) or bearer. One ZIP
-    counts as ONE download against the share budget — parallel/segmented range
+    counts as ONE download against the share budget - parallel/segmented range
     continuations don't re-decrement or re-log."""
     user = _resolve_download_user(request, db, share_id, dt, authorization)
     share = share_svc.get_share_or_404(db, share_id)
@@ -392,7 +392,7 @@ def download_share_zip(
         )
         ip = request.client.host if request.client else None
         ua = ua_fingerprint_hash(request.headers.get("user-agent", ""))
-        # One DownloadLog row per included file (file_id is NOT NULL) — keeps
+        # One DownloadLog row per included file (file_id is NOT NULL) - keeps
         # per-file download attribution; the budget still moved only once above.
         for f in files:
             db.add(
@@ -442,7 +442,7 @@ def delete_file(
     share_id = file.share_id
     file_svc.hard_delete(db, file=file, reason="user_request", request=request)
     # If this was the last non-deleted file in an active share, auto-revoke it
-    # (shared helper — same behavior as the admin delete path).
+    # (shared helper - same behavior as the admin delete path).
     file_svc.revoke_share_if_empty(
         db,
         share_id=share_id,

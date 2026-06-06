@@ -11,7 +11,7 @@ from .common import APIBaseModel
 
 class OIDCProviderItem(APIBaseModel):
     """Returned by GET /api/admin/settings/sso/providers (list) and
-    GET .../providers/{id} (single). Secret is never exposed —
+    GET .../providers/{id} (single). Secret is never exposed -
     `client_secret_set` says whether one is stored."""
 
     id: str

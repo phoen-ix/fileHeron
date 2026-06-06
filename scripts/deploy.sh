@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# fileHeron production deploy — pulls SemVer-tagged images from GHCR,
+# fileHeron production deploy - pulls SemVer-tagged images from GHCR,
 # with a source-build fallback for hosts that need to bootstrap before
 # any release exists or want to ship a hotpatch ahead of cutting a
 # release.
@@ -10,7 +10,7 @@
 #   3. If the pull fails (e.g., during initial bootstrap or a network
 #      hiccup), falls back to building from source via the dev override
 #      Dockerfile and tagging the result as the GHCR image name. The
-#      next deploy will try GHCR again — local builds don't get sticky.
+#      next deploy will try GHCR again - local builds don't get sticky.
 #
 # Rollback: scripts/rollback.sh <previous-tag>
 set -euo pipefail
@@ -33,7 +33,7 @@ export FH_TAG
 
 REPO_OWNER="phoen-ix"
 # v1.0.0: updater is now `updater-shim` (perpetual) + `updater-executor`
-# (ephemeral, never declared as a compose service — spawned ad-hoc by
+# (ephemeral, never declared as a compose service - spawned ad-hoc by
 # the shim per request).
 IMAGES=(fileheron-backend fileheron-worker fileheron-frontend fileheron-updater-shim fileheron-updater-executor)
 SERVICES=(backend worker frontend updater-shim)
@@ -47,12 +47,12 @@ if ! docker compose pull "${SERVICES[@]}" 2>&1; then
 fi
 
 if [ "$PULL_OK" = "false" ]; then
-    echo "[deploy] GHCR pull failed — falling back to local build"
+    echo "[deploy] GHCR pull failed - falling back to local build"
     echo "[deploy] (this is normal on first bootstrap before any v* tag"
     echo "[deploy]  has been published; once a release is cut, subsequent"
     echo "[deploy]  deploys will pull from GHCR cleanly)"
     SHA="$(git rev-parse --short=12 HEAD)"
-    # Use the prod Dockerfiles explicitly — the dev compose's Dockerfile.dev
+    # Use the prod Dockerfiles explicitly - the dev compose's Dockerfile.dev
     # has --reload / vite-dev CMDs that would be wrong for prod.
     docker build -f docker/backend/Dockerfile \
         --build-arg "FH_VERSION=local-$SHA" --build-arg "FH_GIT_SHA=$SHA" \
@@ -88,7 +88,7 @@ while :; do
         break
     fi
     if [ "$(date +%s)" -gt "$DEADLINE" ]; then
-        echo "[deploy] FAIL: healthcheck timeout —$UNHEALTHY" >&2
+        echo "[deploy] FAIL: healthcheck timeout -$UNHEALTHY" >&2
         echo "[deploy] container logs (last 20 lines):" >&2
         docker compose logs --tail=20 backend worker frontend >&2
         exit 1
@@ -109,5 +109,5 @@ for img in "${IMAGES[@]}"; do
     done
 done
 
-echo "[deploy] done — running on FH_TAG=$FH_TAG"
+echo "[deploy] done - running on FH_TAG=$FH_TAG"
 echo "[deploy] rollback: scripts/rollback.sh <previous-tag>"

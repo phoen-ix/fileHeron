@@ -1,6 +1,6 @@
 """Phase 1 self-update: version constant is wired through to user-facing
 endpoints. The constant is read from env at import time so a Docker
-rebuild with a new FH_VERSION arg is enough — no code edit needed."""
+rebuild with a new FH_VERSION arg is enough - no code edit needed."""
 from __future__ import annotations
 
 import importlib

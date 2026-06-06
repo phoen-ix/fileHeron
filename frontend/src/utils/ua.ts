@@ -1,5 +1,5 @@
 /**
- * Tiny User-Agent heuristic — render "Chrome · Windows" instead of a full
+ * Tiny User-Agent heuristic - render "Chrome · Windows" instead of a full
  * UA string. Shared by the account session list and the admin session table.
  */
 export function uaShort(ua: string | null, fallback = ''): string {

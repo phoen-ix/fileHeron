@@ -1,4 +1,4 @@
-/* Tiny pure SVG-geometry helpers for the analytics dashboard. No chart lib —
+/* Tiny pure SVG-geometry helpers for the analytics dashboard. No chart lib -
  * we hand-roll <polyline>/<rect> against a fixed viewBox and style with
  * --fh-* tokens, matching the "no UI framework" rule. All functions are pure
  * (geometry only) so they're trivially unit-testable. */
@@ -11,7 +11,7 @@ export interface Bar {
 }
 
 /** Map values to evenly-spaced bars filling `width` × `height`. Heights scale
- *  to the max value (0 → a 0-height bar). `gap` is the fraction (0–1) of each
+ *  to the max value (0 → a 0-height bar). `gap` is the fraction (0-1) of each
  *  slot left as spacing. */
 export function scaleBars(
   values: number[],

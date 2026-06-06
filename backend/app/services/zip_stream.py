@@ -1,13 +1,13 @@
 """Streaming ZIP builder for bulk share downloads.
 
-On-the-fly, **ZIP_STORED** (no compression), O(1) memory — we never build or
+On-the-fly, **ZIP_STORED** (no compression), O(1) memory - we never build or
 cache a zip on disk. A cached archive would double bytes on the bind mount and
 create a second copy that GDPR-erasure / expiry would have to find and reap,
 which is exactly the single-server-delete-simplicity property we want to keep.
 
 `zipstream-ng`'s *sized* mode (STORED-only) lets us compute the exact archive
 length before streaming, so the response can carry a real `Content-Length`
-(browser progress bar + Range-resume) while still yielding the bytes lazily —
+(browser progress bar + Range-resume) while still yielding the bytes lazily -
 each member is read from disk in chunks as the archive streams, never buffered
 whole. Shared files are almost always already-compressed (media, PDFs, office,
 archives), so STORED costs ~nothing vs. DEFLATE and avoids burning CPU on 30 GB.

@@ -1,4 +1,4 @@
-"""Add shares.terminated_at — when a share became terminal (revoked/deleted).
+"""Add shares.terminated_at - when a share became terminal (revoked/deleted).
 
 Powers the reclaim_orphaned_files cron's grace window: a soft-revoked share
 keeps its bytes for ORPHAN_RECLAIM_AFTER_DAYS before the cron frees them.

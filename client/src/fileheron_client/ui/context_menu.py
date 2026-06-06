@@ -1,7 +1,7 @@
 """Standard right-click (Cut / Copy / Paste / Select all) context menu for
 every text input.
 
-Tkinter — and therefore CustomTkinter, which wraps it — ships no native context
+Tkinter - and therefore CustomTkinter, which wraps it - ships no native context
 menu, so a right-click on a ``CTkEntry`` / ``CTkTextbox`` did nothing. This wires
 one up app-wide.
 

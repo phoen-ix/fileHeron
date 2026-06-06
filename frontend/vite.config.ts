@@ -19,7 +19,7 @@ export default defineConfig({
         target: 'http://backend:8000',
         changeOrigin: true,
       },
-      // /uploads/* is the TUS protocol surface — streams to tusd.
+      // /uploads/* is the TUS protocol surface - streams to tusd.
       // Browser → Vite → tusd. No buffering on either hop.
       // tusd listens on its default port 8080.
       '/uploads': {

@@ -1,8 +1,8 @@
-"""Add api_tokens.expires_at — optional API-token expiry.
+"""Add api_tokens.expires_at - optional API-token expiry.
 
 NULL = never expires (the existing behaviour, so all current tokens are
 unaffected). When set, verify_token rejects the token past that instant with
-API_TOKEN_EXPIRED. No backfill — existing rows stay NULL.
+API_TOKEN_EXPIRED. No backfill - existing rows stay NULL.
 
 Revision ID: 202606031500
 Revises: 202605312000

@@ -1,4 +1,4 @@
-"""GET /api/account/api-tokens/current — returns metadata for the API token
+"""GET /api/account/api-tokens/current - returns metadata for the API token
 authenticating the request, so a client can show which token it's running on.
 
 JWT/session auth has no token → 400 NOT_API_TOKEN.

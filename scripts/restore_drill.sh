@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# fileHeron restore drill — validates backup ARTIFACTS without touching
+# fileHeron restore drill - validates backup ARTIFACTS without touching
 # production data. Catches the common silent-corruption failure modes
 # (truncated tarball, dump that doesn't parse, RDB header drift) before
 # a real disaster forces the question.
@@ -93,7 +93,7 @@ check "redis.rdb has REDIS magic header" bash -c "
 
 # Restic check (if configured).
 if [ -n "${BACKUP_RESTIC_REPO:-}" ] && [ -n "${BACKUP_RESTIC_PASSWORD:-}" ] && command -v restic >/dev/null 2>&1; then
-    echo "[drill] restic configured — running 'restic check --read-data-subset=1%' …"
+    echo "[drill] restic configured - running 'restic check --read-data-subset=1%' …"
     PWD_FILE="$(mktemp)"
     chmod 600 "$PWD_FILE"
     trap 'rm -f "$PWD_FILE"' EXIT
@@ -108,7 +108,7 @@ if [ -n "${BACKUP_RESTIC_REPO:-}" ] && [ -n "${BACKUP_RESTIC_PASSWORD:-}" ] && c
     rm -f "$PWD_FILE"
     trap - EXIT
 else
-    echo "[drill] restic not configured — skipping remote integrity check"
+    echo "[drill] restic not configured - skipping remote integrity check"
 fi
 
 echo

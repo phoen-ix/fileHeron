@@ -1,4 +1,4 @@
-"""Email rendering — locale resolution + subject lookup + dt_locale filter."""
+"""Email rendering - locale resolution + subject lookup + dt_locale filter."""
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -61,7 +61,7 @@ def test_unknown_locale_falls_back_to_en():
 
 
 def test_dt_locale_filter_includes_utc_marker():
-    # `_format_dt_locale` is a @pass_context Jinja filter — invoke it through
+    # `_format_dt_locale` is a @pass_context Jinja filter - invoke it through
     # a rendered template so Jinja injects the rendering context itself.
     # Calling it directly is brittle: how pass_context threads the context
     # argument varies by Jinja version.
@@ -94,7 +94,7 @@ def test_render_email_share_files_added_en_de():
 
 def test_render_email_no_html_falls_back_gracefully(tmp_path, monkeypatch):
     # If the template lookup throws (e.g. missing html.j2), html should
-    # come back as None — text path remains required.
+    # come back as None - text path remains required.
     payload = {
         "display_name": "Bob",
         "verify_url": "https://example.com/verify/x",
@@ -102,7 +102,7 @@ def test_render_email_no_html_falls_back_gracefully(tmp_path, monkeypatch):
     subject, text, html = email_svc.render_email("en", "verify", payload)
     assert subject == "Verify your email"
     assert "verify" in text.lower()
-    # The verify template only exists as txt — no html companion.
+    # The verify template only exists as txt - no html companion.
     assert html is None
 
 

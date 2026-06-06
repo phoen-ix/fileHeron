@@ -175,7 +175,7 @@ async function changePassword() {
     newPw.value = ''
     ui.pushToast(t('account.password_changed_toast'), 'success')
     // The current refresh cookie remains valid since change_password revokes
-    // all of the user's tokens — but the backend deliberately does not include
+    // all of the user's tokens - but the backend deliberately does not include
     // a fresh cookie in the response. Force a refresh round-trip:
     await auth.refreshMe()
   } catch (e) {
@@ -392,7 +392,7 @@ function jumpTo(id: string) {
       </div>
     </section>
 
-    <!-- Email change (self-service — only when the admin enabled it) -->
+    <!-- Email change (self-service - only when the admin enabled it) -->
     <section
       v-if="auth.user?.can_change_own_email"
       id="email"
@@ -545,7 +545,7 @@ function jumpTo(id: string) {
       <WebAuthnPanel />
     </section>
 
-    <!-- OIDC connect — child component renders its own <section>; wrap so
+    <!-- OIDC connect - child component renders its own <section>; wrap so
          the quick-nav has a stable anchor without touching the panel. -->
     <section id="oidc" class="account-anchor">
       <OIDCConnectPanel />

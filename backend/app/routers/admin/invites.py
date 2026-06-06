@@ -1,4 +1,4 @@
-"""/api/admin/invites — list + revoke + regenerate + resend + activate."""
+"""/api/admin/invites - list + revoke + regenerate + resend + activate."""
 from __future__ import annotations
 
 from datetime import datetime, timezone

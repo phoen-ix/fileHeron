@@ -42,7 +42,7 @@ _REFRESH_PATH = "/api/auth"
 
 def _set_refresh_cookie(response: Response, plaintext: str, db: Session) -> None:
     # Match the cookie's client-side lifetime to the refresh token's
-    # server-side expiry — both read the admin-tunable value (kv overlay,
+    # server-side expiry - both read the admin-tunable value (kv overlay,
     # env default) so an admin change keeps them in sync.
     from ..services import settings_registry
     days = settings_registry.effective(db, settings_registry.K.REFRESH_TOKEN_EXPIRE_DAYS)
@@ -170,7 +170,7 @@ async def forgot_password(
     request: Request,
     db: Session = Depends(get_db),
 ) -> dict:
-    """Always returns 200 — never reveals whether the email exists."""
+    """Always returns 200 - never reveals whether the email exists."""
     ip = request.client.host if request.client else ""
     if not rate_limit_svc.check_ip_allowed(
         "forgot", ip, settings_registry.effective(db, settings_registry.K.RATE_LIMIT_REGISTER)
@@ -283,7 +283,7 @@ async def resend_verification(
         return {"ok": True, "already_verified": True}
     plaintext = auth_svc.begin_email_verification(db, user=user)
     db.commit()
-    # We don't store plaintext email — but the invite/login flow knows the
+    # We don't store plaintext email - but the invite/login flow knows the
     # user clicked through, so address resolution here uses an admin-only
     # path. For Phase 1a, log the link via the email service (which has
     # logs-fallback). The actual SMTP send to the user's email will be wired
@@ -295,7 +295,7 @@ async def resend_verification(
 
 # ---------------------------------------------------------------------------
 # Active sessions. These live under /api/auth (not /api/account) so the
-# refresh cookie — which is path-scoped to /api/auth — is sent, letting us
+# refresh cookie - which is path-scoped to /api/auth - is sent, letting us
 # flag the current session and keep it on "sign out others".
 # ---------------------------------------------------------------------------
 

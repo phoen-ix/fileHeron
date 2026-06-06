@@ -74,7 +74,7 @@ const presets: Preset[] = (props.presets ?? DEFAULT_PRESET_IDS).map((id) => ({
 }))
 
 // dt = null means "never expires" (v1.1.4). Anything else is a
-// "YYYY-MM-DDTHH:mm:ss" wall-clock string in the admin-set SITE timezone —
+// "YYYY-MM-DDTHH:mm:ss" wall-clock string in the admin-set SITE timezone -
 // the same zone the app *displays* expiry in (formatInSiteTime). Anchoring
 // the picker to the site tz (via siteNowPlusIso) instead of the browser tz
 // means a "7 days" pick lands exactly 7 days out and shows the time the user
@@ -125,7 +125,7 @@ const inputValue = computed<string>({
   },
 })
 
-// Prevent picking a past instant — the site-tz "now" at page load, to the
+// Prevent picking a past instant - the site-tz "now" at page load, to the
 // minute. Evaluated once (no reactive deps); a coarse floor is sufficient.
 const minAttr = siteNowPlusIso(0).slice(0, 16)
 
@@ -156,7 +156,7 @@ watch(locale, () => {
 })
 
 // Manual edits on the picker invalidate the active preset highlight.
-// Skipped when dt is null (Never state — no comparison possible).
+// Skipped when dt is null (Never state - no comparison possible).
 watch(dt, (newV) => {
   if (newV === null) return
   if (!activePreset.value || activePreset.value === 'never') return
@@ -164,7 +164,7 @@ watch(dt, (newV) => {
   if (!preset || preset.ms === null) return
   const expected = siteNowPlusIso(preset.ms)
   // Both are site-tz wall-clock strings; compare as instants in the site tz.
-  // Allow a 60-second tolerance band — the time elapsed during click.
+  // Allow a 60-second tolerance band - the time elapsed during click.
   if (Math.abs(siteLocalIsoToEpochMs(newV) - siteLocalIsoToEpochMs(expected)) > 60_000) {
     activePreset.value = null
   }

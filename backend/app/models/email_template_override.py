@@ -6,7 +6,7 @@ Markdown ``body_markdown`` (+ optional ``subject``); the renderer in
 filesystem Jinja template when no row exists. "Reset to default" simply deletes
 the row, so the built-in copy is always the safety net.
 
-Keyed by ``(slug, locale)`` — independent upsert/delete per pair. Bodies are
+Keyed by ``(slug, locale)`` - independent upsert/delete per pair. Bodies are
 free text and can be large, so they live here rather than in the hot
 ``app_settings`` kv table.
 """
@@ -32,7 +32,7 @@ from ..utils.timeutil import utc_now
 if TYPE_CHECKING:
     from .user import User  # noqa: F401  (only for type hints)
 
-# In SQLite, a BigInteger PK does not autoincrement — only INTEGER PK does.
+# In SQLite, a BigInteger PK does not autoincrement - only INTEGER PK does.
 _BigIntPK = BigInteger().with_variant(Integer(), "sqlite")
 
 

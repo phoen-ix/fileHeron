@@ -83,7 +83,7 @@ async def test_last_used_persists_on_get_request(make_user, db, client):
     """Regression: a read-only GET with an API token must COMMIT last_used_at.
 
     get_db never commits (rolls back on close), so the old bare flush() in
-    verify_token was discarded on GETs — last_used_at only advanced on write
+    verify_token was discarded on GETs - last_used_at only advanced on write
     endpoints. Here we read the row back after the request (under StaticPool a
     rolled-back flush would have reverted it) and assert it persisted.
     """

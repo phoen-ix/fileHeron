@@ -45,7 +45,7 @@ def test_gate_passes_when_no_policy_and_env_off(make_user, db, monkeypatch):
 
     monkeypatch.setattr(app_settings, "REQUIRE_2FA", "none")
     admin = make_user(email="admin@test.local", role=UserRole.admin)
-    # No exception expected — should be a quiet no-op.
+    # No exception expected - should be a quiet no-op.
     svc.require_2fa_complete(_fake_request_with_session_auth(), user=admin, db=db)
 
 
@@ -72,7 +72,7 @@ def test_gate_passes_when_user_has_totp(make_user, db, monkeypatch):
 
 
 def test_gate_short_circuits_for_api_token_auth(make_user, db, monkeypatch):
-    """API tokens are session-less and trusted-at-issuance — the gate
+    """API tokens are session-less and trusted-at-issuance - the gate
     must not block them even when policy would otherwise require 2FA."""
     from app.config import settings as app_settings
 
@@ -81,5 +81,5 @@ def test_gate_short_circuits_for_api_token_auth(make_user, db, monkeypatch):
 
     req = Request({"type": "http", "headers": [], "method": "GET", "path": "/"})
     req.state.auth_via = "api_token"
-    # No exception — the api_token short-circuit kicks in.
+    # No exception - the api_token short-circuit kicks in.
     svc.require_2fa_complete(req, user=admin, db=db)

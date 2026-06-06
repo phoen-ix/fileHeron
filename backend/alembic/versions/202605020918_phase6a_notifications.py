@@ -1,4 +1,4 @@
-"""phase6a — notifications + user_notification_preferences + shares.expiring_notified_at
+"""phase6a - notifications + user_notification_preferences + shares.expiring_notified_at
 
 Revision ID: 202605020918
 Revises: 202605020917

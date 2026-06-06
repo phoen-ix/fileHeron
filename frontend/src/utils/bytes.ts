@@ -1,5 +1,5 @@
 /**
- * Human-readable byte size — the single source of truth for the ~6 views
+ * Human-readable byte size - the single source of truth for the ~6 views
  * that previously each defined their own `formatBytes`. Renders e.g.
  * "0 B", "512 B", "1.5 KB", "240 MB", "3.2 GB".
  */

@@ -40,7 +40,7 @@ class AddFilesDialog:
         on_added: Callable[[], None],
         flash: Optional[Callable[[str], None]] = None,
     ) -> None:
-        # Keep the root on _app_root — never assign self._root (it shadows
+        # Keep the root on _app_root - never assign self._root (it shadows
         # tkinter.Misc and breaks event dispatch on widget subclasses; harmless
         # here but we keep the convention).
         self._app_root = root
@@ -114,7 +114,7 @@ class AddFilesDialog:
         self._win.bind(
             "<Escape>", lambda _e: None if self._uploading else self._win.destroy(),
         )
-        # Modal focus WITHOUT wait_window — the uploads are async.
+        # Modal focus WITHOUT wait_window - the uploads are async.
         self._win.after_idle(lambda: (self._win.grab_set(), self._win.focus_force()))
 
     # ---- file list -------------------------------------------------------
@@ -238,7 +238,7 @@ class AddFilesDialog:
         if self._completed < self._total:
             return
         if not self._file_ids:
-            # Everything failed — re-enable so the user can retry.
+            # Everything failed - re-enable so the user can retry.
             self._uploading = False
             for w in (self._add_btn, self._notify_cb, self._close_btn):
                 if alive(w):
@@ -268,7 +268,7 @@ class AddFilesDialog:
                 self._win.destroy()
 
         # register_files_added failing (e.g. server < v1.12.0) must NOT lose the
-        # upload — the files are already in the share. Degrade gracefully.
+        # upload - the files are already in the share. Degrade gracefully.
         run_in_background(
             self._app_root, _do,
             on_done=lambda _resp: _finish(True),

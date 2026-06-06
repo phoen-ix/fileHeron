@@ -32,7 +32,7 @@ def test_set_then_get_plain_value(make_user, db):
 
 
 def test_set_then_get_encrypted_value(make_user, db):
-    """SMTP_PASSWORD is in _ENCRYPTED_KEYS — value is Fernet ciphertext on disk
+    """SMTP_PASSWORD is in _ENCRYPTED_KEYS - value is Fernet ciphertext on disk
     but get() returns the plaintext."""
     admin = make_user(email="admin@test.local", role=UserRole.admin)
     secret = "super-secret-smtp-password-42"
@@ -154,7 +154,7 @@ def test_audit_settings_change_records_sorted_keys(make_user, db):
 
 def test_decryption_failure_returns_none(make_user, db):
     """If JWT_SECRET rotates and an encrypted row can't be decrypted, get()
-    falls back to None rather than crashing — env fallback then wins."""
+    falls back to None rather than crashing - env fallback then wins."""
     admin = make_user(email="admin@test.local", role=UserRole.admin)
     settings_svc.set_value(
         db, key=settings_svc.Keys.SMTP_PASSWORD, value="real-secret", actor=admin

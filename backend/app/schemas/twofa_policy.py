@@ -18,7 +18,7 @@ class TwofaPolicyResponse(APIBaseModel):
     required_groups: list[RequiredGroupRef]           # labels for SPA display
     # True when the kv keys are set (admin saved a policy at least
     # once). False means we're inheriting from the REQUIRE_2FA env
-    # knob — surface this to the SPA so the editor can show
+    # knob - surface this to the SPA so the editor can show
     # "currently inheriting from environment" instead of pretending
     # the unsaved form is the truth.
     is_kv_overridden: bool

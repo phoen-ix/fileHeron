@@ -183,7 +183,7 @@ export interface CronRunDTO {
 }
 
 export interface LiveChecks {
-  /** Server time the probes ran (naive UTC ISO) — for "checked <time>". */
+  /** Server time the probes ran (naive UTC ISO) - for "checked <time>". */
   checked_at: string | null
   db: { status: string; error: string | null }
   redis: { status: string; error: string | null }
@@ -211,9 +211,9 @@ export interface SystemStatusResponse {
     running_release_url: string | null
     latest: string | null
     update_available: boolean
-    /** Every attempt (success OR failure) — display as "checked X ago". */
+    /** Every attempt (success OR failure) - display as "checked X ago". */
     last_check_at: string | null
-    /** Only successful attempts — used to gate retries server-side. */
+    /** Only successful attempts - used to gate retries server-side. */
     last_success_at: string | null
     last_check_error: string | null
     release_notes: string | null
@@ -247,7 +247,7 @@ export function runLiveChecks() {
 }
 
 
-// Phase 4 — self-update.
+// Phase 4 - self-update.
 
 export interface UpdaterStatus {
   current_tag: string
@@ -320,7 +320,7 @@ export function getUser(id: number) {
   return api.get<AdminUserItem>(`/admin/users/${id}`)
 }
 
-/** Create a user immediately — no invite, email pre-verified, set password. */
+/** Create a user immediately - no invite, email pre-verified, set password. */
 export function createUserDirect(payload: CreateUserRequest) {
   return api.post<AdminUserItem>('/admin/users', payload)
 }
@@ -391,7 +391,7 @@ export function retryWebhookDelivery(deliveryId: number) {
 }
 
 // Analytics dashboard (v1.18.0). CSV goes through axios (responseType blob) so
-// the bearer is attached — a plain <a href> can't authenticate an admin GET.
+// the bearer is attached - a plain <a href> can't authenticate an admin GET.
 export function getAnalytics(days: number) {
   return api.get<AnalyticsResponse>('/admin/analytics', { params: { days } })
 }
@@ -404,7 +404,7 @@ export function exportAnalyticsCsv(days: number) {
 }
 
 // CSV export goes through axios (responseType blob) so the in-memory bearer is
-// attached — a plain <a href> can't authenticate a bearer-gated admin GET.
+// attached - a plain <a href> can't authenticate a bearer-gated admin GET.
 export function exportAuditCsv(params: Record<string, string> = {}) {
   return api.get('/admin/audit-log/export.csv', { params, responseType: 'blob' })
 }
@@ -625,7 +625,7 @@ export function updateEmailChangePolicy(payload: UpdateEmailChangePolicyRequest)
   return api.put<EmailChangePolicyResponse>('/admin/settings/email-change', payload)
 }
 
-// Quarantine — admin actions on infected files + notification toggle
+// Quarantine - admin actions on infected files + notification toggle
 
 export function adminQuarantineRelease(fileId: string, payload: QuarantineActionRequest) {
   return api.post<void>(`/admin/files/${fileId}/quarantine/release`, payload)

@@ -6,7 +6,7 @@ per-admin overridable) when a new release is first detected.
 
 - URL: kv `updates.api_url` (default = upstream phoen-ix/fileHeron).
   Forks repoint at their own repo's `/releases` (list) or
-  `/releases/latest` (single) — the auto-detect below handles both.
+  `/releases/latest` (single) - the auto-detect below handles both.
 - Cadence: kv `updates.check_mode` ∈ {auto, manual}. In `auto` the
   cron does a real check at most once per 24h; in `manual` the cron
   skips entirely and only the on-demand button works.
@@ -68,7 +68,7 @@ class CacheKeys:
     LATEST_PUBLISHED_AT = "release.latest_published_at"
     LATEST_BODY = "release.latest_body"
     LATEST_URL = "release.latest_url"
-    LAST_CHECK_AT = "release.last_check_at"        # every attempt — for UI
+    LAST_CHECK_AT = "release.last_check_at"        # every attempt - for UI
     # Advanced only when an attempt actually returned a tag. Used by the
     # 24h skip guard so failures (network blip, 404, malformed body)
     # retry on the next tick instead of blocking for a full day.
@@ -102,7 +102,7 @@ async def _fetch_releases(url: str):
         "User-Agent": "fileHeron-release-check",
         "X-GitHub-Api-Version": "2022-11-28",
     }
-    # SSRF guard for the admin-configurable updates URL — block loopback /
+    # SSRF guard for the admin-configurable updates URL - block loopback /
     # metadata while still allowing a self-hosted/internal release mirror.
     assert_public_http_url(url, allow_private=True, require_https=False)
     async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT_SEC) as client:
@@ -115,7 +115,7 @@ def _select_backend_release(payload) -> dict | None:
     """Return the first release object whose ``tag_name`` matches the
     backend tag pattern (``vX.Y.Z[…]``), or None.
 
-    Handles both response shapes — list (the new default URL) and
+    Handles both response shapes - list (the new default URL) and
     single object (legacy /releases/latest overrides). The list path
     relies on GitHub returning releases newest-first.
     """
@@ -176,7 +176,7 @@ def _maybe_notify_admins(db: Session, new_version: str, release_url: str | None)
     notifications dispatched (0 = dedup-suppressed). The check itself is
     cheap so we do it here rather than at every call-site.
 
-    Skipped when the new version equals the currently-running version —
+    Skipped when the new version equals the currently-running version -
     no point notifying about your own release."""
     from ..version import VERSION as RUNNING_VERSION
 
@@ -223,7 +223,7 @@ def _too_soon(db: Session) -> bool:
     this entirely.
 
     Reads `last_success_at` rather than `last_check_at` so a failed
-    attempt doesn't block the next hourly retry — we want failures to
+    attempt doesn't block the next hourly retry - we want failures to
     self-heal as soon as the upstream is reachable again."""
     raw = settings_svc.get(db, CacheKeys.LAST_SUCCESS_AT)
     if not raw:
@@ -270,12 +270,12 @@ async def run_check(db: Session, *, manual: bool) -> dict:
 
     match = _select_backend_release(payload)
     if match is None:
-        # No vX.Y.Z tag in the response — either the repo has only
+        # No vX.Y.Z tag in the response - either the repo has only
         # client-v* tags currently (early in a fresh-fork's lifetime)
         # or per_page=30 doesn't reach back far enough. Cache the
         # error so the UI shows something, leave latest_version alone
         # (don't overwrite a previously-good cached version), and
-        # _too_soon won't advance — the next hourly tick retries.
+        # _too_soon won't advance - the next hourly tick retries.
         msg = "no backend release (vX.Y.Z) in GitHub response"
         logger.warning("release_check: %s", msg)
         _write_cache(
@@ -305,7 +305,7 @@ async def run_check(db: Session, *, manual: bool) -> dict:
 
 @track_cron("release_check")
 async def release_check(_ctx) -> dict:
-    """ARQ cron entry. Hourly tick — work happens at most once per 24h
+    """ARQ cron entry. Hourly tick - work happens at most once per 24h
     in auto mode, never in manual mode. Always succeeds (errors are
     caught + cached + returned in the result)."""
     db = SessionLocal()

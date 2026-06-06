@@ -1,4 +1,4 @@
-"""/api/admin/settings/sso — OIDC provider CRUD + discovery probes."""
+"""/api/admin/settings/sso - OIDC provider CRUD + discovery probes."""
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -261,7 +261,7 @@ async def test_provider_connection(
     _admin: User = Depends(get_current_admin),
 ) -> TestConnectionResponse:
     """Probe the IdP without persisting. Uses the issuer_url from the
-    payload if provided, else from the stored row — so the admin can
+    payload if provided, else from the stored row - so the admin can
     verify a candidate value before saving."""
     p = oidc_admin_svc.get_provider(db, provider_id)
     issuer = (payload.issuer_url or p.issuer_url or "").rstrip("/")
@@ -288,7 +288,7 @@ async def _probe_issuer(issuer: str) -> TestConnectionResponse:
         return TestConnectionResponse(ok=False, error="No issuer URL provided.")
     url = f"{issuer}/.well-known/openid-configuration"
     try:
-        # SSRF guard — admin can't probe loopback/metadata/etc. Private LAN
+        # SSRF guard - admin can't probe loopback/metadata/etc. Private LAN
         # allowed (self-hosted IdP). Errors surface as a friendly result.
         assert_public_http_url(url, allow_private=True, require_https=False)
         async with httpx.AsyncClient(timeout=5.0) as cli:

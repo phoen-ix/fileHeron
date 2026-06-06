@@ -48,7 +48,7 @@ async def test_rejects_unknown_route(make_user, client, login_as):
 
 @pytest.mark.asyncio
 async def test_rejects_admin_route(make_user, client, login_as):
-    """Admin pages aren't in ALLOWED_LANDING_ROUTES — even an admin
+    """Admin pages aren't in ALLOWED_LANDING_ROUTES - even an admin
     can't pick them as their landing (per the design choice)."""
     make_user(email="a@test.local", role=UserRole.admin, password="Pass12345678!")
     token, _ = await login_as("a@test.local", "Pass12345678!")

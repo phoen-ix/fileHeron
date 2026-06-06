@@ -1,7 +1,7 @@
-"""/api/notifications/* — per-user notification preferences + bell list/mark/stream.
+"""/api/notifications/* - per-user notification preferences + bell list/mark/stream.
 
 Default channel is `both` for any category the user hasn't explicitly
-set — that's resolved at read time in `services/notification.py`. We
+set - that's resolved at read time in `services/notification.py`. We
 only persist non-default rows, but for ergonomics the GET endpoint
 returns the effective channel for every category (so the UI doesn't
 have to know the defaults).
@@ -45,7 +45,7 @@ from ..services.notification import _DEFAULT_CHANNEL  # internal, but stable
 router = APIRouter(prefix="/api/notifications", tags=["notifications"])
 # /stream lives on a separate router so it bypasses the global
 # `require_2fa_complete` gate (which calls `get_actor`, which requires
-# Authorization: Bearer — but EventSource can only send cookies/query).
+# Authorization: Bearer - but EventSource can only send cookies/query).
 # Auth is enforced inline in the endpoint via the signed-token path
 # (browser) or the bearer path (curl).
 stream_router = APIRouter(prefix="/api/notifications", tags=["notifications-stream"])
@@ -284,11 +284,11 @@ async def stream(
     server closes after 60s and the client is expected to reconnect.
 
     Two auth paths (see `_resolve_stream_user`):
-    - `?token=<sse>` — short-lived HMAC, used by EventSource since it
+    - `?token=<sse>` - short-lived HMAC, used by EventSource since it
       can't send Authorization headers.
-    - `Authorization: Bearer <jwt>` — for curl/CI.
+    - `Authorization: Bearer <jwt>` - for curl/CI.
 
-    Important Traefik / reverse-proxy headers below — see CLAUDE.md
+    Important Traefik / reverse-proxy headers below - see CLAUDE.md
     for the labels operators must NOT add (no buffering middleware)."""
     user = _resolve_stream_user(request, db, token, authorization)
 

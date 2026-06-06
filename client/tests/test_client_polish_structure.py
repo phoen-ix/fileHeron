@@ -1,6 +1,6 @@
 """Structural guards for the v0.9.4 popup-reduction polish.
 
-AST/substring checks (no ``ui`` import — CI lacks system tkinter), mirroring
+AST/substring checks (no ``ui`` import - CI lacks system tkinter), mirroring
 ``test_login_overlay_structure.py``. Pin the contract that the formerly-modal
 Settings + recipient pickers are now in-window, and that the informational
 ``mb.info`` popups are gone.
@@ -29,7 +29,7 @@ def _has_class(tree: ast.Module, name: str) -> ast.ClassDef:
 
 
 def _identifiers(tree: ast.Module) -> set[str]:
-    """Names/attributes/defs used in code — ignores docstrings + comments."""
+    """Names/attributes/defs used in code - ignores docstrings + comments."""
     ids: set[str] = set()
     for node in ast.walk(tree):
         if isinstance(node, ast.Attribute):
@@ -87,7 +87,7 @@ def test_widgets_has_toast_and_copy_helper() -> None:
 
 
 def test_info_and_error_popups_are_toasts() -> None:
-    # Neither info nor error popups in the upload / detail flows — they flash
+    # Neither info nor error popups in the upload / detail flows - they flash
     # non-modal toasts instead.
     for name in ("share_detail_view.py", "upload_panel.py"):
         assert "mb.info(" not in _src(name), f"{name}: use a toast, not mb.info"

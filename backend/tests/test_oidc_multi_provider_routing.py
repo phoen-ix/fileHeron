@@ -70,7 +70,7 @@ async def test_callback_for_a_cannot_resolve_user_of_b(
     claims = make_claims(a, sub="shared-sub", email="different@example.com")
     patch_exchange(monkeypatch, claims)
 
-    # No matching (provider=A, sub) row, and the email is unknown — refuses.
+    # No matching (provider=A, sub) row, and the email is unknown - refuses.
     with pytest.raises(AppError) as exc:
         await oidc_svc.handle_callback(
             db, provider=a, code="x", state_cookie="s", state_param="s",

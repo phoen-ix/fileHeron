@@ -20,7 +20,7 @@ def test_migration_pulls_kv_into_provider(engine, db, make_user):
     from app.models.user import UserRole
     from app.utils.crypto import encrypt_setting
 
-    # Seed the legacy state — Phase 9 left these rows in app_settings.
+    # Seed the legacy state - Phase 9 left these rows in app_settings.
     user = make_user(
         email="legacy@test.local", role=UserRole.employee
     )

@@ -14,7 +14,7 @@ Refresh-token rotation invariants the audit relies on:
   double-use (the second concurrent request sees rowcount=0 →
   treats as reuse → family-revoke).
 - Per-user session cap is enforced via `enforce_session_cap` at every
-  call site that mints a fresh refresh — oldest evicted first.
+  call site that mints a fresh refresh - oldest evicted first.
 """
 from __future__ import annotations
 
@@ -50,7 +50,7 @@ logger = logging.getLogger("fileheron.jwt_session")
 def create_access_token(user_id: int, settings, db: Session | None = None) -> tuple[str, int]:
     """Returns (token, expires_in_seconds).
 
-    Uses AWARE UTC for timestamp math — naive .timestamp() is interpreted as
+    Uses AWARE UTC for timestamp math - naive .timestamp() is interpreted as
     local time and would emit incorrect Unix epochs.
     Adds a `jti` (random nonce) so two tokens issued in the same second
     are still distinguishable.
@@ -212,10 +212,10 @@ def reclamp_refresh_expiry(
 
 
 def create_refresh_token(db: Session, user: User, request: Request | None, settings) -> tuple[RefreshToken, str]:
-    # Cap-enforcement chokepoint — every auth flow (password, recovery,
+    # Cap-enforcement chokepoint - every auth flow (password, recovery,
     # OIDC, WebAuthn, register-from-invite) ends here, so this gate
     # covers them all. The eviction is non-security-relevant
-    # (`refresh_token_evicted` audit) — distinct from
+    # (`refresh_token_evicted` audit) - distinct from
     # `refresh_token_reused` family-revoke for compromised chains.
     from . import settings_registry
     enforce_session_cap(

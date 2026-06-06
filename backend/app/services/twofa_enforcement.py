@@ -2,7 +2,7 @@
 requires the user to have TOTP and they don't.
 
 The policy is computed live by `services.twofa_policy.is_2fa_required`
-on every request — no flag column, no boot-time walk. The gate is a
+on every request - no flag column, no boot-time walk. The gate is a
 FastAPI dependency mounted on the protected routers in `main.py`;
 `/api/account/2fa/*`, `/api/account/me`, `/api/auth/*`,
 `/api/health`, and the public/anonymous routers are exempt so the

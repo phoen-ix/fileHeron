@@ -1,6 +1,6 @@
 """Per-share download limit (v1.1.0).
 
-Adds `download_limit` + `downloads_remaining` to shares — mirrors the
+Adds `download_limit` + `downloads_remaining` to shares - mirrors the
 existing public_link counter for authenticated shares. NULL = unlimited
 so existing rows keep their current behavior with no back-fill.
 

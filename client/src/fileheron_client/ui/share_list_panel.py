@@ -1,4 +1,4 @@
-"""Inbox / Outbox table panel — v0.4.0 CustomTkinter port.
+"""Inbox / Outbox table panel - v0.4.0 CustomTkinter port.
 
 CTk doesn't have a real "table" widget. We render rows as
 ``CTkFrame``s inside a ``CTkScrollableFrame``; each row is a
@@ -44,7 +44,7 @@ _COL_KEYS = (
 _COL_WEIGHTS = (4, 3, 1, 1, 2, 2, 1)
 
 
-# (i18n_key, server_value) — same shape as the v0.7.x English tuples.
+# (i18n_key, server_value) - same shape as the v0.7.x English tuples.
 _STATE_FILTER_KEYS: list[tuple[str, str]] = [
     ("share_list.state_active", "active"),
     ("share_list.state_any", ""),
@@ -63,7 +63,7 @@ _SORT_OPTION_KEYS: list[tuple[str, str]] = [
 
 
 class ShareListPanel(ctk.CTkFrame):
-    """Used twice — for the Inbox tab (box=inbox, shows sender) and
+    """Used twice - for the Inbox tab (box=inbox, shows sender) and
     the Outbox tab (box=outbox, shows recipients)."""
 
     def __init__(
@@ -140,7 +140,7 @@ class ShareListPanel(ctk.CTkFrame):
         )
         sort_menu.pack(side="left", padx=(6, 6))
 
-        # Direction toggle: starts at desc (newest/farthest first — matches
+        # Direction toggle: starts at desc (newest/farthest first - matches
         # the backend default + the old client behaviour).
         self._direction = "desc"
         self._direction_btn = ctk.CTkButton(
@@ -149,7 +149,7 @@ class ShareListPanel(ctk.CTkFrame):
         )
         self._direction_btn.pack(side="left", padx=(0, 12))
 
-        # Party filter — distinct senders (inbox) or recipient users
+        # Party filter - distinct senders (inbox) or recipient users
         # (outbox) seen on the current page. Lightweight: no server
         # search, just the parties already present in _items. Refilled
         # by ``_rebuild_party_options`` after every successful refresh.
@@ -185,7 +185,7 @@ class ShareListPanel(ctk.CTkFrame):
                 font=ctk.CTkFont(weight="bold", size=11),
             ).grid(row=0, column=col_idx, sticky="ew", padx=6, pady=4)
 
-        # Scrollable body — rows added by _render.
+        # Scrollable body - rows added by _render.
         self._scroll = ctk.CTkScrollableFrame(self._list_frame, fg_color="transparent")
         self._scroll.pack(fill="both", expand=True, padx=8, pady=(0, 4))
         for col_idx, weight in enumerate(_COL_WEIGHTS):
@@ -209,7 +209,7 @@ class ShareListPanel(ctk.CTkFrame):
         the parties present in the current page of items. Cheap, no
         server search needed, and gives an immediate "filter to Alice"
         UX. Loss: parties not visible on the current page aren't
-        selectable — acceptable given the 200-row page cap."""
+        selectable - acceptable given the 200-row page cap."""
         seen: dict[int, str] = {}
         if self._box == "inbox":
             for it in self._items:
@@ -298,7 +298,7 @@ class ShareListPanel(ctk.CTkFrame):
                     or t("share_list.no_party")
                 )
 
-            # Plain text cells — manually grid each into the scrollable
+            # Plain text cells - manually grid each into the scrollable
             # frame. The PillLabel state chip is a widget (cell 6).
             cells = [
                 subject,
@@ -333,7 +333,7 @@ class ShareListPanel(ctk.CTkFrame):
     def _drill_in(self, share_id: str) -> None:
         """Hide the list, pack a fresh ShareDetailView in its place."""
         if self._detail_view is not None:
-            # Already viewing something — replace with the new share.
+            # Already viewing something - replace with the new share.
             self._detail_view.destroy()
             self._detail_view = None
         else:

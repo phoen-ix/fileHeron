@@ -1,6 +1,6 @@
 """Subset Pydantic mirrors of the backend response schemas.
 
-We don't try to reproduce the whole backend type system — only the
+We don't try to reproduce the whole backend type system - only the
 fields the client actually reads. ``model_config`` allows extra
 fields so future server additions don't break the client.
 """
@@ -94,7 +94,7 @@ class GroupRecipientRef(_Base):
 
 class InlinePublicLinkResult(_Base):
     """Returned on POST /api/shares when ``public_link`` was set
-    in the request — plaintext URL shown ONCE. Mirrors the backend
+    in the request - plaintext URL shown ONCE. Mirrors the backend
     schema; ``_Base`` ignores any extra fields so server-side
     additions don't break us."""
     id: str

@@ -95,7 +95,7 @@ def test_401_triggers_one_refresh_then_replays():
     me_route.side_effect = [
         httpx.Response(401, json={"code": "TOKEN_EXPIRED", "error": "expired"}),
         httpx.Response(200, json={
-            # Backend retired the HMAC + email_hint design — see CLAUDE.md
+            # Backend retired the HMAC + email_hint design - see CLAUDE.md
             # "Email storage": plaintext in users.email so notification
             # dispatchers can address them. MeResponse expects 'email'.
             "id": 1,
@@ -139,7 +139,7 @@ def test_401_after_failed_refresh_raises_session_expired():
 
 @respx.mock
 def test_api_token_path_does_not_attempt_refresh():
-    """A 401 with an API token should NOT call /api/auth/refresh — API
+    """A 401 with an API token should NOT call /api/auth/refresh - API
     tokens are stable secrets, not session tokens."""
     me_route = respx.get(f"{SERVER}/api/account/me").mock(
         return_value=httpx.Response(401, json={"code": "INVALID_TOKEN", "error": "bad"})

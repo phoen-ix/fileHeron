@@ -88,7 +88,7 @@ def test_pdf_receipt_renders(make_user, db):
     pdf = erasure_svc.generate_receipt_pdf(row)
     # PDF magic header.
     assert pdf[:4] == b"%PDF"
-    # Sanity — file is non-trivial size.
+    # Sanity - file is non-trivial size.
     assert len(pdf) > 1000
 
 
@@ -106,7 +106,7 @@ async def test_already_erased_user_summary_flag(make_user, db):
 @pytest.mark.asyncio
 async def test_erase_drops_client_employee_connection_rows(make_user, db):
     """Erasure must remove ClientEmployeeConnection rows pointing at the
-    target — the FK CASCADE doesn't fire because we anonymise rather
+    target - the FK CASCADE doesn't fire because we anonymise rather
     than delete the row."""
     from app.models.client_employee_connection import ClientEmployeeConnection
     from app.services import connection as connection_svc

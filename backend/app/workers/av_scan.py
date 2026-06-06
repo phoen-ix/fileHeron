@@ -1,4 +1,4 @@
-"""ARQ worker task — scan an uploaded file via clamd.
+"""ARQ worker task - scan an uploaded file via clamd.
 
 Triggered by the tusd post-finish hook (synchronous → enqueues here).
 Reads the file path from the DB row, asks clamd, and either:
@@ -21,7 +21,7 @@ logger = logging.getLogger("fileheron.workers.av_scan")
 
 
 async def av_scan_file(_ctx, file_id: str) -> dict:
-    """Scan a single file. Idempotent — silently skips files not in
+    """Scan a single file. Idempotent - silently skips files not in
     `ready_unscanned` state (already scanned, deleted, etc.)."""
     db = SessionLocal()
     try:
@@ -67,7 +67,7 @@ async def av_scan_file(_ctx, file_id: str) -> dict:
             quarantine_file(db, file=file, signature=result.signature)
             db.commit()
             logger.warning(
-                "av_scan: %s INFECTED (%s) — quarantined", file_id, result.signature
+                "av_scan: %s INFECTED (%s) - quarantined", file_id, result.signature
             )
             return {
                 "file_id": file_id,

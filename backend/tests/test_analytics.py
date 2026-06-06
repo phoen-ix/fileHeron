@@ -1,4 +1,4 @@
-"""Admin analytics — storage snapshot, live aggregation, endpoint + CSV."""
+"""Admin analytics - storage snapshot, live aggregation, endpoint + CSV."""
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
@@ -52,7 +52,7 @@ def test_snapshot_storage_today_idempotent(make_user, db):
     assert row.files_infected == 1
     assert row.files_total == 3  # all non-deleted
 
-    # Re-run overwrites today's row (idempotent) — still exactly one row.
+    # Re-run overwrites today's row (idempotent) - still exactly one row.
     from app.models.analytics_snapshot import AnalyticsSnapshot
     analytics_svc.snapshot_storage_today(db)
     db.commit()

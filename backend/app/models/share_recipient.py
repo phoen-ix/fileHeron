@@ -1,11 +1,11 @@
-"""Share recipients — a join row per (share, recipient).
+"""Share recipients - a join row per (share, recipient).
 
 A recipient is EITHER a user OR a group, never both. Phase 3a only writes
 recipient_user_id; Phase 4 introduces real groups and starts using
 recipient_group_id (which becomes a FK to `groups` then).
 
 Composite primary key on (share_id, recipient_user_id, recipient_group_id)
-isn't great because of the nullables — instead we use a synthetic id +
+isn't great because of the nullables - instead we use a synthetic id +
 indices. Uniqueness enforced at the application level (P4 service layer).
 """
 from __future__ import annotations

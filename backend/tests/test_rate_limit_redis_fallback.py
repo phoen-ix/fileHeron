@@ -30,7 +30,7 @@ def _redis_down(monkeypatch):
 def test_login_ip_limit_still_bounds_when_redis_down(monkeypatch):
     monkeypatch.setattr(rate_limit.settings, "RATE_LIMIT_LOGIN", 5)
     ip = "203.0.113.50"
-    # First 5 allowed, the 6th refused — NOT unlimited.
+    # First 5 allowed, the 6th refused - NOT unlimited.
     results = [_REAL_CHECK_LOGIN(ip) for _ in range(7)]
     assert results[:5] == [True] * 5
     assert results[5] is False

@@ -1,6 +1,6 @@
 """Tests for the share-render helpers in ``fileheron_client.formatters``.
 
-Kept here (not under ``tests/ui/``) deliberately — these helpers are
+Kept here (not under ``tests/ui/``) deliberately - these helpers are
 pure-Python and the conftest excludes the ``ui`` package from the test
 process."""
 from __future__ import annotations
@@ -42,11 +42,11 @@ def test_to_local_aware_preserves_instant():
 
 
 def test_format_expiry_renders_none_as_never_word():
-    # v1.1.4 "Never" preset — backend sends expires_at: null.
+    # v1.1.4 "Never" preset - backend sends expires_at: null.
     assert format_expiry(None) == "Never"
 
 
-# ---- exact local rendering (POSIX only — needs a pinned TZ) -----------------
+# ---- exact local rendering (POSIX only - needs a pinned TZ) -----------------
 
 
 @pytest.fixture
@@ -90,9 +90,9 @@ def test_format_rate_units():
 
 
 def test_format_eta():
-    assert format_eta(None) == "—"
-    assert format_eta(0) == "—"
-    assert format_eta(-3) == "—"
+    assert format_eta(None) == "-"
+    assert format_eta(0) == "-"
+    assert format_eta(-3) == "-"
     assert format_eta(42) == "0:42"
     assert format_eta(83) == "1:23"
     assert format_eta(3 * 3600 + 23 * 60 + 45) == "3:23:45"

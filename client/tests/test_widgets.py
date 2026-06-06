@@ -2,7 +2,7 @@
 
 Importing ``customtkinter`` requires the system ``tkinter`` extension,
 which CI does not necessarily ship. We therefore inspect signatures
-via the AST instead of importing the module — enough to catch the
+via the AST instead of importing the module - enough to catch the
 kind of bug v0.5.5 fixed (``PillLabel.__init__`` rejected widget-level
 kwargs like ``cursor=`` because it had no ``**kwargs``)."""
 from __future__ import annotations
@@ -34,7 +34,7 @@ def test_pill_label_init_accepts_kwargs() -> None:
 
     v0.5.4 added ``cursor='hand2'`` to the call site in
     ``share_list_panel.py::_render`` on the assumption that PillLabel
-    transparently forwards CTk widget kwargs. It did not — the resulting
+    transparently forwards CTk widget kwargs. It did not - the resulting
     TypeError crashed the row render mid-loop and the swallowed
     exception (logged by ``_async.py::_poll``) made the list look empty
     and made post-revoke refreshes silently fail. v0.5.5 added

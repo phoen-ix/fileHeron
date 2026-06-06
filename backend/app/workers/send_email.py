@@ -82,6 +82,7 @@ async def send_email_job(
     text_body: str,
     html_body: str | None = None,
     email_log_id: int | None = None,
+    list_unsubscribe: str | None = None,
 ) -> dict:
     """Worker entry point. Returns a small status dict for diagnostics.
 
@@ -89,6 +90,9 @@ async def send_email_job(
     on the next send without a worker restart. When ``email_log_id`` is
     supplied (the notification + resend paths), finalizes that mail-log
     row to the delivery outcome - one row per email, ``attempts`` climbs.
+
+    ``list_unsubscribe`` (when set) becomes the RFC 8058 one-click
+    unsubscribe header pair on the outgoing message.
     """
     db = SessionLocal()
     try:
@@ -97,7 +101,8 @@ async def send_email_job(
         db.close()
     try:
         await send_email(
-            cfg=cfg, to=to, subject=subject, text_body=text_body, html_body=html_body
+            cfg=cfg, to=to, subject=subject, text_body=text_body,
+            html_body=html_body, list_unsubscribe=list_unsubscribe,
         )
         # `send_email` returns without sending when SMTP is unconfigured (it
         # logs to stdout) - surface that distinctly in the mail log.

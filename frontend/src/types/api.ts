@@ -418,25 +418,43 @@ export interface PublicShareResponse {
 
 export type NotificationCategory =
   | 'share_created'
+  | 'share_files_added'
   | 'share_expiring'
+  | 'share_pending_approval'
+  | 'share_approved'
+  | 'share_rejected'
   | 'public_link_downloaded'
   | 'account_created'
-  | 'password_reset'
-  | 'twofa_required'
+  | 'reset_password'
   | 'login_alert'
+  | 'oidc_linked'
   | 'file_quarantined'
+  | 'session_evicted'
   | 'ops_alert'
   | 'release_available'
+  | 'inbound_message'
 
 export type NotificationChannel = 'off' | 'email' | 'in_app' | 'both'
 
 export interface PreferenceItem {
   category: NotificationCategory
   channel: NotificationChannel
+  locked: boolean
 }
 
 export interface PreferencesResponse {
   items: PreferenceItem[]
+}
+
+export interface SubscriptionContextResponse {
+  display_name: string
+  items: PreferenceItem[]
+}
+
+export interface UnsubscribeResponse {
+  items: PreferenceItem[]
+  category: string
+  previous_channel: NotificationChannel
 }
 
 export interface NotificationItem {

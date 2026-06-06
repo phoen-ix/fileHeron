@@ -19,16 +19,8 @@ from sqlalchemy.orm import Session
 from ..config import settings
 from ..dependencies import get_current_user, get_db
 from ..middleware.errors import AppError
-from ..models.notification import (
-    ADMIN_ONLY_CATEGORIES,
-    Notification,
-    NotificationCategory,
-)
-from ..models.user import User, UserRole
-from ..models.user_notification_preference import (
-    NotificationChannel,
-    UserNotificationPreference,
-)
+from ..models.notification import Notification
+from ..models.user import User
 from ..schemas.notification import (
     MarkReadResponse,
     NotificationItem,
@@ -37,10 +29,9 @@ from ..schemas.notification import (
     PreferencesResponse,
     UpdatePreferencesRequest,
 )
-from ..services import rate_limit
+from ..services import notification_prefs, rate_limit
 from ..services import sse as sse_svc
 from ..services import sse_token as sse_token_svc
-from ..services.notification import _DEFAULT_CHANNEL  # internal, but stable
 
 router = APIRouter(prefix="/api/notifications", tags=["notifications"])
 # /stream lives on a separate router so it bypasses the global
@@ -73,20 +64,13 @@ def _to_item(n: Notification) -> NotificationItem:
 # ---- Preferences ----------------------------------------------------------
 
 
-def _hidden_categories(db: Session, user: User) -> set[NotificationCategory]:
-    """Categories that should not appear in this user's preferences because
-    they can never deliver to them:
-    - admin-only categories (ops/updates) for non-admins;
-    - oidc_linked when no SSO provider is enabled (nobody can link SSO).
-    """
-    from ..services import oidc_admin
-
-    hidden: set[NotificationCategory] = set()
-    if user.role != UserRole.admin:
-        hidden |= ADMIN_ONLY_CATEGORIES
-    if not oidc_admin.is_any_enabled(db):
-        hidden.add(NotificationCategory.oidc_linked)
-    return hidden
+def _prefs_response(db: Session, user: User) -> PreferencesResponse:
+    return PreferencesResponse(
+        items=[
+            PreferenceItem(category=r.category, channel=r.channel, locked=r.locked)
+            for r in notification_prefs.list_preferences(db, user)
+        ]
+    )
 
 
 @router.get("/preferences", response_model=PreferencesResponse)
@@ -94,24 +78,7 @@ def get_preferences(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> PreferencesResponse:
-    rows = (
-        db.query(UserNotificationPreference)
-        .filter(UserNotificationPreference.user_id == user.id)
-        .all()
-    )
-    by_cat = {r.category: r.channel for r in rows}
-    hidden = _hidden_categories(db, user)
-    items = [
-        PreferenceItem(
-            category=cat,
-            channel=by_cat.get(
-                cat, _DEFAULT_CHANNEL.get(cat, NotificationChannel.both)
-            ),
-        )
-        for cat in NotificationCategory
-        if cat not in hidden
-    ]
-    return PreferencesResponse(items=items)
+    return _prefs_response(db, user)
 
 
 @router.put("/preferences", response_model=PreferencesResponse)
@@ -120,40 +87,9 @@ def update_preferences(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> PreferencesResponse:
-    hidden = _hidden_categories(db, user)
-    valid_cats = {c.value for c in NotificationCategory if c not in hidden}
-    valid_chans = {c.value for c in NotificationChannel}
-    for cat_key, chan_val in payload.preferences.items():
-        if cat_key not in valid_cats:
-            raise AppError(
-                400, "INVALID_CATEGORY", f"Unknown notification category: {cat_key}"
-            )
-        if chan_val not in valid_chans:
-            raise AppError(
-                400, "INVALID_CHANNEL", f"Unknown channel: {chan_val}"
-            )
-
-    for cat_key, chan_val in payload.preferences.items():
-        cat = NotificationCategory(cat_key)
-        chan = NotificationChannel(chan_val)
-        existing = (
-            db.query(UserNotificationPreference)
-            .filter(
-                UserNotificationPreference.user_id == user.id,
-                UserNotificationPreference.category == cat,
-            )
-            .one_or_none()
-        )
-        if existing is None:
-            db.add(
-                UserNotificationPreference(
-                    user_id=user.id, category=cat, channel=chan
-                )
-            )
-        else:
-            existing.channel = chan
+    notification_prefs.update_preferences(db, user, payload.preferences)
     db.commit()
-    return get_preferences(user=user, db=db)
+    return _prefs_response(db, user)
 
 
 # ---- List + read ---------------------------------------------------------

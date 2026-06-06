@@ -352,6 +352,14 @@ const router = createRouter({
       meta: { public: true, density: 'editorial', title: 'Shared files' },
     },
 
+    /* anonymous "manage subscriptions" page (email footer links) ----------- */
+    {
+      path: '/manage-notifications/:token',
+      name: 'manage-notifications',
+      component: () => import('@/views/ManageNotifications.vue'),
+      meta: { public: true, density: 'editorial', title: 'Manage subscriptions' },
+    },
+
     /* fallback ------------------------------------------------------------- */
     {
       path: '/:pathMatch(.*)*',

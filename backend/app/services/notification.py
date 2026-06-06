@@ -25,10 +25,7 @@ from sqlalchemy.orm import Session
 
 from ..models.notification import Notification, NotificationCategory
 from ..models.user import User
-from ..models.user_notification_preference import (
-    NotificationChannel,
-    UserNotificationPreference,
-)
+from ..models.user_notification_preference import NotificationChannel
 from . import email as email_svc
 from . import job_queue
 
@@ -74,17 +71,12 @@ _DEFAULT_CHANNEL: dict[NotificationCategory, NotificationChannel] = {
 def _channel_for(
     db: Session, user_id: int, category: NotificationCategory
 ) -> NotificationChannel:
-    pref = (
-        db.query(UserNotificationPreference)
-        .filter(
-            UserNotificationPreference.user_id == user_id,
-            UserNotificationPreference.category == category,
-        )
-        .one_or_none()
-    )
-    if pref is not None:
-        return pref.channel
-    return _DEFAULT_CHANNEL.get(category, NotificationChannel.both)
+    # Delegated to the shared prefs layer so locked (security) categories
+    # always resolve to their default channel regardless of any stored row.
+    # Lazy import: notification_prefs imports _DEFAULT_CHANNEL from here.
+    from . import notification_prefs
+
+    return notification_prefs.effective_channel(db, user_id, category)
 
 
 def _wants_email(channel: NotificationChannel) -> bool:
@@ -187,15 +179,22 @@ def dispatch(
             from . import site as site_svc
 
             slug = template_slug or category.value
+            site_url = site_svc.get_site_url(db)
             # Render ONCE: the same (subject, text, html) is both logged (masked)
             # and enqueued (unmasked, for the real send) - never re-rendered, so
-            # the stored body matches what was sent.
+            # the stored body matches what was sent. render_email injects the
+            # Manage/Unsubscribe footer for this recipient + category.
             subject, text, html = email_svc.render_email(
                 user.locale, slug, payload,
-                app_url=site_svc.get_site_url(db),
+                app_url=site_url,
                 site_timezone=site_svc.get_site_timezone(db),
                 app_name=site_svc.get_app_name(db),
                 db=db,
+                recipient_user_id=user.id,
+                category=category.value,
+            )
+            list_unsub = email_svc.list_unsubscribe_header(
+                user.id, category.value, site_url
             )
             eid = mail_log.record_queued(
                 db,
@@ -214,6 +213,7 @@ def dispatch(
                 text_body=text,
                 html_body=html,
                 email_log_id=eid,
+                list_unsubscribe=list_unsub,
             )
         except Exception:
             logger.exception(

@@ -10,7 +10,11 @@ import en from '@/i18n/locales/en.json'
 // the bell + the preferences table. Keep this list in sync with the enum.
 const CATEGORIES = [
   'share_created',
+  'share_files_added',
   'share_expiring',
+  'share_pending_approval',
+  'share_approved',
+  'share_rejected',
   'public_link_downloaded',
   'account_created',
   'reset_password',
@@ -20,6 +24,7 @@ const CATEGORIES = [
   'session_evicted',
   'ops_alert',
   'release_available',
+  'inbound_message',
 ] as const
 
 describe('notif_bell.cat covers every NotificationCategory', () => {

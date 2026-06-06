@@ -57,10 +57,14 @@ async def send_email(
     subject: str,
     text_body: str,
     html_body: str | None = None,
+    list_unsubscribe: str | None = None,
 ) -> None:
     """Send (or log) one email. Raises aiosmtplib exceptions on
     failure when SMTP is configured; logs-fallback on the dev path
-    never raises."""
+    never raises.
+
+    ``list_unsubscribe``: when set, adds the RFC 8058 one-click
+    unsubscribe headers (``List-Unsubscribe`` + ``List-Unsubscribe-Post``)."""
     if not cfg.is_configured:
         # Logs-fallback: print the email body block to stdout for dev visibility.
         logger.info(
@@ -84,6 +88,10 @@ async def send_email(
     msg["From"] = cfg.from_header
     msg["To"] = to
     msg["Subject"] = subject
+    if list_unsubscribe:
+        msg["List-Unsubscribe"] = list_unsubscribe
+        # Signals RFC 8058 one-click support to Gmail/Outlook.
+        msg["List-Unsubscribe-Post"] = "List=One-Click"
     msg.set_content(text_body)
     if html_body:
         msg.add_alternative(html_body, subtype="html")

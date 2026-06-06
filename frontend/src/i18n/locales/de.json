@@ -960,7 +960,11 @@
     "hr_ago": "vor {n}h",
     "cat": {
       "share_created": "Freigabe",
+      "share_files_added": "Dateien hinzugefügt",
       "share_expiring": "Läuft ab",
+      "share_pending_approval": "Freigabe nötig",
+      "share_approved": "Freigabe genehmigt",
+      "share_rejected": "Freigabe abgelehnt",
       "public_link_downloaded": "Öffentlicher Link",
       "account_created": "Neues Konto",
       "reset_password": "Passwort zurücksetzen",
@@ -970,7 +974,8 @@
       "file_quarantined": "Quarantäne",
       "session_evicted": "Abgemeldet",
       "ops_alert": "Betriebsalarm",
-      "release_available": "Update verfügbar"
+      "release_available": "Update verfügbar",
+      "inbound_message": "Eingehende Nachricht"
     },
     "headline": {
       "share_created": "{sender_name} hat dir {file_count} Datei(en) gesendet.",
@@ -995,6 +1000,7 @@
   "notif_prefs": {
     "title": "Benachrichtigungen",
     "intro": "Wähle für jedes Ereignis, wie du benachrichtigt werden möchtest. „Beides\" steht für E-Mail und Benachrichtigungsglocke.",
+    "locked": "Erforderlich",
     "col": {
       "category": "Ereignis",
       "channel": "Benachrichtigung über"
@@ -1004,6 +1010,21 @@
       "email": "Nur E-Mail",
       "in_app": "Nur in der App",
       "both": "Beides"
+    }
+  },
+  "manage_notifications": {
+    "eyebrow": "E-Mail-Einstellungen",
+    "title": "Abonnements verwalten",
+    "invalid_title": "Dieser Link ist nicht mehr gültig",
+    "intro": "Wähle für jedes Ereignis, wie du benachrichtigt werden möchtest. Änderungen werden sofort gespeichert.",
+    "intro_named": "Benachrichtigungseinstellungen für {name}. Änderungen werden sofort gespeichert.",
+    "unsubscribed": "Du hast „{category}\"-E-Mails abbestellt.",
+    "undo": "Rückgängig",
+    "errors": {
+      "generic": "Dieser Verwaltungslink ist ungültig oder abgelaufen. Melde dich an, um deine Benachrichtigungseinstellungen zu ändern.",
+      "INVALID_MANAGE_TOKEN": "Dieser Verwaltungslink ist ungültig. Melde dich an, um deine Benachrichtigungseinstellungen zu ändern.",
+      "MANAGE_TOKEN_EXPIRED": "Dieser Verwaltungslink ist abgelaufen. Öffne eine neuere E-Mail oder melde dich an, um deine Einstellungen zu ändern.",
+      "RATE_LIMITED": "Zu viele Anfragen. Bitte warte einen Moment und versuche es erneut."
     }
   },
   "admin_users": {

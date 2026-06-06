@@ -35,6 +35,14 @@
                   {% else %}
                     Sent by <strong>{{ app_name }}</strong>.
                   {% endif %}
+                  {% if manage_subscriptions_url %}
+                    <br>
+                    {% if locale|default('en') == 'de' %}
+                      <a href="{{ manage_subscriptions_url }}" style="color:#6b7280;text-decoration:underline;">Benachrichtigungen verwalten</a>{% if unsubscribe_url %} &middot; <a href="{{ unsubscribe_url }}" style="color:#6b7280;text-decoration:underline;">Abbestellen</a>{% endif %}
+                    {% else %}
+                      <a href="{{ manage_subscriptions_url }}" style="color:#6b7280;text-decoration:underline;">Manage subscriptions</a>{% if unsubscribe_url %} &middot; <a href="{{ unsubscribe_url }}" style="color:#6b7280;text-decoration:underline;">Unsubscribe</a>{% endif %}
+                    {% endif %}
+                  {% endif %}
                 {% endblock %}
               </td>
             </tr>

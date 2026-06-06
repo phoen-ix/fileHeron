@@ -186,8 +186,12 @@ A single scrollable page with these sections (left-side quick-nav with scroll-sp
 - **Recovery codes** - regenerate (invalidates the previous set).
 - **Passkeys** - register a platform / cross-platform authenticator. Multiple per account; each can be removed individually.
 - **SSO connections** - connect to or disconnect from any OIDC provider your admin configured. The connect flow refuses if the provider's email doesn't match your fileHeron email.
-- **Notifications** - per-category channel pick (off / email / in-app / both).
+- **Notifications** - per-category channel pick (off / email / in-app / both). Security-critical types (password reset, sign-in alerts) are shown but **locked on** - they can't be disabled.
 - **API tokens** - if your admin's policy allows you to mint them; each token's plaintext is shown once at creation.
+
+## Email unsubscribe + manage subscriptions
+
+Every email file:Heron sends carries a footer with a **Manage subscriptions** link, and ordinary notifications also get a one-click **Unsubscribe** link. Both work **without logging in**: the link embeds a long-lived signed token that opens a standalone page (`/manage-notifications/<token>`) where the recipient can tune every notification channel. Clicking Unsubscribe turns that notification type fully off, lands on the page, applies it immediately, and offers an **Undo**. Gmail/Outlook also show their native one-click unsubscribe button (RFC 8058 `List-Unsubscribe` headers). Security-critical emails (password reset, email verification, sign-in alerts, invites, email-change) are **always-on**: they show the Manage link but can never be switched off - enforced server-side, so even a previously-disabled sign-in alert still sends.
 
 ## When 2FA is required (forced enrolment)
 

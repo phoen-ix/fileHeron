@@ -27,6 +27,7 @@ from .routers import (
     groups,
     health,
     metrics,
+    notification_subscriptions,
     notifications,
     oidc,
     oidc_connect,
@@ -97,6 +98,7 @@ app.include_router(setup.router)                 # anonymous wizard for first ad
 app.include_router(auth.router)
 app.include_router(account.router)               # /me + /2fa/* must be reachable
 app.include_router(public.router)                # anonymous public-link landing
+app.include_router(notification_subscriptions.router)  # anonymous, token-authed
 app.include_router(tus_hooks.router)             # internal HMAC-gated
 app.include_router(oidc.router)                  # anonymous OIDC login
 app.include_router(webauthn.auth_router)         # WebAuthn login flow

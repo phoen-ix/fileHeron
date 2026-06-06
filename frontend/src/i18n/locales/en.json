@@ -960,7 +960,11 @@
     "hr_ago": "{n}h ago",
     "cat": {
       "share_created": "Share",
+      "share_files_added": "Files added",
       "share_expiring": "Expiring",
+      "share_pending_approval": "Approval needed",
+      "share_approved": "Share approved",
+      "share_rejected": "Share rejected",
       "public_link_downloaded": "Public link",
       "account_created": "New account",
       "reset_password": "Password reset",
@@ -970,7 +974,8 @@
       "file_quarantined": "Quarantine",
       "session_evicted": "Signed out",
       "ops_alert": "Ops alert",
-      "release_available": "Update available"
+      "release_available": "Update available",
+      "inbound_message": "Inbound message"
     },
     "headline": {
       "share_created": "{sender_name} sent you {file_count} file(s).",
@@ -995,6 +1000,7 @@
   "notif_prefs": {
     "title": "Notifications",
     "intro": "Choose how you'd like to be notified for each event. \"Both\" means email and the bell.",
+    "locked": "Required",
     "col": {
       "category": "Event",
       "channel": "Notify me via"
@@ -1004,6 +1010,21 @@
       "email": "Email only",
       "in_app": "In-app only",
       "both": "Both"
+    }
+  },
+  "manage_notifications": {
+    "eyebrow": "Email preferences",
+    "title": "Manage subscriptions",
+    "invalid_title": "This link is no longer valid",
+    "intro": "Choose how you'd like to be notified for each event. Changes are saved instantly.",
+    "intro_named": "Notification settings for {name}. Changes are saved instantly.",
+    "unsubscribed": "You've been unsubscribed from \"{category}\" emails.",
+    "undo": "Undo",
+    "errors": {
+      "generic": "This manage link is invalid or has expired. Sign in to change your notification settings.",
+      "INVALID_MANAGE_TOKEN": "This manage link is invalid. Sign in to change your notification settings.",
+      "MANAGE_TOKEN_EXPIRED": "This manage link has expired. Open a more recent email, or sign in to change your settings.",
+      "RATE_LIMITED": "Too many requests. Please wait a moment and try again."
     }
   },
   "admin_users": {

@@ -5,6 +5,13 @@ import type {
   AdminApiTokenListResponse,
   AdminAuditResponse,
   AnalyticsResponse,
+  EmailTemplatesListResponse,
+  EmailTemplateItem,
+  UpdateEmailTemplateRequest,
+  PreviewEmailTemplateRequest,
+  PreviewEmailTemplateResponse,
+  TestSendEmailTemplateRequest,
+  TestSendEmailTemplateResponse,
   WebhookItem,
   WebhookCreateResponse,
   WebhookDeliveryItem,
@@ -648,4 +655,44 @@ export function getShareDefaults() {
 
 export function updateShareDefaults(payload: UpdateShareDefaultsRequest) {
   return api.put<ShareDefaultsResponse>('/admin/settings/share-defaults', payload)
+}
+
+// Admin-editable email templates (v1.25.0)
+const _et = (slug: string, locale: string) =>
+  `/admin/settings/email-templates/${encodeURIComponent(slug)}/${encodeURIComponent(locale)}`
+
+export function getEmailTemplates() {
+  return api.get<EmailTemplatesListResponse>('/admin/settings/email-templates')
+}
+
+export function getEmailTemplate(slug: string, locale: string) {
+  return api.get<EmailTemplateItem>(_et(slug, locale))
+}
+
+export function updateEmailTemplate(
+  slug: string,
+  locale: string,
+  payload: UpdateEmailTemplateRequest,
+) {
+  return api.put<EmailTemplateItem>(_et(slug, locale), payload)
+}
+
+export function resetEmailTemplate(slug: string, locale: string) {
+  return api.delete<EmailTemplateItem>(_et(slug, locale))
+}
+
+export function previewEmailTemplate(
+  slug: string,
+  locale: string,
+  payload: PreviewEmailTemplateRequest,
+) {
+  return api.post<PreviewEmailTemplateResponse>(`${_et(slug, locale)}/preview`, payload)
+}
+
+export function testSendEmailTemplate(
+  slug: string,
+  locale: string,
+  payload: TestSendEmailTemplateRequest,
+) {
+  return api.post<TestSendEmailTemplateResponse>(`${_et(slug, locale)}/test-send`, payload)
 }

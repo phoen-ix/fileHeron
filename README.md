@@ -154,6 +154,16 @@ Optional, admin-controlled. When enabled, a newly created share enters **pending
 
 Approvers get an **Approvals** entry in the top nav — a queue of everything waiting on them. A sender sees "pending approval" on a held share, and on a rejected one the **reason** plus a **Resubmit** button (the files are kept). Notifications (email + in-app, EN/DE) fire to the approvers ("needs your approval") and back to the sender ("approved" / "rejected"). A pending or rejected share is invisible to recipients and to any public link until approved.
 
+## Email templates (`/admin/settings/email-templates`)
+
+Admins can edit the **subject and body of every outbound email, per language**, from a dedicated editor — no code change or release needed. Built-in templates remain the default; an override only takes effect once saved, and **Reset to default** removes it.
+
+- **WYSIWYG editor** (bold/italic/headings/lists) via the MIT-licensed Milkdown editor, lazy-loaded only on this page. The body is authored as Markdown and stored as Markdown; on send it becomes the plain-text part *and* a sanitised HTML part wrapped in the standard branded layout.
+- **Friendly placeholders** — insert `[RECIPIENT]`, `[SHARE_LINK]`, `[RESET_LINK]`, etc. from a toolbar menu; each template lists the placeholders it supports. The server maps them to real values, HTML-escaping dynamic data and keeping one-time auth links in their canonical (masked-in-mail-log) form.
+- **Live preview** (HTML + plain-text, sample data, rendered in a sandboxed iframe) and **test send** to your own address via the configured SMTP.
+- **Locale-agnostic** — the language tabs are driven by the app's locale set (EN/DE today), so a future language becomes editable with no code change.
+- **Safety** — overrides are sanitised (no scripts/handlers/unsafe schemes); the editor rejects saving an auth email (password reset / verify / invite / email-change) that drops its required link placeholder, so those flows can't be bricked. The 8 token-bearing auth categories stay force-masked in the mail log regardless.
+
 ## Account page (`/account`)
 
 A single scrollable page with these sections (left-side quick-nav with scroll-spy):
@@ -281,7 +291,7 @@ Companion setting at **`/admin/settings/quarantine`** — single toggle "Notify 
 - **Shares / files:** `share_created`, `share_revoked`, `share_expired`, `share_expiry_updated`, `share_limit_updated`, `share_submitted_for_approval`, `share_approved`, `share_rejected`, `share_resubmitted`, `file_finalized`, `file_downloaded`, `file_deleted`, `file_expired`, `file_quarantined`, `file_quarantine_released`, `file_quarantine_purged`, `av_reload_triggered`.
 - **Public links / groups:** `public_link_created`, `public_link_revoked`, `public_link_consumed`, `group_created`, `group_updated`, `group_deleted`, `group_member_added`, `group_member_removed`.
 - **API tokens / OIDC:** `api_token_created`/`_revoked`/`_disabled`/`_reactivated`/`_admin_revoked`/`_admin_created`, `oidc_linked`, `oidc_unlinked`, `oidc_provider_created`/`_updated`/`_deleted`.
-- **Settings / policy:** `api_policy_changed`, `public_link_policy_changed`, `twofa_policy_changed`, `quarantine_policy_changed`, `share_defaults_policy_changed`, `smtp_config_changed`, `home_page_toggled`, `file_preview_toggled`, `share_approval_policy_changed`, `motd_changed`, `site_url_changed`, `site_timezone_changed`, `updates_settings_changed`, `settings_changed`.
+- **Settings / policy:** `api_policy_changed`, `public_link_policy_changed`, `twofa_policy_changed`, `quarantine_policy_changed`, `share_defaults_policy_changed`, `smtp_config_changed`, `home_page_toggled`, `file_preview_toggled`, `share_approval_policy_changed`, `email_template_changed`, `email_template_reset`, `motd_changed`, `site_url_changed`, `site_timezone_changed`, `updates_settings_changed`, `settings_changed`.
 - **Ops / self-update:** `cron_failed`, `cron_run_triggered`, `ops_alert_dispatched`, `email_undeliverable`, `update_triggered`/`_completed`/`_failed`, `rollback_triggered`/`_completed`/`_failed`.
 
 ---
@@ -616,6 +626,7 @@ Edited under `/admin/settings/*`; stored in `app_settings`. Authoritative key li
 | **Share approval** `/share-approval` | `share_approval.enabled` + `..approver_mode` + allowlists + `..scope` + `..exempt_approvers` + `..allow_content_review` | Four-eyes gate: which shares need approval, who approves, and whether approvers may review file contents. Off by default. |
 | **2FA** `/twofa` | `twofa.required_roles` + `twofa.required_group_ids` | Which roles/groups must enrol TOTP (computed live; no admin escape). |
 | **Email** `/email` | `smtp.{host,port,user,password,from_email,from_name,tls_mode}` | Live SMTP override (DB beats env). Password encrypted; never echoed. Has a "test send". |
+| **Email templates** `/email-templates` | *(own table `email_template_override`, not kv)* | Per-(template, language) subject/body Markdown overrides; built-in templates are the fallback. WYSIWYG editor, placeholders, preview, test-send, reset-to-default. |
 | **Site** `/site` | `site.url`, `site.timezone` | Public URL used in links; IANA timezone for the 24-hour timestamps shown in UI + emails. |
 | **Home page** `/home-page` | `home_page.enabled` | Toggle the welcome home page (off → brand mark non-linkable, `/` redirects forward). |
 | **File preview** `/general#file-preview` | `file_preview.enabled` | Toggle in-browser preview of PDFs/images/text (off → Preview buttons hidden, endpoints refuse). |

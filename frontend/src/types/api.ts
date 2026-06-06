@@ -1050,3 +1050,72 @@ export interface AvReloadResponse {
   av_skip: boolean
   raw: string
 }
+
+// Admin-editable email templates (v1.25.0)
+export interface EmailPlaceholderMeta {
+  token: string
+  label: string
+  description: string
+  kind: string
+  required: boolean
+}
+
+export interface EmailTemplateLocale {
+  code: string
+  label: string
+}
+
+export interface EmailTemplateSummaryItem {
+  slug: string
+  group: string
+  has_override: Record<string, boolean>
+}
+
+export interface EmailTemplatesListResponse {
+  locales: EmailTemplateLocale[]
+  groups: string[]
+  items: EmailTemplateSummaryItem[]
+  placeholders: Record<string, EmailPlaceholderMeta[]>
+}
+
+export interface EmailTemplateItem {
+  slug: string
+  group: string
+  locale: string
+  has_override: boolean
+  subject: string
+  body_markdown: string
+  default_subject: string
+  default_body: string
+  placeholders: EmailPlaceholderMeta[]
+}
+
+export interface UpdateEmailTemplateRequest {
+  subject: string | null
+  body_markdown: string
+}
+
+export interface PreviewEmailTemplateRequest {
+  subject: string | null
+  body_markdown: string
+}
+
+export interface PreviewEmailTemplateResponse {
+  subject: string
+  text: string
+  html: string
+}
+
+export interface TestSendEmailTemplateRequest {
+  subject: string | null
+  body_markdown: string
+}
+
+export interface TestSendEmailTemplateResponse {
+  ok: boolean
+  error_class: string | null
+  error_message: string | null
+  smtp_code: number | null
+  hint: string | null
+  sent_to: string | null
+}

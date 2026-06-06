@@ -18,6 +18,7 @@
     "@fontsource-variable/geist": "^5.1.1",
     "@fontsource-variable/geist-mono": "^5.1.1",
     "@fontsource/instrument-serif": "^5.1.1",
+    "@milkdown/kit": "7.21.2",
     "@uppy/core": "^4.4.0",
     "@uppy/tus": "^4.2.0",
     "@vueuse/core": "^12.0.0",

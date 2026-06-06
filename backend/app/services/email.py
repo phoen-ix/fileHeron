@@ -14,11 +14,13 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from datetime import datetime, timezone
-from pathlib import Path
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from babel.dates import format_date, format_time
+import nh3
+from markdown_it import MarkdownIt
+from pathlib import Path
+
 from jinja2 import Environment, FileSystemLoader, pass_context, select_autoescape
 from sqlalchemy.orm import Session
 
@@ -49,52 +51,60 @@ _env = Environment(
     keep_trailing_newline=True,
 )
 
-# Locale-keyed subject lines. Loaded once at import time.
+# Locale-keyed subject lines. Loaded once at import time for every locale the
+# app supports (Locale enum), so adding a locale needs no code change here.
 _SUBJECTS: dict[str, dict[str, str]] = {}
-for _code in ("en", "de"):
-    _path = _TEMPLATE_ROOT / _code / "subjects.json"
+for _loc in Locale:
+    _path = _TEMPLATE_ROOT / _loc.value / "subjects.json"
     if _path.is_file():
-        _SUBJECTS[_code] = json.loads(_path.read_text(encoding="utf-8"))
+        _SUBJECTS[_loc.value] = json.loads(_path.read_text(encoding="utf-8"))
+
+_LOCALE_CODES = {loc.value for loc in Locale}
 
 
 def _resolve_locale(locale: Locale | str) -> str:
     code = locale.value if isinstance(locale, Locale) else locale
-    return code if code in {"en", "de"} else "en"
+    return code if code in _LOCALE_CODES else "en"
 
 
 @pass_context
 def _format_dt_locale(jctx, value, locale_code: str = "en") -> str:
     """Jinja filter: format a datetime in the recipient's locale, in the
-    admin-set site timezone. Reads ``site_timezone`` from the rendering
-    context (set in ``_render``); falls back to UTC if absent or invalid.
+    admin-set site timezone. Reads ``site_timezone`` from the rendering context;
+    delegates the actual formatting to ``email_placeholders.format_dt_locale``
+    (single source of truth, shared with the override-render path)."""
+    from . import email_placeholders as ep
 
-    The codebase convention is naive UTC datetimes — we promote naive
-    values to aware UTC before handing to babel, then babel re-renders
-    in the target tz."""
-    if value is None:
-        return ""
-    dt = value if isinstance(value, datetime) else datetime.fromisoformat(str(value))
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    tz_name = jctx.get("site_timezone") or DEFAULT_TIMEZONE
-    try:
-        tz = ZoneInfo(tz_name)
-    except ZoneInfoNotFoundError:
-        tz_name = DEFAULT_TIMEZONE
-        tz = ZoneInfo(DEFAULT_TIMEZONE)
-    locale_str = "de_AT" if locale_code == "de" else "en_US"
-    # 24-hour time for every locale (convention), with the locale's own date
-    # style. en_US `medium` is 12-hour (AM/PM); forcing `HH:mm:ss` keeps it
-    # consistent with de_AT (already 24-hour) and the rest of the app.
-    local = dt.astimezone(tz)
-    rendered = (
-        f"{format_date(local, format='medium', locale=locale_str)}, "
-        f"{format_time(local, format='HH:mm:ss', locale=locale_str)}"
-    )
-    return f"{rendered} ({tz_name})"
+    return ep.format_dt_locale(value, locale_code, jctx.get("site_timezone"))
 
 
 _env.filters["dt_locale"] = _format_dt_locale
+
+# --- Markdown override rendering (admin-editable templates, v1.25.0) ---------
+# CommonMark with raw HTML DISABLED (raw HTML in the admin's source is escaped
+# as text). breaks=True turns single newlines into <br> so typed line breaks
+# survive in email. nh3 sanitizes the output as defense-in-depth.
+_md = MarkdownIt("commonmark", {"html": False, "breaks": True})
+# Don't percent-encode/validate link destinations at markdown time: a token like
+# [RESET_LINK] must survive verbatim in the href so we can substitute the real
+# URL before sanitizing. nh3's scheme allowlist (below) is the actual gate, so
+# disabling markdown-it's own link checks here is safe.
+_md.normalizeLink = lambda url: url
+_md.validateLink = lambda url: True
+_ALLOWED_TAGS = {
+    "p", "strong", "b", "em", "i", "a", "ul", "ol", "li",
+    "blockquote", "code", "pre", "h1", "h2", "h3", "h4", "br", "hr",
+}
+_ALLOWED_ATTRS = {"a": {"href"}}
+_ALLOWED_SCHEMES = {"http", "https", "mailto"}
+
+# Wrap a sanitized HTML fragment in the shared branded layout. The fragment is
+# already sanitized → marked safe; the subject is escaped for the <title>.
+_LAYOUT_WRAP = _env.from_string(
+    "{% extends 'layout.html.j2' %}"
+    "{% block subject %}{{ email_subject|e }}{% endblock %}"
+    "{% block content %}{{ fragment|safe }}{% endblock %}"
+)
 
 
 def _render(
@@ -142,19 +152,134 @@ def _resolve_subject(
         return template
 
 
+def _sub(text: str, mapping: dict[str, str]) -> str:
+    """Single-pass replace of friendly ``[TOKEN]`` occurrences from ``mapping``;
+    unknown tokens are left untouched (no cascade — a substituted value can't be
+    re-scanned)."""
+    from . import email_placeholders as ep
+
+    return ep.TOKEN_RE.sub(lambda m: mapping.get(m.group(0), m.group(0)), text)
+
+
+def _normalize_text(text: str) -> str:
+    """Tidy the plain-text part: collapse 3+ blank lines, single trailing NL."""
+    return re.sub(r"\n{3,}", "\n\n", text).rstrip("\n") + "\n"
+
+
+def _sanitize_html(raw_html: str) -> str:
+    return nh3.clean(
+        raw_html,
+        tags=_ALLOWED_TAGS,
+        attributes=_ALLOWED_ATTRS,
+        url_schemes=_ALLOWED_SCHEMES,
+    )
+
+
+def _wrap_layout(
+    fragment: str, subject: str, locale_code: str, app_name: str | None,
+    site_timezone: str | None, ctx: dict,
+) -> str:
+    return _LAYOUT_WRAP.render(
+        fragment=fragment,
+        email_subject=subject,
+        app_name=app_name if app_name else settings.APP_NAME,
+        app_url=settings.APP_URL,
+        locale=locale_code,
+        site_timezone=site_timezone or DEFAULT_TIMEZONE,
+        now=ctx.get("now"),
+    )
+
+
+def render_override(
+    override, slug: str, locale_code: str, ctx: dict,
+    *, app_url: str | None = None, site_timezone: str | None = None,
+    app_name: str | None = None,
+) -> tuple[str, str, str]:
+    """Render an admin override (subject, text, html) from its Markdown body.
+
+    Security ordering for the HTML part: markdown→HTML (raw HTML disabled), then
+    URL tokens substituted into hrefs (real scheme, canonical auth path) BEFORE
+    sanitize, then nh3 sanitize, then text tokens substituted (HTML-escaped) so
+    no user-controlled value can introduce markup."""
+    from . import email_placeholders as ep
+
+    eff_app_url = app_url if app_url is not None else settings.APP_URL
+    eff_app_name = app_name if app_name else settings.APP_NAME
+    eff_tz = site_timezone or DEFAULT_TIMEZONE
+    text_values, html_values = ep.build_substitutions(
+        slug, ctx, locale_code=locale_code, app_url=eff_app_url,
+        app_name=eff_app_name, site_timezone=eff_tz,
+    )
+    url_toks = ep.url_tokens(slug)
+
+    raw_subject = override.subject if override.subject else _resolve_subject(
+        locale_code, slug, ctx, app_name
+    )
+    subject = _sub(raw_subject, text_values)
+
+    text = _normalize_text(_sub(override.body_markdown, text_values))
+
+    frag = _md.render(override.body_markdown)
+    frag = _sub(frag, {t: html_values[t] for t in url_toks if t in html_values})
+    frag = _sanitize_html(frag)
+    frag = _sub(frag, {t: v for t, v in html_values.items() if t not in url_toks})
+    html_out = _wrap_layout(frag, subject, locale_code, eff_app_name, eff_tz, ctx)
+    return subject, text, html_out
+
+
+def _load_override(slug: str, locale_code: str, db: Session | None = None):
+    """Look up an admin override for (slug, locale), falling back to ``en`` like
+    the filesystem path. Opens a short-lived session when ``db`` is None. Returns
+    None on any error so a lookup failure can never break a send."""
+    from . import email_placeholders as ep
+
+    if not ep.is_editable(slug):
+        return None
+    from ..models.email_template_override import EmailTemplateOverride
+
+    own = db is None
+    sess = db or SessionLocal()
+    try:
+        row = (
+            sess.query(EmailTemplateOverride)
+            .filter_by(slug=slug, locale=locale_code)
+            .one_or_none()
+        )
+        if row is None and locale_code != "en":
+            row = (
+                sess.query(EmailTemplateOverride)
+                .filter_by(slug=slug, locale="en")
+                .one_or_none()
+            )
+        return row
+    except Exception:
+        logger.exception("email override lookup failed for %s/%s", slug, locale_code)
+        return None
+    finally:
+        if own:
+            sess.close()
+
+
 def render_email(
     locale: Locale | str, slug: str, ctx: dict,
     *, app_url: str | None = None, site_timezone: str | None = None,
-    app_name: str | None = None,
+    app_name: str | None = None, db: Session | None = None,
 ) -> tuple[str, str, str | None]:
-    """Render (subject, text, html). HTML may be None if no .html.j2 exists.
-    Used by the notification dispatcher before enqueueing.
+    """Render (subject, text, html). HTML may be None if no override exists and
+    no .html.j2 ships. Consults the admin override table first (per (slug,
+    locale)); falls back to the built-in filesystem template when absent.
 
     ``app_url`` should be the kv-resolved value from
     ``services.site.get_site_url``; ``site_timezone`` from
     ``services.site.get_site_timezone``; ``app_name`` from
     ``services.site.get_app_name``. All default safely when omitted."""
     code = _resolve_locale(locale)
+    override = _load_override(slug, code, db)
+    if override is not None:
+        return render_override(
+            override, slug, code, ctx,
+            app_url=app_url, site_timezone=site_timezone, app_name=app_name,
+        )
     subject = _resolve_subject(code, slug, ctx, app_name)
     text = _render(code, slug, "txt", ctx, app_url=app_url, site_timezone=site_timezone, app_name=app_name)
     try:
@@ -461,32 +586,35 @@ def _site_tz(explicit: str | None) -> str:
 async def send_verify_email(
     *, to: str, locale: Locale | str, display_name: str, token: str,
     app_url: str | None = None, site_timezone: str | None = None,
+    db: Session | None = None,
 ) -> None:
     base = _app_url(app_url)
     tz = _site_tz(site_timezone)
     ctx = {"display_name": display_name, "verify_url": f"{base}/verify-email/{token}"}
-    body = _render(locale, "verify", "txt", ctx, app_url=base, site_timezone=tz)
-    subject = _resolve_subject(_resolve_locale(locale), "verify", ctx)
-    await _send_resolved(to=to, subject=subject, text_body=body, category="verify")
+    subject, body, html = render_email(locale, "verify", ctx, app_url=base, site_timezone=tz, db=db)
+    await _send_resolved(
+        to=to, subject=subject, text_body=body, html_body=html, category="verify"
+    )
 
 
 async def send_password_reset_email(
     *, to: str, locale: Locale | str, display_name: str, token: str,
     app_url: str | None = None, site_timezone: str | None = None,
+    db: Session | None = None,
 ) -> None:
     base = _app_url(app_url)
     tz = _site_tz(site_timezone)
     ctx = {"display_name": display_name, "reset_url": f"{base}/reset-password/{token}"}
-    body = _render(locale, "reset_password", "txt", ctx, app_url=base, site_timezone=tz)
-    subject = _resolve_subject(_resolve_locale(locale), "reset_password", ctx)
+    subject, body, html = render_email(locale, "reset_password", ctx, app_url=base, site_timezone=tz, db=db)
     await _send_resolved(
-        to=to, subject=subject, text_body=body, category="reset_password"
+        to=to, subject=subject, text_body=body, html_body=html, category="reset_password"
     )
 
 
 async def send_invite_email(
     *, to: str, locale: Locale | str, display_name_hint: str, inviter_display_name: str,
     token: str, app_url: str | None = None, site_timezone: str | None = None,
+    db: Session | None = None,
 ) -> None:
     base = _app_url(app_url)
     tz = _site_tz(site_timezone)
@@ -495,9 +623,10 @@ async def send_invite_email(
         "inviter_display_name": inviter_display_name,
         "register_url": f"{base}/register/{token}",
     }
-    body = _render(locale, "invite", "txt", ctx, app_url=base, site_timezone=tz)
-    subject = _resolve_subject(_resolve_locale(locale), "invite", ctx)
-    await _send_resolved(to=to, subject=subject, text_body=body, category="invite")
+    subject, body, html = render_email(locale, "invite", ctx, app_url=base, site_timezone=tz, db=db)
+    await _send_resolved(
+        to=to, subject=subject, text_body=body, html_body=html, category="invite"
+    )
 
 
 async def send_lockout_warning_email(
@@ -509,6 +638,7 @@ async def send_lockout_warning_email(
     ip_hint: str | None,
     app_url: str | None = None,
     site_timezone: str | None = None,
+    db: Session | None = None,
 ) -> None:
     base = _app_url(app_url)
     tz = _site_tz(site_timezone)
@@ -518,10 +648,9 @@ async def send_lockout_warning_email(
         "ip_hint": ip_hint or "unknown",
         "reset_url": f"{base}/forgot-password",
     }
-    body = _render(locale, "lockout_warning", "txt", ctx, app_url=base, site_timezone=tz)
-    subject = _resolve_subject(_resolve_locale(locale), "lockout_warning", ctx)
+    subject, body, html = render_email(locale, "lockout_warning", ctx, app_url=base, site_timezone=tz, db=db)
     await _send_resolved(
-        to=to, subject=subject, text_body=body, category="lockout_warning"
+        to=to, subject=subject, text_body=body, html_body=html, category="lockout_warning"
     )
 
 
@@ -536,6 +665,7 @@ async def send_email_change_confirm(
     *, to: str, locale: Locale | str, display_name: str, token: str,
     new_email: str, by_admin: bool = False,
     app_url: str | None = None, site_timezone: str | None = None,
+    db: Session | None = None,
 ) -> None:
     """Confirm link to the NEW address (verify_new + verify_both modes)."""
     base = _app_url(app_url)
@@ -546,10 +676,9 @@ async def send_email_change_confirm(
         "by_admin": by_admin,
         "confirm_url": f"{base}/confirm-email-change/{token}",
     }
-    body = _render(locale, "email_change_confirm", "txt", ctx, app_url=base, site_timezone=tz)
-    subject = _resolve_subject(_resolve_locale(locale), "email_change_confirm", ctx)
+    subject, body, html = render_email(locale, "email_change_confirm", ctx, app_url=base, site_timezone=tz, db=db)
     await _send_resolved(
-        to=to, subject=subject, text_body=body, category="email_change_confirm"
+        to=to, subject=subject, text_body=body, html_body=html, category="email_change_confirm"
     )
 
 
@@ -557,6 +686,7 @@ async def send_email_change_verify_old(
     *, to: str, locale: Locale | str, display_name: str,
     confirm_token: str, cancel_token: str, new_email: str, by_admin: bool = False,
     app_url: str | None = None, site_timezone: str | None = None,
+    db: Session | None = None,
 ) -> None:
     """Confirm + cancel links to the OLD address (verify_both mode only)."""
     base = _app_url(app_url)
@@ -568,10 +698,9 @@ async def send_email_change_verify_old(
         "confirm_url": f"{base}/confirm-email-change/{confirm_token}",
         "cancel_url": f"{base}/cancel-email-change/{cancel_token}",
     }
-    body = _render(locale, "email_change_verify_old", "txt", ctx, app_url=base, site_timezone=tz)
-    subject = _resolve_subject(_resolve_locale(locale), "email_change_verify_old", ctx)
+    subject, body, html = render_email(locale, "email_change_verify_old", ctx, app_url=base, site_timezone=tz, db=db)
     await _send_resolved(
-        to=to, subject=subject, text_body=body, category="email_change_verify_old"
+        to=to, subject=subject, text_body=body, html_body=html, category="email_change_verify_old"
     )
 
 
@@ -579,6 +708,7 @@ async def send_email_change_alert(
     *, to: str, locale: Locale | str, display_name: str, new_email: str,
     cancel_token: str | None = None, by_admin: bool = False, applied: bool = False,
     app_url: str | None = None, site_timezone: str | None = None,
+    db: Session | None = None,
 ) -> None:
     """Security notice to the OLD address. When ``applied`` (immediate mode)
     the change is already live, so no cancel link; otherwise (verify_new) a
@@ -593,10 +723,9 @@ async def send_email_change_alert(
         "cancel_url": f"{base}/cancel-email-change/{cancel_token}" if cancel_token else None,
         "reset_url": f"{base}/forgot-password",
     }
-    body = _render(locale, "email_change_alert", "txt", ctx, app_url=base, site_timezone=tz)
-    subject = _resolve_subject(_resolve_locale(locale), "email_change_alert", ctx)
+    subject, body, html = render_email(locale, "email_change_alert", ctx, app_url=base, site_timezone=tz, db=db)
     await _send_resolved(
-        to=to, subject=subject, text_body=body, category="email_change_alert"
+        to=to, subject=subject, text_body=body, html_body=html, category="email_change_alert"
     )
 
 
@@ -604,6 +733,7 @@ async def send_email_change_completed(
     *, to: str, locale: Locale | str, display_name: str, new_email: str,
     oidc_reset: bool = False,
     app_url: str | None = None, site_timezone: str | None = None,
+    db: Session | None = None,
 ) -> None:
     """Token-free courtesy notice to the NEW (now current) address."""
     base = _app_url(app_url)
@@ -614,8 +744,7 @@ async def send_email_change_completed(
         "oidc_reset": oidc_reset,
         "login_url": f"{base}/login",
     }
-    body = _render(locale, "email_change_completed", "txt", ctx, app_url=base, site_timezone=tz)
-    subject = _resolve_subject(_resolve_locale(locale), "email_change_completed", ctx)
+    subject, body, html = render_email(locale, "email_change_completed", ctx, app_url=base, site_timezone=tz, db=db)
     await _send_resolved(
-        to=to, subject=subject, text_body=body, category="email_change_completed"
+        to=to, subject=subject, text_body=body, html_body=html, category="email_change_completed"
     )

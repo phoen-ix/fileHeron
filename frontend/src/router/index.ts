@@ -260,6 +260,12 @@ const router = createRouter({
           meta: { density: 'operator', title: 'Email / SMTP', requiresRole: 'admin' },
         },
         {
+          path: 'settings/email-templates',
+          name: 'admin-settings-email-templates',
+          component: () => import('@/views/AdminSettingsEmailTemplates.vue'),
+          meta: { density: 'operator', title: 'Email templates', requiresRole: 'admin' },
+        },
+        {
           path: 'settings/general',
           name: 'admin-settings-general',
           component: () => import('@/views/AdminSettingsGeneral.vue'),

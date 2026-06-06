@@ -192,6 +192,7 @@ def dispatch(
                 app_url=site_svc.get_site_url(db),
                 site_timezone=site_svc.get_site_timezone(db),
                 app_name=site_svc.get_app_name(db),
+                db=db,
             )
             eid = mail_log.record_queued(
                 db,

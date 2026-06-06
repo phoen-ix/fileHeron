@@ -12,6 +12,7 @@ from .client_employee_connection import ClientEmployeeConnection, ConnectionSour
 from .download_log import DownloadLog, DownloadVia
 from .email_change_token import EmailChangeToken
 from .email_log import EmailLog, EmailStatus, EmailVia
+from .email_template_override import EmailTemplateOverride
 from .email_verify_token import EmailVerifyToken
 from .file import File, FileState
 from .group import Group
@@ -51,6 +52,7 @@ __all__ = [
     "EmailLog",
     "EmailStatus",
     "EmailVia",
+    "EmailTemplateOverride",
     "EmailVerifyToken",
     "File",
     "FileState",

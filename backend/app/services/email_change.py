@@ -453,37 +453,37 @@ async def dispatch_request_emails(db: Session, outcome: RequestOutcome) -> None:
             await email_svc.send_email_change_alert(
                 to=outcome.old_email, locale=loc, display_name=name,
                 new_email=outcome.new_email, by_admin=outcome.by_admin,
-                applied=True, app_url=base, site_timezone=tz,
+                applied=True, app_url=base, site_timezone=tz, db=db,
             )
             if outcome.set_password_token:
                 await email_svc.send_password_reset_email(
                     to=outcome.new_email, locale=loc, display_name=name,
-                    token=outcome.set_password_token, app_url=base, site_timezone=tz,
+                    token=outcome.set_password_token, app_url=base, site_timezone=tz, db=db,
                 )
             await email_svc.send_email_change_completed(
                 to=outcome.new_email, locale=loc, display_name=name,
                 new_email=outcome.new_email, oidc_reset=outcome.oidc_reset,
-                app_url=base, site_timezone=tz,
+                app_url=base, site_timezone=tz, db=db,
             )
         else:
             await email_svc.send_email_change_confirm(
                 to=outcome.new_email, locale=loc, display_name=name,
                 token=outcome.new_token, new_email=outcome.new_email,
-                by_admin=outcome.by_admin, app_url=base, site_timezone=tz,
+                by_admin=outcome.by_admin, app_url=base, site_timezone=tz, db=db,
             )
             if outcome.mode == "verify_both" and outcome.old_token:
                 await email_svc.send_email_change_verify_old(
                     to=outcome.old_email, locale=loc, display_name=name,
                     confirm_token=outcome.old_token, cancel_token=outcome.cancel_token,
                     new_email=outcome.new_email, by_admin=outcome.by_admin,
-                    app_url=base, site_timezone=tz,
+                    app_url=base, site_timezone=tz, db=db,
                 )
             else:
                 await email_svc.send_email_change_alert(
                     to=outcome.old_email, locale=loc, display_name=name,
                     new_email=outcome.new_email, cancel_token=outcome.cancel_token,
                     by_admin=outcome.by_admin, applied=False,
-                    app_url=base, site_timezone=tz,
+                    app_url=base, site_timezone=tz, db=db,
                 )
     except Exception:
         logger.exception(
@@ -504,12 +504,12 @@ async def dispatch_confirm_emails(db: Session, outcome: ConfirmOutcome) -> None:
             await email_svc.send_password_reset_email(
                 to=outcome.new_email, locale=outcome.locale,
                 display_name=outcome.display_name, token=outcome.set_password_token,
-                app_url=base, site_timezone=tz,
+                app_url=base, site_timezone=tz, db=db,
             )
         await email_svc.send_email_change_completed(
             to=outcome.new_email, locale=outcome.locale,
             display_name=outcome.display_name, new_email=outcome.new_email,
-            oidc_reset=outcome.oidc_reset, app_url=base, site_timezone=tz,
+            oidc_reset=outcome.oidc_reset, app_url=base, site_timezone=tz, db=db,
         )
     except Exception:
         logger.exception(

@@ -103,6 +103,9 @@ class AuditEventType(str, enum.Enum):
     group_member_removed = "group_member_removed"          # Phase 4
     file_expired = "file_expired"                          # Phase 4
     settings_changed = "settings_changed"                  # Phase 9
+    # Admin-editable email templates (v1.25.0). slug+locale only — never the body.
+    email_template_changed = "email_template_changed"
+    email_template_reset = "email_template_reset"
     # Operational audit additions (2026-05-16):
     email_undeliverable = "email_undeliverable"            # SMTP 5xx → audit + admin alert (was silently swallowed)
     cron_failed = "cron_failed"                            # cron_tracker logs the failure to audit + admin alert

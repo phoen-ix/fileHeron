@@ -60,7 +60,9 @@ def _p(*placeholders: Placeholder) -> tuple[Placeholder, ...]:
 
 
 # Friendly tokens reused across templates, defined once for consistency.
-_RECIPIENT = Placeholder("[RECIPIENT]", "Recipient name", "Display name of the person receiving the email.", "recipient_name")
+_RECIPIENT = Placeholder(
+    "[RECIPIENT]", "Recipient name", "Display name of the person receiving the email.", "recipient_name"
+)
 _SENDER = Placeholder("[SENDER]", "Sender name", "Display name of the person who sent the share.", "sender_name")
 _SUBJECT = Placeholder("[SUBJECT]", "Share subject", "The share's subject/title.", "subject")
 _SHARE_LINK = Placeholder("[SHARE_LINK]", "Share link", "URL to open the share.", "share_url", kind="url")
@@ -103,7 +105,10 @@ REGISTRY: dict[str, TemplateSpec] = {
         Placeholder("[FILENAME]", "File name", "Name of the downloaded file.", "filename"),
         Placeholder("[FILE_SIZE]", "File size", "Size of the file in bytes.", "size_bytes"),
         Placeholder("[DOWNLOADED_AT]", "Downloaded at", "When the download happened.", "at", kind="datetime"),
-        Placeholder("[DOWNLOADS_REMAINING]", "Downloads remaining", "Remaining downloads on the link.", "downloads_remaining"),
+        Placeholder(
+            "[DOWNLOADS_REMAINING]", "Downloads remaining", "Remaining downloads on the link.",
+            "downloads_remaining",
+        ),
         _SHARE_LINK,
     )),
     "file_quarantined": TemplateSpec("file_quarantined", "shares", _p(
@@ -139,16 +144,25 @@ REGISTRY: dict[str, TemplateSpec] = {
     # ---- Security / auth (token-bearing) ----------------------------------
     "verify": TemplateSpec("verify", "security", _p(
         Placeholder("[RECIPIENT]", "Recipient name", "Display name of the recipient.", "display_name"),
-        Placeholder("[VERIFY_LINK]", "Verify link", "One-time link to confirm the email address.", "verify_url", kind="url", required=True, auth_link=True),
+        Placeholder(
+            "[VERIFY_LINK]", "Verify link", "One-time link to confirm the email address.",
+            "verify_url", kind="url", required=True, auth_link=True,
+        ),
     )),
     "reset_password": TemplateSpec("reset_password", "security", _p(
         Placeholder("[RECIPIENT]", "Recipient name", "Display name of the recipient.", "display_name"),
-        Placeholder("[RESET_LINK]", "Reset link", "One-time link to reset the password.", "reset_url", kind="url", required=True, auth_link=True),
+        Placeholder(
+            "[RESET_LINK]", "Reset link", "One-time link to reset the password.",
+            "reset_url", kind="url", required=True, auth_link=True,
+        ),
     )),
     "invite": TemplateSpec("invite", "security", _p(
         Placeholder("[RECIPIENT]", "Recipient name", "Expected name of the invited person.", "display_name_hint"),
         Placeholder("[INVITER]", "Inviter name", "Display name of the inviter.", "inviter_display_name"),
-        Placeholder("[INVITE_LINK]", "Invite link", "One-time link to accept the invite.", "register_url", kind="url", required=True, auth_link=True),
+        Placeholder(
+            "[INVITE_LINK]", "Invite link", "One-time link to accept the invite.",
+            "register_url", kind="url", required=True, auth_link=True,
+        ),
     )),
     "lockout_warning": TemplateSpec("lockout_warning", "security", _p(
         Placeholder("[RECIPIENT]", "Recipient name", "Display name of the recipient.", "display_name"),
@@ -159,18 +173,30 @@ REGISTRY: dict[str, TemplateSpec] = {
     "email_change_confirm": TemplateSpec("email_change_confirm", "security", _p(
         Placeholder("[RECIPIENT]", "Recipient name", "Display name of the recipient.", "display_name"),
         Placeholder("[NEW_EMAIL]", "New email", "The new email address being set.", "new_email"),
-        Placeholder("[CONFIRM_LINK]", "Confirm link", "One-time link to confirm the new address.", "confirm_url", kind="url", required=True, auth_link=True),
+        Placeholder(
+            "[CONFIRM_LINK]", "Confirm link", "One-time link to confirm the new address.",
+            "confirm_url", kind="url", required=True, auth_link=True,
+        ),
     )),
     "email_change_verify_old": TemplateSpec("email_change_verify_old", "security", _p(
         Placeholder("[RECIPIENT]", "Recipient name", "Display name of the recipient.", "display_name"),
         Placeholder("[NEW_EMAIL]", "New email", "The new email address being set.", "new_email"),
-        Placeholder("[CONFIRM_LINK]", "Confirm link", "One-time link to approve the change.", "confirm_url", kind="url", required=True, auth_link=True),
-        Placeholder("[CANCEL_LINK]", "Cancel link", "One-time link to cancel the change.", "cancel_url", kind="url", auth_link=True),
+        Placeholder(
+            "[CONFIRM_LINK]", "Confirm link", "One-time link to approve the change.",
+            "confirm_url", kind="url", required=True, auth_link=True,
+        ),
+        Placeholder(
+            "[CANCEL_LINK]", "Cancel link", "One-time link to cancel the change.",
+            "cancel_url", kind="url", auth_link=True,
+        ),
     )),
     "email_change_alert": TemplateSpec("email_change_alert", "security", _p(
         Placeholder("[RECIPIENT]", "Recipient name", "Display name of the recipient.", "display_name"),
         Placeholder("[NEW_EMAIL]", "New email", "The new email address being set.", "new_email"),
-        Placeholder("[CANCEL_LINK]", "Cancel link", "One-time link to cancel the change (may be absent).", "cancel_url", kind="url", auth_link=True),
+        Placeholder(
+            "[CANCEL_LINK]", "Cancel link", "One-time link to cancel the change (may be absent).",
+            "cancel_url", kind="url", auth_link=True,
+        ),
         Placeholder("[RESET_LINK]", "Password help link", "Link to the forgot-password page.", "reset_url", kind="url"),
     )),
     "email_change_completed": TemplateSpec("email_change_completed", "security", _p(

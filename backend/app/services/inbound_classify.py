@@ -30,10 +30,8 @@ def classify(msg: Message) -> MessageClass:
         return MessageClass.bounce
     if msg.get("X-Failed-Recipients"):
         return MessageClass.bounce
-    # A null Return-Path (<>) is the classic bounce envelope.
-    if (msg.get("Return-Path") or "").strip() in ("<>", ""):
-        if any(h in from_addr for h in _BOUNCE_SENDER_HINTS):
-            return MessageClass.bounce
+    # A null Return-Path (<>) is the classic bounce envelope; and a daemon
+    # sender is a bounce regardless of Return-Path.
     if any(h in from_addr for h in _BOUNCE_SENDER_HINTS):
         return MessageClass.bounce
 

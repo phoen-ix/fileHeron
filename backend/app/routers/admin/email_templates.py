@@ -132,7 +132,7 @@ def _validate_content(slug: str, subject: str | None, body: str) -> None:
     try:
         email_svc._md.render(body)
     except Exception:  # noqa: BLE001
-        raise AppError(400, "INVALID_MARKDOWN", "The body could not be parsed.")
+        raise AppError(400, "INVALID_MARKDOWN", "The body could not be parsed.") from None
 
 
 # ---------------------------------------------------------------------------

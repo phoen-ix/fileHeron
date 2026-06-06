@@ -18,8 +18,7 @@ from sqlalchemy.orm import Session
 from ..models.inbound_attachment import AttachmentAVState, InboundAttachment
 from ..models.inbound_message import InboundMessage, MessageClass
 from ..models.user import User, UserRole
-from . import av_scan
-from . import imap_config
+from . import av_scan, imap_config
 from . import storage_backend as storage_svc
 from .inbound_parse import ParsedAttachment, ParsedMessage
 
@@ -35,10 +34,12 @@ def _already_ingested(db: Session, *, uidvalidity: int, uid: int, message_id: st
     )
     if q.first() is not None:
         return True
-    if message_id:
-        if db.query(InboundMessage.id).filter(InboundMessage.message_id == message_id).first():
-            return True
-    return False
+    return bool(
+        message_id
+        and db.query(InboundMessage.id)
+        .filter(InboundMessage.message_id == message_id)
+        .first()
+    )
 
 
 def _store_attachment(db: Session, message_id_pk: int, att: ParsedAttachment) -> None:
@@ -52,16 +53,16 @@ def _store_attachment(db: Session, message_id_pk: int, att: ParsedAttachment) ->
         av_state = AttachmentAVState.infected
     else:
         av_state = AttachmentAVState.pending
-    tmp = tempfile.NamedTemporaryFile(delete=False)
+    tmp_name = None
     try:
-        tmp.write(att.content)
-        tmp.flush()
-        tmp.close()
-        backend.finalize(tmp.name, locator)
+        with tempfile.NamedTemporaryFile(delete=False) as tmp:
+            tmp.write(att.content)
+            tmp_name = tmp.name
+        backend.finalize(tmp_name, locator)
     except Exception:
         logger.exception("failed to store inbound attachment %s", att.filename)
-        if os.path.exists(tmp.name):
-            os.unlink(tmp.name)
+        if tmp_name and os.path.exists(tmp_name):
+            os.unlink(tmp_name)
         return
     db.add(
         InboundAttachment(
@@ -81,9 +82,9 @@ def _notify_admins(db: Session, msg: InboundMessage) -> None:
         return
     if mode == "human" and msg.classification != MessageClass.normal:
         return
+    from ..models.notification import NotificationCategory
     from . import notification as notif_svc
     from . import site as site_svc
-    from ..models.notification import NotificationCategory
 
     base = site_svc.get_site_url(db)
     payload = {

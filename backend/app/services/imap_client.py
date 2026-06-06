@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import imaplib
 import logging
+from collections.abc import Iterator
 from contextlib import contextmanager
-from typing import Iterator
 
 from .imap_config import ImapConfig
 

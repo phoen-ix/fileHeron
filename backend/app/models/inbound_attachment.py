@@ -40,6 +40,6 @@ class InboundAttachment(Base):
         nullable=False, default=AttachmentAVState.pending,
     )
 
-    message: Mapped["InboundMessage"] = relationship(  # noqa: F821
+    message: Mapped[InboundMessage] = relationship(  # noqa: F821
         "InboundMessage", back_populates="attachments"
     )

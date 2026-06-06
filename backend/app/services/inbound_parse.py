@@ -13,9 +13,9 @@ from email.header import decode_header, make_header
 from email.message import Message
 from email.utils import parseaddr, parsedate_to_datetime
 
+from ..models.inbound_message import MessageClass
 from . import email as email_svc  # reuse the nh3 _sanitize_html helper
 from . import inbound_classify
-from ..models.inbound_message import MessageClass
 
 _MAX_BODY = 1_000_000  # 1 MB cap per body part (defensive)
 

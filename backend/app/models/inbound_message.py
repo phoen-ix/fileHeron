@@ -88,6 +88,6 @@ class InboundMessage(Base):
     body_html: Mapped[str | None] = mapped_column(_Body, nullable=True, deferred=True)
     has_attachments: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
-    attachments: Mapped[list["InboundAttachment"]] = relationship(  # noqa: F821
+    attachments: Mapped[list[InboundAttachment]] = relationship(  # noqa: F821
         "InboundAttachment", back_populates="message", cascade="all, delete-orphan"
     )

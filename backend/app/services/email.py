@@ -16,12 +16,11 @@ import json
 import logging
 import re
 from datetime import datetime, timezone
-
-import nh3
-from markdown_it import MarkdownIt
 from pathlib import Path
 
+import nh3
 from jinja2 import Environment, FileSystemLoader, pass_context, select_autoescape
+from markdown_it import MarkdownIt
 from sqlalchemy.orm import Session
 
 from ..config import settings

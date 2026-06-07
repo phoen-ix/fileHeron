@@ -27,6 +27,22 @@ logger = logging.getLogger("fileheron.workers.quota_reconcile")
 
 _DRIFT_THRESHOLD = 1024 * 1024  # 1 MiB
 
+# Compare-and-set overwrite: only set the counter to db_sum if it STILL holds
+# the value we read (ARGV[1]), or is still missing when it was missing on read
+# (ARGV[3]=='0'). A plain GET-then-SET would clobber a concurrent
+# reserve_bytes() INCRBY landing between our read and write, transiently
+# under-enforcing quota (audit L35). On a mismatch we return 0 and skip - the
+# next reconcile run picks it up.
+_RECONCILE_CAS_LUA = """
+local cur = redis.call('GET', KEYS[1])
+if ARGV[3] == '0' then
+    if cur == false then redis.call('SET', KEYS[1], ARGV[2]); return 1 end
+    return 0
+end
+if cur == ARGV[1] then redis.call('SET', KEYS[1], ARGV[2]); return 1 end
+return 0
+"""
+
 
 @track_cron("quota_reconcile")
 async def quota_reconcile(_ctx) -> dict:
@@ -68,14 +84,25 @@ async def quota_reconcile(_ctx) -> dict:
                     user_id, abs(db_sum - redis_val), db_sum, redis_val,
                 )
                 try:
-                    # No TTL - the counter must not silently lapse to 0 between
-                    # reconcile runs (Redis is persistent; this cron is the
-                    # authority).
-                    redis.set(_key(user_id), db_sum)
-                    fixed += 1
+                    # CAS overwrite (no TTL - the counter must not silently
+                    # lapse to 0 between runs; Redis is persistent and this cron
+                    # is the authority). Skips if a concurrent reservation moved
+                    # the counter since our read (audit L35).
+                    had = "1" if redis_val_raw is not None else "0"
+                    expected = redis_val_raw if redis_val_raw is not None else ""
+                    res = redis.eval(
+                        _RECONCILE_CAS_LUA, 1, _key(user_id), expected, db_sum, had
+                    )
+                    if int(res) == 1:
+                        fixed += 1
+                    else:
+                        logger.info(
+                            "quota_reconcile: user=%d counter moved mid-reconcile; "
+                            "skipping (next run reconciles)", user_id,
+                        )
                 except Exception as e:
                     logger.error(
-                        "quota_reconcile: redis set failed user=%d: %s",
+                        "quota_reconcile: redis CAS failed user=%d: %s",
                         user_id, e,
                     )
         if fixed:

@@ -91,6 +91,50 @@ async def test_expire_files_idempotent(make_user, db, tmp_path, monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_expire_files_state_commit_is_independent_of_byte_purge(
+    make_user, db, tmp_path, monkeypatch
+):
+    """M14: the state transition is committed BEFORE bytes are unlinked, so a
+    byte-purge failure can't revert a file back to a downloadable state with its
+    bytes gone. Here the on-disk purge fails, yet the row is durably `deleted`
+    and the share `expired` (the leaked bytes are cleaned by orphan-reclaim)."""
+    sender = make_user(email="hr@test.local", role=UserRole.admin)
+    recipient = make_user(email="cli@test.local", role=UserRole.client)
+    share = _make_expired_share(db, sender, recipient.id)
+    on_disk = tmp_path / "file.bin"
+    on_disk.write_bytes(b"x" * 1024)
+    f = File(
+        id="testfile-uuid",
+        share_id=share.id,
+        original_filename="x.bin",
+        mime_type="application/octet-stream",
+        size_bytes=1024,
+        state=FileState.ready_unscanned,
+        storage_path=str(on_disk),
+        uploaded_by_id=sender.id,
+    )
+    db.add(f)
+    db.commit()
+
+    from app.workers import expire_files as ef_module
+    monkeypatch.setattr(ef_module, "SessionLocal", lambda: db)
+
+    class _Boom:
+        def delete(self, *_a, **_k):
+            raise OSError("disk gone")
+
+    monkeypatch.setattr(ef_module, "get_storage_backend", lambda: _Boom())
+
+    result = await expire_files(None)
+    assert result["expired_shares"] == 1
+    share_after = db.query(Share).filter(Share.id == share.id).one()
+    f_after = db.query(File).filter(File.id == f.id).one()
+    assert share_after.state == ShareState.expired
+    assert f_after.state == FileState.deleted  # state committed despite purge failure
+    assert on_disk.exists()  # purge failed -> leaked (not lost), recoverable
+
+
+@pytest.mark.asyncio
 async def test_expire_files_skips_active_shares(make_user, db, tmp_path, monkeypatch):
     from app.services import share as share_svc
 

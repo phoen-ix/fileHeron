@@ -111,11 +111,39 @@ async def reclaim_orphaned_files(_ctx) -> dict:
 
         reclaimed = 0
         failed = 0
+        skipped = 0
         bytes_freed = 0
         for f in orphans:
-            size = f.size_bytes
             try:
-                file_svc.hard_delete(db, file=f, reason="orphan_reclaim")
+                # Re-assert under a row lock that the file is STILL reclaimable
+                # and its share is STILL terminal. A concurrent quarantine
+                # Release (or files-added) can flip the share back to active
+                # between the SELECT above and here; hard-deleting then would
+                # destroy bytes a now-live share needs - irreversible
+                # (audit M16, TOCTOU). The lock makes the reactivate-vs-reclaim
+                # race serialize; if the share is no longer terminal, skip.
+                f2 = (
+                    db.query(File)
+                    .filter(File.id == f.id, File.state.in_(_RECLAIMABLE))
+                    .with_for_update()
+                    .one_or_none()
+                )
+                if f2 is None:
+                    db.rollback()
+                    skipped += 1
+                    continue
+                share = (
+                    db.query(Share)
+                    .filter(Share.id == f2.share_id, Share.state.in_(_TERMINAL))
+                    .with_for_update()
+                    .one_or_none()
+                )
+                if share is None:
+                    db.rollback()
+                    skipped += 1
+                    continue
+                size = f2.size_bytes
+                file_svc.hard_delete(db, file=f2, reason="orphan_reclaim")
                 db.commit()
                 reclaimed += 1
                 bytes_freed += size
@@ -131,6 +159,12 @@ async def reclaim_orphaned_files(_ctx) -> dict:
                 "reclaim_orphaned_files: reclaimed=%d bytes=%d failed=%d (grace=%dd)",
                 reclaimed, bytes_freed, failed, days,
             )
-        return {"reclaimed": reclaimed, "bytes_freed": bytes_freed, "failed": failed, "grace_days": days}
+        return {
+            "reclaimed": reclaimed,
+            "bytes_freed": bytes_freed,
+            "failed": failed,
+            "skipped": skipped,
+            "grace_days": days,
+        }
     finally:
         db.close()

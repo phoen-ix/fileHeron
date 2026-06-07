@@ -1,48 +1,49 @@
-# file:Heron v1.38.0
+# file:Heron v1.39.0
 
-**Data-integrity hardening.** This release closes several rare-but-serious races in
-the file-cleanup jobs that could destroy file bytes or mis-count storage quota, and
-adds filename hardening that protects downloads. No database migration.
+**Security hardening (round 2).** Five more audit fixes across single sign-on, email
+logging, uploads, data-erasure and bulk downloads. Backend-only; no database
+migration. Rolls forward via **Update** in `/admin/system`.
 
 ## What's fixed
 
-- **Orphan cleanup can no longer delete a file that just came back to life
-  (important).** The daily job that reclaims disk from long-revoked shares could, in
-  a narrow timing window, delete the bytes of a share that an admin had *just*
-  released from quarantine - permanent, unrecoverable loss. The job now re-checks
-  and locks each file and its share immediately before deleting, and skips anything
-  that became active again.
-- **Expiry no longer risks losing a live file on a database hiccup.** The hourly
-  expiry job used to delete a file's bytes *before* committing the "expired" state.
-  If that commit failed, the file looked active again but its bytes were already
-  gone, and the storage quota was double-credited every hour after. Expiry now
-  commits the state first and deletes bytes afterwards, so a failed commit leaves
-  everything intact to retry safely.
-- **Storage-quota reconciliation no longer clobbers an in-progress upload.** The
-  hourly quota repair could overwrite a reservation made by an upload happening at
-  the same instant. It now uses an atomic compare-and-set and simply retries next
-  run if it sees a concurrent change.
-- **Filenames are hardened against path tricks.** The server now reduces every
-  uploaded file's name to a safe, single name component, so a crafted name can't be
-  used to write outside its intended folder when files are saved (defense-in-depth
-  alongside the desktop client fix).
-- **The internal upload-hook path is refused at the SPA proxy.** `/api/internal/*`
-  (the tusd webhook receiver) now returns 404 from the bundled nginx, in case the
-  front reverse-proxy config ever drifts.
+- **Admin accounts can't be silently linked to single sign-on (important).** An
+  unauthenticated sign-in callback used to link any existing account to a provider
+  when the email matched. For an admin account that's a takeover risk if the
+  identity provider's email claim can be influenced. Admins must now link SSO
+  deliberately from their own account settings; the automatic match no longer
+  applies to them.
+- **One-time email links no longer leak to the server log.** If email is left
+  unconfigured on a production server, the app previously printed full message
+  bodies - including live password-reset / verification / invite links - to the
+  container log. In production it now logs only the recipient and subject; the
+  admin mail log keeps its masked copy.
+- **Large single-shot uploads can't exhaust server memory.** The direct-upload path
+  used to hold the whole file in memory; a few simultaneous uploads could crash the
+  backend. It now streams straight to disk, and correctly frees the reserved quota
+  if a write fails.
+- **Erasure now clears inbound-email sender details too.** A right-to-erasure
+  request now also removes the person's email address and name from any messages
+  they sent into the admin inbox, instead of leaving them searchable.
+- **The bulk "download all as ZIP" limit can't be bypassed.** A crafted request
+  could fetch the whole archive without counting against a share's or public link's
+  download limit (and without logging it). ZIP downloads are now always counted.
 
 ## Upgrade notes
 
-- Backend + worker + frontend roll forward via **Update** in `/admin/system`. No
-  database migration. No configuration changes.
+- Backend + worker roll forward via **Update** in `/admin/system`. No frontend
+  change, no database migration, no configuration change.
+- If you use OIDC single sign-on with admin accounts: an admin signing in for the
+  first time via SSO must first link their provider from *Account -> Single sign-on*
+  (their account is no longer auto-linked on the login callback).
 
 ## Container images
 
 Published to GitHub Container Registry:
 
-- `ghcr.io/phoen-ix/fileheron-backend:v1.38.0`
-- `ghcr.io/phoen-ix/fileheron-worker:v1.38.0`
-- `ghcr.io/phoen-ix/fileheron-frontend:v1.38.0`
-- `ghcr.io/phoen-ix/fileheron-updater-shim:v1.38.0`
-- `ghcr.io/phoen-ix/fileheron-updater-executor:v1.38.0`
+- `ghcr.io/phoen-ix/fileheron-backend:v1.39.0`
+- `ghcr.io/phoen-ix/fileheron-worker:v1.39.0`
+- `ghcr.io/phoen-ix/fileheron-frontend:v1.39.0`
+- `ghcr.io/phoen-ix/fileheron-updater-shim:v1.39.0`
+- `ghcr.io/phoen-ix/fileheron-updater-executor:v1.39.0`
 
 Click **Update** in `/admin/system` to roll forward.

@@ -384,53 +384,57 @@ def public_download_zip(
     if not files:
         raise AppError(400, "NO_DOWNLOADABLE_FILES", "This share has no downloadable files.")
 
-    if not is_partial_continuation(request):
-        allowed, downloads_remaining = public_link_svc.decrement_counter(db, link=link)
-        if not allowed:
-            db.commit()
-            raise AppError(
-                410, "PUBLIC_LINK_EXHAUSTED", "This public link's download limit has been reached."
-            )
-
-        ip = request.client.host if request.client else None
-        ua = ua_fingerprint_hash(request.headers.get("user-agent", ""))
-        for f in files:
-            db.add(
-                DownloadLog(
-                    file_id=f.id,
-                    share_id=link.share_id,
-                    accessed_by_user_id=None,
-                    ip=ip,
-                    ua_fingerprint_hash=ua,
-                    bytes_served=f.size_bytes,
-                    via=DownloadVia.public,
-                )
-            )
-        record_audit_event(
-            db,
-            event_type=AuditEventType.share_downloaded,
-            actor_user_id=None,
-            target_type="share",
-            target_id=link.share_id,
-            metadata={
-                "via": "public",
-                "file_count": len(files),
-                "archive": True,
-                "public_link_id": link.id,
-            },
-            request=request,
-        )
-        public_link_svc.record_consumption(
-            db, link=link, file_id=None, ip=ip, request=request
-        )
-        public_link_svc.notify_owner_on_archive_download(
-            db,
-            link=link,
-            file_count=len(files),
-            total_bytes=sum(f.size_bytes for f in files),
-            downloads_remaining=downloads_remaining,
-        )
+    # A ZIP is a single StreamingResponse artifact - it CANNOT serve a real
+    # partial/range response, so a `Range:` header on a ZIP request still returns
+    # the FULL archive. Always charge the budget + log once; honoring
+    # is_partial_continuation here let a holder re-download the whole archive for
+    # free, unlimited times, invisibly to the counter/log/owner (audit M5).
+    allowed, downloads_remaining = public_link_svc.decrement_counter(db, link=link)
+    if not allowed:
         db.commit()
+        raise AppError(
+            410, "PUBLIC_LINK_EXHAUSTED", "This public link's download limit has been reached."
+        )
+
+    ip = request.client.host if request.client else None
+    ua = ua_fingerprint_hash(request.headers.get("user-agent", ""))
+    for f in files:
+        db.add(
+            DownloadLog(
+                file_id=f.id,
+                share_id=link.share_id,
+                accessed_by_user_id=None,
+                ip=ip,
+                ua_fingerprint_hash=ua,
+                bytes_served=f.size_bytes,
+                via=DownloadVia.public,
+            )
+        )
+    record_audit_event(
+        db,
+        event_type=AuditEventType.share_downloaded,
+        actor_user_id=None,
+        target_type="share",
+        target_id=link.share_id,
+        metadata={
+            "via": "public",
+            "file_count": len(files),
+            "archive": True,
+            "public_link_id": link.id,
+        },
+        request=request,
+    )
+    public_link_svc.record_consumption(
+        db, link=link, file_id=None, ip=ip, request=request
+    )
+    public_link_svc.notify_owner_on_archive_download(
+        db,
+        link=link,
+        file_count=len(files),
+        total_bytes=sum(f.size_bytes for f in files),
+        downloads_remaining=downloads_remaining,
+    )
+    db.commit()
 
     share = db.query(Share).filter(Share.id == link.share_id).one()
     return zip_stream_svc.zip_streaming_response(files, f"share-{share.id[:8]}", count=True)

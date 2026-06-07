@@ -392,7 +392,11 @@ def download_share_zip(
     if not files:
         raise AppError(400, "NO_DOWNLOADABLE_FILES", "This share has no downloadable files.")
 
-    if not is_partial_continuation(request) and share.state == ShareState.active:
+    # A ZIP is a single StreamingResponse - a `Range:` header still yields the
+    # FULL archive, so always charge the budget once (honoring
+    # is_partial_continuation here let a recipient bypass the share download
+    # limit by adding a Range header) (audit M5).
+    if share.state == ShareState.active:
         if share.download_limit is not None and not share_svc.try_decrement_share_counter(
             db, share=share
         ):

@@ -50,6 +50,33 @@ async def test_callback_auto_links_existing_user_with_verified_email(
 
 
 @pytest.mark.asyncio
+async def test_callback_refuses_to_auto_link_an_admin(
+    make_provider, make_user, db, monkeypatch
+):
+    """M1: an UNauthenticated callback must never auto-link a privileged
+    (admin) account by verified-email match - that would be account takeover if
+    the IdP's email claim can be influenced. The admin must link explicitly via
+    the authed connect flow instead."""
+    from app.middleware.errors import AppError
+
+    p = make_provider()
+    boss = make_user(email="boss@example.com", role=UserRole.admin)
+    claims = make_claims(
+        p, sub="idp-boss", email="boss@example.com", name="Boss", groups=[],
+    )
+    patch_exchange(monkeypatch, claims)
+
+    with pytest.raises(AppError) as exc:
+        await oidc_svc.handle_callback(
+            db, provider=p, code="x", state_cookie="s", state_param="s",
+            expected_nonce=None,
+        )
+    assert exc.value.code == "OIDC_NO_ACCOUNT"
+    db.refresh(boss)
+    assert boss.oidc_provider_id is None  # not linked
+
+
+@pytest.mark.asyncio
 async def test_callback_returns_existing_link_via_provider_sub(
     make_provider, make_user, db, monkeypatch
 ):

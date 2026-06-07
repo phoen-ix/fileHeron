@@ -125,62 +125,69 @@ async def direct_upload(
     _refuse_if_storage_critical(db)
 
     # Stream-check size as we read.
-    from ..services import settings_registry
-    cap = int(settings_registry.effective(db, settings_registry.K.MAX_DIRECT_UPLOAD_BYTES))
-    chunks: list[bytes] = []
-    received = 0
     import hashlib
-    sha = hashlib.sha256()
-
-    while True:
-        chunk = await file.read(1024 * 1024)  # 1 MiB
-        if not chunk:
-            break
-        received += len(chunk)
-        if received > cap:
-            raise AppError(
-                413,
-                "DIRECT_UPLOAD_TOO_LARGE",
-                f"Direct upload limit is {cap} bytes; use TUS for larger files.",
-            )
-        sha.update(chunk)
-        chunks.append(chunk)
-
-    # Quota
-    quota_svc.reserve_bytes(db, user=user, additional_bytes=received)
-
-    # Persist
-    file_row = file_svc.create_pending(
-        db,
-        share=share,
-        uploader=user,
-        original_filename=file.filename or "upload.bin",
-        mime_type=file.content_type or "application/octet-stream",
-        size_bytes=received,
-    )
-    db.flush()
-
-    # Write to a temp file then hand the bytes to the storage backend (no tusd
-    # involvement). Local backend renames it into place (same fast path as TUS);
-    # an object backend uploads it. Staging in TUS_UPLOAD_DIR keeps the local
-    # move same-filesystem.
     import os
     import tempfile
 
+    from ..services import settings_registry
+    cap = int(settings_registry.effective(db, settings_registry.K.MAX_DIRECT_UPLOAD_BYTES))
+    received = 0
+    reserved = 0
+    sha = hashlib.sha256()
     when = utc_now()
     backend = get_storage_backend()
-    locator = backend.generate_locator(file_row.id, when)
+
     Path(settings.TUS_UPLOAD_DIR).mkdir(parents=True, exist_ok=True)
     fd, tmp_path = tempfile.mkstemp(dir=settings.TUS_UPLOAD_DIR, suffix=".part")
+    finalized = False
+    locator = None
+    file_row = None
     try:
+        # Stream each chunk straight to the temp file so resident memory stays
+        # bounded by the 1 MiB chunk size, NOT the (admin-tunable) size cap - a
+        # list[bytes] buffer let a few concurrent direct uploads OOM-kill the
+        # backend (audit M3/L15). Staged in TUS_UPLOAD_DIR so the local backend's
+        # finalize is a same-filesystem rename.
         with os.fdopen(fd, "wb") as out:
-            for chunk in chunks:
+            while True:
+                chunk = await file.read(1024 * 1024)  # 1 MiB
+                if not chunk:
+                    break
+                received += len(chunk)
+                if received > cap:
+                    raise AppError(
+                        413,
+                        "DIRECT_UPLOAD_TOO_LARGE",
+                        f"Direct upload limit is {cap} bytes; use TUS for larger files.",
+                    )
+                sha.update(chunk)
                 out.write(chunk)
+
+        quota_svc.reserve_bytes(db, user=user, additional_bytes=received)
+        reserved = received
+
+        file_row = file_svc.create_pending(
+            db,
+            share=share,
+            uploader=user,
+            original_filename=file.filename or "upload.bin",
+            mime_type=file.content_type or "application/octet-stream",
+            size_bytes=received,
+        )
+        db.flush()
+
+        locator = backend.generate_locator(file_row.id, when)
         backend.finalize(tmp_path, locator)
+        finalized = True
     except Exception:
-        if os.path.exists(tmp_path):
-            os.unlink(tmp_path)
+        # Release any reservation so a finalize/persist failure can't leak quota
+        # against the user (audit L5); the DB row is rolled back by get_db.
+        if reserved:
+            quota_svc.release_bytes(user_id=user.id, bytes_to_free=reserved)
         raise
+    finally:
+        if not finalized and os.path.exists(tmp_path):
+            os.unlink(tmp_path)
 
     file_row.storage_path = locator
     file_row.state = file_row.state.__class__.ready_unscanned

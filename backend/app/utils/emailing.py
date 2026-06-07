@@ -66,7 +66,21 @@ async def send_email(
     ``list_unsubscribe``: when set, adds the RFC 8058 one-click
     unsubscribe headers (``List-Unsubscribe`` + ``List-Unsubscribe-Post``)."""
     if not cfg.is_configured:
-        # Logs-fallback: print the email body block to stdout for dev visibility.
+        from ..config import settings
+
+        if settings.is_production:
+            # An unconfigured SMTP host in production is a misconfiguration, not a
+            # dev convenience. Printing the body would dump LIVE one-time tokens
+            # (password-reset / verify / invite links) into the container logs,
+            # readable by anyone with log access - defeating the mail-log's
+            # fail-closed masking (audit M13). Log metadata only; the admin
+            # mail-log keeps a masked copy of the body.
+            logger.error(
+                "EMAIL NOT SENT: SMTP unconfigured in production - body suppressed",
+                extra={"to": to, "subject": subject},
+            )
+            return
+        # Dev logs-fallback: print the email body block to stdout for visibility.
         logger.info(
             "EMAIL DEV (no SMTP_HOST configured) - would send",
             extra={

@@ -198,6 +198,28 @@ def erase_user(
             synchronize_session=False,
         )
     )
+    # Inbound mailbox: a registered user who replied to a share by email leaves
+    # their plaintext sender email + display name in inbound_messages, which
+    # stays searchable in the admin inbox indefinitely (Art.17 residue). Scrub
+    # the sender identity fields (mirror email_log) but keep the row + body as a
+    # business record of received correspondence (audit M7).
+    from ..models.inbound_message import InboundMessage
+    pii_purged["inbound_messages_scrubbed"] = (
+        db.query(InboundMessage)
+        .filter(
+            (InboundMessage.sender_user_id == target.id)
+            | (InboundMessage.sender_email == original_email)
+        )
+        .update(
+            {
+                InboundMessage.sender_user_id: None,
+                InboundMessage.sender_email: f"erased-{target.id}@erased.invalid",
+                InboundMessage.sender_name: None,
+            },
+            synchronize_session=False,
+        )
+    )
+
     # Deliberately retained: `share_recipients` rows reference the (now
     # anonymised) user by integer FK only - no plaintext PII - so the
     # sender's recipient list stays intact. `audit_log` is the append-only

@@ -424,6 +424,19 @@ async def handle_callback(
         if local is not None and local.oidc_provider_id is None:
             if local.is_disabled:
                 raise AppError(403, "ACCOUNT_DISABLED", "Account is disabled.")
+            if local.role == UserRole.admin:
+                # Never auto-link a privileged account on an UNauthenticated
+                # callback: if the IdP's email claim can be influenced (a realm
+                # that allows self-service email change without re-verification,
+                # a tenant where preferred_username is settable, ...), this would
+                # be admin account takeover. An admin must link SSO explicitly
+                # from account settings (the authed connect flow re-checks email
+                # + subject) (audit M1).
+                raise AppError(
+                    403,
+                    "OIDC_NO_ACCOUNT",
+                    "Admin accounts must link single sign-on from account settings.",
+                )
             local.oidc_provider_id = provider.id
             local.oidc_subject = sub
             db.flush()

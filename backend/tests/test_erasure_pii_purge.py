@@ -50,6 +50,20 @@ def test_erasure_purges_plaintext_pii(make_user, db):
             expires_at=_naive_utc() + timedelta(days=1),
         )
     )
+    from app.models.inbound_message import InboundMessage, MessageClass
+    db.add(
+        InboundMessage(
+            received_at=_naive_utc(),
+            sender_email=victim_email,
+            sender_name="Victim Name",
+            sender_user_id=victim.id,
+            subject="hi there",
+            imap_uid=42,
+            uidvalidity=7,
+            classification=MessageClass.normal,
+            has_attachments=False,
+        )
+    )
     db.add(KnownDevice(user_id=victim.id, ua_fingerprint_hash="f" * 64, ip_geohash="u4pruyd"))
     db.add(
         Notification(
@@ -71,3 +85,9 @@ def test_erasure_purges_plaintext_pii(make_user, db):
     # Device fingerprints + own notifications purged.
     assert db.query(KnownDevice).filter(KnownDevice.user_id == victim.id).count() == 0
     assert db.query(Notification).filter(Notification.user_id == victim.id).count() == 0
+    # Inbound mailbox sender identity scrubbed (row + body kept as a business
+    # record), so the original email is no longer searchable in the admin inbox.
+    from app.models.inbound_message import InboundMessage
+    assert db.query(InboundMessage).filter(InboundMessage.sender_email == victim_email).count() == 0
+    im = db.query(InboundMessage).one()
+    assert im.sender_name is None and im.sender_user_id is None

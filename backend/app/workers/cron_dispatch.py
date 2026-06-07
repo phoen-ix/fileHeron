@@ -42,9 +42,15 @@ async def cron_dispatch(_ctx) -> dict:
                     db.commit()
                     continue
                 if cs.is_due(res, last, now, tz):
-                    await job_queue.aenqueue(name)
+                    # Persist "ran" BEFORE enqueuing (audit Info-11): if the
+                    # commit fails we simply retry next minute, instead of having
+                    # enqueued the job but not recorded it - which re-fires it
+                    # every minute until a commit lands, widening the overlap
+                    # window. All cron jobs are idempotent, so the rare
+                    # marked-but-enqueue-failed case just skips one run.
                     cs.mark_ran(db, name, now)
                     db.commit()
+                    await job_queue.aenqueue(name)
                     enqueued.append(name)
             except Exception:
                 db.rollback()

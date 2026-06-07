@@ -41,6 +41,10 @@ def upgrade() -> None:
             "shares",
             sa.Column("approval_decided_by_id", sa.Integer(), nullable=True),
         )
+    # FK in its OWN step, not nested under the column guard: a partial-failure
+    # rerun that already added the column above would otherwise skip the FK
+    # forever (audit L26). No _has_fk helper exists, so tolerate "already exists".
+    try:
         op.create_foreign_key(
             "fk_shares_approval_decided_by",
             "shares",
@@ -49,6 +53,8 @@ def upgrade() -> None:
             ["id"],
             ondelete="SET NULL",
         )
+    except Exception:
+        pass  # FK already present from a prior (possibly partial) run
     if not _has_column(bind, "shares", "approval_decided_at"):
         op.add_column(
             "shares", sa.Column("approval_decided_at", sa.DateTime(), nullable=True)

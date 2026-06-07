@@ -49,9 +49,16 @@ def _now() -> int:
     return int(datetime.now(tz=timezone.utc).timestamp())
 
 
+# Domain-separation prefix so a download-URL HMAC can never collide with another
+# HMAC that also keys on JWT_SECRET (SSE token, unsubscribe token, unlock cookie)
+# even if a payload structure ever lined up (audit Info-2). Bumping the version
+# suffix invalidates outstanding tokens, which is harmless at a ~60s TTL.
+_DOMAIN = b"fh:download-url:v1\x00"
+
+
 def _sign(payload: bytes) -> str:
     secret = settings.JWT_SECRET.encode("utf-8")
-    digest = hmac.new(secret, payload, hashlib.sha256).digest()
+    digest = hmac.new(secret, _DOMAIN + payload, hashlib.sha256).digest()
     return base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
 
 

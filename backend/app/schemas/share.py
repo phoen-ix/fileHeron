@@ -13,8 +13,11 @@ from .common import APIBaseModel
 
 
 class ShareRecipientsRequest(APIBaseModel):
-    user_ids: list[int] = Field(default_factory=list)
-    group_ids: list[int] = Field(default_factory=list)
+    # Bounded so a single request can't submit an enormous recipient list that
+    # gets fully buffered + bulk-loaded (audit L17). 1000 is far above any real
+    # single-org share.
+    user_ids: list[int] = Field(default_factory=list, max_length=1000)
+    group_ids: list[int] = Field(default_factory=list, max_length=1000)
 
     @field_validator("user_ids", "group_ids")
     @classmethod

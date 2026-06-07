@@ -75,6 +75,8 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up
 - **Public links** with optional password (Argon2 + brute-force lockout) and download-count limit (atomic counter).
 - **WebAuthn / passkeys** as alternative second factor (sign-count enforced).
 - **In-app self-update + runtime settings registry** - admins update the stack from `/admin/system` (GitHub release-check → one-click update with automatic previous-version rollback), and tune ~25 operational knobs (session cap, rate limits, retention windows, upload cap, …) live at `/admin/settings/advanced` with no redeploy.
+- **Drain-before-update + maintenance mode** - starting an update while uploads/downloads are in flight offers to **postpone**: maintenance mode blocks *new* transfers (in-progress + resumable ones finish), then the update applies automatically once they drain (or a max-wait cap elapses). Maintenance mode is also a standalone toggle at `/admin/settings/maintenance`.
+- **Configuration backup & restore** - export an instance's settings/branding/OIDC/webhooks/groups/users (optionally logs) to a single file at `/admin/settings/backup` and import it to rebuild a crashed system; three secret-handling modes (passphrase-encrypted/portable · keep-ciphertext · exclude). Files/shares are excluded; importing invalidates active shares.
 - **24-hour timestamps with an admin-set site timezone** - one IANA timezone setting renders consistent, labelled times across the SPA and every email.
 - **Backups** via dated dirs + optional `restic` push to S3/B2/SFTP.
 - **i18n** EN + DE everywhere; user-saved `users.locale` overrides browser language; anonymous picks persist via localStorage.
@@ -307,6 +309,19 @@ Companion setting at **`/admin/settings/quarantine`** - single toggle "Notify al
 ## Self-update
 
 - **`/admin/system`** surfaces the update banner; **`/admin/settings/updates`** configures it: the **releases API URL** (fork operators repoint it at their own repo) and **check mode** - `auto` (poll every 24 h) or `manual` (only when you click "Check now"). The check filters to backend `^v\d+\.\d+\.\d+` tags so a `client-v*` desktop release never shows as a server update. Clicking **Update** drives the updater shim/executor and records the previous `FH_TAG` for one-click rollback.
+- **Drain before update.** When you click Update, file:Heron checks for uploads/downloads in progress. If any are active you get a choice: **Update now anyway** (interrupts them) or **Postpone & enable maintenance** - the latter turns on maintenance mode and applies the update automatically once transfers finish, or after the *drain max wait* cap (`/admin/settings/advanced`, default 30 min) so a single paused transfer can't block it forever. A postponed update shows a live "waiting for N uploads / M downloads" banner with **Update now** and **Cancel**.
+
+## Maintenance mode (`/admin/settings/maintenance`)
+
+- Toggle that **pauses new file transfers** - uploads, downloads, public-link downloads, bulk ZIP and preview all return `503` - while letting **in-progress (and paused/resumable) transfers finish**. The rest of the app (login, browsing, admin) stays usable.
+- A site-wide banner (with an optional custom message) tells users what's happening; the page also shows the current in-flight upload/download counts.
+- The drain-before-update flow flips this on automatically when you postpone; you can also use it standalone for planned maintenance.
+
+## Configuration backup & restore (`/admin/settings/backup`)
+
+- **Export** a single `*.fhbackup.json` of the instance's *configuration* - tick which categories to include: settings & branding (incl. the logo + legal pages), OIDC providers & webhooks, groups & memberships, user accounts (incl. password hashes + 2FA), and optionally logs. Shared **files are deliberately excluded** - this rebuilds a crashed system's setup, not its short-lived file data.
+- **Secret handling** is chosen per export: **passphrase-encrypted** (decrypts secrets then re-encrypts the whole file with your passphrase - portable to any server), **keep ciphertext** (raw blobs, only restore onto the same `JWT_SECRET`), or **exclude** (re-enter secrets after import). Passphrase mode can also bundle a read-only `.env` snapshot for the operator.
+- **Import** previews exactly what will change, then **replaces** the in-scope configuration: it upserts users/groups by natural key, **purges users/groups not in the backup**, **invalidates every active share** (their bytes are deleted), and **revokes all sessions**. This is a disaster-recovery tool - intended for a fresh/crashed target. The host-level `scripts/backup.sh` (DB + file bytes + Redis) remains the byte-for-byte backup.
 
 ## Advanced (runtime tunables)
 

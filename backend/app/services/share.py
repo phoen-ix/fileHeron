@@ -599,8 +599,10 @@ def list_shares_for_user(
         raise AppError(400, "INVALID_BOX", "box must be 'outbox' or 'inbox'.")
 
     if q:
-        like = f"%{q}%"
-        base = base.filter(Share.subject.ilike(like))
+        # Escape LIKE wildcards so a literal % or _ in the query matches itself
+        # rather than acting as "any chars" / "any char" (audit L4).
+        esc = q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        base = base.filter(Share.subject.ilike(f"%{esc}%", escape="\\"))
 
     if states:
         valid = {s.value for s in ShareState}

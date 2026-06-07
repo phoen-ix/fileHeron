@@ -1,7 +1,7 @@
 <template>
   <a
-    v-if="linkUrl"
-    :href="linkUrl"
+    v-if="safeLink"
+    :href="safeLink"
     class="brand-logo-link"
     target="_blank"
     rel="noopener noreferrer"
@@ -12,7 +12,9 @@
 </template>
 
 <script setup lang="ts">
-withDefaults(
+import { computed } from 'vue'
+
+const props = withDefaults(
   defineProps<{
     src: string
     alt?: string
@@ -21,6 +23,16 @@ withDefaults(
   }>(),
   { alt: '', linkUrl: null, size: 'sm' },
 )
+
+// Only allow http(s) absolute URLs or a root-relative path as the logo link;
+// reject javascript:/data:/vbscript:/etc. so an admin-set (or config-backup-
+// imported) branding link can't execute script on the pre-auth login page
+// where the logo renders (audit L29).
+const safeLink = computed<string | null>(() => {
+  const u = (props.linkUrl ?? '').trim()
+  if (!u) return null
+  return /^https?:\/\//i.test(u) || u.startsWith('/') ? u : null
+})
 </script>
 
 <style scoped>

@@ -15,11 +15,20 @@ def to_client_png(data: bytes, *, max_height: int = 48) -> bytes:
     upscales. Returns PNG bytes."""
     from PIL import Image  # local import: keep Pillow out of the boot path
 
-    with Image.open(io.BytesIO(data)) as img:
-        img = img.convert("RGBA")
-        if img.height > max_height:
-            new_w = max(1, round(img.width * (max_height / img.height)))
-            img = img.resize((new_w, max_height), Image.LANCZOS)
-        out = io.BytesIO()
-        img.save(out, format="PNG", optimize=True)
-        return out.getvalue()
+    from ..middleware.errors import AppError
+
+    # Bound the decoded pixel count so a decompression bomb (a tiny file that
+    # declares enormous dimensions) can't exhaust memory on decode/convert. A
+    # header logo is small; 25 MP (e.g. 5000x5000) is generous (audit L16).
+    Image.MAX_IMAGE_PIXELS = 25_000_000
+    try:
+        with Image.open(io.BytesIO(data)) as img:
+            img = img.convert("RGBA")  # forces a decode under the pixel cap
+            if img.height > max_height:
+                new_w = max(1, round(img.width * (max_height / img.height)))
+                img = img.resize((new_w, max_height), Image.LANCZOS)
+            out = io.BytesIO()
+            img.save(out, format="PNG", optimize=True)
+            return out.getvalue()
+    except Image.DecompressionBombError as e:
+        raise AppError(400, "IMAGE_TOO_LARGE", "Logo image is too large to process.") from e

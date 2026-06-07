@@ -1,34 +1,42 @@
-# file:Heron v1.41.0
+# file:Heron v1.42.0
 
-**Build & supply-chain hardening.** No application or behavior change - this release
-makes the build reproducible and integrity-checked. Roll forward via **Update** in
-`/admin/system` like any other.
+**Hardening round 3.** A set of smaller security fixes from the audit: data-erasure
+completeness, spreadsheet-export safety, branding-link safety, logo upload limits,
+and a couple of robustness fixes. Backend + frontend; no database migration.
 
-## What changed (operators / self-hosters)
+## What's fixed
 
-- **Pinned, integrity-checked dependencies.** Both the backend and the frontend now
-  build from committed lockfiles (`backend/requirements.lock` with hashes, and
-  `frontend/package-lock.json`), installed with `pip install --require-hashes` and
-  `npm ci`. Two builds of the same commit now produce the same images, and a
-  compromised or typo-squatted upstream package can no longer slip into a build.
-- **GitHub Actions pinned to commit SHAs.** Every CI/release action is pinned to an
-  exact commit (with a `# vN` comment) instead of a movable tag, closing a
-  supply-chain risk in the release pipeline.
+- **Right-to-erasure is now more complete.** Erasing a user also removes their saved
+  passkeys (WebAuthn credentials) and any pending email-change records, which carry
+  the person's email address - these used to survive an erasure.
+- **The analytics CSV export is safe to open in a spreadsheet.** Email addresses in
+  the export are now protected against formula injection (a value starting with `=`,
+  `+`, `-` or `@`), matching the audit and mail-log exports.
+- **A branding link can't run code.** The logo's optional click-through link is now
+  restricted to normal web addresses, so a `javascript:` link (e.g. left by a
+  malicious config import) can't execute on the login page.
+- **Logo uploads can't exhaust memory.** The logo image transcoder now caps the
+  image size it will decode, rejecting oversized "decompression bomb" images.
+- **Single sign-on fails clearly on a key-rotation mistake.** If an OIDC provider's
+  stored secret can't be decrypted (e.g. `JWT_SECRET` was rotated without
+  re-encrypting), sign-in now returns a clear error instead of silently sending an
+  empty secret.
+- **Search treats `%` and `_` literally.** Searching shares for a subject containing
+  `%` or `_` now matches those characters, not "any text".
 
-No database migration, no configuration change, no functional difference for users.
+## Upgrade notes
 
-> Maintainer note: regenerate the locks when bumping dependencies -
-> `uv pip compile pyproject.toml --generate-hashes -o backend/requirements.lock`
-> and `npm install --package-lock-only` in `frontend/`.
+- Backend + worker + frontend roll forward via **Update** in `/admin/system`. No
+  database migration, no configuration change.
 
 ## Container images
 
 Published to GitHub Container Registry:
 
-- `ghcr.io/phoen-ix/fileheron-backend:v1.41.0`
-- `ghcr.io/phoen-ix/fileheron-worker:v1.41.0`
-- `ghcr.io/phoen-ix/fileheron-frontend:v1.41.0`
-- `ghcr.io/phoen-ix/fileheron-updater-shim:v1.41.0`
-- `ghcr.io/phoen-ix/fileheron-updater-executor:v1.41.0`
+- `ghcr.io/phoen-ix/fileheron-backend:v1.42.0`
+- `ghcr.io/phoen-ix/fileheron-worker:v1.42.0`
+- `ghcr.io/phoen-ix/fileheron-frontend:v1.42.0`
+- `ghcr.io/phoen-ix/fileheron-updater-shim:v1.42.0`
+- `ghcr.io/phoen-ix/fileheron-updater-executor:v1.42.0`
 
 Click **Update** in `/admin/system` to roll forward.

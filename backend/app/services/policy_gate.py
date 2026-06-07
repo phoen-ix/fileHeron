@@ -17,7 +17,11 @@ from ..models.group_member import GroupMember
 from ..models.user import User, UserRole
 
 POLICY_MODES = ("everyone", "employees_admins", "admins_only", "disabled")
-DEFAULT_POLICY_MODE = "everyone"
+# Default for the public-link + API-token create gates. employees_admins (not
+# everyone) so an UNCONFIGURED deploy doesn't let every client mint anonymous
+# public download links or long-lived API tokens out of the box (audit L27). An
+# admin can widen to "everyone" or allowlist specific clients/groups.
+DEFAULT_POLICY_MODE = "employees_admins"
 
 
 def _parse_id_list(raw: str | None) -> list[int]:

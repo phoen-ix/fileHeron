@@ -55,12 +55,13 @@ def _make_group(db, name: str) -> Group:
     return g
 
 
-def test_default_mode_allows_everyone(make_user, db):
-    """No policy rows yet → defaults to `everyone`."""
+def test_default_mode_is_employees_admins(make_user, db):
+    """No policy rows yet → defaults to employees_admins (audit L27): clients
+    cannot mint API tokens out of the box; staff can."""
     client = make_user(email="c@test.local", role=UserRole.client)
     employee = make_user(email="e@test.local", role=UserRole.employee)
     admin = make_user(email="a@test.local", role=UserRole.admin)
-    assert api_token_svc.is_allowed_to_create(db, client) is True
+    assert api_token_svc.is_allowed_to_create(db, client) is False
     assert api_token_svc.is_allowed_to_create(db, employee) is True
     assert api_token_svc.is_allowed_to_create(db, admin) is True
 

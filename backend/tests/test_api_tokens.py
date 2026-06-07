@@ -5,6 +5,7 @@ import pytest
 
 from app.middleware.errors import AppError
 from app.models.api_token import ApiToken
+from app.models.user import UserRole
 from app.services import api_token as api_token_svc
 
 
@@ -104,7 +105,7 @@ async def test_last_used_persists_on_get_request(make_user, db, client):
 
 @pytest.mark.asyncio
 async def test_create_via_api(make_user, client, db):
-    make_user(email="alice@test.local", password="LongCorrectHorse123!")
+    make_user(email="alice@test.local", password="LongCorrectHorse123!", role=UserRole.employee)
     login = await client.post(
         "/api/auth/login", json={"email": "alice@test.local", "password": "LongCorrectHorse123!"}
     )

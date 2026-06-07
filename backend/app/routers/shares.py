@@ -30,8 +30,15 @@ from ..schemas.share import (
     UpdateShareRequest,
 )
 from ..services import public_link as public_link_svc
+from ..services import rate_limit as rate_limit_svc
 from ..services import share as share_svc
 from ..services import share_approval as share_approval_svc
+
+# Per-sender share-creation rate limit (audit #2). Generous for any legitimate
+# user; bounds an abusive/compromised account blasting unsolicited shares at
+# staff/admins (staff->staff sends have no relationship requirement by design).
+_SHARE_CREATE_LIMIT = 60
+_SHARE_CREATE_WINDOW_SEC = 900  # 15 minutes
 
 router = APIRouter(prefix="/api/shares", tags=["shares"])
 
@@ -145,6 +152,16 @@ def create_share(
     user: User = Depends(get_actor),
     db: Session = Depends(get_db),
 ) -> ShareResponse:
+    # Per-sender rate limit (audit #2): cap how fast one account can create
+    # shares, so a compromised/abusive user can't blast unsolicited content at
+    # staff/admins. Keyed by user id; fail-open if Redis is down.
+    if not rate_limit_svc.check_ip_allowed(
+        "share_create", f"u{user.id}", _SHARE_CREATE_LIMIT, _SHARE_CREATE_WINDOW_SEC
+    ):
+        raise AppError(
+            429, "RATE_LIMITED", "You're creating shares too quickly; try again shortly."
+        )
+
     # Pre-flight the public-link policy gate before any DB writes - no
     # half-created share if the user can't add the link they asked for.
     if payload.public_link is not None and not public_link_svc.is_allowed_to_create(

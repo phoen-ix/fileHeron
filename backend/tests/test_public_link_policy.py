@@ -64,11 +64,13 @@ def _future(days: int = 7) -> datetime:
     return datetime.now(tz=timezone.utc).replace(tzinfo=None) + timedelta(days=days)
 
 
-def test_default_mode_allows_everyone(make_user, db):
+def test_default_mode_is_employees_admins(make_user, db):
+    """Default is employees_admins (audit L27): a client can't create a public
+    link out of the box; staff can."""
     client = make_user(email="c@test.local", role=UserRole.client)
     employee = make_user(email="e@test.local", role=UserRole.employee)
     admin = make_user(email="a@test.local", role=UserRole.admin)
-    assert public_link_svc.is_allowed_to_create(db, client) is True
+    assert public_link_svc.is_allowed_to_create(db, client) is False
     assert public_link_svc.is_allowed_to_create(db, employee) is True
     assert public_link_svc.is_allowed_to_create(db, admin) is True
 
@@ -215,7 +217,7 @@ async def test_policy_get_put_round_trip(make_user, db, client, login_as):
         headers={"Authorization": f"Bearer {token}"},
     )
     assert r1.status_code == 200
-    assert r1.json()["mode"] == "everyone"
+    assert r1.json()["mode"] == "employees_admins"  # default tightened (audit L27)
 
     r2 = await client.put(
         "/api/admin/settings/public-links/policy",

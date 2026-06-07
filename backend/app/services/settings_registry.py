@@ -66,9 +66,12 @@ TUNABLES: list[Tunable] = [
     # --- Uploads / security / branding ---
     Tunable(K.MAX_DIRECT_UPLOAD_BYTES, "MAX_DIRECT_UPLOAD_BYTES", "int", "uploads", 1_000_000, 5_368_709_120),
     # --- Downloads ---
-    # Signed-url TTL: 30s floor, 24h ceiling. Longer enables browser resume
-    # of interrupted downloads; shorter shrinks the leaked-url window.
-    Tunable(K.DOWNLOAD_SIGNED_URL_TTL_SEC, "DOWNLOAD_SIGNED_URL_TTL_SEC", "int", "downloads", 30, 86400),
+    # Signed-url TTL: 30s floor, 1h ceiling. The URL is an UNgated, transferable
+    # bearer of the file bytes for its whole lifetime (audit #3), so the ceiling
+    # is capped at 1h - enough for browser native-resume of an interrupted
+    # download, without turning a leaked/forwarded URL into a day-long key. (Was
+    # 24h.) Shorter still is better if you don't need resume.
+    Tunable(K.DOWNLOAD_SIGNED_URL_TTL_SEC, "DOWNLOAD_SIGNED_URL_TTL_SEC", "int", "downloads", 30, 3600),
     # --- Updates ---
     # Postpone-update drain cap: 1 min floor, 24h ceiling. After this the
     # deferred update applies even if transfers haven't fully drained.

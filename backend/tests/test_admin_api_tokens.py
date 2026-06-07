@@ -200,7 +200,7 @@ async def test_policy_get_put_round_trip(make_user, db, client, login_as):
         headers={"Authorization": f"Bearer {token}"},
     )
     assert r1.status_code == 200
-    assert r1.json()["mode"] == "everyone"
+    assert r1.json()["mode"] == "employees_admins"  # default tightened (audit L27)
     assert r1.json()["allowed_user_ids"] == []
 
     # PUT a stricter policy

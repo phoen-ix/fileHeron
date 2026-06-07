@@ -47,7 +47,7 @@ async def test_verify_allows_future_and_null_expiry(make_user, db):
 
 @pytest.mark.asyncio
 async def test_create_via_api_persists_expiry(make_user, db, client, login_as):
-    make_user(email="hr@test.local", password="LongCorrectHorse123!")
+    make_user(email="hr@test.local", password="LongCorrectHorse123!", role=UserRole.employee)
     token, _ = await login_as("hr@test.local", "LongCorrectHorse123!")
     expires = (_utcnow() + timedelta(days=30)).isoformat()
     resp = await client.post(
@@ -64,7 +64,7 @@ async def test_create_via_api_persists_expiry(make_user, db, client, login_as):
 
 @pytest.mark.asyncio
 async def test_create_via_api_rejects_past_expiry(make_user, client, login_as):
-    make_user(email="hr@test.local", password="LongCorrectHorse123!")
+    make_user(email="hr@test.local", password="LongCorrectHorse123!", role=UserRole.employee)
     token, _ = await login_as("hr@test.local", "LongCorrectHorse123!")
     past = (_utcnow() - timedelta(days=1)).isoformat()
     resp = await client.post(
@@ -78,7 +78,7 @@ async def test_create_via_api_rejects_past_expiry(make_user, client, login_as):
 
 @pytest.mark.asyncio
 async def test_create_via_api_no_expiry_is_unlimited(make_user, db, client, login_as):
-    make_user(email="hr@test.local", password="LongCorrectHorse123!")
+    make_user(email="hr@test.local", password="LongCorrectHorse123!", role=UserRole.employee)
     token, _ = await login_as("hr@test.local", "LongCorrectHorse123!")
     resp = await client.post(
         "/api/account/api-tokens",

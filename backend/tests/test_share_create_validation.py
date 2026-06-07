@@ -69,6 +69,30 @@ async def test_create_allows_no_recipient_when_public_link_set(
 
 
 @pytest.mark.asyncio
+async def test_create_share_rate_limited(make_user, client, login_as, monkeypatch):
+    """audit #2: the per-sender share-creation rate limit returns 429 when
+    exceeded (the limiter check runs first, before any recipient validation)."""
+    from app.routers import shares as shares_mod
+
+    make_user(email="emp@test.local", role=UserRole.employee, password="Pass12345678!")
+    recipient = make_user(email="cli@test.local", role=UserRole.client)
+    token, _ = await login_as("emp@test.local", "Pass12345678!")
+    monkeypatch.setattr(shares_mod.rate_limit_svc, "check_ip_allowed", lambda *a, **k: False)
+
+    resp = await client.post(
+        "/api/shares",
+        json={
+            "kind": "outbound",
+            "recipients": {"user_ids": [recipient.id], "group_ids": []},
+            "expires_at": _expires_in(24),
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 429
+    assert resp.json()["code"] == "RATE_LIMITED"
+
+
+@pytest.mark.asyncio
 async def test_create_allows_recipients_only_unchanged(
     make_user, db, client, login_as
 ):

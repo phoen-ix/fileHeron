@@ -15,15 +15,16 @@ keep this to what would cause a wrong move if unknown.
 
 ## Status
 
-Backend **`v1.34.1`**, desktop client **`client-v0.12.0`** - shipped + in
+Backend **`v1.49.0`**, desktop client **`client-v0.13.0`** - shipped + in
 production.
 
 > **Doc currency:** sections below were last fully swept at v1.14, plus v1.33
-> (config backup) + v1.34 (maintenance) which are documented. Subsystems shipped
-> v1.15-v1.32 (bulk ZIP, analytics, webhooks, anomaly detection, pluggable storage
-> backend incl. S3, share-approval, email-template overrides, inbound IMAP,
-> admin-tunable cron schedules, branding/legal pages) live in `README.md` + `git
-> log`, not yet back-filled here.
+> (config backup) + v1.34 (maintenance) + v1.49 (API-token scopes) which are
+> documented. Subsystems shipped v1.15-v1.32 (bulk ZIP, analytics, webhooks,
+> anomaly detection, pluggable storage backend incl. S3, share-approval,
+> email-template overrides, inbound IMAP, admin-tunable cron schedules,
+> branding/legal pages) + the v1.35-v1.47 security-audit remediation live in
+> `README.md` + `git log`, not yet back-filled here.
 
 **Open / deferred (don't re-propose):** per-file envelope encryption - deferred
 until storage leaves single-server bind mounts (KEK + ciphertext would otherwise

@@ -16,9 +16,10 @@ def _res(**kw):
 
 
 def test_registry_covers_all_jobs():
-    assert len(cs.REGISTRY) == 18
+    assert len(cs.REGISTRY) == 19
     assert "imap_poll" in cs.REGISTRY and "prune_history" in cs.REGISTRY
     assert "drain_pending_update" in cs.REGISTRY
+    assert "rescan_inbound_attachments" in cs.REGISTRY  # audit L18
     # release_check defaults to ~daily so it doesn't poll GitHub hourly.
     assert cs.REGISTRY["release_check"].default_interval_min == 1440
 

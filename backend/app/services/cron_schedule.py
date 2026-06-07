@@ -62,6 +62,9 @@ REGISTRY: dict[str, CronSpec] = {
         # Mail
         CronSpec("imap_poll", "mail",
                  "Fetch the inbound mailbox over IMAP.", KIND_INTERVAL, 5),
+        CronSpec("rescan_inbound_attachments", "mail",
+                 "Re-scan inbound attachments left unscanned (e.g. after a ClamAV outage).",
+                 KIND_INTERVAL, 60),
         # Maintenance
         CronSpec("cleanup_expired_tokens", "maintenance",
                  "Revoke + delete expired auth tokens.", KIND_INTERVAL, 60),

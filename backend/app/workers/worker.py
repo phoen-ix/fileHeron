@@ -49,6 +49,7 @@ from .prune_history import prune_history
 from .purge_old_quarantine import purge_old_quarantine
 from .quota_reconcile import quota_reconcile
 from .reclaim_orphaned_files import reclaim_orphaned_files
+from .rescan_inbound_attachments import rescan_inbound_attachments
 from .send_email import send_email_job
 from .share_expiring import share_expiring_24h_warning
 from .webhook_deliver import webhook_deliver
@@ -81,6 +82,7 @@ class WorkerSettings:
         webhook_deliver,
         anomaly_check,
         imap_poll,
+        rescan_inbound_attachments,
         drain_pending_update,
         cron_dispatch,
     ]

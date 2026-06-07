@@ -1,8 +1,10 @@
 """Attachments on inbound messages (v1.27.0).
 
 Bytes are stored via the pluggable storage backend (``services/storage_backend``)
-under ``storage_key``; each is ClamAV-scanned by the ``scan_inbound_attachment``
-job before an admin can download it. ``av_state`` gates the download endpoint.
+under ``storage_key`` and ClamAV-scanned inline at ingest
+(``services/inbound_mail.py``); anything left ``pending`` (e.g. a ClamAV outage)
+is settled later by the ``rescan_inbound_attachments`` cron. ``av_state`` gates
+the download endpoint.
 """
 from __future__ import annotations
 

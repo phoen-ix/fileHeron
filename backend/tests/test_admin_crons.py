@@ -25,9 +25,10 @@ async def test_list_crons(make_user, client, login_as):
     r = await client.get("/api/admin/crons", headers=_h(t))
     assert r.status_code == 200, r.text
     body = r.json()
-    assert len(body["items"]) == 18
+    assert len(body["items"]) == 19
     names = {i["name"] for i in body["items"]}
     assert "expire_files" in names and "imap_poll" in names
+    assert "rescan_inbound_attachments" in names  # audit L18
     ef = next(i for i in body["items"] if i["name"] == "expire_files")
     assert ef["kind"] == "interval" and ef["interval_minutes"] == 60 and ef["enabled"] is True
 

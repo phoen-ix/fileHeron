@@ -41,7 +41,10 @@ vi.mock('@/stores/site', () => ({ useSiteStore: () => ({ loadConfig }) }))
 
 const MarkdownEditorStub = defineComponent({
   name: 'MarkdownEditor',
-  props: ['modelValue', 'ariaLabel'],
+  props: {
+    modelValue: { type: String, default: '' },
+    ariaLabel: { type: String, default: '' },
+  },
   emits: ['update:modelValue'],
   setup(props) {
     return () => h('textarea', { class: 'md-stub', value: props.modelValue })
@@ -131,5 +134,42 @@ describe('AdminSettingsBranding', () => {
     await flushPromises()
     expect(uploadBrandingLogo).not.toHaveBeenCalled()
     expect(pushToast).toHaveBeenCalled()
+  })
+
+  it('legal editor shows one language at a time via tabs', async () => {
+    const w = makeWrapper()
+    await flushPromises()
+    const tabs = w.findAll('.locale-tab')
+    expect(tabs.map((b) => b.text())).toEqual(['English', 'German'])
+    expect(tabs[0].classes()).toContain('active') // English default
+
+    // All four editors are mounted (imprint/privacy x en/de) but only the
+    // active language's two are shown - v-show sets display:none on the rest.
+    const langs = w.findAll('.legal-lang')
+    expect(langs.length).toBe(4)
+    const hidden = () =>
+      langs.filter((l) => (l.element as HTMLElement).style.display === 'none').length
+    expect(hidden()).toBe(2) // the German pair is hidden while English is active
+
+    // Switching the tab swaps which two are hidden.
+    await tabs[1].trigger('click')
+    expect(tabs[1].classes()).toContain('active')
+    expect(tabs[0].classes()).not.toContain('active')
+    expect(hidden()).toBe(2) // now the English pair is hidden
+  })
+
+  it('legal save still sends both languages regardless of the active tab', async () => {
+    const w = makeWrapper()
+    await flushPromises()
+    // Two "Save" buttons: [0] branding, [1] legal.
+    const saves = w.findAll('button').filter((b) => b.text() === 'Save')
+    await saves[1].trigger('click')
+    await flushPromises()
+    expect(updateLegalSettings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        imprint: expect.objectContaining({ en: expect.any(String), de: expect.any(String) }),
+        privacy: expect.objectContaining({ en: expect.any(String), de: expect.any(String) }),
+      }),
+    )
   })
 })

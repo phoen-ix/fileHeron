@@ -1202,7 +1202,8 @@
       "imprint_enable": "Enable Imprint",
       "privacy_enable": "Enable Privacy policy",
       "lang_en": "English",
-      "lang_de": "German"
+      "lang_de": "German",
+      "language_tab_group": "Language"
     }
   },
   "footer": {

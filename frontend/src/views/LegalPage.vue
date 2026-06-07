@@ -6,7 +6,9 @@
       <span class="fh-eyebrow fh-rise" data-stagger="1">{{ t('legal.eyebrow') }}</span>
       <h1 class="fh-display fh-rise" data-stagger="2">{{ title }}</h1>
       <hr class="fh-rule" />
-      <!-- Server-sanitised (markdown-it raw HTML off + nh3 allowlist). -->
+      <!-- Server-sanitised (markdown-it raw HTML off + nh3 allowlist), so the
+           raw-HTML sink is the intended, reviewed render path. -->
+      <!-- eslint-disable-next-line vue/no-v-html -->
       <div class="legal-content fh-rise" data-stagger="3" v-html="html"></div>
     </template>
 

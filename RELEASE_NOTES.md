@@ -1,46 +1,37 @@
-# file:Heron v1.43.0
+# file:Heron v1.44.0
 
-**Hardening round 4.** Privacy, restore-safety and misconfiguration fixes from the
-audit, plus container hardening (one manual step). No database migration.
+**Hardening round 5.** Disaster-recovery safety, single sign-on correctness, and a
+couple of robustness limits. Backend-only; no database migration. Rolls forward via
+**Update** in `/admin/system`.
 
 ## What's fixed
 
-- **No long-lived token sits in the mail log.** The "manage notifications /
-  unsubscribe" link token is now redacted in stored email bodies (it never needed to
-  be browsable). Resend keeps working - this is treated as a low-sensitivity footer
-  token, not an account link.
-- **An immediate email change can't be undone by an old link.** When an admin
-  changes a user's email immediately, any earlier pending change is cancelled first,
-  so a stale confirmation link can no longer silently revert it.
-- **A misconfigured IMAP connection is now obvious.** Running the inbound mailbox
-  over plain (no-TLS) IMAP to a remote host in production now logs a clear error
-  (credentials and message bodies would be sent in cleartext).
-- **A restore can't lock you out of admin.** Importing a configuration backup now
-  keeps the admin performing the import as an enabled admin, even if the backup's
-  copy of their account said otherwise.
-- **Containers can't escalate privileges.** Every service now runs with
-  `no-new-privileges` (see the manual step below).
+- **A broken backup can no longer wipe your shares.** Restoring a configuration
+  backup now fully validates the file BEFORE doing anything irreversible. A
+  corrupt-but-readable backup is rejected with a clear error and changes nothing -
+  previously it could delete every active share and then fail half-way through the
+  restore.
+- **Single sign-on verifies the provider's identity document.** The provider's
+  discovery document must now declare the same issuer it was fetched from, closing a
+  gap where a tampered discovery endpoint could misrepresent the provider.
+- **Download links are domain-separated.** The short-lived signed download URL's
+  signature is now scoped so it can't be confused with any other signed value.
+- **Recipient lists are bounded.** A single share request can include at most 1000
+  user IDs and 1000 group IDs, preventing an oversized request from straining the
+  server.
 
 ## Upgrade notes
 
-- Backend + worker roll forward via **Update** in `/admin/system` (covers the first
-  four items above). No database migration.
-- **One-time host step for the container hardening:** the `no-new-privileges` setting
-  is a compose change the in-app updater doesn't apply to every service. After
-  updating, run once on the host:
-
-  ```
-  docker compose up -d
-  ```
+- Backend + worker roll forward via **Update** in `/admin/system`. No database
+  migration, no configuration change. (Outstanding download links re-issue
+  automatically; their ~60-second lifetime makes this invisible.)
 
 ## Container images
 
-Published to GitHub Container Registry:
+- `ghcr.io/phoen-ix/fileheron-backend:v1.44.0`
+- `ghcr.io/phoen-ix/fileheron-worker:v1.44.0`
+- `ghcr.io/phoen-ix/fileheron-frontend:v1.44.0`
+- `ghcr.io/phoen-ix/fileheron-updater-shim:v1.44.0`
+- `ghcr.io/phoen-ix/fileheron-updater-executor:v1.44.0`
 
-- `ghcr.io/phoen-ix/fileheron-backend:v1.43.0`
-- `ghcr.io/phoen-ix/fileheron-worker:v1.43.0`
-- `ghcr.io/phoen-ix/fileheron-frontend:v1.43.0`
-- `ghcr.io/phoen-ix/fileheron-updater-shim:v1.43.0`
-- `ghcr.io/phoen-ix/fileheron-updater-executor:v1.43.0`
-
-Click **Update** in `/admin/system` to roll forward, then run `docker compose up -d`.
+Click **Update** in `/admin/system` to roll forward.

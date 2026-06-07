@@ -6,6 +6,15 @@ import pytest
 from app.models.user import UserRole
 
 
+@pytest.fixture(autouse=True)
+def _bypass_webhook_url_check(monkeypatch):
+    """These CRUD tests use example hostnames that don't resolve; bypass the
+    SSRF/DNS check so they exercise CRUD, not network resolution. The real guard
+    is covered by test_webhook_ssrf.py and test_ssrf_guard.py."""
+    from app.routers.admin import webhooks as wh_router
+    monkeypatch.setattr(wh_router, "assert_public_http_url", lambda *a, **k: None)
+
+
 @pytest.fixture
 def admin_headers(make_user, login_as):
     async def _go():

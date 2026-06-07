@@ -14,10 +14,12 @@ import logging
 import httpx
 
 from ..database import SessionLocal
+from ..middleware.errors import AppError
 from ..models.webhook import Webhook, WebhookDelivery, WebhookDeliveryStatus
 from ..services import job_queue
 from ..services import webhook as webhook_svc
 from ..utils.crypto import decrypt_setting
+from ..utils.net import assert_public_http_url
 from ..utils.timeutil import utc_now
 
 logger = logging.getLogger("fileheron.workers.webhook_deliver")
@@ -71,6 +73,24 @@ async def webhook_deliver(
             db.add(delivery)
             db.flush()
 
+        # Re-validate the target at delivery time (defense-in-depth): a row
+        # could have been written by a config-backup import that bypassed the
+        # create-time check (audit M2/M9). A URL that RESOLVES to a non-routable
+        # / internal address is a real SSRF target -> fail terminally (it will
+        # never become valid). A transient DNS resolution failure, by contrast,
+        # must NOT terminally kill a legitimate webhook - fall through to the
+        # normal POST path so it fails + retries.
+        try:
+            assert_public_http_url(wh.url, allow_private=True, require_https=False)
+        except AppError as e:
+            if "could not resolve" not in (e.message or "").lower():
+                delivery.attempts = attempt
+                delivery.status = WebhookDeliveryStatus.failed
+                delivery.error = f"blocked: {e.message}"[:500]
+                delivery.delivered_at = utc_now()
+                db.commit()
+                return {"delivery_id": delivery.id, "status": "blocked"}
+
         body = _body_bytes(event_type, delivery.id, payload)
         headers = {
             "Content-Type": "application/json",
@@ -83,7 +103,9 @@ async def webhook_deliver(
 
         delivery.attempts = attempt
         try:
-            async with httpx.AsyncClient(timeout=_TIMEOUT_SEC) as client:
+            async with httpx.AsyncClient(
+                timeout=_TIMEOUT_SEC, follow_redirects=False
+            ) as client:
                 resp = await client.post(wh.url, content=body, headers=headers)
             delivery.response_code = resp.status_code
             ok = 200 <= resp.status_code < 300

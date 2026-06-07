@@ -15,11 +15,12 @@ Read-only. No mutating endpoints - the cron_tracker writes the rows.
 """
 from __future__ import annotations
 
+import re
 from datetime import timedelta
 
 from fastapi import APIRouter, Depends, Header, Query, Request
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -306,6 +307,19 @@ class UpdateApplyRequest(BaseModel):
     # drain worker apply once in-flight transfers finish (or the max-wait cap
     # elapses). The SPA sets this after seeing active transfers.
     postpone: bool = Field(default=False)
+
+    @field_validator("target_tag")
+    @classmethod
+    def _validate_target_tag(cls, v: str | None) -> str | None:
+        # The tag flows into `docker pull ghcr.io/.../*:<tag>` and the FH_TAG
+        # env on the host, so constrain it to the exact release-tag shape the
+        # release-check surfaces (^v\d+\.\d+\.\d+) - no shell metacharacters,
+        # no `latest`, no arbitrary ref (audit L22/L25).
+        if v is None:
+            return v
+        if not re.fullmatch(r"v\d+\.\d+\.\d+", v):
+            raise ValueError("target_tag must be a release tag like v1.2.3")
+        return v
 
 
 def _verify_password_or_403(user: User, password: str) -> None:

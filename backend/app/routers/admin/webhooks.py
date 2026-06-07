@@ -25,6 +25,7 @@ from ...services import job_queue
 from ...services import webhook as webhook_svc
 from ...services.audit import record_audit_event
 from ...utils.crypto import encrypt_setting
+from ...utils.net import assert_public_http_url
 from ...utils.timeutil import utc_now
 
 router = APIRouter()
@@ -70,10 +71,16 @@ def create_webhook(
     db: Session = Depends(get_db),
     admin: User = Depends(get_current_admin),
 ) -> WebhookCreateResponse:
+    url = payload.url.strip()
+    # SSRF guard: a webhook URL is admin-controlled and fetched server-side, so
+    # block loopback/link-local/metadata/reserved targets (audit M2/M9). Matches
+    # the posture used for OIDC/JWKS/release-check (private LAN allowed for a
+    # self-hosted receiver; the dangerous non-routable ranges are not).
+    assert_public_http_url(url, allow_private=True, require_https=False)
     secret = webhook_svc.generate_secret()
     wh = Webhook(
         name=payload.name.strip(),
-        url=payload.url.strip(),
+        url=url,
         secret_encrypted=encrypt_setting(secret),
         event_types=payload.event_types,
         active=True,
@@ -108,7 +115,9 @@ def update_webhook(
     if payload.name is not None:
         wh.name = payload.name.strip()
     if payload.url is not None:
-        wh.url = payload.url.strip()
+        url = payload.url.strip()
+        assert_public_http_url(url, allow_private=True, require_https=False)
+        wh.url = url
     if payload.event_types is not None:
         wh.event_types = payload.event_types
     if payload.active is not None:

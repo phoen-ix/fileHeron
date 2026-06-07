@@ -811,6 +811,8 @@ export interface ApiTokenListItem {
   created_at: string
   last_used_at: string | null
   expires_at: string | null
+  /** null = unrestricted (full access); else the granted scope names. */
+  scopes: string[] | null
 }
 
 export interface ApiTokenListResponse {
@@ -826,6 +828,7 @@ export interface CreateApiTokenResponse {
   plaintext_token: string
   created_at: string
   expires_at: string | null
+  scopes: string[] | null
   owner_user_id?: number
 }
 
@@ -879,6 +882,7 @@ export interface AdminApiTokenItem {
   revoked_at: string | null
   disabled_at: string | null
   expires_at: string | null
+  scopes: string[] | null
 }
 
 export interface AdminApiTokenListResponse {
@@ -892,6 +896,7 @@ export interface AdminCreateApiTokenRequest {
   target_user_id: number
   name: string
   expires_at?: string | null
+  scopes?: string[] | null
 }
 
 /* Admin file history (post-Phase 10) */

@@ -502,8 +502,9 @@ def create_api_token(
             "Your administrator has restricted API token creation.",
         )
     expires_at = api_token_svc.normalize_expiry(payload.expires_at)
+    scopes = api_token_svc.normalize_scopes(payload.scopes)
     record, plaintext = api_token_svc.create_token(
-        db, owner=user, name=payload.name, expires_at=expires_at
+        db, owner=user, name=payload.name, expires_at=expires_at, scopes=scopes
     )
 
     from ..models.audit_log import AuditEventType
@@ -515,7 +516,7 @@ def create_api_token(
         actor_user_id=user.id,
         target_type="api_token",
         target_id=record.id,
-        metadata={"name": record.name},
+        metadata={"name": record.name, "scopes": record.scopes_list},
         request=request,
     )
     db.commit()
@@ -526,6 +527,7 @@ def create_api_token(
         plaintext_token=plaintext,
         created_at=record.created_at,
         expires_at=record.expires_at,
+        scopes=record.scopes_list,
     )
 
 
@@ -544,6 +546,7 @@ def list_api_tokens(
                 created_at=r.created_at,
                 last_used_at=r.last_used_at,
                 expires_at=r.expires_at,
+                scopes=r.scopes_list,
             )
             for r in rows
         ],
@@ -588,6 +591,7 @@ def get_current_api_token(
         created_at=record.created_at,
         last_used_at=record.last_used_at,
         expires_at=record.expires_at,
+        scopes=record.scopes_list,
         status=token_status,
     )
 

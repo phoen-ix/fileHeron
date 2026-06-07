@@ -1714,7 +1714,26 @@
     "revoke": "Widerrufen",
     "revoke_confirm": "Diesen Token widerrufen? Skripte, die ihn nutzen, funktionieren danach nicht mehr.",
     "empty": "Noch keine API-Tokens.",
-    "disabled_by_admin": "Deine Administration hat das Anlegen von API-Tokens eingeschränkt. Bitte einen Admin um Hilfe, wenn du einen Token für Automatisierung brauchst."
+    "disabled_by_admin": "Deine Administration hat das Anlegen von API-Tokens eingeschränkt. Bitte einen Admin um Hilfe, wenn du einen Token für Automatisierung brauchst.",
+    "scopes_legend": "Zugriff",
+    "scope_full": "Voller Zugriff",
+    "scope_full_help": "der Token kann alles, was du kannst.",
+    "scope_limited": "Eingeschränkter Zugriff",
+    "scope_limited_help": "lege genau fest, was dieser Token darf; alles andere wird abgelehnt.",
+    "scope_full_badge": "voller Zugriff",
+    "scope_group_sharing": "Teilen",
+    "scope_group_files": "Dateien",
+    "scopes": {
+      "shares_create": "Freigaben erstellen",
+      "shares_add_files": "Dateien zu bestehenden Freigaben hinzufügen",
+      "shares_read": "Freigaben auflisten & ansehen",
+      "shares_manage": "Freigaben verwalten (bearbeiten, ablaufen, widerrufen)",
+      "recipients_search": "Empfänger suchen",
+      "public_links_write": "Öffentliche Links erstellen & widerrufen",
+      "files_upload": "Dateien hochladen",
+      "files_download": "Dateien herunterladen & ansehen",
+      "files_delete": "Dateien löschen"
+    }
   },
   "share_kind": {
     "outbound": "Ausgehend",

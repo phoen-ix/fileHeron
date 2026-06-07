@@ -1714,7 +1714,26 @@
     "revoke": "Revoke",
     "revoke_confirm": "Revoke this token? Any script using it will stop working immediately.",
     "empty": "No API tokens yet.",
-    "disabled_by_admin": "Your administrator has restricted API token creation. Ask an admin if you need a token for automation."
+    "disabled_by_admin": "Your administrator has restricted API token creation. Ask an admin if you need a token for automation.",
+    "scopes_legend": "Access",
+    "scope_full": "Full access",
+    "scope_full_help": "the token can do everything you can.",
+    "scope_limited": "Limited access",
+    "scope_limited_help": "pick exactly what this token may do; everything else is refused.",
+    "scope_full_badge": "full access",
+    "scope_group_sharing": "Sharing",
+    "scope_group_files": "Files",
+    "scopes": {
+      "shares_create": "Create shares",
+      "shares_add_files": "Add files to existing shares",
+      "shares_read": "List & read shares",
+      "shares_manage": "Manage shares (edit, expire, revoke)",
+      "recipients_search": "Search recipients",
+      "public_links_write": "Create & revoke public links",
+      "files_upload": "Upload files",
+      "files_download": "Download & preview files",
+      "files_delete": "Delete files"
+    }
   },
   "share_kind": {
     "outbound": "Outbound",

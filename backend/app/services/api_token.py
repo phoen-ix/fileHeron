@@ -15,6 +15,7 @@ Verify:
 """
 from __future__ import annotations
 
+import json
 import secrets
 from datetime import datetime, timezone
 
@@ -35,7 +36,58 @@ TOKEN_SECRET_BYTES = 32  # 43 b64url chars (no padding)
 # a human-facing "last used" while avoiding an UPDATE on every single request.
 LAST_USED_THROTTLE_SEC = 60
 
+# Canonical per-token scopes (least privilege). A token's stored `scopes` is a
+# JSON array of a SUBSET of these; NULL = unrestricted (full access). Each maps
+# to a `require_scope(...)` gate on the token-reachable routes - keep this list
+# and the route annotations in lockstep (the deny-by-default backstop test
+# fails if a get_actor route is left ungated).
+SCOPES: frozenset[str] = frozenset(
+    {
+        "files:upload",       # POST /uploads/init, /uploads/direct
+        "shares:create",      # POST /api/shares
+        "shares:add_files",   # POST /api/shares/{id}/files-added
+        "shares:read",        # list/read shares, recipients, recipient-targets
+        "shares:manage",      # PATCH/expire/bulk-expire/DELETE/approve/reject/resubmit
+        "files:download",     # download/preview/zip + the *-url minters
+        "files:delete",       # DELETE /api/files/{id}
+        "public_links:write", # create/revoke a public link (+ inline-on-create)
+        "recipients:search",  # GET /api/users/search, /api/users/me/connections
+    }
+)
 
+
+def normalize_scopes(raw: list[str] | None) -> str | None:
+    """Validate + canonicalise a requested scope list for storage.
+
+    - ``None`` (field omitted / null) -> ``None`` => unrestricted (full access).
+    - ``[]`` (empty list) -> 400 INVALID_SCOPE: an empty restricted set is a
+      token that can reach nothing but the any-token routes - almost always a
+      mistake. Callers wanting full access omit the field.
+    - any unknown scope -> 400 INVALID_SCOPE (details lists the offenders).
+    - otherwise -> a JSON array of the de-duped, sorted scope names.
+    """
+    if raw is None:
+        return None
+    requested = {s.strip() for s in raw if s and s.strip()}
+    if not requested:
+        raise AppError(
+            400,
+            "INVALID_SCOPE",
+            "Scope list cannot be empty; omit it for an unrestricted token.",
+        )
+    unknown = sorted(requested - SCOPES)
+    if unknown:
+        raise AppError(
+            400, "INVALID_SCOPE", "Unknown scope(s).", details={"unknown": unknown}
+        )
+    return json.dumps(sorted(requested))
+
+
+def token_scope_set(record: ApiToken) -> set[str] | None:
+    """Parse a token's stored scopes. ``None`` => unrestricted (full access)."""
+    if record.scopes is None:
+        return None
+    return set(json.loads(record.scopes))
 
 
 def _gen_prefix() -> str:
@@ -68,9 +120,12 @@ def create_token(
     owner: User,
     name: str,
     expires_at: datetime | None = None,
+    scopes: str | None = None,
 ) -> tuple[ApiToken, str]:
     """Returns (record, plaintext_token). The plaintext is shown to the user
-    once; only the SHA-256 hash is stored. ``expires_at`` NULL = never expires."""
+    once; only the SHA-256 hash is stored. ``expires_at`` NULL = never expires.
+    ``scopes`` is the already-normalised JSON string (or None = unrestricted)
+    from :func:`normalize_scopes`."""
     prefix = _gen_prefix()
     secret = _gen_secret()
     plaintext = f"fh_{prefix}_{secret}"
@@ -82,6 +137,7 @@ def create_token(
         last4=secret[-4:],
         secret_hash=sha256_hex(secret),
         expires_at=expires_at,
+        scopes=scopes,
     )
     db.add(record)
     db.flush()
@@ -289,12 +345,13 @@ def admin_create_for(
     target_user: User,
     name: str,
     expires_at: datetime | None = None,
+    scopes: str | None = None,
     request=None,
 ) -> tuple[ApiToken, str]:
     """Admin creates a token on behalf of `target_user`. Plaintext is
     returned to the admin once and forwarded out-of-band."""
     record, plaintext = create_token(
-        db, owner=target_user, name=name, expires_at=expires_at
+        db, owner=target_user, name=name, expires_at=expires_at, scopes=scopes
     )
     record_audit_event(
         db,
@@ -302,7 +359,11 @@ def admin_create_for(
         actor_user_id=actor.id,
         target_type="api_token",
         target_id=str(record.id),
-        metadata={"owner_user_id": target_user.id, "name": record.name},
+        metadata={
+            "owner_user_id": target_user.id,
+            "name": record.name,
+            "scopes": record.scopes_list,
+        },
         request=request,
     )
     return record, plaintext

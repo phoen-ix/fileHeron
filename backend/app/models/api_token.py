@@ -51,5 +51,20 @@ class ApiToken(Base):
     disabled_at: Mapped[datetime | None] = mapped_column(DateTime(), nullable=True)
     # Optional expiry. NULL = never expires (the default, back-compat).
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(), nullable=True)
+    # Optional per-token scopes (least-privilege). NULL = unrestricted (full
+    # access = the default + back-compat for every pre-existing token). When
+    # set, it's a JSON array of granted scope names; the token is confined to
+    # exactly those. See services.api_token.{SCOPES,normalize_scopes,token_scope_set}.
+    scopes: Mapped[str | None] = mapped_column(String(1024), nullable=True)
 
     owner: Mapped[User] = relationship("User", foreign_keys=[owner_user_id])
+
+    @property
+    def scopes_list(self) -> list[str] | None:
+        """Granted scopes as a sorted list, or None for an unrestricted token.
+        Parsed inline (no service import) to avoid a models<->services cycle."""
+        if self.scopes is None:
+            return None
+        import json
+
+        return sorted(json.loads(self.scopes))

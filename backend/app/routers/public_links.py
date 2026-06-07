@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, Request, status
 from sqlalchemy.orm import Session
 
 from ..config import settings
-from ..dependencies import get_actor, get_db
+from ..dependencies import get_db, require_scope
 from ..middleware.errors import AppError
 from ..models.user import User, UserRole
 from ..schemas.public_link import (
@@ -82,7 +82,7 @@ def create_public_link(
     share_id: str,
     payload: CreatePublicLinkRequest,
     request: Request,
-    user: User = Depends(get_actor),
+    user: User = Depends(require_scope("public_links:write")),
     db: Session = Depends(get_db),
 ) -> CreatePublicLinkResponse:
     share = share_svc.get_share_or_404(db, share_id)
@@ -112,7 +112,7 @@ def create_public_link(
 @router.get("/{share_id}/public-link", response_model=PublicLinkResponse)
 def get_public_link(
     share_id: str,
-    user: User = Depends(get_actor),
+    user: User = Depends(require_scope("shares:read")),
     db: Session = Depends(get_db),
 ) -> PublicLinkResponse:
     share = share_svc.get_share_or_404(db, share_id)
@@ -128,7 +128,7 @@ def get_public_link(
 def revoke_public_link(
     share_id: str,
     request: Request,
-    user: User = Depends(get_actor),
+    user: User = Depends(require_scope("public_links:write")),
     db: Session = Depends(get_db),
 ) -> None:
     share = share_svc.get_share_or_404(db, share_id)

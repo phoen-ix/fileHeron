@@ -18,6 +18,7 @@ import { usePaginatedList } from '@/composables/usePaginatedList'
 import { useSiteDateFormat } from '@/composables/useSiteDateFormat'
 import { useUiStore } from '@/stores/ui'
 import { siteLocalIsoToUtcIso } from '@/utils/datetime'
+import { TOKEN_SCOPE_GROUPS, scopeLabelKey } from '@/utils/tokenScopes'
 import type {
   AdminApiTokenItem,
   CreateApiTokenResponse,
@@ -102,9 +103,15 @@ const userSuggestions = ref<UserSearchItem[]>([])
 const selectedUser = ref<UserSearchItem | null>(null)
 const newName = ref('')
 const tokenExpiresAt = ref<string | null>(null)  // null = Never (default)
+const scopeMode = ref<'full' | 'limited'>('full')  // full = unrestricted (default)
+const selectedScopes = ref<string[]>([])
 const creating = ref(false)
 const createError = ref<string | null>(null)
 const TOKEN_PRESETS = ['7d', '30d', '90d', '1y', 'never'] as const
+
+function scopeLabel(scope: string): string {
+  return t(scopeLabelKey(scope))
+}
 const plaintextResult = ref<CreateApiTokenResponse | null>(null)
 const copied = ref(false)
 let userSearchTimer: ReturnType<typeof setTimeout> | null = null
@@ -141,6 +148,8 @@ function resetCreateForm() {
   selectedUser.value = null
   newName.value = ''
   tokenExpiresAt.value = null
+  scopeMode.value = 'full'
+  selectedScopes.value = []
   createError.value = null
 }
 
@@ -159,6 +168,7 @@ async function onCreateForUser() {
         tokenExpiresAt.value === null
           ? null
           : siteLocalIsoToUtcIso(tokenExpiresAt.value),
+      scopes: scopeMode.value === 'full' ? null : selectedScopes.value,
     })
     plaintextResult.value = data
     showCreateForm.value = false
@@ -166,6 +176,8 @@ async function onCreateForUser() {
     selectedUser.value = null
     newName.value = ''
     tokenExpiresAt.value = null
+    scopeMode.value = 'full'
+    selectedScopes.value = []
     await load()
   } catch (err) {
     createError.value = describe(err)
@@ -259,13 +271,34 @@ onMounted(load)
       />
       <span class="fh-field-help">{{ t('api_tokens.expiry_help') }}</span>
 
+      <fieldset class="scopes-field">
+        <legend class="fh-field-label">{{ t('api_tokens.scopes_legend') }}</legend>
+        <label class="radio-row">
+          <input v-model="scopeMode" type="radio" value="full" :disabled="creating" />
+          <span><strong>{{ t('api_tokens.scope_full') }}</strong> - {{ t('api_tokens.scope_full_help') }}</span>
+        </label>
+        <label class="radio-row">
+          <input v-model="scopeMode" type="radio" value="limited" :disabled="creating" />
+          <span><strong>{{ t('api_tokens.scope_limited') }}</strong> - {{ t('api_tokens.scope_limited_help') }}</span>
+        </label>
+        <div v-if="scopeMode === 'limited'" class="scope-groups">
+          <div v-for="grp in TOKEN_SCOPE_GROUPS" :key="grp.group" class="scope-group">
+            <span class="scope-group-title">{{ t('api_tokens.scope_group_' + grp.group) }}</span>
+            <label v-for="s in grp.scopes" :key="s" class="check">
+              <input v-model="selectedScopes" type="checkbox" :value="s" :disabled="creating" />
+              <span>{{ scopeLabel(s) }}</span>
+            </label>
+          </div>
+        </div>
+      </fieldset>
+
       <div v-if="createError" class="fh-notice" data-tone="error">{{ createError }}</div>
 
       <div class="form-actions">
         <button
           type="submit"
           class="fh-btn"
-          :disabled="creating || !selectedUser || !newName"
+          :disabled="creating || !selectedUser || !newName || (scopeMode === 'limited' && selectedScopes.length === 0)"
         >
           {{ creating ? t('common.loading') : t('admin_api_tokens.create_submit') }}
         </button>
@@ -327,6 +360,14 @@ onMounted(load)
             <td>
               <div class="row-name">{{ item.name }}</div>
               <div class="fh-mono row-hint">…{{ item.last4 }}</div>
+              <div class="token-scopes-cell">
+                <span v-if="item.scopes === null" class="scope-chip full">
+                  {{ t('api_tokens.scope_full_badge') }}
+                </span>
+                <span v-for="s in item.scopes || []" v-else :key="s" class="scope-chip">
+                  {{ scopeLabel(s) }}
+                </span>
+              </div>
             </td>
             <td>
               <div class="row-name">{{ item.owner_display_name }}</div>
@@ -413,6 +454,70 @@ onMounted(load)
   gap: var(--fh-space-3);
   align-items: baseline;
   margin-top: var(--fh-space-2);
+}
+
+.scopes-field {
+  border: var(--fh-border);
+  border-radius: var(--fh-radius-sm);
+  padding: var(--fh-space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--fh-space-2);
+  margin: 0;
+}
+
+.radio-row,
+.scopes-field .check {
+  display: flex;
+  align-items: baseline;
+  gap: var(--fh-space-2);
+  font-size: var(--fh-text-body-sm);
+}
+
+.scope-groups {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--fh-space-4);
+  margin-top: var(--fh-space-1);
+  padding-left: var(--fh-space-3);
+}
+
+.scope-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fh-space-1);
+}
+
+.scope-group-title {
+  font-family: var(--fh-font-mono);
+  font-size: var(--fh-text-mono-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--fh-subtle);
+}
+
+.token-scopes-cell {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--fh-space-1);
+  margin-top: var(--fh-space-1);
+  max-width: 320px;
+}
+
+.scope-chip {
+  font-family: var(--fh-font-mono);
+  font-size: var(--fh-text-mono-sm);
+  padding: 0.1rem 0.5rem;
+  border: var(--fh-border);
+  border-radius: var(--fh-radius-sm);
+  background: var(--fh-paper-raised);
+  color: var(--fh-ink-soft);
+}
+
+.scope-chip.full {
+  color: var(--fh-subtle);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
 }
 
 .user-suggestions {

@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, Header, Request, status
 from fastapi.responses import Response, StreamingResponse
 from sqlalchemy.orm import Session
 
-from ..dependencies import get_actor, get_db
+from ..dependencies import get_actor, get_db, request_has_scope, require_scope
 from ..middleware.errors import AppError
 from ..models.audit_log import AuditEventType
 from ..models.download_log import DownloadLog, DownloadVia
@@ -95,6 +95,16 @@ def _resolve_download_user(
         return user
     # Bearer path (JWT or API token).
     user = get_actor(request=request, authorization=authorization, db=db)
+    # A restricted API token must hold files:download to use the bearer
+    # download/preview/zip path. The ?dt= branch above is exempt: it's a token
+    # of past authorization minted by an already-scope-checked *-url endpoint.
+    if not request_has_scope(request, "files:download"):
+        raise AppError(
+            403,
+            "INSUFFICIENT_SCOPE",
+            "This API token lacks the required scope.",
+            details={"required_scope": "files:download"},
+        )
     # Mirror the global require_2fa_complete gate for JWT users -
     # API tokens are session-less and trusted-at-issuance per the
     # existing convention.
@@ -112,7 +122,7 @@ def _resolve_download_user(
 @router.get("/{file_id}/download-url")
 def get_download_url(
     file_id: str,
-    user: User = Depends(get_actor),
+    user: User = Depends(require_scope("files:download")),
     db: Session = Depends(get_db),
 ) -> dict:
     """Mint a short-lived signed URL the SPA can pass to
@@ -157,7 +167,7 @@ def get_download_url(
 @router.get("/{file_id}/preview-url")
 def get_preview_url(
     file_id: str,
-    user: User = Depends(get_actor),
+    user: User = Depends(require_scope("files:download")),
     db: Session = Depends(get_db),
 ) -> dict:
     """Mint a short-lived signed URL the SPA passes to an <img>/<iframe> src (or
@@ -339,7 +349,7 @@ def download_file(
 @router.get("/{share_id}/download-zip-url")
 def get_share_zip_url(
     share_id: str,
-    user: User = Depends(get_actor),
+    user: User = Depends(require_scope("files:download")),
     db: Session = Depends(get_db),
 ) -> dict:
     """Mint a short-lived signed URL for a bulk-ZIP of every downloadable file
@@ -443,7 +453,7 @@ def download_share_zip(
 def delete_file(
     file_id: str,
     request: Request,
-    user: User = Depends(get_actor),
+    user: User = Depends(require_scope("files:delete")),
     db: Session = Depends(get_db),
 ) -> None:
     file = _get_file_or_404(db, file_id)

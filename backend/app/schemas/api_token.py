@@ -13,6 +13,9 @@ class CreateApiTokenRequest(APIBaseModel):
     name: str = Field(..., min_length=1, max_length=120)
     # Optional expiry. Omit / null = never expires.
     expires_at: datetime | None = None
+    # Optional least-privilege scopes. Omit / null = unrestricted (full access).
+    # A non-empty list confines the token to exactly those scopes.
+    scopes: list[str] | None = None
 
 
 class CreateApiTokenResponse(APIBaseModel):
@@ -23,6 +26,7 @@ class CreateApiTokenResponse(APIBaseModel):
     plaintext_token: str
     created_at: datetime
     expires_at: datetime | None = None
+    scopes: list[str] | None = None  # null = unrestricted
     owner_user_id: int | None = None  # populated for admin-create-on-behalf
 
 
@@ -33,6 +37,7 @@ class ApiTokenListItem(APIBaseModel):
     created_at: datetime
     last_used_at: datetime | None
     expires_at: datetime | None = None
+    scopes: list[str] | None = None  # null = unrestricted
 
 
 class ApiTokenListResponse(APIBaseModel):
@@ -61,6 +66,7 @@ class CurrentApiTokenResponse(APIBaseModel):
     created_at: datetime
     last_used_at: datetime | None
     expires_at: datetime | None = None
+    scopes: list[str] | None = None  # null = unrestricted
     status: TokenStatus
 
 
@@ -105,6 +111,7 @@ class AdminApiTokenItem(APIBaseModel):
     revoked_at: datetime | None
     disabled_at: datetime | None
     expires_at: datetime | None = None
+    scopes: list[str] | None = None  # null = unrestricted
 
 
 class AdminApiTokenListResponse(APIBaseModel):
@@ -119,6 +126,8 @@ class AdminCreateApiTokenRequest(APIBaseModel):
     name: str = Field(..., min_length=1, max_length=120)
     # Optional expiry. Omit / null = never expires.
     expires_at: datetime | None = None
+    # Optional least-privilege scopes. Omit / null = unrestricted (full access).
+    scopes: list[str] | None = None
 
 
 # Resolve forward refs for embedded item types.

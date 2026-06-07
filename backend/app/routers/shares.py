@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, Query, Request, status
 from sqlalchemy.orm import Session
 
 from ..config import settings
-from ..dependencies import get_actor, get_db
+from ..dependencies import get_db, request_has_scope, require_scope
 from ..middleware.errors import AppError
 from ..models.file import FileState
 from ..models.group import Group
@@ -149,7 +149,7 @@ def _public_link_url(token: str, db: Session) -> str:
 def create_share(
     payload: CreateShareRequest,
     request: Request,
-    user: User = Depends(get_actor),
+    user: User = Depends(require_scope("shares:create")),
     db: Session = Depends(get_db),
 ) -> ShareResponse:
     # Per-sender rate limit (audit #2): cap how fast one account can create
@@ -160,6 +160,19 @@ def create_share(
     ):
         raise AppError(
             429, "RATE_LIMITED", "You're creating shares too quickly; try again shortly."
+        )
+
+    # A restricted API token with shares:create but WITHOUT public_links:write
+    # must not expose files publicly via the inline-link shortcut. Checked
+    # before the org policy gate and before any DB write.
+    if payload.public_link is not None and not request_has_scope(
+        request, "public_links:write"
+    ):
+        raise AppError(
+            403,
+            "INSUFFICIENT_SCOPE",
+            "This API token lacks the required scope.",
+            details={"required_scope": "public_links:write"},
         )
 
     # Pre-flight the public-link policy gate before any DB writes - no
@@ -244,7 +257,7 @@ def list_shares(
     direction: str = Query("desc", pattern="^(asc|desc)$"),
     page: int = Query(1, ge=1, le=10_000),
     page_size: int = Query(50, ge=1, le=200),
-    user: User = Depends(get_actor),
+    user: User = Depends(require_scope("shares:read")),
     db: Session = Depends(get_db),
 ) -> ShareListResponse:
     rows, total = share_svc.list_shares_for_user(
@@ -364,7 +377,7 @@ def list_shares(
 def list_pending_approval(
     page: int = Query(1, ge=1, le=10_000),
     page_size: int = Query(50, ge=1, le=200),
-    user: User = Depends(get_actor),
+    user: User = Depends(require_scope("shares:read")),
     db: Session = Depends(get_db),
 ) -> ShareListResponse:
     """Shares awaiting the current user's approval (approver, not their own),
@@ -446,7 +459,7 @@ def list_pending_approval(
 def approve_share_route(
     share_id: str,
     request: Request,
-    user: User = Depends(get_actor),
+    user: User = Depends(require_scope("shares:manage")),
     db: Session = Depends(get_db),
 ) -> ShareResponse:
     """Approver approves a pending share → active; recipients are notified now."""
@@ -462,7 +475,7 @@ def reject_share_route(
     share_id: str,
     payload: RejectShareRequest,
     request: Request,
-    user: User = Depends(get_actor),
+    user: User = Depends(require_scope("shares:manage")),
     db: Session = Depends(get_db),
 ) -> ShareResponse:
     """Approver rejects a pending share → rejected (files kept); sender notified."""
@@ -479,7 +492,7 @@ def reject_share_route(
 def resubmit_share_route(
     share_id: str,
     request: Request,
-    user: User = Depends(get_actor),
+    user: User = Depends(require_scope("shares:manage")),
     db: Session = Depends(get_db),
 ) -> ShareResponse:
     """Owner re-queues a rejected share for approval."""
@@ -493,7 +506,7 @@ def resubmit_share_route(
 @router.get("/{share_id}", response_model=ShareResponse)
 def get_share(
     share_id: str,
-    user: User = Depends(get_actor),
+    user: User = Depends(require_scope("shares:read")),
     db: Session = Depends(get_db),
 ) -> ShareResponse:
     share = share_svc.get_share_or_404(db, share_id)
@@ -506,7 +519,7 @@ def get_share(
 def revoke_share(
     share_id: str,
     request: Request,
-    user: User = Depends(get_actor),
+    user: User = Depends(require_scope("shares:manage")),
     db: Session = Depends(get_db),
 ) -> None:
     share = share_svc.get_share_or_404(db, share_id)
@@ -519,7 +532,7 @@ def patch_share(
     share_id: str,
     payload: UpdateShareRequest,
     request: Request,
-    user: User = Depends(get_actor),
+    user: User = Depends(require_scope("shares:manage")),
     db: Session = Depends(get_db),
 ) -> ShareResponse:
     """Editable fields on an active share: expires_at, download_limit.
@@ -570,7 +583,7 @@ def patch_share(
 def expire_share_now_route(
     share_id: str,
     request: Request,
-    user: User = Depends(get_actor),
+    user: User = Depends(require_scope("shares:manage")),
     db: Session = Depends(get_db),
 ) -> ShareResponse:
     """Owner-or-admin force-expires a share: state=expired, expires_at=now,
@@ -588,7 +601,7 @@ def files_added_route(
     share_id: str,
     payload: FilesAddedRequest,
     request: Request,
-    user: User = Depends(get_actor),
+    user: User = Depends(require_scope("shares:add_files")),
     db: Session = Depends(get_db),
 ) -> ShareResponse:
     """Owner's batch-complete signal after uploading more files into an
@@ -616,7 +629,7 @@ _BULK_EXPIRE_CAP = 100
 def bulk_expire(
     payload: BulkExpireRequest,
     request: Request,
-    user: User = Depends(get_actor),
+    user: User = Depends(require_scope("shares:manage")),
     db: Session = Depends(get_db),
 ) -> BulkExpireResponse:
     """Expire many shares in one request. Per-share commit so a single

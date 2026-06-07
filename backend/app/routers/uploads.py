@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, File, Form, Request, UploadFile, status
 from sqlalchemy.orm import Session
 
 from ..config import settings
-from ..dependencies import get_actor, get_db
+from ..dependencies import get_db, require_scope
 from ..middleware.errors import AppError
 from ..models.share import ShareState
 from ..models.user import User
@@ -40,7 +40,7 @@ def _refuse_if_storage_critical(db: Session) -> None:
 @router.post("/init", response_model=UploadInitResponse)
 def init_upload(
     payload: UploadInitRequest,
-    user: User = Depends(get_actor),
+    user: User = Depends(require_scope("files:upload")),
     db: Session = Depends(get_db),
 ) -> UploadInitResponse:
     """Authorise an upload. Returns a signed envelope the client embeds in
@@ -107,7 +107,7 @@ async def direct_upload(
     request: Request,
     share_id: str = Form(...),
     file: UploadFile = File(...),
-    user: User = Depends(get_actor),
+    user: User = Depends(require_scope("files:upload")),
     db: Session = Depends(get_db),
 ) -> DirectUploadResponse:
     """Multipart upload for files <= MAX_DIRECT_UPLOAD_BYTES. Single

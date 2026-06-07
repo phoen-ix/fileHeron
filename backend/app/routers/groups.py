@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, Request
 from sqlalchemy import func
 from sqlalchemy.orm import Session, selectinload
 
-from ..dependencies import get_actor, get_current_admin, get_db
+from ..dependencies import get_current_admin, get_db, require_scope
 from ..middleware.errors import AppError
 from ..models.group import Group
 from ..models.group_member import GroupMember
@@ -74,7 +74,7 @@ def _detail_response(db: Session, group) -> GroupDetailResponse:
 @router.get("/recipient-targets", response_model=GroupListResponse)
 def recipient_targets(
     db: Session = Depends(get_db),
-    me: User = Depends(get_actor),
+    me: User = Depends(require_scope("shares:read")),
 ) -> GroupListResponse:
     """Groups the caller can target in a share. Open to all roles."""
     if me.role == UserRole.admin:

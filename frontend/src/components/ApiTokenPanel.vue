@@ -44,8 +44,34 @@
         :disabled="creatingBusy"
       />
       <span class="fh-field-help">{{ t('api_tokens.expiry_help') }}</span>
+
+      <fieldset class="scopes-field">
+        <legend class="fh-field-label">{{ t('api_tokens.scopes_legend') }}</legend>
+        <label class="radio-row">
+          <input v-model="scopeMode" type="radio" value="full" :disabled="creatingBusy" />
+          <span><strong>{{ t('api_tokens.scope_full') }}</strong> - {{ t('api_tokens.scope_full_help') }}</span>
+        </label>
+        <label class="radio-row">
+          <input v-model="scopeMode" type="radio" value="limited" :disabled="creatingBusy" />
+          <span><strong>{{ t('api_tokens.scope_limited') }}</strong> - {{ t('api_tokens.scope_limited_help') }}</span>
+        </label>
+        <div v-if="scopeMode === 'limited'" class="scope-groups">
+          <div v-for="grp in TOKEN_SCOPE_GROUPS" :key="grp.group" class="scope-group">
+            <span class="scope-group-title">{{ t('api_tokens.scope_group_' + grp.group) }}</span>
+            <label v-for="s in grp.scopes" :key="s" class="check">
+              <input v-model="selectedScopes" type="checkbox" :value="s" :disabled="creatingBusy" />
+              <span>{{ scopeLabel(s) }}</span>
+            </label>
+          </div>
+        </div>
+      </fieldset>
+
       <div class="create-form-actions">
-        <button type="submit" class="fh-btn" :disabled="creatingBusy || !newName">
+        <button
+          type="submit"
+          class="fh-btn"
+          :disabled="creatingBusy || !newName || (scopeMode === 'limited' && selectedScopes.length === 0)"
+        >
           {{ creatingBusy ? t('common.loading') : t('api_tokens.create_submit') }}
         </button>
         <button type="button" class="fh-btn-text" :disabled="creatingBusy" @click="cancelCreate">
@@ -94,6 +120,14 @@
         >
           {{ revoking === token.id ? t('common.loading') : t('api_tokens.revoke') }}
         </button>
+        <div class="token-scopes">
+          <span v-if="token.scopes === null" class="scope-chip full">
+            {{ t('api_tokens.scope_full_badge') }}
+          </span>
+          <span v-for="s in token.scopes || []" v-else :key="s" class="scope-chip">
+            {{ scopeLabel(s) }}
+          </span>
+        </div>
       </li>
     </ul>
     <p v-else-if="!loading && !creating" class="fh-field-help empty">
@@ -117,6 +151,7 @@ import { useSiteDateFormat } from '@/composables/useSiteDateFormat'
 import { useUiStore } from '@/stores/ui'
 import type { ApiTokenListItem, CreateApiTokenResponse } from '@/types/api'
 import { siteLocalIsoToUtcIso } from '@/utils/datetime'
+import { TOKEN_SCOPE_GROUPS, scopeLabelKey } from '@/utils/tokenScopes'
 
 // Token-appropriate durations; default null → the picker shows "Never" so a
 // token stays unlimited unless the user opts into an expiry.
@@ -134,7 +169,13 @@ const creating = ref(false)
 const creatingBusy = ref(false)
 const newName = ref('')
 const expiresAtLocal = ref<string | null>(null)  // null = Never (default)
+const scopeMode = ref<'full' | 'limited'>('full')  // full = unrestricted (default)
+const selectedScopes = ref<string[]>([])
 const plaintext = ref<CreateApiTokenResponse | null>(null)
+
+function scopeLabel(scope: string): string {
+  return t(scopeLabelKey(scope))
+}
 const errorMsg = ref<string | null>(null)
 const revoking = ref<number | null>(null)
 const copiedTimer = ref<number | null>(null)
@@ -158,11 +199,14 @@ async function onCreate() {
       expiresAtLocal.value === null
         ? null
         : siteLocalIsoToUtcIso(expiresAtLocal.value)
-    const { data } = await createToken(newName.value, expiresAt)
+    const scopes = scopeMode.value === 'full' ? null : selectedScopes.value
+    const { data } = await createToken(newName.value, expiresAt, scopes)
     plaintext.value = data
     creating.value = false
     newName.value = ''
     expiresAtLocal.value = null
+    scopeMode.value = 'full'
+    selectedScopes.value = []
     await refresh()
   } catch (err) {
     errorMsg.value = describe(err)
@@ -175,6 +219,8 @@ function cancelCreate() {
   creating.value = false
   newName.value = ''
   expiresAtLocal.value = null
+  scopeMode.value = 'full'
+  selectedScopes.value = []
   errorMsg.value = null
 }
 
@@ -259,6 +305,69 @@ onMounted(refresh)
   display: flex;
   gap: var(--fh-space-3);
   align-items: center;
+}
+
+.scopes-field {
+  border: var(--fh-border);
+  border-radius: var(--fh-radius-sm);
+  padding: var(--fh-space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--fh-space-2);
+  margin: 0;
+}
+
+.radio-row,
+.scopes-field .check {
+  display: flex;
+  align-items: baseline;
+  gap: var(--fh-space-2);
+  font-size: var(--fh-text-body-sm);
+}
+
+.scope-groups {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--fh-space-4);
+  margin-top: var(--fh-space-1);
+  padding-left: var(--fh-space-3);
+}
+
+.scope-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fh-space-1);
+}
+
+.scope-group-title {
+  font-family: var(--fh-font-mono);
+  font-size: var(--fh-text-mono-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--fh-subtle);
+}
+
+.token-scopes {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--fh-space-1);
+}
+
+.scope-chip {
+  font-family: var(--fh-font-mono);
+  font-size: var(--fh-text-mono-sm);
+  padding: 0.1rem 0.5rem;
+  border: var(--fh-border);
+  border-radius: var(--fh-radius-sm);
+  background: var(--fh-paper-raised);
+  color: var(--fh-ink-soft);
+}
+
+.scope-chip.full {
+  color: var(--fh-subtle);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
 }
 
 .plaintext-box {

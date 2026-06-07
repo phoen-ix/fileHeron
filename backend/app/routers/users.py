@@ -13,7 +13,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
-from ..dependencies import get_actor, get_db
+from ..dependencies import get_db, require_scope
 from ..models.client_employee_connection import (
     ClientEmployeeConnection,
     ConnectionSource,
@@ -53,7 +53,7 @@ def _filter_by_q(users: list[User], q: str) -> list[User]:
 @router.get("/search", response_model=UserSearchResponse)
 def search(
     q: str = Query("", max_length=120),
-    me: User = Depends(get_actor),
+    me: User = Depends(require_scope("recipients:search")),
     db: Session = Depends(get_db),
 ) -> UserSearchResponse:
     """Return the union of users the caller can address as a recipient,
@@ -99,7 +99,7 @@ def search(
 
 @router.get("/me/connections", response_model=ConnectionListResponse)
 def my_connections(
-    me: User = Depends(get_actor),
+    me: User = Depends(require_scope("recipients:search")),
     db: Session = Depends(get_db),
 ) -> ConnectionListResponse:
     """List the people I'm connected to (any source). For clients →

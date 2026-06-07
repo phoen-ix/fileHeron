@@ -56,6 +56,7 @@ def _to_admin_token_item(t: ApiToken, owner: User) -> AdminApiTokenItem:
         revoked_at=t.revoked_at,
         disabled_at=t.disabled_at,
         expires_at=t.expires_at,
+        scopes=t.scopes_list,
     )
 
 
@@ -212,12 +213,14 @@ def admin_create_api_token(
             409, "USER_DISABLED", "Cannot create a token for a disabled user."
         )
     expires_at = api_token_svc.normalize_expiry(payload.expires_at)
+    scopes = api_token_svc.normalize_scopes(payload.scopes)
     record, plaintext = api_token_svc.admin_create_for(
         db,
         actor=admin,
         target_user=target,
         name=payload.name,
         expires_at=expires_at,
+        scopes=scopes,
         request=request,
     )
     db.commit()
@@ -228,6 +231,7 @@ def admin_create_api_token(
         plaintext_token=plaintext,
         created_at=record.created_at,
         expires_at=record.expires_at,
+        scopes=record.scopes_list,
         owner_user_id=record.owner_user_id,
     )
 

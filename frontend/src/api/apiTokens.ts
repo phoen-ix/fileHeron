@@ -8,10 +8,15 @@ export function listTokens() {
   return api.get<ApiTokenListResponse>('/account/api-tokens')
 }
 
-export function createToken(name: string, expiresAt: string | null = null) {
+export function createToken(
+  name: string,
+  expiresAt: string | null = null,
+  scopes: string[] | null = null,
+) {
   return api.post<CreateApiTokenResponse>('/account/api-tokens', {
     name,
     expires_at: expiresAt,
+    scopes,
   })
 }
 

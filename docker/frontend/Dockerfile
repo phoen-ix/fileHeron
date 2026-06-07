@@ -11,9 +11,12 @@ ARG FH_GIT_SHA=unknown
 ENV VITE_FH_VERSION=${FH_VERSION} \
     VITE_FH_GIT_SHA=${FH_GIT_SHA}
 
-# Copy manifests first for dep cache.
-COPY frontend/package.json frontend/package-lock.json* ./
-RUN --mount=type=cache,target=/root/.npm npm install
+# Copy manifests first for dep cache. The committed lockfile is required (no `*`
+# glob): `npm ci` installs the EXACT locked tree and fails loudly if it's missing
+# or out of sync with package.json - reproducible, integrity-checked builds
+# instead of resolving `^` ranges fresh on every build (audit M11).
+COPY frontend/package.json frontend/package-lock.json ./
+RUN --mount=type=cache,target=/root/.npm npm ci --no-audit --no-fund
 
 # Copy the rest and build.
 COPY frontend/ ./

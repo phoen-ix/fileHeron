@@ -19,9 +19,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         gcc libmariadb-dev curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Python deps first (cache layer)
-COPY backend/pyproject.toml ./pyproject.toml
-RUN --mount=type=cache,target=/root/.cache/pip pip install .
+# Python deps first (cache layer). Install from the committed, fully-pinned +
+# hashed lock (regenerate with `uv pip compile pyproject.toml --generate-hashes
+# -o requirements.lock`): reproducible builds + integrity verification against a
+# typosquat / compromised upstream, instead of resolving `>=` ranges fresh from
+# PyPI on every build (audit M12). `pip install .` here only ever pulled deps
+# anyway - the app source is COPYed below and run from WORKDIR.
+COPY backend/pyproject.toml backend/requirements.lock ./
+RUN --mount=type=cache,target=/root/.cache/pip pip install --require-hashes -r requirements.lock
 # Fail the build on a broken/conflicting dependency closure. Complements the
 # import-smoke below: pip check catches version conflicts among declared deps;
 # the import-smoke catches modules imported in code but not declared at all.

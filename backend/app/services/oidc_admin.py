@@ -158,13 +158,23 @@ def is_provider_usable(provider: OIDCProvider) -> bool:
 
 
 def get_client_secret(provider: OIDCProvider) -> str:
-    """Fernet-decrypt the secret, return "" if not set or decryption fails."""
+    """Fernet-decrypt the secret. "" if none is set; raises (fail-closed) if a
+    stored secret can't be decrypted."""
     if not provider.client_secret_encrypted:
         return ""
     try:
         return decrypt_setting(provider.client_secret_encrypted)
-    except Exception:
-        logger.warning(
-            "oidc_admin.get_client_secret: decryption failed provider=%s", provider.id
+    except Exception as e:
+        # Fail closed + loud (audit L2): silently returning "" sends an EMPTY
+        # client secret to the IdP token endpoint, surfacing as a confusing
+        # generic auth failure. A decrypt failure almost always means JWT_SECRET
+        # was rotated without re-encrypting the provider secrets - say so.
+        logger.error(
+            "oidc_admin.get_client_secret: decryption failed provider=%s: %s",
+            provider.id, e,
         )
-        return ""
+        raise AppError(
+            500,
+            "OIDC_SECRET_UNAVAILABLE",
+            "The OIDC client secret could not be decrypted; re-save it on the provider.",
+        ) from e

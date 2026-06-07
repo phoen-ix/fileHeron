@@ -42,6 +42,13 @@ def export_analytics_csv(
     bounded (≤90 day-rows + top-10s), so we render it in one pass."""
     b = analytics_svc.compute_analytics(db, days=days)
 
+    def _csv_safe(value) -> str:
+        # Neutralise CSV formula injection: a spreadsheet executes a cell whose
+        # text starts with = + - @ (or a control char). The only user-influenced
+        # cells here are uploader / quota-warning emails (audit L39).
+        s = "" if value is None else str(value)
+        return "'" + s if (s and s[0] in ("=", "+", "-", "@", "\t", "\r")) else s
+
     def _rows() -> Iterator[bytes]:
         buf = io.StringIO()
         w = csv.writer(buf)
@@ -57,11 +64,11 @@ def export_analytics_csv(
         for k, v in b["file_states"].items():
             w.writerow(["file_state", k, v])
         for u in b["top_uploaders"]:
-            w.writerow(["top_uploader", u["email"], u["bytes"]])
+            w.writerow(["top_uploader", _csv_safe(u["email"]), u["bytes"]])
         for sh in b["top_shares"]:
             w.writerow(["top_share", sh["share_id"], sh["downloads"]])
         for q in b["quota_warnings"]:
-            w.writerow(["quota_warning", q["email"], f'{q["pct"]}%'])
+            w.writerow(["quota_warning", _csv_safe(q["email"]), f'{q["pct"]}%'])
         yield buf.getvalue().encode("utf-8")
 
     return StreamingResponse(

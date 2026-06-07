@@ -29,6 +29,7 @@ from ..models.api_token import ApiToken
 from ..models.audit_log import AuditEventType
 from ..models.client_employee_connection import ClientEmployeeConnection
 from ..models.download_log import DownloadLog
+from ..models.email_change_token import EmailChangeToken
 from ..models.email_log import EmailLog
 from ..models.email_verify_token import EmailVerifyToken
 from ..models.file import File, FileState
@@ -41,6 +42,7 @@ from ..models.refresh_token import RefreshToken
 from ..models.user import User
 from ..models.user_recovery_code import UserRecoveryCode
 from ..models.user_totp import UserTOTP
+from ..models.user_webauthn_credential import UserWebAuthnCredential
 from ..utils.timeutil import utc_now
 from . import file as file_svc
 from .audit import record_audit_event
@@ -111,6 +113,16 @@ def erase_user(
     db.query(ApiToken).filter(ApiToken.owner_user_id == target.id).delete(
         synchronize_session=False
     )
+    # WebAuthn credentials are device-bound personal data; anonymise-by-UPDATE
+    # never CASCADEs them, so they'd otherwise survive the erasure (audit L13).
+    db.query(UserWebAuthnCredential).filter(
+        UserWebAuthnCredential.user_id == target.id
+    ).delete(synchronize_session=False)
+    # Pending email-change tokens carry the target's new/old PLAINTEXT email and
+    # are never reaped while unsettled - delete them on erasure (audit L12).
+    db.query(EmailChangeToken).filter(
+        EmailChangeToken.user_id == target.id
+    ).delete(synchronize_session=False)
 
     # 3. Drop ClientEmployeeConnection rows pointing at this user - the
     # FK CASCADE doesn't fire because erasure anonymises rather than

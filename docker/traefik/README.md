@@ -33,6 +33,25 @@ proxies external HTTPS to those local ports.
    downloads. TUS (`/uploads/`) must likewise stream, not buffer.
    Attach `fileheron-large-body` ONLY to a dedicated
    `Path('/api/uploads/direct')` router (see below).
+5. **Don't let clients spoof their IP via `X-Forwarded-For` (audit H5).**
+   The backend trusts the left-most `X-Forwarded-For` value (uvicorn
+   `--proxy-headers --forwarded-allow-ips=*`) for the per-IP login
+   rate-limit + account-lockout, the `login_attempts` / `audit_log` IPs,
+   `known_devices`, and `TUS_HOOK_ALLOWED_IPS`. Traefik MUST set that header
+   to the real client IP and MUST NOT trust an incoming, client-supplied one:
+   - Do **NOT** set `forwardedHeaders.trustedIPs` or
+     `forwardedHeaders.insecure` on the public entrypoint. That makes Traefik
+     trust + pass through a client's own `X-Forwarded-For`, so an attacker can
+     rotate it per request to defeat the rate-limit/lockout and poison the
+     audit log. Traefik's default (overwrite with the connecting IP) is the
+     safe behaviour - keep it.
+   - Defense-in-depth: pin the backend's trust to the proxy rather than `*` -
+     set `FORWARDED_ALLOW_IPS=<traefik/docker-bridge CIDR>` and change the
+     backend CMD's `--forwarded-allow-ips=*` to that value, so uvicorn only
+     trusts `X-Forwarded-For` from the proxy peer even if the backend port is
+     ever reachable past Traefik.
+   - Verify: `curl -H 'X-Forwarded-For: 1.2.3.4' https://<host>/api/auth/login ...`
+     then confirm `login_attempts.ip` recorded YOUR real IP, not `1.2.3.4`.
 
 ---
 

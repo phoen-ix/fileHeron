@@ -728,8 +728,63 @@ def _user_fields(d: dict) -> dict:
     return out
 
 
+def _validate_backup_payload(p: dict, actor: User) -> None:
+    """Exercise the field coercions apply_backup performs, WITHOUT touching the
+    DB, so a malformed-but-parseable backup is rejected with 400 BACKUP_CORRUPT
+    BEFORE the irreversible active-share invalidation - instead of wiping every
+    share and then 500ing mid-restore (audit M6). Covers the realistic failure
+    modes: missing keys, bad role enum, bad notification category/channel, and
+    secret/field decode errors on oidc/webhook/totp/webauthn rows."""
+    try:
+        users = p.get("users", {})
+        for d in users.get("users", []):
+            if "email" not in d:
+                raise ValueError("a user row is missing 'email'")
+            _user_fields(d)  # role enum + per-column decodes
+        for pref in users.get("user_notification_preferences", []):
+            _ = pref["user_id"]
+            NotificationCategory(pref["category"])
+            NotificationChannel(pref["channel"])
+        for t in users.get("user_totp", []):
+            _ = t["user_id"]
+            _ingest_secret_totp(t.get("secret"))
+        for r in users.get("user_recovery_codes", []):
+            _ = (r["user_id"], r["code_hash"])
+        for c in users.get("user_webauthn_credentials", []):
+            _build(UserWebAuthnCredential, c, overrides={"user_id": 0},
+                   skip=frozenset({"id", "user_id"}))
+        groups = p.get("groups", {})
+        for d in groups.get("groups", []):
+            _ = (d["id"], d["name"], d["name_normalized"])
+        for m in groups.get("group_members", []):
+            _ = (m["group_id"], m["user_id"])
+        ow = p.get("oidc_webhooks", {})
+        for d in ow.get("oidc_providers", []):
+            d2 = dict(d)
+            _ingest_secret_str(d2.pop("client_secret_encrypted", None))
+            _build(OIDCProvider, d2, overrides={
+                "client_secret_encrypted": "", "created_by_id": actor.id,
+                "updated_by_id": actor.id,
+            })
+        for d in ow.get("webhooks", []):
+            d2 = dict(d)
+            _ingest_secret_str(d2.pop("secret_encrypted", None))
+            _build(Webhook, d2, overrides={"secret_encrypted": "", "created_by_id": actor.id},
+                   skip=frozenset({"id"}))
+    except AppError:
+        raise
+    except (KeyError, ValueError, TypeError) as e:
+        raise AppError(
+            400, "BACKUP_CORRUPT",
+            f"Backup payload is malformed and was not applied (nothing changed): {e}",
+        ) from e
+
+
 def apply_backup(db: Session, *, parsed: ParsedBackup, actor: User, request=None) -> ImportSummary:
     p = parsed.payload
+    # Reject a malformed-but-parseable payload up front, BEFORE anything
+    # destructive runs - the share invalidation below is irreversible (audit M6).
+    _validate_backup_payload(p, actor)
     has_users = "users" in p
     has_groups = "groups" in p
     warnings = list(parsed.warnings)

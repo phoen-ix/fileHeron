@@ -49,6 +49,10 @@ from ...schemas.legal_settings import (
     LegalSettingsResponse,
     UpdateLegalSettingsRequest,
 )
+from ...schemas.maintenance import (
+    MaintenanceSettingsResponse,
+    UpdateMaintenanceSettingsRequest,
+)
 from ...schemas.motd_settings import (
     MotdSettingsResponse,
     UpdateMotdSettingsRequest,
@@ -535,6 +539,46 @@ def update_file_preview_settings(
     )
     db.commit()
     return FilePreviewSettingsResponse(enabled=payload.enabled)
+
+
+# ---- Maintenance mode ------------------------------------------------------
+
+
+def _maintenance_response(db: Session) -> MaintenanceSettingsResponse:
+    from ...services import maintenance as maintenance_svc
+    from ...services import transfer_activity as ta
+
+    snap = ta.snapshot(db)
+    return MaintenanceSettingsResponse(
+        enabled=maintenance_svc.is_enabled(db),
+        message=maintenance_svc.get_message(db),
+        active_uploads=snap["active_uploads"],
+        active_downloads=snap["active_downloads"],
+    )
+
+
+@router.get("/settings/maintenance", response_model=MaintenanceSettingsResponse)
+def get_maintenance_settings(
+    db: Session = Depends(get_db),
+    _admin: User = Depends(get_current_admin),
+) -> MaintenanceSettingsResponse:
+    return _maintenance_response(db)
+
+
+@router.put("/settings/maintenance", response_model=MaintenanceSettingsResponse)
+def update_maintenance_settings(
+    payload: UpdateMaintenanceSettingsRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin),
+) -> MaintenanceSettingsResponse:
+    from ...services import maintenance as maintenance_svc
+
+    maintenance_svc.set_enabled(
+        db, payload.enabled, actor=admin, message=payload.message, request=request
+    )
+    db.commit()
+    return _maintenance_response(db)
 
 
 # ---- Share defaults --------------------------------------------------------

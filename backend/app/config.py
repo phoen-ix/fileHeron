@@ -159,6 +159,10 @@ class Settings(BaseSettings):
     # longer; shorter = a url leaked into a proxy/access log is usable for
     # a smaller window. Admin-tunable via the registry. Default 15 min.
     DOWNLOAD_SIGNED_URL_TTL_SEC: int = 900
+    # Maintenance-mode postpone: how long the deferred-update drain worker waits
+    # for in-flight transfers to finish before applying the update anyway.
+    # Admin-tunable via the registry. Default 30 min.
+    UPDATES_DRAIN_MAX_WAIT_MIN: int = 30
     # Where finalized files live + tusd's working dir + AV quarantine.
     # Must all be on the SAME filesystem (atomic os.rename across them).
     STORAGE_ROOT: str = "/data/files"

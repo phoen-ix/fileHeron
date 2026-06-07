@@ -333,6 +333,12 @@ const router = createRouter({
           meta: { density: 'operator', title: 'Backup & restore', requiresRole: 'admin' },
         },
         {
+          path: 'settings/maintenance',
+          name: 'admin-settings-maintenance',
+          component: () => import('@/views/AdminSettingsMaintenance.vue'),
+          meta: { density: 'operator', title: 'Maintenance mode', requiresRole: 'admin' },
+        },
+        {
           path: 'system',
           name: 'admin-system',
           component: () => import('@/views/AdminSystem.vue'),

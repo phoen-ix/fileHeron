@@ -219,8 +219,23 @@
       "email_change": "E-Mail-Änderung",
       "webhooks": "Webhooks",
       "advanced": "Erweitert",
+      "maintenance": "Wartungsmodus",
       "backup": "Sicherung & Wiederherstellung"
     }
+  },
+  "admin_maintenance": {
+    "title": "Wartungsmodus",
+    "intro": "Wenn aktiv, werden neue Uploads und Downloads pausiert (laufende werden beendet); der Rest der App bleibt nutzbar. Der Ablauf 'Update verschieben' aktiviert dies automatisch.",
+    "toggle_label": "Wartungsmodus aktivieren",
+    "toggle_help": "Blockiert neue Dateiübertragungen mit 503, lässt laufende aber zu Ende laufen.",
+    "message_label": "Banner-Text (optional)",
+    "message_ph": "z. B. Geplante Wartung, gleich zurück",
+    "message_help": "Wird allen Nutzern als Banner gezeigt und zurückgegeben, wenn eine Übertragung abgelehnt wird. Leer lassen für einen Standardtext.",
+    "activity": "Gerade aktiv: {up} Upload(s), {down} Download(s).",
+    "saved_toast": "Wartungseinstellungen gespeichert."
+  },
+  "maintenance": {
+    "banner_default": "Der Server befindet sich im Wartungsmodus. Neue Uploads und Downloads sind pausiert; laufende Übertragungen werden beendet."
   },
   "admin_backup": {
     "title": "Sicherung & Wiederherstellung",
@@ -357,6 +372,19 @@
         "failed": "Update fehlgeschlagen: {err}",
         "rolled_back": "Update auf {tag} fehlgeschlagen; automatisch auf {prev} zurückgerollt.",
         "no_target": "Kein Release-Tag zum Aktualisieren."
+      },
+      "postpone": {
+        "active_notice": "{up} Upload(s) und {down} Download(s) laufen gerade. Jetzt aktualisieren würde sie unterbrechen, oder verschiebe bis sie fertig sind.",
+        "update_now_anyway": "Trotzdem jetzt aktualisieren",
+        "postpone_btn": "Verschieben & Wartung aktivieren",
+        "enabled_toast": "Wartungsmodus an. Das Update wird angewendet, sobald die Übertragungen fertig sind.",
+        "pending_title": "Update auf {v} verschoben",
+        "waiting": "Warte auf {up} Upload(s) und {down} Download(s). Neue Übertragungen sind pausiert.",
+        "deadline": "Wird automatisch bis {when} angewendet (oder früher, sobald leer).",
+        "force_now": "Jetzt aktualisieren",
+        "force_title": "Update auf {v} jetzt anwenden?",
+        "cancel": "Update abbrechen",
+        "cancelled": "Verschobenes Update abgebrochen; Wartungsmodus aus."
       }
     },
     "live": {

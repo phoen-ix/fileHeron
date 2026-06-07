@@ -276,11 +276,21 @@ export function getUpdaterJob(jobId: string) {
   return api.get<UpdaterJob>(`/admin/system/update-jobs/${jobId}`)
 }
 
-export function applyUpdate(password: string, target_tag: string) {
-  return api.post<{ job_id: string; action: string; target_tag: string }>(
-    '/admin/system/update',
-    { password, target_tag },
-  )
+export interface UpdateApplyResult {
+  job_id?: string
+  action?: string
+  target_tag?: string
+  // Set when the admin chose to postpone until transfers drain.
+  postponed?: boolean
+  deadline_iso?: string
+}
+
+export function applyUpdate(password: string, target_tag: string, postpone = false) {
+  return api.post<UpdateApplyResult>('/admin/system/update', {
+    password,
+    target_tag,
+    postpone,
+  })
 }
 
 export function applyRollback(password: string) {
@@ -288,6 +298,47 @@ export function applyRollback(password: string) {
     '/admin/system/rollback',
     { password },
   )
+}
+
+// Maintenance / drain-before-update (v1.34.0).
+export interface PendingUpdate {
+  target_tag: string
+  deadline_iso: string
+  requested_by_id: number
+}
+
+export interface TransferActivity {
+  active_uploads: number
+  active_downloads: number
+  maintenance_enabled: boolean
+  pending_update: PendingUpdate | null
+}
+
+export function getTransferActivity() {
+  return api.get<TransferActivity>('/admin/system/transfer-activity')
+}
+
+export function forcePendingUpdate(password: string) {
+  return api.post<UpdateApplyResult>('/admin/system/update/now', { password })
+}
+
+export function cancelPendingUpdate() {
+  return api.post<{ cancelled: boolean }>('/admin/system/update/cancel', {})
+}
+
+export interface MaintenanceSettingsResponse {
+  enabled: boolean
+  message: string
+  active_uploads: number
+  active_downloads: number
+}
+
+export function getMaintenanceSettings() {
+  return api.get<MaintenanceSettingsResponse>('/admin/settings/maintenance')
+}
+
+export function updateMaintenanceSettings(payload: { enabled: boolean; message?: string }) {
+  return api.put<MaintenanceSettingsResponse>('/admin/settings/maintenance', payload)
 }
 
 export function listInvites(

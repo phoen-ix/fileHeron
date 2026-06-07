@@ -41,6 +41,7 @@ from .cleanup_read_notifications import cleanup_read_notifications
 from .cleanup_stale_uploads import cleanup_stale_uploads
 from .cron_dispatch import cron_dispatch
 from .disk_check import disk_check
+from .drain_pending_update import drain_pending_update
 from .expire_files import expire_files
 from .imap_poll import imap_poll
 from .ops_check import ops_check
@@ -80,6 +81,7 @@ class WorkerSettings:
         webhook_deliver,
         anomaly_check,
         imap_poll,
+        drain_pending_update,
         cron_dispatch,
     ]
     cron_jobs = [

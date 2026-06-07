@@ -61,15 +61,36 @@ def build_zip_stream(files: list[File]) -> ZipStream:
     return zs
 
 
-def zip_streaming_response(files: list[File], archive_basename: str) -> StreamingResponse:
+def zip_streaming_response(
+    files: list[File], archive_basename: str, *, count: bool = False
+) -> StreamingResponse:
     """A `StreamingResponse` that streams a ZIP_STORED archive of `files` with an
     exact `Content-Length` (sized mode) so the browser shows real progress and
     can Range-resume. `archive_basename` becomes `<basename>.zip` in the
-    attachment filename."""
+    attachment filename.
+
+    `count=True` registers the stream as an in-flight download
+    (services/transfer_activity) so the maintenance-mode drain knows when it
+    finishes - decremented in the generator's `finally`, which fires even when the
+    client disconnects mid-stream."""
     zs = build_zip_stream(files)
     length = len(zs)
+
+    body = iter(zs)
+    if count:
+        from . import transfer_activity
+
+        def _counted():
+            dl_id = transfer_activity.download_started()
+            try:
+                yield from zs
+            finally:
+                transfer_activity.download_finished(dl_id)
+
+        body = _counted()
+
     return StreamingResponse(
-        iter(zs),
+        body,
         media_type="application/zip",
         headers={
             "Content-Disposition": f'attachment; filename="{archive_basename}.zip"',

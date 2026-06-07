@@ -7,17 +7,18 @@ from app.services import cron_schedule as cs
 
 
 def _res(**kw):
-    base = dict(
-        name="x", group="g", description="d", enabled=True,
-        kind="interval", interval_minutes=60, daily_time="02:00",
-    )
+    base = {
+        "name": "x", "group": "g", "description": "d", "enabled": True,
+        "kind": "interval", "interval_minutes": 60, "daily_time": "02:00",
+    }
     base.update(kw)
     return cs.ResolvedSchedule(**base)
 
 
 def test_registry_covers_all_jobs():
-    assert len(cs.REGISTRY) == 17
+    assert len(cs.REGISTRY) == 18
     assert "imap_poll" in cs.REGISTRY and "prune_history" in cs.REGISTRY
+    assert "drain_pending_update" in cs.REGISTRY
     # release_check defaults to ~daily so it doesn't poll GitHub hourly.
     assert cs.REGISTRY["release_check"].default_interval_min == 1440
 

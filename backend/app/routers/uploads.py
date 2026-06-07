@@ -52,6 +52,8 @@ def init_upload(
     if share.created_by_id != user.id:
         raise AppError(403, "FORBIDDEN", "Only the share owner can upload to it.")
 
+    from ..services import maintenance as maintenance_svc
+    maintenance_svc.refuse_if_maintenance(db, kind="upload")
     _refuse_if_storage_critical(db)
 
     # Pre-flight quota check (best-effort; pre-create hook re-checks).
@@ -118,6 +120,8 @@ async def direct_upload(
     if share.created_by_id != user.id:
         raise AppError(403, "FORBIDDEN", "Only the share owner can upload to it.")
 
+    from ..services import maintenance as maintenance_svc
+    maintenance_svc.refuse_if_maintenance(db, kind="upload")
     _refuse_if_storage_critical(db)
 
     # Stream-check size as we read.

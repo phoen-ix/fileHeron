@@ -1,0 +1,69 @@
+"""Drain-before-update worker (v1.34.0).
+
+Runs every minute. When a postponed self-update is pending (the admin chose
+"postpone" in the Update dialog, which set maintenance mode + a
+`maintenance.pending_update` record), this fires the update once in-flight
+transfers have drained - or once the max-wait deadline has passed, so a single
+paused/stuck resumable transfer can't block the update forever.
+
+Idempotent: with no pending record it no-ops; once it triggers the update it
+clears both the pending record and maintenance mode (so the freshly-updated
+container doesn't boot stuck in maintenance).
+"""
+from __future__ import annotations
+
+import logging
+
+from ..database import SessionLocal
+from ..services import maintenance as maintenance_svc
+from ..services import transfer_activity as ta
+from ..services.cron_tracker import track_cron
+from ..utils.timeutil import utc_now
+
+logger = logging.getLogger("fileheron.workers.drain_pending_update")
+
+
+@track_cron("drain_pending_update")
+async def drain_pending_update(_ctx) -> dict:
+    db = SessionLocal()
+    try:
+        pending = maintenance_svc.get_pending_update(db)
+        if not pending:
+            return {"pending": False}
+
+        active_uploads = ta.active_uploads(db)
+        active_downloads = ta.active_downloads()
+        drained = active_uploads == 0 and active_downloads == 0
+
+        past_deadline = False
+        deadline = pending.get("deadline_iso")
+        if deadline:
+            try:
+                from datetime import datetime
+
+                past_deadline = utc_now() >= datetime.fromisoformat(deadline)
+            except ValueError:
+                past_deadline = True  # unparseable deadline -> don't wedge forever
+
+        if not (drained or past_deadline):
+            return {
+                "pending": True,
+                "triggered": False,
+                "active_uploads": active_uploads,
+                "active_downloads": active_downloads,
+            }
+
+        reason = "drain" if drained else "deadline"
+        result = maintenance_svc.apply_pending_update(db, reason=reason)
+        logger.info(
+            "drain_pending_update: fired update via=%s (uploads=%d downloads=%d)",
+            reason, active_uploads, active_downloads,
+        )
+        return {
+            "pending": True,
+            "triggered": True,
+            "reason": reason,
+            "job_id": (result or {}).get("job_id"),
+        }
+    finally:
+        db.close()

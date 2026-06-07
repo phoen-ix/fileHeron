@@ -5,12 +5,16 @@ import { useI18n } from 'vue-i18n'
 import {
   applyRollback,
   applyUpdate,
+  cancelPendingUpdate,
   checkUpdatesNow,
+  forcePendingUpdate,
   getSystemStatus,
+  getTransferActivity,
   getUpdaterJob,
   getUpdaterStatus,
   runLiveChecks,
   type SystemStatusResponse,
+  type TransferActivity,
   type UpdaterJob,
   type UpdaterStatus,
 } from '@/api/admin'
@@ -47,12 +51,55 @@ watch(
     if (stick && logPre.value) logPre.value.scrollTop = logPre.value.scrollHeight
   },
 )
-const confirming = ref<null | 'update' | 'rollback'>(null)
+const confirming = ref<null | 'update' | 'rollback' | 'force'>(null)
 const passwordInput = ref('')
 const confirmError = ref<string | null>(null)
 const submitting = ref(false)
 const checking = ref(false)
 let jobPollHandle: ReturnType<typeof setInterval> | null = null
+
+// --- Maintenance / drain-before-update ---
+const transferActivity = ref<TransferActivity | null>(null)
+const pendingUpdate = computed(() => transferActivity.value?.pending_update ?? null)
+const activeTransfers = computed(
+  () =>
+    (transferActivity.value?.active_uploads ?? 0) +
+    (transferActivity.value?.active_downloads ?? 0),
+)
+let activityPollHandle: ReturnType<typeof setInterval> | null = null
+
+async function loadTransferActivity() {
+  try {
+    const { data } = await getTransferActivity()
+    transferActivity.value = data
+    // Poll while an update is postponed so the banner counts down + clears when
+    // the drain worker fires the update.
+    if (data.pending_update) startActivityPoll()
+    else stopActivityPoll()
+  } catch {
+    // updater/admin endpoint unreachable - leave the existing state.
+  }
+}
+
+function startActivityPoll() {
+  if (activityPollHandle) return
+  activityPollHandle = setInterval(() => void loadTransferActivity(), 5000)
+}
+
+function stopActivityPoll() {
+  if (activityPollHandle) clearInterval(activityPollHandle)
+  activityPollHandle = null
+}
+
+async function onCancelPending() {
+  try {
+    await cancelPendingUpdate()
+    ui.pushToast(t('admin_system.update.postpone.cancelled'), 'success')
+    await loadTransferActivity()
+  } catch (err) {
+    ui.pushToast(describe(err), 'error')
+  }
+}
 
 async function onCheckNow() {
   checking.value = true
@@ -207,10 +254,14 @@ async function pollJob(jobId: string) {
   jobPollHandle = setInterval(tick, 2000)
 }
 
-async function openConfirm(kind: 'update' | 'rollback') {
+async function openConfirm(kind: 'update' | 'rollback' | 'force') {
   confirming.value = kind
   passwordInput.value = ''
   confirmError.value = null
+  if (kind === 'update') {
+    // Refresh the in-flight transfer counts so the dialog can offer "postpone".
+    await loadTransferActivity()
+  }
 }
 
 function closeConfirm() {
@@ -220,7 +271,7 @@ function closeConfirm() {
   confirmError.value = null
 }
 
-async function submitConfirm() {
+async function submitConfirm(postpone = false) {
   if (!confirming.value || !passwordInput.value) return
   submitting.value = true
   confirmError.value = null
@@ -231,8 +282,17 @@ async function submitConfirm() {
         ui.pushToast(t('admin_system.update.toast.no_target'), 'error')
         return
       }
-      const { data } = await applyUpdate(passwordInput.value, tag)
-      void pollJob(data.job_id)
+      const { data } = await applyUpdate(passwordInput.value, tag, postpone)
+      if (data.postponed) {
+        ui.pushToast(t('admin_system.update.postpone.enabled_toast'), 'success')
+        await loadTransferActivity()
+      } else if (data.job_id) {
+        void pollJob(data.job_id)
+      }
+    } else if (confirming.value === 'force') {
+      const { data } = await forcePendingUpdate(passwordInput.value)
+      await loadTransferActivity()
+      if (data.job_id) void pollJob(data.job_id)
     } else {
       const { data } = await applyRollback(passwordInput.value)
       void pollJob(data.job_id)
@@ -258,11 +318,13 @@ const jobInFlight = computed(
 onMounted(() => {
   void load()
   void loadUpdaterStatus()
+  void loadTransferActivity()
   sse.start()
 })
 
 onBeforeUnmount(() => {
   if (jobPollHandle) clearInterval(jobPollHandle)
+  stopActivityPoll()
 })
 
 function fmtTime(iso: string | null): string {
@@ -398,6 +460,29 @@ const headlineFailures = computed(() => {
           </div>
         </div>
 
+        <div v-if="pendingUpdate && !jobInFlight" class="pending-banner">
+          <div class="banner-text">
+            <strong>{{ t('admin_system.update.postpone.pending_title', { v: pendingUpdate.target_tag }) }}</strong>
+            <p class="banner-sub">
+              {{ t('admin_system.update.postpone.waiting', {
+                up: transferActivity?.active_uploads ?? 0,
+                down: transferActivity?.active_downloads ?? 0,
+              }) }}
+            </p>
+            <p class="banner-sub">
+              {{ t('admin_system.update.postpone.deadline', { when: fmtTime(pendingUpdate.deadline_iso) }) }}
+            </p>
+          </div>
+          <div class="banner-actions">
+            <button type="button" class="btn-primary" @click="openConfirm('force')">
+              {{ t('admin_system.update.postpone.force_now') }}
+            </button>
+            <button type="button" class="btn-secondary" @click="onCancelPending">
+              {{ t('admin_system.update.postpone.cancel') }}
+            </button>
+          </div>
+        </div>
+
         <div
           v-if="updaterStatus?.rollback_target && !jobInFlight"
           class="rollback-row"
@@ -510,13 +595,25 @@ const headlineFailures = computed(() => {
             {{
               confirming === 'update'
                 ? t('admin_system.update.confirm.title_update', { v: status.version.latest })
+                : confirming === 'force'
+                ? t('admin_system.update.postpone.force_title', { v: pendingUpdate?.target_tag })
                 : t('admin_system.update.confirm.title_rollback', {
                     v: updaterStatus?.rollback_target,
                   })
             }}
           </h2>
           <p class="modal-body">{{ t('admin_system.update.confirm.body') }}</p>
-          <form @submit.prevent="submitConfirm">
+          <div
+            v-if="confirming === 'update' && activeTransfers > 0"
+            class="fh-notice"
+            data-tone="warning"
+          >
+            {{ t('admin_system.update.postpone.active_notice', {
+              up: transferActivity?.active_uploads ?? 0,
+              down: transferActivity?.active_downloads ?? 0,
+            }) }}
+          </div>
+          <form @submit.prevent="submitConfirm(false)">
             <label class="fh-field">
               <span class="fh-field-label">{{ t('common.current_password') }}</span>
               <input
@@ -542,7 +639,20 @@ const headlineFailures = computed(() => {
                 class="btn-primary"
                 :disabled="submitting || !passwordInput"
               >
-                {{ submitting ? t('common.loading') : t('admin_system.update.confirm.action') }}
+                {{ submitting
+                  ? t('common.loading')
+                  : confirming === 'update' && activeTransfers > 0
+                  ? t('admin_system.update.postpone.update_now_anyway')
+                  : t('admin_system.update.confirm.action') }}
+              </button>
+              <button
+                v-if="confirming === 'update' && activeTransfers > 0"
+                type="button"
+                class="btn-secondary"
+                :disabled="submitting || !passwordInput"
+                @click="submitConfirm(true)"
+              >
+                {{ t('admin_system.update.postpone.postpone_btn') }}
               </button>
               <button
                 type="button"
@@ -627,6 +737,16 @@ const headlineFailures = computed(() => {
   padding: var(--fh-space-3) var(--fh-space-4);
   background: #fff8e1;
   border: 1px solid #f1c40f;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--fh-space-3);
+}
+.pending-banner {
+  margin-top: var(--fh-space-3);
+  padding: var(--fh-space-3) var(--fh-space-4);
+  background: #fff3cd;
+  border: 1px solid #ffeeba;
   display: flex;
   align-items: center;
   justify-content: space-between;

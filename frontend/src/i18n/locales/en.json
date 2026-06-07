@@ -219,8 +219,23 @@
       "email_change": "Email change",
       "webhooks": "Webhooks",
       "advanced": "Advanced",
+      "maintenance": "Maintenance mode",
       "backup": "Backup & restore"
     }
+  },
+  "admin_maintenance": {
+    "title": "Maintenance mode",
+    "intro": "When on, new uploads and downloads are paused (existing ones finish); the rest of the app stays usable. The 'postpone update' flow turns this on automatically.",
+    "toggle_label": "Enable maintenance mode",
+    "toggle_help": "Blocks new file transfers with a 503 while letting in-progress ones complete.",
+    "message_label": "Banner message (optional)",
+    "message_ph": "e.g. Scheduled maintenance, back shortly",
+    "message_help": "Shown to all users in a banner and returned when a transfer is refused. Leave blank for a default message.",
+    "activity": "In progress right now: {up} upload(s), {down} download(s).",
+    "saved_toast": "Maintenance settings saved."
+  },
+  "maintenance": {
+    "banner_default": "The server is in maintenance mode. New uploads and downloads are paused; in-progress transfers will finish."
   },
   "admin_backup": {
     "title": "Backup & restore",
@@ -357,6 +372,19 @@
         "failed": "Update failed: {err}",
         "rolled_back": "Update to {tag} failed; automatically rolled back to {prev}.",
         "no_target": "No release tag to update to."
+      },
+      "postpone": {
+        "active_notice": "{up} upload(s) and {down} download(s) are in progress. Update now would interrupt them, or postpone until they finish.",
+        "update_now_anyway": "Update now anyway",
+        "postpone_btn": "Postpone & enable maintenance",
+        "enabled_toast": "Maintenance mode on. The update will apply once transfers finish.",
+        "pending_title": "Update to {v} postponed",
+        "waiting": "Waiting for {up} upload(s) and {down} download(s) to finish. New transfers are paused.",
+        "deadline": "Applies automatically by {when} (or sooner once drained).",
+        "force_now": "Update now",
+        "force_title": "Apply update to {v} now?",
+        "cancel": "Cancel update",
+        "cancelled": "Postponed update cancelled; maintenance mode off."
       }
     },
     "live": {

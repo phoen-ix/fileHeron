@@ -75,6 +75,11 @@ def _extract_upload(event_body: dict[str, Any]) -> tuple[dict[str, Any], dict[st
 
 
 def handle_pre_create(db: Session, body: dict[str, Any]) -> None:
+    # Block brand-new tusd uploads during maintenance. An already-in-progress
+    # resumable upload continues via PATCH (no pre-create) and is untouched.
+    from . import maintenance as maintenance_svc
+    maintenance_svc.refuse_if_maintenance(db, kind="upload")
+
     upload, meta = _extract_upload(body)
     envelope = _extract_envelope(meta)
 

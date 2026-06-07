@@ -2,6 +2,8 @@
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { RouterView, useRoute } from 'vue-router'
 
+import { useI18n } from 'vue-i18n'
+
 import AppHeader from '@/components/AppHeader.vue'
 import SiteFooter from '@/components/SiteFooter.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
@@ -9,13 +11,19 @@ import KeyboardShortcutsModal from '@/components/KeyboardShortcutsModal.vue'
 import ToastStack from '@/components/ToastStack.vue'
 import { useKeyboardShortcuts } from '@/composables/useKeyboardShortcuts'
 import { useAuthStore } from '@/stores/auth'
+import { useSiteStore } from '@/stores/site'
 import { setLocale } from '@/i18n'
 
 const auth = useAuthStore()
+const site = useSiteStore()
 const route = useRoute()
+const { t } = useI18n()
 
 const showHeader = computed(() => auth.isAuthenticated && !route.meta.public)
 const density = computed(() => route.meta.density ?? 'editorial')
+const maintenanceBanner = computed(() =>
+  site.maintenance?.enabled ? site.maintenance : null,
+)
 
 const { cheatSheetOpen } = useKeyboardShortcuts()
 
@@ -42,6 +50,9 @@ onMounted(() => {
 
 <template>
   <AppHeader v-if="showHeader" />
+  <div v-if="maintenanceBanner" class="fh-maintenance-banner" role="status">
+    {{ maintenanceBanner.message || t('maintenance.banner_default') }}
+  </div>
   <main ref="mainEl" tabindex="-1" :data-density="density">
     <RouterView v-slot="{ Component, route: r }">
       <Transition name="fh-page" mode="out-in">
@@ -62,6 +73,14 @@ onMounted(() => {
 /* Programmatic focus target on route change - no visible outline. */
 main:focus {
   outline: none;
+}
+.fh-maintenance-banner {
+  background: #fff3cd;
+  color: #856404;
+  border-bottom: 1px solid #ffeeba;
+  padding: 0.6rem 1rem;
+  text-align: center;
+  font-size: 0.9rem;
 }
 .fh-page-enter-active,
 .fh-page-leave-active {

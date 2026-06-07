@@ -122,6 +122,8 @@ def get_download_url(
     file = _get_file_or_404(db, file_id)
     share = db.query(Share).filter(Share.id == file.share_id).one()
     share_svc.assert_share_file_access(db, user=user, share=share)
+    from ..services import maintenance as maintenance_svc
+    maintenance_svc.refuse_if_maintenance(db, kind="download")
     if file.state == FileState.uploading:
         raise AppError(409, "STILL_UPLOADING", "File hasn't finished uploading yet.")
     if file.state == FileState.deleted:
@@ -171,6 +173,8 @@ def get_preview_url(
     file = _get_file_or_404(db, file_id)
     share = db.query(Share).filter(Share.id == file.share_id).one()
     share_svc.assert_share_file_access(db, user=user, share=share)
+    from ..services import maintenance as maintenance_svc
+    maintenance_svc.refuse_if_maintenance(db, kind="download")
     _assert_file_state_servable(file)
     if not settings_svc.get_bool(
         db, settings_svc.Keys.FILE_PREVIEW_ENABLED, default=True
@@ -212,6 +216,8 @@ def preview_file(
     file = _get_file_or_404(db, file_id)
     share = db.query(Share).filter(Share.id == file.share_id).one()
     share_svc.assert_share_file_access(db, user=user, share=share)
+    from ..services import maintenance as maintenance_svc
+    maintenance_svc.refuse_if_maintenance(db, request=request, kind="download")
     _assert_file_state_servable(file)
     if not settings_svc.get_bool(
         db, settings_svc.Keys.FILE_PREVIEW_ENABLED, default=True
@@ -254,6 +260,9 @@ def download_file(
     share = db.query(Share).filter(Share.id == file.share_id).one()
 
     share_svc.assert_share_file_access(db, user=user, share=share)
+
+    from ..services import maintenance as maintenance_svc
+    maintenance_svc.refuse_if_maintenance(db, request=request, kind="download")
 
     if file.state == FileState.uploading:
         raise AppError(409, "STILL_UPLOADING", "File hasn't finished uploading yet.")
@@ -323,6 +332,7 @@ def download_file(
         filename=file.original_filename,
         mime_type=file.mime_type,
         ttl_sec=ttl,
+        count=True,
     )
 
 
@@ -338,6 +348,8 @@ def get_share_zip_url(
     URL later, then issues a `?dt=` token bound to the SHARE id."""
     share = share_svc.get_share_or_404(db, share_id)
     share_svc.assert_share_file_access(db, user=user, share=share)
+    from ..services import maintenance as maintenance_svc
+    maintenance_svc.refuse_if_maintenance(db, kind="download")
 
     if not file_svc.downloadable_files(db, share.id):
         raise AppError(400, "NO_DOWNLOADABLE_FILES", "This share has no downloadable files.")
@@ -372,6 +384,9 @@ def download_share_zip(
     share = share_svc.get_share_or_404(db, share_id)
 
     share_svc.assert_share_file_access(db, user=user, share=share)
+
+    from ..services import maintenance as maintenance_svc
+    maintenance_svc.refuse_if_maintenance(db, request=request, kind="download")
 
     files = file_svc.downloadable_files(db, share.id)
     if not files:
@@ -417,7 +432,7 @@ def download_share_zip(
         )
         db.commit()
 
-    return zip_stream_svc.zip_streaming_response(files, f"share-{share.id[:8]}")
+    return zip_stream_svc.zip_streaming_response(files, f"share-{share.id[:8]}", count=True)
 
 
 @router.delete("/{file_id}", status_code=status.HTTP_204_NO_CONTENT)

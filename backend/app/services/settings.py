@@ -200,6 +200,17 @@ class Keys:
     ANOMALY_MASS_DOWNLOAD_THRESHOLD = "anomaly.mass_download_threshold"
     ANOMALY_MULTI_NETWORK_THRESHOLD = "anomaly.multi_network_threshold"
     ANOMALY_LOGIN_FAILURE_THRESHOLD = "anomaly.login_failure_threshold"
+    # Maintenance mode (v1.34.0). When enabled, NEW file transfers (uploads +
+    # downloads, incl. public links / ZIP / preview) are refused with 503 while
+    # in-progress ones finish; the rest of the app stays usable. Toggled manually
+    # by an admin or automatically by the postpone-update flow. `pending_update`
+    # holds the deferred self-update the drain worker fires once transfers drain.
+    MAINTENANCE_ENABLED = "maintenance.enabled"          # boolean
+    MAINTENANCE_MESSAGE = "maintenance.message"          # optional banner text
+    MAINTENANCE_PENDING_UPDATE = "maintenance.pending_update"  # JSON or absent
+    # Registry tunable: how long the postpone flow waits for transfers to drain
+    # before applying the update anyway.
+    UPDATES_DRAIN_MAX_WAIT_MIN = "updates.drain_max_wait_min"
 
 
 _ENCRYPTED_KEYS: set[str] = {Keys.SMTP_PASSWORD, Keys.IMAP_PASSWORD}

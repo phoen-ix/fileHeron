@@ -40,6 +40,7 @@ export const useSiteStore = defineStore('site', () => {
   const timezone = ref<string>(DEFAULT_TIMEZONE)
   const branding = ref<PublicBranding>({ ...EMPTY_BRANDING })
   const legal = ref<PublicLegal>({ ...EMPTY_LEGAL })
+  const maintenance = ref<{ enabled: boolean; message: string } | null>(null)
   const loaded = ref(false)
 
   function _apply(cfg: PublicConfigResponse) {
@@ -51,6 +52,7 @@ export const useSiteStore = defineStore('site', () => {
     timezone.value = cfg.site_timezone || DEFAULT_TIMEZONE
     branding.value = cfg.branding ?? { ...EMPTY_BRANDING }
     legal.value = cfg.legal ?? { ...EMPTY_LEGAL }
+    maintenance.value = cfg.maintenance ?? null
     loaded.value = true
   }
 
@@ -74,6 +76,7 @@ export const useSiteStore = defineStore('site', () => {
     timezone,
     branding,
     legal,
+    maintenance,
     loaded,
     loadConfig,
   }

@@ -69,6 +69,10 @@ TUNABLES: list[Tunable] = [
     # Signed-url TTL: 30s floor, 24h ceiling. Longer enables browser resume
     # of interrupted downloads; shorter shrinks the leaked-url window.
     Tunable(K.DOWNLOAD_SIGNED_URL_TTL_SEC, "DOWNLOAD_SIGNED_URL_TTL_SEC", "int", "downloads", 30, 86400),
+    # --- Updates ---
+    # Postpone-update drain cap: 1 min floor, 24h ceiling. After this the
+    # deferred update applies even if transfers haven't fully drained.
+    Tunable(K.UPDATES_DRAIN_MAX_WAIT_MIN, "UPDATES_DRAIN_MAX_WAIT_MIN", "int", "updates", 1, 1440),
     Tunable(K.HIBP_ENABLED, "HIBP_ENABLED", "bool", "security"),
     Tunable(K.APP_NAME, "APP_NAME", "str", "branding"),
     # --- Storage / low-disk degradation (≤ 1 TiB byte ceiling) ---

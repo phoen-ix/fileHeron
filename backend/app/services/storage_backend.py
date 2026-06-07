@@ -235,6 +235,7 @@ def serve_response(
     ttl_sec: int,
     disposition: str = "attachment",
     extra_headers: dict[str, str] | None = None,
+    count: bool = False,
 ):
     """The HTTP response for a file. Local backend → FileResponse (kernel
     sendfile, Range-capable); object backend → 307 redirect to a presigned URL
@@ -244,7 +245,12 @@ def serve_response(
     caller) or "inline" (preview). `extra_headers` (preview hardening:
     nosniff/CSP) ride on the local FileResponse; on the S3 redirect the bytes
     come from the store and can't carry them, so the previewable-type allowlist
-    is the defense there (documented caveat)."""
+    is the defense there (documented caveat).
+
+    `count=True` registers this as an in-flight download (services/transfer_activity)
+    so the maintenance-mode drain knows when transfers finish. Only the local
+    FileResponse can be tracked - an S3 redirect streams bytes the backend never
+    sees, so it is not counted."""
     from fastapi.responses import FileResponse, RedirectResponse
 
     url = backend.download_url(
@@ -256,12 +262,22 @@ def serve_response(
     )
     if url is not None:
         return RedirectResponse(url, status_code=307)
+
+    background = None
+    if count:
+        from starlette.background import BackgroundTask
+
+        from . import transfer_activity
+        dl_id = transfer_activity.download_started()
+        if dl_id is not None:
+            background = BackgroundTask(transfer_activity.download_finished, dl_id)
     return FileResponse(
         path=backend.local_path(locator),
         media_type=mime_type,
         filename=filename,
         content_disposition_type=disposition,
         headers=extra_headers or None,
+        background=background,
     )
 
 

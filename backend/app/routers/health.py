@@ -125,6 +125,15 @@ def public_config(db: Session = Depends(get_db)) -> dict:
         "privacy_enabled": settings_svc.get_bool(db, settings_svc.Keys.LEGAL_PRIVACY_ENABLED, default=False),
     }
 
+    # Maintenance mode: surface the flag (+ optional banner message) so the SPA
+    # can show a global banner and disable transfer UI. Absent when off.
+    maintenance: dict | None = None
+    if settings_svc.get_bool(db, settings_svc.Keys.MAINTENANCE_ENABLED, default=False):
+        maintenance = {
+            "enabled": True,
+            "message": (settings_svc.get(db, settings_svc.Keys.MAINTENANCE_MESSAGE) or "").strip(),
+        }
+
     body: dict = {
         "app_name": site_svc.get_app_name(db),
         "default_locale": "en",
@@ -136,4 +145,6 @@ def public_config(db: Session = Depends(get_db)) -> dict:
     }
     if motd is not None:
         body["motd"] = motd
+    if maintenance is not None:
+        body["maintenance"] = maintenance
     return body

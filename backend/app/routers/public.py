@@ -218,6 +218,9 @@ def public_download(
     if not _is_unlocked(link, fh_dl_unlock):
         raise AppError(401, "UNLOCK_REQUIRED", "Submit the password first.")
 
+    from ..services import maintenance as maintenance_svc
+    maintenance_svc.refuse_if_maintenance(db, request=request, kind="download")
+
     file = db.query(File).filter(File.id == file_id).one_or_none()
     if file is None or file.share_id != link.share_id:
         raise AppError(404, "FILE_NOT_FOUND", "File not found in this public share.")
@@ -289,6 +292,7 @@ def public_download(
         filename=file.original_filename,
         mime_type=file.mime_type,
         ttl_sec=ttl,
+        count=True,
     )
 
 
@@ -313,6 +317,8 @@ def public_preview(
     public_link_svc.assert_link_usable(db, link)
     if not _is_unlocked(link, fh_dl_unlock):
         raise AppError(401, "UNLOCK_REQUIRED", "Submit the password first.")
+    from ..services import maintenance as maintenance_svc
+    maintenance_svc.refuse_if_maintenance(db, request=request, kind="download")
     if not settings_svc.get_bool(
         db, settings_svc.Keys.FILE_PREVIEW_ENABLED, default=True
     ):
@@ -371,6 +377,9 @@ def public_download_zip(
     if not _is_unlocked(link, fh_dl_unlock):
         raise AppError(401, "UNLOCK_REQUIRED", "Submit the password first.")
 
+    from ..services import maintenance as maintenance_svc
+    maintenance_svc.refuse_if_maintenance(db, request=request, kind="download")
+
     files = file_svc.downloadable_files(db, link.share_id)
     if not files:
         raise AppError(400, "NO_DOWNLOADABLE_FILES", "This share has no downloadable files.")
@@ -424,4 +433,4 @@ def public_download_zip(
         db.commit()
 
     share = db.query(Share).filter(Share.id == link.share_id).one()
-    return zip_stream_svc.zip_streaming_response(files, f"share-{share.id[:8]}")
+    return zip_stream_svc.zip_streaming_response(files, f"share-{share.id[:8]}", count=True)

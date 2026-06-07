@@ -144,6 +144,11 @@ class AuditEventType(str, enum.Enum):
     # active shares were invalidated.
     config_backup_exported = "config_backup_exported"
     config_backup_imported = "config_backup_imported"
+    # Maintenance mode + drain-before-update (v1.34.0).
+    maintenance_enabled = "maintenance_enabled"
+    maintenance_disabled = "maintenance_disabled"
+    update_postponed = "update_postponed"
+    update_postpone_cancelled = "update_postpone_cancelled"
 
 
 

@@ -40,6 +40,8 @@ export interface PublicConfigResponse {
   branding: PublicBranding
   /** Which legal footer pages are enabled. */
   legal: PublicLegal
+  /** Maintenance mode: present + enabled when new transfers are paused. */
+  maintenance?: { enabled: boolean; message: string }
 }
 
 export function getPublicConfig() {

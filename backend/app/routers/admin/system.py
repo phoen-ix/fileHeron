@@ -302,6 +302,10 @@ class UpdateApplyRequest(BaseModel):
     # Tag to apply. Updates only; rollback ignores this and reads the
     # stored rollback_target from the updater's state file.
     target_tag: str | None = Field(default=None, max_length=64)
+    # When true, don't apply immediately: enter maintenance mode and let the
+    # drain worker apply once in-flight transfers finish (or the max-wait cap
+    # elapses). The SPA sets this after seeing active transfers.
+    postpone: bool = Field(default=False)
 
 
 def _verify_password_or_403(user: User, password: str) -> None:
@@ -377,6 +381,41 @@ def apply_update(
     if not payload.target_tag:
         raise AppError(400, "INVALID_INPUT", "target_tag is required.")
 
+    if payload.postpone:
+        from datetime import timedelta
+
+        from ...services import maintenance as maintenance_svc
+        from ...services import settings_registry
+        wait_min = settings_registry.effective(
+            db, settings_registry.K.UPDATES_DRAIN_MAX_WAIT_MIN
+        )
+        deadline = (utc_now() + timedelta(minutes=int(wait_min))).isoformat()
+        maintenance_svc.set_enabled(db, True, actor=admin, request=request)
+        maintenance_svc.set_pending_update(
+            db,
+            {
+                "target_tag": payload.target_tag,
+                "deadline_iso": deadline,
+                "requested_by_id": admin.id,
+            },
+            actor=admin,
+        )
+        record_audit_event(
+            db,
+            event_type=AuditEventType.update_postponed,
+            actor_user_id=admin.id,
+            target_type="update_job",
+            target_id=None,
+            metadata={"target_tag": payload.target_tag, "deadline": deadline},
+            request=request,
+        )
+        db.commit()
+        return {
+            "postponed": True,
+            "target_tag": payload.target_tag,
+            "deadline_iso": deadline,
+        }
+
     result = release_apply.apply(action="update", target_tag=payload.target_tag)
 
     record_audit_event(
@@ -438,3 +477,51 @@ def apply_rollback(
     )
     db.commit()
     return result
+
+
+@router.get("/system/transfer-activity")
+def transfer_activity(
+    db: Session = Depends(get_db), _admin: User = Depends(get_current_admin)
+) -> dict:
+    """Live in-flight uploads/downloads + any postponed-update record. Drives the
+    Update dialog ('N transfers in progress') and the postponed banner."""
+    from ...services import maintenance as maintenance_svc
+    from ...services import transfer_activity as ta
+
+    snap = ta.snapshot(db)
+    snap["maintenance_enabled"] = maintenance_svc.is_enabled(db)
+    snap["pending_update"] = maintenance_svc.get_pending_update(db)
+    return snap
+
+
+@router.post("/system/update/now")
+def force_pending_update(
+    payload: UpdateApplyRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin),
+) -> dict:
+    """Apply a postponed update immediately, without waiting for transfers to
+    drain. Password re-auth, same as the initial Update."""
+    from ...services import maintenance as maintenance_svc
+
+    _verify_password_or_403(admin, payload.password)
+    result = maintenance_svc.apply_pending_update(
+        db, actor=admin, request=request, reason="admin_force"
+    )
+    if result is None:
+        raise AppError(409, "NO_PENDING_UPDATE", "There is no postponed update to apply.")
+    return result
+
+
+@router.post("/system/update/cancel")
+def cancel_pending_update(
+    request: Request,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin),
+) -> dict:
+    """Cancel a postponed update and leave maintenance mode."""
+    from ...services import maintenance as maintenance_svc
+
+    cancelled = maintenance_svc.cancel_pending_update(db, actor=admin, request=request)
+    return {"cancelled": cancelled}

@@ -58,6 +58,21 @@ def downloadable_files(db: Session, share_id: str) -> list[File]:
     return out
 
 
+def safe_original_filename(name: str) -> str:
+    """Reduce a client-supplied filename to a safe leaf: strip any directory
+    components (both / and \\ - a Windows client may send back-slashes), drop
+    control/NUL chars, and map the traversal specials ('', '.', '..') to a
+    placeholder. Prevents a path-traversal payload from ever being persisted,
+    so no downstream consumer (the desktop 'Save all', a ZIP entry name, a
+    Content-Disposition header) can be tricked into escaping its target dir
+    (audit H4, backend defense-in-depth)."""
+    leaf = (name or "").replace("\\", "/").split("/")[-1]
+    leaf = "".join(ch for ch in leaf if ch >= " ").strip()
+    if leaf in ("", ".", ".."):
+        return "file"
+    return leaf[:512]
+
+
 def create_pending(
     db: Session,
     *,
@@ -72,7 +87,7 @@ def create_pending(
     """
     record = File(
         share_id=share.id,
-        original_filename=original_filename[:512],
+        original_filename=safe_original_filename(original_filename),
         mime_type=(mime_type or "application/octet-stream")[:255],
         size_bytes=size_bytes,
         state=FileState.uploading,

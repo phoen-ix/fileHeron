@@ -35,6 +35,7 @@ from ..formatters import (
 )
 from ..i18n import t
 from ..models import FileInShareResponse, MeResponse, ShareResponse
+from ..safe_path import safe_join
 from ._async import run_in_background, run_with_progress
 from . import _messagebox as mb
 from .add_files_dialog import AddFilesDialog
@@ -593,8 +594,14 @@ class ShareDetailView(ctk.CTkFrame):
         if not dir_str:
             return
         base = Path(dir_str)
+        used: set[str] = set()
         for f in downloadable:
-            self._spawn_download(f.id, base / f.original_filename)
+            # SECURITY (audit H4): f.original_filename is server-controlled.
+            # Never join it raw - a '../' / absolute / UNC / reserved-device
+            # name would write outside the chosen folder. Reduce to a safe,
+            # de-duplicated leaf and assert containment.
+            dest = safe_join(base, f.original_filename, used)
+            self._spawn_download(f.id, dest)
 
     def _show_open_actions(self, row: dict, dest: Path) -> None:
         """After a successful save, replace the row's Download/Cancel button

@@ -87,6 +87,16 @@ async def _discovery(provider: OIDCProvider) -> dict[str, Any]:
         logger.warning("OIDC discovery failed provider=%s: %s", provider.id, e)
         raise AppError(503, "OIDC_UNAVAILABLE", "Identity provider is unreachable.") from e
     doc = resp.json()
+    # The discovery document's `issuer` MUST equal the issuer we fetched it from
+    # (OIDC Discovery spec); otherwise a tampered/rogue discovery endpoint could
+    # advertise a different issuer that later weakens ID-token validation (Info-3).
+    doc_issuer = (doc.get("issuer") or "").rstrip("/")
+    if doc_issuer != issuer:
+        logger.warning(
+            "OIDC discovery issuer mismatch provider=%s: doc=%r expected=%r",
+            provider.id, doc_issuer, issuer,
+        )
+        raise AppError(502, "OIDC_ISSUER_MISMATCH", "Identity provider discovery issuer mismatch.")
     _DISCOVERY_CACHE[key] = doc
     return doc
 

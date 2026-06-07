@@ -19,7 +19,8 @@
     "new_password": "Neues Passwort",
     "current_password": "Aktuelles Passwort",
     "display_name": "Anzeigename",
-    "language": "Sprache"
+    "language": "Sprache",
+    "delete": "Löschen"
   },
   "setup": {
     "title": "Willkommen bei fileHeron",
@@ -489,7 +490,10 @@
       "uploads": "Uploads",
       "downloads": "Downloads",
       "security": "Sicherheit",
-      "branding": "Branding"
+      "branding": "Branding",
+      "storage": "Speicher & wenig Platz",
+      "anomaly": "Anomalie-Erkennung",
+      "updates": "Updates"
     },
     "keys": {
       "auth": {
@@ -518,7 +522,11 @@
         "notification_read_days": "Gelesene Benachrichtigungen (Tage, 0 = Bereinigung aus)",
         "quarantine_purge_days": "Quarantäne-Dateibytes (Tage, 0 = behalten)",
         "orphan_reclaim_days": "Verwaiste Dateien aus widerrufenen/gelöschten Freigaben (Tage, 0 = Auto-Freigabe aus)",
-        "tus_abandoned_hours": "Abgebrochene Uploads (Stunden)"
+        "tus_abandoned_hours": "Abgebrochene Uploads (Stunden)",
+        "email_log_days": "Mail-Log (Tage, 0 = unbegrenzt)",
+        "inbound_message_days": "Eingehende Nachrichten (Tage, 0 = unbegrenzt)",
+        "webhook_delivery_days": "Webhook-Zustellungen (Tage, 0 = unbegrenzt)",
+        "upload_stale_hours": "Hängende laufende Uploads (Stunden)"
       },
       "uploads": {
         "max_direct_bytes": "Größenlimit für Direkt-Upload (Bytes)"
@@ -531,6 +539,19 @@
       },
       "branding": {
         "app_name": "Anwendungs-/Markenname"
+      },
+      "updates": {
+        "drain_max_wait_min": "Max. Wartezeit beim verschobenen Update (Minuten)"
+      },
+      "storage": {
+        "low_threshold_percent": "Schwelle wenig Platz (% frei)",
+        "low_threshold_bytes": "Schwelle wenig Platz (freie Bytes)"
+      },
+      "anomaly": {
+        "enabled": "Anomalie-Erkennung aktivieren",
+        "mass_download_threshold": "Schwelle Massen-Download-Alarm (Dateien / Stunde)",
+        "multi_network_threshold": "Schwelle Mehr-Netzwerk-Alarm (verschiedene Netzwerke)",
+        "login_failure_threshold": "Schwelle Anmelde-Fehlversuch-Alarm (Fehler / Stunde)"
       }
     },
     "help": {
@@ -541,10 +562,55 @@
         "signed_url_ttl_sec": "Wie lange der einmalige Download-Link, den der Browser nutzt, gültig bleibt. Länger ermöglicht das Fortsetzen eines unterbrochenen Browser-Downloads (er fordert denselben Link erneut an); kürzer verkleinert das Zeitfenster, falls dieser Link je in einem Proxy-Log landet. Der Desktop-Client nutzt einen Bearer-Token und ist nicht betroffen."
       },
       "rate_limit": {
-        "lockout_duration_min": "Wie lange ein Konto nach zu vielen Fehlversuchen gesperrt bleibt."
+        "lockout_duration_min": "Wie lange ein Konto nach zu vielen Fehlversuchen gesperrt bleibt.",
+        "login": "Erlaubte Anmeldeversuche pro IP innerhalb des Fensters, bevor begrenzt wird. (1-1000, Standard 10.)",
+        "register": "Versuche pro IP im Fenster für Einladungsregistrierung, Passwort-vergessen und E-Mail-Bestätigung. (1-1000, Standard 3.)",
+        "login_window_sec": "Gleitendes Fenster, über das die Anmelde-/Registrier-Versuche gezählt werden. (30-86400 Sek., Standard 900.)",
+        "lockout_threshold": "Aufeinanderfolgende Fehlversuche an einem Konto, bevor es gesperrt wird. (1-100, Standard 5.)"
       },
       "branding": {
         "app_name": "Wird in der UI-Kopfzeile und in ausgehenden Benachrichtigungs-E-Mails angezeigt."
+      },
+      "auth": {
+        "access_token_expire_minutes": "Wie lange das Access-Token einer Sitzung gültig ist, bevor der Browser es still erneuert. Kürzer ist sicherer; länger bedeutet weniger Erneuerungen. (5-1440 Min., Standard 15.)",
+        "refresh_token_expire_days": "Wie lange eine gespeicherte Sitzung erneuert werden kann, bevor eine erneute Anmeldung nötig ist. (1-365 Tage, Standard 7.)",
+        "max_active_sessions_per_user": "Obergrenze gleichzeitiger Sitzungen pro Benutzer; die älteste wird darüber hinaus entfernt. (1-100, Standard 10.)"
+      },
+      "retention": {
+        "refresh_token_days": "Wie lange widerrufene/abgelaufene Refresh-Token-Zeilen vor der endgültigen Löschung aufbewahrt werden. (1-3650 Tage, Standard 30.)",
+        "invite_days": "Wie lange ungenutzte Einladungen aufbewahrt werden, bevor sie entfernt werden. (1-3650 Tage, Standard 14.)",
+        "audit_log_days": "Wie lange Audit-Log-Zeilen aufbewahrt werden. 0 = unbegrenzt. (0-3650 Tage, Standard 365.)",
+        "download_log_days": "Wie lange Download-Log-Zeilen aufbewahrt werden. 0 = unbegrenzt. (0-3650 Tage, Standard 90.)",
+        "email_log_days": "Wie lange Mail-Log-Zeilen aufbewahrt werden. 0 = unbegrenzt. (0-3650 Tage, Standard 90.)",
+        "inbound_message_days": "Wie lange abgerufene eingehende (IMAP-)Nachrichten aufbewahrt werden. 0 = unbegrenzt. (0-3650 Tage, Standard 90.)",
+        "login_attempt_days": "Wie lange forensische Anmeldeversuch-Zeilen aufbewahrt werden. 0 = unbegrenzt. (0-3650 Tage, Standard 30.)",
+        "webhook_delivery_days": "Wie lange Webhook-Zustellversuch-Zeilen aufbewahrt werden. 0 = unbegrenzt. (0-3650 Tage, Standard 30.)",
+        "notification_read_days": "Wie lange gelesene In-App-Benachrichtigungen vor der Bereinigung aufbewahrt werden. 0 = Bereinigung aus. (0-3650 Tage, Standard 3.)",
+        "quarantine_purge_days": "Wie lange Bytes quarantänisierter infizierter Dateien auf der Platte bleiben, bevor sie gelöscht werden. 0 = behalten. (0-3650 Tage, Standard 90.)",
+        "orphan_reclaim_days": "Schonfrist, bevor Bytes lange widerrufener/gelöschter Freigaben freigegeben werden. 0 = Auto-Freigabe aus. (0-3650 Tage, Standard 7.)",
+        "tus_abandoned_hours": "Wie lange eine abgebrochene fortsetzbare Upload-Temp-Datei liegen bleibt, bevor sie gelöscht wird. (1-8760 Stunden, Standard 24.)",
+        "upload_stale_hours": "Wie lange eine mitten im Upload hängende Datei liegen darf, bevor sie entfernt und ihre leere Freigabe als fehlgeschlagen markiert wird. (1-720 Stunden, Standard 3.)"
+      },
+      "security": {
+        "hibp_enabled": "Neue Passwörter gegen die Have-I-Been-Pwned-Datenbank prüfen (k-Anonymität, kein Passwort verlässt den Server). Fällt bei Nichterreichbarkeit offen aus."
+      },
+      "updates": {
+        "drain_max_wait_min": "Wenn ein Admin ein Self-Update verschiebt, wie lange der Wartungsmodus auf laufende Übertragungen wartet, bevor das Update trotzdem angewendet wird. (1-1440 Min., Standard 30.)"
+      },
+      "storage": {
+        "low_threshold_percent": "Speicher als knapp markieren, wenn der freie Platz unter diesen Prozentsatz des Volumes fällt. 0 = Prozentprüfung aus. (0-50 %, Standard 5.)",
+        "low_threshold_bytes": "Speicher zusätzlich als knapp markieren, wenn der freie Platz unter so viele Bytes fällt. 0 = Byte-Prüfung aus. (Standard 10 GiB.)"
+      },
+      "anomaly": {
+        "enabled": "Heuristische Anomalie-Erkennung ausführen (Massen-Downloads, Credential-Stuffing, Mehr-Netzwerk-Zugriff). Nur Alarme; blockiert nie.",
+        "mass_download_threshold": "Alarm, wenn ein Akteur mindestens so viele Dateien in einer Stunde herunterlädt. (1-100000, Standard 100.)",
+        "multi_network_threshold": "Alarm, wenn ein Konto im Fenster aus mindestens so vielen verschiedenen Netzwerken genutzt wird. (2-1000, Standard 4.)",
+        "login_failure_threshold": "Alarm, wenn die Fehlversuche in einer Stunde diese Zahl erreichen (mögliches Stuffing). (1-100000, Standard 50.)"
+      },
+      "public_link": {
+        "password_rate_limit": "Passwortversuche für einen öffentlichen Link im Fenster, bevor der Link gesperrt wird. (1-1000, Standard 10.)",
+        "password_window_sec": "Fenster, über das die Passwortversuche öffentlicher Links gezählt werden. (30-86400 Sek., Standard 900.)",
+        "lockout_sec": "Wie lange ein öffentlicher Link (für alle IPs) nach zu vielen falschen Passwörtern gesperrt bleibt. (30-86400 Sek., Standard 900.)"
       }
     }
   },
@@ -1615,7 +1681,8 @@
       "clean": "Sauber",
       "infected": "Infiziert",
       "failed": "Fehlgeschlagen",
-      "deleted": "Gelöscht"
+      "deleted": "Gelöscht",
+      "uploading": "Wird hochgeladen"
     },
     "actions": {
       "download": "Herunterladen",

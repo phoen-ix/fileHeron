@@ -19,7 +19,8 @@
     "new_password": "New password",
     "current_password": "Current password",
     "display_name": "Display name",
-    "language": "Language"
+    "language": "Language",
+    "delete": "Delete"
   },
   "setup": {
     "title": "Welcome to fileHeron",
@@ -489,7 +490,10 @@
       "uploads": "Uploads",
       "downloads": "Downloads",
       "security": "Security",
-      "branding": "Branding"
+      "branding": "Branding",
+      "storage": "Storage & low-disk",
+      "anomaly": "Anomaly detection",
+      "updates": "Updates"
     },
     "keys": {
       "auth": {
@@ -518,7 +522,11 @@
         "notification_read_days": "Read notifications (days, 0 = disable cleanup)",
         "quarantine_purge_days": "Quarantined file bytes (days, 0 = keep)",
         "orphan_reclaim_days": "Orphaned files from revoked/deleted shares (days, 0 = disable auto-reclaim)",
-        "tus_abandoned_hours": "Abandoned uploads (hours)"
+        "tus_abandoned_hours": "Abandoned uploads (hours)",
+        "email_log_days": "Mail log (days, 0 = keep forever)",
+        "inbound_message_days": "Inbound messages (days, 0 = keep forever)",
+        "webhook_delivery_days": "Webhook deliveries (days, 0 = keep forever)",
+        "upload_stale_hours": "Stale in-progress uploads (hours)"
       },
       "uploads": {
         "max_direct_bytes": "Direct-upload size cap (bytes)"
@@ -531,6 +539,19 @@
       },
       "branding": {
         "app_name": "Application / brand name"
+      },
+      "updates": {
+        "drain_max_wait_min": "Postpone-update drain max wait (minutes)"
+      },
+      "storage": {
+        "low_threshold_percent": "Low-disk threshold (% free)",
+        "low_threshold_bytes": "Low-disk threshold (bytes free)"
+      },
+      "anomaly": {
+        "enabled": "Enable anomaly detection",
+        "mass_download_threshold": "Mass-download alert threshold (files / hour)",
+        "multi_network_threshold": "Multi-network alert threshold (distinct networks)",
+        "login_failure_threshold": "Login-failure alert threshold (failures / hour)"
       }
     },
     "help": {
@@ -541,10 +562,55 @@
         "signed_url_ttl_sec": "How long the one-time download link the browser uses stays valid. Longer lets a browser resume an interrupted download (it re-requests the same link); shorter shrinks the window if that link ever lands in a proxy log. The desktop client uses a bearer token and is unaffected."
       },
       "rate_limit": {
-        "lockout_duration_min": "How long an account stays locked after too many failed logins."
+        "lockout_duration_min": "How long an account stays locked after too many failed logins.",
+        "login": "Login attempts allowed per IP within the window below before requests are rate-limited. (1-1000, default 10.)",
+        "register": "Attempts per IP within the window for register-from-invite, forgot-password and verify-email. (1-1000, default 3.)",
+        "login_window_sec": "Sliding window the login/register attempt limits are counted over. (30-86400 sec, default 900.)",
+        "lockout_threshold": "Consecutive failed logins on one account before it is locked. (1-100, default 5.)"
       },
       "branding": {
         "app_name": "Shown in the UI header and outgoing notification emails."
+      },
+      "auth": {
+        "access_token_expire_minutes": "How long a signed-in session's access token stays valid before the browser silently refreshes it. Shorter is safer; longer means fewer refreshes. (5-1440 min, default 15.)",
+        "refresh_token_expire_days": "How long a stored session can be refreshed before the user must sign in again. (1-365 days, default 7.)",
+        "max_active_sessions_per_user": "Cap on concurrent signed-in sessions per user; the oldest is evicted past this. (1-100, default 10.)"
+      },
+      "retention": {
+        "refresh_token_days": "How long revoked/expired refresh-token rows are kept before hard deletion. (1-3650 days, default 30.)",
+        "invite_days": "How long unused invites are kept before they are purged. (1-3650 days, default 14.)",
+        "audit_log_days": "How long audit-log rows are kept. 0 keeps them forever. (0-3650 days, default 365.)",
+        "download_log_days": "How long download-log rows are kept. 0 keeps them forever. (0-3650 days, default 90.)",
+        "email_log_days": "How long mail-log rows are kept. 0 keeps them forever. (0-3650 days, default 90.)",
+        "inbound_message_days": "How long fetched inbound (IMAP) messages are kept. 0 keeps them forever. (0-3650 days, default 90.)",
+        "login_attempt_days": "How long forensic login-attempt rows are kept. 0 keeps them forever. (0-3650 days, default 30.)",
+        "webhook_delivery_days": "How long webhook delivery-attempt rows are kept. 0 keeps them forever. (0-3650 days, default 30.)",
+        "notification_read_days": "How long read in-app notifications are kept before cleanup. 0 disables cleanup. (0-3650 days, default 3.)",
+        "quarantine_purge_days": "How long quarantined infected file bytes are kept on disk before purging. 0 keeps them. (0-3650 days, default 90.)",
+        "orphan_reclaim_days": "Grace period before bytes from long-revoked/deleted shares are reclaimed. 0 disables auto-reclaim. (0-3650 days, default 7.)",
+        "tus_abandoned_hours": "How long an abandoned resumable-upload temp file lingers before the sweeper deletes it. (1-8760 hours, default 24.)",
+        "upload_stale_hours": "How long a file stuck mid-upload may sit before it is reaped and its empty share failed. (1-720 hours, default 3.)"
+      },
+      "security": {
+        "hibp_enabled": "Check new passwords against the Have I Been Pwned breach corpus (k-anonymity, no password leaves the server). Fails open if the service is unreachable."
+      },
+      "updates": {
+        "drain_max_wait_min": "When an admin postpones a self-update, how long maintenance mode waits for in-flight transfers to finish before applying the update anyway. (1-1440 min, default 30.)"
+      },
+      "storage": {
+        "low_threshold_percent": "Flag storage low when free space drops below this percent of the volume. 0 disables the percent check. (0-50%, default 5.)",
+        "low_threshold_bytes": "Also flag storage low when free space drops below this many bytes. 0 disables the byte check. (default 10 GiB.)"
+      },
+      "anomaly": {
+        "enabled": "Run the heuristic anomaly scan (mass downloads, credential stuffing, multi-network access). Alerts only; never blocks.",
+        "mass_download_threshold": "Alert when one actor downloads at least this many files in an hour. (1-100000, default 100.)",
+        "multi_network_threshold": "Alert when one account is used from at least this many distinct networks in the window. (2-1000, default 4.)",
+        "login_failure_threshold": "Alert when failed logins in an hour reach this count (possible stuffing). (1-100000, default 50.)"
+      },
+      "public_link": {
+        "password_rate_limit": "Public-link password attempts allowed within the window below before the link is locked. (1-1000, default 10.)",
+        "password_window_sec": "Window the public-link password attempts are counted over. (30-86400 sec, default 900.)",
+        "lockout_sec": "How long a public link stays locked (all IPs) after too many wrong passwords. (30-86400 sec, default 900.)"
       }
     }
   },
@@ -1615,7 +1681,8 @@
       "clean": "Clean",
       "infected": "Infected",
       "failed": "Failed",
-      "deleted": "Deleted"
+      "deleted": "Deleted",
+      "uploading": "Uploading"
     },
     "actions": {
       "download": "Download",

@@ -20,7 +20,7 @@ import type {
 } from '@/types/api'
 
 // Lazy chunk: Milkdown only loads when this page is opened.
-const MarkdownEditor = defineAsyncComponent(() => import('@/components/MarkdownEditor.vue'))
+const RichTextEditor = defineAsyncComponent(() => import('@/components/RichTextEditor.vue'))
 
 const { t, te } = useI18n()
 const { describe } = useApiError()
@@ -100,7 +100,7 @@ async function loadDetail() {
   try {
     const { data } = await getEmailTemplate(activeSlug.value, activeLocale.value)
     subject.value = data.subject
-    body.value = data.has_override ? data.body_markdown : data.default_body
+    body.value = data.has_override ? data.body_html : data.default_body
     baseline.value = { subject: subject.value, body: body.value }
     customized.value = data.has_override
   } catch (err) {
@@ -136,7 +136,7 @@ async function onSave() {
   try {
     const { data } = await updateEmailTemplate(activeSlug.value, activeLocale.value, {
       subject: subject.value.trim() || null,
-      body_markdown: body.value,
+      body_html: body.value,
     })
     subject.value = data.subject
     baseline.value = { subject: subject.value, body: body.value }
@@ -177,7 +177,7 @@ async function onPreview() {
   try {
     const { data } = await previewEmailTemplate(activeSlug.value, activeLocale.value, {
       subject: subject.value.trim() || null,
-      body_markdown: body.value,
+      body_html: body.value,
     })
     preview.value = data
     previewMode.value = 'html'
@@ -194,7 +194,7 @@ async function onTestSend() {
   try {
     const { data } = await testSendEmailTemplate(activeSlug.value, activeLocale.value, {
       subject: subject.value.trim() || null,
-      body_markdown: body.value,
+      body_html: body.value,
     })
     if (data.ok) {
       ui.pushToast(t('admin_email_templates.test_ok_toast', { to: data.sent_to ?? '' }), 'success')
@@ -303,7 +303,7 @@ onBeforeRouteLeave(async () => {
 
           <div class="fh-field">
             <span class="fh-field-label">{{ t('admin_email_templates.body_label') }}</span>
-            <MarkdownEditor
+            <RichTextEditor
               ref="editorRef"
               v-model="body"
               :placeholders="editorPlaceholders"

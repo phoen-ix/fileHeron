@@ -95,6 +95,8 @@ def get_legal(kind: str, db: Session = Depends(get_db)) -> LegalContentResponse:
     enabled = settings_svc.get_bool(db, enabled_key, default=False)
     return LegalContentResponse(
         enabled=enabled,
-        html_en=richtext.render_markdown_safe(settings_svc.get(db, en_key)),
-        html_de=richtext.render_markdown_safe(settings_svc.get(db, de_key)),
+        # Stored content is already sanitised on save; sanitise again on serve
+        # as defense-in-depth (a stricter allowlist could ship later).
+        html_en=richtext.sanitize_html(settings_svc.get(db, en_key)),
+        html_de=richtext.sanitize_html(settings_svc.get(db, de_key)),
     )

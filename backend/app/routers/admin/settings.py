@@ -91,7 +91,7 @@ from ...schemas.updates_settings import (
     UpdateUpdatesSettingsRequest,
 )
 from ...services import email as email_svc
-from ...services import email_change_policy, settings_registry
+from ...services import email_change_policy, richtext, settings_registry
 from ...services import public_link as public_link_svc
 from ...services import settings as settings_svc
 from ...services import share_approval as share_approval_svc
@@ -1387,8 +1387,16 @@ def update_legal_settings(
             db, key=enabled_key, value="true" if doc.enabled else "false",
             actor=admin, request=request,
         )
-        settings_svc.set_value(db, key=en_key, value=(doc.en or None), actor=admin, request=request)
-        settings_svc.set_value(db, key=de_key, value=(doc.de or None), actor=admin, request=request)
+        # Authored as HTML by the editor; sanitise to the safe allowlist on the
+        # way in so stored content is never trusted raw.
+        settings_svc.set_value(
+            db, key=en_key, value=(richtext.sanitize_html(doc.en) or None),
+            actor=admin, request=request,
+        )
+        settings_svc.set_value(
+            db, key=de_key, value=(richtext.sanitize_html(doc.de) or None),
+            actor=admin, request=request,
+        )
     record_audit_event(
         db,
         event_type=AuditEventType.legal_changed,

@@ -12,7 +12,7 @@ import {
   type BrandingSettingsResponse,
   type LegalSettingsResponse,
 } from '@/api/admin'
-import MarkdownEditor from '@/components/MarkdownEditor.vue'
+import RichTextEditor from '@/components/RichTextEditor.vue'
 import { useApiError } from '@/composables/useApiError'
 import { SUPPORTED_LOCALES, type SupportedLocale } from '@/i18n'
 import { useSiteStore } from '@/stores/site'
@@ -263,7 +263,7 @@ onMounted(load)
               :key="loc"
               class="legal-lang"
             >
-              <MarkdownEditor
+              <RichTextEditor
                 v-model="legal![kind][loc]"
                 :aria-label="t(`admin_branding.legal.${kind}_enable`) + ' ' + loc.toUpperCase()"
               />

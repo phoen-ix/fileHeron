@@ -44,7 +44,14 @@ class EmailTemplateOverride(Base):
     locale: Mapped[str] = mapped_column(String(8), nullable=False)
     # NULL subject ⇒ inherit the built-in subject from subjects.json.
     subject: Mapped[str | None] = mapped_column(String(512), nullable=True)
-    body_markdown: Mapped[str] = mapped_column(Text, nullable=False)
+    # Legacy Markdown body (v1.25). Stays NOT NULL to avoid a SQLite ALTER; the
+    # editor now authors HTML in ``body_html`` and writes "" here. Kept one
+    # release as a rollback breadcrumb.
+    body_markdown: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    # HTML authored by the ProseMirror editor (v1.50). Stored raw (token hrefs
+    # like [RESET_URL] must survive); sanitised at render. The migration
+    # backfills it from ``body_markdown``. NULL only for pre-migration rows.
+    body_html: Mapped[str | None] = mapped_column(Text, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(), nullable=False, default=utc_now
     )

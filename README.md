@@ -160,7 +160,7 @@ Approvers get an **Approvals** entry in the top nav - a queue of everything wait
 
 Admins can edit the **subject and body of every outbound email, per language**, from a dedicated editor - no code change or release needed. Built-in templates remain the default; an override only takes effect once saved, and **Reset to default** removes it.
 
-- **WYSIWYG editor** (bold/italic/headings/lists) via the MIT-licensed Milkdown editor, lazy-loaded only on this page. The body is authored as Markdown and stored as Markdown; on send it becomes the plain-text part *and* a sanitised HTML part wrapped in the standard branded layout.
+- **Rich-text (HTML) editor** (v1.50) - headings, bold/italic/underline/strike, alignment, lists, quotes, code, tables, links and images-by-URL - built directly on the MIT-licensed ProseMirror, lazy-loaded only on this page. The body is authored and stored as **HTML**; on send it becomes the plain-text part *and* a sanitised HTML part (alignment classes inlined for mail clients) wrapped in the standard branded layout.
 - **Friendly placeholders** - insert `[RECIPIENT]`, `[SHARE_LINK]`, `[RESET_LINK]`, etc. from a toolbar menu; each template lists the placeholders it supports. The server maps them to real values, HTML-escaping dynamic data and keeping one-time auth links in their canonical (masked-in-mail-log) form.
 - **Live preview** (HTML + plain-text, sample data, rendered in a sandboxed iframe) and **test send** to your own address via the configured SMTP.
 - **Locale-agnostic** - the language tabs are driven by the app's locale set (EN/DE today), so a future language becomes editable with no code change.
@@ -180,8 +180,9 @@ White-label the instance and publish the legally-required footer pages, no redep
   by the desktop-client toggle); the client downloads it after sign-in and shows it
   in the window header, or stays blank if none is set.
 - **Imprint + Privacy policy** - two independently enable-able pages, each edited
-  **per language (EN/DE)** in the same Milkdown editor used for email templates
-  (Markdown in, server-sanitised HTML out via nh3). When enabled, a footer link
+  **per language (EN/DE)** in the same ProseMirror rich-text editor used for email
+  templates (HTML in, server-sanitised HTML out via nh3, alignment via a fixed safe
+  class set). When enabled, a footer link
   appears on **every** page - signed-in, login, and public-link - opening
   `/imprint` / `/privacy`. The viewer sees their language, falling back to the
   other when one side is blank.

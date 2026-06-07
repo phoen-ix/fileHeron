@@ -39,8 +39,8 @@ vi.mock('@/stores/ui', () => ({ useUiStore: () => ({ pushToast }) }))
 const loadConfig = vi.fn(async () => {})
 vi.mock('@/stores/site', () => ({ useSiteStore: () => ({ loadConfig }) }))
 
-const MarkdownEditorStub = defineComponent({
-  name: 'MarkdownEditor',
+const RichTextEditorStub = defineComponent({
+  name: 'RichTextEditor',
   props: {
     modelValue: { type: String, default: '' },
     ariaLabel: { type: String, default: '' },
@@ -56,7 +56,7 @@ import AdminSettingsBranding from '@/views/AdminSettingsBranding.vue'
 function makeWrapper() {
   const i18n = createI18n({ legacy: false, locale: 'en', fallbackLocale: 'en', messages: { en } })
   return mount(AdminSettingsBranding, {
-    global: { plugins: [i18n], stubs: { MarkdownEditor: MarkdownEditorStub } },
+    global: { plugins: [i18n], stubs: { RichTextEditor: RichTextEditorStub } },
   })
 }
 

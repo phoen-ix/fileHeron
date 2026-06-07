@@ -15,8 +15,18 @@ keep this to what would cause a wrong move if unknown.
 
 ## Status
 
-Backend **`v1.49.0`**, desktop client **`client-v0.13.0`** - shipped + in
+Backend **`v1.50.0`**, desktop client **`client-v0.13.0`** - shipped + in
 production.
+
+> **Rich text (v1.50):** the admin legal pages + email-template editor is a
+> from-scratch **ProseMirror** (MIT) HTML editor (`components/RichTextEditor.vue`
+> + `components/richtext/{schema,html}.ts`) - Milkdown/Markdown removed. Content
+> is **HTML**, sanitised by the shared `services/richtext.py::sanitize_html` (nh3;
+> alignment is a value-filtered `text-{left,center,right,justify}` class, no inline
+> style). Legal sanitises on save+serve; email stores raw HTML (token hrefs must
+> survive) and sanitises at render, then inlines the alignment classes for mail
+> clients (`email.py::_inline_alignment`). **Only true-MIT libs** - see the
+> only-true-MIT memory; never TipTap.
 
 > **Doc currency:** sections below were last fully swept at v1.14, plus v1.33
 > (config backup) + v1.34 (maintenance) + v1.49 (API-token scopes) which are

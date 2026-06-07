@@ -21,8 +21,8 @@ async def test_put_then_public_render_sanitised(make_user, db, client, login_as)
         json={
             "imprint": {
                 "enabled": True,
-                "en": "# Imprint\n\nAcme Ltd <script>alert(1)</script>",
-                "de": "# Impressum\n\nAcme GmbH",
+                "en": "<h1>Imprint</h1><p>Acme Ltd <script>alert(1)</script></p>",
+                "de": "<h1>Impressum</h1><p>Acme GmbH</p>",
             },
             "privacy": {"enabled": False, "en": "", "de": ""},
         },

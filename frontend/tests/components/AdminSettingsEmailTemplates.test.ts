@@ -30,7 +30,7 @@ function detail(slug: string, locale: string, hasOverride = false) {
       locale,
       has_override: hasOverride,
       subject: 'Built-in subject',
-      body_markdown: hasOverride ? 'Custom body' : '',
+      body_html: hasOverride ? '<p>Custom body</p>' : '',
       default_subject: 'Built-in subject',
       default_body: 'Default body for [SENDER]',
       placeholders: SUMMARY.placeholders[slug as keyof typeof SUMMARY.placeholders],
@@ -69,8 +69,8 @@ const pushToast = vi.fn()
 const confirm = vi.fn(async () => true)
 vi.mock('@/stores/ui', () => ({ useUiStore: () => ({ pushToast, confirm }) }))
 
-const MarkdownEditorStub = defineComponent({
-  name: 'MarkdownEditor',
+const RichTextEditorStub = defineComponent({
+  name: 'RichTextEditor',
   props: ['modelValue', 'placeholders', 'disabled', 'ariaLabel'],
   emits: ['update:modelValue', 'ready'],
   setup(props, { emit, expose }) {
@@ -90,7 +90,7 @@ function makeWrapper() {
   setActivePinia(createPinia())
   const i18n = createI18n({ legacy: false, locale: 'en', fallbackLocale: 'en', messages: { en } })
   return mount(AdminSettingsEmailTemplates, {
-    global: { plugins: [i18n], stubs: { MarkdownEditor: MarkdownEditorStub } },
+    global: { plugins: [i18n], stubs: { RichTextEditor: RichTextEditorStub } },
   })
 }
 

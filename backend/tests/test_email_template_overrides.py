@@ -11,17 +11,18 @@ from app.utils.timeutil import utc_now
 
 
 def _add(db, slug, locale, body, subject=None):
+    # body is HTML (the editor authors HTML since v1.50).
     db.add(
         EmailTemplateOverride(
             slug=slug, locale=locale, subject=subject,
-            body_markdown=body, updated_at=utc_now(),
+            body_html=body, body_markdown="", updated_at=utc_now(),
         )
     )
     db.commit()
 
 
 def test_override_takes_precedence(db):
-    _add(db, "share_created", "en", "CUSTOM body for [RECIPIENT].", subject="Custom [SENDER]")
+    _add(db, "share_created", "en", "<p>CUSTOM body for [RECIPIENT].</p>", subject="Custom [SENDER]")
     subject, text, html = email_svc.render_email(
         "en", "share_created",
         {"recipient_name": "Grace", "sender_name": "Ada", "share_url": "https://x/s/1"},
@@ -44,7 +45,7 @@ def test_no_override_matches_filesystem(db):
 
 
 def test_locale_falls_back_to_en_override(db):
-    _add(db, "share_approved", "en", "EN override for [RECIPIENT].")
+    _add(db, "share_approved", "en", "<p>EN override for [RECIPIENT].</p>")
     # No DE row → falls back to the EN override.
     subject, text, html = email_svc.render_email(
         "de", "share_approved", {"recipient_name": "Grace", "share_url": "https://x/s/1"}, db=db
@@ -53,7 +54,7 @@ def test_locale_falls_back_to_en_override(db):
 
 
 def test_dynamic_values_are_escaped_in_html_not_text(db):
-    _add(db, "share_created", "en", "Hi [RECIPIENT], note: [MESSAGE]")
+    _add(db, "share_created", "en", "<p>Hi [RECIPIENT], note: [MESSAGE]</p>")
     subject, text, html = email_svc.render_email(
         "en", "share_created",
         {"recipient_name": "Grace", "message": "<script>alert(1)</script>", "share_url": "https://x"},
@@ -75,19 +76,23 @@ def test_sanitize_html_strips_script_and_handlers():
     assert "javascript:" not in out
 
 
-def test_raw_html_in_markdown_is_inert(db):
-    # markdown-it has raw HTML disabled, so admin-typed tags render as escaped
-    # text (no live tag / handler), and dangerous link schemes are stripped.
-    _add(db, "share_created", "en", "Body\n\n<img src=x onerror=alert(1)>\n\n[x](javascript:alert(1))")
+def test_admin_html_is_sanitized(db):
+    # Admin-authored HTML is sanitised on render: event handlers and dangerous
+    # link/image schemes are stripped (the img tag may remain, but inert).
+    _add(
+        db, "share_created", "en",
+        '<p>Body</p><img src="x" onerror="alert(1)">'
+        '<p><a href="javascript:alert(1)">x</a></p>',
+    )
     _, _, html = email_svc.render_email(
         "en", "share_created", {"recipient_name": "G", "share_url": "https://x"}, db=db
     )
-    assert "<img" not in html  # no live img tag
+    assert "onerror" not in html
     assert "javascript:" not in html
 
 
 def test_auth_link_canonical_path_preserved_and_masked(db):
-    _add(db, "reset_password", "en", "Reset here: [reset]([RESET_LINK])")
+    _add(db, "reset_password", "en", '<p>Reset here: <a href="[RESET_LINK]">reset</a></p>')
     subject, text, html = email_svc.render_email(
         "en", "reset_password",
         {"display_name": "Grace", "reset_url": "https://x/reset-password/SECRET123"},

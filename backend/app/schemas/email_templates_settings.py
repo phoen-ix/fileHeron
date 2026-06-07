@@ -26,9 +26,9 @@ class EmailTemplateItem(APIBaseModel):
     has_override: bool
     # Effective subject (override if set, else built-in default).
     subject: str
-    # The override body markdown, or "" when none exists yet (the editor seeds
-    # from the built-in default text in that case - see `default_body`).
-    body_markdown: str
+    # The override body HTML, or "" when none exists yet (the editor seeds from
+    # the built-in default HTML in that case - see `default_body`).
+    body_html: str
     default_subject: str
     default_body: str
     placeholders: list[PlaceholderMeta]
@@ -51,12 +51,12 @@ class EmailTemplatesListResponse(APIBaseModel):
 class UpdateEmailTemplateRequest(APIBaseModel):
     # None/"" subject ⇒ inherit the built-in subject.
     subject: str | None = Field(default=None, max_length=512)
-    body_markdown: str = Field(..., min_length=1, max_length=50_000)
+    body_html: str = Field(..., min_length=1, max_length=50_000)
 
 
 class PreviewEmailTemplateRequest(APIBaseModel):
     subject: str | None = Field(default=None, max_length=512)
-    body_markdown: str = Field(..., max_length=50_000)
+    body_html: str = Field(..., max_length=50_000)
 
 
 class PreviewEmailTemplateResponse(APIBaseModel):
@@ -69,7 +69,7 @@ class TestSendEmailTemplateRequest(APIBaseModel):
     # The (possibly unsaved) edits to render. Recipient is forced to the
     # requesting admin's own address server-side.
     subject: str | None = Field(default=None, max_length=512)
-    body_markdown: str = Field(..., max_length=50_000)
+    body_html: str = Field(..., max_length=50_000)
 
 
 class TestSendEmailTemplateResponse(APIBaseModel):

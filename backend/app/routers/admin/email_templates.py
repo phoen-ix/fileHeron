@@ -72,15 +72,25 @@ def _default_subject(slug: str, locale: str) -> str:
 
 
 def _default_body(slug: str, locale: str) -> str:
-    """The built-in text template rendered with friendly tokens - the editor's
-    starting point when no override exists. Best-effort."""
+    """The built-in plain-text body rendered with friendly tokens, wrapped in
+    paragraphs - the editor's starting point when no override exists. (The
+    built-in .html.j2 extends the email layout, so it can't seed the editor;
+    the plain text gives clean paragraphs the admin can then format.)"""
     try:
-        return email_svc._render(
+        text = email_svc._render(
             locale, slug, "txt", _seed_ctx(slug),
             app_url="[APP_URL]", app_name="[APP_NAME]",
-        ).strip() + "\n"
+        ).strip()
     except Exception:  # noqa: BLE001 - seeding is non-critical
         return ""
+    if not text:
+        return ""
+    import html as _html
+
+    paras = [p.strip() for p in text.split("\n\n") if p.strip()]
+    return "".join(
+        "<p>" + _html.escape(p).replace("\n", "<br>") + "</p>" for p in paras
+    )
 
 
 def _placeholders(slug: str) -> list[PlaceholderMeta]:
@@ -105,7 +115,7 @@ def _item(db: Session, slug: str, locale: str) -> EmailTemplateItem:
         locale=locale,
         has_override=row is not None,
         subject=(row.subject if (row and row.subject) else default_subject),
-        body_markdown=(row.body_markdown if row else ""),
+        body_html=((row.body_html or "") if row else ""),
         default_subject=default_subject,
         default_body=default_body,
         placeholders=_placeholders(slug),
@@ -113,7 +123,8 @@ def _item(db: Session, slug: str, locale: str) -> EmailTemplateItem:
 
 
 def _validate_content(slug: str, subject: str | None, body: str) -> None:
-    """Reject unknown placeholders, missing required auth links, broken markdown."""
+    """Reject unknown placeholders + missing required auth links. ``body`` is
+    HTML; the renderer sanitises it, so there's no parse step to fail."""
     used = ep.tokens_in(body) | ep.tokens_in(subject or "")
     unknown = sorted(used - ep.known_tokens(slug))
     if unknown:
@@ -129,10 +140,6 @@ def _validate_content(slug: str, subject: str | None, body: str) -> None:
             "A required link placeholder is missing from the body.",
             details={"missing": missing},
         )
-    try:
-        email_svc._md.render(body)
-    except Exception:  # noqa: BLE001
-        raise AppError(400, "INVALID_MARKDOWN", "The body could not be parsed.") from None
 
 
 # ---------------------------------------------------------------------------
@@ -194,14 +201,15 @@ def update_email_template(
     _assert_slug(slug)
     _assert_locale(locale)
     subject = (payload.subject or "").strip() or None
-    _validate_content(slug, subject, payload.body_markdown)
+    _validate_content(slug, subject, payload.body_html)
 
     row = _get_override(db, slug, locale)
     if row is None:
         row = EmailTemplateOverride(slug=slug, locale=locale)
         db.add(row)
     row.subject = subject
-    row.body_markdown = payload.body_markdown
+    row.body_html = payload.body_html
+    row.body_markdown = ""  # legacy column kept NOT NULL; no longer authored
     row.updated_at = utc_now()
     row.updated_by_id = admin.id
     db.flush()
@@ -259,9 +267,9 @@ def preview_email_template(
     _assert_slug(slug)
     _assert_locale(locale)
     subject = (payload.subject or "").strip() or None
-    _validate_content(slug, subject, payload.body_markdown)
+    _validate_content(slug, subject, payload.body_html)
     app_url = site_svc.get_site_url(db)
-    ov = SimpleNamespace(subject=subject, body_markdown=payload.body_markdown)
+    ov = SimpleNamespace(subject=subject, body_html=payload.body_html)
     rendered_subject, text, html = email_svc.render_override(
         ov, slug, locale, ep.sample_ctx(slug, app_url=app_url),
         app_url=app_url,
@@ -287,9 +295,9 @@ async def test_send_email_template(
     _assert_slug(slug)
     _assert_locale(locale)
     subject = (payload.subject or "").strip() or None
-    _validate_content(slug, subject, payload.body_markdown)
+    _validate_content(slug, subject, payload.body_html)
     app_url = site_svc.get_site_url(db)
-    ov = SimpleNamespace(subject=subject, body_markdown=payload.body_markdown)
+    ov = SimpleNamespace(subject=subject, body_html=payload.body_html)
     rendered_subject, text, html = email_svc.render_override(
         ov, slug, locale, ep.sample_ctx(slug, app_url=app_url),
         app_url=app_url,

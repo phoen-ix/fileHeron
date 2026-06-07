@@ -1107,7 +1107,7 @@ export interface EmailTemplateItem {
   locale: string
   has_override: boolean
   subject: string
-  body_markdown: string
+  body_html: string
   default_subject: string
   default_body: string
   placeholders: EmailPlaceholderMeta[]
@@ -1115,12 +1115,12 @@ export interface EmailTemplateItem {
 
 export interface UpdateEmailTemplateRequest {
   subject: string | null
-  body_markdown: string
+  body_html: string
 }
 
 export interface PreviewEmailTemplateRequest {
   subject: string | null
-  body_markdown: string
+  body_html: string
 }
 
 export interface PreviewEmailTemplateResponse {
@@ -1131,7 +1131,7 @@ export interface PreviewEmailTemplateResponse {
 
 export interface TestSendEmailTemplateRequest {
   subject: string | null
-  body_markdown: string
+  body_html: string
 }
 
 export interface TestSendEmailTemplateResponse {

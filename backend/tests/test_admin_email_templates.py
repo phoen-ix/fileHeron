@@ -39,13 +39,13 @@ async def test_put_persists_and_audits(make_user, db, client, login_as):
     token = await _admin_token(make_user, login_as)
     resp = await client.put(
         f"{_BASE}/share_created/de",
-        json={"subject": "Neu von [SENDER]", "body_markdown": "Hallo [RECIPIENT]!"},
+        json={"subject": "Neu von [SENDER]", "body_html": "<p>Hallo [RECIPIENT]!</p>"},
         headers=_h(token),
     )
     assert resp.status_code == 200, resp.text
     assert resp.json()["has_override"] is True
     row = db.query(EmailTemplateOverride).filter_by(slug="share_created", locale="de").one()
-    assert row.body_markdown == "Hallo [RECIPIENT]!"
+    assert row.body_html == "<p>Hallo [RECIPIENT]!</p>"
     audit = (
         db.query(AuditLog)
         .filter(AuditLog.event_type == AuditEventType.email_template_changed)
@@ -62,7 +62,7 @@ async def test_put_rejects_unknown_placeholder(make_user, client, login_as):
     token = await _admin_token(make_user, login_as)
     resp = await client.put(
         f"{_BASE}/share_created/en",
-        json={"body_markdown": "Hi [BOGUS_TOKEN]"},
+        json={"body_html": "<p>Hi [BOGUS_TOKEN]</p>"},
         headers=_h(token),
     )
     assert resp.status_code == 400
@@ -75,7 +75,7 @@ async def test_put_requires_auth_link_for_reset_password(make_user, client, logi
     # Missing [RESET_LINK] → rejected.
     bad = await client.put(
         f"{_BASE}/reset_password/en",
-        json={"body_markdown": "Hi [RECIPIENT], you asked for a reset."},
+        json={"body_html": "<p>Hi [RECIPIENT], you asked for a reset.</p>"},
         headers=_h(token),
     )
     assert bad.status_code == 400
@@ -83,7 +83,7 @@ async def test_put_requires_auth_link_for_reset_password(make_user, client, logi
     # Present → accepted.
     ok = await client.put(
         f"{_BASE}/reset_password/en",
-        json={"body_markdown": "Hi [RECIPIENT], reset: [RESET_LINK]"},
+        json={"body_html": "<p>Hi [RECIPIENT], reset: [RESET_LINK]</p>"},
         headers=_h(token),
     )
     assert ok.status_code == 200, ok.text
@@ -94,7 +94,7 @@ async def test_delete_resets_to_default(make_user, db, client, login_as):
     token = await _admin_token(make_user, login_as)
     await client.put(
         f"{_BASE}/share_approved/en",
-        json={"body_markdown": "Custom [RECIPIENT]"},
+        json={"body_html": "<p>Custom [RECIPIENT]</p>"},
         headers=_h(token),
     )
     resp = await client.delete(f"{_BASE}/share_approved/en", headers=_h(token))
@@ -114,7 +114,7 @@ async def test_preview_renders_sample_data(make_user, client, login_as):
     token = await _admin_token(make_user, login_as)
     resp = await client.post(
         f"{_BASE}/reset_password/en/preview",
-        json={"subject": "Reset for [RECIPIENT]", "body_markdown": "Reset: [reset]([RESET_LINK])"},
+        json={"subject": "Reset for [RECIPIENT]", "body_html": '<p>Reset: <a href="[RESET_LINK]">reset</a></p>'},
         headers=_h(token),
     )
     assert resp.status_code == 200, resp.text

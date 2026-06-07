@@ -1735,6 +1735,37 @@
       "files_delete": "Dateien löschen"
     }
   },
+  "richtext": {
+    "undo": "Rückgängig",
+    "redo": "Wiederholen",
+    "block": "Stil",
+    "paragraph": "Absatz",
+    "bold": "Fett",
+    "italic": "Kursiv",
+    "underline": "Unterstrichen",
+    "strike": "Durchgestrichen",
+    "code": "Inline-Code",
+    "align_left": "Linksbündig",
+    "align_center": "Zentriert",
+    "align_right": "Rechtsbündig",
+    "align_justify": "Blocksatz",
+    "bullet_list": "Aufzählung",
+    "ordered_list": "Nummerierte Liste",
+    "blockquote": "Zitat",
+    "code_block": "Codeblock",
+    "hr": "Trennlinie",
+    "link": "Link",
+    "image": "Bild",
+    "table": "Tabelle einfügen",
+    "row_after": "Zeile hinzufügen",
+    "col_after": "Spalte hinzufügen",
+    "del_row": "Zeile löschen",
+    "del_col": "Spalte löschen",
+    "del_table": "Tabelle löschen",
+    "insert_placeholder": "Platzhalter einfügen…",
+    "link_prompt": "Link-URL (leer lassen zum Entfernen):",
+    "image_prompt": "Bild-URL:"
+  },
   "share_kind": {
     "outbound": "Ausgehend",
     "inbound": "Eingehend"

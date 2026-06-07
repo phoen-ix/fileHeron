@@ -12,6 +12,7 @@ notification flows enqueue via the ARQ `send_email_job` task.
 """
 from __future__ import annotations
 
+import html as _htmllib
 import json
 import logging
 import re
@@ -27,6 +28,7 @@ from ..config import settings
 from ..database import SessionLocal
 from ..models.user import Locale
 from ..utils.emailing import SmtpConfig, send_email
+from . import richtext
 
 DEFAULT_TIMEZONE = "UTC"
 
@@ -174,6 +176,46 @@ def _sanitize_html(raw_html: str) -> str:
     )
 
 
+# --- HTML override rendering (ProseMirror editor, v1.50) ---------------------
+# The shared sanitiser (services/richtext) keeps only the four alignment classes;
+# email clients ignore classes/<style>, so we inline just those four as
+# `style="text-align:…"`. Everything else in the layout is already inline-styled.
+_ALIGN_INLINE = {
+    "text-left": "text-align:left",
+    "text-center": "text-align:center",
+    "text-right": "text-align:right",
+    "text-justify": "text-align:justify",
+}
+
+
+def _inline_alignment(html: str) -> str:
+    """Inject inline `text-align` for the four alignment utility classes the
+    sanitiser preserves (so alignment survives in Outlook/Gmail)."""
+    return re.sub(
+        r'class="(text-(?:left|center|right|justify))"',
+        lambda m: f'class="{m.group(1)}" style="{_ALIGN_INLINE[m.group(1)]}"',
+        html,
+    )
+
+
+def _html_to_text(html: str) -> str:
+    """Best-effort plain-text alternative from an HTML body: links become
+    ``label (href)``, block tags become line breaks, remaining tags are stripped
+    and entities decoded. Token placeholders in hrefs survive for substitution."""
+    if not html:
+        return ""
+    t = re.sub(
+        r'(?is)<a\b[^>]*\bhref="([^"]*)"[^>]*>(.*?)</a>',
+        lambda m: f"{re.sub(r'<[^>]+>', '', m.group(2)).strip()} ({m.group(1)})",
+        html,
+    )
+    t = re.sub(r"(?i)<br\s*/?>", "\n", t)
+    t = re.sub(r"(?i)<li\b[^>]*>", "- ", t)
+    t = re.sub(r"(?i)</(p|div|h[1-6]|li|tr|blockquote|ul|ol|pre)>", "\n", t)
+    t = re.sub(r"<[^>]+>", "", t)
+    return _htmllib.unescape(t)
+
+
 def _wrap_layout(
     fragment: str, subject: str, locale_code: str, app_name: str | None,
     site_timezone: str | None, ctx: dict,
@@ -309,12 +351,13 @@ def render_override(
     *, app_url: str | None = None, site_timezone: str | None = None,
     app_name: str | None = None,
 ) -> tuple[str, str, str]:
-    """Render an admin override (subject, text, html) from its Markdown body.
+    """Render an admin override (subject, text, html) from its HTML body.
 
-    Security ordering for the HTML part: markdown→HTML (raw HTML disabled), then
-    URL tokens substituted into hrefs (real scheme, canonical auth path) BEFORE
-    sanitize, then nh3 sanitize, then text tokens substituted (HTML-escaped) so
-    no user-controlled value can introduce markup."""
+    Security ordering for the HTML part: URL tokens substituted into hrefs (real
+    scheme, canonical auth path) BEFORE sanitize, then nh3 sanitize (shared
+    allowlist), then text tokens substituted (HTML-escaped) so no user-controlled
+    value can introduce markup, then alignment classes inlined for mail clients.
+    The plain-text part is derived from the HTML."""
     from . import email_placeholders as ep
 
     eff_app_url = app_url if app_url is not None else settings.APP_URL
@@ -331,12 +374,16 @@ def render_override(
     )
     subject = _sub(raw_subject, text_values)
 
-    text = _normalize_text(_sub(override.body_markdown, text_values))
+    body_html = override.body_html or ""
 
-    frag = _md.render(override.body_markdown)
-    frag = _sub(frag, {t: html_values[t] for t in url_toks if t in html_values})
-    frag = _sanitize_html(frag)
+    # Plain-text alternative, derived from the HTML (links keep their href so
+    # token URLs survive), then text tokens substituted.
+    text = _normalize_text(_sub(_html_to_text(body_html), text_values))
+
+    frag = _sub(body_html, {t: html_values[t] for t in url_toks if t in html_values})
+    frag = richtext.sanitize_html(frag)
     frag = _sub(frag, {t: v for t, v in html_values.items() if t not in url_toks})
+    frag = _inline_alignment(frag)
     html_out = _wrap_layout(frag, subject, locale_code, eff_app_name, eff_tz, ctx)
     return subject, text, html_out
 

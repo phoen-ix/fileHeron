@@ -1,59 +1,46 @@
-# file:Heron v1.49.0
+# file:Heron v1.50.0
 
-**Scoped API tokens.** You can now mint an API token that's limited to *specific*
-actions instead of carrying your full account access. Create a token that can only
-create a share and upload files, for example, and it will be refused if it tries to
-download other files, list shares, delete anything, or touch your account. Existing
-tokens are unchanged - they keep full access until you choose to replace them with a
-scoped one.
+**A real rich-text editor for legal pages and emails.** The editor for *Imprint /
+Privacy* pages and *email templates* was a bare 5-button Markdown box that couldn't
+do tables or text alignment. It's been replaced with a proper visual HTML editor:
+alignment, tables, underline, more, all in a what-you-see-is-what-you-get toolbar.
 
 ## What's new
 
-- **Per-token scopes (least privilege).** When you create a token (under *Account →
-  API tokens*, or *Admin → API tokens* for a token on someone's behalf) you can now pick
-  **Full access** (the default, same as before) or **Limited access** and tick exactly
-  what the token may do:
-  - **Sharing:** create shares · add files to existing shares · list & read shares ·
-    manage shares (edit/expire/revoke) · search recipients · create & revoke public links
-  - **Files:** upload · download & preview · delete
-- **Everything else is refused.** A limited token that tries anything outside its scopes
-  gets a clean `403 INSUFFICIENT_SCOPE` telling it which scope it was missing - it cannot
-  reach any other part of the API. Public-link creation is its own scope, so a plain
-  "send files" token can't expose files to the world unless you grant it.
-- **Existing tokens keep working.** A token with no scopes set means *unrestricted* -
-  identical to today. Nothing you've already issued changes.
-- **Scopes are visible.** Each token shows its granted scopes (or "full access") in the
-  list, and a programmatic client can read its own scopes from
-  `/api/account/api-tokens/current`.
-
-## Why
-
-An automation credential should be able to do its one job and nothing more. Before this,
-a token stolen from (say) a backup script could download every file the owner could
-reach; now that script's token can be limited to "upload + create share" and is useless
-for anything else.
-
-## Notes for the security-minded
-
-- Scopes only ever *narrow* a token below its owner's permissions - they can never grant
-  more than the user already has, and browser/session logins are completely unaffected.
-- Enforcement is deny-by-default and guarded by a test that fails the build if any
-  token-reachable endpoint is ever left ungated, so the restriction can't silently
-  develop a hole as the API grows.
+- **Full formatting toolbar** - headings (H1-H6), **bold / italic / underline /
+  strikethrough / inline code**, **left / center / right / justify alignment**,
+  bulleted & numbered lists, quotes, code blocks, horizontal rules, **links**,
+  **images by URL**, and **tables** (insert, add/remove rows & columns) - plus
+  undo/redo.
+- **What you see is what you get.** Content is authored and stored as HTML, so the
+  editor shows the real result instead of Markdown source.
+- **Still locked down.** Legal pages are public, so every page is sanitised on the
+  server with a tight allowlist - alignment is applied through a fixed, safe set of
+  classes (no arbitrary styles or scripts can ever be stored). Email bodies are
+  sanitised the same way, and alignment is auto-inlined so it survives in mail
+  clients like Outlook.
+- **Built on open foundations.** The editor is built directly on **ProseMirror**
+  (MIT-licensed) - no third-party editor vendor. It's lazy-loaded, and the bundle is
+  actually *smaller* than the old one.
 
 ## Upgrade notes
 
-- Backend rolls forward via **Update** in `/admin/system`. The release adds one
-  **re-runnable, back-compatible database column** (`api_tokens.scopes`, nullable) -
-  applied automatically on update, no host step, and existing tokens stay full-access
-  (the column is NULL for them).
+- Rolls forward via **Update** in `/admin/system`. The update **migrates your
+  existing legal-page and email-template content from Markdown to HTML automatically**
+  (one-time, on upgrade) - nothing is lost, and pages keep rendering as before.
+- **Re-styling old content:** previously-written text comes across as clean
+  paragraphs; use the new toolbar to add alignment/tables/etc. where you want them.
+- **Rolling back** to a pre-v1.50 image after updating is possible but the converted
+  legal/email content is now HTML, so the old (Markdown) renderer would show it
+  unformatted - re-save those pages if you roll back.
+- One re-runnable, back-compatible database column is added; no host step.
 
 ## Container images
 
-- `ghcr.io/phoen-ix/fileheron-backend:v1.49.0`
-- `ghcr.io/phoen-ix/fileheron-worker:v1.49.0`
-- `ghcr.io/phoen-ix/fileheron-frontend:v1.49.0`
-- `ghcr.io/phoen-ix/fileheron-updater-shim:v1.49.0`
-- `ghcr.io/phoen-ix/fileheron-updater-executor:v1.49.0`
+- `ghcr.io/phoen-ix/fileheron-backend:v1.50.0`
+- `ghcr.io/phoen-ix/fileheron-worker:v1.50.0`
+- `ghcr.io/phoen-ix/fileheron-frontend:v1.50.0`
+- `ghcr.io/phoen-ix/fileheron-updater-shim:v1.50.0`
+- `ghcr.io/phoen-ix/fileheron-updater-executor:v1.50.0`
 
 Click **Update** in `/admin/system` to roll forward.

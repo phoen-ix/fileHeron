@@ -1735,6 +1735,37 @@
       "files_delete": "Delete files"
     }
   },
+  "richtext": {
+    "undo": "Undo",
+    "redo": "Redo",
+    "block": "Style",
+    "paragraph": "Paragraph",
+    "bold": "Bold",
+    "italic": "Italic",
+    "underline": "Underline",
+    "strike": "Strikethrough",
+    "code": "Inline code",
+    "align_left": "Align left",
+    "align_center": "Align center",
+    "align_right": "Align right",
+    "align_justify": "Justify",
+    "bullet_list": "Bulleted list",
+    "ordered_list": "Numbered list",
+    "blockquote": "Quote",
+    "code_block": "Code block",
+    "hr": "Horizontal rule",
+    "link": "Link",
+    "image": "Image",
+    "table": "Insert table",
+    "row_after": "Add row",
+    "col_after": "Add column",
+    "del_row": "Delete row",
+    "del_col": "Delete column",
+    "del_table": "Delete table",
+    "insert_placeholder": "Insert placeholder…",
+    "link_prompt": "Link URL (leave blank to remove):",
+    "image_prompt": "Image URL:"
+  },
   "share_kind": {
     "outbound": "Outbound",
     "inbound": "Inbound"

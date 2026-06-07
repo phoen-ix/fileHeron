@@ -3,6 +3,7 @@
   "reset_password": "Reset your password",
   "invite": "You have been invited to {app_name}",
   "lockout_warning": "Your account was just locked",
+  "password_changed": "Your password was changed",
   "share_created": "{sender_name} sent you files via {app_name}",
   "share_files_added": "{sender_name} added new files to a share",
   "share_expiring": "Your share expires in 24 hours",

@@ -249,6 +249,28 @@ async def change_password(
         request=request,
     )
     db.commit()
+    # Security alert to the account owner (audit L34). Best-effort: a failed
+    # alert must never fail the password change itself.
+    try:
+        import logging
+
+        from ..services import site as site_svc
+        from ..utils.geohash import ip_geohash5
+
+        geo = ip_geohash5(ip) if ip else None
+        await email_svc.send_password_changed_email(
+            to=user.email,
+            locale=user.locale,
+            display_name=user.display_name,
+            ip_hint=f"~{geo}" if geo else None,
+            app_url=site_svc.get_site_url(db),
+            site_timezone=site_svc.get_site_timezone(db),
+            db=db,
+        )
+    except Exception:
+        logging.getLogger("fileheron.account").exception(
+            "password-changed alert failed for user=%d", user.id
+        )
     return {"ok": True}
 
 

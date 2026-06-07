@@ -6,11 +6,10 @@ import contextlib
 
 import pytest
 
-from app.models.inbound_message import InboundMessage, MessageClass
 from app.models.inbound_attachment import AttachmentAVState, InboundAttachment
+from app.models.inbound_message import InboundMessage, MessageClass
 from app.models.user import UserRole
-from app.services import av_scan
-from app.services import imap_poll, inbound_mail, inbound_parse
+from app.services import av_scan, imap_poll, inbound_mail, inbound_parse
 from app.services import settings as s
 
 NORMAL = b"""From: Grace Hopper <grace@example.com>

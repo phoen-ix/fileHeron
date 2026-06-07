@@ -102,7 +102,7 @@ def test_auth_link_canonical_path_preserved_and_masked(db):
 
 def test_editable_locales_track_locale_enum():
     # The editor's locale set must be Locale-derived (future-locale requirement).
-    assert email_svc._LOCALE_CODES == {loc.value for loc in Locale}
+    assert {loc.value for loc in Locale} == email_svc._LOCALE_CODES
 
 
 def test_auth_link_placeholders_match_masking_regex():

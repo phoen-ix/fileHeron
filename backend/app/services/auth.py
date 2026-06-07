@@ -60,6 +60,7 @@ __all__ = [
     "resolve_user_from_access_token",
     "revoke_all_user_refresh_tokens",
     "create_refresh_token",
+    "authenticate_first_factor",
     "login",
     "login_with_recovery",
     "register_from_invite",
@@ -78,6 +79,12 @@ __all__ = [
 INVITE_TTL = timedelta(hours=24)
 EMAIL_VERIFY_TTL = timedelta(hours=24)
 PASSWORD_RESET_TTL = timedelta(hours=1)
+
+# A fixed Argon2 hash used only to equalize wall-clock time on the
+# unknown-email branch of authenticate_first_factor, so a missing account
+# cannot be told apart from a wrong password by response latency. The
+# plaintext below is never a usable credential.
+_DUMMY_PASSWORD_HASH = argon2_hash("fileheron-login-timing-equalizer")
 
 
 # ---------------------------------------------------------------------------
@@ -305,27 +312,26 @@ async def _maybe_send_lockout_email(
     )
 
 
-async def login(
+async def authenticate_first_factor(
     db: Session,
     *,
     email: str,
     password: str,
-    totp_code: str | None = None,
     request: Request | None,
-    settings,
-) -> tuple[User, str, int, str]:
-    """Phase 1b: full auth flow with TOTP + lockout + device recording.
+) -> User:
+    """Shared pre-second-factor gate for every password-first login path
+    (``/api/auth/login``, ``/api/auth/login/recovery``,
+    ``/api/auth/webauthn/begin``).
 
-    Returns (user, access_token, expires_in_seconds, refresh_token_plain) on
-    success. Raises AppError otherwise. Possible error codes:
-    - RATE_LIMITED      - per-IP login rate exceeded
-    - INVALID_CREDENTIALS - bad email or bad password
-    - ACCOUNT_LOCKED    - account-level lockout active (15min)
-    - ACCOUNT_DISABLED
-    - EMAIL_NOT_VERIFIED
-    - TOTP_REQUIRED     - 2FA is on, totp_code missing
-    - INVALID_TOTP      - totp_code wrong (also bumps failure counter)
-    """
+    Runs, in order: per-IP rate limit -> unknown-email -> account lockout ->
+    password verify (with failure recording + lockout email) -> disabled ->
+    email-not-verified. Returns the authenticated User on success. On every
+    failure branch it records the attempt, commits, and raises ``AppError``
+    with the same codes/messages as ``login()``. The caller owns the second
+    factor (TOTP / recovery / passkey) and the success path. Extracted so the
+    password and WebAuthn flows cannot drift apart on throttling/lockout - the
+    bug that left /webauthn/begin an unthrottled password + enumeration oracle
+    (audit H1)."""
     ip = _request_ip(request)
 
     # 1. Per-IP rate limit
@@ -341,8 +347,11 @@ async def login(
     em_email = normalize_email(email)
     user = db.query(User).filter(User.email == em_email).one_or_none()
 
-    # 2. Unknown email → bad credentials (no oracle: same response either way)
+    # 2. Unknown email -> bad credentials. Spend one Argon2 verify against a
+    # fixed dummy hash so the latency matches the wrong-password branch below
+    # (no enumeration-by-timing tell).
     if user is None:
+        argon2_verify(_DUMMY_PASSWORD_HASH, password)
         _record_login_attempt(db, email_value=em_email, ip=ip, outcome=LoginOutcome.unknown_email)
         record_audit_event(
             db,
@@ -356,7 +365,7 @@ async def login(
         db.commit()
         raise AppError(401, "INVALID_CREDENTIALS", "Invalid email or password.")
 
-    # 3. Account lockout (return 423 with retry-after hint baked in details)
+    # 3. Account lockout (423 with retry-after hint baked into details)
     if rate_limit_svc.is_account_locked(user):
         _record_login_attempt(db, email_value=em_email, ip=ip, outcome=LoginOutcome.locked)
         record_audit_event(
@@ -432,7 +441,37 @@ async def login(
         db.commit()
         raise AppError(403, "EMAIL_NOT_VERIFIED", "Please verify your email first.")
 
-    # 6. TOTP challenge (if enabled)
+    return user
+
+
+async def login(
+    db: Session,
+    *,
+    email: str,
+    password: str,
+    totp_code: str | None = None,
+    request: Request | None,
+    settings,
+) -> tuple[User, str, int, str]:
+    """Phase 1b: full auth flow with TOTP + lockout + device recording.
+
+    Returns (user, access_token, expires_in_seconds, refresh_token_plain) on
+    success. Raises AppError otherwise. Possible error codes:
+    - RATE_LIMITED      - per-IP login rate exceeded
+    - INVALID_CREDENTIALS - bad email or bad password
+    - ACCOUNT_LOCKED    - account-level lockout active (15min)
+    - ACCOUNT_DISABLED
+    - EMAIL_NOT_VERIFIED
+    - TOTP_REQUIRED     - 2FA is on, totp_code missing
+    - INVALID_TOTP      - totp_code wrong (also bumps failure counter)
+    """
+    user = await authenticate_first_factor(
+        db, email=email, password=password, request=request
+    )
+    ip = _request_ip(request)
+    em_email = normalize_email(email)
+
+    # TOTP challenge (if enabled)
     if totp_svc.is_enabled(user):
         if not totp_code:
             db.commit()
@@ -472,9 +511,12 @@ async def login(
             db.commit()
             raise AppError(401, "INVALID_TOTP", "Two-factor code is invalid.")
 
-    # 7. Success path
+    # Success path
     rate_limit_svc.record_success(db, user=user)
-    rate_limit_svc.reset_ip_window(ip or "")
+    # Do NOT clear the shared per-IP login window on success: it is keyed by IP
+    # (not account), so resetting it would let one valid credential wipe the
+    # throttle and brute-force OTHER accounts from the same IP (audit L1). The
+    # window expires on its own after LOGIN_RATE_WINDOW_SEC.
 
     access, expires_in = create_access_token(user.id, settings, db)
     _, refresh_plain = create_refresh_token(db, user, request, settings)
@@ -509,38 +551,12 @@ async def login_with_recovery(
     """Login using a recovery code instead of a TOTP code. Same auth gates as
     `login()` (rate limit, lockout, password, disabled, email-verified). On
     success, the recovery code is consumed (cannot be re-used)."""
+    user = await authenticate_first_factor(
+        db, email=email, password=password, request=request
+    )
     ip = _request_ip(request)
-
-    if ip and not rate_limit_svc.check_login_ip_allowed(
-        ip,
-        limit=settings_registry.effective(db, settings_registry.K.RATE_LIMIT_LOGIN),
-        window_sec=settings_registry.effective(db, settings_registry.K.LOGIN_RATE_WINDOW_SEC),
-    ):
-        _record_login_attempt(db, email_value=None, ip=ip, outcome=LoginOutcome.rate_limited)
-        db.commit()
-        raise AppError(429, "RATE_LIMITED", "Too many login attempts. Try again later.")
-
     em_email = normalize_email(email)
-    user = db.query(User).filter(User.email == em_email).one_or_none()
-    if user is None:
-        _record_login_attempt(db, email_value=em_email, ip=ip, outcome=LoginOutcome.unknown_email)
-        db.commit()
-        raise AppError(401, "INVALID_CREDENTIALS", "Invalid email or password.")
-    if rate_limit_svc.is_account_locked(user):
-        _record_login_attempt(db, email_value=em_email, ip=ip, outcome=LoginOutcome.locked)
-        db.commit()
-        raise AppError(423, "ACCOUNT_LOCKED", "Account is temporarily locked.")
-    if not argon2_verify(user.password_hash, password):
-        rate_limit_svc.record_failure(db, user=user)
-        _record_login_attempt(db, email_value=em_email, ip=ip, outcome=LoginOutcome.bad_password)
-        db.commit()
-        raise AppError(401, "INVALID_CREDENTIALS", "Invalid email or password.")
-    if user.is_disabled:
-        db.commit()
-        raise AppError(403, "ACCOUNT_DISABLED", "This account has been disabled.")
-    if not user.email_verified:
-        db.commit()
-        raise AppError(403, "EMAIL_NOT_VERIFIED", "Please verify your email first.")
+
     if not totp_svc.is_enabled(user):
         # No 2FA configured → recovery codes don't apply. Use /login.
         db.commit()
@@ -562,7 +578,7 @@ async def login_with_recovery(
         raise AppError(401, "INVALID_RECOVERY", "Recovery code is invalid or already used.")
 
     rate_limit_svc.record_success(db, user=user)
-    rate_limit_svc.reset_ip_window(ip or "")
+    # The shared per-IP window is intentionally not cleared on success (audit L1).
 
     access, expires_in = create_access_token(user.id, settings, db)
     _, refresh_plain = create_refresh_token(db, user, request, settings)

@@ -13,6 +13,7 @@ from ..middleware.errors import AppError
 from ..models.audit_log import AuditEventType
 from ..models.refresh_token import RefreshToken
 from ..models.user import User, UserRole
+from ..utils.timeutil import utc_now
 from .audit import record_audit_event
 
 logger = logging.getLogger("fileheron.user_management")
@@ -64,6 +65,39 @@ def update_user(
     request=None,
 ) -> User:
     changed: dict[str, object] = {}
+
+    # Last-admin / self-demotion guard (audit M17): refuse a change that would
+    # leave the organization with zero enabled admins - either demoting an
+    # enabled admin off the admin role or disabling an enabled admin. Without
+    # this, the sole admin can lock the whole org out of every /admin route
+    # (role is resolved live, so the demotion takes effect immediately and the
+    # user-update endpoint itself becomes 403). Recovery would then require the
+    # out-of-band scripts/promote_user.py escape hatch.
+    removing_admin_privilege = (
+        target.role == UserRole.admin
+        and not target.is_disabled
+        and (
+            (role is not None and role != UserRole.admin)
+            or is_disabled is True
+        )
+    )
+    if removing_admin_privilege:
+        other_admins = (
+            db.query(User)
+            .filter(
+                User.role == UserRole.admin,
+                User.is_disabled.is_(False),
+                User.id != target.id,
+            )
+            .count()
+        )
+        if other_admins == 0:
+            raise AppError(
+                400,
+                "LAST_ADMIN",
+                "Cannot remove the last remaining admin. Promote another admin first.",
+            )
+
     if display_name is not None and display_name.strip() != target.display_name:
         target.display_name = display_name.strip()
         changed["display_name"] = display_name.strip()
@@ -101,7 +135,7 @@ def update_user(
                 RefreshToken.user_id == target.id,
                 RefreshToken.revoked_at.is_(None),
             ).update(
-                {RefreshToken.revoked_at: target.created_at.__class__.now()},
+                {RefreshToken.revoked_at: utc_now()},
                 synchronize_session=False,
             )
 

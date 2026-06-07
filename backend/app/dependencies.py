@@ -10,6 +10,7 @@ from .config import settings
 from .database import SessionLocal
 from .middleware.errors import AppError
 from .models.user import User, UserRole
+from .services import rate_limit as rate_limit_svc
 from .services.auth import resolve_user_from_access_token
 
 
@@ -65,6 +66,10 @@ def get_actor(
         user = db.query(User).filter(User.id == record.owner_user_id).one_or_none()
         if user is None or user.is_disabled:
             raise AppError(403, "ACCOUNT_DISABLED", "Account is disabled.")
+        if rate_limit_svc.is_account_locked(user):
+            # A pre-minted API token must not outlive an active account lockout
+            # (audit L30) - mirror the interactive login gate.
+            raise AppError(423, "ACCOUNT_LOCKED", "Account is temporarily locked.")
         request.state.user_id = user.id
         request.state.auth_via = "api_token"
         request.state.api_token_id = record.id

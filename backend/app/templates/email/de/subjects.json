@@ -3,6 +3,7 @@
   "reset_password": "Passwort zurücksetzen",
   "invite": "Du wurdest zu {app_name} eingeladen",
   "lockout_warning": "Dein Konto wurde gesperrt",
+  "password_changed": "Dein Passwort wurde geändert",
   "share_created": "{sender_name} hat dir Dateien über {app_name} gesendet",
   "share_files_added": "{sender_name} hat neue Dateien zu einer Freigabe hinzugefügt",
   "share_expiring": "Deine Freigabe läuft in 24 Stunden ab",

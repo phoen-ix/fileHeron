@@ -803,6 +803,35 @@ async def send_lockout_warning_email(
     )
 
 
+async def send_password_changed_email(
+    *,
+    to: str,
+    locale: Locale | str,
+    display_name: str,
+    ip_hint: str | None,
+    app_url: str | None = None,
+    site_timezone: str | None = None,
+    db: Session | None = None,
+) -> None:
+    """Token-free security notice that the account password was just changed
+    (audit L34). Deliberately rendered WITHOUT a recipient/category footer:
+    security alerts are not opt-outable, and skipping the footer avoids
+    emitting a manage-subscriptions token in a mail that doesn't need one."""
+    base = _app_url(app_url)
+    tz = _site_tz(site_timezone)
+    ctx = {
+        "display_name": display_name,
+        "ip_hint": ip_hint or "unknown",
+        "reset_url": f"{base}/forgot-password",
+    }
+    subject, body, html = render_email(
+        locale, "password_changed", ctx, app_url=base, site_timezone=tz, db=db,
+    )
+    await _send_resolved(
+        to=to, subject=subject, text_body=body, html_body=html, category="password_changed"
+    )
+
+
 # -------------------------------------------------------------------------
 # Email-change senders (v1.13.0). The confirm/verify-old/alert mails carry
 # one-time tokens (masked at rest by mail_log via category); the completion

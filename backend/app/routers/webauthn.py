@@ -39,7 +39,6 @@ from ..services import jwt_session, settings_registry
 from ..services import rate_limit as rate_limit_svc
 from ..services import webauthn as webauthn_svc
 from ..services.audit import record_audit_event
-from ..utils.crypto import argon2_verify, normalize_email
 
 logger = logging.getLogger("fileheron.webauthn_router")
 
@@ -146,16 +145,16 @@ async def auth_begin(
     request: Request,
     db: Session = Depends(get_db),
 ) -> WebAuthnAuthBeginResponse:
-    """Validate the email/password (same gates as /api/auth/login) but
-    instead of issuing tokens, return a passkey challenge. The client
-    completes the flow by calling /complete with the same `session`."""
-    em_hash = normalize_email(payload.email)
-    user = db.query(User).filter(User.email == em_hash).one_or_none()
-    if user is None or user.is_disabled:
-        # Tarpit + uniform error to avoid email enumeration.
-        raise AppError(401, "INVALID_CREDENTIALS", "Email or password is incorrect.")
-    if not argon2_verify(user.password_hash, payload.password):
-        raise AppError(401, "INVALID_CREDENTIALS", "Email or password is incorrect.")
+    """Validate the email/password through the SAME pre-second-factor gate as
+    /api/auth/login (per-IP rate limit, account lockout, password verify with
+    failure recording + lockout email, disabled/email-verified checks) but,
+    instead of issuing tokens, return a passkey challenge. The client completes
+    the flow by calling /complete with the same `session`. Sharing the gate is
+    what closes the previously-unthrottled password + enumeration oracle on
+    this endpoint (audit H1)."""
+    user = await auth_svc.authenticate_first_factor(
+        db, email=payload.email, password=payload.password, request=request
+    )
 
     session_key = secrets.token_urlsafe(24)
     options = await webauthn_svc.authenticate_begin(
@@ -177,6 +176,16 @@ async def auth_complete(
         session_key=payload.session,
         credential_response=payload.credential,
     )
+
+    # The /begin gate verified account state, but that was a prior request -
+    # re-check here so a passkey ceremony can't mint a session for an account
+    # disabled/locked/unverified in the interim (audit L3).
+    if user.is_disabled:
+        raise AppError(403, "ACCOUNT_DISABLED", "This account has been disabled.")
+    if rate_limit_svc.is_account_locked(user):
+        raise AppError(423, "ACCOUNT_LOCKED", "Account is temporarily locked.")
+    if not user.email_verified:
+        raise AppError(403, "EMAIL_NOT_VERIFIED", "Please verify your email first.")
 
     # Mint the same session cookies the password flow produces.
     access, expires_in = auth_svc.create_access_token(user.id, settings, db)

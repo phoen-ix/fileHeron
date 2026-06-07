@@ -1,12 +1,13 @@
 """Cron minute-dispatcher (v1.28.0)."""
 from __future__ import annotations
 
+from datetime import timedelta
+
 import pytest
 
 from app.services import cron_schedule as cs
 from app.services import settings as s
 from app.utils.timeutil import utc_now
-from datetime import timedelta
 
 
 @pytest.mark.asyncio

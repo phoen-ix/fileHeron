@@ -27,7 +27,7 @@ async def test_list_returns_all_slugs_and_locales(make_user, client, login_as):
     resp = await client.get(_BASE, headers=_h(token))
     assert resp.status_code == 200, resp.text
     body = resp.json()
-    assert {l["code"] for l in body["locales"]} == {"en", "de"}
+    assert {loc["code"] for loc in body["locales"]} == {"en", "de"}
     assert len(body["items"]) == 21
     item = next(i for i in body["items"] if i["slug"] == "share_created")
     assert item["has_override"] == {"en": False, "de": False}

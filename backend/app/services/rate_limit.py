@@ -1,8 +1,10 @@
 """Rate limiting + per-account lockout.
 
 Two layers:
-1. Per-IP sliding window on /api/auth/login (Redis INCR + EXPIRE). Returns
-   429 RATE_LIMITED when exceeded. Window: 15 minutes.
+1. Per-IP fixed window on /api/auth/login (Redis INCR + EXPIRE-on-first-hit).
+   Returns 429 RATE_LIMITED when exceeded. Window: 15 minutes. (Fixed, not
+   sliding - a burst can straddle two adjacent windows; the per-account
+   lockout is the hard stop.)
 2. Per-account lockout (DB-backed users.failed_login_count). 5 consecutive
    bad-credential failures → users.locked_until = now + 15 min, warning email
    sent (deduped to one per 6h via users.lockout_email_sent_at).
@@ -113,7 +115,7 @@ def reset_ip_window(ip: str) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Generic per-IP sliding window for non-login auth-adjacent endpoints
+# Generic per-IP fixed window for non-login auth-adjacent endpoints
 # (register-from-invite, forgot-password, verify-email).
 # ---------------------------------------------------------------------------
 #

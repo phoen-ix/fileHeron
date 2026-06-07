@@ -830,3 +830,57 @@ export function getCrons() {
 export function updateCronSchedule(name: string, payload: UpdateCronScheduleRequest) {
   return api.put<CronScheduleItem>(`/admin/crons/${encodeURIComponent(name)}`, payload)
 }
+
+// --- Configuration backup / restore (v1.33.0) ---------------------------
+
+export type BackupCategory =
+  | 'settings_branding'
+  | 'oidc_webhooks'
+  | 'groups'
+  | 'users'
+  | 'logs'
+export type BackupSecretMode = 'passphrase' | 'ciphertext' | 'exclude'
+
+export interface BackupExportRequest {
+  categories: BackupCategory[]
+  secret_mode: BackupSecretMode
+  passphrase?: string | null
+  include_env?: boolean
+}
+
+export interface BackupImportSummary {
+  dry_run: boolean
+  secret_mode: string
+  categories: string[]
+  shares_to_invalidate: number
+  files_deleted: number
+  counts: Record<string, unknown>
+  purged_users: string[]
+  purged_groups: string[]
+  sessions_revoked: number
+  env_snapshot_present: boolean
+  env_dotenv: string | null
+  version_warning: string | null
+  warnings: string[]
+}
+
+// Export goes through axios (responseType blob) so the in-memory bearer is
+// attached - a plain <a href> can't authenticate a bearer-gated admin POST.
+export function exportConfigBackup(payload: BackupExportRequest) {
+  return api.post('/admin/backup/export', payload, { responseType: 'blob' })
+}
+
+export function previewBackupImport(file: File, passphrase?: string) {
+  const form = new FormData()
+  form.append('file', file)
+  if (passphrase) form.append('passphrase', passphrase)
+  return api.post<BackupImportSummary>('/admin/backup/import/preview', form)
+}
+
+export function importConfigBackup(file: File, passphrase?: string) {
+  const form = new FormData()
+  form.append('file', file)
+  if (passphrase) form.append('passphrase', passphrase)
+  form.append('confirm', 'true')
+  return api.post<BackupImportSummary>('/admin/backup/import', form)
+}

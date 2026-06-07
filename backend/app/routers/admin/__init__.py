@@ -25,6 +25,7 @@ from . import (
     analytics,
     api_tokens,
     audit,
+    backup,
     crons,
     email_templates,
     files,
@@ -42,7 +43,7 @@ from . import (
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 _SUBROUTERS = (
-    analytics, api_tokens, audit, crons, email_templates, files, imap, invites, mail,
+    analytics, api_tokens, audit, backup, crons, email_templates, files, imap, invites, mail,
     oidc, quarantine, sessions, settings, system, users, webhooks,
 )
 for _sub in _SUBROUTERS:

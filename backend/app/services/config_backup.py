@@ -1,0 +1,991 @@
+"""Configuration backup / restore (v1.33.0).
+
+Disaster-recovery for an instance's *configuration* (not its shared files - those
+are short-lived and deliberately excluded). An admin exports a category-selectable
+backup and imports it to rebuild a crashed system.
+
+Three moving parts:
+  - ``build_backup``  - serialise the chosen categories into a versioned JSON
+    container (see the format below).
+  - ``parse_backup``  - validate magic + version + (passphrase) decrypt.
+  - ``preview_backup`` / ``apply_backup`` - dry-run summary, then the FK-safe
+    REPLACE import. Import invalidates ALL active shares (config restore changes
+    the world out from under any live share) and revokes all sessions.
+
+Backup file (``*.fhbackup.json``): the OUTER envelope is always plaintext JSON so
+import can detect the secret mode without a passphrase; the payload is inline
+(plaintext / ciphertext modes) or a passphrase-encrypted blob.
+
+    {
+      "magic": "FILEHERON_CONFIG_BACKUP", "format_version": 1,
+      "created_at": "...", "app_version": "...", "git_sha": "...",
+      "alembic_revision": "...", "secret_mode": "passphrase|ciphertext|exclude",
+      "categories": [...], "include_env": false, "warnings": [...],
+      "encryption": {"kdf":"scrypt","n":...,"r":...,"p":...,"salt":"<b64>"},   # passphrase only
+      "payload": {...}                  # inline (plaintext/ciphertext)
+      # OR "payload_encrypted": "<fernet token>"   # passphrase
+    }
+
+Secret columns (app_settings encrypted values, oidc client_secret, webhook
+secret, totp secret) carry one of three shapes inside the payload depending on
+secret_mode: ``{"__plain__": "..."}`` (decrypted, re-encrypted under the target's
+JWT_SECRET on import), ``{"__cipher__": "..."}`` / ``{"__cipher_b64__": "..."}``
+(raw blob, only decrypts if the target reuses the same JWT_SECRET), or absent
+(excluded).
+"""
+from __future__ import annotations
+
+import base64
+import enum
+import json
+import logging
+import os
+import tempfile
+import uuid
+from dataclasses import dataclass, field
+from datetime import datetime
+from pathlib import Path
+from typing import Any
+
+from cryptography.fernet import InvalidToken
+from sqlalchemy import inspect as sa_inspect
+from sqlalchemy.orm import Session
+
+from ..config import settings as cfg
+from ..middleware.errors import AppError
+from ..models.app_setting import AppSetting
+from ..models.audit_log import AuditEventType, AuditLog
+from ..models.download_log import DownloadLog
+from ..models.email_log import EmailLog
+from ..models.email_template_override import EmailTemplateOverride
+from ..models.group import Group
+from ..models.group_member import GroupMember
+from ..models.login_attempt import LoginAttempt
+from ..models.notification import Notification, NotificationCategory
+from ..models.oidc_provider import OIDCProvider
+from ..models.share import Share, ShareState
+from ..models.user import User
+from ..models.user_notification_preference import (
+    NotificationChannel,
+    UserNotificationPreference,
+)
+from ..models.user_recovery_code import UserRecoveryCode
+from ..models.user_totp import UserTOTP
+from ..models.user_webauthn_credential import UserWebAuthnCredential
+from ..models.webhook import Webhook
+from ..utils import crypto
+from ..utils.crypto import normalize_email
+from ..utils.timeutil import utc_now
+from ..version import GIT_SHA, VERSION
+from . import settings as settings_svc
+from . import share as share_svc
+from .audit import record_audit_event
+from .erasure import erase_user
+
+logger = logging.getLogger("fileheron.config_backup")
+
+MAGIC = "FILEHERON_CONFIG_BACKUP"
+FORMAT_VERSION = 1
+
+CATEGORIES = ("settings_branding", "oidc_webhooks", "groups", "users", "logs")
+SECRET_MODES = ("passphrase", "ciphertext", "exclude")
+
+# Runtime / cron state - looks like config but isn't; never exported.
+_TRANSIENT_SETTING_KEYS = {
+    settings_svc.Keys.IMAP_LAST_POLL_AT,
+    settings_svc.Keys.IMAP_LAST_SUCCESS_AT,
+    settings_svc.Keys.IMAP_LAST_UID,
+    settings_svc.Keys.IMAP_UIDVALIDITY,
+    settings_svc.Keys.STORAGE_CRITICAL_LOW,
+}
+# Logo locators are system-specific (absolute paths / object keys); the bytes
+# travel in the branding_logo section and locators are regenerated on import.
+_LOGO_LOCATOR_KEYS = {
+    settings_svc.Keys.BRANDING_LOGO_LOCATOR,
+    settings_svc.Keys.BRANDING_LOGO_PNG_LOCATOR,
+}
+# app_settings whose JSON value embeds user / group IDs that must be remapped
+# through the identity import.
+_JSON_USER_ID_KEYS = {
+    settings_svc.Keys.API_TOKEN_ALLOWED_USERS,
+    settings_svc.Keys.PUBLIC_LINK_ALLOWED_USERS,
+    settings_svc.Keys.SHARE_APPROVAL_APPROVER_USERS,
+}
+_JSON_GROUP_ID_KEYS = {
+    settings_svc.Keys.API_TOKEN_ALLOWED_GROUPS,
+    settings_svc.Keys.PUBLIC_LINK_ALLOWED_GROUPS,
+    settings_svc.Keys.TWOFA_REQUIRED_GROUPS,
+    settings_svc.Keys.SHARE_APPROVAL_APPROVER_GROUPS,
+}
+# os.environ keys captured into the optional env snapshot. Hardcoded whitelist -
+# we NEVER dump **os.environ.
+_ENV_WHITELIST = (
+    "JWT_SECRET", "DB_HOST", "DB_PORT", "DB_USER", "DB_PASSWORD", "DB_NAME",
+    "TUS_HOOK_SECRET", "APP_URL", "REDIS_HOST", "REDIS_PORT",
+    "SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASSWORD",
+    "SMTP_FROM_EMAIL", "SMTP_FROM_NAME",
+    "STORAGE_BACKEND", "STORAGE_ROOT",
+    "S3_ENDPOINT_URL", "S3_BUCKET", "S3_REGION",
+    "S3_ACCESS_KEY_ID", "S3_SECRET_ACCESS_KEY", "S3_KEY_PREFIX",
+)
+
+
+# ---------------------------------------------------------------------------
+# Generic column (de)serialisation
+# ---------------------------------------------------------------------------
+
+def _columns(model):
+    return sa_inspect(model).columns
+
+
+def _enc(v: Any) -> Any:
+    if v is None:
+        return None
+    if isinstance(v, bytes):
+        return {"__b64__": base64.b64encode(v).decode("ascii")}
+    if isinstance(v, datetime):
+        return {"__dt__": v.isoformat()}
+    if isinstance(v, enum.Enum):
+        return v.value
+    return v
+
+
+def _dec(v: Any, coltype: Any = None) -> Any:
+    if v is None:
+        return None
+    if isinstance(v, dict):
+        if "__b64__" in v:
+            return base64.b64decode(v["__b64__"])
+        if "__dt__" in v:
+            return datetime.fromisoformat(v["__dt__"])
+    if coltype is not None:
+        ec = getattr(coltype, "enum_class", None)
+        if ec is not None and isinstance(v, str):
+            return ec(v)
+    return v
+
+
+def _dt(v: Any) -> Any:
+    """Decode a datetime field on a hand-built row (no coltype context)."""
+    if isinstance(v, dict) and "__dt__" in v:
+        return datetime.fromisoformat(v["__dt__"])
+    return v
+
+
+def _row_to_dict(obj, *, drop: frozenset[str] = frozenset()) -> dict:
+    out: dict[str, Any] = {}
+    for col in _columns(type(obj)):
+        if col.key in drop:
+            continue
+        out[col.key] = _enc(getattr(obj, col.key))
+    return out
+
+
+def _build(model, data: dict, *, overrides: dict | None = None, skip: frozenset[str] = frozenset()):
+    cols = {c.key: c for c in _columns(model)}
+    kwargs: dict[str, Any] = {}
+    for k, v in data.items():
+        if k in skip:
+            continue
+        col = cols.get(k)
+        if col is None:
+            continue
+        kwargs[k] = _dec(v, col.type)
+    if overrides:
+        kwargs.update(overrides)
+    return model(**kwargs)
+
+
+# ---------------------------------------------------------------------------
+# Secret transforms
+# ---------------------------------------------------------------------------
+
+def _emit_secret_str(stored: str | None, *, mode: str, warnings: list[str], label: str):
+    """app_settings encrypted value / oidc client_secret / webhook secret -
+    all stored as a Fernet ASCII string (or ``""`` when unset)."""
+    if not stored:
+        return None
+    if mode == "exclude":
+        return None
+    if mode == "ciphertext":
+        return {"__cipher__": stored}
+    try:
+        return {"__plain__": crypto.decrypt_setting(stored)}
+    except Exception:
+        warnings.append(f"could not decrypt {label}; exported without it")
+        return None
+
+
+def _emit_secret_totp(stored: bytes | None, *, mode: str, warnings: list[str], label: str):
+    if not stored:
+        return None
+    if mode == "exclude":
+        return None
+    if mode == "ciphertext":
+        return {"__cipher_b64__": base64.b64encode(stored).decode("ascii")}
+    try:
+        return {"__plain__": crypto.decrypt_totp_secret(stored)}
+    except Exception:
+        warnings.append(f"could not decrypt {label}; exported without it")
+        return None
+
+
+def _ingest_secret_str(val: Any) -> str | None:
+    """-> stored Fernet ASCII string (re-encrypted under the target JWT_SECRET
+    for ``__plain__``, verbatim for ``__cipher__``), or None to leave unset."""
+    if not isinstance(val, dict):
+        return None
+    if "__plain__" in val:
+        return crypto.encrypt_setting(val["__plain__"])
+    if "__cipher__" in val:
+        return val["__cipher__"]
+    return None
+
+
+def _ingest_secret_totp(val: Any) -> bytes | None:
+    if not isinstance(val, dict):
+        return None
+    if "__plain__" in val:
+        return crypto.encrypt_totp_secret(val["__plain__"])
+    if "__cipher_b64__" in val:
+        return base64.b64decode(val["__cipher_b64__"])
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Export
+# ---------------------------------------------------------------------------
+
+def capture_env_snapshot() -> dict[str, str]:
+    return {k: os.environ[k] for k in _ENV_WHITELIST if k in os.environ}
+
+
+def _current_alembic_revision(db: Session) -> str | None:
+    try:
+        from alembic.runtime.migration import MigrationContext
+
+        return MigrationContext.from_connection(db.connection()).get_current_revision()
+    except Exception:
+        return None
+
+
+def _export_logo(db: Session, warnings: list[str]) -> dict:
+    loc = settings_svc.get(db, settings_svc.Keys.BRANDING_LOGO_LOCATOR)
+    if not loc:
+        return {"present": False}
+    from .storage_backend import get_storage_backend
+
+    backend = get_storage_backend()
+    out: dict[str, Any] = {"present": True}
+    try:
+        with backend.open(loc) as fh:
+            out["original_b64"] = base64.b64encode(fh.read()).decode("ascii")
+    except Exception:
+        warnings.append("branding logo bytes unreadable; skipped")
+        return {"present": False}
+    png = settings_svc.get(db, settings_svc.Keys.BRANDING_LOGO_PNG_LOCATOR)
+    if png:
+        try:
+            with backend.open(png) as fh:
+                out["png_b64"] = base64.b64encode(fh.read()).decode("ascii")
+        except Exception:
+            warnings.append("branding logo PNG rendition unreadable; skipped")
+    return out
+
+
+def export_settings_branding(db: Session, *, mode: str, warnings: list[str]) -> dict:
+    rows: list[dict] = []
+    for s in db.query(AppSetting).all():
+        if s.key in _TRANSIENT_SETTING_KEYS or s.key in _LOGO_LOCATOR_KEYS:
+            continue
+        if s.is_encrypted:
+            rows.append({
+                "key": s.key,
+                "is_encrypted": True,
+                "secret": _emit_secret_str(
+                    s.value, mode=mode, warnings=warnings, label=f"setting {s.key}"
+                ),
+            })
+        else:
+            rows.append({"key": s.key, "is_encrypted": False, "value": s.value})
+    return {"app_settings": rows, "branding_logo": _export_logo(db, warnings)}
+
+
+def export_oidc_webhooks(db: Session, *, mode: str, warnings: list[str]) -> dict:
+    providers = []
+    for p in db.query(OIDCProvider).all():
+        d = _row_to_dict(p, drop=frozenset(
+            {"client_secret_encrypted", "created_by_id", "updated_by_id", "created_at", "updated_at"}
+        ))
+        d["client_secret_encrypted"] = _emit_secret_str(
+            p.client_secret_encrypted, mode=mode, warnings=warnings,
+            label=f"OIDC provider {p.name} secret",
+        )
+        providers.append(d)
+    hooks = []
+    for w in db.query(Webhook).all():
+        d = _row_to_dict(w, drop=frozenset(
+            {"id", "secret_encrypted", "created_by_id", "created_at", "updated_at"}
+        ))
+        d["secret_encrypted"] = _emit_secret_str(
+            w.secret_encrypted, mode=mode, warnings=warnings,
+            label=f"webhook {w.name} secret",
+        )
+        hooks.append(d)
+    return {"oidc_providers": providers, "webhooks": hooks}
+
+
+def export_groups(db: Session) -> dict:
+    groups = [
+        {
+            "id": g.id, "name": g.name, "name_normalized": g.name_normalized,
+            "description": g.description, "is_company_inbox": g.is_company_inbox,
+            "created_by_id": g.created_by_id,
+        }
+        for g in db.query(Group).all()
+    ]
+    members = [
+        {"group_id": m.group_id, "user_id": m.user_id, "joined_at": _enc(m.joined_at)}
+        for m in db.query(GroupMember).all()
+    ]
+    return {"groups": groups, "group_members": members}
+
+
+def export_users(db: Session, *, mode: str, warnings: list[str]) -> dict:
+    users = [
+        _row_to_dict(u, drop=frozenset(
+            {"failed_login_count", "locked_until", "lockout_email_sent_at"}
+        ))
+        for u in db.query(User).all()
+    ]
+    totp = [
+        {
+            "user_id": t.user_id,
+            "secret": _emit_secret_totp(
+                t.secret_encrypted, mode=mode, warnings=warnings,
+                label=f"TOTP secret for user {t.user_id}",
+            ),
+            "enabled_at": _enc(t.enabled_at),
+            "last_used_counter": t.last_used_counter,
+        }
+        for t in db.query(UserTOTP).all()
+    ]
+    recovery = [
+        {
+            "user_id": r.user_id, "code_hash": r.code_hash,
+            "created_at": _enc(r.created_at), "used_at": _enc(r.used_at),
+        }
+        for r in db.query(UserRecoveryCode).all()
+    ]
+    webauthn = [
+        _row_to_dict(c, drop=frozenset({"id"}))
+        for c in db.query(UserWebAuthnCredential).all()
+    ]
+    prefs = [
+        {"user_id": p.user_id, "category": p.category.value, "channel": p.channel.value}
+        for p in db.query(UserNotificationPreference).all()
+    ]
+    return {
+        "users": users, "user_totp": totp, "user_recovery_codes": recovery,
+        "user_webauthn_credentials": webauthn, "user_notification_preferences": prefs,
+    }
+
+
+def export_logs(db: Session) -> dict:
+    def _dump(model):
+        return [_row_to_dict(r, drop=frozenset({"id"})) for r in db.query(model).all()]
+
+    return {
+        "audit_log": _dump(AuditLog),
+        "email_log": _dump(EmailLog),
+        "download_log": _dump(DownloadLog),
+        "login_attempts": _dump(LoginAttempt),
+        "notifications": _dump(Notification),
+    }
+
+
+def build_backup(
+    db: Session,
+    *,
+    categories: list[str],
+    secret_mode: str,
+    passphrase: str | None,
+    include_env: bool,
+) -> bytes:
+    warnings: list[str] = []
+    payload: dict[str, Any] = {}
+    if "settings_branding" in categories:
+        payload["settings_branding"] = export_settings_branding(db, mode=secret_mode, warnings=warnings)
+    if "oidc_webhooks" in categories:
+        payload["oidc_webhooks"] = export_oidc_webhooks(db, mode=secret_mode, warnings=warnings)
+    if "groups" in categories:
+        payload["groups"] = export_groups(db)
+    if "users" in categories:
+        payload["users"] = export_users(db, mode=secret_mode, warnings=warnings)
+    if "logs" in categories:
+        payload["logs"] = export_logs(db)
+    if include_env:
+        payload["env_snapshot"] = capture_env_snapshot()
+
+    envelope: dict[str, Any] = {
+        "magic": MAGIC,
+        "format_version": FORMAT_VERSION,
+        "created_at": utc_now().isoformat(),
+        "app_version": VERSION,
+        "git_sha": GIT_SHA,
+        "alembic_revision": _current_alembic_revision(db),
+        "secret_mode": secret_mode,
+        "categories": list(categories),
+        "include_env": include_env,
+        "warnings": warnings,
+    }
+    if secret_mode == "passphrase":
+        assert passphrase
+        salt = crypto.new_backup_salt()
+        envelope["encryption"] = {
+            "kdf": "scrypt", "n": crypto.SCRYPT_N, "r": crypto.SCRYPT_R,
+            "p": crypto.SCRYPT_P, "salt": base64.b64encode(salt).decode("ascii"),
+            "version": 1,
+        }
+        envelope["payload_encrypted"] = crypto.encrypt_with_passphrase(
+            json.dumps(payload).encode("utf-8"), passphrase, salt
+        )
+    else:
+        envelope["payload"] = payload
+    return json.dumps(envelope, indent=2).encode("utf-8")
+
+
+# ---------------------------------------------------------------------------
+# Parse
+# ---------------------------------------------------------------------------
+
+@dataclass
+class ParsedBackup:
+    secret_mode: str
+    categories: list[str]
+    include_env: bool
+    payload: dict
+    app_version: str | None
+    git_sha: str | None
+    alembic_revision: str | None
+    created_at: str | None
+    warnings: list[str] = field(default_factory=list)
+
+
+def parse_backup(raw: bytes, *, passphrase: str | None) -> ParsedBackup:
+    try:
+        env = json.loads(raw)
+    except Exception as e:
+        raise AppError(400, "BACKUP_CORRUPT", "File is not valid JSON.") from e
+    if not isinstance(env, dict) or env.get("magic") != MAGIC:
+        raise AppError(400, "BACKUP_CORRUPT", "Not a fileHeron configuration backup.")
+    fmt = env.get("format_version")
+    if not isinstance(fmt, int) or fmt > FORMAT_VERSION:
+        raise AppError(
+            409, "BACKUP_VERSION_INCOMPATIBLE",
+            f"Backup format v{fmt} is newer than this system supports (v{FORMAT_VERSION}). "
+            "Update fileHeron before importing.",
+        )
+    secret_mode = env.get("secret_mode")
+    if secret_mode not in SECRET_MODES:
+        raise AppError(400, "BACKUP_CORRUPT", "Unknown or missing secret mode.")
+
+    if secret_mode == "passphrase":
+        if not passphrase:
+            raise AppError(
+                400, "BACKUP_PASSPHRASE_REQUIRED",
+                "This backup is passphrase-encrypted; a passphrase is required.",
+            )
+        enc = env.get("encryption") or {}
+        try:
+            salt = base64.b64decode(enc["salt"])
+            token = env["payload_encrypted"]
+        except (KeyError, ValueError, TypeError) as e:
+            raise AppError(400, "BACKUP_CORRUPT", "Encrypted backup is malformed.") from e
+        try:
+            raw_payload = crypto.decrypt_with_passphrase(
+                token, passphrase, salt,
+                n=int(enc.get("n", crypto.SCRYPT_N)),
+                r=int(enc.get("r", crypto.SCRYPT_R)),
+                p=int(enc.get("p", crypto.SCRYPT_P)),
+            )
+        except InvalidToken as e:
+            raise AppError(
+                400, "BACKUP_BAD_PASSPHRASE", "Wrong passphrase, or the backup is corrupted."
+            ) from e
+        try:
+            payload = json.loads(raw_payload)
+        except Exception as e:
+            raise AppError(400, "BACKUP_CORRUPT", "Decrypted payload is not valid JSON.") from e
+    else:
+        payload = env.get("payload")
+        if not isinstance(payload, dict):
+            raise AppError(400, "BACKUP_CORRUPT", "Backup is missing its payload.")
+
+    return ParsedBackup(
+        secret_mode=secret_mode,
+        categories=list(env.get("categories") or []),
+        include_env=bool(env.get("include_env")),
+        payload=payload,
+        app_version=env.get("app_version"),
+        git_sha=env.get("git_sha"),
+        alembic_revision=env.get("alembic_revision"),
+        created_at=env.get("created_at"),
+        warnings=list(env.get("warnings") or []),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Import summary
+# ---------------------------------------------------------------------------
+
+@dataclass
+class ImportSummary:
+    dry_run: bool
+    secret_mode: str
+    categories: list[str]
+    shares_to_invalidate: int = 0
+    files_deleted: int = 0
+    counts: dict[str, Any] = field(default_factory=dict)
+    purged_users: list[str] = field(default_factory=list)
+    purged_groups: list[str] = field(default_factory=list)
+    sessions_revoked: int = 0
+    env_snapshot_present: bool = False
+    env_dotenv: str | None = None
+    version_warning: str | None = None
+    warnings: list[str] = field(default_factory=list)
+
+
+def _version_warning(db: Session, parsed: ParsedBackup) -> str | None:
+    cur = _current_alembic_revision(db)
+    bak = parsed.alembic_revision
+    if bak and cur and bak != cur:
+        return (
+            f"Backup was taken at schema revision {bak}; this system is at {cur}. "
+            "Import will proceed - review for configuration drift afterwards."
+        )
+    return None
+
+
+def _render_dotenv(snapshot: dict[str, str]) -> str:
+    return "\n".join(f"{k}={v}" for k, v in snapshot.items())
+
+
+# ---------------------------------------------------------------------------
+# Preview (dry run - no writes)
+# ---------------------------------------------------------------------------
+
+def preview_backup(db: Session, parsed: ParsedBackup) -> ImportSummary:
+    p = parsed.payload
+    summary = ImportSummary(
+        dry_run=True, secret_mode=parsed.secret_mode, categories=parsed.categories,
+        version_warning=_version_warning(db, parsed), warnings=list(parsed.warnings),
+    )
+    summary.shares_to_invalidate = (
+        db.query(Share).filter(Share.state == ShareState.active).count()
+    )
+    if "settings_branding" in p:
+        sb = p["settings_branding"]
+        summary.counts["app_settings"] = len(sb.get("app_settings", []))
+        summary.counts["branding_logo"] = bool(sb.get("branding_logo", {}).get("present"))
+    if "oidc_webhooks" in p:
+        ow = p["oidc_webhooks"]
+        summary.counts["oidc_providers"] = len(ow.get("oidc_providers", []))
+        summary.counts["webhooks"] = len(ow.get("webhooks", []))
+    if "groups" in p:
+        backup_nn = {g["name_normalized"] for g in p["groups"].get("groups", [])}
+        summary.counts["groups"] = len(backup_nn)
+        summary.counts["group_members"] = len(p["groups"].get("group_members", []))
+        summary.purged_groups = sorted(
+            g.name for g in db.query(Group).all() if g.name_normalized not in backup_nn
+        )
+    if "users" in p:
+        backup_emails = {normalize_email(u["email"]) for u in p["users"].get("users", [])}
+        existing_emails = {row[0] for row in db.query(User.email).all()}
+        summary.counts["users_total"] = len(backup_emails)
+        summary.counts["users_insert"] = len(backup_emails - existing_emails)
+        summary.counts["users_update"] = len(backup_emails & existing_emails)
+        summary.purged_users = sorted(existing_emails - backup_emails)
+    if "logs" in p:
+        summary.counts["logs"] = {k: len(v) for k, v in p["logs"].items()}
+    if "env_snapshot" in p:
+        summary.env_snapshot_present = True
+        summary.env_dotenv = _render_dotenv(p["env_snapshot"])
+    return summary
+
+
+# ---------------------------------------------------------------------------
+# Apply (REPLACE import)
+# ---------------------------------------------------------------------------
+
+def _remap_json_ids(val: str | None, idmap: dict[int, int]) -> str:
+    if not val:
+        return val or "[]"
+    try:
+        ids = json.loads(val)
+    except Exception:
+        return val
+    if not isinstance(ids, list):
+        return val
+    return json.dumps([idmap[i] for i in ids if i in idmap])
+
+
+def _resolve_log_user(bid, user_id_map, has_users, db, *, existing_ids):
+    if bid is None:
+        return None
+    if has_users:
+        return user_id_map.get(bid)
+    return bid if bid in existing_ids else None
+
+
+def _restore_log(db, model, rows, *, user_fk, user_id_map, has_users, required_user=False):
+    existing_ids = {r[0] for r in db.query(User.id).all()}
+    db.query(model).delete(synchronize_session=False)
+    db.flush()
+    for d in rows:
+        d = dict(d)
+        if user_fk and user_fk in d:
+            resolved = _resolve_log_user(
+                d.get(user_fk), user_id_map, has_users, db, existing_ids=existing_ids
+            )
+            if required_user and resolved is None:
+                continue
+            d[user_fk] = resolved
+        db.add(_build(model, d, skip=frozenset({"id"})))
+    db.flush()
+
+
+def _import_logo(db, logo, *, actor, warnings):
+    if not logo or not logo.get("present"):
+        return
+    from .storage_backend import get_storage_backend
+
+    backend = get_storage_backend()
+
+    def _write(b64: str) -> str:
+        data = base64.b64decode(b64)
+        loc = backend.generate_locator(f"branding-logo-{uuid.uuid4().hex}")
+        Path(cfg.TUS_UPLOAD_DIR).mkdir(parents=True, exist_ok=True)
+        fd, tmp = tempfile.mkstemp(dir=cfg.TUS_UPLOAD_DIR, suffix=".logo")
+        try:
+            with os.fdopen(fd, "wb") as out:
+                out.write(data)
+            backend.finalize(tmp, loc)
+        except Exception:
+            if os.path.exists(tmp):
+                os.unlink(tmp)
+            raise
+        return loc
+
+    try:
+        if logo.get("original_b64"):
+            settings_svc.set_value(
+                db, key=settings_svc.Keys.BRANDING_LOGO_LOCATOR,
+                value=_write(logo["original_b64"]), actor=actor,
+            )
+        if logo.get("png_b64"):
+            settings_svc.set_value(
+                db, key=settings_svc.Keys.BRANDING_LOGO_PNG_LOCATOR,
+                value=_write(logo["png_b64"]), actor=actor,
+            )
+    except Exception:
+        logger.exception("config import: branding logo restore failed")
+        warnings.append("failed to restore branding logo bytes")
+
+
+def _purge_user(db, user, *, actor, request) -> str:
+    """Hard-delete where FKs allow (true purge); fall back to anonymise (erasure)
+    when transactional references block the delete."""
+    sp = db.begin_nested()
+    try:
+        db.delete(user)
+        db.flush()
+        sp.commit()
+        return "deleted"
+    except Exception:
+        sp.rollback()
+    try:
+        erase_user(db, actor=actor, target=user, request=request)
+        return "anonymised"
+    except Exception:
+        logger.exception("config import: purge failed for user=%s", user.id)
+        return "failed"
+
+
+_USER_FIELD_SKIP = frozenset({"id", "email", "created_by_id", "oidc_provider_id"})
+
+
+def _user_fields(d: dict) -> dict:
+    cols = {c.key: c for c in _columns(User)}
+    out: dict[str, Any] = {}
+    for k, v in d.items():
+        if k in _USER_FIELD_SKIP:
+            continue
+        col = cols.get(k)
+        if col is None:
+            continue
+        out[k] = _dec(v, col.type)
+    return out
+
+
+def apply_backup(db: Session, *, parsed: ParsedBackup, actor: User, request=None) -> ImportSummary:
+    p = parsed.payload
+    has_users = "users" in p
+    has_groups = "groups" in p
+    warnings = list(parsed.warnings)
+    summary = ImportSummary(
+        dry_run=False, secret_mode=parsed.secret_mode, categories=parsed.categories,
+        version_warning=_version_warning(db, parsed),
+        env_snapshot_present="env_snapshot" in p,
+    )
+
+    # 1. Invalidate ALL active shares in its own committed pass - disk unlink is
+    # irreversible and must not sit inside the config transaction.
+    inv = share_svc.invalidate_all_active_shares(db, actor=actor, request=request)
+    db.commit()
+    summary.shares_to_invalidate = inv["expired_shares"]
+    summary.files_deleted = inv["deleted_files"]
+
+    user_id_map: dict[int, int] = {}
+    group_id_map: dict[int, int] = {}
+
+    # 2. Standalone config tables - wipe + reload.
+    if "oidc_webhooks" in p:
+        ow = p["oidc_webhooks"]
+        db.query(OIDCProvider).delete(synchronize_session=False)
+        db.flush()
+        for d in ow.get("oidc_providers", []):
+            d = dict(d)
+            secret = _ingest_secret_str(d.pop("client_secret_encrypted", None))
+            db.add(_build(OIDCProvider, d, overrides={
+                "client_secret_encrypted": secret or "",
+                "created_by_id": actor.id, "updated_by_id": actor.id,
+            }))
+        db.flush()
+        db.query(Webhook).delete(synchronize_session=False)
+        db.flush()
+        for d in ow.get("webhooks", []):
+            d = dict(d)
+            secret = _ingest_secret_str(d.pop("secret_encrypted", None))
+            db.add(_build(Webhook, d, overrides={
+                "secret_encrypted": secret or "", "created_by_id": actor.id,
+            }, skip=frozenset({"id"})))
+        db.flush()
+        summary.counts["oidc_providers"] = len(ow.get("oidc_providers", []))
+        summary.counts["webhooks"] = len(ow.get("webhooks", []))
+
+    # 3. Identity upsert (users, then groups) with old->new ID remap.
+    existing_oidc_ids = {r[0] for r in db.query(OIDCProvider.id).all()}
+    if has_users:
+        backup_users = p["users"].get("users", [])
+        inserted = updated = 0
+        for d in backup_users:
+            bid = d.get("id")
+            email = normalize_email(d["email"])
+            oidc_pid = d.get("oidc_provider_id")
+            if oidc_pid and oidc_pid not in existing_oidc_ids:
+                oidc_pid = None
+            fields = _user_fields(d)
+            u = db.query(User).filter(User.email == email).one_or_none()
+            if u is None:
+                u = User(email=email, oidc_provider_id=oidc_pid, **fields)
+                db.add(u)
+                db.flush()
+                inserted += 1
+            else:
+                for k, v in fields.items():
+                    setattr(u, k, v)
+                u.oidc_provider_id = oidc_pid
+                updated += 1
+            user_id_map[bid] = u.id
+        # second pass: created_by_id (self-FK)
+        for d in backup_users:
+            local = user_id_map.get(d.get("id"))
+            cby = user_id_map.get(d.get("created_by_id"))
+            if local is not None:
+                db.query(User).filter(User.id == local).update(
+                    {"created_by_id": cby}, synchronize_session=False
+                )
+        db.flush()
+        summary.counts["users_insert"] = inserted
+        summary.counts["users_update"] = updated
+
+    if has_groups:
+        for d in p["groups"].get("groups", []):
+            nn = d["name_normalized"]
+            cby = user_id_map.get(d.get("created_by_id")) or actor.id
+            g = db.query(Group).filter(Group.name_normalized == nn).one_or_none()
+            if g is None:
+                g = Group(
+                    name=d["name"], name_normalized=nn, description=d.get("description"),
+                    is_company_inbox=bool(d.get("is_company_inbox")), created_by_id=cby,
+                )
+                db.add(g)
+                db.flush()
+            else:
+                g.name = d["name"]
+                g.description = d.get("description")
+                g.is_company_inbox = bool(d.get("is_company_inbox"))
+            group_id_map[d["id"]] = g.id
+        db.flush()
+        affected = set(group_id_map.values())
+        if affected:
+            db.query(GroupMember).filter(
+                GroupMember.group_id.in_(affected)
+            ).delete(synchronize_session=False)
+            db.flush()
+        existing_user_ids = {r[0] for r in db.query(User.id).all()}
+        for m in p["groups"].get("group_members", []):
+            gid = group_id_map.get(m["group_id"])
+            uid = user_id_map.get(m["user_id"]) if has_users else (
+                m["user_id"] if m["user_id"] in existing_user_ids else None
+            )
+            if gid is None or uid is None:
+                continue
+            db.add(GroupMember(group_id=gid, user_id=uid, joined_at=_dt(m.get("joined_at"))))
+        db.flush()
+        summary.counts["groups"] = len(group_id_map)
+
+    # 4. User sub-tables (2FA + notification prefs) - delete-for-affected + insert.
+    if has_users:
+        local_ids = set(user_id_map.values())
+        if local_ids:
+            db.query(UserTOTP).filter(UserTOTP.user_id.in_(local_ids)).delete(synchronize_session=False)
+            db.query(UserRecoveryCode).filter(UserRecoveryCode.user_id.in_(local_ids)).delete(synchronize_session=False)
+            db.query(UserWebAuthnCredential).filter(UserWebAuthnCredential.user_id.in_(local_ids)).delete(synchronize_session=False)
+            db.query(UserNotificationPreference).filter(UserNotificationPreference.user_id.in_(local_ids)).delete(synchronize_session=False)
+            db.flush()
+        for t in p["users"].get("user_totp", []):
+            uid = user_id_map.get(t["user_id"])
+            sec = _ingest_secret_totp(t.get("secret"))
+            if uid is None or sec is None:
+                continue
+            db.add(UserTOTP(
+                user_id=uid, secret_encrypted=sec, enabled_at=_dt(t.get("enabled_at")),
+                last_used_counter=t.get("last_used_counter", 0),
+            ))
+        for r in p["users"].get("user_recovery_codes", []):
+            uid = user_id_map.get(r["user_id"])
+            if uid is None:
+                continue
+            db.add(UserRecoveryCode(
+                user_id=uid, code_hash=r["code_hash"],
+                created_at=_dt(r.get("created_at")) or utc_now(), used_at=_dt(r.get("used_at")),
+            ))
+        for c in p["users"].get("user_webauthn_credentials", []):
+            uid = user_id_map.get(c["user_id"])
+            if uid is None:
+                continue
+            db.add(_build(UserWebAuthnCredential, c, overrides={"user_id": uid},
+                          skip=frozenset({"id", "user_id"})))
+        for pref in p["users"].get("user_notification_preferences", []):
+            uid = user_id_map.get(pref["user_id"])
+            if uid is None:
+                continue
+            db.add(UserNotificationPreference(
+                user_id=uid, category=NotificationCategory(pref["category"]),
+                channel=NotificationChannel(pref["channel"]),
+            ))
+        db.flush()
+
+    # 5. Purge identities absent from the backup (literal replace).
+    if has_users:
+        backup_emails = {normalize_email(u["email"]) for u in p["users"].get("users", [])}
+        for u in list(db.query(User).all()):
+            if u.email in backup_emails:
+                continue
+            if u.id == actor.id:
+                warnings.append(
+                    "the importing admin was not in the backup; account kept to "
+                    "preserve the audit trail"
+                )
+                continue
+            outcome = _purge_user(db, u, actor=actor, request=request)
+            summary.purged_users.append(
+                u.email if outcome == "deleted" else f"{u.email} ({outcome})"
+            )
+        db.flush()
+    if has_groups:
+        backup_nn = {g["name_normalized"] for g in p["groups"].get("groups", [])}
+        for g in list(db.query(Group).all()):
+            if g.name_normalized in backup_nn:
+                continue
+            db.query(GroupMember).filter(GroupMember.group_id == g.id).delete(synchronize_session=False)
+            summary.purged_groups.append(g.name)
+            db.delete(g)
+        db.flush()
+
+    # 6. app_settings (+ email templates + logo) - wipe + reload, with JSON-ID
+    # remap once identities exist.
+    if "settings_branding" in p:
+        sb = p["settings_branding"]
+        db.query(EmailTemplateOverride).delete(synchronize_session=False)
+        db.flush()
+        db.query(AppSetting).delete(synchronize_session=False)
+        db.flush()
+        for row in sb.get("app_settings", []):
+            key = row["key"]
+            if row.get("is_encrypted"):
+                stored = _ingest_secret_str(row.get("secret"))
+                if stored is None:
+                    continue
+                db.add(AppSetting(
+                    key=key, value=stored, is_encrypted=True,
+                    updated_at=utc_now(), updated_by_id=actor.id,
+                ))
+            else:
+                val = row.get("value")
+                if has_users and key in _JSON_USER_ID_KEYS:
+                    val = _remap_json_ids(val, user_id_map)
+                elif has_groups and key in _JSON_GROUP_ID_KEYS:
+                    val = _remap_json_ids(val, group_id_map)
+                db.add(AppSetting(
+                    key=key, value=val, is_encrypted=False,
+                    updated_at=utc_now(), updated_by_id=actor.id,
+                ))
+        db.flush()
+        _import_logo(db, sb.get("branding_logo"), actor=actor, warnings=warnings)
+        summary.counts["app_settings"] = len(sb.get("app_settings", []))
+
+    # 7. Logs - wipe + reload (opt-in).
+    if "logs" in p:
+        lg = p["logs"]
+        _restore_log(db, AuditLog, lg.get("audit_log", []), user_fk="actor_user_id",
+                     user_id_map=user_id_map, has_users=has_users)
+        _restore_log(db, EmailLog, lg.get("email_log", []), user_fk="recipient_user_id",
+                     user_id_map=user_id_map, has_users=has_users)
+        _restore_log(db, DownloadLog, lg.get("download_log", []), user_fk="accessed_by_user_id",
+                     user_id_map=user_id_map, has_users=has_users)
+        _restore_log(db, LoginAttempt, lg.get("login_attempts", []), user_fk=None,
+                     user_id_map=user_id_map, has_users=has_users)
+        _restore_log(db, Notification, lg.get("notifications", []), user_fk="user_id",
+                     user_id_map=user_id_map, has_users=has_users, required_user=True)
+        summary.counts["logs"] = {k: len(v) for k, v in lg.items()}
+
+    # 8. Revoke all sessions (identity replaced wholesale).
+    if has_users:
+        from .jwt_session import revoke_all_user_refresh_tokens
+
+        for (uid,) in db.query(User.id).all():
+            summary.sessions_revoked += revoke_all_user_refresh_tokens(db, uid)
+
+    summary.warnings = warnings
+    record_audit_event(
+        db,
+        event_type=AuditEventType.config_backup_imported,
+        actor_user_id=actor.id,
+        target_type="config_backup",
+        target_id=None,
+        metadata={
+            "categories": parsed.categories,
+            "secret_mode": parsed.secret_mode,
+            "shares_invalidated": summary.shares_to_invalidate,
+            "purged_users": len(summary.purged_users),
+            "purged_groups": len(summary.purged_groups),
+            "sessions_revoked": summary.sessions_revoked,
+            "counts": summary.counts,
+        },
+        request=request,
+    )
+    db.commit()
+    return summary

@@ -218,8 +218,70 @@
       "quarantine_alerts": "Quarantäne-Alarme",
       "email_change": "E-Mail-Änderung",
       "webhooks": "Webhooks",
-      "advanced": "Erweitert"
+      "advanced": "Erweitert",
+      "backup": "Sicherung & Wiederherstellung"
     }
+  },
+  "admin_backup": {
+    "title": "Sicherung & Wiederherstellung",
+    "intro": "Exportiere die Konfiguration dieser Instanz, um sie nach einem Ausfall wieder aufzubauen, oder importiere eine Sicherung. Geteilte Dateien sind nicht enthalten - ein Import macht jede aktive Freigabe ungültig.",
+    "export_title": "Konfiguration exportieren",
+    "export_help": "Wähle aus, was enthalten sein soll und wie mit Geheimnissen umgegangen wird, und lade dann eine einzelne Sicherungsdatei herunter.",
+    "categories_label": "Was enthalten sein soll",
+    "cat": {
+      "settings_branding": "Einstellungen & Branding",
+      "oidc_webhooks": "OIDC-Anbieter & Webhooks",
+      "groups": "Gruppen & Mitgliedschaften",
+      "users": "Benutzerkonten",
+      "logs": "Protokolle"
+    },
+    "cat_help": {
+      "settings_branding": "Alle Admin-Einstellungen, Richtlinien, Branding (inkl. Logo) und Rechtsseiten.",
+      "oidc_webhooks": "Single-Sign-on-Anbieter und ausgehende Webhook-Abonnements.",
+      "groups": "Empfängergruppen und ihre Mitglieder.",
+      "users": "Konten inkl. Passwort-Hashes, Rollen und 2FA (TOTP / Wiederherstellungscodes / Passkeys).",
+      "logs": "Audit-, E-Mail-, Download-, Login- und Benachrichtigungsverlauf. Kann groß sein."
+    },
+    "secret_label": "Umgang mit Geheimnissen",
+    "secret": {
+      "passphrase": "Passphrase-verschlüsselt (portabel)",
+      "ciphertext": "Chiffrat behalten (nur derselbe Server)",
+      "exclude": "Geheimnisse ausschließen"
+    },
+    "secret_help": {
+      "passphrase": "Entschlüsselt Geheimnisse und verschlüsselt die gesamte Datei mit deiner Passphrase. Auf jedem Server wiederherstellbar.",
+      "ciphertext": "Behält rohe verschlüsselte Werte - nur wiederherstellbar, wenn das Ziel dasselbe JWT_SECRET nutzt.",
+      "exclude": "Lässt Geheimniswerte vollständig weg; nach dem Import erneut eingeben."
+    },
+    "passphrase_label": "Sicherungs-Passphrase",
+    "passphrase_ph": "Mindestens {n} Zeichen",
+    "passphrase_confirm_ph": "Passphrase wiederholen",
+    "passphrase_mismatch": "Passphrasen müssen übereinstimmen und mindestens {n} Zeichen lang sein.",
+    "include_env": "Umgebungs-Snapshot (.env) einschließen",
+    "include_env_help": "Bündelt Infrastruktur-Geheimnisse (JWT_SECRET, DB- und SMTP-Zugangsdaten, S3-Schlüssel) zur manuellen Wiederherstellung durch den Betreiber. Wird nie automatisch angewendet.",
+    "plaintext_warning": "Eine passphrase-verschlüsselte Sicherung enthält nach dem Öffnen entschlüsselte Geheimnisse. Bewahre sie sicher auf und gib die Passphrase nie zusammen mit der Datei weiter.",
+    "export_cta": "Sicherung exportieren",
+    "export_done": "Sicherung heruntergeladen.",
+    "import_title": "Konfiguration importieren",
+    "import_warning": "Ein Import ERSETZT die betroffene Konfiguration, entfernt Benutzer und Gruppen, die nicht in der Sicherung enthalten sind, macht ALLE aktiven Freigaben ungültig (ihre Dateien werden gelöscht) und meldet alle ab. Das kann nicht rückgängig gemacht werden.",
+    "import_file_label": "Sicherungsdatei",
+    "import_passphrase_ph": "Passphrase (nur wenn die Sicherung verschlüsselt ist)",
+    "preview_cta": "Änderungen ansehen",
+    "preview_heading": "Vorschau - es wurde noch nichts geändert",
+    "result_heading": "Import abgeschlossen",
+    "sum_categories": "Kategorien: {v}",
+    "sum_secret_mode": "Geheimnis-Modus: {v}",
+    "sum_shares": "Aktive Freigaben, die ungültig werden (Dateien gelöscht): {n}",
+    "sum_sessions": "Alle Benutzer werden abgemeldet, auch du.",
+    "sum_purge_users": "Zu entfernende Benutzer ({n})",
+    "sum_purge_groups": "Zu entfernende Gruppen ({n})",
+    "sum_sessions_revoked": "Widerrufene Sitzungen: {n}",
+    "env_present_help": "Diese Sicherung enthält einen Umgebungs-Snapshot. Er wird hier zur manuellen Anwendung angezeigt; er wird nie automatisch geschrieben.",
+    "import_cta": "Konfiguration ersetzen & importieren",
+    "import_done": "Konfiguration importiert.",
+    "confirm_title": "Konfiguration ersetzen?",
+    "confirm_body": "Dies ersetzt die Konfiguration, entfernt nicht aufgeführte Benutzer und Gruppen, macht {shares} aktive Freigabe(n) ungültig und meldet alle ab. Das kann nicht rückgängig gemacht werden.",
+    "confirm_cta": "Ersetzen & importieren"
   },
   "admin_scheduled_tasks": {
     "title": "Geplante Aufgaben",

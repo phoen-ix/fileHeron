@@ -218,8 +218,70 @@
       "quarantine_alerts": "Quarantine alerts",
       "email_change": "Email change",
       "webhooks": "Webhooks",
-      "advanced": "Advanced"
+      "advanced": "Advanced",
+      "backup": "Backup & restore"
     }
+  },
+  "admin_backup": {
+    "title": "Backup & restore",
+    "intro": "Export this instance's configuration to rebuild it after a crash, or import a backup to restore it. Shared files are not included - importing a backup invalidates every active share.",
+    "export_title": "Export configuration",
+    "export_help": "Choose what to include and how to handle secrets, then download a single backup file.",
+    "categories_label": "What to include",
+    "cat": {
+      "settings_branding": "Settings & branding",
+      "oidc_webhooks": "OIDC providers & webhooks",
+      "groups": "Groups & memberships",
+      "users": "User accounts",
+      "logs": "Logs"
+    },
+    "cat_help": {
+      "settings_branding": "All admin settings, policies, branding (incl. the logo image) and legal pages.",
+      "oidc_webhooks": "Single sign-on providers and outbound webhook subscriptions.",
+      "groups": "Recipient groups and who belongs to them.",
+      "users": "Accounts incl. password hashes, roles and 2FA (TOTP / recovery codes / passkeys).",
+      "logs": "Audit, email, download, login and notification history. Can be large."
+    },
+    "secret_label": "Secret handling",
+    "secret": {
+      "passphrase": "Passphrase-encrypted (portable)",
+      "ciphertext": "Keep ciphertext (same server only)",
+      "exclude": "Exclude secrets"
+    },
+    "secret_help": {
+      "passphrase": "Decrypts secrets and re-encrypts the whole file with your passphrase. Restores on any server.",
+      "ciphertext": "Keeps raw encrypted blobs - only restores if the target reuses the same JWT_SECRET.",
+      "exclude": "Leaves secret values out entirely; re-enter them after import."
+    },
+    "passphrase_label": "Backup passphrase",
+    "passphrase_ph": "At least {n} characters",
+    "passphrase_confirm_ph": "Repeat passphrase",
+    "passphrase_mismatch": "Passphrases must match and be at least {n} characters.",
+    "include_env": "Include an environment snapshot (.env)",
+    "include_env_help": "Bundles infrastructure secrets (JWT_SECRET, DB and SMTP credentials, S3 keys) for the operator to restore by hand. Never applied automatically.",
+    "plaintext_warning": "A passphrase-encrypted backup contains decrypted secrets once opened. Store it somewhere safe and never share the passphrase alongside the file.",
+    "export_cta": "Export backup",
+    "export_done": "Backup downloaded.",
+    "import_title": "Import configuration",
+    "import_warning": "Importing REPLACES the in-scope configuration, purges users and groups not present in the backup, invalidates ALL active shares (their files are deleted), and logs everyone out. This cannot be undone.",
+    "import_file_label": "Backup file",
+    "import_passphrase_ph": "Passphrase (only if the backup is encrypted)",
+    "preview_cta": "Preview changes",
+    "preview_heading": "Preview - nothing has changed yet",
+    "result_heading": "Import complete",
+    "sum_categories": "Categories: {v}",
+    "sum_secret_mode": "Secret mode: {v}",
+    "sum_shares": "Active shares to be invalidated (files deleted): {n}",
+    "sum_sessions": "All users will be signed out, including you.",
+    "sum_purge_users": "Users to be purged ({n})",
+    "sum_purge_groups": "Groups to be purged ({n})",
+    "sum_sessions_revoked": "Sessions revoked: {n}",
+    "env_present_help": "This backup carries an environment snapshot. It is shown here for you to apply by hand; it is never written automatically.",
+    "import_cta": "Replace configuration & import",
+    "import_done": "Configuration imported.",
+    "confirm_title": "Replace configuration?",
+    "confirm_body": "This replaces configuration, purges unlisted users and groups, invalidates {shares} active share(s) and signs everyone out. This cannot be undone.",
+    "confirm_cta": "Replace & import"
   },
   "admin_scheduled_tasks": {
     "title": "Scheduled tasks",

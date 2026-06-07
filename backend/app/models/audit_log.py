@@ -139,6 +139,11 @@ class AuditEventType(str, enum.Enum):
     email_changed = "email_changed"
     email_change_cancelled = "email_change_cancelled"
     email_change_policy_changed = "email_change_policy_changed"
+    # Configuration backup / restore (v1.33.0). Export records categories +
+    # secret mode (never values); import records what it replaced + that all
+    # active shares were invalidated.
+    config_backup_exported = "config_backup_exported"
+    config_backup_imported = "config_backup_imported"
 
 
 

@@ -122,6 +122,51 @@ def decrypt_totp_secret(ciphertext: bytes) -> str:
     return _get_fernet().decrypt(ciphertext).decode("utf-8")
 
 
+# ---------------------------------------------------------------------------
+# Passphrase-based encryption for portable config backups.
+#
+# Independent of JWT_SECRET: the key is scrypt-derived from an admin-supplied
+# passphrase + a per-file random salt, so a backup encrypted on one system can
+# be restored on another that has a *different* JWT_SECRET. Used only by
+# services/config_backup.py to wrap the whole payload when secret_mode is
+# "passphrase". The salt + scrypt params travel in the (cleartext) envelope.
+# ---------------------------------------------------------------------------
+
+# scrypt cost params. n=2^14 keeps derivation well under a second on server
+# hardware while staying memory-hard. Stored in the envelope so a future bump
+# stays backwards-readable.
+SCRYPT_N = 2**14
+SCRYPT_R = 8
+SCRYPT_P = 1
+
+
+def new_backup_salt() -> bytes:
+    return secrets.token_bytes(16)
+
+
+def derive_backup_key(passphrase: str, salt: bytes, *, n: int, r: int, p: int) -> bytes:
+    """scrypt(passphrase, salt) -> 32 bytes -> urlsafe base64 -> Fernet key."""
+    from cryptography.hazmat.primitives.kdf.scrypt import Scrypt
+
+    kdf = Scrypt(salt=salt, length=32, n=n, r=r, p=p)
+    derived = kdf.derive(passphrase.encode("utf-8"))
+    return base64.urlsafe_b64encode(derived)
+
+
+def encrypt_with_passphrase(plaintext: bytes, passphrase: str, salt: bytes) -> str:
+    key = derive_backup_key(passphrase, salt, n=SCRYPT_N, r=SCRYPT_R, p=SCRYPT_P)
+    return Fernet(key).encrypt(plaintext).decode("ascii")
+
+
+def decrypt_with_passphrase(
+    token: str, passphrase: str, salt: bytes, *, n: int, r: int, p: int
+) -> bytes:
+    """Raises cryptography.fernet.InvalidToken on a wrong passphrase / tampered
+    token - the caller maps that to BACKUP_BAD_PASSPHRASE."""
+    key = derive_backup_key(passphrase, salt, n=n, r=r, p=p)
+    return Fernet(key).decrypt(token.encode("ascii"))
+
+
 # Generic alias for the Phase 9 app_settings table. Same Fernet key, same
 # crypto - separate names so callsites read self-documenting.
 def encrypt_setting(plaintext: str) -> str:

@@ -85,6 +85,7 @@ export const ADMIN_NAV: AdminNavCategory[] = [
       { routeName: 'admin-settings-general', labelKey: 'admin.nav_item.general', matchNames: ['admin-settings-general'] },
       { routeName: 'admin-settings-branding', labelKey: 'admin.nav_item.branding', matchNames: ['admin-settings-branding'] },
       { routeName: 'admin-settings-advanced', labelKey: 'admin.nav_item.advanced', matchNames: ['admin-settings-advanced'] },
+      { routeName: 'admin-settings-backup', labelKey: 'admin.nav_item.backup', matchNames: ['admin-settings-backup'] },
     ],
   },
 ]

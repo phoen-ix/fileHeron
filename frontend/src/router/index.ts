@@ -327,6 +327,12 @@ const router = createRouter({
           meta: { density: 'operator', title: 'Advanced', requiresRole: 'admin' },
         },
         {
+          path: 'settings/backup',
+          name: 'admin-settings-backup',
+          component: () => import('@/views/AdminSettingsBackup.vue'),
+          meta: { density: 'operator', title: 'Backup & restore', requiresRole: 'admin' },
+        },
+        {
           path: 'system',
           name: 'admin-system',
           component: () => import('@/views/AdminSystem.vue'),

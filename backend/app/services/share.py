@@ -1138,3 +1138,65 @@ def register_files_added(
 
     db.flush()
     return share
+
+
+def invalidate_all_active_shares(
+    db: Session, *, actor: User | None = None, request=None
+) -> dict:
+    """Expire every currently-active share and hard-delete its file bytes.
+
+    Used by the config-restore flow: importing a configuration changes the
+    world out from under any live share, so all of them are invalidated. Mirrors
+    the hourly ``expire_files`` cron (flip state -> expired, delete bytes via
+    ``delete_file_for_expiry``, audit ``share_expired`` per share) but with an
+    admin actor and a single summary audit row.
+
+    Irreversible (disk unlink), so the caller MUST run this in its own committed
+    pass *before* the config transaction. Returns a small summary dict."""
+    from sqlalchemy.orm import selectinload
+
+    from .file import delete_file_for_expiry
+
+    shares = (
+        db.query(Share)
+        .options(selectinload(Share.files))
+        .filter(Share.state == ShareState.active)
+        .all()
+    )
+    expired_shares = 0
+    deleted_files = 0
+    for share in shares:
+        file_count = 0
+        failed_files: list[str] = []
+        for f in share.files:
+            try:
+                delete_file_for_expiry(db, file=f)
+                file_count += 1
+                deleted_files += 1
+            except OSError as e:
+                logger.error(
+                    "invalidate_all_active_shares: delete failed file=%s share=%s: %s",
+                    f.id, share.id, e,
+                )
+                failed_files.append(f.id)
+        share.state = ShareState.expired
+        share.expires_at = utc_now()
+        metadata: dict = {"file_count": file_count, "via": "config_restore"}
+        if failed_files:
+            metadata["failed_files"] = failed_files
+        record_audit_event(
+            db,
+            event_type=AuditEventType.share_expired,
+            actor_user_id=actor.id if actor else None,
+            target_type="share",
+            target_id=share.id,
+            metadata=metadata,
+            request=request,
+        )
+        expired_shares += 1
+    db.flush()
+    logger.info(
+        "invalidate_all_active_shares: expired %d shares, deleted %d files",
+        expired_shares, deleted_files,
+    )
+    return {"expired_shares": expired_shares, "deleted_files": deleted_files}

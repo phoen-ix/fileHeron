@@ -1,54 +1,53 @@
-# file:Heron v1.35.0
+# file:Heron v1.36.0
 
-**Security hardening.** This release closes an authentication bypass and several
-access-control gaps surfaced by a full-surface security and reliability audit. No
-database migration; safe to roll straight forward from v1.34.x.
+**Antivirus scanning gate.** This release makes the virus scan effective for large
+uploads and adds automatic recovery for scans that don't complete. Backend-only
+code; no database migration. **One manual step is required to scan large files** -
+see *Upgrade notes*.
 
 ## What's fixed
 
-- **Passkey sign-in no longer bypasses brute-force protection (important).** The
-  passkey login step (`/api/auth/webauthn/begin`) checked your password but, unlike
-  the normal sign-in page, applied none of the throttling: the per-IP rate limit,
-  the 5-strike account lockout, and the sign-in attempt log were all skipped. An
-  attacker who knew an email address could therefore guess passwords through this
-  endpoint at full speed, invisibly. Both sign-in paths now run through one shared
-  gate, so the rate limit, lockout, attempt logging and lockout email apply
-  identically - and an unknown email is now indistinguishable from a wrong password.
-- **A successful sign-in no longer resets the shared per-IP throttle.** Previously
-  one valid login cleared the rate-limit window for its whole IP, which a determined
-  attacker could use to keep guessing other accounts from the same address. The
-  window now simply expires on its own.
-- **API tokens now respect account lockout.** A pre-issued `fh_...` token kept
-  working while its owner's account was locked out; locked accounts are now refused
-  on the token path too.
-- **Passkey completion re-checks account state.** A passkey ceremony can no longer
-  finish a sign-in for an account that was disabled, locked, or left unverified
-  between the two steps.
-- **The last administrator can no longer be removed.** Demoting or disabling the
-  final remaining admin (including yourself) is now refused with a clear error, so
-  the organization can't be accidentally locked out of every admin screen.
-- **Password changes now send a security alert.** Changing your password emails you
-  a heads-up (with a reset link if it wasn't you), matching the email-change flow.
-- **Inbound mailbox keeps flowing during a ClamAV outage.** If the virus scanner is
-  briefly unavailable while fetching mail, attachments are stored as *pending*
-  (gated from download) and ingestion continues, instead of the whole poll aborting
-  and silently stalling the inbox until the scanner recovered.
+- **Large uploads are now actually scanned (important).** ClamAV's defaults stop
+  scanning a file past 100 MB and simply report it "clean". Because file:Heron is
+  built for transfers up to ~30 GB, anything larger than 100 MB was being passed
+  through the virus gate without being inspected. This release ships a `clamd`
+  configuration that raises the scan limits to 30 GB, and - as a safety net - the
+  backend now refuses to trust a "clean" verdict on any file larger than the
+  configured scan size (`AV_MAX_SCAN_BYTES`, default 30 GB): such a file is left
+  unscanned and not downloadable rather than served as clean.
+- **Stalled scans recover on their own.** If a scan didn't finish (a brief ClamAV
+  outage, a missed hand-off, or a worker restart), the affected file used to sit
+  un-scanned and therefore un-downloadable indefinitely. The hourly maintenance
+  sweep now re-queues a scan for any file left unscanned for more than 30 minutes
+  (oversize files excluded, since they can't be fully scanned).
 
 ## Upgrade notes
 
-- Backend-only; no frontend change, no database migration. Roll straight forward
-  from v1.34.0 / v1.34.1.
-- No configuration changes required. Existing passkeys, API tokens and sessions
-  continue to work unchanged.
+- **Backend + worker** roll forward via **Update** in `/admin/system` as usual.
+- **One-time host step to raise the ClamAV scan limit.** The new scan limits live
+  in a mounted config file (`docker/clamav/clamd.conf`) that the in-app updater does
+  not recreate the ClamAV container for. After updating, run this once on the host
+  to apply it:
+
+  ```
+  docker compose up -d clamav
+  ```
+
+  Until you do, the backend safety net still prevents unscanned large files from
+  being served as clean - they will report as still-scanning rather than slipping
+  through. If your maximum upload size differs from 30 GB, set the limits in
+  `docker/clamav/clamd.conf` and the `AV_MAX_SCAN_BYTES` backend setting to match.
+- No database migration.
 
 ## Container images
 
 Published to GitHub Container Registry:
 
-- `ghcr.io/phoen-ix/fileheron-backend:v1.35.0`
-- `ghcr.io/phoen-ix/fileheron-worker:v1.35.0`
-- `ghcr.io/phoen-ix/fileheron-frontend:v1.35.0`
-- `ghcr.io/phoen-ix/fileheron-updater-shim:v1.35.0`
-- `ghcr.io/phoen-ix/fileheron-updater-executor:v1.35.0`
+- `ghcr.io/phoen-ix/fileheron-backend:v1.36.0`
+- `ghcr.io/phoen-ix/fileheron-worker:v1.36.0`
+- `ghcr.io/phoen-ix/fileheron-frontend:v1.36.0`
+- `ghcr.io/phoen-ix/fileheron-updater-shim:v1.36.0`
+- `ghcr.io/phoen-ix/fileheron-updater-executor:v1.36.0`
 
-Click **Update** in `/admin/system` to roll forward.
+Click **Update** in `/admin/system` to roll forward, then run the one-time
+`docker compose up -d clamav` step above.

@@ -113,6 +113,33 @@ async def test_av_scan_infected_quarantines_and_revokes(make_user, db, tmp_path,
 
 
 @pytest.mark.asyncio
+async def test_av_scan_oversize_clean_is_not_trusted(make_user, db, tmp_path, monkeypatch):
+    """H3: clamd reports 'clean' for a file past its configured scan limit
+    WITHOUT actually scanning it. A file larger than AV_MAX_SCAN_BYTES must not
+    be marked clean on a clamd OK - it stays ready_unscanned (not downloadable),
+    so unscanned large files can't be served as 'clean'."""
+    sender = make_user(email="hr@test.local", role=UserRole.admin)
+    recipient = make_user(email="cli@test.local", role=UserRole.client)
+    _, file, _ = _seed_file_for_scan(db, sender, recipient, tmp_path, content=b"hello")
+
+    monkeypatch.setattr(
+        av_scan_svc,
+        "scan_path",
+        lambda _p: ScanResult(state="clean", signature=None, raw="OK"),
+    )
+    # Treat the 5-byte file as 'oversize' for the test.
+    monkeypatch.setattr("app.config.settings.AV_MAX_SCAN_BYTES", 2)
+    from app.workers import av_scan as worker_mod
+    monkeypatch.setattr(worker_mod, "SessionLocal", lambda: db)
+
+    result = await av_scan_file(None, file.id)
+    assert result["state"] == "oversize_unscanned"
+    db.expire_all()
+    f_after = db.query(File).filter(File.id == file.id).one()
+    assert f_after.state == FileState.ready_unscanned
+
+
+@pytest.mark.asyncio
 async def test_av_scan_skip_in_unexpected_state(make_user, db, tmp_path, monkeypatch):
     """If the file is already clean (e.g. a duplicate enqueue), the
     worker should no-op rather than re-scan."""

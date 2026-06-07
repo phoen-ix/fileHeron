@@ -161,6 +161,10 @@ services:
       - ${COMPOSE_HOST_ROOT:-${PWD:-/opt/fileHeron}}/data/quarantine:/data/quarantine:rw
       # Signature DB persists across container restarts.
       - clamav-defs:/var/lib/clamav
+      # Raised MaxFileSize/MaxScanSize/StreamMaxLength so LARGE uploads are
+      # actually scanned instead of silently passed as "clean" past clamd's
+      # 100MB default (audit H3). Keep in sync with backend AV_MAX_SCAN_BYTES.
+      - ${COMPOSE_HOST_ROOT:-${PWD:-/opt/fileHeron}}/docker/clamav/clamd.conf:/etc/clamav/clamd.conf:ro
     networks: [internal]
     healthcheck:
       # `clamdcheck.sh` ships with the official image; it short-circuits

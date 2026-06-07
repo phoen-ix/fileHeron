@@ -33,6 +33,7 @@ from ..database import SessionLocal
 from ..models.audit_log import AuditEventType
 from ..models.file import File, FileState
 from ..models.share import Share, ShareState
+from ..services import job_queue
 from ..services.audit import record_audit_event
 from ..services.cron_tracker import track_cron
 from ..utils.timeutil import utc_now
@@ -45,6 +46,14 @@ _USABLE_FILE_STATES = {
     FileState.ready_unscanned,
     FileState.clean,
 }
+
+# Files finalized this long ago that are still ready_unscanned had their scan
+# fail or never run (transient clamd error, a missed enqueue - audit L7, or a
+# worker crash); re-enqueue a scan so they don't stay un-downloadable forever
+# (audit L8). The normal post-finish scan completes in seconds, so this window
+# never races an in-flight scan.
+_RESCAN_STUCK_AFTER_MIN = 30
+_RESCAN_BATCH = 500
 
 
 
@@ -139,15 +148,37 @@ async def cleanup_stale_uploads(_ctx) -> dict:
             shares_failed += 1
 
         db.commit()
-        if files_reaped or shares_failed:
+
+        # Recover scans that never completed: re-enqueue ready_unscanned files
+        # stuck past _RESCAN_STUCK_AFTER_MIN. Oversize files are excluded - clamd
+        # can't fully scan them (audit H3), so re-scanning would loop forever.
+        rescan_cutoff = utc_now() - timedelta(minutes=_RESCAN_STUCK_AFTER_MIN)
+        stuck = (
+            db.query(File)
+            .filter(
+                File.state == FileState.ready_unscanned,
+                File.finalized_at.isnot(None),
+                File.finalized_at < rescan_cutoff,
+                File.size_bytes <= settings.AV_MAX_SCAN_BYTES,
+            )
+            .limit(_RESCAN_BATCH)
+            .all()
+        )
+        for f in stuck:
+            await job_queue.aenqueue("av_scan_file", f.id)
+        rescans_requeued = len(stuck)
+
+        if files_reaped or shares_failed or rescans_requeued:
             logger.info(
-                "cleanup_stale_uploads: scanned=%d files_reaped=%d shares_failed=%d",
-                scanned, files_reaped, shares_failed,
+                "cleanup_stale_uploads: scanned=%d files_reaped=%d shares_failed=%d "
+                "rescans_requeued=%d",
+                scanned, files_reaped, shares_failed, rescans_requeued,
             )
         return {
             "scanned": scanned,
             "files_reaped": files_reaped,
             "shares_failed": shares_failed,
+            "rescans_requeued": rescans_requeued,
         }
     except Exception:
         db.rollback()

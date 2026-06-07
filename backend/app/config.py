@@ -242,6 +242,13 @@ class Settings(BaseSettings):
     # Skip the AV scan entirely (e.g. for tests, CI). When true, every
     # uploaded file is auto-marked `clean` immediately.
     AV_SKIP: bool = False
+    # Largest file clamd is configured to actually scan - MUST match the
+    # MaxFileSize/MaxScanSize in docker/clamav/clamd.conf. clamd silently
+    # reports "clean" for files past its limit (it just stops scanning), so a
+    # "clean" verdict on a file LARGER than this is treated as inconclusive
+    # (left unscanned / not served) instead of trusted (audit H3, defense in
+    # depth). Default 30 GiB matches the shipped clamd.conf.
+    AV_MAX_SCAN_BYTES: int = 32212254720  # 30 GiB
     # Public-link tunables.
     PUBLIC_LINK_BASE_PATH: str = "/d"
     PUBLIC_LINK_PASSWORD_RATE_LIMIT: int = 10  # max attempts per (link, IP) per window

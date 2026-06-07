@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import logging
 
+from ..config import settings
 from ..database import SessionLocal
 from ..models.file import File, FileState
 from ..services import av_scan as av_scan_svc
@@ -58,6 +59,26 @@ async def av_scan_file(_ctx, file_id: str) -> dict:
             raise
 
         if result.state == "clean":
+            # clamd reports "clean" even when a file exceeds its configured
+            # MaxFileSize/MaxScanSize - it simply stops scanning past the limit.
+            # So a "clean" verdict on a file larger than what clamd is
+            # configured to scan is NOT trustworthy. Don't mark it clean (it
+            # stays ready_unscanned -> not downloadable, 425 SCAN_IN_PROGRESS);
+            # the operator must size clamd (docker/clamav/clamd.conf) + this
+            # AV_MAX_SCAN_BYTES to their real maximum (audit H3, defense-in-depth).
+            if (file.size_bytes or 0) > settings.AV_MAX_SCAN_BYTES and not settings.AV_SKIP:
+                logger.error(
+                    "av_scan: %s is %d bytes, over AV_MAX_SCAN_BYTES (%d); clamd "
+                    "'clean' is inconclusive for an oversize file - NOT marking clean",
+                    file_id,
+                    file.size_bytes or 0,
+                    settings.AV_MAX_SCAN_BYTES,
+                )
+                return {
+                    "file_id": file_id,
+                    "state": "oversize_unscanned",
+                    "size_bytes": file.size_bytes,
+                }
             file.state = FileState.clean
             db.commit()
             logger.info("av_scan: %s clean", file_id)

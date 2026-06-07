@@ -1,3 +1,23 @@
+# Desktop client 0.13.0
+
+Security fix for "Save all to folder".
+
+## What's fixed
+
+When you used **Save all to folder** to download every file in a share at once,
+the app trusted each file name exactly as the server sent it. A crafted name
+(for example one containing a folder path) could cause a file to be written
+*outside* the folder you picked - potentially into a sensitive location such as a
+Windows auto-run/Startup folder. The app now strips any folder path from each
+name, keeps only a safe file name inside the folder you chose, and renames
+duplicates so nothing is silently overwritten.
+
+The single-file **Download** button was never affected - there you name the file
+yourself in the save dialog. Nothing changes in how you use the app; bulk saves
+just always land safely inside the folder you select.
+
+---
+
 # Desktop client 0.12.0
 
 Your organisation's logo, right in the app.

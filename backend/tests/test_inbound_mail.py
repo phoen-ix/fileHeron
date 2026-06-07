@@ -165,6 +165,22 @@ def test_ingest_attachment_scanned_clean(db, monkeypatch):
     assert att.filename == "report.pdf"
 
 
+def test_ingest_attachment_when_clamd_unavailable_is_pending_not_fatal(db, monkeypatch):
+    """M10: a clamd outage during an attachment scan must NOT abort ingestion -
+    the attachment is stored `pending` (gated) and the message still lands, so
+    the IMAP highwater advances and the inbox doesn't silently stall."""
+    def _boom(_fh):
+        raise av_scan.AVUnavailableError("clamd down")
+
+    monkeypatch.setattr(av_scan, "scan_stream", _boom)
+    msg = inbound_mail.ingest(db, inbound_parse.parse(WITH_ATTACH), uid=1, uidvalidity=1)
+    db.commit()
+    assert msg is not None
+    att = db.query(InboundAttachment).filter_by(message_id=msg.id).one()
+    assert att.av_state == AttachmentAVState.pending
+    assert att.filename == "report.pdf"
+
+
 # --- poll gating ------------------------------------------------------------
 
 def test_poll_skips_when_disabled(db):

@@ -45,14 +45,26 @@ def _already_ingested(db: Session, *, uidvalidity: int, uid: int, message_id: st
 def _store_attachment(db: Session, message_id_pk: int, att: ParsedAttachment) -> None:
     backend = storage_svc.get_storage_backend()
     locator = backend.generate_locator(f"inbound-{uuid.uuid4().hex}")
-    # Scan the bytes before they land anywhere servable.
-    scan = av_scan.scan_stream(io.BytesIO(att.content))
-    if scan.state == "clean":
-        av_state = AttachmentAVState.clean
-    elif scan.state == "infected":
-        av_state = AttachmentAVState.infected
-    else:
+    # Scan the bytes before they land anywhere servable. If clamd is
+    # unavailable (its documented slow first boot, or any outage), store the
+    # attachment as `pending` (gated from download) and carry on - letting the
+    # AVUnavailableError propagate would abort the whole poll run, the
+    # highwater would never advance, and ALL inbound ingestion would silently
+    # stall until clamd recovered (audit M10).
+    try:
+        scan = av_scan.scan_stream(io.BytesIO(att.content))
+    except av_scan.AVUnavailableError:
+        logger.warning(
+            "clamd unavailable scanning inbound attachment %s; storing as pending",
+            att.filename,
+        )
+        scan = None
+    if scan is None or scan.state not in ("clean", "infected"):
         av_state = AttachmentAVState.pending
+    elif scan.state == "clean":
+        av_state = AttachmentAVState.clean
+    else:
+        av_state = AttachmentAVState.infected
     tmp_name = None
     try:
         with tempfile.NamedTemporaryFile(delete=False) as tmp:

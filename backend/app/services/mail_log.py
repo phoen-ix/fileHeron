@@ -35,6 +35,13 @@ _AUTH_LINK_RE = re.compile(
 )
 _REDACTED = r"\1<redacted>"
 
+# The long-lived manage-notifications / unsubscribe footer token added to every
+# notification email. Lower sensitivity than the auth links above (it only
+# governs notification prefs), but it must still not sit in plaintext in the
+# browsable mail log (audit L9/L28). Masked separately so it does NOT disable
+# resend the way an account-takeover token does.
+_FOOTER_LINK_RE = re.compile(r"(/manage-notifications/)([A-Za-z0-9._~\-]+)")
+
 # Categories whose emails always carry a one-time token - RESEND is hard-disabled
 # on these even if a future template tweak moves the token out of regex reach.
 _AUTH_LINK_CATEGORIES = {
@@ -73,8 +80,21 @@ def mask_bodies(
     category is a known token-bearing one (so resend stays disabled regardless)."""
     t, t_red = mask_sensitive(text_body)
     h, h_red = mask_sensitive(html_body)
+    # Redact the manage-notifications footer token too (low sensitivity -> does
+    # not flip `masked`/disable resend; audit L9/L28).
+    t = _mask_footer(t)
+    h = _mask_footer(h)
     masked = t_red or h_red or (category in _AUTH_LINK_CATEGORIES)
     return t, h, masked
+
+
+def _mask_footer(text: str | None) -> str | None:
+    if not text:
+        return text
+    try:
+        return _FOOTER_LINK_RE.sub(_REDACTED, text)
+    except Exception:
+        return text
 
 
 def record_queued(

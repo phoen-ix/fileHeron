@@ -211,6 +211,10 @@ def request_email_change(
     old_email = target.email
 
     if skip_verification or mode == "immediate":
+        # Cancel any live pending change FIRST, so a stale confirm/cancel link
+        # from an earlier verify_new request can't later silently override this
+        # immediate (admin) change (audit L10).
+        _supersede_pending(db, user_id=target.id)
         oidc_reset, set_pw = _apply_email_change(
             db,
             user=target,

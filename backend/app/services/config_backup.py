@@ -64,7 +64,7 @@ from ..models.login_attempt import LoginAttempt
 from ..models.notification import Notification, NotificationCategory
 from ..models.oidc_provider import OIDCProvider
 from ..models.share import Share, ShareState
-from ..models.user import User
+from ..models.user import User, UserRole
 from ..models.user_notification_preference import (
     NotificationChannel,
     UserNotificationPreference,
@@ -806,7 +806,15 @@ def apply_backup(db: Session, *, parsed: ParsedBackup, actor: User, request=None
                 db.query(User).filter(User.id == local).update(
                     {"created_by_id": cby}, synchronize_session=False
                 )
-        db.flush()
+        # Never let a restore downgrade or disable the admin performing it - the
+        # upsert above may have overwritten their row with the backup's role /
+        # is_disabled. Re-assert so they can finish (and repeat) the import and
+        # the org isn't locked out of admin (audit L11).
+        me = db.query(User).filter(User.id == actor.id).one_or_none()
+        if me is not None:
+            me.role = UserRole.admin
+            me.is_disabled = False
+            db.flush()
         summary.counts["users_insert"] = inserted
         summary.counts["users_update"] = updated
 

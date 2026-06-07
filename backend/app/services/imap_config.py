@@ -7,12 +7,15 @@ per call - an admin change applies without a redeploy.
 """
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 
 from sqlalchemy.orm import Session
 
 from ..config import settings
 from . import settings as settings_svc
+
+logger = logging.getLogger("fileheron.imap_config")
 
 POST_FETCH_ACTIONS = ("mark_read", "untouched", "move", "delete")
 NOTIFY_MODES = ("off", "human", "all")
@@ -66,6 +69,21 @@ def resolve_imap_config(db: Session) -> ImapConfig:
         user = smtp.user
         password = smtp.password
         host = host or smtp.host
+
+    # tls_mode 'none' sends IMAP credentials + message bodies in CLEARTEXT. It's
+    # a deliberate opt-in (e.g. a localhost relay), but in production against a
+    # remote host it is almost certainly a mistake - surface it loudly (audit L19).
+    if (
+        tls_mode == "none"
+        and settings.is_production
+        and host
+        and host.lower() not in ("localhost", "127.0.0.1", "::1")
+    ):
+        logger.error(
+            "IMAP tls_mode=none in production against remote host %r - credentials "
+            "and message bodies are transmitted in CLEARTEXT; use implicit/starttls.",
+            host,
+        )
 
     return ImapConfig(
         host=host,

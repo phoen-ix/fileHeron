@@ -152,26 +152,27 @@ def dispatch(
         db.add(notif)
         db.flush()
 
-        # Push live to SSE listeners (the bell). Best-effort - the
-        # in-app row is the durable record; SSE is real-time UX only.
+        # Push live to SSE listeners (the bell) AFTER the caller commits - the
+        # in-app row is the durable record; SSE is real-time UX only, and firing
+        # it pre-commit would ping the bell for a row a rollback then discards
+        # (audit M8). Capture the payload now (values, not the ORM object).
         if _wants_in_app(channel):
+            from ..database import run_after_commit
             from . import sse as sse_svc
-            sse_svc.publish_sync(
-                user.id,
-                {
-                    "event": "notification",
+
+            sse_event = {
+                "event": "notification",
+                "id": notif.id,
+                "data": {
                     "id": notif.id,
-                    "data": {
-                        "id": notif.id,
-                        "category": notif.category.value,
-                        "link_url": notif.link_url,
-                        "created_at": notif.created_at.isoformat()
-                        if notif.created_at
-                        else None,
-                        "payload": notif.payload_json,
-                    },
+                    "category": notif.category.value,
+                    "link_url": notif.link_url,
+                    "created_at": notif.created_at.isoformat() if notif.created_at else None,
+                    "payload": notif.payload_json,
                 },
-            )
+            }
+            _uid = user.id
+            run_after_commit(db, lambda: sse_svc.publish_sync(_uid, sse_event))
 
     if _wants_email(channel) and email_to:
         try:
@@ -206,14 +207,23 @@ def dispatch(
                 text_body=text,
                 html_body=html,
             )
-            job_queue.enqueue(
-                "send_email_job",
-                to=email_to,
-                subject=subject,
-                text_body=text,
-                html_body=html,
-                email_log_id=eid,
-                list_unsubscribe=list_unsub,
+            # Enqueue the send AFTER the caller commits: the mail-log row (eid)
+            # is written in the caller's transaction, so a rollback must take
+            # the email with it, and the worker must not pick up the job before
+            # the row is durable (audit M8). Deferred via the session's
+            # after-commit hook; dropped on rollback.
+            from ..database import run_after_commit
+            run_after_commit(
+                db,
+                lambda: job_queue.enqueue(
+                    "send_email_job",
+                    to=email_to,
+                    subject=subject,
+                    text_body=text,
+                    html_body=html,
+                    email_log_id=eid,
+                    list_unsubscribe=list_unsub,
+                ),
             )
         except Exception:
             logger.exception(

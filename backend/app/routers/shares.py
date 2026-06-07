@@ -75,6 +75,24 @@ def _to_share_response(db: Session, share, *, viewer: User | None = None) -> Sha
             GroupRecipientRef(id=g.id, name=g.name, is_company_inbox=g.is_company_inbox)
             for g in groups
         ]
+    # Co-recipient privacy (audit M4): a viewer who is not the creator, an admin,
+    # or an approver has no need to see the FULL recipient roster - project it
+    # to their own need-to-know (themselves + the groups they belong to).
+    if (
+        viewer is not None
+        and viewer.role != UserRole.admin
+        and share.created_by_id != viewer.id
+        and not share_approval_svc.can_decide(db, viewer, share)
+    ):
+        from ..models.group_member import GroupMember
+        own_groups = {
+            gid
+            for (gid,) in db.query(GroupMember.group_id)
+            .filter(GroupMember.user_id == viewer.id)
+            .all()
+        }
+        rec_user_ids = [uid for uid in rec_user_ids if uid == viewer.id]
+        rec_groups = [g for g in rec_groups if g.id in own_groups]
     all_files = list(share.files)
     files = [f for f in all_files if f.state != FileState.deleted]
     return ShareResponse(

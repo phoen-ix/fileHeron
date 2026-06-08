@@ -30,6 +30,9 @@ jobs:
       # backend image build runs).
       - name: pip check
         run: pip check
+      # Lint gate (ruff config + curated ignores live in pyproject.toml).
+      - name: Ruff
+        run: ruff check .
       # The suite uses in-memory SQLite (conftest) and includes test_import_boot
       # (app.main + app.workers.worker import cleanly against the declared deps).
       # The alembic downgrade roundtrip stays skipped here (it needs a real
@@ -80,3 +83,50 @@ jobs:
           APP_URL: http://ci.local
           APP_NAME: fileHeron
         run: pytest -q -p no:cacheprovider tests/test_alembic_roundtrip.py
+
+  # Type-check + lint + unit-test the SPA. These all existed locally but never
+  # ran in CI, so a broken frontend couldn't fail the pipeline. vue-tsc --noEmit
+  # is the type half of the `build` script (vue-tsc -b && vite build) without
+  # bundling; eslint + vitest are the repo's own npm scripts.
+  frontend-tests:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install (npm ci)
+        run: npm ci --no-audit --no-fund
+      - name: Type-check (vue-tsc)
+        run: npx vue-tsc --noEmit
+      - name: Lint (eslint)
+        run: npm run lint
+      - name: Unit tests (vitest)
+        run: npm run test
+
+  # Supply-chain audit of the deps that actually ship. Python: the hash-locked
+  # requirements.lock is the source of truth. Node: --omit=dev so dev-only tool
+  # CVEs (vitest/happy-dom etc., never bundled) don't block; Dependabot tracks
+  # those separately. Fails on high/critical in production deps.
+  dependency-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
+        with:
+          python-version: '3.12'
+      - name: pip-audit (backend, hash-locked deps)
+        run: |
+          pip install pip-audit
+          pip-audit -r backend/requirements.lock --progress-spinner off
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version: '22'
+      - name: npm audit (frontend, production deps only)
+        working-directory: frontend
+        run: npm audit --omit=dev --audit-level=high

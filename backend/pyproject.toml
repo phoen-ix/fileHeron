@@ -57,6 +57,7 @@ dev = [
     "mypy>=1.10",
     "aiosqlite>=0.20",
     "moto[s3]>=5.0",
+    "pip-audit>=2.7",
 ]
 
 [tool.setuptools.packages.find]
@@ -78,6 +79,12 @@ ignore = [
     "S112",   # try-except-continue: same deliberate best-effort pattern
     "SIM105", # try-except-pass kept as-is (don't force contextlib.suppress) - same blocks
     "UP017",  # keep datetime.timezone.utc - the documented timestamp convention (CLAUDE.md)
+    "UP042",  # keep `(str, enum.Enum)` not `StrEnum`: deliberate - SAEnum(native_enum=False)
+              # + str() behaviour the code relies on; StrEnum would change serialization
+    "ASYNC240", # pathlib in async fns: the stack has no anyio/trio Path; sync pathlib in
+                # the ARQ workers is intentional, so this rule is inapplicable here
+    "UP046",  # keep explicit `Generic[T]` on the Pydantic base model (PaginatedResponse) -
+              # PEP-695 type params interact awkwardly with Pydantic v2 generic models
 ]
 
 [tool.ruff.lint.per-file-ignores]

@@ -43,10 +43,8 @@ from ..models.user import User, UserRole
 from ..redis_client import get_redis
 from ..utils.crypto import sha256_hex
 from ..utils.timeutil import utc_now
-from . import cron_schedule
-from . import rate_limit
+from . import rate_limit, settings_registry
 from . import settings as settings_svc
-from . import settings_registry
 
 logger = logging.getLogger("fileheron.error_alert")
 
@@ -241,8 +239,7 @@ def _send_to_admins(db: Session, payload: dict[str, Any]) -> int:
 
 def _send_to_custom(db: Session, payload: dict[str, Any], addrs: list[str]) -> int:
     from . import email as email_svc
-    from . import job_queue
-    from . import mail_log
+    from . import job_queue, mail_log
     from . import site as site_svc
 
     if not addrs:

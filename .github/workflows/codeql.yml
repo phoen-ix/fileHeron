@@ -1,0 +1,38 @@
+name: CodeQL
+
+# Static analysis (SAST) for a security-critical file-sharing tool. Free for
+# public repos. Findings land in the repo's Security -> Code scanning tab; this
+# workflow does not block PRs by itself (gate it via branch protection if you
+# want that). Python + the SPA are both interpreted, so build-mode: none.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '27 3 * * 1'  # weekly, Monday 03:27 UTC
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      contents: read
+      actions: read
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [python, javascript-typescript]
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@b0c4fd77f6c559021d78430ec4d0d169ae74a4eb # v3
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: none
+          queries: security-extended
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@b0c4fd77f6c559021d78430ec4d0d169ae74a4eb # v3
+        with:
+          category: "/language:${{ matrix.language }}"

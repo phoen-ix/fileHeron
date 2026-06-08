@@ -1,0 +1,38 @@
+version: 2
+# Weekly dependency-update PRs, grouped so minor/patch bumps land together.
+# - pip: tracks backend/pyproject.toml ranges (regenerate requirements.lock via
+#   `uv pip compile --generate-hashes` when a PR lands - Dependabot can't update
+#   the uv lock itself).
+# - npm: frontend tree (this is where the dev-only happy-dom/js-cookie advisories
+#   get their upgrade PRs; they don't block CI since they aren't shipped).
+# - github-actions: keeps the SHA-pinned action versions fresh.
+updates:
+  - package-ecosystem: pip
+    directory: /backend
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels: [dependencies, backend]
+    groups:
+      backend-minor-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels: [dependencies, frontend]
+    groups:
+      frontend-minor-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels: [dependencies, ci]
+    groups:
+      actions:
+        patterns: ["*"]

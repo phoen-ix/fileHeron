@@ -2185,7 +2185,7 @@
     "recipients_label": "Empfänger",
     "recipients_admins": "Alle Admins (jeder kann es unter Konto → Benachrichtigungen stummschalten)",
     "recipients_custom": "Eine bestimmte Liste von Adressen",
-    "recipients_placeholder": "ops@example.com\nsre@example.com",
+    "recipients_placeholder": "ops{'@'}example.com\nsre{'@'}example.com",
     "recipients_help": "Eine Adresse pro Zeile. Diese erhalten die E-Mail direkt und erscheinen nicht in der In-App-Glocke.",
     "throttle_label": "Flutschutz",
     "cooldown_label": "Abklingzeit (Minuten)",

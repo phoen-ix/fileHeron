@@ -1,0 +1,70 @@
+name: E2E
+
+# Playwright against the REAL stack: builds the prod images from source, stands
+# the compose stack up (AV_SKIP + seeded accounts via docker-compose.e2e.yml),
+# and drives the critical user journeys. Catches the integration breakage the
+# 980 backend + 167 vitest unit tests can't see (router guards, silent refresh,
+# the upload + public-link wiring). Slower than the unit gates, so it's its own
+# workflow: runs on PRs + on-demand (workflow_dispatch). Promote to push/main
+# via branch protection once it's proven stable.
+on:
+  pull_request: {}
+  workflow_dispatch: {}
+
+jobs:
+  playwright:
+    runs-on: ubuntu-latest
+    env:
+      COMPOSE_PROJECT_NAME: fileheron_e2e
+      E2E_BACKEND_CONTAINER: fileheron_e2e-backend
+      # Compose requires these (${VAR:?}); test-only values.
+      DB_ROOT_PASSWORD: e2e-root-not-a-secret
+      DB_PASSWORD: e2e-db-not-a-secret
+      JWT_SECRET: e2e-jwt-secret-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      TUS_HOOK_SECRET: e2e-tus-secret-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      APP_URL: http://localhost:8080
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+
+      - name: Build + start the stack
+        run: docker compose -f docker-compose.yml -f docker-compose.e2e.yml up -d --build
+
+      - name: Wait for the stack to answer
+        run: |
+          for i in $(seq 1 60); do
+            if curl -fsS http://localhost:8080/api/health >/dev/null 2>&1 \
+               && curl -fsS http://localhost:8080/ >/dev/null 2>&1; then
+              echo "stack ready"; exit 0
+            fi
+            sleep 5
+          done
+          echo "stack never became ready"; exit 1
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version: '22'
+
+      - name: Install Playwright
+        working-directory: e2e
+        run: |
+          npm install
+          npx playwright install --with-deps chromium
+
+      - name: Run Playwright
+        working-directory: e2e
+        run: npx playwright test
+
+      - name: Stack logs on failure
+        if: failure()
+        run: docker compose -f docker-compose.yml -f docker-compose.e2e.yml logs --tail=300
+
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        if: ${{ !cancelled() }}
+        with:
+          name: playwright-report
+          path: e2e/playwright-report/
+          retention-days: 7
+
+      - name: Tear down
+        if: always()
+        run: docker compose -f docker-compose.yml -f docker-compose.e2e.yml down -v

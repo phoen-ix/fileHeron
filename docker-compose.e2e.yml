@@ -1,0 +1,39 @@
+# E2E override: build the PROD images from source (nginx SPA + real uvicorn, so
+# Playwright exercises what ships), seed deterministic accounts, AV_SKIP so there's
+# no ClamAV warmup, and SMTP unset so one-time-link emails print to backend stdout
+# (the suite scrapes the token from there - the mail log masks those tokens).
+#
+# Used by the e2e CI job and locally:
+#   COMPOSE_PROJECT_NAME=fileheron_e2e \
+#   docker compose -f docker-compose.yml -f docker-compose.e2e.yml up -d --build
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: docker/backend/Dockerfile
+    image: fileheron-backend:e2e
+    environment:
+      ENVIRONMENT: development
+      COOKIE_SECURE: "false"
+      AV_SKIP: "true"
+      SMTP_HOST: ""
+      ADMIN_BOOTSTRAP_EMAIL: admin@e2e.local
+      ADMIN_BOOTSTRAP_PASSWORD: AdminPass123!
+      TEST_ACCOUNT_EMAIL: user@e2e.local
+      TEST_ACCOUNT_PASSWORD: UserPass123!
+      TEST_ACCOUNT_DISPLAY_NAME: E2E User
+
+  worker:
+    build:
+      context: .
+      dockerfile: docker/backend/Dockerfile
+    image: fileheron-backend:e2e
+    environment:
+      ENVIRONMENT: development
+      AV_SKIP: "true"
+
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/frontend/Dockerfile
+    image: fileheron-frontend:e2e

@@ -34,7 +34,7 @@ test('inbound share + upload is visible in staff inbox and downloadable', async 
     headers: { authorization: `Bearer ${userTok}` },
     body: form,
   })
-  expect(up.ok).toBeTruthy()
+  if (!up.ok) throw new Error(`direct upload failed: ${up.status} ${await up.text()}`)
 
   // Staff (admin) sees the inbound share in their inbox.
   await page.goto('/login')

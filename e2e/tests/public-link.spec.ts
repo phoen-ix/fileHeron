@@ -37,7 +37,7 @@ test('public link password unlock (UI) + download-limit exhaustion (API)', async
     headers: { authorization: `Bearer ${admin}` },
     body: form,
   })
-  expect(up.ok).toBeTruthy()
+  if (!up.ok) throw new Error(`direct upload failed: ${up.status} ${await up.text()}`)
 
   // Anonymous unlock UX: wrong password errors, right password reveals the share.
   const anon = await browser.newContext()

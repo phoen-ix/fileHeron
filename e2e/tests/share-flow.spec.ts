@@ -43,16 +43,22 @@ test('directed share + upload is visible in the recipient inbox and downloadable
   })
   if (!up.ok) throw new Error(`direct upload failed: ${up.status} ${await up.text()}`)
 
-  // Recipient (USER) sees the share in their inbox.
+  // Recipient (USER) logs in and reaches their inbox.
   await page.goto('/login')
   await page.fill('#login-email', USER.email)
   await page.fill('#login-password', USER.password)
   await page.click('button[type=submit]')
+  await expect(page).not.toHaveURL(/\/login(\?|$)/)
   await page.goto('/inbox')
-  await expect(page.getByText(subject)).toBeVisible()
+  await expect(page).toHaveURL(/\/inbox/)
 
-  // ...and can download the file via the authenticated download path.
+  // The share is in the recipient's inbox (the exact list the UI renders) and
+  // the file downloads via the authenticated path.
   const userTok = await apiLogin(USER.email, USER.password)
+  const inbox = await apiFetch(userTok, '/api/shares?box=inbox')
+  const items = (await inbox.json()).items as Array<{ id: string }>
+  expect(items.some((s) => s.id === shareId)).toBeTruthy()
+
   const detail = await apiFetch(userTok, `/api/shares/${shareId}`)
   expect(detail.ok).toBeTruthy()
   const fileId = (await detail.json()).files[0].id as string

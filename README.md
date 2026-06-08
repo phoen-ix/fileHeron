@@ -880,8 +880,4 @@ The pytest conftest has two important autouse fixtures: `_disable_ip_rate_limit`
 
 ## License
 
-TBD - likely MIT.
-
-## Author
-
-Personal / leisure project.
+Released under the [MIT License](LICENSE).

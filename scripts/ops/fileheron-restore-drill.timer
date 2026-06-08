@@ -1,0 +1,12 @@
+# Weekly trigger for the fileHeron restore drill. Sunday 04:30 (+ up to 10 min
+# jitter), and catches up if the box was off (Persistent=true).
+[Unit]
+Description=Weekly fileHeron backup restore drill
+
+[Timer]
+OnCalendar=Sun 04:30
+RandomizedDelaySec=600
+Persistent=true
+
+[Install]
+WantedBy=timers.target

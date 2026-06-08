@@ -490,7 +490,22 @@ Schedule via host cron / systemd timer:
 # (typing anything else aborts). Then nukes the DB + bind mounts and reimports.
 ```
 
-**Restore-test discipline:** the restore path has not been exercised end-to-end against a real production backup. Schedule a monthly "restore to staging" drill before treating the backup as load-bearing. Record the most recent successful drill date next to your backup cron.
+**Restore drills (continuous proof the backup actually restores).** `scripts/restore_drill_e2e.sh` verifies the latest backup's artifacts, then restores it into an **isolated throwaway compose project** (its own project name, data dirs, and port - it never touches the live stack), runs `alembic upgrade head` (so it also exercises forward-migrating an older backup onto the current image), runs `scripts/restore_validate.py` against it (row counts, on-disk file existence, no orphan FKs, schema at head), records the timestamp in `backups/LAST_SUCCESSFUL_DRILL`, and tears the throwaway down. Run it by hand against any backup:
+
+```bash
+./scripts/restore_drill_e2e.sh                     # newest backup
+./scripts/restore_drill_e2e.sh ./backups/<stamp>/  # a specific one
+```
+
+Schedule it weekly via the shipped systemd units (the drill needs the host's backups + Docker, so it runs on the box, not in CI):
+
+```bash
+sudo cp scripts/ops/fileheron-restore-drill.{service,timer} /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now fileheron-restore-drill.timer
+```
+
+A failed drill marks the unit `failed` (`systemctl --failed` + `journalctl -u fileheron-restore-drill`); wire `OnFailure=` in the unit to your alerting for a push notification. The cheaper artifact-only check, `scripts/restore_drill.sh`, stands up no stack and is safe to cron more often.
 
 ## Upgrades
 

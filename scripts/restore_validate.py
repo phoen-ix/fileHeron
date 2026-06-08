@@ -22,9 +22,15 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-# Run from /app inside the backend container (or pip-install with the
-# backend's pyproject).
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "backend"))
+# Locate the backend root (the dir holding app/ + alembic.ini). The repo keeps
+# it at ../backend (scripts/ is a sibling); the container image flattens both
+# under /app, so scripts/ and app/ share a parent. Support both layouts.
+_HERE = Path(__file__).resolve().parent
+_BACKEND = next(
+    (c for c in (_HERE.parent / "backend", _HERE.parent) if (c / "app").is_dir()),
+    _HERE.parent / "backend",
+)
+sys.path.insert(0, str(_BACKEND))
 
 from sqlalchemy import select  # noqa: E402
 
@@ -113,7 +119,7 @@ def main() -> int:
             from alembic.runtime.migration import MigrationContext
             from alembic.script import ScriptDirectory
 
-            alembic_cfg = Config(str(Path(__file__).resolve().parent.parent / "backend" / "alembic.ini"))
+            alembic_cfg = Config(str(_BACKEND / "alembic.ini"))
             script_dir = ScriptDirectory.from_config(alembic_cfg)
             heads = set(script_dir.get_heads())
             ctx = MigrationContext.configure(db.connection())

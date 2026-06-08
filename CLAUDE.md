@@ -38,9 +38,14 @@ production.
 
 **Open / deferred (don't re-propose):** per-file envelope encryption - deferred
 until storage leaves single-server bind mounts (KEK + ciphertext would otherwise
-share a container); restore-drill discipline - `scripts/restore_drill.sh` exists,
-no production drill run yet. **Dropped:** Locust load-test baseline (real-load
+share a container). **Dropped:** Locust load-test baseline (real-load
 operation supersedes); zxcvbn-ts strength meter (HIBP is the real defense).
+
+> **Restore drills now exist (don't re-flag as a gap):** `scripts/restore_drill_e2e.sh`
+> restores the latest backup into an isolated throwaway compose project + runs
+> `restore_validate.py` (proven end-to-end against the 2026-05-04 backup); host
+> systemd units in `scripts/ops/` schedule it weekly. Last success is recorded in
+> `backups/LAST_SUCCESSFUL_DRILL`.
 
 ## Quickstart
 
@@ -303,7 +308,7 @@ leaves the system.
 
 ## Backups + restore
 
-→ README §Backups & Restore (`scripts/backup.sh` → `./backups/<stamp>/{db.sql, files.tar.gz, quarantine.tar.gz, redis.rdb, manifest.txt}`, optional restic; `scripts/restore.sh` sha256-verifies + prompts literal `restore`). **Caveat:** the restore path has not been exercised against a real production backup - run a drill before treating backups as load-bearing.
+→ README §Backups & Restore (`scripts/backup.sh` → `./backups/<stamp>/{db.sql, files.tar.gz, quarantine.tar.gz, redis.rdb, manifest.txt}`, optional restic; `scripts/restore.sh` sha256-verifies + prompts literal `restore`). **Drilled:** `scripts/restore_drill_e2e.sh` restores the latest backup into an isolated throwaway compose project (own project name/data/port, never touches the live stack) + `alembic upgrade head` + `restore_validate.py`; weekly via `scripts/ops/fileheron-restore-drill.timer`. Last success in `backups/LAST_SUCCESSFUL_DRILL`.
 
 ## Design system
 

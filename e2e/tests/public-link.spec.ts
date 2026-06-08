@@ -13,7 +13,9 @@ test('public link password unlock (UI) + download-limit exhaustion (API)', async
   const sh = await apiFetch(admin, '/api/shares', {
     method: 'POST',
     body: JSON.stringify({
+      kind: 'outbound',
       recipients: { user_ids: [], group_ids: [] },
+      expires_at: null,
       subject: `E2E public ${Date.now()}`,
       public_link: { password: pw, download_limit: 1 },
     }),

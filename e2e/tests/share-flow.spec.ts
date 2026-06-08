@@ -12,7 +12,12 @@ test('inbound share + upload is visible in staff inbox and downloadable', async 
 
   const sh = await apiFetch(userTok, '/api/shares', {
     method: 'POST',
-    body: JSON.stringify({ recipients: { user_ids: [], group_ids: [] }, subject }),
+    body: JSON.stringify({
+      kind: 'inbound',
+      recipients: { user_ids: [], group_ids: [] },
+      expires_at: null,
+      subject,
+    }),
   })
   expect(sh.status).toBe(201)
   const shareId = (await sh.json()).id as string

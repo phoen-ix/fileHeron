@@ -1,4 +1,4 @@
-# file:Heron v1.51.0
+# file:Heron v1.51.1
 
 **A clearer access-policy picker.** The *who-can-create* policy for **API tokens**
 and **public links** offered two options that did exactly the same thing -
@@ -33,10 +33,10 @@ The duplicate is gone.
 
 ## Container images
 
-- `ghcr.io/phoen-ix/fileheron-backend:v1.51.0`
-- `ghcr.io/phoen-ix/fileheron-worker:v1.51.0`
-- `ghcr.io/phoen-ix/fileheron-frontend:v1.51.0`
-- `ghcr.io/phoen-ix/fileheron-updater-shim:v1.51.0`
-- `ghcr.io/phoen-ix/fileheron-updater-executor:v1.51.0`
+- `ghcr.io/phoen-ix/fileheron-backend:v1.51.1`
+- `ghcr.io/phoen-ix/fileheron-worker:v1.51.1`
+- `ghcr.io/phoen-ix/fileheron-frontend:v1.51.1`
+- `ghcr.io/phoen-ix/fileheron-updater-shim:v1.51.1`
+- `ghcr.io/phoen-ix/fileheron-updater-executor:v1.51.1`
 
 Click **Update** in `/admin/system` to roll forward.

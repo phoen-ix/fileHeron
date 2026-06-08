@@ -24,9 +24,11 @@ depends_on = None
 
 
 def upgrade() -> None:
+    # `key` is a reserved word in MariaDB - must be backtick-quoted (SQLite
+    # accepts the same quoting), mirroring the other app_settings migrations.
     op.execute(
         "UPDATE app_settings SET value = 'admins_only' "
-        "WHERE key IN ('api_token.policy_mode', 'public_link.policy_mode') "
+        "WHERE `key` IN ('api_token.policy_mode', 'public_link.policy_mode') "
         "AND value = 'disabled'"
     )
 

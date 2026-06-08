@@ -1,7 +1,13 @@
-import { createRouter, createWebHistory, type RouteLocationNormalized } from 'vue-router'
+import {
+  createRouter,
+  createWebHistory,
+  type RouteLocationNormalized,
+  type RouteLocationRaw,
+} from 'vue-router'
 
 import { effectiveLandingPath } from '@/composables/useEffectiveLanding'
 import { useAuthStore } from '@/stores/auth'
+import type { MeResponse } from '@/types/api'
 
 declare module 'vue-router' {
   interface RouteMeta {
@@ -408,28 +414,29 @@ const router = createRouter({
   ],
 })
 
-function isPublic(route: RouteLocationNormalized): boolean {
-  return route.meta.public === true
+/** Minimal auth shape the guard needs - lets navigationGuard be unit-tested
+ * without a live Pinia store. The real store satisfies this structurally. */
+export interface GuardAuthState {
+  setupRequired: boolean
+  isAuthenticated: boolean
+  user: MeResponse | null
 }
 
-router.beforeEach(async (to, _from) => {
-  const auth = useAuthStore()
-  // Wait for the silent-refresh bootstrap. main.ts already kicked it off
-  // before mount; auth.bootstrap() returns the cached in-flight promise so
-  // every guard call awaits the same resolution. After it settles, this
-  // line is a no-op (resolved promise).
-  await auth.bootstrap()
+/** Pure navigation-guard decision: given the target route + resolved auth
+ * state, return a redirect target or `undefined` to allow. Extracted from the
+ * beforeEach closure so the redirect logic is unit-testable (the async
+ * bootstrap stays in the registration below). */
+export function navigationGuard(
+  to: RouteLocationNormalized,
+  auth: GuardAuthState,
+): RouteLocationRaw | undefined {
+  // v1.0.0 first-install: if no admin exists, every route bounces to /setup;
+  // the setup route 404s once an admin exists.
+  if (auth.setupRequired && to.name !== 'setup') return { name: 'setup' }
+  if (!auth.setupRequired && to.name === 'setup') return { name: 'login' }
 
-  // v1.0.0 first-install: if no admin exists, every route bounces to
-  // /setup; the setup route 404s once an admin exists.
-  if (auth.setupRequired && to.name !== 'setup') {
-    return { name: 'setup' }
-  }
-  if (!auth.setupRequired && to.name === 'setup') {
-    return { name: 'login' }
-  }
-
-  if (!isPublic(to) && !auth.isAuthenticated) {
+  // Auth gate: non-public route + logged-out → /login (carry the target).
+  if (to.meta.public !== true && !auth.isAuthenticated) {
     return {
       name: 'login',
       query: to.fullPath !== '/' ? { redirect: to.fullPath } : undefined,
@@ -437,8 +444,7 @@ router.beforeEach(async (to, _from) => {
   }
 
   // Logged-in users hitting /login → bounce to their effective landing
-  // (avoids a double form on F5). Falls back gracefully when home is
-  // disabled.
+  // (avoids a double form on F5).
   if (to.name === 'login' && auth.isAuthenticated) {
     return { path: effectiveLandingPath(auth.user) }
   }
@@ -452,8 +458,7 @@ router.beforeEach(async (to, _from) => {
     return { path: effectiveLandingPath(auth.user) }
   }
 
-  // Hitting `/` while admin has disabled the home page → redirect
-  // forward. Bookmarks + direct URL entry still work; they just hop.
+  // Hitting `/` while admin disabled the home page → redirect forward.
   if (
     to.name === 'home' &&
     auth.isAuthenticated &&
@@ -462,12 +467,9 @@ router.beforeEach(async (to, _from) => {
     return { path: effectiveLandingPath(auth.user) }
   }
 
-  // Forced-2FA: when the active policy applies to this user and they
-  // haven't enabled TOTP yet, drop them straight into the setup
-  // wizard (which auto-launches the QR + secret display). Backend
-  // would 403 anyway; this just routes to the QR first. The original
-  // destination rides along as `?redirect=` so completion can return
-  // there.
+  // Forced-2FA: policy applies + TOTP not enabled → into the setup wizard,
+  // carrying the original destination as `?redirect=` (avoid a loop when
+  // already on the 2FA route or /login).
   if (
     auth.isAuthenticated &&
     auth.user?.requires_2fa === true &&
@@ -479,6 +481,21 @@ router.beforeEach(async (to, _from) => {
       query: to.fullPath !== '/' ? { redirect: to.fullPath } : undefined,
     }
   }
+
+  return undefined
+}
+
+router.beforeEach(async (to) => {
+  const auth = useAuthStore()
+  // Wait for the silent-refresh bootstrap. main.ts kicked it off before mount;
+  // bootstrap() returns the cached in-flight promise so every guard call awaits
+  // the same resolution, then it's a no-op.
+  await auth.bootstrap()
+  return navigationGuard(to, {
+    setupRequired: auth.setupRequired,
+    isAuthenticated: auth.isAuthenticated,
+    user: auth.user,
+  })
 })
 
 router.afterEach((to) => {

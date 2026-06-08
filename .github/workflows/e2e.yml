@@ -5,10 +5,10 @@ name: E2E
 # and drives the critical user journeys. Catches the integration breakage the
 # 980 backend + 167 vitest unit tests can't see (router guards, silent refresh,
 # the upload + public-link wiring). Slower than the unit gates, so it's its own
-# workflow: runs on PRs (the `playwright` check is REQUIRED for PR merge via
-# main's branch protection) + daily + on-demand (workflow_dispatch). Direct
-# pushes to main aren't gated by it (the check can't run before a push lands) -
-# the daily run is the safety net there.
+# workflow: runs daily + on-demand (workflow_dispatch) + on any PR. This is a
+# direct-to-main repo (no PRs, no branch protection), so the DAILY run is the
+# real safety net - it can't gate a direct push (the check can't run before the
+# push lands).
 on:
   pull_request: {}
   workflow_dispatch: {}

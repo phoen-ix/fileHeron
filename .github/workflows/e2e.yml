@@ -27,7 +27,15 @@ jobs:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
 
       - name: Build + start the stack
-        run: docker compose -f docker-compose.yml -f docker-compose.e2e.yml up -d --build
+        # Retry: Docker Hub base-image pulls (mariadb/nginx) intermittently 502 /
+        # time out from GitHub runners. up --build is idempotent, so just retry.
+        run: |
+          for i in 1 2 3; do
+            docker compose -f docker-compose.yml -f docker-compose.e2e.yml up -d --build && exit 0
+            echo "::warning::build/up attempt $i failed (likely a Docker Hub hiccup); retrying in 20s"
+            sleep 20
+          done
+          echo "build/up failed after 3 attempts"; exit 1
 
       - name: Wait for the stack to answer
         run: |

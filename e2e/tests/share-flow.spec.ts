@@ -2,19 +2,26 @@ import { expect, test } from '@playwright/test'
 
 import { ADMIN, BASE, USER, apiFetch, apiLogin } from '../helpers'
 
-/* Journey 3: a client submits an inbound share + file to the company; staff see
- * it in their inbox (UI) and can download the file (recipient-bearer path).
- * Inbound (no explicit recipient) avoids depending on the recipient-search shape. */
+/* Journey 3: admin sends a directed share + file to a user; the recipient sees
+ * it in their inbox (UI) and can download it (recipient-bearer path). */
 
-test('inbound share + upload is visible in staff inbox and downloadable', async ({ page }) => {
-  const userTok = await apiLogin(USER.email, USER.password)
-  const subject = `E2E inbound ${Date.now()}`
+test('directed share + upload is visible in the recipient inbox and downloadable', async ({
+  page,
+}) => {
+  const admin = await apiLogin(ADMIN.email, ADMIN.password)
 
-  const sh = await apiFetch(userTok, '/api/shares', {
+  // Admin can address anyone - resolve the recipient's id.
+  const search = await apiFetch(admin, `/api/users/search?q=${encodeURIComponent(USER.email)}`)
+  const items = (await search.json()).items as Array<{ user_id: number; email: string }>
+  const recipientId = items.find((u) => u.email === USER.email)?.user_id
+  expect(recipientId).toBeTruthy()
+
+  const subject = `E2E directed ${Date.now()}`
+  const sh = await apiFetch(admin, '/api/shares', {
     method: 'POST',
     body: JSON.stringify({
-      kind: 'inbound',
-      recipients: { user_ids: [], group_ids: [] },
+      kind: 'outbound',
+      recipients: { user_ids: [recipientId], group_ids: [] },
       expires_at: null,
       subject,
     }),
@@ -31,24 +38,24 @@ test('inbound share + upload is visible in staff inbox and downloadable', async 
   )
   const up = await fetch(`${BASE}/api/uploads/direct`, {
     method: 'POST',
-    headers: { authorization: `Bearer ${userTok}` },
+    headers: { authorization: `Bearer ${admin}` },
     body: form,
   })
   if (!up.ok) throw new Error(`direct upload failed: ${up.status} ${await up.text()}`)
 
-  // Staff (admin) sees the inbound share in their inbox.
+  // Recipient (USER) sees the share in their inbox.
   await page.goto('/login')
-  await page.fill('#login-email', ADMIN.email)
-  await page.fill('#login-password', ADMIN.password)
+  await page.fill('#login-email', USER.email)
+  await page.fill('#login-password', USER.password)
   await page.click('button[type=submit]')
   await page.goto('/inbox')
   await expect(page.getByText(subject)).toBeVisible()
 
   // ...and can download the file via the authenticated download path.
-  const adminTok = await apiLogin(ADMIN.email, ADMIN.password)
-  const detail = await apiFetch(adminTok, `/api/shares/${shareId}`)
+  const userTok = await apiLogin(USER.email, USER.password)
+  const detail = await apiFetch(userTok, `/api/shares/${shareId}`)
   expect(detail.ok).toBeTruthy()
   const fileId = (await detail.json()).files[0].id as string
-  const dl = await apiFetch(adminTok, `/api/files/${fileId}/download`)
+  const dl = await apiFetch(userTok, `/api/files/${fileId}/download`)
   expect(dl.status).toBe(200)
 })

@@ -9,7 +9,7 @@ from pydantic import Field
 from .common import APIBaseModel
 
 PublicLinkPolicyMode = Literal[
-    "everyone", "employees_admins", "admins_only", "disabled"
+    "everyone", "employees_admins", "admins_only"
 ]
 
 

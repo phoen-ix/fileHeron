@@ -52,7 +52,7 @@ class ApiTokenListResponse(APIBaseModel):
 # ---------------------------------------------------------------------------
 
 
-PolicyMode = Literal["everyone", "employees_admins", "admins_only", "disabled"]
+PolicyMode = Literal["everyone", "employees_admins", "admins_only"]
 TokenStatus = Literal["active", "disabled", "revoked", "expired"]
 
 

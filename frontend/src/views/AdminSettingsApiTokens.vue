@@ -124,7 +124,6 @@ const modeOptions: { value: TokenPolicyMode; labelKey: string; helpKey: string }
   { value: 'everyone', labelKey: 'admin_token_policy.mode.everyone', helpKey: 'admin_token_policy.mode.everyone_help' },
   { value: 'employees_admins', labelKey: 'admin_token_policy.mode.employees_admins', helpKey: 'admin_token_policy.mode.employees_admins_help' },
   { value: 'admins_only', labelKey: 'admin_token_policy.mode.admins_only', helpKey: 'admin_token_policy.mode.admins_only_help' },
-  { value: 'disabled', labelKey: 'admin_token_policy.mode.disabled', helpKey: 'admin_token_policy.mode.disabled_help' },
 ]
 
 const showAllowlist = computed(() => mode.value !== 'everyone')

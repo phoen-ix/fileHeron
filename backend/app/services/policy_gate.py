@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 from ..models.group_member import GroupMember
 from ..models.user import User, UserRole
 
-POLICY_MODES = ("everyone", "employees_admins", "admins_only", "disabled")
+POLICY_MODES = ("everyone", "employees_admins", "admins_only")
 # Default for the public-link + API-token create gates. employees_admins (not
 # everyone) so an UNCONFIGURED deploy doesn't let every client mint anonymous
 # public download links or long-lived API tokens out of the box (audit L27). An
@@ -42,6 +42,12 @@ def resolve_policy(
     from . import settings as settings_svc
 
     mode = settings_svc.get(db, mode_key) or DEFAULT_POLICY_MODE
+    if mode == "disabled":
+        # Legacy mode (removed v1.51) - collapse to its functional equivalent.
+        # Do NOT let it fall through to DEFAULT_POLICY_MODE below: that would
+        # LOOSEN an un-migrated deploy or a config-backup import from admin-only
+        # to employees_admins.
+        mode = "admins_only"
     if mode not in POLICY_MODES:
         mode = DEFAULT_POLICY_MODE
     user_ids = _parse_id_list(settings_svc.get(db, users_key))

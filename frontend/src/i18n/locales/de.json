@@ -441,8 +441,8 @@
     "sections": {
       "general": "Kleine Schalter und allgemeine App-Einstellungen - beginnt mit der Startseite an/aus.",
       "sso": "Eine oder mehrere OIDC-Identity-Provider konfigurieren (Microsoft Entra, Google, Authentik, Keycloak, …). Benutzer verknüpfen ihr Konto mit einem Provider für Ein-Klick-Anmeldung.",
-      "api_tokens": "Festlegen, wer programmatische API-Tokens anlegen darf - alle, nur Mitarbeiter, nur Admins oder deaktiviert. Eine Allowlist ergänzt die Basis-Richtlinie.",
-      "public_links": "Festlegen, wer öffentliche Links zu Freigaben anlegen darf - alle, nur Mitarbeiter, nur Admins oder deaktiviert. Eine Allowlist ergänzt die Basis-Richtlinie.",
+      "api_tokens": "Festlegen, wer programmatische API-Tokens anlegen darf - alle, nur Mitarbeiter oder nur Admins. Eine Allowlist ergänzt die Basis-Richtlinie.",
+      "public_links": "Festlegen, wer öffentliche Links zu Freigaben anlegen darf - alle, nur Mitarbeiter oder nur Admins. Eine Allowlist ergänzt die Basis-Richtlinie.",
       "email": "Ausgehenden SMTP konfigurieren - Host, Port, Zugangsdaten, TLS-Modus, Absender. Test-E-Mail senden und tatsächlichen Fehler sehen, falls etwas nicht stimmt.",
       "twofa": "Festlegen, wer 2FA aktivieren muss - beliebige Kombination aus Rollen (Admin / Mitarbeiter / Client) und Gruppen. Betroffene Benutzer ohne TOTP werden bei jedem Seitenaufruf in den Einrichtungsfluss umgeleitet, bis sie sich registrieren.",
       "quarantine": "Wenn ClamAV einen Upload als infiziert markiert, optional zusätzlich eine Benachrichtigung (E-Mail + In-App-Glocke) an alle Admins senden.",
@@ -952,9 +952,7 @@
       "employees_admins": "Mitarbeiter + Admins",
       "employees_admins_help": "Clients dürfen keine öffentlichen Links anlegen.",
       "admins_only": "Nur Admins",
-      "admins_only_help": "Nur Admins dürfen öffentliche Links anlegen.",
-      "disabled": "Deaktiviert",
-      "disabled_help": "Nur Admins dürfen öffentliche Links anlegen; alle anderen werden blockiert."
+      "admins_only_help": "Nur Admins dürfen öffentliche Links anlegen."
     },
     "allowlist_heading": "Allowlist",
     "allowlist_help": "Hinzugefügte Benutzer und Gruppen dürfen unabhängig von der Basis-Richtlinie öffentliche Links anlegen.",
@@ -1017,9 +1015,7 @@
       "employees_admins": "Mitarbeiter + Admins",
       "employees_admins_help": "Clients dürfen keine Tokens anlegen.",
       "admins_only": "Nur Admins",
-      "admins_only_help": "Nur Admins dürfen Tokens anlegen.",
-      "disabled": "Deaktiviert",
-      "disabled_help": "Nur Admins dürfen Tokens anlegen; alle anderen werden blockiert."
+      "admins_only_help": "Nur Admins dürfen Tokens anlegen."
     },
     "allowlist_heading": "Allowlist",
     "allowlist_help": "Hinzugefügte Benutzer und Gruppen dürfen unabhängig von der Basis-Richtlinie Tokens anlegen.",

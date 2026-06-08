@@ -183,7 +183,7 @@ admin-tunable via `email_change.*` kv.
 - **Password:** Argon2. `POST …/unlock` sets signed cookie `fh_dl_unlock` (HMAC under JWT_SECRET, path-scoped, lifetime min(24h, expires_at)).
 - **Counter:** atomic `UPDATE … downloads_remaining-1 WHERE remaining>0` + rowcount. NULL = unlimited.
 - **Brute-force:** `public_link_password_attempts`; after `PUBLIC_LINK_PASSWORD_RATE_LIMIT` (10) in `PUBLIC_LINK_PASSWORD_WINDOW_SEC` (900), `locked_until` set on the **link** (all IPs).
-- **Policy** kv `public_link.policy_mode` ∈ everyone|employees_admins|admins_only|disabled + allowlists; single gate `services/public_link.py::is_allowed_to_create` (admin always passes).
+- **Policy** kv `public_link.policy_mode` ∈ everyone|employees_admins|admins_only + allowlists; single gate `services/public_link.py::is_allowed_to_create` (admin always passes).
 
 ## Notifications
 
@@ -223,7 +223,7 @@ authoritative key list; `_ENCRYPTED_KEYS = {smtp.password, imap.password}` (Fern
 same HKDF as TOTP). PATCH for secret keys: `null`=leave, `""`=clear, other=replace.
 Settings-change audits record counts/keys only (never values).
 
-Policy-gate pattern (mode ∈ everyone/employees_admins/admins_only/disabled + additive
+Policy-gate pattern (mode ∈ everyone/employees_admins/admins_only + additive
 user/group allowlists; admin always passes): `api_token.*`, `public_link.*`,
 `share_approval.*`. Boolean toggles: `home_page.enabled`, `motd.*`,
 `share.notify_recipients_default`, `quarantine.notify_admins`, `file_preview.enabled`.

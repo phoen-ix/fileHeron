@@ -441,8 +441,8 @@
     "sections": {
       "general": "Small toggles and miscellaneous app settings - start with the home page on/off.",
       "sso": "Configure one or more OIDC identity providers (Microsoft Entra, Google, Authentik, Keycloak, …). Users connect their account to a provider for one-click sign-in.",
-      "api_tokens": "Decide who can mint programmatic API tokens - everyone, employees only, admins only, or disabled. Add specific users or groups to an allowlist on top.",
-      "public_links": "Decide who can create shareable public links to a share - everyone, employees only, admins only, or disabled. Add specific users or groups to an allowlist on top.",
+      "api_tokens": "Decide who can mint programmatic API tokens - everyone, employees only, or admins only. Add specific users or groups to an allowlist on top.",
+      "public_links": "Decide who can create shareable public links to a share - everyone, employees only, or admins only. Add specific users or groups to an allowlist on top.",
       "email": "Configure outbound SMTP - host, port, credentials, TLS mode, From address. Send a test email and see the actual error if something's wrong.",
       "twofa": "Decide who must enable 2FA - pick any combination of roles (admin / employee / client) and groups. Affected users without TOTP get bounced into the setup flow on every page load until they enrol.",
       "quarantine": "When ClamAV flags an upload, optionally fan out a notification (email + in-app bell) to every admin in addition to the uploader.",
@@ -952,9 +952,7 @@
       "employees_admins": "Employees + admins",
       "employees_admins_help": "Clients cannot create public links.",
       "admins_only": "Admins only",
-      "admins_only_help": "Only admins can create public links.",
-      "disabled": "Disabled",
-      "disabled_help": "Only admins can create public links; everyone else is blocked."
+      "admins_only_help": "Only admins can create public links."
     },
     "allowlist_heading": "Allowlist",
     "allowlist_help": "Users and groups added here can always create public links, regardless of the base policy.",
@@ -1017,9 +1015,7 @@
       "employees_admins": "Employees + admins",
       "employees_admins_help": "Clients cannot create tokens.",
       "admins_only": "Admins only",
-      "admins_only_help": "Only admins can create tokens.",
-      "disabled": "Disabled",
-      "disabled_help": "Only admins can create tokens; everyone else is blocked."
+      "admins_only_help": "Only admins can create tokens."
     },
     "allowlist_heading": "Allowlist",
     "allowlist_help": "Users and groups added here can always mint tokens, regardless of the base policy.",

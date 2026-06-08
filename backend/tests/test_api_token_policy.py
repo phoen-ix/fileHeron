@@ -86,14 +86,25 @@ def test_employees_admins_blocks_clients(make_user, db):
     assert api_token_svc.is_allowed_to_create(db, client) is False
 
 
-def test_disabled_blocks_everyone_except_admin_escape_hatch(make_user, db):
-    """Mode=disabled means no token creation by anyone - except admin
-    keeps an escape hatch (operator should always be able to create one)."""
+def test_legacy_disabled_mode_coerces_to_admins_only(make_user, db):
+    """The removed `disabled` mode (== admins_only) is coerced, not dropped to
+    the looser default: a stored/imported `disabled` keeps blocking staff and
+    clients while the admin escape hatch still passes - it must NOT loosen to
+    employees_admins."""
     admin = make_user(email="a@test.local", role=UserRole.admin)
     employee = make_user(email="e@test.local", role=UserRole.employee)
     client = make_user(email="c@test.local", role=UserRole.client)
     _set_policy(db, mode="disabled")
 
+    from app.services import policy_gate
+
+    mode, _, _ = policy_gate.resolve_policy(
+        db,
+        mode_key=settings_svc.Keys.API_TOKEN_POLICY_MODE,
+        users_key=settings_svc.Keys.API_TOKEN_ALLOWED_USERS,
+        groups_key=settings_svc.Keys.API_TOKEN_ALLOWED_GROUPS,
+    )
+    assert mode == "admins_only"
     assert api_token_svc.is_allowed_to_create(db, admin) is True
     assert api_token_svc.is_allowed_to_create(db, employee) is False
     assert api_token_svc.is_allowed_to_create(db, client) is False

@@ -145,11 +145,6 @@ const modeOptions: {
     labelKey: 'admin_public_link_policy.mode.admins_only',
     helpKey: 'admin_public_link_policy.mode.admins_only_help',
   },
-  {
-    value: 'disabled',
-    labelKey: 'admin_public_link_policy.mode.disabled',
-    helpKey: 'admin_public_link_policy.mode.disabled_help',
-  },
 ]
 
 const showAllowlist = computed(() => mode.value !== 'everyone')

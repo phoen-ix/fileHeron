@@ -838,7 +838,6 @@ export type TokenPolicyMode =
   | 'everyone'
   | 'employees_admins'
   | 'admins_only'
-  | 'disabled'
 
 export type TokenStatus = 'active' | 'disabled' | 'revoked' | 'expired'
 

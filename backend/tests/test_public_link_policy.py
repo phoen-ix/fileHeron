@@ -93,10 +93,22 @@ def test_employees_admins_blocks_clients(make_user, db):
     assert public_link_svc.is_allowed_to_create(db, client) is False
 
 
-def test_disabled_mode_admin_escape_hatch(make_user, db):
+def test_legacy_disabled_mode_coerces_to_admins_only(make_user, db):
+    """The removed `disabled` mode (== admins_only) is coerced, not dropped to
+    the looser default - admin still passes, staff still blocked."""
     admin = make_user(email="a@test.local", role=UserRole.admin)
     employee = make_user(email="e@test.local", role=UserRole.employee)
     _set_policy(db, mode="disabled")
+
+    from app.services import policy_gate
+
+    mode, _, _ = policy_gate.resolve_policy(
+        db,
+        mode_key=settings_svc.Keys.PUBLIC_LINK_POLICY_MODE,
+        users_key=settings_svc.Keys.PUBLIC_LINK_ALLOWED_USERS,
+        groups_key=settings_svc.Keys.PUBLIC_LINK_ALLOWED_GROUPS,
+    )
+    assert mode == "admins_only"
     assert public_link_svc.is_allowed_to_create(db, admin) is True
     assert public_link_svc.is_allowed_to_create(db, employee) is False
 
@@ -138,10 +150,8 @@ async def test_route_returns_403_when_policy_blocks(
         message=None,
     )
     # Sign in as admin then tighten policy → admin still allowed (escape
-    # hatch). To verify the route gate, sign in as the recipient (client)
-    # who shouldn't be able to add a public link to their own share.
-    # Easier: temporarily downgrade by setting mode=disabled and signing
-    # in as a non-admin who owns a share.
+    # hatch). To verify the route gate, sign in as a non-admin who owns a
+    # share under mode=admins_only and confirm the 403.
     db.commit()
 
     # Switch to a client-owned share for the negative test.

@@ -56,8 +56,8 @@ test('directed share + upload is visible in the recipient inbox and downloadable
   // the file downloads via the authenticated path.
   const userTok = await apiLogin(USER.email, USER.password)
   const inbox = await apiFetch(userTok, '/api/shares?box=inbox')
-  const items = (await inbox.json()).items as Array<{ id: string }>
-  expect(items.some((s) => s.id === shareId)).toBeTruthy()
+  const inboxItems = (await inbox.json()).items as Array<{ id: string }>
+  expect(inboxItems.some((s) => s.id === shareId)).toBeTruthy()
 
   const detail = await apiFetch(userTok, `/api/shares/${shareId}`)
   expect(detail.ok).toBeTruthy()

@@ -861,13 +861,6 @@ The pytest conftest has two important autouse fixtures: `_disable_ip_rate_limit`
 - **CSS variables** for everything - see `tokens.css`. No UI framework: Element Plus was removed in v1.9.0 (date/time uses a native `<input type=datetime-local>` styled with the `--fh-*` tokens).
 - **One service module per domain.** Keep routers thin: parse + delegate + serialise. Business logic lives in `services/`.
 
-
-
-
-
-- `REDACTED` - `config.py` fail-fast, SQLAlchemy session, Dockerfile multi-stage, Pinia auth store + axios refresh interceptor.
-
-
 ---
 
 ## License

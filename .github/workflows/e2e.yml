@@ -26,6 +26,14 @@ jobs:
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
 
+      - name: Prepare data dirs (UID-1000-owned, as the containers write them)
+        # backend/worker/tusd run as UID 1000; the bind-mount sources are
+        # runner-owned at checkout, so writes (uploads, files) would 500 with
+        # EACCES. Mirror install.sh. (db/redis manage their own 999-owned dirs.)
+        run: |
+          mkdir -p data/files data/uploads data/quarantine data/updater
+          sudo chown -R 1000:1000 data/files data/uploads data/quarantine data/updater
+
       - name: Build + start the stack
         # Retry: Docker Hub base-image pulls (mariadb/nginx) intermittently 502 /
         # time out from GitHub runners. up --build is idempotent, so just retry.

@@ -37,7 +37,7 @@
     "prosemirror-view": "1.41.8",
     "vue": "^3.5.0",
     "vue-i18n": "^11.0.0",
-    "vue-router": "^4.4.0"
+    "vue-router": "^5.1.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

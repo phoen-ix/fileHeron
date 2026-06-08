@@ -145,17 +145,20 @@ rm -f .env.bak
 
 chmod 600 .env
 
-# ---- state dir ownership ---------------------------------------------
-# The backend container runs as appuser (UID 1000); the updater-shim
-# runs as root. Both share data/updater/ via bind mount, and backend
-# needs to write the update-request JSON. If we let the shim create
-# the dir first, it ends up root-owned and backend can't write. Force
-# UID 1000 here so backend wins from the first compose up.
+# ---- bind-mount dir ownership ----------------------------------------
+# backend/worker/tusd all run as UID 1000; the updater-shim + clamav run
+# as root. They share data/{updater,uploads,quarantine,files} via bind
+# mounts. The footgun: if any of these dirs is MISSING when compose
+# starts, the root docker daemon creates the bind-mount source as
+# root:root, and the UID-1000 containers can no longer write
+# (tusd: "open /data/uploads/...: permission denied"). Pre-create them
+# and force UID 1000 here so the app wins from the first compose up.
 # (A one-shot privileged container does the chown - saves us from
 #  requiring `sudo` in the installer itself.)
-echo "[install] ensuring data/updater is writable by the backend (UID 1000)"
-mkdir -p data/updater
-docker run --rm -v "$(pwd)/data/updater:/state" alpine chown -R 1000:1000 /state >/dev/null
+echo "[install] ensuring data bind-mount dirs are writable by the app (UID 1000)"
+for d in updater uploads quarantine files; do mkdir -p "data/$d"; done
+docker run --rm -v "$(pwd)/data:/data" alpine \
+    chown -R 1000:1000 /data/updater /data/uploads /data/quarantine /data/files >/dev/null
 
 # ---- pull + up -d ----------------------------------------------------
 

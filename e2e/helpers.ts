@@ -1,11 +1,13 @@
 import { execSync } from 'node:child_process'
 
+import { authenticator } from 'otplib'
+
 /* Shared helpers + the deterministic seeded accounts (docker-compose.e2e.yml). */
 
 export const ADMIN = { email: 'admin@e2e.local', password: 'AdminPass123!' }
 export const USER = { email: 'user@e2e.local', password: 'UserPass123!' }
 
-const BASE = process.env.E2E_BASE_URL ?? 'http://localhost:8080'
+export const BASE = process.env.E2E_BASE_URL ?? 'http://localhost:8080'
 const BACKEND_CONTAINER = process.env.E2E_BACKEND_CONTAINER ?? 'fileheron_e2e-backend'
 
 /** Scrape a one-time link token from the backend container's stdout. With SMTP
@@ -47,4 +49,55 @@ export async function apiFetch(
       ...(init.headers ?? {}),
     },
   })
+}
+
+/** Invite (as admin) + register a fresh user via the API, returning its creds.
+ * Setup helper for journeys that need an isolated account (2FA, forced-2FA). */
+export async function createUser(
+  adminToken: string,
+  opts: { email: string; password: string; role: 'client' | 'employee'; displayName?: string },
+): Promise<{ email: string; password: string }> {
+  const inv = await apiFetch(adminToken, '/api/account/invite', {
+    method: 'POST',
+    body: JSON.stringify({
+      email: opts.email,
+      target_role: opts.role,
+      display_name_hint: opts.displayName ?? opts.email,
+    }),
+  })
+  if (!inv.ok) throw new Error(`[e2e] invite ${opts.email} failed: ${inv.status} ${await inv.text()}`)
+  const token = tokenFromStdout('register')
+  const reg = await fetch(`${BASE}/api/auth/register-from-invite`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      token,
+      password: opts.password,
+      display_name: opts.displayName ?? opts.email,
+      locale: 'en',
+    }),
+  })
+  if (!reg.ok) throw new Error(`[e2e] register ${opts.email} failed: ${reg.status} ${await reg.text()}`)
+  return { email: opts.email, password: opts.password }
+}
+
+/** Enroll TOTP for a user (setup -> enable with a computed code). Returns the
+ * base32 secret so the caller can generate login codes. */
+export async function enroll2FA(email: string, password: string): Promise<string> {
+  const token = await apiLogin(email, password)
+  const s = await apiFetch(token, '/api/account/2fa/setup', { method: 'POST' })
+  if (!s.ok) throw new Error(`[e2e] 2fa setup failed: ${s.status}`)
+  const secret = (await s.json()).secret_b32 as string
+  const e = await apiFetch(token, '/api/account/2fa/enable', {
+    method: 'POST',
+    body: JSON.stringify({ code: authenticator.generate(secret) }),
+  })
+  if (!e.ok) throw new Error(`[e2e] 2fa enable failed: ${e.status} ${await e.text()}`)
+  return secret
+}
+
+/** A strong, almost-certainly-not-breached password (HIBP is enforced on
+ * register). Unique per call so re-runs don't collide. */
+export function freshPassword(): string {
+  return `E2e!q${Date.now()}${Math.floor(Math.random() * 1e6)}Zx`
 }

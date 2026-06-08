@@ -81,6 +81,7 @@ export const ADMIN_NAV: AdminNavCategory[] = [
       { routeName: 'admin-audit', labelKey: 'admin.nav.audit', matchNames: ['admin-audit'] },
       { routeName: 'admin-system', labelKey: 'admin.nav.system', matchNames: ['admin-system'] },
       { routeName: 'admin-scheduled-tasks', labelKey: 'admin.nav.scheduled_tasks', matchNames: ['admin-scheduled-tasks'] },
+      { routeName: 'admin-settings-error-alerts', labelKey: 'admin.nav_item.error_alerts', matchNames: ['admin-settings-error-alerts'] },
       { routeName: 'admin-settings-webhooks', labelKey: 'admin.nav_item.webhooks', matchNames: ['admin-settings-webhooks'] },
       { routeName: 'admin-settings-general', labelKey: 'admin.nav_item.general', matchNames: ['admin-settings-general'] },
       { routeName: 'admin-settings-branding', labelKey: 'admin.nav_item.branding', matchNames: ['admin-settings-branding'] },

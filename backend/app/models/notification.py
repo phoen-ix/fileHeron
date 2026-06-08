@@ -82,6 +82,11 @@ class NotificationCategory(str, enum.Enum):
     # Admin-only; in-app only (no stored admin plaintext email). The admin
     # `imap.notify_mode` setting gates whether/which messages dispatch this.
     inbound_message = "inbound_message"
+    # Server error (email-on-error feature): a 5xx HTTP error or a failed
+    # scheduled task. Admin-only; default channel `both` (the cooldown + hourly
+    # cap in services/error_alert.py already throttle, so email-by-default is
+    # safe). Plain string -> no migration.
+    server_error = "server_error"
 
 
 # Categories only ever dispatched to admins (the dispatch sites filter on
@@ -91,6 +96,7 @@ ADMIN_ONLY_CATEGORIES = frozenset(
         NotificationCategory.ops_alert,
         NotificationCategory.release_available,
         NotificationCategory.inbound_message,
+        NotificationCategory.server_error,
     }
 )
 

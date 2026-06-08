@@ -21,5 +21,6 @@
   "email_change_confirm": "Confirm your new {app_name} email address",
   "email_change_verify_old": "Approve your {app_name} email change",
   "email_change_alert": "Your {app_name} email address is being changed",
-  "email_change_completed": "Your {app_name} sign-in email was changed"
+  "email_change_completed": "Your {app_name} sign-in email was changed",
+  "server_error": "{app_name} - server error ({code})"
 }

@@ -1196,11 +1196,13 @@ export interface CronScheduleItem {
   last_error: string | null
   next_run_at: string | null
   last_24h: CronCounts
+  alert_on_failure: boolean
 }
 
 export interface CronListResponse {
   items: CronScheduleItem[]
   site_timezone: string
+  error_alerts_enabled: boolean
 }
 
 export interface UpdateCronScheduleRequest {
@@ -1208,7 +1210,19 @@ export interface UpdateCronScheduleRequest {
   kind: 'interval' | 'daily'
   interval_minutes: number
   daily_time: string
+  alert_on_failure: boolean
 }
+
+export interface ErrorAlertSettingsResponse {
+  enabled: boolean
+  source_http_5xx: boolean
+  recipients_mode: 'admins' | 'custom'
+  custom_recipients: string[]
+  cooldown_minutes: number
+  max_per_hour: number
+}
+
+export type UpdateErrorAlertSettingsRequest = ErrorAlertSettingsResponse
 
 export interface ImapTestResponse {
   ok: boolean

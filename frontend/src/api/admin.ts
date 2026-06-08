@@ -41,6 +41,7 @@ import type {
   CreateUserRequest,
   EmailChangePolicyResponse,
   EmailSettingsResponse,
+  ErrorAlertSettingsResponse,
   AvReloadResponse,
   AvStatusResponse,
   EraseUserResponse,
@@ -61,6 +62,7 @@ import type {
   TwofaPolicyResponse,
   UpdateEmailChangePolicyRequest,
   UpdateEmailSettingsRequest,
+  UpdateErrorAlertSettingsRequest,
   UpdateFilePreviewSettingsRequest,
   UpdateHomePageSettingsRequest,
   UpdatePublicLinkPolicyRequest,
@@ -761,6 +763,14 @@ export function getQuarantineSettings() {
 
 export function updateQuarantineSettings(payload: UpdateQuarantineSettingsRequest) {
   return api.put<QuarantineSettingsResponse>('/admin/settings/quarantine', payload)
+}
+
+export function getErrorAlertSettings() {
+  return api.get<ErrorAlertSettingsResponse>('/admin/settings/error-alerts')
+}
+
+export function updateErrorAlertSettings(payload: UpdateErrorAlertSettingsRequest) {
+  return api.put<ErrorAlertSettingsResponse>('/admin/settings/error-alerts', payload)
 }
 
 /* v1.1.6: AV engine read-only status + manual reload. */

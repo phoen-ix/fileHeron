@@ -19,6 +19,9 @@ const loading = ref(true)
 const errorMsg = ref<string | null>(null)
 const items = ref<CronScheduleItem[]>([])
 const siteTz = ref('UTC')
+// Master error-alert switch; the per-task "alert on failure" toggle is only
+// shown when this is on (set on the Error alerts settings page).
+const errorAlertsEnabled = ref(false)
 const savingName = ref<string | null>(null)
 const runningName = ref<string | null>(null)
 
@@ -42,6 +45,7 @@ async function load() {
     const { data } = await getCrons()
     items.value = data.items
     siteTz.value = data.site_timezone
+    errorAlertsEnabled.value = data.error_alerts_enabled
   } catch (err) {
     errorMsg.value = describe(err)
   } finally {
@@ -57,6 +61,7 @@ async function onSave(it: CronScheduleItem) {
       kind: it.kind,
       interval_minutes: it.interval_minutes,
       daily_time: it.daily_time,
+      alert_on_failure: it.alert_on_failure,
     })
     Object.assign(it, data)
     ui.pushToast(t('admin_scheduled_tasks.saved'), 'success')
@@ -131,6 +136,10 @@ onMounted(load)
                   <code>{{ it.name }}</code>
                 </label>
                 <span class="desc">{{ it.description }}</span>
+                <label v-if="errorAlertsEnabled" class="alert-toggle">
+                  <input v-model="it.alert_on_failure" type="checkbox" />
+                  <span>{{ t('admin_scheduled_tasks.alert_on_failure') }}</span>
+                </label>
               </td>
               <td class="sched-cell">
                 <select v-model="it.kind" class="fh-field-input kind">
@@ -198,6 +207,15 @@ onMounted(load)
   color: var(--fh-ink-soft);
   font-size: var(--fh-text-body-sm);
   margin-top: 0.15rem;
+}
+.alert-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--fh-space-1);
+  margin-top: 0.3rem;
+  font-size: var(--fh-text-body-sm);
+  color: var(--fh-ink-soft);
+  cursor: pointer;
 }
 .sched-cell {
   display: flex;

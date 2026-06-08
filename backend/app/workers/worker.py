@@ -44,6 +44,7 @@ from .disk_check import disk_check
 from .drain_pending_update import drain_pending_update
 from .expire_files import expire_files
 from .imap_poll import imap_poll
+from .notify_admin_error import notify_admin_error
 from .ops_check import ops_check
 from .prune_history import prune_history
 from .purge_old_quarantine import purge_old_quarantine
@@ -85,6 +86,7 @@ class WorkerSettings:
         rescan_inbound_attachments,
         drain_pending_update,
         cron_dispatch,
+        notify_admin_error,
     ]
     cron_jobs = [
         # v1.28.0: cadence/enable/disable for every job is admin-editable. A single

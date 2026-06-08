@@ -217,6 +217,7 @@
       "email_templates": "Email templates",
       "imap": "Inbound mail (IMAP)",
       "quarantine_alerts": "Quarantine alerts",
+      "error_alerts": "Error alerts",
       "email_change": "Email change",
       "webhooks": "Webhooks",
       "advanced": "Advanced",
@@ -320,7 +321,8 @@
     "run_now": "Run now",
     "saved": "Schedule saved",
     "run_queued": "{name} queued",
-    "disabled": "disabled"
+    "disabled": "disabled",
+    "alert_on_failure": "Email admins on failure"
   },
   "admin_system": {
     "eyebrow": "Admin / System",
@@ -1132,7 +1134,8 @@
       "session_evicted": "Signed out",
       "ops_alert": "Ops alert",
       "release_available": "Update available",
-      "inbound_message": "Inbound message"
+      "inbound_message": "Inbound message",
+      "server_error": "Server error"
     },
     "headline": {
       "share_created": "{sender_name} sent you {file_count} file(s).",
@@ -1145,6 +1148,7 @@
       "file_quarantined": "{filename} was quarantined by antivirus.",
       "session_evicted": "An older session was signed out - you reached your {cap}-session limit.",
       "release_available": "fileHeron {version} is available.",
+      "server_error": "Server error: {code} ({path})",
       "ops_alert": {
         "cron_failed": "Cron {job_name} failed.",
         "update_triggered": "Update to {target_tag} started.",
@@ -2169,6 +2173,29 @@
     "toggle_label": "Notify all admins when a virus is detected",
     "toggle_help": "Each admin gets an email + an in-app bell ring per detection. An admin can mute themselves from /account → Notifications by switching the \"file_quarantined\" channel to \"off\" (default is \"both\" - email + in-app).",
     "saved_toast": "Quarantine alert setting saved."
+  },
+  "admin_error_alerts": {
+    "title": "Error alerts",
+    "intro": "Email admins when a server error happens (an HTTP 5xx, or a failed scheduled task). Identical errors are deduplicated and a per-hour cap prevents a looping error from flooding your inbox. Emails carry context only - no stack trace.",
+    "enabled_label": "Email admins about server errors",
+    "enabled_help": "Master switch. When off, nothing is sent and there is no overhead.",
+    "http_label": "HTTP server errors (5xx)",
+    "http_help": "Unhandled 500s plus server-side failures like storage or antivirus being unavailable. Client errors (4xx) never alert.",
+    "cron_note": "Failed scheduled tasks are opted in per task on the Scheduled tasks page (the toggle appears there once this feature is enabled).",
+    "recipients_label": "Recipients",
+    "recipients_admins": "All admins (each can mute it under Account → Notifications)",
+    "recipients_custom": "A specific list of addresses",
+    "recipients_placeholder": "ops@example.com\nsre@example.com",
+    "recipients_help": "One address per line. These get the email directly and do not appear in the in-app bell.",
+    "throttle_label": "Anti-flood",
+    "cooldown_label": "Cooldown (minutes)",
+    "cap_label": "Max emails / hour",
+    "throttle_help": "An identical error is emailed at most once per cooldown window; the next email after the window reports how many repeats were suppressed. The hourly cap is a hard ceiling across all errors.",
+    "saved_toast": "Error alert settings saved.",
+    "err_cooldown_range": "Cooldown must be between 1 and 1440 minutes.",
+    "err_cap_range": "Max emails per hour must be between 1 and 1000.",
+    "err_custom_empty": "Add at least one recipient address, or switch to All admins.",
+    "err_bad_email": "Not a valid email address: {list}"
   },
   "admin_av": {
     "title": "Antivirus engine",

@@ -104,6 +104,10 @@ class ResolvedSchedule:
     kind: str
     interval_minutes: int
     daily_time: str
+    # When true (and the error-alert feature is enabled), a failure of this job
+    # emails admins via services/error_alert.py. Toggled per task on the
+    # Scheduled tasks admin page; default off.
+    alert_on_failure: bool = False
 
 
 def _key(name: str, field: str) -> str:
@@ -124,9 +128,11 @@ def effective(db: Session, name: str) -> ResolvedSchedule:
         spec, settings_svc.get_int(db, _key(name, "interval_minutes"), default=spec.default_interval_min)
     )
     daily_time = settings_svc.get(db, _key(name, "daily_time")) or spec.default_daily_time
+    alert_on_failure = settings_svc.get_bool(db, _key(name, "alert_on_failure"), default=False)
     return ResolvedSchedule(
         name=name, group=spec.group, description=spec.description,
         enabled=enabled, kind=kind, interval_minutes=interval, daily_time=daily_time,
+        alert_on_failure=alert_on_failure,
     )
 
 

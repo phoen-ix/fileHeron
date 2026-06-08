@@ -36,6 +36,10 @@ from ...schemas.email_settings import (
     TestEmailResponse,
     UpdateEmailSettingsRequest,
 )
+from ...schemas.error_alert_settings import (
+    ErrorAlertSettingsResponse,
+    UpdateErrorAlertSettingsRequest,
+)
 from ...schemas.file_preview_settings import (
     FilePreviewSettingsResponse,
     UpdateFilePreviewSettingsRequest,
@@ -91,7 +95,7 @@ from ...schemas.updates_settings import (
     UpdateUpdatesSettingsRequest,
 )
 from ...services import email as email_svc
-from ...services import email_change_policy, richtext, settings_registry
+from ...services import email_change_policy, error_alert, richtext, settings_registry
 from ...services import public_link as public_link_svc
 from ...services import settings as settings_svc
 from ...services import share_approval as share_approval_svc
@@ -1016,6 +1020,56 @@ def update_quarantine_settings(
     )
     db.commit()
     return QuarantineSettingsResponse(notify_admins=payload.notify_admins)
+
+
+# ---- Error alerts (email admins on server errors) -------------------------
+
+
+@router.get("/settings/error-alerts", response_model=ErrorAlertSettingsResponse)
+def get_error_alert_settings(
+    db: Session = Depends(get_db),
+    _admin: User = Depends(get_current_admin),
+) -> ErrorAlertSettingsResponse:
+    return ErrorAlertSettingsResponse(**error_alert.get_settings(db))
+
+
+@router.put("/settings/error-alerts", response_model=ErrorAlertSettingsResponse)
+def update_error_alert_settings(
+    payload: UpdateErrorAlertSettingsRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin),
+) -> ErrorAlertSettingsResponse:
+    result = error_alert.update_settings(
+        db,
+        enabled=payload.enabled,
+        source_http_5xx=payload.source_http_5xx,
+        recipients_mode=payload.recipients_mode,
+        custom_recipients=payload.custom_recipients,
+        cooldown_minutes=payload.cooldown_minutes,
+        max_per_hour=payload.max_per_hour,
+        actor=admin,
+        request=request,
+    )
+    record_audit_event(
+        db,
+        event_type=AuditEventType.error_alert_settings_changed,
+        actor_user_id=admin.id,
+        target_type="settings",
+        target_id="error_alerts",
+        # Record counts/keys only - never the recipient addresses themselves.
+        metadata={
+            "enabled": payload.enabled,
+            "source_http_5xx": payload.source_http_5xx,
+            "recipients_mode": payload.recipients_mode,
+            "recipient_count": len(payload.custom_recipients),
+            "cooldown_minutes": payload.cooldown_minutes,
+            "max_per_hour": payload.max_per_hour,
+        },
+        request=request,
+    )
+    db.commit()
+    return ErrorAlertSettingsResponse(**result)
 
 
 # ---------------------------------------------------------------------------

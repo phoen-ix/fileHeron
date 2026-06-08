@@ -1,0 +1,15 @@
+{{ app_name }} detected a server error.
+
+{% if source == "worker" %}A scheduled task failed: {{ job_name }}{% else %}A server error occurred: {{ method }} {{ path }}{% endif %}
+
+Status:  {{ status_code }} {{ code }}
+Error:   {{ exception_type }}{% if message %} - {{ message }}{% endif %}
+When:    {{ at|dt_locale(locale) }}
+{% if request_id %}Request: {{ request_id }}
+{% endif %}{% if user_id %}User:    #{{ user_id }}{% if auth_via %} (via {{ auth_via }}){% endif %}
+{% endif %}Occurrences since last alert: {{ occurrence_count }}
+{% if suppressed_count and suppressed_since %}({{ suppressed_count }} earlier occurrence(s) suppressed since {{ suppressed_since|dt_locale(locale) }})
+{% endif %}
+Manage these alerts at /admin/settings/error-alerts
+
+- {{ app_name }}

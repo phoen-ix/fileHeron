@@ -65,6 +65,10 @@ _DEFAULT_CHANNEL: dict[NotificationCategory, NotificationChannel] = {
     # Inbound mail: in-app only (no stored admin plaintext email); the
     # `imap.notify_mode` setting decides whether it fires at all.
     NotificationCategory.inbound_message: NotificationChannel.in_app,
+    # Server error: `both` so admins get the email by default. The cooldown +
+    # hourly cap in services/error_alert.py already throttle, so this can't
+    # mailstorm; admins can opt down to in_app via their preferences.
+    NotificationCategory.server_error: NotificationChannel.both,
 }
 
 

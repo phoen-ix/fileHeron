@@ -63,6 +63,7 @@ def _item(db: Session, name: str, tz: str, now) -> CronScheduleItem:
         name=name, group=spec.group, description=spec.description,
         enabled=res.enabled, kind=res.kind, interval_minutes=res.interval_minutes,
         daily_time=res.daily_time, min_interval_minutes=spec.min_interval_min,
+        alert_on_failure=res.alert_on_failure,
         last_run_at=(last.started_at.isoformat() if last and last.started_at else None),
         last_status=last_status,
         last_duration_ms=(last.duration_ms if last else None),
@@ -86,6 +87,9 @@ def list_crons(
     return CronListResponse(
         items=[_item(db, name, tz, now) for name in cs.REGISTRY],
         site_timezone=tz,
+        error_alerts_enabled=settings_svc.get_bool(
+            db, settings_svc.Keys.ERROR_ALERT_ENABLED, default=False
+        ),
     )
 
 
@@ -119,6 +123,11 @@ def update_cron(
     settings_svc.set_value(
         db, key=k("daily_time"), value=payload.daily_time, actor=admin, request=request
     )
+    settings_svc.set_value(
+        db, key=k("alert_on_failure"),
+        value="true" if payload.alert_on_failure else "false",
+        actor=admin, request=request,
+    )
     record_audit_event(
         db,
         event_type=AuditEventType.cron_schedule_changed,
@@ -126,7 +135,8 @@ def update_cron(
         target_type="cron",
         target_id=name,
         metadata={"enabled": payload.enabled, "kind": payload.kind,
-                  "interval_minutes": payload.interval_minutes, "daily_time": payload.daily_time},
+                  "interval_minutes": payload.interval_minutes, "daily_time": payload.daily_time,
+                  "alert_on_failure": payload.alert_on_failure},
         request=request,
     )
     db.commit()

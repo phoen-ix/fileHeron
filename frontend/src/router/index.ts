@@ -321,6 +321,12 @@ const router = createRouter({
           meta: { density: 'operator', title: 'Email change', requiresRole: 'admin' },
         },
         {
+          path: 'settings/error-alerts',
+          name: 'admin-settings-error-alerts',
+          component: () => import('@/views/AdminSettingsErrorAlerts.vue'),
+          meta: { density: 'operator', title: 'Error alerts', requiresRole: 'admin' },
+        },
+        {
           path: 'settings/advanced',
           name: 'admin-settings-advanced',
           component: () => import('@/views/AdminSettingsAdvanced.vue'),

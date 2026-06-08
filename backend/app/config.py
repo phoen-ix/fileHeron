@@ -263,6 +263,13 @@ class Settings(BaseSettings):
     ANOMALY_MULTI_NETWORK_THRESHOLD: int = 4     # distinct networks / user / 30 min
     ANOMALY_LOGIN_FAILURE_THRESHOLD: int = 50    # failed logins / IP / 15 min
 
+    # --- Error alerting (email admins on server errors) ----------------------
+    # Off by default; admins enable + tune on /admin/settings/error-alerts. The
+    # cooldown dedups identical errors per signature; the hourly cap bounds a
+    # burst regardless of signature. Both are registry tunables (admin-editable).
+    ERROR_ALERT_COOLDOWN_MINUTES: int = 15   # suppress an identical error this long
+    ERROR_ALERT_MAX_PER_HOUR: int = 20       # hard ceiling on alert emails / hour
+
     @property
     def database_url(self) -> str:
         return (

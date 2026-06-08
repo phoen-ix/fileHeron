@@ -184,6 +184,33 @@ def track_cron(job_name: str) -> Callable[[Callable[..., Awaitable[Any]]], Calla
                         metadata={"error": str(exc)[:500], "duration_ms": duration_ms},
                     )
                     _maybe_alert_admins(db2, job_name, str(exc))
+                    # Email layer (gated per-task by cron.<name>.alert_on_failure
+                    # + the master error-alert switch, all checked in the worker).
+                    # Independent of the in-app ops_alert above; best-effort.
+                    try:
+                        from . import job_queue
+                        job_queue.enqueue(
+                            "notify_admin_error",
+                            event={
+                                "source": "worker",
+                                "exception_type": type(exc).__name__,
+                                "message": str(exc)[:500],
+                                "job_name": job_name,
+                                "path": job_name,
+                                "method": "CRON",
+                                "status_code": 500,
+                                "code": "CRON_FAILED",
+                                "request_id": None,
+                                "user_id": None,
+                                "auth_via": None,
+                                "at": utc_now().isoformat(),
+                            },
+                        )
+                    except Exception:
+                        logger.warning(
+                            "notify_admin_error enqueue failed for %s", job_name,
+                            exc_info=True,
+                        )
                     db2.commit()
                     # Push to admin-system viewers so the table refreshes
                     # without waiting for the manual Refresh button.

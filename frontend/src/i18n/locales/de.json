@@ -217,6 +217,7 @@
       "email_templates": "E-Mail-Vorlagen",
       "imap": "Posteingang (IMAP)",
       "quarantine_alerts": "Quarantäne-Alarme",
+      "error_alerts": "Fehler-Alarme",
       "email_change": "E-Mail-Änderung",
       "webhooks": "Webhooks",
       "advanced": "Erweitert",
@@ -320,7 +321,8 @@
     "run_now": "Jetzt ausführen",
     "saved": "Zeitplan gespeichert",
     "run_queued": "{name} eingereiht",
-    "disabled": "deaktiviert"
+    "disabled": "deaktiviert",
+    "alert_on_failure": "Admins bei Fehler benachrichtigen"
   },
   "admin_system": {
     "eyebrow": "Admin / System",
@@ -1132,7 +1134,8 @@
       "session_evicted": "Abgemeldet",
       "ops_alert": "Betriebsalarm",
       "release_available": "Update verfügbar",
-      "inbound_message": "Eingehende Nachricht"
+      "inbound_message": "Eingehende Nachricht",
+      "server_error": "Serverfehler"
     },
     "headline": {
       "share_created": "{sender_name} hat dir {file_count} Datei(en) gesendet.",
@@ -1145,6 +1148,7 @@
       "file_quarantined": "{filename} wurde durch Antivirus unter Quarantäne gestellt.",
       "session_evicted": "Eine ältere Sitzung wurde abgemeldet - Limit von {cap} Sitzungen erreicht.",
       "release_available": "fileHeron {version} ist verfügbar.",
+      "server_error": "Serverfehler: {code} ({path})",
       "ops_alert": {
         "cron_failed": "Cron-Job {job_name} fehlgeschlagen.",
         "update_triggered": "Update auf {target_tag} gestartet.",
@@ -2169,6 +2173,29 @@
     "toggle_label": "Alle Admins benachrichtigen, wenn ein Virus erkannt wird",
     "toggle_help": "Jeder Admin erhält pro Erkennung eine E-Mail und einen Eintrag in der In-App-Glocke. Ein Admin kann sich unter /account → Benachrichtigungen stummschalten, indem er den Kanal für \"file_quarantined\" auf \"off\" stellt (Standard ist \"both\" - E-Mail + In-App).",
     "saved_toast": "Einstellung für Quarantäne-Alarme gespeichert."
+  },
+  "admin_error_alerts": {
+    "title": "Fehler-Alarme",
+    "intro": "Admins per E-Mail benachrichtigen, wenn ein Serverfehler auftritt (ein HTTP-5xx oder eine fehlgeschlagene geplante Aufgabe). Identische Fehler werden zusammengefasst, und eine Stundengrenze verhindert, dass ein wiederkehrender Fehler dein Postfach flutet. Die E-Mails enthalten nur Kontext - keinen Stacktrace.",
+    "enabled_label": "Admins über Serverfehler benachrichtigen",
+    "enabled_help": "Hauptschalter. Wenn aus, wird nichts gesendet und es entsteht kein Aufwand.",
+    "http_label": "HTTP-Serverfehler (5xx)",
+    "http_help": "Unbehandelte 500er sowie serverseitige Ausfälle, etwa wenn Speicher oder Antivirus nicht verfügbar sind. Client-Fehler (4xx) lösen nie einen Alarm aus.",
+    "cron_note": "Fehlgeschlagene geplante Aufgaben werden pro Aufgabe auf der Seite Geplante Aufgaben aktiviert (der Schalter erscheint dort, sobald diese Funktion aktiv ist).",
+    "recipients_label": "Empfänger",
+    "recipients_admins": "Alle Admins (jeder kann es unter Konto → Benachrichtigungen stummschalten)",
+    "recipients_custom": "Eine bestimmte Liste von Adressen",
+    "recipients_placeholder": "ops@example.com\nsre@example.com",
+    "recipients_help": "Eine Adresse pro Zeile. Diese erhalten die E-Mail direkt und erscheinen nicht in der In-App-Glocke.",
+    "throttle_label": "Flutschutz",
+    "cooldown_label": "Abklingzeit (Minuten)",
+    "cap_label": "Max. E-Mails / Stunde",
+    "throttle_help": "Ein identischer Fehler wird höchstens einmal pro Abklingfenster gemeldet; die nächste E-Mail nach dem Fenster nennt die Anzahl der unterdrückten Wiederholungen. Die Stundengrenze ist eine harte Obergrenze über alle Fehler.",
+    "saved_toast": "Einstellungen für Fehler-Alarme gespeichert.",
+    "err_cooldown_range": "Die Abklingzeit muss zwischen 1 und 1440 Minuten liegen.",
+    "err_cap_range": "Max. E-Mails pro Stunde muss zwischen 1 und 1000 liegen.",
+    "err_custom_empty": "Füge mindestens eine Empfängeradresse hinzu oder wähle Alle Admins.",
+    "err_bad_email": "Keine gültige E-Mail-Adresse: {list}"
   },
   "admin_av": {
     "title": "Antiviren-Engine",

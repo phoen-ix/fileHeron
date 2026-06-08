@@ -211,6 +211,17 @@ class Keys:
     # Registry tunable: how long the postpone flow waits for transfers to drain
     # before applying the update anyway.
     UPDATES_DRAIN_MAX_WAIT_MIN = "updates.drain_max_wait_min"
+    # Error alerting (email admins on server errors). Master switch + the HTTP-5xx
+    # source toggle + recipient targeting are simple kv; the cooldown + hourly cap
+    # are registry tunables (see settings_registry). The cron/worker source is NOT
+    # here - it's a per-task `cron.<name>.alert_on_failure` flag on the Scheduled
+    # tasks page. See services/error_alert.py.
+    ERROR_ALERT_ENABLED = "error_alert.enabled"                  # boolean master switch (default false)
+    ERROR_ALERT_SOURCE_HTTP_5XX = "error_alert.source_http_5xx"  # boolean (default true)
+    ERROR_ALERT_RECIPIENTS_MODE = "error_alert.recipients_mode"  # 'admins' | 'custom' (default 'admins')
+    ERROR_ALERT_CUSTOM_RECIPIENTS = "error_alert.custom_recipients"  # CSV of email addresses
+    ERROR_ALERT_COOLDOWN_MINUTES = "error_alert.cooldown_minutes"    # registry tunable (int)
+    ERROR_ALERT_MAX_PER_HOUR = "error_alert.max_per_hour"            # registry tunable (int)
 
 
 _ENCRYPTED_KEYS: set[str] = {Keys.SMTP_PASSWORD, Keys.IMAP_PASSWORD}

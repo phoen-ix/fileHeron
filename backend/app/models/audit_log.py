@@ -126,6 +126,9 @@ class AuditEventType(str, enum.Enum):
     rollback_failed = "rollback_failed"
     # Phase 5: admin-editable Updates settings (URL + check_mode).
     updates_settings_changed = "updates_settings_changed"
+    # Error-alert settings changed (email-on-server-error feature). Records
+    # keys/counts only, never the custom recipient addresses.
+    error_alert_settings_changed = "error_alert_settings_changed"
     # v1.5.1: cleanup_stale_uploads reaper - an upload abandoned in `uploading`
     # past retention.upload_stale_hours, and the share it left empty.
     file_upload_abandoned = "file_upload_abandoned"

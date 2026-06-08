@@ -60,8 +60,8 @@ def upgrade() -> None:
 def downgrade() -> None:
     bind = op.get_bind()
     if _has_table(bind, "webhook_deliveries"):
-        op.drop_index("ix_webhook_deliveries_created_at", table_name="webhook_deliveries")
-        op.drop_index("ix_webhook_deliveries_webhook_id", table_name="webhook_deliveries")
+        # drop_table drops the table's indexes with it; an explicit drop_index
+        # first is redundant and errors (MySQL 1091) when the name doesn't match.
         op.drop_table("webhook_deliveries")
     if _has_table(bind, "webhooks"):
         op.drop_table("webhooks")

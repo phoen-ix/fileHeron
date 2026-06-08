@@ -35,7 +35,6 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_index("ix_shares_state", table_name="shares")
-    op.drop_index("ix_shares_expires_at", table_name="shares")
-    op.drop_index("ix_shares_created_by_id", table_name="shares")
+    # drop_table removes these indexes (incl. the FK-backing created_by_id one)
+    # with the table; dropping a FK-backed index first errors (MySQL 1553).
     op.drop_table("shares")

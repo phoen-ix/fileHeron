@@ -40,6 +40,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_index("ix_users_oidc_subject", table_name="users")
-    op.drop_index("ix_users_email_hash", table_name="users")
+    # drop_table removes the table's indexes with it; dropping them explicitly
+    # first errors when a later migration already removed one (MySQL 1091 - the
+    # email-plaintext migration dropped the email_hash index).
     op.drop_table("users")

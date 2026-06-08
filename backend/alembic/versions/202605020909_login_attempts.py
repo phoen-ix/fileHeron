@@ -34,8 +34,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_index("ix_login_attempts_outcome", table_name="login_attempts")
-    op.drop_index("ix_login_attempts_attempted_at", table_name="login_attempts")
-    op.drop_index("ix_login_attempts_ip", table_name="login_attempts")
-    op.drop_index("ix_login_attempts_email_hash", table_name="login_attempts")
+    # drop_table removes the table's indexes with it; dropping them explicitly
+    # first errors when a later migration already removed one (MySQL 1091 - the
+    # email-plaintext migration dropped the email_hash index).
     op.drop_table("login_attempts")

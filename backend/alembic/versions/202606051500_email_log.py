@@ -116,8 +116,7 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     bind = op.get_bind()
-    for name, _cols in _INDEXES:
-        if _has_index(bind, "email_log", name):
-            op.drop_index(name, table_name="email_log")
+    # drop_table removes the table's indexes (incl. FK-backing ones) with it;
+    # dropping a FK-backed index first errors (MySQL 1553).
     if _has_table(bind, "email_log"):
         op.drop_table("email_log")

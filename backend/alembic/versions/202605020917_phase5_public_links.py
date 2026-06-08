@@ -70,17 +70,8 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_index(
-        "ix_public_link_password_attempts_attempted_at",
-        table_name="public_link_password_attempts",
-    )
-    op.drop_index(
-        "ix_public_link_password_attempts_ip",
-        table_name="public_link_password_attempts",
-    )
-    op.drop_index(
-        "ix_public_link_password_attempts_link_id",
-        table_name="public_link_password_attempts",
-    )
+    # drop_table removes each table's indexes (incl. the FK-backing
+    # public_link_id one) with it; dropping a FK-backed index first errors
+    # (MySQL 1553). The attempts table is dropped first (it FKs to public_links).
     op.drop_table("public_link_password_attempts")
     op.drop_table("public_links")

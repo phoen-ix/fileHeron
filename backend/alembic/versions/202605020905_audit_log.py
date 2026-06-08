@@ -37,8 +37,6 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_index("ix_audit_log_request_id", table_name="audit_log")
-    op.drop_index("ix_audit_log_event_type", table_name="audit_log")
-    op.drop_index("ix_audit_log_actor_user_id", table_name="audit_log")
-    op.drop_index("ix_audit_log_created_at", table_name="audit_log")
+    # drop_table removes these indexes (incl. the FK-backing actor_user_id one)
+    # with the table; dropping a FK-backed index first errors (MySQL 1553).
     op.drop_table("audit_log")

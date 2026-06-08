@@ -39,8 +39,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_index("ix_download_log_accessed_at", table_name="download_log")
-    op.drop_index("ix_download_log_accessed_by_user_id", table_name="download_log")
-    op.drop_index("ix_download_log_share_id", table_name="download_log")
-    op.drop_index("ix_download_log_file_id", table_name="download_log")
+    # drop_table removes these indexes (incl. the FK-backing file_id / share_id /
+    # accessed_by_user_id ones) with the table; dropping a FK-backed index first
+    # errors (MySQL 1553).
     op.drop_table("download_log")

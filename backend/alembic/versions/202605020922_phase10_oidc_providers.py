@@ -211,9 +211,24 @@ def downgrade() -> None:
     bind = op.get_bind()
     if _has_index(bind, "users", "uq_users_provider_subject"):
         op.drop_constraint("uq_users_provider_subject", "users", type_="unique")
-    if _has_index(bind, "users", "ix_users_oidc_provider_id"):
-        op.drop_index("ix_users_oidc_provider_id", table_name="users")
+    # oidc_provider_id carries an (auto-named) FK to oidc_providers plus a
+    # backing index. On MySQL neither the index nor the column can be dropped
+    # while the FK exists (1553), so resolve the generated FK name and drop it
+    # first, then the index, then the column.
     if _has_column(bind, "users", "oidc_provider_id"):
+        if bind.dialect.name == "mysql":
+            fk = bind.execute(
+                sa.text(
+                    "SELECT constraint_name FROM information_schema.key_column_usage "
+                    "WHERE table_schema = DATABASE() AND table_name = 'users' "
+                    "AND column_name = 'oidc_provider_id' "
+                    "AND referenced_table_name = 'oidc_providers' LIMIT 1"
+                )
+            ).scalar()
+            if fk:
+                op.drop_constraint(fk, "users", type_="foreignkey")
+        if _has_index(bind, "users", "ix_users_oidc_provider_id"):
+            op.drop_index("ix_users_oidc_provider_id", table_name="users")
         op.drop_column("users", "oidc_provider_id")
     if _has_table(bind, "oidc_providers"):
         op.drop_table("oidc_providers")

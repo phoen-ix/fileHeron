@@ -36,6 +36,6 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_index("ix_refresh_tokens_token_hash", table_name="refresh_tokens")
-    op.drop_index("ix_refresh_tokens_user_id", table_name="refresh_tokens")
+    # drop_table removes the FK-backing user_id index with the table; dropping
+    # it explicitly first errors (MySQL 1553).
     op.drop_table("refresh_tokens")

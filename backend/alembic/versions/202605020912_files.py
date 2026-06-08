@@ -42,9 +42,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_index("ix_files_tus_upload_id", table_name="files")
-    op.drop_index("ix_files_sha256_hex", table_name="files")
-    op.drop_index("ix_files_state", table_name="files")
-    op.drop_index("ix_files_uploaded_by_id", table_name="files")
-    op.drop_index("ix_files_share_id", table_name="files")
+    # drop_table removes these indexes (incl. the FK-backing share_id /
+    # uploaded_by_id ones) with the table; dropping a FK-backed index first
+    # errors (MySQL 1553).
     op.drop_table("files")

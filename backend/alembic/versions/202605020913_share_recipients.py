@@ -37,7 +37,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_index("ix_share_recipients_recipient_group_id", table_name="share_recipients")
-    op.drop_index("ix_share_recipients_recipient_user_id", table_name="share_recipients")
-    op.drop_index("ix_share_recipients_share_id", table_name="share_recipients")
+    # drop_table removes these indexes (incl. the FK-backing share_id /
+    # recipient_user_id ones) with the table; dropping a FK-backed index first
+    # errors (MySQL 1553).
     op.drop_table("share_recipients")

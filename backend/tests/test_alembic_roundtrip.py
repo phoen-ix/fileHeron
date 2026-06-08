@@ -1,14 +1,15 @@
-"""Verify every alembic migration can downgrade cleanly.
+"""Verify every alembic migration downgrades cleanly on the real engine.
 
-Many migrations have non-trivial downgrade() paths. Without a test,
-they sit untested until the day an operator needs to roll back -
-and finds out the path doesn't work. This walks the migration chain
-backwards step-by-step against a temporary SQLite engine, then
-re-upgrades to confirm no schema drift.
+Walks the whole chain up -> down -> up against the *configured* database
+(``settings.database_url``, which ``alembic/env.py`` binds). In CI this runs in a
+dedicated ``alembic-roundtrip`` job against a disposable MariaDB service (sets
+``RUN_ALEMBIC_ROUNDTRIP=1`` + ``DB_*``); locally, point ``DB_*`` at a throwaway
+MariaDB and set the flag.
 
-Slow-ish (creates and destroys ~30 tables N times). Lives in tests/
-but not run by default - gate with `RUN_ALEMBIC_ROUNDTRIP=1` env var
-so the default pytest run stays under 20s.
+Skipped by default: it needs a real MySQL/MariaDB (the migrations use MySQL DDL
+the SQLite test harness can't run) and rewrites a whole schema. This is the only
+thing that exercises the downgrade() paths - which otherwise sit untested until
+an operator (or a rollback) needs them.
 """
 from __future__ import annotations
 
@@ -19,22 +20,21 @@ import pytest
 
 _SKIP = pytest.mark.skipif(
     os.environ.get("RUN_ALEMBIC_ROUNDTRIP") != "1",
-    reason="alembic roundtrip is slow; set RUN_ALEMBIC_ROUNDTRIP=1 to enable",
+    reason="needs a real MariaDB; set RUN_ALEMBIC_ROUNDTRIP=1 + DB_* to enable",
 )
 
 
 @_SKIP
-def test_alembic_full_downgrade_roundtrip(tmp_path):
-    """Run upgrade head → downgrade base → upgrade head against a
-    fresh SQLite file. Asserts no exception."""
+def test_alembic_full_downgrade_roundtrip():
+    """upgrade head -> downgrade base -> upgrade head against the configured
+    database. Asserts no exception - i.e. every migration's downgrade() works on
+    the engine production actually uses."""
     from alembic.command import downgrade, upgrade
     from alembic.config import Config
 
-    db_path = tmp_path / "roundtrip.sqlite"
-    cfg = Config(
-        str(Path(__file__).resolve().parent.parent / "alembic.ini")
-    )
-    cfg.set_main_option("sqlalchemy.url", f"sqlite:///{db_path}")
+    # env.py binds the URL from settings.database_url (the DB_* env). No need to
+    # set sqlalchemy.url here - and a SQLite override would be ignored anyway.
+    cfg = Config(str(Path(__file__).resolve().parent.parent / "alembic.ini"))
 
     upgrade(cfg, "head")
     downgrade(cfg, "base")

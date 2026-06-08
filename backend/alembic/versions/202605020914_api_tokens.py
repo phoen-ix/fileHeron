@@ -35,6 +35,6 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_index("ix_api_tokens_prefix", table_name="api_tokens")
-    op.drop_index("ix_api_tokens_owner_user_id", table_name="api_tokens")
+    # drop_table removes these indexes (incl. the FK-backing owner_user_id one)
+    # with the table; dropping a FK-backed index first errors (MySQL 1553).
     op.drop_table("api_tokens")

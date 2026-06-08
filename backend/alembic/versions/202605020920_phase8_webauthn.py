@@ -38,8 +38,6 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_index(
-        "ix_user_webauthn_credentials_user_id",
-        table_name="user_webauthn_credentials",
-    )
+    # drop_table removes the FK-backing index with the table; dropping that
+    # index first rebuilds the table and trips errno 150 (FK malformed).
     op.drop_table("user_webauthn_credentials")

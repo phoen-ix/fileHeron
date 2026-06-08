@@ -32,6 +32,6 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_index("ix_email_verify_tokens_token_hash", table_name="email_verify_tokens")
-    op.drop_index("ix_email_verify_tokens_user_id", table_name="email_verify_tokens")
+    # drop_table removes the FK-backing user_id index with the table; dropping
+    # it explicitly first errors (MySQL 1553).
     op.drop_table("email_verify_tokens")

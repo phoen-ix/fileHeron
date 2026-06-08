@@ -85,18 +85,13 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    # Drop the FK this migration added to the (surviving) share_recipients table
+    # first, then the new tables. drop_table removes each table's own indexes
+    # (incl. FK-backing ones) with it; dropping those explicitly first errors
+    # (MySQL 1553). group_members is dropped before groups (it FKs to groups).
     op.drop_constraint(
         "fk_share_recipients_group", "share_recipients", type_="foreignkey"
     )
-    op.drop_index(
-        "ix_client_employee_connections_employee",
-        table_name="client_employee_connections",
-    )
-    op.drop_index(
-        "ix_client_employee_connections_client", table_name="client_employee_connections"
-    )
     op.drop_table("client_employee_connections")
-    op.drop_index("ix_group_members_user_id", table_name="group_members")
     op.drop_table("group_members")
-    op.drop_index("ix_groups_is_company_inbox", table_name="groups")
     op.drop_table("groups")

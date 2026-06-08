@@ -50,7 +50,6 @@ def upgrade() -> None:
 def downgrade() -> None:
     op.drop_column("shares", "expiring_notified_at")
     op.drop_table("user_notification_preferences")
-    op.drop_index("ix_notifications_created_at", table_name="notifications")
-    op.drop_index("ix_notifications_category", table_name="notifications")
-    op.drop_index("ix_notifications_user_id", table_name="notifications")
+    # drop_table removes these indexes (incl. the FK-backing user_id one) with
+    # the table; dropping a FK-backed index first errors (MySQL 1553).
     op.drop_table("notifications")

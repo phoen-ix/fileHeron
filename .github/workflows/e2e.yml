@@ -10,6 +10,10 @@ name: E2E
 on:
   pull_request: {}
   workflow_dispatch: {}
+  # Daily so the suite has real teeth on a direct-to-main repo (PRs are rare),
+  # without slowing every push or flaking main CI on a Docker Hub hiccup.
+  schedule:
+    - cron: '17 4 * * *'
 
 jobs:
   playwright:

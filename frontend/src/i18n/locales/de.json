@@ -402,20 +402,6 @@
       "cron_failures_24h": "Cron-Fehler (24h)",
       "email_undeliverable_24h": "E-Mails nicht zustellbar (24h)"
     },
-    "crons": {
-      "heading": "Geplante Aufgaben",
-      "moved": "Zeitpläne, Status und Jetzt ausführen findest du jetzt unter",
-      "job": "Job",
-      "last_status": "Letzter Status",
-      "last_run": "Letzter Lauf",
-      "duration": "Dauer",
-      "last_24h": "Letzte 24h",
-      "result": "Ergebnis",
-      "no_runs": "noch keine Läufe",
-      "actions": "Aktionen",
-      "run_now": "Jetzt ausführen",
-      "run_queued": "{job} eingereiht"
-    },
     "failures": {
       "heading": "Letzte Fehler",
       "job": "Job",

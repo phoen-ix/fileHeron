@@ -402,20 +402,6 @@
       "cron_failures_24h": "Cron failures (24h)",
       "email_undeliverable_24h": "Emails undeliverable (24h)"
     },
-    "crons": {
-      "heading": "Scheduled tasks",
-      "moved": "Cron schedules, status and Run now have moved to",
-      "job": "Job",
-      "last_status": "Last status",
-      "last_run": "Last run",
-      "duration": "Duration",
-      "last_24h": "Last 24h",
-      "result": "Result",
-      "no_runs": "no runs yet",
-      "actions": "Actions",
-      "run_now": "Run now",
-      "run_queued": "{job} queued"
-    },
     "failures": {
       "heading": "Recent failures",
       "job": "Job",

@@ -570,17 +570,6 @@ const headlineFailures = computed(() => {
         </div>
       </section>
 
-      <!-- Scheduled tasks (crons) live on their own page now. -->
-      <section class="card">
-        <h2>{{ t('admin_system.crons.heading') }}</h2>
-        <p class="muted">
-          {{ t('admin_system.crons.moved') }}
-          <RouterLink :to="{ name: 'admin-scheduled-tasks' }">
-            {{ t('admin.nav.scheduled_tasks') }}
-          </RouterLink>
-        </p>
-      </section>
-
       <!-- update / rollback confirm modal -->
       <div
         v-if="confirming"

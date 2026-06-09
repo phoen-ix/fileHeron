@@ -12,7 +12,7 @@ from app.utils.timeutil import utc_now
 K = settings_svc.Keys
 
 
-def _event(source="http", status=500, code="INTERNAL_ERROR", path="/api/files/1", job=None):
+def _event(source="http", status=500, code="INTERNAL_ERROR", path="/api/files/1", job=None, ip="203.0.113.7"):
     ev = {
         "source": source,
         "exception_type": "ValueError",
@@ -21,6 +21,7 @@ def _event(source="http", status=500, code="INTERNAL_ERROR", path="/api/files/1"
         "path": path,
         "status_code": status,
         "code": code,
+        "ip": ip,
         "request_id": "rid",
         "user_id": 7,
         "auth_via": "session",
@@ -77,10 +78,10 @@ def test_should_log_4xx_only_when_captured_and_allowlisted(db):
 
 
 def test_record_and_list_filters(db):
-    error_log.record(db, _event(status=500, code="INTERNAL_ERROR", path="/a"), signature="sig5")
-    error_log.record(db, _event(status=429, code="RATE_LIMITED", path="/b"), signature="sig4")
+    error_log.record(db, _event(status=500, code="INTERNAL_ERROR", path="/a", ip="10.0.0.1"), signature="sig5")
+    error_log.record(db, _event(status=429, code="RATE_LIMITED", path="/b", ip="10.0.0.2"), signature="sig4")
     error_log.record(
-        db, _event(source="worker", status=500, code="CRON_FAILED", job="expire_files"), signature="sigw"
+        db, _event(source="worker", status=500, code="CRON_FAILED", job="expire_files", ip=None), signature="sigw"
     )
     db.commit()
 
@@ -92,6 +93,10 @@ def test_record_and_list_filters(db):
     assert total == 2
     rows, total = error_log.list_errors(db, source="worker")
     assert total == 1 and rows[0].job_name == "expire_files"
+    # IP is stored and exact-match filterable (scan triage).
+    rows, total = error_log.list_errors(db, ip="10.0.0.1")
+    assert total == 1 and rows[0].path == "/a"
+    assert rows[0].ip == "10.0.0.1"
 
 
 def test_record_clips_and_defaults(db):

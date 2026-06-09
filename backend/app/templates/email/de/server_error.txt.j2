@@ -5,7 +5,8 @@
 Status:   {{ status_code }} {{ code }}
 Fehler:   {{ exception_type }}{% if message %} - {{ message }}{% endif %}
 Zeit:     {{ at|dt_locale(locale) }}
-{% if request_id %}Request:  {{ request_id }}
+{% if ip %}Von IP:   {{ ip }}
+{% endif %}{% if request_id %}Request:  {{ request_id }}
 {% endif %}{% if user_id %}Benutzer: #{{ user_id }}{% if auth_via %} (via {{ auth_via }}){% endif %}
 {% endif %}Vorkommen seit der letzten Meldung: {{ occurrence_count }}
 {% if suppressed_count and suppressed_since %}({{ suppressed_count }} frühere(s) Vorkommen unterdrückt seit {{ suppressed_since|dt_locale(locale) }})

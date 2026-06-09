@@ -23,6 +23,7 @@ const pageSize = ref(50)
 const code = ref('')
 const statusCode = ref('')
 const source = ref('')
+const ip = ref('')
 const fromTs = ref('')
 const toTs = ref('')
 
@@ -43,6 +44,7 @@ const filterParams = computed(() => {
   if (code.value) p.code = code.value
   if (statusCode.value) p.status_code = statusCode.value
   if (source.value) p.source = source.value
+  if (ip.value) p.ip = ip.value
   if (fromTs.value) p.from = fromTs.value
   if (toTs.value) p.to = toTs.value
   return p
@@ -109,6 +111,7 @@ onMounted(load)
 
     <div class="filters">
       <input v-model.trim="code" class="fh-field-input" :placeholder="t('admin_error_log.filter.code')" />
+      <input v-model.trim="ip" class="fh-field-input" :placeholder="t('admin_error_log.filter.ip')" />
       <input
         v-model.trim="statusCode"
         class="fh-field-input"
@@ -134,6 +137,7 @@ onMounted(load)
       <thead>
         <tr>
           <th>{{ t('admin_error_log.col.when') }}</th>
+          <th>{{ t('admin_error_log.col.ip') }}</th>
           <th>{{ t('admin_error_log.col.status') }}</th>
           <th>{{ t('admin_error_log.col.code') }}</th>
           <th>{{ t('admin_error_log.col.where') }}</th>
@@ -144,6 +148,7 @@ onMounted(load)
         <template v-for="r in items" :key="r.id">
           <tr class="row" @click="toggle(r.id)">
             <td class="fh-mono nowrap">{{ formatDate(r.created_at, { second: '2-digit' }) }}</td>
+            <td class="fh-mono nowrap">{{ r.ip ?? '-' }}</td>
             <td>
               <span class="fh-pill" :data-state="statusTone(r.status_code)">{{ r.status_code }}</span>
               <span v-if="r.alerted" class="fh-pill mini" data-state="active">{{ t('admin_error_log.emailed') }}</span>
@@ -153,10 +158,11 @@ onMounted(load)
             <td class="msg">{{ r.message ?? '-' }}</td>
           </tr>
           <tr v-if="expanded === r.id" class="detail-row">
-            <td colspan="5">
+            <td colspan="6">
               <dl class="detail">
                 <dt>{{ t('admin_error_log.detail.exception') }}</dt><dd class="fh-mono">{{ r.exception_type ?? '-' }}</dd>
                 <dt>{{ t('admin_error_log.detail.source') }}</dt><dd class="fh-mono">{{ r.source }}</dd>
+                <dt>{{ t('admin_error_log.detail.ip') }}</dt><dd class="fh-mono">{{ r.ip ?? '-' }}</dd>
                 <dt>{{ t('admin_error_log.detail.request_id') }}</dt><dd class="fh-mono">{{ r.request_id ?? '-' }}</dd>
                 <dt>{{ t('admin_error_log.detail.user') }}</dt>
                 <dd class="fh-mono">{{ r.user_id !== null ? `#${r.user_id}${r.auth_via ? ` (${r.auth_via})` : ''}` : '-' }}</dd>

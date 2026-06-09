@@ -201,6 +201,7 @@ def _build_payload(event: dict[str, Any], decision: _CooldownDecision) -> dict[s
         "job_name": event.get("job_name"),
         "status_code": event.get("status_code"),
         "code": event.get("code"),
+        "ip": event.get("ip"),
         "request_id": event.get("request_id"),
         "user_id": event.get("user_id"),
         "auth_via": event.get("auth_via"),

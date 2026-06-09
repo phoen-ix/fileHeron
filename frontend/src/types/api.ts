@@ -752,6 +752,7 @@ export interface AdminErrorRow {
   method: string | null
   path: string | null
   job_name: string | null
+  ip: string | null
   request_id: string | null
   user_id: number | null
   auth_via: string | null

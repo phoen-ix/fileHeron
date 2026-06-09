@@ -15,7 +15,8 @@ def _seed(db):
         db,
         {
             "source": "http", "status_code": 500, "code": "INTERNAL_ERROR",
-            "method": "GET", "path": "/api/x", "message": "boom", "at": utc_now(),
+            "method": "GET", "path": "/api/x", "message": "boom",
+            "ip": "198.51.100.5", "at": utc_now(),
         },
         signature="s500",
     )
@@ -23,7 +24,8 @@ def _seed(db):
         db,
         {
             "source": "http", "status_code": 429, "code": "RATE_LIMITED",
-            "method": "POST", "path": "/api/y", "message": "slow down", "at": utc_now(),
+            "method": "POST", "path": "/api/y", "message": "slow down",
+            "ip": "203.0.113.9", "at": utc_now(),
         },
         signature="s429",
     )
@@ -55,6 +57,12 @@ async def test_list_and_filter(make_user, db, client, login_as):
     r = await client.get("/api/admin/error-log?status_code=500", headers=_h(token))
     assert r.json()["total"] == 1
     assert r.json()["items"][0]["code"] == "INTERNAL_ERROR"
+    assert r.json()["items"][0]["ip"] == "198.51.100.5"
+
+    # Filter by IP (scan triage).
+    r = await client.get("/api/admin/error-log?ip=203.0.113.9", headers=_h(token))
+    assert r.json()["total"] == 1
+    assert r.json()["items"][0]["code"] == "RATE_LIMITED"
 
 
 @pytest.mark.asyncio
@@ -81,6 +89,8 @@ async def test_csv_export(make_user, db, client, login_as):
     assert "text/csv" in r.headers["content-type"]
     assert "INTERNAL_ERROR" in r.text
     assert "RATE_LIMITED" in r.text
+    assert "ip" in r.text.splitlines()[0]  # header has the IP column
+    assert "198.51.100.5" in r.text
 
 
 @pytest.mark.asyncio

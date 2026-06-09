@@ -58,7 +58,7 @@ def _enable(db, **overrides):
     db.commit()
 
 
-def _http_event(path="/api/files/123", code="INTERNAL_ERROR", status=500, exc_type="ValueError"):
+def _http_event(path="/api/files/123", code="INTERNAL_ERROR", status=500, exc_type="ValueError", ip="203.0.113.7"):
     return {
         "source": "http",
         "exception_type": exc_type,
@@ -67,6 +67,7 @@ def _http_event(path="/api/files/123", code="INTERNAL_ERROR", status=500, exc_ty
         "path": path,
         "status_code": status,
         "code": code,
+        "ip": ip,
         "request_id": "rid-1",
         "user_id": None,
         "auth_via": None,
@@ -155,6 +156,7 @@ def test_post_cooldown_resend_reports_suppressed(db, fake_redis, monkeypatch):
     assert captured["occurrence_count"] == 2  # since the last alert
     assert captured["suppressed_count"] == 1
     assert captured["suppressed_since"] is not None
+    assert captured["ip"] == "203.0.113.7"  # client IP flows into the email payload
 
 
 # --- hourly cap ------------------------------------------------------------
@@ -253,6 +255,7 @@ def _fake_request():
     return types.SimpleNamespace(
         method="GET",
         url=types.SimpleNamespace(path="/api/files/9"),
+        client=types.SimpleNamespace(host="203.0.113.7"),
         state=types.SimpleNamespace(request_id="rid", user_id=7, auth_via="session"),
     )
 

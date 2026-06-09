@@ -93,6 +93,7 @@ def _maybe_enqueue_error_event(
             "path": request.url.path,
             "status_code": status_code,
             "code": code,
+            "ip": request.client.host if request.client else None,
             "request_id": getattr(request.state, "request_id", None),
             "user_id": getattr(request.state, "user_id", None),
             "auth_via": getattr(request.state, "auth_via", None),

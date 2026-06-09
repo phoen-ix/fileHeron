@@ -142,6 +142,7 @@ def record(db: Session, event: dict[str, Any], *, signature: str) -> int | None:
             method=_clip(event.get("method"), 8),
             path=_clip(event.get("path"), 512),
             job_name=_clip(event.get("job_name"), 128),
+            ip=_clip(event.get("ip"), 45),
             request_id=_clip(event.get("request_id"), 64),
             user_id=event.get("user_id"),
             auth_via=_clip(event.get("auth_via"), 16),
@@ -183,6 +184,7 @@ def filtered_query(
     code: str | None = None,
     status_code: int | None = None,
     source: str | None = None,
+    ip: str | None = None,
     from_ts: datetime | None = None,
     to_ts: datetime | None = None,
 ):
@@ -193,6 +195,8 @@ def filtered_query(
         q = q.filter(ErrorLog.status_code == status_code)
     if source:
         q = q.filter(ErrorLog.source == source)
+    if ip:
+        q = q.filter(ErrorLog.ip == ip)
     if from_ts:
         q = q.filter(ErrorLog.created_at >= from_ts)
     if to_ts:
@@ -206,13 +210,15 @@ def list_errors(
     code: str | None = None,
     status_code: int | None = None,
     source: str | None = None,
+    ip: str | None = None,
     from_ts: datetime | None = None,
     to_ts: datetime | None = None,
     page: int = 1,
     page_size: int = 50,
 ) -> tuple[list[ErrorLog], int]:
     q = filtered_query(
-        db, code=code, status_code=status_code, source=source, from_ts=from_ts, to_ts=to_ts
+        db, code=code, status_code=status_code, source=source, ip=ip,
+        from_ts=from_ts, to_ts=to_ts,
     )
     total = q.count()
     rows = (

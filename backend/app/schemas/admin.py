@@ -202,6 +202,7 @@ class AdminErrorRow(APIBaseModel):
     method: str | None
     path: str | None
     job_name: str | None
+    ip: str | None
     request_id: str | None
     user_id: int | None
     auth_via: str | None

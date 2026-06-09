@@ -2220,6 +2220,7 @@
     "filter": {
       "code": "code (e.g. INTERNAL_ERROR)",
       "status": "status (e.g. 500)",
+      "ip": "IP address",
       "source_any": "all sources",
       "from": "from",
       "to": "to"
@@ -2230,6 +2231,7 @@
     },
     "col": {
       "when": "When",
+      "ip": "IP",
       "status": "Status",
       "code": "Code",
       "where": "Where",
@@ -2238,6 +2240,7 @@
     "detail": {
       "exception": "Exception",
       "source": "Source",
+      "ip": "IP address",
       "request_id": "Request ID",
       "user": "User",
       "signature": "Signature",

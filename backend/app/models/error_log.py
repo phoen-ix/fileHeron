@@ -8,10 +8,11 @@ was deduped, hourly-capped, or the alert feature is off entirely - logging and
 alerting are decoupled (``services/error_log.py`` logs; ``services/error_alert.py``
 alerts).
 
-Context only: exception type, masked-free message (<=500 chars), method/path,
-status/code, request_id, acting user id - never a traceback, request body, query
-string, or headers (the path already drops the query string upstream). ``alerted``
-records whether an email actually went out for this row. Bounded by the
+Context only: client IP, exception type, masked-free message (<=500 chars),
+method/path, status/code, request_id, acting user id - never a traceback, request
+body, or query string (the path already drops the query string upstream). The IP
+is the real client IP (proxy-resolved) and is the key field for spotting scans.
+``alerted`` records whether an email actually went out for this row. Bounded by the
 ``error_log`` retention window in ``workers/prune_history.py``.
 """
 from __future__ import annotations
@@ -33,6 +34,8 @@ class ErrorLog(Base):
     __table_args__ = (
         # Filter by code, ordered by time (leftmost prefix also serves code-only).
         Index("ix_error_log_code_created", "code", "created_at"),
+        # "show everything from this IP" (scan triage), newest first.
+        Index("ix_error_log_ip_created", "ip", "created_at"),
         # Group every occurrence of one error shape.
         Index("ix_error_log_signature", "signature"),
     )
@@ -53,6 +56,8 @@ class ErrorLog(Base):
     path: Mapped[str | None] = mapped_column(String(512), nullable=True)
     job_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
 
+    # Real client IP (proxy-resolved). String(45) fits IPv6; mirrors login_attempts.
+    ip: Mapped[str | None] = mapped_column(String(45), nullable=True)
     request_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     # No FK: forensic, must survive user deletion / erasure.
     user_id: Mapped[int | None] = mapped_column(Integer, nullable=True)

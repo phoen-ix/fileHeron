@@ -45,6 +45,7 @@ def _row(r: ErrorLog) -> AdminErrorRow:
         method=r.method,
         path=r.path,
         job_name=r.job_name,
+        ip=r.ip,
         request_id=r.request_id,
         user_id=r.user_id,
         auth_via=r.auth_via,
@@ -58,6 +59,7 @@ def list_errors(
     code: str | None = Query(None),
     status_code: int | None = Query(None, ge=100, le=599),
     source: str | None = Query(None),
+    ip: str | None = Query(None),
     from_ts: datetime | None = Query(None, alias="from"),
     to_ts: datetime | None = Query(None, alias="to"),
     page: int = Query(1, ge=1, le=1000),
@@ -65,12 +67,13 @@ def list_errors(
     db: Session = Depends(get_db),
     _admin: User = Depends(get_current_admin),
 ) -> AdminErrorListResponse:
-    """Paginated error-log feed, newest first, filterable by code/status/source/time."""
+    """Paginated error-log feed, newest first, filterable by code/status/source/ip/time."""
     rows, total = error_log_svc.list_errors(
         db,
         code=code,
         status_code=status_code,
         source=source,
+        ip=ip,
         from_ts=from_ts,
         to_ts=to_ts,
         page=page,
@@ -101,6 +104,7 @@ def export_errors_csv(
     code: str | None = Query(None),
     status_code: int | None = Query(None, ge=100, le=599),
     source: str | None = Query(None),
+    ip: str | None = Query(None),
     from_ts: datetime | None = Query(None, alias="from"),
     to_ts: datetime | None = Query(None, alias="to"),
     db: Session = Depends(get_db),
@@ -108,7 +112,8 @@ def export_errors_csv(
 ) -> StreamingResponse:
     """Stream the filtered result as CSV."""
     query = error_log_svc.filtered_query(
-        db, code=code, status_code=status_code, source=source, from_ts=from_ts, to_ts=to_ts
+        db, code=code, status_code=status_code, source=source, ip=ip,
+        from_ts=from_ts, to_ts=to_ts,
     ).order_by(ErrorLog.created_at.desc())
 
     def _rows() -> Iterator[bytes]:
@@ -125,6 +130,7 @@ def export_errors_csv(
                 "method",
                 "path",
                 "job_name",
+                "ip",
                 "request_id",
                 "user_id",
                 "auth_via",
@@ -149,6 +155,7 @@ def export_errors_csv(
                     _csv_safe(r.method or ""),
                     _csv_safe(r.path or ""),
                     _csv_safe(r.job_name or ""),
+                    _csv_safe(r.ip or ""),
                     _csv_safe(r.request_id or ""),
                     r.user_id if r.user_id is not None else "",
                     _csv_safe(r.auth_via or ""),

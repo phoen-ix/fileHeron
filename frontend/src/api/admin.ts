@@ -496,6 +496,7 @@ export function listErrorLog(params: {
   code?: string
   status_code?: number
   source?: string
+  ip?: string
   from?: string
   to?: string
   page?: number

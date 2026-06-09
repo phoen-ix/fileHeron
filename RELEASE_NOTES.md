@@ -1,31 +1,40 @@
-# file:Heron v1.53.3
+# file:Heron v1.54.0
 
-**Stop the self-update from logging its own 404s.** When you click Update, the UI
-polls `GET /api/admin/system/update-jobs/{id}` for progress - but the update
-restarts the backend (to swap in the new image), which wipes the in-flight job
-record, so the next couple of polls return `404 JOB_NOT_FOUND`. Harmless and
-expected, but with 404 capture on it added two self-inflicted rows to the Error
-log on every update, cluttering the scanner signal. Those are now excluded.
+**The Error log now records the client IP.** Until now the log captured the path,
+status, and code of each error but not *who* sent it - which is the one field you
+need to spot and block a scan. This adds the real client IP to every error row,
+makes it filterable, includes it in the CSV export and the alert email, and moves
+the Error log next to its settings in the sidebar.
 
 ## What's new
 
-- **`JOB_NOT_FOUND` is never captured.** The update-progress poll race no longer
-  writes to the Error log. Every other 404 - including scanner probes (`/.env`,
-  `/wp-login.php`, …) and genuine "not found"s - is still logged exactly as before.
+- **Client IP on every error.** Each error-log row now stores the real client IP
+  (proxy-resolved, IPv6-capable), shown as a column in **Admin → Error log** and in
+  the row detail. A vuln scan now reads as a burst of bogus 404s from one IP.
+- **Filter by IP.** A new IP filter on the Error log isolates every hit from a
+  given address - one click to see everything a scanner touched. The IP is also in
+  the CSV export.
+- **IP in the alert email.** The server-error email gains a "from IP" line.
+- **Sidebar tidy-up.** The Error log now sits directly beneath **Errors & alerts**
+  (it was up by the Audit log), so the log and its settings live together.
 
 ## Upgrade notes
 
-- Rolls forward via **Update** in `/admin/system`. Backend-only, no migration, no
-  host step. (This is the last update that'll log those two 404s - the next one
-  won't.)
-- Rolling back to v1.53.2 is safe.
+- Rolls forward via **Update** in `/admin/system`. **One re-runnable migration**
+  adds the `error_log.ip` column (+ an index); it runs on backend restart. No host
+  step.
+- Rows created before this release have no IP (it wasn't captured then) and show
+  `-`; everything new gets it.
+- IP is treated like the existing login-attempt log: stored in plain text, bounded
+  by the Error-log retention window.
+- Rolling back to v1.53.3 is safe (the extra column is simply unused).
 
 ## Container images
 
-- `ghcr.io/phoen-ix/fileheron-backend:v1.53.3`
-- `ghcr.io/phoen-ix/fileheron-worker:v1.53.3`
-- `ghcr.io/phoen-ix/fileheron-frontend:v1.53.3`
-- `ghcr.io/phoen-ix/fileheron-updater-shim:v1.53.3`
-- `ghcr.io/phoen-ix/fileheron-updater-executor:v1.53.3`
+- `ghcr.io/phoen-ix/fileheron-backend:v1.54.0`
+- `ghcr.io/phoen-ix/fileheron-worker:v1.54.0`
+- `ghcr.io/phoen-ix/fileheron-frontend:v1.54.0`
+- `ghcr.io/phoen-ix/fileheron-updater-shim:v1.54.0`
+- `ghcr.io/phoen-ix/fileheron-updater-executor:v1.54.0`
 
 Click **Update** in `/admin/system` to roll forward.

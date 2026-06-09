@@ -14,6 +14,7 @@
     <tr><td style="padding:4px 0;color:#6b7280;">Status</td><td style="padding:4px 0;color:#1a1d24;">{{ status_code }} {{ code }}</td></tr>
     <tr><td style="padding:4px 0;color:#6b7280;">Fehler</td><td style="padding:4px 0;color:#1a1d24;">{{ exception_type }}{% if message %} - {{ message }}{% endif %}</td></tr>
     <tr><td style="padding:4px 0;color:#6b7280;">Zeit</td><td style="padding:4px 0;color:#1a1d24;">{{ at|dt_locale(locale) }}</td></tr>
+    {% if ip %}<tr><td style="padding:4px 0;color:#6b7280;">Von IP</td><td style="padding:4px 0;color:#1a1d24;">{{ ip }}</td></tr>{% endif %}
     {% if request_id %}<tr><td style="padding:4px 0;color:#6b7280;">Request-ID</td><td style="padding:4px 0;color:#1a1d24;">{{ request_id }}</td></tr>{% endif %}
     {% if user_id %}<tr><td style="padding:4px 0;color:#6b7280;">Benutzer</td><td style="padding:4px 0;color:#1a1d24;">#{{ user_id }}{% if auth_via %} (via {{ auth_via }}){% endif %}</td></tr>{% endif %}
     <tr><td style="padding:4px 0;color:#6b7280;">Vorkommen</td><td style="padding:4px 0;color:#1a1d24;">{{ occurrence_count }}</td></tr>

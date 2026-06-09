@@ -375,7 +375,7 @@ onMounted(load)
 
 <style scoped>
 .email-page {
-  max-width: 720px;
+  max-width: none;
 }
 
 .intro {

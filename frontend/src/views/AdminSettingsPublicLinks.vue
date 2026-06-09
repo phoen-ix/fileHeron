@@ -247,7 +247,7 @@ onMounted(load)
 
 <style scoped>
 .policy-page {
-  max-width: 720px;
+  max-width: none;
 }
 .intro {
   margin: var(--fh-space-2) 0 var(--fh-space-3);

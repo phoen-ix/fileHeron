@@ -440,7 +440,7 @@ onMounted(init)
 
 <style scoped>
 .sso-edit {
-  max-width: 720px;
+  max-width: none;
 }
 
 .loading {

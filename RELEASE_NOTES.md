@@ -1,39 +1,36 @@
-# file:Heron v1.55.10
+# file:Heron v1.55.11
 
-**Stop the "blank page after Update" caching trap.** `index.html` was served with no
-`Cache-Control`, so browsers could heuristically cache it. After an Update the cached
-`index.html` still points at the *old* hashed JS chunks - which no longer exist in the new
-image (they 404) - so the app fails to boot and the page comes up blank, reading as "system
-down" until a hard refresh. This serves the SPA entry document `no-cache` so the browser
-always revalidates it.
+**Admin settings pages now use the full width.** The form/settings pages (Error alerts, General,
+Advanced, Branding, Email, 2FA, the policy pages, SSO, Maintenance, …) were each capped to a
+narrow column (~720-1100px) while the rest of the admin (logs, lists, Scheduled tasks) already
+filled the screen. They now fill the content width too, consistent with everything else.
 
 ## What's new
 
-- **`index.html` is now served `Cache-Control: no-cache`** (revalidated every load via etag ->
-  304 when unchanged, full 200 right after a deploy). The content-hashed `/assets/` stay
-  `immutable`. Net effect: an Update is picked up immediately, no more stale-bundle blank page
-  / forced hard-refresh.
+- **Settings pages fill the width.** Removed the per-page width caps so every admin settings page
+  uses the full content area instead of a narrow centered column - no more "limited" feeling and
+  no wasted right-hand space.
+- General's content column now expands (its quicknav rail stays on the right).
 
 ## Notes
 
-- nginx config only; validated with `nginx -t`. The SPA's security headers (X-Frame-Options,
-  X-Content-Type-Options, Referrer-Policy) are re-declared on the `index.html` location so
-  they're preserved (a location-level `add_header` otherwise drops the server-level ones).
-- This change is baked into the frontend image, so it ships via the normal in-app Update.
+- Pure layout/CSS change - no behavior, data, settings, or API changes.
+- Descriptive intro/help **text** stays at a readable line length (it isn't stretched across the
+  whole screen), and the Branding logo preview keeps its size - only the form/content area widens.
+- Single-column forms now have wide inputs; if a specific page reads better in two columns, that's
+  an easy per-page follow-up.
 
 ## Upgrade notes
 
-- Rolls forward via **Update** in `/admin/system`. Frontend image (backend + worker rebuilt at
-  the same version, code unchanged), **no migration, no host step**. Rolling back to v1.55.9 is
-  safe. (This is the *last* Update that may still need a one-time hard refresh to clear the old
-  cached `index.html`; after it, future updates won't.)
+- Rolls forward via **Update** in `/admin/system`. Frontend image (backend + worker rebuilt at the
+  same version, code unchanged), **no migration, no host step**. Rolling back to v1.55.10 is safe.
 
 ## Container images
 
-- `ghcr.io/phoen-ix/fileheron-backend:v1.55.10`
-- `ghcr.io/phoen-ix/fileheron-worker:v1.55.10`
-- `ghcr.io/phoen-ix/fileheron-frontend:v1.55.10`
-- `ghcr.io/phoen-ix/fileheron-updater-shim:v1.55.10`
-- `ghcr.io/phoen-ix/fileheron-updater-executor:v1.55.10`
+- `ghcr.io/phoen-ix/fileheron-backend:v1.55.11`
+- `ghcr.io/phoen-ix/fileheron-worker:v1.55.11`
+- `ghcr.io/phoen-ix/fileheron-frontend:v1.55.11`
+- `ghcr.io/phoen-ix/fileheron-updater-shim:v1.55.11`
+- `ghcr.io/phoen-ix/fileheron-updater-executor:v1.55.11`
 
 Click **Update** in `/admin/system` to roll forward.

@@ -232,7 +232,7 @@ onMounted(load)
 
 <style scoped>
 .policy-page {
-  max-width: 720px;
+  max-width: none;
 }
 
 .intro {

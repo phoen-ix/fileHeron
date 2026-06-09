@@ -283,7 +283,7 @@ onMounted(load)
 
 <style scoped>
 .branding-page {
-  max-width: 860px;
+  max-width: none;
 }
 .intro {
   max-width: 64ch;

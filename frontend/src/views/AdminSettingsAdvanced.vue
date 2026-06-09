@@ -169,7 +169,7 @@ onMounted(load)
 </template>
 
 <style scoped>
-.advanced-settings { max-width: 760px; }
+.advanced-settings { max-width: none; }
 .intro { margin-bottom: var(--fh-space-4); max-width: 64ch; }
 .loading { color: var(--fh-subtle); padding: var(--fh-space-4) 0; }
 .group { margin-bottom: var(--fh-space-5); }

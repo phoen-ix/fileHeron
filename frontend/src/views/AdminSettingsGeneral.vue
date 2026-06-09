@@ -107,10 +107,10 @@ function jumpTo(id: string) {
 <style scoped>
 .general-layout {
   display: grid;
-  grid-template-columns: minmax(0, 38rem) 12rem;
+  grid-template-columns: minmax(0, 1fr) 12rem;
   gap: var(--fh-space-6);
   align-items: start;
-  max-width: 56rem;
+  max-width: none;
   margin: 0 auto;
 }
 

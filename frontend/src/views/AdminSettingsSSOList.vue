@@ -113,7 +113,7 @@ onMounted(load)
 
 <style scoped>
 .sso-list {
-  max-width: 1100px;
+  max-width: none;
 }
 
 .header-row {

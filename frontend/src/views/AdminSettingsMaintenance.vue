@@ -129,7 +129,7 @@ onMounted(() => void load())
 }
 .fh-field {
   display: block;
-  max-width: 36rem;
+  max-width: none;
   margin-bottom: 1rem;
 }
 .activity {

@@ -26,6 +26,7 @@ from ..database import SessionLocal
 from ..models.error_log import ErrorLog
 from ..utils.timeutil import utc_now
 from . import settings as settings_svc
+from . import settings_registry
 
 logger = logging.getLogger("fileheron.error_log")
 
@@ -72,36 +73,53 @@ def should_log(db: Session, event: dict[str, Any]) -> bool:
 
 
 # Tiny in-process TTL cache so the request-path middleware can decide whether to
-# enqueue a 4xx without a DB read per error. ~60s lag after a toggle is fine.
+# enqueue a 4xx (and at what rate) without a DB read per error. ~60s lag is fine.
 _CACHE_TTL_SEC = 60.0
-_cache_value = False
 _cache_expires = 0.0
+_cap4xx = False
+_rate_per_min = 300
+
+
+def _refresh_cache() -> None:
+    global _cap4xx, _rate_per_min, _cache_expires
+    cap = False
+    rate = int(settings_registry.env_default(settings_registry.BY_KEY[K.ERROR_LOG_SCAN_CAPTURE_PER_MIN]))
+    db = SessionLocal()
+    try:
+        if settings_svc.get_bool(db, K.ERROR_LOG_CAPTURE_4XX, default=False):
+            cap = bool(parse_4xx_codes(settings_svc.get(db, K.ERROR_LOG_4XX_CODES)))
+        rate = int(settings_registry.effective(db, K.ERROR_LOG_SCAN_CAPTURE_PER_MIN))
+    except Exception:
+        logger.warning("error_log: capture cache refresh failed", exc_info=True)
+        cap = False
+    finally:
+        db.close()
+    _cap4xx, _rate_per_min = cap, rate
+    _cache_expires = time.monotonic() + _CACHE_TTL_SEC
+
+
+def _ensure_fresh() -> None:
+    if time.monotonic() >= _cache_expires:
+        _refresh_cache()
 
 
 def capture_4xx_enabled_cached() -> bool:
     """Cheap, cached: should the middleware enqueue 4xx at all? True only when
     capture is on AND the allowlist is non-empty. Fail-closed."""
-    global _cache_value, _cache_expires
-    now = time.monotonic()
-    if now < _cache_expires:
-        return _cache_value
-    value = False
-    db = SessionLocal()
-    try:
-        if settings_svc.get_bool(db, K.ERROR_LOG_CAPTURE_4XX, default=False):
-            value = bool(parse_4xx_codes(settings_svc.get(db, K.ERROR_LOG_4XX_CODES)))
-    except Exception:
-        logger.warning("error_log: capture_4xx cache refresh failed", exc_info=True)
-        value = False
-    finally:
-        db.close()
-    _cache_value = value
-    _cache_expires = now + _CACHE_TTL_SEC
-    return value
+    _ensure_fresh()
+    return _cap4xx
+
+
+def capture_rate_per_min_cached() -> int:
+    """Cached admin-tunable ceiling on 4xx events captured per minute (the
+    middleware's global front-guard limit). Raise on the Advanced page for fuller
+    scan visibility."""
+    _ensure_fresh()
+    return _rate_per_min
 
 
 def _reset_cache() -> None:
-    """Test hook: drop the cached 4xx-capture flag."""
+    """Test hook: drop the cached capture flag/rate."""
     global _cache_expires
     _cache_expires = 0.0
 

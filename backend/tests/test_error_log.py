@@ -179,6 +179,15 @@ def test_capture_4xx_cached_reflects_setting(db):
     assert error_log.capture_4xx_enabled_cached() is False
 
 
+def test_capture_rate_per_min_cached_reflects_setting(db):
+    error_log._reset_cache()
+    assert error_log.capture_rate_per_min_cached() == 300  # env default
+    settings_svc.set_value(db, key=K.ERROR_LOG_SCAN_CAPTURE_PER_MIN, value="900", actor=None)
+    db.commit()
+    error_log._reset_cache()
+    assert error_log.capture_rate_per_min_cached() == 900
+
+
 # --- retention -------------------------------------------------------------
 
 

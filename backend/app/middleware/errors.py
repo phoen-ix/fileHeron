@@ -79,7 +79,9 @@ def _maybe_enqueue_error_event(
         if status_code >= 500:
             bucket, limit = "err_alert_enqueue", 30
         elif 400 <= status_code < 500 and error_log.capture_4xx_enabled_cached():
-            bucket, limit = "err_alert_enqueue_4xx", 10
+            # Admin-tunable ceiling (Advanced) so scan capture isn't stuck at a hard
+            # default; cached, so no per-error DB read. nginx limit_req sheds the rest.
+            bucket, limit = "err_alert_enqueue_4xx", error_log.capture_rate_per_min_cached()
         else:
             return
         if not rate_limit.check_ip_allowed(bucket, "global", limit=limit, window_sec=60):

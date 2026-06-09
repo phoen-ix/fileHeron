@@ -272,6 +272,10 @@ class Settings(BaseSettings):
     # Error LOG retention (the error_log table + admin viewer). 0 disables the
     # daily prune. Logging itself is on by default for 5xx (error_log.enabled).
     ERROR_LOG_RETENTION_DAYS: int = 90
+    # Max 4xx error events captured into the log per minute (global front-guard in
+    # middleware/errors.py, mirrored to the edge nginx limit_req). Raise for fuller
+    # scan visibility; it bounds the worst-case log-write rate during a probe storm.
+    ERROR_LOG_SCAN_CAPTURE_PER_MIN: int = 300
 
     @property
     def database_url(self) -> str:

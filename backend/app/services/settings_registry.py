@@ -90,6 +90,7 @@ TUNABLES: list[Tunable] = [
     # --- Error alerting (email admins on server errors) ---
     Tunable(K.ERROR_ALERT_COOLDOWN_MINUTES, "ERROR_ALERT_COOLDOWN_MINUTES", "int", "error_alert", 1, 1440),
     Tunable(K.ERROR_ALERT_MAX_PER_HOUR, "ERROR_ALERT_MAX_PER_HOUR", "int", "error_alert", 1, 1000),
+    Tunable(K.ERROR_LOG_SCAN_CAPTURE_PER_MIN, "ERROR_LOG_SCAN_CAPTURE_PER_MIN", "int", "error_alert", 10, 12000),
 ]
 
 BY_KEY: dict[str, Tunable] = {t.key: t for t in TUNABLES}

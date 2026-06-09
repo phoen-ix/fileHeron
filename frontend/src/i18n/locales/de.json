@@ -496,7 +496,8 @@
       "branding": "Branding",
       "storage": "Speicher & wenig Platz",
       "anomaly": "Anomalie-Erkennung",
-      "updates": "Updates"
+      "updates": "Updates",
+      "error_alert": "Fehler & Alarme"
     },
     "keys": {
       "auth": {
@@ -555,6 +556,14 @@
         "mass_download_threshold": "Schwelle Massen-Download-Alarm (Dateien / Stunde)",
         "multi_network_threshold": "Schwelle Mehr-Netzwerk-Alarm (verschiedene Netzwerke)",
         "login_failure_threshold": "Schwelle Anmelde-Fehlversuch-Alarm (Fehler / Stunde)"
+      },
+      "error_alert": {
+        "cooldown_minutes": "Fehler-Alarm-Abklingzeit (Minuten)",
+        "max_per_hour": "Max. Fehler-Alarm-E-Mails pro Stunde"
+      },
+      "error_log": {
+        "retention_days": "Fehlerprotokoll (Tage, 0 = unbegrenzt)",
+        "scan_capture_per_min": "Max. 4xx-Fehler pro Minute protokollieren (höher = mehr Scan-Erfassung)"
       }
     },
     "help": {

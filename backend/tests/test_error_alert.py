@@ -292,6 +292,7 @@ def test_middleware_skips_never_capture_codes(monkeypatch):
     calls = []
     monkeypatch.setattr(job_queue, "enqueue", lambda name, **kw: calls.append((name, kw)))
     monkeypatch.setattr(error_log, "capture_4xx_enabled_cached", lambda: True)
+    monkeypatch.setattr(error_log, "capture_rate_per_min_cached", lambda: 100)
 
     # JOB_NOT_FOUND = the self-update UI polling its own vanished job; never logged.
     errors._maybe_enqueue_error_event(
@@ -312,6 +313,7 @@ def test_middleware_enqueues_4xx_when_capture_on(monkeypatch):
     calls = []
     monkeypatch.setattr(job_queue, "enqueue", lambda name, **kw: calls.append((name, kw)))
     monkeypatch.setattr(error_log, "capture_4xx_enabled_cached", lambda: True)
+    monkeypatch.setattr(error_log, "capture_rate_per_min_cached", lambda: 100)
 
     errors._maybe_enqueue_error_event(
         _fake_request(), status_code=429, code="RATE_LIMITED", exc=Exception("slow down")

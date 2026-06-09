@@ -496,7 +496,8 @@
       "branding": "Branding",
       "storage": "Storage & low-disk",
       "anomaly": "Anomaly detection",
-      "updates": "Updates"
+      "updates": "Updates",
+      "error_alert": "Errors & alerts"
     },
     "keys": {
       "auth": {
@@ -555,6 +556,14 @@
         "mass_download_threshold": "Mass-download alert threshold (files / hour)",
         "multi_network_threshold": "Multi-network alert threshold (distinct networks)",
         "login_failure_threshold": "Login-failure alert threshold (failures / hour)"
+      },
+      "error_alert": {
+        "cooldown_minutes": "Error-alert cooldown (minutes)",
+        "max_per_hour": "Max error-alert emails per hour"
+      },
+      "error_log": {
+        "retention_days": "Error log (days, 0 = keep forever)",
+        "scan_capture_per_min": "Max 4xx errors logged per minute (raise for fuller scan capture)"
       }
     },
     "help": {

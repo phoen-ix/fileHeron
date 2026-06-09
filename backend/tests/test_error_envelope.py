@@ -68,3 +68,40 @@ async def test_request_id_present_in_app_error(client):
     r = await client.post("/api/auth/refresh")
     assert r.status_code == 401
     assert "request_id" in r.json() or "X-Request-Id" in r.headers
+
+
+@pytest.mark.asyncio
+async def test_unknown_route_uses_envelope(client):
+    """A route-not-found 404 is framework-raised (not an AppError); it must still
+    conform to the envelope and carry a friendly code."""
+    r = await client.get("/api/this-route-does-not-exist")
+    assert r.status_code == 404
+    assert _is_envelope(r.json())
+    assert r.json()["code"] == "NOT_FOUND"
+
+
+@pytest.mark.asyncio
+async def test_route_404_captured_when_allowlisted(client, db, monkeypatch):
+    """A framework 404 reaches the error-capture path once 4xx capture + the
+    allowlist opt it in (previously it bypassed the handlers entirely)."""
+    from app.services import error_log, job_queue
+    from app.services import settings as ssvc
+
+    k = ssvc.Keys
+    ssvc.set_value(db, key=k.ERROR_LOG_CAPTURE_4XX, value="true", actor=None)
+    ssvc.set_value(db, key=k.ERROR_LOG_4XX_CODES, value="404", actor=None)
+    db.commit()
+    error_log._reset_cache()
+
+    calls: list = []
+    monkeypatch.setattr(job_queue, "enqueue", lambda name, **kw: calls.append((name, kw)))
+
+    r = await client.get("/api/definitely-not-a-real-endpoint")
+    assert r.status_code == 404
+    assert any(
+        name == "notify_admin_error"
+        and kw["event"]["status_code"] == 404
+        and kw["event"]["code"] == "NOT_FOUND"
+        for name, kw in calls
+    )
+    error_log._reset_cache()

@@ -14,8 +14,25 @@ from typing import Any
 
 from fastapi import Request
 from fastapi.responses import JSONResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 logger = logging.getLogger("fileheron.errors")
+
+# Friendly codes for framework-raised HTTPExceptions (route-not-found 404, 405,
+# …). App code uses AppError with its own codes; this only covers the exceptions
+# Starlette/FastAPI raise themselves.
+_HTTP_STATUS_CODES = {
+    400: "BAD_REQUEST",
+    401: "AUTH_REQUIRED",
+    403: "FORBIDDEN",
+    404: "NOT_FOUND",
+    405: "METHOD_NOT_ALLOWED",
+    406: "NOT_ACCEPTABLE",
+    409: "CONFLICT",
+    413: "PAYLOAD_TOO_LARGE",
+    415: "UNSUPPORTED_MEDIA_TYPE",
+    429: "RATE_LIMITED",
+}
 
 
 class AppError(Exception):
@@ -89,6 +106,30 @@ async def app_error_handler(request: Request, exc: Exception) -> JSONResponse:
         request, status_code=exc.status_code, code=exc.code, exc=exc
     )
     return JSONResponse(status_code=exc.status_code, content=body)
+
+
+async def http_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    """Framework-raised HTTPException (route-not-found 404, method-not-allowed 405,
+    a library raising HTTPException(503), …). App code raises AppError; this
+    normalises Starlette/FastAPI HTTPExceptions to the same envelope AND funnels
+    them through the error-capture path - so an allowlisted route-level 404 (which
+    never reaches app_error_handler) gets logged like any other error. Pydantic
+    422s use a different exception type and keep FastAPI's default {"detail":[…]}."""
+    assert isinstance(exc, StarletteHTTPException)
+    status_code = exc.status_code
+    code = _HTTP_STATUS_CODES.get(status_code, f"HTTP_{status_code}")
+    _maybe_enqueue_error_event(request, status_code=status_code, code=code, exc=exc)
+    detail = exc.detail
+    body: dict[str, Any] = {
+        "error": detail if isinstance(detail, str) and detail else "HTTP error",
+        "code": code,
+    }
+    request_id = getattr(request.state, "request_id", None)
+    if request_id:
+        body["request_id"] = request_id
+    return JSONResponse(
+        status_code=status_code, content=body, headers=getattr(exc, "headers", None)
+    )
 
 
 async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:

@@ -12,10 +12,16 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from .config import settings
 from .database import SessionLocal
-from .middleware.errors import AppError, app_error_handler, unhandled_exception_handler
+from .middleware.errors import (
+    AppError,
+    app_error_handler,
+    http_exception_handler,
+    unhandled_exception_handler,
+)
 from .middleware.gzip import SelectiveGZipMiddleware
 from .middleware.request_id import RequestIdMiddleware
 from .middleware.security_headers import SecurityHeadersMiddleware
@@ -78,8 +84,10 @@ app.add_middleware(SelectiveGZipMiddleware, minimum_size=1024)
 app.add_middleware(RequestIdMiddleware)
 app.add_middleware(SecurityHeadersMiddleware, is_production=settings.is_production)
 
-# Exception handlers - AppError envelopes; everything else → 500 with envelope.
+# Exception handlers - AppError + framework HTTPException → envelope (the latter
+# also reaches the error-capture path); everything else → 500 with envelope.
 app.add_exception_handler(AppError, app_error_handler)
+app.add_exception_handler(StarletteHTTPException, http_exception_handler)
 app.add_exception_handler(Exception, unhandled_exception_handler)
 
 # Routers

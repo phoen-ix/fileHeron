@@ -34,6 +34,13 @@ _HTTP_STATUS_CODES = {
     429: "RATE_LIMITED",
 }
 
+# Known-benign error codes that are never worth capturing in the error log.
+# JOB_NOT_FOUND: the self-update UI polls GET /api/admin/system/update-jobs/{id}
+# for progress; the update restarts the backend (swapping its own image), which
+# wipes the in-flight job record, so the next poll 404s. Self-inflicted, expected
+# on every update - not an error and not an attack.
+_NEVER_CAPTURE_CODES = frozenset({"JOB_NOT_FOUND"})
+
 
 class AppError(Exception):
     """Raise this from any handler/service to produce an envelope response."""
@@ -63,6 +70,8 @@ def _maybe_enqueue_error_event(
     cached flag), and behind a tighter front guard so high-volume 4xx noise can't
     starve 5xx or flood the queue; the worker re-checks the allowlist
     authoritatively. The real cooldown/cap (for alerts) live in the worker."""
+    if code in _NEVER_CAPTURE_CODES:
+        return
     try:
         from ..services import error_log, job_queue, rate_limit
         from ..utils.timeutil import utc_now

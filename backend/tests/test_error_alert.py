@@ -282,6 +282,26 @@ def test_middleware_skips_4xx_by_default_enqueues_5xx(monkeypatch):
     assert kw["event"]["path"] == "/api/files/9"
 
 
+def test_middleware_skips_never_capture_codes(monkeypatch):
+    from app.middleware import errors
+    from app.services import error_log, job_queue
+
+    calls = []
+    monkeypatch.setattr(job_queue, "enqueue", lambda name, **kw: calls.append((name, kw)))
+    monkeypatch.setattr(error_log, "capture_4xx_enabled_cached", lambda: True)
+
+    # JOB_NOT_FOUND = the self-update UI polling its own vanished job; never logged.
+    errors._maybe_enqueue_error_event(
+        _fake_request(), status_code=404, code="JOB_NOT_FOUND", exc=Exception("gone")
+    )
+    assert calls == []
+    # A normal 404 still captures.
+    errors._maybe_enqueue_error_event(
+        _fake_request(), status_code=404, code="NOT_FOUND", exc=Exception("nope")
+    )
+    assert len(calls) == 1
+
+
 def test_middleware_enqueues_4xx_when_capture_on(monkeypatch):
     from app.middleware import errors
     from app.services import error_log, job_queue

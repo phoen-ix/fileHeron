@@ -148,7 +148,6 @@ onMounted(load)
                     <option value="daily">{{ t('admin_scheduled_tasks.kind_daily') }}</option>
                   </select>
                   <span v-if="it.kind === 'interval'" class="sched-input">
-                    {{ t('admin_scheduled_tasks.every') }}
                     <input
                       v-model.number="it.interval_minutes"
                       type="number"
@@ -159,7 +158,6 @@ onMounted(load)
                     {{ t('admin_scheduled_tasks.minutes') }}
                   </span>
                   <span v-else class="sched-input">
-                    {{ t('admin_scheduled_tasks.at') }}
                     <input v-model="it.daily_time" type="time" class="fh-field-input time" />
                   </span>
                 </td>
@@ -192,12 +190,16 @@ onMounted(load)
 <style scoped>
 .intro {
   margin: var(--fh-space-2) 0 var(--fh-space-4);
+  max-width: 70ch;
 }
 .group + .group {
   margin-top: var(--fh-space-5);
 }
 .table-wrap {
   overflow-x: auto;
+  /* Constrain + left-align the table so its columns sit together instead of
+     stretching across the full-width page. Right-side whitespace is intended. */
+  max-width: 68rem;
 }
 .cron-table {
   width: 100%;

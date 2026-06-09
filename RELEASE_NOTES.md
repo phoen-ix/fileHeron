@@ -1,39 +1,38 @@
-# file:Heron v1.55.5
+# file:Heron v1.55.6
 
-**Full-width layout.** Earlier v1.55.x steps widened the layout but still capped it at
-1440px and centered it, so wide monitors kept showing empty bands on both sides. The
-shared page width is now **100%** - the content and the top header both fill the whole
-window, with only the normal page gutter padding the edges.
+**Stop the Scheduled-tasks table from stretching.** Going full-width (v1.55.5) reclaimed
+the wasted side gutters, but the cron table has only a handful of columns, so stretched
+across a full-width page they floated apart with big gaps and the Save / Run-now buttons
+got flung to the far edge. The table is now constrained and left-aligned so its columns
+sit together and read cleanly.
 
 ## What's new
 
-- **Use the entire window width.** The shared `--fh-max-width-page` cap goes to **100%**
-  (was a centered 1440px max). Every operator page and the top header now span the full
-  viewport instead of sitting in a centered column - no more wasted left/right gutters
-  on 1080p, 1440p, or ultrawide screens.
-- **Header included.** The header shares the same width token, so it stays edge-aligned
-  with the content at full width.
+- **Constrained, left-aligned Scheduled-tasks table.** The page and header stay full
+  width; the table itself is capped (~1090px) and hugs the left, so the columns are close
+  together with no stretched gaps and Save / Run-now sit right after the schedule columns
+  instead of at the screen edge.
+- **Cleaner schedule labels.** Each row used to read "Every **every** 60 min" and "Daily
+  at **at** 02:13" - the connector word was doubled. Now it reads simply "Every 60 min"
+  and "Daily at 02:13" (EN + DE).
 
 ## Notes
 
-- Pure layout/CSS change - no behavior, data, settings, or API changes.
-- Long-form reading pages (e.g. legal pages) keep their separate, narrower
-  reading-width cap on purpose, so body text stays legible and doesn't stretch.
-- (v1.55.4 was a mis-tagged no-op build identical to v1.55.3; this is the release that
-  actually ships full width - update straight to v1.55.5.)
+- Pure layout/CSS + label change - no behavior, data, settings, or API changes. The
+  full-width header and the rest of the app are unchanged.
 
 ## Upgrade notes
 
 - Rolls forward via **Update** in `/admin/system`. Frontend image (backend + worker are
   rebuilt at the same version, code unchanged), **no migration, no host step**. Rolling
-  back to v1.55.3 is safe.
+  back to v1.55.5 is safe.
 
 ## Container images
 
-- `ghcr.io/phoen-ix/fileheron-backend:v1.55.5`
-- `ghcr.io/phoen-ix/fileheron-worker:v1.55.5`
-- `ghcr.io/phoen-ix/fileheron-frontend:v1.55.5`
-- `ghcr.io/phoen-ix/fileheron-updater-shim:v1.55.5`
-- `ghcr.io/phoen-ix/fileheron-updater-executor:v1.55.5`
+- `ghcr.io/phoen-ix/fileheron-backend:v1.55.6`
+- `ghcr.io/phoen-ix/fileheron-worker:v1.55.6`
+- `ghcr.io/phoen-ix/fileheron-frontend:v1.55.6`
+- `ghcr.io/phoen-ix/fileheron-updater-shim:v1.55.6`
+- `ghcr.io/phoen-ix/fileheron-updater-executor:v1.55.6`
 
 Click **Update** in `/admin/system` to roll forward.

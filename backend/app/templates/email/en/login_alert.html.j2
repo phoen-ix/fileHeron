@@ -13,7 +13,8 @@
     <tr><td style="padding:4px 0;color:#6b7280;">when</td><td style="padding:4px 0;color:#1a1d24;">{{ at|dt_locale(locale) }}</td></tr>
     <tr><td style="padding:4px 0;color:#6b7280;">method</td><td style="padding:4px 0;color:#1a1d24;">{{ via|default("password") }}</td></tr>
     <tr><td style="padding:4px 0;color:#6b7280;">browser</td><td style="padding:4px 0;color:#1a1d24;">{{ ua_summary|default("unknown") }}</td></tr>
-    <tr><td style="padding:4px 0;color:#6b7280;">region</td><td style="padding:4px 0;color:#1a1d24;">{{ ip_hint|default("unknown") }}</td></tr>
+    <tr><td style="padding:4px 0;color:#6b7280;">IP address</td><td style="padding:4px 0;color:#1a1d24;">{{ ip_address|default("unknown") }}</td></tr>
+    {% if user_agent %}<tr><td style="padding:4px 0;color:#6b7280;vertical-align:top;">user agent</td><td style="padding:4px 0;color:#1a1d24;word-break:break-all;">{{ user_agent }}</td></tr>{% endif %}
   </table>
   <p style="margin:0 0 16px 0;color:#1a1d24;">
     If this was you, no action is needed. If not, change your password and review active sessions.

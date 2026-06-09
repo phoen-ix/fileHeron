@@ -13,13 +13,13 @@ Chrome auto-update doesn't fire an alert.
 from __future__ import annotations
 
 import logging
+import re
 
 from fastapi import Request
 from sqlalchemy.orm import Session
 
 from ..models.notification import NotificationCategory
 from ..models.user import User
-from ..utils.geohash import ip_geohash5
 from ..utils.timeutil import utc_now
 from . import notification as notif_svc
 
@@ -49,11 +49,13 @@ def fire_new_device_alert(
             payload={
                 "display_name": user.display_name,
                 "via": via,
-                "ip_hint": f"~{ip_geohash5(ip)}" if ip else "unknown",
-                # We deliberately don't ship the full UA string - that's
-                # enough device-fingerprinting that emailing it back
-                # adds disclosure risk if the inbox is later breached.
+                # Real client IP (request.client.host is the true client IP -
+                # uvicorn runs --proxy-headers and Traefik overwrites XFF). The
+                # /24 geohash still backs new-device dedup in auth.py; only the
+                # alert surfaces the raw IP.
+                "ip_address": ip or "unknown",
                 "ua_summary": _summarize_ua(ua),
+                "user_agent": ua,  # raw header; template gates on truthiness
                 "at": utc_now(),
                 "account_url": account_url,
             },
@@ -64,9 +66,22 @@ def fire_new_device_alert(
         logger.exception("login_alert dispatch failed for user_id=%d", user.id)
 
 
+# Browser major-version extractors, keyed by the name picked below. Safari
+# reports its own version as `Version/NN` (`Safari/605` is the engine), and
+# Edge's `Edg.../NN` is matched before the Chrome token it also carries.
+_UA_VERSION_RES = {
+    "Firefox": re.compile(r"Firefox/(\d+)"),
+    "Edge": re.compile(r"Edg[A-Za-z]*/(\d+)"),
+    "Chrome": re.compile(r"Chrome/(\d+)"),
+    "Safari": re.compile(r"Version/(\d+)"),
+}
+
+
 def _summarize_ua(ua: str) -> str:
     """Reduce a User-Agent header to a short, audit-friendly label.
-    Examples: "Chrome on macOS", "Firefox on Windows", "unknown browser"."""
+    Includes the browser MAJOR version when detectable; the OS *version* is
+    intentionally omitted (browsers freeze/spoof it).
+    Examples: "Firefox 128 on Windows", "Chrome on macOS", "unknown browser"."""
     if not ua:
         return "unknown browser"
     lower = ua.lower()
@@ -92,4 +107,7 @@ def _summarize_ua(ua: str) -> str:
         os_name = "Linux"
     else:
         os_name = "unknown OS"
-    return f"{browser} on {os_name}"
+    pattern = _UA_VERSION_RES.get(browser)
+    m = pattern.search(ua) if pattern else None
+    label = f"{browser} {m.group(1)}" if m else browser
+    return f"{label} on {os_name}"

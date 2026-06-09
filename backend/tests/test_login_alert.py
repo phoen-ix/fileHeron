@@ -24,12 +24,20 @@ def test_ua_summary_browsers():
     ua_chrome_mac = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/138.0.0.0"
     ua_firefox_win = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Gecko/20100101 Firefox/120.0"
     ua_safari_ios = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0) AppleWebKit/605 Version/17.0 Mobile Safari/604.1"
-    assert "Chrome" in _summarize_ua(ua_chrome_mac)
-    assert "macOS" in _summarize_ua(ua_chrome_mac)
-    assert "Firefox" in _summarize_ua(ua_firefox_win)
-    assert "Windows" in _summarize_ua(ua_firefox_win)
-    assert "Safari" in _summarize_ua(ua_safari_ios)
-    assert "iOS" in _summarize_ua(ua_safari_ios)
+    # Edge carries both Chrome/ and Safari/ tokens; the Edg/ major must win.
+    ua_edge_win = (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "Chrome/138.0.0.0 Safari/537.36 Edg/138.0.2210.91"
+    )
+    assert _summarize_ua(ua_chrome_mac) == "Chrome 138 on macOS"
+    assert _summarize_ua(ua_firefox_win) == "Firefox 120 on Windows"
+    assert _summarize_ua(ua_safari_ios) == "Safari 17 on iOS"
+    assert _summarize_ua(ua_edge_win) == "Edge 138 on Windows"
+
+
+def test_ua_summary_falls_back_without_version():
+    # Browser token present but no parseable version -> bare name, no crash.
+    assert _summarize_ua("Mozilla/5.0 (Windows NT 10.0) Gecko Firefox") == "Firefox on Windows"
 
 
 def test_ua_summary_handles_empty():
@@ -61,3 +69,6 @@ def test_fire_new_device_dispatches_login_alert(make_user, db, monkeypatch):
     assert payload["display_name"] == user.display_name
     assert payload["via"] == "password"
     assert "Chrome" in payload["ua_summary"]
+    assert payload["ip_address"] == "203.0.113.42"
+    assert payload["user_agent"] == "Chrome/138.0.0.0"
+    assert "ip_hint" not in payload

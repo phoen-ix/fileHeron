@@ -1,38 +1,42 @@
-# file:Heron v1.55.1
+# file:Heron v1.55.2
 
-**Capture more of a scan, and make the ceiling tunable.** The error log front-guard
-that bounds how many 4xx events are recorded per minute was a hard-coded 10/min, so
-during a probe storm the log only sampled. The default is now **300/min** (matching
-the per-IP edge rate limit) and it's an **admin knob** - so you decide the
-scan-visibility vs database-volume tradeoff without a release.
+**Use the whole screen.** The app was hard-capped at 1152px wide and centered, so on
+a common 1920x1080 (or 1440p) monitor a big band of space was wasted in each side
+gutter while data-dense admin pages got squeezed. The layout now widens to use that
+space, and the Scheduled-tasks table gets a styling pass so the reclaimed room is put
+to work instead of left as gaps.
 
 ## What's new
 
-- **Higher default 4xx capture rate.** 10/min → **300/min** globally - a scan now
-  shows up far more completely in the Error log out of the box.
-- **New tunable** on **Settings → Advanced → Errors & alerts**: "Max 4xx errors
-  logged per minute" (10-12000). The matching edge nginx throttle still sheds extreme
-  per-IP floods first; this bounds the worst-case log-write rate.
-- **Tidier Advanced page**: the error-alert cooldown / max-per-hour and error-log
-  retention knobs now have proper labels (they previously showed raw setting keys).
+- **Wider, fluid layout, app-wide.** The shared page width goes from a fixed 1152px to
+  `min(94vw, 90rem)` - it scales with the screen up to ~1440px and stays edge-aligned
+  with the top header on every page (dashboard, shares, files, and the whole admin
+  area). On a 1920px screen the usable content area grows roughly +35%.
+- **Scheduled tasks, de-crammed.** The cron table (Admin → Scheduled tasks) was
+  effectively unstyled, so its rows wrapped and ran together. It now has proper column
+  headers, cell padding and hairline rules, the schedule/status/next cells no longer
+  wrap, and the task column absorbs the extra width.
 
 ## Notes
 
-- This only governs *logging* throughput; the email cooldown + hourly cap are
-  unchanged. 5xx capture stays at its own bound. Raising it past a few thousand/min
-  on a busy instance will grow the `error_log` table faster - retention still prunes it.
+- Pure layout/CSS change - no behavior, data, settings, or API changes.
+- Long-form reading pages (e.g. the legal pages) keep their narrower, more legible
+  width on purpose; only the operator/data surfaces widen.
+- Below ~720px the admin sidebar still collapses and wide tables scroll within their
+  own box rather than breaking the page.
 
 ## Upgrade notes
 
-- Rolls forward via **Update** in `/admin/system`. Backend + frontend, **no
-  migration, no host step**. Rolling back to v1.55.0 is safe.
+- Rolls forward via **Update** in `/admin/system`. Frontend image (backend + worker are
+  rebuilt at the same version, code unchanged), **no migration, no host step**. Rolling
+  back to v1.55.1 is safe.
 
 ## Container images
 
-- `ghcr.io/phoen-ix/fileheron-backend:v1.55.1`
-- `ghcr.io/phoen-ix/fileheron-worker:v1.55.1`
-- `ghcr.io/phoen-ix/fileheron-frontend:v1.55.1`
-- `ghcr.io/phoen-ix/fileheron-updater-shim:v1.55.1`
-- `ghcr.io/phoen-ix/fileheron-updater-executor:v1.55.1`
+- `ghcr.io/phoen-ix/fileheron-backend:v1.55.2`
+- `ghcr.io/phoen-ix/fileheron-worker:v1.55.2`
+- `ghcr.io/phoen-ix/fileheron-frontend:v1.55.2`
+- `ghcr.io/phoen-ix/fileheron-updater-shim:v1.55.2`
+- `ghcr.io/phoen-ix/fileheron-updater-executor:v1.55.2`
 
 Click **Update** in `/admin/system` to roll forward.

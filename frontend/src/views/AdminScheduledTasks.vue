@@ -118,70 +118,72 @@ onMounted(load)
     <template v-else>
       <section v-for="grp in groups" :key="grp.key" class="group">
         <h2 class="form-h2">{{ t(`admin_scheduled_tasks.group.${grp.key}`) }}</h2>
-        <table class="fh-table cron-table">
-          <thead>
-            <tr>
-              <th>{{ t('admin_scheduled_tasks.col_task') }}</th>
-              <th>{{ t('admin_scheduled_tasks.col_schedule') }}</th>
-              <th>{{ t('admin_scheduled_tasks.col_status') }}</th>
-              <th>{{ t('admin_scheduled_tasks.col_next') }}</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="it in grp.items" :key="it.name">
-              <td class="task-cell">
-                <label class="enable">
-                  <input v-model="it.enabled" type="checkbox" />
-                  <code>{{ it.name }}</code>
-                </label>
-                <span class="desc">{{ it.description }}</span>
-                <label v-if="errorAlertsEnabled" class="alert-toggle">
-                  <input v-model="it.alert_on_failure" type="checkbox" />
-                  <span>{{ t('admin_scheduled_tasks.alert_on_failure') }}</span>
-                </label>
-              </td>
-              <td class="sched-cell">
-                <select v-model="it.kind" class="fh-field-input kind">
-                  <option value="interval">{{ t('admin_scheduled_tasks.kind_interval') }}</option>
-                  <option value="daily">{{ t('admin_scheduled_tasks.kind_daily') }}</option>
-                </select>
-                <span v-if="it.kind === 'interval'" class="sched-input">
-                  {{ t('admin_scheduled_tasks.every') }}
-                  <input
-                    v-model.number="it.interval_minutes"
-                    type="number"
-                    class="fh-field-input num"
-                    :min="it.min_interval_minutes"
-                    max="10080"
-                  />
-                  {{ t('admin_scheduled_tasks.minutes') }}
-                </span>
-                <span v-else class="sched-input">
-                  {{ t('admin_scheduled_tasks.at') }}
-                  <input v-model="it.daily_time" type="time" class="fh-field-input time" />
-                </span>
-              </td>
-              <td>
-                <span v-if="it.last_status" class="fh-pill" :data-tone="statusTone(it)">{{ it.last_status }}</span>
-                <span v-else class="muted">-</span>
-                <span class="counts fh-mono">
-                  <span class="ok">{{ it.last_24h.success }}</span>/<span class="bad">{{ it.last_24h.failure }}</span>
-                </span>
-                <span v-if="it.last_run_at" class="last fh-mono">{{ formatDate(it.last_run_at) }}</span>
-              </td>
-              <td class="fh-mono next">{{ it.enabled ? formatDate(it.next_run_at) : t('admin_scheduled_tasks.disabled') }}</td>
-              <td class="actions">
-                <button type="button" class="fh-btn" :disabled="savingName === it.name" @click="onSave(it)">
-                  {{ t('common.save') }}
-                </button>
-                <button type="button" class="fh-btn-text" :disabled="runningName === it.name" @click="onRun(it)">
-                  {{ t('admin_scheduled_tasks.run_now') }}
-                </button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+        <div class="table-wrap">
+          <table class="cron-table">
+            <thead>
+              <tr>
+                <th>{{ t('admin_scheduled_tasks.col_task') }}</th>
+                <th>{{ t('admin_scheduled_tasks.col_schedule') }}</th>
+                <th>{{ t('admin_scheduled_tasks.col_status') }}</th>
+                <th>{{ t('admin_scheduled_tasks.col_next') }}</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="it in grp.items" :key="it.name">
+                <td class="task-cell">
+                  <label class="enable">
+                    <input v-model="it.enabled" type="checkbox" />
+                    <code>{{ it.name }}</code>
+                  </label>
+                  <span class="desc">{{ it.description }}</span>
+                  <label v-if="errorAlertsEnabled" class="alert-toggle">
+                    <input v-model="it.alert_on_failure" type="checkbox" />
+                    <span>{{ t('admin_scheduled_tasks.alert_on_failure') }}</span>
+                  </label>
+                </td>
+                <td class="sched-cell">
+                  <select v-model="it.kind" class="fh-field-input kind">
+                    <option value="interval">{{ t('admin_scheduled_tasks.kind_interval') }}</option>
+                    <option value="daily">{{ t('admin_scheduled_tasks.kind_daily') }}</option>
+                  </select>
+                  <span v-if="it.kind === 'interval'" class="sched-input">
+                    {{ t('admin_scheduled_tasks.every') }}
+                    <input
+                      v-model.number="it.interval_minutes"
+                      type="number"
+                      class="fh-field-input num"
+                      :min="it.min_interval_minutes"
+                      max="10080"
+                    />
+                    {{ t('admin_scheduled_tasks.minutes') }}
+                  </span>
+                  <span v-else class="sched-input">
+                    {{ t('admin_scheduled_tasks.at') }}
+                    <input v-model="it.daily_time" type="time" class="fh-field-input time" />
+                  </span>
+                </td>
+                <td class="status-cell">
+                  <span v-if="it.last_status" class="fh-pill" :data-tone="statusTone(it)">{{ it.last_status }}</span>
+                  <span v-else class="muted">-</span>
+                  <span class="counts fh-mono">
+                    <span class="ok">{{ it.last_24h.success }}</span>/<span class="bad">{{ it.last_24h.failure }}</span>
+                  </span>
+                  <span v-if="it.last_run_at" class="last fh-mono">{{ formatDate(it.last_run_at) }}</span>
+                </td>
+                <td class="fh-mono next">{{ it.enabled ? formatDate(it.next_run_at) : t('admin_scheduled_tasks.disabled') }}</td>
+                <td class="actions">
+                  <button type="button" class="fh-btn" :disabled="savingName === it.name" @click="onSave(it)">
+                    {{ t('common.save') }}
+                  </button>
+                  <button type="button" class="fh-btn-text" :disabled="runningName === it.name" @click="onRun(it)">
+                    {{ t('admin_scheduled_tasks.run_now') }}
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </section>
     </template>
   </div>
@@ -194,7 +196,34 @@ onMounted(load)
 .group + .group {
   margin-top: var(--fh-space-5);
 }
+.table-wrap {
+  overflow-x: auto;
+}
 .cron-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fh-text-body-sm);
+}
+.cron-table th {
+  text-align: left;
+  font-family: var(--fh-font-mono);
+  font-size: var(--fh-text-mono-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--fh-subtle);
+  font-weight: 500;
+  padding: var(--fh-space-2) var(--fh-space-3) var(--fh-space-2) 0;
+  border-bottom: var(--fh-border);
+  white-space: nowrap;
+}
+.cron-table td {
+  padding: var(--fh-space-3) var(--fh-space-3) var(--fh-space-3) 0;
+  border-bottom: var(--fh-border);
+  vertical-align: top;
+}
+/* Let the Task column absorb the reclaimed width; control columns stay
+   content-sized so they don't sprawl. */
+.cron-table .task-cell {
   width: 100%;
 }
 .task-cell .enable {
@@ -221,7 +250,7 @@ onMounted(load)
   display: flex;
   align-items: center;
   gap: var(--fh-space-2);
-  flex-wrap: wrap;
+  white-space: nowrap;
 }
 .fh-field-input.kind {
   width: auto;
@@ -231,6 +260,9 @@ onMounted(load)
 }
 .fh-field-input.time {
   width: 7rem;
+}
+.status-cell {
+  white-space: nowrap;
 }
 .counts {
   margin-left: var(--fh-space-2);
@@ -250,8 +282,12 @@ onMounted(load)
 .last {
   display: block;
 }
+.next {
+  white-space: nowrap;
+}
 .actions {
   display: flex;
+  justify-content: flex-end;
   gap: var(--fh-space-2);
   white-space: nowrap;
 }

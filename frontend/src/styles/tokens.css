@@ -76,7 +76,7 @@
 
   /* --- layout ------------------------------------------------------------- */
   --fh-max-width-prose: 38rem; /* 608 - comfortable reading width */
-  --fh-max-width-page: 72rem; /* 1152 - operator page width */
+  --fh-max-width-page: min(94vw, 90rem); /* fluid - up to 1440px, scales to 94vw on smaller screens (reclaims wasted side gutters) */
   --fh-page-gutter: var(--fh-space-5);
   --fh-app-header-height: 4rem; /* sticky AppHeader nominal height - used for sticky-aware offsets and anchor scroll-margin */
 }

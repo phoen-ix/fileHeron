@@ -202,7 +202,8 @@ onMounted(load)
 .cron-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: var(--fh-text-body-sm);
+  font-size: var(--fh-text-body-md);
+  line-height: 1.5;
 }
 .cron-table th {
   text-align: left;
@@ -212,19 +213,22 @@ onMounted(load)
   letter-spacing: 0.08em;
   color: var(--fh-subtle);
   font-weight: 500;
-  padding: var(--fh-space-2) var(--fh-space-3) var(--fh-space-2) 0;
+  padding: var(--fh-space-2) var(--fh-space-4) var(--fh-space-2) 0;
   border-bottom: var(--fh-border);
   white-space: nowrap;
 }
 .cron-table td {
-  padding: var(--fh-space-3) var(--fh-space-3) var(--fh-space-3) 0;
+  padding: var(--fh-space-4) var(--fh-space-4) var(--fh-space-4) 0;
   border-bottom: var(--fh-border);
   vertical-align: top;
 }
-/* Let the Task column absorb the reclaimed width; control columns stay
-   content-sized so they don't sprawl. */
+.cron-table tbody tr:hover td {
+  background: var(--fh-surface-2, rgba(0, 0, 0, 0.02));
+}
+/* Give the Task column a generous-but-bounded share so the control columns
+   spread evenly across the width instead of clustering after one greedy cell. */
 .cron-table .task-cell {
-  width: 100%;
+  width: 40%;
 }
 .task-cell .enable {
   display: flex;
@@ -235,13 +239,14 @@ onMounted(load)
   display: block;
   color: var(--fh-ink-soft);
   font-size: var(--fh-text-body-sm);
-  margin-top: 0.15rem;
+  margin-top: var(--fh-space-2);
+  max-width: 48ch;
 }
 .alert-toggle {
   display: inline-flex;
   align-items: center;
   gap: var(--fh-space-1);
-  margin-top: 0.3rem;
+  margin-top: var(--fh-space-3);
   font-size: var(--fh-text-body-sm);
   color: var(--fh-ink-soft);
   cursor: pointer;
@@ -281,6 +286,7 @@ onMounted(load)
 }
 .last {
   display: block;
+  margin-top: var(--fh-space-1);
 }
 .next {
   white-space: nowrap;

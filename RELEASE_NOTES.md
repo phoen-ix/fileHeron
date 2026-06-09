@@ -1,42 +1,38 @@
-# file:Heron v1.55.2
+# file:Heron v1.55.3
 
-**Use the whole screen.** The app was hard-capped at 1152px wide and centered, so on
-a common 1920x1080 (or 1440p) monitor a big band of space was wasted in each side
-gutter while data-dense admin pages got squeezed. The layout now widens to use that
-space, and the Scheduled-tasks table gets a styling pass so the reclaimed room is put
-to work instead of left as gaps.
+**Let the rows breathe.** v1.55.2 widened the layout to use the screen, but the
+Scheduled-tasks table itself was still dense - small text, rows packed tight, and the
+task name / description / alert toggle crammed together. This pass gives that table
+real vertical breathing room.
 
 ## What's new
 
-- **Wider, fluid layout, app-wide.** The shared page width goes from a fixed 1152px to
-  `min(94vw, 90rem)` - it scales with the screen up to ~1440px and stays edge-aligned
-  with the top header on every page (dashboard, shares, files, and the whole admin
-  area). On a 1920px screen the usable content area grows roughly +35%.
-- **Scheduled tasks, de-crammed.** The cron table (Admin → Scheduled tasks) was
-  effectively unstyled, so its rows wrapped and ran together. It now has proper column
-  headers, cell padding and hairline rules, the schedule/status/next cells no longer
-  wrap, and the task column absorbs the extra width.
+- **Roomier Scheduled-tasks table** (Admin → Scheduled tasks): larger body text,
+  noticeably more padding per row, and proper spacing between the task name, its
+  description, and the "alert on failure" toggle so each row reads cleanly instead of
+  as one tight block.
+- **Better-balanced columns.** The Task column no longer hogs the row; it now takes a
+  bounded share so Schedule / Recent / Next / actions spread evenly across the width
+  instead of clustering after one big gap.
+- **Row hover highlight** for easier left-to-right reading across a row.
 
 ## Notes
 
-- Pure layout/CSS change - no behavior, data, settings, or API changes.
-- Long-form reading pages (e.g. the legal pages) keep their narrower, more legible
-  width on purpose; only the operator/data surfaces widen.
-- Below ~720px the admin sidebar still collapses and wide tables scroll within their
-  own box rather than breaking the page.
+- Pure layout/CSS change - no behavior, data, settings, or API changes. Builds on the
+  app-wide width increase from v1.55.2.
 
 ## Upgrade notes
 
 - Rolls forward via **Update** in `/admin/system`. Frontend image (backend + worker are
   rebuilt at the same version, code unchanged), **no migration, no host step**. Rolling
-  back to v1.55.1 is safe.
+  back to v1.55.2 is safe.
 
 ## Container images
 
-- `ghcr.io/phoen-ix/fileheron-backend:v1.55.2`
-- `ghcr.io/phoen-ix/fileheron-worker:v1.55.2`
-- `ghcr.io/phoen-ix/fileheron-frontend:v1.55.2`
-- `ghcr.io/phoen-ix/fileheron-updater-shim:v1.55.2`
-- `ghcr.io/phoen-ix/fileheron-updater-executor:v1.55.2`
+- `ghcr.io/phoen-ix/fileheron-backend:v1.55.3`
+- `ghcr.io/phoen-ix/fileheron-worker:v1.55.3`
+- `ghcr.io/phoen-ix/fileheron-frontend:v1.55.3`
+- `ghcr.io/phoen-ix/fileheron-updater-shim:v1.55.3`
+- `ghcr.io/phoen-ix/fileheron-updater-executor:v1.55.3`
 
 Click **Update** in `/admin/system` to roll forward.

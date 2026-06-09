@@ -120,6 +120,13 @@ onMounted(load)
         <h2 class="form-h2">{{ t(`admin_scheduled_tasks.group.${grp.key}`) }}</h2>
         <div class="table-wrap">
           <table class="cron-table">
+            <colgroup>
+              <col class="col-task" />
+              <col class="col-sched" />
+              <col class="col-recent" />
+              <col class="col-next" />
+              <col class="col-actions" />
+            </colgroup>
             <thead>
               <tr>
                 <th>{{ t('admin_scheduled_tasks.col_task') }}</th>
@@ -206,12 +213,33 @@ onMounted(load)
   overflow-x: auto;
 }
 .cron-table {
-  /* Shrink-to-content + left-aligned: columns sit together (no stretched gaps)
-     without forcing the table wider than its wrapper (no scrollbar). */
-  width: auto;
+  /* One shared, fixed column template across every group table so all sections
+     fill the full width, end at the same right edge, and line up column-for-column.
+     min-width keeps the nowrap timestamp columns from collapsing; below it the
+     .table-wrap scrolls. */
+  width: 100%;
+  min-width: 64rem;
+  table-layout: fixed;
   border-collapse: collapse;
   font-size: var(--fh-text-body-md);
   line-height: 1.5;
+}
+/* Proportions sized so the nowrap content fits at min-width (the schedule cell -
+   select + time input - is the widest, hence its larger share). */
+.col-task {
+  width: 27%;
+}
+.col-sched {
+  width: 21%;
+}
+.col-recent {
+  width: 18%;
+}
+.col-next {
+  width: 18%;
+}
+.col-actions {
+  width: 16%;
 }
 .cron-table th {
   text-align: left;
@@ -265,7 +293,7 @@ onMounted(load)
   gap: var(--fh-space-2);
 }
 .actions-row {
-  justify-content: flex-end;
+  justify-content: flex-start;
 }
 .fh-field-input.kind {
   width: auto;

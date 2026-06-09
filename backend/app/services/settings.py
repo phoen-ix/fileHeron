@@ -218,10 +218,18 @@ class Keys:
     # tasks page. See services/error_alert.py.
     ERROR_ALERT_ENABLED = "error_alert.enabled"                  # boolean master switch (default false)
     ERROR_ALERT_SOURCE_HTTP_5XX = "error_alert.source_http_5xx"  # boolean (default true)
+    ERROR_ALERT_SOURCE_HTTP_4XX = "error_alert.source_http_4xx"  # boolean (default false) - email captured 4xx too
     ERROR_ALERT_RECIPIENTS_MODE = "error_alert.recipients_mode"  # 'admins' | 'custom' (default 'admins')
     ERROR_ALERT_CUSTOM_RECIPIENTS = "error_alert.custom_recipients"  # CSV of email addresses
     ERROR_ALERT_COOLDOWN_MINUTES = "error_alert.cooldown_minutes"    # registry tunable (int)
     ERROR_ALERT_MAX_PER_HOUR = "error_alert.max_per_hour"            # registry tunable (int)
+    # Error LOG (persist to the error_log table + the admin viewer). Decoupled
+    # from the alert switch above: logging captures every qualifying error; the
+    # cooldown/cap only throttle emails. See services/error_log.py.
+    ERROR_LOG_ENABLED = "error_log.enabled"            # boolean (default true) - persist 5xx + cron failures
+    ERROR_LOG_CAPTURE_4XX = "error_log.capture_4xx"    # boolean (default false) - also persist allowlisted 4xx
+    ERROR_LOG_4XX_CODES = "error_log.http_4xx_codes"   # CSV of HTTP status codes (e.g. "429,409")
+    ERROR_LOG_RETENTION_DAYS = "error_log.retention_days"  # registry tunable (int; 0 disables prune)
 
 
 _ENCRYPTED_KEYS: set[str] = {Keys.SMTP_PASSWORD, Keys.IMAP_PASSWORD}

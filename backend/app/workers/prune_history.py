@@ -26,6 +26,7 @@ from ..database import SessionLocal
 from ..models.audit_log import AuditLog
 from ..models.download_log import DownloadLog
 from ..models.email_log import EmailLog
+from ..models.error_log import ErrorLog
 from ..models.login_attempt import LoginAttempt
 from ..models.webhook import WebhookDelivery
 from ..services.cron_tracker import track_cron
@@ -89,6 +90,7 @@ async def prune_history(_ctx) -> dict:
         login_days = _sr.effective(_db0, _sr.K.LOGIN_ATTEMPT_RETENTION_DAYS)
         webhook_days = _sr.effective(_db0, _sr.K.WEBHOOK_DELIVERY_RETENTION_DAYS)
         inbound_days = _sr.effective(_db0, _sr.K.IMAP_MESSAGE_RETENTION_DAYS)
+        error_days = _sr.effective(_db0, _sr.K.ERROR_LOG_RETENTION_DAYS)
     finally:
         _db0.close()
     audit_pruned = await _prune_table(
@@ -109,6 +111,9 @@ async def prune_history(_ctx) -> dict:
     webhook_pruned = await _prune_table(
         "webhook_deliveries", webhook_days, WebhookDelivery.created_at, WebhookDelivery
     )
+    error_pruned = await _prune_table(
+        "error_log", error_days, ErrorLog.created_at, ErrorLog
+    )
     inbound_pruned = await _prune_inbound(inbound_days)
     return {
         "audit_log": audit_pruned,
@@ -116,6 +121,7 @@ async def prune_history(_ctx) -> dict:
         "email_log": email_pruned,
         "login_attempts": login_pruned,
         "webhook_deliveries": webhook_pruned,
+        "error_log": error_pruned,
         "inbound_messages": inbound_pruned,
     }
 

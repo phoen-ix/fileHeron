@@ -1,6 +1,6 @@
-{{ app_name }} detected a server error.
+{{ app_name }} detected {% if status_code and status_code < 500 %}a client error (HTTP {{ status_code }}){% else %}a server error{% endif %}.
 
-{% if source == "worker" %}A scheduled task failed: {{ job_name }}{% else %}A server error occurred: {{ method }} {{ path }}{% endif %}
+{% if source == "worker" %}A scheduled task failed: {{ job_name }}{% elif status_code and status_code < 500 %}A client error occurred: {{ method }} {{ path }}{% else %}A server error occurred: {{ method }} {{ path }}{% endif %}
 
 Status:  {{ status_code }} {{ code }}
 Error:   {{ exception_type }}{% if message %} - {{ message }}{% endif %}

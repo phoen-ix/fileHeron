@@ -43,6 +43,7 @@ from ..models.user import User, UserRole
 from ..redis_client import get_redis
 from ..utils.crypto import sha256_hex
 from ..utils.timeutil import utc_now
+from . import error_log as error_log_svc
 from . import rate_limit, settings_registry
 from . import settings as settings_svc
 
@@ -288,51 +289,89 @@ def _send_to_custom(db: Session, payload: dict[str, Any], addrs: list[str]) -> i
 # ---------------------------------------------------------------------------
 
 
+def _alert_source_enabled(db: Session, event: dict[str, Any]) -> bool:
+    """Whether the per-source alert toggle permits emailing this event. 4xx alerts
+    ride the same allowlist that governs 4xx capture (alert is a subset of log)."""
+    source = event.get("source")
+    if source == "worker":
+        job_name = event.get("job_name") or ""
+        return settings_svc.get_bool(db, f"cron.{job_name}.alert_on_failure", default=False)
+    if source == "http":
+        status = int(event.get("status_code") or 0)
+        if status >= 500:
+            return settings_svc.get_bool(db, K.ERROR_ALERT_SOURCE_HTTP_5XX, default=True)
+        if 400 <= status < 500:
+            if not settings_svc.get_bool(db, K.ERROR_ALERT_SOURCE_HTTP_4XX, default=False):
+                return False
+            allow = error_log_svc.parse_4xx_codes(settings_svc.get(db, K.ERROR_LOG_4XX_CODES))
+            return status in allow
+    return False
+
+
 def handle_error_event(db: Session, event: dict[str, Any]) -> dict[str, Any]:
-    """Apply the saferails and (maybe) email admins. Never raises."""
+    """Persist to error_log (always, when logging is on) then maybe email admins.
+    Logging and alerting are decoupled and independently fail-open. Never raises."""
+    sig = signature(event)
+
+    # STEP 1 - LOG. The browsable log captures every qualifying error regardless
+    # of the alert switches / cooldown / cap below.
+    row_id: int | None = None
     try:
-        if not settings_svc.get_bool(db, K.ERROR_ALERT_ENABLED, default=False):
-            return {"status": "disabled"}
+        if error_log_svc.should_log(db, event):
+            row_id = error_log_svc.record(db, event, signature=sig)
+            db.commit()
+    except Exception:
+        logger.exception("error_alert: log step failed")
+        try:
+            db.rollback()
+        except Exception:
+            pass
 
-        source = event.get("source")
-        if source == "http":
-            if not settings_svc.get_bool(db, K.ERROR_ALERT_SOURCE_HTTP_5XX, default=True):
-                return {"status": "source_disabled"}
-        elif source == "worker":
-            job_name = event.get("job_name") or ""
-            if not settings_svc.get_bool(
-                db, f"cron.{job_name}.alert_on_failure", default=False
-            ):
-                return {"status": "source_disabled"}
-        else:
-            return {"status": "unknown_source"}
-
-        sig = signature(event)
-        cooldown_sec = int(settings_registry.effective(db, K.ERROR_ALERT_COOLDOWN_MINUTES)) * 60
-        decision = _cooldown_decision(sig, cooldown_sec)
-        if not decision.should_send:
-            return {"status": "deduped", "occurrences": decision.occurrence_count}
-
-        # Only consume a cap slot once we've decided we'd send (suppressed
-        # repeats must not burn the hourly budget).
-        if not _within_hourly_cap(db):
-            return {"status": "rate_capped"}
-
-        payload = _build_payload(event, decision)
-        mode = (settings_svc.get(db, K.ERROR_ALERT_RECIPIENTS_MODE) or "admins").strip().lower()
-        if mode == "custom":
-            addrs = _parse_recipients(settings_svc.get(db, K.ERROR_ALERT_CUSTOM_RECIPIENTS))
-            sent = _send_to_custom(db, payload, addrs)
-        else:
-            sent = _send_to_admins(db, payload)
-        return {"status": "sent", "signature": sig, "recipients": sent}
+    # STEP 2 - ALERT (the throttled subset).
+    try:
+        result = _maybe_alert(db, event, sig, row_id)
     except Exception:
         logger.exception("error_alert.handle_error_event failed")
         try:
             db.rollback()
         except Exception:
             pass
-        return {"status": "error"}
+        result = {"status": "error"}
+    result["logged"] = row_id is not None
+    return result
+
+
+def _maybe_alert(
+    db: Session, event: dict[str, Any], sig: str, row_id: int | None
+) -> dict[str, Any]:
+    if not settings_svc.get_bool(db, K.ERROR_ALERT_ENABLED, default=False):
+        return {"status": "disabled"}
+    if event.get("source") not in ("http", "worker"):
+        return {"status": "unknown_source"}
+    if not _alert_source_enabled(db, event):
+        return {"status": "source_disabled"}
+
+    cooldown_sec = int(settings_registry.effective(db, K.ERROR_ALERT_COOLDOWN_MINUTES)) * 60
+    decision = _cooldown_decision(sig, cooldown_sec)
+    if not decision.should_send:
+        return {"status": "deduped", "occurrences": decision.occurrence_count}
+
+    # Only consume a cap slot once we've decided we'd send (suppressed repeats
+    # must not burn the hourly budget).
+    if not _within_hourly_cap(db):
+        return {"status": "rate_capped"}
+
+    payload = _build_payload(event, decision)
+    mode = (settings_svc.get(db, K.ERROR_ALERT_RECIPIENTS_MODE) or "admins").strip().lower()
+    if mode == "custom":
+        addrs = _parse_recipients(settings_svc.get(db, K.ERROR_ALERT_CUSTOM_RECIPIENTS))
+        sent = _send_to_custom(db, payload, addrs)
+    else:
+        sent = _send_to_admins(db, payload)
+    if sent and row_id:
+        error_log_svc.mark_alerted(db, row_id)
+        db.commit()
+    return {"status": "sent", "signature": sig, "recipients": sent}
 
 
 # ---------------------------------------------------------------------------
@@ -344,6 +383,7 @@ def get_settings(db: Session) -> dict[str, Any]:
     return {
         "enabled": settings_svc.get_bool(db, K.ERROR_ALERT_ENABLED, default=False),
         "source_http_5xx": settings_svc.get_bool(db, K.ERROR_ALERT_SOURCE_HTTP_5XX, default=True),
+        "source_http_4xx": settings_svc.get_bool(db, K.ERROR_ALERT_SOURCE_HTTP_4XX, default=False),
         "recipients_mode": (
             settings_svc.get(db, K.ERROR_ALERT_RECIPIENTS_MODE) or "admins"
         ),
@@ -352,6 +392,13 @@ def get_settings(db: Session) -> dict[str, Any]:
         ),
         "cooldown_minutes": int(settings_registry.effective(db, K.ERROR_ALERT_COOLDOWN_MINUTES)),
         "max_per_hour": int(settings_registry.effective(db, K.ERROR_ALERT_MAX_PER_HOUR)),
+        # Logging (decoupled from alerting).
+        "log_enabled": settings_svc.get_bool(db, K.ERROR_LOG_ENABLED, default=True),
+        "capture_4xx": settings_svc.get_bool(db, K.ERROR_LOG_CAPTURE_4XX, default=False),
+        "http_4xx_codes": sorted(
+            error_log_svc.parse_4xx_codes(settings_svc.get(db, K.ERROR_LOG_4XX_CODES))
+        ),
+        "retention_days": int(settings_registry.effective(db, K.ERROR_LOG_RETENTION_DAYS)),
     }
 
 
@@ -360,23 +407,30 @@ def update_settings(
     *,
     enabled: bool,
     source_http_5xx: bool,
+    source_http_4xx: bool,
     recipients_mode: str,
     custom_recipients: list[str],
     cooldown_minutes: int,
     max_per_hour: int,
+    log_enabled: bool,
+    capture_4xx: bool,
+    http_4xx_codes: list[int],
+    retention_days: int,
     actor: User,
     request=None,
 ) -> dict[str, Any]:
-    """Persist all error-alert settings. Caller commits. Numeric bounds are
-    enforced by the registry's ``coerce_for_store`` (clamped, validated)."""
-    settings_svc.set_value(
-        db, key=K.ERROR_ALERT_ENABLED, value="true" if enabled else "false",
-        actor=actor, request=request,
-    )
-    settings_svc.set_value(
-        db, key=K.ERROR_ALERT_SOURCE_HTTP_5XX, value="true" if source_http_5xx else "false",
-        actor=actor, request=request,
-    )
+    """Persist all error-alert + error-log settings. Caller commits. Numeric
+    bounds are enforced by the registry's ``coerce_for_store`` (clamped)."""
+    for key, flag in (
+        (K.ERROR_ALERT_ENABLED, enabled),
+        (K.ERROR_ALERT_SOURCE_HTTP_5XX, source_http_5xx),
+        (K.ERROR_ALERT_SOURCE_HTTP_4XX, source_http_4xx),
+        (K.ERROR_LOG_ENABLED, log_enabled),
+        (K.ERROR_LOG_CAPTURE_4XX, capture_4xx),
+    ):
+        settings_svc.set_value(
+            db, key=key, value="true" if flag else "false", actor=actor, request=request,
+        )
     settings_svc.set_value(
         db, key=K.ERROR_ALERT_RECIPIENTS_MODE, value=recipients_mode,
         actor=actor, request=request,
@@ -386,13 +440,22 @@ def update_settings(
         value=",".join(_parse_recipients(",".join(custom_recipients))),
         actor=actor, request=request,
     )
+    # Normalise the 4xx allowlist to a sorted CSV of valid 4xx codes.
+    valid = sorted(error_log_svc.parse_4xx_codes(",".join(str(c) for c in http_4xx_codes)))
+    settings_svc.set_value(
+        db, key=K.ERROR_LOG_4XX_CODES, value=",".join(str(c) for c in valid),
+        actor=actor, request=request,
+    )
     for key, value in (
         (K.ERROR_ALERT_COOLDOWN_MINUTES, cooldown_minutes),
         (K.ERROR_ALERT_MAX_PER_HOUR, max_per_hour),
+        (K.ERROR_LOG_RETENTION_DAYS, retention_days),
     ):
         spec = settings_registry.BY_KEY[key]
         settings_svc.set_value(
             db, key=key, value=settings_registry.coerce_for_store(spec, value),
             actor=actor, request=request,
         )
+    # Drop the middleware's cached 4xx-capture flag so the change applies at once.
+    error_log_svc._reset_cache()
     return get_settings(db)

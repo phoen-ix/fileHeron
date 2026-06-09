@@ -28,6 +28,7 @@ import type {
   AdminChangeEmailRequest,
   AdminChangeEmailResponse,
   AdminCreateApiTokenRequest,
+  AdminErrorListResponse,
   AdminFileListResponse,
   AdminMailDetail,
   AdminMailListResponse,
@@ -489,6 +490,22 @@ export function resendMailLog(id: number) {
 
 export function exportMailCsv(params: Record<string, string> = {}) {
   return api.get('/admin/mail-log/export.csv', { params, responseType: 'blob' })
+}
+
+export function listErrorLog(params: {
+  code?: string
+  status_code?: number
+  source?: string
+  from?: string
+  to?: string
+  page?: number
+  page_size?: number
+} = {}) {
+  return api.get<AdminErrorListResponse>('/admin/error-log', { params })
+}
+
+export function exportErrorCsv(params: Record<string, string> = {}) {
+  return api.get('/admin/error-log/export.csv', { params, responseType: 'blob' })
 }
 
 // API token policy + admin inventory (post-Phase 10)

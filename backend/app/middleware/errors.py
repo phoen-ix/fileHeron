@@ -35,25 +35,28 @@ class AppError(Exception):
         self.details = details or {}
 
 
-def _maybe_enqueue_error_alert(
+def _maybe_enqueue_error_event(
     request: Request, *, status_code: int, code: str, exc: Exception
 ) -> None:
-    """Fire-and-forget: enqueue a server-error alert event for the worker to
-    (maybe) email admins. Fully swallowed - this runs on an already-failed
-    response and must never add latency or raise a second exception.
+    """Fire-and-forget: enqueue an error event for the worker to LOG (always, when
+    logging is on) and maybe alert. Fully swallowed - this runs on an already-
+    failed response and must never add latency or raise a second exception.
 
-    Only server errors (>= 500) qualify; 4xx are expected and never alert. A
-    cheap fail-open front guard caps enqueues so a tight 500-loop (e.g. DB down)
-    can't flood the job queue - the real cooldown/cap live in the worker."""
-    if status_code < 500:
-        return
+    5xx always enqueue. 4xx enqueue only when 4xx capture is switched on (a cheap
+    cached flag), and behind a tighter front guard so high-volume 4xx noise can't
+    starve 5xx or flood the queue; the worker re-checks the allowlist
+    authoritatively. The real cooldown/cap (for alerts) live in the worker."""
     try:
-        from ..services import job_queue, rate_limit
+        from ..services import error_log, job_queue, rate_limit
         from ..utils.timeutil import utc_now
 
-        if not rate_limit.check_ip_allowed(
-            "err_alert_enqueue", "global", limit=30, window_sec=60
-        ):
+        if status_code >= 500:
+            bucket, limit = "err_alert_enqueue", 30
+        elif 400 <= status_code < 500 and error_log.capture_4xx_enabled_cached():
+            bucket, limit = "err_alert_enqueue_4xx", 10
+        else:
+            return
+        if not rate_limit.check_ip_allowed(bucket, "global", limit=limit, window_sec=60):
             return
         event = {
             "source": "http",
@@ -71,7 +74,7 @@ def _maybe_enqueue_error_alert(
         }
         job_queue.enqueue("notify_admin_error", event=event)
     except Exception:
-        logger.warning("error-alert enqueue skipped", exc_info=True)
+        logger.warning("error-event enqueue skipped", exc_info=True)
 
 
 async def app_error_handler(request: Request, exc: Exception) -> JSONResponse:
@@ -82,7 +85,7 @@ async def app_error_handler(request: Request, exc: Exception) -> JSONResponse:
     request_id = getattr(request.state, "request_id", None)
     if request_id:
         body["request_id"] = request_id
-    _maybe_enqueue_error_alert(
+    _maybe_enqueue_error_event(
         request, status_code=exc.status_code, code=exc.code, exc=exc
     )
     return JSONResponse(status_code=exc.status_code, content=body)
@@ -91,7 +94,7 @@ async def app_error_handler(request: Request, exc: Exception) -> JSONResponse:
 async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     request_id = getattr(request.state, "request_id", None)
     logger.exception("unhandled exception", extra={"request_id": request_id})
-    _maybe_enqueue_error_alert(
+    _maybe_enqueue_error_event(
         request, status_code=500, code="INTERNAL_ERROR", exc=exc
     )
     body: dict[str, Any] = {"error": "Internal server error.", "code": "INTERNAL_ERROR"}

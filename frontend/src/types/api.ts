@@ -741,6 +741,32 @@ export interface AdminMailListResponse {
   next_cursor: string | null
 }
 
+export interface AdminErrorRow {
+  id: number
+  created_at: string
+  source: string
+  status_code: number
+  code: string
+  exception_type: string | null
+  message: string | null
+  method: string | null
+  path: string | null
+  job_name: string | null
+  request_id: string | null
+  user_id: number | null
+  auth_via: string | null
+  signature: string
+  /** True when an alert email actually went out for this row. */
+  alerted: boolean
+}
+
+export interface AdminErrorListResponse {
+  items: AdminErrorRow[]
+  total: number
+  page: number
+  page_size: number
+}
+
 export interface AdminMailResendResponse {
   ok: boolean
   new_log_id: number
@@ -1215,10 +1241,16 @@ export interface UpdateCronScheduleRequest {
 export interface ErrorAlertSettingsResponse {
   enabled: boolean
   source_http_5xx: boolean
+  source_http_4xx: boolean
   recipients_mode: 'admins' | 'custom'
   custom_recipients: string[]
   cooldown_minutes: number
   max_per_hour: number
+  /** Error LOG (decoupled from the alert switches above). */
+  log_enabled: boolean
+  capture_4xx: boolean
+  http_4xx_codes: number[]
+  retention_days: number
 }
 
 export type UpdateErrorAlertSettingsRequest = ErrorAlertSettingsResponse

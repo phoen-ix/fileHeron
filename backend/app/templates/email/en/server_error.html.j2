@@ -1,9 +1,9 @@
 {% extends "layout.html.j2" %}
-{% block subject %}{{ app_name }} server error ({{ code }}){% endblock %}
+{% block subject %}{{ app_name }} {% if status_code and status_code < 500 %}client{% else %}server{% endif %} error ({{ code }}){% endblock %}
 {% block content %}
   <p style="margin:0 0 12px 0;color:#6b7280;font-family:Georgia,serif;font-style:italic;">Operations</p>
   <h1 style="font-family:Georgia,'Times New Roman',serif;font-weight:normal;font-size:26px;line-height:1.2;margin:0 0 16px 0;">
-    {% if source == "worker" %}A scheduled task failed{% else %}A server error occurred{% endif %}
+    {% if source == "worker" %}A scheduled task failed{% elif status_code and status_code < 500 %}A client error occurred{% else %}A server error occurred{% endif %}
   </h1>
   <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 16px 0;width:100%;font-family:'JetBrains Mono',Menlo,Consolas,monospace;font-size:13px;">
     {% if source == "worker" %}

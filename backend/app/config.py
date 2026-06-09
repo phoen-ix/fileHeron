@@ -269,6 +269,9 @@ class Settings(BaseSettings):
     # burst regardless of signature. Both are registry tunables (admin-editable).
     ERROR_ALERT_COOLDOWN_MINUTES: int = 15   # suppress an identical error this long
     ERROR_ALERT_MAX_PER_HOUR: int = 20       # hard ceiling on alert emails / hour
+    # Error LOG retention (the error_log table + admin viewer). 0 disables the
+    # daily prune. Logging itself is on by default for 5xx (error_log.enabled).
+    ERROR_LOG_RETENTION_DAYS: int = 90
 
     @property
     def database_url(self) -> str:

@@ -189,6 +189,7 @@
       "groups": "Gruppen",
       "analytics": "Analysen",
       "audit": "Audit-Protokoll",
+      "error_log": "Fehlerprotokoll",
       "inbox": "Posteingang",
       "mail_log": "E-Mail-Protokoll",
       "file_history": "Dateiverlauf",
@@ -2171,12 +2172,26 @@
     "saved_toast": "Einstellung für Quarantäne-Alarme gespeichert."
   },
   "admin_error_alerts": {
-    "title": "Fehler-Alarme",
-    "intro": "Admins per E-Mail benachrichtigen, wenn ein Serverfehler auftritt (ein HTTP-5xx oder eine fehlgeschlagene geplante Aufgabe). Identische Fehler werden zusammengefasst, und eine Stundengrenze verhindert, dass ein wiederkehrender Fehler dein Postfach flutet. Die E-Mails enthalten nur Kontext - keinen Stacktrace.",
-    "enabled_label": "Admins über Serverfehler benachrichtigen",
-    "enabled_help": "Hauptschalter. Wenn aus, wird nichts gesendet und es entsteht kein Aufwand.",
+    "title": "Fehler & Alarme",
+    "intro": "Führe ein durchsuchbares Protokoll der Serverfehler und benachrichtige bei Bedarf Admins per E-Mail. Protokollierung und Versand sind unabhängig: Das Protokoll erfasst jeden Fehler, während E-Mails zusammengefasst und begrenzt werden, damit ein wiederkehrender Fehler dein Postfach nicht flutet. Die E-Mails enthalten nur Kontext - keinen Stacktrace.",
+    "log_section": "Fehlerprotokoll",
+    "log_enabled_label": "Fehler protokollieren",
+    "log_enabled_help": "Jeden Serverfehler (HTTP-5xx) und jede fehlgeschlagene geplante Aufgabe in einem durchsuchbaren, filterbaren Protokoll festhalten - unabhängig davon, ob E-Mails gesendet werden.",
+    "view_log_link": "Fehlerprotokoll öffnen",
+    "capture_4xx_label": "Auch ausgewählte Client-Fehler (4xx) erfassen",
+    "capture_4xx_help": "Standardmäßig werden nur 5xx und Cron-Fehler protokolliert. Aktiviere dies, um zusätzlich bestimmte 4xx-Codes zu erfassen - nützlich sind etwa 429 (Rate-Limit) oder 409 (Konflikt). Laute Codes wie 401/403/404/422 werden ignoriert, sofern du sie nicht aufführst.",
+    "codes_4xx_placeholder": "429, 409",
+    "codes_4xx_help": "Kommagetrennte HTTP-Statuscodes zwischen 400 und 499. Nur diese 4xx-Codes werden erfasst.",
+    "retention_label": "Protokolleinträge aufbewahren für (Tage)",
+    "retention_help": "Ältere Einträge werden täglich entfernt. 0 = unbegrenzt aufbewahren.",
+    "alert_section": "E-Mail-Alarme",
+    "enabled_label": "Admins über Fehler per E-Mail benachrichtigen",
+    "enabled_help": "Hauptschalter für E-Mails. Wenn aus, werden Fehler weiterhin protokolliert (oben), aber es wird keine E-Mail gesendet.",
     "http_label": "HTTP-Serverfehler (5xx)",
-    "http_help": "Unbehandelte 500er sowie serverseitige Ausfälle, etwa wenn Speicher oder Antivirus nicht verfügbar sind. Client-Fehler (4xx) lösen nie einen Alarm aus.",
+    "http_help": "Unbehandelte 500er sowie serverseitige Ausfälle, etwa wenn Speicher oder Antivirus nicht verfügbar sind.",
+    "http_4xx_label": "Auch über die erfassten 4xx-Codes per E-Mail benachrichtigen",
+    "http_4xx_help": "Sende eine E-Mail für dieselben 4xx-Codes, die du oben erfasst (vorbehaltlich Abklingzeit und Stundengrenze).",
+    "http_4xx_needs_capture": "Aktiviere oben \"Auch ausgewählte Client-Fehler (4xx) erfassen\", um 4xx-E-Mails zu ermöglichen.",
     "cron_note": "Fehlgeschlagene geplante Aufgaben werden pro Aufgabe auf der Seite Geplante Aufgaben aktiviert (der Schalter erscheint dort, sobald diese Funktion aktiv ist).",
     "recipients_label": "Empfänger",
     "recipients_admins": "Alle Admins (jeder kann es unter Konto → Benachrichtigungen stummschalten)",
@@ -2187,11 +2202,47 @@
     "cooldown_label": "Abklingzeit (Minuten)",
     "cap_label": "Max. E-Mails / Stunde",
     "throttle_help": "Ein identischer Fehler wird höchstens einmal pro Abklingfenster gemeldet; die nächste E-Mail nach dem Fenster nennt die Anzahl der unterdrückten Wiederholungen. Die Stundengrenze ist eine harte Obergrenze über alle Fehler.",
-    "saved_toast": "Einstellungen für Fehler-Alarme gespeichert.",
+    "saved_toast": "Fehler-Einstellungen gespeichert.",
     "err_cooldown_range": "Die Abklingzeit muss zwischen 1 und 1440 Minuten liegen.",
     "err_cap_range": "Max. E-Mails pro Stunde muss zwischen 1 und 1000 liegen.",
     "err_custom_empty": "Füge mindestens eine Empfängeradresse hinzu oder wähle Alle Admins.",
-    "err_bad_email": "Keine gültige E-Mail-Adresse: {list}"
+    "err_bad_email": "Keine gültige E-Mail-Adresse: {list}",
+    "err_4xx_empty": "Gib mindestens einen 4xx-Statuscode zum Erfassen an oder deaktiviere die 4xx-Erfassung.",
+    "err_4xx_bad": "Kein gültiger 4xx-Statuscode: {list}",
+    "err_retention_range": "Die Aufbewahrung muss zwischen 0 und 3650 Tagen liegen."
+  },
+  "admin_error_log": {
+    "eyebrow": "Admin / Fehlerprotokoll",
+    "intro": "Jeder erfasste Serverfehler (HTTP-5xx), aktivierte Client-Fehler (4xx) und jede fehlgeschlagene geplante Aufgabe. Filtere nach Code, Status, Quelle oder Zeit; klicke eine Zeile für Details. \"Versendet\" markiert Zeilen, die auch einen Alarm ausgelöst haben.",
+    "export_csv": "CSV exportieren",
+    "empty": "Keine Fehler passen zu diesen Filtern.",
+    "emailed": "versendet",
+    "filter": {
+      "code": "Code (z. B. INTERNAL_ERROR)",
+      "status": "Status (z. B. 500)",
+      "source_any": "alle Quellen",
+      "from": "von",
+      "to": "bis"
+    },
+    "source": {
+      "http": "HTTP",
+      "worker": "Geplante Aufgabe"
+    },
+    "col": {
+      "when": "Wann",
+      "status": "Status",
+      "code": "Code",
+      "where": "Wo",
+      "message": "Meldung"
+    },
+    "detail": {
+      "exception": "Ausnahme",
+      "source": "Quelle",
+      "request_id": "Request-ID",
+      "user": "Benutzer",
+      "signature": "Signatur",
+      "message": "Meldung"
+    }
   },
   "admin_av": {
     "title": "Antiviren-Engine",

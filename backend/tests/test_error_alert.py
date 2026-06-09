@@ -257,19 +257,21 @@ def _fake_request():
     )
 
 
-def test_handler_skips_4xx_enqueues_5xx(monkeypatch):
+def test_middleware_skips_4xx_by_default_enqueues_5xx(monkeypatch):
     from app.middleware import errors
-    from app.services import job_queue
+    from app.services import error_log, job_queue
 
     calls = []
     monkeypatch.setattr(job_queue, "enqueue", lambda name, **kw: calls.append((name, kw)))
+    # 4xx capture off (default) -> the cheap cached gate says skip.
+    monkeypatch.setattr(error_log, "capture_4xx_enabled_cached", lambda: False)
 
-    errors._maybe_enqueue_error_alert(
+    errors._maybe_enqueue_error_event(
         _fake_request(), status_code=404, code="NOT_FOUND", exc=Exception("nope")
     )
-    assert calls == []  # 4xx never alerts
+    assert calls == []  # 4xx not captured by default
 
-    errors._maybe_enqueue_error_alert(
+    errors._maybe_enqueue_error_event(
         _fake_request(), status_code=500, code="INTERNAL_ERROR", exc=Exception("boom")
     )
     assert len(calls) == 1
@@ -278,3 +280,40 @@ def test_handler_skips_4xx_enqueues_5xx(monkeypatch):
     assert kw["event"]["status_code"] == 500
     assert kw["event"]["source"] == "http"
     assert kw["event"]["path"] == "/api/files/9"
+
+
+def test_middleware_enqueues_4xx_when_capture_on(monkeypatch):
+    from app.middleware import errors
+    from app.services import error_log, job_queue
+
+    calls = []
+    monkeypatch.setattr(job_queue, "enqueue", lambda name, **kw: calls.append((name, kw)))
+    monkeypatch.setattr(error_log, "capture_4xx_enabled_cached", lambda: True)
+
+    errors._maybe_enqueue_error_event(
+        _fake_request(), status_code=429, code="RATE_LIMITED", exc=Exception("slow down")
+    )
+    assert len(calls) == 1
+    assert calls[0][1]["event"]["status_code"] == 429
+    assert calls[0][1]["event"]["code"] == "RATE_LIMITED"
+
+
+def _http_4xx_event(status=429, code="RATE_LIMITED"):
+    ev = _http_event(status=status, code=code)
+    return ev
+
+
+def test_4xx_alert_requires_source_and_allowlist(db, make_user, fake_redis):
+    make_user(email="a@test.local", role=UserRole.admin)
+    _enable(db)  # master on; 4xx alert source defaults off
+    ev = _http_4xx_event(status=429, code="RATE_LIMITED")
+    # 4xx alert source off -> not sent (but it IS logged; see test_error_log).
+    assert error_alert.handle_error_event(db, ev)["status"] == "source_disabled"
+    # Turn the 4xx alert source on + allowlist 429.
+    settings_svc.set_value(db, key=K.ERROR_ALERT_SOURCE_HTTP_4XX, value="true", actor=None)
+    settings_svc.set_value(db, key=K.ERROR_LOG_4XX_CODES, value="429", actor=None)
+    db.commit()
+    assert error_alert.handle_error_event(db, ev)["status"] == "sent"
+    # A 4xx code NOT in the allowlist still won't alert.
+    ev409 = _http_4xx_event(status=409, code="CONFLICT")
+    assert error_alert.handle_error_event(db, ev409)["status"] == "source_disabled"

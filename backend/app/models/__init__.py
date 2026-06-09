@@ -14,6 +14,7 @@ from .email_change_token import EmailChangeToken
 from .email_log import EmailLog, EmailStatus, EmailVia
 from .email_template_override import EmailTemplateOverride
 from .email_verify_token import EmailVerifyToken
+from .error_log import ErrorLog
 from .file import File, FileState
 from .group import Group
 from .group_member import GroupMember
@@ -56,6 +57,7 @@ __all__ = [
     "EmailVia",
     "EmailTemplateOverride",
     "EmailVerifyToken",
+    "ErrorLog",
     "File",
     "FileState",
     "Group",

@@ -6,6 +6,7 @@ Sub-modules:
 - oidc           OIDC provider CRUD + discovery probes
 - api_tokens     token policy + admin-on-behalf-of token CRUD
 - files          cross-user file inventory
+- errors         server-error log: list + detail + CSV (5xx / opted-in 4xx / cron)
 - mail           outbound email log: list + detail + CSV + resend
 - settings       all kv-store admin settings (public-link policy, SMTP,
                  home page, share defaults, site URL, 2FA enforcement,
@@ -28,6 +29,7 @@ from . import (
     backup,
     crons,
     email_templates,
+    errors,
     files,
     imap,
     invites,
@@ -43,8 +45,8 @@ from . import (
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 _SUBROUTERS = (
-    analytics, api_tokens, audit, backup, crons, email_templates, files, imap, invites, mail,
-    oidc, quarantine, sessions, settings, system, users, webhooks,
+    analytics, api_tokens, audit, backup, crons, email_templates, errors, files, imap,
+    invites, mail, oidc, quarantine, sessions, settings, system, users, webhooks,
 )
 for _sub in _SUBROUTERS:
     router.include_router(_sub.router)

@@ -192,6 +192,12 @@ const router = createRouter({
           meta: { density: 'operator', title: 'Mail', requiresRole: 'admin' },
         },
         {
+          path: 'error-log',
+          name: 'admin-error-log',
+          component: () => import('@/views/AdminErrorLog.vue'),
+          meta: { density: 'operator', title: 'Error log', requiresRole: 'admin' },
+        },
+        {
           path: 'inbox',
           name: 'admin-inbox',
           component: () => import('@/views/AdminInbox.vue'),

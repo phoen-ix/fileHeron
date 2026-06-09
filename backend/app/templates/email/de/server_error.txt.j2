@@ -1,6 +1,6 @@
-{{ app_name }} hat einen Serverfehler erkannt.
+{{ app_name }} hat {% if status_code and status_code < 500 %}einen Client-Fehler (HTTP {{ status_code }}){% else %}einen Serverfehler{% endif %} erkannt.
 
-{% if source == "worker" %}Eine geplante Aufgabe ist fehlgeschlagen: {{ job_name }}{% else %}Ein Serverfehler ist aufgetreten: {{ method }} {{ path }}{% endif %}
+{% if source == "worker" %}Eine geplante Aufgabe ist fehlgeschlagen: {{ job_name }}{% elif status_code and status_code < 500 %}Ein Client-Fehler ist aufgetreten: {{ method }} {{ path }}{% else %}Ein Serverfehler ist aufgetreten: {{ method }} {{ path }}{% endif %}
 
 Status:   {{ status_code }} {{ code }}
 Fehler:   {{ exception_type }}{% if message %} - {{ message }}{% endif %}

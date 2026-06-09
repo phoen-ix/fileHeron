@@ -189,6 +189,7 @@
       "groups": "Groups",
       "analytics": "Analytics",
       "audit": "Audit log",
+      "error_log": "Error log",
       "inbox": "Inbox",
       "mail_log": "Mail log",
       "file_history": "File history",
@@ -2171,12 +2172,26 @@
     "saved_toast": "Quarantine alert setting saved."
   },
   "admin_error_alerts": {
-    "title": "Error alerts",
-    "intro": "Email admins when a server error happens (an HTTP 5xx, or a failed scheduled task). Identical errors are deduplicated and a per-hour cap prevents a looping error from flooding your inbox. Emails carry context only - no stack trace.",
-    "enabled_label": "Email admins about server errors",
-    "enabled_help": "Master switch. When off, nothing is sent and there is no overhead.",
+    "title": "Errors & alerts",
+    "intro": "Keep a browsable log of server errors and, optionally, email admins about them. Logging and emailing are independent: the log records every captured error, while emails are deduplicated and capped so a looping error can't flood your inbox. Emails carry context only - no stack trace.",
+    "log_section": "Error log",
+    "log_enabled_label": "Record errors to the log",
+    "log_enabled_help": "Persist every server error (HTTP 5xx) and failed scheduled task to a browsable, filterable log - independent of whether emails are sent.",
+    "view_log_link": "Open the error log",
+    "capture_4xx_label": "Also record selected client errors (4xx)",
+    "capture_4xx_help": "By default only 5xx and cron failures are logged. Turn this on to also capture specific 4xx codes - useful ones are 429 (rate limited) or 409 (conflict). Noisy codes like 401/403/404/422 are ignored unless you list them.",
+    "codes_4xx_placeholder": "429, 409",
+    "codes_4xx_help": "Comma-separated HTTP status codes between 400 and 499. Only these 4xx codes are captured.",
+    "retention_label": "Keep log entries for (days)",
+    "retention_help": "Older entries are pruned daily. Set to 0 to keep them forever.",
+    "alert_section": "Email alerts",
+    "enabled_label": "Email admins about errors",
+    "enabled_help": "Master switch for emails. When off, errors are still logged (above) but no email is sent.",
     "http_label": "HTTP server errors (5xx)",
-    "http_help": "Unhandled 500s plus server-side failures like storage or antivirus being unavailable. Client errors (4xx) never alert.",
+    "http_help": "Unhandled 500s plus server-side failures like storage or antivirus being unavailable.",
+    "http_4xx_label": "Also email about the captured 4xx codes",
+    "http_4xx_help": "Send an email for the same 4xx codes you capture above (subject to the cooldown and hourly cap).",
+    "http_4xx_needs_capture": "Turn on \"Also record selected client errors (4xx)\" above to enable 4xx emails.",
     "cron_note": "Failed scheduled tasks are opted in per task on the Scheduled tasks page (the toggle appears there once this feature is enabled).",
     "recipients_label": "Recipients",
     "recipients_admins": "All admins (each can mute it under Account → Notifications)",
@@ -2187,11 +2202,47 @@
     "cooldown_label": "Cooldown (minutes)",
     "cap_label": "Max emails / hour",
     "throttle_help": "An identical error is emailed at most once per cooldown window; the next email after the window reports how many repeats were suppressed. The hourly cap is a hard ceiling across all errors.",
-    "saved_toast": "Error alert settings saved.",
+    "saved_toast": "Error settings saved.",
     "err_cooldown_range": "Cooldown must be between 1 and 1440 minutes.",
     "err_cap_range": "Max emails per hour must be between 1 and 1000.",
     "err_custom_empty": "Add at least one recipient address, or switch to All admins.",
-    "err_bad_email": "Not a valid email address: {list}"
+    "err_bad_email": "Not a valid email address: {list}",
+    "err_4xx_empty": "Enter at least one 4xx status code to capture, or turn off 4xx capture.",
+    "err_4xx_bad": "Not a valid 4xx status code: {list}",
+    "err_retention_range": "Retention must be between 0 and 3650 days."
+  },
+  "admin_error_log": {
+    "eyebrow": "Admin / Error log",
+    "intro": "Every captured server error (HTTP 5xx), opted-in client error (4xx), and failed scheduled task. Filter by code, status, source, or time; click a row for full detail. \"Emailed\" marks rows that also triggered an alert.",
+    "export_csv": "Export CSV",
+    "empty": "No errors match these filters.",
+    "emailed": "emailed",
+    "filter": {
+      "code": "code (e.g. INTERNAL_ERROR)",
+      "status": "status (e.g. 500)",
+      "source_any": "all sources",
+      "from": "from",
+      "to": "to"
+    },
+    "source": {
+      "http": "HTTP",
+      "worker": "Scheduled task"
+    },
+    "col": {
+      "when": "When",
+      "status": "Status",
+      "code": "Code",
+      "where": "Where",
+      "message": "Message"
+    },
+    "detail": {
+      "exception": "Exception",
+      "source": "Source",
+      "request_id": "Request ID",
+      "user": "User",
+      "signature": "Signature",
+      "message": "Message"
+    }
   },
   "admin_av": {
     "title": "Antivirus engine",

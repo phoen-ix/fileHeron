@@ -185,6 +185,38 @@ class AdminMailResendResponse(APIBaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Admin error log (v1.53.0). Every captured 5xx / opted-in 4xx / failed cron.
+# All columns are small (no deferred bodies), so one row schema serves both the
+# list and the single-row detail endpoint.
+# ---------------------------------------------------------------------------
+
+
+class AdminErrorRow(APIBaseModel):
+    id: int
+    created_at: datetime
+    source: str
+    status_code: int
+    code: str
+    exception_type: str | None
+    message: str | None
+    method: str | None
+    path: str | None
+    job_name: str | None
+    request_id: str | None
+    user_id: int | None
+    auth_via: str | None
+    signature: str
+    alerted: bool
+
+
+class AdminErrorListResponse(APIBaseModel):
+    items: list[AdminErrorRow]
+    total: int
+    page: int
+    page_size: int
+
+
+# ---------------------------------------------------------------------------
 # Admin session oversight (v1.7.0). A session = a `refresh_tokens` row.
 # ---------------------------------------------------------------------------
 

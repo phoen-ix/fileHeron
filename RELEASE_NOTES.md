@@ -1,35 +1,39 @@
-# file:Heron v1.55.9
+# file:Heron v1.55.10
 
-**Scheduled tasks: all sections now share one full-width column layout.** Each job group
-(Shares & files, Mail, Maintenance, Operations) was its own table that shrank to fit its own
-content, so the sections ended at different right edges, their columns didn't line up, and the
-right side of the page was unused. They now all use a single fixed column template at full
-width.
+**Stop the "blank page after Update" caching trap.** `index.html` was served with no
+`Cache-Control`, so browsers could heuristically cache it. After an Update the cached
+`index.html` still points at the *old* hashed JS chunks - which no longer exist in the new
+image (they 404) - so the app fails to boot and the page comes up blank, reading as "system
+down" until a hard refresh. This serves the SPA entry document `no-cache` so the browser
+always revalidates it.
 
 ## What's new
 
-- **Every group is the same width and lines up.** All sections span the full content width and
-  end at the same right edge, with columns (Task / Schedule / Recent / Next run / actions) that
-  line up vertically from one group to the next - no more ragged section widths or wasted
-  right-hand space.
+- **`index.html` is now served `Cache-Control: no-cache`** (revalidated every load via etag ->
+  304 when unchanged, full 200 right after a deploy). The content-hashed `/assets/` stay
+  `immutable`. Net effect: an Update is picked up immediately, no more stale-bundle blank page
+  / forced hard-refresh.
 
 ## Notes
 
-- Pure layout/CSS change - no behavior, data, settings, or API changes.
-- On very narrow windows the table scrolls inside its own box rather than breaking the page.
+- nginx config only; validated with `nginx -t`. The SPA's security headers (X-Frame-Options,
+  X-Content-Type-Options, Referrer-Policy) are re-declared on the `index.html` location so
+  they're preserved (a location-level `add_header` otherwise drops the server-level ones).
+- This change is baked into the frontend image, so it ships via the normal in-app Update.
 
 ## Upgrade notes
 
-- Rolls forward via **Update** in `/admin/system`. Frontend image (backend + worker are
-  rebuilt at the same version, code unchanged), **no migration, no host step**. Rolling
-  back to v1.55.8 is safe.
+- Rolls forward via **Update** in `/admin/system`. Frontend image (backend + worker rebuilt at
+  the same version, code unchanged), **no migration, no host step**. Rolling back to v1.55.9 is
+  safe. (This is the *last* Update that may still need a one-time hard refresh to clear the old
+  cached `index.html`; after it, future updates won't.)
 
 ## Container images
 
-- `ghcr.io/phoen-ix/fileheron-backend:v1.55.9`
-- `ghcr.io/phoen-ix/fileheron-worker:v1.55.9`
-- `ghcr.io/phoen-ix/fileheron-frontend:v1.55.9`
-- `ghcr.io/phoen-ix/fileheron-updater-shim:v1.55.9`
-- `ghcr.io/phoen-ix/fileheron-updater-executor:v1.55.9`
+- `ghcr.io/phoen-ix/fileheron-backend:v1.55.10`
+- `ghcr.io/phoen-ix/fileheron-worker:v1.55.10`
+- `ghcr.io/phoen-ix/fileheron-frontend:v1.55.10`
+- `ghcr.io/phoen-ix/fileheron-updater-shim:v1.55.10`
+- `ghcr.io/phoen-ix/fileheron-updater-executor:v1.55.10`
 
 Click **Update** in `/admin/system` to roll forward.

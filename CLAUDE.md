@@ -15,7 +15,7 @@ keep this to what would cause a wrong move if unknown.
 
 ## Status
 
-Backend **`v1.50.0`**, desktop client **`client-v0.13.0`** - shipped + in
+Backend **`v1.54.1`**, desktop client **`client-v0.13.0`** - shipped + in
 production.
 
 > **Rich text (v1.50):** the admin legal pages + email-template editor is a
@@ -29,12 +29,16 @@ production.
 > only-true-MIT memory; never TipTap.
 
 > **Doc currency:** sections below were last fully swept at v1.14, plus v1.33
-> (config backup) + v1.34 (maintenance) + v1.49 (API-token scopes) which are
-> documented. Subsystems shipped v1.15-v1.32 (bulk ZIP, analytics, webhooks,
-> anomaly detection, pluggable storage backend incl. S3, share-approval,
+> (config backup) + v1.34 (maintenance) + v1.49 (API-token scopes) + v1.50 (rich
+> text, above) + v1.52-v1.54 (error log + alerts + scanner detection, own section
+> below) which are documented. Subsystems shipped v1.15-v1.32 (bulk ZIP, analytics,
+> webhooks, anomaly detection, pluggable storage backend incl. S3, share-approval,
 > email-template overrides, inbound IMAP, admin-tunable cron schedules,
-> branding/legal pages) + the v1.35-v1.47 security-audit remediation live in
-> `README.md` + `git log`, not yet back-filled here.
+> branding/legal pages) + the v1.35-v1.47 security-audit remediation + v1.51 (dropped
+> the redundant "disabled" token/public-link policy mode) live in `README.md` +
+> `git log`, not yet back-filled here. **README.md was fully re-swept to v1.54.1.**
+> v1.52 also: the new-device login alert now ships the real client IP + browser
+> version + raw user-agent (was a geohash + version-less summary).
 
 **Open / deferred (don't re-propose):** per-file envelope encryption - deferred
 until storage leaves single-server bind mounts (KEK + ciphertext would otherwise
@@ -201,6 +205,17 @@ Every outbound email → `email_log` via funnel `services/mail_log.py`; admin at
 - **Masking (fail-closed):** `mask_sensitive` redacts tokens in reset/verify/register URLs; forced for auth-link categories; any regex error → placeholder (never persist a live token). `masked` (or via test/dev_fallback) **disables resend**.
 - **Retention** `retention.email_log_days` (90, 0 disables). **Erasure** scrubs the target's rows in place (PII gone, flow counts kept).
 
+## Error log + alerts + scanner detection (v1.52-1.54)
+
+Browsable server-error log + (separately) email alerts. Admin: Error log
+`/admin/error-log`, settings `/admin/settings/error-alerts`.
+
+- **Log ≠ alert (decoupled).** The `notify_admin_error` ARQ job → `error_alert.handle_error_event` **LOGS first** (`services/error_log.py::record` → `error_log` table) then runs the alert saferails. `error_log.enabled` (default **true**, 5xx + cron failures) is independent of `error_alert.enabled` (default **false**, emails). Cooldown/hourly-cap/dedup-signature govern **emails only** - the log captures every qualifying event even when no email fires. Don't re-couple them.
+- **4xx is opt-in + allowlist-gated.** `error_log.capture_4xx` + `error_log.http_4xx_codes` (CSV of HTTP statuses; **empty allowlist = capture nothing**). `error_alert.source_http_4xx` rides the same allowlist (alert ⊆ capture). Middleware `errors.py::_maybe_enqueue_error_event` gates the 4xx enqueue on a **process-cached** flag `error_log.capture_4xx_enabled_cached()` (~60s TTL; `error_alert.update_settings` resets it); the worker re-checks the allowlist authoritatively. 5xx always enqueue. Separate enqueue pre-guards bound flood: `err_alert_enqueue` 30/60s, `err_alert_enqueue_4xx` 10/60s.
+- **Framework HTTPException (v1.53.1).** `errors.py::http_exception_handler` (registered for `starlette ... HTTPException`) funnels route-not-found **404/405** through the capture path AND returns the standard envelope. **422** is `RequestValidationError` (a different type) - stays FastAPI's `{detail:[...]}`, **not** captured (don't "fix" as a bug). `_NEVER_CAPTURE_CODES = {JOB_NOT_FOUND}` (the self-update poll race) is deliberately excluded.
+- **Edge scanner detection (v1.53.2).** `docker/frontend/nginx.conf` routes scanner-bait paths (a curated script/config/vcs **extension** denylist + dotfiles except `/.well-known/`) to the backend → 404 → logged. This is the **only** way scans surface: the SPA fallback 200s unknown *page* paths and scanners don't run the SPA JS. nginx.conf is baked into the frontend image → ships via in-app Update (no host step). Per-IP `limit_req zone=probe`.
+- **`error_log` table:** `ip` (real client IP, v1.54), no FK on `user_id` (forensic), `signature` for grouping, `alerted` flag. Pruned by `prune_history` + `error_log.retention_days`. server_error email = admin-only `NotificationCategory.server_error` (subject neutral "error (CODE)"; body branches client/server).
+
 ## SSO (multi-provider OIDC)
 
 - **Table** `oidc_providers` (UUID PK): preset ∈ entra|google|authentik|keycloak|custom, issuer_url, client_id, `client_secret_encrypted` (Fernet, HKDF over JWT_SECRET), groups_claim, admin/employee_groups, redirect_uri, enabled. **Binding:** `users.oidc_provider_id` + composite unique `(provider_id, oidc_subject)` - each user binds to one provider. Presets in `services/oidc.py::PROVIDER_PRESETS`.
@@ -285,7 +300,8 @@ ARQ worker (`workers/worker.py::WorkerSettings`), queue `fileheron:default`,
 `max_tries=5`. Schedules are admin-tunable since v1.28.0 via
 `services/cron_schedule.py::REGISTRY` + the minute `cron_dispatch`; all idempotent.
 
-- **Hourly-ish:** `expire_files`, `share_expiring_24h_warning`, `ops_check` (cron+Redis health → `ops_alert`), `cleanup_expired_tokens`, `quota_reconcile`, `cleanup_abandoned_uploads`, `cleanup_stale_uploads`, `release_check` (filter `^v\d+\.\d+\.\d+`), `disk_check`, `anomaly_check`.
+- **Hourly-ish:** `expire_files`, `share_expiring_24h_warning`, `ops_check` (cron+Redis health → `ops_alert`), `cleanup_expired_tokens`, `quota_reconcile`, `cleanup_abandoned_uploads`, `cleanup_stale_uploads`, `release_check` (filter `^v\d+\.\d+\.\d+`), `disk_check`, `anomaly_check`, `rescan_inbound_attachments`.
+- **Every 5 min:** `imap_poll` (self-gated on `imap.enabled`/mode/interval).
 - **Every minute:** `drain_pending_update` (see Maintenance).
 - **Daily ~02:xx:** `purge_old_quarantine`, `cleanup_pending_invites`, `cleanup_read_notifications`, `prune_history`, `reclaim_orphaned_files`, `analytics_aggregate`.
 - **Event-driven:** `av_scan_file` (see Antivirus); `send_email_job` (per-job DB session resolves SMTP, transient retry, permanent 5xx → audit `email_undeliverable` + admin alert).
@@ -293,9 +309,9 @@ ARQ worker (`workers/worker.py::WorkerSettings`), queue `fileheron:default`,
 ## Database schema
 
 Per-table models are the source; non-obvious facts only. **BigInteger PK** on
-high-volume tables (`audit_log`, `download_log`, `email_log`, `login_attempts`,
-`notifications`, `public_link_password_attempts`); rest Integer; UUID where it
-leaves the system.
+high-volume tables (`audit_log`, `download_log`, `email_log`, `error_log`,
+`login_attempts`, `notifications`, `public_link_password_attempts`); rest Integer;
+UUID where it leaves the system.
 
 - `users` - plaintext `email VARCHAR(254) UNIQUE`; `oidc_provider_id` + composite unique with `oidc_subject`; `quota_bytes` NULL = unlimited; `requires_2fa_setup` **dropped** (computed live).
 - `refresh_tokens` - `replaced_by_id` self-FK = rotation chain; reuse → revoke whole family.

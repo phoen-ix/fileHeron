@@ -123,6 +123,27 @@ def test_logged_even_when_alerting_disabled(db):
     assert db.query(ErrorLog).first().alerted is False
 
 
+def test_spa_404_logged_but_not_alerted(db, monkeypatch):
+    # capture 4xx + 404 allowlisted, alerting on - a browser-reported page miss.
+    settings_svc.set_value(db, key=K.ERROR_LOG_CAPTURE_4XX, value="true", actor=None)
+    settings_svc.set_value(db, key=K.ERROR_LOG_4XX_CODES, value="404", actor=None)
+    settings_svc.set_value(db, key=K.ERROR_ALERT_ENABLED, value="true", actor=None)
+    db.commit()
+    sent: list = []
+    monkeypatch.setattr(error_alert, "_send_to_admins", lambda _db, _p: (sent.append(1), 1)[1])
+
+    ev = {
+        "source": "spa", "status_code": 404, "code": "NOT_FOUND", "method": "GET",
+        "path": "/foobar", "ip": "203.0.113.5", "at": utc_now().isoformat(),
+    }
+    res = error_alert.handle_error_event(db, ev)
+    assert res["logged"] is True
+    assert res["status"] == "unknown_source"   # spa is not an alert source -> no email
+    rows, total = error_log.list_errors(db, source="spa")
+    assert total == 1 and rows[0].path == "/foobar" and rows[0].ip == "203.0.113.5"
+    assert sent == []
+
+
 def test_alerted_flag_set_on_send(db, make_user, monkeypatch):
     make_user(email="a@test.local", role=UserRole.admin)
     settings_svc.set_value(db, key=K.ERROR_ALERT_ENABLED, value="true", actor=None)

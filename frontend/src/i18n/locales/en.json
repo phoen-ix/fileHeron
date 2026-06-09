@@ -2179,7 +2179,7 @@
     "log_enabled_help": "Persist every server error (HTTP 5xx) and failed scheduled task to a browsable, filterable log - independent of whether emails are sent.",
     "view_log_link": "Open the error log",
     "capture_4xx_label": "Also record selected client errors (4xx)",
-    "capture_4xx_help": "By default only 5xx and cron failures are logged. Turn this on to also capture specific 4xx codes - useful ones are 429 (rate limited) or 409 (conflict). Noisy codes like 401/403/404/422 are ignored unless you list them.",
+    "capture_4xx_help": "By default only 5xx and cron failures are logged. Turn this on to also capture specific 4xx codes - useful ones are 429 (rate limited) or 409 (conflict). Noisy codes like 401/403/404/422 are ignored unless you list them. With 404 in the list, browser visits to non-existent pages are logged too (source: page).",
     "codes_4xx_placeholder": "429, 409",
     "codes_4xx_help": "Comma-separated HTTP status codes between 400 and 499. Only these 4xx codes are captured.",
     "retention_label": "Keep log entries for (days)",
@@ -2227,6 +2227,7 @@
     },
     "source": {
       "http": "HTTP",
+      "spa": "Page (browser)",
       "worker": "Scheduled task"
     },
     "col": {

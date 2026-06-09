@@ -31,7 +31,7 @@ const loading = ref(true)
 const errorMsg = ref<string | null>(null)
 const expanded = ref<number | null>(null)
 
-const sourceOptions = ['', 'http', 'worker']
+const sourceOptions = ['', 'http', 'spa', 'worker']
 
 function statusTone(s: number): 'active' | 'warn' | 'danger' | undefined {
   if (s >= 500) return 'danger'

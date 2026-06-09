@@ -2179,7 +2179,7 @@
     "log_enabled_help": "Jeden Serverfehler (HTTP-5xx) und jede fehlgeschlagene geplante Aufgabe in einem durchsuchbaren, filterbaren Protokoll festhalten - unabhängig davon, ob E-Mails gesendet werden.",
     "view_log_link": "Fehlerprotokoll öffnen",
     "capture_4xx_label": "Auch ausgewählte Client-Fehler (4xx) erfassen",
-    "capture_4xx_help": "Standardmäßig werden nur 5xx und Cron-Fehler protokolliert. Aktiviere dies, um zusätzlich bestimmte 4xx-Codes zu erfassen - nützlich sind etwa 429 (Rate-Limit) oder 409 (Konflikt). Laute Codes wie 401/403/404/422 werden ignoriert, sofern du sie nicht aufführst.",
+    "capture_4xx_help": "Standardmäßig werden nur 5xx und Cron-Fehler protokolliert. Aktiviere dies, um zusätzlich bestimmte 4xx-Codes zu erfassen - nützlich sind etwa 429 (Rate-Limit) oder 409 (Konflikt). Laute Codes wie 401/403/404/422 werden ignoriert, sofern du sie nicht aufführst. Mit 404 in der Liste werden auch Browser-Aufrufe nicht existierender Seiten protokolliert (Quelle: Seite).",
     "codes_4xx_placeholder": "429, 409",
     "codes_4xx_help": "Kommagetrennte HTTP-Statuscodes zwischen 400 und 499. Nur diese 4xx-Codes werden erfasst.",
     "retention_label": "Protokolleinträge aufbewahren für (Tage)",
@@ -2227,6 +2227,7 @@
     },
     "source": {
       "http": "HTTP",
+      "spa": "Seite (Browser)",
       "worker": "Geplante Aufgabe"
     },
     "col": {

@@ -42,6 +42,7 @@ from .routers import (
     public_links,
     setup,
     shares,
+    telemetry,
     tus_hooks,
     uploads,
     users,
@@ -109,6 +110,7 @@ app.include_router(account.router)               # /me + /2fa/* must be reachabl
 app.include_router(public.router)                # anonymous public-link landing
 app.include_router(notification_subscriptions.router)  # anonymous, token-authed
 app.include_router(branding.router)              # anonymous logo + legal pages
+app.include_router(telemetry.router)             # anonymous SPA client-404 beacon
 app.include_router(tus_hooks.router)             # internal HMAC-gated
 app.include_router(oidc.router)                  # anonymous OIDC login
 app.include_router(webauthn.auth_router)         # WebAuthn login flow

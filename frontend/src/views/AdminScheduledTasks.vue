@@ -143,23 +143,25 @@ onMounted(load)
                   </label>
                 </td>
                 <td class="sched-cell">
-                  <select v-model="it.kind" class="fh-field-input kind">
-                    <option value="interval">{{ t('admin_scheduled_tasks.kind_interval') }}</option>
-                    <option value="daily">{{ t('admin_scheduled_tasks.kind_daily') }}</option>
-                  </select>
-                  <span v-if="it.kind === 'interval'" class="sched-input">
-                    <input
-                      v-model.number="it.interval_minutes"
-                      type="number"
-                      class="fh-field-input num"
-                      :min="it.min_interval_minutes"
-                      max="10080"
-                    />
-                    {{ t('admin_scheduled_tasks.minutes') }}
-                  </span>
-                  <span v-else class="sched-input">
-                    <input v-model="it.daily_time" type="time" class="fh-field-input time" />
-                  </span>
+                  <div class="cell-row">
+                    <select v-model="it.kind" class="fh-field-input kind">
+                      <option value="interval">{{ t('admin_scheduled_tasks.kind_interval') }}</option>
+                      <option value="daily">{{ t('admin_scheduled_tasks.kind_daily') }}</option>
+                    </select>
+                    <span v-if="it.kind === 'interval'" class="sched-input">
+                      <input
+                        v-model.number="it.interval_minutes"
+                        type="number"
+                        class="fh-field-input num"
+                        :min="it.min_interval_minutes"
+                        max="10080"
+                      />
+                      {{ t('admin_scheduled_tasks.minutes') }}
+                    </span>
+                    <span v-else class="sched-input">
+                      <input v-model="it.daily_time" type="time" class="fh-field-input time" />
+                    </span>
+                  </div>
                 </td>
                 <td class="status-cell">
                   <span v-if="it.last_status" class="fh-pill" :data-tone="statusTone(it)">{{ it.last_status }}</span>
@@ -171,12 +173,14 @@ onMounted(load)
                 </td>
                 <td class="fh-mono next">{{ it.enabled ? formatDate(it.next_run_at) : t('admin_scheduled_tasks.disabled') }}</td>
                 <td class="actions">
-                  <button type="button" class="fh-btn" :disabled="savingName === it.name" @click="onSave(it)">
-                    {{ t('common.save') }}
-                  </button>
-                  <button type="button" class="fh-btn-text" :disabled="runningName === it.name" @click="onRun(it)">
-                    {{ t('admin_scheduled_tasks.run_now') }}
-                  </button>
+                  <div class="cell-row actions-row">
+                    <button type="button" class="fh-btn" :disabled="savingName === it.name" @click="onSave(it)">
+                      {{ t('common.save') }}
+                    </button>
+                    <button type="button" class="fh-btn-text" :disabled="runningName === it.name" @click="onRun(it)">
+                      {{ t('admin_scheduled_tasks.run_now') }}
+                    </button>
+                  </div>
                 </td>
               </tr>
             </tbody>
@@ -196,13 +200,15 @@ onMounted(load)
   margin-top: var(--fh-space-5);
 }
 .table-wrap {
+  /* Narrow-screen safety only: on wide screens the table is narrower than this
+     wrapper so nothing scrolls; below the table's natural width it scrolls here
+     instead of breaking the page. */
   overflow-x: auto;
-  /* Constrain + left-align the table so its columns sit together instead of
-     stretching across the full-width page. Right-side whitespace is intended. */
-  max-width: 68rem;
 }
 .cron-table {
-  width: 100%;
+  /* Shrink-to-content + left-aligned: columns sit together (no stretched gaps)
+     without forcing the table wider than its wrapper (no scrollbar). */
+  width: auto;
   border-collapse: collapse;
   font-size: var(--fh-text-body-md);
   line-height: 1.5;
@@ -227,11 +233,6 @@ onMounted(load)
 .cron-table tbody tr:hover td {
   background: var(--fh-surface-2, rgba(0, 0, 0, 0.02));
 }
-/* Give the Task column a generous-but-bounded share so the control columns
-   spread evenly across the width instead of clustering after one greedy cell. */
-.cron-table .task-cell {
-  width: 40%;
-}
 .task-cell .enable {
   display: flex;
   align-items: center;
@@ -254,10 +255,17 @@ onMounted(load)
   cursor: pointer;
 }
 .sched-cell {
+  white-space: nowrap;
+}
+/* Flex lives on an inner wrapper, never the <td> - a flex <td> drops out of the
+   table row-height model so its border-bottom stops aligning with the other cells. */
+.cell-row {
   display: flex;
   align-items: center;
   gap: var(--fh-space-2);
-  white-space: nowrap;
+}
+.actions-row {
+  justify-content: flex-end;
 }
 .fh-field-input.kind {
   width: auto;
@@ -294,9 +302,6 @@ onMounted(load)
   white-space: nowrap;
 }
 .actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--fh-space-2);
   white-space: nowrap;
 }
 .muted {

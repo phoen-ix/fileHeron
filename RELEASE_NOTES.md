@@ -1,34 +1,36 @@
-# file:Heron v1.55.7
+# file:Heron v1.55.8
 
-**Drop the redundant "moved" pointer on the System page.** The System page still carried a
-leftover "Scheduled tasks - cron schedules, status and Run now have moved to..." card from
-when the cron table lived there. It's noise now that Scheduled tasks is its own page, so
-it's removed.
+**Fix the Scheduled-tasks table alignment + stray scrollbar.** Two layout bugs crept into
+the cron table: the column bottom-borders didn't line up across a row, and every group
+section (Shares & files, Mail, ...) had a small horizontal scrollbar. Both are fixed.
 
 ## What's new
 
-- **Removed the "Scheduled tasks (moved)" card** from Admin → System. The dedicated
-  Scheduled tasks page (and its sidebar link) is unchanged; this only deletes the stale
-  pointer note and its now-unused text.
+- **Row borders line up again.** The Schedule and actions cells had their flex layout set
+  directly on the table cell, which pulled them out of the table's row-height model so their
+  underline sat at a different height than the Task / Recent / Next columns. The flex now
+  lives on an inner wrapper, so all five columns share one clean bottom border per row.
+- **No more per-section scrollbar.** The table previously forced itself wider than its
+  (capped) container. It now sizes to its content and left-aligns naturally - constrained
+  and tidy, with no horizontal scrollbar on normal screens (narrow windows still scroll the
+  table inside its own box instead of breaking the page).
 
 ## Notes
 
-- Pure UI cleanup - no behavior, data, settings, or API changes. The Scheduled tasks page,
-  its other deep-links (IMAP settings, Updates section), and the backend crons are
-  untouched.
+- Pure layout/CSS change - no behavior, data, settings, or API changes.
 
 ## Upgrade notes
 
 - Rolls forward via **Update** in `/admin/system`. Frontend image (backend + worker are
   rebuilt at the same version, code unchanged), **no migration, no host step**. Rolling
-  back to v1.55.6 is safe.
+  back to v1.55.7 is safe.
 
 ## Container images
 
-- `ghcr.io/phoen-ix/fileheron-backend:v1.55.7`
-- `ghcr.io/phoen-ix/fileheron-worker:v1.55.7`
-- `ghcr.io/phoen-ix/fileheron-frontend:v1.55.7`
-- `ghcr.io/phoen-ix/fileheron-updater-shim:v1.55.7`
-- `ghcr.io/phoen-ix/fileheron-updater-executor:v1.55.7`
+- `ghcr.io/phoen-ix/fileheron-backend:v1.55.8`
+- `ghcr.io/phoen-ix/fileheron-worker:v1.55.8`
+- `ghcr.io/phoen-ix/fileheron-frontend:v1.55.8`
+- `ghcr.io/phoen-ix/fileheron-updater-shim:v1.55.8`
+- `ghcr.io/phoen-ix/fileheron-updater-executor:v1.55.8`
 
 Click **Update** in `/admin/system` to roll forward.

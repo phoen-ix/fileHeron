@@ -1,4 +1,4 @@
-# file:Heron v1.56.1
+# file:Heron v1.56.2
 
 **A correctness + hardening release from a full code audit.** No new features and
 no visible redesign - this fixes a batch of real bugs found by an end-to-end audit
@@ -54,9 +54,10 @@ docs. No database migration and no host step: deploy straight from this banner.
 - Removed dead code and two unused Python dependencies; refreshed the developer
   handover notes and the README (documented the deploy/rollback and JWT-secret
   rotation scripts).
-- **Security dependency updates** (v1.56.1): bumped `starlette`, `cryptography`,
-  and `pydantic-settings` to the versions that clear newly-published advisories
-  (the full test suite passes on the updated stack). No behaviour change.
+- **Security dependency updates** (v1.56.1-.2): bumped `starlette`,
+  `cryptography`, and `pydantic-settings` (backend) and pinned `form-data`
+  (frontend) to the versions that clear newly-published advisories; the full
+  backend suite and frontend build pass on the updated stack. No behaviour change.
 
 ## Notes
 

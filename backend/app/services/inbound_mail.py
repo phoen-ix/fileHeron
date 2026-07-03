@@ -80,7 +80,7 @@ def _store_attachment(db: Session, message_id_pk: int, att: ParsedAttachment) ->
         InboundAttachment(
             message_id=message_id_pk,
             filename=att.filename[:255],
-            content_type=(att.content_type or None),
+            content_type=(att.content_type or None) and att.content_type[:127],
             size_bytes=len(att.content),
             storage_key=locator,
             av_state=av_state,
@@ -134,15 +134,19 @@ def ingest(
             db.query(User.id).filter(User.email == parsed.sender_email).scalar()
         )
 
+    # Truncate every String-column field to its length: an over-long header
+    # (spam/malformed) otherwise raises DataError on commit under MariaDB strict
+    # mode, which aborts the whole poll and never advances the UID highwater, so
+    # the same message re-wedges every subsequent poll.
     msg = InboundMessage(
         received_at=parsed.received_at,
         sender_email=(parsed.sender_email or "unknown")[:320],
-        sender_name=(parsed.sender_name or None),
+        sender_name=(parsed.sender_name or None) and parsed.sender_name[:255],
         sender_user_id=sender_user_id,
-        to_addr=(parsed.to_addr or None),
+        to_addr=(parsed.to_addr or None) and parsed.to_addr[:320],
         subject=parsed.subject[:512],
-        message_id=parsed.message_id,
-        in_reply_to=parsed.in_reply_to,
+        message_id=(parsed.message_id or None) and parsed.message_id[:320],
+        in_reply_to=(parsed.in_reply_to or None) and parsed.in_reply_to[:320],
         imap_uid=uid,
         uidvalidity=uidvalidity,
         classification=parsed.classification,

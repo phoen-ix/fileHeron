@@ -163,6 +163,7 @@ def compute_analytics(db: Session, days: int = 30) -> dict:
         for sid, subject, c in (
             db.query(Share.id, Share.subject, func.count(DownloadLog.id))
             .join(DownloadLog, DownloadLog.share_id == Share.id)
+            .filter(DownloadLog.accessed_at >= start_dt)
             .group_by(Share.id, Share.subject)
             .order_by(func.count(DownloadLog.id).desc())
             .limit(10)

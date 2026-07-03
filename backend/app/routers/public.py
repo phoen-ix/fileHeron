@@ -76,8 +76,11 @@ def _b64url_decode(s: str) -> bytes:
 
 
 def _make_unlock_cookie(link_id: str, expires_at: datetime) -> str:
+    # expires_at is naive UTC (the storage convention); .timestamp() on a naive
+    # datetime is interpreted in the process-local TZ, so stamp UTC explicitly to
+    # match _verify_unlock_cookie's aware-UTC comparison below.
     payload = json.dumps(
-        {"link_id": link_id, "exp": int(expires_at.timestamp())},
+        {"link_id": link_id, "exp": int(expires_at.replace(tzinfo=timezone.utc).timestamp())},
         separators=(",", ":"),
     ).encode("utf-8")
     sig = hmac_mod.new(

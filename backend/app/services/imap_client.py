@@ -101,9 +101,13 @@ class ImapSession:
             self._c.create(folder)  # no-op if it already exists
         except imaplib.IMAP4.error:
             pass
-        typ, _ = self._c.uid("MOVE", str(uid), folder)
+        try:
+            typ, _ = self._c.uid("MOVE", str(uid), folder)
+        except imaplib.IMAP4.error:
+            # A server without RFC 6851 MOVE answers a tagged BAD, which imaplib
+            # raises rather than returning; fall through to COPY+delete.
+            typ = "BAD"
         if typ != "OK":
-            # Server without RFC 6851 MOVE: copy then delete.
             self._c.uid("COPY", str(uid), folder)
             self.delete(uid)
 

@@ -107,6 +107,13 @@ api.interceptors.response.use(
       original._retry = true
       const refreshed = await refreshOnce()
       if (refreshed) {
+        // Drop the stale Authorization header so the request interceptor
+        // injects the freshly-refreshed token; otherwise the retry replays the
+        // now-expired token (the interceptor skips headers that already carry
+        // an Authorization) and 401s again.
+        ;(original.headers as { delete?(name: string): void } | undefined)?.delete?.(
+          'Authorization',
+        )
         return api(original)
       }
       // The bootstrap session-probe opts out: a failed probe just means

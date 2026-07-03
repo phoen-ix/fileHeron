@@ -1,6 +1,6 @@
 /* Translates an axios error envelope into a user-readable message via i18n.
- * Falls back gracefully through: known code → generic message → server error
- * text. */
+ * Falls back gracefully through: known code → server error text → generic
+ * message. */
 import { useI18n } from 'vue-i18n'
 
 import { asEnvelope } from '@/api/client'

@@ -97,6 +97,11 @@ _TRANSIENT_SETTING_KEYS = {
     settings_svc.Keys.IMAP_LAST_UID,
     settings_svc.Keys.IMAP_UIDVALIDITY,
     settings_svc.Keys.STORAGE_CRITICAL_LOW,
+    # Runtime drain state - exporting it would re-arm maintenance mode (and a
+    # past-deadline pending update that drain_pending_update fires at once) on
+    # every restore, so keep it out of the portable config backup.
+    settings_svc.Keys.MAINTENANCE_ENABLED,
+    settings_svc.Keys.MAINTENANCE_PENDING_UPDATE,
 }
 # Logo locators are system-specific (absolute paths / object keys); the bytes
 # travel in the branding_logo section and locators are regenerated on import.

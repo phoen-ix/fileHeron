@@ -245,6 +245,10 @@ def erase_user(
     target.password_hash = ""
     target.is_disabled = True
     target.oidc_subject = None
+    # Also clear the provider binding: _user_count_for_provider counts by
+    # oidc_provider_id alone, so an erased ghost would otherwise block that
+    # provider's deletion forever (OIDC_PROVIDER_HAS_USERS).
+    target.oidc_provider_id = None
     target.last_login_at = None
     db.flush()
 

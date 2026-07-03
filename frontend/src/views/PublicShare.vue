@@ -69,8 +69,13 @@ async function onUnlock() {
   } catch (err: unknown) {
     interface AxiosLike { response?: { data?: { error?: string; code?: string } } }
     const e = err as AxiosLike
-    unlockError.value =
-      e.response?.data?.error ?? t('public_share.errors.unlock_failed')
+    const code = e.response?.data?.code
+    // Translate by code (INVALID_PUBLIC_PASSWORD / PUBLIC_LINK_LOCKED /
+    // PUBLIC_LINK_EXHAUSTED) so the localized strings are actually used,
+    // falling back to the server text then the generic message.
+    unlockError.value = code
+      ? t(`public_share.errors.${code}`, e.response?.data?.error ?? t('public_share.errors.unlock_failed'))
+      : (e.response?.data?.error ?? t('public_share.errors.unlock_failed'))
   } finally {
     unlocking.value = false
   }

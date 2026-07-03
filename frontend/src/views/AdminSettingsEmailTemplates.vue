@@ -19,7 +19,7 @@ import type {
   PreviewEmailTemplateResponse,
 } from '@/types/api'
 
-// Lazy chunk: Milkdown only loads when this page is opened.
+// Lazy chunk: the ProseMirror RichTextEditor only loads when this page is opened.
 const RichTextEditor = defineAsyncComponent(() => import('@/components/RichTextEditor.vue'))
 
 const { t, te } = useI18n()

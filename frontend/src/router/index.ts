@@ -480,6 +480,7 @@ export function navigationGuard(
     auth.isAuthenticated &&
     auth.user?.requires_2fa === true &&
     to.name !== 'login' &&
+    to.meta.public !== true &&
     !to.path.startsWith('/account/2fa')
   ) {
     return {

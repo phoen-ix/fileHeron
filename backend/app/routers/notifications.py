@@ -227,6 +227,12 @@ async def stream(
     Important Traefik / reverse-proxy headers below - see CLAUDE.md
     for the labels operators must NOT add (no buffering middleware)."""
     user = _resolve_stream_user(request, db, token, authorization)
+    user_id = user.id
+    # The stream does no DB work after auth; release the pooled connection now
+    # instead of pinning it for the whole ~60s stream (a handful of open bell
+    # tabs would otherwise exhaust the connection pool). get_db's teardown
+    # close() then becomes a no-op.
+    db.close()
 
     last_event_id_header = request.headers.get("last-event-id")
     last_event_id = None
@@ -239,17 +245,17 @@ async def stream(
     # Per-user concurrent-connection cap (finding M4). Acquire here so we
     # can return a clean 429; release in the generator's finally, which
     # Starlette invokes on completion OR client disconnect.
-    if not sse_svc.try_acquire_user_stream(user.id):
+    if not sse_svc.try_acquire_user_stream(user_id):
         raise AppError(
             429, "TOO_MANY_STREAMS", "Too many concurrent connections; close some tabs."
         )
 
     async def _capped_stream():
         try:
-            async for frame in sse_svc.stream_for_user(user.id, last_event_id):
+            async for frame in sse_svc.stream_for_user(user_id, last_event_id):
                 yield frame
         finally:
-            sse_svc.release_user_stream(user.id)
+            sse_svc.release_user_stream(user_id)
 
     return StreamingResponse(
         _capped_stream(),

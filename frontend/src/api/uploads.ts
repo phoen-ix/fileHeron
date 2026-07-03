@@ -15,6 +15,10 @@ export function directUpload(shareId: string, file: File, onProgress?: (n: numbe
   form.append('share_id', shareId)
   form.append('file', file)
   return api.post<DirectUploadResponse>('/uploads/direct', form, {
+    // A direct upload can easily exceed the shared client's 30s default; the
+    // whole-request timeout would abort a legit slow upload. Rely on progress
+    // events / user abort instead.
+    timeout: 0,
     headers: { 'Content-Type': 'multipart/form-data' },
     onUploadProgress: onProgress
       ? (e) => {

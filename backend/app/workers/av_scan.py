@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import logging
 
+from arq import Retry
+
 from ..config import settings
 from ..database import SessionLocal
 from ..models.file import File, FileState
@@ -53,10 +55,13 @@ async def av_scan_file(_ctx, file_id: str) -> dict:
                 with backend.open(file.storage_path) as fh:
                     result = av_scan_svc.scan_stream(fh)
         except av_scan_svc.AVUnavailableError as e:
-            # Re-raise so ARQ retries with backoff. Worker config picks
-            # the retry count.
-            logger.warning("clamd unavailable for %s: %s", file_id, e)
-            raise
+            # clamd is down/not-ready. A plain re-raise is NOT re-enqueued by
+            # arq (only Retry/RetryJob are), so it would burn the job with no
+            # retry; raise Retry so max_tries applies with a capped backoff.
+            # cleanup_stale_uploads recovers anything that outlives the retries.
+            attempt = _ctx.get("job_try", 1)
+            logger.warning("clamd unavailable for %s (try %d): %s", file_id, attempt, e)
+            raise Retry(defer=min(60, 5 * attempt)) from e
 
         if result.state == "clean":
             # clamd reports "clean" even when a file exceeds its configured
@@ -79,7 +84,22 @@ async def av_scan_file(_ctx, file_id: str) -> dict:
                     "state": "oversize_unscanned",
                     "size_bytes": file.size_bytes,
                 }
-            file.state = FileState.clean
+            # Conditional flip: a slow scan can run while share expiry commits
+            # `deleted` (bytes gone). Only mark clean if the row is still
+            # ready_unscanned, else we would resurrect a deleted file whose
+            # bytes no longer exist (mirrors approve_share/expire_share_now).
+            updated = (
+                db.query(File)
+                .filter(File.id == file_id, File.state == FileState.ready_unscanned)
+                .update({File.state: FileState.clean}, synchronize_session=False)
+            )
+            if updated == 0:
+                db.rollback()
+                logger.info(
+                    "av_scan: %s left ready_unscanned mid-scan; not marking clean",
+                    file_id,
+                )
+                return {"file_id": file_id, "state": "superseded"}
             db.commit()
             logger.info("av_scan: %s clean", file_id)
             return {"file_id": file_id, "state": "clean"}

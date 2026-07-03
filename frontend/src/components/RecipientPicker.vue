@@ -285,6 +285,10 @@ function moveCursor(delta: number) {
 
 function selectCursor() {
   const usersLen = filteredUsers.value.length
+  const total = usersLen + filteredGroups.value.length
+  // Enter with no results (or a stale cursor past the shrunk list) must not
+  // deref undefined - bail out instead of crashing the keydown handler.
+  if (cursorIdx.value < 0 || cursorIdx.value >= total) return
   if (cursorIdx.value < usersLen) {
     addUser(filteredUsers.value[cursorIdx.value])
   } else {

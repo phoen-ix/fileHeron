@@ -469,7 +469,7 @@ onMounted(load)
           <button
             type="button"
             class="fh-btn"
-            :disabled="!newExpiryLocal || savingExpiry"
+            :disabled="newExpiryLocal === undefined || savingExpiry"
             @click="saveExpiry"
           >
             {{ savingExpiry ? t('common.loading') : t('common.save') }}

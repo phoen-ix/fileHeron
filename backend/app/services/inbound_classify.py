@@ -4,9 +4,19 @@ side-effect free so it's exhaustively testable on raw sample emails (v1.27.0).
 """
 from __future__ import annotations
 
+from email.header import decode_header, make_header
 from email.message import Message
 
 from ..models.inbound_message import MessageClass
+
+
+def _decoded_subject(msg: Message) -> str:
+    raw = msg.get("Subject") or ""
+    try:
+        return str(make_header(decode_header(raw)))
+    except Exception:
+        return raw
+
 
 _AUTO_SUBJECT_HINTS = (
     "out of office",
@@ -23,7 +33,9 @@ def classify(msg: Message) -> MessageClass:
     ctype = (msg.get_content_type() or "").lower()
     report_type = (msg.get_param("report-type") or "").lower() if msg.get("Content-Type") else ""
     from_addr = (msg.get("From") or "").lower()
-    subject = (msg.get("Subject") or "").lower()
+    # Decode RFC2047-encoded words (=?utf-8?...?=) before matching, else an
+    # encoded "Automatische Antwort" subject never matches the auto-reply hints.
+    subject = _decoded_subject(msg).lower()
 
     # --- Bounce (delivery-status notification) ---
     if ctype == "multipart/report" and report_type == "delivery-status":

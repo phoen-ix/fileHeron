@@ -250,13 +250,20 @@ def delete_file_for_expiry(db: Session, *, file: File) -> None:
     decide whether to keep processing the rest of the batch)."""
     if file.state == FileState.deleted:
         return
+
+    # An infected file already had its bytes moved to quarantine and its quota
+    # released by services/quarantine.py; re-releasing here would double-credit
+    # the uploader (mirrors the hard_delete guard above, finding L11).
+    was_infected = file.state == FileState.infected
+
     if file.storage_path:
         get_storage_backend().delete(file.storage_path)
 
     file.state = FileState.deleted
     db.flush()
 
-    release_bytes(user_id=file.uploaded_by_id, bytes_to_free=file.size_bytes)
+    if not was_infected:
+        release_bytes(user_id=file.uploaded_by_id, bytes_to_free=file.size_bytes)
 
     record_audit_event(
         db,

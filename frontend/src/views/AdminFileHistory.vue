@@ -139,9 +139,12 @@ onMounted(load)
       <select v-model="shareStateFilter" class="filter-select">
         <option value="">{{ t('admin_file_history.share_state_all') }}</option>
         <option value="active">{{ t('share_state.active') }}</option>
+        <option value="pending_approval">{{ t('share_state.pending_approval') }}</option>
         <option value="expired">{{ t('share_state.expired') }}</option>
         <option value="revoked">{{ t('share_state.revoked') }}</option>
+        <option value="rejected">{{ t('share_state.rejected') }}</option>
         <option value="deleted">{{ t('share_state.deleted') }}</option>
+        <option value="failed">{{ t('share_state.failed') }}</option>
       </select>
       <label class="orphan-toggle">
         <input v-model="orphanedOnly" type="checkbox" />

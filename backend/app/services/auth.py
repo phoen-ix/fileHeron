@@ -18,6 +18,7 @@ from datetime import timedelta
 
 from fastapi import Request
 from sqlalchemy import update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..middleware.errors import AppError
@@ -134,7 +135,13 @@ def _create_user_from_invite(
         created_by_id=invite.created_by_id,
     )
     db.add(user)
-    db.flush()
+    try:
+        db.flush()
+    except IntegrityError:
+        # A parallel registration won the UNIQUE(email) race between the
+        # preflight SELECT above and this flush - surface the clean 409 rather
+        # than a raw 500 (mirrors services/email_change.py's apply path).
+        raise AppError(409, "USER_EXISTS", "An account already exists for this email.") from None
 
     invite.used_at = utc_now()
     invite.used_user_id = user.id
@@ -668,6 +675,11 @@ async def consume_password_reset(
 
     user = db.query(User).filter(User.id == record.user_id).one()
     user.password_hash = argon2_hash(new_password)
+    # Completing a reset is proof of control, so clear any prior lockout - else
+    # a locked-out user who resets still hits ACCOUNT_LOCKED on next login until
+    # the window elapses (reset is not lockout-gated, so this is the only place).
+    user.failed_login_count = 0
+    user.locked_until = None
 
     revoke_all_user_refresh_tokens(db, user.id)
 

@@ -99,7 +99,7 @@
       <li v-for="token in tokens" :key="token.id" class="token-row">
         <div class="token-name">{{ token.name }}</div>
         <div class="token-meta">
-          <span class="fh-mono last4">fh_{{ token.id }}_…{{ token.last4 }}</span>
+          <span class="fh-mono last4">…{{ token.last4 }}</span>
           <span class="fh-mono created">{{ t('api_tokens.created_at', { d: formatDate(token.created_at) }) }}</span>
           <span class="fh-mono used">
             {{
@@ -150,7 +150,7 @@ import { useApiError } from '@/composables/useApiError'
 import { useSiteDateFormat } from '@/composables/useSiteDateFormat'
 import { useUiStore } from '@/stores/ui'
 import type { ApiTokenListItem, CreateApiTokenResponse } from '@/types/api'
-import { siteLocalIsoToUtcIso } from '@/utils/datetime'
+import { parseServerDate, siteLocalIsoToUtcIso } from '@/utils/datetime'
 import { TOKEN_SCOPE_GROUPS, scopeLabelKey } from '@/utils/tokenScopes'
 
 // Token-appropriate durations; default null → the picker shows "Never" so a
@@ -225,7 +225,9 @@ function cancelCreate() {
 }
 
 function isExpired(token: ApiTokenListItem): boolean {
-  return token.expires_at !== null && new Date(token.expires_at) <= new Date()
+  // expires_at is naive UTC; parseServerDate stamps the Z so the comparison
+  // isn't shifted by the viewer's timezone (raw `new Date()` reads it as local).
+  return token.expires_at !== null && parseServerDate(token.expires_at) <= new Date()
 }
 
 function expiryLabel(token: ApiTokenListItem): string {

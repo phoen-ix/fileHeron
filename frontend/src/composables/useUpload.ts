@@ -23,6 +23,7 @@ import Uppy, { type Body, type Meta, type UppyFile } from '@uppy/core'
 import Tus from '@uppy/tus'
 import { computed, onBeforeUnmount, ref, type Ref } from 'vue'
 
+import { asEnvelope } from '@/api/client'
 import { directUpload, initUpload } from '@/api/uploads'
 
 // Mirror backend's MAX_DIRECT_UPLOAD_BYTES default. Cheap-enough for the
@@ -242,12 +243,12 @@ export function useUpload(shareId: Ref<string | null>) {
         /* ignore - already removed on success */
       }
     } catch (err) {
+      // Prefer the API error envelope (e.g. QUOTA_EXCEEDED / MAINTENANCE_MODE /
+      // DIRECT_UPLOAD_TOO_LARGE) over axios's generic "Request failed with
+      // status code NNN"; keep this composable i18n-free (views localize).
       const msg =
-        err instanceof Error
-          ? err.message
-          : typeof err === 'string'
-            ? err
-            : 'upload failed'
+        asEnvelope(err)?.error ??
+        (err instanceof Error ? err.message : typeof err === 'string' ? err : 'upload failed')
       item.state = 'error'
       item.error = msg
       pushLog(item, 'error', { error: msg })

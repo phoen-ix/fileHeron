@@ -1,6 +1,7 @@
 """Upload endpoints - TUS-init + small-file direct multipart."""
 from __future__ import annotations
 
+import logging
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -22,6 +23,7 @@ from ..services.storage_backend import get_storage_backend
 from ..utils.timeutil import utc_now
 
 router = APIRouter(prefix="/api/uploads", tags=["uploads"])
+logger = logging.getLogger("fileheron.uploads")
 
 
 def _refuse_if_storage_critical(db: Session) -> None:
@@ -200,7 +202,15 @@ async def direct_upload(
     # sync `enqueue` would otherwise have to detour around the running
     # loop. (See services/job_queue.py.)
     from ..services import job_queue
-    await job_queue.aenqueue("av_scan_file", file_row.id)
+    try:
+        await job_queue.aenqueue("av_scan_file", file_row.id)
+    except Exception:
+        # The file is already committed; a Redis blip must not 500 a successful
+        # upload. cleanup_stale_uploads re-enqueues scans for rows left in
+        # ready_unscanned (mirrors the tus post-finish hook's swallow-and-log).
+        logger.warning(
+            "av scan enqueue failed for %s; stale-upload cron will recover", file_row.id
+        )
 
     return DirectUploadResponse(
         file_id=file_row.id, size_bytes=received, sha256_hex=file_row.sha256_hex

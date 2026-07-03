@@ -95,14 +95,16 @@ def _summarize_ua(ua: str) -> str:
         browser = "Safari"
     else:
         browser = "Browser"
-    if "mac os" in lower or "macos" in lower:
+    # iOS UAs carry "like Mac OS X", so the iPhone/iPad check MUST precede the
+    # macOS check or every iOS device is mislabelled macOS.
+    if "iphone" in lower or "ipad" in lower or "ios" in lower:
+        os_name = "iOS"
+    elif "mac os" in lower or "macos" in lower:
         os_name = "macOS"
     elif "windows" in lower:
         os_name = "Windows"
     elif "android" in lower:
         os_name = "Android"
-    elif "iphone" in lower or "ipad" in lower or "ios" in lower:
-        os_name = "iOS"
     elif "linux" in lower:
         os_name = "Linux"
     else:

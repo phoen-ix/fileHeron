@@ -84,12 +84,6 @@ def consume_invite(db: Session, *, plaintext_token: str) -> InviteToken:
     return record
 
 
-def mark_invite_consumed(db: Session, record: InviteToken, used_user_id: int) -> None:
-    record.used_at = utc_now()
-    record.used_user_id = used_user_id
-    db.flush()
-
-
 # ---------------------------------------------------------------------------
 # Admin views over pending / expired invites (post-Phase 10; v1.1.5
 # dropped the soft-revoke tombstone - admin delete is now a hard delete).

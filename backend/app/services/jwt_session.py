@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import logging
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 from typing import TYPE_CHECKING
 
 import jwt
@@ -33,7 +33,7 @@ from ..models.audit_log import AuditEventType
 from ..models.refresh_token import RefreshToken
 from ..models.user import User
 from ..utils.crypto import random_token, refresh_token_hash
-from ..utils.timeutil import utc_now
+from ..utils.timeutil import utc_now, utc_now_aware
 from .audit import record_audit_event
 
 if TYPE_CHECKING:
@@ -64,7 +64,7 @@ def create_access_token(user_id: int, settings, db: Session | None = None) -> tu
         minutes = settings_registry.effective(db, settings_registry.K.ACCESS_TOKEN_EXPIRE_MINUTES)
     else:
         minutes = settings.ACCESS_TOKEN_EXPIRE_MINUTES
-    now_aware = datetime.now(tz=timezone.utc)
+    now_aware = utc_now_aware()
     exp_aware = now_aware + timedelta(minutes=minutes)
     payload = {
         "sub": str(user_id),

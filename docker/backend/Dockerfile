@@ -65,6 +65,6 @@ ENTRYPOINT ["/entrypoint.sh"]
 # because the backend port is bound to 127.0.0.1 in compose; external
 # clients can never reach uvicorn directly, so any incoming connection
 # is by definition from a trusted proxy (Traefik on the host, or the
-# nginx-spa container on the internal network).
+# frontend nginx container on the internal network).
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", \
      "--proxy-headers", "--forwarded-allow-ips=*"]

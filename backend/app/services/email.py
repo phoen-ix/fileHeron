@@ -767,23 +767,6 @@ def _site_tz(explicit: str | None) -> str:
     return explicit if explicit is not None else DEFAULT_TIMEZONE
 
 
-async def send_verify_email(
-    *, to: str, locale: Locale | str, display_name: str, token: str,
-    app_url: str | None = None, site_timezone: str | None = None,
-    db: Session | None = None,
-) -> None:
-    base = _app_url(app_url)
-    tz = _site_tz(site_timezone)
-    ctx = {"display_name": display_name, "verify_url": f"{base}/verify-email/{token}"}
-    subject, body, html = render_email(
-        locale, "verify", ctx, app_url=base, site_timezone=tz, db=db,
-        recipient_email=to, category="verify",
-    )
-    await _send_resolved(
-        to=to, subject=subject, text_body=body, html_body=html, category="verify"
-    )
-
-
 async def send_password_reset_email(
     *, to: str, locale: Locale | str, display_name: str, token: str,
     app_url: str | None = None, site_timezone: str | None = None,

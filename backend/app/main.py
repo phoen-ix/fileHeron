@@ -4,8 +4,8 @@
 3. Register exception handler (envelope shape).
 4. Register routers.
 
-The SPA is served by the separate nginx-spa container; this app does not serve
-static files.
+The SPA is served by the separate frontend nginx container; this app does not
+serve static files.
 """
 from __future__ import annotations
 

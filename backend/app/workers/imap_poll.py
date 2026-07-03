@@ -1,9 +1,9 @@
 """Cron entry for the inbound IMAP poll (v1.27.0).
 
-The cron ticks every 5 minutes; ``run_poll`` self-gates on the admin
-``imap.enabled`` / ``imap.check_mode`` / interval settings, so a coarser admin
-interval just skips ticks. IMAP I/O is blocking stdlib ``imaplib`` → run it in a
-thread so the worker event loop stays free.
+Cadence/enable live in the admin cron scheduler (services/cron_schedule.py)
+since v1.28.0; ``run_poll`` only feature-gates on ``imap.enabled``. IMAP I/O is
+blocking stdlib ``imaplib`` → run it in a thread so the worker event loop stays
+free.
 """
 from __future__ import annotations
 

@@ -89,11 +89,6 @@ PROVIDER_PRESETS: dict[str, dict[str, Any]] = {
 }
 
 
-def preset_meta(preset: OIDCPreset | str) -> dict[str, Any]:
-    key = preset.value if isinstance(preset, OIDCPreset) else preset
-    return PROVIDER_PRESETS.get(key, PROVIDER_PRESETS[OIDCPreset.custom.value])
-
-
 # ---------------------------------------------------------------------------
 # Provider lookups
 # ---------------------------------------------------------------------------

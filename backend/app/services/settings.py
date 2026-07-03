@@ -111,7 +111,6 @@ class Keys:
     # Inbound mailbox / IMAP fetch (v1.27.0). Admin-editable; password is the
     # only encrypted field (mirrors SMTP). Read via services/imap_config.py.
     IMAP_ENABLED = "imap.enabled"              # boolean master switch (default false)
-    IMAP_CHECK_MODE = "imap.check_mode"        # 'auto' | 'manual'
     # When true (default), IMAP borrows the SMTP username/password (and host as a
     # default) so the admin doesn't re-enter the outgoing-email login.
     IMAP_USE_SMTP_CREDENTIALS = "imap.use_smtp_credentials"  # boolean
@@ -131,8 +130,7 @@ class Keys:
     IMAP_LAST_SUCCESS_AT = "imap.last_success_at"
     IMAP_LAST_UID = "imap.last_uid"
     IMAP_UIDVALIDITY = "imap.uidvalidity"
-    # Registry tunables (overlay config.Settings env; see settings_registry).
-    IMAP_POLL_INTERVAL_MINUTES = "imap.poll_interval_minutes"
+    # Registry tunable (overlays config.Settings env; see settings_registry).
     IMAP_MESSAGE_RETENTION_DAYS = "retention.inbound_message_days"
 
     # --- Advanced runtime-tunable knobs (registry-driven, see

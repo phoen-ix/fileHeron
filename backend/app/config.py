@@ -125,7 +125,6 @@ class Settings(BaseSettings):
     IMAP_PASSWORD: str = ""
     IMAP_TLS_MODE: str = "implicit"  # 'implicit' (993) | 'starttls' (143) | 'none'
     IMAP_MAILBOX: str = "INBOX"
-    IMAP_POLL_INTERVAL_MINUTES: int = 5
     IMAP_MESSAGE_RETENTION_DAYS: int = 90
 
     # --- Rate limits ---------------------------------------------------------
@@ -206,23 +205,12 @@ class Settings(BaseSettings):
     # kv keys are unset (admin can override at runtime via /admin/settings/twofa).
     REQUIRE_2FA: str = "none"
 
-    # --- Phase 7 - HIBP / OIDC / backup --------------------------------------
+    # --- Phase 7 - HIBP ------------------------------------------------------
     # When false, password-breach checks are disabled (air-gapped deploys).
     HIBP_ENABLED: bool = True
-    # Empty issuer URL = OIDC disabled. Operator sets this to e.g.
-    # "https://idp.example.com/realms/fileheron".
-    OIDC_ISSUER_URL: str = ""
-    OIDC_CLIENT_ID: str = ""
-    OIDC_CLIENT_SECRET: str = ""
-    # Dot-separated path in the ID-token claims dict pointing at the groups
-    # list. Different IdPs put it in different places.
-    OIDC_GROUPS_CLAIM: str = "groups"
-    # Comma-separated group names. First match wins (admin > employee).
-    OIDC_ADMIN_GROUPS: str = ""
-    OIDC_EMPLOYEE_GROUPS: str = ""
-    # Restic-encrypted backup target (optional remote push).
-    BACKUP_RESTIC_REPO: str = ""
-    BACKUP_RESTIC_PASSWORD: str = ""
+    # (OIDC SSO is DB-configured multi-provider - `oidc_providers` table, admin
+    # UI /admin/settings/sso - so there are no OIDC env vars. BACKUP_RESTIC_*
+    # are host-side vars read only by scripts/backup.sh, never by the app.)
 
     # --- Phase 8 - WebAuthn / passkeys ---------------------------------------
     # Relying-Party identifier MUST match the public hostname (no scheme,

@@ -274,7 +274,12 @@ alerting are independent**.
   vuln-scanner probes (`/wp-login.php`, `/.env`, `/.git/config`, …) are routed at the
   edge (nginx) to the backend, which returns `404 NOT_FOUND`; with `404` in the 4xx
   allowlist they appear in the Error log with the source IP. A scan reads as a burst of
-  bogus 404s from one IP.
+  bogus 404s from one IP. Real-browser hits on nonexistent *page* paths (which nginx
+  answers `200` with the SPA shell) are additionally reported by the SPA itself via an
+  anonymous beacon (`POST /api/telemetry/page-404`, opt-in with 4xx capture, per-IP
+  rate-limited, query string stripped); those rows show `source: spa`. The per-minute
+  4xx capture ceiling is tunable on Advanced (`error_log.scan_capture_per_min`) if a
+  scan burst exceeds the default.
 
 ## Webhooks (`/admin/settings/webhooks`)
 
@@ -511,6 +516,15 @@ Alembic migrations run from the backend entrypoint on every boot - idempotent
 only**; back up before upgrading. (Image downgrade after a forward migration needs an
 `alembic stamp` from the newer image first.)
 
+**Scripted deploy / rollback (bootstrap + hotpatch).** `scripts/deploy.sh` pulls
+the GHCR images for `FH_TAG` (default `latest`), with a build-from-source fallback
+for first install or a hotpatch ahead of a release (local builds are not sticky -
+the next deploy tries GHCR again). `scripts/rollback.sh` with no args lists the
+rollable tags; with a `<tag>` it re-tags that image as `:latest` and rolls. Both
+work only against images `deploy.sh` has pulled/built. Prefer the in-app updater
+for routine upgrades - it maintains its own rollback state
+(`data/updater/rollback_target.json`) that a manual `FH_TAG` flip would leave stale.
+
 ## Health checks & metrics
 
 - `GET /api/health` → `{"status":"ok"}` or `{"status":"degraded","degraded":[…]}`; each container has its own Docker healthcheck (`docker compose ps`).
@@ -534,6 +548,13 @@ defaults: [ARQ workers + cron](#arq-workers--cron).
 
 - **Lost admin access** - `docker compose exec backend python scripts/promote_user.py <email>`.
 - **Bypass ClamAV in CI/dev** - `AV_SKIP=true` (boot refuses `production + true`).
+- **Rotate `JWT_SECRET`** - `scripts/rotate_jwt_secret.py` re-encrypts every
+  Fernet-protected field (TOTP secrets, OIDC client secrets, public-link tokens,
+  the encrypted SMTP/IMAP passwords) under the new secret. Stop the worker, run
+  with `OLD_JWT_SECRET`/`NEW_JWT_SECRET` set (`--dry-run` first; safe to re-run
+  after a crash), update `.env`, restart backend + worker. Rotating *without* it
+  locks out every TOTP user and breaks SSO, the stored SMTP password, and
+  public-link re-view. All sessions invalidate (forced re-login) - plan a window.
 
 ## Settings reference
 
@@ -584,7 +605,7 @@ via `/admin/settings/advanced`.
 | `SMTP_FROM_EMAIL`/`SMTP_FROM_NAME` | `noreply@fileheron.local`/`fileHeron` | Envelope sender. |
 | `SMTP_HELO_HOST` | empty | EHLO/HELO name (empty = container FQDN). |
 | `IMAP_HOST`/`IMAP_PORT`/`IMAP_USER`/`IMAP_PASSWORD` | empty/`993`/empty/empty | Inbound mailbox (DB overrides via `/admin/settings/imap`; off unless enabled). |
-| `IMAP_TLS_MODE`/`IMAP_MAILBOX`/`IMAP_POLL_INTERVAL_MINUTES` | `implicit`/`INBOX`/`5` | Inbound fetch tuning. |
+| `IMAP_TLS_MODE`/`IMAP_MAILBOX` | `implicit`/`INBOX` | Inbound fetch tuning. Poll cadence lives on [Scheduled tasks](#scheduled-tasks-adminscheduled-tasks), not an env var. |
 | `RATE_LIMIT_LOGIN` | `10` | Login attempts / IP / window. ↻ |
 | `RATE_LIMIT_REGISTER` | `3` | Register/forgot/verify / IP / window. ↻ |
 | `LOGIN_RATE_WINDOW_SEC` | `900` | Per-IP login window. ↻ |
@@ -634,7 +655,7 @@ via `/admin/settings/advanced`.
 | `FH_TAG` | `latest` | GHCR image tag (the in-app updater rewrites it). |
 | `UPDATER_HOST_WORKSPACE` / `UPDATER_HOST_STATE` | `${PWD}` / `${PWD}/data/updater` | Host paths the updater shim resolves. |
 | `UPDATES_DRAIN_MAX_WAIT_MIN` | `30` | Max wait for transfers to drain before a postponed update applies. ↻ |
-| `BACKUP_RESTIC_REPO` / `BACKUP_RESTIC_PASSWORD` | empty | Optional offsite restic push. |
+| `BACKUP_RESTIC_REPO` / `BACKUP_RESTIC_PASSWORD` | empty | Optional offsite restic push - read by the host `scripts/backup.sh`, not by the app. |
 | `METRICS_BEARER_TOKEN` / `METRICS_ALLOWED_IPS` / `METRICS_CACHE_TTL_SEC` | empty/empty/`60` | `/api/metrics` auth + cache. |
 | `OIDC_*` | empty | **Legacy** - SSO now lives in the DB; use `/admin/settings/sso`. |
 

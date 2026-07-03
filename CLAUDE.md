@@ -15,7 +15,7 @@ keep this to what would cause a wrong move if unknown.
 
 ## Status
 
-Backend **`v1.54.1`**, desktop client **`client-v0.13.0`** - shipped + in
+Backend **`v1.56.0`**, desktop client **`client-v0.13.0`** - shipped + in
 production.
 
 > **Rich text (v1.50):** the admin legal pages + email-template editor is a
@@ -28,15 +28,18 @@ production.
 > clients (`email.py::_inline_alignment`). **Only true-MIT libs** - see the
 > only-true-MIT memory; never TipTap.
 
-> **Doc currency:** sections below were last fully swept at v1.14, plus v1.33
-> (config backup) + v1.34 (maintenance) + v1.49 (API-token scopes) + v1.50 (rich
-> text, above) + v1.52-v1.54 (error log + alerts + scanner detection, own section
-> below) which are documented. Subsystems shipped v1.15-v1.32 (bulk ZIP, analytics,
-> webhooks, anomaly detection, pluggable storage backend incl. S3, share-approval,
+> **Doc currency:** the v1.15-v1.32 subsystems (bulk ZIP, analytics, webhooks,
+> anomaly detection, pluggable storage backend incl. S3, share-approval,
 > email-template overrides, inbound IMAP, admin-tunable cron schedules,
-> branding/legal pages) + the v1.35-v1.47 security-audit remediation + v1.51 (dropped
-> the redundant "disabled" token/public-link policy mode) live in `README.md` +
-> `git log`, not yet back-filled here. **README.md was fully re-swept to v1.54.1.**
+> branding/legal pages) are now **back-filled into their own sections below**
+> (done in the v1.56.0 audit sweep). Also documented: v1.33 (config backup),
+> v1.34 (maintenance), v1.49 (API-token scopes), v1.50 (rich text, above),
+> v1.52-v1.55 (error log + alerts + scanner detection incl. the v1.55 SPA 404
+> beacon + tunable 4xx capture rate, own section below). The v1.35-v1.47
+> security-audit remediation + v1.51 (dropped the redundant "disabled"
+> token/public-link policy mode) live in `README.md` + `git log`. **README.md
+> was fully re-swept to v1.54.1** (v1.55.x = one day of UI polish + two
+> error-log knobs; v1.56.0 = the audit fix-wave, no new admin surface).
 > v1.52 also: the new-device login alert now ships the real client IP + browser
 > version + raw user-agent (was a geohash + version-less summary).
 
@@ -106,11 +109,11 @@ sendfile()`; no X-Accel-Redirect.
 
 ## Conventions
 
-- **Timestamps:** naive UTC via `app/utils/timeutil.py::utc_now()` (`datetime.now(tz=utc).replace(tzinfo=None)`) - MariaDB DATETIME drops TZ. JWT `iat`/`exp` use aware UTC (`utc_now_aware()`) so `.timestamp()` is correct.
+- **Timestamps:** naive UTC via `app/utils/timeutil.py::utc_now()` (`datetime.now(tz=utc).replace(tzinfo=None)`) - MariaDB DATETIME drops TZ. JWT `iat`/`exp` are minted from `timeutil.utc_now_aware()` (aware UTC) so `.timestamp()` returns the correct epoch. Any other `.timestamp()` on a stored naive value must stamp `tzinfo=utc` first (bit the public-link unlock cookie).
 - **DB IDs:** `BigInteger` for high-volume tables; `Integer` for low-volume; UUID where it leaves the system (shares, files, public-link tokens, OIDC providers).
 - **Compose env vars:** required ones use `${VAR:?error}` to fail fast.
 - **Logging:** JSON one-line-per-event; `json-file, max-size 50-100m, max-file 3` on every service.
-- **Error envelope** (every 4xx/5xx): `{"error","code","details","request_id"}` - raise `AppError(status, code, message, details=...)` from `app/errors.py`.
+- **Error envelope** (every 4xx/5xx): `{"error","code","details","request_id"}` - raise `AppError(status, code, message, details=...)` from `app/middleware/errors.py`.
 - **Refresh rotation:** reuse-detection revokes the entire user family.
 - **HIBP check:** k-anonymity (no plaintext sent); fail-open on outage.
 - **Email storage:** plaintext in `users.email` (+ `invite_tokens.email`, `login_attempts.email`), normalised on write via `utils/crypto.normalize_email`. Plaintext required so notification dispatchers can send.
@@ -211,9 +214,10 @@ Browsable server-error log + (separately) email alerts. Admin: Error log
 `/admin/error-log`, settings `/admin/settings/error-alerts`.
 
 - **Log ≠ alert (decoupled).** The `notify_admin_error` ARQ job → `error_alert.handle_error_event` **LOGS first** (`services/error_log.py::record` → `error_log` table) then runs the alert saferails. `error_log.enabled` (default **true**, 5xx + cron failures) is independent of `error_alert.enabled` (default **false**, emails). Cooldown/hourly-cap/dedup-signature govern **emails only** - the log captures every qualifying event even when no email fires. Don't re-couple them.
-- **4xx is opt-in + allowlist-gated.** `error_log.capture_4xx` + `error_log.http_4xx_codes` (CSV of HTTP statuses; **empty allowlist = capture nothing**). `error_alert.source_http_4xx` rides the same allowlist (alert ⊆ capture). Middleware `errors.py::_maybe_enqueue_error_event` gates the 4xx enqueue on a **process-cached** flag `error_log.capture_4xx_enabled_cached()` (~60s TTL; `error_alert.update_settings` resets it); the worker re-checks the allowlist authoritatively. 5xx always enqueue. Separate enqueue pre-guards bound flood: `err_alert_enqueue` 30/60s, `err_alert_enqueue_4xx` 10/60s.
+- **4xx is opt-in + allowlist-gated.** `error_log.capture_4xx` + `error_log.http_4xx_codes` (CSV of HTTP statuses; **empty allowlist = capture nothing**). `error_alert.source_http_4xx` rides the same allowlist (alert ⊆ capture). Middleware `errors.py::_maybe_enqueue_error_event` gates the 4xx enqueue on a **process-cached** flag `error_log.capture_4xx_enabled_cached()` (~60s TTL; `error_alert.update_settings` resets it); the worker re-checks the allowlist authoritatively. 5xx always enqueue. Separate enqueue pre-guards bound flood: `err_alert_enqueue` 30/60s; the 4xx pre-guard rate is the **admin-tunable** `error_log.scan_capture_per_min` (registry tunable, default 300 - raise it to catch a bigger scan burst, v1.55).
 - **Framework HTTPException (v1.53.1).** `errors.py::http_exception_handler` (registered for `starlette ... HTTPException`) funnels route-not-found **404/405** through the capture path AND returns the standard envelope. **422** is `RequestValidationError` (a different type) - stays FastAPI's `{detail:[...]}`, **not** captured (don't "fix" as a bug). `_NEVER_CAPTURE_CODES = {JOB_NOT_FOUND}` (the self-update poll race) is deliberately excluded.
-- **Edge scanner detection (v1.53.2).** `docker/frontend/nginx.conf` routes scanner-bait paths (a curated script/config/vcs **extension** denylist + dotfiles except `/.well-known/`) to the backend → 404 → logged. This is the **only** way scans surface: the SPA fallback 200s unknown *page* paths and scanners don't run the SPA JS. nginx.conf is baked into the frontend image → ships via in-app Update (no host step). Per-IP `limit_req zone=probe`.
+- **Edge scanner detection (v1.53.2).** `docker/frontend/nginx.conf` routes scanner-bait paths (a curated script/config/vcs **extension** denylist + dotfiles except `/.well-known/`) to the backend → 404 → logged. This is the **only** way edge scans surface: the SPA fallback 200s unknown *page* paths and scanners don't run the SPA JS. nginx.conf is baked into the frontend image → ships via in-app Update (no host step). Per-IP `limit_req zone=probe`.
+- **SPA 404 beacon (v1.55).** `POST /api/telemetry/page-404` (`routers/telemetry.py`) lets the SPA report client-side 404s (real-browser visits to page paths Vue Router can't match) so they land in the error log alongside edge/backend 404s. Anonymous + opt-in (no-op unless 4xx capture is on, cheap cached check), 10/60s per-IP rate limit, query string stripped, rows are `source="spa"`, logged never emailed. Client-asserted (spoofable) by design - bounded by the gate + rate limit.
 - **`error_log` table:** `ip` (real client IP, v1.54), no FK on `user_id` (forensic), `signature` for grouping, `alerted` flag. Pruned by `prune_history` + `error_log.retention_days`. server_error email = admin-only `NotificationCategory.server_error` (subject neutral "error (CODE)"; body branches client/server).
 
 ## SSO (multi-provider OIDC)
@@ -326,6 +330,151 @@ UUID where it leaves the system.
 
 → README §Backups & Restore (`scripts/backup.sh` → `./backups/<stamp>/{db.sql, files.tar.gz, quarantine.tar.gz, redis.rdb, manifest.txt}`, optional restic; `scripts/restore.sh` sha256-verifies + prompts literal `restore`). **Drilled:** `scripts/restore_drill_e2e.sh` restores the latest backup into an isolated throwaway compose project (own project name/data/port, never touches the live stack) + `alembic upgrade head` + `restore_validate.py`; weekly via `scripts/ops/fileheron-restore-drill.timer`. Last success in `backups/LAST_SUCCESSFUL_DRILL`.
 
+## Back-filled subsystems (v1.15-v1.32)
+
+Non-obvious invariants for the subsystems shipped v1.15-v1.32; README + `git
+log` hold the feature-level detail.
+
+### Storage backend (local | S3, v1.21)
+
+All file byte-I/O routes through `services/storage_backend.py` (`StorageBackend`
+ABC, cached `get_storage_backend`; env `STORAGE_BACKEND` local|s3) - never touch
+the filesystem directly.
+- **`File.storage_path` is a backend-interpreted locator** - local: absolute
+  on-disk path (byte-identical to pre-abstraction rows, so no migration); s3:
+  object key.
+- `supports_disk_stats` True only for local - gates kernel-sendfile downloads,
+  clamd path-scan, and the disk-space guard.
+- `serve_response`: local → `FileResponse` (sendfile, Range-capable, countable
+  for the maintenance drain); **S3 → 307 presigned redirect** (can't carry
+  `extra_headers` so preview nosniff/CSP rides the previewable-type allowlist
+  alone; the backend never sees the bytes so drain can't count them). clamd on
+  S3 = INSTREAM; quarantine = server-side copy between key prefixes. Boot
+  fail-fast if `STORAGE_BACKEND=s3` and `S3_BUCKET` unset.
+
+### Bulk ZIP download (v1.17)
+
+`services/zip_stream.py`: mint `GET /api/files/{share_id}/download-zip-url` →
+consume `…/download-zip?dt=`; public `GET /api/public/{token}/download-zip`.
+- **ZIP_STORED, streamed, never cached to disk** - a cached archive would double
+  bytes on the bind mount and dodge expiry/GDPR-delete. Sized mode
+  (`ZipStream(sized=True)`) gives an exact Content-Length up front (browser
+  progress + Range resume) while streaming member bytes lazily.
+- **`safe_arcname()` sanitises member names** - `zipstream-ng.add_path` does not,
+  so a stored `../../etc/passwd` name would land verbatim. Strips dir
+  components/nulls, de-dupes `(n)`.
+- One `downloads_remaining` decrement per ZIP (not per member). `count=True`
+  registers the stream in `transfer_activity` for the drain; decremented in the
+  generator `finally` (fires on mid-stream disconnect). S3 path passes an
+  explicit `size=` (sized mode requires it).
+
+### Share approval / four-eyes (v1.24)
+
+`services/share_approval.py`, state `pending_approval`, SPA `/approvals`.
+- Approver-mode default is **admins_only** (deliberately diverges from
+  `policy_gate`'s permissive `everyone` default - resolved locally, not via the
+  shared gate).
+- **No self-approval, ever** - `can_decide` refuses `user.id ==
+  share.created_by_id` even for admins.
+- `is_approval_required` must run **after recipient rows are flushed** (the
+  `outbound_to_clients` scope reads them). `exempt_approvers` (default true)
+  auto-approves an approver's own shares; `allow_content_review` gates whether an
+  approver may preview/download pending files; add-files at upload is allowed
+  while `state in {active, pending_approval}` (owner keeps assembling).
+
+### Email template overrides (v1.25; HTML body v1.50)
+
+`models/email_template_override.py` `UNIQUE(slug, locale)`;
+`services/email.py::render_email` consults the table first, falls back to the
+built-in filesystem Jinja template - **"Reset to default" just deletes the row**.
+- Body is **HTML** (`body_html`); legacy `body_markdown` stays NOT NULL written
+  `""` (avoids a SQLite ALTER; one-release rollback breadcrumb).
+- Stored **raw** (token hrefs like `[RESET_URL]` must survive the editor),
+  **sanitised at render**, then alignment classes inlined for mail clients.
+- NULL subject = inherit built-in from `subjects.json`; `_load_override` falls
+  back to `en`. Placeholder registry: `services/email_placeholders.py`.
+
+### Inbound IMAP (v1.27)
+
+Services `imap_{client,config,poll}.py` + `inbound_{mail,parse,classify}.py`;
+workers `imap_poll` + `rescan_inbound_attachments`; admin `/admin/inbox` +
+`/admin/settings/imap`. No anonymous senders by policy.
+- Cadence/enabled moved to the **cron scheduler** (v1.28) - `run_poll` only
+  feature-gates on `imap.enabled`.
+- **Dedup** by `(uidvalidity, imap_uid)` AND `message_id`; a UIDVALIDITY change
+  resets `last_uid` to 0. Post-fetch server action (mark_read/move/delete)
+  applies **only after successful ingest+commit**.
+- **Attachments are clamd-scanned inline before landing anywhere servable.**
+  clamd down → store the attachment `pending` (download-gated) and CONTINUE -
+  never let `AVUnavailableError` propagate, or the poll aborts, the UID highwater
+  never advances, and ALL inbound ingestion stalls (audit M10). `rescan_inbound_attachments`
+  re-scans `pending` after an outage.
+- Every String-column field is truncated to its length at ingest (an over-long
+  header otherwise raises DataError under MariaDB strict mode and re-wedges the
+  poll). `inbound_classify.classify` is header-only + pure and decodes RFC2047
+  subjects before matching auto-reply hints.
+
+### Webhooks (v1.19)
+
+`services/webhook.py::emit` → worker `workers/webhook_deliver.py`; models
+`Webhook` + `WebhookDelivery`.
+- **`emit` never writes the delivery row** - the caller's transaction is
+  uncommitted; the WORKER creates and owns `webhook_deliveries` from the enqueued
+  args. `emit` is best-effort and never raises into the originating action. (It
+  enqueues synchronously though, so a post-emit rollback can still deliver a
+  ghost event - a known report-only edge.)
+- Worker **self-re-enqueues** with backoff `{1:5,2:15,3:30,4:60}`s (max 5), NOT
+  ARQ's generic retry (which would lose the row).
+- **SSRF re-validated per delivery attempt** (`utils/net.py::assert_public_http_url`)
+  - the create-time check alone is bypassable via config-backup import.
+  `follow_redirects=False`. Signature `X-Webhook-Signature: sha256=<hmac>` over
+  sorted-keys compact JSON; secret Fernet-encrypted.
+
+### Cron scheduler mechanics (v1.28)
+
+`services/cron_schedule.py` (`REGISTRY`) + minute `cron_dispatch` +
+`cron_tracker`; admin `/admin/scheduled-tasks`.
+- Cadence/enable/kind (`interval`|`daily`; daily uses the site timezone) are
+  runtime-editable via `cron.<name>.*` kv; defaults reproduce the historical
+  cadence (upgrade is behaviour-neutral until edited). `REGISTRY` doubles as the
+  **Run-now allowlist**.
+- **`mark_ran` persists BEFORE enqueue** - a failed commit retries next minute
+  rather than enqueue-without-record. First sight seeds the clock (no thundering
+  start after boot); `cron_dispatch` is deliberately NOT `@track_cron`
+  (1440×/day would flood `cron_runs`).
+
+### Anomaly detection (v1.22)
+
+`services/anomaly.py` + hourly `anomaly_check`. **Advisory only - always alert an
+admin, never auto-block.** GeoIP-free: `multi_network` approximates
+impossible-travel with `utils/geohash.ip_geohash5` - an IP-prefix hash, NOT
+geography. `login_stuffing` needs >threshold failures across ≥3 distinct emails
+from one IP. Thresholds env-tunable (`ANOMALY_*`); feeds webhooks. (Detector
+lookback windows are fixed while the cron cadence is tunable - a burst outside
+the last window is missed, a known report-only gap.)
+
+### Analytics (v1.18)
+
+`services/analytics.py` + daily `analytics_aggregate` + `/admin/analytics`
+(hand-rolled SVG via `useAnalyticsCharts`).
+- **Only the storage/file-state trend is persisted** (one nightly
+  `analytics_snapshots` row - the only figure deletes destroy); every other panel
+  is computed live. `snapshot_storage_today` is idempotent on `snapshot_date`.
+- `_STORED_STATES` **mirrors `quota._used_bytes_query`** - keep in lockstep or
+  storage totals diverge from quota. `top_uploaders`/`top_shares` exclude
+  GDPR-erased rows; `func.date()` bucketing for SQLite(tests)+MariaDB(prod).
+
+### Branding + legal pages (v1.20; rich text v1.50)
+
+`routers/branding.py`; admin `/admin/settings/branding`; SPA `LegalPage.vue`
+serves `/imprint` + `/privacy`.
+- **`/api/branding/logo` + `/api/legal/{kind}` are anonymous by design** (login
+  page, public-link pages, emails need them).
+- Logo served through the **storage backend** (`serve_response`, works on S3);
+  locator in `app_settings`; `Cache-Control public max-age=24h`.
+  `/api/branding/logo.png` is the client-sized rendition, 404s when
+  `branding.show_client` is off. Legal HTML sanitised **on save AND on serve**.
+
 ## Design system
 
 Editorial Swiss-modernist, **light theme only**. Self-hosted Instrument Serif +
@@ -346,6 +495,7 @@ accent `#b45309` on `#faf8f3`. Density via `[data-density="operator"]` (router m
 - **`TEST_ACCOUNT_*`** used by `scripts/seed_dev.py` + `entrypoint.sh` - not dead.
 - **ClamAV slow first boot** - full `freshclam` mirror sync (~150 MB), then incremental.
 - **Self-update filter `^v\d+\.\d+\.\d+`** (`services/release_check.py`) counts only backend tags; without it GitHub's "latest" is usually a `client-v*` desktop tag.
+- **`index.html` must stay no-cache** - `docker/frontend/nginx.conf` serves `index.html` with `Cache-Control: no-cache` (v1.55.4) so a browser fetches the fresh hashed bundle names after an in-app Update; a cached stale index points at deleted bundle hashes → blank page. Hashed `assets/*` stay long-cached; only `index.html` is no-cache. Don't re-add caching for it.
 
 ## Desktop client
 

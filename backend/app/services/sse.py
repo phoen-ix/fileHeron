@@ -238,7 +238,7 @@ def _catchup_frames(user_id: int, last_event_id: int) -> list[tuple[bytes, int]]
                 "event: notification\n"
                 f"id: {n.id}\n"
                 f"data: {json.dumps(payload, separators=(',', ':'))}\n\n"
-            ).encode("utf-8")
+            ).encode()
             out.append((frame, n.id))
     except Exception:
         logger.warning("SSE: catch-up replay failed for user=%s", user_id, exc_info=True)

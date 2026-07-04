@@ -1,4 +1,4 @@
-# file:Heron v1.61.0
+# file:Heron v1.61.1
 
 **Admin UI reliability.** The fifth and final follow-up release from the code
 audit, cleaning up a set of front-end edge cases in the notification bell, the

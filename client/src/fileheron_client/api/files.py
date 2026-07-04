@@ -7,7 +7,7 @@ import threading
 from pathlib import Path
 from typing import Callable, Optional
 
-from .client import ApiClient, ApiError, _envelope_from_response
+from .client import ApiClient, _envelope_from_response
 
 logger = logging.getLogger("fileheron_client.files")
 
@@ -42,8 +42,12 @@ def download_file(
     dest.parent.mkdir(parents=True, exist_ok=True)
     headers = {"Authorization": f"Bearer {api.bearer}"} if api.bearer else {}
     try:
+        # follow_redirects: an S3/object-storage backend answers with a 307 to a
+        # presigned URL. httpx follows it and drops the bearer cross-origin (the
+        # presigned query carries its own auth), so downloads work on S3 too.
         with api._http.stream(
-            "GET", f"/api/files/{file_id}/download", headers=headers
+            "GET", f"/api/files/{file_id}/download", headers=headers,
+            follow_redirects=True,
         ) as resp:
             if resp.status_code != 200:
                 # Drain so the server can release the connection cleanly.
@@ -66,21 +70,3 @@ def download_file(
             pass
         raise
     return dest
-
-
-def get_download_url(api: ApiClient, file_id: str) -> str:
-    """Mint a short-lived signed download URL. Useful when you want a
-    URL the user can paste into their browser without exposing the
-    bearer token."""
-    out = api.request_or_raise(
-        "GET", f"/api/files/{file_id}/download-url"
-    )
-    # Guard the response shape (finding C4): request_or_raise can return
-    # None (204/empty) and a non-conforming body lacks "url".
-    if not isinstance(out, dict) or "url" not in out:
-        raise ApiError(
-            status_code=200,
-            code="MALFORMED_RESPONSE",
-            message="Download-URL response did not contain a url.",
-        )
-    return out["url"]

@@ -13,9 +13,9 @@ Wraps the existing single-stream (``files.download_file``) and parallel-range
   ``If-Range``; segmented: re-fetch the not-yet-complete segments).
 
 The byte transfer reuses ``download_segmented._fetch_segment`` / ``_split`` and
-the server's HTTP Range support (Starlette ``FileResponse``). The pre-existing
-``download_file`` / ``download_file_segmented`` entry points are unchanged; the
-UI calls ``download_file_resumable``.
+the server's HTTP Range support (Starlette ``FileResponse``). The single-stream
+``files.download_file`` entry point is unchanged; the UI calls
+``download_file_resumable``.
 """
 from __future__ import annotations
 
@@ -67,7 +67,8 @@ def _probe(
     """
     try:
         with api._http.stream(
-            "GET", url, headers={**headers, "Range": "bytes=1-1"}
+            "GET", url, headers={**headers, "Range": "bytes=1-1"},
+            follow_redirects=True,
         ) as resp:
             cr = resp.headers.get("Content-Range", "")
             etag = resp.headers.get("ETag")
@@ -182,7 +183,10 @@ def _run_single(
     )
     _raise_if_stopped(cancel, pause)
     try:
-        with api._http.stream("GET", url, headers=req_headers) as resp:
+        # follow_redirects for an S3 backend's 307 -> presigned URL (see download_file).
+        with api._http.stream(
+            "GET", url, headers=req_headers, follow_redirects=True
+        ) as resp:
             if resp.status_code == 206:
                 write_mode = "r+b"
                 start_at = offset

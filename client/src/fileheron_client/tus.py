@@ -178,7 +178,17 @@ def _send_chunk_with_retry(
                     status_code=head.status_code,
                 )
             actual_offset = int(head.headers.get("Upload-Offset", "0"))
+            if expected_offset < actual_offset <= expected_offset + len(chunk):
+                # A transport error dropped the PATCH mid-chunk after tusd had
+                # already persisted part of it. Resume from where the server
+                # actually is - the caller re-seeks + re-slices the file from any
+                # returned offset, so the persisted bytes aren't re-sent. (This is
+                # the exact case resumable upload exists for; aborting here forced
+                # a full restart.)
+                return actual_offset
             if actual_offset != expected_offset:
+                # Offset moved backwards or past the end of this chunk - a genuine
+                # desync we can't safely resume from.
                 raise TusError(
                     f"TUS offset drift: server says {actual_offset}, "
                     f"client expected {expected_offset}. Aborting upload."

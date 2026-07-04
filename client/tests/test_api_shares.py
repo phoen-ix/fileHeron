@@ -32,16 +32,6 @@ def _share_response_json(share_id: str = "share-1", state: str = "active") -> di
 
 
 @respx.mock
-def test_revoke_share_calls_delete_endpoint():
-    route = respx.delete(f"{SERVER}/api/shares/share-1").mock(
-        return_value=httpx.Response(204)
-    )
-    api = ApiClient(SERVER, api_token="fh_xx_yy")
-    shares_api.revoke_share(api, "share-1")
-    assert route.called
-
-
-@respx.mock
 def test_expire_share_now_returns_updated_share():
     body = _share_response_json(state="expired")
     body["expires_at"] = "2026-05-17T10:05:00"

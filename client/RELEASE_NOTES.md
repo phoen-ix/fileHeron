@@ -1,3 +1,26 @@
+# Desktop client 0.13.2
+
+More reliability fixes for uploads and downloads (from the app-wide audit).
+
+## What's fixed
+
+- **Interrupted uploads resume instead of restarting.** If the connection
+  dropped in the middle of sending a chunk of a large upload - after the server
+  had already saved part of it - the app would give up and the whole file had to
+  start over from the beginning. It now resumes from exactly where the server got
+  to, which is the entire point of resumable uploads.
+- **Downloads work on object-storage (S3) servers.** When the server stores files
+  in S3-compatible object storage, it hands the app a redirect to a temporary
+  download link. The app wasn't following that redirect, so every download failed
+  with a cryptic error. It now follows it correctly (self-hosted/local-disk
+  servers were never affected).
+
+## Housekeeping
+
+- Removed some unused internal code paths. No change to how you use the app.
+
+---
+
 # Desktop client 0.13.1
 
 Two correctness fixes for share expiry and downloads (from the app-wide audit).

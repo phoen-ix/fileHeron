@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 import httpx
 import pytest
@@ -33,6 +33,30 @@ def _share_response_json(public_link: dict | None = None) -> dict:
     if public_link is not None:
         body["public_link"] = public_link
     return body
+
+
+@respx.mock
+def test_create_share_serializes_expiry_as_utc():
+    """A picked expiry is sent as an offset-bearing UTC string, not a tz-less
+    string the backend would misread as UTC (shifting expiry by the machine's
+    local offset)."""
+    captured: dict = {}
+
+    def _handler(request: httpx.Request) -> httpx.Response:
+        captured["body"] = json.loads(request.content)
+        return httpx.Response(201, json=_share_response_json())
+
+    respx.post(f"{SERVER}/api/shares").mock(side_effect=_handler)
+    api = ApiClient(SERVER, api_token="fh_xx_yy")
+    # 18:00 at +02:00 is 16:00 UTC.
+    shares_api.create_share(
+        api,
+        recipient_user_ids=[2],
+        expires_at=datetime(2026, 6, 1, 18, 0, 0, tzinfo=timezone(timedelta(hours=2))),
+    )
+    assert captured["body"]["expires_at"] == "2026-06-01T16:00:00+00:00"
+    # A naive local pick still carries a UTC offset (never tz-less).
+    assert captured["body"]["expires_at"].endswith("+00:00")
 
 
 @respx.mock

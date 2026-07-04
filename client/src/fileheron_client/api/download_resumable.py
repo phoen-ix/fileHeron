@@ -56,10 +56,18 @@ def _probe(
     api: ApiClient, url: str, headers: dict
 ) -> Optional[tuple[int, Optional[str]]]:
     """One tiny ranged GET. Returns (total, etag) iff the server honours
-    ranges (HTTP 206 with a parseable Content-Range), else None."""
+    ranges (HTTP 206 with a parseable Content-Range), else None.
+
+    Probes at ``bytes=1-1`` (not ``0-0``): the backend counts a range that
+    starts at byte 0 as a full download (it isn't a partial *continuation*), so
+    a ``0-0`` probe double-charged the share's download budget and got refused
+    under maintenance mode. A start > 0 is treated as an uncounted continuation.
+    A file under 2 bytes answers 416, which falls through to the single-stream
+    path below - correct, since a 1-byte file needs no segmentation.
+    """
     try:
         with api._http.stream(
-            "GET", url, headers={**headers, "Range": "bytes=0-0"}
+            "GET", url, headers={**headers, "Range": "bytes=1-1"}
         ) as resp:
             cr = resp.headers.get("Content-Range", "")
             etag = resp.headers.get("ETag")

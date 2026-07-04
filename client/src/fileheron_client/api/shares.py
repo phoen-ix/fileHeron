@@ -1,11 +1,23 @@
 """Share endpoints - list, get, create, revoke, expire-now, patch-expiry."""
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from .client import ApiClient
 from ..models import ShareListResponse, ShareResponse
+
+
+def _expiry_to_utc_iso(dt: datetime) -> str:
+    """Serialize a share-expiry datetime as an offset-bearing UTC ISO string.
+
+    The expiry picker hands us a *naive* datetime that is the user's local
+    wall-clock choice. The backend reads a tz-less ISO string as UTC, so a naive
+    value would be off by the machine's UTC offset; attach the local offset (or
+    keep an already-aware value's) and convert to UTC before sending.
+    """
+    aware = dt if dt.tzinfo is not None else dt.astimezone()
+    return aware.astimezone(timezone.utc).isoformat()
 
 
 def list_shares(
@@ -103,7 +115,7 @@ def create_share(
     if expires_at_never:
         body["expires_at"] = None
     elif expires_at is not None:
-        body["expires_at"] = expires_at.isoformat()
+        body["expires_at"] = _expiry_to_utc_iso(expires_at)
     if download_limit is not None:
         body["download_limit"] = download_limit
     if public_link is not None:
@@ -212,7 +224,7 @@ def patch_share_expiry(
     if clear:
         body["expires_at_clear"] = True
     elif expires_at is not None:
-        body["expires_at"] = expires_at.isoformat()
+        body["expires_at"] = _expiry_to_utc_iso(expires_at)
     out = api.request_or_raise("PATCH", f"/api/shares/{share_id}", json=body)
     return ShareResponse.model_validate(out)
 

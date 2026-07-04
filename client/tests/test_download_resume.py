@@ -50,6 +50,27 @@ def _api() -> ApiClient:
 
 
 @respx.mock
+def test_probe_uses_offset_range_not_byte_zero():
+    """The probe must start above byte 0. The backend counts a range that
+    starts at byte 0 as a full (budget-charged) download, so a bytes=0-0 probe
+    double-charged the share's download budget and got refused under
+    maintenance mode; a start > 0 is an uncounted continuation."""
+    seen: dict = {}
+
+    def _capture(request: httpx.Request) -> httpx.Response:
+        seen["range"] = request.headers.get("range")
+        return httpx.Response(
+            206, content=b"x",
+            headers={"Content-Range": f"bytes 1-1/{len(DATA)}", "ETag": ETAG},
+        )
+
+    respx.get(f"{SERVER}/api/files/fid/download").mock(side_effect=_capture)
+    result = dr._probe(_api(), "/api/files/fid/download", {})
+    assert seen["range"] == "bytes=1-1"
+    assert result == (len(DATA), ETAG)
+
+
+@respx.mock
 def test_resumable_segmented_happy(tmp_path, monkeypatch):
     monkeypatch.setattr(dr, "SEGMENT_THRESHOLD", 10)
     monkeypatch.setattr(dr, "SEGMENT_SIZE", 10)

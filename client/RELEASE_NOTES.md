@@ -1,3 +1,29 @@
+# Desktop client 0.13.1
+
+Two correctness fixes for share expiry and downloads (from the app-wide audit).
+
+## What's fixed
+
+- **Share expiry now uses the right time.** When you set an expiry on a share,
+  the app was sending your picked time without a timezone, and the server read it
+  as UTC - so the real expiry was off by your machine's UTC offset (e.g. two hours
+  early or late). The time you pick is now converted to UTC correctly, so a share
+  expires exactly when you chose.
+- **Downloads no longer waste a limited share's download budget.** Before starting
+  a download, the app makes a tiny probe request; that probe was being counted as a
+  full download by the server. On a share limited to a set number of downloads this
+  double-counted every download - and a share limited to a single download couldn't
+  be downloaded at all (the probe used up the only allowed download). The probe is
+  now correctly treated as a non-counted request, and such downloads also work
+  during server maintenance.
+
+Also: the version shown in the app (Settings / login screen) now correctly reads
+0.13.1 - it was stuck displaying 0.12.0.
+
+Nothing changes in how you use the app.
+
+---
+
 # Desktop client 0.13.0
 
 Security fix for "Save all to folder".

@@ -1,7 +1,7 @@
 """Share manager actions (v0.2.0): revoke / expire-now / patch-expiry."""
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 import httpx
 import pytest
@@ -71,9 +71,33 @@ def test_patch_share_expiry_set_sends_expires_at():
         api, "share-1", expires_at=datetime(2026, 6, 1, 18, 0, 0)
     )
     assert b'"expires_at"' in captured["body"]
-    assert b'"2026-06-01T18:00:00"' in captured["body"]
+    # A naive local pick is now serialized as an offset-bearing UTC string
+    # (it used to be sent tz-less and misread as UTC, shifting the expiry by the
+    # machine's offset). The output is always UTC, so +00:00 is deterministic.
+    assert b"+00:00" in captured["body"]
     assert b"expires_at_clear" not in captured["body"]
     assert out.id == "share-1"
+
+
+@respx.mock
+def test_patch_share_expiry_converts_aware_to_utc():
+    body = _share_response_json()
+    body["expires_at"] = "2026-06-01T16:00:00"
+    captured: dict = {}
+
+    def _handler(request: httpx.Request) -> httpx.Response:
+        captured["body"] = request.content
+        return httpx.Response(200, json=body)
+
+    respx.patch(f"{SERVER}/api/shares/share-1").mock(side_effect=_handler)
+    api = ApiClient(SERVER, api_token="fh_xx_yy")
+    # 18:00 at +02:00 is 16:00 UTC.
+    shares_api.patch_share_expiry(
+        api,
+        "share-1",
+        expires_at=datetime(2026, 6, 1, 18, 0, 0, tzinfo=timezone(timedelta(hours=2))),
+    )
+    assert b'"2026-06-01T16:00:00+00:00"' in captured["body"]
 
 
 @respx.mock

@@ -55,9 +55,14 @@ from ..config import settings as cfg
 from ..middleware.errors import AppError
 from ..models.app_setting import AppSetting
 from ..models.audit_log import AuditEventType, AuditLog
+from ..models.client_employee_connection import (
+    ClientEmployeeConnection,
+    ConnectionSource,
+)
 from ..models.download_log import DownloadLog
 from ..models.email_log import EmailLog
 from ..models.email_template_override import EmailTemplateOverride
+from ..models.file import File, FileState
 from ..models.group import Group
 from ..models.group_member import GroupMember
 from ..models.login_attempt import LoginAttempt
@@ -77,9 +82,11 @@ from ..utils import crypto
 from ..utils.crypto import normalize_email
 from ..utils.timeutil import utc_now
 from ..version import GIT_SHA, VERSION
+from . import file as file_svc
 from . import settings as settings_svc
 from . import share as share_svc
 from .audit import record_audit_event
+from .connection import recompute_shared_group_connections_for_user
 from .erasure import erase_user
 
 logger = logging.getLogger("fileheron.config_backup")
@@ -313,7 +320,15 @@ def export_settings_branding(db: Session, *, mode: str, warnings: list[str]) -> 
             })
         else:
             rows.append({"key": s.key, "is_encrypted": False, "value": s.value})
-    return {"app_settings": rows, "branding_logo": _export_logo(db, warnings)}
+    overrides = [
+        _row_to_dict(o, drop=frozenset({"id", "updated_by_id"}))
+        for o in db.query(EmailTemplateOverride).all()
+    ]
+    return {
+        "app_settings": rows,
+        "branding_logo": _export_logo(db, warnings),
+        "email_template_overrides": overrides,
+    }
 
 
 def export_oidc_webhooks(db: Session, *, mode: str, warnings: list[str]) -> dict:
@@ -390,9 +405,23 @@ def export_users(db: Session, *, mode: str, warnings: list[str]) -> dict:
         {"user_id": p.user_id, "category": p.category.value, "channel": p.channel.value}
         for p in db.query(UserNotificationPreference).all()
     ]
+    # invite-source connections are sticky and not derivable from group
+    # membership, so they must travel in the backup; shared_group rows are
+    # recomputed on import instead.
+    connections = [
+        {
+            "client_user_id": c.client_user_id,
+            "employee_user_id": c.employee_user_id,
+            "created_at": _enc(c.created_at),
+        }
+        for c in db.query(ClientEmployeeConnection).filter(
+            ClientEmployeeConnection.source == ConnectionSource.invite
+        ).all()
+    ]
     return {
         "users": users, "user_totp": totp, "user_recovery_codes": recovery,
         "user_webauthn_credentials": webauthn, "user_notification_preferences": prefs,
+        "client_employee_connections": connections,
     }
 
 
@@ -643,8 +672,20 @@ def _resolve_log_user(bid, user_id_map, has_users, db, *, existing_ids):
     return bid if bid in existing_ids else None
 
 
-def _restore_log(db, model, rows, *, user_fk, user_id_map, has_users, required_user=False):
+def _restore_log(
+    db, model, rows, *, user_fk, user_id_map, has_users, required_user=False,
+    fk_present_checks=(), null_fields=(),
+):
+    """Reload a log table. `fk_present_checks` = [(field, ref_model)] - a row whose
+    non-null value isn't present in ref_model is SKIPPED (config backup excludes
+    files/shares, so cross-system download_log rows reference rows that don't exist
+    here and would raise an IntegrityError). `null_fields` are forced to None (stale
+    self-refs like email_log.source_log_id that won't survive the id reassignment)."""
     existing_ids = {r[0] for r in db.query(User.id).all()}
+    present: dict[str, set] = {
+        field: {r[0] for r in db.query(ref_model.id).all()}
+        for field, ref_model in fk_present_checks
+    }
     db.query(model).delete(synchronize_session=False)
     db.flush()
     for d in rows:
@@ -656,6 +697,14 @@ def _restore_log(db, model, rows, *, user_fk, user_id_map, has_users, required_u
             if required_user and resolved is None:
                 continue
             d[user_fk] = resolved
+        if any(
+            d.get(field) is not None and d.get(field) not in present[field]
+            for field, _ref in fk_present_checks
+        ):
+            continue
+        for nf in null_fields:
+            if nf in d:
+                d[nf] = None
         db.add(_build(model, d, skip=frozenset({"id"})))
     db.flush()
 
@@ -701,6 +750,25 @@ def _import_logo(db, logo, *, actor, warnings):
 def _purge_user(db, user, *, actor, request) -> str:
     """Hard-delete where FKs allow (true purge); fall back to anonymise (erasure)
     when transactional references block the delete."""
+    # Unlink the bytes of every file that would otherwise be cascade-deleted with
+    # the user row (files they uploaded + files under their shares). MariaDB's FK
+    # CASCADE drops those rows with NO storage-backend unlink, permanently leaking
+    # the bytes (reclaim_orphaned_files can't see cascaded-away rows). hard_delete
+    # is idempotent on already-deleted files.
+    doomed = (
+        db.query(File)
+        .outerjoin(Share, File.share_id == Share.id)
+        .filter(
+            (File.uploaded_by_id == user.id) | (Share.created_by_id == user.id),
+            File.state != FileState.deleted,
+        )
+        .all()
+    )
+    for f in doomed:
+        try:
+            file_svc.hard_delete(db, file=f, reason="user_purged", actor_user_id=actor.id)
+        except Exception:
+            logger.exception("config import: purge byte-unlink failed for file=%s", f.id)
     sp = db.begin_nested()
     try:
         db.delete(user)
@@ -914,6 +982,29 @@ def apply_backup(db: Session, *, parsed: ParsedBackup, actor: User, request=None
         db.flush()
         summary.counts["groups"] = len(group_id_map)
 
+    # 3b. Client<->employee connections. Restore the sticky invite-source rows
+    # (remapped) and recompute the derivable shared_group rows from the memberships
+    # applied above - neither survives a raw users+groups restore otherwise.
+    if has_users:
+        db.query(ClientEmployeeConnection).delete(synchronize_session=False)
+        db.flush()
+        for c in p["users"].get("client_employee_connections", []):
+            cid = user_id_map.get(c["client_user_id"])
+            eid = user_id_map.get(c["employee_user_id"])
+            if cid is None or eid is None:
+                continue
+            db.add(ClientEmployeeConnection(
+                client_user_id=cid, employee_user_id=eid,
+                source=ConnectionSource.invite,
+                created_at=_dt(c.get("created_at")) or utc_now(),
+            ))
+        db.flush()
+        for local_uid in set(user_id_map.values()):
+            u = db.query(User).filter(User.id == local_uid).one_or_none()
+            if u is not None:
+                recompute_shared_group_connections_for_user(db, user=u)
+        db.flush()
+
     # 4. User sub-tables (2FA + notification prefs) - delete-for-affected + insert.
     if has_users:
         local_ids = set(user_id_map.values())
@@ -1012,8 +1103,16 @@ def apply_backup(db: Session, *, parsed: ParsedBackup, actor: User, request=None
                     updated_at=utc_now(), updated_by_id=actor.id,
                 ))
         db.flush()
+        for o in sb.get("email_template_overrides", []):
+            db.add(_build(
+                EmailTemplateOverride, o,
+                overrides={"updated_by_id": actor.id},
+                skip=frozenset({"id", "updated_by_id"}),
+            ))
+        db.flush()
         _import_logo(db, sb.get("branding_logo"), actor=actor, warnings=warnings)
         summary.counts["app_settings"] = len(sb.get("app_settings", []))
+        summary.counts["email_template_overrides"] = len(sb.get("email_template_overrides", []))
 
     # 7. Logs - wipe + reload (opt-in).
     if "logs" in p:
@@ -1021,9 +1120,11 @@ def apply_backup(db: Session, *, parsed: ParsedBackup, actor: User, request=None
         _restore_log(db, AuditLog, lg.get("audit_log", []), user_fk="actor_user_id",
                      user_id_map=user_id_map, has_users=has_users)
         _restore_log(db, EmailLog, lg.get("email_log", []), user_fk="recipient_user_id",
-                     user_id_map=user_id_map, has_users=has_users)
+                     user_id_map=user_id_map, has_users=has_users,
+                     null_fields=("source_log_id",))
         _restore_log(db, DownloadLog, lg.get("download_log", []), user_fk="accessed_by_user_id",
-                     user_id_map=user_id_map, has_users=has_users)
+                     user_id_map=user_id_map, has_users=has_users,
+                     fk_present_checks=(("file_id", File), ("share_id", Share)))
         _restore_log(db, LoginAttempt, lg.get("login_attempts", []), user_fk=None,
                      user_id_map=user_id_map, has_users=has_users)
         _restore_log(db, Notification, lg.get("notifications", []), user_fk="user_id",

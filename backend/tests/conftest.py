@@ -47,7 +47,7 @@ os.environ.setdefault("TUS_PUBLIC_BASE", "/uploads/")
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -78,6 +78,41 @@ def session_factory(engine):
 @pytest.fixture
 def db(session_factory):
     s = session_factory()
+    try:
+        yield s
+    finally:
+        s.close()
+
+
+# ---- FK-enforced engine (opt-in) -------------------------------------------
+# SQLite ships with foreign-key enforcement OFF, so the default `engine`/`db`
+# fixtures never catch a FK/cascade bug. `fk_db` turns it on via a per-connection
+# PRAGMA so restore/cascade tests exercise the same integrity MariaDB enforces.
+
+
+@pytest.fixture
+def fk_engine():
+    eng = create_engine(
+        "sqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+
+    @event.listens_for(eng, "connect")
+    def _fk_pragma(dbapi_conn, _rec):  # noqa: ANN001
+        cur = dbapi_conn.cursor()
+        cur.execute("PRAGMA foreign_keys=ON")
+        cur.close()
+
+    Base.metadata.create_all(eng)
+    yield eng
+    eng.dispose()
+
+
+@pytest.fixture
+def fk_db(fk_engine):
+    factory = sessionmaker(bind=fk_engine, autoflush=False, expire_on_commit=False)
+    s = factory()
     try:
         yield s
     finally:

@@ -292,6 +292,42 @@ def _record_login_device(db: Session, *, user: User, request: Request | None) ->
     return True
 
 
+def finalize_successful_login(
+    db: Session,
+    *,
+    user: User,
+    request: Request | None,
+    settings,
+    via: str,
+    email_value: str | None = None,
+) -> tuple[str, int, str]:
+    """Mint the session and record the forensic trail shared by EVERY
+    successful-login flow: access + refresh tokens, known-device upsert,
+    login_attempts row, login_success audit, and the new-device alert. `via` tags
+    the flow (password / recovery_code / oidc / webauthn). Returns
+    ``(access_token, expires_in_seconds, refresh_token_plain)``. Caller commits."""
+    access, expires_in = create_access_token(user.id, settings, db)
+    _, refresh_plain = create_refresh_token(db, user, request, settings)
+    is_new_device = _record_login_device(db, user=user, request=request)
+    _record_login_attempt(
+        db, email_value=email_value or user.email, ip=_request_ip(request),
+        outcome=LoginOutcome.success,
+    )
+    record_audit_event(
+        db,
+        event_type=AuditEventType.login_success,
+        actor_user_id=user.id,
+        target_type="user",
+        target_id=user.id,
+        metadata={"new_device": is_new_device, "via": via},
+        request=request,
+    )
+    if is_new_device:
+        from .login_alert import fire_new_device_alert
+        fire_new_device_alert(db, user=user, request=request, via=via)
+    return access, expires_in, refresh_plain
+
+
 async def _maybe_send_lockout_email(
     *,
     db: Session,
@@ -525,24 +561,10 @@ async def login(
     # throttle and brute-force OTHER accounts from the same IP (audit L1). The
     # window expires on its own after LOGIN_RATE_WINDOW_SEC.
 
-    access, expires_in = create_access_token(user.id, settings, db)
-    _, refresh_plain = create_refresh_token(db, user, request, settings)
-
-    is_new_device = _record_login_device(db, user=user, request=request)
-    _record_login_attempt(db, email_value=em_email, ip=ip, outcome=LoginOutcome.success)
-    record_audit_event(
-        db,
-        event_type=AuditEventType.login_success,
-        actor_user_id=user.id,
-        target_type="user",
-        target_id=user.id,
-        metadata={"new_device": is_new_device, "via": "password"},
-        request=request,
+    access, expires_in, refresh_plain = finalize_successful_login(
+        db, user=user, request=request, settings=settings, via="password",
+        email_value=em_email,
     )
-    if is_new_device:
-        from .login_alert import fire_new_device_alert
-        fire_new_device_alert(db, user=user, request=request, via="password")
-
     return user, access, expires_in, refresh_plain
 
 
@@ -587,22 +609,10 @@ async def login_with_recovery(
     rate_limit_svc.record_success(db, user=user)
     # The shared per-IP window is intentionally not cleared on success (audit L1).
 
-    access, expires_in = create_access_token(user.id, settings, db)
-    _, refresh_plain = create_refresh_token(db, user, request, settings)
-    is_new_device = _record_login_device(db, user=user, request=request)
-    _record_login_attempt(db, email_value=em_email, ip=ip, outcome=LoginOutcome.success)
-    record_audit_event(
-        db,
-        event_type=AuditEventType.login_success,
-        actor_user_id=user.id,
-        target_type="user",
-        target_id=user.id,
-        metadata={"new_device": is_new_device, "via": "recovery_code"},
-        request=request,
+    access, expires_in, refresh_plain = finalize_successful_login(
+        db, user=user, request=request, settings=settings, via="recovery_code",
+        email_value=em_email,
     )
-    if is_new_device:
-        from .login_alert import fire_new_device_alert
-        fire_new_device_alert(db, user=user, request=request, via="recovery_code")
     return user, access, expires_in, refresh_plain
 
 

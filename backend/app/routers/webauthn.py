@@ -35,8 +35,8 @@ from ..schemas.webauthn import (
     WebAuthnRegisterCompleteRequest,
 )
 from ..services import auth as auth_svc
-from ..services import jwt_session, settings_registry
 from ..services import rate_limit as rate_limit_svc
+from ..services import settings_registry
 from ..services import webauthn as webauthn_svc
 from ..services.audit import record_audit_event
 
@@ -187,10 +187,11 @@ async def auth_complete(
     if not user.email_verified:
         raise AppError(403, "EMAIL_NOT_VERIFIED", "Please verify your email first.")
 
-    # Mint the same session cookies the password flow produces.
-    access, expires_in = auth_svc.create_access_token(user.id, settings, db)
+    # Mint the same session + forensic trail the password flow produces.
     rate_limit_svc.record_success(db, user=user)
-    _, refresh_plain = jwt_session.create_refresh_token(db, user, request, settings)
+    access, expires_in, refresh_plain = auth_svc.finalize_successful_login(
+        db, user=user, request=request, settings=settings, via="webauthn",
+    )
     db.commit()
 
     response.set_cookie(

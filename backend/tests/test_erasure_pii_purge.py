@@ -22,6 +22,30 @@ def _naive_utc():
     return datetime.now(tz=timezone.utc).replace(tzinfo=None)
 
 
+def test_erasure_revokes_shares_and_public_links(make_user, db):
+    """After erasing a user, their shares (now over deleted files) and any public
+    links must not stay live."""
+    from app.models.public_link import PublicLink
+    from app.models.share import Share, ShareKind, ShareState
+
+    admin = make_user(email="admin@test.local", role=UserRole.admin)
+    victim = make_user(email="victim@test.local", role=UserRole.client)
+    share = Share(created_by_id=victim.id, kind=ShareKind.outbound, state=ShareState.active)
+    db.add(share)
+    db.flush()
+    link = PublicLink(share_id=share.id, token_hash="t" * 64, created_by_id=victim.id)
+    db.add(link)
+    db.commit()
+
+    erasure_svc.erase_user(db, actor=admin, target=victim, request=None)
+    db.commit()
+    db.refresh(share)
+    db.refresh(link)
+
+    assert share.state == ShareState.revoked
+    assert link.revoked_at is not None
+
+
 def test_erasure_purges_plaintext_pii(make_user, db):
     admin = make_user(email="admin@test.local", role=UserRole.admin)
     victim = make_user(email="victim@test.local", role=UserRole.client)

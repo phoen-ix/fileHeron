@@ -30,10 +30,10 @@ from ..config import settings
 from ..dependencies import get_db
 from ..middleware.errors import AppError
 from ..services import auth as auth_svc
-from ..services import jwt_session, settings_registry
 from ..services import oidc as oidc_svc
 from ..services import oidc_admin as oidc_admin_svc
 from ..services import rate_limit as rate_limit_svc
+from ..services import settings_registry
 
 logger = logging.getLogger("fileheron.routers.oidc")
 
@@ -107,9 +107,10 @@ async def callback(
         request=request,
     )
 
-    access, expires_in = auth_svc.create_access_token(user.id, settings, db)
     rate_limit_svc.record_success(db, user=user)
-    _, refresh_plain = jwt_session.create_refresh_token(db, user, request, settings)
+    access, expires_in, refresh_plain = auth_svc.finalize_successful_login(
+        db, user=user, request=request, settings=settings, via="oidc",
+    )
     db.commit()
 
     from ..services import site as site_svc

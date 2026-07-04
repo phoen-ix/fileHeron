@@ -23,7 +23,7 @@ def _now():
     return datetime.now(tz=timezone.utc).replace(tzinfo=None)
 
 
-def _tok(db, user_id, *, hash_, created_days_ago, ttl_days):
+def _tok(db, user_id, *, hash_, created_days_ago, ttl_days, last_used_days_ago=None):
     created = _now() - timedelta(days=created_days_ago)
     t = RefreshToken(
         user_id=user_id,
@@ -33,6 +33,11 @@ def _tok(db, user_id, *, hash_, created_days_ago, ttl_days):
     db.add(t)
     db.flush()
     t.created_at = created  # override the default=now
+    # A never-rotated token's last activity IS its creation (both default to now
+    # at mint); a rotated one advances last_used_at while created_at is carried
+    # forward. reclamp uses last activity (max-idle), so model it faithfully.
+    since = created_days_ago if last_used_days_ago is None else last_used_days_ago
+    t.last_used_at = _now() - timedelta(days=since)
     db.flush()
     return t
 
@@ -60,6 +65,27 @@ def test_reclamp_revokes_idle_clamps_recent(make_user, db):
     assert recent.revoked_at is None
     # recent clamped down to created+3d
     assert abs((recent.expires_at - (recent.created_at + timedelta(days=3))).total_seconds()) < 2
+
+
+def test_reclamp_max_idle_keeps_actively_rotated_session(make_user, db):
+    """Max-idle: a session started long ago but recently rotated (fresh
+    last_used_at) is clamped, NOT revoked - the old created_at-anchored code would
+    have revoked it as if it were idle."""
+    from app.services import jwt_session
+
+    user = make_user(email="u@test.local")
+    # Session started 6d ago, rotated just now, currently valid for ~4 more days.
+    t = _tok(db, user.id, hash_="h_rot", created_days_ago=6, ttl_days=10, last_used_days_ago=0)
+    db.commit()
+
+    res = jwt_session.reclamp_refresh_expiry(db, new_days=3)
+    db.commit()
+    db.refresh(t)
+
+    assert t.revoked_at is None  # active session survives
+    assert res["revoked"] == 0
+    assert res["clamped"] == 1  # clamped to last_used + 3d, still in the future
+    assert t.expires_at > _now()
 
 
 def test_reclamp_noop_when_not_shorter(make_user, db):

@@ -147,6 +147,47 @@ async def test_refresh_reuse_revokes_entire_family(make_user, client, db):
 
 
 @pytest.mark.asyncio
+async def test_refresh_of_deliberately_revoked_token_does_not_nuke_family(make_user, client, db):
+    """A token revoked deliberately (logout-others / cap eviction / password change -
+    replaced_by_id stays NULL) that is later refreshed fails softly with
+    INVALID_REFRESH, NOT reuse detection, so the user's other live sessions survive."""
+    from app.services.jwt_session import refresh_token_hash
+    from app.utils.timeutil import utc_now
+
+    user = make_user(email="bob@test.local", password="LongCorrectHorse123!")
+    login_a = await client.post(
+        "/api/auth/login",
+        json={"email": "bob@test.local", "password": "LongCorrectHorse123!"},
+    )
+    refresh_a = login_a.cookies["fh_refresh"]
+    # A second, still-live session B.
+    client.cookies.clear()
+    await client.post(
+        "/api/auth/login",
+        json={"email": "bob@test.local", "password": "LongCorrectHorse123!"},
+    )
+    # Deliberately revoke A's token WITHOUT a rotation replacement (like logout-others).
+    tok_a = db.query(RefreshToken).filter(
+        RefreshToken.token_hash == refresh_token_hash(refresh_a)
+    ).one()
+    tok_a.revoked_at = utc_now()
+    db.commit()
+
+    client.cookies.clear()
+    replay = await client.post(
+        "/api/auth/refresh", headers={"Cookie": f"fh_refresh={refresh_a}"}
+    )
+    assert replay.status_code == 401
+    assert replay.json()["code"] == "INVALID_REFRESH"  # soft, not TOKEN_REUSE
+
+    db.expire_all()
+    live = db.query(RefreshToken).filter(
+        RefreshToken.user_id == user.id, RefreshToken.revoked_at.is_(None)
+    ).all()
+    assert len(live) >= 1, "session B must survive - the family was not nuked"
+
+
+@pytest.mark.asyncio
 async def test_logout_revokes_refresh(make_user, client, db):
     make_user(email="alice@test.local", password="LongCorrectHorse123!")
     await client.post(

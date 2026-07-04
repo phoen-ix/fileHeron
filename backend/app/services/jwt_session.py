@@ -171,11 +171,11 @@ def reclamp_refresh_expiry(
 ) -> dict:
     """Apply a shortened refresh-token TTL to EXISTING active sessions.
 
-    For each active token, clamp ``expires_at`` down to
-    ``created_at + new_days`` (never extend); any token now past that new
-    expiry is revoked immediately. Sessions still inside the new window keep
-    running, just with the shorter expiry. Returns ``{clamped, revoked}``.
-    Caller commits."""
+    Max-idle semantics: clamp ``expires_at`` down to ``last_activity + new_days``
+    (``last_used_at``, or ``created_at`` for a never-rotated token) - never extend;
+    a session idle longer than the new window is revoked. A session that keeps
+    refreshing stays alive because each rotation re-anchors ``last_used_at``.
+    Returns ``{clamped, revoked}``. Caller commits."""
     now = utc_now()
     rows = (
         db.query(RefreshToken)
@@ -185,7 +185,7 @@ def reclamp_refresh_expiry(
     clamped = 0
     revoked = 0
     for t in rows:
-        new_exp = t.created_at + timedelta(days=new_days)
+        new_exp = (t.last_used_at or t.created_at) + timedelta(days=new_days)
         if new_exp < t.expires_at:
             t.expires_at = new_exp
             clamped += 1
@@ -276,7 +276,14 @@ def rotate_refresh(
     if record.expires_at < utc_now():
         raise AppError(401, "INVALID_REFRESH", "Refresh token expired.")
     if record.revoked_at is not None:
-        # Reuse detected → kill all sessions for this user, audit, raise.
+        if record.replaced_by_id is None:
+            # Deliberately revoked (logout-others, session-cap eviction, password
+            # change/reset, email change, admin revoke, config restore) - NOT a
+            # rotation-chain replay. Fail this refresh softly; don't nuke the whole
+            # family or raise a false theft alarm.
+            raise AppError(401, "INVALID_REFRESH", "Refresh token revoked.")
+        # A token that was already ROTATED (replaced_by_id set) is being replayed →
+        # genuine reuse of a stale chain link. Kill all sessions, audit, raise.
         revoke_all_user_refresh_tokens(db, record.user_id)
         record_audit_event(
             db,
@@ -298,18 +305,13 @@ def rotate_refresh(
         .values(revoked_at=now)
     )
     if (result.rowcount or 0) == 0:
-        revoke_all_user_refresh_tokens(db, record.user_id)
-        record_audit_event(
-            db,
-            event_type=AuditEventType.refresh_token_reused,
-            actor_user_id=record.user_id,
-            target_type="refresh_token",
-            target_id=record.id,
-            metadata={"reason": "race"},
-            request=request,
-        )
-        db.commit()
-        raise AppError(401, "TOKEN_REUSE", "Refresh token reuse detected; all sessions revoked.")
+        # The token was valid when we read it but got revoked between the read and
+        # this UPDATE - a concurrent legitimate operation (two browser tabs sharing
+        # the cookie both rotating, or a deliberate revoke firing at the same
+        # instant), NOT theft. Genuine reuse - replaying an already-rotated token -
+        # is caught by the replaced_by_id branch above on the next attempt. Fail
+        # this racer softly instead of nuking the family.
+        raise AppError(401, "INVALID_REFRESH", "Refresh token already rotated.")
 
     user = db.query(User).filter(User.id == record.user_id).one_or_none()
     if user is None or user.is_disabled:

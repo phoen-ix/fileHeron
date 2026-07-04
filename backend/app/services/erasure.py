@@ -100,6 +100,27 @@ def erase_user(
             details={"failed_file_ids": failed_files},
         )
 
+    # 1b. Revoke the target's still-live shares + their public links. The files
+    # above are now deleted, so leaving these active would keep shares (and
+    # anonymous public links) alive over dead files - a soft revoke closes them.
+    from ..models.public_link import PublicLink
+    from ..models.share import Share, ShareState
+    from . import public_link as public_link_svc
+    from . import share as share_svc
+    live_shares = (
+        db.query(Share)
+        .filter(
+            Share.created_by_id == target.id,
+            Share.state.in_([ShareState.active, ShareState.pending_approval]),
+        )
+        .all()
+    )
+    for s in live_shares:
+        link = db.query(PublicLink).filter(PublicLink.share_id == s.id).one_or_none()
+        if link is not None and link.revoked_at is None:
+            public_link_svc.revoke(db, actor=actor, link=link)
+        share_svc.revoke_share(db, user=actor, share=s, request=request)
+
     # 2. Wipe credentials + tokens.
     db.query(UserTOTP).filter(UserTOTP.user_id == target.id).delete(
         synchronize_session=False

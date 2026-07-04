@@ -10,6 +10,7 @@ Does not require maxminddb or any external DB.
 from __future__ import annotations
 
 import hashlib
+import ipaddress
 
 
 def ip_geohash5(ip: str | None) -> str:
@@ -19,6 +20,11 @@ def ip_geohash5(ip: str | None) -> str:
         parts = ip.split(".")
         prefix = ".".join(parts[:3]) if len(parts) >= 3 else ip
     else:
-        parts = ip.split(":")
-        prefix = ":".join(parts[:4]) if len(parts) >= 4 else ip
+        # IPv6: hash the canonical /64 network. Splitting the textual form
+        # mis-handles a compressed "::" (it absorbs host bits into the first four
+        # groups), so every address in a /64 must mask to the same network first.
+        try:
+            prefix = str(ipaddress.ip_network(f"{ip}/64", strict=False).network_address)
+        except ValueError:
+            prefix = ip
     return hashlib.sha256(prefix.encode("utf-8")).hexdigest()[:5]

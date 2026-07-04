@@ -164,7 +164,10 @@ export function useShareListState(box: ComputedRef<'outbox' | 'inbox'>) {
     void load()
   })
 
+  let seq = 0
+
   async function load() {
+    const mine = ++seq
     loading.value = true
     errorMsg.value = null
     try {
@@ -193,12 +196,22 @@ export function useShareListState(box: ComputedRef<'outbox' | 'inbox'>) {
       }
 
       const { data } = await listShares(params)
+      if (mine !== seq) return // superseded by a newer load()
+      // Bulk-expiring the last rows of the last page (or a filter that empties
+      // it) can leave us on an out-of-range page with total > 0 and no Pager to
+      // get back. Clamp to the last valid page and reload instead of stranding.
+      const maxPage = Math.max(1, Math.ceil(data.total / pageSize.value))
+      if (data.total > 0 && page.value > maxPage) {
+        page.value = maxPage // triggers watch(page) -> reload
+        return
+      }
       items.value = data.items
       total.value = data.total
     } catch (err) {
+      if (mine !== seq) return
       errorMsg.value = describe(err)
     } finally {
-      loading.value = false
+      if (mine === seq) loading.value = false
     }
   }
 

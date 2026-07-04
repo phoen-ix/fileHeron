@@ -430,6 +430,15 @@ def apply_update(
             "deadline_iso": deadline,
         }
 
+    # A direct (non-postponed) update must not leave an earlier POSTPONED record
+    # behind: drain_pending_update would otherwise re-fire it and the box could
+    # boot stuck in maintenance mode. Clear both idempotently (no-op when none).
+    from ...services import maintenance as maintenance_svc
+    if maintenance_svc.get_pending_update(db) is not None:
+        maintenance_svc.set_pending_update(db, None, actor=admin)
+        maintenance_svc.set_enabled(db, False, actor=admin, request=request)
+        db.commit()
+
     result = release_apply.apply(action="update", target_tag=payload.target_tag)
 
     record_audit_event(

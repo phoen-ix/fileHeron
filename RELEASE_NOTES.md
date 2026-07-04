@@ -1,40 +1,32 @@
-# file:Heron v1.60.0
+# file:Heron v1.61.0
 
-**Notifications, alerts, analytics, and webhooks.** The fourth follow-up release
-from the code audit. A batch of reliability fixes across email/alert delivery, the
-notification bell, analytics, webhooks, and public links. No database migration and
-no host step - deploy from this banner.
+**Admin UI reliability.** The fifth and final follow-up release from the code
+audit, cleaning up a set of front-end edge cases in the notification bell, the
+admin tables, the shares list, and the System update page. No database migration
+and no host step - deploy from this banner.
 
 ## What's fixed
 
-- **Operations and inbound-mail email alerts now actually send.** If you set the
-  "operations alert" or "inbound message" notification categories to email, they
-  were silently doing nothing (no email template existed). They now send a proper
-  email to admins.
-- **Undeliverable emails no longer sit stuck as "queued".** When email delivery
-  fails through all retries, the mail-log row is now marked *failed* and surfaced
-  to operations, instead of lingering as "queued" forever.
-- **The notification bell catches up after a reconnect.** The live connection
-  refreshes about once a minute; notifications that arrived during that brief gap
-  are now replayed on reconnect, so the unread badge no longer drifts.
-- **Error-alert rate-capping no longer swallows an alert.** When the hourly alert
-  cap was hit, the next occurrence of an error could be silently lost and the later
-  alert under-counted how many were suppressed. The cap and the cooldown are now
-  applied in the right order, so nothing is dropped and counts are accurate.
-- **Analytics charts use your timezone.** The daily activity charts (shares,
-  downloads, quarantines) now group events by your configured site timezone, so an
-  event near midnight lands on the correct day instead of the UTC day.
-- **Webhooks don't fire for rolled-back changes.** Outbound webhooks are now sent
-  only after the change that triggered them is committed, so a change that gets
-  rolled back no longer delivers a "ghost" event.
-- **Anomaly detection covers the whole gap between scans.** The detector's lookback
-  windows now scale with the scan interval, so a burst that happens between two
-  scans is no longer missed.
-- **Public links: the last download can finish.** On a one-time (single-download)
-  public link, a resumed or ranged download that had already consumed the last
-  allowed download now completes instead of being refused.
+- **The notification bell count no longer over-counts.** A notification delivered
+  twice (a live update racing the initial fetch) could add to the unread badge
+  twice. A duplicate now never re-counts.
+- **Admin tables no longer flash stale data.** Clicking quickly between pages or
+  filters on an admin list (users, sessions, mail log, etc.) could let a slow
+  earlier response overwrite the newer one. Out-of-order responses are now
+  discarded, so the table always shows what you last asked for.
+- **The shares list won't strand you on a blank page.** Bulk-expiring the last
+  rows on the last page (or a filter that empties it) used to leave you on an empty
+  page with no way to navigate back. It now returns to the last valid page
+  automatically.
+- **The System update button behaves during a postponed update.** While an update
+  is postponed (waiting for transfers to finish), the plain "Update" button is
+  hidden so you use "Update now" / "Cancel". And starting a direct update can no
+  longer leave a stale postponed-update record or stuck maintenance mode behind
+  (which could otherwise trigger a second, duplicate update).
 
 ## Notes
 
 - **No migration, no host step** - the in-app Update swaps the backend, worker, and
   frontend images.
+- This completes the follow-up series (v1.57-v1.61) working through the deeper
+  findings from the full code audit.

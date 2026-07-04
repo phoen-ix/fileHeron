@@ -28,18 +28,25 @@ export function usePaginatedList<T>(
   const pageSize = ref(opts.pageSize ?? 50)
   const loading = ref(true)
   const errorMsg = ref<string | null>(null)
+  // Monotonic request token: rapid page/filter changes fire overlapping load()s;
+  // discard any whose response arrives after a newer one was started, so a slow
+  // earlier page can't overwrite the current results.
+  let seq = 0
 
   async function load() {
+    const mine = ++seq
     loading.value = true
     errorMsg.value = null
     try {
       const data = await fetcher({ page: page.value, pageSize: pageSize.value })
+      if (mine !== seq) return
       items.value = data.items
       total.value = data.total
     } catch (err) {
+      if (mine !== seq) return
       errorMsg.value = describe(err)
     } finally {
-      loading.value = false
+      if (mine === seq) loading.value = false
     }
   }
 

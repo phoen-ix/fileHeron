@@ -36,12 +36,15 @@ export const useNotificationsStore = defineStore('notifications', () => {
   }
 
   function pushFromSSE(item: NotificationItem) {
-    // Drop duplicates (same id) - SSE may deliver an item the list
-    // already has during a race with the initial fetch.
+    // Drop duplicates (same id) - SSE may deliver an item the list already has
+    // during a race with the initial fetch. Only bump the unread badge when the
+    // id is genuinely new, or a re-delivered item (already counted by refresh())
+    // inflates the count.
+    const existed = items.value.some((i) => i.id === item.id)
     items.value = items.value.filter((i) => i.id !== item.id)
     items.value.unshift(item)
     if (items.value.length > RECENT_LIMIT) items.value.length = RECENT_LIMIT
-    if (!item.read_at) unreadCount.value += 1
+    if (!existed && !item.read_at) unreadCount.value += 1
   }
 
   async function remove(id: number) {

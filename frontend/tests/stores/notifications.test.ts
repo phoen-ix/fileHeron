@@ -47,7 +47,7 @@ describe('notifications store', () => {
     s.pushFromSSE(fakeNotif(1))
     s.pushFromSSE(fakeNotif(1))
     expect(s.items.length).toBe(1)
-    expect(s.unreadCount).toBe(2) // counted the duplicate as new
+    expect(s.unreadCount).toBe(1) // duplicate id must NOT re-count
   })
 
   it('remove deletes the item from the bell + lowers the count', async () => {

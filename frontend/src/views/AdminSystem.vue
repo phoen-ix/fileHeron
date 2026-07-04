@@ -441,7 +441,7 @@ const headlineFailures = computed(() => {
           </div>
           <div class="banner-actions">
             <button
-              v-if="!updaterUnreachable && !jobInFlight"
+              v-if="!updaterUnreachable && !jobInFlight && !pendingUpdate"
               type="button"
               class="btn-primary"
               @click="openConfirm('update')"

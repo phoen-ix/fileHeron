@@ -22,5 +22,7 @@
   "email_change_verify_old": "Bestätige deine {app_name}-E-Mail-Änderung",
   "email_change_alert": "Deine {app_name}-E-Mail-Adresse wird geändert",
   "email_change_completed": "Deine {app_name}-Anmelde-E-Mail wurde geändert",
-  "server_error": "{app_name} - Fehler ({code})"
+  "server_error": "{app_name} - Fehler ({code})",
+  "ops_alert": "{app_name} - Betriebswarnung",
+  "inbound_message": "{app_name} - neue eingehende Nachricht"
 }

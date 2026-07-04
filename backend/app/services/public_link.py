@@ -157,9 +157,15 @@ def get_link_by_token(db: Session, token: str) -> PublicLink:
     return record
 
 
-def assert_link_usable(db: Session, link: PublicLink) -> None:
+def assert_link_usable(
+    db: Session, link: PublicLink, *, allow_exhausted_continuation: bool = False
+) -> None:
     """Validate link state. Raises if revoked, locked-out, expired share,
-    counter exhausted, or share revoked/expired/deleted."""
+    counter exhausted, or share revoked/expired/deleted.
+
+    ``allow_exhausted_continuation`` skips ONLY the exhausted-counter check (a
+    Range continuation of the download that consumed the last unit must still
+    finish, mirroring the authed path); revoked/locked/expired still apply."""
     if link.revoked_at is not None:
         raise AppError(410, "PUBLIC_LINK_REVOKED", "This public link has been revoked.")
     if link.locked_until is not None and link.locked_until > utc_now():
@@ -168,7 +174,11 @@ def assert_link_usable(db: Session, link: PublicLink) -> None:
             "PUBLIC_LINK_LOCKED",
             "This public link is temporarily locked due to repeated failed unlocks.",
         )
-    if link.downloads_remaining is not None and link.downloads_remaining <= 0:
+    if (
+        not allow_exhausted_continuation
+        and link.downloads_remaining is not None
+        and link.downloads_remaining <= 0
+    ):
         raise AppError(
             410, "PUBLIC_LINK_EXHAUSTED", "This public link's download limit has been reached."
         )

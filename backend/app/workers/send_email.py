@@ -6,9 +6,10 @@ trivially available) and enqueues only the rendered strings. The worker
 just talks SMTP.
 
 Retry policy: ARQ's `Retry` exception with `defer` lets us back off
-gracefully. We retry 3 times on transient SMTP errors (connection
-refused, 4xx codes); permanent failures (5xx) log + give up so the
-worker doesn't loop forever.
+gracefully. We retry up to `_MAX_TRIES` times on transient SMTP errors
+(connection refused, 4xx codes); on the final attempt - and on a permanent 5xx -
+the worker finalizes the mail-log row as `failed` + audits `email_undeliverable`
+so it never lingers `queued`.
 """
 from __future__ import annotations
 
@@ -38,6 +39,57 @@ _TRANSIENT_ERRORS = (
     SMTPTimeoutError,
     OSError,  # network blip
 )
+
+# Keep in sync with workers/worker.py WorkerSettings.max_tries. After the last
+# attempt arq abandons the job WITHOUT calling the function again, so the worker
+# itself must finalize the row on the final try - otherwise it sits `queued`
+# forever (the mail-log's terminal-status contract).
+_MAX_TRIES = 5
+
+
+def _record_undeliverable_audit(to: str, subject: str, smtp_code: int | None, message: str) -> None:
+    """Audit an undeliverable email so ops_check surfaces it. Best-effort; never
+    lets the audit write swallow the worker's outcome."""
+    try:
+        audit_db = SessionLocal()
+        try:
+            record_audit_event(
+                audit_db,
+                event_type=AuditEventType.email_undeliverable,
+                actor_user_id=None,
+                target_type="email",
+                target_id=to,
+                metadata={
+                    "subject": subject[:120],
+                    "smtp_code": smtp_code,
+                    "smtp_message": (message or "")[:300],
+                },
+            )
+            audit_db.commit()
+        finally:
+            audit_db.close()
+    except Exception:
+        logger.exception("could not record email_undeliverable audit event for %s", to)
+
+
+def _fail_if_last_attempt(
+    *, email_log_id: int | None, attempt: int, to: str, subject: str,
+    smtp_code: int | None, error_class: str, error_message: str,
+) -> bool:
+    """On the final retry, finalize the row as `failed` + audit undeliverable so it
+    doesn't linger `queued`. Returns True if this was the last attempt (caller then
+    returns instead of raising Retry)."""
+    if attempt < _MAX_TRIES:
+        return False
+    logger.error(
+        "giving up sending to %s after %d attempts: %s", to, attempt, error_message
+    )
+    _record_undeliverable_audit(to, subject, smtp_code, error_message)
+    _finalize_log(
+        email_log_id, EmailStatus.failed, attempt, smtp_code=smtp_code,
+        error_class=error_class, error_message=error_message,
+    )
+    return True
 
 
 def _finalize_log(
@@ -115,12 +167,18 @@ async def send_email_job(
         return {"to": to, "subject": subject, "status": "sent"}
     except _TRANSIENT_ERRORS as e:
         attempt = ctx.get("job_try", 1)
+        if _fail_if_last_attempt(
+            email_log_id=email_log_id, attempt=attempt, to=to, subject=subject,
+            smtp_code=None, error_class=type(e).__name__, error_message=str(e),
+        ):
+            return {"to": to, "subject": subject, "status": "failed"}
         # 1s, 5s, 30s - exponential-ish.
         defer = (1, 5, 30)[min(attempt - 1, 2)]
         logger.warning(
-            "transient SMTP error sending to %s (attempt %d/3): %s - retrying in %ds",
+            "transient SMTP error sending to %s (attempt %d/%d): %s - retrying in %ds",
             to,
             attempt,
+            _MAX_TRIES,
             e,
             defer,
         )
@@ -139,12 +197,18 @@ async def send_email_job(
         # so ARQ doesn't keep retrying - the job's outcome is "we tried").
         if 400 <= e.code < 500:
             attempt = ctx.get("job_try", 1)
+            if _fail_if_last_attempt(
+                email_log_id=email_log_id, attempt=attempt, to=to, subject=subject,
+                smtp_code=e.code, error_class=type(e).__name__, error_message=e.message,
+            ):
+                return {"to": to, "subject": subject, "status": "failed", "code": e.code}
             defer = (1, 5, 30)[min(attempt - 1, 2)]
             logger.warning(
-                "SMTP 4xx (%s) sending to %s (attempt %d/3): %s - retrying in %ds",
+                "SMTP 4xx (%s) sending to %s (attempt %d/%d): %s - retrying in %ds",
                 e.code,
                 to,
                 attempt,
+                _MAX_TRIES,
                 e.message,
                 defer,
             )
@@ -163,29 +227,8 @@ async def send_email_job(
             to,
             e.message,
         )
-        # Audit the undeliverable so ops_check (hourly) surfaces it to
-        # admins instead of failing silently. Best-effort: never let the
-        # audit write swallow the worker's outcome dict.
-        try:
-            audit_db = SessionLocal()
-            try:
-                record_audit_event(
-                    audit_db,
-                    event_type=AuditEventType.email_undeliverable,
-                    actor_user_id=None,
-                    target_type="email",
-                    target_id=to,
-                    metadata={
-                        "subject": subject[:120],
-                        "smtp_code": e.code,
-                        "smtp_message": (e.message or "")[:300],
-                    },
-                )
-                audit_db.commit()
-            finally:
-                audit_db.close()
-        except Exception:
-            logger.exception("could not record email_undeliverable audit event for %s", to)
+        # Audit the undeliverable so ops_check (hourly) surfaces it to admins.
+        _record_undeliverable_audit(to, subject, e.code, e.message or "")
         _finalize_log(
             email_log_id,
             EmailStatus.failed,

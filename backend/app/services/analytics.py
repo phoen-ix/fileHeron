@@ -11,7 +11,8 @@ and MariaDB (prod); ``str(row[0])[:10]`` normalises the bucket key on both.
 """
 from __future__ import annotations
 
-from datetime import date, datetime, time, timedelta
+from datetime import date, datetime, time, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -65,9 +66,21 @@ def snapshot_storage_today(db: Session) -> AnalyticsSnapshot:
     return row
 
 
-def _cutoff(days: int) -> tuple[date, datetime]:
-    start_date = utc_now().date() - timedelta(days=days - 1)
-    return start_date, datetime.combine(start_date, time.min)
+def _site_tz(db) -> ZoneInfo:
+    from . import site as site_svc
+    try:
+        return ZoneInfo(site_svc.get_site_timezone(db))
+    except Exception:
+        return ZoneInfo("UTC")
+
+
+def _cutoff(days: int, tz: ZoneInfo) -> tuple[date, datetime]:
+    # "Today" and the day buckets are in the site timezone; the fetch lower bound
+    # is that local start-of-day expressed in UTC (stored timestamps are naive UTC).
+    site_today = utc_now().replace(tzinfo=timezone.utc).astimezone(tz).date()
+    start_date = site_today - timedelta(days=days - 1)
+    start_utc = datetime.combine(start_date, time.min, tzinfo=tz).astimezone(timezone.utc)
+    return start_date, start_utc.replace(tzinfo=None)
 
 
 def _zero_filled(counts: dict[str, int], start: date, days: int) -> list[dict]:
@@ -78,20 +91,24 @@ def _zero_filled(counts: dict[str, int], start: date, days: int) -> list[dict]:
     return out
 
 
-def _daily(db, date_col, *filters, start_dt: datetime) -> dict[str, int]:
-    bucket = func.date(date_col)
-    rows = (
-        db.query(bucket, func.count())
-        .filter(date_col >= start_dt, *filters)
-        .group_by(bucket)
-        .all()
-    )
-    return {str(r[0])[:10]: int(r[1]) for r in rows}
+def _daily(db, date_col, *filters, start_dt: datetime, tz: ZoneInfo) -> dict[str, int]:
+    # Bucket by the SITE-timezone day, in Python (CONVERT_TZ is MariaDB-only and
+    # would break the SQLite tests), so a 23:30-UTC event lands on the right local
+    # day - every other admin surface renders in site.timezone.
+    rows = db.query(date_col).filter(date_col >= start_dt, *filters).all()
+    counts: dict[str, int] = {}
+    for (ts,) in rows:
+        if ts is None:
+            continue
+        local = ts.replace(tzinfo=timezone.utc).astimezone(tz).date().isoformat()
+        counts[local] = counts.get(local, 0) + 1
+    return counts
 
 
 def compute_analytics(db: Session, days: int = 30) -> dict:
     """The live analytics bundle for the last `days` days."""
-    start_date, start_dt = _cutoff(days)
+    tz = _site_tz(db)
+    start_date, start_dt = _cutoff(days, tz)
 
     # Storage trend - from the daily snapshots (the only non-reconstructable bit).
     snaps = (
@@ -113,10 +130,10 @@ def compute_analytics(db: Session, days: int = 30) -> dict:
 
     # Daily time-series (reconstructed live).
     shares_created = _zero_filled(
-        _daily(db, Share.created_at, start_dt=start_dt), start_date, days
+        _daily(db, Share.created_at, start_dt=start_dt, tz=tz), start_date, days
     )
     downloads = _zero_filled(
-        _daily(db, DownloadLog.accessed_at, start_dt=start_dt), start_date, days
+        _daily(db, DownloadLog.accessed_at, start_dt=start_dt, tz=tz), start_date, days
     )
     av_quarantines = _zero_filled(
         _daily(
@@ -124,6 +141,7 @@ def compute_analytics(db: Session, days: int = 30) -> dict:
             AuditLog.created_at,
             AuditLog.event_type == AuditEventType.file_quarantined.value,
             start_dt=start_dt,
+            tz=tz,
         ),
         start_date,
         days,

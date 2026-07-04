@@ -1,0 +1,13 @@
+{{ app_name }} operations alert{% if reason %} - {{ reason }}{% endif %}.
+
+{% if job_name %}Task:    {{ job_name }}
+{% endif %}{% if type %}Type:    {{ type }}
+{% endif %}{% if subject %}Subject: {{ subject }}
+{% endif %}{% if count %}Count:   {{ count }}
+{% endif %}{% if error %}Error:   {{ error }}
+{% endif %}{% if detail %}Detail:  {{ detail }}
+{% endif %}{% if at %}When:    {{ at }}
+{% endif %}
+Review it in the admin area (System, Audit log, or the relevant page).
+
+- {{ app_name }}

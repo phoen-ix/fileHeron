@@ -29,6 +29,22 @@ def test_render_email_en_share_created_returns_subject_text_html():
     assert "Open the share" in html
 
 
+def test_render_email_ops_alert_renders():
+    # ops_alert had no template, so selecting the email channel silently failed.
+    payload = {"reason": "cron_failed", "job_name": "expire_files", "error": "boom",
+               "at": "2026-07-04T10:00:00"}
+    subject, text, _html = email_svc.render_email("en", "ops_alert", payload)
+    assert "operations alert" in subject.lower()
+    assert "expire_files" in text and "boom" in text
+
+
+def test_render_email_inbound_message_renders_de():
+    payload = {"sender": "a@x.com", "subject": "Hi there", "classification": "normal"}
+    subject, text, _html = email_svc.render_email("de", "inbound_message", payload)
+    assert "nachricht" in subject.lower()
+    assert "a@x.com" in text and "Hi there" in text
+
+
 def test_render_email_de_locale_uses_de_template():
     payload = {
         "sender_name": "Alice",

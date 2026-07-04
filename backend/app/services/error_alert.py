@@ -110,7 +110,9 @@ def signature(event: dict[str, Any]) -> str:
 
 
 class _CooldownDecision:
-    __slots__ = ("should_send", "occurrence_count", "suppressed_count", "suppressed_since")
+    __slots__ = (
+        "should_send", "occurrence_count", "suppressed_count", "suppressed_since", "total",
+    )
 
     def __init__(
         self,
@@ -118,30 +120,32 @@ class _CooldownDecision:
         occurrence_count: int,
         suppressed_count: int,
         suppressed_since: datetime | None,
+        total: int = 0,
     ) -> None:
         self.should_send = should_send
         self.occurrence_count = occurrence_count
         self.suppressed_count = suppressed_count
         self.suppressed_since = suppressed_since
+        self.total = total
 
 
-def _cooldown_decision(sig: str, cooldown_sec: int) -> _CooldownDecision:
-    """Decide whether this occurrence sends. Redis-backed; on any Redis error
-    err toward sending (the hourly cap still bounds the blast radius)."""
+def _cooldown_peek(sig: str) -> _CooldownDecision:
+    """Would this occurrence send? Counts it (INCR) but does NOT consume the
+    cooldown slot or advance the watermark - that happens in _cooldown_commit,
+    only once we've decided to send AND passed the hourly cap. (Previously the
+    slot+watermark were burned here, so a rate-capped occurrence lost its cooldown
+    with no email and the eventual email under-reported the suppressed count.)
+    Redis error -> err toward sending; the cap still bounds the blast radius."""
     try:
         redis = get_redis()
         total = redis.incr(_TOTAL_KEY.format(sig=sig))
         redis.expire(_TOTAL_KEY.format(sig=sig), _ACCOUNTING_TTL_SEC)
-        first = redis.set(_SENT_KEY.format(sig=sig), "1", nx=True, ex=cooldown_sec)
-        if not first:
-            # Already alerted for this signature inside the window. Count it,
-            # don't email it.
-            return _CooldownDecision(False, int(total), 0, None)
-
+        if redis.get(_SENT_KEY.format(sig=sig)) is not None:
+            # Already alerted for this signature inside the window. Count, don't email.
+            return _CooldownDecision(False, int(total), 0, None, int(total))
         reported_raw = redis.get(_REPORTED_KEY.format(sig=sig))
         reported = int(reported_raw) if reported_raw else 0
         last_iso = redis.get(_LASTSENT_KEY.format(sig=sig))
-        now = utc_now()
         # Occurrences this email represents = everything since the last email.
         occurrence_count = max(1, int(total) - reported)
         suppressed_count = max(0, occurrence_count - 1)
@@ -151,12 +155,29 @@ def _cooldown_decision(sig: str, cooldown_sec: int) -> _CooldownDecision:
                 suppressed_since = datetime.fromisoformat(last_iso)
             except ValueError:
                 suppressed_since = None
-        redis.set(_REPORTED_KEY.format(sig=sig), str(int(total)), ex=_ACCOUNTING_TTL_SEC)
-        redis.set(_LASTSENT_KEY.format(sig=sig), now.isoformat(), ex=_ACCOUNTING_TTL_SEC)
-        return _CooldownDecision(True, occurrence_count, suppressed_count, suppressed_since)
+        return _CooldownDecision(
+            True, occurrence_count, suppressed_count, suppressed_since, int(total)
+        )
     except Exception:
-        logger.warning("error_alert: cooldown check skipped (redis); sending", exc_info=True)
-        return _CooldownDecision(True, 1, 0, None)
+        logger.warning("error_alert: cooldown peek skipped (redis); sending", exc_info=True)
+        return _CooldownDecision(True, 1, 0, None, 1)
+
+
+def _cooldown_commit(sig: str, cooldown_sec: int, total: int) -> bool:
+    """Consume the cooldown slot + advance the watermark. Runs only after the cap
+    passed. Returns False if a concurrent occurrence won the slot first (nx) - then
+    WE don't send. (Two racers can each spend one hourly-cap slot in that window;
+    only one actually emails - acceptable, the cap bounds it.)"""
+    try:
+        redis = get_redis()
+        if not redis.set(_SENT_KEY.format(sig=sig), "1", nx=True, ex=cooldown_sec):
+            return False
+        redis.set(_REPORTED_KEY.format(sig=sig), str(int(total)), ex=_ACCOUNTING_TTL_SEC)
+        redis.set(_LASTSENT_KEY.format(sig=sig), utc_now().isoformat(), ex=_ACCOUNTING_TTL_SEC)
+        return True
+    except Exception:
+        logger.warning("error_alert: cooldown commit skipped (redis); sending", exc_info=True)
+        return True
 
 
 def _within_hourly_cap(db: Session) -> bool:
@@ -353,7 +374,7 @@ def _maybe_alert(
         return {"status": "source_disabled"}
 
     cooldown_sec = int(settings_registry.effective(db, K.ERROR_ALERT_COOLDOWN_MINUTES)) * 60
-    decision = _cooldown_decision(sig, cooldown_sec)
+    decision = _cooldown_peek(sig)
     if not decision.should_send:
         return {"status": "deduped", "occurrences": decision.occurrence_count}
 
@@ -361,6 +382,11 @@ def _maybe_alert(
     # must not burn the hourly budget).
     if not _within_hourly_cap(db):
         return {"status": "rate_capped"}
+
+    # Past the cap - NOW consume the cooldown slot + advance the watermark. If a
+    # concurrent occurrence beat us to it, defer to that one.
+    if not _cooldown_commit(sig, cooldown_sec, decision.total):
+        return {"status": "deduped", "occurrences": decision.occurrence_count}
 
     payload = _build_payload(event, decision)
     mode = (settings_svc.get(db, K.ERROR_ALERT_RECIPIENTS_MODE) or "admins").strip().lower()

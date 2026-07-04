@@ -70,15 +70,17 @@ def _alert_admins(db, *, payload: dict) -> int:
                 category=NotificationCategory.ops_alert,
                 payload=payload,
                 link_url="/admin/system",
+                email_to=admin.email,
             )
             n += 1
         except Exception:
             logger.exception("ops_alert dispatch failed admin=%d", admin.id)
 
+    from ..database import run_after_commit
     from ..services import webhook as webhook_svc
-    webhook_svc.emit(
-        db, webhook_svc.OPS_ALERT_EVENT,
-        {"target_type": "ops", "target_id": "storage_critical_low", "metadata": payload},
+    emit_payload = {"target_type": "ops", "target_id": "storage_critical_low", "metadata": payload}
+    run_after_commit(
+        db, lambda: webhook_svc.emit(db, webhook_svc.OPS_ALERT_EVENT, emit_payload)
     )
     return n
 

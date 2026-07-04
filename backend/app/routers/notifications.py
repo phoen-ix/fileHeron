@@ -214,6 +214,7 @@ async def stream(
     request: Request,
     db: Session = Depends(get_db),
     token: str | None = None,
+    last_event_id: str | None = None,
     authorization: str | None = Header(default=None),
 ) -> StreamingResponse:
     """Long-lived SSE connection. Per-user Redis pubsub channel; the
@@ -234,13 +235,15 @@ async def stream(
     # close() then becomes a no-op.
     db.close()
 
-    last_event_id_header = request.headers.get("last-event-id")
-    last_event_id = None
-    if last_event_id_header is not None:
+    # The wrapper reconnects by building a fresh EventSource, which doesn't send
+    # the Last-Event-Id header, so it also passes ?last_event_id=. Accept either.
+    raw_last_id = last_event_id or request.headers.get("last-event-id")
+    last_event_id_int = None
+    if raw_last_id is not None:
         try:
-            last_event_id = int(last_event_id_header)
+            last_event_id_int = int(raw_last_id)
         except ValueError:
-            last_event_id = None
+            last_event_id_int = None
 
     # Per-user concurrent-connection cap (finding M4). Acquire here so we
     # can return a clean 429; release in the generator's finally, which
@@ -252,7 +255,7 @@ async def stream(
 
     async def _capped_stream():
         try:
-            async for frame in sse_svc.stream_for_user(user_id, last_event_id):
+            async for frame in sse_svc.stream_for_user(user_id, last_event_id_int):
                 yield frame
         finally:
             sse_svc.release_user_stream(user_id)

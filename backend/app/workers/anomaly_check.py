@@ -18,6 +18,7 @@ from ..models.notification import NotificationCategory
 from ..models.user import User, UserRole
 from ..redis_client import get_redis
 from ..services import anomaly as anomaly_svc
+from ..services import cron_schedule as cron_sched
 from ..services import settings as settings_svc
 from ..services import settings_registry as _sr
 from ..services.audit import record_audit_event
@@ -28,9 +29,14 @@ from ..utils.timeutil import utc_now
 logger = logging.getLogger("fileheron.workers.anomaly_check")
 
 _DEDUP_TTL_SEC = 3600
+# Floors for the detector lookback windows. The effective window scales up to the
+# admin-tunable scan cadence (+ a small overlap) so consecutive scans leave no
+# gap - a burst between two runs would otherwise be missed. Thresholds are counts
+# within the window, so a longer cadence means a proportionally larger window.
 _MASS_DOWNLOAD_WINDOW_MIN = 15
 _MULTI_NETWORK_WINDOW_MIN = 30
 _LOGIN_FAILURE_WINDOW_MIN = 15
+_WINDOW_OVERLAP_MIN = 5
 
 
 def _dedup_seen(finding) -> bool:
@@ -69,6 +75,7 @@ def _alert_admins(db, finding) -> None:
                 category=NotificationCategory.ops_alert,
                 payload=payload,
                 link_url="/admin/audit-log",
+                email_to=admin.email,
             )
         except Exception:
             logger.exception("anomaly ops_alert dispatch failed admin=%d", admin.id)
@@ -86,16 +93,21 @@ async def anomaly_check(_ctx) -> dict:
         net_threshold = _sr.effective(db, _sr.K.ANOMALY_MULTI_NETWORK_THRESHOLD)
         login_threshold = _sr.effective(db, _sr.K.ANOMALY_LOGIN_FAILURE_THRESHOLD)
 
+        cadence = cron_sched.effective_cadence_minutes(db, "anomaly_check") + _WINDOW_OVERLAP_MIN
+        mass_window = max(_MASS_DOWNLOAD_WINDOW_MIN, cadence)
+        net_window = max(_MULTI_NETWORK_WINDOW_MIN, cadence)
+        login_window = max(_LOGIN_FAILURE_WINDOW_MIN, cadence)
+
         findings = []
         for run in (
             lambda: anomaly_svc.mass_download(
-                db, cutoff=now - timedelta(minutes=_MASS_DOWNLOAD_WINDOW_MIN), threshold=mass_threshold
+                db, cutoff=now - timedelta(minutes=mass_window), threshold=mass_threshold
             ),
             lambda: anomaly_svc.multi_network(
-                db, cutoff=now - timedelta(minutes=_MULTI_NETWORK_WINDOW_MIN), threshold=net_threshold
+                db, cutoff=now - timedelta(minutes=net_window), threshold=net_threshold
             ),
             lambda: anomaly_svc.login_stuffing(
-                db, cutoff=now - timedelta(minutes=_LOGIN_FAILURE_WINDOW_MIN), threshold=login_threshold
+                db, cutoff=now - timedelta(minutes=login_window), threshold=login_threshold
             ),
         ):
             try:

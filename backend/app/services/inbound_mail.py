@@ -117,6 +117,7 @@ def _notify_admins(db: Session, msg: InboundMessage) -> None:
             category=NotificationCategory.inbound_message,
             payload=payload,
             link_url=link,
+            email_to=admin.email,
         )
 
 

@@ -216,7 +216,11 @@ def public_download(
     fh_dl_unlock: str | None = Cookie(default=None),
 ) -> Response:
     link = public_link_svc.get_link_by_token(db, token)
-    public_link_svc.assert_link_usable(db, link)
+    # A Range continuation of the download that consumed the last unit must be
+    # allowed to finish (the counter already hit 0); it isn't re-counted below.
+    public_link_svc.assert_link_usable(
+        db, link, allow_exhausted_continuation=is_partial_continuation(request)
+    )
 
     if not _is_unlocked(link, fh_dl_unlock):
         raise AppError(401, "UNLOCK_REQUIRED", "Submit the password first.")

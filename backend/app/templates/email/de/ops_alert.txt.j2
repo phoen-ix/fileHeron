@@ -1,0 +1,13 @@
+{{ app_name }} Betriebswarnung{% if reason %} - {{ reason }}{% endif %}.
+
+{% if job_name %}Aufgabe:      {{ job_name }}
+{% endif %}{% if type %}Typ:          {{ type }}
+{% endif %}{% if subject %}Betreff:      {{ subject }}
+{% endif %}{% if count %}Anzahl:       {{ count }}
+{% endif %}{% if error %}Fehler:       {{ error }}
+{% endif %}{% if detail %}Detail:       {{ detail }}
+{% endif %}{% if at %}Zeitpunkt:    {{ at }}
+{% endif %}
+Im Admin-Bereich ansehen (System, Audit-Log oder die betreffende Seite).
+
+- {{ app_name }}

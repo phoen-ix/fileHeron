@@ -126,16 +126,18 @@ def _maybe_alert_admins(db: Session, job_name: str, error_msg: str) -> None:
                 category=NotificationCategory.ops_alert,
                 payload=payload,
                 link_url="/admin/system",
+                email_to=admin.email,
             )
         except Exception:
             logger.exception(
                 "ops_alert dispatch to admin=%d failed", admin.id
             )
 
+    from ..database import run_after_commit
     from . import webhook as webhook_svc
-    webhook_svc.emit(
-        db, webhook_svc.OPS_ALERT_EVENT,
-        {"target_type": "ops", "target_id": "cron_failed", "metadata": payload},
+    emit_payload = {"target_type": "ops", "target_id": "cron_failed", "metadata": payload}
+    run_after_commit(
+        db, lambda: webhook_svc.emit(db, webhook_svc.OPS_ALERT_EVENT, emit_payload)
     )
 
 

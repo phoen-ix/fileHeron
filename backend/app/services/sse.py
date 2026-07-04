@@ -206,18 +206,65 @@ async def stream_admin_events() -> AsyncIterator[bytes]:
         await r.aclose()
 
 
+_CATCHUP_MAX = 100  # cap the reconnect replay so a long gap can't flood one stream
+
+
+def _catchup_frames(user_id: int, last_event_id: int) -> list[tuple[bytes, int]]:
+    """Notifications newer than `last_event_id` for this user, as (frame, id) pairs
+    in the same shape the live loop emits. Own short-lived session (the request db
+    was already released at auth). Best-effort - never raises into the stream."""
+    from ..database import SessionLocal
+    from ..models.notification import Notification
+
+    out: list[tuple[bytes, int]] = []
+    cdb = SessionLocal()
+    try:
+        rows = (
+            cdb.query(Notification)
+            .filter(Notification.user_id == user_id, Notification.id > last_event_id)
+            .order_by(Notification.id.asc())
+            .limit(_CATCHUP_MAX)
+            .all()
+        )
+        for n in rows:
+            payload = {
+                "id": n.id,
+                "category": n.category.value,
+                "link_url": n.link_url,
+                "created_at": n.created_at.isoformat() if n.created_at else None,
+                "payload": n.payload_json,
+            }
+            frame = (
+                "event: notification\n"
+                f"id: {n.id}\n"
+                f"data: {json.dumps(payload, separators=(',', ':'))}\n\n"
+            ).encode("utf-8")
+            out.append((frame, n.id))
+    except Exception:
+        logger.warning("SSE: catch-up replay failed for user=%s", user_id, exc_info=True)
+    finally:
+        cdb.close()
+    return out
+
+
 async def stream_for_user(user_id: int, last_event_id: int | None = None) -> AsyncIterator[bytes]:
     """Async generator producing SSE frames. Yields:
+    - any notifications newer than `last_event_id` (reconnect catch-up), replayed
+      id-tagged before the live loop
     - one keepalive comment every KEEPALIVE_SEC even if no events
     - a real `data:` frame per published event
-    Closes after CONNECTION_TTL_SEC.
-
-    If `last_event_id` is set, the caller should have flushed any
-    catch-up frames before this generator starts (we don't double-fetch
-    here)."""
+    Closes after CONNECTION_TTL_SEC."""
     r = _redis()
     pubsub = r.pubsub()
+    # Subscribe BEFORE the catch-up query so an event published during it is
+    # buffered by pubsub and delivered by the live loop (deduped via seen_max).
     await pubsub.subscribe(_channel(user_id))
+
+    seen_max = last_event_id or 0
+    if last_event_id is not None:
+        for frame, fid in _catchup_frames(user_id, last_event_id):
+            seen_max = max(seen_max, fid)
+            yield frame
 
     deadline = asyncio.get_running_loop().time() + CONNECTION_TTL_SEC
 
@@ -248,6 +295,10 @@ async def stream_for_user(user_id: int, last_event_id: int | None = None) -> Asy
                 continue
 
             event_id = event.get("id")
+            if event_id is not None:
+                if int(event_id) <= seen_max:
+                    continue  # already replayed during catch-up
+                seen_max = max(seen_max, int(event_id))
             payload = event.get("data") or event
             line = f"event: {event.get('event', 'notification')}\n"
             if event_id is not None:

@@ -1,33 +1,40 @@
-# file:Heron v1.59.0
+# file:Heron v1.60.0
 
-**Single sign-on (OIDC) fixes.** The third follow-up release from the code audit.
-It fixes account-linking over SSO and removes a group-to-role mapping that never
-worked. Roles stay managed inside fileHeron. This release includes a small
-automatic database change (applied on startup - no host step).
+**Notifications, alerts, analytics, and webhooks.** The fourth follow-up release
+from the code audit. A batch of reliability fixes across email/alert delivery, the
+notification bell, analytics, webhooks, and public links. No database migration and
+no host step - deploy from this banner.
 
 ## What's fixed
 
-- **Connecting your account to SSO now works.** From **Account -> connect single
-  sign-on**, linking your existing fileHeron account to an identity provider was
-  failing: the provider's browser redirect back to fileHeron couldn't be
-  authenticated, so the link never completed. The return trip is now authenticated
-  by a tamper-proof signed token, so connecting works end to end.
-
-## What's changed
-
-- **Roles are managed in fileHeron, not by your identity provider.** The SSO
-  provider form had "groups claim", "admin groups", and "employee groups" fields
-  that were saved but never actually did anything. They have been removed. A user's
-  role (admin / employee / client) is set inside fileHeron - when an admin invites
-  them or edits their account - and signing in via SSO never changes it. In
-  particular, **a fileHeron admin always stays an admin**, and no identity-provider
-  group can grant or remove admin.
-- If you had those group fields filled in, no action is needed - they were doing
-  nothing, and the values are dropped by this update.
+- **Operations and inbound-mail email alerts now actually send.** If you set the
+  "operations alert" or "inbound message" notification categories to email, they
+  were silently doing nothing (no email template existed). They now send a proper
+  email to admins.
+- **Undeliverable emails no longer sit stuck as "queued".** When email delivery
+  fails through all retries, the mail-log row is now marked *failed* and surfaced
+  to operations, instead of lingering as "queued" forever.
+- **The notification bell catches up after a reconnect.** The live connection
+  refreshes about once a minute; notifications that arrived during that brief gap
+  are now replayed on reconnect, so the unread badge no longer drifts.
+- **Error-alert rate-capping no longer swallows an alert.** When the hourly alert
+  cap was hit, the next occurrence of an error could be silently lost and the later
+  alert under-counted how many were suppressed. The cap and the cooldown are now
+  applied in the right order, so nothing is dropped and counts are accurate.
+- **Analytics charts use your timezone.** The daily activity charts (shares,
+  downloads, quarantines) now group events by your configured site timezone, so an
+  event near midnight lands on the correct day instead of the UTC day.
+- **Webhooks don't fire for rolled-back changes.** Outbound webhooks are now sent
+  only after the change that triggered them is committed, so a change that gets
+  rolled back no longer delivers a "ghost" event.
+- **Anomaly detection covers the whole gap between scans.** The detector's lookback
+  windows now scale with the scan interval, so a burst that happens between two
+  scans is no longer missed.
+- **Public links: the last download can finish.** On a one-time (single-download)
+  public link, a resumed or ranged download that had already consumed the last
+  allowed download now completes instead of being refused.
 
 ## Notes
 
-- This release drops three unused columns from the SSO-providers table. The change
-  runs automatically when the backend starts (as with every migration) - there is
-  no host step, and no other data is affected.
-- Deploy from the in-app Update banner as usual.
+- **No migration, no host step** - the in-app Update swaps the backend, worker, and
+  frontend images.

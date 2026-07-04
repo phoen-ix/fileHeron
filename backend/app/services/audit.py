@@ -57,21 +57,21 @@ def record_audit_event(
     )
 
     # Fan out to outbound webhooks subscribed to this event (best-effort, never
-    # raises). Lazy import - webhook → models → audit would be a cycle at import.
+    # raises). Deferred to AFTER the caller's commit (run_after_commit) so a
+    # post-audit rollback can't deliver a ghost event for a change that never
+    # persisted. Lazy import - webhook → models → audit would cycle at import.
     try:
+        from ..database import run_after_commit
         from . import webhook as webhook_svc
 
         if webhook_svc.is_webhook_event(et):
-            webhook_svc.emit(
-                db,
-                et,
-                {
-                    "actor_user_id": actor_user_id,
-                    "target_type": target_type,
-                    "target_id": str(target_id) if target_id is not None else None,
-                    "metadata": metadata,
-                },
-            )
+            payload = {
+                "actor_user_id": actor_user_id,
+                "target_type": target_type,
+                "target_id": str(target_id) if target_id is not None else None,
+                "metadata": metadata,
+            }
+            run_after_commit(db, lambda: webhook_svc.emit(db, et, payload))
     except Exception:
         logger.exception("webhook emit from audit failed for event=%s", et)
 

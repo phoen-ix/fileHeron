@@ -22,5 +22,7 @@
   "email_change_verify_old": "Approve your {app_name} email change",
   "email_change_alert": "Your {app_name} email address is being changed",
   "email_change_completed": "Your {app_name} sign-in email was changed",
-  "server_error": "{app_name} - error ({code})"
+  "server_error": "{app_name} - error ({code})",
+  "ops_alert": "{app_name} - operations alert",
+  "inbound_message": "{app_name} - new inbound message"
 }

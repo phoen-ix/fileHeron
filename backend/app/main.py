@@ -135,4 +135,7 @@ app.include_router(notifications.router, dependencies=_gate)
 app.include_router(notifications.stream_router)
 app.include_router(admin.router, dependencies=_gate)
 app.include_router(oidc_connect.router, dependencies=_gate)
+# The connect callback is a top-level IdP browser redirect (cookies only, no
+# Bearer); it authenticates via the signed state cookie, so it stays OUTSIDE _gate.
+app.include_router(oidc_connect.callback_router)
 app.include_router(webauthn.account_router, dependencies=_gate)

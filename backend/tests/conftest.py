@@ -347,9 +347,6 @@ def make_provider(db):
         issuer_url: str = "https://idp.example.com/realms/fh",
         client_id: str = "fileheron",
         client_secret: str = "shh",
-        groups_claim: str = "groups",
-        admin_groups: str = "fh-admins",
-        employee_groups: str = "fh-employees",
         redirect_uri: str = "",
         enabled: bool = True,
     ) -> OIDCProvider:
@@ -359,9 +356,6 @@ def make_provider(db):
             issuer_url=issuer_url,
             client_id=client_id,
             client_secret_encrypted=encrypt_setting(client_secret) if client_secret else "",
-            groups_claim=groups_claim,
-            admin_groups=admin_groups,
-            employee_groups=employee_groups,
             redirect_uri=redirect_uri,
             enabled=enabled,
         )

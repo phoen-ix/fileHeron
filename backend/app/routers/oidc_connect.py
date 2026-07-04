@@ -27,6 +27,8 @@ where a malicious IdP would somehow learn another user's auth.
 """
 from __future__ import annotations
 
+import hashlib
+import hmac as hmac_mod
 import logging
 
 from fastapi import APIRouter, Cookie, Depends, Query, Request, Response
@@ -48,22 +50,39 @@ from ..services import oidc_admin as oidc_admin_svc
 
 logger = logging.getLogger("fileheron.routers.oidc_connect")
 
+# The authed connect flow: /connect/start + /links + unlink are gated (need the
+# Bearer session). The callback is on a SEPARATE, UNGATED router: the IdP returns
+# via a top-level browser navigation that carries only cookies, so it can't satisfy
+# the Bearer gate - the signed state cookie authenticates the actor instead.
 router = APIRouter(prefix="/api/account/oidc", tags=["oidc-connect"])
+callback_router = APIRouter(prefix="/api/account/oidc", tags=["oidc-connect"])
 
 _CONNECT_COOKIE = "fh_oidc_connect_state"
 _COOKIE_PATH = "/api/account/oidc"
 
 
 def _pack(state: str, provider_id: str, user_id: int, nonce: str) -> str:
-    return f"{state}::{provider_id}::{user_id}::{nonce}"
+    # The callback trusts cookie_user_id to authenticate the actor (no Bearer), so
+    # the packed value MUST be tamper-proof - HMAC it under JWT_SECRET.
+    payload = f"{state}::{provider_id}::{user_id}::{nonce}"
+    sig = hmac_mod.new(
+        settings.JWT_SECRET.encode("utf-8"), payload.encode("utf-8"), hashlib.sha256
+    ).hexdigest()
+    return f"{payload}.{sig}"
 
 
 def _unpack(
     packed: str | None,
 ) -> tuple[str | None, str | None, int | None, str | None]:
-    if not packed:
+    if not packed or "." not in packed:
         return None, None, None, None
-    parts = packed.split("::")
+    payload, _, sig = packed.rpartition(".")
+    expected = hmac_mod.new(
+        settings.JWT_SECRET.encode("utf-8"), payload.encode("utf-8"), hashlib.sha256
+    ).hexdigest()
+    if not hmac_mod.compare_digest(expected, sig):
+        return None, None, None, None
+    parts = payload.split("::")
     if len(parts) != 4:
         return None, None, None, None
     state, provider_id, uid_str, nonce = parts
@@ -129,22 +148,23 @@ async def connect_start(
 # ---------------------------------------------------------------------------
 
 
-@router.get("/connect/callback/{provider_id}")
+@callback_router.get("/connect/callback/{provider_id}")
 async def connect_callback(
     provider_id: str,
     request: Request,
     code: str = Query(...),
     state: str = Query(...),
     fh_oidc_connect_state: str | None = Cookie(default=None),
-    user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> RedirectResponse:
+    # No Bearer here (IdP browser redirect carries only cookies). The actor is the
+    # user_id inside the HMAC-signed state cookie - _unpack rejects a forged one.
     cookie_state, cookie_provider_id, cookie_user_id, cookie_nonce = _unpack(
         fh_oidc_connect_state
     )
     if (
         cookie_provider_id != provider_id
-        or cookie_user_id != user.id
+        or cookie_user_id is None
         or not cookie_state
         or not cookie_nonce
     ):
@@ -153,6 +173,9 @@ async def connect_callback(
             "OIDC_STATE_MISMATCH",
             "OIDC connect state mismatch - please retry.",
         )
+    user = db.query(User).filter(User.id == cookie_user_id).one_or_none()
+    if user is None or user.is_disabled:
+        raise AppError(401, "OIDC_STATE_MISMATCH", "OIDC connect state mismatch - please retry.")
 
     provider = oidc_admin_svc.get_enabled_provider(db, provider_id)
 

@@ -9,9 +9,6 @@ export interface OIDCProviderItem {
   issuer_url: string
   client_id: string
   client_secret_set: boolean
-  groups_claim: string
-  admin_groups: string
-  employee_groups: string
   redirect_uri: string
   enabled: boolean
   user_count: number
@@ -29,9 +26,6 @@ export interface CreateOIDCProviderRequest {
   issuer_url: string
   client_id: string
   client_secret: string
-  groups_claim?: string
-  admin_groups?: string
-  employee_groups?: string
   redirect_uri?: string
   enabled?: boolean
 }
@@ -43,9 +37,6 @@ export interface UpdateOIDCProviderRequest {
   client_id?: string
   /** null/undefined = leave unchanged; '' = clear; other = replace. */
   client_secret?: string | null
-  groups_claim?: string
-  admin_groups?: string
-  employee_groups?: string
   redirect_uri?: string
   enabled?: boolean
 }
@@ -70,8 +61,6 @@ export interface PresetMeta {
   issuer?: string | null
   issuer_template?: string | null
   issuer_template_fields: PresetField[]
-  default_groups_claim: string
-  supports_groups: boolean
   notes: string
 }
 

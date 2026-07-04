@@ -299,36 +299,6 @@ def _extract_email(
     return email, verified
 
 
-def _walk_path(claims: dict[str, Any], dotted_path: str) -> Any:
-    """Walk a dotted path through nested dicts. Used to extract groups
-    from claims even when the IdP nests them (Keycloak's
-    `realm_access.roles`)."""
-    if not dotted_path:
-        return None
-    cur: Any = claims
-    for part in dotted_path.split("."):
-        if isinstance(cur, dict):
-            cur = cur.get(part)
-        else:
-            return None
-        if cur is None:
-            return None
-    return cur
-
-
-def _resolve_role_from_groups(
-    provider: OIDCProvider, groups: list[str]
-) -> UserRole:
-    admin_set = {g.strip() for g in (provider.admin_groups or "").split(",") if g.strip()}
-    employee_set = {g.strip() for g in (provider.employee_groups or "").split(",") if g.strip()}
-    grp_set = {str(g) for g in groups}
-    if admin_set & grp_set:
-        return UserRole.admin
-    if employee_set & grp_set:
-        return UserRole.employee
-    return UserRole.client
-
-
 async def _verify_token_response(
     provider: OIDCProvider,
     token_resp: dict[str, Any],

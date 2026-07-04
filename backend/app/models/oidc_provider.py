@@ -61,11 +61,6 @@ class OIDCProvider(Base):
     # Fernet ciphertext (str); empty string means "not yet set". Use
     # `utils.crypto.encrypt_setting` / `decrypt_setting`.
     client_secret_encrypted: Mapped[str] = mapped_column(Text, nullable=False, default="")
-    groups_claim: Mapped[str] = mapped_column(
-        String(200), nullable=False, default="groups"
-    )
-    admin_groups: Mapped[str] = mapped_column(Text, nullable=False, default="")
-    employee_groups: Mapped[str] = mapped_column(Text, nullable=False, default="")
     # Override only when the IdP requires a specific redirect URI different
     # from `${APP_URL}/api/auth/oidc/callback/{id}`.
     redirect_uri: Mapped[str] = mapped_column(String(500), nullable=False, default="")

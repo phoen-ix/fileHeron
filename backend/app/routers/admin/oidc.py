@@ -49,9 +49,6 @@ def _to_provider_item(db: Session, p: OIDCProvider) -> OIDCProviderItem:
         issuer_url=p.issuer_url,
         client_id=p.client_id,
         client_secret_set=bool(p.client_secret_encrypted),
-        groups_claim=p.groups_claim,
-        admin_groups=p.admin_groups,
-        employee_groups=p.employee_groups,
         redirect_uri=p.redirect_uri,
         enabled=p.enabled,
         user_count=_user_count_for_provider(db, p.id),
@@ -76,8 +73,6 @@ def list_presets(
                     PresetField(**f)
                     for f in meta.get("issuer_template_fields", [])
                 ],
-                default_groups_claim=meta["default_groups_claim"],
-                supports_groups=meta["supports_groups"],
                 notes=meta.get("notes", ""),
             )
         )
@@ -113,9 +108,6 @@ def create_provider(
         issuer_url=payload.issuer_url,
         client_id=payload.client_id,
         client_secret_encrypted=encrypt_setting(payload.client_secret),
-        groups_claim=payload.groups_claim,
-        admin_groups=payload.admin_groups,
-        employee_groups=payload.employee_groups,
         redirect_uri=payload.redirect_uri,
         enabled=payload.enabled,
         created_at=now,
@@ -170,9 +162,6 @@ def update_provider(
         "preset",
         "issuer_url",
         "client_id",
-        "groups_claim",
-        "admin_groups",
-        "employee_groups",
         "redirect_uri",
         "enabled",
     ):

@@ -33,9 +33,6 @@ async def test_presets_endpoint_returns_known_presets(make_user, client, login_a
     body = resp.json()
     keys = {p["preset"] for p in body["presets"]}
     assert {"entra", "google", "authentik", "keycloak", "custom"}.issubset(keys)
-    # Google does not support groups → role mapping must skip it.
-    google = next(p for p in body["presets"] if p["preset"] == "google")
-    assert google["supports_groups"] is False
 
 
 @pytest.mark.asyncio
@@ -51,9 +48,6 @@ async def test_create_get_patch_provider(make_user, client, login_as, db):
             "issuer_url": "https://login.microsoftonline.com/corp/v2.0",
             "client_id": "corp-client",
             "client_secret": "corp-secret",
-            "groups_claim": "groups",
-            "admin_groups": "fh-admins",
-            "employee_groups": "fh-employees",
             "redirect_uri": "",
             "enabled": True,
         },

@@ -43,9 +43,6 @@ interface FormState {
   issuer_url: string
   client_id: string
   client_secret: string
-  groups_claim: string
-  admin_groups: string
-  employee_groups: string
   redirect_uri: string
   enabled: boolean
 }
@@ -56,9 +53,6 @@ const form = ref<FormState>({
   issuer_url: '',
   client_id: '',
   client_secret: '',
-  groups_claim: 'groups',
-  admin_groups: '',
-  employee_groups: '',
   redirect_uri: '',
   enabled: true,
 })
@@ -74,9 +68,6 @@ const activePreset = computed<PresetMeta | null>(() => {
 function applyPresetDefaults() {
   const p = activePreset.value
   if (!p) return
-  if (!form.value.groups_claim || form.value.groups_claim === 'groups') {
-    form.value.groups_claim = p.default_groups_claim
-  }
   // Reset helper fields when switching presets.
   helperFields.value = Object.fromEntries(
     p.issuer_template_fields.map((f) => [f.key, '']),
@@ -137,9 +128,6 @@ async function loadProvider() {
   form.value.issuer_url = data.issuer_url
   form.value.client_id = data.client_id
   form.value.client_secret = ''
-  form.value.groups_claim = data.groups_claim
-  form.value.admin_groups = data.admin_groups
-  form.value.employee_groups = data.employee_groups
   form.value.redirect_uri = data.redirect_uri
   form.value.enabled = data.enabled
 }
@@ -195,9 +183,6 @@ async function onSave() {
         // null = leave unchanged.
         client_secret:
           form.value.client_secret === '' ? null : form.value.client_secret,
-        groups_claim: form.value.groups_claim,
-        admin_groups: form.value.admin_groups,
-        employee_groups: form.value.employee_groups,
         redirect_uri: form.value.redirect_uri,
         enabled: form.value.enabled,
       })
@@ -214,9 +199,6 @@ async function onSave() {
         issuer_url: form.value.issuer_url,
         client_id: form.value.client_id,
         client_secret: form.value.client_secret,
-        groups_claim: form.value.groups_claim,
-        admin_groups: form.value.admin_groups,
-        employee_groups: form.value.employee_groups,
         redirect_uri: form.value.redirect_uri,
         enabled: form.value.enabled,
       })
@@ -338,39 +320,6 @@ onMounted(init)
         />
         <span class="fh-field-help">{{ t('admin_sso_edit.client_secret_help') }}</span>
       </label>
-
-      <!-- Group mapping fields: hidden for presets that don't support it -->
-      <template v-if="activePreset?.supports_groups">
-        <label class="fh-field">
-          <span class="fh-field-label">{{ t('admin_sso_edit.groups_claim') }}</span>
-          <input
-            v-model.trim="form.groups_claim"
-            class="fh-field-input fh-field-mono"
-            type="text"
-          />
-          <span class="fh-field-help">{{ t('admin_sso_edit.groups_claim_help') }}</span>
-        </label>
-
-        <label class="fh-field">
-          <span class="fh-field-label">{{ t('admin_sso_edit.admin_groups') }}</span>
-          <input
-            v-model.trim="form.admin_groups"
-            class="fh-field-input fh-field-mono"
-            type="text"
-            placeholder="fh-admins"
-          />
-        </label>
-
-        <label class="fh-field">
-          <span class="fh-field-label">{{ t('admin_sso_edit.employee_groups') }}</span>
-          <input
-            v-model.trim="form.employee_groups"
-            class="fh-field-input fh-field-mono"
-            type="text"
-            placeholder="fh-employees"
-          />
-        </label>
-      </template>
 
       <label class="fh-field">
         <span class="fh-field-label">{{ t('admin_sso_edit.redirect_uri') }}</span>

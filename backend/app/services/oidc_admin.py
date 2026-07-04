@@ -35,22 +35,18 @@ PROVIDER_PRESETS: dict[str, dict[str, Any]] = {
         "issuer_template_fields": [
             {"key": "tenant", "label": "Tenant ID or domain", "placeholder": "contoso.onmicrosoft.com"}
         ],
-        "default_groups_claim": "groups",
-        "supports_groups": True,
         "notes": (
-            "Microsoft Entra emits group object IDs (not names) by default. "
-            "Use the GUIDs from Entra's group blade in admin/employee groups."
+            "Roles are managed inside fileHeron; a user's role is set when an "
+            "admin invites them and is not changed by the identity provider."
         ),
     },
     OIDCPreset.google.value: {
         "label": "Google Workspace",
         "issuer": "https://accounts.google.com",
         "issuer_template_fields": [],
-        "default_groups_claim": "",
-        "supports_groups": False,
         "notes": (
-            "Google does not expose Workspace groups in OIDC ID tokens. "
-            "Role mapping must rely on local roles set when admins invite users."
+            "Roles are managed inside fileHeron; a user's role is set when an "
+            "admin invites them and is not changed by the identity provider."
         ),
     },
     OIDCPreset.authentik.value: {
@@ -60,9 +56,7 @@ PROVIDER_PRESETS: dict[str, dict[str, Any]] = {
             {"key": "host", "label": "Authentik host", "placeholder": "auth.example.com"},
             {"key": "slug", "label": "Application slug", "placeholder": "fileheron"},
         ],
-        "default_groups_claim": "groups",
-        "supports_groups": True,
-        "notes": "Authentik groups are emitted by name in the `groups` claim by default.",
+        "notes": "Roles are managed inside fileHeron, not by the identity provider.",
     },
     OIDCPreset.keycloak.value: {
         "label": "Keycloak",
@@ -71,19 +65,12 @@ PROVIDER_PRESETS: dict[str, dict[str, Any]] = {
             {"key": "host", "label": "Keycloak host", "placeholder": "keycloak.example.com"},
             {"key": "realm", "label": "Realm", "placeholder": "fileheron"},
         ],
-        "default_groups_claim": "realm_access.roles",
-        "supports_groups": True,
-        "notes": (
-            "Keycloak nests realm roles under `realm_access.roles`. Add a "
-            "`groups` mapper in the client if you'd rather match group names."
-        ),
+        "notes": "Roles are managed inside fileHeron, not by the identity provider.",
     },
     OIDCPreset.custom.value: {
         "label": "Custom OIDC",
         "issuer_template": "",
         "issuer_template_fields": [],
-        "default_groups_claim": "groups",
-        "supports_groups": True,
         "notes": "Provide the issuer URL, client ID and secret yourself.",
     },
 }

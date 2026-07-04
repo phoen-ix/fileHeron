@@ -22,9 +22,6 @@ def _make_provider() -> OIDCProvider:
         issuer_url="https://idp.example.com",
         client_id="cli",
         client_secret_encrypted="x",
-        groups_claim="groups",
-        admin_groups="",
-        employee_groups="",
         redirect_uri="",
         enabled=True,
     )

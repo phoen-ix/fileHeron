@@ -20,9 +20,6 @@ class OIDCProviderItem(APIBaseModel):
     issuer_url: str
     client_id: str
     client_secret_set: bool
-    groups_claim: str
-    admin_groups: str
-    employee_groups: str
     redirect_uri: str
     enabled: bool
     user_count: int
@@ -41,9 +38,6 @@ class CreateOIDCProviderRequest(APIBaseModel):
     client_id: str = Field(min_length=1, max_length=200)
     # Required on create.
     client_secret: str = Field(min_length=1, max_length=4096)
-    groups_claim: str = Field(default="groups", max_length=200)
-    admin_groups: str = Field(default="", max_length=2000)
-    employee_groups: str = Field(default="", max_length=2000)
     redirect_uri: str = Field(default="", max_length=500)
     enabled: bool = True
 
@@ -56,9 +50,6 @@ class UpdateOIDCProviderRequest(APIBaseModel):
     # null = leave alone; "" = clear (disables provider until set again);
     # any other string = replace.
     client_secret: str | None = None
-    groups_claim: str | None = Field(default=None, max_length=200)
-    admin_groups: str | None = Field(default=None, max_length=2000)
-    employee_groups: str | None = Field(default=None, max_length=2000)
     redirect_uri: str | None = Field(default=None, max_length=500)
     enabled: bool | None = None
 
@@ -87,8 +78,6 @@ class PresetMeta(APIBaseModel):
     issuer: str | None = None
     issuer_template: str | None = None
     issuer_template_fields: list[PresetField] = Field(default_factory=list)
-    default_groups_claim: str
-    supports_groups: bool
     notes: str = ""
 
 

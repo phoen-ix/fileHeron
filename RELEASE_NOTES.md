@@ -1,38 +1,33 @@
-# file:Heron v1.58.0
+# file:Heron v1.59.0
 
-**Session, sign-in, and erasure correctness.** The second follow-up release from
-the code audit, focused on authentication and account lifecycle. No database
-migration and no host step - deploy from this banner.
+**Single sign-on (OIDC) fixes.** The third follow-up release from the code audit.
+It fixes account-linking over SSO and removes a group-to-role mapping that never
+worked. Roles stay managed inside fileHeron. This release includes a small
+automatic database change (applied on startup - no host step).
 
 ## What's fixed
 
-- **No more surprise "signed out everywhere".** Using **Log out other devices**, a
-  password change, or the session-cap eviction could later cause a background
-  device's routine token refresh to be mistaken for token theft - which signed you
-  out of *every* session and raised a false security alert. Deliberately-ended
-  sessions are now told apart from genuine token reuse, and two browser tabs
-  refreshing at the same moment no longer trip it either. Real token theft (a
-  replayed, already-rotated token) is still caught and still revokes everything.
-- **The session-lifetime setting now means "idle timeout".** Shortening the refresh
-  token lifetime now measures from a session's **last activity**, so a session
-  that's actively in use keeps working; only genuinely idle sessions past the new
-  window are ended. (Previously it measured from original sign-in and could cut off
-  sessions that were still active.)
-- **SSO and passkey logins are now recorded like password logins.** Signing in with
-  single sign-on (OIDC) or a passkey (WebAuthn) now appears in your login history
-  and the audit log, and triggers the **new-device email alert** - previously these
-  logins left no trace and never alerted.
-- **Erasing a user now closes their shares.** A GDPR erasure hard-deletes the user's
-  files but was leaving their shares (and any public links) still "active" over
-  now-deleted files. Those shares and links are now revoked as part of the erasure.
-- **More accurate new-device detection for IPv6.** The "same network" grouping used
-  for new-device alerts mis-handled IPv6 addresses, which could produce false "new
-  device" alerts. It now groups an IPv6 /64 correctly.
+- **Connecting your account to SSO now works.** From **Account -> connect single
+  sign-on**, linking your existing fileHeron account to an identity provider was
+  failing: the provider's browser redirect back to fileHeron couldn't be
+  authenticated, so the link never completed. The return trip is now authenticated
+  by a tamper-proof signed token, so connecting works end to end.
+
+## What's changed
+
+- **Roles are managed in fileHeron, not by your identity provider.** The SSO
+  provider form had "groups claim", "admin groups", and "employee groups" fields
+  that were saved but never actually did anything. They have been removed. A user's
+  role (admin / employee / client) is set inside fileHeron - when an admin invites
+  them or edits their account - and signing in via SSO never changes it. In
+  particular, **a fileHeron admin always stays an admin**, and no identity-provider
+  group can grant or remove admin.
+- If you had those group fields filled in, no action is needed - they were doing
+  nothing, and the values are dropped by this update.
 
 ## Notes
 
-- **No migration, no host step** - the in-app Update swaps the backend, worker, and
-  frontend images.
-- One-time effect: because the IPv6 grouping changed, IPv6 users may get a single
-  "new device" alert on their next sign-in as their device is re-registered under
-  the corrected grouping.
+- This release drops three unused columns from the SSO-providers table. The change
+  runs automatically when the backend starts (as with every migration) - there is
+  no host step, and no other data is affected.
+- Deploy from the in-app Update banner as usual.

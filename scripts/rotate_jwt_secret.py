@@ -7,10 +7,12 @@ JWT_SECRET is the seed for the HKDF-derived Fernet key that protects:
 - ``oidc_providers.client_secret_encrypted``  (per-provider IdP secrets)
 - ``public_links.token_encrypted``    (public-link plaintext copy)
 - ``app_settings`` rows where ``is_encrypted=True``  (today: SMTP_PASSWORD)
+- ``webhooks.secret_encrypted``       (per-webhook HMAC signing secrets)
 
 If you rotate JWT_SECRET without this script, all of the above become
 unreadable - TOTP-enrolled users lock out, OIDC SSO breaks, the SMTP
-password disappears, and admins can't re-view public-link URLs.
+password disappears, admins can't re-view public-link URLs, and every
+webhook delivery fails to sign.
 
 USAGE
 -----
@@ -69,6 +71,7 @@ from app.models.app_setting import AppSetting  # noqa: E402
 from app.models.oidc_provider import OIDCProvider  # noqa: E402
 from app.models.public_link import PublicLink  # noqa: E402
 from app.models.user_totp import UserTOTP  # noqa: E402
+from app.models.webhook import Webhook  # noqa: E402
 from app.utils.crypto import _FERNET_HKDF_INFO  # noqa: E402
 
 
@@ -207,6 +210,17 @@ def main() -> int:
             db.query(AppSetting).filter(AppSetting.is_encrypted.is_(True)).all(),
             lambda r: r.value,
             lambda r, v: setattr(r, "value", v),
+            is_bytes=False, old=old_f, new=new_f,
+        )
+        total_errors += s.errors
+
+        # 5. Webhook signing secrets (str column). Missing this stranded every
+        # webhook's HMAC secret after a rotation -> all deliveries failed to sign.
+        s = rotate_table(
+            db, "webhooks.secret_encrypted",
+            db.query(Webhook).all(),
+            lambda r: r.secret_encrypted,
+            lambda r, v: setattr(r, "secret_encrypted", v),
             is_bytes=False, old=old_f, new=new_f,
         )
         total_errors += s.errors

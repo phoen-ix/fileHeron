@@ -523,13 +523,17 @@ def list_shares_for_user(
         base = db.query(Share).options(joinedload(Share.files)).filter(
             Share.created_by_id == user.id
         )
+        # Correlated EXISTS per filter (not a join): two joins on the same
+        # ShareRecipient collided into a 500 when BOTH filters were passed, and a
+        # join also row-fans-out a share with multiple matching recipients. .any()
+        # is unambiguous and duplicate-free, and both filters compose (AND).
         if recipient_user_id is not None:
-            base = base.join(ShareRecipient, ShareRecipient.share_id == Share.id).filter(
-                ShareRecipient.recipient_user_id == recipient_user_id
+            base = base.filter(
+                Share.recipients.any(ShareRecipient.recipient_user_id == recipient_user_id)
             )
         if recipient_group_id is not None:
-            base = base.join(ShareRecipient, ShareRecipient.share_id == Share.id).filter(
-                ShareRecipient.recipient_group_id == recipient_group_id
+            base = base.filter(
+                Share.recipients.any(ShareRecipient.recipient_group_id == recipient_group_id)
             )
     elif box == "inbox":
         user_group_ids = _user_group_ids(db, user.id)

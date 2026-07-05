@@ -127,15 +127,33 @@ def scan_stream(fh) -> ScanResult:
 
     s = _open_clamd_socket()
     try:
-        s.sendall(b"zINSTREAM\0")
-        while True:
-            chunk = fh.read(_INSTREAM_CHUNK)
-            if not chunk:
-                break
-            s.sendall(struct.pack("!I", len(chunk)) + chunk)
-        s.sendall(struct.pack("!I", 0))  # zero-length chunk terminates the stream
-        reply = _read_reply(s)
-        return _parse_reply(reply, prefix="stream")
+        try:
+            s.sendall(b"zINSTREAM\0")
+            while True:
+                chunk = fh.read(_INSTREAM_CHUNK)
+                if not chunk:
+                    break
+                s.sendall(struct.pack("!I", len(chunk)) + chunk)
+            s.sendall(struct.pack("!I", 0))  # zero-length chunk terminates the stream
+            reply = _read_reply(s)
+            return _parse_reply(reply, prefix="stream")
+        except OSError as e:
+            # clamd closes the connection mid-stream once the bytes exceed
+            # StreamMaxLength (or on any transport hiccup), so the next sendall
+            # raises BrokenPipe/ConnectionReset/Timeout. Fail SAFE with
+            # state='error' (the documented, not-served outcome) instead of
+            # raising - otherwise a single oversize/hostile attachment aborts the
+            # whole IMAP poll (and every other scan caller). Read clamd's parting
+            # message if it sent one ("INSTREAM size limit exceeded").
+            try:
+                trailer = _read_reply(s)
+            except OSError:
+                trailer = ""
+            logger.warning("INSTREAM scan transport error: %s (reply=%r)", e, trailer)
+            return ScanResult(
+                state="error", signature=None,
+                raw=trailer or f"instream transport error: {e}",
+            )
     finally:
         s.close()
 

@@ -72,6 +72,15 @@ services:
     cpus: ${BACKEND_CPUS:-2.0}
     ports:
       - "127.0.0.1:${APP_BACKEND_PORT:-8000}:8000"
+    # Inject the operator's full .env so EVERY documented setting reaches the app
+    # (WEBAUTHN_RP_ID, STORAGE_BACKEND/S3_*, METRICS_*, retention/lockout knobs, ...).
+    # The curated `environment:` keys below still win by precedence and keep their
+    # ${VAR:?} fail-fast; config Settings is extra="ignore" so infra-only keys
+    # (DB_ROOT_PASSWORD, FH_TAG, ...) are harmless. required:false leaves the e2e
+    # stack (shell-env only, no .env file) unaffected.
+    env_file:
+      - path: .env
+        required: false
     environment:
       ENVIRONMENT: ${ENVIRONMENT:-development}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
@@ -105,7 +114,6 @@ services:
       APP_NAME: ${APP_NAME:-fileHeron}
       RATE_LIMIT_LOGIN: ${RATE_LIMIT_LOGIN:-10}
       RATE_LIMIT_REGISTER: ${RATE_LIMIT_REGISTER:-3}
-      RATE_LIMIT_API: ${RATE_LIMIT_API:-100}
       TUS_HOOK_SECRET: ${TUS_HOOK_SECRET:?TUS_HOOK_SECRET is required}
       # Surfaced so backend can show "running on vX.Y.Z" on /admin/system
       # (the new release_apply.get_version reads this directly).
@@ -193,6 +201,11 @@ services:
     mem_limit: ${WORKER_MEM_LIMIT:-512m}
     cpus: ${WORKER_CPUS:-1.0}
     command: ["arq", "app.workers.worker.WorkerSettings"]
+    # Same as backend: the worker runs the retention/anomaly/error crons, so it
+    # needs the full .env too (see the backend env_file note).
+    env_file:
+      - path: .env
+        required: false
     environment:
       ENVIRONMENT: ${ENVIRONMENT:-development}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}

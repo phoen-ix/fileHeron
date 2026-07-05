@@ -52,8 +52,13 @@ docker compose up -d       # binds everything to 127.0.0.1; add a Traefik route 
 **Development** (auto-reload + HMR + DB exposed on `127.0.0.1:3306`):
 
 ```bash
+cp .env.example .env       # required - the base compose fail-fasts on the secrets
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up
 ```
+
+If your host user isn't UID 1000, first make the data dirs writable by the
+containers: `docker run --rm -v "$PWD/data":/data alpine chown -R 1000:1000 /data/{uploads,quarantine,files,updater}`
+(see [Common operational issues](#common-operational-issues)).
 
 If `SMTP_HOST` is empty, all outgoing email is logged to the backend container
 instead of being sent - handy for dev. Full operator walkthrough: [First install](#first-install).
@@ -699,7 +704,9 @@ via `/admin/settings/advanced`.
 | `UPDATES_DRAIN_MAX_WAIT_MIN` | `30` | Max wait for transfers to drain before a postponed update applies. ↻ |
 | `BACKUP_RESTIC_REPO` / `BACKUP_RESTIC_PASSWORD` | empty | Optional offsite restic push - read by the host `scripts/backup.sh`, not by the app. |
 | `METRICS_BEARER_TOKEN` / `METRICS_ALLOWED_IPS` / `METRICS_CACHE_TTL_SEC` | empty/empty/`60` | `/api/metrics` auth + cache. |
-| `OIDC_*` | empty | **Legacy** - SSO now lives in the DB; use `/admin/settings/sso`. |
+
+SSO/OIDC has **no** env vars - providers are configured entirely in the DB via
+`/admin/settings/sso`.
 
 </details>
 
@@ -842,7 +849,7 @@ real MariaDB catches it).
 ## Running tests
 
 ```bash
-docker compose exec backend pytest -q     # backend (pytest + pytest-asyncio, SQLite)
+docker compose -f docker-compose.yml -f docker-compose.dev.yml exec backend pytest -q   # backend (dev stack; the prod image ships no test deps)
 cd frontend && npm run build              # vue-tsc type-check + Vite build (the pre-ship gate)
 cd frontend && npx vitest run             # unit + i18n parity
 ```

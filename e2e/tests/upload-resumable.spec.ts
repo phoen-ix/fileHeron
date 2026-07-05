@@ -60,6 +60,6 @@ test('resumable browser upload (Uppy/TUS) adds a file to an active share', async
   await expect(page.getByTestId('add-files-toggle')).toBeVisible({ timeout: 30_000 })
 
   const detail = await apiFetch(admin, `/api/shares/${shareId}`)
-  const files = (await detail.json()).files as Array<{ id: string; name: string }>
-  expect(files.some((f) => f.name === fileName)).toBeTruthy()
+  const files = (await detail.json()).files as Array<{ id: string; original_filename: string }>
+  expect(files.some((f) => f.original_filename === fileName)).toBeTruthy()
 })

@@ -191,14 +191,21 @@ class S3Backend(StorageBackend):
             Params={
                 "Bucket": self._bucket,
                 "Key": locator,
-                "ResponseContentDisposition": f'{disposition}; filename="{filename}"',
+                "ResponseContentDisposition": _content_disposition(disposition, filename),
                 "ResponseContentType": mime_type,
             },
             ExpiresIn=ttl_sec,
         )
 
     def delete(self, locator: str) -> None:
-        self._s3.delete_object(Bucket=self._bucket, Key=locator)  # idempotent on s3
+        from botocore.exceptions import BotoCoreError, ClientError
+
+        try:
+            self._s3.delete_object(Bucket=self._bucket, Key=locator)  # idempotent on s3
+        except (ClientError, BotoCoreError) as e:
+            # Raise OSError so callers' `except OSError` (erasure, file.hard_delete)
+            # engage backend-neutrally instead of a botocore error escaping.
+            raise OSError(f"s3 delete failed for {locator}: {e}") from e
 
     def exists(self, locator: str) -> bool:
         from botocore.exceptions import ClientError
@@ -215,15 +222,36 @@ class S3Backend(StorageBackend):
         return int(self._s3.head_object(Bucket=self._bucket, Key=locator)["ContentLength"])
 
     def move(self, src_locator: str, dst_locator: str) -> None:
-        self._s3.copy_object(
-            Bucket=self._bucket,
-            Key=dst_locator,
-            CopySource={"Bucket": self._bucket, "Key": src_locator},
-        )
-        self._s3.delete_object(Bucket=self._bucket, Key=src_locator)
+        from botocore.exceptions import BotoCoreError, ClientError
+
+        try:
+            self._s3.copy_object(
+                Bucket=self._bucket,
+                Key=dst_locator,
+                CopySource={"Bucket": self._bucket, "Key": src_locator},
+            )
+            self._s3.delete_object(Bucket=self._bucket, Key=src_locator)
+        except (ClientError, BotoCoreError) as e:
+            # OSError so quarantine's `except OSError` catches a transient S3
+            # error instead of aborting the whole quarantine uncaught.
+            raise OSError(f"s3 move failed {src_locator}->{dst_locator}: {e}") from e
 
     def quarantine_locator(self, share_id: str, filename: str) -> str:
         return f"{self._prefix}quarantine/{share_id}/{filename}"
+
+
+def _content_disposition(disposition: str, filename: str) -> str:
+    """RFC 6266 / RFC 5987 Content-Disposition. Emits an ASCII-safe filename=""
+    fallback plus a percent-encoded filename*=UTF-8'' for the real (possibly
+    non-ASCII, quote-bearing) name - the previous naive f-string produced broken
+    or garbled download filenames (and could inject header tokens) on S3."""
+    from urllib.parse import quote
+
+    ascii_name = (
+        filename.encode("ascii", "ignore").decode().replace('"', "").replace("\\", "")
+        or "download"
+    )
+    return f"{disposition}; filename=\"{ascii_name}\"; filename*=UTF-8''{quote(filename)}"
 
 
 def serve_response(

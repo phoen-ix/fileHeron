@@ -42,6 +42,19 @@ def _already_ingested(db: Session, *, uidvalidity: int, uid: int, message_id: st
     )
 
 
+def ingested_by_uid(db: Session, *, uidvalidity: int, uid: int) -> bool:
+    """True if THIS exact (uidvalidity, imap_uid) was already ingested - a genuine
+    re-poll of the same server message (safe to re-apply the server-side action),
+    as distinct from a Message-ID collision with a DIFFERENT message (which must
+    NOT be deleted/moved, or a legitimate distinct mail is destroyed unread)."""
+    return (
+        db.query(InboundMessage.id)
+        .filter(InboundMessage.uidvalidity == uidvalidity, InboundMessage.imap_uid == uid)
+        .first()
+        is not None
+    )
+
+
 def _store_attachment(db: Session, message_id_pk: int, att: ParsedAttachment) -> None:
     backend = storage_svc.get_storage_backend()
     locator = backend.generate_locator(f"inbound-{uuid.uuid4().hex}")

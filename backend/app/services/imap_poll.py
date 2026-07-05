@@ -57,7 +57,10 @@ def run_poll(*, manual: bool, db: Session | None = None, session_opener=open_ses
         with session_opener(cfg) as sess:
             uidvalidity = sess.select(cfg.mailbox)
             total = getattr(sess, "message_count", 0)
-            if uidvalidity != prev_validity:
+            # Only reset on a REAL, changed UIDVALIDITY. A 0/unparseable value
+            # (select() couldn't read it) must NOT trigger a full re-scan +
+            # duplicate ingestion; treat it as "unchanged" and keep the highwater.
+            if uidvalidity and uidvalidity != prev_validity:
                 last_uid = 0  # mailbox reset -> re-evaluate from the start
             for uid in sess.search_uids_after(last_uid):
                 raw = sess.fetch_raw(uid)
@@ -69,21 +72,32 @@ def run_poll(*, manual: bool, db: Session | None = None, session_opener=open_ses
                 if msg is not None:
                     ingested += 1
                 db.commit()
-                # Apply the server-side action only after a successful ingest+commit.
-                try:
-                    if action == "mark_read":
-                        sess.mark_seen(uid)
-                    elif action == "move":
-                        sess.move(uid, move_to)
-                    elif action == "delete":
-                        sess.delete(uid)
-                except Exception:
-                    logger.exception("post-fetch action %s failed for uid %s", action, uid)
+                # Apply the server-side action only when we OWN this message: a
+                # genuine new ingest, or a true re-poll of THIS (uidvalidity, uid).
+                # If ingest returned None because a DIFFERENT message shares this
+                # Message-ID, deleting/moving it would destroy a distinct, unread
+                # mail that was never ingested.
+                owns_message = msg is not None or inbound_mail.ingested_by_uid(
+                    db, uidvalidity=uidvalidity, uid=uid
+                )
+                if owns_message:
+                    try:
+                        if action == "mark_read":
+                            sess.mark_seen(uid)
+                        elif action == "move":
+                            sess.move(uid, move_to)
+                        elif action == "delete":
+                            sess.delete(uid)
+                    except Exception:
+                        logger.exception("post-fetch action %s failed for uid %s", action, uid)
                 last_uid = max(last_uid, uid)
 
         now_iso = utc_now().isoformat()
         settings_svc.set_value(db, key=K.IMAP_LAST_UID, value=str(last_uid), actor=None)
-        settings_svc.set_value(db, key=K.IMAP_UIDVALIDITY, value=str(uidvalidity), actor=None)
+        # Don't overwrite a known-good UIDVALIDITY with a 0/unparseable read, or
+        # the next poll sees a spurious change and re-scans the whole mailbox.
+        if uidvalidity:
+            settings_svc.set_value(db, key=K.IMAP_UIDVALIDITY, value=str(uidvalidity), actor=None)
         settings_svc.set_value(db, key=K.IMAP_LAST_POLL_AT, value=now_iso, actor=None)
         settings_svc.set_value(db, key=K.IMAP_LAST_SUCCESS_AT, value=now_iso, actor=None)
         db.commit()

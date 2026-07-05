@@ -105,7 +105,12 @@ def handle_pre_create(db: Session, body: dict[str, Any]) -> None:
     user = db.query(User).filter(User.id == envelope["owner_user_id"]).one_or_none()
     if user is None or user.is_disabled:
         raise AppError(403, "FORBIDDEN", "Uploader is no longer active.")
-    quota_svc.reserve_bytes(db, user=user, additional_bytes=announced_size)
+    # Reserve the HMAC-authorised max_size (== file_row.size_bytes; pre-finish
+    # forces the final actual size to equal it too), NOT the client-announced
+    # Size. A deferred-length upload announces Size=0, so reserving `announced_size`
+    # reserved 0 - and post-terminate then released a client-set Size, letting an
+    # attacker drain the quota counter below true usage (repeatable bypass).
+    quota_svc.reserve_bytes(db, user=user, additional_bytes=envelope["max_size"])
     db.commit()
 
 
@@ -189,7 +194,9 @@ def handle_post_terminate(db: Session, body: dict[str, Any]) -> None:
     if file_row is None:
         return
     if file_row.state == FileState.uploading:
-        quota_svc.release_bytes(user_id=envelope["owner_user_id"], bytes_to_free=int(upload.get("Size", 0)))
+        # Release exactly what pre-create reserved (the authorised max_size), never
+        # the client-reported Size (attacker-controllable and unbounded).
+        quota_svc.release_bytes(user_id=envelope["owner_user_id"], bytes_to_free=envelope["max_size"])
         file_row.state = FileState.deleted
         db.commit()
 

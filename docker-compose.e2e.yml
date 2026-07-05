@@ -39,4 +39,8 @@ services:
     build:
       context: .
       dockerfile: docker/frontend/Dockerfile
+      args:
+        # Force every browser upload through the resumable Uppy/TUS path so the
+        # e2e suite exercises it with a tiny file (see upload-resumable.spec.ts).
+        VITE_DIRECT_UPLOAD_THRESHOLD: "1"
     image: fileheron-frontend:e2e

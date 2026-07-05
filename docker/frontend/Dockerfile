@@ -8,8 +8,12 @@ WORKDIR /build
 # and inlines them into the bundle so the SPA can show "running version".
 ARG FH_VERSION=0.0.0-dev
 ARG FH_GIT_SHA=unknown
+# Empty default -> the SPA falls back to its built-in 100 MB direct/resumable
+# split (see useUpload.ts). e2e sets it to 1 to force the resumable path.
+ARG VITE_DIRECT_UPLOAD_THRESHOLD=
 ENV VITE_FH_VERSION=${FH_VERSION} \
-    VITE_FH_GIT_SHA=${FH_GIT_SHA}
+    VITE_FH_GIT_SHA=${FH_GIT_SHA} \
+    VITE_DIRECT_UPLOAD_THRESHOLD=${VITE_DIRECT_UPLOAD_THRESHOLD}
 
 # Copy manifests first for dep cache. The committed lockfile is required (no `*`
 # glob): `npm ci` installs the EXACT locked tree and fails loudly if it's missing

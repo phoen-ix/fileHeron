@@ -1,8 +1,7 @@
-# Local dev gates that mirror CI (.github/workflows/ci.yml). Run `make lint`
-# before pushing so a lint error surfaces here instead of on a red main.
-#
-# Intentionally lint-only: this box is the production host, so heavier work
-# (image builds, deploys) stays in Docker / the release workflow, not here.
+# Developer convenience targets. `make lint` / `make test` mirror the CI gates;
+# the up/dev/down/build/seed helpers wrap the common docker compose + npm
+# commands. See CONTRIBUTING.md. Heavy release work stays in the release
+# workflow, not here.
 
 .DEFAULT_GOAL := help
 
@@ -11,16 +10,50 @@
 # resync their local ruff.
 RUFF_PIN := $(shell sed -n 's/.*"ruff==\([0-9.]*\)".*/\1/p' backend/pyproject.toml)
 
-.PHONY: help lint lint-backend lint-frontend lint-docker
+.PHONY: help lint lint-backend lint-frontend lint-docker test test-backend \
+	test-frontend up dev down build seed fmt
 
 help:
 	@echo "Targets:"
-	@echo "  lint           run every CI lint gate (backend ruff + frontend eslint)"
-	@echo "  lint-backend   ruff on backend/ (must match the pyproject pin ruff==$(RUFF_PIN))"
-	@echo "  lint-frontend  eslint on frontend/src"
-	@echo "  lint-docker    backend ruff in an ephemeral python:3.12-slim (CI-faithful, no local ruff needed)"
+	@echo "  lint / lint-backend / lint-frontend   CI lint gates (ruff + eslint)"
+	@echo "  lint-docker    backend ruff in an ephemeral python:3.12-slim (no local ruff needed)"
+	@echo "  test / test-backend / test-frontend   pytest (needs backend .[dev]) + vitest"
+	@echo "  build          frontend production build (vue-tsc type-check + vite)"
+	@echo "  dev            docker compose dev stack (auto-reload + HMR)"
+	@echo "  up / down      start / stop the compose stack"
+	@echo "  seed           seed the dev test accounts into a running stack"
+	@echo "  fmt            autoformat the frontend (prettier)"
 
 lint: lint-backend lint-frontend
+
+test: test-backend test-frontend
+
+# Assumes `cd backend && pip install -e .[dev]` (see CONTRIBUTING.md). In-memory
+# SQLite via conftest - no running services needed.
+test-backend:
+	cd backend && python -m pytest -q
+
+test-frontend:
+	cd frontend && npm run test
+
+build:
+	cd frontend && npm run build
+
+dev:
+	docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+
+up:
+	docker compose up -d
+
+down:
+	docker compose down
+
+seed:
+	docker compose exec backend python scripts/seed_dev.py
+
+# Frontend uses prettier; backend style is enforced by ruff (make lint).
+fmt:
+	cd frontend && npm run format
 
 # Runs the same ruff CI runs. Guards the drift that reddened v1.60.0/v1.61.0:
 # if the local ruff is not the pinned version it fails loudly with the one

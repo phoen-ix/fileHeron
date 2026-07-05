@@ -17,7 +17,6 @@ attacking one) - defense against distributed brute-forcing.
 """
 from __future__ import annotations
 
-import hmac
 import logging
 from datetime import timedelta
 from typing import NamedTuple
@@ -290,8 +289,12 @@ def verify_password(
         # (Caller shouldn't be asking, but be permissive.)
         return True
 
-    if hmac.compare_digest("", password):
-        # Empty password → fast fail.
+    if not password:
+        # Empty password → fast fail. (Was hmac.compare_digest("", password),
+        # which raises TypeError on any non-ASCII password - a German/Unicode
+        # password like "Schlüssel" 500'd here before argon2_verify, silently
+        # bricking the link for every recipient and flooding the error log
+        # un-rate-limited. argon2_verify below is constant-time + Unicode-safe.)
         _record_attempt(db, link=link, ip=ip, outcome=PublicLinkAttemptOutcome.failure)
         return False
 

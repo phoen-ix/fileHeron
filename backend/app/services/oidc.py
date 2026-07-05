@@ -30,6 +30,7 @@ Security boundaries:
 """
 from __future__ import annotations
 
+import json
 import logging
 import secrets
 from typing import Any
@@ -61,6 +62,9 @@ logger = logging.getLogger("fileheron.oidc")
 # Discovery cache (per-provider)
 # ---------------------------------------------------------------------------
 
+# Hard byte cap streamed off the wire so a malicious/compromised IdP discovery
+# endpoint can't OOM the worker (mirrors _JWKS_MAX_BYTES in jwks.py).
+_DISCOVERY_MAX_BYTES = 1 * 1024 * 1024
 _DISCOVERY_CACHE: dict[str, dict[str, Any]] = {}
 
 
@@ -80,13 +84,26 @@ async def _discovery(provider: OIDCProvider) -> dict[str, Any]:
     # allow_private=True - self-hosted IdPs on a private LAN are legitimate.
     assert_public_http_url(url, allow_private=True, require_https=False)
     try:
-        async with httpx.AsyncClient(timeout=5.0) as cli:
-            resp = await cli.get(url)
+        async with httpx.AsyncClient(timeout=5.0) as cli, cli.stream("GET", url) as resp:
             resp.raise_for_status()
+            cl = resp.headers.get("content-length")
+            if cl is not None and int(cl) > _DISCOVERY_MAX_BYTES:
+                raise AppError(
+                    503, "OIDC_DISCOVERY_TOO_LARGE",
+                    "Identity provider discovery document is too large.",
+                )
+            buf = bytearray()
+            async for chunk in resp.aiter_bytes():
+                buf.extend(chunk)
+                if len(buf) > _DISCOVERY_MAX_BYTES:
+                    raise AppError(
+                        503, "OIDC_DISCOVERY_TOO_LARGE",
+                        "Identity provider discovery document is too large.",
+                    )
     except httpx.HTTPError as e:
         logger.warning("OIDC discovery failed provider=%s: %s", provider.id, e)
         raise AppError(503, "OIDC_UNAVAILABLE", "Identity provider is unreachable.") from e
-    doc = resp.json()
+    doc = json.loads(bytes(buf))
     # The discovery document's `issuer` MUST equal the issuer we fetched it from
     # (OIDC Discovery spec); otherwise a tampered/rogue discovery endpoint could
     # advertise a different issuer that later weakens ID-token validation (Info-3).

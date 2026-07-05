@@ -172,6 +172,32 @@ async def test_password_verify_correct_unlocks(make_user, db):
 
 
 @pytest.mark.asyncio
+async def test_password_verify_non_ascii_does_not_crash(make_user, db):
+    # Regression: verify_password used hmac.compare_digest("", password), which
+    # raises TypeError on any non-ASCII password -> the CORRECT password 500'd
+    # and permanently bricked the link (acute for a DE/EN product). The correct
+    # Unicode password must unlock; a wrong one must fail (not raise).
+    owner = make_user(email="hr@test.local", role=UserRole.admin)
+    recipient = make_user(email="cli@test.local", role=UserRole.client)
+    share = _make_share(db, owner, recipient.id)
+    db.commit()
+    pw = "Schlüssel-café-密码-😀"
+    created = public_link_svc.create_link(
+        db,
+        actor=owner,
+        share=share,
+        password=pw,
+        download_limit=None,
+        notify_on_download=False,
+    )
+    db.commit()
+    assert public_link_svc.verify_password(db, link=created.record, password=pw, ip="1.2.3.4")
+    assert not public_link_svc.verify_password(
+        db, link=created.record, password="wröng-café", ip="1.2.3.4"
+    )
+
+
+@pytest.mark.asyncio
 async def test_decrement_counter_atomic_and_terminating(make_user, db):
     owner = make_user(email="hr@test.local", role=UserRole.admin)
     recipient = make_user(email="cli@test.local", role=UserRole.client)

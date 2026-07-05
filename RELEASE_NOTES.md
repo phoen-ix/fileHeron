@@ -1,34 +1,40 @@
-# file:Heron v1.62.0
+# file:Heron v2.0.0
 
-**Dependency modernization + upload hardening.** A maintenance release: the web
-app moves to the current major versions of its core libraries (routing, the
-upload engine, utilities, test tooling) and picks up a batch of minor and
-security updates, plus a reverse-proxy fix for large-file uploads. No
-admin-facing feature or workflow changes, no database migration, and no host
-step - deploy from this banner.
+**General availability.** This is the 2.0 milestone: file:Heron is now published
+as a production-ready, self-hostable release. It is **not a breaking change** -
+existing operators upgrade straight from v1.62.0 via the in-app Update with no
+code or behavior changes - it is a version-marker release. No database
+migration, no host step.
 
-## What's changed
+The major-version bump marks the stable, supported line rather than any runtime
+change: the platform has been running hardened in production, and this release
+formalizes the fresh-install, security-disclosure, and operator-hardening story
+for people deploying it themselves.
 
-- **Web-app libraries updated to their current majors** - the router, the
-  resumable-upload engine (Uppy), the utility library (VueUse), and the test
-  tooling, alongside routine minor/security bumps to HTTP, date, and i18n
-  libraries and the CI actions. Behaviour is unchanged; this is upkeep and
-  security hygiene so the frontend stays on supported, patched releases.
-- **Large-file (resumable) uploads behind a non-standard port** - fixed an edge
-  case where a resumable upload could fail when the app is served through a
-  reverse proxy on a non-default port: the upload address was built without the
-  port and the follow-up requests were refused. The standard HTTPS (:443) setup
-  was never affected.
+## What's in the GA
 
-## Under the hood
+- **Hardened installer.** `install.sh` now produces a production-ready `.env` on
+  first run - `ENVIRONMENT=production` (secure cookies, `/docs` disabled, HSTS,
+  fatal checks on weak/placeholder secrets), a `WEBAUTHN_RP_ID` derived from your
+  URL, and no seeded dev account. Fresh boxes are safe by default.
+- **Security policy.** A `SECURITY.md` with a private vulnerability-disclosure
+  path (GitHub private reporting).
+- **Operator hardening guide.** A consolidated "Production hardening checklist" in
+  the README, a clear app-vs-infra upgrade boundary (which upgrades need a host
+  step), and a shipped nightly-backup systemd timer alongside the weekly restore
+  drill.
+- **Desktop client.** Ships in lockstep as **client v1.0.0**. The Windows `.exe`
+  is unsigned by design - the release now publishes a SHA-256 checksum, and the
+  client README documents verification plus a build-and-self-sign path.
 
-- The browser upload engine now has end-to-end test coverage of the resumable
-  path (previously only the direct path was exercised), so future upload-library
-  upgrades are caught by CI.
-- The direct-vs-resumable size threshold is now configurable at image-build time
-  (default unchanged at 100 MB), mirroring the backend's existing limit.
+## Carried in from the recent line
+
+- Web-app dependencies modernized to current majors (vue-router 5, Uppy 5,
+  VueUse 14, vitest 4) with a resumable-upload proxy fix (v1.62.0).
 
 ## Notes
 
-- **No migration, no host step** - the in-app Update swaps the backend, worker,
-  and frontend images. The dependency changes are entirely in the web-app bundle.
+- **No migration, no host step** for existing operators - a plain in-app Update.
+- Known, intentionally-deferred items: per-file envelope encryption (deferred
+  while storage is single-server bind mounts); the desktop client has no
+  auto-update and intentionally omits OIDC/WebAuthn/admin/SSE.

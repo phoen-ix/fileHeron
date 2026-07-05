@@ -55,8 +55,6 @@ def quarantine_file(
         else None
     )
     dest_loc: str | None = None
-    moved = False
-    move_error: str | None = None
     if src_loc is not None:
         dest_loc = backend.quarantine_locator(
             file.share_id, _safe_filename(file.original_filename)
@@ -67,46 +65,27 @@ def quarantine_file(
             dest_loc = backend.quarantine_locator(
                 file.share_id, f"{file.id}__{_safe_filename(file.original_filename)}"
             )
-        try:
-            backend.move(src_loc, dest_loc)
-            moved = True
-        except OSError as e:
-            move_error = str(e)
-            logger.error("quarantine move failed for %s: %s", file.id, e)
-            # Fall through - we still mark the file infected even if the
-            # move failed; admins can clean storage manually. The DB row's
-            # storage_path stays at the pre-quarantine location (NOT the
-            # would-be dest) so admin tooling can still find the bytes.
 
+    # Phase 1: mark infected + revoke the share + audit, and COMMIT FIRST - with
+    # storage_path still at the original location. This is the security-critical
+    # part that must survive. Doing the irreversible on-disk move / quota release
+    # BEFORE the commit (the old flow, where the CALLER committed) meant a commit
+    # failure left an infected file the DB still believed clean, its bytes already
+    # moved. Mirrors expire_files (audit M14).
     file.state = FileState.infected
-    if moved and dest_loc is not None:
-        file.storage_path = dest_loc
-    # else: leave storage_path unchanged - points at the original location
-    # (or remains None if there was no file on disk to begin with).
-    db.flush()
-
-    # Release uploader's quota - they shouldn't be charged for the bytes
-    # we just moved out of their share into the org's quarantine bucket.
-    release_bytes(user_id=file.uploaded_by_id, bytes_to_free=file.size_bytes)
-
-    audit_meta: dict = {
-        "signature": signature,
-        "size_bytes": file.size_bytes,
-        "filename": file.original_filename,
-        "quarantine_path": dest_loc if moved else None,
-    }
-    if move_error is not None:
-        audit_meta["move_failed"] = True
-        audit_meta["move_error"] = move_error
     record_audit_event(
         db,
         event_type=AuditEventType.file_quarantined,
         actor_user_id=None,  # system action
         target_type="file",
         target_id=file.id,
-        metadata=audit_meta,
+        metadata={
+            "signature": signature,
+            "size_bytes": file.size_bytes,
+            "filename": file.original_filename,
+            "quarantine_path": dest_loc,
+        },
     )
-
     # Revoke the parent share (cascades to all of its files in user-facing
     # listings). Idempotent: if it's already revoked / deleted, no-op.
     share = db.query(Share).filter(Share.id == file.share_id).one_or_none()
@@ -120,6 +99,24 @@ def quarantine_file(
             target_id=share.id,
             metadata={"reason": "av_quarantine", "trigger_file_id": file.id},
         )
+    db.commit()
+
+    # Phase 2: the irreversible side effects, now that the state is durable. A
+    # move failure leaves storage_path at the original location (admin tooling
+    # still finds the bytes there); the quota release reconciles hourly.
+    moved = False
+    if src_loc is not None:
+        try:
+            backend.move(src_loc, dest_loc)
+            file.storage_path = dest_loc
+            db.commit()
+            moved = True
+        except OSError as e:
+            db.rollback()
+            logger.error(
+                "quarantine move failed for %s (already marked infected): %s", file.id, e
+            )
+    release_bytes(user_id=file.uploaded_by_id, bytes_to_free=file.size_bytes)
 
     # Tell the uploader + (optionally) fan out to admins. Wrapped -
     # never fail the quarantine because of a notification path.

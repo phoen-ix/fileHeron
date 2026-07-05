@@ -611,6 +611,7 @@ onMounted(load)
           v-if="isOwner && share.state === 'active' && !showAddFiles"
           type="button"
           class="fh-btn-text edit-link"
+          data-testid="add-files-toggle"
           @click="startAddFiles"
         >
           {{ t('share_detail.add_files') }}
@@ -633,6 +634,7 @@ onMounted(load)
           <button
             type="button"
             class="fh-btn"
+            data-testid="add-files-submit"
             :disabled="addingBusy || addUpload.isActive.value || addUpload.items.value.length === 0"
             @click="onUploadAdded"
           >

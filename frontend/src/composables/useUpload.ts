@@ -27,8 +27,12 @@ import { asEnvelope } from '@/api/client'
 import { directUpload, initUpload } from '@/api/uploads'
 
 // Mirror backend's MAX_DIRECT_UPLOAD_BYTES default. Cheap-enough for the
-// smallest VPS - files above this take the chunked path with resume.
-const DIRECT_UPLOAD_THRESHOLD = 100 * 1024 * 1024 // 100 MB
+// smallest VPS - files above this take the chunked path with resume. Build-time
+// override (VITE_DIRECT_UPLOAD_THRESHOLD) so a deploy that lowered the backend
+// limit can track it, and so e2e can force the resumable path with a tiny file.
+// Empty/unset -> NaN/0 -> the 100 MB default.
+const DIRECT_UPLOAD_THRESHOLD =
+  Number(import.meta.env.VITE_DIRECT_UPLOAD_THRESHOLD) || 100 * 1024 * 1024
 const TUS_CHUNK_BYTES = 8 * 1024 * 1024 // 8 MB chunks → balanced for big files + slow links
 const TUS_RETRY_DELAYS = [0, 1000, 3000, 5000, 10000] // ms
 

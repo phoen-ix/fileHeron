@@ -85,13 +85,25 @@ def erase_user(
     deleted_bytes = 0
     failed_files: list[str] = []
     for f in files:
+        f_bytes = f.size_bytes
+        f_id = f.id
         try:
-            file_svc.hard_delete(db, file=f, reason="user_erased", request=request)
-            deleted_bytes += f.size_bytes
+            file_svc.hard_delete(
+                db, file=f, reason="user_erased", actor_user_id=actor.id, request=request
+            )
+            # Commit each deletion durably. hard_delete unlinks the bytes BEFORE
+            # marking the row deleted, so if a LATER file's unlink fails (which
+            # aborts the whole erasure), a transaction rollback must not revert -
+            # and thereby resurrect the DB rows of - files whose bytes are already
+            # gone. Per-file commit makes each deletion final and the retry resume
+            # cleanly from the failed file.
+            db.commit()
+            deleted_bytes += f_bytes
             deleted_count += 1
         except OSError as e:
-            logger.error("erasure: hard_delete failed file=%s: %s", f.id, e)
-            failed_files.append(f.id)
+            db.rollback()
+            logger.error("erasure: hard_delete failed file=%s: %s", f_id, e)
+            failed_files.append(f_id)
     if failed_files:
         raise AppError(
             500,

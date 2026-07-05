@@ -105,6 +105,17 @@ async def av_scan_file(_ctx, file_id: str) -> dict:
             return {"file_id": file_id, "state": "clean"}
 
         if result.state == "infected":
+            # Same guard as the clean path: if the row left ready_unscanned
+            # mid-scan (share expiry committed `deleted` and freed the bytes),
+            # don't resurrect it into `infected` - which would also revoke a
+            # dead share and fire an infection notice for a file that's gone.
+            current_state = db.query(File.state).filter(File.id == file_id).scalar()
+            if current_state != FileState.ready_unscanned:
+                db.rollback()
+                logger.info(
+                    "av_scan: %s left ready_unscanned mid-scan; not quarantining", file_id
+                )
+                return {"file_id": file_id, "state": "superseded"}
             quarantine_file(db, file=file, signature=result.signature)
             db.commit()
             logger.warning(

@@ -113,6 +113,34 @@ async def test_av_scan_infected_quarantines_and_revokes(make_user, db, tmp_path,
 
 
 @pytest.mark.asyncio
+async def test_av_scan_infected_does_not_resurrect_deleted_file(make_user, db, tmp_path, monkeypatch):
+    """Guard: if share expiry deletes the file mid-scan, an 'infected' result must
+    not resurrect it (quarantine + revoke a dead share + notify for a gone file).
+    Mirrors the clean path's ready_unscanned guard."""
+    sender = make_user(email="hr@test.local", role=UserRole.admin)
+    recipient = make_user(email="cli@test.local", role=UserRole.client)
+    _, file, _ = _seed_file_for_scan(db, sender, recipient, tmp_path, content=b"EICAR_FAKE")
+    file_id = file.id  # capture: the worker closes the (shared) session on exit
+
+    def _scan_then_expire(_path):
+        # Simulate share expiry deleting the file WHILE the scan runs.
+        db.query(File).filter(File.id == file_id).update(
+            {File.state: FileState.deleted}, synchronize_session=False
+        )
+        db.commit()
+        return ScanResult(state="infected", signature="Eicar-Test-Signature", raw="...")
+
+    monkeypatch.setattr(av_scan_svc, "scan_path", _scan_then_expire)
+    from app.workers import av_scan as worker_mod
+    monkeypatch.setattr(worker_mod, "SessionLocal", lambda: db)
+
+    result = await av_scan_file(None, file_id)
+    assert result["state"] == "superseded"
+    db.expire_all()
+    assert db.query(File).filter(File.id == file_id).one().state == FileState.deleted
+
+
+@pytest.mark.asyncio
 async def test_av_scan_oversize_clean_is_not_trusted(make_user, db, tmp_path, monkeypatch):
     """H3: clamd reports 'clean' for a file past its configured scan limit
     WITHOUT actually scanning it. A file larger than AV_MAX_SCAN_BYTES must not

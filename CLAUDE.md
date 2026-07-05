@@ -15,9 +15,10 @@ keep this to what would cause a wrong move if unknown.
 
 ## Status
 
-Backend **`v1.62.0`**, desktop client **`client-v0.13.2`** - shipped + in
-production. (README's server/client version badges read live from the git tags,
-so they never need a manual bump; this line does - keep it current on release.)
+Backend **`v2.0.0`** (GA), desktop client **`client-v1.0.0`** (GA) - shipped + in
+production, published for public self-hosting. (README's server/client version
+badges read live from the git tags, so they never need a manual bump; this line
+does - keep it current on release.)
 
 > **Rich text (v1.50):** the admin legal pages + email-template editor is a
 > from-scratch **ProseMirror** (MIT) HTML editor (`components/RichTextEditor.vue`

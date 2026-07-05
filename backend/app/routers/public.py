@@ -171,6 +171,13 @@ def unlock(
         return UnlockPublicLinkResponse(ok=True)
 
     ip = request.client.host if request.client else None
+    # Serialize the check-and-record for this link: without the row lock a
+    # concurrent burst of guesses could all read the attempt count below the
+    # threshold and pass BEFORE any of them recorded its attempt (TOCTOU),
+    # bypassing the per-IP / link-wide brute-force cap. The lock is held until
+    # the commit below. (SELECT ... FOR UPDATE - a no-op on SQLite/tests, real
+    # on MariaDB; mirrors rate_limit.record_failure.)
+    db.refresh(link, with_for_update=True)
     # Per-IP throttle: a single noisy IP is refused here (429) without
     # locking the link for legitimate users on other IPs (finding M5).
     if public_link_svc.ip_is_rate_limited(db, link, ip):

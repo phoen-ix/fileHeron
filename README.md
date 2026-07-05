@@ -1,6 +1,7 @@
 # file:Heron
 
-![version](https://img.shields.io/badge/version-v1.54.1-b45309)
+![server](https://img.shields.io/github/v/tag/phoen-ix/fileHeron?filter=v*&sort=semver&label=server&color=b45309)
+![client](https://img.shields.io/github/v/tag/phoen-ix/fileHeron?filter=client-v*&sort=semver&label=client&color=b45309)
 ![license](https://img.shields.io/badge/license-MIT-blue)
 [![CI](https://github.com/phoen-ix/fileHeron/actions/workflows/ci.yml/badge.svg)](https://github.com/phoen-ix/fileHeron/actions/workflows/ci.yml)
 ![self-hosted](https://img.shields.io/badge/self--hosted-Docker%20Compose-2496ED)

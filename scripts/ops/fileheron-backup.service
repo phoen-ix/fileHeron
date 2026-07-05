@@ -1,0 +1,26 @@
+# fileHeron nightly backup (oneshot, driven by the .timer).
+# Install: see the main README "Backups & Restore". Adapt User=/paths to your
+# deployment (these match the reference install at /opt/fileHeron).
+#   sudo cp scripts/ops/fileheron-backup.{service,timer} /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now fileheron-backup.timer
+#
+# Runs backup.sh: dumps the DB, tars files+quarantine, snapshots Redis, writes a
+# sha256 manifest, optionally pushes to restic, and prunes to the last 7 local
+# backups. A non-zero exit marks the unit `failed` (systemctl --failed +
+# journald); wire OnFailure= to your alerting for a push/email.
+[Unit]
+Description=fileHeron nightly backup
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+User=getafix
+Group=getafix
+WorkingDirectory=/opt/fileHeron
+ExecStart=/opt/fileHeron/scripts/backup.sh
+# DB dump + tarring files/quarantine can take a while on a large store.
+TimeoutStartSec=1800
+Nice=10
+# Uncomment + provide a unit to get alerted on a failed backup:
+# OnFailure=status-email@%n.service

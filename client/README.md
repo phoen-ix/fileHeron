@@ -18,6 +18,22 @@ run it. First launch asks for the server URL
 stored at `%APPDATA%\fileHeron\config.json`; the refresh token is
 held in Windows Credential Manager.
 
+### Unsigned build - the SmartScreen warning is expected
+
+The official `.exe` is **not code-signed**, so Windows SmartScreen shows a
+"Windows protected your PC" prompt on first run - click **More info -> Run
+anyway**. To confirm you downloaded an authentic, untampered build, verify it
+against the `fileheron-client.exe.sha256` published next to it on the release:
+
+```powershell
+# PowerShell: this hash must equal the one in fileheron-client.exe.sha256
+(Get-FileHash .\fileheron-client.exe -Algorithm SHA256).Hash.ToLower()
+```
+
+Want a signed binary? The build is fully reproducible from source - build it
+yourself and Authenticode-sign it with your own certificate (see
+[Build a Windows .exe locally](#build-a-windows-exe-locally)).
+
 ## Develop
 
 ```bash
@@ -43,6 +59,15 @@ pyinstaller pyinstaller.spec    # produces dist/fileheron-client.exe
 
 PyInstaller's `--onefile` mode extracts the bundled assets to a temp
 dir at runtime (~3 s cold start on Windows).
+
+To ship a **signed** build to your own users, Authenticode-sign the output with
+your code-signing certificate (this removes the SmartScreen warning as your
+signature builds reputation):
+
+```powershell
+signtool sign /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 /a `
+  dist\fileheron-client.exe
+```
 
 ## Release
 

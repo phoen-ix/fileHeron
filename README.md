@@ -33,7 +33,7 @@ the rest.
   - [Users](#user-management) · [Groups](#groups) · [Audit log](#audit-log-adminaudit-log) · [File history](#file-history-adminfile-history) · [Sessions](#sessions-adminsessions) · [Quarantine](#quarantine-adminquarantine) · [Analytics](#analytics-adminanalytics) · [Error log & alerts](#error-log--alerts-adminerror-log--adminsettingserror-alerts) · [Webhooks](#webhooks-adminsettingswebhooks) · [Scheduled tasks](#scheduled-tasks-adminscheduled-tasks)
   - [Policies & settings](#policies--settings): API tokens · public links · 2FA · SSO · SMTP · IMAP · share approval · email-change · branding · maintenance · config backup · advanced
 - [**Operator guide**](#operator-guide)
-  - [Install](#first-install) · [Ports](#compose-ports) · [Traefik](#traefik-on-the-host) · [Storage](#storage-layout) · [Backups](#backups) · [Restore](#restore) · [Upgrades](#upgrades) · [Health & metrics](#health-checks--metrics) · [Background jobs](#background-jobs--housekeeping)
+  - [Install](#first-install) · [Ports](#compose-ports) · [Traefik](#traefik-on-the-host) · [Hardening](#production-hardening-checklist) · [Storage](#storage-layout) · [Backups](#backups) · [Restore](#restore) · [Upgrades](#upgrades) · [Health & metrics](#health-checks--metrics) · [Background jobs](#background-jobs--housekeeping)
   - [**Settings reference**](#settings-reference): [env vars](#1-environment-variables-boot) · [runtime settings](#2-admin-runtime-settings-hot---no-restart) · [per-user](#3-per-user-preferences-account)
 - [**Developer guide**](#developer-guide)
   - [Code layout](#code-layout) · [Request flow](#request-flow-typical) · [Auth](#auth-specifics) · [Uploads](#upload-pipeline) · [Cron](#arq-workers--cron) · [Conventions](#coding-conventions)
@@ -441,6 +441,32 @@ not append**, client-supplied `X-Forwarded-For`, and you must **not** set
 `forwardedHeaders.trustedIPs`/`insecure` on the public entrypoint - the backend trusts
 the leftmost XFF for audit/rate-limit IPs.
 
+## Production hardening checklist
+
+`install.sh` produces a production-ready `.env` (sets `ENVIRONMENT=production`,
+`COOKIE_SECURE=true`, derives `WEBAUTHN_RP_ID`, blanks the dev test account). If you
+write `.env` by hand, confirm each of these before going live:
+
+- **`ENVIRONMENT=production`** - forces secure cookies, disables `/docs` +
+  `/openapi.json`, enables HSTS, and turns the secret/`AV_SKIP` placeholder checks
+  into fatal boot errors (an unrecognised value aborts boot).
+- **Strong unique secrets** - `JWT_SECRET`, `TUS_HOOK_SECRET`, `DB_PASSWORD`,
+  `DB_ROOT_PASSWORD` (each >= 32 chars; production refuses placeholder values).
+  `install.sh` generates these with `openssl rand -hex 32`.
+- **`WEBAUTHN_RP_ID`** = your exact public host (no scheme/port), or passkeys break.
+- **`AV_SKIP=false`** - the ClamAV upload-scan gate (fatal if `true` in production).
+- **No dev test account** - leave `TEST_ACCOUNT_*` blank (only seeded outside production).
+- **Reverse proxy** - terminate TLS at Traefik (or equivalent); it MUST overwrite,
+  not append, `X-Forwarded-For`, and the backend/tusd ports stay bound to
+  `127.0.0.1` (never exposed publicly). See [Traefik on the host](#traefik-on-the-host).
+- **Defense-in-depth (recommended)** - set `METRICS_BEARER_TOKEN` (else `/api/metrics`
+  is disabled) and `TUS_HOOK_ALLOWED_IPS` to restrict the internal hook surface.
+- **Backups + drills** - enable the nightly backup timer + weekly restore drill
+  (see [Backups](#backups)).
+
+The runtime already applies `no-new-privileges`, runs the app services as UID 1000,
+and pins image digests; Argon2id + HIBP guard passwords.
+
 ## Storage layout
 
 ```
@@ -482,7 +508,15 @@ via `S3_BUCKET` / `S3_REGION` / `S3_ENDPOINT_URL` / `S3_ACCESS_KEY_ID` /
 
 With `BACKUP_RESTIC_REPO` + `BACKUP_RESTIC_PASSWORD` set, the dated dir is also pushed
 to that restic repo (S3/B2/SFTP/REST/local; password via `--password-file`, not env).
-Schedule via host cron:
+Schedule it nightly. A ready-made systemd timer ships in `scripts/ops/` (adapt
+`User=`/paths to your install):
+
+```bash
+sudo cp scripts/ops/fileheron-backup.{service,timer} /etc/systemd/system/
+sudo systemctl daemon-reload && sudo systemctl enable --now fileheron-backup.timer
+```
+
+Or via host cron:
 
 ```cron
 30 3 * * * cd /opt/fileHeron && ./scripts/backup.sh >> /var/log/fileheron-backup.log 2>&1
@@ -516,6 +550,13 @@ Alembic migrations run from the backend entrypoint on every boot - idempotent
 (`_has_table` / `_has_column` / `_has_index` guards), safe to re-run. **Roll-forward
 only**; back up before upgrading. (Image downgrade after a forward migration needs an
 `alembic stamp` from the newer image first.)
+
+**App vs. infra - which upgrades need the host step.** The in-app Update swaps only
+the app images it builds: **backend, worker, frontend**. Changes to the **database,
+Redis, ClamAV, tusd, or updater-shim images, `docker-compose.yml`,
+`docker/clamav/clamd.conf`, or your host Traefik config are NOT covered** - those need
+the manual `git pull && docker compose up -d` above. Each release's notes call out
+when a host step is required; a plain app release does not.
 
 **Scripted deploy / rollback (bootstrap + hotpatch).** `scripts/deploy.sh` pulls
 the GHCR images for `FH_TAG` (default `latest`), with a build-from-source fallback

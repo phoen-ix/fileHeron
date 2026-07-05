@@ -1,0 +1,13 @@
+# Nightly trigger for the fileHeron backup. 03:00 (+ up to 10 min jitter), and
+# catches up if the box was off (Persistent=true). Runs before the weekly
+# restore drill (Sun 04:30) so the drill always has a fresh backup to verify.
+[Unit]
+Description=Nightly fileHeron backup
+
+[Timer]
+OnCalendar=*-*-* 03:00:00
+RandomizedDelaySec=600
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -99,8 +99,10 @@ cd "$INSTALL_DIR"
 
 if [ ! -f .env ]; then
     cp .env.example .env
+    created_env=1
     echo "[install] created .env from .env.example"
 else
+    created_env=0
     echo "[install] .env already exists - preserving existing values"
 fi
 
@@ -141,6 +143,24 @@ set_kv() {
 
 set_kv APP_URL "$APP_URL"
 set_kv FH_TAG "$FH_TAG"
+
+# A fresh .env from .env.example is DEVELOPMENT-mode: insecure cookies, /docs
+# exposed, and a seeded test account with a known password. Harden it for
+# production on first install. On a re-run we leave the operator's .env alone
+# (only APP_URL/FH_TAG above are refreshed from the install args).
+if [ "$created_env" = 1 ]; then
+    # WebAuthn RP ID = the bare host of APP_URL (no scheme, port, or path);
+    # passkeys break if it doesn't match the domain the browser sees.
+    rp_host="${APP_URL#*://}"; rp_host="${rp_host%%/*}"; rp_host="${rp_host%%:*}"
+    set_kv ENVIRONMENT production
+    set_kv COOKIE_SECURE true
+    set_kv WEBAUTHN_RP_ID "$rp_host"
+    # Dev-only seed creds: inert under ENVIRONMENT=production, blanked so a later
+    # flip to development can't silently seed a known-password account.
+    set_kv TEST_ACCOUNT_EMAIL ""
+    set_kv TEST_ACCOUNT_PASSWORD ""
+    echo "  hardened .env for production (ENVIRONMENT=production, COOKIE_SECURE=true, WEBAUTHN_RP_ID=$rp_host)"
+fi
 rm -f .env.bak
 
 chmod 600 .env

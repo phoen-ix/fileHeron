@@ -68,6 +68,13 @@ jobs:
         id: ver
         run: echo "version=${GITHUB_REF_NAME#client-v}" >> "$GITHUB_OUTPUT"
 
+      # The .exe is unsigned by design (build-and-self-sign is documented in
+      # client/README.md); publish a SHA-256 so downloaders can verify integrity.
+      - name: Checksum the .exe
+        if: startsWith(github.ref, 'refs/tags/client-v')
+        working-directory: client/dist
+        run: sha256sum fileheron-client.exe | tee fileheron-client.exe.sha256
+
       - name: Publish release with .exe attached
         if: startsWith(github.ref, 'refs/tags/client-v')
         uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b # v3
@@ -78,4 +85,6 @@ jobs:
           # auto "What's Changed" list mixes in backend commits since tags
           # share the repo). Update client/RELEASE_NOTES.md per release.
           body_path: client/RELEASE_NOTES.md
-          files: client/dist/fileheron-client.exe
+          files: |
+            client/dist/fileheron-client.exe
+            client/dist/fileheron-client.exe.sha256

@@ -1,3 +1,23 @@
+# Desktop client 1.0.0
+
+**1.0 - general availability.** The desktop client reaches its stable release
+alongside file:Heron server 2.0. This is a stability/GA milestone, not a feature
+change: it's the same client as 0.13.2, promoted to 1.0 as the supported line.
+
+## Good to know
+
+- **The `.exe` is unsigned by design.** Windows SmartScreen shows a "Windows
+  protected your PC" prompt on first run - click **More info -> Run anyway**.
+- **Verify your download.** Each release now publishes a `fileheron-client.exe.sha256`
+  next to the `.exe`; compare it with `Get-FileHash` (steps in the client README).
+- **Want a signed build?** The build is reproducible from source - compile it
+  yourself and Authenticode-sign it with your own certificate (client README).
+- Scope unchanged for 1.0: email/password (+ TOTP/recovery) or API-token sign-in,
+  Inbox/Outbox, up-to-30 GB resumable transfers. No auto-update; OIDC/WebAuthn/
+  admin/SSE remain server-only by design.
+
+---
+
 # Desktop client 0.13.2
 
 More reliability fixes for uploads and downloads (from the app-wide audit).

@@ -31,7 +31,11 @@ _BOUNCE_SENDER_HINTS = ("mailer-daemon", "postmaster")
 
 def classify(msg: Message) -> MessageClass:
     ctype = (msg.get_content_type() or "").lower()
-    report_type = (msg.get_param("report-type") or "").lower() if msg.get("Content-Type") else ""
+    # get_param returns a (charset, lang, value) tuple for an RFC2231-encoded
+    # parameter, so guard the type - a crafted `report-type*=...` header would
+    # otherwise raise AttributeError on .lower() and crash classification.
+    _rt = msg.get_param("report-type") if msg.get("Content-Type") else None
+    report_type = (_rt if isinstance(_rt, str) else "").lower()
     from_addr = (msg.get("From") or "").lower()
     # Decode RFC2047-encoded words (=?utf-8?...?=) before matching, else an
     # encoded "Automatische Antwort" subject never matches the auto-reply hints.

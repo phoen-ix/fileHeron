@@ -15,8 +15,9 @@ keep this to what would cause a wrong move if unknown.
 
 ## Status
 
-Backend **`v2.0.0`** (GA), desktop client **`client-v1.0.0`** (GA) - shipped + in
-production, published for public self-hosting. (README's server/client version
+Backend **`v2.1.0`** (GA + hardening wave), desktop client **`client-v1.0.0`** (GA)
+- shipped + in production, published for public self-hosting. v2.1.0 needs a host
+step (compose `env_file` change). (README's server/client version
 badges read live from the git tags, so they never need a manual bump; this line
 does - keep it current on release.)
 

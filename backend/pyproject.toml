@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "fileheron-backend"
 # Not the runtime version (that is the git tag via FH_VERSION); kept roughly in
 # step for tooling that reads the package metadata.
-version = "2.0.0"
+version = "2.1.0"
 description = "fileHeron backend - bidirectional self-hosted file-sharing platform"
 license = { text = "MIT" }
 requires-python = ">=3.12"

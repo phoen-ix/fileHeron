@@ -1,40 +1,67 @@
-# file:Heron v2.0.0
+# file:Heron v2.1.0
 
-**General availability.** This is the 2.0 milestone: file:Heron is now published
-as a production-ready, self-hostable release. It is **not a breaking change** -
-existing operators upgrade straight from v1.62.0 via the in-app Update with no
-code or behavior changes - it is a version-marker release. No database
-migration, no host step.
+**Production-hardening wave.** A deep audit + fix pass that closes real
+correctness and security defects, makes the documented `.env` settings actually
+take effect, and smooths first-time dev/prod setup. This is the release that
+makes public self-hosting genuinely solid.
 
-The major-version bump marks the stable, supported line rather than any runtime
-change: the platform has been running hardened in production, and this release
-formalizes the fresh-install, security-disclosure, and operator-hardening story
-for people deploying it themselves.
+> **⚠️ This release needs a host step, not just the in-app Update.** It changes
+> `docker-compose.yml` (see "Settings now apply" below), and the in-app updater
+> only swaps the backend/worker/frontend images. Pull it on the host:
+> `git pull && docker compose up -d`. No database migration.
 
-## What's in the GA
+## Settings now apply (important)
 
-- **Hardened installer.** `install.sh` now produces a production-ready `.env` on
-  first run - `ENVIRONMENT=production` (secure cookies, `/docs` disabled, HSTS,
-  fatal checks on weak/placeholder secrets), a `WEBAUTHN_RP_ID` derived from your
-  URL, and no seeded dev account. Fresh boxes are safe by default.
-- **Security policy.** A `SECURITY.md` with a private vulnerability-disclosure
-  path (GitHub private reporting).
-- **Operator hardening guide.** A consolidated "Production hardening checklist" in
-  the README, a clear app-vs-infra upgrade boundary (which upgrades need a host
-  step), and a shipped nightly-backup systemd timer alongside the weekly restore
-  drill.
-- **Desktop client.** Ships in lockstep as **client v1.0.0**. The Windows `.exe`
-  is unsigned by design - the release now publishes a SHA-256 checksum, and the
-  client README documents verification plus a build-and-self-sign path.
+- **`docker-compose.yml` never forwarded your `.env`** beyond a curated handful
+  of keys, so ~40 documented settings were silently inert - including
+  **`WEBAUTHN_RP_ID`** (so passkeys couldn't work on your real hostname),
+  `STORAGE_BACKEND`/`S3_*`, `METRICS_*`, `TUS_HOOK_ALLOWED_IPS`, and every
+  retention / lockout / session / anomaly / error-log knob. It now injects the
+  full `.env` (an `env_file`), verified against the running image. After the host
+  step above, settings you put in `.env` take effect. `.env.example` is now the
+  complete annotated reference it always claimed to be.
 
-## Carried in from the recent line
+## Security fixes
 
-- Web-app dependencies modernized to current majors (vue-router 5, Uppy 5,
-  VueUse 14, vitest 4) with a resumable-upload proxy fix (v1.62.0).
+- **Public link password:** a non-ASCII password (e.g. `Schlüssel`, `café`) made
+  the *correct* password return a 500, permanently locking legitimate recipients
+  out of the link (and let anyone flood 5xx un-throttled). Fixed.
+- **Upload quota bypass:** a crafted deferred-length upload could release more
+  quota than it reserved, letting a user store beyond their limit. Reserve and
+  release are now symmetric on the authorised size.
+- **OIDC:** the identity-provider discovery fetch had no response-size cap (a
+  hostile IdP could exhaust a worker); now capped like the JWKS fetch.
+- **Public-link brute force:** the attempt check + record are now serialized, so
+  a concurrent burst can't slip past the rate limit.
+- **JWT-secret rotation** now re-encrypts webhook signing secrets too (rotating
+  previously broke all webhook deliveries).
+
+## Reliability / correctness
+
+- **GDPR erasure** commits each file deletion durably, so a mid-batch disk error
+  can no longer leave rows pointing at bytes that are already gone; per-file audit
+  events attribute the admin.
+- **Quarantine** commits the infected + revoked state before the irreversible
+  move, so a failure can't leave an infected file the DB thinks is clean.
+- **Antivirus** fails safe (state `error`, not a crash) when clamd drops an
+  oversize stream - which previously aborted the whole IMAP poll; the infected
+  path no longer resurrects a file that expired mid-scan.
+- **Inbound mail:** a Message-ID collision no longer deletes a distinct unread
+  message from the server, and an unreadable UIDVALIDITY no longer triggers a
+  full re-scan; a crafted RFC 2231 header no longer crashes classification.
+- **S3 backend:** correct RFC 5987 download filenames, and transient S3 errors are
+  handled backend-neutrally.
+- Fixed a 500 when filtering the shares list by both a recipient user and group.
+
+## Developer experience
+
+- Fresh-clone dev setup works (`cp .env.example .env`, data-dir keepfiles, the
+  data-dir ownership note), a fuller `make` (test/up/dev/build/seed), a new
+  `CONTRIBUTING.md`, and several doc-drift corrections.
 
 ## Notes
 
-- **No migration, no host step** for existing operators - a plain in-app Update.
-- Known, intentionally-deferred items: per-file envelope encryption (deferred
-  while storage is single-server bind mounts); the desktop client has no
-  auto-update and intentionally omits OIDC/WebAuthn/admin/SSE.
+- **Host step required** (compose change) - see the callout above. No migration.
+- Known/accepted: a `Range: bytes=1-` continuation can finish an exhausted public
+  download (deliberate, to not break resumed downloads); a full backend
+  type-check gate is a scoped follow-up.

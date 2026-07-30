@@ -24,6 +24,7 @@ Behaviour by hook event:
 """
 from __future__ import annotations
 
+import ipaddress
 import logging
 
 from fastapi import APIRouter, Body, Depends, Header, Request
@@ -39,10 +40,46 @@ logger = logging.getLogger("fileheron.tus_hooks")
 router = APIRouter(tags=["internal"])
 
 
-def _allowed_ips() -> set[str]:
-    """Parse TUS_HOOK_ALLOWED_IPS CSV. Empty set = no enforcement."""
-    raw = getattr(settings, "TUS_HOOK_ALLOWED_IPS", "") or ""
-    return {p.strip() for p in raw.split(",") if p.strip()}
+def _allowlist_configured() -> bool:
+    return bool((getattr(settings, "TUS_HOOK_ALLOWED_IPS", "") or "").strip())
+
+
+def _ip_allowed(client_ip: str | None) -> bool:
+    """True if `client_ip` matches TUS_HOOK_ALLOWED_IPS (CSV of addresses
+    and/or CIDR ranges). Mirrors routers/metrics.py::_ip_allowed.
+
+    CIDR support matters operationally: this allowlist used to accept bare
+    addresses only, and a Docker container's IP is not stable across a
+    recreate, so an operator who set it to tusd's current address would have
+    every upload start failing the next time the container moved. With CIDR you
+    can allow the compose network (e.g. 172.18.0.0/16) and it keeps working.
+    That was the blocker on turning this on at all (audit 2026-07-30), and it
+    is the only control on /api/internal/* that does not depend on the reverse
+    proxy's path handling - a PathPrefix deny in Traefik is bypassable with a
+    percent-encoded slash when the entrypoint permits encoded slashes.
+    """
+    raw = (getattr(settings, "TUS_HOOK_ALLOWED_IPS", "") or "").strip()
+    if not raw:
+        return True  # not configured = no enforcement (HMAC still required)
+    if not client_ip:
+        return False
+    try:
+        addr = ipaddress.ip_address(client_ip)
+    except ValueError:
+        return False
+    for part in raw.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        try:
+            if "/" in part:
+                if addr in ipaddress.ip_network(part, strict=False):
+                    return True
+            elif addr == ipaddress.ip_address(part):
+                return True
+        except ValueError:
+            continue
+    return False
 
 
 @router.post("/api/internal/tus-hooks", status_code=200)
@@ -57,10 +94,9 @@ def tus_hooks(
     - Hook-Name header (older tusd)
     We accept both.
     """
-    allowed = _allowed_ips()
-    if allowed:
+    if _allowlist_configured():
         client_ip = request.client.host if request.client else ""
-        if client_ip not in allowed:
+        if not _ip_allowed(client_ip):
             logger.warning(
                 "tus hook rejected: source ip %s not in TUS_HOOK_ALLOWED_IPS",
                 client_ip or "<unknown>",

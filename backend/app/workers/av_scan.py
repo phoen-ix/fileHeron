@@ -10,6 +10,7 @@ Retries (configured at the WorkerSettings level) handle the transient
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from arq import Retry
@@ -50,12 +51,19 @@ async def av_scan_file(_ctx, file_id: str) -> dict:
         from ..services.storage_backend import get_storage_backend
         backend = get_storage_backend()
         local = backend.local_path(file.storage_path)
-        try:
+        # Both scan paths are BLOCKING socket I/O, and this is an `async def`
+        # running on the ARQ worker's single event loop - so a slow scan used to
+        # freeze every other job in the process (send_email, webhook_deliver,
+        # every cron) for its whole duration, up to the socket timeout per file.
+        # Hand them to a thread so only this task waits (audit 2026-07-30).
+        def _scan() -> av_scan_svc.ScanResult:
             if local is not None:
-                result = av_scan_svc.scan_path(local)
-            else:
-                with backend.open(file.storage_path) as fh:
-                    result = av_scan_svc.scan_stream(fh)
+                return av_scan_svc.scan_path(local)
+            with backend.open(file.storage_path) as fh:
+                return av_scan_svc.scan_stream(fh)
+
+        try:
+            result = await asyncio.to_thread(_scan)
         except av_scan_svc.AVUnavailableError as e:
             # clamd is down/not-ready. A plain re-raise is NOT re-enqueued by
             # arq (only Retry/RetryJob are), so it would burn the job with no

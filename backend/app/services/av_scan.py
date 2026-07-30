@@ -24,7 +24,15 @@ from ..config import settings
 logger = logging.getLogger("fileheron.av_scan")
 
 CHUNK_SIZE = 1024 * 64  # clamd recommends 64 KiB chunks
-SOCKET_TIMEOUT_SEC = 60.0  # large files take a while to scan
+# Wall-clock ceiling on a single clamd request. 60 s was not enough for the
+# workload this product accepts: clamd reads at roughly 100-300 MB/s on a
+# shared bind mount, so anything past a few hundred MB reliably timed out,
+# came back as state="error", and left the file stuck at ready_unscanned to be
+# re-scanned hourly forever - the same file failing the same way every time
+# (audit 2026-07-30). 30 min comfortably covers clamd's real ~2 GiB ceiling
+# (see config.AV_MAX_SCAN_BYTES). The call now runs in a worker thread, so a
+# long scan no longer blocks the event loop while it waits.
+SOCKET_TIMEOUT_SEC = 1800.0
 
 
 @dataclass(frozen=True)

@@ -186,13 +186,27 @@ def hard_delete(
     # released the bytes when it moved the file into ./data/quarantine/).
     was_infected = file.state == FileState.infected
 
+    # Only release what was actually reserved. Quota is reserved at the tus
+    # pre-create hook (tus_hooks.py) or by the direct-upload route - NOT by
+    # /api/uploads/init, which just writes the `uploading` row. So a row that
+    # was registered and then abandoned before tusd ever accepted a byte holds
+    # no reservation, and releasing on delete pushed the Redis counter BELOW
+    # true usage - repeatably, which is a quota bypass (audit 2026-07-30).
+    #
+    # `tus_upload_id` is the marker that pre-create ran, which is the same
+    # discriminator cleanup_stale_uploads already documents for skipping the
+    # release entirely. Anything past `uploading` reached a finalized state and
+    # therefore reserved. If this is ever wrong in either direction, the hourly
+    # quota_reconcile recomputes from disk and is the source of truth.
+    reserved = file.state != FileState.uploading or file.tus_upload_id is not None
+
     if file.storage_path:
         get_storage_backend().delete(file.storage_path)
 
     file.state = FileState.deleted
     db.flush()
 
-    if not was_infected:
+    if not was_infected and reserved:
         release_bytes(user_id=file.uploaded_by_id, bytes_to_free=file.size_bytes)
 
     record_audit_event(

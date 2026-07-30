@@ -26,7 +26,7 @@ from sqlalchemy.orm import Session
 
 from ..middleware.errors import AppError
 from ..models.api_token import ApiToken
-from ..models.audit_log import AuditEventType
+from ..models.audit_log import AuditEventType, AuditLog
 from ..models.client_employee_connection import ClientEmployeeConnection
 from ..models.download_log import DownloadLog
 from ..models.email_change_token import EmailChangeToken
@@ -56,6 +56,28 @@ logger = logging.getLogger("fileheron.erasure")
 
 
 
+def _unlink_tus_partial(tus_upload_id: str) -> None:
+    """Remove a tusd working file and its .info sidecar.
+
+    Deliberately duplicates the shape of
+    workers/cleanup_stale_uploads._unlink_partial_bytes rather than importing
+    it: that helper takes a File and also deletes from the storage backend,
+    which hard_delete has already done by the time we get here. Best-effort -
+    a failure here must not abort an erasure that has already destroyed
+    committed data."""
+    from pathlib import Path
+
+    from ..config import settings
+
+    base = Path(settings.TUS_UPLOAD_DIR)
+    for p in (base / tus_upload_id, base / f"{tus_upload_id}.info"):
+        try:
+            if p.is_file():
+                p.unlink()
+        except OSError as e:
+            logger.warning("erasure: tus partial unlink failed %s: %s", p, e)
+
+
 def erase_user(
     db: Session, *, actor: User, target: User, request=None
 ) -> dict:
@@ -66,6 +88,24 @@ def erase_user(
         raise AppError(
             400, "CANNOT_ERASE_SELF", "An admin cannot erase their own account."
         )
+    # Serialise on the target row BEFORE the already-erased check. `_is_erased`
+    # was an unsynchronised read, so a double-submitted erase (an impatient
+    # click, or two admins acting on the same GDPR request) had both requests
+    # pass the check, both walk the file loop, and both release the same quota -
+    # producing two conflicting `user_erased` receipts for one person. The
+    # second request now blocks here and loses the race cleanly with 409
+    # (audit 2026-07-30).
+    q = db.query(User).filter(User.id == target.id)
+    # SQLite has no row locks and rejects FOR UPDATE, so the guard applies on
+    # the engine production runs (MariaDB) and degrades to a plain re-read in
+    # the test harness. The ordering - lock/re-read BEFORE the erased check -
+    # is what removes the race, and that is asserted separately.
+    if db.bind is not None and db.bind.dialect.name != "sqlite":
+        q = q.with_for_update()
+    locked = q.one_or_none()
+    if locked is None:
+        raise AppError(404, "USER_NOT_FOUND", "User not found.")
+    target = locked
     if _is_erased(target):
         raise AppError(409, "ALREADY_ERASED", "This user has already been erased.")
 
@@ -87,16 +127,32 @@ def erase_user(
     for f in files:
         f_bytes = f.size_bytes
         f_id = f.id
+        tus_id = f.tus_upload_id
         try:
             file_svc.hard_delete(
                 db, file=f, reason="user_erased", actor_user_id=actor.id, request=request
             )
+            # An `uploading` row has no storage_path yet, so hard_delete unlinks
+            # nothing while the receipt still credits its full declared size.
+            # The bytes live in tusd's working directory until
+            # cleanup_abandoned_uploads runs - hours later. Mirror
+            # cleanup_stale_uploads._unlink_partial_bytes so "erased" is true at
+            # the moment we say it (audit 2026-07-30).
+            if tus_id:
+                _unlink_tus_partial(tus_id)
             # Commit each deletion durably. hard_delete unlinks the bytes BEFORE
             # marking the row deleted, so if a LATER file's unlink fails (which
             # aborts the whole erasure), a transaction rollback must not revert -
             # and thereby resurrect the DB rows of - files whose bytes are already
             # gone. Per-file commit makes each deletion final and the retry resume
             # cleanly from the failed file.
+            # The row is retained as a `deleted` marker, but it kept
+            # `original_filename` - and the admin file browser drops the
+            # state filter under `include_inactive=true`, so an admin could
+            # still list every filename the erased user had ever uploaded
+            # (audit 2026-07-30). The marker's job is accounting, not content.
+            f.original_filename = "[erased]"
+            f.mime_type = "application/octet-stream"
             db.commit()
             deleted_bytes += f_bytes
             deleted_count += 1
@@ -153,6 +209,28 @@ def erase_user(
     ).delete(synchronize_session=False)
     # Pending email-change tokens carry the target's new/old PLAINTEXT email and
     # are never reaped while unsettled - delete them on erasure (audit L12).
+    # Every address this person has ever held. Two sources, because neither is
+    # complete on its own:
+    #   - email_change_tokens.new_email covers addresses they asked to move TO,
+    #     including a pending change that never settled. There is no old_email
+    #     column; the token only records the destination.
+    #   - the `email_changed` audit rows carry both sides of every completed
+    #     change, and audit_log is deliberately retained, so it is the only
+    #     record of an address they have already moved away from.
+    prior_emails: set[str] = set()
+    for (addr,) in db.query(EmailChangeToken.new_email).filter(
+        EmailChangeToken.user_id == target.id
+    ).all():
+        if addr:
+            prior_emails.add(addr)
+    for (extra,) in db.query(AuditLog.extra).filter(
+        AuditLog.event_type == AuditEventType.email_changed.value,
+        AuditLog.target_id == str(target.id),
+    ).all():
+        if isinstance(extra, dict):
+            prior_emails.update(
+                e for e in (extra.get("old_email"), extra.get("new_email")) if e
+            )
     db.query(EmailChangeToken).filter(
         EmailChangeToken.user_id == target.id
     ).delete(synchronize_session=False)
@@ -165,6 +243,21 @@ def erase_user(
         | (ClientEmployeeConnection.employee_user_id == target.id)
     ).delete(synchronize_session=False)
 
+    # 3a. And the group memberships, which are what DERIVE those connections.
+    # Deleting the connections while leaving the memberships was self-undoing:
+    # `connection.recompute_shared_group_connections_for_user` runs whenever
+    # any co-member's groups change, reads `_users_sharing_a_group_with`, and
+    # recreates a `shared_group` connection to the erased row. Membership is
+    # also personal data in its own right - which groups a person belonged to
+    # (audit 2026-07-30).
+    from ..models.group_member import GroupMember
+
+    pii_purged_group_members = (
+        db.query(GroupMember)
+        .filter(GroupMember.user_id == target.id)
+        .delete(synchronize_session=False)
+    )
+
     # 3b. Purge personal data that lives OUTSIDE the users row. Because
     # erasure anonymises (UPDATE) rather than DELETEs the user, no FK
     # CASCADE fires - these rows would otherwise retain plaintext email /
@@ -172,11 +265,18 @@ def erase_user(
     # Captured BEFORE the email is rewritten below so the email-keyed
     # deletes still match.
     original_email = target.email
+    # Every address this person has ever held, not just the current one.
+    # login_attempts and invite_tokens are keyed by plaintext email, and the
+    # email-change history was read (and deleted) a few lines above - so rows
+    # written under a previous address survived an erasure that reported
+    # itself complete. `_prior_emails` is captured before that delete
+    # (audit 2026-07-30).
+    all_emails = {original_email, *prior_emails}
     pii_purged: dict[str, int] = {}
     # Plaintext email in the forensic login-attempt log.
     pii_purged["login_attempts"] = (
         db.query(LoginAttempt)
-        .filter(LoginAttempt.email == original_email)
+        .filter(LoginAttempt.email.in_(all_emails))
         .delete(synchronize_session=False)
     )
     # Plaintext email in invites - both invites sent TO this user and
@@ -184,7 +284,7 @@ def erase_user(
     pii_purged["invite_tokens"] = (
         db.query(InviteToken)
         .filter(
-            (InviteToken.email == original_email)
+            InviteToken.email.in_(all_emails)
             | (InviteToken.created_by_id == target.id)
         )
         .delete(synchronize_session=False)
@@ -229,7 +329,7 @@ def erase_user(
         db.query(EmailLog)
         .filter(
             (EmailLog.recipient_user_id == target.id)
-            | (EmailLog.recipient_email == original_email)
+            | EmailLog.recipient_email.in_(all_emails)
         )
         .update(
             {
@@ -248,12 +348,58 @@ def erase_user(
     # stays searchable in the admin inbox indefinitely (Art.17 residue). Scrub
     # the sender identity fields (mirror email_log) but keep the row + body as a
     # business record of received correspondence (audit M7).
+    from ..models.inbound_attachment import InboundAttachment
     from ..models.inbound_message import InboundMessage
+
+    # The v1.27 scrub anonymised the message SENDER but left the attachments:
+    # their bytes on the storage backend, their filenames in the table, and the
+    # admin download route pointing at both. A person who emailed a document in
+    # and then exercised Art.17 had the document survive the erasure that
+    # reported itself complete (audit 2026-07-30). Unlink the blobs and delete
+    # the rows; the message row stays as a business record of correspondence
+    # received, which is what the v1.27 decision was actually about.
+    target_message_ids = [
+        mid
+        for (mid,) in db.query(InboundMessage.id)
+        .filter(
+            (InboundMessage.sender_user_id == target.id)
+            | InboundMessage.sender_email.in_(all_emails)
+        )
+        .all()
+    ]
+    attachments_purged = 0
+    if target_message_ids:
+        from .storage_backend import get_storage_backend
+
+        backend = get_storage_backend()
+        rows = (
+            db.query(InboundAttachment)
+            .filter(InboundAttachment.message_id.in_(target_message_ids))
+            .all()
+        )
+        for att in rows:
+            try:
+                backend.delete(att.storage_key)
+            except Exception as e:
+                # Best-effort, like every other unlink in this function past the
+                # file loop: an orphaned blob is bad, an aborted erasure that
+                # has already destroyed committed data is worse.
+                logger.warning(
+                    "erasure: inbound attachment unlink failed key=%s: %s",
+                    att.storage_key, e,
+                )
+        attachments_purged = (
+            db.query(InboundAttachment)
+            .filter(InboundAttachment.message_id.in_(target_message_ids))
+            .delete(synchronize_session=False)
+        )
+    pii_purged["inbound_attachments"] = attachments_purged
+
     pii_purged["inbound_messages_scrubbed"] = (
         db.query(InboundMessage)
         .filter(
             (InboundMessage.sender_user_id == target.id)
-            | (InboundMessage.sender_email == original_email)
+            | InboundMessage.sender_email.in_(all_emails)
         )
         .update(
             {
@@ -264,6 +410,20 @@ def erase_user(
             synchronize_session=False,
         )
     )
+
+    # error_log keeps `ip` (the real client IP, resolved through the proxy) and
+    # an FK-less `user_id`. It was absent from the purge, from pii_purged, and
+    # from the "deliberately retained" note below - i.e. not a decision, an
+    # omission. Scrub in place like download_log so scan-triage counts and the
+    # 5xx history survive without the person in them (audit 2026-07-30).
+    from ..models.error_log import ErrorLog
+
+    pii_purged["error_log_scrubbed"] = (
+        db.query(ErrorLog)
+        .filter(ErrorLog.user_id == target.id)
+        .update({ErrorLog.ip: None, ErrorLog.user_id: None}, synchronize_session=False)
+    )
+    pii_purged["group_members"] = pii_purged_group_members
 
     # Deliberately retained: `share_recipients` rows reference the (now
     # anonymised) user by integer FK only - no plaintext PII - so the
@@ -309,6 +469,11 @@ def erase_user(
         "deleted_files": deleted_count,
         "deleted_bytes": deleted_bytes,
         "erased_at": utc_now().isoformat(),
+        # Same dict the audit row and the receipt PDF carry. Returned so a
+        # caller can report what was purged without re-reading the audit log,
+        # and so the residue is assertable in a test rather than only visible
+        # in a metadata blob.
+        "pii_purged": pii_purged,
     }
 
 

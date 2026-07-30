@@ -38,6 +38,7 @@ from datetime import datetime, timezone
 
 from ..config import settings
 from ..middleware.errors import AppError
+from ..utils.crypto import constant_time_equals
 
 # 60 seconds. Long enough to start the download (the FileResponse
 # stream then runs to completion regardless of token expiry - the
@@ -88,7 +89,7 @@ def verify(file_id: str, token: str) -> int:
 
     expected = _sign(f"{file_id}|{user_id}|{exp}".encode())
     # Constant-time compare to defeat timing oracles.
-    if not hmac.compare_digest(expected, sig):
+    if not constant_time_equals(expected, sig):
         raise AppError(401, "INVALID_DOWNLOAD_TOKEN", "Bad download token.")
 
     return user_id

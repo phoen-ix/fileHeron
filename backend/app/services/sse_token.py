@@ -32,6 +32,7 @@ from datetime import datetime, timezone
 
 from ..config import settings
 from ..middleware.errors import AppError
+from ..utils.crypto import constant_time_equals
 
 # 5 minutes. The SPA mints a fresh token on every (re)connect and the
 # server closes the stream every 60s by design (see CLAUDE.md). A 2-minute
@@ -75,7 +76,7 @@ def verify(token: str) -> int:
 
     expected = _sign(f"sse|{user_id}|{exp}".encode())
     # Constant-time compare to defeat timing oracles.
-    if not hmac.compare_digest(expected, sig):
+    if not constant_time_equals(expected, sig):
         raise AppError(401, "INVALID_SSE_TOKEN", "Bad SSE token.")
 
     return user_id

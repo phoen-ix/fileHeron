@@ -47,6 +47,7 @@ from ..schemas.oidc_connect import (
 )
 from ..services import oidc as oidc_svc
 from ..services import oidc_admin as oidc_admin_svc
+from ..utils.crypto import constant_time_equals
 
 logger = logging.getLogger("fileheron.routers.oidc_connect")
 
@@ -80,7 +81,7 @@ def _unpack(
     expected = hmac_mod.new(
         settings.JWT_SECRET.encode("utf-8"), payload.encode("utf-8"), hashlib.sha256
     ).hexdigest()
-    if not hmac_mod.compare_digest(expected, sig):
+    if not constant_time_equals(expected, sig):
         return None, None, None, None
     parts = payload.split("::")
     if len(parts) != 4:

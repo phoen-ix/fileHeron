@@ -79,8 +79,24 @@ def normalize_email(email: str) -> str:
     return email.strip().lower()
 
 
-def constant_time_equals(a: str, b: str) -> bool:
-    return hmac.compare_digest(a, b)
+def constant_time_equals(a: str | bytes, b: str | bytes) -> bool:
+    """Constant-time comparison that tolerates arbitrary attacker input.
+
+    `hmac.compare_digest` raises TypeError("comparing strings with non-ASCII
+    characters is not supported") when either str argument is non-ASCII. Every
+    token verifier in this codebase compares a computed hex digest against a
+    value straight off the wire (a cookie, a `?dt=` query param, an
+    Authorization header, tusd metadata), so a single non-ASCII byte turned an
+    invalid-token rejection into an unhandled 500 - unauthenticated, on several
+    endpoints at once (audit 2026-07-30; same shape as the v2.1.0 public-link
+    password fix, which only patched one of them).
+
+    Encoding with errors="replace" cannot itself raise, and a value that needed
+    replacing was never going to match a hex digest anyway.
+    """
+    a_b = a if isinstance(a, bytes) else a.encode("utf-8", "replace")
+    b_b = b if isinstance(b, bytes) else b.encode("utf-8", "replace")
+    return hmac.compare_digest(a_b, b_b)
 
 
 # ---------------------------------------------------------------------------

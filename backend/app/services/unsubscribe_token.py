@@ -26,6 +26,7 @@ from datetime import datetime, timezone
 
 from ..config import settings
 from ..middleware.errors import AppError
+from ..utils.crypto import constant_time_equals
 
 # 180 days. Manage links should outlive the email they ride in by a comfortable
 # margin so an old notification's link still works; every fresh email mints a
@@ -67,7 +68,7 @@ def verify(token: str) -> int:
 
     expected = _sign(f"notif-mgmt|{user_id}|{exp}".encode())
     # Constant-time compare to defeat timing oracles.
-    if not hmac.compare_digest(expected, sig):
+    if not constant_time_equals(expected, sig):
         raise AppError(401, "INVALID_MANAGE_TOKEN", "Bad manage link.")
 
     return user_id

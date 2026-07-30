@@ -49,6 +49,7 @@ from ..services import settings as settings_svc
 from ..services import zip_stream as zip_stream_svc
 from ..services.audit import record_audit_event
 from ..services.storage_backend import get_storage_backend
+from ..utils.crypto import constant_time_equals
 from ..utils.http_range import is_partial_continuation
 from ..utils.timeutil import utc_now
 from ..utils.ua_fingerprint import ua_fingerprint_hash
@@ -99,7 +100,7 @@ def _verify_unlock_cookie(value: str, link_id: str) -> bool:
     expected = hmac_mod.new(
         settings.JWT_SECRET.encode("utf-8"), payload, hashlib.sha256
     ).digest()
-    if not hmac_mod.compare_digest(expected, sig):
+    if not constant_time_equals(expected, sig):
         return False
     try:
         data = json.loads(payload.decode("utf-8"))

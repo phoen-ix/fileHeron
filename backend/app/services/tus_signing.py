@@ -23,6 +23,7 @@ from typing import TypedDict
 
 from ..config import settings
 from ..middleware.errors import AppError
+from ..utils.crypto import constant_time_equals
 
 
 class UploadEnvelope(TypedDict):
@@ -78,7 +79,7 @@ def verify_envelope(
         raise AppError(403, "INVALID_TUS_ENVELOPE", "Malformed upload envelope.") from None
 
     expected = hmac.new(settings.TUS_HOOK_SECRET.encode("utf-8"), json_bytes, hashlib.sha256).hexdigest()
-    if not hmac.compare_digest(expected, sig_hex):
+    if not constant_time_equals(expected, sig_hex):
         raise AppError(403, "INVALID_TUS_ENVELOPE", "Upload envelope signature is invalid.")
 
     try:

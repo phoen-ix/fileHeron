@@ -14,7 +14,6 @@ compute (fail-open).
 """
 from __future__ import annotations
 
-import hmac
 import ipaddress
 import logging
 from datetime import timedelta
@@ -31,6 +30,7 @@ from ..middleware.errors import AppError
 from ..models.file import File, FileState
 from ..models.share import Share, ShareState
 from ..models.user import User
+from ..utils.crypto import constant_time_equals
 from ..utils.timeutil import utc_now
 
 logger = logging.getLogger("fileheron.metrics")
@@ -70,7 +70,7 @@ def _bearer_allowed(authorization: str | None) -> bool:
     if not authorization.lower().startswith("bearer "):
         return False
     presented = authorization.split(" ", 1)[1].strip()
-    return hmac.compare_digest(presented, token)
+    return constant_time_equals(presented, token)
 
 
 def _line(name: str, value, *, help_: str, type_: str = "gauge") -> str:

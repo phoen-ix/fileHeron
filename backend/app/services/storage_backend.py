@@ -15,6 +15,7 @@ prior behaviour. PR-B adds an opt-in `S3Backend` and `STORAGE_BACKEND` selection
 from __future__ import annotations
 
 import logging
+import re
 import shutil
 from abc import ABC, abstractmethod
 from datetime import datetime
@@ -254,6 +255,36 @@ def _content_disposition(disposition: str, filename: str) -> str:
     return f"{disposition}; filename=\"{ascii_name}\"; filename*=UTF-8''{quote(filename)}"
 
 
+
+# RFC 9110 token characters. A media type outside this shape has no business
+# reaching a response header.
+_MEDIA_TYPE_RE = re.compile(r"^[!#$%&\'*+\-.^_`|~0-9A-Za-z]+/[!#$%&\'*+\-.^_`|~0-9A-Za-z]+$")
+_FALLBACK_MEDIA_TYPE = "application/octet-stream"
+
+
+def safe_media_type(mime_type: str | None) -> str:
+    """Clamp a stored media type to something safe to put in a header.
+
+    `files.mime_type` is whatever the client announced at upload. The preview
+    routes already pinned it through preview.safe_content_type, but the two
+    DOWNLOAD routes passed it through verbatim - so a stored type containing a
+    control character (CR/LF in particular) reached the Content-Type header. In
+    practice the ASGI server rejects it and the file becomes permanently
+    undownloadable rather than the header being split, but neither outcome is
+    acceptable and the public-link route makes it anonymously reachable
+    (audit 2026-07-30).
+
+    Parameters are dropped deliberately: nothing here needs them, and they are
+    the part that carries quoted strings.
+    """
+    if not mime_type:
+        return _FALLBACK_MEDIA_TYPE
+    base = mime_type.split(";", 1)[0].strip()
+    if not _MEDIA_TYPE_RE.match(base):
+        return _FALLBACK_MEDIA_TYPE
+    return base
+
+
 def serve_response(
     backend: StorageBackend,
     *,
@@ -280,6 +311,8 @@ def serve_response(
     FileResponse can be tracked - an S3 redirect streams bytes the backend never
     sees, so it is not counted."""
     from fastapi.responses import FileResponse, RedirectResponse
+
+    mime_type = safe_media_type(mime_type)
 
     url = backend.download_url(
         locator=locator,

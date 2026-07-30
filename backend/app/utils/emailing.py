@@ -50,6 +50,12 @@ class SmtpConfig:
         return f"{self.from_name} <{self.from_email}>"
 
 
+
+def _header_safe(value: str) -> str:
+    """Strip control characters from a value destined for a mail header."""
+    return "".join(" " if (ch < " " or ch == "\x7f") else ch for ch in value).strip()
+
+
 async def send_email(
     *,
     cfg: SmtpConfig,
@@ -101,7 +107,13 @@ async def send_email(
     msg = EmailMessage()
     msg["From"] = cfg.from_header
     msg["To"] = to
-    msg["Subject"] = subject
+    # Defence in depth on top of the display-name validation. EmailMessage
+    # raises ValueError on CR/LF in a header value, so an unsanitised value does
+    # not inject a header - it kills the send outright, and the sender of a
+    # notification is not the person who suffers. Collapse control characters
+    # here so no caller, present or future, can wedge outbound mail with one
+    # (audit 2026-07-30).
+    msg["Subject"] = _header_safe(subject)
     if list_unsubscribe:
         msg["List-Unsubscribe"] = list_unsubscribe
         # Signals RFC 8058 one-click support to Gmail/Outlook.

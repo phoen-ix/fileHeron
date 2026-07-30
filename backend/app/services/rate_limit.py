@@ -182,6 +182,16 @@ def record_failure(db: Session, *, user: User) -> tuple[bool, bool]:
     # calls on the same row serialize.
     db.refresh(user, with_for_update=True)
 
+    # A served lockout starts a fresh count. Only a SUCCESSFUL login used to
+    # reset failed_login_count, so once an account had been locked the counter
+    # stayed at the threshold forever: the next single wrong password re-locked
+    # it immediately, and kept doing so. That turns a 15-minute lockout into a
+    # permanent one for a user who mistypes, and lets anyone hold an account
+    # locked indefinitely at one attempt per window (audit 2026-07-30).
+    if user.locked_until is not None and user.locked_until <= now:
+        user.failed_login_count = 0
+        user.locked_until = None
+
     user.failed_login_count = (user.failed_login_count or 0) + 1
     just_locked = False
     if user.failed_login_count >= threshold and not is_account_locked(user):

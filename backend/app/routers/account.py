@@ -135,6 +135,18 @@ def update_display_name(
             "INVALID_DISPLAY_NAME",
             "Display name must be at most 120 characters.",
         )
+    # `.strip()` only removes SURROUNDING whitespace, so "Bob\nEvil" survived.
+    # Three notification subjects interpolate the sender's display name, and
+    # EmailMessage raises ValueError on a header value containing CR/LF - so a
+    # newline here did not inject a header, it silently killed the notification
+    # email sent to OTHER people (audit 2026-07-30). Reject control characters
+    # outright; no legitimate display name contains one.
+    if any(ch < " " or ch == "\x7f" for ch in name):
+        raise AppError(
+            422,
+            "INVALID_DISPLAY_NAME",
+            "Display name must not contain control characters.",
+        )
     user.display_name = name
     db.commit()
     db.refresh(user)

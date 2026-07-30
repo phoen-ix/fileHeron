@@ -124,6 +124,7 @@ def _to_share_response(db: Session, share, *, viewer: User | None = None) -> Sha
                 created_at=f.created_at,
                 finalized_at=f.finalized_at,
                 sha256_hex=f.sha256_hex,
+                av_unscanned=f.av_unscanned,
             )
             for f in files
         ],

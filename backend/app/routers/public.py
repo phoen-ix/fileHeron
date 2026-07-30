@@ -151,6 +151,7 @@ def landing(
                 mime_type=f.mime_type,
                 size_bytes=f.size_bytes,
                 state=f.state.value,
+                av_unscanned=f.av_unscanned,
             )
             for f in files
         ],

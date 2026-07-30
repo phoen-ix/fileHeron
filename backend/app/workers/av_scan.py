@@ -16,8 +16,10 @@ from arq import Retry
 
 from ..config import settings
 from ..database import SessionLocal
+from ..models.audit_log import AuditEventType
 from ..models.file import File, FileState
 from ..services import av_scan as av_scan_svc
+from ..services.audit import record_audit_event
 from ..services.quarantine import quarantine_file
 
 logger = logging.getLogger("fileheron.workers.av_scan")
@@ -64,26 +66,28 @@ async def av_scan_file(_ctx, file_id: str) -> dict:
             raise Retry(defer=min(60, 5 * attempt)) from e
 
         if result.state == "clean":
-            # clamd reports "clean" even when a file exceeds its configured
-            # MaxFileSize/MaxScanSize - it simply stops scanning past the limit.
-            # So a "clean" verdict on a file larger than what clamd is
-            # configured to scan is NOT trustworthy. Don't mark it clean (it
-            # stays ready_unscanned -> not downloadable, 425 SCAN_IN_PROGRESS);
-            # the operator must size clamd (docker/clamav/clamd.conf) + this
-            # AV_MAX_SCAN_BYTES to their real maximum (audit H3, defense-in-depth).
-            if (file.size_bytes or 0) > settings.AV_MAX_SCAN_BYTES and not settings.AV_SKIP:
-                logger.error(
+            # clamd answers "clean" for a file past its size limit without ever
+            # reading it - it just stops scanning. So a "clean" verdict above
+            # AV_MAX_SCAN_BYTES is not evidence of anything.
+            #
+            # That limit is not the operator's to raise: clamd clamps
+            # MaxFileSize to INT_MAX (~2 GiB) whatever clamd.conf says, so no
+            # configuration makes it scan a 5 GB upload. fileHeron deliberately
+            # supports uploads far larger than that, so the file IS still
+            # served - but it is recorded as unscanned rather than clean, and
+            # the API, UI and audit trail say so (audit 2026-07-30).
+            oversize = (
+                (file.size_bytes or 0) > settings.AV_MAX_SCAN_BYTES
+                and not settings.AV_SKIP
+            )
+            if oversize:
+                logger.warning(
                     "av_scan: %s is %d bytes, over AV_MAX_SCAN_BYTES (%d); clamd "
-                    "'clean' is inconclusive for an oversize file - NOT marking clean",
+                    "cannot scan it - serving as UNSCANNED, not clean",
                     file_id,
                     file.size_bytes or 0,
                     settings.AV_MAX_SCAN_BYTES,
                 )
-                return {
-                    "file_id": file_id,
-                    "state": "oversize_unscanned",
-                    "size_bytes": file.size_bytes,
-                }
             # Conditional flip: a slow scan can run while share expiry commits
             # `deleted` (bytes gone). Only mark clean if the row is still
             # ready_unscanned, else we would resurrect a deleted file whose
@@ -91,7 +95,10 @@ async def av_scan_file(_ctx, file_id: str) -> dict:
             updated = (
                 db.query(File)
                 .filter(File.id == file_id, File.state == FileState.ready_unscanned)
-                .update({File.state: FileState.clean}, synchronize_session=False)
+                .update(
+                    {File.state: FileState.clean, File.av_unscanned: oversize},
+                    synchronize_session=False,
+                )
             )
             if updated == 0:
                 db.rollback()
@@ -100,7 +107,29 @@ async def av_scan_file(_ctx, file_id: str) -> dict:
                     file_id,
                 )
                 return {"file_id": file_id, "state": "superseded"}
+            if oversize:
+                # Durable record that a file was released without a real
+                # verdict. Written in the same transaction as the state flip.
+                record_audit_event(
+                    db,
+                    event_type=AuditEventType.file_served_unscanned,
+                    actor_user_id=file.uploaded_by_id,
+                    target_type="file",
+                    target_id=file_id,
+                    metadata={
+                        "size_bytes": file.size_bytes,
+                        "av_max_scan_bytes": settings.AV_MAX_SCAN_BYTES,
+                        "reason": "exceeds_clamd_max_file_size",
+                    },
+                )
             db.commit()
+            if oversize:
+                return {
+                    "file_id": file_id,
+                    "state": "clean",
+                    "av_unscanned": True,
+                    "size_bytes": file.size_bytes,
+                }
             logger.info("av_scan: %s clean", file_id)
             return {"file_id": file_id, "state": "clean"}
 

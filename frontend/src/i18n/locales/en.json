@@ -1690,7 +1690,9 @@
       "download": "Download",
       "delete": "Delete",
       "delete_confirm": "Delete this file? This cannot be undone."
-    }
+    },
+    "av_unscanned": "unscanned",
+    "av_unscanned_hint": "This file is larger than the virus scanner can process, so it was never scanned. Open it only if you trust the sender."
   },
   "api_tokens": {
     "title": "API tokens",

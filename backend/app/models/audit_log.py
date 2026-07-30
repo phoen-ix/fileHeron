@@ -53,6 +53,10 @@ class AuditEventType(str, enum.Enum):
     anomaly_detected = "anomaly_detected"                  # anomaly detection (v1.20.0)
     file_deleted = "file_deleted"                          # Phase 3a/4
     file_quarantined = "file_quarantined"                  # Phase 5
+    # File released to recipients WITHOUT a real AV verdict, because it is
+    # larger than clamd can scan (v2.4.0, audit 2026-07-30). The durable record
+    # that a scan gap was accepted for this file.
+    file_served_unscanned = "file_served_unscanned"        # v2.4.0
     file_quarantine_released = "file_quarantine_released"  # post-Phase 10
     file_quarantine_purged = "file_quarantine_purged"      # post-Phase 10
     quarantine_policy_changed = "quarantine_policy_changed"  # post-Phase 10

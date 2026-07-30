@@ -159,7 +159,16 @@ services:
     # Pinned to a specific patch - `:stable` drifts and breaks
     # reproducibility. Bump deliberately; check ClamAV release notes
     # for signature-DB format changes before moving.
-    image: clamav/clamav:1.5.2
+    #
+    # 1.5.3 (2026-07-01) fixes six CVEs that all affect 1.5.2 and are reachable
+    # by uploading a crafted file, since every upload and every inbound mail
+    # attachment is fed to this clamd: CVE-2026-20213 (Aspack PE integer
+    # overflow -> heap buffer overflow WRITE), -20214, -20215, -20216, -20217,
+    # -20243 (several are trivial scanner crashes, which stall every user's
+    # downloads on 425 while files sit ready_unscanned). Tracked by the `docker`
+    # dependabot ecosystem as of 2026-07-30 - before that, nothing in the repo
+    # watched container pins at all.
+    image: clamav/clamav:1.5.3
     container_name: ${COMPOSE_PROJECT_NAME:-fileheron}-clamav
     restart: unless-stopped
     security_opt: ["no-new-privileges:true"]  # no setuid escalation (audit L23)

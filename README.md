@@ -688,7 +688,17 @@ via `/admin/settings/advanced`.
 | `STORAGE_LOW_THRESHOLD_PERCENT` / `_BYTES` | `5` / `10 GiB` | Low-disk degradation thresholds. ↻ |
 | `CLAMAV_HOST`/`CLAMAV_PORT` | `clamav`/`3310` | clamd endpoint. |
 | `AV_SKIP` | `false` | Skip scanning (CI/dev). **Refuses `production + true`.** |
-| `AV_MAX_SCAN_BYTES` | `30 GiB` | Largest file clamd scans (match `clamd.conf`). |
+| `AV_MAX_SCAN_BYTES` | `2147483645` | clamd's real scan ceiling. Do **not** raise it - see below. |
+
+> **Antivirus coverage stops at ~2 GiB, and no configuration changes that.**
+> clamd clamps `MaxFileSize` to `INT_MAX`, so `MaxFileSize 30G` in
+> `docker/clamav/clamd.conf` really means 2147483645 bytes. Above that, clamd
+> answers "clean" *without reading the file*. fileHeron still serves those
+> uploads - the product supports files far larger than any scanner handles - but
+> records them as `files.av_unscanned`, shows an **unscanned** badge next to them
+> in the UI, and writes a `file_served_unscanned` audit event. Raising
+> `AV_MAX_SCAN_BYTES` does not extend coverage; it only makes fileHeron report a
+> verdict clamd never produced.
 | `PUBLIC_LINK_BASE_PATH` | `/d` | Public-link URL prefix. |
 | `PUBLIC_LINK_PASSWORD_RATE_LIMIT` / `_WINDOW_SEC` / `PUBLIC_LINK_LOCKOUT_SEC` | `10`/`900`/`900` | Per-link password brute-force guard. ↻ |
 | `DOWNLOAD_SIGNED_URL_TTL_SEC` | `900` | Signed-download-URL lifetime (30s-1h). ↻ |

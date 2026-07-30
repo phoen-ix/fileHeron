@@ -263,6 +263,11 @@ export interface FileInShareResponse {
   created_at: string
   finalized_at: string | null
   sha256_hex: string | null
+  /* True when the file is too large for clamd to scan, so it was released
+   * without a real antivirus verdict. `state` is still 'clean' (it is
+   * downloadable); this is what distinguishes "scanned and clean" from
+   * "never scanned". Surface it, don't imply safety. */
+  av_unscanned?: boolean
 }
 
 export interface GroupRecipientRef {
@@ -397,6 +402,11 @@ export interface PublicShareFile {
   mime_type: string
   size_bytes: number
   state: FileState
+  /* True when the file is too large for clamd to scan, so it was released
+   * without a real antivirus verdict. `state` is still 'clean' (it is
+   * downloadable); this is what distinguishes "scanned and clean" from
+   * "never scanned". Surface it, don't imply safety. */
+  av_unscanned?: boolean
 }
 
 export interface PublicShareResponse {

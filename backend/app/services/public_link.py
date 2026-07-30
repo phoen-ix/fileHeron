@@ -88,17 +88,29 @@ def create_link(
     if share.created_by_id != actor.id and actor.role != UserRole.admin:
         raise AppError(403, "FORBIDDEN", "Only the share owner or an admin can do that.")
 
+    # `share_id` carries a plain UNIQUE constraint with no revoked-row
+    # exclusion, so the table can hold exactly ONE row per share, revoked or
+    # not. Filtering on `revoked_at IS NULL` here therefore let a re-create past
+    # this friendly 409 and straight into an unhandled IntegrityError -> 500,
+    # making "revoke and re-create" (which CLAUDE.md and the SPA both tell users
+    # to do for legacy links) permanently impossible (audit 2026-07-30).
+    #
+    # Fixed by consuming the revoked row instead of colliding with it: the old
+    # token_hash is already dead (assert_link_usable rejects revoked links), and
+    # keeping the row would serve no purpose the audit log doesn't already
+    # cover.
     existing = (
-        db.query(PublicLink)
-        .filter(PublicLink.share_id == share.id, PublicLink.revoked_at.is_(None))
-        .one_or_none()
+        db.query(PublicLink).filter(PublicLink.share_id == share.id).one_or_none()
     )
-    if existing is not None:
+    if existing is not None and existing.revoked_at is None:
         raise AppError(
             409,
             "PUBLIC_LINK_EXISTS",
             "A public link already exists for this share. Revoke it first.",
         )
+    if existing is not None:
+        db.delete(existing)
+        db.flush()
     if download_limit is not None and download_limit <= 0:
         raise AppError(
             400, "INVALID_DOWNLOAD_LIMIT", "download_limit must be a positive integer."

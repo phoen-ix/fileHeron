@@ -47,8 +47,27 @@ def sign_envelope(payload: UploadEnvelope) -> tuple[str, str]:
     return payload_b64, sig
 
 
-def verify_envelope(payload_b64: str, sig_hex: str) -> UploadEnvelope:
-    """Re-decode and re-HMAC. Raises AppError on any mismatch / expiry."""
+def verify_envelope(
+    payload_b64: str, sig_hex: str, *, enforce_exp: bool = True
+) -> UploadEnvelope:
+    """Re-decode and re-HMAC. Raises AppError on any mismatch.
+
+    `enforce_exp` gates ONLY the wall-clock expiry check. The envelope's `exp`
+    is authorisation to *begin* an upload, so it is enforced at pre-create and
+    nowhere else.
+
+    It used to be enforced on every hook, including pre-finish/post-finish. An
+    upload that took longer than the 1h TTL to transfer therefore died at
+    finalize with TUS_ENVELOPE_EXPIRED after the bytes were fully uploaded, and
+    cleanup_stale_uploads later flipped the share to `failed`. That is not
+    hypothetical: on the reference deployment 3 of 10 shares died exactly this
+    way after 3.07 GB, 3.07 GB and 0.37 GB transfers (audit 2026-07-30). At
+    10 Mbps the practical ceiling was ~4.5 GB against an advertised 30 GB.
+
+    Dropping the check on the later hooks costs nothing: the HMAC (which tusd
+    cannot mint) still authenticates every hook, and the file/share rows named
+    in the envelope carry their own state gates.
+    """
     if not payload_b64 or not sig_hex:
         raise AppError(403, "INVALID_TUS_ENVELOPE", "Missing upload envelope.")
     try:
@@ -69,7 +88,7 @@ def verify_envelope(payload_b64: str, sig_hex: str) -> UploadEnvelope:
 
     if payload.get("v") != 1:
         raise AppError(403, "INVALID_TUS_ENVELOPE", "Unknown envelope version.")
-    if payload.get("exp", 0) < int(time.time()):
+    if enforce_exp and payload.get("exp", 0) < int(time.time()):
         raise AppError(403, "TUS_ENVELOPE_EXPIRED", "Upload authorisation expired.")
     return payload
 

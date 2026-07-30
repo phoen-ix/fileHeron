@@ -51,13 +51,23 @@ def _check_tus_upload_id(tus_upload_id: str | None) -> str:
     return tus_upload_id
 
 
-def _extract_envelope(meta: dict[str, str]) -> UploadEnvelope:
+def _extract_envelope(
+    meta: dict[str, str], *, enforce_exp: bool = False
+) -> UploadEnvelope:
     """tusd's MetaData object is already a {key: utf8_value} dict (the
     Upload-Metadata header is parsed before we see it). Pull and verify
-    fh_payload + fh_sig."""
+    fh_payload + fh_sig.
+
+    `enforce_exp` defaults to False: the envelope's 1h expiry is authorisation
+    to BEGIN an upload, so only handle_pre_create passes True. Enforcing it on
+    the later hooks killed any transfer slower than the TTL at finalize, after
+    every byte had already been uploaded (see verify_envelope's docstring). The
+    HMAC is still verified on every hook - that is the control tusd cannot
+    forge, and it is unaffected by this.
+    """
     payload_b64 = meta.get("fh_payload", "")
     sig = meta.get("fh_sig", "")
-    return verify_envelope(payload_b64, sig)
+    return verify_envelope(payload_b64, sig, enforce_exp=enforce_exp)
 
 
 def _extract_upload(event_body: dict[str, Any]) -> tuple[dict[str, Any], dict[str, str]]:
@@ -81,7 +91,7 @@ def handle_pre_create(db: Session, body: dict[str, Any]) -> None:
     maintenance_svc.refuse_if_maintenance(db, kind="upload")
 
     upload, meta = _extract_upload(body)
-    envelope = _extract_envelope(meta)
+    envelope = _extract_envelope(meta, enforce_exp=True)
 
     announced_size = int(upload.get("Size", 0))
     if announced_size > envelope["max_size"]:

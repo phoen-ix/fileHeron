@@ -231,13 +231,25 @@ class Settings(BaseSettings):
     # Skip the AV scan entirely (e.g. for tests, CI). When true, every
     # uploaded file is auto-marked `clean` immediately.
     AV_SKIP: bool = False
-    # Largest file clamd is configured to actually scan - MUST match the
-    # MaxFileSize/MaxScanSize in docker/clamav/clamd.conf. clamd silently
-    # reports "clean" for files past its limit (it just stops scanning), so a
-    # "clean" verdict on a file LARGER than this is treated as inconclusive
-    # (left unscanned / not served) instead of trusted (audit H3, defense in
-    # depth). Default 30 GiB matches the shipped clamd.conf.
-    AV_MAX_SCAN_BYTES: int = 32212254720  # 30 GiB
+    # Largest file clamd will actually scan. clamd reports "clean" for a file
+    # past its limit (it just stops scanning), so a "clean" verdict above this
+    # threshold is not evidence of anything and must not be recorded as one.
+    #
+    # This is NOT freely configurable upward: clamd stores MaxFileSize in an
+    # int and silently clamps it to INT_MAX, so `MaxFileSize 30G` in
+    # docker/clamav/clamd.conf really becomes 2147483645 bytes. Its own startup
+    # log says so:
+    #     Limits: Global size limit set to 32212254720 bytes.   <- MaxScanSize
+    #     Limits: File size limit set to 2147483645 bytes.      <- CLAMPED
+    # The default below therefore matches clamd's real ceiling, not the
+    # configured one. Setting it higher does not make clamd scan more; it just
+    # makes fileHeron trust verdicts clamd never produced (audit 2026-07-30,
+    # which is the original H3 bug surviving its own fix one order of magnitude
+    # up).
+    #
+    # Files above this are still served, but are recorded with
+    # `files.av_unscanned = True` and surfaced as unscanned rather than clean.
+    AV_MAX_SCAN_BYTES: int = 2147483645  # clamd's INT_MAX clamp on MaxFileSize
     # Public-link tunables.
     PUBLIC_LINK_BASE_PATH: str = "/d"
     PUBLIC_LINK_PASSWORD_RATE_LIMIT: int = 10  # max attempts per (link, IP) per window

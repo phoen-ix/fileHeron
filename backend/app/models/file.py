@@ -19,7 +19,7 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import BigInteger, DateTime, ForeignKey, Index, Integer, String
+from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Index, Integer, String
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -68,6 +68,18 @@ class File(Base):
         nullable=False,
         default=FileState.uploading,
         index=True,
+    )
+
+    # True when the file was served WITHOUT a trustworthy antivirus verdict,
+    # because it is larger than clamd can scan (clamd clamps MaxFileSize to
+    # INT_MAX ~= 2 GiB regardless of clamd.conf - see config.AV_MAX_SCAN_BYTES).
+    # clamd answers "clean" for such files without reading them, so recording
+    # that verdict as `clean` would be a lie. The file still reaches `clean`
+    # state so it stays downloadable (deliberate product decision: fileHeron
+    # supports uploads far larger than any AV can scan), but this flag is what
+    # the API, the UI warning and the audit trail read (audit 2026-07-30).
+    av_unscanned: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0", index=True
     )
 
     uploaded_by_id: Mapped[int] = mapped_column(

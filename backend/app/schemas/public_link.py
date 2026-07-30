@@ -58,6 +58,10 @@ class PublicShareFile(APIBaseModel):
     mime_type: str
     size_bytes: int
     state: str
+    # True when the file is larger than clamd can scan, so it was released
+    # WITHOUT a real antivirus verdict (see config.AV_MAX_SCAN_BYTES). The
+    # UI surfaces this as an explicit warning rather than implying `clean`.
+    av_unscanned: bool = False
 
 
 class PublicShareResponse(APIBaseModel):

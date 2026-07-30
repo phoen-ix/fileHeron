@@ -1690,7 +1690,9 @@
       "download": "Herunterladen",
       "delete": "Löschen",
       "delete_confirm": "Diese Datei löschen? Das kann nicht rückgängig gemacht werden."
-    }
+    },
+    "av_unscanned": "ungeprüft",
+    "av_unscanned_hint": "Diese Datei ist größer, als der Virenscanner verarbeiten kann, und wurde daher nie geprüft. Öffnen Sie sie nur, wenn Sie dem Absender vertrauen."
   },
   "api_tokens": {
     "title": "API-Tokens",

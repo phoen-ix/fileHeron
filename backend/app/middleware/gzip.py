@@ -24,8 +24,13 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 
 
 def _is_download(scope: Scope) -> bool:
+    # `/preview` serves the same raw file bytes as `/download`, just inline, and
+    # was missing from this list - so previews were gzip-compressed at level 9
+    # on the event loop. On the anonymous public-link preview route that is a
+    # cheap unauthenticated CPU-exhaustion primitive, and on any route it stalls
+    # the loop for the duration (audit 2026-07-30).
     return scope["type"] == "http" and scope.get("path", "").endswith(
-        ("/download", "/download-zip")
+        ("/download", "/download-zip", "/preview")
     )
 
 

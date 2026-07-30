@@ -16,6 +16,17 @@
       <span class="fh-pill" :data-state="pillForFile(file.state)">
         {{ t(`files.state.${file.state}`) }}
       </span>
+      <!-- Too large for clamd to scan: `state` is 'clean' so it downloads, but
+           nothing ever inspected it. Say so rather than let the green pill
+           imply a verdict that was never produced. -->
+      <span
+        v-if="file.av_unscanned"
+        class="fh-pill"
+        data-state="warn"
+        :title="t('files.av_unscanned_hint')"
+      >
+        {{ t('files.av_unscanned') }}
+      </span>
     </div>
     <div class="actions">
       <button

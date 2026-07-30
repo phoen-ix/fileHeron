@@ -27,6 +27,24 @@ updates:
       frontend-minor-patch:
         update-types: [minor, patch]
 
+  # Container image pins. Added 2026-07-30: without this NOTHING watched them,
+  # and the clamav pin sat four weeks behind a six-CVE security release while
+  # pip/npm were kept current. Covers docker-compose.yml plus every Dockerfile.
+  - package-ecosystem: docker
+    directories:
+      - /
+      - /docker/backend
+      - /docker/frontend
+      - /docker/updater-shim
+      - /docker/updater-executor
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels: [dependencies, docker]
+    groups:
+      images:
+        patterns: ["*"]
+
   - package-ecosystem: github-actions
     directory: /
     schedule:

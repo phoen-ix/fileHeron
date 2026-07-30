@@ -1,6 +1,7 @@
 """Upload endpoints - TUS-init + small-file direct multipart."""
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 from datetime import datetime, timezone
@@ -102,6 +103,12 @@ def init_upload(
     )
 
 
+def _absorb(sha, out, chunk: bytes) -> None:
+    """Hash + persist one chunk. Split out so it can be handed to a thread."""
+    sha.update(chunk)
+    out.write(chunk)
+
+
 @router.post(
     "/direct", response_model=DirectUploadResponse, status_code=status.HTTP_201_CREATED
 )
@@ -162,8 +169,11 @@ async def direct_upload(
                         "DIRECT_UPLOAD_TOO_LARGE",
                         f"Direct upload limit is {cap} bytes; use TUS for larger files.",
                     )
-                sha.update(chunk)
-                out.write(chunk)
+                # sha.update + write are CPU/IO on the event loop. Per 1 MiB
+                # chunk that is small, but across a 100 MB upload it adds up to
+                # a noticeable stall for every other request, so hand each chunk
+                # to a thread (audit 2026-07-30).
+                await asyncio.to_thread(_absorb, sha, out, chunk)
 
         quota_svc.reserve_bytes(db, user=user, additional_bytes=received)
         reserved = received
@@ -179,7 +189,13 @@ async def direct_upload(
         db.flush()
 
         locator = backend.generate_locator(file_row.id, when)
-        backend.finalize(tmp_path, locator)
+        # finalize() is the expensive one. The comment above claimed staging in
+        # TUS_UPLOAD_DIR makes this a same-filesystem rename, but compose mounts
+        # ./data/uploads and ./data/files as SEPARATE bind mounts - the
+        # cross-device case CLAUDE.md documents - so shutil.move degrades to a
+        # full copy of the whole file, and on the S3 backend it is a blocking
+        # upload. Either way it must not run on the event loop.
+        await asyncio.to_thread(backend.finalize, tmp_path, locator)
         finalized = True
     except Exception:
         # Release any reservation so a finalize/persist failure can't leak quota

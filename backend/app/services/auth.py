@@ -13,6 +13,7 @@ Includes:
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import timedelta
 
@@ -361,6 +362,18 @@ async def _maybe_send_lockout_email(
     )
 
 
+
+# Argon2id is deliberately expensive: at the configured cost (64 MiB, t=3) a
+# single verify takes ~0.2s of pure CPU. `authenticate_first_factor` is an
+# `async def` on uvicorn's single event loop, so every verify froze the WHOLE
+# process - SSE streams, in-flight downloads, every other request - not just the
+# caller. Recovery-code login is worse: it loops over up to 10 unused codes.
+# Hand them to a thread; the security property (constant-ish latency between the
+# unknown-email and wrong-password branches) is unaffected because both branches
+# still spend one verify (audit 2026-07-30).
+async def _averify(hash_str: str, plaintext: str) -> bool:
+    return await asyncio.to_thread(argon2_verify, hash_str, plaintext)
+
 async def authenticate_first_factor(
     db: Session,
     *,
@@ -400,7 +413,7 @@ async def authenticate_first_factor(
     # fixed dummy hash so the latency matches the wrong-password branch below
     # (no enumeration-by-timing tell).
     if user is None:
-        argon2_verify(_DUMMY_PASSWORD_HASH, password)
+        await _averify(_DUMMY_PASSWORD_HASH, password)
         _record_login_attempt(db, email_value=em_email, ip=ip, outcome=LoginOutcome.unknown_email)
         record_audit_event(
             db,
@@ -435,7 +448,7 @@ async def authenticate_first_factor(
         )
 
     # 4. Verify password
-    if not argon2_verify(user.password_hash, password):
+    if not await _averify(user.password_hash, password):
         just_locked, should_email = rate_limit_svc.record_failure(db, user=user)
         _record_login_attempt(db, email_value=em_email, ip=ip, outcome=LoginOutcome.bad_password)
         record_audit_event(

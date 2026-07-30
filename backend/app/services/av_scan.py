@@ -32,7 +32,22 @@ CHUNK_SIZE = 1024 * 64  # clamd recommends 64 KiB chunks
 # (audit 2026-07-30). 30 min comfortably covers clamd's real ~2 GiB ceiling
 # (see config.AV_MAX_SCAN_BYTES). The call now runs in a worker thread, so a
 # long scan no longer blocks the event loop while it waits.
+#
+# This applies to SCANS ONLY. See PING_TIMEOUT_SEC below.
 SOCKET_TIMEOUT_SEC = 1800.0
+
+# Liveness/metadata probes get their own, short ceiling and MUST NOT inherit the
+# scan timeout. routers/health.py calls ping() on every /api/health request, and
+# that endpoint is anonymous and unthrottled - so when SOCKET_TIMEOUT_SEC was
+# raised to 1800 s for scanning, each request against an UNRESPONSIVE clamd
+# (connection accepted, no reply: busy mid-scan, or a blackholed host) began
+# holding a worker thread for up to 30 minutes instead of 60 seconds. That was a
+# regression introduced by the scan-timeout fix itself, and it turned an existing
+# minor finding into a cheap unauthenticated resource-exhaustion primitive.
+#
+# A liveness probe has no legitimate reason to wait: clamd either answers PONG
+# promptly or it is degraded, which is exactly what health reports.
+PING_TIMEOUT_SEC = 5.0
 
 
 @dataclass(frozen=True)
@@ -48,9 +63,11 @@ class AVUnavailableError(Exception):
     (worker does) or to fall through to a permissive default."""
 
 
-def _open_clamd_socket() -> socket.socket:
+def _open_clamd_socket(timeout: float | None = None) -> socket.socket:
+    """Connect to clamd. `timeout` defaults to the SCAN ceiling; probes pass
+    PING_TIMEOUT_SEC so a hung clamd cannot pin a request thread."""
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s.settimeout(SOCKET_TIMEOUT_SEC)
+    s.settimeout(SOCKET_TIMEOUT_SEC if timeout is None else timeout)
     try:
         s.connect((settings.CLAMAV_HOST, settings.CLAMAV_PORT))
     except OSError as e:
@@ -167,9 +184,12 @@ def scan_stream(fh) -> ScanResult:
 
 
 def ping() -> bool:
-    """Healthcheck - returns True if clamd answers PONG."""
+    """Healthcheck - returns True if clamd answers PONG.
+
+    Short timeout on purpose: /api/health calls this anonymously on every
+    request, so it must never inherit the 30-minute scan ceiling."""
     try:
-        s = _open_clamd_socket()
+        s = _open_clamd_socket(timeout=PING_TIMEOUT_SEC)
     except AVUnavailableError:
         return False
     try:
@@ -208,7 +228,7 @@ def get_version() -> dict:
             "error": None,
         }
     try:
-        s = _open_clamd_socket()
+        s = _open_clamd_socket(timeout=PING_TIMEOUT_SEC)
     except AVUnavailableError as e:
         return {
             "available": False,

@@ -33,6 +33,10 @@ class ShareApprovalSettingsResponse(APIBaseModel):
     scope: ApprovalScope
     exempt_approvers: bool
     allow_content_review: bool
+    # True when the stored policy can never queue anything (see
+    # share_approval.policy_is_inert). New saves are refused outright; this
+    # flags instances already sitting in that state before the check existed.
+    is_inert: bool = False
 
 
 class UpdateShareApprovalSettingsRequest(APIBaseModel):

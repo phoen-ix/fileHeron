@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { getShareApprovalSettings, updateShareApprovalSettings } from '@/api/admin'
@@ -150,6 +150,19 @@ const scopeOptions: { value: ApprovalScope; labelKey: string }[] = [
   { value: 'outbound_to_clients', labelKey: 'admin_share_approval.scope.outbound_to_clients' },
 ]
 
+/* Mirrors share_approval.policy_is_inert on the live form values so the admin
+ * sees it while editing, not only after the save is refused: "every employee
+ * may approve" plus "approvers' own shares are exempt" cancel out, and with
+ * only outbound shares in scope nothing can ever queue. The backend refuses
+ * the save; this explains why before they get there. */
+const policyIsInert = computed(
+  () =>
+    enabled.value &&
+    mode.value === 'employees_admins' &&
+    exemptApprovers.value &&
+    scope.value !== 'all',
+)
+
 onMounted(load)
 </script>
 
@@ -259,10 +272,14 @@ onMounted(load)
         </label>
       </template>
 
+      <div v-if="policyIsInert" class="fh-notice" data-tone="warn">
+        {{ t('admin_share_approval.inert_warning') }}
+      </div>
+
       <div v-if="errorMsg" class="fh-notice" data-tone="error">{{ errorMsg }}</div>
 
       <div class="actions">
-        <button type="submit" class="fh-btn" :disabled="saving">
+        <button type="submit" class="fh-btn" :disabled="saving || policyIsInert">
           {{ saving ? t('common.loading') : t('common.save') }}
         </button>
       </div>

@@ -153,6 +153,21 @@ class InlinePublicLinkResult(APIBaseModel):
     created_at: datetime
 
 
+class PublicLinkSummary(APIBaseModel):
+    """Existence and shape of a share's public link, WITHOUT the URL.
+
+    A public link can be attached to a share that is awaiting approval; it is
+    inert while pending and goes live the moment it is approved. Nothing in the
+    share payload said so, and the link route is owner-or-admin, so an approver
+    signed off on what looked like a named-recipient share and shipped a
+    world-readable URL (audit 2026-07-30). Shown to the owner, admins and
+    approvers - the URL itself stays owner-and-admin only."""
+    has_password: bool
+    download_limit: int | None
+    downloads_remaining: int | None
+    created_at: datetime
+
+
 class ShareResponse(APIBaseModel):
     id: str
     kind: ShareKind
@@ -182,6 +197,17 @@ class ShareResponse(APIBaseModel):
     rejection_reason: str | None = None
     approval_decided_at: datetime | None = None
     viewer_can_approve: bool = False
+    # Set for the owner, admins and approvers when a public link is attached.
+    public_link_summary: PublicLinkSummary | None = None
+    # Digest of the file set + attached link, populated while pending. Echoed
+    # back on approve so a share that changed under the approver is refused.
+    content_fingerprint: str | None = None
+
+
+class ApproveShareRequest(APIBaseModel):
+    """Body for `POST /api/shares/{id}/approve`. Optional for API-token clients
+    that predate the check; the SPA always sends the fingerprint it rendered."""
+    content_fingerprint: str | None = Field(default=None, max_length=64)
 
 
 class RejectShareRequest(APIBaseModel):

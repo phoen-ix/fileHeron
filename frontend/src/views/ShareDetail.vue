@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 
+import { asEnvelope } from '@/api/client'
 import { getDownloadUrl, getPreviewUrl, getShareZipUrl } from '@/api/files'
 import {
   approveShare,
@@ -72,10 +73,20 @@ async function onApprove() {
   if (!share.value) return
   approving.value = true
   try {
-    const { data } = await approveShare(share.value.id)
+    const { data } = await approveShare(
+      share.value.id,
+      share.value.content_fingerprint,
+    )
     share.value = data
     ui.pushToast(t('approvals.approved_toast'), 'success')
   } catch (err) {
+    // The owner added or removed something while this page was open. Reload so
+    // the approver decides on what is actually there now.
+    if (asEnvelope(err)?.code === 'CONTENT_CHANGED') {
+      await load()
+      ui.pushToast(t('approvals.content_changed'), 'warn')
+      return
+    }
     ui.pushToast(describe(err), 'error')
   } finally {
     approving.value = false
@@ -545,6 +556,20 @@ onMounted(load)
         v-if="share.viewer_can_approve && share.state === 'pending_approval'"
         class="approval-box approver-actions"
       >
+        <!-- A public link attached to a pending share is inert now and live the
+             instant this button is pressed. Approving is what publishes it, so
+             it has to be on screen at the moment of the decision. -->
+        <p
+          v-if="share.public_link_summary"
+          class="fh-notice"
+          data-tone="warn"
+        >
+          {{
+            share.public_link_summary.has_password
+              ? t('approvals.public_link_warning_password')
+              : t('approvals.public_link_warning')
+          }}
+        </p>
         <p class="fh-field-help">{{ t('approvals.decide_help') }}</p>
         <div v-if="!showRejectForm" class="approver-buttons">
           <button

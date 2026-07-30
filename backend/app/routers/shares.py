@@ -9,10 +9,11 @@ from ..dependencies import get_db, request_has_scope, require_scope
 from ..middleware.errors import AppError
 from ..models.file import FileState
 from ..models.group import Group
-from ..models.share import ShareKind
+from ..models.share import Share, ShareKind, ShareState
 from ..models.share_recipient import ShareRecipient
 from ..models.user import User, UserRole
 from ..schemas.share import (
+    ApproveShareRequest,
     BulkExpireFailure,
     BulkExpireRequest,
     BulkExpireResponse,
@@ -21,6 +22,7 @@ from ..schemas.share import (
     FilesAddedRequest,
     GroupRecipientRef,
     InlinePublicLinkResult,
+    PublicLinkSummary,
     RejectShareRequest,
     ShareListItem,
     ShareListResponse,
@@ -137,6 +139,37 @@ def _to_share_response(db: Session, share, *, viewer: User | None = None) -> Sha
             if viewer is not None
             else False
         ),
+        public_link_summary=_public_link_summary(db, share, viewer),
+        content_fingerprint=(
+            share_approval_svc.content_fingerprint(db, share)
+            if share.state == ShareState.pending_approval
+            else None
+        ),
+    )
+
+
+def _public_link_summary(
+    db: Session, share: Share, viewer: User | None
+) -> PublicLinkSummary | None:
+    """Tell the owner, admins and approvers that a public link is attached.
+    Approvers are the reason this exists: a link on a pending share is invisible
+    to them and goes live on approval. Never carries the URL."""
+    if viewer is None:
+        return None
+    if (
+        share.created_by_id != viewer.id
+        and viewer.role != UserRole.admin
+        and not share_approval_svc.can_decide(db, viewer, share)
+    ):
+        return None
+    link = public_link_svc.get_active_link_for_share(db, share.id)
+    if link is None:
+        return None
+    return PublicLinkSummary(
+        has_password=link.password_hash is not None,
+        download_limit=link.download_limit,
+        downloads_remaining=link.downloads_remaining,
+        created_at=link.created_at,
     )
 
 
@@ -460,12 +493,19 @@ def list_pending_approval(
 def approve_share_route(
     share_id: str,
     request: Request,
+    payload: ApproveShareRequest | None = None,
     user: User = Depends(require_scope("shares:manage")),
     db: Session = Depends(get_db),
 ) -> ShareResponse:
     """Approver approves a pending share → active; recipients are notified now."""
     share = share_svc.get_share_or_404(db, share_id)
-    share_svc.approve_share(db, user=user, share=share, request=request)
+    share_svc.approve_share(
+        db,
+        user=user,
+        share=share,
+        request=request,
+        expect_fingerprint=payload.content_fingerprint if payload else None,
+    )
     db.commit()
     db.refresh(share)
     return _to_share_response(db, share, viewer=user)

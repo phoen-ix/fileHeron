@@ -14,11 +14,14 @@ wrong for an approval gate), so we resolve it here.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 
 from sqlalchemy.orm import Session
 
+from ..models.file import FileState
 from ..models.group_member import GroupMember
+from ..models.public_link import PublicLink
 from ..models.share import Share, ShareKind, ShareState
 from ..models.share_recipient import ShareRecipient
 from ..models.user import User, UserRole
@@ -164,6 +167,50 @@ def is_approval_required(db: Session, share: Share) -> bool:
         if creator is not None and can_approve(db, creator):
             return False
     return True
+
+
+def policy_is_inert(mode: str, scope: str, exempt: bool) -> bool:
+    """True when a policy combination guarantees that NO share can ever require
+    approval - a four-eyes control that silently does nothing.
+
+    ``employees_admins`` makes every employee an approver, and
+    ``exempt_approvers`` auto-approves an approver's own shares. Share kind is
+    derived from role (staff create outbound, clients inbound), so every
+    outbound share is created by an approver and exempted at birth. Unless
+    inbound shares are also in scope, there is nothing left to queue.
+
+    Structural, not data-dependent: no amount of adding, removing or disabling
+    users changes it. The additive allowlist can produce the same effect if it
+    happens to cover every employee, but that is a property of the current user
+    table rather than of the policy, so it is not asserted here (audit
+    2026-07-30)."""
+    return mode == "employees_admins" and exempt and scope != "all"
+
+
+def is_inert(db: Session) -> bool:
+    """Live-settings form of :func:`policy_is_inert`. False when the feature is
+    off - a disabled control is honestly disabled, not silently inert."""
+    if not is_enabled(db):
+        return False
+    return policy_is_inert(effective_mode(db), effective_scope(db), exempt_approvers(db))
+
+
+def content_fingerprint(db: Session, share: Share) -> str:
+    """Digest of what an approver is actually signing off on: the live file set
+    plus whether a public link is attached.
+
+    The owner may keep uploading into a pending share by design, and
+    ``approve_share`` re-checks only the state - so a file added after the
+    approver opened the review page shipped on approve. The approver's client
+    echoes this value back and the decision is refused if it moved."""
+    file_ids = sorted(f.id for f in share.files if f.state != FileState.deleted)
+    link_id = (
+        db.query(PublicLink.id)
+        .filter(PublicLink.share_id == share.id, PublicLink.revoked_at.is_(None))
+        .scalar()
+    )
+    raw = "|".join([*(str(i) for i in file_ids), f"link={link_id or ''}"])
+    return hashlib.sha256(raw.encode()).hexdigest()[:16]
 
 
 def can_review_pending(db: Session, user: User, share: Share) -> bool:

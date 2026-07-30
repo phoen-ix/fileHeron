@@ -25,6 +25,7 @@ Authorization to send (kind=inbound, client → employee(s)/inbox group):
 from __future__ import annotations
 
 import logging
+import secrets
 from datetime import datetime, timezone
 
 from sqlalchemy import and_, or_, update
@@ -679,12 +680,35 @@ def _assert_can_decide(db: Session, user: User, share: Share) -> None:
         raise AppError(409, "SHARE_NOT_PENDING", "This share isn't awaiting approval.")
 
 
-def approve_share(db: Session, *, user: User, share: Share, request=None) -> Share:
+def approve_share(
+    db: Session,
+    *,
+    user: User,
+    share: Share,
+    request=None,
+    expect_fingerprint: str | None = None,
+) -> Share:
     """Approver flips a pending share live, fires the deferred recipient
-    notifications, and tells the creator. Atomic flip guards double-approve."""
+    notifications, and tells the creator. Atomic flip guards double-approve.
+
+    ``expect_fingerprint`` is the content digest the approver's review screen
+    rendered. The owner may keep adding files to a pending share, so approving
+    without it would sign off on whatever the share happens to contain at the
+    instant the button is clicked. When supplied and stale the decision is
+    refused with 409 so the approver re-reads (audit 2026-07-30)."""
     from ..models.notification import NotificationCategory
+    from . import share_approval as approval_svc
 
     _assert_can_decide(db, user, share)
+    if expect_fingerprint is not None:
+        current = approval_svc.content_fingerprint(db, share)
+        if not secrets.compare_digest(expect_fingerprint, current):
+            raise AppError(
+                409,
+                "CONTENT_CHANGED",
+                "This share changed since you opened it - review it again before approving.",
+                details={"content_fingerprint": current},
+            )
     if share.expires_at is not None and share.expires_at < utc_now():
         raise AppError(
             409,

@@ -98,6 +98,10 @@ export interface ShareApprovalSettingsResponse {
   scope: ApprovalScope
   exempt_approvers: boolean
   allow_content_review: boolean
+  /** True when the saved policy can never queue anything - "every employee may
+   *  approve" plus "approvers' own shares are exempt" cancel out. New saves are
+   *  refused; this flags instances stored before the check existed. */
+  is_inert?: boolean
 }
 
 export interface UpdateShareApprovalSettingsRequest {
@@ -315,6 +319,20 @@ export interface ShareResponse {
   rejection_reason?: string | null
   approval_decided_at?: string | null
   viewer_can_approve?: boolean
+  /** Set for the owner, admins and approvers when a public link is attached.
+   *  Never carries the URL - it exists so an approver can see that approving
+   *  this share also publishes a world-readable link. */
+  public_link_summary?: PublicLinkSummary | null
+  /** Digest of the reviewed file set + attached link, present while pending.
+   *  Echoed back on approve; a stale value is refused with 409. */
+  content_fingerprint?: string | null
+}
+
+export interface PublicLinkSummary {
+  has_password: boolean
+  download_limit: number | null
+  downloads_remaining: number | null
+  created_at: string
 }
 
 export interface ShareRecipientsRequest {

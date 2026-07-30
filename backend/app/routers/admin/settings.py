@@ -650,6 +650,7 @@ def _share_approval_response(db: Session) -> ShareApprovalSettingsResponse:
         scope=share_approval_svc.effective_scope(db),  # type: ignore[arg-type]
         exempt_approvers=share_approval_svc.exempt_approvers(db),
         allow_content_review=share_approval_svc.allow_content_review(db),
+        is_inert=share_approval_svc.is_inert(db),
     )
 
 
@@ -698,6 +699,30 @@ def update_share_approval_settings(
                 "One or more selected groups do not exist.",
                 details={"missing_group_ids": missing},
             )
+
+    # Refuse a combination that can never queue anything. "Every employee may
+    # approve" plus "an approver's own shares are exempt" cancel each other out:
+    # staff create outbound shares, every employee is an approver, so every
+    # outbound share is exempted at birth and only inbound (client) shares are
+    # left - which the outbound scopes exclude. The result is a four-eyes
+    # control that is on, looks configured, and stops nothing. Worse than off,
+    # because it manufactures assurance (audit 2026-07-30).
+    if payload.enabled and share_approval_svc.policy_is_inert(
+        payload.approver_mode, payload.scope, payload.exempt_approvers
+    ):
+        raise AppError(
+            400,
+            "APPROVAL_POLICY_INERT",
+            "This combination means no share can ever require approval: every "
+            "employee is an approver, and approvers' own shares are exempt. "
+            "Set the approver mode to admins only, turn off the approver "
+            "exemption, or widen the scope to all shares.",
+            details={
+                "approver_mode": payload.approver_mode,
+                "scope": payload.scope,
+                "exempt_approvers": payload.exempt_approvers,
+            },
+        )
 
     keys = settings_svc.Keys
     settings_svc.set_value(

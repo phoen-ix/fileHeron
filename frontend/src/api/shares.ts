@@ -102,8 +102,14 @@ export function listPendingApprovals(
   return api.get<ShareListResponse>('/shares/pending-approval', { params })
 }
 
-export function approveShare(shareId: string) {
-  return api.post<ShareResponse>(`/shares/${shareId}/approve`)
+/** `contentFingerprint` is the digest the review screen rendered. The owner may
+ *  keep adding files to a pending share, so sending it back is what makes the
+ *  approval a decision about what was actually reviewed - the backend returns
+ *  409 CONTENT_CHANGED if it moved. */
+export function approveShare(shareId: string, contentFingerprint?: string | null) {
+  return api.post<ShareResponse>(`/shares/${shareId}/approve`, {
+    content_fingerprint: contentFingerprint ?? null,
+  })
 }
 
 export function rejectShare(shareId: string, reason?: string | null) {

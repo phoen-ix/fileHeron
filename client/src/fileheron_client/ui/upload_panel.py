@@ -10,7 +10,7 @@ from tkinter import filedialog
 from typing import Callable, Optional
 
 import customtkinter as ctk
-from tkcalendar import DateEntry
+from .date_entry import DateEntry
 from tkinterdnd2 import DND_FILES
 
 from .. import api as api_pkg
@@ -179,10 +179,6 @@ class UploadPanel(ctk.CTkFrame):
             row,
             year=default.year, month=default.month, day=default.day,
             mindate=datetime.now().date(),
-            date_pattern="yyyy-mm-dd",
-            # Pin to the app locale (en/de) so the bundle only needs those
-            # Babel CLDR files (see pyinstaller.spec babel trim).
-            locale=get_locale(),
         )
         self._expiry_date.pack(side="left")
         ctk.CTkLabel(row, text="@", width=20).pack(side="left", padx=4)

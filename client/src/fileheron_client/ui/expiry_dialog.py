@@ -16,7 +16,7 @@ from datetime import datetime, timedelta
 from typing import Optional, Tuple
 
 import customtkinter as ctk
-from tkcalendar import DateEntry
+from .date_entry import DateEntry
 
 from ..i18n import get_locale, t
 from .app import center_window
@@ -40,26 +40,20 @@ class ExpiryDialog:
             outer, text=t("expiry_dialog.intro"), anchor="w",
         ).pack(fill="x", pady=(0, 12))
 
-        # tkcalendar.DateEntry is date-only; pair with HH/MM CTk entries
+        # DateEntry is date-only; pair with HH/MM CTk entries
         # to recover the datetime granularity Qt's QDateTimeEdit gave us
         # in one widget.
         date_row = ctk.CTkFrame(outer, fg_color="transparent")
         date_row.pack(fill="x", pady=(0, 8))
 
         ctk.CTkLabel(date_row, text=t("expiry_dialog.date_label"), width=60, anchor="w").pack(side="left")
-        # DateEntry's mindate=today blocks past picks at the picker level.
+        # mindate=today disables past days in the picker grid.
         self._date = DateEntry(
             date_row,
             year=default.year,
             month=default.month,
             day=default.day,
             mindate=datetime.now().date(),
-            date_pattern="yyyy-mm-dd",
-            # Pin to the app locale (en/de) so the bundled .exe only needs
-            # those Babel CLDR files - the spec trims the rest. Without this,
-            # tkcalendar defaults to the host's system locale and would raise
-            # UnknownLocaleError on a machine whose locale was trimmed away.
-            locale=get_locale(),
         )
         self._date.pack(side="left", padx=(0, 8))
 
@@ -98,7 +92,7 @@ class ExpiryDialog:
 
     def _on_never_toggled(self) -> None:
         disabled = self._never_var.get()
-        # tkcalendar's DateEntry honours .configure(state="disabled")
+        # DateEntry.configure forwards state to its entry + button
         try:
             self._date.configure(state="disabled" if disabled else "normal")
         except Exception:

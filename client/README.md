@@ -45,10 +45,11 @@ pytest                        # ~15 unit tests (no GUI, no network)
 python -m fileheron_client    # launches the GUI against the server URL the config dialog asks for
 ```
 
-Python 3.12+. The runtime deps (customtkinter, tkinterdnd2, tkcalendar,
-httpx, pydantic, keyring, platformdirs) are all standard PyPI; no system
-packages required
-beyond Python itself.
+Python 3.12+. The runtime deps (customtkinter, tkinterdnd2, httpx, pydantic,
+keyring, platformdirs) are all standard PyPI; no system packages required
+beyond Python itself. Every one is permissively licensed (MIT/BSD/Apache), so
+the published `.exe` can stay MIT - the date picker is built in-tree on stdlib
+tkinter rather than pulling GPL-3.0 tkcalendar.
 
 ## Build a Windows .exe locally
 

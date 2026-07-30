@@ -6,7 +6,7 @@ asset under ``assets/``. Run from the ``client/`` directory:
 
     pyinstaller pyinstaller.spec
 
-GUI stack is CustomTkinter + tkinterdnd2 (drag-drop) + tkcalendar
+GUI stack is CustomTkinter + tkinterdnd2 (drag-drop)
 (date picker). v0.4.10 mis-ejected tkinterdnd2 blaming it for a
 crash that was actually a self.{_root} attribute shadowing in widget
 subclasses (fixed in v0.4.11); v0.5.0 brings it back. PyInstaller's
@@ -46,28 +46,18 @@ datas = [
     ),
 ]
 datas += _ctk_datas + _dnd_datas
-datas += collect_data_files("tkcalendar")
-
-# tkcalendar pulls Babel for its date rendering, and Babel ships the FULL
-# CLDR locale database - ~30 MB across 1000+ `locale-data/*.dat` files, the
-# single biggest chunk of the .exe. The app only ever renders the date picker
-# in en/de (DateEntry is pinned to the app locale in the UI code), so keep
-# only `root` (Babel's ultimate fallback) + `en*` + `de*` and drop the rest.
-# Everything outside `locale-data/` (e.g. global.dat) is kept untouched.
-_BABEL_KEEP_LANGS = {"root", "en", "de"}
-for _src, _dest in collect_data_files("babel"):
-    _p = Path(_src)
-    if "locale-data" in _p.parts and _p.suffix == ".dat":
-        if _p.stem.split("_", 1)[0] not in _BABEL_KEEP_LANGS:
-            continue  # drop this locale's CLDR data
-    datas.append((_src, _dest))
+# No tkcalendar / Babel here any more. tkcalendar is GPL-3.0 and was being
+# compiled into this MIT-licensed .exe (audit 2026-07-30); it is replaced by
+# fileheron_client.ui.date_entry, built on stdlib tkinter + CustomTkinter.
+# That also removed Babel, whose full CLDR locale database (~30 MB across
+# 1000+ locale-data/*.dat files) was the single biggest chunk of the bundle
+# and needed a hand-written trim here to stay a sane size.
 
 binaries = _ctk_bins + _dnd_bins
 
 hiddenimports = [
     "customtkinter",
     "tkinterdnd2",
-    "tkcalendar",
     # Submodules pulled in by string in the API package.
     "fileheron_client.api.client",
     "fileheron_client.api.auth",

@@ -106,7 +106,6 @@ def _selfcheck() -> int:
     from pathlib import Path
 
     import customtkinter
-    import tkcalendar  # noqa: F401 - import must resolve in the bundle
     import tkinterdnd2
 
     problems: list[str] = []

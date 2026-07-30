@@ -15,11 +15,14 @@ keep this to what would cause a wrong move if unknown.
 
 ## Status
 
-Backend **`v2.2.0`** (audit-remediation wave), desktop client **`client-v1.1.0`**
-- shipped + in production, published for public self-hosting. **v2.2.0 needs a
-host step** (`git pull && docker compose up -d`: ClamAV 1.5.3 + a worker
-`/state` mount) **and carries a migration** (`files.av_unscanned`), so a rollback
-past it needs the `alembic stamp` recovery. (README's server/client version
+Backend **`v2.3.0`** (Tier 3 remediation), desktop client **`client-v1.1.0`**
+- shipped + in production, published for public self-hosting. v2.3.0 needs no
+host step and no migration. (v2.2.0 did: ClamAV 1.5.3 + a worker `/state` mount,
+plus the `files.av_unscanned` migration - so a rollback past v2.2.0 still needs
+the `alembic stamp` recovery.) **v2.3.0 adds the `public_links:read` API-token
+scope**: a token scoped `shares:read` only now gets 403 on
+`GET /api/shares/{id}/public-link`, deliberately, because that route returns the
+decrypted plaintext link URL. (README's server/client version
 badges read live from the git tags, so they never need a manual bump; this line
 does - keep it current on release.)
 

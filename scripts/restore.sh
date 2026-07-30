@@ -61,6 +61,14 @@ echo "[restore] restoring file archives …"
 tar -C data -xzf "$BACKUP/files.tar.gz"
 tar -C data -xzf "$BACKUP/quarantine.tar.gz"
 
+# The containers run as UID 1000; the dirs above were just recreated as whoever
+# invoked this script. On any host where that is not uid 1000, the backend,
+# worker and tusd cannot write after the restore and uploads fail immediately -
+# at the worst possible moment. install.sh and restore_drill_e2e.sh both already
+# do this; restore.sh was the outlier (audit 2026-07-30).
+echo "[restore] fixing ownership for the containers (UID 1000) …"
+docker run --rm -v "$ROOT/data":/d alpine chown -R 1000:1000 /d/files /d/quarantine
+
 echo "[restore] restoring redis snapshot …"
 # Wipe the persisted RDB; bring redis up alone so the volume is mounted; copy in.
 docker compose up -d redis

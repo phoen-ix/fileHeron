@@ -17,6 +17,44 @@ from ..version import GIT_SHA, VERSION
 router = APIRouter(tags=["health"])
 
 
+
+# Cache window for the non-authoritative dependency probes. Short enough that a
+# real outage surfaces within seconds, long enough that a burst of health checks
+# cannot amplify into a burst of Redis/clamd connections.
+_PROBE_CACHE_TTL_SEC = 5.0
+_probe_cache: tuple[float, list[str]] | None = None
+
+
+def _cached_dependency_probes() -> list[str]:
+    """Redis + ClamAV liveness, memoised for _PROBE_CACHE_TTL_SEC."""
+    global _probe_cache
+    import time as _time
+
+    now = _time.monotonic()
+    if _probe_cache is not None and (now - _probe_cache[0]) < _PROBE_CACHE_TTL_SEC:
+        return list(_probe_cache[1])
+
+    found: list[str] = []
+    try:
+        from ..redis_client import get_redis
+        get_redis().ping()
+    except Exception:
+        found.append("redis")
+
+    # Only ping clamd when AV scanning is on. Scoped import so test contexts
+    # that monkeypatch the AV module are not forced to import it here.
+    if not getattr(settings, "AV_SKIP", False):
+        try:
+            from ..services import av_scan
+            if not av_scan.ping():
+                found.append("clamav")
+        except Exception:
+            found.append("clamav")
+
+    _probe_cache = (now, list(found))
+    return found
+
+
 @router.get("/api/health")
 def health_check() -> JSONResponse:
     """Service-readiness probe.
@@ -49,22 +87,15 @@ def health_check() -> JSONResponse:
 
     degraded: list[str] = []
 
-    # Redis (rate limit + quota) - failure is non-fatal but worth surfacing.
-    try:
-        from ..redis_client import get_redis
-        get_redis().ping()
-    except Exception:
-        degraded.append("redis")
-
-    # ClamAV - only ping when AV scanning is on. Scoped import to avoid
-    # pulling the AV module in test contexts that monkeypatch it.
-    if not getattr(settings, "AV_SKIP", False):
-        try:
-            from ..services import av_scan
-            if not av_scan.ping():
-                degraded.append("clamav")
-        except Exception:
-            degraded.append("clamav")
+    # Redis + ClamAV probes are CACHED for a few seconds. /api/health is
+    # anonymous and unthrottled, and each call otherwise opened a Redis
+    # connection and a clamd TCP session - so anyone could drive unbounded
+    # backend work from an unauthenticated endpoint, and a slow dependency
+    # multiplied it (audit 2026-07-30). A liveness signal a few seconds stale is
+    # exactly as useful, and container HEALTHCHECK/uptime pollers are unaffected
+    # because the DB check (the one that decides 200 vs 503) still runs every
+    # call.
+    degraded.extend(_cached_dependency_probes())
 
     body: dict = {
         "status": "ok",

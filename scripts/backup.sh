@@ -12,8 +12,12 @@
 # "rest:https://restic.example.com/", or a local path), the produced archive
 # is also pushed to a restic repo using $BACKUP_RESTIC_PASSWORD.
 #
-# Designed to be safe to interrupt: temporary files live under /tmp until
-# the artifact is fully written, then atomically renamed in.
+# Safe to interrupt: artifacts are staged in ./backups/.partial-<stamp>/ and the
+# directory is renamed to ./backups/<stamp>/ only after manifest.txt is written.
+# An interrupted run therefore leaves no directory that looks complete, and the
+# retention sweep only ever counts (and deletes) directories that have a
+# manifest. The header previously claimed staging happened under /tmp; it did
+# not - artifacts were written straight into the final directory.
 #
 # Recovery: see scripts/restore.sh.
 
@@ -34,8 +38,18 @@ fi
 : "${DB_ROOT_PASSWORD:?DB_ROOT_PASSWORD must be set in .env or environment}"
 
 STAMP="$(date -u +%Y-%m-%d_%H%M%S)"
-DEST="$ROOT/backups/$STAMP"
+FINAL="$ROOT/backups/$STAMP"
+# Stage into a sibling `.partial` directory and rename only once the manifest is
+# written. Artifacts used to be written straight into the final directory, so an
+# interrupted run (the shipped systemd unit has TimeoutStartSec=1800, and SIGTERM
+# is silent) left a half-written directory that looks exactly like a good backup
+# to the retention sweep below (audit 2026-07-30). The rename is atomic within
+# the same filesystem.
+DEST="$ROOT/backups/.partial-$STAMP"
+rm -rf "$DEST"
 mkdir -p "$DEST"
+# Never leave a partial behind, however we exit.
+trap 'rm -rf "$DEST"' EXIT
 
 echo "[backup] $STAMP - starting"
 
@@ -90,6 +104,13 @@ echo "[backup] hashing artifacts …"
     sha256sum db.sql files.tar.gz quarantine.tar.gz redis.rdb > manifest.txt
 )
 
+# 4b. Promote the staged directory. Everything above succeeded and manifest.txt
+# exists, so this is now a complete backup; the rename is what makes it visible
+# to the retention sweep and to the restore drill.
+mv "$DEST" "$FINAL"
+trap - EXIT
+DEST="$FINAL"
+
 # 5. Optional restic push.
 if [ -n "${BACKUP_RESTIC_REPO:-}" ]; then
     if [ -z "${BACKUP_RESTIC_PASSWORD:-}" ]; then
@@ -122,7 +143,16 @@ fi
 # configured) holds older snapshots via its own keep-* policy below.
 echo "[backup] pruning local backups (keep last 7) …"
 # shellcheck disable=SC2012
-ls -1dt "$ROOT/backups"/*/ 2>/dev/null | tail -n +8 | xargs -r rm -rf
+# Only COMPLETE backups (those with a manifest.txt) count toward the keep-7
+# window, and only they are eligible for deletion. Pruning purely by directory
+# mtime meant seven aborted runs in a row evicted the last good backup - the
+# retention policy actively destroying the thing it exists to preserve.
+for d in $(ls -1dt "$ROOT/backups"/*/ 2>/dev/null); do
+    [ -f "$d/manifest.txt" ] && printf '%s\n' "$d"
+done | tail -n +8 | xargs -r rm -rf
+
+# Sweep abandoned stages from earlier interrupted runs.
+find "$ROOT/backups" -maxdepth 1 -type d -name '.partial-*' -mmin +180 -exec rm -rf {} + 2>/dev/null || true
 
 # 7. Restic forget + prune - drops snapshots beyond the retention
 # window so the remote repo doesn't grow without bound. Mirrors the

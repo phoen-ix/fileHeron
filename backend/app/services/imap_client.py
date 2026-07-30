@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import imaplib
 import logging
+import re
 from collections.abc import Iterator
 from contextlib import contextmanager
 
@@ -78,6 +79,26 @@ class ImapSession:
         uids = [int(x) for x in data[0].split()]
         # `<n>:*` returns the highest message when n exceeds it - filter.
         return sorted(u for u in uids if u > last_uid)
+
+    def fetch_size(self, uid: int) -> int | None:
+        """RFC822.SIZE for a message, without downloading it.
+
+        The server reports this from its own index, so it costs nothing and
+        lets the caller refuse an oversize message BEFORE it is materialised.
+        Returns None when the server does not answer, in which case the caller
+        should fall through to fetching (fail-open on a metadata read)."""
+        try:
+            typ, data = self._c.uid("FETCH", str(uid), "(RFC822.SIZE)")
+        except Exception:
+            return None
+        if typ != "OK" or not data:
+            return None
+        for part in data:
+            raw = part if isinstance(part, bytes) else (part[0] if isinstance(part, tuple) else b"")
+            m = re.search(rb"RFC822\.SIZE\s+(\d+)", raw or b"")
+            if m:
+                return int(m.group(1))
+        return None
 
     def fetch_raw(self, uid: int) -> bytes | None:
         typ, data = self._c.uid("FETCH", str(uid), "(RFC822)")

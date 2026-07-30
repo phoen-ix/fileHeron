@@ -22,6 +22,12 @@ logger = logging.getLogger("fileheron.imap")
 
 K = settings_svc.Keys
 
+# Hard ceiling on a single fetched message. Deliberately below the worker's
+# memory limit (WORKER_MEM_LIMIT defaults to 512m) because ingestion holds
+# several copies: the raw bytes, the decoded payload per part, a BytesIO for the
+# AV stream and a temp file.
+MAX_MESSAGE_BYTES = 64 * 1024 * 1024
+
 
 def _int_setting(db: Session, key: str) -> int:
     raw = settings_svc.get(db, key)
@@ -75,8 +81,41 @@ def run_poll(*, manual: bool, db: Session | None = None, session_opener=open_ses
                 # It is left untouched on the server (no post-fetch action runs
                 # for it), so it stays available for an admin to inspect.
                 try:
+                    # Refuse an oversize message BEFORE materialising it. The
+                    # per-message try/except below cannot save us here: decoding
+                    # a huge mail (payload decode, then a BytesIO copy for the
+                    # AV stream, then a temp file) against a 512 MB worker limit
+                    # gets the process OOM-KILLED, and SIGKILL raises nothing.
+                    # The highwater is only persisted after the loop, so the
+                    # same message re-killed the worker on every poll - taking
+                    # AV scans, outbound email and every cron with it. That is
+                    # the same permanent wedge v2.2.0 closed for exceptions,
+                    # reachable by a different route (audit 2026-07-30).
+                    size = None
+                    if hasattr(sess, "fetch_size"):
+                        size = sess.fetch_size(uid)
+                    if size is not None and size > MAX_MESSAGE_BYTES:
+                        skipped += 1
+                        logger.warning(
+                            "imap poll: uid %s is %d bytes (limit %d); skipping "
+                            "without fetching (message left on the server)",
+                            uid, size, MAX_MESSAGE_BYTES,
+                        )
+                        last_uid = max(last_uid, uid)
+                        continue
                     raw = sess.fetch_raw(uid)
                     if raw is None:
+                        continue
+                    # Belt and braces for a server that under-reports or does
+                    # not answer RFC822.SIZE at all.
+                    if len(raw) > MAX_MESSAGE_BYTES:
+                        skipped += 1
+                        logger.warning(
+                            "imap poll: uid %s fetched %d bytes, over the %d limit; "
+                            "skipping",
+                            uid, len(raw), MAX_MESSAGE_BYTES,
+                        )
+                        last_uid = max(last_uid, uid)
                         continue
                     fetched += 1
                     parsed = inbound_parse.parse(raw)

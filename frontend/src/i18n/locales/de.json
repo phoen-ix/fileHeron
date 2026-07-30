@@ -194,6 +194,7 @@
     "TOTP_ALREADY_ENABLED": "Zwei-Faktor-Auth ist für dieses Konto bereits aktiv.",
     "TOTP_NOT_ENABLED": "Zwei-Faktor-Auth ist nicht aktiviert.",
     "TOTP_REQUIRED": "Bitte gib den sechsstelligen Code aus deiner Authenticator-App ein.",
+    "TOTP_SECRET_UNAVAILABLE": "Ihr Zwei-Faktor-Schlüssel kann nicht gelesen werden. Ein Administrator muss Ihr Gerät neu registrieren.",
     "TOTP_SETUP_MISSING": "Bitte zuerst die Einrichtung der Zwei-Faktor-Auth starten.",
     "TUSD_INVALID_UPLOAD_ID": "Dieser Upload konnte nicht identifiziert werden. Bitte starten Sie ihn erneut.",
     "TUS_ENVELOPE_EXPIRED": "Die Upload-Autorisierung ist abgelaufen. Bitte starten Sie den Upload erneut.",

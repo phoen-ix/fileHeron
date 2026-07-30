@@ -18,7 +18,7 @@ from ..middleware.errors import AppError
 from ..models.webhook import Webhook, WebhookDelivery, WebhookDeliveryStatus
 from ..services import job_queue
 from ..services import webhook as webhook_svc
-from ..utils.crypto import decrypt_setting
+from ..utils.crypto import SecretUndecryptableError, decrypt_setting
 from ..utils.net import assert_public_http_url
 from ..utils.timeutil import utc_now
 
@@ -91,6 +91,23 @@ async def webhook_deliver(
                 db.commit()
                 return {"delivery_id": delivery.id, "status": "blocked"}
 
+        # Webhook.secret_encrypted is `nullable=False, default=""`, and a
+        # config-backup exported with secret_mode=exclude (or restored under a
+        # different JWT_SECRET) leaves exactly that. Letting the decrypt raise
+        # here escaped into ARQ's generic retry, so the delivery row stayed
+        # `pending` with no error recorded and the admin saw a webhook that
+        # never fired and never failed (audit 2026-07-30). Mirror the `blocked:`
+        # branch above: record it, stop retrying, move on.
+        try:
+            secret = decrypt_setting(wh.secret_encrypted)
+        except SecretUndecryptableError:
+            delivery.attempts = attempt
+            delivery.status = WebhookDeliveryStatus.failed
+            delivery.error = "webhook signing secret missing or undecryptable"
+            delivery.delivered_at = utc_now()
+            db.commit()
+            return {"delivery_id": delivery.id, "status": "failed"}
+
         body = _body_bytes(event_type, delivery.id, payload)
         headers = {
             "Content-Type": "application/json",
@@ -98,7 +115,7 @@ async def webhook_deliver(
             "X-Webhook-Id": str(wh.id),
             "X-Webhook-Event": event_type,
             "X-Webhook-Delivery": str(delivery.id),
-            "X-Webhook-Signature": webhook_svc.sign(decrypt_setting(wh.secret_encrypted), body),
+            "X-Webhook-Signature": webhook_svc.sign(secret, body),
         }
 
         delivery.attempts = attempt

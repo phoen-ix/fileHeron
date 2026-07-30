@@ -194,6 +194,7 @@
     "TOTP_ALREADY_ENABLED": "Two-factor auth is already on for this account.",
     "TOTP_NOT_ENABLED": "Two-factor auth is not enabled.",
     "TOTP_REQUIRED": "Enter your six-digit code from your authenticator app.",
+    "TOTP_SECRET_UNAVAILABLE": "Your two-factor secret cannot be read. An administrator must re-enrol your device.",
     "TOTP_SETUP_MISSING": "Begin two-factor setup first.",
     "TUSD_INVALID_UPLOAD_ID": "This upload could not be identified. Please start it again.",
     "TUS_ENVELOPE_EXPIRED": "The upload authorisation expired. Please start the upload again.",

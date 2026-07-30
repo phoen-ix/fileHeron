@@ -130,8 +130,26 @@ def encrypt_totp_secret(plaintext_b32: str) -> bytes:
     return _get_fernet().encrypt(plaintext_b32.encode("utf-8"))
 
 
+class SecretUndecryptableError(Exception):
+    """A stored Fernet field could not be decrypted under the current key.
+
+    Almost always means JWT_SECRET was rotated without re-encrypting the
+    dependent rows (see backend/scripts/rotate_jwt_secret.py). Callers should
+    catch this and degrade deliberately: services/settings.py already treats an
+    undecryptable setting as missing, and that is the pattern to copy. Letting
+    the raw InvalidToken escape turns "one row is unreadable" into an
+    unhandled 500 on a login or a permanently wedged worker
+    (audit 2026-07-30)."""
+
+
 def decrypt_totp_secret(ciphertext: bytes) -> str:
-    return _get_fernet().decrypt(ciphertext).decode("utf-8")
+    """Raises SecretUndecryptableError rather than InvalidToken so the two
+    call sites in services/totp.py can fail cleanly instead of 500ing every
+    2FA login."""
+    try:
+        return _get_fernet().decrypt(ciphertext).decode("utf-8")
+    except Exception as e:
+        raise SecretUndecryptableError("TOTP secret") from e
 
 
 # ---------------------------------------------------------------------------
@@ -223,7 +241,16 @@ def encrypt_setting(plaintext: str) -> str:
 
 
 def decrypt_setting(ciphertext: str) -> str:
-    return _get_fernet().decrypt(ciphertext.encode("ascii")).decode("utf-8")
+    """Raises SecretUndecryptableError rather than InvalidToken. An empty
+    string is a legitimate "unset" value in several models
+    (Webhook.secret_encrypted is `nullable=False, default=""`), so it is
+    reported the same way rather than blowing up deeper in the caller."""
+    if not ciphertext:
+        raise SecretUndecryptableError("setting (empty)")
+    try:
+        return _get_fernet().decrypt(ciphertext.encode("ascii")).decode("utf-8")
+    except Exception as e:
+        raise SecretUndecryptableError("setting") from e
 
 
 # ---------------------------------------------------------------------------

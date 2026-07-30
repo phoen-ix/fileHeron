@@ -39,6 +39,25 @@ mkdir -p "$DEST"
 
 echo "[backup] $STAMP - starting"
 
+# NOT CAPTURED HERE, AND REQUIRED FOR A USABLE RESTORE: .env, specifically
+# JWT_SECRET. Every Fernet field in the DB (TOTP secrets, OIDC client secrets,
+# SMTP/IMAP passwords, public-link tokens, webhook secrets) is encrypted under a
+# key derived from it. Restore this backup onto a host with a different
+# JWT_SECRET and all of those rows come back intact and permanently unreadable,
+# while every superficial check passes. Secrets are deliberately kept OUT of
+# ./backups (it is a plain directory, often synced onward) - so back .env up
+# separately, in your password manager or secret store. scripts/restore_validate.py
+# samples those fields and fails loudly if the key does not match.
+#
+# CONSISTENCY WINDOW: the DB dump below is point-in-time, but the file tree is
+# archived afterwards, so the two are not a matched pair. A file deleted between
+# the two steps (the hourly expiry cron is the usual cause) leaves a DB row
+# pointing at bytes that are not in the archive. That specific direction is what
+# restore_validate.py's "all live files exist on disk" check reports after a
+# restore, and the weekly drill runs it - so the failure is detected rather than
+# silently shipped. Closing the window properly needs the app quiesced for the
+# duration; not worth it at this scale (audit 2026-07-30).
+
 # 1. MariaDB dump.
 # Pass the password via the MYSQL_PWD env var rather than `-p"$pwd"` on
 # the command line. `MYSQL_PWD=… docker compose exec -e MYSQL_PWD …` keeps

@@ -239,6 +239,14 @@ services:
       - ${COMPOSE_HOST_ROOT:-${PWD:-/opt/fileHeron}}/data/files:/data/files
       - ${COMPOSE_HOST_ROOT:-${PWD:-/opt/fileHeron}}/data/uploads:/data/uploads
       - ${COMPOSE_HOST_ROOT:-${PWD:-/opt/fileHeron}}/data/quarantine:/data/quarantine
+      # Required for drain-before-update. The minute `drain_pending_update` cron
+      # runs HERE, in the worker, and calls maintenance.apply_pending_update ->
+      # release_apply.apply, which writes /state/current_job.json for the shim
+      # to pick up. Without this mount that write always failed - and because
+      # apply_pending_update clears maintenance and the pending record and
+      # COMMITS before the hand-off, every postponed update silently evaporated
+      # instead of applying (audit 2026-07-30). Same bind mount the backend has.
+      - ${COMPOSE_HOST_ROOT:-${PWD:-/opt/fileHeron}}/data/updater:/state
     depends_on:
       db:
         condition: service_healthy

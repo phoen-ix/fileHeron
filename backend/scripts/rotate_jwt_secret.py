@@ -60,7 +60,20 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "backend"))
+# This script moved from repo-root scripts/ to backend/scripts/ so that the
+# backend image actually contains it: the Dockerfile copies `backend/scripts`,
+# and its own documented invocation is
+# `docker compose exec backend python /app/scripts/rotate_jwt_secret.py` - which
+# could never have worked from the old location (audit 2026-07-30).
+#
+# Resolve for both layouts: backend/ in the repo, flattened under /app in the
+# image. Same heuristic as scripts/restore_validate.py.
+_HERE = Path(__file__).resolve().parent
+_ROOT = next(
+    (c for c in (_HERE.parent, _HERE.parent / "backend") if (c / "app").is_dir()),
+    _HERE.parent,
+)
+sys.path.insert(0, str(_ROOT))
 
 from cryptography.fernet import Fernet, InvalidToken  # noqa: E402
 from cryptography.hazmat.primitives import hashes  # noqa: E402

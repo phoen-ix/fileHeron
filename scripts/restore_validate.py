@@ -12,6 +12,12 @@ Checks:
 - Every `files` row with `state IN (ready_unscanned, clean, infected)`
   has a `storage_path` whose file exists on disk.
 - Every `share_recipients` row references a `share_id` that exists.
+- Sampled Fernet-encrypted fields actually DECRYPT under this instance's
+  JWT_SECRET. backup.sh does not capture .env, so a restore onto a host with a
+  different JWT_SECRET leaves every TOTP secret, OIDC client secret, SMTP/IMAP
+  password and public-link token intact but permanently unreadable - and every
+  other check here still passes. Keep .env backed up separately; this check is
+  what tells you if you didn't.
 - Alembic schema is current (head matches the migrations dir).
 
 Exits 0 on PASS, non-zero on any FAIL. Use from cron as a follow-up
@@ -113,7 +119,74 @@ def main() -> int:
         ):
             failed += 1
 
-        # 4. Alembic at head.
+        # 4. Encrypted fields actually decrypt under THIS instance's JWT_SECRET.
+        #
+        # This is the check that catches the worst restore failure, and the
+        # reason it exists: scripts/backup.sh captures the DB, files,
+        # quarantine and redis - but NOT .env, so not JWT_SECRET. Every Fernet
+        # field (TOTP secrets, OIDC client secrets, SMTP/IMAP passwords,
+        # public-link tokens, webhook secrets) is encrypted under a key derived
+        # from it. Restore onto a host with a different JWT_SECRET and every one
+        # of those rows comes back intact and undecryptable: the restore looks
+        # completely successful, and stays that way until someone tries to log
+        # in with 2FA (audit 2026-07-30).
+        #
+        # Every other check in this file passes in that scenario. This one does
+        # not.
+        encrypted_samples: list[tuple[str, bytes | str]] = []
+        try:
+            from app.models.app_setting import AppSetting
+            from app.models.user_totp import UserTOTP
+
+            for row in db.query(UserTOTP).limit(3).all():
+                if row.secret_encrypted:
+                    encrypted_samples.append(("users_totp.secret_encrypted", row.secret_encrypted))
+            for row in db.query(OIDCProvider).limit(3).all():
+                if row.client_secret_encrypted:
+                    encrypted_samples.append(
+                        ("oidc_providers.client_secret_encrypted", row.client_secret_encrypted)
+                    )
+            for row in db.query(PublicLink).limit(3).all():
+                if row.token_encrypted:
+                    encrypted_samples.append(("public_links.token_encrypted", row.token_encrypted))
+            for row in db.query(AppSetting).filter(AppSetting.is_encrypted.is_(True)).limit(3).all():
+                if row.value:
+                    encrypted_samples.append((f"app_settings[{row.key}]", row.value))
+        except Exception as e:  # pragma: no cover - model drift shouldn't abort the drill
+            print(f"  WARN: could not collect encrypted samples: {e}")
+
+        if not encrypted_samples:
+            print(
+                "  SKIP: no encrypted fields present to decrypt "
+                "(no 2FA enrolments, OIDC providers, public links or encrypted settings)"
+            )
+        else:
+            from app.utils.crypto import decrypt_setting, decrypt_totp_secret
+
+            undecryptable = []
+            for label, blob in encrypted_samples:
+                try:
+                    # TOTP secrets are LargeBinary and use their own helper;
+                    # everything else is a Fernet token stored as text.
+                    if isinstance(blob, (bytes, bytearray)):
+                        decrypt_totp_secret(bytes(blob))
+                    else:
+                        decrypt_setting(blob)
+                except Exception:
+                    undecryptable.append(label)
+            if not _check(
+                f"all {len(encrypted_samples)} sampled encrypted fields decrypt",
+                not undecryptable,
+                detail=(
+                    "JWT_SECRET does not match the one these rows were encrypted "
+                    f"under - restore is NOT usable. Failed: {undecryptable}"
+                    if undecryptable
+                    else ""
+                ),
+            ):
+                failed += 1
+
+        # 5. Alembic at head.
         try:
             from alembic.config import Config
             from alembic.runtime.migration import MigrationContext

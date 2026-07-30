@@ -46,8 +46,47 @@ fi
 log "drilling backup: $BACKUP"
 
 # --- 0. cheap artifact integrity check first --------------------------------
-log "verifying artifacts (restore_drill.sh) ..."
-"$SCRIPT_DIR/restore_drill.sh" "$BACKUP" || fail "artifact check failed"
+#
+# These checks used to live in scripts/restore_drill.sh, which the v1.56.0
+# "remove dead code and stale scaffolding" pass deleted while this script still
+# called it. Under `set -e` with `|| fail`, THIS DRILL THEN ABORTED AT STEP 0 -
+# every run, from v1.56.0 (2026-07-03) until the 2026-07-30 audit found it. The
+# weekly restore drill was reported as proven and scheduled while it had not
+# executed once. Inlined here so there is no separate file to mistake for dead
+# code again.
+log "verifying artifacts ..."
+artifact_fail=0
+artifact_check() {
+    local name="$1"; shift
+    if "$@" >/dev/null 2>&1; then
+        log "  PASS: $name"
+    else
+        echo "[drill]   FAIL: $name" >&2
+        artifact_fail=$((artifact_fail + 1))
+    fi
+}
+
+artifact_check "manifest sha256s match" \
+    bash -c "cd '$BACKUP' && sha256sum -c manifest.txt"
+artifact_check "files.tar.gz lists cleanly" tar -tzf "$BACKUP/files.tar.gz"
+artifact_check "quarantine.tar.gz lists cleanly" tar -tzf "$BACKUP/quarantine.tar.gz"
+artifact_check "db.sql has a SQL header" \
+    bash -c "head -n 5 '$BACKUP/db.sql' | grep -qE '(MariaDB|MySQL|sqlite|^-- )'"
+artifact_check "redis.rdb has the REDIS magic header" \
+    bash -c "head -c 9 '$BACKUP/redis.rdb' | grep -q '^REDIS'"
+
+# A dump that parses but declares almost nothing is the dangerous case: it
+# passes every header check and restores an empty instance.
+create_count="$(grep -c '^CREATE TABLE' "$BACKUP/db.sql" 2>/dev/null || echo 0)"
+log "  info: db.sql declares $create_count tables"
+if [ "$create_count" -lt 5 ]; then
+    echo "[drill]   FAIL: db.sql declares only $create_count tables (expected dozens)" >&2
+    artifact_fail=$((artifact_fail + 1))
+else
+    log "  PASS: db.sql table count is plausible"
+fi
+
+[ "$artifact_fail" -eq 0 ] || fail "$artifact_fail artifact check(s) failed"
 
 # --- load secrets/config from .env (reused; the stack is isolated) ----------
 if [ -f .env ]; then set -a; . ./.env; set +a; fi

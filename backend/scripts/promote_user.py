@@ -5,13 +5,27 @@ Usage (from the container):
 """
 from __future__ import annotations
 
-import sys
+# Run either way. The docs (README, CLAUDE.md) invoke these as
+# `python scripts/<name>.py`, which puts scripts/ on sys.path but NOT the
+# package root, so `import app` failed with ModuleNotFoundError - including for
+# promote_user, the documented escape hatch when an admin loses their TOTP and
+# recovery codes (audit 2026-07-30). `python -m scripts.<name>` always worked.
+# Make the documented form work too rather than relying on the operator picking
+# the right invocation while locked out.
+import sys as _sys
+from pathlib import Path as _Path
 
-from app.database import SessionLocal
-from app.models.audit_log import AuditEventType
-from app.models.user import User, UserRole
-from app.services.audit import record_audit_event
-from app.utils.crypto import normalize_email
+_ROOT = _Path(__file__).resolve().parent.parent
+if str(_ROOT) not in _sys.path:
+    _sys.path.insert(0, str(_ROOT))
+
+import sys  # noqa: E402
+
+from app.database import SessionLocal  # noqa: E402
+from app.models.audit_log import AuditEventType  # noqa: E402
+from app.models.user import User, UserRole  # noqa: E402
+from app.services.audit import record_audit_event  # noqa: E402
+from app.utils.crypto import normalize_email  # noqa: E402
 
 
 def main(argv: list[str]) -> int:

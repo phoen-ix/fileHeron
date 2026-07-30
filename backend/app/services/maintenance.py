@@ -121,7 +121,17 @@ def apply_pending_update(
     """Fire the deferred update: clear maintenance + the pending record (committed
     first so the freshly-updated container never boots stuck in maintenance), then
     hand the tag to the updater. Used by the drain worker and the admin
-    'update now' control. Returns the job dict, or None if nothing is pending."""
+    'update now' control. Returns the job dict, or None if nothing is pending.
+
+    The clear-then-hand-off order is deliberate (a container replaced mid-call
+    must not come back stuck in maintenance), but it used to be unconditional:
+    if `release_apply` then failed, the pending record was already gone and
+    maintenance already lifted, so the postponed update silently evaporated with
+    nothing to retry. That was not a rare path - the drain worker runs in the
+    worker container, which had no /state bind mount, so this call failed EVERY
+    time (audit 2026-07-30). The mount is fixed in docker-compose.yml; this
+    restores the state on failure so the next drain tick tries again.
+    """
     pending = get_pending_update(db)
     if not pending:
         return None
@@ -130,7 +140,19 @@ def apply_pending_update(
     db.commit()
 
     from .release_apply import apply as _release_apply
-    result = _release_apply(action="update", target_tag=pending["target_tag"])
+    try:
+        result = _release_apply(action="update", target_tag=pending["target_tag"])
+    except Exception:
+        db.rollback()
+        set_enabled(db, True, actor=actor, audit=False)
+        set_pending_update(db, pending, actor=actor)
+        db.commit()
+        logger.exception(
+            "pending update hand-off failed for tag=%s; restored maintenance + "
+            "pending record so the next drain tick retries",
+            pending["target_tag"],
+        )
+        raise
     record_audit_event(
         db,
         event_type=AuditEventType.update_triggered,

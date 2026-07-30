@@ -66,7 +66,13 @@ def parse(raw: bytes) -> ParsedMessage:
     subject = _decode(msg.get("Subject")) or "(no subject)"
     try:
         received = _naive_utc(parsedate_to_datetime(msg.get("Date"))) if msg.get("Date") else None
-    except (TypeError, ValueError):
+    except Exception:
+        # Deliberately broad. A crafted Date raises OverflowError ("signed
+        # integer is greater than maximum") for an absurd year or offset, which
+        # escaped the old (TypeError, ValueError) guard - and an exception here
+        # aborts the whole poll before the UID highwater advances, so ONE such
+        # message wedges all inbound mail forever (audit 2026-07-30). No Date
+        # header is worth that; an unparseable one is simply unknown.
         received = None
 
     text_parts: list[str] = []
@@ -111,8 +117,13 @@ def parse(raw: bytes) -> ParsedMessage:
         sender_name=_decode(name) or None,
         to_addr=_decode(msg.get("To")) or None,
         subject=subject[:512],
-        message_id=(msg.get("Message-ID") or "").strip() or None,
-        in_reply_to=(msg.get("In-Reply-To") or "").strip() or None,
+        # str() before .strip(): with a raw 8-bit byte in the header, the email
+        # package hands back a Header instance rather than a str, and Header has
+        # no .strip() - AttributeError, which aborts the poll before the UID
+        # highwater advances and wedges all inbound ingestion (audit
+        # 2026-07-30). Same reason _decode() swallows everything.
+        message_id=str(msg.get("Message-ID") or "").strip() or None,
+        in_reply_to=str(msg.get("In-Reply-To") or "").strip() or None,
         received_at=received,
         classification=inbound_classify.classify(msg),
         body_text=body_text,

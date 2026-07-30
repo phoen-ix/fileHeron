@@ -53,7 +53,7 @@ def run_poll(*, manual: bool, db: Session | None = None, session_opener=open_ses
         last_uid = _int_setting(db, K.IMAP_LAST_UID)
         prev_validity = _int_setting(db, K.IMAP_UIDVALIDITY)
 
-        fetched = ingested = total = 0
+        fetched = ingested = total = skipped = 0
         with session_opener(cfg) as sess:
             uidvalidity = sess.select(cfg.mailbox)
             total = getattr(sess, "message_count", 0)
@@ -63,15 +63,37 @@ def run_poll(*, manual: bool, db: Session | None = None, session_opener=open_ses
             if uidvalidity and uidvalidity != prev_validity:
                 last_uid = 0  # mailbox reset -> re-evaluate from the start
             for uid in sess.search_uids_after(last_uid):
-                raw = sess.fetch_raw(uid)
-                if raw is None:
+                # Per-message boundary. Without it, one message that parse() or
+                # ingest() chokes on propagates to the outer handler - which
+                # returns before `last_uid` is ever persisted. The next poll
+                # then starts from the same highwater, fetches the same message,
+                # and dies the same way: ALL inbound ingestion stops permanently
+                # on a single malformed mail, with no way out but manual
+                # intervention on the mailbox (audit 2026-07-30).
+                #
+                # We advance past the offender rather than retrying it forever.
+                # It is left untouched on the server (no post-fetch action runs
+                # for it), so it stays available for an admin to inspect.
+                try:
+                    raw = sess.fetch_raw(uid)
+                    if raw is None:
+                        continue
+                    fetched += 1
+                    parsed = inbound_parse.parse(raw)
+                    msg = inbound_mail.ingest(db, parsed, uid=uid, uidvalidity=uidvalidity)
+                    if msg is not None:
+                        ingested += 1
+                    db.commit()
+                except Exception:
+                    db.rollback()
+                    skipped += 1
+                    logger.exception(
+                        "imap poll: uid %s could not be ingested; skipping it so the "
+                        "poll can continue (message left on the server)",
+                        uid,
+                    )
+                    last_uid = max(last_uid, uid)
                     continue
-                fetched += 1
-                parsed = inbound_parse.parse(raw)
-                msg = inbound_mail.ingest(db, parsed, uid=uid, uidvalidity=uidvalidity)
-                if msg is not None:
-                    ingested += 1
-                db.commit()
                 # Apply the server-side action only when we OWN this message: a
                 # genuine new ingest, or a true re-poll of THIS (uidvalidity, uid).
                 # If ingest returned None because a DIFFERENT message shares this
@@ -102,11 +124,12 @@ def run_poll(*, manual: bool, db: Session | None = None, session_opener=open_ses
         settings_svc.set_value(db, key=K.IMAP_LAST_SUCCESS_AT, value=now_iso, actor=None)
         db.commit()
         logger.info(
-            "imap poll: mailbox=%s total=%d fetched=%d ingested=%d last_uid=%d",
-            cfg.mailbox, total, fetched, ingested, last_uid,
+            "imap poll: mailbox=%s total=%d fetched=%d ingested=%d skipped=%d last_uid=%d",
+            cfg.mailbox, total, fetched, ingested, skipped, last_uid,
         )
         return {
             "ok": True, "fetched": fetched, "ingested": ingested,
+            "skipped": skipped,
             "last_uid": last_uid, "mailbox": cfg.mailbox, "total": total,
         }
     except Exception as exc:  # noqa: BLE001 - surface to caller/cron tracker

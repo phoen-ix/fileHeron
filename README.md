@@ -603,13 +603,16 @@ defaults: [ARQ workers + cron](#arq-workers--cron).
 - **clamd slow to come up** - first boot does a full `freshclam` sync (~150 MB); watch `docker compose logs clamav`.
 - **tusd 500 on finalize** - usually a `TUS_HOOK_SECRET` mismatch between backend + tusd; restart both after changing.
 - **Upload stalls at "finalising"** - `data/uploads` and `data/files` must resolve to the same mount inside the backend container.
-- **Permission denied writing data/** - a missing bind-mount dir was recreated `root:root`; `docker run --rm -v .../data:/data alpine chown -R 1000:1000 /data` (no restart needed).
+- **Permission denied writing data/** - a missing bind-mount dir was recreated `root:root`. Chown only the app's own dirs:
+  `docker run --rm -v "$PWD/data":/data alpine chown -R 1000:1000 /data/{uploads,quarantine,files,updater}` (no restart needed).
+  Do **not** `chown -R 1000:1000 /data` wholesale - that also rewrites `data/db` and `data/redis`, whose
+  datadirs MariaDB and Redis expect to own; they will refuse to start.
 
 ## Operator escape hatches
 
 - **Lost admin access** - `docker compose exec backend python scripts/promote_user.py <email>`.
 - **Bypass ClamAV in CI/dev** - `AV_SKIP=true` (boot refuses `production + true`).
-- **Rotate `JWT_SECRET`** - `scripts/rotate_jwt_secret.py` re-encrypts every
+- **Rotate `JWT_SECRET`** - `docker compose exec backend python /app/scripts/rotate_jwt_secret.py` re-encrypts every
   Fernet-protected field (TOTP secrets, OIDC client secrets, public-link tokens,
   the encrypted SMTP/IMAP passwords) under the new secret. Stop the worker, run
   with `OLD_JWT_SECRET`/`NEW_JWT_SECRET` set (`--dry-run` first; safe to re-run

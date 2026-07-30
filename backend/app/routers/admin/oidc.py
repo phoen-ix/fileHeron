@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, Request, status
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
+from ...config import settings
 from ...dependencies import get_current_admin, get_db
 from ...middleware.errors import AppError
 from ...models.audit_log import AuditEventType
@@ -279,7 +280,10 @@ async def _probe_issuer(issuer: str) -> TestConnectionResponse:
     try:
         # SSRF guard - admin can't probe loopback/metadata/etc. Private LAN
         # allowed (self-hosted IdP). Errors surface as a friendly result.
-        assert_public_http_url(url, allow_private=True, require_https=False)
+        assert_public_http_url(
+            url, allow_private=True,
+            require_https=not settings.OIDC_ALLOW_INSECURE_HTTP,
+        )
         async with httpx.AsyncClient(timeout=5.0) as cli:
             resp = await cli.get(url)
             resp.raise_for_status()

@@ -22,6 +22,7 @@ from typing import Any
 import httpx
 import jwt
 
+from ..config import settings
 from ..middleware.errors import AppError
 from ..models.oidc_provider import OIDCProvider
 from ..utils.net import assert_public_http_url
@@ -46,7 +47,10 @@ def _reset_cache() -> None:
 async def _fetch_jwks(jwks_uri: str) -> dict[str, jwt.PyJWK]:
     # SSRF guard (allow private LAN IdPs; block loopback/metadata) + a hard
     # byte cap streamed off the wire so a huge body can't exhaust memory.
-    assert_public_http_url(jwks_uri, allow_private=True, require_https=False)
+    assert_public_http_url(
+        jwks_uri, allow_private=True,
+        require_https=not settings.OIDC_ALLOW_INSECURE_HTTP,
+    )
     try:
         async with httpx.AsyncClient(timeout=5.0) as cli, cli.stream("GET", jwks_uri) as resp:
             resp.raise_for_status()

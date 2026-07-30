@@ -267,7 +267,13 @@ def _record_login_device(db: Session, *, user: User, request: Request | None) ->
     if request is None:
         return False
     ip = _request_ip(request) or ""
-    ua = request.headers.get("user-agent", "")
+    # An ABSENT User-Agent is itself a device fingerprint, not a reason to skip
+    # the check. ua_fingerprint_hash("") returns "", and bailing on a falsy hash
+    # meant an attacker who simply omitted the header recorded no known_devices
+    # row, fired no new-device alert, and stamped `new_device: False` into the
+    # audit row - across every login path, since they all funnel through
+    # finalize_successful_login (audit 2026-07-30). Fingerprint the absence.
+    ua = request.headers.get("user-agent", "") or "-"
     geo = ip_geohash5(ip)
     ua_hash = ua_fingerprint_hash(ua)
     if not geo or not ua_hash:

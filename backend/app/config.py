@@ -210,8 +210,23 @@ class Settings(BaseSettings):
     # When false, password-breach checks are disabled (air-gapped deploys).
     HIBP_ENABLED: bool = True
     # (OIDC SSO is DB-configured multi-provider - `oidc_providers` table, admin
-    # UI /admin/settings/sso - so there are no OIDC env vars. BACKUP_RESTIC_*
-    # are host-side vars read only by scripts/backup.sh, never by the app.)
+    # UI /admin/settings/sso - so there are no OIDC env vars beyond the escape
+    # hatch below. BACKUP_RESTIC_* are host-side vars read only by
+    # scripts/backup.sh, never by the app.)
+    #
+    # Every outbound OIDC call (discovery, JWKS, and the token exchange) used to
+    # pass require_https=False, so an `http://` issuer was accepted. The token
+    # exchange POSTs the provider's CLIENT SECRET to the discovery-supplied token
+    # endpoint, so a plaintext issuer put that secret on the wire in cleartext on
+    # every single login - and a network attacker could also rewrite the
+    # discovery document to point the secret-bearing POST wherever they liked
+    # (audit 2026-07-30).
+    #
+    # HTTPS is now required. This opt-out exists only for a self-hosted IdP
+    # reachable exclusively over a trusted private network with no TLS; it is
+    # unsafe on any other topology and is deliberately env-only (not
+    # admin-tunable) so it cannot be flipped from a compromised admin session.
+    OIDC_ALLOW_INSECURE_HTTP: bool = False
 
     # --- Phase 8 - WebAuthn / passkeys ---------------------------------------
     # Relying-Party identifier MUST match the public hostname (no scheme,

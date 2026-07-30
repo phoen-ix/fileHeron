@@ -82,7 +82,10 @@ async def _discovery(provider: OIDCProvider) -> dict[str, Any]:
     url = f"{issuer}/.well-known/openid-configuration"
     # SSRF guard: block loopback / link-local (metadata) / multicast etc.
     # allow_private=True - self-hosted IdPs on a private LAN are legitimate.
-    assert_public_http_url(url, allow_private=True, require_https=False)
+    assert_public_http_url(
+        url, allow_private=True,
+        require_https=not settings.OIDC_ALLOW_INSECURE_HTTP,
+    )
     try:
         async with httpx.AsyncClient(timeout=5.0) as cli, cli.stream("GET", url) as resp:
             resp.raise_for_status()
@@ -193,7 +196,10 @@ async def _exchange_code(
         raise AppError(503, "OIDC_BAD_DISCOVERY", "IdP discovery is missing token_endpoint.")
     # Defence in depth: a malicious discovery doc can't redirect the
     # client-secret-bearing token POST at an internal service.
-    assert_public_http_url(token_url, allow_private=True, require_https=False)
+    assert_public_http_url(
+        token_url, allow_private=True,
+        require_https=not settings.OIDC_ALLOW_INSECURE_HTTP,
+    )
     secret = get_client_secret(provider)
     try:
         async with httpx.AsyncClient(timeout=10.0) as cli:

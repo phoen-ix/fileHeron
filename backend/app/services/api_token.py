@@ -50,6 +50,12 @@ SCOPES: frozenset[str] = frozenset(
         "shares:manage",      # PATCH/expire/bulk-expire/DELETE/approve/reject/resubmit
         "files:download",     # download/preview/zip + the *-url minters
         "files:delete",       # DELETE /api/files/{id}
+        # Reading the link is a SEPARATE grant from creating one: the read
+        # returns the DECRYPTED plaintext URL (and a QR of it), which is an
+        # anonymous, password-free path to the file bytes. Gating that on
+        # shares:read let a metadata-only token exfiltrate every file its
+        # owner had shared, with no files:download (audit 2026-07-30).
+        "public_links:read",  # read back an existing public link's URL/QR
         "public_links:write", # create/revoke a public link (+ inline-on-create)
         "recipients:search",  # GET /api/users/search, /api/users/me/connections
     }

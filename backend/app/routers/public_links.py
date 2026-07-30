@@ -112,7 +112,9 @@ def create_public_link(
 @router.get("/{share_id}/public-link", response_model=PublicLinkResponse)
 def get_public_link(
     share_id: str,
-    user: User = Depends(require_scope("shares:read")),
+    # public_links:read, NOT shares:read - this returns the decrypted plaintext
+    # URL plus a QR of it, i.e. an anonymous password-free route to the bytes.
+    user: User = Depends(require_scope("public_links:read")),
     db: Session = Depends(get_db),
 ) -> PublicLinkResponse:
     share = share_svc.get_share_or_404(db, share_id)

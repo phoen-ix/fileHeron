@@ -27,7 +27,7 @@ def test_https_is_the_default():
     )
 
 
-def test_plain_http_is_rejected_when_https_is_required():
+def test_plain_http_is_rejected_when_https_is_required(no_dns):
     with pytest.raises(AppError) as exc:
         assert_public_http_url(
             "http://idp.internal/.well-known/openid-configuration",
@@ -37,21 +37,38 @@ def test_plain_http_is_rejected_when_https_is_required():
     assert exc.value.code in ("URL_NOT_ALLOWED", "URL_BLOCKED")
 
 
-def test_https_is_accepted():
-    """Control: the guard must not reject legitimate https IdPs. Uses a
-    resolvable public host so only the scheme check is under test."""
+@pytest.fixture
+def no_dns(monkeypatch):
+    """Resolve every host to a private address without touching the network.
+
+    The guard calls socket.getaddrinfo; leaving that live made the suite depend
+    on DNS and on example.com staying resolvable, which is not a property worth
+    testing here - only the scheme decision is."""
+    import socket as _socket
+
+    def _fake(host, port, *a, **kw):
+        return [(_socket.AF_INET, _socket.SOCK_STREAM, 6, "", ("10.1.2.3", port or 443))]
+
+    monkeypatch.setattr(
+        "app.utils.net.socket.getaddrinfo", _fake, raising=True
+    )
+
+
+def test_https_is_accepted(no_dns):
+    """Control: the guard must not reject legitimate https IdPs - including one
+    on a private network, which is the case allow_private=True exists for."""
     assert_public_http_url(
-        "https://example.com/.well-known/openid-configuration",
+        "https://idp.internal/.well-known/openid-configuration",
         allow_private=True,
         require_https=True,
     )
 
 
-def test_opt_out_restores_http():
+def test_opt_out_restores_http(no_dns):
     """The escape hatch must actually work, or operators on a private-network
     IdP have no path forward."""
     assert_public_http_url(
-        "http://example.com/.well-known/openid-configuration",
+        "http://idp.internal/.well-known/openid-configuration",
         allow_private=True,
         require_https=False,
     )

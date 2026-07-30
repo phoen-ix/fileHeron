@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { onClickOutside } from '@vueuse/core'
+import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
 import BrandLogo from '@/components/BrandLogo.vue'
@@ -8,10 +9,13 @@ import BrandMark from '@/components/BrandMark.vue'
 import NotificationBell from '@/components/NotificationBell.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useSiteStore } from '@/stores/site'
+import { useUiStore } from '@/stores/ui'
 
 const auth = useAuthStore()
 const site = useSiteStore()
+const ui = useUiStore()
 const router = useRouter()
+const { t } = useI18n()
 
 const showLogo = computed(
   () => site.branding.show_header && !!site.branding.logo_url,
@@ -35,7 +39,12 @@ const initials = computed(() => {
 })
 
 async function doLogout() {
-  await auth.logout()
+  // logout() clears local state either way, but returns false when the server
+  // never confirmed the revoke - in which case the refresh cookie is still live
+  // and the session can be restored by a reload. Say so rather than implying a
+  // clean sign-out (audit 2026-07-30).
+  const revoked = await auth.logout()
+  if (!revoked) ui.pushToast(t('auth.logout_not_confirmed'), 'warn')
   router.push({ name: 'login' })
 }
 </script>

@@ -379,6 +379,17 @@ if os.environ.get("PYTEST_CURRENT_TEST") is None:
     if len(settings.TUS_HOOK_SECRET) < 32:
         _fail_or_warn("TUS_HOOK_SECRET is too short (min 32 chars).")
 
+    # Loud, but NOT fatal. _fail_or_warn sys.exits in production, and a TLS-less
+    # IdP on a private LAN is by definition a production deployment - using it
+    # here would delete the very escape hatch this flag exists to provide.
+    if settings.OIDC_ALLOW_INSECURE_HTTP:
+        warnings.warn(
+            "OIDC_ALLOW_INSECURE_HTTP=true - OIDC discovery, JWKS and the "
+            "client-secret-bearing token exchange may run over plaintext http. "
+            "Only safe on a trusted private network.",
+            stacklevel=2,
+        )
+
     # S3 backend selected but unconfigured → fail fast rather than 500 on first upload.
     if settings.STORAGE_BACKEND.strip().lower() == "s3" and not settings.S3_BUCKET:
         _fail_or_warn("STORAGE_BACKEND=s3 but S3_BUCKET is unset.")

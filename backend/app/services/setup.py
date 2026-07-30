@@ -19,6 +19,8 @@ from ..middleware.errors import AppError
 from ..models.audit_log import AuditEventType
 from ..models.user import Locale, User, UserRole
 from ..utils.crypto import argon2_hash, normalize_email
+from ..utils.timeutil import utc_now
+from . import settings as settings_svc
 from .audit import record_audit_event
 from .hibp import assert_password_not_breached
 
@@ -26,7 +28,28 @@ logger = logging.getLogger("fileheron.setup")
 
 
 def is_setup_complete(db: Session) -> bool:
-    """True when at least one (non-disabled) admin exists."""
+    """True once setup has been completed - STICKY, and independent of whether
+    an admin currently exists.
+
+    This used to be defined purely as "at least one non-disabled admin exists",
+    which made it reversible: any path to zero enabled admins re-opened
+    POST /api/setup/admin, and that route is anonymous and mounted ungated
+    (main.py). Anyone on the internet could then create themselves an admin on a
+    live instance with real data. `update_user`'s last-admin guard is the first
+    line of defence, but defining the wizard's availability as the *absence* of
+    admins makes any future hole in that guard - or a botched restore, or a
+    manual DB edit - an immediate remote-takeover (audit 2026-07-30).
+    A one-way flag removes the consequence rather than only narrowing the race.
+
+    The documented recovery for a genuinely lost admin is the CLI escape hatch
+    (`docker compose exec backend python scripts/promote_user.py <email>`), which
+    requires shell access to the host - the right bar for that operation.
+
+    The admin-exists check is kept as the fallback so instances that completed
+    setup before this flag existed are still recognised as complete.
+    """
+    if settings_svc.get(db, settings_svc.Keys.SETUP_COMPLETED_AT):
+        return True
     return (
         db.query(User)
         .filter(User.role == UserRole.admin, User.is_disabled.is_(False))
@@ -77,6 +100,15 @@ async def complete_setup(
     )
     db.add(user)
     db.flush()
+
+    # One-way: from here on the wizard stays closed even if every admin is
+    # later disabled or deleted.
+    settings_svc.set_value(
+        db,
+        key=settings_svc.Keys.SETUP_COMPLETED_AT,
+        value=utc_now().isoformat(),
+        actor=None,
+    )
     record_audit_event(
         db,
         event_type=AuditEventType.admin_bootstrapped,

@@ -41,16 +41,21 @@ async function load() {
   }
 }
 
-// Open the stored HTML body in a new tab via a Blob URL. This is a top-level
-// navigation (a separate origin), so it is NOT constrained by the SPA's
-// `default-src 'self'` CSP and can't script the admin page.
-function openHtml() {
-  if (!row.value?.body_html) return
-  const blob = new Blob([row.value.body_html], { type: 'text/html' })
-  const url = URL.createObjectURL(blob)
-  window.open(url, '_blank', 'noopener,noreferrer')
-  setTimeout(() => URL.revokeObjectURL(url), 60_000)
-}
+// Render the stored HTML body in a SANDBOXED iframe, never a Blob tab.
+//
+// The previous implementation Blob-wrapped the body and window.open()'d it,
+// under the belief that a top-level navigation is "a separate origin" and so is
+// constrained by the SPA's CSP. Both halves were wrong: a blob: URL INHERITS the
+// creating document's origin, and the SPA ships no CSP at all (nginx.conf omits
+// it; the backend middleware only decorates its own responses). The opened tab
+// was therefore same-origin and could call /api/auth/refresh with the httpOnly
+// cookie - i.e. a stored mail body could take over the admin session
+// (audit 2026-07-30).
+//
+// `sandbox=""` denies every capability including scripts and same-origin, which
+// is what the two sibling viewers (AdminInboxDetail, AdminSettingsEmailTemplates)
+// already do.
+const showHtml = ref(false)
 
 async function onResend() {
   if (!row.value || !row.value.can_resend) return
@@ -146,17 +151,31 @@ onMounted(load)
           v-if="row.body_html"
           type="button"
           class="fh-btn fh-btn-ghost"
-          @click="openHtml"
+          @click="showHtml = !showHtml"
         >
           {{ t('admin_mail.detail.open_html') }}
         </button>
       </div>
-      <pre class="body-text fh-mono">{{ row.body_text ?? t('admin_mail.detail.no_body') }}</pre>
+      <!-- Untrusted stored HTML: sandboxed, never opened as a blob: tab. -->
+      <iframe
+        v-if="showHtml && row.body_html"
+        class="body-frame"
+        sandbox=""
+        :srcdoc="row.body_html"
+        :title="t('admin_mail.detail.open_html')"
+      />
+      <pre v-else class="body-text fh-mono">{{ row.body_text ?? t('admin_mail.detail.no_body') }}</pre>
     </template>
   </div>
 </template>
 
 <style scoped>
+.body-frame {
+  width: 100%;
+  min-height: 24rem;
+  border: 1px solid var(--fh-border);
+  background: #fff;
+}
 .back-link {
   display: inline-block;
   margin-bottom: var(--fh-space-3);

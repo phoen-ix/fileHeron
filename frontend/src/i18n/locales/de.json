@@ -2363,5 +2363,8 @@
     "av_skip_notice": "AV_SKIP-Entwicklungsmodus aktiv - keine ClamAV-Engine angebunden.",
     "unavailable_notice": "ClamAV-Engine nicht erreichbar: {error}",
     "never_reloaded": "Nie (automatische Updates über freshclam)"
+  },
+  "auth": {
+    "logout_not_confirmed": "Sie wurden auf diesem Gerät abgemeldet, der Server war jedoch nicht erreichbar - die Sitzung ist möglicherweise anderswo noch aktiv. Melden Sie sich bei bestehender Verbindung erneut an und ab."
   }
 }

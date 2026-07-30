@@ -2363,5 +2363,8 @@
     "av_skip_notice": "Running in AV_SKIP dev mode - no ClamAV engine attached.",
     "unavailable_notice": "ClamAV engine unreachable: {error}",
     "never_reloaded": "Never (auto-updates handled by freshclam)"
+  },
+  "auth": {
+    "logout_not_confirmed": "You were signed out on this device, but the server could not be reached - the session may still be active elsewhere. Sign in and out again when you have a connection."
   }
 }

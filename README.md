@@ -731,9 +731,11 @@ via `/admin/settings/advanced`.
 | `UPDATES_DRAIN_MAX_WAIT_MIN` | `30` | Max wait for transfers to drain before a postponed update applies. ↻ |
 | `BACKUP_RESTIC_REPO` / `BACKUP_RESTIC_PASSWORD` | empty | Optional offsite restic push - read by the host `scripts/backup.sh`, not by the app. |
 | `METRICS_BEARER_TOKEN` / `METRICS_ALLOWED_IPS` / `METRICS_CACHE_TTL_SEC` | empty/empty/`60` | `/api/metrics` auth + cache. |
+| `OIDC_ALLOW_INSECURE_HTTP` | `false` | Disables HTTPS enforcement for OIDC discovery, JWKS **and the client-secret-bearing token exchange**. Only for a self-hosted IdP on a trusted private network with no TLS. |
 
-SSO/OIDC has **no** env vars - providers are configured entirely in the DB via
-`/admin/settings/sso`.
+SSO/OIDC providers are configured in the DB via `/admin/settings/sso`;
+`OIDC_ALLOW_INSECURE_HTTP` above is the only OIDC env var, and it is env-only on
+purpose so it cannot be flipped from a compromised admin session.
 
 </details>
 

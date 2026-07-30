@@ -134,13 +134,26 @@ def landing(
         .filter(File.share_id == share.id, File.state != FileState.deleted)
         .all()
     )
+    # A password-protected link that has NOT been unlocked yet must not disclose
+    # what it is protecting. `unlocked` was computed and reported, but the
+    # subject, the sender's message and the entire file list (names, types,
+    # sizes) were returned regardless - so the password gated the bytes while
+    # anyone holding the URL could read the metadata, which is often the
+    # sensitive part: "Q3-layoffs-list.xlsx" discloses plenty on its own
+    # (audit 2026-07-30). Expiry, the requires_password flag and
+    # downloads_remaining stay visible: the unlock screen needs them.
+    unlocked = _is_unlocked(link, fh_dl_unlock)
+    gated = link.password_hash is not None and not unlocked
+    if gated:
+        files = []
+
     return PublicShareResponse(
         share_id=share.id,
-        subject=share.subject,
-        message=share.message,
+        subject=None if gated else share.subject,
+        message=None if gated else share.message,
         expires_at=share.expires_at,
         requires_password=link.password_hash is not None,
-        unlocked=_is_unlocked(link, fh_dl_unlock),
+        unlocked=unlocked,
         downloads_remaining=link.downloads_remaining,
         preview_enabled=settings_svc.get_bool(
             db, settings_svc.Keys.FILE_PREVIEW_ENABLED, default=True

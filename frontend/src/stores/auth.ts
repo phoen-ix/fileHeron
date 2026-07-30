@@ -8,6 +8,7 @@ import { computed, ref } from 'vue'
 import * as authApi from '@/api/auth'
 import { getMe } from '@/api/account'
 import { refreshOnce, setAccessToken, setOnAuthLost } from '@/api/client'
+import { useNotificationsStore } from '@/stores/notifications'
 import * as webauthnApi from '@/api/webauthn'
 import { performAuthentication } from '@/composables/useWebAuthn'
 import type { Locale, MeResponse, UserRole } from '@/types/api'
@@ -131,14 +132,28 @@ export const useAuthStore = defineStore('auth', () => {
     return me.data
   }
 
-  async function logout() {
+  /** Returns true when the server-side session was actually revoked. */
+  async function logout(): Promise<boolean> {
+    let revoked = false
     try {
       await authApi.logout()
+      revoked = true
     } catch {
-      /* network error - proceed to clear local state regardless */
+      // The server-side revoke AND the fh_refresh deletion both ride this
+      // response, and the cookie is httpOnly + path-scoped so JS cannot clear
+      // it here. Swallowing the failure showed the user the login page while a
+      // 7-day refresh token stayed live - and the next full page load ran
+      // bootstrap() -> refreshOnce() and silently restored the session. On a
+      // shared machine that is a logout that did not log out
+      // (audit 2026-07-30). Local state is still cleared (below) so the tab is
+      // not left authenticated, but the caller is told the truth so it can warn.
     }
     setAccessToken(null)
     user.value = null
+    // Clear the previous user's cached notifications, or the next person to
+    // sign in on this browser sees them (fe-auth-4).
+    useNotificationsStore().reset()
+    return revoked
   }
 
   /** Force-refresh /me (after a profile update). */

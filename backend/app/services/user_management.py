@@ -97,6 +97,15 @@ def update_user(
                 "LAST_ADMIN",
                 "Cannot remove the last remaining admin. Promote another admin first.",
             )
+        # The count above is a read; the mutation happens below in the same
+        # transaction with nothing serialising them. Two admins demoting EACH
+        # OTHER concurrently both see one other admin and both proceed, leaving
+        # zero. Locking the target row does not help - they are different rows -
+        # so the guarantee has to be a re-check AFTER the change is applied,
+        # which is at the end of this function (audit 2026-07-30).
+        _reassert_admin_remains = True
+    else:
+        _reassert_admin_remains = False
 
     if display_name is not None and display_name.strip() != target.display_name:
         target.display_name = display_name.strip()
@@ -137,6 +146,24 @@ def update_user(
             ).update(
                 {RefreshToken.revoked_at: utc_now()},
                 synchronize_session=False,
+            )
+
+    if _reassert_admin_remains:
+        # Re-check with the change APPLIED. db.flush() makes it visible to this
+        # transaction, and on MariaDB the FOR UPDATE serialises concurrent
+        # demotions so the loser sees the winner's result and aborts.
+        db.flush()
+        still_admin = (
+            db.query(User)
+            .filter(User.role == UserRole.admin, User.is_disabled.is_(False))
+            .with_for_update()
+            .first()
+        )
+        if still_admin is None:
+            raise AppError(
+                400,
+                "LAST_ADMIN",
+                "Cannot remove the last remaining admin. Promote another admin first.",
             )
 
     if changed:

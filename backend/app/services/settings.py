@@ -25,6 +25,10 @@ logger = logging.getLogger("fileheron.settings")
 # Keys we store. OIDC moved to its own table in Phase 10; the only
 # remaining kv keys today are the API-token policy (post-Phase 10).
 class Keys:
+    # Set once, when the first admin is created. Never cleared: it is what
+    # keeps the anonymous /setup wizard from re-opening if the instance ever
+    # reaches zero enabled admins (audit 2026-07-30).
+    SETUP_COMPLETED_AT = "setup.completed_at"
     API_TOKEN_POLICY_MODE = "api_token.policy_mode"
     API_TOKEN_ALLOWED_USERS = "api_token.allowed_user_ids"   # JSON list[int]
     API_TOKEN_ALLOWED_GROUPS = "api_token.allowed_group_ids"  # JSON list[int]

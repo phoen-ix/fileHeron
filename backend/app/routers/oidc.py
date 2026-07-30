@@ -108,7 +108,9 @@ async def callback(
     )
 
     rate_limit_svc.record_success(db, user=user)
-    access, expires_in, refresh_plain = auth_svc.finalize_successful_login(
+    # The access token is deliberately discarded: the browser gets only the
+    # httpOnly refresh cookie, and the SPA exchanges it on first paint.
+    _access, _expires_in, refresh_plain = auth_svc.finalize_successful_login(
         db, user=user, request=request, settings=settings, via="oidc",
     )
     db.commit()
@@ -124,16 +126,17 @@ async def callback(
         samesite="lax",
         path="/api/auth",
     )
-    response.set_cookie(
-        key="fh_oidc_access",
-        value=access,
-        max_age=expires_in,
-        httponly=False,  # SPA reads + clears on landing
-        secure=settings.COOKIE_SECURE,
-        samesite="lax",
-        path="/",
-    )
+    # No access-token cookie here. There used to be a `fh_oidc_access` cookie
+    # carrying the raw JWT with httponly=False and path=/, commented "SPA reads
+    # + clears on landing" - but the SPA never read it and never touches
+    # document.cookie at all, so it was dead weight that also handed any XSS on
+    # the origin a live bearer token for the token's full lifetime (audit
+    # 2026-07-30). The SPA cold-loads through auth.bootstrap() -> refreshOnce(),
+    # which mints an access token from the httpOnly fh_refresh cookie set above,
+    # exactly like every other login flow.
     response.delete_cookie(oidc_svc.STATE_COOKIE, path="/api/auth/oidc")
+    # Clear any cookie left in browsers from before that change.
+    response.delete_cookie("fh_oidc_access", path="/")
     return response
 
 # (Removed an unauthenticated `_test_reset_discovery` HTTP hook - finding

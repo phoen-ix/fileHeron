@@ -106,7 +106,7 @@ app.include_router(health.router)
 app.include_router(metrics.router)               # gated internally (scraper token / IP allowlist)
 app.include_router(setup.router)                 # anonymous wizard for first admin
 app.include_router(auth.router)
-app.include_router(account.router)               # /me + /2fa/* must be reachable
+app.include_router(account.setup_router)         # /me + /2fa/* + /locale only
 app.include_router(public.router)                # anonymous public-link landing
 app.include_router(notification_subscriptions.router)  # anonymous, token-authed
 app.include_router(branding.router)              # anonymous logo + legal pages
@@ -116,6 +116,12 @@ app.include_router(oidc.router)                  # anonymous OIDC login
 app.include_router(webauthn.auth_router)         # WebAuthn login flow
 
 # Subject to the gate.
+# account.router carries everything /api/account/* EXCEPT the setup routes
+# above - notably /invite and the API-token endpoints. Mounting the whole
+# module ungated is what made mandatory 2FA bypassable: mint a token from an
+# ungated route, then use it everywhere, since require_2fa_complete
+# short-circuits for api_token auth (audit 2026-07-30).
+app.include_router(account.router, dependencies=_gate)
 app.include_router(uploads.router, dependencies=_gate)
 app.include_router(files.router, dependencies=_gate)
 # files.download_router intentionally NOT gated: the GET /download

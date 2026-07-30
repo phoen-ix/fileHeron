@@ -13,11 +13,13 @@ a handler's OWN use of get_actor counts.
 """
 from __future__ import annotations
 
-from fastapi import Depends, FastAPI
+from fastapi import APIRouter, Depends, FastAPI
 
 from app.dependencies import get_actor, require_scope
 from app.main import app
 from app.services.twofa_enforcement import require_2fa_complete
+
+from ._route_helpers import iter_api_routes
 
 # Reachable by any authenticated token regardless of scope (login + token
 # self-introspection).
@@ -67,9 +69,10 @@ def _keys(route) -> set[str]:
 
 def test_every_get_actor_route_enforces_scope():
     offenders: list[str] = []
-    for route in app.routes:
-        if not hasattr(route, "dependant"):
-            continue
+    # iter_api_routes, not `app.routes`: FastAPI 0.141 represents each
+    # include_router() as one opaque _IncludedRouter, so the old walk saw zero
+    # routes and this assertion passed vacuously (audit 2026-07-30).
+    for route in iter_api_routes(app):
         if not _uses_get_actor(route):
             continue
         if _has_require_scope(route):
@@ -86,18 +89,34 @@ def test_every_get_actor_route_enforces_scope():
 
 def test_backstop_actually_fires_on_an_unguarded_route():
     """Negative control: a throwaway get_actor route with no scope MUST be
-    detected, so the assertion above can't pass vacuously."""
-    probe = FastAPI()
+    detected, so the assertion above can't pass vacuously.
 
-    @probe.get("/_probe_unguarded")
+    The probe routes are mounted through include_router, NOT registered
+    directly on the probe app. That matters: the previous version of this
+    control registered them directly, which produces plain APIRoutes in
+    `probe.routes` - so the control kept passing while the real assertion,
+    which walks an app built entirely from include_router calls, silently saw
+    zero routes under FastAPI 0.141 (audit 2026-07-30). Exercise the same
+    construction the real app uses, or the control proves nothing.
+    """
+    probe = FastAPI()
+    sub = APIRouter()
+
+    @sub.get("/_probe_unguarded")
     def _unguarded(user=Depends(get_actor)):  # noqa: ANN001
         return {}
 
-    @probe.get("/_probe_guarded")
+    @sub.get("/_probe_guarded")
     def _guarded(user=Depends(require_scope("shares:read"))):  # noqa: ANN001
         return {}
 
-    routes = {r.path: r for r in probe.routes if hasattr(r, "dependant")}
+    probe.include_router(sub)
+
+    routes = {r.path: r for r in iter_api_routes(probe)}
+    assert "/_probe_unguarded" in routes, (
+        "the walker cannot see routes mounted via include_router - the backstop "
+        "would pass vacuously"
+    )
     unguarded = routes["/_probe_unguarded"]
     guarded = routes["/_probe_guarded"]
 
@@ -105,3 +124,9 @@ def test_backstop_actually_fires_on_an_unguarded_route():
     # The guarded probe reaches get_actor (via require_scope) AND is detected as
     # scope-enforcing - proving both halves of the walker work.
     assert _uses_get_actor(guarded) and _has_require_scope(guarded)
+
+
+def test_walker_sees_the_real_app():
+    """Belt and braces: if this ever hits zero again, every scope guarantee in
+    this file is void."""
+    assert len(list(iter_api_routes(app))) > 100

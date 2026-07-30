@@ -543,6 +543,13 @@ def patch_share(
     mutually exclusive - sending both is a 400.
     """
     share = share_svc.get_share_or_404(db, share_id)
+    # Authorize BEFORE branching. The owner-or-admin check used to live only
+    # inside update_share_expiry / update_share_limit, so a PATCH whose body
+    # changed nothing skipped both and still fell through to the serializer -
+    # turning this into a share-metadata read for any authenticated caller
+    # holding the shares:manage scope (audit 2026-07-30).
+    if share.created_by_id != user.id and user.role != UserRole.admin:
+        raise AppError(403, "FORBIDDEN", "You cannot edit this share.")
     if payload.expires_at_clear and payload.expires_at is not None:
         raise AppError(
             400,

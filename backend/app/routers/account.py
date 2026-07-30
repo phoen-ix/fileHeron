@@ -47,6 +47,20 @@ from ..services import totp as totp_svc
 
 router = APIRouter(prefix="/api/account", tags=["account"])
 
+# Routes that MUST stay reachable while the 2FA policy is blocking the user,
+# or they could never satisfy it: read /me to learn the requirement, run the
+# TOTP enrolment, and switch language on the blocking screen.
+#
+# Everything else in this module is on `router`, which main.py mounts behind
+# require_2fa_complete. main.py used to mount the whole module ungated with the
+# comment "/me + /2fa/* must be reachable" - which also exempted /invite and
+# the API-token endpoints. Since require_2fa_complete short-circuits for
+# api_token auth, a user the policy covered could log in with a password, mint
+# a token here, and use it on every gated route: mandatory 2FA was advisory and
+# "no admin escape" was false (audit 2026-07-30). Keep this list minimal, and
+# see tests/test_2fa_enforcement.py, which asserts the split stays honest.
+setup_router = APIRouter(prefix="/api/account", tags=["account-setup"])
+
 
 def _me_response(db: Session, user: User) -> MeResponse:
     """Build a MeResponse with policy-derived fields populated. Reused
@@ -77,7 +91,7 @@ def _me_response(db: Session, user: User) -> MeResponse:
     return me_resp
 
 
-@router.get("/me", response_model=MeResponse)
+@setup_router.get("/me", response_model=MeResponse)
 def me(
     user: User = Depends(get_actor),
     db: Session = Depends(get_db),
@@ -88,7 +102,7 @@ def me(
     return _me_response(db, user)
 
 
-@router.patch("/locale", response_model=MeResponse)
+@setup_router.patch("/locale", response_model=MeResponse)
 def update_locale(
     payload: UpdateLocaleRequest,
     user: User = Depends(get_current_user),
@@ -327,6 +341,21 @@ async def create_invite(
     if user.role not in (UserRole.admin, UserRole.employee):
         raise AppError(403, "FORBIDDEN", "Only employees and admins can invite.")
 
+    # An employee may only invite CLIENTS. `target_role` rides untouched through
+    # invite_svc.create_invite -> InviteToken.target_role -> User(role=...) at
+    # consume time, so without this clamp any employee could invite an address
+    # they control with target_role=admin and hand themselves the admin shell,
+    # config-backup export and GDPR erasure (audit 2026-07-30). Every other
+    # role-granting surface (POST/PATCH /api/admin/users) is admin-gated; this
+    # was the one hole, and the SPA only renders the form on the admin page so
+    # it was invisible from the UI.
+    if user.role != UserRole.admin and payload.target_role != UserRole.client:
+        raise AppError(
+            403,
+            "INVITE_ROLE_NOT_ALLOWED",
+            "Only admins can invite employees or admins.",
+        )
+
     # Duplicate-check 1: a real account already exists for this email.
     from ..utils.crypto import normalize_email
 
@@ -367,6 +396,27 @@ async def create_invite(
                 "One or more selected groups do not exist.",
                 details={"missing_group_ids": missing},
             )
+
+        # Existence is not authority. Group membership is resolved LIVE by
+        # services/share.py::is_authorized_to_download, so seeding an account
+        # into a group instantly grants it byte access to every active share
+        # targeted at that group. Adding members is otherwise admin-only
+        # (POST /api/groups/{id}/members), and the send side already refuses an
+        # employee targeting a group they don't belong to (GROUP_NOT_MEMBER in
+        # share.py::_validate_outbound_targets) - the invite path was the back
+        # door around both (audit 2026-07-30). Mirror the same rule here.
+        if user.role != UserRole.admin:
+            from ..services.share import _user_group_ids
+
+            own_groups = set(_user_group_ids(db, user.id))
+            forbidden = [gid for gid in initial_group_ids if gid not in own_groups]
+            if forbidden:
+                raise AppError(
+                    403,
+                    "GROUP_NOT_MEMBER",
+                    "You can only add invitees to groups you're a member of.",
+                    details={"forbidden_group_ids": forbidden},
+                )
 
     record, plaintext = invite_svc.create_invite(
         db,
@@ -412,7 +462,7 @@ async def create_invite(
 # ---------------------------------------------------------------------------
 
 
-@router.get("/2fa/status", response_model=TotpStatusResponse)
+@setup_router.get("/2fa/status", response_model=TotpStatusResponse)
 def totp_status(user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> TotpStatusResponse:
     enabled = totp_svc.is_enabled(user)
     enabled_at = user.totp.enabled_at if user.totp else None
@@ -424,7 +474,7 @@ def totp_status(user: User = Depends(get_current_user), db: Session = Depends(ge
     return TotpStatusResponse(enabled=enabled, enabled_at=enabled_at, recovery_codes_remaining=remaining)
 
 
-@router.post("/2fa/setup", response_model=TotpSetupResponse)
+@setup_router.post("/2fa/setup", response_model=TotpSetupResponse)
 def totp_setup(
     request: Request,
     user: User = Depends(get_current_user),
@@ -435,7 +485,7 @@ def totp_setup(
     return TotpSetupResponse(**payload)
 
 
-@router.post("/2fa/enable", response_model=RecoveryCodesResponse)
+@setup_router.post("/2fa/enable", response_model=RecoveryCodesResponse)
 def totp_enable(
     payload: TotpEnableRequest,
     request: Request,
@@ -447,7 +497,7 @@ def totp_enable(
     return RecoveryCodesResponse(recovery_codes=codes)
 
 
-@router.post("/2fa/disable", status_code=status.HTTP_200_OK)
+@setup_router.post("/2fa/disable", status_code=status.HTTP_200_OK)
 def totp_disable(
     payload: TotpDisableRequest,
     request: Request,
@@ -465,7 +515,7 @@ def totp_disable(
     return {"ok": True}
 
 
-@router.post("/2fa/recovery-codes/regenerate", response_model=RecoveryCodesResponse)
+@setup_router.post("/2fa/recovery-codes/regenerate", response_model=RecoveryCodesResponse)
 def totp_recovery_regenerate(
     payload: RecoveryCodeRegenerateRequest,
     request: Request,

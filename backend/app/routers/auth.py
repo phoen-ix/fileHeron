@@ -283,13 +283,22 @@ async def resend_verification(
         return {"ok": True, "already_verified": True}
     plaintext = auth_svc.begin_email_verification(db, user=user)
     db.commit()
-    # We don't store plaintext email - but the invite/login flow knows the
-    # user clicked through, so address resolution here uses an admin-only
-    # path. For Phase 1a, log the link via the email service (which has
-    # logs-fallback). The actual SMTP send to the user's email will be wired
-    # up in a small follow-up: Phase 1a invites are pre-verified, so this
-    # branch should be unreachable in practice.
-    request.state.verify_link_for_dev = plaintext
+    # The send used to be a TODO: the token was minted, committed, stashed on
+    # request.state and never delivered, so "resend" returned 200 and did
+    # nothing (audit 2026-07-30). Everything else for this mail already existed
+    # - template, subject, placeholder spec, mail-log masking - only the sender
+    # was missing.
+    from ..services import site as site_svc
+
+    await email_svc.send_verification_email(
+        to=user.email,
+        locale=user.locale,
+        display_name=user.display_name,
+        token=plaintext,
+        app_url=site_svc.get_site_url(db),
+        site_timezone=site_svc.get_site_timezone(db),
+        db=db,
+    )
     return {"ok": True}
 
 

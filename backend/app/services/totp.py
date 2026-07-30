@@ -40,6 +40,7 @@ from ..utils.crypto import (
     SecretUndecryptableError,
     argon2_hash,
     argon2_verify,
+    constant_time_equals,
     decrypt_totp_secret,
     encrypt_totp_secret,
     generate_recovery_codes,
@@ -173,6 +174,21 @@ def confirm_enable(db: Session, *, user: User, code: str, request) -> list[str]:
     return plaintexts
 
 
+def _matched_step(totp: pyotp.TOTP, code: str) -> int | None:
+    """Which 30-second step the accepted code came from.
+
+    pyotp.verify() tells us a code is valid somewhere in +/-_TOTP_VALID_WINDOW
+    but not where, and the anti-replay guard needs the where. Walks the window
+    oldest-first so a code that is somehow valid at two steps is pinned to the
+    earliest, which is the conservative choice for a monotonic counter."""
+    now = int(datetime.now(tz=timezone.utc).timestamp())
+    for offset in range(-_TOTP_VALID_WINDOW, _TOTP_VALID_WINDOW + 1):
+        step = now // 30 + offset
+        if constant_time_equals(totp.at(step * 30), code):
+            return step
+    return None
+
+
 def verify_at_login(db: Session, *, user: User, code: str) -> bool:
     """Returns True iff the code is valid AND not a replay. Updates
     last_used_counter on success.
@@ -188,14 +204,24 @@ def verify_at_login(db: Session, *, user: User, code: str) -> bool:
     if not totp.verify(code, valid_window=_TOTP_VALID_WINDOW):
         return False
 
-    current_counter = int(datetime.now(tz=timezone.utc).timestamp() // 30)
+    # Record the step the submitted code BELONGS to, not the step the server is
+    # currently in. Storing the current step only blocked replay within that
+    # same 30s window: a code from step N-2 or N-1 (both inside the +/-2
+    # tolerance window) was accepted, stamped with step N, and then remained
+    # replayable at step N+1 because N < N+1 still satisfies the guard. A
+    # captured code therefore stayed usable for roughly another minute after
+    # its first successful use - which is precisely the window a shoulder-surfed
+    # or phished code is worth something in (audit 2026-07-30).
+    matched_step = _matched_step(totp, code)
+    if matched_step is None:  # pragma: no cover - verify() just said it matches
+        return False
     result = db.execute(
         update(UserTOTP)
         .where(
             UserTOTP.user_id == user.id,
-            UserTOTP.last_used_counter < current_counter,
+            UserTOTP.last_used_counter < matched_step,
         )
-        .values(last_used_counter=current_counter)
+        .values(last_used_counter=matched_step)
     )
     db.flush()
     if result.rowcount == 1:

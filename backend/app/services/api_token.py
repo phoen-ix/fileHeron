@@ -178,6 +178,16 @@ def verify_token(db: Session, *, token_str: str) -> ApiToken:
     record = db.query(ApiToken).filter(ApiToken.prefix == prefix).one_or_none()
     if record is None:
         raise AppError(401, "INVALID_API_TOKEN", "Invalid API token.")
+
+    # Possession first, state second. The revoked/expired/disabled branches ran
+    # BEFORE the secret comparison, so anyone holding only the 8-hex prefix -
+    # which is not secret; it is indexed, logged, and shown in the admin UI -
+    # could learn whether a token existed and what had happened to it, by
+    # sending the prefix with any garbage secret. The differentiated codes are
+    # good UX for the legitimate holder and an oracle for everyone else, so they
+    # now require proving possession (audit 2026-07-30).
+    if not constant_time_equals(record.secret_hash, sha256_hex(secret)):
+        raise AppError(401, "INVALID_API_TOKEN", "Invalid API token.")
     if record.revoked_at is not None:
         raise AppError(401, "INVALID_API_TOKEN", "API token has been revoked.")
     if record.expires_at is not None and utc_now() > record.expires_at:
@@ -185,8 +195,6 @@ def verify_token(db: Session, *, token_str: str) -> ApiToken:
     if record.disabled_at is not None:
         # Distinct code so admin/UX can tell "temporarily off" from "gone".
         raise AppError(401, "API_TOKEN_DISABLED", "API token is disabled.")
-    if not constant_time_equals(record.secret_hash, sha256_hex(secret)):
-        raise AppError(401, "INVALID_API_TOKEN", "Invalid API token.")
 
     _record_last_used(db, record)
     return record

@@ -131,7 +131,11 @@ async def register_complete(
     the credential. Caller commits."""
     r = _redis()
     try:
-        challenge_b64 = await r.get(f"{REGISTER_KEY}{user.id}")
+        # getdel, not get: the challenge is single-use by definition. Leaving it
+        # in Redis let the same signed assertion be replayed to /complete for
+        # the full CHALLENGE_TTL_SEC (300s) - a captured response stayed valid
+        # for five minutes (audit 2026-07-30). Redis >= 6.2; the stack pins 7.
+        challenge_b64 = await r.getdel(f"{REGISTER_KEY}{user.id}")
     finally:
         await r.aclose()
 
@@ -239,7 +243,8 @@ async def authenticate_complete(
     authenticated user. Caller commits."""
     r = _redis()
     try:
-        stored = await r.get(f"{AUTH_KEY}{session_key}")
+        # Single-use: see the register path above.
+        stored = await r.getdel(f"{AUTH_KEY}{session_key}")
     finally:
         await r.aclose()
 

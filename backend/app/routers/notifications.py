@@ -206,6 +206,21 @@ def _resolve_stream_user(
     user = resolve_user_from_access_token(db, jwt, settings)
     request.state.user_id = user.id
     request.state.auth_via = "session"
+    # Mirror the global require_2fa_complete gate, the same way
+    # files.py::_resolve_download_user does. These stream routes resolve the
+    # user themselves rather than going through get_actor, so the gate that is
+    # applied to every other session-authenticated route was simply absent
+    # here: a user under a mandatory-2FA policy who had not yet enrolled could
+    # still open the SSE stream and read their notification payloads
+    # (audit 2026-07-30).
+    from ..services.twofa_policy import is_2fa_required
+
+    if is_2fa_required(db, user):
+        raise AppError(
+            403,
+            "TWOFA_SETUP_REQUIRED",
+            "Two-factor authentication is required. Set it up to continue.",
+        )
     return user
 
 

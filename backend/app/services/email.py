@@ -784,6 +784,31 @@ async def send_password_reset_email(
     )
 
 
+async def send_verification_email(
+    *, to: str, locale: Locale | str, display_name: str, token: str,
+    app_url: str | None = None, site_timezone: str | None = None,
+    db: Session | None = None,
+) -> None:
+    """Confirm-your-address link.
+
+    The `verify` template, its subject entry, its placeholder spec and its
+    mail-log auth-link masking have all existed since Phase 1a - only the
+    sender was missing, so POST /api/auth/resend-verification minted a token,
+    committed it, stashed it on `request.state` and returned `{"ok": true}`
+    without sending anything. A user who clicked "resend" got a success
+    response and no email, forever (audit 2026-07-30)."""
+    base = _app_url(app_url)
+    tz = _site_tz(site_timezone)
+    ctx = {"display_name": display_name, "verify_url": f"{base}/verify-email/{token}"}
+    subject, body, html = render_email(
+        locale, "verify", ctx, app_url=base, site_timezone=tz, db=db,
+        recipient_email=to, category="verify",
+    )
+    await _send_resolved(
+        to=to, subject=subject, text_body=body, html_body=html, category="verify"
+    )
+
+
 async def send_invite_email(
     *, to: str, locale: Locale | str, display_name_hint: str, inviter_display_name: str,
     token: str, app_url: str | None = None, site_timezone: str | None = None,

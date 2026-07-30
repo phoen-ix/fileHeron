@@ -444,6 +444,28 @@ def cancel_email_change(
 # ---------------------------------------------------------------------------
 
 
+async def _send_each(*sends) -> None:
+    """Dispatch a batch of post-change emails, each isolated from the others.
+
+    Everything here runs AFTER the change is committed and the OIDC binding
+    reset, so one hard bounce must not suppress the rest. A single try/except
+    around the batch meant a 550 on the old address - the decommissioned mailbox
+    of a departed employee, i.e. the exact case an admin-driven change exists
+    for - aborted the block before the set-password link went out, leaving an
+    SSO-only user with no credential, no link and no notification that anything
+    had happened (audit 2026-07-30).
+
+    Order matters as much as isolation: whatever restores the user's access is
+    sent first, courtesy alerts last."""
+    for label, make in sends:
+        try:
+            await make()
+        except Exception:
+            logger.exception(
+                "email_change: %s dispatch failed (change already persisted)", label
+            )
+
+
 async def dispatch_request_emails(db: Session, outcome: RequestOutcome) -> None:
     from . import email as email_svc
     from . import site as site_svc
@@ -452,46 +474,69 @@ async def dispatch_request_emails(db: Session, outcome: RequestOutcome) -> None:
     tz = site_svc.get_site_timezone(db)
     loc = outcome.locale
     name = outcome.display_name
-    try:
-        if outcome.applied:
-            await email_svc.send_email_change_alert(
-                to=outcome.old_email, locale=loc, display_name=name,
-                new_email=outcome.new_email, by_admin=outcome.by_admin,
-                applied=True, app_url=base, site_timezone=tz, db=db,
-            )
-            if outcome.set_password_token:
-                await email_svc.send_password_reset_email(
+    if outcome.applied:
+        sends = []
+        if outcome.set_password_token:
+            sends.append((
+                "set-password",
+                lambda: email_svc.send_password_reset_email(
                     to=outcome.new_email, locale=loc, display_name=name,
-                    token=outcome.set_password_token, app_url=base, site_timezone=tz, db=db,
-                )
-            await email_svc.send_email_change_completed(
+                    token=outcome.set_password_token, app_url=base,
+                    site_timezone=tz, db=db,
+                ),
+            ))
+        sends.append((
+            "completion notice",
+            lambda: email_svc.send_email_change_completed(
                 to=outcome.new_email, locale=loc, display_name=name,
                 new_email=outcome.new_email, oidc_reset=outcome.oidc_reset,
                 app_url=base, site_timezone=tz, db=db,
-            )
-        else:
-            await email_svc.send_email_change_confirm(
-                to=outcome.new_email, locale=loc, display_name=name,
-                token=outcome.new_token, new_email=outcome.new_email,
-                by_admin=outcome.by_admin, app_url=base, site_timezone=tz, db=db,
-            )
-            if outcome.mode == "verify_both" and outcome.old_token:
-                await email_svc.send_email_change_verify_old(
+            ),
+        ))
+        sends.append((
+            "old-address alert",
+            lambda: email_svc.send_email_change_alert(
+                to=outcome.old_email, locale=loc, display_name=name,
+                new_email=outcome.new_email, by_admin=outcome.by_admin,
+                applied=True, app_url=base, site_timezone=tz, db=db,
+            ),
+        ))
+        await _send_each(*sends)
+    else:
+        # Pending: the confirm link to the new address is what moves the flow
+        # forward, so it leads; the old-address mail (verify or cancel-alert)
+        # follows independently.
+        old_send = (
+            (
+                "verify-old",
+                lambda: email_svc.send_email_change_verify_old(
                     to=outcome.old_email, locale=loc, display_name=name,
                     confirm_token=outcome.old_token, cancel_token=outcome.cancel_token,
                     new_email=outcome.new_email, by_admin=outcome.by_admin,
                     app_url=base, site_timezone=tz, db=db,
-                )
-            else:
-                await email_svc.send_email_change_alert(
+                ),
+            )
+            if outcome.mode == "verify_both" and outcome.old_token
+            else (
+                "old-address alert",
+                lambda: email_svc.send_email_change_alert(
                     to=outcome.old_email, locale=loc, display_name=name,
                     new_email=outcome.new_email, cancel_token=outcome.cancel_token,
                     by_admin=outcome.by_admin, applied=False,
                     app_url=base, site_timezone=tz, db=db,
-                )
-    except Exception:
-        logger.exception(
-            "email_change: request email dispatch failed (change already persisted)"
+                ),
+            )
+        )
+        await _send_each(
+            (
+                "confirm",
+                lambda: email_svc.send_email_change_confirm(
+                    to=outcome.new_email, locale=loc, display_name=name,
+                    token=outcome.new_token, new_email=outcome.new_email,
+                    by_admin=outcome.by_admin, app_url=base, site_timezone=tz, db=db,
+                ),
+            ),
+            old_send,
         )
 
 
@@ -503,19 +548,22 @@ async def dispatch_confirm_emails(db: Session, outcome: ConfirmOutcome) -> None:
 
     base = site_svc.get_site_url(db)
     tz = site_svc.get_site_timezone(db)
-    try:
-        if outcome.set_password_token:
-            await email_svc.send_password_reset_email(
+    sends = []
+    if outcome.set_password_token:
+        sends.append((
+            "set-password",
+            lambda: email_svc.send_password_reset_email(
                 to=outcome.new_email, locale=outcome.locale,
                 display_name=outcome.display_name, token=outcome.set_password_token,
                 app_url=base, site_timezone=tz, db=db,
-            )
-        await email_svc.send_email_change_completed(
+            ),
+        ))
+    sends.append((
+        "completion notice",
+        lambda: email_svc.send_email_change_completed(
             to=outcome.new_email, locale=outcome.locale,
             display_name=outcome.display_name, new_email=outcome.new_email,
             oidc_reset=outcome.oidc_reset, app_url=base, site_timezone=tz, db=db,
-        )
-    except Exception:
-        logger.exception(
-            "email_change: confirm email dispatch failed (change already persisted)"
-        )
+        ),
+    ))
+    await _send_each(*sends)

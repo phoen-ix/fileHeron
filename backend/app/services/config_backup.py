@@ -45,9 +45,11 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 from cryptography.fernet import InvalidToken
+from sqlalchemy import func, or_
 from sqlalchemy import inspect as sa_inspect
 from sqlalchemy.orm import Session
 
@@ -147,7 +149,21 @@ _ENV_WHITELIST = (
 # ---------------------------------------------------------------------------
 
 def _columns(model):
-    return sa_inspect(model).columns
+    """The mapped columns, keyed by ORM ATTRIBUTE name.
+
+    `sa_inspect(model).columns` is the *table* collection, keyed by DB column
+    name - and the two diverge wherever a model renames a column. `AuditLog`
+    does exactly that (`extra` -> `metadata_json`), and both sides of this
+    module speak ORM names: `_row_to_dict` uses getattr, `_build` passes
+    kwargs to the constructor. So exporting the `logs` category raised
+    AttributeError on the first audit row - which every real instance has,
+    making that whole category unusable - and importing one would have raised
+    TypeError. Found while testing the audit-preservation fix, 2026-07-30."""
+    mapper = sa_inspect(model).mapper
+    return [
+        SimpleNamespace(key=attr.key, name=attr.expression.key, type=attr.expression.type)
+        for attr in mapper.column_attrs
+    ]
 
 
 def _enc(v: Any) -> Any:
@@ -195,10 +211,14 @@ def _row_to_dict(obj, *, drop: frozenset[str] = frozenset()) -> dict:
 
 def _build(model, data: dict, *, overrides: dict | None = None, skip: frozenset[str] = frozenset()):
     cols = {c.key: c for c in _columns(model)}
+    # Accept a raw DB column name too, so a payload written before _columns
+    # started speaking ORM names still loads.
+    aliases = {c.name: c.key for c in _columns(model) if c.name != c.key}
     kwargs: dict[str, Any] = {}
     for k, v in data.items():
         if k in skip:
             continue
+        k = aliases.get(k, k)
         col = cols.get(k)
         if col is None:
             continue
@@ -716,6 +736,45 @@ def _restore_log(
     db.flush()
 
 
+def _preserved_audit_rows(db, *, since_id: int) -> list[dict]:
+    """Audit rows a config import must NOT destroy, snapshotted before the
+    audit_log wipe in step 7.
+
+    Two classes. Everything written since the import began (``id > since_id``):
+    the share-invalidation pass committed in step 1 and every erasure step 5
+    performed - the import was erasing the record of its own destruction.
+    And every ``user_erased`` row whatever its age: that is what the GDPR
+    erasure receipt reads back, and restoring a config backup is not a licence
+    to forget that somebody exercised their right (audit 2026-07-30)."""
+    rows = (
+        db.query(AuditLog)
+        .filter(
+            or_(
+                AuditLog.id > since_id,
+                AuditLog.event_type == AuditEventType.user_erased.value,
+            )
+        )
+        .all()
+    )
+    return [_row_to_dict(r, drop=frozenset({"id"})) for r in rows]
+
+
+def _reinsert_preserved_audit(db, rows: list[dict]) -> None:
+    """Re-add the snapshot after the reload. Deliberately NOT routed through
+    _restore_log: these ids are already local, and running them through the
+    backup's old->new user map would re-point an actor at whoever happens to
+    hold that id in the backup."""
+    if not rows:
+        return
+    existing = {r[0] for r in db.query(User.id).all()}
+    for d in rows:
+        d = dict(d)
+        if d.get("actor_user_id") is not None and d["actor_user_id"] not in existing:
+            d["actor_user_id"] = None
+        db.add(_build(AuditLog, d, skip=frozenset({"id"})))
+    db.flush()
+
+
 def _import_logo(db, logo, *, actor, warnings):
     if not logo or not logo.get("present"):
         return
@@ -851,6 +910,35 @@ def _validate_backup_payload(p: dict, actor: User) -> None:
             _ingest_secret_str(d2.pop("secret_encrypted", None))
             _build(Webhook, d2, overrides={"secret_encrypted": "", "created_by_id": actor.id},
                    skip=frozenset({"id"}))
+        # settings_branding and logs are consumed at steps 6-7, i.e. AFTER the
+        # irreversible share invalidation has committed. Leaving them unchecked
+        # meant a missing `key` raised a bare KeyError there and produced exactly
+        # the wipe-then-500 this function exists to prevent (audit 2026-07-30).
+        sb = p.get("settings_branding", {})
+        for row in sb.get("app_settings", []):
+            _ = row["key"]
+            if row.get("is_encrypted"):
+                _ingest_secret_str(row.get("secret"))
+        for o in sb.get("email_template_overrides", []):
+            _build(EmailTemplateOverride, o, overrides={"updated_by_id": actor.id},
+                   skip=frozenset({"id", "updated_by_id"}))
+        logo = sb.get("branding_logo")
+        if logo and logo.get("present"):
+            for b64_key in ("original_b64", "png_b64"):
+                if logo.get(b64_key):
+                    base64.b64decode(logo[b64_key], validate=True)
+        lg = p.get("logs", {})
+        for model, key in (
+            (AuditLog, "audit_log"),
+            (EmailLog, "email_log"),
+            (DownloadLog, "download_log"),
+            (LoginAttempt, "login_attempts"),
+            (Notification, "notifications"),
+        ):
+            for d in lg.get(key, []):
+                _build(model, d, skip=frozenset({"id"}))
+        for pref_row in lg.get("notifications", []):
+            NotificationCategory(pref_row["category"])
     except AppError:
         raise
     except (KeyError, ValueError, TypeError) as e:
@@ -873,6 +961,11 @@ def apply_backup(db: Session, *, parsed: ParsedBackup, actor: User, request=None
         version_warning=_version_warning(db, parsed),
         env_snapshot_present="env_snapshot" in p,
     )
+
+    # High-water mark taken before anything destructive: everything the import
+    # writes from here on is identified by a larger id and survives the step-7
+    # audit_log wipe.
+    audit_watermark = db.query(func.max(AuditLog.id)).scalar() or 0
 
     # 1. Invalidate ALL active shares in its own committed pass - disk unlink is
     # irreversible and must not sit inside the config transaction.
@@ -1124,8 +1217,12 @@ def apply_backup(db: Session, *, parsed: ParsedBackup, actor: User, request=None
     # 7. Logs - wipe + reload (opt-in).
     if "logs" in p:
         lg = p["logs"]
+        # Snapshot BEFORE the wipe: this import's own destruction record plus
+        # every erasure receipt (see _preserved_audit_rows).
+        preserved_audit = _preserved_audit_rows(db, since_id=audit_watermark)
         _restore_log(db, AuditLog, lg.get("audit_log", []), user_fk="actor_user_id",
                      user_id_map=user_id_map, has_users=has_users)
+        _reinsert_preserved_audit(db, preserved_audit)
         _restore_log(db, EmailLog, lg.get("email_log", []), user_fk="recipient_user_id",
                      user_id_map=user_id_map, has_users=has_users,
                      null_fields=("source_log_id",))

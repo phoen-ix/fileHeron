@@ -17,7 +17,7 @@ services:
       MYSQL_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
     volumes:
       - ${COMPOSE_HOST_ROOT:-${PWD:-/opt/fileHeron}}/data/db:/var/lib/mysql
-      - ${COMPOSE_HOST_ROOT:-${PWD:-/opt/fileHeron}}/docker/mariadb/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ${COMPOSE_HOST_ROOT:-${PWD:-/opt/fileHeron}}/docker/mariadb/init.sh:/docker-entrypoint-initdb.d/init.sh:ro
     networks: [internal]
     healthcheck:
       test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]

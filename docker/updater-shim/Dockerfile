@@ -10,7 +10,11 @@
 # committing suicide mid-command). Keeping it trivial means it
 # shouldn't ever need to be updated - there's nothing in it to break.
 # The executor (changeable per-release) does all the real logic.
-FROM alpine:3.20
+# alpine:3.20 reached end-of-life, so this image stopped receiving security
+# updates - on the ONE container in the stack that holds the Docker socket
+# (audit 2026-07-30). Now tracked by the `docker` dependabot ecosystem added
+# in v2.2.0, so it will not silently rot again.
+FROM alpine:3.22
 
 # docker CLI for the spawn; jq for reading the state file; bash for
 # the shim itself; curl is occasionally useful for debugging.

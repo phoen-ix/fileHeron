@@ -543,6 +543,13 @@ def parse_backup(raw: bytes, *, passphrase: str | None) -> ParsedBackup:
                 r=int(enc.get("r", crypto.SCRYPT_R)),
                 p=int(enc.get("p", crypto.SCRYPT_P)),
             )
+        except crypto.ScryptParamsRejectedError as e:
+            # A crafted envelope can ask for terabytes of scrypt memory; refuse
+            # before the KDF runs rather than OOM the container.
+            raise AppError(
+                400, "BACKUP_CORRUPT",
+                "Backup declares unsupported key-derivation parameters.",
+            ) from e
         except InvalidToken as e:
             raise AppError(
                 400, "BACKUP_BAD_PASSPHRASE", "Wrong passphrase, or the backup is corrupted."

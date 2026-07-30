@@ -151,15 +151,52 @@ SCRYPT_N = 2**14
 SCRYPT_R = 8
 SCRYPT_P = 1
 
+# Upper bounds for params read back OUT of a backup envelope. scrypt's memory
+# cost is roughly 128 * n * r * p bytes, and those three numbers arrive from the
+# (cleartext, attacker-authorable) envelope of a file an admin was handed - a
+# documented DR/migration flow. `n=2**30, r=8` asks for ~1 TB and OOM-kills the
+# container before the passphrase is even checked (audit 2026-07-30).
+#
+# The ceiling is on the PRODUCT, not just the individual values, because the
+# three multiply. 256 MiB is far above anything this project writes (2**14 * 8 *
+# 1 = 16 MiB) while staying survivable.
+_SCRYPT_MAX_MEMORY_BYTES = 256 * 1024 * 1024
+_SCRYPT_MAX_N = 2**20
+_SCRYPT_MAX_R = 64
+_SCRYPT_MAX_P = 16
+
+
+class ScryptParamsRejectedError(ValueError):
+    """Backup envelope asked for KDF parameters outside the safe envelope."""
+
+
+def validate_scrypt_params(n: int, r: int, p: int) -> tuple[int, int, int]:
+    """Bound KDF parameters taken from an untrusted backup envelope."""
+    if not all(isinstance(v, int) for v in (n, r, p)):
+        raise ScryptParamsRejectedError("scrypt parameters must be integers")
+    if n < 2 or (n & (n - 1)) != 0:
+        raise ScryptParamsRejectedError("scrypt n must be a power of two")
+    if not (1 <= r <= _SCRYPT_MAX_R) or not (1 <= p <= _SCRYPT_MAX_P):
+        raise ScryptParamsRejectedError("scrypt r/p out of range")
+    if n > _SCRYPT_MAX_N:
+        raise ScryptParamsRejectedError("scrypt n out of range")
+    if 128 * n * r * p > _SCRYPT_MAX_MEMORY_BYTES:
+        raise ScryptParamsRejectedError("scrypt parameters demand too much memory")
+    return n, r, p
+
 
 def new_backup_salt() -> bytes:
     return secrets.token_bytes(16)
 
 
 def derive_backup_key(passphrase: str, salt: bytes, *, n: int, r: int, p: int) -> bytes:
-    """scrypt(passphrase, salt) -> 32 bytes -> urlsafe base64 -> Fernet key."""
+    """scrypt(passphrase, salt) -> 32 bytes -> urlsafe base64 -> Fernet key.
+
+    Parameters are bounded here rather than at the call site: this is the only
+    place they are consumed, so a future caller cannot forget."""
     from cryptography.hazmat.primitives.kdf.scrypt import Scrypt
 
+    n, r, p = validate_scrypt_params(n, r, p)
     kdf = Scrypt(salt=salt, length=32, n=n, r=r, p=p)
     derived = kdf.derive(passphrase.encode("utf-8"))
     return base64.urlsafe_b64encode(derived)

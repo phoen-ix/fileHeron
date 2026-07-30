@@ -15,7 +15,15 @@ permissions:
   packages: write    # push to ghcr.io
 
 jobs:
+  # Run the full CI suite against the tagged commit BEFORE building or
+  # publishing anything. Reuses ci.yml directly, so the release gate and the
+  # push/PR gate can never drift apart. A failure here stops the tag: no images
+  # pushed to GHCR, no GitHub release created.
+  ci:
+    uses: ./.github/workflows/ci.yml
+
   build:
+    needs: ci
     runs-on: ubuntu-latest
     strategy:
       # Build each image in parallel. Fail-fast off so a single image's

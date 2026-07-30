@@ -8,6 +8,20 @@ on:
   push:
     branches: [main]
   pull_request: {}
+  # Callable so server-release.yml can GATE a tag build on these exact jobs
+  # rather than duplicating them. Before this, a release ran no tests at all:
+  # lint, pytest, the alembic roundtrip and the dependency audit gated pushes
+  # and PRs but never a tag, so a red main could still publish images to GHCR
+  # and cut a GitHub release (audit 2026-07-30).
+  workflow_call: {}
+
+# Least privilege, and it matters more now that server-release.yml calls this
+# workflow: a reusable workflow INHERITS the caller's permissions unless it
+# declares its own, and the release grants contents:write + packages:write for
+# publishing. Without this, every CI job would run with push-to-GHCR and
+# write-releases rights during a tag build (audit 2026-07-30).
+permissions:
+  contents: read
 
 jobs:
   backend-tests:

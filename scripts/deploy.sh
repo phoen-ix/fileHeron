@@ -31,6 +31,16 @@ fi
 FH_TAG="${FH_TAG:-latest}"
 export FH_TAG
 
+# Compose derives container names from ${COMPOSE_PROJECT_NAME:-fileheron} (see
+# every `container_name:` in docker-compose.yml). Both scripts hardcoded the
+# `fileheron-` prefix, so under any other project name - the `fileheron_drill`
+# the restore drill uses, the `fileheron_e2e` CI uses, or any self-hoster who
+# set one - `docker inspect` returned "missing" for 90 seconds and the script
+# exited 1 on a SUCCESSFUL deploy (audit 2026-07-30).
+container_name() {
+    printf '%s-%s' "${COMPOSE_PROJECT_NAME:-fileheron}" "$1"
+}
+
 REPO_OWNER="phoen-ix"
 # v1.0.0: updater is now `updater-shim` (perpetual) + `updater-executor`
 # (ephemeral, never declared as a compose service - spawned ad-hoc by
@@ -78,7 +88,7 @@ DEADLINE=$(($(date +%s) + 90))
 while :; do
     UNHEALTHY=""
     for svc in backend frontend; do
-        STATUS="$(docker inspect --format '{{.State.Health.Status}}' "fileheron-$svc" 2>/dev/null || echo missing)"
+        STATUS="$(docker inspect --format '{{.State.Health.Status}}' "$(container_name "$svc")" 2>/dev/null || echo missing)"
         if [ "$STATUS" != "healthy" ]; then
             UNHEALTHY="$UNHEALTHY $svc=$STATUS"
         fi

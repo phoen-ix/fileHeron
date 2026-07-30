@@ -12,10 +12,34 @@ name: E2E
 on:
   pull_request: {}
   workflow_dispatch: {}
+  # Path-filtered push trigger. No check can GATE a push on a direct-push repo,
+  # but waiting up to 24h for the daily run to tell you the stack is broken is a
+  # choice, not a constraint. The filter keeps doc-only and comment-only pushes
+  # quiet while covering everything that can actually break the stack.
+  push:
+    branches: [main]
+    paths:
+      - 'backend/**'
+      - 'frontend/**'
+      - 'docker/**'
+      - 'docker-compose*.yml'
+      - 'e2e/**'
+      - '.github/workflows/e2e.yml'
   # Daily so the suite has real teeth on a direct-to-main repo (PRs are rare),
-  # without slowing every push or flaking main CI on a Docker Hub hiccup.
+  # and so base-image drift and dependency rot surface even in a quiet week -
+  # which the path filter deliberately misses.
   schedule:
     - cron: '17 4 * * *'
+
+permissions:
+  contents: read
+
+# One stack build at a time. Without this, a wave of pushes queues a full
+# `compose up --build` per push; with workers:1 and a 3-retry Docker Hub build,
+# that turns the gate into a permanently-lagging backlog.
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   playwright:
@@ -53,7 +77,7 @@ jobs:
 
       - name: Wait for the stack to answer
         run: |
-          for i in $(seq 1 60); do
+          for _ in $(seq 1 60); do
             if curl -fsS http://localhost:8080/api/health >/dev/null 2>&1 \
                && curl -fsS http://localhost:8080/ >/dev/null 2>&1; then
               echo "stack ready"; exit 0
@@ -66,10 +90,15 @@ jobs:
         with:
           node-version: '22'
 
+      # `npm ci` against a committed lockfile. This ran bare `npm install` with
+      # no lockfile in e2e/, so @playwright/test and otplib resolved fresh on
+      # every run - an unpinned dependency tree deciding whether the release
+      # gate passes. CONTRIBUTING.md:41 already told contributors to run
+      # `npm ci` here, which could only ever have failed (audit 2026-07-30).
       - name: Install Playwright
         working-directory: e2e
         run: |
-          npm install
+          npm ci --no-audit --no-fund
           npx playwright install --with-deps chromium
 
       - name: Run Playwright

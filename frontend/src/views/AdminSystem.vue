@@ -571,6 +571,7 @@ const headlineFailures = computed(() => {
       </section>
 
       <!-- update / rollback confirm modal -->
+      <!-- eslint-disable-next-line vuejs-accessibility/no-static-element-interactions -- modal backdrop: click-outside is a convenience, Escape is the keyboard path; revisited with the modal focus work -->
       <div
         v-if="confirming"
         class="fh-modal-backdrop"

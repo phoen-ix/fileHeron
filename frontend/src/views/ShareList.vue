@@ -390,6 +390,7 @@ onMounted(load)
       </div>
     </Transition>
 
+    <!-- eslint-disable-next-line vuejs-accessibility/no-static-element-interactions -- modal backdrop: click-outside is a convenience, Escape is the keyboard path; revisited with the modal focus work -->
     <div
       v-if="bulkConfirmOpen"
       class="fh-modal-backdrop"

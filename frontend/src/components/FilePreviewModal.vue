@@ -77,6 +77,7 @@ watch(
 </script>
 
 <template>
+  <!-- eslint-disable-next-line vuejs-accessibility/no-static-element-interactions -- modal backdrop: click-outside is a convenience, Escape is the keyboard path; revisited with the modal focus work -->
   <div
     v-if="open && file"
     class="preview-backdrop"

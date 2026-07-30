@@ -1,5 +1,6 @@
 <template>
   <div class="upload-area" :class="{ 'has-files': items.length > 0 }">
+    <!-- eslint-disable-next-line vuejs-accessibility/no-static-element-interactions -- drag-and-drop zone; the keyboard path is the sibling file-picker button; revisited with the modal focus work -->
     <label
       class="dropzone"
       :class="{ 'is-dragging': dragging }"

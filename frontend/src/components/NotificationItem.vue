@@ -1,4 +1,5 @@
 <template>
+  <!-- eslint-disable-next-line vuejs-accessibility/no-static-element-interactions -- the <li> carries tabindex=0 + @keydown.enter; the rule cannot see it; revisited with the modal focus work -->
   <li class="notif-row" tabindex="0" @keydown.enter="emit('click')" @click="emit('click')">
     <span class="notif-eyebrow fh-mono">{{ t(`notif_bell.cat.${item.category}`) }}</span>
     <span class="notif-headline">{{ headline }}</span>

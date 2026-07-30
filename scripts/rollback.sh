@@ -31,6 +31,16 @@ fi
 FH_TAG="${FH_TAG:-latest}"
 export FH_TAG
 
+# Compose derives container names from ${COMPOSE_PROJECT_NAME:-fileheron} (see
+# every `container_name:` in docker-compose.yml). Both scripts hardcoded the
+# `fileheron-` prefix, so under any other project name - the `fileheron_drill`
+# the restore drill uses, the `fileheron_e2e` CI uses, or any self-hoster who
+# set one - `docker inspect` returned "missing" for 90 seconds and the script
+# exited 1 on a SUCCESSFUL deploy (audit 2026-07-30).
+container_name() {
+    printf '%s-%s' "${COMPOSE_PROJECT_NAME:-fileheron}" "$1"
+}
+
 list_tags() {
     echo "Available image tags (most recent first):"
     for img in "${IMAGES[@]}"; do
@@ -62,12 +72,28 @@ if [ -n "$MISSING" ]; then
     exit 2
 fi
 
-echo "[rollback] re-tagging $TARGET as :$FH_TAG for all three repos"
-for img in "${IMAGES[@]}"; do
-    docker tag "ghcr.io/$REPO_OWNER/$img:$TARGET" "ghcr.io/$REPO_OWNER/$img:$FH_TAG"
-done
+# Point .env at the target tag instead of re-tagging the target AS the current
+# one. The re-tag approach rolled the running stack back correctly and then left
+# `.env` still naming the broken version, so the next `docker compose pull` -
+# or the next in-app Update's version comparison - silently re-pulled the thing
+# we just rolled away from, overwriting the local re-tag. The rollback undid
+# itself (audit 2026-07-30).
+#
+# install.sh's `set_kv` is the existing precedent for editing .env in place.
+if [ -f .env ] && grep -qE '^FH_TAG=' .env; then
+    echo "[rollback] pinning FH_TAG=$TARGET in .env (was $FH_TAG)"
+    tmp="$(mktemp)"
+    sed "s|^FH_TAG=.*|FH_TAG=$TARGET|" .env > "$tmp" && cat "$tmp" > .env && rm -f "$tmp"
+elif [ -f .env ]; then
+    echo "[rollback] appending FH_TAG=$TARGET to .env"
+    printf '\nFH_TAG=%s\n' "$TARGET" >> .env
+else
+    echo "[rollback] WARNING: no .env found - FH_TAG not persisted, next pull may revert" >&2
+fi
+FH_TAG="$TARGET"
+export FH_TAG
 
-echo "[rollback] rolling services onto :$FH_TAG (= $TARGET)"
+echo "[rollback] rolling services onto :$FH_TAG"
 docker compose up -d "${SERVICES[@]}"
 
 echo "[rollback] waiting for health (up to 90s)"
@@ -75,7 +101,7 @@ DEADLINE=$(($(date +%s) + 90))
 while :; do
     UNHEALTHY=""
     for svc in backend frontend; do
-        STATUS="$(docker inspect --format '{{.State.Health.Status}}' "fileheron-$svc" 2>/dev/null || echo missing)"
+        STATUS="$(docker inspect --format '{{.State.Health.Status}}' "$(container_name "$svc")" 2>/dev/null || echo missing)"
         if [ "$STATUS" != "healthy" ]; then
             UNHEALTHY="$UNHEALTHY $svc=$STATUS"
         fi

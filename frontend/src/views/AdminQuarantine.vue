@@ -190,6 +190,7 @@ onMounted(load)
 
     <Pager v-model:page="page" :total="total" :page-size="pageSize" />
 
+    <!-- eslint-disable-next-line vuejs-accessibility/no-static-element-interactions -- modal backdrop: click-outside is a convenience, Escape is the keyboard path; revisited with the modal focus work -->
     <div v-if="confirm" class="confirm-backdrop" @click.self="closeConfirm" @keydown.escape="closeConfirm">
       <div
         class="confirm-card"

@@ -22,6 +22,7 @@ const rows: Row[] = [
 </script>
 
 <template>
+  <!-- eslint-disable-next-line vuejs-accessibility/click-events-have-key-events vuejs-accessibility/no-static-element-interactions -- modal backdrop: click-outside is a convenience, Escape is the keyboard path; revisited with the modal focus work -->
   <div
     v-if="open"
     class="fh-modal-backdrop"

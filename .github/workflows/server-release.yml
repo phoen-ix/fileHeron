@@ -25,6 +25,9 @@ jobs:
   build:
     needs: ci
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write   # push images to ghcr.io
     strategy:
       # Build each image in parallel. Fail-fast off so a single image's
       # failure leaves the others' artifacts intact for diagnosis.
@@ -194,6 +197,9 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write   # re-tag the published manifests as :latest
     steps:
       - uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4
       - uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4
@@ -221,9 +227,27 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: [build, publish-latest]
     runs-on: ubuntu-latest
+    permissions:
+      contents: write   # softprops/action-gh-release writes the release
     steps:
       # Checkout so the release body can be read from the repo's RELEASE_NOTES.md.
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      # RELEASE_NOTES.md is fed to the release verbatim and is what admins read
+      # from the in-app Update banner. Nothing checked that it had been rewritten
+      # for THIS tag, so forgetting to update it publishes the previous release's
+      # changelog under the new version - and the tag is immutable, so the only
+      # fix is shipping another patch release (audit 2026-07-30).
+      - name: RELEASE_NOTES.md must name this tag
+        run: |
+          set -euo pipefail
+          if ! head -5 RELEASE_NOTES.md | grep -qF "${GITHUB_REF_NAME}"; then
+            echo "::error::RELEASE_NOTES.md does not mention ${GITHUB_REF_NAME} in its first 5 lines."
+            echo "First line is: $(head -1 RELEASE_NOTES.md)"
+            echo "Rewrite RELEASE_NOTES.md for this release before tagging."
+            exit 1
+          fi
+          echo "RELEASE_NOTES.md names ${GITHUB_REF_NAME}"
       - uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b # v3
         with:
           tag_name: ${{ github.ref_name }}

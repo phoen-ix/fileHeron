@@ -142,14 +142,18 @@ fi
 # 6. Local retention - keep last 7 dated dirs. Restic remote (if
 # configured) holds older snapshots via its own keep-* policy below.
 echo "[backup] pruning local backups (keep last 7) …"
-# shellcheck disable=SC2012
 # Only COMPLETE backups (those with a manifest.txt) count toward the keep-7
 # window, and only they are eligible for deletion. Pruning purely by directory
 # mtime meant seven aborted runs in a row evicted the last good backup - the
 # retention policy actively destroying the thing it exists to preserve.
-for d in $(ls -1dt "$ROOT/backups"/*/ 2>/dev/null); do
+#
+# Ordering is by NAME, not mtime: STAMP is `%Y-%m-%d_%H%M%S`, so a reverse
+# lexical sort is exactly chronological, and unlike mtime it cannot be
+# rewritten by a sync tool, a restore, or a `touch`. This also drops the
+# `ls`-parsing that shellcheck flagged (SC2045) once it was finally run.
+for d in "$ROOT"/backups/*/; do
     [ -f "$d/manifest.txt" ] && printf '%s\n' "$d"
-done | tail -n +8 | xargs -r rm -rf
+done | sort -r | tail -n +8 | xargs -r rm -rf
 
 # Sweep abandoned stages from earlier interrupted runs.
 find "$ROOT/backups" -maxdepth 1 -type d -name '.partial-*' -mmin +180 -exec rm -rf {} + 2>/dev/null || true

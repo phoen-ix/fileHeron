@@ -15,16 +15,35 @@ keep this to what would cause a wrong move if unknown.
 
 ## Status
 
-Backend **`v2.3.0`** (Tier 3 remediation), desktop client **`client-v1.1.0`**
-- shipped + in production, published for public self-hosting. v2.3.0 needs no
-host step and no migration. (v2.2.0 did: ClamAV 1.5.3 + a worker `/state` mount,
-plus the `files.av_unscanned` migration - so a rollback past v2.2.0 still needs
-the `alembic stamp` recovery.) **v2.3.0 adds the `public_links:read` API-token
-scope**: a token scoped `shares:read` only now gets 403 on
-`GET /api/shares/{id}/public-link`, deliberately, because that route returns the
-decrypted plaintext link URL. (README's server/client version
+Backend **`v2.4.0`** (audit mediums - the last remediation wave), desktop client
+**`client-v1.1.0`** - shipped + in production, published for public self-hosting.
+v2.4.0 needs no host step and no migration; v2.3.0 didn't either. (v2.2.0 did:
+ClamAV 1.5.3 + a worker `/state` mount, plus the `files.av_unscanned` migration -
+so a rollback past v2.2.0 still needs the `alembic stamp` recovery.) **v2.3.0
+adds the `public_links:read` API-token scope**: a token scoped `shares:read` only
+now gets 403 on `GET /api/shares/{id}/public-link`, deliberately, because that
+route returns the decrypted plaintext link URL. (README's server/client version
 badges read live from the git tags, so they never need a manual bump; this line
 does - keep it current on release.)
+
+> **v2.4.0 invariants worth knowing before you touch these areas.**
+> `share_approval.policy_is_inert` refuses `employees_admins` + `exempt_approvers`
+> with an outbound-only scope - that combination queues nothing at all, so the
+> settings PUT rejects it with `APPROVAL_POLICY_INERT` rather than storing a
+> control that silently does nothing. Approving a share echoes back
+> `content_fingerprint` (file set + attached link) and a stale one is refused
+> `409 CONTENT_CHANGED`; the field is optional so pre-existing API-token clients
+> keep working, which is a deliberate residual, not an oversight.
+> `config_backup._columns` must return **ORM attribute** names, not table column
+> names - `AuditLog.extra` maps to `metadata_json`, and getting this wrong made
+> the whole `logs` backup category raise on export. `apply_backup` preserves
+> every `user_erased` audit row plus everything written after its own
+> high-water mark; don't reinstate a blanket `audit_log` wipe.
+> `imap_poll.MAX_MESSAGE_BYTES` is checked via `RFC822.SIZE` **before** the
+> fetch - the point is not downloading the message, because downloading it is
+> what OOM-kills the worker. `:latest` is published by a separate
+> `publish-latest` job that needs the whole build matrix; never push it from a
+> matrix leg again.
 
 > **Corrections from the 2026-07-30 audit - these were previously asserted here
 > and were false.** Restore drills were described as proven and weekly; the drill

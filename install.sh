@@ -106,13 +106,20 @@ else
     echo "[install] .env already exists - preserving existing values"
 fi
 
-# Generate any secret that's still at the placeholder value.
+# Generate any secret that's still at a placeholder value.
+#
+# Matched by PREFIX, not by a caller-supplied literal. This used to be called
+# with `change_this` for all four keys while .env.example shipped
+# `change_me_in_production` and `change_root_password`, so DB_PASSWORD and
+# DB_ROOT_PASSWORD were silently never regenerated: a fresh install kept the
+# published database credentials, and the backend then refused to boot on the
+# DB_PASSWORD placeholder (audit 2026-07-30). Keep this rule in lockstep with
+# backend/app/config.py::_PLACEHOLDER_RE.
 gen_secret() {
     local key="$1"
-    local prefix="$2"
     local current
     current=$(grep -E "^${key}=" .env | head -1 | cut -d= -f2-)
-    if [ -z "$current" ] || [[ "$current" == ${prefix}* ]]; then
+    if [ -z "$current" ] || [[ "${current,,}" == change[-_]* ]]; then
         local new_val
         new_val=$(openssl rand -hex 32)
         if grep -qE "^${key}=" .env; then
@@ -125,11 +132,22 @@ gen_secret() {
 }
 
 echo "[install] generating any missing secrets"
-gen_secret DB_PASSWORD change_this
-gen_secret DB_ROOT_PASSWORD change_this
-gen_secret JWT_SECRET change_this
-gen_secret TUS_HOOK_SECRET change_this
+gen_secret DB_PASSWORD
+gen_secret DB_ROOT_PASSWORD
+gen_secret JWT_SECRET
+gen_secret TUS_HOOK_SECRET
 rm -f .env.bak
+
+# Refuse to continue if any of them somehow survived - booting on a published
+# credential is worse than failing the install loudly.
+for _k in DB_PASSWORD DB_ROOT_PASSWORD JWT_SECRET TUS_HOOK_SECRET; do
+    _v=$(grep -E "^${_k}=" .env | head -1 | cut -d= -f2-)
+    if [ -z "$_v" ] || [[ "${_v,,}" == change[-_]* ]]; then
+        echo "[install] FATAL: $_k is still at a placeholder value. Aborting." >&2
+        exit 1
+    fi
+done
+unset _k _v
 
 set_kv() {
     local key="$1"

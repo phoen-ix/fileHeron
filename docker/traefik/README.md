@@ -60,6 +60,27 @@ proxies external HTTPS to those local ports.
 ```yaml
 http:
   routers:
+    # Highest priority: refuse external requests to internal-only paths.
+    # A separate router beats a middleware here - stripPrefix would ALIAS
+    # /api/internal/* onto other paths rather than refuse it.
+    #
+    # CAVEAT, and it matters: this matches on the path as the entrypoint
+    # presents it. If your entrypoint permits encoded slashes (Traefik v3
+    # `encodedCharacters.allowEncodedSlash: true`, or `sanitizePath: false`),
+    # then `/api/internal%2Ftus-hooks` does NOT match this rule, while uvicorn
+    # decodes it and routes it to the real endpoint - so the deny is bypassed.
+    # Treat this as defence-in-depth only. The controls that do not depend on
+    # proxy path handling are the HMAC envelope (always on) and
+    # TUS_HOOK_ALLOWED_IPS - set the latter.
+    fileheron-block-internal:
+      rule: "Host(`files.example.com`) && PathPrefix(`/api/internal/`)"
+      entryPoints:
+        - websecure
+      service: noop@internal
+      priority: 1000
+      tls:
+        certResolver: letsencrypt
+
     fileheron:
       rule: "Host(`files.example.com`)"
       entryPoints:
@@ -69,7 +90,6 @@ http:
         certResolver: letsencrypt
       middlewares:
         - fileheron-headers
-        - fileheron-deny-internal
 
     # Dedicated, higher-priority router for the ONE endpoint that needs a
     # request-body cap. The buffering middleware lives ONLY here so it can
@@ -84,7 +104,6 @@ http:
         certResolver: letsencrypt
       middlewares:
         - fileheron-headers
-        - fileheron-deny-internal
         - fileheron-large-body
 
     fileheron-api:
@@ -98,16 +117,18 @@ http:
       # response to disk before the first byte (operator rule 4).
       middlewares:
         - fileheron-headers
-        - fileheron-deny-internal
 
     fileheron-uploads:
       rule: "Host(`files.example.com`) && PathPrefix(`/uploads/`)"
       entryPoints:
         - websecure
-      service: fileheron-backend
-      # tusd is reached via the SPA container's nginx proxy. TUS streams
-      # 5 MB chunks and tusd enforces its own limits - NO buffering here,
-      # or large resumable uploads (and any download) stall.
+      # MUST be fileheron-spa, not fileheron-backend: tusd is reached through
+      # the SPA container's nginx, which proxies /uploads/ to tusd:8080. The
+      # backend has no /uploads/ route, so pointing this at it 404s every
+      # resumable upload.
+      service: fileheron-spa
+      # TUS streams 5 MB chunks and tusd enforces its own limits - NO buffering
+      # here, or large resumable uploads (and any download) stall.
       tls:
         certResolver: letsencrypt
       middlewares:
@@ -138,20 +159,6 @@ http:
         # decide whether to issue Secure cookies.
         customRequestHeaders:
           X-Forwarded-Proto: "https"
-
-    fileheron-deny-internal:
-      # Defence-in-depth: refuse any external request to internal
-      # paths even if a router accidentally matches them.
-      stripPrefix:
-        prefixes:
-          - "/api/internal"
-      # Note: stripPrefix would alias them to other paths - better
-      # is to use plugin or chain to return 404. The cleanest
-      # approach is to put a separate router with a higher priority:
-      #   rule: "PathPrefix(`/api/internal/`)"
-      #   service: noop
-      # Or use the official `denyHeader`/`denyRouter` patterns from
-      # your Traefik version.
 
     fileheron-large-body:
       # Adjust to MAX_DIRECT_UPLOAD_BYTES + headroom (~110 MiB for the
@@ -187,7 +194,40 @@ http:
 
 `noop@internal` is Traefik's built-in service that returns 404.
 Higher priority means this router wins over the broader
-`/api/` router defined above.
+`/api/` router defined above. This is already included in the dynamic-config
+example above; it is repeated here because it is the one rule most
+hand-written configs get wrong.
+
+### This rule alone is not sufficient
+
+Router rules match the path **as the entrypoint presents it**, while
+uvicorn/Starlette percent-decode before routing. If your entrypoint permits
+encoded slashes - Traefik v3 `encodedCharacters.allowEncodedSlash: true`, or
+`sanitizePath: false` - then:
+
+    GET /api/internal/tus-hooks     -> 418/404   (blocked, rule matches)
+    GET /api/internal%2Ftus-hooks   -> reaches the backend  (rule does NOT match)
+
+The same trick sidesteps a `Path()`-scoped body cap such as
+`fileheron-api-upload`. If you run a shared entrypoint you may not be free to
+change that setting, so do not rely on the proxy for this:
+
+1. **Set `TUS_HOOK_ALLOWED_IPS`** to the tusd container's address. It is
+   enforced in the application (`routers/tus_hooks.py`), so no proxy path
+   handling can bypass it.
+2. The **HMAC envelope** signed with `TUS_HOOK_SECRET` is always required and is
+   the load-bearing control. Keep that secret strong; the backend refuses to
+   boot in production if it is still a placeholder.
+
+Verify with both forms after any proxy change:
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' https://files.example.com/api/internal/tus-hooks
+curl -s -o /dev/null -w '%{http_code}\n' https://files.example.com/api/internal%2Ftus-hooks
+```
+
+Anything that reaches the app returns the JSON error envelope with a
+`request_id`; a blocked request does not.
 
 ---
 

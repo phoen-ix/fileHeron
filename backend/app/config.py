@@ -6,6 +6,7 @@ ENVIRONMENT=production additionally forces COOKIE_SECURE=true.
 from __future__ import annotations
 
 import os
+import re
 import sys
 import warnings
 from urllib.parse import quote_plus
@@ -291,6 +292,11 @@ class Settings(BaseSettings):
 _PRODUCTION_ALIASES = frozenset({"production", "prod"})
 _KNOWN_ENVIRONMENTS = _PRODUCTION_ALIASES | frozenset({"development", "test"})
 
+# Every secret placeholder shipped in .env.example begins "change-" or
+# "change_". Kept module-level so the regression test can assert it against the
+# real .env.example rather than against a copy of the strings.
+_PLACEHOLDER_RE = re.compile(r"^change[-_]", re.IGNORECASE)
+
 
 settings = Settings()
 
@@ -312,21 +318,34 @@ if os.environ.get("PYTEST_CURRENT_TEST") is None:
             f"Use one of: {', '.join(sorted(_KNOWN_ENVIRONMENTS))}."
         )
 
-    _insecure_defaults = [
-        ("change-me-in-production-min-32-chars", "JWT_SECRET", settings.JWT_SECRET),
-        ("change_me_in_production", "DB_PASSWORD", settings.DB_PASSWORD),
-        # TUS_HOOK_SECRET is the load-bearing HMAC secret for the internal
-        # tusd webhook - at its default an attacker who knows the placeholder
-        # could forge upload envelopes. Fail fast like the others (finding L1/M-tus).
-        (
-            "change-me-tus-hook-secret-min-32-chars-_______________",
-            "TUS_HOOK_SECRET",
-            settings.TUS_HOOK_SECRET,
-        ),
+    # Matched by PREFIX, not by literal. This used to compare against exact
+    # strings, and those strings drifted away from the ones .env.example
+    # actually ships - so `cp .env.example .env` + ENVIRONMENT=production booted
+    # on the published JWT_SECRET and TUS_HOOK_SECRET, with every token
+    # forgeable and every Fernet field decryptable. Every placeholder we ship
+    # begins "change-" or "change_"; a real random secret doing the same is not
+    # a practical concern, and the failure mode is a loud boot error.
+    # tests/test_config_placeholders.py loads .env.example verbatim and asserts
+    # each value here is still caught - that is what stops the drift recurring.
+    _secret_fields = [
+        ("JWT_SECRET", settings.JWT_SECRET),
+        ("DB_PASSWORD", settings.DB_PASSWORD),
+        # TUS_HOOK_SECRET is the load-bearing HMAC secret for the internal tusd
+        # webhook - at its default an attacker who knows the placeholder can
+        # forge upload envelopes.
+        ("TUS_HOOK_SECRET", settings.TUS_HOOK_SECRET),
+        # Not a Settings field (only the db container consumes it), but it does
+        # reach the backend via `env_file: .env`, which makes this the one
+        # boot-time place that can refuse a published default. Absent = no
+        # opinion, so deployments that don't pass it through still boot.
+        ("DB_ROOT_PASSWORD", os.environ.get("DB_ROOT_PASSWORD", "")),
     ]
-    for placeholder, name, value in _insecure_defaults:
-        if value == placeholder:
-            _fail_or_warn(f"{name} is unset (still at placeholder). Set it to a strong random value.")
+    for name, value in _secret_fields:
+        if value and _PLACEHOLDER_RE.match(value.strip()):
+            _fail_or_warn(
+                f"{name} is still at a shipped placeholder value. Set it to a "
+                "strong random value (e.g. `openssl rand -hex 32`)."
+            )
 
     if len(settings.JWT_SECRET) < 32:
         _fail_or_warn("JWT_SECRET is too short (min 32 chars).")

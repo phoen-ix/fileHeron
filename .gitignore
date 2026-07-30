@@ -49,6 +49,10 @@ Thumbs.db
 .env
 .env.local
 .env.*.local
+# install.sh writes .env.bak via `sed -i.bak` and removes it again; if it dies
+# in between, that leftover holds real secrets. Never let one be committable.
+.env.bak*
+.env.*.bak
 
 # Project data - bind mounts, never commit user files
 data/db/*

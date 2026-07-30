@@ -44,8 +44,22 @@ the rest.
 **Production target** (the host's Traefik terminates TLS and routes to the
 loopback-bound compose stack):
 
+The supported path is `./install.sh --url=https://files.example.com`, which
+generates all four secrets, sets `ENVIRONMENT=production` and hardens the rest
+of `.env` for you. To do it by hand instead:
+
 ```bash
-cp .env.example .env       # set DB_PASSWORD, DB_ROOT_PASSWORD, JWT_SECRET, TUS_HOOK_SECRET, ADMIN_BOOTSTRAP_EMAIL
+cp .env.example .env
+# 1. REQUIRED - .env.example ships ENVIRONMENT=development. Without this the
+#    stack runs in dev mode: Secure cookies are not forced and /docs is public.
+sed -i 's/^ENVIRONMENT=.*/ENVIRONMENT=production/' .env
+# 2. REQUIRED - replace all four placeholders with real random values.
+#    The backend refuses to boot in production while any of them is still a
+#    placeholder, which is the intended behaviour, not a bug.
+for k in DB_PASSWORD DB_ROOT_PASSWORD JWT_SECRET TUS_HOOK_SECRET; do
+    sed -i "s|^${k}=.*|${k}=$(openssl rand -hex 32)|" .env
+done
+# 3. Set ADMIN_BOOTSTRAP_EMAIL, then bring it up.
 docker compose up -d       # binds everything to 127.0.0.1; add a Traefik route on the host
 ```
 

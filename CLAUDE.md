@@ -15,11 +15,24 @@ keep this to what would cause a wrong move if unknown.
 
 ## Status
 
-Backend **`v2.1.0`** (GA + hardening wave), desktop client **`client-v1.0.0`** (GA)
-- shipped + in production, published for public self-hosting. v2.1.0 needs a host
-step (compose `env_file` change). (README's server/client version
+Backend **`v2.2.0`** (audit-remediation wave), desktop client **`client-v1.1.0`**
+- shipped + in production, published for public self-hosting. **v2.2.0 needs a
+host step** (`git pull && docker compose up -d`: ClamAV 1.5.3 + a worker
+`/state` mount) **and carries a migration** (`files.av_unscanned`), so a rollback
+past it needs the `alembic stamp` recovery. (README's server/client version
 badges read live from the git tags, so they never need a manual bump; this line
 does - keep it current on release.)
+
+> **Corrections from the 2026-07-30 audit - these were previously asserted here
+> and were false.** Restore drills were described as proven and weekly; the drill
+> had been broken since v1.56.0 and the systemd units are *available*, not
+> installed (they now are, on this host). `clamd.conf`'s 30 G limits do not
+> apply: clamd clamps `MaxFileSize` to ~2 GiB, so AV coverage stops there and
+> larger files are served flagged `av_unscanned` rather than `clean`.
+> `tests/test_scope_deny_by_default.py` was cited as the guard against ungated
+> `get_actor` routes; under FastAPI 0.141 it was walking zero routes - use
+> `tests/_route_helpers.py::iter_api_routes`, and note it still cannot see
+> router-level dependencies, so gate coverage is tested behaviourally.
 
 > **Rich text (v1.50):** the admin legal pages + email-template editor is a
 > from-scratch **ProseMirror** (MIT) HTML editor (`components/RichTextEditor.vue`

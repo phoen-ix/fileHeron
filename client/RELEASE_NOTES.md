@@ -1,3 +1,29 @@
+# Desktop client 1.1.0
+
+**Licensing fix.** The date picker used by the expiry fields was
+[tkcalendar](https://github.com/j4321/tkCalendar), which is **GPL-3.0**. It was
+being compiled into this `.exe`, which is published under MIT - so the binary and
+its stated licence disagreed. Found in the 2026-07-30 audit.
+
+It is replaced by an equivalent picker built in-tree on the Python standard
+library and CustomTkinter, both permissively licensed. Every remaining runtime
+dependency is MIT/BSD/Apache, so the published `.exe` is now genuinely MIT.
+
+## What you will notice
+
+- The expiry date field looks slightly different and opens a month grid with
+  back/forward arrows. Dates before today are greyed out, as before.
+- Dates are entered and shown as `YYYY-MM-DD`. Previously the format followed
+  the app language; it is now the same everywhere, which is also the format the
+  server uses.
+- **The download is smaller.** tkcalendar pulled in Babel, whose full locale
+  database was the single largest component of the executable.
+
+No functional changes to uploads, downloads, resume, or sign-in. If you build
+from source, `tkcalendar` is no longer a dependency.
+
+---
+
 # Desktop client 1.0.0
 
 **1.0 - general availability.** The desktop client reaches its stable release

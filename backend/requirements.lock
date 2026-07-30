@@ -1896,7 +1896,3 @@ websockets==16.0 \
     --hash=sha256:f4a32d1bd841d4bcbffdcb3d2ce50c09c3909fbead375ab28d0181af89fd04da \
     --hash=sha256:fd3cb4adb94a2a6e2b7c0d8d05cb94e6f1c81a0cf9dc2694fb65c7e8d94c42e4
     # via uvicorn
-zipstream-ng==1.9.2 \
-    --hash=sha256:116b7304b00f3251328cb300fa90f0f09d523b7faf2a06b3eaf7277dcb82cc3e \
-    --hash=sha256:7292efc812a437ec688cef2c9523a4e710cd669e4b5abc7d5a15eb4d5e68e4ea
-    # via fileheron-backend (pyproject.toml)

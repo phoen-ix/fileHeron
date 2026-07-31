@@ -45,6 +45,7 @@ import type {
   ErrorAlertSettingsResponse,
   AvReloadResponse,
   AvStatusResponse,
+  ErasePreflight,
   EraseUserResponse,
   FilePreviewSettingsResponse,
   ForcePasswordResetResponse,
@@ -395,6 +396,20 @@ export function changeUserEmail(id: number, payload: AdminChangeEmailRequest) {
 
 export function eraseUser(id: number) {
   return api.post<EraseUserResponse>(`/admin/users/${id}/erase`)
+}
+
+/** What the irreversible erase is about to destroy. The endpoint has existed
+ *  since the feature shipped and the SPA never called it, so the confirmation
+ *  dialog asked for a decision without showing what it costs (audit
+ *  2026-07-30, flow-erasure-10). */
+export function erasePreflight(id: number) {
+  return api.get<ErasePreflight>(`/admin/users/${id}/erase/preflight`)
+}
+
+/** The verifiable receipt PDF for a completed erasure, addressed by the audit
+ *  row the erase response now returns. */
+export function erasureReceiptPdf(auditId: number) {
+  return api.get(`/admin/erasure-receipts/${auditId}/pdf`, { responseType: 'blob' })
 }
 
 export function listAuditLog(params: {

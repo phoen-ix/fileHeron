@@ -252,17 +252,27 @@ async function disable() {
 
       <p class="fh-field-help">
         {{
-          $t('account.twofa_recovery_remaining', { n: status.recovery_codes_remaining })
+          $t(
+            'account.twofa_recovery_remaining',
+            { n: status.recovery_codes_remaining },
+            status.recovery_codes_remaining,
+          )
         }}
       </p>
 
       <hr class="fh-rule" />
 
       <h2 class="active-h2">{{ $t('twofa.regenerate_cta') }}</h2>
+      <!-- Each label below is associated with its input by id. They were
+           siblings with no `for` and no id, so the accessible name of all four
+           fields was empty: a screen reader announced "edit, blank" on the
+           password box of the DISABLE-2FA form (audit 2026-07-30,
+           fe-i18n-a11y-9). -->
       <form class="manage-form" @submit.prevent="regenerateCodes">
         <div class="fh-field">
-          <label class="fh-field-label">{{ $t('common.current_password') }}</label>
+          <label class="fh-field-label" for="regen-password">{{ $t('common.current_password') }}</label>
           <input
+            id="regen-password"
             v-model="disablePassword"
             class="fh-field-input"
             type="password"
@@ -271,8 +281,9 @@ async function disable() {
           />
         </div>
         <div class="fh-field">
-          <label class="fh-field-label">{{ $t('twofa.code_or_recovery_label') }}</label>
+          <label class="fh-field-label" for="regen-code">{{ $t('twofa.code_or_recovery_label') }}</label>
           <input
+            id="regen-code"
             v-model="disableCode"
             class="fh-field-input fh-field-mono"
             autocomplete="one-time-code"
@@ -299,8 +310,9 @@ async function disable() {
       <p>{{ $t('twofa.disable_intro') }}</p>
       <form class="manage-form" @submit.prevent="disable">
         <div class="fh-field">
-          <label class="fh-field-label">{{ $t('common.current_password') }}</label>
+          <label class="fh-field-label" for="disable-password">{{ $t('common.current_password') }}</label>
           <input
+            id="disable-password"
             v-model="disablePassword"
             class="fh-field-input"
             type="password"
@@ -309,8 +321,9 @@ async function disable() {
           />
         </div>
         <div class="fh-field">
-          <label class="fh-field-label">{{ $t('twofa.code_or_recovery_label') }}</label>
+          <label class="fh-field-label" for="disable-code">{{ $t('twofa.code_or_recovery_label') }}</label>
           <input
+            id="disable-code"
             v-model="disableCode"
             class="fh-field-input fh-field-mono"
             autocomplete="one-time-code"

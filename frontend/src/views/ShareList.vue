@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+
+import { useEscapeToClose } from '@/composables/useEscapeToClose'
 import { useRoute, useRouter } from 'vue-router'
 
 import { bulkExpireShares } from '@/api/shares'
@@ -67,6 +69,9 @@ function openBulkConfirm() {
 function closeBulkConfirm() {
   if (!bulkInProgress.value) bulkConfirmOpen.value = false
 }
+
+// See useEscapeToClose: the backdrop's own @keydown.escape never fires.
+useEscapeToClose(computed(() => bulkConfirmOpen.value), closeBulkConfirm)
 
 async function confirmBulkExpire() {
   const ids = Array.from(

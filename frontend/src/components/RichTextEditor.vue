@@ -1,47 +1,52 @@
 <template>
   <div class="rt-editor" :class="{ disabled }">
+    <!-- Every control here is a bare glyph (B, ↶, ⯇, </>). `title` is a
+         tooltip, not an accessible name: a screen reader announced "button"
+         and the glyph's own character name, so the whole toolbar was unusable
+         without sight (audit 2026-07-30, fe-i18n-a11y-16). aria-label mirrors
+         the already-localized title. -->
     <div class="rt-toolbar" role="toolbar" :aria-label="ariaLabel || undefined">
-      <button type="button" class="rt-tool" :disabled="disabled" :title="t('richtext.undo')" @click="run(undo)">↶</button>
-      <button type="button" class="rt-tool" :disabled="disabled" :title="t('richtext.redo')" @click="run(redo)">↷</button>
+      <button type="button" class="rt-tool" :disabled="disabled" :title="t('richtext.undo')" :aria-label="t('richtext.undo')" @click="run(undo)">↶</button>
+      <button type="button" class="rt-tool" :disabled="disabled" :title="t('richtext.redo')" :aria-label="t('richtext.redo')" @click="run(redo)">↷</button>
       <span class="rt-sep" />
 
-      <select class="rt-select" :disabled="disabled" :title="t('richtext.block')" :value="''" @change="onBlockSelect">
+      <select class="rt-select" :disabled="disabled" :title="t('richtext.block')" :aria-label="t('richtext.block')" :value="''" @change="onBlockSelect">
         <option value="" disabled>{{ t('richtext.block') }}</option>
         <option value="p">{{ t('richtext.paragraph') }}</option>
         <option v-for="lvl in [1, 2, 3, 4, 5, 6]" :key="lvl" :value="`h${lvl}`">H{{ lvl }}</option>
       </select>
       <span class="rt-sep" />
 
-      <button type="button" class="rt-tool" :disabled="disabled" :title="t('richtext.bold')" @click="toggle('strong')"><strong>B</strong></button>
-      <button type="button" class="rt-tool" :disabled="disabled" :title="t('richtext.italic')" @click="toggle('em')"><em>I</em></button>
-      <button type="button" class="rt-tool" :disabled="disabled" :title="t('richtext.underline')" @click="toggle('underline')"><u>U</u></button>
-      <button type="button" class="rt-tool" :disabled="disabled" :title="t('richtext.strike')" @click="toggle('strikethrough')"><s>S</s></button>
-      <button type="button" class="rt-tool" :disabled="disabled" :title="t('richtext.code')" @click="toggle('code')">&lt;/&gt;</button>
+      <button type="button" class="rt-tool" :disabled="disabled" :title="t('richtext.bold')" :aria-label="t('richtext.bold')" @click="toggle('strong')"><strong>B</strong></button>
+      <button type="button" class="rt-tool" :disabled="disabled" :title="t('richtext.italic')" :aria-label="t('richtext.italic')" @click="toggle('em')"><em>I</em></button>
+      <button type="button" class="rt-tool" :disabled="disabled" :title="t('richtext.underline')" :aria-label="t('richtext.underline')" @click="toggle('underline')"><u>U</u></button>
+      <button type="button" class="rt-tool" :disabled="disabled" :title="t('richtext.strike')" :aria-label="t('richtext.strike')" @click="toggle('strikethrough')"><s>S</s></button>
+      <button type="button" class="rt-tool" :disabled="disabled" :title="t('richtext.code')" :aria-label="t('richtext.code')" @click="toggle('code')">&lt;/&gt;</button>
       <span class="rt-sep" />
 
-      <button type="button" class="rt-tool" :disabled="disabled" :title="t('richtext.align_left')" @click="run(setAlign('left'))">⯇</button>
-      <button type="button" class="rt-tool" :disabled="disabled" :title="t('richtext.align_center')" @click="run(setAlign('center'))">≡</button>
-      <button type="button" class="rt-tool" :disabled="disabled" :title="t('richtext.align_right')" @click="run(setAlign('right'))">⯈</button>
-      <button type="button" class="rt-tool" :disabled="disabled" :title="t('richtext.align_justify')" @click="run(setAlign('justify'))">☰</button>
+      <button type="button" class="rt-tool" :disabled="disabled" :title="t('richtext.align_left')" :aria-label="t('richtext.align_left')" @click="run(setAlign('left'))">⯇</button>
+      <button type="button" class="rt-tool" :disabled="disabled" :title="t('richtext.align_center')" :aria-label="t('richtext.align_center')" @click="run(setAlign('center'))">≡</button>
+      <button type="button" class="rt-tool" :disabled="disabled" :title="t('richtext.align_right')" :aria-label="t('richtext.align_right')" @click="run(setAlign('right'))">⯈</button>
+      <button type="button" class="rt-tool" :disabled="disabled" :title="t('richtext.align_justify')" :aria-label="t('richtext.align_justify')" @click="run(setAlign('justify'))">☰</button>
       <span class="rt-sep" />
 
-      <button type="button" class="rt-tool" :disabled="disabled" :title="t('richtext.bullet_list')" @click="run(wrapInList(schema.nodes.bullet_list))">•</button>
-      <button type="button" class="rt-tool" :disabled="disabled" :title="t('richtext.ordered_list')" @click="run(wrapInList(schema.nodes.ordered_list))">1.</button>
-      <button type="button" class="rt-tool" :disabled="disabled" :title="t('richtext.blockquote')" @click="run(wrapIn(schema.nodes.blockquote))">❝</button>
-      <button type="button" class="rt-tool" :disabled="disabled" :title="t('richtext.code_block')" @click="run(setBlockType(schema.nodes.code_block))">{ }</button>
-      <button type="button" class="rt-tool" :disabled="disabled" :title="t('richtext.hr')" @click="run(insertHr)">―</button>
+      <button type="button" class="rt-tool" :disabled="disabled" :title="t('richtext.bullet_list')" :aria-label="t('richtext.bullet_list')" @click="run(wrapInList(schema.nodes.bullet_list))">•</button>
+      <button type="button" class="rt-tool" :disabled="disabled" :title="t('richtext.ordered_list')" :aria-label="t('richtext.ordered_list')" @click="run(wrapInList(schema.nodes.ordered_list))">1.</button>
+      <button type="button" class="rt-tool" :disabled="disabled" :title="t('richtext.blockquote')" :aria-label="t('richtext.blockquote')" @click="run(wrapIn(schema.nodes.blockquote))">❝</button>
+      <button type="button" class="rt-tool" :disabled="disabled" :title="t('richtext.code_block')" :aria-label="t('richtext.code_block')" @click="run(setBlockType(schema.nodes.code_block))">{ }</button>
+      <button type="button" class="rt-tool" :disabled="disabled" :title="t('richtext.hr')" :aria-label="t('richtext.hr')" @click="run(insertHr)">―</button>
       <span class="rt-sep" />
 
-      <button type="button" class="rt-tool" :disabled="disabled" :title="t('richtext.link')" @click="onLink">🔗</button>
-      <button type="button" class="rt-tool" :disabled="disabled" :title="t('richtext.image')" @click="onImage">🖼</button>
+      <button type="button" class="rt-tool" :disabled="disabled" :title="t('richtext.link')" :aria-label="t('richtext.link')" @click="onLink">🔗</button>
+      <button type="button" class="rt-tool" :disabled="disabled" :title="t('richtext.image')" :aria-label="t('richtext.image')" @click="onImage">🖼</button>
       <span class="rt-sep" />
 
-      <button type="button" class="rt-tool" :disabled="disabled" :title="t('richtext.table')" @click="run(insertTable)">▦</button>
-      <button type="button" class="rt-tool" :disabled="disabled" :title="t('richtext.row_after')" @click="run(addRowAfter)">+R</button>
-      <button type="button" class="rt-tool" :disabled="disabled" :title="t('richtext.col_after')" @click="run(addColumnAfter)">+C</button>
-      <button type="button" class="rt-tool" :disabled="disabled" :title="t('richtext.del_row')" @click="run(deleteRow)">−R</button>
-      <button type="button" class="rt-tool" :disabled="disabled" :title="t('richtext.del_col')" @click="run(deleteColumn)">−C</button>
-      <button type="button" class="rt-tool" :disabled="disabled" :title="t('richtext.del_table')" @click="run(deleteTable)">⌫▦</button>
+      <button type="button" class="rt-tool" :disabled="disabled" :title="t('richtext.table')" :aria-label="t('richtext.table')" @click="run(insertTable)">▦</button>
+      <button type="button" class="rt-tool" :disabled="disabled" :title="t('richtext.row_after')" :aria-label="t('richtext.row_after')" @click="run(addRowAfter)">+R</button>
+      <button type="button" class="rt-tool" :disabled="disabled" :title="t('richtext.col_after')" :aria-label="t('richtext.col_after')" @click="run(addColumnAfter)">+C</button>
+      <button type="button" class="rt-tool" :disabled="disabled" :title="t('richtext.del_row')" :aria-label="t('richtext.del_row')" @click="run(deleteRow)">−R</button>
+      <button type="button" class="rt-tool" :disabled="disabled" :title="t('richtext.del_col')" :aria-label="t('richtext.del_col')" @click="run(deleteColumn)">−C</button>
+      <button type="button" class="rt-tool" :disabled="disabled" :title="t('richtext.del_table')" :aria-label="t('richtext.del_table')" @click="run(deleteTable)">⌫▦</button>
 
       <template v-if="placeholders.length > 0">
         <span class="rt-toolbar-spacer" />

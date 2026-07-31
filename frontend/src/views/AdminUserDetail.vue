@@ -10,13 +10,16 @@ import {
   adminRevokeSession,
   adminRevokeUserSessions,
   changeUserEmail,
+  erasePreflight,
   eraseUser,
+  erasureReceiptPdf,
   forcePasswordReset,
   getUser,
   listMailLog,
   updateUser,
 } from '@/api/admin'
 import { useApiError } from '@/composables/useApiError'
+import { downloadBlob } from '@/utils/downloadBlob'
 import { useSiteDateFormat } from '@/composables/useSiteDateFormat'
 import { useUiStore } from '@/stores/ui'
 import type {
@@ -24,6 +27,7 @@ import type {
   AdminMailRow,
   AdminSessionRow,
   AdminUserItem,
+  ErasePreflight,
   UserRole,
 } from '@/types/api'
 import { formatBytes } from '@/utils/bytes'
@@ -33,7 +37,7 @@ const route = useRoute()
 const router = useRouter()
 const { t } = useI18n()
 const { formatDate } = useSiteDateFormat()
-const { describe } = useApiError()
+const { describe, describeBlob } = useApiError()
 const ui = useUiStore()
 
 const user = ref<AdminUserItem | null>(null)
@@ -261,10 +265,24 @@ async function onChangeEmail() {
   }
 }
 
+// What the erase is about to destroy. The endpoint shipped with the feature
+// and nothing called it, so both confirmation steps asked for an irreversible
+// decision without showing its cost (audit 2026-07-30, flow-erasure-10).
+const preflight = ref<ErasePreflight | null>(null)
+const receiptAuditId = ref<number | null>(null)
+
 async function onErase() {
   if (!user.value) return
   if (eraseStep.value === 0) {
     eraseStep.value = 1
+    try {
+      const { data } = await erasePreflight(user.value.id)
+      preflight.value = data
+    } catch {
+      // Best-effort: a failed pre-flight must not block the erasure itself,
+      // it just means the dialog shows no counts.
+      preflight.value = null
+    }
     return
   }
   if (eraseStep.value === 1) {
@@ -274,6 +292,7 @@ async function onErase() {
   erasing.value = true
   try {
     const { data } = await eraseUser(user.value.id)
+    receiptAuditId.value = data.audit_id
     ui.pushToast(
       t('admin_user_detail.erased_toast', {
         n: data.deleted_files,
@@ -281,6 +300,12 @@ async function onErase() {
       }),
       'success',
     )
+    // Offer the receipt BEFORE navigating away - it is the document the admin
+    // hands to the data subject, and the erase response is the only place its
+    // audit id appears.
+    if (data.audit_id !== null) {
+      await onDownloadReceipt(data.audit_id)
+    }
     await router.push({ name: 'admin-users' })
   } catch (err) {
     ui.pushToast(describe(err), 'error')
@@ -289,6 +314,15 @@ async function onErase() {
   }
 }
 
+
+async function onDownloadReceipt(auditId: number) {
+  try {
+    const { data } = await erasureReceiptPdf(auditId)
+    downloadBlob(data as Blob, `erasure-receipt-${auditId}.pdf`)
+  } catch (err) {
+    ui.pushToast(await describeBlob(err), 'error')
+  }
+}
 
 onMounted(load)
 </script>
@@ -525,10 +559,29 @@ onMounted(load)
       <div class="danger-zone">
         <h2 class="section-h2">{{ t('admin_user_detail.danger') }}</h2>
         <p class="fh-field-help">{{ t('admin_user_detail.erase_help') }}</p>
-        <p v-if="eraseStep === 1" class="fh-notice" data-tone="error">
+        <p v-if="eraseStep === 1" class="fh-notice" data-tone="error" role="alert">
           {{ t('admin_user_detail.erase_step1') }}
         </p>
-        <p v-if="eraseStep === 2" class="fh-notice" data-tone="error">
+        <!-- What the erase will destroy, from the pre-flight endpoint. -->
+        <ul v-if="eraseStep >= 1 && preflight" class="fh-notice erase-preflight" data-tone="error">
+          <li>
+            {{
+              t('admin_user_detail.erase_preflight_files', {
+                n: preflight.files_to_delete,
+                bytes: formatBytes(preflight.bytes_to_delete),
+              })
+            }}
+          </li>
+          <li>
+            {{
+              t('admin_user_detail.erase_preflight_shares', {
+                created: preflight.shares_created,
+                received: preflight.shares_received_to_anonymize,
+              })
+            }}
+          </li>
+        </ul>
+        <p v-if="eraseStep === 2" class="fh-notice" data-tone="error" role="alert">
           {{ t('admin_user_detail.erase_step2') }}
         </p>
         <button

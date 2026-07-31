@@ -142,12 +142,16 @@ const hintText = computed(() => {
   }
   const ms = expiresInMs.value
   if (ms <= 0) return t('expiry.in_past')
+  // The third argument is the plural COUNT. vue-i18n selects the form from it,
+  // not from the interpolation payload - so `t(key, { n })` alone always
+  // rendered the plural branch and every one-day expiry read "in 1 days" /
+  // "in 1 Tagen" (audit 2026-07-30, fe-i18n-a11y-12).
   const minutes = Math.round(ms / 60_000)
-  if (minutes < 60) return t('expiry.in_minutes', { n: minutes })
+  if (minutes < 60) return t('expiry.in_minutes', { n: minutes }, minutes)
   const hours = Math.round(minutes / 60)
-  if (hours < 24) return t('expiry.in_hours', { n: hours })
+  if (hours < 24) return t('expiry.in_hours', { n: hours }, hours)
   const days = Math.round(hours / 24)
-  return t('expiry.in_days', { n: days })
+  return t('expiry.in_days', { n: days }, days)
 })
 
 // Re-evaluate the locale-side label when language flips.

@@ -8,6 +8,7 @@ import { asEnvelope } from '@/api/client'
 import { oidcStartUrl, type PublicProvider } from '@/api/oidc'
 import { useApiError } from '@/composables/useApiError'
 import { effectiveLandingPath } from '@/composables/useEffectiveLanding'
+import { POST_LOGIN_REDIRECT_KEY } from '@/router/postLoginRedirect'
 import { isWebAuthnSupported } from '@/composables/useWebAuthn'
 import { useAuthStore } from '@/stores/auth'
 import { useSiteStore } from '@/stores/site'
@@ -43,6 +44,20 @@ const providers = computed<PublicProvider[]>(() => site.providers)
 const motdText = computed<string>(() => site.motd?.text ?? '')
 
 function onProviderClick(p: PublicProvider) {
+  // Carry the deep link across the IdP round-trip. The OIDC callback is a
+  // BACKEND redirect that always lands on `/`, so a user who followed a link to
+  // a share, got bounced to /login?redirect=/share/abc and signed in with SSO
+  // arrived at the dashboard with no idea what they had been trying to open -
+  // while the password form honoured the same parameter (audit 2026-07-30,
+  // fe-auth-7). sessionStorage, not localStorage: it must not outlive the tab.
+  const target = route.query.redirect
+  if (typeof target === 'string' && target.startsWith('/') && !target.startsWith('//')) {
+    try {
+      window.sessionStorage?.setItem(POST_LOGIN_REDIRECT_KEY, target)
+    } catch {
+      /* storage unavailable - fall back to landing on the default page */
+    }
+  }
   window.location.href = oidcStartUrl(p.id)
 }
 

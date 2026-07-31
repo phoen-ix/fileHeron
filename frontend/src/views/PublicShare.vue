@@ -86,7 +86,13 @@ function formatExpiry(iso: string | null): string {
 }
 
 function fileEnabled(state: string): boolean {
-  return state === 'clean' || state === 'ready_unscanned'
+  // `ready_unscanned` is NOT downloadable: the backend answers 425
+  // SCAN_IN_PROGRESS for it, always. Offering an enabled link produced a
+  // download that could only fail, on the one page whose visitor has no
+  // account, no error log and no way to tell a transient failure from a
+  // permanent one - next to a pill that already says "scanning"
+  // (audit 2026-07-30, fe-correct-7 / flow-publiclink-6).
+  return state === 'clean'
 }
 
 // In-browser preview (gated on the global admin switch + a supported type +
@@ -205,7 +211,7 @@ onMounted(load)
           v-if="share.downloads_remaining !== null"
           class="fh-field-help downloads-remaining"
         >
-          {{ t('public_share.downloads_remaining', { n: share.downloads_remaining }) }}
+          {{ t('public_share.downloads_remaining', { n: share.downloads_remaining }, share.downloads_remaining) }}
         </p>
 
         <a

@@ -15,7 +15,7 @@ import { useUiStore } from '@/stores/ui'
 import { downloadBlob } from '@/utils/downloadBlob'
 
 const { t } = useI18n()
-const { describe } = useApiError()
+const { describe, describeBlob } = useApiError()
 const ui = useUiStore()
 
 const CATEGORY_KEYS: BackupCategory[] = [
@@ -72,7 +72,7 @@ async function onExport() {
     downloadBlob(data as Blob, `fileheron-config-${stamp}.fhbackup.json`)
     ui.pushToast(t('admin_backup.export_done'), 'success')
   } catch (err) {
-    ui.pushToast(describe(err), 'error')
+    ui.pushToast(await describeBlob(err), 'error')
   } finally {
     exporting.value = false
   }

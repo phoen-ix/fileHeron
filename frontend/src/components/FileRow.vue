@@ -69,6 +69,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
 import type { FileInShareResponse, FileState } from '@/types/api'
 import { previewKind } from '@/utils/preview'
+import { formatBytes } from '@/utils/bytes'
 
 const props = defineProps<{
   file: FileInShareResponse
@@ -130,22 +131,18 @@ async function onDelete() {
   try {
     await deleteFile(props.file.id)
     emit('deleted', props.file.id)
+  } catch (err) {
+    // There was no catch here at all: a server refusal (403, 409, a 500)
+    // rejected silently, the spinner stopped, and the row stayed put - which
+    // reads as "nothing happened" for a destructive action the user just
+    // confirmed. The next thing they do is click it again (audit 2026-07-30,
+    // fe-correct-8).
+    ui.pushToast(describe(err), 'error')
   } finally {
     deleting.value = false
   }
 }
 
-function formatBytes(n: number): string {
-  if (n < 1024) return `${n} B`
-  const units = ['KB', 'MB', 'GB', 'TB']
-  let size = n / 1024
-  let unitIdx = 0
-  while (size >= 1024 && unitIdx < units.length - 1) {
-    size /= 1024
-    unitIdx++
-  }
-  return `${size.toFixed(size < 10 ? 2 : 1)} ${units[unitIdx]}`
-}
 </script>
 
 <style scoped>

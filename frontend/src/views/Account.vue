@@ -481,9 +481,11 @@ function jumpTo(id: string) {
           </p>
           <p class="fh-field-help">
             {{
-              $t('account.twofa_recovery_remaining', {
-                n: totpStatus.recovery_codes_remaining,
-              })
+              $t(
+                'account.twofa_recovery_remaining',
+                { n: totpStatus.recovery_codes_remaining },
+                totpStatus.recovery_codes_remaining,
+              )
             }}
           </p>
           <RouterLink to="/account/2fa" class="fh-btn-ghost fh-btn">

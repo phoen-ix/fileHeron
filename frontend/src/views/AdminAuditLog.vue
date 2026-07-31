@@ -13,7 +13,7 @@ import { downloadBlob } from '@/utils/downloadBlob'
 
 const { t } = useI18n()
 const { formatDate } = useSiteDateFormat()
-const { describe } = useApiError()
+const { describe, describeBlob } = useApiError()
 const ui = useUiStore()
 
 const items = ref<AdminAuditRow[]>([])
@@ -39,7 +39,15 @@ const filterParams = computed(() => {
   return p
 })
 
+// Out-of-order guard. Typing in the filter fires a request per keystroke
+// (debounced, not serialised), and whichever response arrived LAST won - so a
+// slow early request could overwrite the results of a newer, narrower one and
+// leave the table showing rows that do not match what is in the search box
+// (audit 2026-07-30, fe-correct-11). Same `seq` pattern usePaginatedList uses.
+let loadSeq = 0
+
 async function load() {
+  const mine = ++loadSeq
   loading.value = true
   errorMsg.value = null
   try {
@@ -48,12 +56,14 @@ async function load() {
       page: page.value,
       page_size: pageSize.value,
     })
+    if (mine !== loadSeq) return
     items.value = data.items
     total.value = data.total
   } catch (err) {
+    if (mine !== loadSeq) return
     errorMsg.value = describe(err)
   } finally {
-    loading.value = false
+    if (mine === loadSeq) loading.value = false
   }
 }
 
@@ -71,7 +81,7 @@ async function onExportCsv() {
     const { data } = await exportAuditCsv(filterParams.value)
     downloadBlob(data as Blob, 'audit-log.csv')
   } catch (err) {
-    ui.pushToast(describe(err), 'error')
+    ui.pushToast(await describeBlob(err), 'error')
   } finally {
     exporting.value = false
   }

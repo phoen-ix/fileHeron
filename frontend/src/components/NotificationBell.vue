@@ -76,9 +76,12 @@ onClickOutside(root, () => (open.value = false))
 
 const sse = useSSE({
   // Mint a fresh signed token on every (re)connect - EventSource can't
-  // send Authorization headers, so auth rides on `?token=`. The token
-  // has a 2-minute TTL so a long-running tab still works as the SSE
-  // composable cycles every 60s.
+  // send Authorization headers, so auth rides on `?token=`. The token's TTL is
+  // 5 minutes (services/sse_token.py::DEFAULT_TTL_SEC), comfortably more than
+  // the 60s connection cycle so a throttled background tab can still
+  // reconnect. This comment said 2 minutes, which was the value before the TTL
+  // was raised for exactly that reason - and a stale number here is what a
+  // later change would "restore" to (audit 2026-07-30, fe-auth-11).
   async url() {
     const { data } = await getStreamToken()
     return `/api/notifications/stream?token=${encodeURIComponent(data.token)}`
@@ -113,12 +116,9 @@ watch(
   { immediate: true },
 )
 
-onMounted(() => {
-  if (auth.isAuthenticated) {
-    void store.refresh()
-    sse.start()
-  }
-})
+// No onMounted duplicate of the watcher above: `{ immediate: true }` already
+// runs it during setup, so mounting refreshed the bell and opened the stream
+// twice (audit 2026-07-30, fe-correct-1).
 
 // Background tabs get throttled, which can stall an SSE reconnect long enough
 // for the stream to drop and the composable to give up. On refocus, restart it

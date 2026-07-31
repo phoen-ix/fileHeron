@@ -1,8 +1,13 @@
 <script setup lang="ts">
+import { toRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-defineProps<{ open: boolean }>()
+import { useEscapeToClose } from '@/composables/useEscapeToClose'
+
+const props = defineProps<{ open: boolean }>()
 const emit = defineEmits<{ (e: 'close'): void }>()
+
+useEscapeToClose(toRef(props, 'open'), () => emit('close'))
 
 const { t } = useI18n()
 

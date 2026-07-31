@@ -19,7 +19,7 @@ import { formatBytes } from '@/utils/bytes'
 
 const { t } = useI18n()
 const { formatDate } = useSiteDateFormat()
-const { describe } = useApiError()
+const { describe, describeBlob } = useApiError()
 const ui = useUiStore()
 
 const q = ref('')
@@ -66,20 +66,12 @@ async function onDownload(file: AdminFileItem) {
     document.body.removeChild(a)
     URL.revokeObjectURL(url)
   } catch (err) {
-    // axios with responseType=blob delivers the error body as a Blob too,
-    // so describe() can't see the envelope. Re-parse the blob as JSON
-    // before handing it off so the user sees the real backend message
-    // (e.g. QUARANTINE_BYTES_MISSING) instead of the generic fallback.
-    const ax = err as { response?: { data?: unknown } }
-    if (ax.response?.data instanceof Blob) {
-      try {
-        const text = await (ax.response.data as Blob).text()
-        ax.response.data = JSON.parse(text)
-      } catch {
-        /* body wasn't JSON; describe() will fall back to generic */
-      }
-    }
-    ui.pushToast(describe(err), 'error')
+    // axios with responseType=blob delivers the ERROR body as a Blob too, so
+    // describe() cannot see the envelope. This view had its own inline
+    // re-parse; it is now `describeBlob` in useApiError, shared with the four
+    // admin CSV/backup downloads that were all showing the generic message
+    // (audit 2026-07-30, fe-correct-12).
+    ui.pushToast(await describeBlob(err), 'error')
   }
 }
 

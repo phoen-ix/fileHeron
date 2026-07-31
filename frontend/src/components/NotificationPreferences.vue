@@ -21,6 +21,8 @@ import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import NotificationPreferencesTable from '@/components/NotificationPreferencesTable.vue'
+import { useApiError } from '@/composables/useApiError'
+import { useUiStore } from '@/stores/ui'
 import {
   getPreferences,
   updatePreferences,
@@ -32,6 +34,8 @@ import type {
 } from '@/types/api'
 
 const { t } = useI18n()
+const ui = useUiStore()
+const { describe } = useApiError()
 
 const items = ref<PreferenceItem[]>([])
 const loading = ref(true)
@@ -43,6 +47,8 @@ async function load() {
   try {
     const { data } = await getPreferences()
     items.value = data.items
+  } catch (err) {
+    ui.pushToast(describe(err), 'error')
   } finally {
     loading.value = false
   }
@@ -50,15 +56,24 @@ async function load() {
 
 async function onChange(cat: NotificationCategory, channel: NotificationChannel) {
   saving.value = true
+  // Keep the previous value so a failed save can be rolled back. The select is
+  // controlled by `items`, and the local write below only happened on success -
+  // but the BROWSER had already moved the dropdown, so a rejected save left the
+  // control showing a preference the server does not have, with no error
+  // anywhere (audit 2026-07-30, fe-correct-5).
+  const row = items.value.find((i) => i.category === cat)
+  const previous = row?.channel
   try {
     await updatePreferences({ [cat]: channel } as Record<NotificationCategory, NotificationChannel>)
     // Reflect the saved value locally (the table is now controlled via props).
-    const row = items.value.find((i) => i.category === cat)
     if (row) row.channel = channel
     savedAt.value = Date.now()
     setTimeout(() => {
       if (savedAt.value && Date.now() - savedAt.value > 1500) savedAt.value = null
     }, 1700)
+  } catch (err) {
+    if (row && previous !== undefined) row.channel = previous
+    ui.pushToast(describe(err), 'error')
   } finally {
     saving.value = false
   }

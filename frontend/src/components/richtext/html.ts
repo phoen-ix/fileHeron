@@ -27,7 +27,31 @@ const inertDoc = document.implementation.createHTMLDocument('richtext')
 export function htmlToDoc(html: string): PMNode {
   const el = inertDoc.createElement('div')
   el.innerHTML = html || ''
+  stripTableWidths(el)
   return DOMParser.fromSchema(schema).parse(el)
+}
+
+/** Drop column widths from pasted tables.
+ *
+ * prosemirror-tables' cell spec always carries a `colwidth` attribute and
+ * parses it back out of `<td width>` / `<colgroup>`, so a table pasted from a
+ * word processor arrived WITH widths, rendered with them in the editor - and
+ * then lost them on save, because the backend sanitiser's allowlist has no
+ * `col`, `colgroup` or width attribute (services/richtext.py). The user saw
+ * their layout revert with no explanation, every time (audit 2026-07-30,
+ * fe-xss-3).
+ *
+ * Dropping them here rather than widening the sanitiser keeps ONE definition
+ * of what HTML is allowed - the backend's - and makes the editor show what will
+ * actually be stored. */
+function stripTableWidths(root: HTMLElement): void {
+  root.querySelectorAll('colgroup, col').forEach((el) => el.remove())
+  root.querySelectorAll('td[width], th[width]').forEach((el) => {
+    el.removeAttribute('width')
+  })
+  root.querySelectorAll('table[style], td[style], th[style], col[style]').forEach(
+    (el) => el.removeAttribute('style'),
+  )
 }
 
 /** Serialise a ProseMirror document back to an HTML string. */

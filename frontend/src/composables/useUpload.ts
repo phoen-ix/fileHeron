@@ -51,6 +51,10 @@ export interface UploadItem {
   progress: number
   fileId: string | null
   error: string | null
+  /** Backend error code (e.g. QUOTA_EXCEEDED) when the failure carried one, so
+   *  the view can render a localized string instead of the server's English
+   *  text. The composable stays i18n-free; only the key travels. */
+  errorCode: string | null
   bytesUploaded: number
 }
 
@@ -164,8 +168,9 @@ export function useUpload(shareId: Ref<string | null>) {
     const item = findItemByUppyId(uppyFile.id)
     if (!item) return
     item.state = 'error'
-    item.error = err?.message ?? 'upload failed'
-    pushLog(item, 'error', { error: item.error })
+    item.error = err?.message ?? null
+    item.errorCode = 'UPLOAD_FAILED'
+    pushLog(item, 'error', { error: item.error ?? 'UPLOAD_FAILED' })
   })
 
   function add(files: File[]) {
@@ -177,6 +182,7 @@ export function useUpload(shareId: Ref<string | null>) {
         progress: 0,
         fileId: null,
         error: null,
+        errorCode: null,
         bytesUploaded: 0,
       }
       items.value.push(item)
@@ -186,8 +192,11 @@ export function useUpload(shareId: Ref<string | null>) {
 
   async function startItem(item: UploadItem) {
     if (!shareId.value) {
+      // Was the literal developer string "no share id", rendered verbatim into
+      // the user's file list (audit 2026-07-30, fe-i18n-a11y-5).
       item.state = 'error'
-      item.error = 'no share id'
+      item.error = null
+      item.errorCode = 'UPLOAD_NOT_READY'
       return
     }
     if (item.state !== 'queued') return
@@ -250,12 +259,14 @@ export function useUpload(shareId: Ref<string | null>) {
       // Prefer the API error envelope (e.g. QUOTA_EXCEEDED / MAINTENANCE_MODE /
       // DIRECT_UPLOAD_TOO_LARGE) over axios's generic "Request failed with
       // status code NNN"; keep this composable i18n-free (views localize).
+      const env = asEnvelope(err)
       const msg =
-        asEnvelope(err)?.error ??
-        (err instanceof Error ? err.message : typeof err === 'string' ? err : 'upload failed')
+        env?.error ??
+        (err instanceof Error ? err.message : typeof err === 'string' ? err : null)
       item.state = 'error'
       item.error = msg
-      pushLog(item, 'error', { error: msg })
+      item.errorCode = env?.code ?? 'UPLOAD_FAILED'
+      pushLog(item, 'error', { error: msg ?? item.errorCode })
     }
   }
 
@@ -295,6 +306,7 @@ export function useUpload(shareId: Ref<string | null>) {
     item.progress = 0
     item.bytesUploaded = 0
     item.error = null
+    item.errorCode = null
     pushLog(item, 'queued')
     await startItem(item)
   }

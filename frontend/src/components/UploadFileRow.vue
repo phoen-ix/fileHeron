@@ -37,16 +37,24 @@
         {{ t('upload.actions.remove') }}
       </button>
     </div>
-    <div v-if="item.error" class="file-row-error">{{ item.error }}</div>
+    <!-- A known error code renders as a localized string; an unrecognised one
+         falls back to the server's own text, and only then to the generic
+         message. The raw English backend string used to go straight to the
+         user (audit 2026-07-30, fe-i18n-a11y-5). -->
+    <div v-if="item.error || item.errorCode" class="file-row-error">
+      {{ errorText }}
+    </div>
   </li>
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import type { UploadItem, UploadState } from '@/composables/useUpload'
+import { formatBytes } from '@/utils/bytes'
 
-withDefaults(
+const props = withDefaults(
   defineProps<{
     item: UploadItem
     showRetry?: boolean
@@ -61,7 +69,18 @@ defineEmits<{
   retry: [uid: string]
 }>()
 
-const { t } = useI18n()
+const { t, te } = useI18n()
+
+// A known error code renders as a localized string; an unrecognised one falls
+// back to the server's own text, and only then to the generic message.
+const errorText = computed(() => {
+  const code = props.item.errorCode
+  if (code) {
+    const key = `errors.${code}`
+    if (te(key)) return t(key)
+  }
+  return props.item.error ?? t('errors.generic')
+})
 
 function canRemove(state: UploadState): boolean {
   return state === 'queued' || state === 'error' || state === 'done'
@@ -81,17 +100,6 @@ function percentLabel(item: UploadItem): string {
   return `${item.progress}%`
 }
 
-function formatBytes(n: number): string {
-  if (n < 1024) return `${n} B`
-  const units = ['KB', 'MB', 'GB', 'TB']
-  let size = n / 1024
-  let unitIdx = 0
-  while (size >= 1024 && unitIdx < units.length - 1) {
-    size /= 1024
-    unitIdx++
-  }
-  return `${size.toFixed(size < 10 ? 2 : 1)} ${units[unitIdx]}`
-}
 </script>
 
 <style scoped>

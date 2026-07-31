@@ -8,4 +8,17 @@ interface ImportMetaEnv {
 
 interface ImportMeta {
   readonly env: ImportMetaEnv
+  /** Vite's glob import. Declared here (rather than pulling in the whole
+   *  `vite/client` lib) because the structural tests read source files with it
+   *  - a bare `import('/src/x.ts?raw')` type-checks as a missing module even
+   *  though vite serves it, which is how a test can pass locally and fail the
+   *  `npm run build` gate. Minimal signature: only the eager+raw form is used. */
+  glob<T = unknown>(
+    pattern: string | string[],
+    options?: {
+      query?: string
+      import?: string
+      eager?: boolean
+    },
+  ): Record<string, T>
 }

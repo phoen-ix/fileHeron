@@ -5,12 +5,14 @@
  * Pages slot their form into the default slot. */
 
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 import LanguageSwitcher from '@/components/LanguageSwitcher.vue'
 import BrandLogo from '@/components/BrandLogo.vue'
 import BrandMark from '@/components/BrandMark.vue'
 import { useSiteStore } from '@/stores/site'
 
+const { t } = useI18n()
 const site = useSiteStore()
 const showLogo = computed(
   () => site.branding.show_login && !!site.branding.logo_url,
@@ -33,14 +35,21 @@ const showLogo = computed(
       <LanguageSwitcher />
     </header>
 
-    <main class="auth-inner">
+    <!-- A <div>, not a <main>: App.vue already renders the page's single
+         <main> and this component is rendered INSIDE it, so all nine public
+         auth pages shipped nested main landmarks - which is invalid, and makes
+         landmark navigation ambiguous exactly where a screen-reader user is
+         least oriented (audit 2026-07-30, fe-i18n-a11y-11). -->
+    <div class="auth-inner">
       <section class="auth-form">
         <slot />
       </section>
-    </main>
+    </div>
 
     <footer class="auth-bottom">
-      <span class="auth-foot-meta">self-hosted · GDPR-aware · MIT (planned)</span>
+      <!-- Was hardcoded English AND said "MIT (planned)" - the repository has
+           shipped an MIT LICENSE since v1.0 (audit 2026-07-30). -->
+      <span class="auth-foot-meta">{{ t('login.footer_meta') }}</span>
     </footer>
   </div>
 </template>

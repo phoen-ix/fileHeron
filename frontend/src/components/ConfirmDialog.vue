@@ -1,6 +1,8 @@
 <script setup lang="ts">
-import { nextTick, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+
+import { useEscapeToClose } from '@/composables/useEscapeToClose'
 
 import { useUiStore } from '@/stores/ui'
 
@@ -8,6 +10,14 @@ const ui = useUiStore()
 const { t } = useI18n()
 
 const confirmBtn = ref<HTMLButtonElement | null>(null)
+
+// Escape has to be bound on the document. The `@keydown.esc` on the backdrop
+// below can never fire - the backdrop is not focusable, so it is never on the
+// propagation path from the focused button (audit 2026-07-30).
+useEscapeToClose(
+  computed(() => !!ui.confirmState?.open),
+  () => ui.resolveConfirm(false),
+)
 
 // Move focus onto the confirm button when the dialog opens so keyboard users
 // land inside it (and Enter confirms).

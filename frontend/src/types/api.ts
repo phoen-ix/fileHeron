@@ -631,11 +631,26 @@ export interface UpdateEmailChangePolicyRequest {
   oidc_mode: EmailChangeOidcMode
 }
 
+export interface ErasePreflight {
+  user_id: number
+  display_name: string
+  email: string
+  role: string
+  is_already_erased: boolean
+  files_to_delete: number
+  bytes_to_delete: number
+  shares_created: number
+  shares_received_to_anonymize: number
+}
+
 export interface EraseUserResponse {
   user_id: number
   deleted_files: number
   deleted_bytes: number
   erased_at: string
+  /** Audit row the receipt PDF is generated from. */
+  audit_id: number | null
+  pii_purged: Record<string, number>
 }
 
 export interface AdminAuditRow {

@@ -16,10 +16,16 @@ import axios, { type AxiosError, type AxiosRequestConfig } from 'axios'
 import type { ApiErrorEnvelope, RefreshResponse } from '@/types/api'
 
 declare module 'axios' {
-  // Per-request opt-out: when true, a 401 that can't be refreshed away does
-  // NOT trigger the global onAuthLost() redirect. Used by the app-bootstrap
-  // session probe (getMe) so an anonymous visitor on a PUBLIC page isn't
-  // bounced to /login before the router guard can honor meta.public.
+  // Per-request opt-out: when true, a 401 that cannot be refreshed away does
+  // NOT trigger the global onAuthLost() redirect.
+  //
+  // The comment here used to say the app-bootstrap session probe passes it.
+  // Nothing has ever passed it: `bootstrap()` calls `refreshOnce()` FIRST and
+  // only calls getMe() if that succeeded, so the probe never reaches this
+  // branch and the flag was a documented escape hatch that did nothing (audit
+  // 2026-07-30, fe-auth-9). It stays declared - it is the correct mechanism if
+  // a caller ever does need a 401 not to navigate - but the comment now says
+  // what is true, so nobody relies on protection that is not there.
   interface AxiosRequestConfig {
     _skipAuthLost?: boolean
   }

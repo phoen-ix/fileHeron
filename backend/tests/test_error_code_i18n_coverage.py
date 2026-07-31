@@ -100,6 +100,20 @@ def test_en_and_de_have_identical_error_keys():
     assert en == de, {"en_only": sorted(en - de), "de_only": sorted(de - en)}
 
 
+# Codes the SPA raises on its OWN behalf, with no backend counterpart. They
+# live under `errors.*` because that is the namespace the shared describe()
+# helper resolves against - so they must be exempt from the
+# "does the backend emit it" sweep, and named here rather than silently
+# widening the check.
+_CLIENT_ONLY_CODES = {
+    # useUpload: a transport failure with no envelope, and an upload attempted
+    # before a share id exists. Both used to render developer English straight
+    # into the user's file list (audit 2026-07-30, fe-i18n-a11y-5).
+    "UPLOAD_FAILED",
+    "UPLOAD_NOT_READY",
+}
+
+
 def test_no_translations_for_codes_the_backend_cannot_emit():
     """Stale keys accumulate silently and make the coverage number a lie."""
     emitted: set[str] = set()
@@ -111,9 +125,23 @@ def test_no_translations_for_codes_the_backend_cannot_emit():
         # Codes set via a `code=` kwarg (the error middleware's INTERNAL_ERROR,
         # bulk-operation per-item failures) never appear as AppError literals.
         emitted |= set(re.findall(r'code\s*=\s*"([A-Z][A-Z_0-9]+)"', s))
-    keys = set(_locale("en")["errors"]) - {"generic"}
+    keys = set(_locale("en")["errors"]) - {"generic"} - _CLIENT_ONLY_CODES
     stale = sorted(keys - emitted)
     assert not stale, f"errors.* keys for codes the backend never emits: {stale}"
+
+
+def test_every_client_only_code_is_actually_used_by_the_spa():
+    """The exemption above must not become a place to park dead keys."""
+    import pathlib as _p
+
+    src_dir = _p.Path(__file__).resolve().parents[2] / "frontend" / "src"
+    blob = "\n".join(
+        f.read_text(encoding="utf-8", errors="replace")
+        for f in src_dir.rglob("*")
+        if f.suffix in {".ts", ".vue"}
+    )
+    unused = sorted(c for c in _CLIENT_ONLY_CODES if c not in blob)
+    assert not unused, f"exempted but unused: {unused}"
 
 
 def test_the_guard_is_not_vacuous():

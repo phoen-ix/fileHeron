@@ -2,6 +2,8 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import { useEscapeToClose } from '@/composables/useEscapeToClose'
+
 import {
   applyRollback,
   applyUpdate,
@@ -263,6 +265,15 @@ async function openConfirm(kind: 'update' | 'rollback' | 'force') {
     await loadTransferActivity()
   }
 }
+
+// Escape must be bound on the document: the `@keydown.escape` on the backdrop
+// cannot fire, because the backdrop is not focusable and so is never on the
+// propagation path (audit 2026-07-30). closeConfirm already refuses while a
+// submit is in flight.
+useEscapeToClose(
+  computed(() => confirming.value !== null),
+  () => closeConfirm(),
+)
 
 function closeConfirm() {
   if (submitting.value) return

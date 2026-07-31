@@ -31,13 +31,25 @@ function detectInitialLocale(): SupportedLocale {
   return 'en'
 }
 
+const initialLocale = detectInitialLocale()
+
 export const i18n = createI18n({
   legacy: false,
   globalInjection: true,
-  locale: detectInitialLocale(),
+  locale: initialLocale,
   fallbackLocale: 'en',
   messages: { en, de },
 })
+
+// `setLocale` keeps <html lang> in step, but nothing set it for the INITIAL
+// locale - index.html ships lang="en" and only a language SWITCH corrected it.
+// An anonymous German visitor therefore got a German login page inside an
+// English document: wrong screen-reader voice and pronunciation, wrong
+// hyphenation, wrong browser translation offer (audit 2026-07-30,
+// fe-i18n-a11y-10).
+if (typeof document !== 'undefined') {
+  document.documentElement.lang = initialLocale
+}
 
 export function setLocale(locale: SupportedLocale) {
   i18n.global.locale.value = locale

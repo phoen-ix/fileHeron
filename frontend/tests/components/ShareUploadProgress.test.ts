@@ -16,6 +16,7 @@ function item(over: Partial<UploadItem> = {}): UploadItem {
     progress: 40,
     fileId: null,
     error: null,
+    errorCode: null,
     bytesUploaded: 4,
     ...over,
   }

@@ -8,6 +8,7 @@ import { computed, ref } from 'vue'
 import * as authApi from '@/api/auth'
 import { getMe } from '@/api/account'
 import { refreshOnce, setAccessToken, setOnAuthLost } from '@/api/client'
+import { setLocale, type SupportedLocale } from '@/i18n'
 import { useNotificationsStore } from '@/stores/notifications'
 import * as webauthnApi from '@/api/webauthn'
 import { performAuthentication } from '@/composables/useWebAuthn'
@@ -72,12 +73,24 @@ export const useAuthStore = defineStore('auth', () => {
     return bootstrapPromise
   }
 
+  /** Apply the signed-in user's language.
+   *
+   * The locale was applied only at app bootstrap (main.ts / App.vue), so an
+   * in-tab logout and sign-in as a different user left the FIRST user's
+   * language in place until a full page reload - and a German user signing in
+   * after an English one read an English UI while their profile said German
+   * (audit 2026-07-30, fe-auth-8). Every login path funnels through here. */
+  function applyUserLocale(me: MeResponse): MeResponse {
+    if (me.locale) setLocale(me.locale as SupportedLocale)
+    return me
+  }
+
   async function login(email: string, password: string, totpCode?: string) {
     const resp = await authApi.login({ email, password, totp_code: totpCode })
     setAccessToken(resp.data.access_token)
     const me = await getMe()
     user.value = me.data
-    return me.data
+    return applyUserLocale(me.data)
   }
 
   async function loginWithRecovery(email: string, password: string, recoveryCode: string) {
@@ -89,7 +102,7 @@ export const useAuthStore = defineStore('auth', () => {
     setAccessToken(resp.data.access_token)
     const me = await getMe()
     user.value = me.data
-    return me.data
+    return applyUserLocale(me.data)
   }
 
   /** Passkey-as-second-factor login. Validates email + password,
@@ -116,7 +129,7 @@ export const useAuthStore = defineStore('auth', () => {
     setAccessToken(resp.data.access_token)
     const me = await getMe()
     user.value = me.data
-    return me.data
+    return applyUserLocale(me.data)
   }
 
   async function registerFromInvite(payload: {
@@ -129,7 +142,7 @@ export const useAuthStore = defineStore('auth', () => {
     setAccessToken(resp.data.access_token)
     const me = await getMe()
     user.value = me.data
-    return me.data
+    return applyUserLocale(me.data)
   }
 
   /** Returns true when the server-side session was actually revoked. */
@@ -169,6 +182,10 @@ export const useAuthStore = defineStore('auth', () => {
     setOnAuthLost(() => {
       setAccessToken(null)
       user.value = null
+      // Same reset as logout(). Only the explicit logout cleared the bell, so
+      // an EXPIRED session left the previous user's notifications on screen for
+      // whoever signed in next on that browser (audit 2026-07-30, fe-auth-4).
+      useNotificationsStore().reset()
       onAuthLostCallback?.()
     })
   }

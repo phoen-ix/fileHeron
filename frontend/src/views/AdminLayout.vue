@@ -26,10 +26,20 @@
               <path d="M4 6l4 4 4-4" />
             </svg>
           </button>
+          <!-- Collapsed is only a VISUAL state here: the panel animates to
+               grid-template-rows 0fr and the inner wrapper clips, but the links
+               inside stay in the tab order and in the accessibility tree. A
+               keyboard user tabbing past a collapsed category walked through
+               every hidden link, and a screen reader announced them, while
+               aria-expanded on the header said "collapsed" (audit 2026-07-30,
+               fe-i18n-a11y-6). `inert` removes both; aria-hidden is belt and
+               braces for anything that does not honour it yet. -->
           <div
             :id="`nav-cat-${cat.key}`"
             class="nav-cat-panel"
             :data-open="isOpen(cat.key)"
+            :inert="!isOpen(cat.key)"
+            :aria-hidden="!isOpen(cat.key)"
           >
             <div class="nav-cat-panel-inner">
               <RouterLink

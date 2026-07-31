@@ -54,6 +54,8 @@ export function useSSE(opts: UseSSEOptions) {
   let reconnectAttempt = 0
   let consecutiveErrors = 0
   let stopped = false
+  // True between start() and the EventSource actually existing - see _connect.
+  let connecting = false
 
   function _appendLastId(url: string): string {
     if (!lastEventId.value) return url
@@ -73,10 +75,16 @@ export function useSSE(opts: UseSSEOptions) {
 
   async function _connect() {
     if (stopped || givenUp.value) return
+    // Set BEFORE the first await: the URL factory is async (it mints a signed
+    // token), so `es` stays null across that await and three synchronous
+    // start() calls would each get past an `es === null` check and open their
+    // own EventSource.
+    connecting = true
     let u: string
     try {
       u = await _resolveUrl()
     } catch {
+      connecting = false
       // URL factory rejected (e.g. token mint failed because the user
       // logged out). Treat as a soft error and back off - but count
       // toward the give-up budget so a permanently-broken token route
@@ -84,6 +92,7 @@ export function useSSE(opts: UseSSEOptions) {
       _onFailure()
       return
     }
+    connecting = false
     es = new EventSource(u, { withCredentials: true })
     es.onopen = () => {
       connected.value = true
@@ -138,6 +147,14 @@ export function useSSE(opts: UseSSEOptions) {
   }
 
   function start() {
+    // Idempotent. `start()` used to open a SECOND EventSource whenever it was
+    // called while one was already live - and NotificationBell called it twice
+    // on every mount (an immediate watcher plus an onMounted), so every bell
+    // burned two of the five per-user stream slots the server allows, doubled
+    // the reconnect traffic, and delivered every notification twice (audit
+    // 2026-07-30, fe-correct-1). The visibilitychange handler is a third
+    // caller, which is exactly the shape this guard is for.
+    if ((es !== null || connecting) && !stopped) return
     stopped = false
     givenUp.value = false
     reconnectAttempt = 0
@@ -147,6 +164,7 @@ export function useSSE(opts: UseSSEOptions) {
 
   function stop() {
     stopped = true
+    connecting = false
     if (reconnectTimer !== null) {
       window.clearTimeout(reconnectTimer)
       reconnectTimer = null

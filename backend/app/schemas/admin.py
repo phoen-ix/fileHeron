@@ -107,6 +107,11 @@ class EraseUserResponse(APIBaseModel):
     deleted_files: int
     deleted_bytes: int
     erased_at: str
+    # Names the audit row `/admin/erasure-receipts/{audit_id}/pdf` renders. The
+    # receipt endpoint shipped with the feature; without this the SPA could not
+    # address it (audit 2026-07-30, flow-erasure-10).
+    audit_id: int | None = None
+    pii_purged: dict[str, int] = Field(default_factory=dict)
 
 
 class AdminAuditRow(APIBaseModel):

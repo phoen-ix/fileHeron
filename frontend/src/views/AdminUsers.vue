@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
+
+import { useEscapeToClose } from '@/composables/useEscapeToClose'
 
 import {
   activateInvite,
@@ -41,7 +43,15 @@ const errorMsg = ref<string | null>(null)
 
 let searchTimer: ReturnType<typeof setTimeout> | null = null
 
+// Out-of-order guard. Typing in the filter fires a request per keystroke
+// (debounced, not serialised), and whichever response arrived LAST won - so a
+// slow early request could overwrite the results of a newer, narrower one and
+// leave the table showing rows that do not match what is in the search box
+// (audit 2026-07-30, fe-correct-11). Same `seq` pattern usePaginatedList uses.
+let loadSeq = 0
+
 async function load() {
+  const mine = ++loadSeq
   loading.value = true
   errorMsg.value = null
   try {
@@ -51,12 +61,14 @@ async function load() {
       page: page.value,
       page_size: pageSize.value,
     })
+    if (mine !== loadSeq) return
     items.value = data.items
     total.value = data.total
   } catch (err) {
+    if (mine !== loadSeq) return
     errorMsg.value = describe(err)
   } finally {
-    loading.value = false
+    if (mine === loadSeq) loading.value = false
   }
 }
 
@@ -198,6 +210,13 @@ async function onConfirmRevoke() {
     revokeInProgress.value = false
   }
 }
+
+// Escape on each of the three invite modals. The `@keydown.escape` each
+// backdrop carries cannot fire: the backdrop is not focusable, so it is never
+// on the propagation path from whatever inside has focus (audit 2026-07-30).
+useEscapeToClose(computed(() => detailsInvite.value !== null), closeDetails)
+useEscapeToClose(computed(() => revokeInviteRow.value !== null), closeRevoke)
+useEscapeToClose(computed(() => activateInviteRow.value !== null), closeActivate)
 
 function openActivate(inv: AdminInviteItem) {
   activateInviteRow.value = inv

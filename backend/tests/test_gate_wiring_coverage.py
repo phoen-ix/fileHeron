@@ -521,3 +521,37 @@ def test_a_csp_event_is_captured_only_while_the_switch_is_on(db):
     )
     db.commit()
     assert error_log.should_log(db, event) is True
+
+
+# --- fe-i18n-a11y-2: the bell can name every category it shows ---------------
+
+
+def test_every_dispatched_category_has_a_bell_headline():
+    """`notif_bell.headline.<category>` is what the in-app bell renders. Six of
+    the seventeen dispatched categories had no entry, so the bell showed a raw
+    key - `notif_bell.headline.share_rejected` - to the user (audit 2026-07-30).
+    Asserted here rather than in vitest: the frontend test container mounts only
+    frontend/, so the enum is not reachable from there."""
+    import json
+    import pathlib
+
+    from app.models.notification import NotificationCategory
+
+    root = pathlib.Path(__file__).resolve().parents[2] / "frontend/src/i18n/locales"
+    for locale in ("en", "de"):
+        data = json.loads((root / f"{locale}.json").read_text(encoding="utf-8"))
+        headlines = data["notif_bell"]["headline"]
+        missing = [c.value for c in NotificationCategory if c.value not in headlines]
+        assert not missing, f"{locale}.json has no headline for: {missing}"
+
+
+def test_the_two_locales_carry_the_same_headline_keys():
+    """A key present in en and absent in de renders the raw key for German
+    users only - the failure mode nobody testing in English would see."""
+    import json
+    import pathlib
+
+    root = pathlib.Path(__file__).resolve().parents[2] / "frontend/src/i18n/locales"
+    en = json.loads((root / "en.json").read_text(encoding="utf-8"))
+    de = json.loads((root / "de.json").read_text(encoding="utf-8"))
+    assert set(en["notif_bell"]["headline"]) == set(de["notif_bell"]["headline"])

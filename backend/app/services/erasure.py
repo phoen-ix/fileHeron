@@ -517,7 +517,7 @@ def erase_user(
     # whole purpose is to state it (audit 2026-07-30, flow-erasure-2).
     deleted_count, deleted_bytes = _erased_file_totals(db, target.id)
 
-    record_audit_event(
+    audit_row = record_audit_event(
         db,
         event_type=AuditEventType.user_erased,
         actor_user_id=actor.id,
@@ -530,6 +530,7 @@ def erase_user(
         },
         request=request,
     )
+    db.flush()
     logger.info(
         "user erased: id=%d, %d files (%d bytes) hard-deleted",
         target.id,
@@ -541,6 +542,12 @@ def erase_user(
         "deleted_files": deleted_count,
         "deleted_bytes": deleted_bytes,
         "erased_at": utc_now().isoformat(),
+        # The id of the audit row the receipt PDF is generated from. The
+        # endpoint to fetch it has existed since the feature shipped and the
+        # SPA had no way to name a row, so the verifiable receipt an admin
+        # hands to the data subject was unreachable from the UI that performed
+        # the erasure (audit 2026-07-30, flow-erasure-10).
+        "audit_id": audit_row.id if audit_row is not None else None,
         # Same dict the audit row and the receipt PDF carry. Returned so a
         # caller can report what was purged without re-reading the audit log,
         # and so the residue is assertable in a test rather than only visible

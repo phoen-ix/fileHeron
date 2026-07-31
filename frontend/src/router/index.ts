@@ -6,6 +6,8 @@ import {
 } from 'vue-router'
 
 import { effectiveLandingPath } from '@/composables/useEffectiveLanding'
+import { i18n } from '@/i18n'
+import { takePostLoginRedirect } from '@/router/postLoginRedirect'
 import { useAuthStore } from '@/stores/auth'
 import type { MeResponse } from '@/types/api'
 
@@ -15,8 +17,10 @@ declare module 'vue-router' {
     public?: boolean
     /** Density mode for the layout wrapper. */
     density?: 'editorial' | 'operator'
-    /** Page title shown in <title> + AppHeader. */
-    title?: string
+    /** i18n key under `page_title.*` for <title>. A key, not a string: every
+     *  title used to be hardcoded English, so a German user's tab, history
+     *  entry and bookmark were always English (audit 2026-07-30). */
+    titleKey?: string
     /** Restrict to a specific role; un-met → bounced home. */
     requiresRole?: 'admin'
   }
@@ -30,49 +34,49 @@ const router = createRouter({
       path: '/setup',
       name: 'setup',
       component: () => import('@/views/Setup.vue'),
-      meta: { public: true, density: 'editorial', title: 'Set up fileHeron' },
+      meta: { public: true, density: 'editorial', titleKey: 'setup' },
     },
     {
       path: '/login',
       name: 'login',
       component: () => import('@/views/Login.vue'),
-      meta: { public: true, density: 'editorial', title: 'Sign in' },
+      meta: { public: true, density: 'editorial', titleKey: 'login' },
     },
     {
       path: '/register/:token',
       name: 'register',
       component: () => import('@/views/RegisterFromInvite.vue'),
-      meta: { public: true, density: 'editorial', title: 'Set up your account' },
+      meta: { public: true, density: 'editorial', titleKey: 'register' },
     },
     {
       path: '/forgot-password',
       name: 'forgot-password',
       component: () => import('@/views/ForgotPassword.vue'),
-      meta: { public: true, density: 'editorial', title: 'Forgot password' },
+      meta: { public: true, density: 'editorial', titleKey: 'forgot_password' },
     },
     {
       path: '/reset-password/:token',
       name: 'reset-password',
       component: () => import('@/views/ResetPassword.vue'),
-      meta: { public: true, density: 'editorial', title: 'Reset password' },
+      meta: { public: true, density: 'editorial', titleKey: 'reset_password' },
     },
     {
       path: '/verify-email/:token',
       name: 'verify-email',
       component: () => import('@/views/EmailVerify.vue'),
-      meta: { public: true, density: 'editorial', title: 'Verify email' },
+      meta: { public: true, density: 'editorial', titleKey: 'verify_email' },
     },
     {
       path: '/confirm-email-change/:token',
       name: 'confirm-email-change',
       component: () => import('@/views/ConfirmEmailChange.vue'),
-      meta: { public: true, density: 'editorial', title: 'Confirm email change' },
+      meta: { public: true, density: 'editorial', titleKey: 'confirm_email_change' },
     },
     {
       path: '/cancel-email-change/:token',
       name: 'cancel-email-change',
       component: () => import('@/views/CancelEmailChange.vue'),
-      meta: { public: true, density: 'editorial', title: 'Cancel email change' },
+      meta: { public: true, density: 'editorial', titleKey: 'cancel_email_change' },
     },
 
     /* authed --------------------------------------------------------------- */
@@ -80,19 +84,19 @@ const router = createRouter({
       path: '/',
       name: 'home',
       component: () => import('@/views/HomePlaceholder.vue'),
-      meta: { density: 'editorial', title: 'file:Heron' },
+      meta: { density: 'editorial', titleKey: 'home' },
     },
     {
       path: '/account',
       name: 'account',
       component: () => import('@/views/Account.vue'),
-      meta: { density: 'editorial', title: 'Account' },
+      meta: { density: 'editorial', titleKey: 'account' },
     },
     {
       path: '/account/2fa',
       name: 'account-2fa',
       component: () => import('@/views/TwoFactorSetup.vue'),
-      meta: { density: 'editorial', title: 'Two-factor authentication' },
+      meta: { density: 'editorial', titleKey: 'account_2fa' },
     },
 
     /* shares -------------------------------------------------------------- */
@@ -100,31 +104,31 @@ const router = createRouter({
       path: '/outbox',
       name: 'outbox',
       component: () => import('@/views/ShareList.vue'),
-      meta: { density: 'operator', title: 'Sent' },
+      meta: { density: 'operator', titleKey: 'outbox' },
     },
     {
       path: '/inbox',
       name: 'inbox',
       component: () => import('@/views/ShareList.vue'),
-      meta: { density: 'operator', title: 'Received' },
+      meta: { density: 'operator', titleKey: 'inbox' },
     },
     {
       path: '/share/new',
       name: 'share-create',
       component: () => import('@/views/ShareCreate.vue'),
-      meta: { density: 'operator', title: 'New share' },
+      meta: { density: 'operator', titleKey: 'share_create' },
     },
     {
       path: '/approvals',
       name: 'approvals',
       component: () => import('@/views/Approvals.vue'),
-      meta: { density: 'operator', title: 'Approvals' },
+      meta: { density: 'operator', titleKey: 'approvals' },
     },
     {
       path: '/share/:id',
       name: 'share-detail',
       component: () => import('@/views/ShareDetail.vue'),
-      meta: { density: 'operator', title: 'Share' },
+      meta: { density: 'operator', titleKey: 'share_detail' },
     },
 
     /* admin --------------------------------------------------------------- */
@@ -141,97 +145,97 @@ const router = createRouter({
           path: 'users',
           name: 'admin-users',
           component: () => import('@/views/AdminUsers.vue'),
-          meta: { density: 'operator', title: 'Users', requiresRole: 'admin' },
+          meta: { density: 'operator', titleKey: 'admin_users', requiresRole: 'admin' },
         },
         {
           path: 'users/:id',
           name: 'admin-user-detail',
           component: () => import('@/views/AdminUserDetail.vue'),
-          meta: { density: 'operator', title: 'User', requiresRole: 'admin' },
+          meta: { density: 'operator', titleKey: 'admin_user_detail', requiresRole: 'admin' },
         },
         {
           path: 'groups',
           name: 'admin-groups',
           component: () => import('@/views/AdminGroups.vue'),
-          meta: { density: 'operator', title: 'Groups', requiresRole: 'admin' },
+          meta: { density: 'operator', titleKey: 'admin_groups', requiresRole: 'admin' },
         },
         {
           path: 'groups/:id',
           name: 'admin-group-detail',
           component: () => import('@/views/AdminGroupDetail.vue'),
-          meta: { density: 'operator', title: 'Group', requiresRole: 'admin' },
+          meta: { density: 'operator', titleKey: 'admin_group_detail', requiresRole: 'admin' },
         },
         {
           path: 'audit-log',
           name: 'admin-audit',
           component: () => import('@/views/AdminAuditLog.vue'),
-          meta: { density: 'operator', title: 'Audit log', requiresRole: 'admin' },
+          meta: { density: 'operator', titleKey: 'admin_audit', requiresRole: 'admin' },
         },
         {
           path: 'analytics',
           name: 'admin-analytics',
           component: () => import('@/views/AdminAnalytics.vue'),
-          meta: { density: 'operator', title: 'Analytics', requiresRole: 'admin' },
+          meta: { density: 'operator', titleKey: 'admin_analytics', requiresRole: 'admin' },
         },
         {
           path: 'settings/webhooks',
           name: 'admin-settings-webhooks',
           component: () => import('@/views/AdminSettingsWebhooks.vue'),
-          meta: { density: 'operator', title: 'Webhooks', requiresRole: 'admin' },
+          meta: { density: 'operator', titleKey: 'admin_settings_webhooks', requiresRole: 'admin' },
         },
         {
           path: 'mail-log',
           name: 'admin-mail-log',
           component: () => import('@/views/AdminMailLog.vue'),
-          meta: { density: 'operator', title: 'Mail log', requiresRole: 'admin' },
+          meta: { density: 'operator', titleKey: 'admin_mail_log', requiresRole: 'admin' },
         },
         {
           path: 'mail-log/:id',
           name: 'admin-mail-detail',
           component: () => import('@/views/AdminMailDetail.vue'),
-          meta: { density: 'operator', title: 'Mail', requiresRole: 'admin' },
+          meta: { density: 'operator', titleKey: 'admin_mail_detail', requiresRole: 'admin' },
         },
         {
           path: 'error-log',
           name: 'admin-error-log',
           component: () => import('@/views/AdminErrorLog.vue'),
-          meta: { density: 'operator', title: 'Error log', requiresRole: 'admin' },
+          meta: { density: 'operator', titleKey: 'admin_error_log', requiresRole: 'admin' },
         },
         {
           path: 'inbox',
           name: 'admin-inbox',
           component: () => import('@/views/AdminInbox.vue'),
-          meta: { density: 'operator', title: 'Inbox', requiresRole: 'admin' },
+          meta: { density: 'operator', titleKey: 'admin_inbox', requiresRole: 'admin' },
         },
         {
           path: 'inbox/:id',
           name: 'admin-inbox-detail',
           component: () => import('@/views/AdminInboxDetail.vue'),
-          meta: { density: 'operator', title: 'Message', requiresRole: 'admin' },
+          meta: { density: 'operator', titleKey: 'admin_inbox_detail', requiresRole: 'admin' },
         },
         {
           path: 'file-history',
           name: 'admin-file-history',
           component: () => import('@/views/AdminFileHistory.vue'),
-          meta: { density: 'operator', title: 'File history', requiresRole: 'admin' },
+          meta: { density: 'operator', titleKey: 'admin_file_history', requiresRole: 'admin' },
         },
         {
           path: 'sessions',
           name: 'admin-sessions',
           component: () => import('@/views/AdminSessions.vue'),
-          meta: { density: 'operator', title: 'Sessions', requiresRole: 'admin' },
+          meta: { density: 'operator', titleKey: 'admin_sessions', requiresRole: 'admin' },
         },
         {
           path: 'quarantine',
           name: 'admin-quarantine',
           component: () => import('@/views/AdminQuarantine.vue'),
-          meta: { density: 'operator', title: 'Quarantine', requiresRole: 'admin' },
+          meta: { density: 'operator', titleKey: 'admin_quarantine', requiresRole: 'admin' },
         },
         {
           path: 'api-tokens',
           name: 'admin-api-tokens',
           component: () => import('@/views/AdminApiTokens.vue'),
-          meta: { density: 'operator', title: 'API tokens', requiresRole: 'admin' },
+          meta: { density: 'operator', titleKey: 'admin_api_tokens', requiresRole: 'admin' },
         },
         {
           // The dedicated Settings hub page was flattened into the sidebar -
@@ -245,67 +249,67 @@ const router = createRouter({
           path: 'settings/sso',
           name: 'admin-settings-sso',
           component: () => import('@/views/AdminSettingsSSOList.vue'),
-          meta: { density: 'operator', title: 'SSO', requiresRole: 'admin' },
+          meta: { density: 'operator', titleKey: 'admin_settings_sso', requiresRole: 'admin' },
         },
         {
           path: 'settings/sso/new',
           name: 'admin-settings-sso-new',
           component: () => import('@/views/AdminSettingsSSOEdit.vue'),
-          meta: { density: 'operator', title: 'New SSO provider', requiresRole: 'admin' },
+          meta: { density: 'operator', titleKey: 'admin_settings_sso_new', requiresRole: 'admin' },
         },
         {
           path: 'settings/sso/:id',
           name: 'admin-settings-sso-edit',
           component: () => import('@/views/AdminSettingsSSOEdit.vue'),
-          meta: { density: 'operator', title: 'Edit SSO provider', requiresRole: 'admin' },
+          meta: { density: 'operator', titleKey: 'admin_settings_sso_edit', requiresRole: 'admin' },
         },
         {
           path: 'settings/api-tokens',
           name: 'admin-settings-api-tokens',
           component: () => import('@/views/AdminSettingsApiTokens.vue'),
-          meta: { density: 'operator', title: 'API token policy', requiresRole: 'admin' },
+          meta: { density: 'operator', titleKey: 'admin_settings_api_tokens', requiresRole: 'admin' },
         },
         {
           path: 'settings/public-links',
           name: 'admin-settings-public-links',
           component: () => import('@/views/AdminSettingsPublicLinks.vue'),
-          meta: { density: 'operator', title: 'Public link policy', requiresRole: 'admin' },
+          meta: { density: 'operator', titleKey: 'admin_settings_public_links', requiresRole: 'admin' },
         },
         {
           path: 'settings/share-approval',
           name: 'admin-settings-share-approval',
           component: () => import('@/views/AdminSettingsShareApproval.vue'),
-          meta: { density: 'operator', title: 'Share approval', requiresRole: 'admin' },
+          meta: { density: 'operator', titleKey: 'admin_settings_share_approval', requiresRole: 'admin' },
         },
         {
           path: 'settings/email',
           name: 'admin-settings-email',
           component: () => import('@/views/AdminSettingsEmail.vue'),
-          meta: { density: 'operator', title: 'Email / SMTP', requiresRole: 'admin' },
+          meta: { density: 'operator', titleKey: 'admin_settings_email', requiresRole: 'admin' },
         },
         {
           path: 'settings/email-templates',
           name: 'admin-settings-email-templates',
           component: () => import('@/views/AdminSettingsEmailTemplates.vue'),
-          meta: { density: 'operator', title: 'Email templates', requiresRole: 'admin' },
+          meta: { density: 'operator', titleKey: 'admin_settings_email_templates', requiresRole: 'admin' },
         },
         {
           path: 'settings/imap',
           name: 'admin-settings-imap',
           component: () => import('@/views/AdminSettingsImap.vue'),
-          meta: { density: 'operator', title: 'Inbound mail', requiresRole: 'admin' },
+          meta: { density: 'operator', titleKey: 'admin_settings_imap', requiresRole: 'admin' },
         },
         {
           path: 'settings/general',
           name: 'admin-settings-general',
           component: () => import('@/views/AdminSettingsGeneral.vue'),
-          meta: { density: 'operator', title: 'General settings', requiresRole: 'admin' },
+          meta: { density: 'operator', titleKey: 'admin_settings_general', requiresRole: 'admin' },
         },
         {
           path: 'settings/branding',
           name: 'admin-settings-branding',
           component: () => import('@/views/AdminSettingsBranding.vue'),
-          meta: { density: 'operator', title: 'Branding & legal', requiresRole: 'admin' },
+          meta: { density: 'operator', titleKey: 'admin_settings_branding', requiresRole: 'admin' },
         },
         {
           // Legacy bookmark: the dedicated home-page view was folded
@@ -318,55 +322,55 @@ const router = createRouter({
           path: 'settings/twofa',
           name: 'admin-settings-twofa',
           component: () => import('@/views/AdminSettingsTwofa.vue'),
-          meta: { density: 'operator', title: '2FA enforcement', requiresRole: 'admin' },
+          meta: { density: 'operator', titleKey: 'admin_settings_twofa', requiresRole: 'admin' },
         },
         {
           path: 'settings/quarantine',
           name: 'admin-settings-quarantine',
           component: () => import('@/views/AdminSettingsQuarantine.vue'),
-          meta: { density: 'operator', title: 'Quarantine', requiresRole: 'admin' },
+          meta: { density: 'operator', titleKey: 'admin_settings_quarantine', requiresRole: 'admin' },
         },
         {
           path: 'settings/email-change',
           name: 'admin-settings-email-change',
           component: () => import('@/views/AdminSettingsEmailChange.vue'),
-          meta: { density: 'operator', title: 'Email change', requiresRole: 'admin' },
+          meta: { density: 'operator', titleKey: 'admin_settings_email_change', requiresRole: 'admin' },
         },
         {
           path: 'settings/error-alerts',
           name: 'admin-settings-error-alerts',
           component: () => import('@/views/AdminSettingsErrorAlerts.vue'),
-          meta: { density: 'operator', title: 'Error alerts', requiresRole: 'admin' },
+          meta: { density: 'operator', titleKey: 'admin_settings_error_alerts', requiresRole: 'admin' },
         },
         {
           path: 'settings/advanced',
           name: 'admin-settings-advanced',
           component: () => import('@/views/AdminSettingsAdvanced.vue'),
-          meta: { density: 'operator', title: 'Advanced', requiresRole: 'admin' },
+          meta: { density: 'operator', titleKey: 'admin_settings_advanced', requiresRole: 'admin' },
         },
         {
           path: 'settings/backup',
           name: 'admin-settings-backup',
           component: () => import('@/views/AdminSettingsBackup.vue'),
-          meta: { density: 'operator', title: 'Backup & restore', requiresRole: 'admin' },
+          meta: { density: 'operator', titleKey: 'admin_settings_backup', requiresRole: 'admin' },
         },
         {
           path: 'settings/maintenance',
           name: 'admin-settings-maintenance',
           component: () => import('@/views/AdminSettingsMaintenance.vue'),
-          meta: { density: 'operator', title: 'Maintenance mode', requiresRole: 'admin' },
+          meta: { density: 'operator', titleKey: 'admin_settings_maintenance', requiresRole: 'admin' },
         },
         {
           path: 'system',
           name: 'admin-system',
           component: () => import('@/views/AdminSystem.vue'),
-          meta: { density: 'operator', title: 'System', requiresRole: 'admin' },
+          meta: { density: 'operator', titleKey: 'admin_system', requiresRole: 'admin' },
         },
         {
           path: 'scheduled-tasks',
           name: 'admin-scheduled-tasks',
           component: () => import('@/views/AdminScheduledTasks.vue'),
-          meta: { density: 'operator', title: 'Scheduled tasks', requiresRole: 'admin' },
+          meta: { density: 'operator', titleKey: 'admin_scheduled_tasks', requiresRole: 'admin' },
         },
       ],
     },
@@ -385,7 +389,7 @@ const router = createRouter({
       path: '/d/:token',
       name: 'public-share',
       component: () => import('@/views/PublicShare.vue'),
-      meta: { public: true, density: 'editorial', title: 'Shared files' },
+      meta: { public: true, density: 'editorial', titleKey: 'public_share' },
     },
 
     /* anonymous "manage subscriptions" page (email footer links) ----------- */
@@ -393,7 +397,7 @@ const router = createRouter({
       path: '/manage-notifications/:token',
       name: 'manage-notifications',
       component: () => import('@/views/ManageNotifications.vue'),
-      meta: { public: true, density: 'editorial', title: 'Manage subscriptions' },
+      meta: { public: true, density: 'editorial', titleKey: 'manage_notifications' },
     },
 
     /* legal pages (footer links; mandatory in much of the EU) -------------- */
@@ -401,13 +405,13 @@ const router = createRouter({
       path: '/imprint',
       name: 'imprint',
       component: () => import('@/views/LegalPage.vue'),
-      meta: { public: true, density: 'editorial', title: 'Imprint' },
+      meta: { public: true, density: 'editorial', titleKey: 'imprint' },
     },
     {
       path: '/privacy',
       name: 'privacy',
       component: () => import('@/views/LegalPage.vue'),
-      meta: { public: true, density: 'editorial', title: 'Privacy' },
+      meta: { public: true, density: 'editorial', titleKey: 'privacy' },
     },
 
     /* fallback ------------------------------------------------------------- */
@@ -415,7 +419,7 @@ const router = createRouter({
       path: '/:pathMatch(.*)*',
       name: 'not-found',
       component: () => import('@/views/NotFound.vue'),
-      meta: { public: true, density: 'editorial', title: 'Not found' },
+      meta: { public: true, density: 'editorial', titleKey: 'not_found' },
     },
   ],
 })
@@ -447,6 +451,15 @@ export function navigationGuard(
       name: 'login',
       query: to.fullPath !== '/' ? { redirect: to.fullPath } : undefined,
     }
+  }
+
+  // Back from an SSO round-trip: the backend callback always lands on `/`, so
+  // the deep link Login.vue stashed before leaving is consumed here. Once, and
+  // only for an authenticated arrival at the landing route (audit 2026-07-30,
+  // fe-auth-7).
+  if (to.name === 'home' && auth.isAuthenticated) {
+    const stashed = takePostLoginRedirect()
+    if (stashed && stashed !== to.fullPath) return { path: stashed }
   }
 
   // Logged-in users hitting /login → bounce to their effective landing
@@ -505,9 +518,21 @@ router.beforeEach(async (to) => {
   })
 })
 
+// Localized document title. Every route's title was a hardcoded English
+// string, so a German user's browser tab, history entry and bookmark were
+// always in English - and the tab title is one of the few strings a user sees
+// without looking at the page (audit 2026-07-30, fe-i18n-a11y-3). The route
+// carries a KEY now; the string is resolved at navigation time, so it also
+// follows an in-session language switch.
 router.afterEach((to) => {
-  const t = to.meta.title ?? 'file:Heron'
-  document.title = t === 'file:Heron' ? 'file:Heron' : `${t} · file:Heron`
+  const key = to.meta.titleKey as string | undefined
+  const brand = 'file:Heron'
+  if (!key || key === 'home') {
+    document.title = brand
+    return
+  }
+  const label = i18n.global.t(`page_title.${key}`)
+  document.title = label === `page_title.${key}` ? brand : `${label} · ${brand}`
 })
 
 export default router

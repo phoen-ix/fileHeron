@@ -20,7 +20,8 @@
     "current_password": "Current password",
     "display_name": "Display name",
     "language": "Language",
-    "delete": "Delete"
+    "delete": "Delete",
+    "dismiss": "Dismiss"
   },
   "setup": {
     "title": "Welcome to fileHeron",
@@ -217,7 +218,9 @@
     "WEBAUTHN_NO_ID": "The passkey response was incomplete.",
     "WEBAUTHN_UNKNOWN_CREDENTIAL": "This passkey is not registered for this account.",
     "WEBAUTHN_VERIFY_FAILED": "The passkey could not be verified.",
-    "generic": "Something didn't work. Please try again."
+    "generic": "Something didn't work. Please try again.",
+    "UPLOAD_FAILED": "The upload failed. Try again.",
+    "UPLOAD_NOT_READY": "This share is not ready for uploads yet."
   },
   "login": {
     "title": "Sign in",
@@ -234,7 +237,8 @@
     "forgot": "Forgot password",
     "submitting": "Signing in…",
     "sso_button_with_name": "Sign in with {name}",
-    "sso_or": "or"
+    "sso_or": "or",
+    "footer_meta": "self-hosted · GDPR-aware · MIT licensed"
   },
   "register": {
     "title": "Set up your account",
@@ -952,7 +956,8 @@
     "av_infected": "Infected - blocked",
     "status_updated": "Updated",
     "delete_confirm": "Delete this message and its attachments? This can't be undone.",
-    "deleted": "Message deleted"
+    "deleted": "Message deleted",
+    "open_message": "Open message: {subject}"
   },
   "admin_email_templates": {
     "title": "Email templates",
@@ -1256,7 +1261,14 @@
         "rollback_triggered": "Rollback to {target_tag} started.",
         "generic": "Operational alert."
       },
-      "generic": "New activity"
+      "generic": "New activity",
+      "inbound_message": "New inbound message",
+      "oidc_linked": "SSO account connected",
+      "reset_password": "Password reset requested",
+      "share_approved": "Share approved",
+      "share_files_added": "Files added to a share",
+      "share_pending_approval": "Share awaiting approval",
+      "share_rejected": "Share rejected"
     }
   },
   "notif_prefs": {
@@ -1482,7 +1494,9 @@
     "emails": "Emails to this user",
     "emails_help": "The most recent emails file:Heron sent to this user.",
     "emails_view_all": "View in Mail log →",
-    "emails_empty": "No emails sent to this user."
+    "emails_empty": "No emails sent to this user.",
+    "erase_preflight_files": "{n} file(s) will be permanently deleted ({bytes}).",
+    "erase_preflight_shares": "{created} share(s) they created will be revoked; {received} received share(s) will be anonymised."
   },
   "admin_mail": {
     "eyebrow": "Admin / Mail log",
@@ -1682,7 +1696,7 @@
     "change_password_submit": "Change password",
     "twofa_off": "Two-factor auth is off.",
     "twofa_on": "Two-factor auth is on.",
-    "twofa_recovery_remaining": "{n} recovery codes remaining.",
+    "twofa_recovery_remaining": "{n} recovery code left | {n} recovery codes left",
     "twofa_setup_cta": "Set up two-factor auth",
     "twofa_manage_cta": "Manage two-factor",
     "session_current": "current",
@@ -1765,9 +1779,9 @@
       "never": "Never"
     },
     "custom_placeholder": "Pick a date and time",
-    "in_minutes": "in {n} minutes",
-    "in_hours": "in {n} hours",
-    "in_days": "in {n} days",
+    "in_minutes": "in {n} minute | in {n} minutes",
+    "in_hours": "in {n} hour | in {n} hours",
+    "in_days": "in {n} day | in {n} days",
     "in_past": "already past - pick a future time",
     "never_label": "Never",
     "never_help": "This share will not expire automatically. Revoke it manually when you're done."
@@ -2043,7 +2057,7 @@
     "no_subject": "Files for you",
     "expires": "Expires",
     "files_heading": "Files ({n})",
-    "downloads_remaining": "{n} downloads left.",
+    "downloads_remaining": "{n} download left | {n} downloads left",
     "download_all_zip": "Download all as ZIP",
     "password_label": "Password",
     "password_help": "The sender shared a password to access these files.",
@@ -2355,7 +2369,8 @@
       "user": "User",
       "signature": "Signature",
       "message": "Message"
-    }
+    },
+    "toggle_row": "Show details for error {code}"
   },
   "admin_av": {
     "title": "Antivirus engine",
@@ -2373,5 +2388,70 @@
   },
   "auth": {
     "logout_not_confirmed": "You were signed out on this device, but the server could not be reached - the session may still be active elsewhere. Sign in and out again when you have a connection."
+  },
+  "page_title": {
+    "setup": "Set up fileHeron",
+    "login": "Sign in",
+    "register": "Set up your account",
+    "forgot_password": "Forgot password",
+    "reset_password": "Reset password",
+    "verify_email": "Verify email",
+    "confirm_email_change": "Confirm email change",
+    "cancel_email_change": "Cancel email change",
+    "home": "file:Heron",
+    "account": "Account",
+    "account_2fa": "Two-factor authentication",
+    "outbox": "Sent",
+    "inbox": "Received",
+    "share_create": "New share",
+    "approvals": "Approvals",
+    "share_detail": "Share",
+    "admin_users": "Users",
+    "admin_user_detail": "User",
+    "admin_groups": "Groups",
+    "admin_group_detail": "Group",
+    "admin_audit": "Audit log",
+    "admin_analytics": "Analytics",
+    "admin_settings_webhooks": "Webhooks",
+    "admin_mail_log": "Mail log",
+    "admin_mail_detail": "Mail",
+    "admin_error_log": "Error log",
+    "admin_inbox": "Inbox",
+    "admin_inbox_detail": "Message",
+    "admin_file_history": "File history",
+    "admin_sessions": "Sessions",
+    "admin_quarantine": "Quarantine",
+    "admin_api_tokens": "API tokens",
+    "admin_settings_sso": "SSO",
+    "admin_settings_sso_new": "New SSO provider",
+    "admin_settings_sso_edit": "Edit SSO provider",
+    "admin_settings_api_tokens": "API token policy",
+    "admin_settings_public_links": "Public link policy",
+    "admin_settings_share_approval": "Share approval",
+    "admin_settings_email": "Email / SMTP",
+    "admin_settings_email_templates": "Email templates",
+    "admin_settings_imap": "Inbound mail",
+    "admin_settings_general": "General settings",
+    "admin_settings_branding": "Branding & legal",
+    "admin_settings_twofa": "2FA enforcement",
+    "admin_settings_quarantine": "Quarantine",
+    "admin_settings_email_change": "Email change",
+    "admin_settings_error_alerts": "Error alerts",
+    "admin_settings_advanced": "Advanced",
+    "admin_settings_backup": "Backup & restore",
+    "admin_settings_maintenance": "Maintenance mode",
+    "admin_system": "System",
+    "admin_scheduled_tasks": "Scheduled tasks",
+    "public_share": "Shared files",
+    "manage_notifications": "Manage subscriptions",
+    "imprint": "Imprint",
+    "privacy": "Privacy",
+    "not_found": "Not found"
+  },
+  "not_found": {
+    "eyebrow": "404 · not found",
+    "headline": "A heron flew off with this page.",
+    "body": "Try the home page or sign in.",
+    "home_cta": "Home"
   }
 }

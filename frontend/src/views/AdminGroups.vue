@@ -27,16 +27,26 @@ const newIsInbox = ref(false)
 const creating = ref(false)
 const formError = ref<string | null>(null)
 
+// Out-of-order guard. Typing in the filter fires a request per keystroke
+// (debounced, not serialised), and whichever response arrived LAST won - so a
+// slow early request could overwrite the results of a newer, narrower one and
+// leave the table showing rows that do not match what is in the search box
+// (audit 2026-07-30, fe-correct-11). Same `seq` pattern usePaginatedList uses.
+let loadSeq = 0
+
 async function load() {
+  const mine = ++loadSeq
   loading.value = true
   errorMsg.value = null
   try {
     const { data } = await listGroups()
+    if (mine !== loadSeq) return
     items.value = data.items
   } catch (err) {
+    if (mine !== loadSeq) return
     errorMsg.value = describe(err)
   } finally {
-    loading.value = false
+    if (mine === loadSeq) loading.value = false
   }
 }
 

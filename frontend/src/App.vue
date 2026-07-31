@@ -46,6 +46,19 @@ watch(
 onMounted(() => {
   if (auth.user) setLocale(auth.user.locale)
 })
+
+// Maintenance is hydrated once at bootstrap, so an admin who postponed an
+// update - which turns maintenance ON from the server side - saw no banner in
+// the tab they did it from, and neither did anyone already logged in. The
+// banner is the only warning a user gets before their next upload is refused
+// (audit 2026-07-30, flow-maintenance-8). Re-read it on navigation, which is
+// cheap (one anonymous /api/config-public) and is when the state matters.
+watch(
+  () => route.fullPath,
+  () => {
+    void site.loadConfig()
+  },
+)
 </script>
 
 <template>

@@ -41,7 +41,15 @@ const textTooLarge = computed(
   () => !!props.file && props.file.size_bytes > TEXT_PREVIEW_MAX_BYTES,
 )
 
+// Monotonic request token. Opening a second file while the first is still
+// loading meant whichever response arrived LAST won - so a slow response could
+// render the previous file's contents under the current file's name, in a modal
+// whose whole job is to show you what is in a file (audit 2026-07-30,
+// fe-correct-10). Every write below is gated on still being the newest request.
+let textRequestId = 0
+
 async function loadText(url: string) {
+  const requestId = ++textRequestId
   textContent.value = ''
   textError.value = false
   if (textTooLarge.value) return
@@ -51,13 +59,15 @@ async function loadText(url: string) {
       responseType: 'text',
       withCredentials: true,
     })
+    if (requestId !== textRequestId) return
     // axios may parse JSON-looking text into an object; coerce back to a string.
     textContent.value =
       typeof data === 'string' ? data : JSON.stringify(data, null, 2)
   } catch {
+    if (requestId !== textRequestId) return
     textError.value = true
   } finally {
-    textLoading.value = false
+    if (requestId === textRequestId) textLoading.value = false
   }
 }
 
@@ -69,6 +79,9 @@ watch(
       closeBtn.value?.focus()
       if (kind.value === 'text' && url) await loadText(url)
     } else {
+      // Invalidate any in-flight load so a late response cannot repopulate a
+      // closed modal.
+      textRequestId += 1
       textContent.value = ''
       textError.value = false
     }

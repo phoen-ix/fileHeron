@@ -20,7 +20,8 @@
     "current_password": "Aktuelles Passwort",
     "display_name": "Anzeigename",
     "language": "Sprache",
-    "delete": "Löschen"
+    "delete": "Löschen",
+    "dismiss": "Schließen"
   },
   "setup": {
     "title": "Willkommen bei fileHeron",
@@ -217,7 +218,9 @@
     "WEBAUTHN_NO_ID": "Die Passkey-Antwort war unvollständig.",
     "WEBAUTHN_UNKNOWN_CREDENTIAL": "Dieser Passkey ist für dieses Konto nicht registriert.",
     "WEBAUTHN_VERIFY_FAILED": "Der Passkey konnte nicht verifiziert werden.",
-    "generic": "Etwas hat nicht funktioniert. Bitte erneut versuchen."
+    "generic": "Etwas hat nicht funktioniert. Bitte erneut versuchen.",
+    "UPLOAD_FAILED": "Der Upload ist fehlgeschlagen. Bitte erneut versuchen.",
+    "UPLOAD_NOT_READY": "Diese Freigabe ist noch nicht bereit für Uploads."
   },
   "login": {
     "title": "Anmelden",
@@ -234,7 +237,8 @@
     "forgot": "Passwort vergessen",
     "submitting": "Wird angemeldet…",
     "sso_button_with_name": "Mit {name} anmelden",
-    "sso_or": "oder"
+    "sso_or": "oder",
+    "footer_meta": "selbst gehostet · DSGVO-bewusst · MIT-lizenziert"
   },
   "register": {
     "title": "Konto einrichten",
@@ -952,7 +956,8 @@
     "av_infected": "Infiziert - blockiert",
     "status_updated": "Aktualisiert",
     "delete_confirm": "Diese Nachricht und ihre Anhänge löschen? Das kann nicht rückgängig gemacht werden.",
-    "deleted": "Nachricht gelöscht"
+    "deleted": "Nachricht gelöscht",
+    "open_message": "Nachricht öffnen: {subject}"
   },
   "admin_email_templates": {
     "title": "E-Mail-Vorlagen",
@@ -1256,7 +1261,14 @@
         "rollback_triggered": "Rollback auf {target_tag} gestartet.",
         "generic": "Betriebsalarm."
       },
-      "generic": "Neue Aktivität"
+      "generic": "Neue Aktivität",
+      "inbound_message": "Neue eingegangene Nachricht",
+      "oidc_linked": "SSO-Konto verbunden",
+      "reset_password": "Passwort-Zurücksetzung angefordert",
+      "share_approved": "Freigabe genehmigt",
+      "share_files_added": "Dateien zu einer Freigabe hinzugefügt",
+      "share_pending_approval": "Freigabe wartet auf Genehmigung",
+      "share_rejected": "Freigabe abgelehnt"
     }
   },
   "notif_prefs": {
@@ -1482,7 +1494,9 @@
     "emails": "E-Mails an diese:n Nutzer:in",
     "emails_help": "Die zuletzt von file:Heron an diese:n Nutzer:in gesendeten E-Mails.",
     "emails_view_all": "Im E-Mail-Protokoll ansehen →",
-    "emails_empty": "Keine E-Mails an diese:n Nutzer:in gesendet."
+    "emails_empty": "Keine E-Mails an diese:n Nutzer:in gesendet.",
+    "erase_preflight_files": "{n} Datei(en) werden endgültig gelöscht ({bytes}).",
+    "erase_preflight_shares": "{created} von dieser Person erstellte Freigabe(n) werden widerrufen; {received} empfangene Freigabe(n) werden anonymisiert."
   },
   "admin_mail": {
     "eyebrow": "Admin / E-Mail-Protokoll",
@@ -1682,7 +1696,7 @@
     "change_password_submit": "Passwort ändern",
     "twofa_off": "Zwei-Faktor-Auth ist aus.",
     "twofa_on": "Zwei-Faktor-Auth ist aktiv.",
-    "twofa_recovery_remaining": "{n} Wiederherstellungscodes verbleibend.",
+    "twofa_recovery_remaining": "{n} Wiederherstellungscode übrig | {n} Wiederherstellungscodes übrig",
     "twofa_setup_cta": "Zwei-Faktor einrichten",
     "twofa_manage_cta": "Zwei-Faktor verwalten",
     "session_current": "aktuell",
@@ -1765,9 +1779,9 @@
       "never": "Nie"
     },
     "custom_placeholder": "Datum und Uhrzeit wählen",
-    "in_minutes": "in {n} Minuten",
-    "in_hours": "in {n} Stunden",
-    "in_days": "in {n} Tagen",
+    "in_minutes": "in {n} Minute | in {n} Minuten",
+    "in_hours": "in {n} Stunde | in {n} Stunden",
+    "in_days": "in {n} Tag | in {n} Tagen",
     "in_past": "bereits vorbei - bitte zukünftigen Zeitpunkt wählen",
     "never_label": "Nie",
     "never_help": "Diese Freigabe läuft nicht automatisch ab. Manuell widerrufen, wenn nicht mehr benötigt."
@@ -2043,7 +2057,7 @@
     "no_subject": "Dateien für dich",
     "expires": "Läuft ab",
     "files_heading": "Dateien ({n})",
-    "downloads_remaining": "Noch {n} Downloads verfügbar.",
+    "downloads_remaining": "noch {n} Download | noch {n} Downloads",
     "download_all_zip": "Alle als ZIP herunterladen",
     "password_label": "Passwort",
     "password_help": "Der Absender hat ein Passwort gesetzt, um auf diese Dateien zuzugreifen.",
@@ -2355,7 +2369,8 @@
       "user": "Benutzer",
       "signature": "Signatur",
       "message": "Meldung"
-    }
+    },
+    "toggle_row": "Details zum Fehler {code} anzeigen"
   },
   "admin_av": {
     "title": "Antiviren-Engine",
@@ -2373,5 +2388,70 @@
   },
   "auth": {
     "logout_not_confirmed": "Sie wurden auf diesem Gerät abgemeldet, der Server war jedoch nicht erreichbar - die Sitzung ist möglicherweise anderswo noch aktiv. Melden Sie sich bei bestehender Verbindung erneut an und ab."
+  },
+  "page_title": {
+    "setup": "fileHeron einrichten",
+    "login": "Anmelden",
+    "register": "Konto einrichten",
+    "forgot_password": "Passwort vergessen",
+    "reset_password": "Passwort zurücksetzen",
+    "verify_email": "E-Mail bestätigen",
+    "confirm_email_change": "E-Mail-Änderung bestätigen",
+    "cancel_email_change": "E-Mail-Änderung abbrechen",
+    "home": "file:Heron",
+    "account": "Konto",
+    "account_2fa": "Zwei-Faktor-Authentifizierung",
+    "outbox": "Gesendet",
+    "inbox": "Empfangen",
+    "share_create": "Neue Freigabe",
+    "approvals": "Freigaben",
+    "share_detail": "Freigabe",
+    "admin_users": "Benutzer",
+    "admin_user_detail": "Benutzer",
+    "admin_groups": "Gruppen",
+    "admin_group_detail": "Gruppe",
+    "admin_audit": "Audit-Log",
+    "admin_analytics": "Auswertungen",
+    "admin_settings_webhooks": "Webhooks",
+    "admin_mail_log": "E-Mail-Log",
+    "admin_mail_detail": "E-Mail",
+    "admin_error_log": "Fehlerprotokoll",
+    "admin_inbox": "Posteingang",
+    "admin_inbox_detail": "Nachricht",
+    "admin_file_history": "Dateiverlauf",
+    "admin_sessions": "Sitzungen",
+    "admin_quarantine": "Quarantäne",
+    "admin_api_tokens": "API-Tokens",
+    "admin_settings_sso": "SSO",
+    "admin_settings_sso_new": "Neuer SSO-Provider",
+    "admin_settings_sso_edit": "SSO-Provider bearbeiten",
+    "admin_settings_api_tokens": "API-Token-Richtlinie",
+    "admin_settings_public_links": "Richtlinie für öffentliche Links",
+    "admin_settings_share_approval": "Freigabe-Genehmigung",
+    "admin_settings_email": "E-Mail / SMTP",
+    "admin_settings_email_templates": "E-Mail-Vorlagen",
+    "admin_settings_imap": "Eingehende E-Mail",
+    "admin_settings_general": "Allgemeine Einstellungen",
+    "admin_settings_branding": "Branding & Rechtliches",
+    "admin_settings_twofa": "2FA-Pflicht",
+    "admin_settings_quarantine": "Quarantäne",
+    "admin_settings_email_change": "E-Mail-Änderung",
+    "admin_settings_error_alerts": "Fehler-Benachrichtigungen",
+    "admin_settings_advanced": "Erweitert",
+    "admin_settings_backup": "Sicherung & Wiederherstellung",
+    "admin_settings_maintenance": "Wartungsmodus",
+    "admin_system": "System",
+    "admin_scheduled_tasks": "Geplante Aufgaben",
+    "public_share": "Geteilte Dateien",
+    "manage_notifications": "Benachrichtigungen verwalten",
+    "imprint": "Impressum",
+    "privacy": "Datenschutz",
+    "not_found": "Nicht gefunden"
+  },
+  "not_found": {
+    "eyebrow": "404 · nicht gefunden",
+    "headline": "Ein Reiher ist mit dieser Seite davongeflogen.",
+    "body": "Versuch es auf der Startseite oder melde dich an.",
+    "home_cta": "Startseite"
   }
 }

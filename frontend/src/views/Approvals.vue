@@ -1,9 +1,10 @@
 <script setup lang="ts">
 /* /approvals - the approver's work queue: shares awaiting this user's
  * approval. Click through to the share detail to review + approve/reject. */
-import { onMounted, ref } from 'vue'
+import { onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import Pager from '@/components/Pager.vue'
 import { listPendingApprovals } from '@/api/shares'
 import { useApiError } from '@/composables/useApiError'
 import { useSiteDateFormat } from '@/composables/useSiteDateFormat'
@@ -15,6 +16,9 @@ const { describe } = useApiError()
 const { formatDate } = useSiteDateFormat()
 
 const items = ref<ShareListItem[]>([])
+const total = ref(0)
+const page = ref(1)
+const pageSize = ref(25)
 const loading = ref(true)
 const errorMsg = ref<string | null>(null)
 
@@ -22,8 +26,16 @@ async function load() {
   loading.value = true
   errorMsg.value = null
   try {
-    const { data } = await listPendingApprovals({ page: 1, page_size: 100 })
+    // Was a single hard-coded page of 100 with `total` discarded, so the 101st
+    // pending share was invisible with nothing on screen to suggest more
+    // existed - in the one queue whose entire purpose is that nothing sits in
+    // it unnoticed (audit 2026-07-30, fe-correct-9).
+    const { data } = await listPendingApprovals({
+      page: page.value,
+      page_size: pageSize.value,
+    })
     items.value = data.items
+    total.value = data.total
   } catch (err) {
     errorMsg.value = describe(err)
   } finally {
@@ -31,6 +43,7 @@ async function load() {
   }
 }
 
+watch(page, load)
 onMounted(load)
 </script>
 
@@ -70,6 +83,8 @@ onMounted(load)
         </RouterLink>
       </li>
     </ul>
+
+    <Pager v-model:page="page" :total="total" :page-size="pageSize" />
   </div>
 </template>
 

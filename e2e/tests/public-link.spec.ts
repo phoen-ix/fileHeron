@@ -52,8 +52,19 @@ test('public link password unlock (UI) + download-limit exhaustion (API)', async
   await anon.close()
 
   // Download-limit exhaustion (limit=1): first anonymous download 200, second 410.
-  const meta = await fetch(`${BASE}/api/public/${token}`)
-  const fileId = (await meta.json()).files[0].id as string
+  //
+  // Unlock BEFORE reading the metadata. A password-protected link that has not
+  // been unlocked no longer discloses what it is protecting - subject, message
+  // and the whole file list are withheld, because "Q3-layoffs-list.xlsx" is
+  // often the sensitive part on its own (audit 2026-07-30). This test read
+  // `files[0]` from a gated response and had been failing on every push since
+  // that landed.
+  const gated = await fetch(`${BASE}/api/public/${token}`)
+  const gatedBody = await gated.json()
+  expect(gatedBody.requires_password).toBe(true)
+  expect(gatedBody.files).toEqual([])
+  expect(gatedBody.subject).toBeNull()
+
   const unlock = await fetch(`${BASE}/api/public/${token}/unlock`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -61,6 +72,9 @@ test('public link password unlock (UI) + download-limit exhaustion (API)', async
   })
   expect(unlock.ok).toBeTruthy()
   const cookie = (unlock.headers.get('set-cookie') ?? '').split(';')[0]
+
+  const meta = await fetch(`${BASE}/api/public/${token}`, { headers: { cookie } })
+  const fileId = (await meta.json()).files[0].id as string
   const dl1 = await fetch(`${BASE}/api/public/${token}/files/${fileId}/download`, {
     headers: { cookie },
   })

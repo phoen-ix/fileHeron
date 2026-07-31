@@ -44,8 +44,11 @@ test('a direct upload lands through the edge proxy', async () => {
     headers: { Authorization: `Bearer ${admin}` },
     body: form,
   })
-  expect(resp.status, await resp.text()).toBe(201)
-  const body = (await resp.json()) as { file_id: string; size_bytes: number }
+  // Read the body ONCE: passing `await resp.text()` as the assertion message
+  // consumes it, and the `resp.json()` below then throws "Body is unusable".
+  const text = await resp.text()
+  expect(resp.status, text).toBe(201)
+  const body = JSON.parse(text) as { file_id: string; size_bytes: number }
   expect(body.size_bytes).toBe(bytes.length)
 })
 

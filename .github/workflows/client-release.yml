@@ -68,6 +68,40 @@ jobs:
         id: ver
         run: echo "version=${GITHUB_REF_NAME#client-v}" >> "$GITHUB_OUTPUT"
 
+      # Two guards the server release has and this one never got. Both failure
+      # modes are silent: the release publishes, and the wrong thing is in it.
+      #
+      # NOTE the version, not the tag. The server workflow greps GITHUB_REF_NAME
+      # ("v2.7.3") against its notes header, and copying that literally here
+      # would fail every client release - the convention is
+      # "# Desktop client 1.2.0", with no "client-v" prefix.
+      - name: RELEASE_NOTES.md must name this version
+        if: startsWith(github.ref, 'refs/tags/client-v')
+        run: |
+          set -euo pipefail
+          if ! head -5 client/RELEASE_NOTES.md | grep -qF "${{ steps.ver.outputs.version }}"; then
+            echo "::error::client/RELEASE_NOTES.md does not mention ${{ steps.ver.outputs.version }} in its first 5 lines."
+            echo "First line is: $(head -1 client/RELEASE_NOTES.md)"
+            exit 1
+          fi
+
+      # The server gets this free: its image carries an FH_VERSION build-arg
+      # from the tag. The client's version is baked into the .exe from these two
+      # files, so a tag that disagrees with them ships a binary that reports the
+      # wrong version and no one finds out.
+      - name: pyproject and __init__ must match the tag
+        if: startsWith(github.ref, 'refs/tags/client-v')
+        run: |
+          set -euo pipefail
+          want='${{ steps.ver.outputs.version }}'
+          got_pyproject=$(sed -n 's/^version = "\(.*\)"/\1/p' client/pyproject.toml | head -1)
+          got_init=$(sed -n 's/^__version__ = "\(.*\)"/\1/p' client/src/fileheron_client/__init__.py | head -1)
+          if [ "$got_pyproject" != "$want" ] || [ "$got_init" != "$want" ]; then
+            echo "::error::tag says $want but pyproject.toml says '$got_pyproject' and __init__.py says '$got_init'."
+            exit 1
+          fi
+          echo "version $want matches both files"
+
       # The .exe is unsigned by design (build-and-self-sign is documented in
       # client/README.md); publish a SHA-256 so downloaders can verify integrity.
       - name: Checksum the .exe

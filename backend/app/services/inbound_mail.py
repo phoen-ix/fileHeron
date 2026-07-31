@@ -139,6 +139,28 @@ def ingest(
 ) -> InboundMessage | None:
     """Store one message + its attachments. Returns the row, or None if it was a
     duplicate. Caller commits."""
+    # A Message-ID collision with a DIFFERENT server message is not a duplicate
+    # - it is a distinct mail that will be silently dropped while the poll's UID
+    # highwater advances past it, so it is never seen again and nothing records
+    # that it existed. Message-IDs are client-generated and not guaranteed
+    # unique; a misconfigured sender can reuse one across genuinely different
+    # mails. Log it loudly so an operator can find the mail on the server
+    # (audit 2026-07-30).
+    if parsed.message_id and not ingested_by_uid(
+        db, uidvalidity=uidvalidity, uid=uid
+    ):
+        collision = (
+            db.query(InboundMessage.id)
+            .filter(InboundMessage.message_id == parsed.message_id)
+            .first()
+        )
+        if collision is not None:
+            logger.warning(
+                "inbound: dropping uid=%s (uidvalidity=%s) - Message-ID %r collides "
+                "with already-ingested message id=%s. If these are different mails, "
+                "the newer one is on the server unread and will not be re-fetched.",
+                uid, uidvalidity, parsed.message_id, collision[0],
+            )
     if _already_ingested(db, uidvalidity=uidvalidity, uid=uid, message_id=parsed.message_id):
         return None
 

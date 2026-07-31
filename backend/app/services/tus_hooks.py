@@ -40,7 +40,15 @@ logger = logging.getLogger("fileheron.tus_hooks")
 # tusd's default upload ID is a hex / urlsafe-base64 string. Validate
 # defensively so a malicious / malformed ID can never escape the
 # upload directory in a future refactor of finalize_to_disk.
-_TUS_UPLOAD_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
+#
+# The bound is 64, not 128, because `files.tus_upload_id` is String(64): an id
+# between 65 and 128 characters passed this check and then raised a DataError
+# under MariaDB's strict mode, turning a malformed input into a 500 on the
+# hook rather than the clean 400 this validator exists to produce. SQLite is
+# permissive about length, so the test suite could not have caught it
+# (audit 2026-07-30). tusd's own ids are 32 hex chars, so nothing legitimate
+# is refused.
+_TUS_UPLOAD_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 
 
 def _check_tus_upload_id(tus_upload_id: str | None) -> str:
@@ -88,6 +96,13 @@ def handle_pre_create(db: Session, body: dict[str, Any]) -> None:
     # Block brand-new tusd uploads during maintenance. An already-in-progress
     # resumable upload continues via PATCH (no pre-create) and is untouched.
     from . import maintenance as maintenance_svc
+    from . import storage_guard
+
+    # Same disk-pressure gate the direct-upload routes apply. Without it here,
+    # the guard covered only uploads under 100 MB while multi-GB resumable
+    # uploads - the ones that actually fill a volume - proceeded onto a disk
+    # already flagged critically low (audit 2026-07-30).
+    storage_guard.refuse_if_critical_low(db)
     maintenance_svc.refuse_if_maintenance(db, kind="upload")
 
     upload, meta = _extract_upload(body)
@@ -121,6 +136,30 @@ def handle_pre_create(db: Session, body: dict[str, Any]) -> None:
     # reserved 0 - and post-terminate then released a client-set Size, letting an
     # attacker drain the quota counter below true usage (repeatable bypass).
     quota_svc.reserve_bytes(db, user=user, additional_bytes=envelope["max_size"])
+
+    # Link the row to the tusd upload NOW, not at finalize.
+    #
+    # `files.tus_upload_id` was only ever written by finalize_to_disk, which
+    # then clears it - so an IN-FLIGHT upload always had NULL there. That made
+    # cleanup_abandoned_uploads' "leave it alone, the finalize hook may yet
+    # land" guard structurally unreachable: it looks up
+    # `tus_upload_id == <id> AND state == uploading`, which no live upload can
+    # ever satisfy. The only thing protecting a slow multi-hour upload from the
+    # sweeper was the mtime cutoff (audit 2026-07-30).
+    #
+    # tusd v2 supplies Event.Upload.ID on pre-create. Guarded because a tusd
+    # version that omits it must not break upload authorisation - the mtime
+    # cutoff still applies in that case, i.e. exactly today's behaviour.
+    pre_create_id = upload.get("ID")
+    if pre_create_id:
+        try:
+            file_row.tus_upload_id = _check_tus_upload_id(pre_create_id)
+        except AppError:
+            logger.warning(
+                "pre-create supplied an unusable upload id for file %s; "
+                "the abandoned-upload sweeper will fall back to mtime",
+                file_row.id,
+            )
     db.commit()
 
 

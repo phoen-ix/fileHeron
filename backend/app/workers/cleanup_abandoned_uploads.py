@@ -49,6 +49,29 @@ async def cleanup_abandoned_uploads(_ctx) -> dict:
                 db, settings_registry.K.TUS_UPLOAD_ABANDONED_AFTER_HOURS
             )
         )
+        # Direct uploads stage a `<uuid>.part` in the SAME directory and unlink
+        # it on success. A crash, a disconnect or a 507 between the write and
+        # the unlink leaves it behind, and NOTHING swept these: they are not
+        # tusd uploads so they have no `.info` sidecar, and no `files` row
+        # points at them. They accumulated until someone noticed the volume
+        # filling (audit 2026-07-30). They are never resumable, so age alone
+        # decides - no DB cross-check needed.
+        for part_path in upload_dir.glob("*.part"):
+            scanned += 1
+            try:
+                p_mtime = datetime.fromtimestamp(
+                    part_path.stat().st_mtime, tz=timezone.utc
+                ).replace(tzinfo=None)
+            except OSError:
+                continue
+            if p_mtime > cutoff:
+                continue
+            try:
+                part_path.unlink()
+                deleted += 1
+            except OSError as e:
+                logger.warning("cleanup_abandoned_uploads: .part unlink failed %s: %s", part_path, e)
+
         for info_path in upload_dir.glob("*.info"):
             scanned += 1
             try:

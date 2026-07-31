@@ -28,16 +28,14 @@ logger = logging.getLogger("fileheron.uploads")
 
 
 def _refuse_if_storage_critical(db: Session) -> None:
-    """Block NEW uploads when the disk_check cron has flagged the storage
-    volume critically low. Downloads are deliberately unaffected. The flag is
-    the fast path (no statvfs on the hot path); the cron keeps it current."""
-    from ..services import settings as settings_svc
-    if settings_svc.get_bool(db, settings_svc.Keys.STORAGE_CRITICAL_LOW, default=False):
-        raise AppError(
-            507,
-            "STORAGE_CRITICAL_LOW",
-            "Server storage is critically low. Uploads are temporarily unavailable.",
-        )
+    """Thin alias for services/storage_guard.refuse_if_critical_low.
+
+    The rule moved to a service so the tusd pre-create hook can apply it too -
+    it could not while it lived here, which meant every upload above 100 MB
+    bypassed the disk-full guard entirely."""
+    from ..services.storage_guard import refuse_if_critical_low
+
+    refuse_if_critical_low(db)
 
 
 @router.post("/init", response_model=UploadInitResponse)

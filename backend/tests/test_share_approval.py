@@ -212,9 +212,48 @@ def test_can_approve_modes(make_user, db):
     assert approval_svc.can_approve(db, client) is False
 
 
-def test_disabled_means_no_one_approves(make_user, db):
+def test_disabled_means_no_one_but_an_admin_approves(make_user, db):
+    """Turning approval off does not un-queue the shares already waiting: their
+    senders cannot withdraw them and nothing sweeps them. With the feature
+    switch checked first, every in-flight share became permanently undecidable
+    - files uploaded, quota charged, recipients never notified, no way out but
+    SQL. The admin escape hatch therefore sits above the switch (audit
+    2026-07-30, flow-approval-5)."""
     admin = make_user(email="admin@test.local", role=UserRole.admin)
-    assert approval_svc.can_approve(db, admin) is False  # feature off
+    emp = make_user(email="emp@test.local", role=UserRole.employee)
+    client = make_user(email="cli@test.local", role=UserRole.client)
+    assert approval_svc.can_approve(db, admin) is True
+    assert approval_svc.can_approve(db, emp) is False
+    assert approval_svc.can_approve(db, client) is False
+
+
+def test_the_approvals_view_stays_hidden_when_there_is_nothing_to_decide(
+    make_user, db
+):
+    """`can_approve` answers "may you decide", which is now True for an admin
+    even with the feature off - that alone would pin an Approvals link into the
+    nav of every instance that never uses approvals."""
+    make_user(email="admin@test.local", role=UserRole.admin)
+    assert approval_svc.has_pending_shares(db) is False
+
+
+def test_a_stranded_queue_is_visible_again(make_user, db):
+    from app.models.share import Share, ShareKind, ShareState
+
+    admin = make_user(email="admin@test.local", role=UserRole.admin)
+    creator = make_user(email="emp@test.local", role=UserRole.employee)
+    stranded = Share(
+        created_by_id=creator.id,
+        kind=ShareKind.outbound,
+        state=ShareState.pending_approval,
+    )
+    db.add(stranded)
+    db.commit()
+
+    assert approval_svc.has_pending_shares(db) is True
+    assert approval_svc.can_decide(db, admin, stranded) is True, (
+        "the admin still cannot clear a queue stranded by the off switch"
+    )
 
 
 # ---------------------------------------------------------------------------

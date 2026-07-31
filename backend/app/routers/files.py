@@ -295,14 +295,24 @@ def download_file(
     # Parallel/segmented downloads send several ranged GETs for one logical
     # download; the byte-0 (or full) request counts it, the continuation
     # ranges must not re-decrement or re-log. See utils/http_range.
-    # A pending share only reaches here for an approver reviewing it (content
-    # review) - that must not consume the not-yet-live recipient budget or log.
-    if not is_partial_continuation(request) and share.state == ShareState.active:
-        # v1.1.0: per-share download budget. Atomic decrement; if the
-        # counter is already at 0 we refuse with 410 before logging/sending.
-        # NULL limit = unlimited, the helper's WHERE clause skips the case.
-        if share.download_limit is not None and not share_svc.try_decrement_share_counter(
-            db, share=share
+    if not is_partial_continuation(request):
+        # A pending share only reaches here for an approver reviewing its
+        # content. That must not consume the not-yet-live recipient budget -
+        # but it IS a person who is not a recipient taking a full copy of
+        # someone else's file, so it is recorded like any other transfer. It
+        # used to be recorded nowhere at all: no download_log row, no audit
+        # entry, nothing for the sender or an investigator to find (audit
+        # 2026-07-30).
+        is_review = share.state == ShareState.pending_approval
+
+        # v1.1.0: per-share download budget, live shares only. Atomic
+        # decrement; if the counter is already at 0 we refuse with 410 before
+        # logging/sending. NULL limit = unlimited, the helper's WHERE clause
+        # skips the case.
+        if (
+            share.state == ShareState.active
+            and share.download_limit is not None
+            and not share_svc.try_decrement_share_counter(db, share=share)
         ):
             raise AppError(
                 410,
@@ -323,13 +333,16 @@ def download_file(
                 via=via,
             )
         )
+        metadata = {"via": via.value, "share_id": file.share_id}
+        if is_review:
+            metadata["review"] = True
         record_audit_event(
             db,
             event_type=AuditEventType.file_downloaded,
             actor_user_id=user.id,
             target_type="file",
             target_id=file.id,
-            metadata={"via": via.value, "share_id": file.share_id},
+            metadata=metadata,
             request=request,
         )
         db.commit()

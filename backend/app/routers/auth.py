@@ -92,10 +92,22 @@ async def register_from_invite(
         locale=payload.locale,
         request=request,
     )
-    # Issue session immediately so the new user is logged in.
-    access, expires_in = auth_svc.create_access_token(user.id, settings, db)
+    # Issue session immediately so the new user is logged in. Through the same
+    # funnel as every other login flow: minting the tokens inline skipped the
+    # known_devices upsert, so the browser that just registered was still
+    # unknown and the user's FIRST real sign-in - same machine, minutes later -
+    # fired a "new device" security alert about itself. The alert is suppressed
+    # here only because consuming the invite is already proof of control.
+    access, expires_in, refresh_plain = auth_svc.finalize_successful_login(
+        db,
+        user=user,
+        request=request,
+        settings=settings,
+        via="register_from_invite",
+        email_value=user.email,
+        notify_new_device=False,
+    )
     rate_limit_svc.record_success(db, user=user)
-    _, refresh_plain = jwt_session.create_refresh_token(db, user, request, settings)
     db.commit()
     _set_refresh_cookie(response, refresh_plain, db)
     return LoginResponse(access_token=access, expires_in_seconds=expires_in)

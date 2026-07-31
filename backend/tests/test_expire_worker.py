@@ -123,7 +123,10 @@ async def test_expire_files_state_commit_is_independent_of_byte_purge(
         def delete(self, *_a, **_k):
             raise OSError("disk gone")
 
-    monkeypatch.setattr(ef_module, "get_storage_backend", lambda: _Boom())
+    # The purge moved into services/file.py so the owner-driven expire paths
+    # share the same post-commit ordering; patch it where it now lives.
+    from app.services import file as file_svc
+    monkeypatch.setattr(file_svc, "get_storage_backend", lambda: _Boom())
 
     result = await expire_files(None)
     assert result["expired_shares"] == 1

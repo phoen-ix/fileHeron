@@ -31,6 +31,7 @@ from ..schemas.share import (
     ShareSenderRef,
     UpdateShareRequest,
 )
+from ..services import file as file_svc
 from ..services import public_link as public_link_svc
 from ..services import rate_limit as rate_limit_svc
 from ..services import share as share_svc
@@ -638,8 +639,12 @@ def expire_share_now_route(
     every file hard-deleted from disk. Re-uses the same helper the
     hourly cron uses."""
     share = share_svc.get_share_or_404(db, share_id)
-    share_svc.expire_share_now(db, user=user, share=share, request=request)
+    _, to_purge = share_svc.expire_share_now(
+        db, user=user, share=share, request=request
+    )
     db.commit()
+    # Bytes go only after the state flip is durable - see expire_share_now.
+    file_svc.purge_expired_bytes(db, to_purge, reason="expire_now")
     db.refresh(share)
     return _to_share_response(db, share, viewer=user)
 
@@ -697,10 +702,11 @@ def bulk_expire(
     for sid in payload.share_ids:
         try:
             share = share_svc.get_share_or_404(db, sid)
-            share_svc.expire_share_now(
+            _, to_purge = share_svc.expire_share_now(
                 db, user=user, share=share, request=request
             )
             db.commit()
+            file_svc.purge_expired_bytes(db, to_purge, reason="bulk_expire")
             expired.append(sid)
         except AppError as e:
             db.rollback()

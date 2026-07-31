@@ -27,6 +27,7 @@ from __future__ import annotations
 import logging
 import secrets
 from datetime import datetime, timezone
+from typing import TYPE_CHECKING
 
 from sqlalchemy import and_, or_, update
 from sqlalchemy.orm import Session, joinedload
@@ -41,6 +42,9 @@ from ..models.share_recipient import ShareRecipient
 from ..models.user import User, UserRole
 from ..utils.timeutil import utc_now
 from .audit import record_audit_event
+
+if TYPE_CHECKING:
+    from .file import PurgeEntry
 
 logger = logging.getLogger("fileheron.share")
 
@@ -1012,10 +1016,16 @@ def update_share_expiry(
 
 def expire_share_now(
     db: Session, *, user: User, share: Share, request=None
-) -> Share:
-    """Owner-or-admin expires a share immediately. Hard-deletes every
-    file and transitions state to `expired`. Re-uses the same helper
-    the cron uses (`services/file.py::delete_file_for_expiry`).
+) -> tuple[Share, list[PurgeEntry]]:
+    """Owner-or-admin expires a share immediately: transitions state to
+    `expired` and marks every file `deleted`, inside the caller's transaction.
+
+    Returns `(share, to_purge)`. **The caller must commit and then call
+    `file_svc.purge_expired_bytes(db, to_purge, reason=...)`** - unlinking bytes
+    and releasing quota are irreversible and non-transactional, so doing them
+    before the commit (which this used to) meant a commit failure left a row
+    still marked `clean` whose bytes were already gone. Same two-phase shape as
+    the hourly cron, which was restructured for this in audit M14.
 
     Concurrent expire-now calls on the same share are guarded by an
     atomic conditional UPDATE - only the first wins the state flip; the
@@ -1038,34 +1048,24 @@ def expire_share_now(
 
     # Lazy import - services.file imports services.share elsewhere; keep
     # the dependency direction loose.
-    from .file import delete_file_for_expiry
+    from .file import mark_deleted_for_expiry
 
-    file_count = 0
-    failed_files: list[str] = []
+    to_purge: list[PurgeEntry] = []
     for f in list(share.files):
-        try:
-            delete_file_for_expiry(db, file=f)
-            file_count += 1
-        except OSError as e:
-            logger.error(
-                "expire_share_now: delete failed file=%s share=%s: %s",
-                f.id, share.id, e,
-            )
-            failed_files.append(f.id)
+        entry = mark_deleted_for_expiry(db, file=f)
+        if entry is not None:
+            to_purge.append(entry)
 
-    metadata: dict = {"via": "owner_action", "file_count": file_count}
-    if failed_files:
-        metadata["failed_files"] = failed_files
     record_audit_event(
         db,
         event_type=AuditEventType.share_expired,
         actor_user_id=user.id,
         target_type="share",
         target_id=share.id,
-        metadata=metadata,
+        metadata={"via": "owner_action", "file_count": len(to_purge)},
         request=request,
     )
-    return share
+    return share, to_purge
 
 
 def register_files_added(
@@ -1203,15 +1203,17 @@ def invalidate_all_active_shares(
 
     Used by the config-restore flow: importing a configuration changes the
     world out from under any live share, so all of them are invalidated. Mirrors
-    the hourly ``expire_files`` cron (flip state -> expired, delete bytes via
-    ``delete_file_for_expiry``, audit ``share_expired`` per share) but with an
-    admin actor and a single summary audit row.
+    the hourly ``expire_files`` cron (flip state -> expired, mark every file
+    deleted, audit ``share_expired`` per share) but with an admin actor and a
+    single summary audit row.
 
-    Irreversible (disk unlink), so the caller MUST run this in its own committed
-    pass *before* the config transaction. Returns a small summary dict."""
+    Two-phase like the cron: this marks rows inside the caller's transaction and
+    the byte unlink happens after ``db.commit()``. The caller MUST run it in its
+    own committed pass *before* the config transaction. Returns a small summary
+    dict including ``to_purge`` for phase 2."""
     from sqlalchemy.orm import selectinload
 
-    from .file import delete_file_for_expiry
+    from .file import mark_deleted_for_expiry
 
     shares = (
         db.query(Share)
@@ -1220,39 +1222,33 @@ def invalidate_all_active_shares(
         .all()
     )
     expired_shares = 0
-    deleted_files = 0
+    to_purge: list[PurgeEntry] = []
     for share in shares:
         file_count = 0
-        failed_files: list[str] = []
         for f in share.files:
-            try:
-                delete_file_for_expiry(db, file=f)
+            entry = mark_deleted_for_expiry(db, file=f)
+            if entry is not None:
+                to_purge.append(entry)
                 file_count += 1
-                deleted_files += 1
-            except OSError as e:
-                logger.error(
-                    "invalidate_all_active_shares: delete failed file=%s share=%s: %s",
-                    f.id, share.id, e,
-                )
-                failed_files.append(f.id)
         share.state = ShareState.expired
         share.expires_at = utc_now()
-        metadata: dict = {"file_count": file_count, "via": "config_restore"}
-        if failed_files:
-            metadata["failed_files"] = failed_files
         record_audit_event(
             db,
             event_type=AuditEventType.share_expired,
             actor_user_id=actor.id if actor else None,
             target_type="share",
             target_id=share.id,
-            metadata=metadata,
+            metadata={"file_count": file_count, "via": "config_restore"},
             request=request,
         )
         expired_shares += 1
     db.flush()
     logger.info(
-        "invalidate_all_active_shares: expired %d shares, deleted %d files",
-        expired_shares, deleted_files,
+        "invalidate_all_active_shares: expired %d shares, marked %d files",
+        expired_shares, len(to_purge),
     )
-    return {"expired_shares": expired_shares, "deleted_files": deleted_files}
+    return {
+        "expired_shares": expired_shares,
+        "deleted_files": len(to_purge),
+        "to_purge": to_purge,
+    }

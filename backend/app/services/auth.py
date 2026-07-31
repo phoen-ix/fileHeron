@@ -320,12 +320,19 @@ def finalize_successful_login(
     settings,
     via: str,
     email_value: str | None = None,
+    notify_new_device: bool = True,
 ) -> tuple[str, int, str]:
     """Mint the session and record the forensic trail shared by EVERY
     successful-login flow: access + refresh tokens, known-device upsert,
     login_attempts row, login_success audit, and the new-device alert. `via` tags
     the flow (password / recovery_code / oidc / webauthn). Returns
-    ``(access_token, expires_in_seconds, refresh_token_plain)``. Caller commits."""
+    ``(access_token, expires_in_seconds, refresh_token_plain)``. Caller commits.
+
+    `notify_new_device=False` seeds the device row without the alert. Used by
+    registration-from-invite: consuming the invite is itself proof of control,
+    and the device is new by definition, so alerting says "we noticed a login
+    from a new device" about the account's very first second - training the
+    reader to ignore the one message that matters later."""
     access, expires_in = create_access_token(user.id, settings, db)
     _, refresh_plain = create_refresh_token(db, user, request, settings)
     is_new_device = _record_login_device(db, user=user, request=request)
@@ -342,7 +349,7 @@ def finalize_successful_login(
         metadata={"new_device": is_new_device, "via": via},
         request=request,
     )
-    if is_new_device:
+    if is_new_device and notify_new_device:
         from .login_alert import fire_new_device_alert
         fire_new_device_alert(db, user=user, request=request, via=via)
     return access, expires_in, refresh_plain

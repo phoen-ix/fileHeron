@@ -84,7 +84,14 @@ def _me_response(db: Session, user: User) -> MeResponse:
     )
     from ..services import share_approval as share_approval_svc
 
-    me_resp.can_approve_shares = share_approval_svc.can_approve(db, user)
+    # Authorization AND something to do: an admin may always decide (so a queue
+    # left behind by switching the feature off is still clearable), but the
+    # Approvals nav entry should not follow them around an instance that does
+    # not use approvals.
+    me_resp.can_approve_shares = share_approval_svc.can_approve(db, user) and (
+        share_approval_svc.is_enabled(db)
+        or share_approval_svc.has_pending_shares(db)
+    )
     from ..services import email_change_policy
 
     me_resp.can_change_own_email = email_change_policy.self_service_enabled(db)

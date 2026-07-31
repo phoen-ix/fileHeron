@@ -273,27 +273,39 @@ def revoke_share_if_empty(
         )
 
 
-def delete_file_for_expiry(db: Session, *, file: File) -> None:
-    """Cleanup-worker variant: hard-delete with `file_expired` audit event,
-    no actor (system action). Idempotent on `state == deleted`; raises
-    OSError on disk unlink failure (callers handle per-file failures and
-    decide whether to keep processing the rest of the batch)."""
+# (locator, uploader_id, size_bytes) queued for purge after the caller commits.
+# `locator` is None for an infected file: its bytes were MOVED to quarantine and
+# its quota already released, so both must be left alone.
+PurgeEntry = tuple[str | None, int, int]
+
+
+def mark_deleted_for_expiry(db: Session, *, file: File) -> PurgeEntry | None:
+    """Phase 1 of expiring a file: flip the row to `deleted` and audit it,
+    inside the CALLER'S transaction. Returns what phase 2 must purge, or None
+    if the file was already deleted.
+
+    Nothing irreversible happens here. `delete_file_for_expiry`, which this
+    replaces, unlinked the bytes and released the Redis quota counter BEFORE the
+    caller's commit - so a commit failure left a row still marked `clean` whose
+    bytes were already gone (silent data loss the UI could not show), and the
+    next run released the same bytes a second time. The hourly cron was
+    restructured for exactly this in audit M14; the owner-driven paths were not
+    (audit 2026-07-30)."""
     if file.state == FileState.deleted:
-        return
+        return None
 
     # An infected file already had its bytes moved to quarantine and its quota
     # released by services/quarantine.py; re-releasing here would double-credit
     # the uploader (mirrors the hard_delete guard above, finding L11).
     was_infected = file.state == FileState.infected
-
-    if file.storage_path:
-        get_storage_backend().delete(file.storage_path)
+    entry: PurgeEntry = (
+        None if was_infected else file.storage_path,
+        file.uploaded_by_id,
+        file.size_bytes,
+    )
 
     file.state = FileState.deleted
     db.flush()
-
-    if not was_infected:
-        release_bytes(user_id=file.uploaded_by_id, bytes_to_free=file.size_bytes)
 
     record_audit_event(
         db,
@@ -303,3 +315,52 @@ def delete_file_for_expiry(db: Session, *, file: File) -> None:
         target_id=file.id,
         metadata={"size_bytes": file.size_bytes, "filename": file.original_filename},
     )
+    return entry
+
+
+def record_orphan_locator(db: Session, *, locator: str, reason: str) -> None:
+    """Leave a durable trace of bytes that failed to unlink.
+
+    `reclaim_orphaned_files` works from DB rows, and the row is already
+    `deleted` by the time a purge runs - so without this the locator is
+    unreachable and the bytes leak silently, charged to nobody and visible to
+    no one. Commits on its own: it runs after the caller's transaction closed."""
+    try:
+        record_audit_event(
+            db,
+            event_type=AuditEventType.file_purge_failed,
+            actor_user_id=None,
+            target_type="file_bytes",
+            target_id=locator[:255],
+            metadata={"locator": locator, "reason": reason},
+        )
+        db.commit()
+    except Exception:
+        db.rollback()
+        logger.exception("could not record orphan locator %s", locator)
+
+
+def purge_expired_bytes(
+    db: Session, entries: list[PurgeEntry], *, reason: str
+) -> int:
+    """Phase 2: unlink bytes and release quota. MUST run only after the
+    caller's commit succeeded - both effects are irreversible and neither is
+    transactional. Returns how many entries were processed; a failed unlink is
+    recorded as an orphan locator rather than raised, so one bad file does not
+    abort the rest."""
+    backend = get_storage_backend()
+    for locator, uploader_id, size_bytes in entries:
+        if locator is None:
+            continue  # infected: bytes are in quarantine, quota already released
+        try:
+            backend.delete(locator)
+        except Exception as e:
+            logger.error(
+                "post-commit byte purge failed locator=%s: %s - recording for "
+                "reclaim", locator, e,
+            )
+            record_orphan_locator(db, locator=locator, reason=reason)
+        # Released either way: the row is already `deleted`, so the quota must
+        # stop counting it whether or not the unlink landed.
+        release_bytes(user_id=uploader_id, bytes_to_free=size_bytes)
+    return len(entries)

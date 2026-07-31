@@ -1015,6 +1015,10 @@ def apply_backup(db: Session, *, parsed: ParsedBackup, actor: User, request=None
     # irreversible and must not sit inside the config transaction.
     inv = share_svc.invalidate_all_active_shares(db, actor=actor, request=request)
     db.commit()
+    # Only now, with the rows durable, are the bytes unlinked: a failed commit
+    # must not leave shares still marked active over files that are gone.
+    from . import file as file_svc
+    file_svc.purge_expired_bytes(db, inv["to_purge"], reason="config_restore")
     summary.shares_to_invalidate = inv["expired_shares"]
     summary.files_deleted = inv["deleted_files"]
 

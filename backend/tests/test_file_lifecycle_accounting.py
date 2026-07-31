@@ -44,10 +44,10 @@ def test_expire_does_not_release_quota_twice_for_an_infected_file(
     """quarantine.py already released these bytes when it moved the file. The
     inlined loop released them again, crediting the uploader for storage they
     never freed."""
+    from app.services import file as file_svc
     from app.workers import expire_files as ef
-
     released = []
-    monkeypatch.setattr(ef, "release_bytes", lambda **kw: released.append(kw))
+    monkeypatch.setattr(file_svc, "release_bytes", lambda **kw: released.append(kw))
 
     from datetime import timedelta
 
@@ -71,7 +71,7 @@ def test_expire_does_not_release_quota_twice_for_an_infected_file(
 
     deleted = []
     monkeypatch.setattr(
-        ef, "get_storage_backend",
+        file_svc, "get_storage_backend",
         lambda: type("B", (), {"delete": staticmethod(lambda loc: deleted.append(loc))})(),
     )
 
@@ -85,13 +85,13 @@ def test_a_clean_file_still_releases_its_quota(db, owner, monkeypatch, tmp_path)
     """Control: the guard must not stop ordinary expiry from freeing space."""
     from datetime import timedelta
 
+    from app.services import file as file_svc
     from app.utils.timeutil import utc_now
     from app.workers import expire_files as ef
-
     released = []
-    monkeypatch.setattr(ef, "release_bytes", lambda **kw: released.append(kw))
+    monkeypatch.setattr(file_svc, "release_bytes", lambda **kw: released.append(kw))
     monkeypatch.setattr(
-        ef, "get_storage_backend",
+        file_svc, "get_storage_backend",
         lambda: type("B", (), {"delete": staticmethod(lambda loc: None)})(),
     )
 
@@ -123,16 +123,17 @@ def test_a_failed_purge_leaves_a_durable_record(db, owner, monkeypatch, tmp_path
     never see it. Without a record the bytes leak silently, charged to nobody."""
     from datetime import timedelta
 
+    from app.services import file as file_svc
     from app.utils.timeutil import utc_now
     from app.workers import expire_files as ef
 
-    monkeypatch.setattr(ef, "release_bytes", lambda **kw: None)
+    monkeypatch.setattr(file_svc, "release_bytes", lambda **kw: None)
 
     def _boom(_loc):
         raise OSError("disk gone")
 
     monkeypatch.setattr(
-        ef, "get_storage_backend",
+        file_svc, "get_storage_backend",
         lambda: type("B", (), {"delete": staticmethod(_boom)})(),
     )
 

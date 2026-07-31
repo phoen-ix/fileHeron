@@ -76,13 +76,21 @@ def resolve_approver_policy(db: Session) -> tuple[str, list[int], list[int]]:
 
 
 def can_approve(db: Session, user: User) -> bool:
-    """True if ``user`` may approve/reject pending shares. False when the feature
-    is off. Admin always passes (operator escape hatch); otherwise the base mode
-    plus the additive user/group allowlist decide."""
-    if not is_enabled(db):
-        return False
+    """True if ``user`` may approve/reject pending shares. Admin always passes
+    (operator escape hatch); otherwise the feature must be on, and the base mode
+    plus the additive user/group allowlist decide.
+
+    The admin check sits ABOVE the feature switch on purpose. Turning approval
+    off does not un-queue the shares already waiting: their senders cannot
+    withdraw them and nothing sweeps them, so with the switch checked first
+    every in-flight share became permanently undecidable - files uploaded,
+    quota charged, recipients never notified, and no way out but SQL (audit
+    2026-07-30). An admin can still clear the queue after the switch is
+    flipped."""
     if user.role == UserRole.admin:
         return True
+    if not is_enabled(db):
+        return False
     mode, allowed_users, allowed_groups = resolve_approver_policy(db)
     if mode == "employees_admins" and user.role == UserRole.employee:
         return True
@@ -222,6 +230,20 @@ def can_review_pending(db: Session, user: User, share: Share) -> bool:
     if not allow_content_review(db):
         return False
     return can_approve(db, user)
+
+
+def has_pending_shares(db: Session) -> bool:
+    """Whether any share is still waiting on a decision. Used to decide whether
+    to surface the Approvals view at all: `can_approve` answers "may you
+    decide", which is True for an admin even with the feature off, and that
+    alone would put a permanent Approvals link in front of an instance that
+    never turned approval on."""
+    return (
+        db.query(Share.id)
+        .filter(Share.state == ShareState.pending_approval)
+        .first()
+        is not None
+    )
 
 
 def can_decide(db: Session, user: User, share: Share) -> bool:

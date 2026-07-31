@@ -17,7 +17,30 @@ local header carries zeroes, the real CRC and sizes follow the data in a
 fixed-size trailer. Because entries are STORED (no compression), every field's
 length is known from the file names and sizes alone, so `len(stream)` is exact
 before anything is read. `Content-Length` is therefore real, which is what lets
-the browser show true progress and lets a download be Range-resumed.
+the browser show true progress.
+
+WHY THE ARCHIVE IS SEEKABLE
+---------------------------
+The same arithmetic that makes the length exact makes any byte offset
+addressable: block boundaries are a prefix sum over name lengths and member
+sizes, so `iter_from(n)` finds its starting block in O(entries) with no
+generate-and-discard. That is what lets a 9 GB archive whose transfer died at
+90% be *resumed* rather than restarted (audit 2026-07-30, flow-publiclink-5).
+
+Two properties the resume depends on, and which are therefore load-bearing:
+
+- **Reproducibility.** Two generations of the same member list must be
+  byte-identical, or the second half of a resumed download belongs to a
+  different archive than the first. Hence the DOS timestamp comes from the
+  caller (the share's creation time) rather than the clock, and is rendered in
+  UTC rather than the container's local time.
+- **CRC availability.** A member's CRC lands in its data descriptor and again in
+  the central directory, both of which are normally produced as a side effect of
+  reading the member. Resuming past a member means its CRC is needed without
+  reading it, so an optional `crc_cache` is consulted; on a miss the member is
+  re-read to recompute it. `resume_cost()` reports how many bytes that would
+  take so a caller can decline and serve the full archive instead. There is no
+  path that emits a guessed CRC - a resume is either exact or refused.
 
 ZIP64 IS UNCONDITIONAL
 ----------------------
@@ -35,6 +58,7 @@ then, once:
 """
 from __future__ import annotations
 
+import hashlib
 import logging
 import struct
 import time
@@ -42,7 +66,7 @@ import zlib
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
-from typing import BinaryIO
+from typing import BinaryIO, Protocol
 
 logger = logging.getLogger("fileheron.zip_writer")
 
@@ -72,11 +96,33 @@ _EOCD = 22
 
 _READ_CHUNK = 1024 * 256
 
+# The MS-DOS epoch. The default when no caller timestamp is supplied: a constant
+# beats `time.time()` because it makes the archive reproducible, and the mtime
+# of a member inside a share archive carries no information anyone uses.
+_DOS_EPOCH = 315532800.0  # 1980-01-01T00:00:00Z
+
+# Bumped when a change alters the produced bytes. It is mixed into `signature()`
+# so an in-flight resume against an archive built by the previous version misses
+# its `If-Range` and restarts cleanly instead of splicing two layouts together.
+LAYOUT_VERSION = 1
+
+
+class CrcCache(Protocol):
+    """Somewhere to remember a member's CRC-32 between requests."""
+
+    def get(self, key: str) -> int | None: ...
+
+    def put(self, key: str, crc: int) -> None: ...
+
 
 def _dos_datetime(ts: float) -> tuple[int, int]:
     """(dos_time, dos_date). ZIP stores MS-DOS timestamps: 2-second resolution,
-    epoch 1980."""
-    t = time.localtime(ts)
+    epoch 1980.
+
+    Rendered in **UTC**, not local time: the same share must produce the same
+    bytes whatever `TZ` the container happens to have, or a resume splices two
+    archives that disagree in every timestamp field."""
+    t = time.gmtime(ts)
     year = max(t.tm_year, 1980)
     dos_date = ((year - 1980) << 9) | (t.tm_mon << 5) | t.tm_mday
     dos_time = (t.tm_hour << 11) | (t.tm_min << 5) | (t.tm_sec // 2)
@@ -89,6 +135,10 @@ class _Entry:
     size: int
     open_fn: Callable[[], BinaryIO]
     name_bytes: bytes
+    # Stable identity of the member's BYTES (a file id), for the CRC cache. A
+    # file's content never changes once it is `clean`, so the cached CRC cannot
+    # go stale. None disables caching for this member.
+    cache_key: str | None = None
     # Filled in while streaming, then used to build the central directory.
     crc: int = 0
     offset: int = 0
@@ -110,21 +160,32 @@ class SizedZipStream:
     Use `add_path` / `add_stream` to register members, `len(zs)` for the exact
     Content-Length, and iterate to stream. Sources are opened lazily during
     iteration - registering 500 members does not hold 500 file descriptors.
+
+    `iter_from(offset)` streams the same archive starting at an arbitrary byte,
+    which is what makes a ranged resume possible; see the module docstring.
     """
 
-    def __init__(self) -> None:
+    def __init__(
+        self, *, mtime: float | None = None, crc_cache: CrcCache | None = None
+    ) -> None:
         self._entries: list[_Entry] = []
-        self._mtime = time.time()
+        self._mtime = _DOS_EPOCH if mtime is None else mtime
+        self._crc_cache = crc_cache
 
     # -- registration -------------------------------------------------------
 
-    def add_path(self, path: str | Path, arcname: str) -> None:
+    def add_path(self, path: str | Path, arcname: str, *, cache_key: str | None = None) -> None:
         p = Path(path)
         size = p.stat().st_size
-        self.add_stream(lambda: p.open("rb"), arcname, size)
+        self.add_stream(lambda: p.open("rb"), arcname, size, cache_key=cache_key)
 
     def add_stream(
-        self, open_fn: Callable[[], BinaryIO], arcname: str, size: int
+        self,
+        open_fn: Callable[[], BinaryIO],
+        arcname: str,
+        size: int,
+        *,
+        cache_key: str | None = None,
     ) -> None:
         """`open_fn` is called at streaming time and must return a fresh binary
         reader positioned at 0. `size` must be exact - it is what the declared
@@ -137,10 +198,11 @@ class SizedZipStream:
                 size=size,
                 open_fn=open_fn,
                 name_bytes=arcname.encode("utf-8"),
+                cache_key=cache_key,
             )
         )
 
-    # -- exact length -------------------------------------------------------
+    # -- exact length + identity --------------------------------------------
 
     def __len__(self) -> int:
         total = 0
@@ -153,124 +215,309 @@ class SizedZipStream:
         total += _EOCD64 + _EOCD64_LOCATOR + _EOCD
         return total
 
+    def signature(self) -> str:
+        """A hex digest over everything that determines the archive's bytes.
+
+        Used as a strong ETag. A member added, removed, renamed, resized or
+        reordered changes it, and so does a change to the layout itself - which
+        is exactly what an `If-Range` needs to detect, since resuming across such
+        a change would produce a corrupt file rather than a failed download."""
+        h = hashlib.sha256()
+        h.update(f"v{LAYOUT_VERSION}|{int(self._mtime)}|".encode())
+        for e in self._entries:
+            h.update(f"{len(e.name_bytes)}:".encode())
+            h.update(e.name_bytes)
+            h.update(f"|{e.size}|".encode())
+        return h.hexdigest()[:32]
+
+    # -- layout -------------------------------------------------------------
+
+    def _positions(self) -> list[tuple[int, int, int]]:
+        """(header_start, data_start, descriptor_start) per entry."""
+        out: list[tuple[int, int, int]] = []
+        pos = 0
+        for e in self._entries:
+            head = _LOCAL_HEADER + len(e.name_bytes) + _LOCAL_ZIP64_EXTRA
+            out.append((pos, pos + head, pos + head + e.size))
+            pos += head + e.size + _DATA_DESCRIPTOR
+        return out
+
+    def resume_cost(self, offset: int) -> int:
+        """Bytes that would be read from storage but never sent, to start
+        streaming at `offset`.
+
+        Two sources. Every member ending before `offset` still needs its CRC for
+        the central directory - cached ones are free, the rest must be re-read
+        whole. And the member straddling `offset` is read from byte 0 for the
+        same reason, so its prefix is read and discarded.
+
+        A caller that finds the answer too expensive should serve the full
+        archive with a 200 rather than pay it: a slow resume is worse than a
+        restart, and a wrong CRC is worse than both."""
+        if offset <= 0:
+            return 0
+        cost = 0
+        for e, (_h, d_start, desc_start) in zip(
+            self._entries, self._positions(), strict=True
+        ):
+            if offset >= desc_start + _DATA_DESCRIPTOR:
+                if self._cached_crc(e) is None:
+                    cost += e.size
+                continue
+            if offset > d_start:
+                cost += min(offset, desc_start) - d_start
+            break
+        return cost
+
+    def _cached_crc(self, e: _Entry) -> int | None:
+        if self._crc_cache is None or e.cache_key is None:
+            return None
+        try:
+            return self._crc_cache.get(e.cache_key)
+        except Exception:  # pragma: no cover - a cache must never break a download
+            logger.warning("zip crc cache get failed for %r", e.cache_key, exc_info=True)
+            return None
+
+    def _remember_crc(self, e: _Entry, crc: int) -> None:
+        if self._crc_cache is None or e.cache_key is None:
+            return
+        try:
+            self._crc_cache.put(e.cache_key, crc)
+        except Exception:  # pragma: no cover
+            logger.warning("zip crc cache put failed for %r", e.cache_key, exc_info=True)
+
+    def _crc_of(self, e: _Entry) -> int:
+        """The member's CRC without emitting it: cache, else re-read it."""
+        cached = self._cached_crc(e)
+        if cached is not None:
+            return cached
+        crc = 0
+        read = 0
+        fh = e.open_fn()
+        try:
+            while read < e.size:
+                chunk = fh.read(min(_READ_CHUNK, e.size - read))
+                if not chunk:
+                    break
+                crc = zlib.crc32(chunk, crc)
+                read += len(chunk)
+        finally:
+            try:
+                fh.close()
+            except Exception:  # pragma: no cover
+                pass
+        if read != e.size:
+            raise ZipSizeMismatchError(
+                f"{e.arcname}: declared {e.size} bytes, produced {read}"
+            )
+        crc &= 0xFFFFFFFF
+        self._remember_crc(e, crc)
+        return crc
+
+    # -- block builders -----------------------------------------------------
+
+    @property
+    def _flags(self) -> int:
+        return _FLAG_DATA_DESCRIPTOR | _FLAG_UTF8
+
+    def _local_header(self, e: _Entry) -> bytes:
+        dos_time, dos_date = _dos_datetime(self._mtime)
+        header = struct.pack(
+            "<IHHHHHIIIHH",
+            _SIG_LOCAL,
+            _VERSION_ZIP64,
+            self._flags,
+            _METHOD_STORED,
+            dos_time,
+            dos_date,
+            0,  # crc - in the descriptor
+            _U32_MAX,  # compressed size - see zip64 extra
+            _U32_MAX,  # uncompressed size - see zip64 extra
+            len(e.name_bytes),
+            _LOCAL_ZIP64_EXTRA,
+        )
+        # Zip64 extended information. Sizes are unknown here (bit 3 is set),
+        # so they are zero and the descriptor carries the truth.
+        extra = struct.pack("<HHQQ", 0x0001, 16, 0, 0)
+        return header + e.name_bytes + extra
+
+    def _descriptor(self, e: _Entry, crc: int) -> bytes:
+        return struct.pack("<IIQQ", _SIG_DESCRIPTOR, crc, e.size, e.size)
+
+    def _central(self, e: _Entry, crc: int, offset: int) -> bytes:
+        dos_time, dos_date = _dos_datetime(self._mtime)
+        extra = struct.pack("<HHQQQ", 0x0001, 24, e.size, e.size, offset)
+        central = struct.pack(
+            "<IHHHHHHIIIHHHHHII",
+            _SIG_CENTRAL,
+            _VERSION_ZIP64,  # version made by
+            _VERSION_ZIP64,  # version needed
+            self._flags,
+            _METHOD_STORED,
+            dos_time,
+            dos_date,
+            crc,
+            _U32_MAX,  # compressed size -> zip64 extra
+            _U32_MAX,  # uncompressed size -> zip64 extra
+            len(e.name_bytes),
+            len(extra),
+            0,  # comment length
+            0,  # disk number start
+            0,  # internal attrs
+            0o100644 << 16,  # external attrs: regular file, rw-r--r--
+            _U32_MAX,  # local header offset -> zip64 extra
+        )
+        return central + e.name_bytes + extra
+
+    def _end_records(self, cd_offset: int, cd_size: int) -> bytes:
+        count = len(self._entries)
+        return (
+            struct.pack(
+                "<IQHHIIQQQQ",
+                _SIG_EOCD64,
+                44,  # size of the remainder of this record
+                _VERSION_ZIP64,
+                _VERSION_ZIP64,
+                0,  # this disk
+                0,  # disk with central directory
+                count,
+                count,
+                cd_size,
+                cd_offset,
+            )
+            + struct.pack("<IIQI", _SIG_EOCD64_LOC, 0, cd_offset + cd_size, 1)
+            + struct.pack(
+                "<IHHHHIIH",
+                _SIG_EOCD,
+                _U16_MAX,
+                _U16_MAX,
+                _U16_MAX,
+                _U16_MAX,
+                _U32_MAX,
+                _U32_MAX,
+                0,
+            )
+        )
+
     # -- streaming ----------------------------------------------------------
 
     def __iter__(self) -> Iterator[bytes]:
-        offset = 0
-        dos_time, dos_date = _dos_datetime(self._mtime)
-        flags = _FLAG_DATA_DESCRIPTOR | _FLAG_UTF8
+        return self.iter_from(0)
 
-        for e in self._entries:
-            e.offset = offset
+    def iter_from(self, offset: int = 0, length: int | None = None) -> Iterator[bytes]:
+        """Stream the archive from byte `offset`, at most `length` bytes.
 
-            header = struct.pack(
-                "<IHHHHHIIIHH",
-                _SIG_LOCAL,
-                _VERSION_ZIP64,
-                flags,
-                _METHOD_STORED,
-                dos_time,
-                dos_date,
-                0,  # crc - in the descriptor
-                _U32_MAX,  # compressed size - see zip64 extra
-                _U32_MAX,  # uncompressed size - see zip64 extra
-                len(e.name_bytes),
-                _LOCAL_ZIP64_EXTRA,
-            )
-            # Zip64 extended information. Sizes are unknown here (bit 3 is set),
-            # so they are zero and the descriptor carries the truth.
-            extra = struct.pack("<HHQQ", 0x0001, 16, 0, 0)
-            yield header + e.name_bytes + extra
-            offset += _LOCAL_HEADER + len(e.name_bytes) + _LOCAL_ZIP64_EXTRA
+        The full stream is `iter_from(0)` - one code path, so every existing
+        archive test also exercises the seek arithmetic.
 
+        Blocks are produced in archive order and clipped to the window: a block
+        that ends before `offset` is skipped, the one straddling it is sliced,
+        and the generator stops the moment `length` is satisfied. Member data is
+        the only part read from storage; every other block is a few dozen bytes
+        built in memory."""
+        total = len(self)
+        if offset < 0 or offset > total:
+            raise ValueError(f"offset {offset} outside archive of {total} bytes")
+        remaining = total - offset if length is None else min(length, total - offset)
+        if remaining <= 0:
+            return
+
+        positions = self._positions()
+        crcs: list[int] = []
+        cd_offset = (positions[-1][2] + _DATA_DESCRIPTOR) if positions else 0
+
+        for e, (h_start, d_start, desc_start) in zip(
+            self._entries, positions, strict=True
+        ):
+            e.offset = h_start
+            if offset >= desc_start + _DATA_DESCRIPTOR:
+                # Wholly behind the window - but the central directory still
+                # needs this member's CRC, so pay for it now (cache, else
+                # re-read). `resume_cost()` is the caller's advance warning.
+                crcs.append(self._crc_of(e))
+                continue
+
+            block = self._local_header(e)
+            lo = max(0, offset - h_start)
+            if lo < len(block):
+                piece = block[lo : lo + remaining]
+                remaining -= len(piece)
+                yield piece
+                if remaining <= 0:
+                    return
+
+            # The CRC covers the whole member, so the data is read from byte 0
+            # even when the window starts later; the skipped prefix is
+            # discarded. One pass over the member either way.
             crc = 0
-            written = 0
+            read = 0
             fh = e.open_fn()
             try:
-                while written < e.size:
-                    chunk = fh.read(min(_READ_CHUNK, e.size - written))
+                while read < e.size:
+                    chunk = fh.read(min(_READ_CHUNK, e.size - read))
                     if not chunk:
                         break
                     crc = zlib.crc32(chunk, crc)
-                    written += len(chunk)
-                    yield chunk
+                    start = d_start + read
+                    read += len(chunk)
+                    lo = max(0, offset - start)
+                    if lo >= len(chunk):
+                        continue
+                    piece = chunk[lo : lo + remaining]
+                    remaining -= len(piece)
+                    yield piece
+                    if remaining <= 0:
+                        # The window closed mid-member. The CRC is incomplete
+                        # and must NOT be cached or emitted - and it is not
+                        # needed, because nothing after this point is sent.
+                        return
             finally:
                 try:
                     fh.close()
                 except Exception:  # pragma: no cover - close-on-error is best effort
                     pass
 
-            if written != e.size:
+            if read != e.size:
                 # Cannot be recovered from: Content-Length is already committed.
                 logger.error(
                     "zip member %r declared %d bytes but produced %d",
-                    e.arcname, e.size, written,
+                    e.arcname, e.size, read,
                 )
                 raise ZipSizeMismatchError(
-                    f"{e.arcname}: declared {e.size} bytes, produced {written}"
+                    f"{e.arcname}: declared {e.size} bytes, produced {read}"
                 )
+            crc &= 0xFFFFFFFF
+            self._remember_crc(e, crc)
+            crcs.append(crc)
 
-            e.crc = crc & 0xFFFFFFFF
-            yield struct.pack(
-                "<IIQQ", _SIG_DESCRIPTOR, e.crc, e.size, e.size
-            )
-            offset += e.size + _DATA_DESCRIPTOR
+            block = self._descriptor(e, crc)
+            lo = max(0, offset - desc_start)
+            if lo < len(block):
+                piece = block[lo : lo + remaining]
+                remaining -= len(piece)
+                yield piece
+                if remaining <= 0:
+                    return
 
-        # -- central directory ---------------------------------------------
-        cd_offset = offset
-        cd_size = 0
-        for e in self._entries:
-            extra = struct.pack(
-                "<HHQQQ", 0x0001, 24, e.size, e.size, e.offset
-            )
-            central = struct.pack(
-                "<IHHHHHHIIIHHHHHII",
-                _SIG_CENTRAL,
-                _VERSION_ZIP64,  # version made by
-                _VERSION_ZIP64,  # version needed
-                flags,
-                _METHOD_STORED,
-                dos_time,
-                dos_date,
-                e.crc,
-                _U32_MAX,  # compressed size -> zip64 extra
-                _U32_MAX,  # uncompressed size -> zip64 extra
-                len(e.name_bytes),
-                len(extra),
-                0,  # comment length
-                0,  # disk number start
-                0,  # internal attrs
-                0o100644 << 16,  # external attrs: regular file, rw-r--r--
-                _U32_MAX,  # local header offset -> zip64 extra
-            )
-            yield central + e.name_bytes + extra
-            cd_size += _CENTRAL_HEADER + len(e.name_bytes) + len(extra)
+        cd_size = sum(
+            _CENTRAL_HEADER + len(e.name_bytes) + _CENTRAL_ZIP64_EXTRA
+            for e in self._entries
+        )
 
-        count = len(self._entries)
-        yield struct.pack(
-            "<IQHHIIQQQQ",
-            _SIG_EOCD64,
-            44,  # size of the remainder of this record
-            _VERSION_ZIP64,
-            _VERSION_ZIP64,
-            0,  # this disk
-            0,  # disk with central directory
-            count,
-            count,
-            cd_size,
-            cd_offset,
-        )
-        yield struct.pack(
-            "<IIQI", _SIG_EOCD64_LOC, 0, cd_offset + cd_size, 1
-        )
-        yield struct.pack(
-            "<IHHHHIIH",
-            _SIG_EOCD,
-            _U16_MAX,
-            _U16_MAX,
-            _U16_MAX,
-            _U16_MAX,
-            _U32_MAX,
-            _U32_MAX,
-            0,
-        )
+        pos = cd_offset
+        for e, crc in zip(self._entries, crcs, strict=True):
+            block = self._central(e, crc, e.offset)
+            lo = max(0, offset - pos)
+            pos += len(block)
+            if lo >= len(block):
+                continue
+            piece = block[lo : lo + remaining]
+            remaining -= len(piece)
+            yield piece
+            if remaining <= 0:
+                return
+
+        block = self._end_records(cd_offset, cd_size)
+        lo = max(0, offset - pos)
+        if lo < len(block):
+            yield block[lo : lo + remaining]

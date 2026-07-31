@@ -25,8 +25,7 @@ import json
 import logging
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Cookie, Depends, Request, Response
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, Cookie, Depends, Header, Request, Response
 from sqlalchemy.orm import Session
 
 from ..config import settings
@@ -51,8 +50,12 @@ from ..services import zip_stream as zip_stream_svc
 from ..services.audit import record_audit_event
 from ..services.storage_backend import get_storage_backend
 from ..utils.crypto import constant_time_equals
-from ..utils.http_range import is_partial_continuation
-from ..utils.timeutil import utc_now
+from ..utils.http_range import (
+    UnsatisfiableRangeError,
+    is_partial_continuation,
+    parse_single_range,
+)
+from ..utils.timeutil import to_epoch, utc_now
 from ..utils.ua_fingerprint import ua_fingerprint_hash
 
 logger = logging.getLogger("fileheron.public")
@@ -450,12 +453,28 @@ def public_download_zip(
     request: Request,
     db: Session = Depends(get_db),
     fh_dl_unlock: str | None = Cookie(default=None),
-) -> StreamingResponse:
+    range_header: str | None = Header(default=None, alias="Range"),
+    if_range: str | None = Header(default=None, alias="If-Range"),
+) -> Response:
     """Stream a single ZIP of every downloadable file behind a public link.
     Same unlock gate as the single-file path; ONE ZIP counts as ONE download
-    against the link budget (range continuations don't re-decrement/re-log)."""
+    against the link budget, and a genuine resume of it is free.
+
+    Resumable since v2.6.0. Before that a 9 GB archive that died at 90% was
+    unrecoverable: the link had already been charged, every retry restarted at
+    byte 0, and once the budget ran out the retries got 410 (audit 2026-07-30,
+    flow-publiclink-5). The archive is reproducible and seekable, so this now
+    answers a Range with a real 206."""
     link = public_link_svc.get_link_by_token(db, token)
-    public_link_svc.assert_link_usable(db, link)
+    # The bare header claim, used ONLY to decide whether an exhausted link may
+    # proceed far enough to compute the archive's identity (the corroborating
+    # evidence is keyed on the ETag, so it cannot be checked this early). The
+    # authoritative decision is the `corroborated` boolean below: a fabricated
+    # `Range: bytes=1-` on a spent link reaches the atomic decrement and gets
+    # the same 410, just a few stat calls later.
+    public_link_svc.assert_link_usable(
+        db, link, allow_exhausted_continuation=is_partial_continuation(request)
+    )
 
     if not _is_unlocked(link, fh_dl_unlock):
         raise AppError(401, "UNLOCK_REQUIRED", "Submit the password first.")
@@ -474,57 +493,95 @@ def public_download_zip(
     if not files:
         raise AppError(400, "NO_DOWNLOADABLE_FILES", "This share has no downloadable files.")
 
-    # A ZIP is a single StreamingResponse artifact - it CANNOT serve a real
-    # partial/range response, so a `Range:` header on a ZIP request still returns
-    # the FULL archive. Always charge the budget + log once; honoring
-    # is_partial_continuation here let a holder re-download the whole archive for
-    # free, unlimited times, invisibly to the counter/log/owner (audit M5).
-    allowed, downloads_remaining = public_link_svc.decrement_counter(db, link=link)
-    if not allowed:
-        db.commit()
-        raise AppError(
-            410, "PUBLIC_LINK_EXHAUSTED", "This public link's download limit has been reached."
-        )
-
-    ip = request.client.host if request.client else None
-    ua = ua_fingerprint_hash(request.headers.get("user-agent", ""))
-    for f in files:
-        db.add(
-            DownloadLog(
-                file_id=f.id,
-                share_id=link.share_id,
-                accessed_by_user_id=None,
-                ip=ip,
-                ua_fingerprint_hash=ua,
-                bytes_served=f.size_bytes,
-                via=DownloadVia.public,
-            )
-        )
-    record_audit_event(
-        db,
-        event_type=AuditEventType.share_downloaded,
-        actor_user_id=None,
-        target_type="share",
-        target_id=link.share_id,
-        metadata={
-            "via": "public",
-            "file_count": len(files),
-            "archive": True,
-            "public_link_id": link.id,
-        },
-        request=request,
-    )
-    public_link_svc.record_consumption(
-        db, link=link, file_id=None, ip=ip, request=request
-    )
-    public_link_svc.notify_owner_on_archive_download(
-        db,
-        link=link,
-        file_count=len(files),
-        total_bytes=sum(f.size_bytes for f in files),
-        downloads_remaining=downloads_remaining,
-    )
-    db.commit()
-
     share = db.query(Share).filter(Share.id == link.share_id).one()
-    return zip_stream_svc.zip_streaming_response(files, f"share-{share.id[:8]}", count=True)
+    # The timestamp comes from the share, never the clock, so the same member
+    # list always produces the same bytes; the ETag covers that list, so a file
+    # quarantined mid-transfer makes `If-Range` miss and the client restarts
+    # cleanly instead of splicing two different archives together.
+    mtime = to_epoch(share.created_at)
+    etag, total = zip_stream_svc.zip_identity(files, mtime=mtime)
+    quoted_etag = f'"{etag}"'
+
+    byte_range = None
+    if if_range is None or if_range.strip() == quoted_etag:
+        try:
+            parsed = parse_single_range(range_header, total)
+        except UnsatisfiableRangeError:
+            # RFC 9110 15.5.17: the 416 carries the resource length so the
+            # client can recover. A bare Response rather than the usual error
+            # envelope because Content-Range is the entire point of the reply.
+            return Response(
+                status_code=416, headers={"Content-Range": f"bytes */{total}"}
+            )
+        byte_range = (parsed.start, parsed.end) if parsed else None
+
+    # A resume is free; a CLAIM of one is not. Evidence is that this instance
+    # really did start serving this exact archive inside the recency window -
+    # keyed on the share and the ETag, so a Range against a changed member list
+    # is a new download and pays like one. Without this, `Range: bytes=1-` would
+    # be an unlimited free-download bypass, which is the defect the old
+    # always-charge rule was avoiding by refusing to resume at all.
+    recent_key = f"zip:{share.id}:{etag}"
+    resuming = bool(byte_range) and byte_range[0] > 0
+    corroborated = resuming and transfer_activity.was_download_recent(recent_key)
+
+    downloads_remaining = link.downloads_remaining
+    if not corroborated:
+        allowed, downloads_remaining = public_link_svc.decrement_counter(db, link=link)
+        if not allowed:
+            db.commit()
+            raise AppError(
+                410,
+                "PUBLIC_LINK_EXHAUSTED",
+                "This public link's download limit has been reached.",
+            )
+
+        ip = request.client.host if request.client else None
+        ua = ua_fingerprint_hash(request.headers.get("user-agent", ""))
+        for f in files:
+            db.add(
+                DownloadLog(
+                    file_id=f.id,
+                    share_id=link.share_id,
+                    accessed_by_user_id=None,
+                    ip=ip,
+                    ua_fingerprint_hash=ua,
+                    bytes_served=f.size_bytes,
+                    via=DownloadVia.public,
+                )
+            )
+        record_audit_event(
+            db,
+            event_type=AuditEventType.share_downloaded,
+            actor_user_id=None,
+            target_type="share",
+            target_id=link.share_id,
+            metadata={
+                "via": "public",
+                "file_count": len(files),
+                "archive": True,
+                "public_link_id": link.id,
+            },
+            request=request,
+        )
+        public_link_svc.record_consumption(
+            db, link=link, file_id=None, ip=ip, request=request
+        )
+        public_link_svc.notify_owner_on_archive_download(
+            db,
+            link=link,
+            file_count=len(files),
+            total_bytes=sum(f.size_bytes for f in files),
+            downloads_remaining=downloads_remaining,
+        )
+        db.commit()
+
+    return zip_stream_svc.zip_streaming_response(
+        files,
+        f"share-{share.id[:8]}",
+        count=True,
+        mtime=mtime,
+        byte_range=byte_range,
+        etag=etag,
+        recent_key=recent_key,
+    )

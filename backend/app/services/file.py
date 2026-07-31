@@ -42,13 +42,19 @@ def storage_path_for(file_id: str, when: datetime | None = None) -> Path:
 def downloadable_files(db: Session, share_id: str) -> list[File]:
     """The `clean` files of a share whose bytes are actually present on disk -
     the set a bulk-ZIP download includes. Scanning / infected / deleted files
-    are skipped (not an error); a missing-on-disk row is skipped + logged."""
+    are skipped (not an error); a missing-on-disk row is skipped + logged.
+
+    The order is TOTAL, not just `created_at`: files uploaded in the same second
+    tie, and MariaDB is free to break a tie differently between two queries. The
+    bulk ZIP is resumable, which means the same share must lay its members out
+    identically on every request - a reordering mid-resume would splice two
+    archives into a corrupt one (audit 2026-07-30)."""
     out: list[File] = []
     backend = get_storage_backend()
     rows = (
         db.query(File)
         .filter(File.share_id == share_id, File.state == FileState.clean)
-        .order_by(File.created_at.asc())
+        .order_by(File.created_at.asc(), File.id.asc())
         .all()
     )
     for f in rows:

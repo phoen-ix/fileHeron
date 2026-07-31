@@ -130,3 +130,85 @@ test('a CSP is delivered in report-only mode', async ({ request }) => {
   // Enforcing is a separate, deliberate release step.
   expect(h['content-security-policy']).toBeUndefined()
 })
+
+test('a public ZIP download resumes through the edge and is charged once', async () => {
+  /* flow-publiclink-5: a bulk archive that died mid-transfer used to be
+   * unrecoverable - the link was charged before the first byte, every retry
+   * restarted at 0, and once the budget ran out the retries got 410. It also
+   * has to survive the PROXY: Traefik and nginx both sit in front of this, and
+   * a buffering or Accept-Ranges-stripping hop turns a 206 back into a 200
+   * without the backend ever noticing. Only a request through the real stack
+   * says whether the resume works.
+   *
+   * From the 2026-07-30 audit. */
+  const admin = await apiLogin(ADMIN.email, ADMIN.password)
+
+  const sh = await apiFetch(admin, '/api/shares', {
+    method: 'POST',
+    body: JSON.stringify({
+      kind: 'outbound',
+      recipients: { user_ids: [], group_ids: [] },
+      expires_at: null,
+      subject: `E2E zip resume ${Date.now()}`,
+      public_link: { password: null, download_limit: 2 },
+    }),
+  })
+  expect(sh.status).toBe(201)
+  const created = (await sh.json()) as { id: string; public_link?: { url: string } }
+  const token = (created.public_link?.url ?? '').split('/d/').pop() as string
+  expect(token, 'the create response must return the plaintext link once').toBeTruthy()
+
+  for (const name of ['one.bin', 'two.bin']) {
+    const form = new FormData()
+    form.append('share_id', created.id)
+    form.append(
+      'file',
+      new Blob([Buffer.alloc(512 * 1024, name.charCodeAt(0))], {
+        type: 'application/octet-stream',
+      }),
+      name,
+    )
+    const up = await fetch(`${BASE}/api/uploads/direct`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${admin}` },
+      body: form,
+    })
+    expect(up.status, await up.text()).toBe(201)
+  }
+  // Give the AV scan a moment: only `clean` files are included in the archive.
+  await expect
+    .poll(
+      async () => {
+        const meta = await fetch(`${BASE}/api/public/${token}`)
+        const body = (await meta.json()) as { files: { state: string }[] }
+        return body.files.filter((f) => f.state === 'clean').length
+      },
+      { timeout: 60_000, intervals: [500] },
+    )
+    .toBe(2)
+
+  const zipUrl = `${BASE}/api/public/${token}/download-zip`
+
+  const full = await fetch(zipUrl)
+  expect(full.status).toBe(200)
+  expect(full.headers.get('accept-ranges'), 'a proxy hop stripped Accept-Ranges').toBe('bytes')
+  const etag = full.headers.get('etag') as string
+  expect(etag).toBeTruthy()
+  const whole = Buffer.from(await full.arrayBuffer())
+
+  const cut = Math.floor(whole.length / 2)
+  const resumed = await fetch(zipUrl, {
+    headers: { Range: `bytes=${cut}-`, 'If-Range': etag },
+  })
+  expect(resumed.status, 'the edge did not pass the Range through').toBe(206)
+  expect(resumed.headers.get('content-range')).toBe(
+    `bytes ${cut}-${whole.length - 1}/${whole.length}`,
+  )
+  const tail = Buffer.from(await resumed.arrayBuffer())
+  expect(Buffer.concat([whole.subarray(0, cut), tail]).equals(whole)).toBe(true)
+
+  // Two requests, one archive, one unit of budget.
+  const meta = await fetch(`${BASE}/api/public/${token}`)
+  const remaining = ((await meta.json()) as { downloads_remaining: number }).downloads_remaining
+  expect(remaining, 'the resume was charged as a second download').toBe(1)
+})

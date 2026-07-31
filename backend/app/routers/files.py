@@ -4,7 +4,7 @@ from __future__ import annotations
 import logging
 
 from fastapi import APIRouter, Depends, Header, Request, status
-from fastapi.responses import Response, StreamingResponse
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from ..dependencies import get_actor, get_db, request_has_scope, require_scope
@@ -21,7 +21,12 @@ from ..services import share as share_svc
 from ..services import zip_stream as zip_stream_svc
 from ..services.audit import record_audit_event
 from ..services.storage_backend import get_storage_backend
-from ..utils.http_range import is_partial_continuation
+from ..utils.http_range import (
+    UnsatisfiableRangeError,
+    is_partial_continuation,
+    parse_single_range,
+)
+from ..utils.timeutil import to_epoch
 from ..utils.ua_fingerprint import ua_fingerprint_hash
 
 logger = logging.getLogger("fileheron.files")
@@ -423,12 +428,14 @@ def download_share_zip(
     db: Session = Depends(get_db),
     dt: str | None = None,
     authorization: str | None = Header(default=None),
-) -> StreamingResponse:
+    range_header: str | None = Header(default=None, alias="Range"),
+    if_range: str | None = Header(default=None, alias="If-Range"),
+) -> Response:
     """Stream a single ZIP of all downloadable files in a share. On-the-fly,
     ZIP_STORED, O(1) memory (see services/zip_stream). Auth mirrors the
     single-file path: signed `?dt=` (bound to the share id) or bearer. One ZIP
-    counts as ONE download against the share budget - parallel/segmented range
-    continuations don't re-decrement or re-log."""
+    counts as ONE download against the share budget - a genuine resume doesn't
+    re-decrement or re-log."""
     user = _resolve_download_user(request, db, share_id, dt, authorization)
     share = share_svc.get_share_or_404(db, share_id)
 
@@ -447,11 +454,43 @@ def download_share_zip(
     if not files:
         raise AppError(400, "NO_DOWNLOADABLE_FILES", "This share has no downloadable files.")
 
-    # A ZIP is a single StreamingResponse - a `Range:` header still yields the
-    # FULL archive, so always charge the budget once (honoring
-    # is_partial_continuation here let a recipient bypass the share download
-    # limit by adding a Range header) (audit M5).
-    if share.state == ShareState.active:
+    # The archive is reproducible and seekable, so a Range is honoured for real
+    # (see services/zip_stream). The timestamp comes from the share so the same
+    # member list always produces the same bytes; the ETag covers the member
+    # list, so a file quarantined mid-transfer makes `If-Range` miss and the
+    # client restarts instead of splicing two archives.
+    mtime = to_epoch(share.created_at)
+    etag, total = zip_stream_svc.zip_identity(files, mtime=mtime)
+    quoted_etag = f'"{etag}"'
+
+    byte_range = None
+    if if_range is None or if_range.strip() == quoted_etag:
+        try:
+            parsed = parse_single_range(range_header, total)
+        except UnsatisfiableRangeError:
+            # RFC 9110 15.5.17: a 416 carries the resource length so the client
+            # can recover. A bare Response rather than the usual error envelope
+            # because Content-Range is the entire point of the reply.
+            return Response(
+                status_code=416, headers={"Content-Range": f"bytes */{total}"}
+            )
+        byte_range = (parsed.start, parsed.end) if parsed else None
+
+    # A continuation is free; a claim of one is not. `Range: bytes=1-` from a
+    # caller who never downloaded this share would otherwise be an unlimited
+    # bypass of the share budget - the same defect closed on the single-file
+    # path (audit 2026-07-30). Evidence is a download_log row for this user and
+    # one of these files inside the resume-credit window, which survives a Redis
+    # restart and an overnight pause.
+    resuming = bool(byte_range) and byte_range[0] > 0
+    corroborated = resuming and file_svc.has_recent_counted_download(
+        db,
+        file_id=files[0].id,
+        user_id=user.id,
+        within_hours=int(_sr.effective(db, _sr.K.DOWNLOAD_RESUME_CREDIT_HOURS)),
+    )
+
+    if share.state == ShareState.active and not corroborated:
         if share.download_limit is not None and not share_svc.try_decrement_share_counter(
             db, share=share
         ):
@@ -491,7 +530,15 @@ def download_share_zip(
         )
         db.commit()
 
-    return zip_stream_svc.zip_streaming_response(files, f"share-{share.id[:8]}", count=True)
+    return zip_stream_svc.zip_streaming_response(
+        files,
+        f"share-{share.id[:8]}",
+        count=True,
+        mtime=mtime,
+        byte_range=byte_range,
+        etag=etag,
+        recent_key=f"zip:{share.id}:{etag}",
+    )
 
 
 @router.delete("/{file_id}", status_code=status.HTTP_204_NO_CONTENT)

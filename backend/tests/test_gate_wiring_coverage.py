@@ -702,9 +702,14 @@ def test_serving_a_file_records_the_mark():
     )
 
 
-def test_every_counted_download_route_passes_its_file_id():
-    """A route that counts but does not identify the file would leave a
-    legitimate resume unmarked - and therefore refused during maintenance."""
+def test_every_counted_download_route_identifies_what_it_is_serving():
+    """A counted response must name the thing it is serving, or the mark a later
+    resume looks for is never written - and the resume is then refused during
+    maintenance, and charged again against the download budget.
+
+    Single files identify by `file_id=`; a bulk ZIP has no single file, so it
+    identifies by `recent_key=` (share id + archive ETag). Either is fine;
+    neither is not."""
     import inspect
     import re
 
@@ -713,7 +718,8 @@ def test_every_counted_download_route_passes_its_file_id():
 
     for mod in (files_router, public_router):
         src = inspect.getsource(mod)
-        for m in re.finditer(r"count=True,\n(\s*)([^\n]*)", src):
-            assert "file_id=" in m.group(2), (
-                f"{mod.__name__}: a counted response does not identify its file"
+        for m in re.finditer(r"count=True,?", src):
+            call_tail = src[m.start() : m.start() + 400]
+            assert "file_id=" in call_tail or "recent_key=" in call_tail, (
+                f"{mod.__name__}: a counted response does not identify what it serves"
             )

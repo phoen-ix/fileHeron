@@ -18,3 +18,14 @@ def utc_now() -> datetime:
 def utc_now_aware() -> datetime:
     """Timezone-aware UTC - for JWT iat/exp where epoch math matters."""
     return datetime.now(tz=timezone.utc)
+
+
+def to_epoch(value: datetime) -> float:
+    """Epoch seconds for a stored (naive UTC) timestamp.
+
+    `datetime.timestamp()` on a naive value interprets it as LOCAL time and
+    silently shifts it by the container's offset - the bug that bit the
+    public-link unlock cookie. Stamp the tz first, always through here."""
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.timestamp()

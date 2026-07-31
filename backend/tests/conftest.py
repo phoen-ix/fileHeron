@@ -60,11 +60,30 @@ from app.utils.crypto import argon2_hash, normalize_email
 
 @pytest.fixture
 def engine():
+    """The default test engine, with foreign keys ENFORCED.
+
+    SQLite ships FK enforcement off. With it off, the whole suite ran against a
+    database that silently accepted rows MariaDB would reject, and the ~30
+    `ondelete=` declarations on the models were never exercised - so an ORM-level
+    cascade could look correct while the DB-level one was wrong, which is
+    precisely the class of defect the erasure, purge and config-restore paths
+    are made of. `fk_db` existed for exactly this and one test file used it
+    (audit 2026-07-30, tests-17).
+
+    Flipped last, deliberately: doing it mid-programme would have made a
+    harness-induced failure indistinguishable from a fix-induced one."""
     eng = create_engine(
         "sqlite:///:memory:",
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
+
+    @event.listens_for(eng, "connect")
+    def _fk_pragma(dbapi_conn, _rec):  # noqa: ANN001
+        cur = dbapi_conn.cursor()
+        cur.execute("PRAGMA foreign_keys=ON")
+        cur.close()
+
     Base.metadata.create_all(eng)
     yield eng
     eng.dispose()
@@ -84,10 +103,11 @@ def db(session_factory):
         s.close()
 
 
-# ---- FK-enforced engine (opt-in) -------------------------------------------
-# SQLite ships with foreign-key enforcement OFF, so the default `engine`/`db`
-# fixtures never catch a FK/cascade bug. `fk_db` turns it on via a per-connection
-# PRAGMA so restore/cascade tests exercise the same integrity MariaDB enforces.
+# ---- FK-enforced engine ----------------------------------------------------
+# Kept as its own fixture pair for the tests that name it explicitly. Since the
+# 2026-07-30 audit the DEFAULT `engine` enforces foreign keys too, so `fk_db` is
+# no longer the only way to get integrity - it is now just an independent
+# session on an independent engine.
 
 
 @pytest.fixture

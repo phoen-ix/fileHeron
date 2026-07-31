@@ -9,10 +9,75 @@ from app.services import anomaly
 from app.utils.timeutil import utc_now
 
 
+def _real_user(db, user_id):
+    """Ensure a User row with this id exists.
+
+    The anomaly tests count downloads BY user id and used bare integers with no
+    users behind them. `download_log.accessed_by_user_id` carries a real FK, so
+    those rows are rejected by MariaDB - they only inserted because the test
+    engine had foreign keys off (audit 2026-07-30, tests-17)."""
+    from app.models.user import User, UserRole
+
+    if user_id is None:
+        return None
+    existing = db.get(User, user_id)
+    if existing is not None:
+        return existing.id
+    u = User(
+        id=user_id, email=f"anomaly-{user_id}@test.local",
+        display_name=f"User {user_id}", role=UserRole.client,
+        password_hash="x", email_verified=True,
+    )
+    db.add(u)
+    db.flush()
+    return u.id
+
+
+def _real_file(db):
+    """A committed (share, file) pair for the download rows below to point at.
+
+    These helpers used to insert `file_id="f", share_id="s"` - rows referring to
+    nothing. That only worked because the test engine had foreign keys OFF; the
+    same insert is rejected by MariaDB, so the suite was exercising a shape
+    production cannot produce (audit 2026-07-30, tests-17)."""
+    from app.models.file import File, FileState
+    from app.models.share import Share, ShareKind, ShareState
+    from app.models.user import User, UserRole
+
+    owner = db.query(User).filter(User.role == UserRole.employee).first()
+    if owner is None:
+        owner = User(
+            email="anomaly-owner@test.local", display_name="Owner",
+            role=UserRole.employee, password_hash="x", email_verified=True,
+        )
+        db.add(owner)
+        db.flush()
+    # Reused across calls within a test: the download rows only need SOME real
+    # parent, and creating a fresh one per call would collide on the file id.
+    existing = db.query(File).first()
+    if existing is not None:
+        return existing.id, existing.share_id
+
+    sh = Share(created_by_id=owner.id, kind=ShareKind.outbound, state=ShareState.active)
+    db.add(sh)
+    db.flush()
+    f = File(
+        id="00000000-0000-0000-0000-0000000000an", share_id=sh.id,
+        original_filename="a.bin", mime_type="application/octet-stream",
+        size_bytes=1, storage_path=None, state=FileState.clean,
+        uploaded_by_id=owner.id,
+    )
+    db.add(f)
+    db.flush()
+    return f.id, sh.id
+
+
 def _dl(db, *, user_id, ip, n=1):
+    file_id, share_id = _real_file(db)
+    _real_user(db, user_id)
     for _ in range(n):
         db.add(DownloadLog(
-            file_id="f", share_id="s", accessed_by_user_id=user_id, ip=ip,
+            file_id=file_id, share_id=share_id, accessed_by_user_id=user_id, ip=ip,
             via=DownloadVia.auth, accessed_at=utc_now(),
         ))
 
@@ -33,8 +98,11 @@ def test_mass_download_flags_over_threshold(db):
 
 def test_mass_download_ignores_old_and_anonymous(db):
     # Old download (outside window) + anonymous public download (NULL user).
-    db.add(DownloadLog(file_id="f", share_id="s", accessed_by_user_id=1, ip="1.1.1.1",
-                       via=DownloadVia.auth, accessed_at=utc_now() - timedelta(hours=2)))
+    old_file, old_share = _real_file(db)
+    _real_user(db, 1)
+    db.add(DownloadLog(file_id=old_file, share_id=old_share, accessed_by_user_id=1,
+                       ip="1.1.1.1", via=DownloadVia.auth,
+                       accessed_at=utc_now() - timedelta(hours=2)))
     _dl(db, user_id=None, ip="1.1.1.1", n=10)
     db.commit()
     findings = anomaly.mass_download(db, cutoff=utc_now() - timedelta(minutes=15), threshold=3)

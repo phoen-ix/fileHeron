@@ -34,6 +34,10 @@ def _file(db, *, owner_id, share_id, fid, size, state=FileState.clean):
         original_filename=fid, mime_type="application/octet-stream",
         size_bytes=size, storage_path=f"/{fid}", state=state,
     ))
+    # Flush so a `download_log` row added next has a parent to reference. The
+    # test engine enforces foreign keys since the 2026-07-30 audit; without the
+    # flush the child insert can be ordered first and the FK check fails.
+    db.flush()
 
 
 def test_snapshot_storage_today_idempotent(make_user, db):

@@ -555,3 +555,37 @@ def test_the_two_locales_carry_the_same_headline_keys():
     en = json.loads((root / "en.json").read_text(encoding="utf-8"))
     de = json.loads((root / "de.json").read_text(encoding="utf-8"))
     assert set(en["notif_bell"]["headline"]) == set(de["notif_bell"]["headline"])
+
+
+# --- tests-17: the harness enforces what production enforces -----------------
+
+
+def test_the_default_test_engine_enforces_foreign_keys(db):
+    """SQLite ships FK enforcement OFF. With it off the suite ran against a
+    database that accepted rows MariaDB rejects, and the ~30 `ondelete=`
+    declarations on the models were never exercised - an ORM-level cascade could
+    look right while the DB-level one was wrong, which is exactly what the
+    erasure, purge and config-restore paths are made of (audit 2026-07-30)."""
+    from sqlalchemy import text
+
+    assert db.execute(text("PRAGMA foreign_keys")).scalar() == 1
+
+
+def test_an_orphan_child_row_is_actually_refused(db, make_user):
+    """The assertion that proves the PRAGMA is doing something."""
+    from sqlalchemy.exc import IntegrityError
+
+    from app.models.download_log import DownloadLog
+
+    db.add(DownloadLog(file_id="no-such-file", share_id="no-such-share"))
+    with pytest.raises(IntegrityError):
+        db.flush()
+    db.rollback()
+
+
+def test_the_opt_in_fk_fixture_still_exists(fk_db):
+    """Tests that name `fk_db` explicitly must keep working - it is now an
+    independent session, not the only way to get integrity."""
+    from sqlalchemy import text
+
+    assert fk_db.execute(text("PRAGMA foreign_keys")).scalar() == 1

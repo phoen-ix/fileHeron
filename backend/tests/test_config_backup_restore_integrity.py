@@ -62,6 +62,7 @@ def test_logs_restore_skips_absent_file_share_fks(db, fk_db):
         storage_path="/nope", uploaded_by_id=u.id,
     )
     db.add(f)
+    db.flush()  # the FK-enforcing test engine checks the parent at insert time
     db.add(DownloadLog(file_id=f.id, share_id=share.id, accessed_by_user_id=u.id))
     a = EmailLog(recipient_email="u@x", subject="first")
     db.add(a)

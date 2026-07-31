@@ -227,7 +227,9 @@ def preview_file(
     share = db.query(Share).filter(Share.id == file.share_id).one()
     share_svc.assert_share_file_access(db, user=user, share=share)
     from ..services import maintenance as maintenance_svc
-    maintenance_svc.refuse_if_maintenance(db, request=request, kind="download")
+    maintenance_svc.refuse_if_maintenance(
+        db, request=request, kind="download", file_id=file_id
+    )
     _assert_file_state_servable(file)
     if not settings_svc.get_bool(
         db, settings_svc.Keys.FILE_PREVIEW_ENABLED, default=True
@@ -255,6 +257,7 @@ def preview_file(
         disposition="inline",
         extra_headers=preview_svc.SECURITY_HEADERS,
         count=True,
+        file_id=file.id,
     )
 
 
@@ -273,7 +276,9 @@ def download_file(
     share_svc.assert_share_file_access(db, user=user, share=share)
 
     from ..services import maintenance as maintenance_svc
-    maintenance_svc.refuse_if_maintenance(db, request=request, kind="download")
+    maintenance_svc.refuse_if_maintenance(
+        db, request=request, kind="download", file_id=file_id
+    )
 
     if file.state == FileState.uploading:
         raise AppError(409, "STILL_UPLOADING", "File hasn't finished uploading yet.")
@@ -357,6 +362,7 @@ def download_file(
         mime_type=file.mime_type,
         ttl_sec=ttl,
         count=True,
+        file_id=file.id,
     )
 
 

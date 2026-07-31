@@ -39,9 +39,49 @@ def _now() -> float:
     return time.time()
 
 
-def download_started() -> str | None:
+# Per-file "this instance served bytes for it recently" marks.
+#
+# The maintenance gate lets a `Range:` continuation through, on the reasoning
+# that it is finishing an in-progress transfer rather than starting a new one.
+# That was taken purely from the SHAPE of the header, so `Range: bytes=1-` on a
+# brand-new connection bypassed the gate entirely (audit 2026-07-30, config-7).
+# A mark recorded when a download actually starts turns the claim into something
+# checkable.
+#
+# The window is deliberately short. Maintenance is a drain: a transfer that has
+# been idle for an hour is a NEW transfer, and refusing it is correct.
+_RECENT_KEY_PREFIX = "fh:transfer:recent:"
+RECENT_DOWNLOAD_TTL_SEC = 30 * 60
+
+
+def mark_download_recent(file_id: str) -> None:
+    """Record that this instance just started serving `file_id`."""
+    try:
+        get_redis().set(
+            f"{_RECENT_KEY_PREFIX}{file_id}", "1", ex=RECENT_DOWNLOAD_TTL_SEC
+        )
+    except Exception:
+        logger.warning("transfer_activity: recent-mark failed (redis)")
+
+
+def was_download_recent(file_id: str) -> bool:
+    """Whether this instance served bytes for `file_id` inside the window.
+
+    Fails OPEN: with Redis unreachable we cannot tell a resume from a fabricated
+    range, and refusing a genuine resume is the worse outcome - the same
+    fail-open posture the quota counter takes."""
+    try:
+        return get_redis().get(f"{_RECENT_KEY_PREFIX}{file_id}") is not None
+    except Exception:
+        logger.warning("transfer_activity: recent-check failed (redis); allowing")
+        return True
+
+
+def download_started(file_id: str | None = None) -> str | None:
     """Register an in-flight download. Returns its id (pass to download_finished),
     or None if Redis is unavailable."""
+    if file_id:
+        mark_download_recent(file_id)
     dl_id = uuid.uuid4().hex
     try:
         get_redis().zadd(_DOWNLOADS_KEY, {dl_id: _now()})

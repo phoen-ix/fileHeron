@@ -336,6 +336,7 @@ def serve_response(
     disposition: str = "attachment",
     extra_headers: dict[str, str] | None = None,
     count: bool = False,
+    file_id: str | None = None,
 ):
     """The HTTP response for a file. Local backend → FileResponse (kernel
     sendfile, Range-capable); object backend → 307 redirect to a presigned URL
@@ -369,7 +370,7 @@ def serve_response(
     if count:
         from . import transfer_activity
 
-        dl_id = transfer_activity.download_started()
+        dl_id = transfer_activity.download_started(file_id)
     return _CountedFileResponse(
         path=backend.local_path(locator),
         media_type=mime_type,

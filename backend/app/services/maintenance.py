@@ -75,17 +75,39 @@ def set_enabled(
         )
 
 
-def refuse_if_maintenance(db: Session, *, request=None, kind: str = "transfer") -> None:
+def refuse_if_maintenance(
+    db: Session, *, request=None, kind: str = "transfer", file_id: str | None = None
+) -> None:
     """Raise 503 when maintenance mode blocks a NEW transfer.
 
-    `kind="download"` lets a ranged continuation through - a resumed/ranged GET is
-    finishing an in-progress download, not starting a new one, and the whole point
-    of maintenance mode is to let in-progress transfers complete.
+    `kind="download"` lets a ranged continuation through - a resumed/ranged GET
+    is finishing an in-progress download, not starting a new one, and the whole
+    point of maintenance mode is to let in-progress transfers complete.
+
+    That exemption used to be granted on the SHAPE of the header alone, so
+    `Range: bytes=1-` on a brand-new connection walked straight past the gate -
+    a one-header bypass of the control that pauses transfers before an update
+    (audit 2026-07-30, config-7). It now also requires this instance to have
+    actually started serving that file inside
+    `transfer_activity.RECENT_DOWNLOAD_TTL_SEC`, which is what makes
+    "continuation" a claim we can check rather than one we take on trust.
+
+    Deliberately NOT applied to the download BUDGET (see utils/http_range): a
+    counter keyed on the same evidence would charge a second download to anyone
+    resuming after the window - or, on a public link, after a phone switched
+    networks - which is a worse failure than the bypass it closes on an
+    instance where the attacker already holds the link. That remains a
+    documented, accepted tradeoff.
     """
     if not is_enabled(db):
         return
     if kind == "download" and request is not None and is_partial_continuation(request):
-        return
+        if file_id is None:
+            return
+        from . import transfer_activity
+
+        if transfer_activity.was_download_recent(file_id):
+            return
     raise AppError(
         503,
         "MAINTENANCE_MODE",

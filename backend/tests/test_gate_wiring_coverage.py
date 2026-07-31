@@ -589,3 +589,131 @@ def test_the_opt_in_fk_fixture_still_exists(fk_db):
     from sqlalchemy import text
 
     assert fk_db.execute(text("PRAGMA foreign_keys")).scalar() == 1
+
+
+# --- config-7: the one-header maintenance bypass -----------------------------
+
+
+class _RecordingRedis:
+    def __init__(self):
+        self.store: dict[str, str] = {}
+
+    def set(self, key, value, ex=None, nx=False):
+        if nx and key in self.store:
+            return None
+        self.store[key] = value
+        return True
+
+    def get(self, key):
+        return self.store.get(key)
+
+    def zadd(self, *a, **k):
+        return 1
+
+    def zrem(self, *a, **k):
+        return 1
+
+
+def test_a_fabricated_range_no_longer_walks_past_maintenance(db, monkeypatch):
+    """`Range: bytes=1-` on a brand-new connection was granted the continuation
+    exemption on the SHAPE of the header alone - a one-header bypass of the
+    control that pauses transfers before an update."""
+    from app.middleware.errors import AppError
+    from app.services import maintenance as maintenance_svc
+    from app.services import transfer_activity
+
+    fake = _RecordingRedis()
+    monkeypatch.setattr(transfer_activity, "get_redis", lambda: fake)
+    maintenance_svc.set_enabled(db, True, actor=None)
+    db.commit()
+
+    class _Req:
+        headers = {"range": "bytes=1-"}
+
+    with pytest.raises(AppError) as exc:
+        maintenance_svc.refuse_if_maintenance(
+            db, request=_Req(), kind="download", file_id="never-served"
+        )
+    assert exc.value.code == "MAINTENANCE_MODE"
+
+    maintenance_svc.set_enabled(db, False, actor=None)
+    db.commit()
+
+
+def test_a_genuine_resume_still_completes_during_maintenance(db, monkeypatch):
+    """The exemption exists so an in-progress transfer can finish; bounding it
+    must not break that."""
+    from app.services import maintenance as maintenance_svc
+    from app.services import transfer_activity
+
+    fake = _RecordingRedis()
+    monkeypatch.setattr(transfer_activity, "get_redis", lambda: fake)
+    transfer_activity.mark_download_recent("served-file")
+    maintenance_svc.set_enabled(db, True, actor=None)
+    db.commit()
+
+    class _Req:
+        headers = {"range": "bytes=500-"}
+
+    maintenance_svc.refuse_if_maintenance(
+        db, request=_Req(), kind="download", file_id="served-file"
+    )  # must not raise
+
+    maintenance_svc.set_enabled(db, False, actor=None)
+    db.commit()
+
+
+def test_redis_being_down_lets_the_resume_through(db, monkeypatch):
+    """Fail OPEN: without Redis we cannot tell a resume from a fabricated range,
+    and refusing a genuine resume is the worse outcome - the same posture the
+    quota counter takes."""
+    from app.services import maintenance as maintenance_svc
+    from app.services import transfer_activity
+
+    def _boom():
+        raise RuntimeError("redis down")
+
+    monkeypatch.setattr(transfer_activity, "get_redis", _boom)
+    maintenance_svc.set_enabled(db, True, actor=None)
+    db.commit()
+
+    class _Req:
+        headers = {"range": "bytes=1-"}
+
+    maintenance_svc.refuse_if_maintenance(
+        db, request=_Req(), kind="download", file_id="whatever"
+    )  # must not raise
+
+    maintenance_svc.set_enabled(db, False, actor=None)
+    db.commit()
+
+
+def test_serving_a_file_records_the_mark():
+    """The check is only meaningful if something writes the mark."""
+    import inspect
+
+    from app.services import storage_backend, transfer_activity
+
+    assert "file_id" in inspect.signature(storage_backend.serve_response).parameters
+    src = inspect.getsource(storage_backend.serve_response)
+    assert "download_started(file_id)" in src
+    assert "mark_download_recent" in inspect.getsource(
+        transfer_activity.download_started
+    )
+
+
+def test_every_counted_download_route_passes_its_file_id():
+    """A route that counts but does not identify the file would leave a
+    legitimate resume unmarked - and therefore refused during maintenance."""
+    import inspect
+    import re
+
+    from app.routers import files as files_router
+    from app.routers import public as public_router
+
+    for mod in (files_router, public_router):
+        src = inspect.getsource(mod)
+        for m in re.finditer(r"count=True,\n(\s*)([^\n]*)", src):
+            assert "file_id=" in m.group(2), (
+                f"{mod.__name__}: a counted response does not identify its file"
+            )

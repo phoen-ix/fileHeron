@@ -248,7 +248,9 @@ def public_download(
         raise AppError(401, "UNLOCK_REQUIRED", "Submit the password first.")
 
     from ..services import maintenance as maintenance_svc
-    maintenance_svc.refuse_if_maintenance(db, request=request, kind="download")
+    maintenance_svc.refuse_if_maintenance(
+        db, request=request, kind="download", file_id=file_id
+    )
 
     file = db.query(File).filter(File.id == file_id).one_or_none()
     if file is None or file.share_id != link.share_id:
@@ -322,6 +324,7 @@ def public_download(
         mime_type=file.mime_type,
         ttl_sec=ttl,
         count=True,
+        file_id=file.id,
     )
 
 
@@ -347,7 +350,9 @@ def public_preview(
     if not _is_unlocked(link, fh_dl_unlock):
         raise AppError(401, "UNLOCK_REQUIRED", "Submit the password first.")
     from ..services import maintenance as maintenance_svc
-    maintenance_svc.refuse_if_maintenance(db, request=request, kind="download")
+    maintenance_svc.refuse_if_maintenance(
+        db, request=request, kind="download", file_id=file_id
+    )
     if not settings_svc.get_bool(
         db, settings_svc.Keys.FILE_PREVIEW_ENABLED, default=True
     ):
@@ -412,6 +417,7 @@ def public_preview(
         disposition="inline",
         extra_headers=preview_svc.SECURITY_HEADERS,
         count=True,
+        file_id=file.id,
     )
 
 

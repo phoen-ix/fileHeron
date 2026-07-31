@@ -72,7 +72,7 @@ dev = [
     # silently reddens a green main on the next release with zero code change, and
     # drifts from any local copy. Bump deliberately. Local gate must match:
     # `pip install --user --upgrade ruff==<this>` (or run ruff in python:3.12-slim).
-    "ruff==0.15.20",
+    "ruff==0.16.0",
     "mypy>=1.10",
     "aiosqlite>=0.20",
     "moto[s3]>=5.0",

@@ -58,7 +58,7 @@ jobs:
             # matching version per request.
             dockerfile: docker/updater-executor/Dockerfile
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Resolve version + tags
         id: meta
@@ -71,9 +71,9 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "git_sha=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
 
-      - uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4
+      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
 
-      - uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4
+      - uses: docker/login-action@371161bbe7024a29a25c5e19bfcbc0804fe9ad2c # v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -88,7 +88,7 @@ jobs:
           BASE="ghcr.io/${REPO_LOWER}/${{ matrix.image }}"
           echo "tags=${BASE}:${{ steps.meta.outputs.version }}" >> "$GITHUB_OUTPUT"
 
-      - uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7
+      - uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
         with:
           context: .
           file: ${{ matrix.dockerfile }}
@@ -201,8 +201,8 @@ jobs:
       contents: read
       packages: write   # re-tag the published manifests as :latest
     steps:
-      - uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4
-      - uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4
+      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
+      - uses: docker/login-action@371161bbe7024a29a25c5e19bfcbc0804fe9ad2c # v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -231,7 +231,7 @@ jobs:
       contents: write   # softprops/action-gh-release writes the release
     steps:
       # Checkout so the release body can be read from the repo's RELEASE_NOTES.md.
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # RELEASE_NOTES.md is fed to the release verbatim and is what admins read
       # from the in-app Update banner. Nothing checked that it had been rewritten
@@ -248,7 +248,7 @@ jobs:
             exit 1
           fi
           echo "RELEASE_NOTES.md names ${GITHUB_REF_NAME}"
-      - uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b # v3
+      - uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3
         with:
           tag_name: ${{ github.ref_name }}
           name: 'Server ${{ github.ref_name }}'

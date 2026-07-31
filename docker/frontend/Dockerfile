@@ -18,10 +18,13 @@ ENV VITE_FH_VERSION=${FH_VERSION} \
 # Copy manifests first for dep cache. The committed lockfile is required (no `*`
 # glob): `npm ci` installs the EXACT locked tree and fails loudly if it's missing
 # or out of sync with package.json - reproducible, integrity-checked builds
-# instead of resolving `^` ranges fresh on every build (audit M11). .npmrc must
-# come too - it carries legacy-peer-deps, without which npm ci aborts on
-# vue-router 5's optional pinia@^3 peer (see frontend/.npmrc).
-COPY frontend/.npmrc frontend/package.json frontend/package-lock.json ./
+# instead of resolving `^` ranges fresh on every build (audit M11).
+#
+# There is deliberately no .npmrc any more. It carried legacy-peer-deps, needed
+# only because the app stayed on pinia 2 while vue-router 5 declared an optional
+# peer on pinia 3. pinia 4 satisfies that peer, so the flag went - and with it
+# the blanket suppression of EVERY peer conflict, not just that one.
+COPY frontend/package.json frontend/package-lock.json ./
 RUN --mount=type=cache,target=/root/.npm npm ci --no-audit --no-fund
 
 # Copy the rest and build.

@@ -39,9 +39,14 @@ class ShareRecipient(Base):
         Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True
     )
 
-    # Will become a real FK to `groups` in Phase 4. For now: opaque id, NULL
-    # in Phase 3a where every recipient is a user.
-    recipient_group_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True, index=True)
+    # A real FK since Phase 4 (202605020916), which the model never caught up with.
+    # Declaring it here is what makes the create_all test schema behave like
+    # production: without it SQLite keeps orphaned recipient rows after a group is
+    # deleted while MariaDB cascades them away, so the loss of a share's historical
+    # recipient record cannot be seen by any test.
+    recipient_group_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("groups.id", ondelete="CASCADE"), nullable=True, index=True
+    )
 
     share: Mapped[Share] = relationship("Share", back_populates="recipients")
     recipient_user: Mapped[User | None] = relationship("User", foreign_keys=[recipient_user_id])

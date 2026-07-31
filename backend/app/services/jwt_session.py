@@ -225,7 +225,12 @@ def create_refresh_token(db: Session, user: User, request: Request | None, setti
         request=request,
     )
 
-    plaintext = random_token(48)  # 64 raw bytes → 86-char b64url
+    # 64 raw bytes, base64url-encoded to 86 characters. The call asked for 48
+    # while this comment, the RefreshToken model docstring and CLAUDE.md all
+    # said 64; three documents asserting a number the code contradicts is how a
+    # later change "restores" the wrong constant or reports the wrong entropy
+    # budget, so make the code match them rather than the other way round.
+    plaintext = random_token(64)
     now = utc_now()
     refresh_days = settings_registry.effective(
         db, settings_registry.K.REFRESH_TOKEN_EXPIRE_DAYS

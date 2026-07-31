@@ -152,6 +152,18 @@ def run_poll(*, manual: bool, db: Session | None = None, session_opener=open_ses
                     except Exception:
                         logger.exception("post-fetch action %s failed for uid %s", action, uid)
                 last_uid = max(last_uid, uid)
+                # Persist the highwater per message, not once the loop is over.
+                # A failure anywhere in the loop - a dropped connection, a
+                # session teardown error - threw away the progress of every
+                # message already committed, so the next poll re-downloaded the
+                # whole batch and re-applied the post-fetch action to mail that
+                # had already been ingested (audit 2026-07-30). Written after
+                # the server-side action so the highwater never runs ahead of a
+                # message we have not finished handling.
+                settings_svc.set_value(
+                    db, key=K.IMAP_LAST_UID, value=str(last_uid), actor=None
+                )
+                db.commit()
 
         now_iso = utc_now().isoformat()
         settings_svc.set_value(db, key=K.IMAP_LAST_UID, value=str(last_uid), actor=None)

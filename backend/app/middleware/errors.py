@@ -36,9 +36,13 @@ _HTTP_STATUS_CODES = {
 
 # Known-benign error codes that are never worth capturing in the error log.
 # JOB_NOT_FOUND: the self-update UI polls GET /api/admin/system/update-jobs/{id}
-# for progress; the update restarts the backend (swapping its own image), which
-# wipes the in-flight job record, so the next poll 404s. Self-inflicted, expected
-# on every update - not an error and not an attack.
+# every couple of seconds while the executor is rewriting the job record. The
+# record is NOT wiped by the container swap - it lives on the data/updater bind
+# mount that backend, shim and executor all share - so a 404 here means the poll
+# read the file between a writer's truncate and its write, or a newer job replaced
+# it. Expected noise from a poll racing a writer, not an error and not an attack.
+# If these ever need chasing, the signal is the backend log's "state file
+# unreadable" tracebacks (services/release_apply.py::_read_state), not this table.
 _NEVER_CAPTURE_CODES = frozenset({"JOB_NOT_FOUND"})
 
 

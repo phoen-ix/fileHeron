@@ -453,8 +453,12 @@ async def create_invite(
         },
         request=request,
     )
-    db.commit()
-
+    # Send BEFORE the commit, the same ordering `invite_svc.resend_invite` uses.
+    # `_send_resolved` re-raises so the caller sees a send failure, and with the
+    # row already durable that left an invite nobody could act on: the plaintext
+    # token lived only in this frame, `has_pending_invite` then refused every
+    # retry for the full 24h TTL, and resend/revoke are admin-only - so an
+    # employee inviter was stuck until an admin intervened (audit 2026-07-30).
     from ..services import site as site_svc
     await email_svc.send_invite_email(
         to=payload.email,
@@ -466,6 +470,7 @@ async def create_invite(
         site_timezone=site_svc.get_site_timezone(db),
         db=db,
     )
+    db.commit()
     return {"ok": True, "email": record.email, "expires_at": record.expires_at.isoformat()}
 
 

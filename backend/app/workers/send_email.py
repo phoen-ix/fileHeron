@@ -58,8 +58,14 @@ def _record_undeliverable_audit(to: str, subject: str, smtp_code: int | None, me
                 event_type=AuditEventType.email_undeliverable,
                 actor_user_id=None,
                 target_type="email",
-                target_id=to,
+                # audit_log.target_id is VARCHAR(64) and a recipient address runs to
+                # 254. MariaDB rejects the row outright and the except below swallows
+                # it, so a bounce to a long address was never audited at all and
+                # ops_check never told an admin their mail to that person was dead.
+                # The full address rides in the JSON metadata, which has no bound.
+                target_id=to[:64],
                 metadata={
+                    "to": to,
                     "subject": subject[:120],
                     "smtp_code": smtp_code,
                     "smtp_message": (message or "")[:300],

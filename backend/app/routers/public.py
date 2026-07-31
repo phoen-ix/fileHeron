@@ -408,7 +408,14 @@ def public_download_zip(
         raise AppError(401, "UNLOCK_REQUIRED", "Submit the password first.")
 
     from ..services import maintenance as maintenance_svc
-    maintenance_svc.refuse_if_maintenance(db, request=request, kind="download")
+    # No `request` here on purpose. The ranged-continuation exemption inside the
+    # gate exists so a resumed download can finish, but a ZIP is one
+    # StreamingResponse that hands back the whole archive whatever the Range
+    # header says - the budget code below already refuses to honour the same
+    # predicate for exactly that reason. Passing the request let one header start
+    # a brand-new multi-gigabyte transfer during the window that is meant to
+    # admit none, and hold the drain open for as long as it ran.
+    maintenance_svc.refuse_if_maintenance(db, kind="download")
 
     files = file_svc.downloadable_files(db, link.share_id)
     if not files:

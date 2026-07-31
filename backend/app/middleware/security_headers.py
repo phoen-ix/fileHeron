@@ -1,7 +1,11 @@
 """SecurityHeadersMiddleware: standard set of headers applied to every response.
 
-CSP is intentionally relaxed for `style-src 'self' 'unsafe-inline'` to support
-Element Plus (it injects scoped styles inline). Documented in CLAUDE.md.
+CSP is intentionally relaxed for `style-src 'self' 'unsafe-inline'` because the SPA
+ships literal `style="..."` attributes and Vue `:style` bindings (the upload
+progress bar, the analytics bar fills), and a style attribute falls back to
+`style-src` when `style-src-attr` is absent. Element Plus, which this used to be
+blamed on, was removed long ago; tightening this means auditing those bindings out
+of the templates first, not deleting the directive.
 
 Implemented as **pure ASGI** (not BaseHTTPMiddleware) so it doesn't wrap the
 response body - preserving ``FileResponse``'s zero-copy ``os.sendfile`` for

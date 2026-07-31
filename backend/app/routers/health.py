@@ -3,7 +3,9 @@ SPA hits BEFORE login to know which OIDC providers (if any) to render
 buttons for."""
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+import ipaddress
+
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -55,15 +57,45 @@ def _cached_dependency_probes() -> list[str]:
     return found
 
 
+def _peer_is_operator(request: Request) -> bool:
+    """True when the caller reached us over loopback or the compose network.
+
+    The diagnostic half of this response is operator information, and
+    /api/health is anonymous with the whole of /api/ proxied from the internet.
+    fileHeron is published for public self-hosting against a public repo, so
+    `running_sha` mapped one-to-one onto a known source tree and told any
+    passer-by exactly which security fixes an instance was still missing, while
+    `degraded` told them when Redis was down and the per-IP limits had fallen
+    back to the weaker in-process limiter - precisely when to start credential
+    stuffing. Every consumer that needs the detail (the compose HEALTHCHECK, the
+    updater executor's running_version poll, an operator on the box) arrives
+    over loopback or the docker bridge; public callers get liveness only. This
+    trusts request.client.host, which is only as good as the proxy's
+    X-Forwarded-For handling - the same assumption the audit log and the rate
+    limiter already make (audit 2026-07-30).
+    """
+    host = request.client.host if request.client else None
+    if not host:
+        return False
+    try:
+        addr = ipaddress.ip_address(host)
+    except ValueError:
+        return False
+    return addr.is_loopback or addr.is_private or addr.is_link_local
+
+
 @router.get("/api/health")
-def health_check() -> JSONResponse:
+def health_check(request: Request) -> JSONResponse:
     """Service-readiness probe.
 
     DB outage → 503 (the app is unusable). Redis / ClamAV outages
     are reported as `degraded` subfields but the response stays 200
     - the app still serves JWT requests with rate-limit and AV
     fail-open semantics. Operators should alert on `degraded` even
-    when status is `ok`."""
+    when status is `ok`. Build identifiers, pool stats and `degraded`
+    render only for loopback / compose-network callers - see
+    `_peer_is_operator`; the public path gets bare liveness."""
+    detailed = _peer_is_operator(request)
     db_latency_ms: float | None = None
     try:
         import time
@@ -76,14 +108,14 @@ def health_check() -> JSONResponse:
         finally:
             db.close()
     except Exception:
-        return JSONResponse(
-            status_code=503,
-            content={
-                "status": "db_unavailable",
-                "running_version": VERSION,
-                "running_sha": GIT_SHA,
-            },
-        )
+        body_503: dict = {"status": "db_unavailable"}
+        if detailed:
+            body_503["running_version"] = VERSION
+            body_503["running_sha"] = GIT_SHA
+        return JSONResponse(status_code=503, content=body_503)
+
+    if not detailed:
+        return JSONResponse(status_code=200, content={"status": "ok"})
 
     degraded: list[str] = []
 

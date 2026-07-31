@@ -135,7 +135,15 @@ def handle_pre_create(db: Session, body: dict[str, Any]) -> None:
     # Size. A deferred-length upload announces Size=0, so reserving `announced_size`
     # reserved 0 - and post-terminate then released a client-set Size, letting an
     # attacker drain the quota counter below true usage (repeatable bypass).
-    quota_svc.reserve_bytes(db, user=user, additional_bytes=envelope["max_size"])
+    # Reserve at most once per file. Pre-create is the one hook that cannot be
+    # bound to a single tusd upload, and @uppy/tus replays the creation POST
+    # whenever its response is lost - so the same file used to reserve its bytes
+    # twice while only ever being released once, locking the uploader out of
+    # their own quota until the hourly reconcile repaired the counter. A
+    # non-NULL tus_upload_id here means an earlier pre-create for this file
+    # already reserved.
+    if file_row.tus_upload_id is None:
+        quota_svc.reserve_bytes(db, user=user, additional_bytes=envelope["max_size"])
 
     # Link the row to the tusd upload NOW, not at finalize.
     #

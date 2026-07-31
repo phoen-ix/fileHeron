@@ -203,6 +203,13 @@ async def system_stream(
     if user is None or user.role != UserRole.admin:
         raise AppError(403, "FORBIDDEN", "Admin role required.")
 
+    # The stream does no DB work after this point, so release the pooled connection
+    # now instead of pinning it for the whole ~60s life of the response. A handful of
+    # open /admin/system tabs would otherwise hold a real slice of a 10+20 pool and
+    # every other request would queue behind them until DB_POOL_TIMEOUT_SEC. get_db's
+    # teardown close() then becomes a no-op. Mirrors routers/notifications.py::stream.
+    db.close()
+
     return StreamingResponse(
         sse_svc.stream_admin_events(),
         media_type="text/event-stream",

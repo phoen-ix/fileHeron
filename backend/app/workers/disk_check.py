@@ -89,8 +89,30 @@ def _alert_admins(db, *, payload: dict) -> int:
 async def disk_check(_ctx) -> dict:
     from ..services.storage_backend import get_storage_backend
     if not get_storage_backend().supports_disk_stats:
-        # Object-store backend - "local disk full" is meaningless; nothing to do.
-        return {"skipped": True, "reason": "non-disk backend"}
+        # Object-store backend - "local disk full" is meaningless, but the flag
+        # still has to be cleared on the way out: this cron is its only writer
+        # and there is no admin control for it, so a deployment that flipped it
+        # while on local storage and then moved to object storage - the obvious
+        # response to a full disk - would refuse every upload with 507 forever,
+        # with a manual DB edit as the only way back (audit 2026-07-30).
+        cleared = False
+        db = SessionLocal()
+        try:
+            if settings_svc.get_bool(
+                db, settings_svc.Keys.STORAGE_CRITICAL_LOW, default=False
+            ):
+                settings_svc.set_value(
+                    db,
+                    key=settings_svc.Keys.STORAGE_CRITICAL_LOW,
+                    value="false",
+                    actor=None,
+                )
+                db.commit()
+                _clear_dedup()
+                cleared = True
+        finally:
+            db.close()
+        return {"skipped": True, "reason": "non-disk backend", "cleared_flag": cleared}
     db = SessionLocal()
     try:
         stats = storage_svc.get_disk_stats(settings.STORAGE_ROOT)

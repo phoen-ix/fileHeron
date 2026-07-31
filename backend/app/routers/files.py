@@ -397,7 +397,13 @@ def download_share_zip(
     share_svc.assert_share_file_access(db, user=user, share=share)
 
     from ..services import maintenance as maintenance_svc
-    maintenance_svc.refuse_if_maintenance(db, request=request, kind="download")
+    # No `request=` here on purpose. The Range exemption exists so an
+    # in-progress download can finish, but a ZIP is a single StreamingResponse
+    # that ignores Range and always builds the WHOLE archive from scratch - so
+    # `Range: bytes=1-` started a brand-new multi-GB transfer during
+    # maintenance, which is the one thing maintenance mode exists to stop. Same
+    # reasoning the budget decrement below already applies (audit M5).
+    maintenance_svc.refuse_if_maintenance(db, kind="download")
 
     files = file_svc.downloadable_files(db, share.id)
     if not files:

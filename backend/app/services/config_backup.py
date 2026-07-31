@@ -445,13 +445,44 @@ def export_users(db: Session, *, mode: str, warnings: list[str]) -> dict:
     }
 
 
-def export_logs(db: Session) -> dict:
-    def _dump(model):
-        return [_row_to_dict(r, drop=frozenset({"id"})) for r in db.query(model).all()]
+# The `logs` category is the only unbounded thing in a backup: a year of
+# retention is hundreds of thousands of rows, email_log carries whole message
+# bodies, and the export holds four copies at once (ORM rows, dicts, the JSON
+# string, the encrypted blob). That OOM-killed the container of the very
+# instance an admin was taking a disaster-recovery backup from. Truncating
+# costs nothing real: import refuses any file over 50 MB, so an untruncated log
+# export could not have been restored anyway.
+_MAX_EXPORT_LOG_ROWS = 25_000
+
+
+def export_logs(db: Session, *, warnings: list[str]) -> dict:
+    from sqlalchemy.orm import undefer
+
+    def _dump(model, *, options=()):
+        rows = (
+            db.query(model)
+            .options(*options)
+            .order_by(model.id.desc())
+            .limit(_MAX_EXPORT_LOG_ROWS + 1)
+            .all()
+        )
+        if len(rows) > _MAX_EXPORT_LOG_ROWS:
+            rows = rows[:_MAX_EXPORT_LOG_ROWS]
+            warnings.append(
+                f"{model.__tablename__}: exported only the newest "
+                f"{_MAX_EXPORT_LOG_ROWS} rows"
+            )
+        return [_row_to_dict(r, drop=frozenset({"id"})) for r in reversed(rows)]
 
     return {
         "audit_log": _dump(AuditLog),
-        "email_log": _dump(EmailLog),
+        # body_text / body_html are deferred on the model, so _row_to_dict's
+        # getattr over every column fired two extra SELECTs per row and pulled
+        # the bodies in one at a time anyway. Load them with the row.
+        "email_log": _dump(
+            EmailLog,
+            options=(undefer(EmailLog.body_text), undefer(EmailLog.body_html)),
+        ),
         "download_log": _dump(DownloadLog),
         "login_attempts": _dump(LoginAttempt),
         "notifications": _dump(Notification),
@@ -477,7 +508,7 @@ def build_backup(
     if "users" in categories:
         payload["users"] = export_users(db, mode=secret_mode, warnings=warnings)
     if "logs" in categories:
-        payload["logs"] = export_logs(db)
+        payload["logs"] = export_logs(db, warnings=warnings)
     if include_env:
         payload["env_snapshot"] = capture_env_snapshot()
 
@@ -557,11 +588,21 @@ def parse_backup(raw: bytes, *, passphrase: str | None) -> ParsedBackup:
         except (KeyError, ValueError, TypeError) as e:
             raise AppError(400, "BACKUP_CORRUPT", "Encrypted backup is malformed.") from e
         try:
+            kdf_n = int(enc.get("n", crypto.SCRYPT_N))
+            kdf_r = int(enc.get("r", crypto.SCRYPT_R))
+            kdf_p = int(enc.get("p", crypto.SCRYPT_P))
+        except (TypeError, ValueError) as e:
+            # These three numbers come out of the cleartext envelope, so a
+            # hand-edited or truncated file can put a string or a null where an
+            # integer belongs. That is a corrupt backup and has to read as one,
+            # not as an unhandled 500 out of int().
+            raise AppError(
+                400, "BACKUP_CORRUPT",
+                "Backup declares unsupported key-derivation parameters.",
+            ) from e
+        try:
             raw_payload = crypto.decrypt_with_passphrase(
-                token, passphrase, salt,
-                n=int(enc.get("n", crypto.SCRYPT_N)),
-                r=int(enc.get("r", crypto.SCRYPT_R)),
-                p=int(enc.get("p", crypto.SCRYPT_P)),
+                token, passphrase, salt, n=kdf_n, r=kdf_r, p=kdf_p,
             )
         except crypto.ScryptParamsRejectedError as e:
             # A crafted envelope can ask for terabytes of scrypt memory; refuse
@@ -1190,7 +1231,15 @@ def apply_backup(db: Session, *, parsed: ParsedBackup, actor: User, request=None
             summary.purged_users.append(
                 u.email if outcome == "deleted" else f"{u.email} ({outcome})"
             )
-        db.flush()
+        # Commit the purge on its own, for the same reason step 1 commits the
+        # share invalidation: _purge_user unlinks file bytes and decrements the
+        # Redis quota counter, and a rollback brings back neither. A failure
+        # anywhere in steps 6-8 used to restore the purged users and their file
+        # rows while the bytes were already gone, leaving a system whose
+        # downloads 500 and whose quota counters under-report until the hourly
+        # reconcile. A partially applied REPLACE import is recoverable by
+        # re-running it; unlinked bytes are not.
+        db.commit()
     if has_groups:
         backup_nn = {g["name_normalized"] for g in p["groups"].get("groups", [])}
         for g in list(db.query(Group).all()):

@@ -250,7 +250,20 @@ def _record_login_attempt(
     ip: str | None,
     outcome: LoginOutcome,
 ) -> None:
-    db.add(LoginAttempt(email=email_value, ip=ip, outcome=outcome.value))
+    # Clip to the column width before inserting. This row is written on the
+    # unknown-email branch too, so the value is whatever an anonymous caller
+    # sent; under MariaDB strict mode an over-long one raises DataError, which
+    # turns an intended 401 into a 500 that also writes an error_log row and can
+    # page an admin - repeatable at will, without credentials. The schema cap on
+    # EmailLike is the real guard; forensics must never be able to fail the
+    # request it is recording.
+    db.add(
+        LoginAttempt(
+            email=email_value[:254] if email_value else None,
+            ip=ip,
+            outcome=outcome.value,
+        )
+    )
     db.flush()
 
 

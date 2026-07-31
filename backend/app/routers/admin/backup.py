@@ -41,6 +41,19 @@ def export_backup(
         passphrase=payload.passphrase,
         include_env=payload.include_env,
     )
+    # Never hand back an artifact the import side would reject. The only time
+    # anyone opens a config backup is during a disaster, and discovering then
+    # that it is over the ceiling means there is no backup at all. The `logs`
+    # category is the one that grows without bound (email bodies are LONGTEXT);
+    # every other category is small or byte-capped, so naming it is actionable.
+    if len(data) > _MAX_IMPORT_BYTES:
+        raise AppError(
+            413,
+            "BACKUP_TOO_LARGE",
+            f"This export is {len(data) // (1024 * 1024)} MB, above the "
+            f"{_MAX_IMPORT_BYTES // (1024 * 1024)} MB import limit, so it could never "
+            "be restored. Export again without the 'logs' category.",
+        )
     record_audit_event(
         db,
         event_type=AuditEventType.config_backup_exported,
@@ -106,9 +119,17 @@ async def preview_import(
     db: Session = Depends(get_db),
     admin: User = Depends(get_current_admin),
 ) -> BackupImportSummaryResponse:
+    # These handlers must be `async def` to await the upload, but everything
+    # after that is blocking: an scrypt KDF, a json.loads of up to 50 MB, and a
+    # full pass over the config surface on a synchronous Session. Run straight
+    # from the loop thread that work serves nothing else in the process for its
+    # whole duration. The sibling export handler is a plain `def` and has always
+    # had the threadpool for free.
+    from starlette.concurrency import run_in_threadpool
+
     raw = await _read_upload(file)
-    parsed = cb.parse_backup(raw, passphrase=passphrase)
-    return _to_response(cb.preview_backup(db, parsed))
+    parsed = await run_in_threadpool(cb.parse_backup, raw, passphrase=passphrase)
+    return _to_response(await run_in_threadpool(cb.preview_backup, db, parsed))
 
 
 @router.post("/backup/import", response_model=BackupImportSummaryResponse)
@@ -125,7 +146,17 @@ async def import_backup(
             400, "BACKUP_CONFIRM_REQUIRED",
             "Import replaces configuration and invalidates all shares; confirm=true is required.",
         )
+    # apply_backup unlinks the bytes of every active share, purges identities,
+    # wipes and reloads whole tables and revokes every session - minutes of
+    # blocking work on a real instance. On the loop thread that stalls every
+    # in-flight download and SSE stream and stops /api/health answering, so the
+    # container healthcheck can flip the backend unhealthy and restart it with
+    # the configuration half-applied.
+    from starlette.concurrency import run_in_threadpool
+
     raw = await _read_upload(file)
-    parsed = cb.parse_backup(raw, passphrase=passphrase)
-    summary = cb.apply_backup(db, parsed=parsed, actor=admin, request=request)
+    parsed = await run_in_threadpool(cb.parse_backup, raw, passphrase=passphrase)
+    summary = await run_in_threadpool(
+        cb.apply_backup, db, parsed=parsed, actor=admin, request=request
+    )
     return _to_response(summary)

@@ -53,7 +53,12 @@ class SmtpConfig:
 
 def _header_safe(value: str) -> str:
     """Strip control characters from a value destined for a mail header."""
-    return "".join(" " if (ch < " " or ch == "\x7f") else ch for ch in value).strip()
+    collapsed = "".join(" " if (ch < " " or ch == "\x7f") else ch for ch in value)
+    # The ASCII sweep above misses U+0085, U+2028 and U+2029, which `str.splitlines`
+    # still counts as line breaks - and `str.splitlines` is the exact test
+    # email.policy.default applies before it rejects a header. Joining its output is
+    # what guarantees the result can never be refused.
+    return " ".join(collapsed.splitlines()).strip()
 
 
 async def send_email(

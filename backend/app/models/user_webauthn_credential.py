@@ -42,12 +42,15 @@ class UserWebAuthnCredential(Base):
     user_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    # `credential_id` is opaque per the spec; bytes, indexed for lookup
-    # at authenticate time.
+    # Lengths match the phase8 migration. An unbounded LargeBinary is BLOB on MySQL,
+    # and a UNIQUE key over a BLOB is error 1170, so building this schema from the
+    # models would fail on a table alembic creates without complaint. The unique
+    # constraint already indexes the column; the separate index=True described one
+    # production has never had.
     credential_id: Mapped[bytes] = mapped_column(
-        LargeBinary, nullable=False, unique=True, index=True
+        LargeBinary(512), nullable=False, unique=True
     )
-    public_key: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    public_key: Mapped[bytes] = mapped_column(LargeBinary(2048), nullable=False)
     sign_count: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
     # Comma-separated transports list (`usb`, `ble`, `nfc`, `internal`,
     # `hybrid`). Hint to the browser; not load-bearing for security.

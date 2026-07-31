@@ -115,24 +115,32 @@ def update_group(
 def delete_group(
     db: Session, *, actor: User, group: Group, request=None
 ) -> None:
-    """Block deletion if the group is currently a recipient of any active
-    share - admin must revoke those first. Default per Phase 4 policy."""
-    active_shares = (
+    """Block deletion if the group is currently a recipient of a live share -
+    admin must revoke those first. Default per Phase 4 policy."""
+    # pending_approval counts as live. share_recipients.recipient_group_id
+    # carries no foreign key, so nothing at the DB level stops the delete
+    # either: the recipient row survives pointing at a group id that no longer
+    # resolves, and when the approver later approves the share it flips to
+    # active, reports success and shows a healthy share with an expiry - while
+    # the recipient resolution joins an empty membership set, so it notifies
+    # nobody and nobody but the creator and admins can download it. Silent on
+    # both sides.
+    blocking_shares = (
         db.query(Share.id)
         .join(ShareRecipient, ShareRecipient.share_id == Share.id)
         .filter(
             ShareRecipient.recipient_group_id == group.id,
-            Share.state == ShareState.active,
+            Share.state.in_((ShareState.active, ShareState.pending_approval)),
         )
         .limit(1)
         .all()
     )
-    if active_shares:
+    if blocking_shares:
         raise AppError(
             409,
             "GROUP_IN_USE",
-            "This group is the recipient of one or more active shares. "
-            "Revoke or expire those first.",
+            "This group is the recipient of one or more active or "
+            "pending-approval shares. Revoke or expire those first.",
         )
 
     # Capture members so we can recompute their connections after delete.

@@ -135,6 +135,24 @@ def apply_pending_update(
     pending = get_pending_update(db)
     if not pending:
         return None
+    # Local import so this fix stays independent of the module import block,
+    # which the hand-off fix also edits.
+    import re
+
+    tag = pending.get("target_tag")
+    if not isinstance(tag, str) or not re.fullmatch(r"v\d+\.\d+\.\d+", tag):
+        # The release-tag shape is enforced by a Pydantic validator on the admin
+        # route, and this entry point never goes through it: the tag comes back
+        # out of a kv row and straight into `docker pull ...:<tag>` on the host.
+        # Anything that can write app_settings could otherwise pin the whole
+        # deployment to a tag of its choosing, with no password re-auth. Drop the
+        # record rather than hand it on, and rather than retry a value that will
+        # never become valid once a minute forever.
+        logger.error("pending update has an invalid target_tag=%r; discarding", tag)
+        set_pending_update(db, None, actor=actor)
+        set_enabled(db, False, actor=actor, audit=False)
+        db.commit()
+        return None
     set_enabled(db, False, actor=actor, audit=False)
     set_pending_update(db, None, actor=actor)
     db.commit()

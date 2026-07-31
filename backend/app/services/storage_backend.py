@@ -250,8 +250,17 @@ def _content_disposition(disposition: str, filename: str) -> str:
     or garbled download filenames (and could inject header tokens) on S3."""
     from urllib.parse import quote
 
+    # Filter to printable ASCII rather than blacklisting two characters. This
+    # builder is reached with names nobody in this codebase sanitised: inbound
+    # mail stores the attachment filename straight off an attacker-authored
+    # MIME header, and a CR/LF that survives into the filename="" parameter
+    # gets the whole presigned download rejected by the object store.
     ascii_name = (
-        filename.encode("ascii", "ignore").decode().replace('"', "").replace("\\", "")
+        "".join(
+            c
+            for c in filename.encode("ascii", "ignore").decode()
+            if " " <= c < "\x7f" and c not in '"\\'
+        )
         or "download"
     )
     return f"{disposition}; filename=\"{ascii_name}\"; filename*=UTF-8''{quote(filename)}"

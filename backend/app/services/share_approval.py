@@ -8,9 +8,10 @@ Admin-tunable, all read live from ``app_settings`` (no boot cache):
 - whether an approver's **own** shares are exempt (auto-approved),
 - whether approvers may **review file contents** of a pending share.
 
-The approver set mirrors ``policy_gate`` but defaults to the *restrictive*
-`admins_only` (policy_gate's own default is the permissive `everyone`, which is
-wrong for an approval gate), so we resolve it here.
+The approver set mirrors ``policy_gate``'s shape but resolves its mode here rather
+than through the shared gate: ``policy_gate.DEFAULT_POLICY_MODE`` is
+`employees_admins`, which for an approval gate would make every employee an
+approver on an unconfigured deploy, so this module defaults to `admins_only`.
 """
 from __future__ import annotations
 

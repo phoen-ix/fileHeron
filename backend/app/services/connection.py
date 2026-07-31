@@ -18,7 +18,7 @@ The two callers are:
 """
 from __future__ import annotations
 
-from sqlalchemy import and_, exists, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..models.client_employee_connection import (
@@ -90,22 +90,6 @@ def _users_sharing_a_group_with(db: Session, user_id: int) -> list[User]:
     return list(rows)
 
 
-def _share_a_group(db: Session, user_a_id: int, user_b_id: int) -> bool:
-    gm_a = GroupMember.__table__.alias("gm_a")
-    gm_b = GroupMember.__table__.alias("gm_b")
-    return db.execute(
-        select(
-            exists().where(
-                and_(
-                    gm_a.c.user_id == user_a_id,
-                    gm_b.c.user_id == user_b_id,
-                    gm_a.c.group_id == gm_b.c.group_id,
-                )
-            )
-        )
-    ).scalar() or False
-
-
 def recompute_shared_group_connections_for_user(
     db: Session, *, user: User
 ) -> None:
@@ -122,33 +106,9 @@ def recompute_shared_group_connections_for_user(
 
     sharing_users = _users_sharing_a_group_with(db, user.id)
 
-    # Insert any missing shared_group rows.
-    for other in sharing_users:
-        pair = _classify_pair(user, other)
-        if pair is None:
-            continue
-        client_id, employee_id = pair
-        exists_row = (
-            db.query(ClientEmployeeConnection)
-            .filter(
-                ClientEmployeeConnection.client_user_id == client_id,
-                ClientEmployeeConnection.employee_user_id == employee_id,
-                ClientEmployeeConnection.source == ConnectionSource.shared_group,
-            )
-            .one_or_none()
-        )
-        if exists_row is None:
-            db.add(
-                ClientEmployeeConnection(
-                    client_user_id=client_id,
-                    employee_user_id=employee_id,
-                    source=ConnectionSource.shared_group,
-                )
-            )
-
-    # Walk all shared_group rows that involve this user and prune the
-    # ones whose pair no longer shares any group.
-    rows_to_check = (
+    # Two queries, then set arithmetic. Adding N members to a group used to
+    # cost O(N x peers) round-trips because each pair was checked on its own.
+    existing_rows = (
         db.query(ClientEmployeeConnection)
         .filter(
             ClientEmployeeConnection.source == ConnectionSource.shared_group,
@@ -157,8 +117,30 @@ def recompute_shared_group_connections_for_user(
         )
         .all()
     )
-    for row in rows_to_check:
-        if not _share_a_group(db, row.client_user_id, row.employee_user_id):
+    existing_pairs = {
+        (r.client_user_id, r.employee_user_id): r for r in existing_rows
+    }
+
+    wanted_pairs: set[tuple[int, int]] = set()
+    for other in sharing_users:
+        pair = _classify_pair(user, other)
+        if pair is not None:
+            wanted_pairs.add(pair)
+
+    for pair in wanted_pairs - set(existing_pairs):
+        db.add(
+            ClientEmployeeConnection(
+                client_user_id=pair[0],
+                employee_user_id=pair[1],
+                source=ConnectionSource.shared_group,
+            )
+        )
+
+    # Prune rows whose pair no longer shares a group. Every row here involves
+    # `user`, so "still shares a group" is exactly "the counterparty is in
+    # sharing_users" - no per-pair query needed.
+    for pair, row in existing_pairs.items():
+        if pair not in wanted_pairs:
             db.delete(row)
     db.flush()
 

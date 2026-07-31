@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import desc, func
+from sqlalchemy import desc, func, select
 from sqlalchemy.orm import Session
 
 from ..models.download_log import DownloadLog
@@ -79,63 +79,78 @@ def list_all_files(
     """Return (rows, total). Each row is a dict with all the fields
     needed for `AdminFileItem` plus pre-formatted recipients_summary -
     the route handler maps it into the schema."""
-    base = (
-        db.query(
-            File,
-            Share,
-            User,
+    # Aggregate download_log ONCE in its own grouped subselect instead of
+    # grouping the whole join. The outer query then has no GROUP BY, which is
+    # what let `total` degenerate into a COUNT over a grouped join of every
+    # file against every download row.
+    dl = (
+        select(
+            DownloadLog.file_id.label("file_id"),
             func.max(DownloadLog.accessed_at).label("last_dl"),
             func.count(DownloadLog.id).label("dl_count"),
         )
-        .join(Share, Share.id == File.share_id)
-        .join(User, User.id == File.uploaded_by_id)
-        .outerjoin(DownloadLog, DownloadLog.file_id == File.id)
-        .group_by(File.id, Share.id, User.id)
+        .group_by(DownloadLog.file_id)
+        .subquery()
     )
 
+    filters = []
+
     if q:
-        like = f"%{q}%"
-        base = base.filter(
-            (File.original_filename.ilike(like))
-            | (User.display_name.ilike(like))
-            | (User.email.ilike(like))
+        # Escape LIKE wildcards so a literal % or _ matches itself.
+        esc = q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        like = f"%{esc}%"
+        filters.append(
+            File.original_filename.ilike(like, escape="\\")
+            | User.display_name.ilike(like, escape="\\")
+            | User.email.ilike(like, escape="\\")
         )
 
     if state:
         valid = {s.value for s in FileState}
         if state in valid:
-            base = base.filter(File.state == state)
+            filters.append(File.state == state)
 
     if share_state:
         valid_share = {s.value for s in ShareState}
         if share_state in valid_share:
-            base = base.filter(Share.state == share_state)
+            filters.append(Share.state == share_state)
 
     if orphaned:
-        base = base.filter(
-            File.state.in_(_ORPHAN_FILE_STATES),
-            Share.state.in_(_ORPHAN_SHARE_STATES),
-        )
+        filters.append(File.state.in_(_ORPHAN_FILE_STATES))
+        filters.append(Share.state.in_(_ORPHAN_SHARE_STATES))
 
     # Default view hides dead rows: deleted files + abandoned (failed-share)
     # uploads. Explicit state / share_state filters take precedence, so the
     # dropdowns can still surface them on demand.
     if not include_inactive:
         if not state:
-            base = base.filter(File.state != FileState.deleted)
+            filters.append(File.state != FileState.deleted)
         if not share_state:
-            base = base.filter(Share.state != ShareState.failed)
+            filters.append(Share.state != ShareState.failed)
 
     if uploader_id is not None:
-        base = base.filter(File.uploaded_by_id == uploader_id)
+        filters.append(File.uploaded_by_id == uploader_id)
 
     if from_ts is not None:
-        base = base.filter(File.created_at >= from_ts)
+        filters.append(File.created_at >= from_ts)
     if to_ts is not None:
-        base = base.filter(File.created_at <= to_ts)
+        filters.append(File.created_at <= to_ts)
 
-    # Total without the limit/offset.
-    total = base.count()
+    def _joined(query):
+        query = query.join(Share, Share.id == File.share_id).join(
+            User, User.id == File.uploaded_by_id
+        )
+        for f in filters:
+            query = query.filter(f)
+        return query
+
+    # Total without the limit/offset - and without the download join, which
+    # contributes nothing to how many files match.
+    total = _joined(db.query(func.count(File.id))).scalar() or 0
+
+    base = _joined(
+        db.query(File, Share, User, dl.c.last_dl, dl.c.dl_count)
+    ).outerjoin(dl, dl.c.file_id == File.id)
 
     sort_col = sort if sort in VALID_SORT_COLUMNS else "uploaded_at"
     direction = direction if direction in ("asc", "desc") else "desc"
@@ -145,8 +160,8 @@ def list_all_files(
         "size": File.size_bytes,
         "state": File.state,
         "uploaded_at": File.created_at,
-        "last_downloaded_at": func.max(DownloadLog.accessed_at),
-        "download_count": func.count(DownloadLog.id),
+        "last_downloaded_at": dl.c.last_dl,
+        "download_count": func.coalesce(dl.c.dl_count, 0),
     }
     target = column_map[sort_col]
     order = target.asc() if direction == "asc" else target.desc()

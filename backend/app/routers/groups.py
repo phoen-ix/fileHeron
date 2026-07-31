@@ -208,11 +208,20 @@ def add_members_endpoint(
     admin: User = Depends(get_current_admin),
 ) -> GroupDetailResponse:
     g = group_svc.get_or_404(db, group_id)
-    for uid in payload.user_ids:
-        u = db.query(User).filter(User.id == uid).one_or_none()
-        if u is None:
-            raise AppError(404, "USER_NOT_FOUND", f"User {uid} does not exist.")
-        group_svc.add_member(db, actor=admin, group=g, user=u, request=request)
+    # One lookup for the whole batch, and every id validated before the first
+    # row is written - a missing id halfway through used to leave the earlier
+    # members added under a 404.
+    wanted = list(dict.fromkeys(payload.user_ids))
+    found = {u.id: u for u in db.query(User).filter(User.id.in_(wanted)).all()}
+    missing = [uid for uid in wanted if uid not in found]
+    if missing:
+        raise AppError(
+            404, "USER_NOT_FOUND", f"User {missing[0]} does not exist."
+        )
+    for uid in wanted:
+        group_svc.add_member(
+            db, actor=admin, group=g, user=found[uid], request=request
+        )
     db.commit()
     return _detail_response(db, g)
 

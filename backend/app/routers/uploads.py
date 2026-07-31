@@ -149,6 +149,17 @@ async def direct_upload(
     finalized = False
     locator = None
     file_row = None
+
+    # Give the pooled DB connection back before reading the body. A client
+    # trickling 100 MB up a slow link held a connection out of a 10+20 pool for
+    # the whole transfer while doing no DB work at all, so a handful of slow
+    # uploads could starve every other request until DB_POOL_TIMEOUT_SEC. The
+    # session is reusable afterwards - it opens a fresh transaction on next use
+    # - but `share` and `user` are detached by the close, so both are re-read
+    # below, which also re-checks a share that may have been revoked mid-upload.
+    user_id = user.id
+    db.close()
+
     try:
         # Stream each chunk straight to the temp file so resident memory stays
         # bounded by the 1 MiB chunk size, NOT the (admin-tunable) size cap - a
@@ -172,6 +183,13 @@ async def direct_upload(
                 # a noticeable stall for every other request, so hand each chunk
                 # to a thread (audit 2026-07-30).
                 await asyncio.to_thread(_absorb, sha, out, chunk)
+
+        user = db.query(User).filter(User.id == user_id).one()
+        share = share_svc.get_share_or_404(db, share_id)
+        if share.state not in (ShareState.active, ShareState.pending_approval):
+            raise AppError(409, "SHARE_NOT_ACTIVE", "Share is not active.")
+        if share.created_by_id != user.id:
+            raise AppError(403, "FORBIDDEN", "Only the share owner can upload to it.")
 
         quota_svc.reserve_bytes(db, user=user, additional_bytes=received)
         reserved = received
@@ -199,7 +217,7 @@ async def direct_upload(
         # Release any reservation so a finalize/persist failure can't leak quota
         # against the user (audit L5); the DB row is rolled back by get_db.
         if reserved:
-            quota_svc.release_bytes(user_id=user.id, bytes_to_free=reserved)
+            quota_svc.release_bytes(user_id=user_id, bytes_to_free=reserved)
         raise
     finally:
         if not finalized and os.path.exists(tmp_path):

@@ -41,23 +41,45 @@ KEEPALIVE_SEC = 15.0
 MAX_STREAMS_PER_USER = 5
 _active_streams: dict[int, int] = {}
 
+# The /admin/system stream is a second, independent long-lived connection an
+# admin can hold, so it gets its own budget rather than eating into the bell's
+# - and rather than being uncapped, which is what it was.
+_active_admin_streams: dict[int, int] = {}
+
+
+def _try_acquire(counter: dict[int, int], user_id: int) -> bool:
+    n = counter.get(user_id, 0)
+    if n >= MAX_STREAMS_PER_USER:
+        return False
+    counter[user_id] = n + 1
+    return True
+
+
+def _release(counter: dict[int, int], user_id: int) -> None:
+    n = counter.get(user_id, 0)
+    if n <= 1:
+        counter.pop(user_id, None)
+    else:
+        counter[user_id] = n - 1
+
 
 def try_acquire_user_stream(user_id: int) -> bool:
     """Reserve a stream slot for the user on this worker. Returns False
     when the user is already at MAX_STREAMS_PER_USER (caller → 429)."""
-    n = _active_streams.get(user_id, 0)
-    if n >= MAX_STREAMS_PER_USER:
-        return False
-    _active_streams[user_id] = n + 1
-    return True
+    return _try_acquire(_active_streams, user_id)
 
 
 def release_user_stream(user_id: int) -> None:
-    n = _active_streams.get(user_id, 0)
-    if n <= 1:
-        _active_streams.pop(user_id, None)
-    else:
-        _active_streams[user_id] = n - 1
+    _release(_active_streams, user_id)
+
+
+def try_acquire_admin_stream(user_id: int) -> bool:
+    """Same cap, separate budget, for the /admin/system event stream."""
+    return _try_acquire(_active_admin_streams, user_id)
+
+
+def release_admin_stream(user_id: int) -> None:
+    _release(_active_admin_streams, user_id)
 
 
 def _channel(user_id: int) -> str:

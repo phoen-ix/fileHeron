@@ -47,4 +47,4 @@ class GroupListResponse(APIBaseModel):
 
 
 class AddGroupMembersRequest(APIBaseModel):
-    user_ids: list[int] = Field(..., min_length=1)
+    user_ids: list[int] = Field(..., min_length=1, max_length=1000)

@@ -210,8 +210,25 @@ async def system_stream(
     # teardown close() then becomes a no-op. Mirrors routers/notifications.py::stream.
     db.close()
 
+    # Same per-user cap the notification stream carries, on its own budget:
+    # this route was the one long-lived connection an admin could open without
+    # limit, each holding a Redis pubsub subscription for 60s.
+    if not sse_svc.try_acquire_admin_stream(user.id):
+        raise AppError(
+            429, "TOO_MANY_STREAMS", "Too many concurrent connections; close some tabs."
+        )
+
+    admin_id = user.id
+
+    async def _capped_stream():
+        try:
+            async for frame in sse_svc.stream_admin_events():
+                yield frame
+        finally:
+            sse_svc.release_admin_stream(admin_id)
+
     return StreamingResponse(
-        sse_svc.stream_admin_events(),
+        _capped_stream(),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache, no-transform",

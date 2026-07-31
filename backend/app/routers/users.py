@@ -11,6 +11,7 @@ Phase 4 model:
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Query
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from ..dependencies import get_db, require_scope
@@ -25,7 +26,6 @@ from ..schemas.user import (
     UserSearchItem,
     UserSearchResponse,
 )
-from ..services import connection as connection_svc
 
 router = APIRouter(prefix="/api/users", tags=["users"])
 
@@ -39,15 +39,7 @@ def _to_search_item(u: User) -> UserSearchItem:
     )
 
 
-def _filter_by_q(users: list[User], q: str) -> list[User]:
-    if not q:
-        return users
-    needle = q.lower().strip()
-    return [
-        u
-        for u in users
-        if needle in u.display_name.lower() or needle in u.email.lower()
-    ]
+SEARCH_LIMIT = 50
 
 
 @router.get("/search", response_model=UserSearchResponse)
@@ -58,43 +50,48 @@ def search(
 ) -> UserSearchResponse:
     """Return the union of users the caller can address as a recipient,
     filtered by `q` (substring match on display_name + email)."""
-    if me.role == UserRole.admin:
-        candidates = (
-            db.query(User)
-            .filter(User.is_disabled.is_(False), User.id != me.id)
-            .order_by(User.display_name)
-            .all()
-        )
-    elif me.role == UserRole.employee:
+    if me.role not in (UserRole.admin, UserRole.employee, UserRole.client):
+        return UserSearchResponse(items=[])
+
+    # The scope, the filter and the limit all belong in SQL: an admin on a
+    # large instance would otherwise materialise every active user per
+    # keystroke to hand back at most 50 of them.
+    query = db.query(User).filter(User.is_disabled.is_(False), User.id != me.id)
+
+    if me.role == UserRole.employee:
         # Employees see all employees/admins (small team, no privacy issue)
         # plus their connected clients.
-        non_clients = (
-            db.query(User)
-            .filter(
-                User.is_disabled.is_(False),
-                User.id != me.id,
+        connected_clients = select(
+            ClientEmployeeConnection.client_user_id
+        ).where(ClientEmployeeConnection.employee_user_id == me.id)
+        query = query.filter(
+            or_(
                 User.role.in_([UserRole.employee, UserRole.admin]),
+                User.id.in_(connected_clients),
             )
-            .all()
         )
-        connected_clients = connection_svc.list_clients_visible_to(db, viewer=me)
-        candidates = non_clients + connected_clients
     elif me.role == UserRole.client:
-        candidates = connection_svc.list_employees_visible_to(db, viewer=me)
-    else:
-        candidates = []
+        connected_employees = select(
+            ClientEmployeeConnection.employee_user_id
+        ).where(ClientEmployeeConnection.client_user_id == me.id)
+        query = query.filter(User.id.in_(connected_employees))
 
-    filtered = _filter_by_q(candidates, q)
-    # De-dupe in case a viewer would have matched in two paths.
-    seen: set[int] = set()
-    unique: list[User] = []
-    for u in filtered:
-        if u.id in seen:
-            continue
-        seen.add(u.id)
-        unique.append(u)
+    if q.strip():
+        # Escape LIKE wildcards so a literal % or _ matches itself rather than
+        # acting as "any chars" / "any char".
+        esc = (
+            q.strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        )
+        like = f"%{esc}%"
+        query = query.filter(
+            or_(
+                User.display_name.ilike(like, escape="\\"),
+                User.email.ilike(like, escape="\\"),
+            )
+        )
 
-    return UserSearchResponse(items=[_to_search_item(u) for u in unique[:50]])
+    rows = query.order_by(User.display_name).limit(SEARCH_LIMIT).all()
+    return UserSearchResponse(items=[_to_search_item(u) for u in rows])
 
 
 @router.get("/me/connections", response_model=ConnectionListResponse)

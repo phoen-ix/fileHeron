@@ -15,7 +15,7 @@ keep this to what would cause a wrong move if unknown.
 
 ## Status
 
-Backend **`v2.7.1`** (dependency/runtime sweep in .0: Python 3.14, Node 24 LTS,
+Backend **`v2.7.2`** (dependency/runtime sweep in .0: Python 3.14, Node 24 LTS,
 TypeScript 6, ESLint 10, Vite 8, Pinia 4 - zero open dependency PRs. v2.6.x
 closed out the 2026-07-30 audit with **nothing left accepted**; v2.6.1 fixed a
 v2.6.0 regression that charged the desktop client's size probe as a download),
@@ -33,6 +33,21 @@ route returns the decrypted plaintext link URL. (README's server/client version
 badges read live from the git tags, so they never need a manual bump; this line
 does - keep it current on release.)
 
+> **v2.7.2 invariants worth knowing before you touch these areas.**
+> **v2.7.2 HAS A MIGRATION** (`202607310001`, the `av_unscanned` backfill) - the
+> first since v2.2.0, so a rollback past it hits the
+> [[reference_rollback_migration_trap]] `alembic stamp` recovery. The backfill
+> flags `state='clean' AND av_unscanned=0 AND size_bytes > 2147483645` and
+> NOTHING else: below clamd's ceiling the files really were scanned, so flagging
+> them would be a lie in the other direction - that band is exactly why
+> 202607300001 declined to backfill at all, and the distinction is the fix.
+> Two v2.7.1 tests were proven by mutation not to test what they named (the
+> retry-backoff one re-implemented the formula it was checking; the mid-scan
+> deletion one set `deleted` BEFORE the call so the worker short-circuited and
+> the guard never ran). **When a test covers a constant or a guard, assert on
+> what the code produced, never on a re-derivation of it** - and check the guard
+> is actually reached.
+>
 > **v2.7.1 invariants worth knowing before you touch these areas.**
 > `AV_MAX_SCAN_BYTES` is **clamped** to `config.CLAMD_MAX_FILE_SIZE` (clamd's own
 > INT_MAX ceiling) by a field_validator - `.env.example` shipped 30 GiB for four

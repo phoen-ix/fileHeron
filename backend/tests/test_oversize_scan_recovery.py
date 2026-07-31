@@ -70,6 +70,35 @@ def oversize_file(db, make_user, tmp_path):
     return f, sh, owner
 
 
+@pytest.fixture
+def scannable_file(db, make_user, tmp_path):
+    """A file clamd WOULD scan - under the physical ceiling. Used for the paths
+    that must actually reach clamd."""
+    from app.utils.timeutil import utc_now
+
+    owner = make_user(email="scannable@test.local", role=UserRole.employee)
+    sh = Share(created_by_id=owner.id, kind=ShareKind.outbound, state=ShareState.active)
+    db.add(sh)
+    db.flush()
+    path = tmp_path / "mid.bin"
+    path.write_bytes(b"payload")
+    f = File(
+        id="00000000-0000-0000-0000-00000000mid1",
+        share_id=sh.id,
+        original_filename="mid.bin",
+        mime_type="application/octet-stream",
+        size_bytes=50 * 1024 * 1024,  # above a lowered trust threshold, below the ceiling
+        storage_path=str(path),
+        state=FileState.ready_unscanned,
+        uploaded_by_id=owner.id,
+        finalized_at=utc_now(),
+    )
+    db.add(f)
+    db.flush()
+    db.commit()
+    return f
+
+
 # --- the file reaches a terminal state --------------------------------------
 
 
@@ -142,19 +171,39 @@ async def test_rescanning_it_is_idempotent(db, oversize_file, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_a_file_deleted_mid_scan_is_not_resurrected(
-    db, oversize_file, monkeypatch
+    db, scannable_file, monkeypatch
 ):
-    """Share expiry can commit `deleted` and unlink the bytes while this runs.
-    Flipping it back to `clean` would advertise a file that is gone."""
-    f, sh, owner = oversize_file
-    monkeypatch.setattr(av_scan_svc, "scan_path", lambda *a, **k: None)
-    db.query(File).filter(File.id == f.id).update({File.state: FileState.deleted})
-    db.commit()
+    """Share expiry can commit `deleted` and unlink the bytes WHILE the scan
+    runs. Flipping the row back to `clean` afterwards would advertise a file
+    whose bytes are gone.
 
-    result = await av_scan_file({}, f.id)
-    assert result.get("skipped") or result["state"] in ("superseded", "deleted")
+    The first version of this test set `deleted` BEFORE calling the worker, so
+    it short-circuited on the state check at the top and never reached the
+    conditional UPDATE inside `_release_unscanned` - a review proved the guard
+    could be replaced with an unconditional update and the whole suite stayed
+    green. The delete now happens during the scan, which is when it happens in
+    production."""
+    monkeypatch.setattr(settings, "AV_MAX_SCAN_BYTES", 1_048_576)
+
+    def _scan_then_delete(*a, **k):
+        # Exactly what share expiry does, at exactly the wrong moment.
+        db.query(File).filter(File.id == scannable_file.id).update(
+            {File.state: FileState.deleted}, synchronize_session=False
+        )
+        db.commit()
+        return av_scan_svc.ScanResult(state="clean", signature=None, raw="OK")
+
+    monkeypatch.setattr(av_scan_svc, "scan_path", _scan_then_delete)
+
+    result = await av_scan_file({}, scannable_file.id)
+    assert result["state"] == "superseded", (
+        "the guard did not fire; a deleted file was flipped back to clean"
+    )
     db.expire_all()
-    assert db.query(File).filter(File.id == f.id).one().state == FileState.deleted
+    assert (
+        db.query(File).filter(File.id == scannable_file.id).one().state
+        == FileState.deleted
+    )
 
 
 # --- the sweep must pick them up --------------------------------------------
@@ -188,30 +237,55 @@ async def test_an_oversize_stuck_file_is_re_enqueued(db, oversize_file, monkeypa
 
     enqueued: list = []
 
-    async def _fake(name, *a, **k):
-        enqueued.append((name, a))
+    async def _fake(jobs):
+        enqueued.extend(jobs)
 
-    monkeypatch.setattr(cleanup_stale_uploads.job_queue, "aenqueue", _fake)
+    monkeypatch.setattr(cleanup_stale_uploads.job_queue, "aenqueue_many", _fake)
     out = await cleanup_stale_uploads.cleanup_stale_uploads({})
     assert out["rescans_requeued"] >= 1
-    assert ("av_scan_file", (f.id,)) in enqueued
+    assert ("av_scan_file", (f.id,), {}) in enqueued, (
+        "the sweep must push one batch, not one pool per stuck file"
+    )
 
 
 # --- the retry budget -------------------------------------------------------
 
 
-def test_the_retry_backoff_outlasts_a_clamav_cold_start():
+@pytest.mark.asyncio
+async def test_the_retry_backoff_outlasts_a_clamav_cold_start(
+    db, scannable_file, monkeypatch
+):
     """The trigger. `min(60, 5 * attempt)` gave 5+10+15+20 = 50 seconds across
     the four retries `max_tries=5` allows, against a clamav healthcheck that is
     allowed 180 seconds to come up (and a first freshclam sync far longer than
     that). Every clamav restart therefore burned the in-flight scans, which is
-    what manufactured the stranded files in the first place."""
-    from app.workers.av_scan import _RETRY_MAX_DEFER_SEC
+    what manufactured the stranded files in the first place.
+
+    An adversarial review caught the first version of this test re-implementing
+    `min(_RETRY_MAX_DEFER_SEC, 30 * attempt)` in its own body - so the
+    multiplier, the entire change, was hardcoded into the assertion and
+    reverting the source to `min(60, 5 * attempt)` left all 27 AV tests green.
+    It now reads the deferral off the `Retry` the worker actually raises."""
+    from arq import Retry
+
+    from app.services import av_scan as svc
     from app.workers.worker import WorkerSettings
 
-    retries = WorkerSettings.max_tries - 1
-    total = sum(min(_RETRY_MAX_DEFER_SEC, 30 * attempt) for attempt in range(1, retries + 1))
-    assert total >= 180, f"retry budget is {total}s, under the clamav start budget"
+    def _down(*a, **k):
+        raise svc.AVUnavailableError("clamd not ready")
+
+    monkeypatch.setattr(svc, "scan_path", _down)
+
+    total = 0.0
+    for attempt in range(1, WorkerSettings.max_tries):
+        with pytest.raises(Retry) as exc:
+            await av_scan_file({"job_try": attempt}, scannable_file.id)
+        total += exc.value.defer_score / 1000.0
+
+    assert total >= 180, (
+        f"retry budget is {total}s across {WorkerSettings.max_tries - 1} retries, "
+        "under the 180s docker-compose allows clamav to become healthy"
+    )
 
 
 # --- the setting that made it worse everywhere ------------------------------

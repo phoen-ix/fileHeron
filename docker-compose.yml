@@ -209,7 +209,10 @@ services:
       - clamav-defs:/var/lib/clamav
       # Raised MaxFileSize/MaxScanSize/StreamMaxLength so LARGE uploads are
       # actually scanned instead of silently passed as "clean" past clamd's
-      # 100MB default (audit H3). Keep in sync with backend AV_MAX_SCAN_BYTES.
+      # 100MB default (audit H3). Do NOT mirror this into the backend's
+      # AV_MAX_SCAN_BYTES: clamd clamps MaxFileSize to INT_MAX (~2 GiB) whatever
+      # is asked for here, so the backend clamps anything higher and warns. See
+      # docker/clamav/clamd.conf.
       - ${COMPOSE_HOST_ROOT:-${PWD:-/opt/fileHeron}}/docker/clamav/clamd.conf:/etc/clamav/clamd.conf:ro
     networks: [internal]
     healthcheck:

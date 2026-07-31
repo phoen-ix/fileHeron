@@ -254,8 +254,15 @@ async def av_scan_file(_ctx, file_id: str) -> dict:
             }
 
         # ScanResult.state == "error": clamd answered but couldn't decide.
-        # Don't quarantine; leave in ready_unscanned for a manual rescan
-        # or a retry on next worker cycle.
+        # Don't quarantine; leave in ready_unscanned. `cleanup_stale_uploads`
+        # re-enqueues it once it is 30 minutes past finalize, and the cron runs
+        # hourly - so recovery is 30-90 minutes away, not immediate.
+        #
+        # There is NO manual rescan. This comment used to name one, as did
+        # tus_hooks; no rescan endpoint or admin action exists anywhere in the
+        # product. If clamd keeps answering `error` for the same file, this is
+        # the path that loops: the sweep re-enqueues, the scan fails the same
+        # way, and nothing escalates. See the note in cleanup_stale_uploads.
         logger.error("av_scan: %s error from clamd: %s", file_id, result.raw)
         return {"file_id": file_id, "state": "error", "raw": result.raw}
     finally:

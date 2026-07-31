@@ -238,6 +238,20 @@ onMounted(load)
               <span v-else-if="f.state === 'infected'" class="fh-pill" data-state="danger">
                 {{ t('public_share.infected') }}
               </span>
+              <!-- A file too large for clamd to read is served without a real
+                   verdict. The signed-in file list has shown this since v2.2.0;
+                   the public page never did, so an anonymous recipient - the
+                   one person who cannot ask the sender about it - saw nothing
+                   distinguishing it from a scanned file. schemas/public_link.py
+                   claimed otherwise in its own comment. -->
+              <span
+                v-else-if="f.av_unscanned"
+                class="fh-pill"
+                data-state="warn"
+                :title="t('files.av_unscanned_hint')"
+              >
+                {{ t('files.av_unscanned') }}
+              </span>
             </div>
             <div class="action">
               <button

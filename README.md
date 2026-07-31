@@ -525,7 +525,7 @@ via `S3_BUCKET` / `S3_REGION` / `S3_ENDPOINT_URL` / `S3_ACCESS_KEY_ID` /
 
 - Uploads stream to the bucket (multipart for large files); downloads **307-redirect to a presigned URL** (app does auth + the single budget decrement first); AV scans via clamd **INSTREAM**; quarantine is a server-side key-prefix copy.
 - **Pick the backend at install time** - switching local↔s3 with existing data isn't automatic (an operator script copies bytes + rewrites `files.storage_path`). `uploads/` (tusd staging) always stays local.
-- Bucket durability/versioning is your responsibility; `scripts/backup.sh` only tars local `./data/files`. INSTREAM is bounded by clamd `StreamMaxLength` (raise it for large files; an over-size file scans as `error` and is not served). The low-disk guard is a no-op on s3. At-rest encryption is your bucket's SSE.
+- Bucket durability/versioning is your responsibility; `scripts/backup.sh` only tars local `./data/files`. INSTREAM is bounded by clamd `StreamMaxLength` (raise it for large files; a file over that limit but under clamd's ~2 GiB ceiling scans as `error` and is not served). Files past the ceiling are not streamed to clamd at all - they are served flagged `av_unscanned`, since no verdict is obtainable. The low-disk guard is a no-op on s3. At-rest encryption is your bucket's SSE.
 
 </details>
 

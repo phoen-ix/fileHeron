@@ -144,7 +144,13 @@ def scan_stream(fh) -> ScanResult:
 
     Caveat: INSTREAM is bounded by clamd's ``StreamMaxLength`` (default 25 MB).
     Operators using the s3 backend with larger files must raise it; a file that
-    exceeds the limit comes back as ``state='error'`` (fail-safe - not served)."""
+    exceeds the limit comes back as ``state='error'`` (fail-safe - not served).
+
+    That applies to the band between ``StreamMaxLength`` and clamd's own ~2 GiB
+    ceiling. Past the ceiling the worker never gets here: ``av_scan_file``
+    releases the file as ``av_unscanned`` without streaming it, because there is
+    no verdict to be had and streaming multi-gigabyte objects out of the store
+    to be rejected on arrival is pure waste."""
     import struct
 
     if settings.AV_SKIP:

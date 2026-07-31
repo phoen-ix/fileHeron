@@ -176,8 +176,14 @@ async def cleanup_stale_uploads(_ctx) -> dict:
         # or a job that exceeds WorkerSettings.job_timeout - still comes back
         # here next cycle. That is deliberate (the alternative is abandoning a
         # file with no verdict and no recovery), but it means a persistently
-        # failing scan shows up as repeated work rather than as an alert. The
-        # ops_check / error-log path is what should surface it.
+        # failing scan shows up as repeated work and NOTHING ELSE.
+        #
+        # Nothing surfaces it today, and saying "ops_check should" would be the
+        # same kind of comment this release exists to delete: `notify_admin_error`
+        # is fed by the HTTP error middleware, the telemetry routes, and
+        # cron_tracker when a cron RAISES. `av_scan_file` returning
+        # `{"state": "error"}` is none of those. Wiring it up is worth doing;
+        # until then this is a known blind spot, written down as one.
         rescan_cutoff = utc_now() - timedelta(minutes=_RESCAN_STUCK_AFTER_MIN)
         stuck = (
             db.query(File)
@@ -186,11 +192,21 @@ async def cleanup_stale_uploads(_ctx) -> dict:
                 File.finalized_at.isnot(None),
                 File.finalized_at < rescan_cutoff,
             )
+            # Ordered: a bare LIMIT over an unordered query lets the database
+            # return a different 500 each cycle, so with more stuck files than
+            # _RESCAN_BATCH some could be passed over indefinitely. Oldest
+            # first, which is also the order an operator would expect.
+            .order_by(File.finalized_at.asc(), File.id.asc())
             .limit(_RESCAN_BATCH)
             .all()
         )
-        for f in stuck:
-            await job_queue.aenqueue("av_scan_file", f.id)
+        # One Redis pool for the batch, not one per file: `aenqueue` opens and
+        # closes a connection pool per call, and this loop can be 500 long
+        # (job_queue's own docstring says to use the batch form wherever the
+        # count scales with anything but a constant).
+        await job_queue.aenqueue_many(
+            [("av_scan_file", (f.id,), {}) for f in stuck]
+        )
         rescans_requeued = len(stuck)
 
         if files_reaped or shares_failed or rescans_requeued:

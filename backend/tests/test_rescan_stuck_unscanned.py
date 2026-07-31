@@ -60,16 +60,16 @@ async def test_rescan_requeues_stuck_unscanned(make_user, db, monkeypatch):
 
     calls: list = []
 
-    async def _spy(name, *a, **k):
-        calls.append((name, a))
+    async def _spy(jobs):
+        calls.extend(jobs)
 
     from app.services import job_queue
-    monkeypatch.setattr(job_queue, "aenqueue", _spy)
+    monkeypatch.setattr(job_queue, "aenqueue_many", _spy)
 
     from app.workers.cleanup_stale_uploads import cleanup_stale_uploads
     result = await cleanup_stale_uploads(None)
 
-    requeued = {a[0] for (name, a) in calls if name == "av_scan_file"}
+    requeued = {a[0] for (name, a, _kw) in calls if name == "av_scan_file"}
     assert stuck.id in requeued
     assert fresh.id not in requeued        # finalized too recently - still in flight
     assert oversize.id in requeued, (

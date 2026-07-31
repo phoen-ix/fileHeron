@@ -235,7 +235,8 @@ def handle_post_finish(db: Session, body: dict[str, Any]) -> None:
     # finalize_to_disk; downloads are blocked until the worker flips it
     # to `clean`. Failures here are logged but don't fail the upload -
     # the `cleanup_stale_uploads` cron re-enqueues anything still
-    # `ready_unscanned` 30 minutes after finalize. (This said "a manual rescan
+    # `ready_unscanned` once it is 30 minutes past finalize - and that cron runs
+    # hourly, so recovery lands 30-90 minutes out, not at the 30-minute mark. (This said "a manual rescan
     # can recover", which named a thing that does not exist: there is no rescan
     # endpoint or admin action anywhere. The cron is the recovery.)
     from . import job_queue

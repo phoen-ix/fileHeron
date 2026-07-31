@@ -1,155 +1,118 @@
-# file:Heron v2.7.1
+# file:Heron v2.7.2
 
-**Three ways a file could become permanently unavailable, and one way a fresh
-install trusted an antivirus verdict it never got.** No host step, no migration.
+**A schema migration runs on this one** - the first since v2.2.0. It is a data
+repair, it runs automatically on update, and it needs nothing from you. No host
+step. Read the rollback note at the end before updating if you keep a rollback
+path open.
 
-If you self-host and copied `.env.example` at any point since v2.2.0, read the
-first section - your instance is affected and this release repairs it on
-restart, with nothing for you to edit.
+Two of the tests shipped in v2.7.1 did not test what they claimed, and an
+adversarial review proved it by breaking the code and watching them pass. That
+is the same failure this whole wave has been chasing, one level up: not a
+comment asserting something false, but a *test* asserting it.
 
 ---
 
-## Fresh installs trusted verdicts clamd never produced
+## Files that were never scanned, and were never labelled
 
-`.env.example` shipped `AV_MAX_SCAN_BYTES=32212254720` - 30 GiB - and
-`install.sh` copies that file onto every fresh install. clamd clamps its own
-maximum to about 2 GiB whatever its configuration says: past that it stops
-reading and answers "OK" without having looked.
+`.env.example` shipped `AV_MAX_SCAN_BYTES=32212254720` (30 GiB) for four
+releases, and `install.sh` copies it onto every fresh install. v2.7.1 clamped
+the setting so that stops happening. It did not repair what had already
+happened: on any instance that took the shipped defaults, files between about
+2 GiB and 30 GB are still recorded as `clean` and **unflagged**, which is
+indistinguishable from a file the scanner actually read.
 
-So on any instance that took the shipped `.env.example`, a file between 2 GiB
-and 30 GB was recorded as **`clean`, not flagged**. No `unscanned` badge in the
-UI, no `file_served_unscanned` audit row - nothing distinguishing it from a file
-the scanner actually read. That is the exact defect v2.5.0 fixed, surviving its
-own fix one order of magnitude up.
+The migration that introduced the flag declined to backfill, and explained why:
 
-The setting is now clamped in the backend, so an instance carrying the bad value
-is corrected the moment it restarts, with a warning naming what happened. A
-*lower* limit is still yours to set; a higher one buys nothing and never did.
+> this migration cannot know which historical files were oversize at the time
+> they were scanned, and back-filling from size_bytes would flag files that WERE
+> genuinely scanned under whatever limit was configured then.
 
-Files above the clamp are still served - fileHeron deliberately accepts uploads
-far larger than any scanner reads - but they are flagged, badged and audited as
-unscanned. Rows written before this release keep whatever they were given; only
-new scans are affected.
+That is right for one band and wrong for another, and the difference is the
+whole fix. Between an operator's configured limit and clamd's own ceiling, files
+really were scanned - flagging those retroactively would be a lie in the other
+direction. **Above clamd's ceiling, no configuration ever mattered.** clamd
+clamps its own maximum to about 2 GiB whatever it is asked for; past that it
+stops reading and answers "OK". A row that is `clean`, unflagged and larger than
+that carries a verdict produced without opening the file - on every version this
+product has shipped.
 
-## A large file whose scan was interrupted could never recover
+So the backfill flags exactly that: `clean`, unflagged, larger than the ceiling.
+Nothing at or below it. Nothing in any other state - `infected` and `deleted` are
+verdicts of their own, and `ready_unscanned` has not been decided yet. It logs
+how many rows it touched, and running it twice touches nothing.
 
-Every download of it answered `425` - *"Antivirus scan still in progress; try
-again shortly"* - about a scan that was never going to run again. Forever. Its
-bytes kept counting against the uploader's quota, and getting it back needed
-hand-written SQL.
+The files stay downloadable. They now carry the `unscanned` badge they should
+always have had.
 
-Three things had to line up, and on a busy instance they did:
+## The public link page never showed that badge
 
-- The retry budget for "clamd is not answering" totalled about **50 seconds**,
-  while the antivirus container is allowed **180 seconds** to become healthy -
-  and its first signature sync is far longer. So a clamav restart, a host reboot
-  or an out-of-memory kill burned every scan in flight.
-- The sweep that recovers stuck scans - the only automated recovery there is -
-  deliberately **skipped files over the size limit**, on the grounds that
-  re-scanning them would loop forever.
-- That reasoning was true on object storage and false on local disk, and it was
-  applied to both.
+Since v2.2.0 the signed-in file list has marked files released without a verdict.
+The anonymous `/d/{token}` page did not - so the one recipient who cannot ask the
+sender about it was the one person not told. The API has always sent the field,
+and `schemas/public_link.py` says in its own comment that "the UI surfaces this
+as an explicit warning rather than implying `clean`". It didn't. Now it does.
 
-So a file under the limit healed itself within thirty minutes, and a file over
-it never did. Which is also why this went unnoticed: every test and every
-development upload exercised the path that works, and the failure was reserved
-for the flagship large-file workload.
+## Two tests that were not testing anything
 
-Now the scanner decides *before* reading that a file is past what clamd can
-scan, and releases it as unscanned in one pass - on either storage backend. That
-makes re-queueing safe, so the recovery sweep no longer skips anything, and the
-retry budget outlasts a cold start. As a side effect, oversize files on object
-storage are no longer streamed out in full only to be rejected on arrival.
+Both were caught by mutation - reverting the fix and confirming the suite went
+green anyway.
 
-**If you have files stuck at "scan in progress" right now, they will clear
-themselves within about thirty minutes of updating.** Nothing to run.
+**The retry-backoff test re-implemented the formula it was checking.** v2.7.1
+lengthened the antivirus retry backoff so it outlasts a scanner cold start. The
+test computed the expected total using the same expression as the source, so the
+multiplier - the entire change - was hardcoded into the assertion. Putting the
+old, too-short backoff back left all 27 antivirus tests passing. It now reads the
+delay off the retry the worker actually raises.
 
-## The backup does not contain your `.env`, and the manual never said so
+**The mid-scan deletion test never reached the code it named.** A share can
+expire and delete a file's bytes *while* a scan is running, and the worker has a
+guard so it does not then flip that row back to `clean` and advertise a file that
+is gone. The test set the file to `deleted` before starting the scan, so the
+worker short-circuited at its first state check and the guard never executed -
+the guard could be deleted outright with the full suite still green. The deletion
+now happens during the scan, which is when it happens in production.
 
-`scripts/backup.sh` has carried this warning in a comment for a long time.
-README's Backups section - the page an operator actually reads - did not mention
-`.env` or `JWT_SECRET` at all.
+Neither was a defect in shipped behaviour. The code was right; the tests just
+weren't holding it, which is worse than not having them, because they read as
+coverage.
 
-Every encrypted field in the database is encrypted under a key derived from
-`JWT_SECRET`: TOTP secrets, SSO client secrets, SMTP and IMAP passwords,
-public-link tokens, webhook secrets. Restore onto replacement hardware without
-that key and all of it comes back **intact and permanently unreadable**. Every
-two-factor user locked out, SSO dead, outgoing mail dead. Row counts, checksums
-and the restore script's own output all look correct, because the data is
-there - it simply cannot be decrypted, and nothing recovers it.
+## Four more claims that were not true
 
-The weekly restore drill cannot catch this either: it restores on the same host,
-reading the same `.env`.
+Tracing the above turned up others of the same kind:
 
-README now says so, next to the backup command. **Go and check that your `.env`
-is in your password manager or secret store.** That is the whole action.
+- The antivirus worker still pointed at "a manual rescan" as the recovery path
+  for a scan that errors. There is no manual rescan anywhere in the product -
+  v2.7.1 deleted that phantom from one file and it survived, two files over, on
+  the one branch that still parks a file waiting.
+- A comment v2.7.1 itself added said the error-log path "should surface" a
+  repeatedly failing scan. Tracing it: nothing does. That is now written down as
+  a known blind spot instead of an assurance.
+- `docker-compose.yml` told operators to keep clamd's limit "in sync with backend
+  `AV_MAX_SCAN_BYTES`". Following that now produces a clamped value and a
+  warning, and it contradicted the guidance in `clamd.conf` written in the same
+  wave.
+- README and a docstring said an over-size file "scans as `error` and is not
+  served". True between the streaming limit and clamd's ceiling; false above it,
+  where the file is no longer streamed to the scanner at all.
 
-## `AV_MAX_SCAN_BYTES` decides what is *trusted*, never what is *scanned*
-
-Worth stating plainly, because the first version of this release got it wrong
-and an adversarial review caught it before it went out.
-
-There are two different limits and they must stay different:
-
-- **What clamd physically cannot read** (~2 GiB, its own internal clamp). Past
-  this there is no verdict to be had, so the scan is skipped and the file is
-  released flagged. That is the fix described above.
-- **`AV_MAX_SCAN_BYTES`** - the size above which fileHeron stops *believing* a
-  `clean` answer. The file is still scanned. An infection is still quarantined
-  and the share still revoked.
-
-Keying the skip off the tunable would have turned a documented setting into a
-silent antivirus off-switch: `docker/clamav/clamd.conf` invites you to lower it
-to match a memory-constrained scanner, and after that every file above the new
-value would have been served `clean` without clamd ever seeing it. That is now
-impossible by construction, and both halves have tests.
-
-Relatedly, `AV_MAX_SCAN_BYTES=0` was accepted silently - and `0` means
-"unlimited" for several neighbouring settings, so it is a natural thing to type.
-It is floored now, with a warning. `AV_SKIP` remains the one deliberate
-no-antivirus switch, and it still refuses to start in production.
-
-## A slow scan could also loop forever
-
-The job runner's default timeout was 300 seconds and it *cancels* the task,
-while the antivirus socket allows 1800 - a ceiling chosen precisely so a slow
-scan of a large nested archive produces a real verdict. The ceiling was
-unreachable: the job was killed first, the cancellation counted as a retry so
-all five attempts burned back to back, and the recovery sweep re-queued the file
-an hour later to do it again. The socket limit is now the one that fires.
-
-## Why these shipped together
-
-All three are the same failure the 2026-07-30 audit kept finding: a comment, a
-document or a default asserting something the code does not do.
-
-A code comment said re-scanning large files "would loop forever" - it does not,
-on the backend most people run. Another named a "manual rescan" as the recovery
-path; no such rescan exists anywhere in the product. A shipped configuration
-file described a limit as needing to match a scanner setting that the scanner
-ignores. And a warning that mattered lived only in a shell script nobody has a
-reason to open.
-
-Each was read many times. None was checked.
-
-## Verification
-
-Every fix has a test proven to fail against the previous release - eight of
-them, each failing on the assertion rather than an import - and the three
-corrections that came out of the review were each re-broken afterwards to
-confirm the new tests go red. The test that
-asserted the old exclusion (`oversize excluded (would loop)`) encoded the defect
-and was rewritten to state the real rule.
-
-The check that matters most is not about oversize files at all: skipping the
-scan is only safe if a file's recorded size cannot be claimed by its uploader,
-or a small hostile file declaring itself enormous would go unscanned where the
-previous code would have caught and quarantined it. It cannot be claimed - the
-resumable-upload hook refuses any upload whose final size differs from the
-authorised one, and the direct-upload route records what it actually received.
-That chain is now pinned by its own test, because it is load-bearing and
-invisible from the code that depends on it.
+Also: the recovery sweep re-queued up to 500 files one connection at a time, and
+its query had no `ORDER BY` under its `LIMIT` - so with a backlog larger than the
+batch, the same files could be passed over indefinitely. Oldest first now, one
+batch, one connection.
 
 ## Upgrading
 
-In-app Update, or `FH_TAG=v2.7.1`. Nothing else to do.
+In-app Update, or `FH_TAG=v2.7.2`. The migration runs automatically when the
+backend container starts; there is nothing to run by hand.
+
+`docker-compose.yml` does change, and the updater does not replace it - but the
+change is **a comment only**, correcting advice that would now produce a clamped
+value and a warning. Nothing about the running stack depends on it, so there is
+no host step. Pick it up whenever you next pull the repo.
+
+**If you keep a rollback path open, note this one.** Going back to a v2.7.1
+image *after* this migration has run will fail at boot - the older image's
+migration history does not contain this revision, and it stops rather than
+guess. Recovery is to stamp the previous revision from the newer image and then
+bring the old tag up. This is the standard consequence of any schema change here;
+it is called out because the last four releases had none.

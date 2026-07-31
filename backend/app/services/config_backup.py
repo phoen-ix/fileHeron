@@ -966,6 +966,9 @@ def apply_backup(db: Session, *, parsed: ParsedBackup, actor: User, request=None
     # writes from here on is identified by a larger id and survives the step-7
     # audit_log wipe.
     audit_watermark = db.query(func.max(AuditLog.id)).scalar() or 0
+    # Captured before the identity upsert overwrites the actor's row; used by
+    # the anti-lockout re-assert below.
+    actor_password_hash = actor.password_hash
 
     # 1. Invalidate ALL active shares in its own committed pass - disk unlink is
     # irreversible and must not sit inside the config transaction.
@@ -1042,6 +1045,17 @@ def apply_backup(db: Session, *, parsed: ParsedBackup, actor: User, request=None
         if me is not None:
             me.role = UserRole.admin
             me.is_disabled = False
+            # Everything else that gates getting back IN. The upsert above
+            # overwrites the actor's whole row from the backup, so a backup
+            # taken when they had not yet verified their address (or that
+            # carries a different password hash, or no TOTP where they now have
+            # one enforced) locked the importing admin out of the instance they
+            # were mid-restore on - with every other admin already purged.
+            # Restoring role without restoring the ability to authenticate was
+            # half a guard (audit 2026-07-30).
+            me.email_verified = True
+            if actor_password_hash:
+                me.password_hash = actor_password_hash
             db.flush()
         summary.counts["users_insert"] = inserted
         summary.counts["users_update"] = updated
@@ -1159,6 +1173,19 @@ def apply_backup(db: Session, *, parsed: ParsedBackup, actor: User, request=None
                     "preserve the audit trail"
                 )
                 continue
+            # `groups.created_by_id` is ON DELETE CASCADE, so hard-deleting a
+            # user takes every group they created with them - including groups
+            # this very import restored moments earlier, because group identity
+            # is the normalised NAME while ownership is a user id that gets
+            # remapped. The import therefore destroyed part of its own result,
+            # silently, and only for groups whose creator happened not to be in
+            # the backup (audit 2026-07-30). Reassign to the importing admin
+            # first: the group is the artefact worth keeping, and its creator
+            # is being erased anyway.
+            db.query(Group).filter(Group.created_by_id == u.id).update(
+                {"created_by_id": actor.id}, synchronize_session=False
+            )
+            db.flush()
             outcome = _purge_user(db, u, actor=actor, request=request)
             summary.purged_users.append(
                 u.email if outcome == "deleted" else f"{u.email} ({outcome})"
@@ -1182,8 +1209,20 @@ def apply_backup(db: Session, *, parsed: ParsedBackup, actor: User, request=None
         db.flush()
         db.query(AppSetting).delete(synchronize_session=False)
         db.flush()
+        # `_TRANSIENT_SETTING_KEYS` was applied on EXPORT only, so a backup
+        # file that carries those keys - hand-edited, or produced by an older
+        # build, or supplied by someone else - planted them verbatim. That
+        # includes `maintenance.pending_update`, which the minute drain worker
+        # reads and hands straight to release_apply: a config import could
+        # therefore trigger a self-update to an attacker-chosen tag, bypassing
+        # the `v\d+\.\d+\.\d+` validator that only guards the admin route
+        # (audit 2026-07-30). Filter on the way in as well as out.
+        skipped_transient = 0
         for row in sb.get("app_settings", []):
             key = row["key"]
+            if key in _TRANSIENT_SETTING_KEYS or key in _LOGO_LOCATOR_KEYS:
+                skipped_transient += 1
+                continue
             if row.get("is_encrypted"):
                 stored = _ingest_secret_str(row.get("secret"))
                 if stored is None:
@@ -1212,6 +1251,11 @@ def apply_backup(db: Session, *, parsed: ParsedBackup, actor: User, request=None
         db.flush()
         _import_logo(db, sb.get("branding_logo"), actor=actor, warnings=warnings)
         summary.counts["app_settings"] = len(sb.get("app_settings", []))
+        if skipped_transient:
+            warnings.append(
+                f"skipped {skipped_transient} runtime/transient setting key(s) "
+                "carried in the backup (maintenance + IMAP cursors are not portable)"
+            )
         summary.counts["email_template_overrides"] = len(sb.get("email_template_overrides", []))
 
     # 7. Logs - wipe + reload (opt-in).

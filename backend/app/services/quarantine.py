@@ -89,7 +89,17 @@ def quarantine_file(
     # Revoke the parent share (cascades to all of its files in user-facing
     # listings). Idempotent: if it's already revoked / deleted, no-op.
     share = db.query(Share).filter(Share.id == file.share_id).one_or_none()
-    if share is not None and share.state == ShareState.active:
+    # `pending_approval` counts too. A share awaiting four-eyes review whose
+    # content just failed AV was left unrevoked and unannotated, so the approver
+    # saw a normal pending share and could flip it live - publishing a share
+    # whose member file is infected. The file itself 410s on download, but the
+    # approval workflow exists precisely so a human decides with full
+    # information, and this withheld the single most relevant fact
+    # (audit 2026-07-30).
+    if share is not None and share.state in (
+        ShareState.active,
+        ShareState.pending_approval,
+    ):
         share.state = ShareState.revoked
         record_audit_event(
             db,

@@ -40,7 +40,11 @@ from ..utils.timeutil import utc_now
 
 logger = logging.getLogger("fileheron.workers.reclaim_orphaned_files")
 
-_TERMINAL = [ShareState.revoked, ShareState.deleted]
+# `rejected` belongs here: rejection keeps the bytes on purpose so the owner can
+# resubmit, but nothing reclaimed them if they never did. The grace window this
+# worker already applies is exactly the "did they come back?" period
+# (audit 2026-07-30).
+_TERMINAL = [ShareState.revoked, ShareState.deleted, ShareState.rejected]
 _RECLAIMABLE = [FileState.clean, FileState.ready_unscanned]
 
 

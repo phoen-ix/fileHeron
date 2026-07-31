@@ -762,6 +762,14 @@ def reject_share(
         .where(Share.id == share.id, Share.state == ShareState.pending_approval)
         .values(
             state=ShareState.rejected,
+            # Stamp the terminal time so reclaim_orphaned_files can age this
+            # share out. Without it a rejected share's bytes were reclaimed by
+            # nothing at all: rejection deliberately keeps the files so the
+            # owner can resubmit, but if they never do, the bytes sat against
+            # the uploader's quota indefinitely - past the share's own expiry,
+            # because an expired share is only swept while `active`
+            # (audit 2026-07-30).
+            terminated_at=utc_now(),
             approval_decided_by_id=user.id,
             approval_decided_at=now,
             rejection_reason=reason,

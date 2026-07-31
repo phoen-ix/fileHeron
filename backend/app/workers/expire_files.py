@@ -30,6 +30,31 @@ logger = logging.getLogger("fileheron.workers.expire_files")
 
 
 
+def _record_orphan_locator(db, *, locator: str, reason: str) -> None:
+    """Leave a durable trace of bytes that failed to unlink.
+
+    The old comment promised these were "cleaned by orphan-reclaim / disk
+    sweep", but reclaim_orphaned_files works from DB rows and the row has
+    already been flipped to `deleted` by the time the purge runs - so nothing
+    could ever see the locator again and the bytes leaked silently, charged to
+    nobody and visible to no one. An audit row is the cheapest durable record
+    that needs no schema change, and it puts the locator somewhere an operator
+    actually looks (audit 2026-07-30)."""
+    try:
+        record_audit_event(
+            db,
+            event_type=AuditEventType.file_purge_failed,
+            actor_user_id=None,
+            target_type="file_bytes",
+            target_id=locator[:255],
+            metadata={"locator": locator, "reason": reason},
+        )
+        db.commit()
+    except Exception:
+        db.rollback()
+        logger.exception("expire_files: could not record orphan locator %s", locator)
+
+
 @track_cron("expire_files")
 async def expire_files(_ctx) -> dict:
     """Walk shares.expires_at < now, transition state + hard-delete files.
@@ -50,18 +75,35 @@ async def expire_files(_ctx) -> dict:
         )
         for share in shares:
             # (locator, user_id, size) to purge AFTER the commit succeeds.
-            to_purge: list[tuple[str | None, int, int]] = []
+            # (locator, user_id, size, was_infected)
+            to_purge: list[tuple[str | None, int, int, bool]] = []
             file_count = 0
             for f in share.files:
                 if f.state == FileState.deleted:
                     continue
+                # An `infected` file already had its bytes MOVED to quarantine
+                # and its quota released by services/quarantine.py. This loop
+                # was inlined rather than calling delete_file_for_expiry, so it
+                # never picked up that helper's `was_infected` guard: it
+                # unlinked the QUARANTINE locator (destroying evidence an admin
+                # can otherwise release or inspect) and released the same bytes
+                # a second time, silently inflating the uploader's free quota
+                # (audit 2026-07-30).
+                was_infected = f.state == FileState.infected
                 # Mark deleted + audit now, but DON'T unlink bytes or release
                 # quota yet. The irreversible byte delete + non-transactional
                 # Redis release happen only AFTER the per-share commit (below),
                 # so a commit failure can't leave a still-'clean' row whose
                 # bytes are already gone (silent data loss) nor double-release
                 # the quota on the next cron cycle (audit M14).
-                to_purge.append((f.storage_path, f.uploaded_by_id, f.size_bytes))
+                to_purge.append(
+                    (
+                        None if was_infected else f.storage_path,
+                        f.uploaded_by_id,
+                        f.size_bytes,
+                        was_infected,
+                    )
+                )
                 f.state = FileState.deleted
                 record_audit_event(
                     db,
@@ -95,16 +137,24 @@ async def expire_files(_ctx) -> dict:
             # A failure here leaks bytes on disk (cleaned by orphan-reclaim /
             # disk sweep) but never loses a live file or double-releases quota.
             backend = get_storage_backend()
-            for locator, uid, size in to_purge:
+            for locator, uid, size, was_infected in to_purge:
                 if locator:
                     try:
                         backend.delete(locator)
                     except Exception as e:
+                        # files-8: the comment claimed orphan-reclaim would mop
+                        # this up, but reclaim works from DB rows and the row is
+                        # already `deleted`, so nothing could ever see it again.
+                        # Record the locator so the sweeper has something to act
+                        # on instead of silently leaking the bytes.
                         logger.error(
-                            "expire_files: post-commit byte purge failed share=%s: %s",
-                            share.id, e,
+                            "expire_files: post-commit byte purge failed share=%s "
+                            "locator=%s: %s - recording for reclaim",
+                            share.id, locator, e,
                         )
-                release_bytes(user_id=uid, bytes_to_free=size)
+                        _record_orphan_locator(db, locator=locator, reason="expire_purge_failed")
+                if not was_infected:
+                    release_bytes(user_id=uid, bytes_to_free=size)
                 deleted_files += 1
         if expired_shares or failed_shares:
             logger.info(

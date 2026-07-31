@@ -55,9 +55,7 @@ def _initialize_from_db(db: Session, user_id: int) -> int:
         db.query(func.coalesce(func.sum(File.size_bytes), 0))
         .filter(
             File.uploaded_by_id == user_id,
-            File.state.in_(
-                [FileState.uploading, FileState.ready_unscanned, FileState.clean]
-            ),
+            File.state.in_(STORED_STATES),
         )
         .scalar()
         or 0
@@ -139,6 +137,14 @@ def used_bytes(*, user_id: int) -> int:
         return 0
 
 
+# The single definition of "counts as stored". services/analytics.py imports
+# this rather than re-declaring it: the two lists were duplicated with a comment
+# on each saying to keep them in step, which is a convention, not a guarantee -
+# and if they ever diverged, the admin storage totals and the quota figures
+# would disagree with no test failing (audit 2026-07-30).
+STORED_STATES = [FileState.uploading, FileState.ready_unscanned, FileState.clean]
+
+
 def _used_bytes_query(db: Session, user_ids: list[int]):
     """Authoritative allocated-bytes per user from the DB - same filter as
     `_initialize_from_db` / `quota_reconcile` (in-flight + finalized, not
@@ -147,9 +153,7 @@ def _used_bytes_query(db: Session, user_ids: list[int]):
         db.query(File.uploaded_by_id, func.coalesce(func.sum(File.size_bytes), 0))
         .filter(
             File.uploaded_by_id.in_(user_ids),
-            File.state.in_(
-                [FileState.uploading, FileState.ready_unscanned, FileState.clean]
-            ),
+            File.state.in_(STORED_STATES),
         )
         .group_by(File.uploaded_by_id)
     )

@@ -43,8 +43,39 @@ def run_after_commit(db: Session, thunk) -> None:
     db.info.setdefault(_AFTER_COMMIT_KEY, []).append(thunk)
 
 
+_AFTER_ROLLBACK_KEY = "_fh_after_rollback"
+
+
+def run_after_rollback(db: Session, thunk) -> None:
+    """Register a COMPENSATING action for a side-effect that has already
+    happened outside the transaction and cannot be rolled back with it.
+
+    `run_after_commit` defers a side-effect until the data is durable. This is
+    its mirror image, for the cases where the write must happen first: bytes
+    landed on the storage backend before the row describing them was committed,
+    so a rollback leaves a blob nothing references and no sweeper can find (the
+    sweepers all walk DB rows). Cleared on a successful commit, fired on
+    rollback (audit 2026-07-30). `thunk` is a zero-arg callable."""
+    db.info.setdefault(_AFTER_ROLLBACK_KEY, []).append(thunk)
+
+
+@event.listens_for(Session, "after_rollback")
+def _fh_fire_after_rollback(session: Session) -> None:
+    thunks = session.info.pop(_AFTER_ROLLBACK_KEY, None)
+    if not thunks:
+        return
+    log = logging.getLogger("fileheron.after_rollback")
+    for thunk in thunks:
+        try:
+            thunk()
+        except Exception:
+            log.exception("after-rollback compensation failed")
+
+
 @event.listens_for(Session, "after_commit")
 def _fh_fire_after_commit(session: Session) -> None:
+    # A successful commit means the compensations are no longer wanted.
+    session.info.pop(_AFTER_ROLLBACK_KEY, None)
     thunks = session.info.pop(_AFTER_COMMIT_KEY, None)
     if not thunks:
         return

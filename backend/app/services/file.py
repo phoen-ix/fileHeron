@@ -123,8 +123,25 @@ def finalize_to_disk(
     when = utc_now()
     backend = get_storage_backend()
     locator = backend.generate_locator(file.id, when)
-    # Backend moves/uploads the bytes from the tusd working file and consumes it
-    # (local = atomic rename / copy fallback; object store = multipart upload).
+
+    # Write the intended locator DOWN before moving the bytes, and commit it.
+    #
+    # `backend.finalize` consumes the tusd working file - a rename on the same
+    # filesystem, a copy+unlink across one. It is irreversible. Doing it before
+    # any commit meant a commit failure right after (a DB blip, a lock timeout,
+    # the connection dropping) left the bytes sitting at `locator` while the row
+    # still said `uploading` with `storage_path=NULL`. Nothing could find them
+    # again: the sweeper looks for tusd working files, which are gone;
+    # reclaim_orphaned_files walks `files` rows, which point nowhere. The
+    # uploader's quota stayed charged for bytes no one could serve or delete
+    # (audit 2026-07-30).
+    #
+    # Recording the intent first makes the failure recoverable: the row now
+    # names the locator, so the orphan sweeper has something to act on whichever
+    # side of the move the failure lands.
+    file.storage_path = locator
+    db.flush()
+
     backend.finalize(str(src), locator)
 
     # tusd also writes a sidecar .info - clean it up.
@@ -135,7 +152,6 @@ def finalize_to_disk(
         except OSError:
             pass
 
-    file.storage_path = locator
     file.finalized_at = when
     file.state = FileState.ready_unscanned
     file.tus_upload_id = None

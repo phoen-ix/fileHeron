@@ -89,6 +89,20 @@ def _store_attachment(db: Session, message_id_pk: int, att: ParsedAttachment) ->
         if tmp_name and os.path.exists(tmp_name):
             os.unlink(tmp_name)
         return
+    # The bytes are on the storage backend already and the commit belongs to
+    # run_poll, several layers up. If that commit never lands, the blob is
+    # orphaned: no InboundAttachment row references it, and every sweeper in the
+    # codebase works from DB rows, so nothing can ever find it again
+    # (audit 2026-07-30). Compensate on rollback.
+    from ..database import run_after_rollback
+
+    def _drop_orphan(loc: str = locator) -> None:
+        try:
+            backend.delete(loc)
+        except Exception:
+            logger.warning("inbound: could not drop orphaned attachment blob %s", loc)
+
+    run_after_rollback(db, _drop_orphan)
     db.add(
         InboundAttachment(
             message_id=message_id_pk,

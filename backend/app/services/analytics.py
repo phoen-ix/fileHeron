@@ -26,9 +26,16 @@ from ..models.user import User
 from ..utils.timeutil import utc_now
 from . import quota as quota_svc
 
-# Files that count as "stored" (in-flight + finalized, not deleted). Mirrors
-# quota._used_bytes_query so storage totals match the quota figures.
-_STORED_STATES = [FileState.uploading, FileState.ready_unscanned, FileState.clean]
+# Files that count as "stored" (in-flight + finalized, not deleted). IMPORTED
+# from quota rather than mirrored, so the two cannot drift: the storage totals
+# shown to an admin and the quota charged to a user are the same question and
+# must have one answer.
+from .quota import STORED_STATES as _STORED_STATES
+
+# Rows per round-trip when streaming a day-bucket query. Large enough that the
+# per-chunk overhead is irrelevant, small enough that a 90-day window on a busy
+# instance never holds a meaningful slice of the log in memory.
+_DAILY_CHUNK = 2000
 
 
 def snapshot_storage_today(db: Session) -> AnalyticsSnapshot:
@@ -92,12 +99,25 @@ def _zero_filled(counts: dict[str, int], start: date, days: int) -> list[dict]:
 
 
 def _daily(db, date_col, *filters, start_dt: datetime, tz: ZoneInfo) -> dict[str, int]:
-    # Bucket by the SITE-timezone day, in Python (CONVERT_TZ is MariaDB-only and
-    # would break the SQLite tests), so a 23:30-UTC event lands on the right local
-    # day - every other admin surface renders in site.timezone.
-    rows = db.query(date_col).filter(date_col >= start_dt, *filters).all()
+    """Per-day counts, bucketed by the SITE-timezone day.
+
+    Streamed rather than materialised. This used to `.all()` every matching row
+    to produce ~90 integers, so a busy instance loaded its entire 90-day
+    download_log into the web process - and the admin analytics page is exactly
+    where an instance under load gets looked at (audit 2026-07-30). `yield_per`
+    bounds the resident set to one chunk while keeping the result identical.
+
+    The bucketing stays in Python deliberately, and the finding's suggestion to
+    move it into SQL was tried and reverted. CONVERT_TZ is MariaDB-only, and the
+    portable-looking alternative - shifting the column by a fixed offset and
+    grouping on `func.date(...)` - does not survive SQLite, which has no
+    interval arithmetic and silently does numeric addition on the string
+    instead. The original comment was right about why this lives here; only the
+    memory behaviour was wrong.
+    """
     counts: dict[str, int] = {}
-    for (ts,) in rows:
+    q = db.query(date_col).filter(date_col >= start_dt, *filters)
+    for (ts,) in q.yield_per(_DAILY_CHUNK):
         if ts is None:
             continue
         local = ts.replace(tzinfo=timezone.utc).astimezone(tz).date().isoformat()

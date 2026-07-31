@@ -713,7 +713,7 @@ def approve_share(
         raise AppError(
             409,
             "SHARE_EXPIRY_PASSED",
-            "This share's expiry has already passed - ask the sender to resubmit with a later expiry.",
+            "This share's expiry has already passed - ask the sender to extend it, then approve.",
         )
     now = utc_now()
     result = db.execute(
@@ -959,18 +959,23 @@ def update_share_expiry(
     new_expires_at: datetime | None,
     request=None,
 ) -> Share:
-    """Owner-or-admin extends, shortens, or clears an active share's expiry.
-    Refuses non-active shares (bytes might be gone) or past timestamps
-    (use `expire_share_now` for that). new_expires_at=None clears the
-    field - the share becomes never-expire (v1.1.4).
+    """Owner-or-admin extends, shortens, or clears the expiry of a share that is
+    active or awaiting approval. Refuses terminal states (bytes might be gone)
+    or past timestamps (use `expire_share_now` for that). new_expires_at=None
+    clears the field - the share becomes never-expire (v1.1.4).
     """
     if share.created_by_id != user.id and user.role != UserRole.admin:
         raise AppError(403, "FORBIDDEN", "You cannot edit this share.")
-    if share.state != ShareState.active:
+    # `pending_approval` belongs here. approve_share refuses a share whose
+    # expiry has already passed and tells the approver to ask the sender to
+    # extend it - but this path then refused the sender, because the share is
+    # not active. The instruction and the code disagreed, and the only way out
+    # was to discard the share and rebuild it (audit 2026-07-30).
+    if share.state not in (ShareState.active, ShareState.pending_approval):
         raise AppError(
             409,
             "SHARE_NOT_ACTIVE",
-            "Only active shares can have their expiry changed.",
+            "Only an active or pending-approval share can have its expiry changed.",
         )
     if new_expires_at is not None:
         # Normalise to naive UTC (matches DB convention).
@@ -1080,10 +1085,20 @@ def register_files_added(
     recipients). Caller commits."""
     if share.created_by_id != user.id:
         raise AppError(403, "FORBIDDEN", "Only the share owner can add files.")
-    if share.state != ShareState.active:
+    if share.state not in (ShareState.active, ShareState.pending_approval):
         raise AppError(
-            409, "SHARE_NOT_ACTIVE", "Only active shares can receive files."
+            409,
+            "SHARE_NOT_ACTIVE",
+            "Only an active or pending-approval share can receive files.",
         )
+    # `create_pending` attaches the file to a pending share on purpose - the
+    # owner keeps assembling while it waits for approval - so by the time this
+    # batch-complete signal ran, the files were ALREADY on the share. Refusing
+    # here told the caller the batch had failed while the content had in fact
+    # changed: the SPA reported an error, the owner re-uploaded, and the bytes
+    # and the quota charge doubled, with no share-level audit row recording
+    # either attempt (audit 2026-07-30). Recipients must still not hear about a
+    # share that is not live yet, which the notify guard below handles.
 
     from ..models.file import File
 
@@ -1109,7 +1124,10 @@ def register_files_added(
         request=request,
     )
 
-    if notify and added_count > 0:
+    # Never for a share still awaiting approval: the recipients cannot see it
+    # yet, and telling them files were added to something they have no access
+    # to is both confusing and a disclosure of the share's existence.
+    if notify and added_count > 0 and share.state == ShareState.active:
         from ..models.notification import NotificationCategory
         from . import notification as notif_svc
         from . import site as site_svc

@@ -26,7 +26,6 @@ import pytest
 from app.models.audit_log import AuditEventType
 from app.services import imap_poll
 
-
 # --- flow-inbound-6 ---------------------------------------------------------
 
 

@@ -15,9 +15,12 @@ keep this to what would cause a wrong move if unknown.
 
 ## Status
 
-Backend **`v2.4.0`** (audit mediums - the last remediation wave), desktop client
-**`client-v1.1.0`** - shipped + in production, published for public self-hosting.
-v2.4.0 needs no host step and no migration; v2.3.0 didn't either. (v2.2.0 did:
+Backend **`v2.5.0`** (the 2026-07-30 audit closed out: all 232 remaining
+findings), desktop client **`client-v1.1.0`** - shipped + in production,
+published for public self-hosting. **v2.5.0 needs ONE host step** (compose file
+changed: `docker compose up -d redis backend worker` after the in-app Update -
+Redis maxmemory headroom + dropping operator-only secrets from the app
+containers) and no migration. v2.4.0 and v2.3.0 needed neither. (v2.2.0 did:
 ClamAV 1.5.3 + a worker `/state` mount, plus the `files.av_unscanned` migration -
 so a rollback past v2.2.0 still needs the `alembic stamp` recovery.) **v2.3.0
 adds the `public_links:read` API-token scope**: a token scoped `shares:read` only
@@ -26,6 +29,22 @@ route returns the decrypted plaintext link URL. (README's server/client version
 badges read live from the git tags, so they never need a manual bump; this line
 does - keep it current on release.)
 
+> **v2.5.0 invariants worth knowing before you touch these areas.**
+> The maintenance gate's `Range:` exemption now requires
+> `transfer_activity.was_download_recent(file_id)` - a per-file mark written
+> when a download starts, 30-minute TTL, **fails open** when Redis is down. The
+> download BUDGET exemption is still unguarded, deliberately (a resume after a
+> network switch would be double-charged); the reasoning is in
+> `maintenance.refuse_if_maintenance`. `expire_share_now` and
+> `invalidate_all_active_shares` now RETURN a `to_purge` list and the caller
+> unlinks bytes AFTER committing - never reintroduce a purge inside the
+> transaction. Alembic guards live in `app/db_guards.py` and each op is guarded
+> SEPARATELY (a nested index/NOT-NULL is skipped forever on a retry). The test
+> engine enforces foreign keys: a new test that inserts a child row needs a real
+> parent and often a `db.flush()` between them. The CSP is **Report-Only** with
+> a sink at `/api/telemetry/csp-report`; enforcing it is a deliberate later
+> step, after the reports come back empty.
+>
 > **v2.4.0 invariants worth knowing before you touch these areas.**
 > `share_approval.policy_is_inert` refuses `employees_admins` + `exempt_approvers`
 > with an outbound-only scope - that combination queues nothing at all, so the

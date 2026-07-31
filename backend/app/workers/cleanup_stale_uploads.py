@@ -166,10 +166,18 @@ async def cleanup_stale_uploads(_ctx) -> dict:
         # and the failure was reserved for the flagship 30 GB workload
         # (audit 2026-07-30).
         #
-        # `av_scan_file` now decides oversize BEFORE scanning and releases those
-        # files as `clean` + `av_unscanned` in one pass, on either backend, so
-        # re-enqueueing them terminates. Do not reintroduce a size filter here:
-        # this sweep is the only automated recovery there is.
+        # `av_scan_file` now decides unscannable BEFORE scanning and releases
+        # those files as `clean` + `av_unscanned` in one pass, on either
+        # backend, so re-enqueueing THEM terminates. Do not reintroduce a size
+        # filter here: this sweep is the only automated recovery there is.
+        #
+        # It is not a universal termination proof, and should not be read as
+        # one. A scan that keeps failing the same way - clamd returning `error`,
+        # or a job that exceeds WorkerSettings.job_timeout - still comes back
+        # here next cycle. That is deliberate (the alternative is abandoning a
+        # file with no verdict and no recovery), but it means a persistently
+        # failing scan shows up as repeated work rather than as an alert. The
+        # ops_check / error-log path is what should surface it.
         rescan_cutoff = utc_now() - timedelta(minutes=_RESCAN_STUCK_AFTER_MIN)
         stuck = (
             db.query(File)

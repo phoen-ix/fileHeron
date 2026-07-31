@@ -1,6 +1,6 @@
 # file:Heron v2.7.1
 
-**Two ways a file could become permanently unavailable, and one way a fresh
+**Three ways a file could become permanently unavailable, and one way a fresh
 install trusted an antivirus verdict it never got.** No host step, no migration.
 
 If you self-host and copied `.env.example` at any point since v2.2.0, read the
@@ -84,7 +84,41 @@ reading the same `.env`.
 README now says so, next to the backup command. **Go and check that your `.env`
 is in your password manager or secret store.** That is the whole action.
 
-## Why these three shipped together
+## `AV_MAX_SCAN_BYTES` decides what is *trusted*, never what is *scanned*
+
+Worth stating plainly, because the first version of this release got it wrong
+and an adversarial review caught it before it went out.
+
+There are two different limits and they must stay different:
+
+- **What clamd physically cannot read** (~2 GiB, its own internal clamp). Past
+  this there is no verdict to be had, so the scan is skipped and the file is
+  released flagged. That is the fix described above.
+- **`AV_MAX_SCAN_BYTES`** - the size above which fileHeron stops *believing* a
+  `clean` answer. The file is still scanned. An infection is still quarantined
+  and the share still revoked.
+
+Keying the skip off the tunable would have turned a documented setting into a
+silent antivirus off-switch: `docker/clamav/clamd.conf` invites you to lower it
+to match a memory-constrained scanner, and after that every file above the new
+value would have been served `clean` without clamd ever seeing it. That is now
+impossible by construction, and both halves have tests.
+
+Relatedly, `AV_MAX_SCAN_BYTES=0` was accepted silently - and `0` means
+"unlimited" for several neighbouring settings, so it is a natural thing to type.
+It is floored now, with a warning. `AV_SKIP` remains the one deliberate
+no-antivirus switch, and it still refuses to start in production.
+
+## A slow scan could also loop forever
+
+The job runner's default timeout was 300 seconds and it *cancels* the task,
+while the antivirus socket allows 1800 - a ceiling chosen precisely so a slow
+scan of a large nested archive produces a real verdict. The ceiling was
+unreachable: the job was killed first, the cancellation counted as a retry so
+all five attempts burned back to back, and the recovery sweep re-queued the file
+an hour later to do it again. The socket limit is now the one that fires.
+
+## Why these shipped together
 
 All three are the same failure the 2026-07-30 audit kept finding: a comment, a
 document or a default asserting something the code does not do.
@@ -101,7 +135,9 @@ Each was read many times. None was checked.
 ## Verification
 
 Every fix has a test proven to fail against the previous release - eight of
-them, each failing on the assertion rather than an import. The test that
+them, each failing on the assertion rather than an import - and the three
+corrections that came out of the review were each re-broken afterwards to
+confirm the new tests go red. The test that
 asserted the old exclusion (`oversize excluded (would loop)`) encoded the defect
 and was rewritten to state the real rule.
 

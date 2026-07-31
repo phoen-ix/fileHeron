@@ -15,7 +15,7 @@ import logging
 
 from arq import Retry
 
-from ..config import settings
+from ..config import CLAMD_MAX_FILE_SIZE, settings
 from ..database import SessionLocal
 from ..models.audit_log import AuditEventType
 from ..models.file import File, FileState
@@ -32,16 +32,23 @@ logger = logging.getLogger("fileheron.workers.av_scan")
 _RETRY_MAX_DEFER_SEC = 300
 
 
-def _release_unscanned(db, *, file_id: str, file: File) -> dict:
-    """Release a file clamd cannot scan: `clean` state, `av_unscanned = True`,
-    and a durable audit row saying so.
+def _release_unscanned(db, *, file_id: str, file: File, reason: str) -> dict:
+    """Release a file without a trusted verdict: `clean` state,
+    `av_unscanned = True`, and a durable audit row saying which threshold did it.
 
-    This is the terminal outcome for anything past AV_MAX_SCAN_BYTES, on either
-    storage backend. fileHeron deliberately accepts uploads far larger than
-    anything clamd will read - clamd clamps MaxFileSize to INT_MAX whatever
-    clamd.conf says - so the choice is between serving the file with an honest
-    label and never serving it at all. It is served, and the API, the UI badge
-    and the audit trail all say it was not scanned.
+    Two distinct reasons reach here, and keeping them distinct is the point:
+
+    - `exceeds_clamd_max_file_size` - past `CLAMD_MAX_FILE_SIZE`, the ceiling
+      clamd clamps itself to whatever clamd.conf says. No verdict is obtainable,
+      so the scan is skipped entirely.
+    - `exceeds_av_max_scan_bytes` - clamd WAS asked and answered clean, but the
+      operator's trust threshold says not to record that as a verdict. The scan
+      still happened, so an infected reply would have been quarantined.
+
+    fileHeron deliberately accepts uploads far larger than anything clamd will
+    read, so the choice is between serving the file with an honest label and
+    never serving it at all. It is served, and the API, the UI badge and the
+    audit trail all say it was not scanned.
 
     Terminal matters as much as honest: the previous behaviour on the object
     store left these files at `ready_unscanned` forever, where every download
@@ -73,16 +80,15 @@ def _release_unscanned(db, *, file_id: str, file: File) -> dict:
         metadata={
             "size_bytes": file.size_bytes,
             "av_max_scan_bytes": settings.AV_MAX_SCAN_BYTES,
-            "reason": "exceeds_clamd_max_file_size",
+            "reason": reason,
         },
     )
     db.commit()
     logger.warning(
-        "av_scan: %s is %d bytes, over AV_MAX_SCAN_BYTES (%d); clamd cannot "
-        "scan it - serving as UNSCANNED, not clean",
+        "av_scan: %s (%d bytes) released as UNSCANNED, not clean - %s",
         file_id,
         file.size_bytes or 0,
-        settings.AV_MAX_SCAN_BYTES,
+        reason,
     )
     return {
         "file_id": file_id,
@@ -118,8 +124,16 @@ async def av_scan_file(_ctx, file_id: str) -> dict:
         backend = get_storage_backend()
         local = backend.local_path(file.storage_path)
 
-        # Decide oversize BEFORE scanning. clamd cannot produce a verdict for a
-        # file past its MaxFileSize, and the two backends failed differently on
+        # Decide unscannable BEFORE scanning, against CLAMD_MAX_FILE_SIZE - the
+        # ceiling clamd clamps ITSELF to, not the operator-tunable
+        # AV_MAX_SCAN_BYTES. Keying this skip off the tunable would turn a
+        # documented knob into a silent antivirus off-switch: lowering it (a
+        # small clamd, a slow disk - docker/clamav/clamd.conf invites exactly
+        # that) would stop files above the new value being scanned at all, and
+        # an infected one would be released `clean` instead of quarantined.
+        # The tunable's job is further down, and it is only about TRUST.
+        #
+        # clamd cannot produce a verdict for a file past its MaxFileSize, and the two backends failed differently on
         # it: a path-scan answers a meaningless "OK" (handled below), while
         # INSTREAM answers `error` - which is not a terminal state, so the file
         # sat at ready_unscanned and got re-enqueued forever. Every download of
@@ -139,8 +153,10 @@ async def av_scan_file(_ctx, file_id: str) -> dict:
         # received. Getting here therefore costs a real multi-gigabyte transfer
         # - which is exactly the case where clamd was never going to produce a
         # verdict anyway. Do not relax either check without revisiting this.
-        if (file.size_bytes or 0) > settings.AV_MAX_SCAN_BYTES and not settings.AV_SKIP:
-            return _release_unscanned(db, file_id=file_id, file=file)
+        if (file.size_bytes or 0) > CLAMD_MAX_FILE_SIZE and not settings.AV_SKIP:
+            return _release_unscanned(
+                db, file_id=file_id, file=file, reason="exceeds_clamd_max_file_size"
+            )
         # Both scan paths are BLOCKING socket I/O, and this is an `async def`
         # running on the ARQ worker's single event loop - so a slow scan used to
         # freeze every other job in the process (send_email, webhook_deliver,
@@ -172,15 +188,25 @@ async def av_scan_file(_ctx, file_id: str) -> dict:
             raise Retry(defer=min(_RETRY_MAX_DEFER_SEC, 30 * attempt)) from e
 
         if result.state == "clean":
-            # Defence in depth. The oversize case returns before scanning, so
-            # reaching here with an oversize file means that guard was bypassed
-            # - and a "clean" verdict for a file clamd never read is not
-            # evidence of anything, so it must not be recorded as one.
+            # AV_MAX_SCAN_BYTES is the TRUST threshold, and it is a different
+            # thing from the skip above. clamd was asked and answered; the
+            # question here is whether that answer is worth recording as a
+            # verdict. An operator may legitimately lower this (a small clamd,
+            # a slow disk) - and lowering it must mean "stop believing clean
+            # above this size", never "stop scanning above this size". Making
+            # it a skip threshold would turn a documented tuning knob into a
+            # silent antivirus off-switch: an infected file above the value
+            # would be released `clean` instead of quarantined.
             if (
                 (file.size_bytes or 0) > settings.AV_MAX_SCAN_BYTES
                 and not settings.AV_SKIP
             ):
-                return _release_unscanned(db, file_id=file_id, file=file)
+                return _release_unscanned(
+                    db,
+                    file_id=file_id,
+                    file=file,
+                    reason="exceeds_av_max_scan_bytes",
+                )
             # Conditional flip: a slow scan can run while share expiry commits
             # `deleted` (bytes gone). Only mark clean if the row is still
             # ready_unscanned, else we would resurrect a deleted file whose

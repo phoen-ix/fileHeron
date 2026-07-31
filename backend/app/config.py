@@ -18,6 +18,13 @@ from pydantic_settings import BaseSettings
 # so this is a hard ceiling on what any verdict can be based on - not a tunable.
 CLAMD_MAX_FILE_SIZE = 2147483645
 
+# Floor for AV_MAX_SCAN_BYTES. It is the threshold above which a `clean` verdict
+# stops being trusted - it never controls whether a file is SCANNED, so a low
+# value cannot disable antivirus. It can still make the `unscanned` badge
+# meaningless by applying it to everything, so it is floored at a size no real
+# deployment would set deliberately.
+AV_MIN_SCAN_BYTES = 1024 * 1024
+
 
 class Settings(BaseSettings):
     # --- Environment ---------------------------------------------------------
@@ -304,7 +311,23 @@ class Settings(BaseSettings):
                 stacklevel=2,
             )
             return CLAMD_MAX_FILE_SIZE
-        return max(0, v)
+        if v < AV_MIN_SCAN_BYTES:
+            # Floored, not accepted. This value decides which verdicts are
+            # trusted, and at 0 - which several other settings here use to mean
+            # "unlimited", so it is a natural thing to type - nothing would be.
+            # Every upload would be labelled `av_unscanned` and the badge that
+            # is supposed to mark the rare unscannable file would appear on all
+            # of them, which is the same as marking none of them.
+            warnings.warn(
+                f"AV_MAX_SCAN_BYTES={v} is below the floor "
+                f"({AV_MIN_SCAN_BYTES}); raising it. A value this low would "
+                "flag every upload as unscanned, which conveys nothing. Use "
+                "AV_SKIP for a deliberate no-antivirus deployment - it is "
+                "refused in production on purpose.",
+                stacklevel=2,
+            )
+            return AV_MIN_SCAN_BYTES
+        return v
     # Public-link tunables.
     PUBLIC_LINK_BASE_PATH: str = "/d"
     PUBLIC_LINK_PASSWORD_RATE_LIMIT: int = 10  # max attempts per (link, IP) per window

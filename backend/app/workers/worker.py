@@ -102,3 +102,14 @@ class WorkerSettings:
     # Retry transient AVUnavailableError errors a few times before giving up.
     # Backoff defaults are roughly: 0s, 5s, 25s, 60s … (ARQ's exponential).
     max_tries = 5
+    # ARQ's default job_timeout is 300s, and it cancels the task rather than
+    # letting it finish. `av_scan.SOCKET_TIMEOUT_SEC` is 1800s, chosen so a slow
+    # scan of a large nested archive produces a real verdict - but that ceiling
+    # was unreachable: arq killed the job at 300s first, arq treats the
+    # CancelledError as a retry so all five tries burned back to back, the file
+    # returned to `ready_unscanned`, and the hourly sweep re-enqueued it with
+    # job_try reset - the same file failing the same way forever, which is the
+    # exact loop SOCKET_TIMEOUT_SEC was raised to close. The socket ceiling has
+    # to be the one that fires, so this sits above it with slack for the DB work
+    # either side (audit 2026-07-30 residual sweep).
+    job_timeout = 2100

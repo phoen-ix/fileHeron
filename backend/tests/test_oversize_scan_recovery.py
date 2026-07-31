@@ -31,7 +31,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.config import CLAMD_MAX_FILE_SIZE
+from app.config import CLAMD_MAX_FILE_SIZE, settings
 from app.models.audit_log import AuditEventType, AuditLog
 from app.models.file import File, FileState
 from app.models.share import Share, ShareKind, ShareState
@@ -235,10 +235,110 @@ def test_av_max_scan_bytes_cannot_be_raised_past_what_clamd_reads():
 
 def test_a_lower_limit_is_still_the_operators_to_set():
     """Clamping is a ceiling, not a fixed value - an operator may legitimately
-    want a stricter one."""
+    want a stricter TRUST threshold (a small clamd, a slow disk)."""
     from app.config import Settings
 
-    assert Settings(AV_MAX_SCAN_BYTES=1024).AV_MAX_SCAN_BYTES == 1024
+    assert Settings(AV_MAX_SCAN_BYTES=50_000_000).AV_MAX_SCAN_BYTES == 50_000_000
+
+
+def test_a_lower_limit_does_not_disable_scanning():
+    """The blocker an adversarial review caught before this shipped.
+
+    The first cut keyed the pre-scan skip off `AV_MAX_SCAN_BYTES`. At the
+    default that is a wash, because clamd genuinely cannot read past it - but
+    `docker/clamav/clamd.conf` invites an operator to lower it to match a
+    memory-constrained clamd, and lowering it then meant files above the new
+    value were never handed to clamd at all while still being recorded `clean`.
+    An infected 200 MB upload would have been served to every recipient where
+    the previous code quarantined it and revoked the share.
+
+    The skip is keyed to `CLAMD_MAX_FILE_SIZE` instead. The tunable decides
+    whether a `clean` answer is TRUSTED, never whether the question is asked."""
+    import inspect
+
+    from app.workers import av_scan as av_scan_worker
+
+    src = inspect.getsource(av_scan_worker.av_scan_file)
+    pre_scan = src.split("def _scan()")[0]
+    assert "> CLAMD_MAX_FILE_SIZE" in pre_scan
+    assert "settings.AV_MAX_SCAN_BYTES" not in pre_scan, (
+        "the scan-skip decision is keyed off the operator-tunable trust "
+        "threshold; lowering it would silently disable antivirus"
+    )
+
+
+@pytest.mark.asyncio
+async def test_an_infected_file_above_a_lowered_limit_is_still_quarantined(
+    db, make_user, tmp_path, monkeypatch
+):
+    """The behavioural half. With a lowered trust threshold, a file above it
+    must still be SCANNED - and an infection still quarantined and the share
+    revoked - even though its clean verdict would not have been trusted."""
+    from app.services import av_scan as svc
+    from app.utils.timeutil import utc_now
+
+    monkeypatch.setattr(settings, "AV_MAX_SCAN_BYTES", 1_048_576)
+    owner = make_user(email="lowlimit@test.local", role=UserRole.employee)
+    sh = Share(created_by_id=owner.id, kind=ShareKind.outbound, state=ShareState.active)
+    db.add(sh)
+    db.flush()
+    path = tmp_path / "mal.bin"
+    path.write_bytes(b"X" * 64)
+    f = File(
+        id="00000000-0000-0000-0000-00000000low1",
+        share_id=sh.id,
+        original_filename="mal.bin",
+        mime_type="application/octet-stream",
+        size_bytes=200 * 1024 * 1024,  # above the lowered threshold
+        storage_path=str(path),
+        state=FileState.ready_unscanned,
+        uploaded_by_id=owner.id,
+        finalized_at=utc_now(),
+    )
+    db.add(f)
+    db.flush()
+    db.commit()
+
+    asked: list = []
+
+    def _scan(p):
+        asked.append(p)
+        return svc.ScanResult(state="infected", signature="Eicar-Test", raw="")
+
+    monkeypatch.setattr(svc, "scan_path", _scan)
+
+    result = await av_scan_file({}, f.id)
+    assert asked, "clamd was never asked; a lowered threshold disabled scanning"
+    assert result["state"] == "infected"
+    db.expire_all()
+    assert db.query(File).filter(File.id == f.id).one().state == FileState.infected
+    assert db.query(Share).filter(Share.id == sh.id).one().state == ShareState.revoked
+
+
+def test_the_trust_threshold_cannot_be_set_to_an_av_off_value():
+    """`AV_MAX_SCAN_BYTES=0` was accepted silently, and 0 means "unlimited" for
+    several neighbouring settings, so it is a natural thing to type. It would
+    have flagged every upload as unscanned - a badge on everything conveys the
+    same as a badge on nothing. `AV_SKIP` is the deliberate no-antivirus switch
+    and it fails fast in production; this must not be a quiet second one."""
+    from app.config import AV_MIN_SCAN_BYTES, Settings
+
+    for bad in (0, -1, 5):
+        with pytest.warns(UserWarning, match="below the floor"):
+            assert Settings(AV_MAX_SCAN_BYTES=bad).AV_MAX_SCAN_BYTES == AV_MIN_SCAN_BYTES
+
+
+def test_the_scan_job_may_run_as_long_as_its_socket_allows():
+    """arq's default job_timeout is 300s and it CANCELS the task; the clamd
+    socket ceiling is 1800s, chosen so a slow scan of a big nested archive
+    produces a real verdict. The default made that ceiling unreachable, and arq
+    retries a CancelledError - so all five tries burned, the file returned to
+    ready_unscanned, and the sweep re-enqueued it forever. Exactly the loop the
+    1800s was raised to close."""
+    from app.services.av_scan import SOCKET_TIMEOUT_SEC
+    from app.workers.worker import WorkerSettings
+
+    assert getattr(WorkerSettings, "job_timeout", 300) > SOCKET_TIMEOUT_SEC
 
 
 def test_the_shipped_env_example_is_within_the_ceiling():

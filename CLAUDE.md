@@ -42,7 +42,14 @@ does - keep it current on release.)
 > **before scanning** and calls `_release_unscanned` (clean + `av_unscanned` +
 > a `file_served_unscanned` audit row) - terminal on BOTH backends, because
 > INSTREAM answers `error` for an oversize stream and `error` is not a state
-> flip. That branch skips AV, so it is only safe because `size_bytes` cannot be
+> flip. **The skip is keyed to `CLAMD_MAX_FILE_SIZE`, never to
+> `AV_MAX_SCAN_BYTES`** - the tunable is a TRUST threshold applied after the
+> verdict, and keying the skip off it turns a documented knob into a silent AV
+> off-switch (an infected file above the value would be released `clean`
+> instead of quarantined). `WorkerSettings.job_timeout` must stay above
+> `av_scan.SOCKET_TIMEOUT_SEC`: arq's 300s default cancelled slow scans before
+> the socket ceiling could fire, and arq retries a CancelledError, so the file
+> looped through the sweep forever. That branch skips AV, so it is only safe because `size_bytes` cannot be
 > claimed (tus pre-finish forces final == authorised size; direct upload records
 > what it received) - don't relax either check. **`cleanup_stale_uploads` must
 > keep NO size filter**: it is the only automated rescan there is, and excluding

@@ -44,10 +44,13 @@ until "rotated=0 skipped=N already-rotated".
 
 SAFETY
 ------
-- Each table is rewritten in its own transaction. Crash mid-table
-  leaves that table partially rotated; re-run cleans up. No row is
-  left in an unreadable state - every row is either OLD-key or NEW-key
-  encrypted, never half.
+- The WHOLE rotation is one transaction: every table is rewritten and a
+  single commit lands at the end (or a single rollback on error). The
+  text here used to claim a transaction per table, which would have
+  meant something quite different to an operator deciding whether it is
+  safe to interrupt (audit 2026-07-30).
+- Nothing is left half-encrypted either way: a row is either OLD-key or
+  NEW-key, so an aborted run re-runs cleanly against the same pair.
 - ``--dry-run`` performs all the decrypt+re-encrypt work in memory but
   rolls back. Verify the row counts before committing.
 """

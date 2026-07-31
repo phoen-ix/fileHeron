@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 
@@ -16,7 +16,7 @@ const auth = useAuthStore()
 const router = useRouter()
 const route = useRoute()
 const { describe } = useApiError()
-const { t } = useI18n()
+const { t, te } = useI18n()
 
 type Mode = 'creds' | 'code'
 
@@ -49,6 +49,18 @@ function onProviderClick(p: PublicProvider) {
 watch(mode, async (m) => {
   await nextTick()
   if (m === 'code') codeInputRef.value?.focus()
+})
+
+// A failed SSO callback redirects here with ?oidc_error=CODE. Before that the
+// backend answered the IdP's browser redirect with a raw JSON error body on an
+// /api/ URL: no nav, no retry, and for OIDC_NO_ACCOUNT - the expected outcome
+// for anyone without an invite - no explanation either.
+onMounted(() => {
+  const failed = route.query.oidc_error
+  if (typeof failed !== 'string' || !failed) return
+  const key = `errors.${failed}`
+  error.value = te(key) ? t(key) : t('errors.generic')
+  void router.replace({ path: route.path, query: {} })
 })
 
 const submitLabel = computed(() => (submitting.value ? 'login.submitting' : 'login.submit'))

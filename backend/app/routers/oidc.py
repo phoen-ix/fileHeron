@@ -78,6 +78,21 @@ async def start(
     return response
 
 
+def _error_redirect(db: Session, code: str, *, path: str = "/login") -> RedirectResponse:
+    """Send a failed callback back into the SPA with the error code.
+
+    This route is reached by the IdP redirecting a BROWSER, so an AppError left
+    the user staring at a raw JSON error body on an /api/ URL with no way back
+    - no nav, no retry, and (for OIDC_NO_ACCOUNT, the expected outcome for
+    anyone without an invite) no explanation. 302 back to the SPA and let it
+    render the message it already has translations for (audit 2026-07-30)."""
+    from ..services import site as site_svc
+
+    return RedirectResponse(
+        url=f"{site_svc.get_site_url(db)}{path}?oidc_error={code}", status_code=302
+    )
+
+
 @router.get("/callback/{provider_id}")
 async def callback(
     provider_id: str,
@@ -86,6 +101,23 @@ async def callback(
     state: str = Query(...),
     fh_oidc_state: str | None = Cookie(default=None),
     db: Session = Depends(get_db),
+) -> RedirectResponse:
+    try:
+        return await _callback_inner(
+            provider_id, request, code, state, fh_oidc_state, db
+        )
+    except AppError as e:
+        logger.info("oidc callback failed provider=%s code=%s", provider_id, e.code)
+        return _error_redirect(db, e.code)
+
+
+async def _callback_inner(
+    provider_id: str,
+    request: Request,
+    code: str,
+    state: str,
+    fh_oidc_state: str | None,
+    db: Session,
 ) -> RedirectResponse:
     provider = oidc_admin_svc.get_enabled_provider(db, provider_id)
 

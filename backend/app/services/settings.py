@@ -106,12 +106,12 @@ class Keys:
     EMAIL_CHANGE_VERIFICATION_MODE = "email_change.verification_mode"
     EMAIL_CHANGE_SELF_SERVICE = "email_change.self_service"  # boolean
     EMAIL_CHANGE_OIDC_MODE = "email_change.oidc_mode"
-    # Phase 5 self-update: configurable update-check. URL is the full
-    # GitHub-compatible releases endpoint a fork operator can repoint
-    # at their own repo; mode is 'auto' (poll once every 24h) or
-    # 'manual' (only when admin clicks Check now).
+    # Phase 5 self-update: the full GitHub-compatible releases endpoint a fork
+    # operator can repoint at their own repo. Cadence lives in the cron
+    # scheduler (`cron.release_check.*`) since v1.28.0; the `updates.check_mode`
+    # key that used to hold it was left behind with nothing reading it, and its
+    # documentation outlived the code by four releases (audit 2026-07-30).
     UPDATES_API_URL = "updates.api_url"        # plain string
-    UPDATES_CHECK_MODE = "updates.check_mode"  # 'auto' | 'manual'
     # Inbound mailbox / IMAP fetch (v1.27.0). Admin-editable; password is the
     # only encrypted field (mirrors SMTP). Read via services/imap_config.py.
     IMAP_ENABLED = "imap.enabled"              # boolean master switch (default false)

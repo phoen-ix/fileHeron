@@ -7,11 +7,12 @@ per-admin overridable) when a new release is first detected.
 - URL: kv `updates.api_url` (default = upstream phoen-ix/fileHeron).
   Forks repoint at their own repo's `/releases` (list) or
   `/releases/latest` (single) - the auto-detect below handles both.
-- Cadence: kv `updates.check_mode` ∈ {auto, manual}. In `auto` the
-  cron does a real check at most once per 24h; in `manual` the cron
-  skips entirely and only the on-demand button works.
-- The cron stays fired hourly by ARQ; the guards live inside the
-  cron body so we don't have to dynamically reschedule.
+- Cadence: owned by the cron scheduler
+  (`services/cron_schedule.py`, job `release_check`) since v1.28.0.
+  There is no check-mode setting and no 24h skip guard in here; the
+  docstring described both long after they were removed, and the
+  `updates.check_mode` key survived with nothing reading it (audit
+  2026-07-30).
 
 v1.1.8: the default URL points at the list endpoint (not /latest) and
 we filter for tags matching ``^v\\d+\\.\\d+\\.\\d+`` so the desktop
@@ -53,9 +54,15 @@ _BODY_MAX_BYTES = 8192
 # workflow fires on ``v*``). The desktop client tags as
 # ``client-vX.Y.Z``. Without this filter GitHub's "latest" was almost
 # always a client release because the client publishes far more often.
-# Uses ``re.match`` (not fullmatch) so suffixes like ``v1.1.7-rc1``
-# or ``v1.1.7+build42`` still pass.
-_BACKEND_TAG_RE = re.compile(r"^v\d+\.\d+\.\d+")
+#
+# EXACT match, and exported: the update endpoint validates `target_tag` against
+# this same pattern before it reaches `docker pull`. While this used
+# ``re.match`` it surfaced suffixed tags like ``v1.2.3-rc1`` as an available
+# update that the endpoint then refused with an opaque 422 - an update banner
+# whose button could not work (audit 2026-07-30, flow-selfupdate-7). One
+# constant, both places.
+RELEASE_TAG_RE = re.compile(r"v\d+\.\d+\.\d+")
+_BACKEND_TAG_RE = RELEASE_TAG_RE
 
 
 class CacheKeys:
@@ -103,8 +110,9 @@ async def _fetch_releases(url: str):
 
 
 def _select_backend_release(payload) -> dict | None:
-    """Return the first release object whose ``tag_name`` matches the
-    backend tag pattern (``vX.Y.Z[…]``), or None.
+    """Return the first release object whose ``tag_name`` is exactly a backend
+    release tag (``vX.Y.Z``) and which is neither a draft nor a prerelease,
+    or None.
 
     Handles both response shapes - list (the new default URL) and
     single object (legacy /releases/latest overrides). The list path
@@ -115,8 +123,13 @@ def _select_backend_release(payload) -> dict | None:
         if not isinstance(entry, dict):
             continue
         tag = entry.get("tag_name")
-        if isinstance(tag, str) and _BACKEND_TAG_RE.match(tag):
-            return entry
+        if not isinstance(tag, str) or not RELEASE_TAG_RE.fullmatch(tag):
+            continue
+        if entry.get("prerelease") or entry.get("draft"):
+            # Never offer an unfinished release as THE update: the button
+            # pulls images and restarts the stack.
+            continue
+        return entry
     return None
 
 
@@ -232,9 +245,9 @@ async def run_check(db: Session, *, manual: bool) -> dict:
         # No vX.Y.Z tag in the response - either the repo has only
         # client-v* tags currently (early in a fresh-fork's lifetime)
         # or per_page=30 doesn't reach back far enough. Cache the
-        # error so the UI shows something, leave latest_version alone
-        # (don't overwrite a previously-good cached version), and
-        # _too_soon won't advance - the next hourly tick retries.
+        # error so the UI shows something and leave latest_version alone
+        # (don't overwrite a previously-good cached version); the next
+        # scheduled tick retries.
         msg = "no backend release (vX.Y.Z) in GitHub response"
         logger.warning("release_check: %s", msg)
         _write_cache(

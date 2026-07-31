@@ -13,7 +13,7 @@ import { getPublicConfig, type PublicProvider } from '@/api/oidc'
 import { useApiError } from '@/composables/useApiError'
 import { useUiStore } from '@/stores/ui'
 
-const { t } = useI18n()
+const { t, te } = useI18n()
 const { describe } = useApiError()
 const ui = useUiStore()
 const route = useRoute()
@@ -78,6 +78,15 @@ onMounted(async () => {
   // to /account?oidc_connected=1. Surface a toast and clean the URL.
   if (route.query.oidc_connected === '1') {
     ui.pushToast(t('account_oidc.connected_toast'), 'success')
+    void router.replace({ path: route.path, query: {} })
+  }
+  // ...and to /account?oidc_error=CODE when it failed. Before this the
+  // backend answered a browser redirect with a raw JSON error body on an
+  // /api/ URL - no nav, no retry, no explanation.
+  const failed = route.query.oidc_error
+  if (typeof failed === 'string' && failed) {
+    const key = `errors.${failed}`
+    errorMsg.value = te(key) ? t(key) : t('errors.generic')
     void router.replace({ path: route.path, query: {} })
   }
 })

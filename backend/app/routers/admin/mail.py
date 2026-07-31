@@ -240,6 +240,21 @@ async def resend_mail(
             "at rest (or it was a test/dev entry).",
         )
 
+    # The manage-subscriptions footer is redacted at rest but resend stays
+    # allowed for it (the token only governs notification prefs). Re-sending the
+    # stored body therefore delivered a live email whose "Manage subscriptions"
+    # link read /manage-notifications/<redacted> - a dead link presented as a
+    # working one. Mint a fresh token for the outgoing copy; the stored row
+    # keeps the redacted form (audit 2026-07-30).
+    from ...services import mail_log as mail_log_svc
+
+    out_text = mail_log_svc.remint_footer(
+        orig.body_text, user_id=orig.recipient_user_id
+    )
+    out_html = mail_log_svc.remint_footer(
+        orig.body_html, user_id=orig.recipient_user_id
+    )
+
     new_row = EmailLog(
         recipient_email=orig.recipient_email,
         recipient_user_id=orig.recipient_user_id,
@@ -274,8 +289,8 @@ async def resend_mail(
         "send_email_job",
         to=new_row.recipient_email,
         subject=new_row.subject,
-        text_body=new_row.body_text or "",
-        html_body=new_row.body_html,
+        text_body=out_text or "",
+        html_body=out_html,
         email_log_id=new_row.id,
     )
     return AdminMailResendResponse(ok=True, new_log_id=new_row.id)

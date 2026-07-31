@@ -41,6 +41,9 @@ _REDACTED = r"\1<redacted>"
 # browsable mail log (audit L9/L28). Masked separately so it does NOT disable
 # resend the way an account-takeover token does.
 _FOOTER_LINK_RE = re.compile(r"(/manage-notifications/)([A-Za-z0-9._~\-]+)")
+_REDACTED_MARKER = "<redacted>"
+# The redacted form, for putting a live token back on resend.
+_FOOTER_REDACTED_RE = re.compile(r"(/manage-notifications/)<redacted>")
 
 # Categories whose emails always carry a one-time token - RESEND is hard-disabled
 # on these even if a future template tweak moves the token out of regex reach.
@@ -95,6 +98,29 @@ def _mask_footer(text: str | None) -> str | None:
         return _FOOTER_LINK_RE.sub(_REDACTED, text)
     except Exception:
         return text
+
+
+def remint_footer(text: str | None, *, user_id: int | None) -> str | None:
+    """Replace a redacted manage-notifications link with a freshly issued one.
+
+    Resend is deliberately allowed for footer-redacted rows - the footer token
+    only governs notification preferences. But it re-sent the STORED body, so
+    the recipient received a mail whose "Manage subscriptions" link pointed at
+    `/manage-notifications/<redacted>` - a dead link presented as a working one
+    (audit 2026-07-30). If we cannot mint a replacement (no known recipient),
+    drop the anchor's href rather than ship the placeholder.
+    """
+    if not text or _REDACTED_MARKER not in text:
+        return text
+    if user_id is None:
+        return _FOOTER_REDACTED_RE.sub(r"\1", text)
+    try:
+        from . import unsubscribe_token
+        token = unsubscribe_token.issue(user_id)
+    except Exception:
+        logger.exception("mail_log: could not re-mint manage link")
+        return _FOOTER_REDACTED_RE.sub(r"\1", text)
+    return _FOOTER_REDACTED_RE.sub(lambda m: f"{m.group(1)}{token}", text)
 
 
 def record_queued(

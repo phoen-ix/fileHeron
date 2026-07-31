@@ -279,8 +279,9 @@ async def test_success_advances_both_timers(db, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_manual_run_bypasses_both_guards(db, monkeypatch):
-    """`run_check(manual=True)` ignores mode and the 24h guard."""
+async def test_manual_run_always_fetches(db, monkeypatch):
+    """Cadence moved to the cron scheduler in v1.28.0; run_check has had no
+    mode gate and no 24h guard since, whatever its docstring said."""
     called = {"n": 0}
 
     class _Stub:
@@ -302,9 +303,6 @@ async def test_manual_run_bypasses_both_guards(db, monkeypatch):
             )
 
     monkeypatch.setattr(rc.httpx, "AsyncClient", lambda **_kw: _Stub())
-    settings_svc.set_value(
-        db, key=settings_svc.Keys.UPDATES_CHECK_MODE, value="manual", actor=None
-    )
     from datetime import datetime, timezone
     settings_svc.set_value(
         db,

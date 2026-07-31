@@ -167,6 +167,32 @@ async def connect_callback(
     fh_oidc_connect_state: str | None = Cookie(default=None),
     db: Session = Depends(get_db),
 ) -> RedirectResponse:
+    """Browser-facing: the IdP redirects the user here, so a failure must land
+    back in the SPA rather than on a raw JSON body at an /api/ URL with no way
+    back (audit 2026-07-30). The account view already renders `oidc_error`."""
+    try:
+        return await _connect_callback_inner(
+            provider_id, request, code, state, fh_oidc_connect_state, db
+        )
+    except AppError as e:
+        logger.info(
+            "oidc connect callback failed provider=%s code=%s", provider_id, e.code
+        )
+        from ..services import site as site_svc
+        return RedirectResponse(
+            url=f"{site_svc.get_site_url(db)}/account?oidc_error={e.code}",
+            status_code=302,
+        )
+
+
+async def _connect_callback_inner(
+    provider_id: str,
+    request: Request,
+    code: str,
+    state: str,
+    fh_oidc_connect_state: str | None,
+    db: Session,
+) -> RedirectResponse:
     # No Bearer here (IdP browser redirect carries only cookies). The actor is the
     # user_id inside the HMAC-signed state cookie - _unpack rejects a forged one.
     cookie_state, cookie_provider_id, cookie_user_id, cookie_nonce = _unpack(

@@ -15,7 +15,6 @@ Read-only. No mutating endpoints - the cron_tracker writes the rows.
 """
 from __future__ import annotations
 
-import re
 from datetime import timedelta
 
 from fastapi import APIRouter, Depends, Header, Query, Request
@@ -336,12 +335,16 @@ class UpdateApplyRequest(BaseModel):
     @classmethod
     def _validate_target_tag(cls, v: str | None) -> str | None:
         # The tag flows into `docker pull ghcr.io/.../*:<tag>` and the FH_TAG
-        # env on the host, so constrain it to the exact release-tag shape the
-        # release-check surfaces (^v\d+\.\d+\.\d+) - no shell metacharacters,
-        # no `latest`, no arbitrary ref (audit L22/L25).
+        # env on the host, so constrain it to the exact release-tag shape - no
+        # shell metacharacters, no `latest`, no arbitrary ref (audit L22/L25).
+        # The pattern is release_check's own constant: while the two were
+        # written separately, release-check surfaced suffixed tags this
+        # rejected, so the update banner offered a version whose button 422'd
+        # (audit 2026-07-30).
         if v is None:
             return v
-        if not re.fullmatch(r"v\d+\.\d+\.\d+", v):
+        from ...services.release_check import RELEASE_TAG_RE
+        if not RELEASE_TAG_RE.fullmatch(v):
             raise ValueError("target_tag must be a release tag like v1.2.3")
         return v
 

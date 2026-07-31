@@ -10,9 +10,12 @@ be audited in one place and unit-tested.
   query against ``users.email`` / ``invite_tokens.email``.
 - hmac_sign(payload, secret): used for tusd metadata signing (Phase 3a).
 - encrypt_totp_secret / decrypt_totp_secret: Fernet (AES-128 CBC + HMAC) under
-  a key HKDF-derived from JWT_SECRET. Rotation: change JWT_SECRET + run a one-
-  shot re-encrypt script (Phase 1b's TOTP secrets are stored encrypted at rest;
-  rotation script lives at scripts/rotate_totp_key.py).
+  a key HKDF-derived from JWT_SECRET. Rotation: change JWT_SECRET + run
+  ``backend/scripts/rotate_jwt_secret.py``, which re-encrypts ALL FIVE Fernet
+  columns (TOTP secrets, OIDC client secrets, SMTP/IMAP passwords in
+  app_settings, public-link tokens, webhook signing secrets) - not just TOTP.
+  The path named here used to be scripts/rotate_totp_key.py, which has never
+  existed (audit 2026-07-30).
 - new_recovery_code(): 8-char alphanumeric recovery code, "K7XQ-2L9P" style.
 """
 from __future__ import annotations
@@ -66,7 +69,7 @@ def sha256_hex(s: str) -> str:
 
 
 def refresh_token_hash(token_plain: str) -> str:
-    """SHA-256 of refresh token. Tokens are 64 raw bytes (43 chars b64url) of
+    """SHA-256 of refresh token. Tokens are 64 raw bytes (86 chars b64url) of
     crypto-random data; SHA-256 is sufficient and avoids Argon2 cost on every
     refresh."""
     return sha256_hex(token_plain)

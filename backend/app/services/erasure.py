@@ -425,6 +425,38 @@ def erase_user(
     )
     pii_purged["group_members"] = pii_purged_group_members
 
+    # audit_log rows are retained, but two event types carry the person's
+    # plaintext addresses in their metadata, so the note below - "references the
+    # user by anonymised id" - was never true of them. /admin/audit and its CSV
+    # export handed back an erased subject's real addresses indefinitely, after
+    # an erasure that issued a signed receipt saying otherwise. Keep the events,
+    # drop the addresses. This runs AFTER `prior_emails` has been read off these
+    # same rows, which is what makes the email-keyed purges above complete
+    # (audit 2026-07-30).
+    scrubbed = 0
+    for row in (
+        db.query(AuditLog)
+        .filter(
+            AuditLog.event_type.in_(
+                (
+                    AuditEventType.email_changed.value,
+                    AuditEventType.email_change_requested.value,
+                )
+            ),
+            AuditLog.target_id == str(target.id),
+        )
+        .all()
+    ):
+        extra = dict(row.extra or {})
+        present = [k for k in ("old_email", "new_email") if k in extra]
+        if not present:
+            continue
+        for k in present:
+            extra[k] = "[erased]"
+        row.extra = extra
+        scrubbed += 1
+    pii_purged["audit_log_scrubbed"] = scrubbed
+
     # Deliberately retained: `share_recipients` rows reference the (now
     # anonymised) user by integer FK only - no plaintext PII - so the
     # sender's recipient list stays intact. `audit_log` is the append-only

@@ -1,9 +1,15 @@
 """Test fixtures.
 
-Tests deliberately avoid importing the ``ui`` package - that would
-pull in PySide6, which we don't want as a hard test dep. Pytest
-discovers modules under ``tests/`` only, so as long as we don't
-``import fileheron_client.ui`` here we're fine.
+Tests deliberately avoid importing the ``ui`` package at module scope: that
+pulls in CustomTkinter, hence tkinter, which CI runners do not have - the UI
+tests are AST/structural for exactly this reason. Pytest discovers modules under
+``tests/`` only, so as long as we don't ``import fileheron_client.ui`` here we
+are fine.
+
+(This said "PySide6" until the 2026-07-30 audit. The client has never shipped
+Qt; the toolkit decision was CustomTkinter from the first commit, and a wrong
+framework name in the file that explains WHY the tests are shaped this way is
+how someone concludes the constraint no longer applies.)
 """
 from __future__ import annotations
 

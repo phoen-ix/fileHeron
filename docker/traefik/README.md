@@ -159,8 +159,11 @@ http:
         contentTypeNosniff: true
         frameDeny: true
         referrerPolicy: "strict-origin-when-cross-origin"
-        # Forward the original scheme so the backend can correctly
-        # decide whether to issue Secure cookies.
+        # Forward the original scheme. NOT for cookies - the backend never
+        # reads this header for that (see point 2 above; COOKIE_SECURE decides).
+        # It matters for tusd: nginx maps it into $fh_proto and tusd builds its
+        # upload Location from it, so dropping it makes TUS PATCH redirect
+        # http->https mid-upload (audit 2026-07-30, docs-14).
         customRequestHeaders:
           X-Forwarded-Proto: "https"
 

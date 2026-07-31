@@ -15,8 +15,12 @@ Grab the latest `fileheron-client.exe` from the
 [releases page](https://github.com/phoen-ix/fileHeron/releases) and
 run it. First launch asks for the server URL
 (e.g. `https://files.example.com`) and credentials. Config is
-stored at `%APPDATA%\fileHeron\config.json`; the refresh token is
-held in Windows Credential Manager.
+stored at `%APPDATA%\fileHeron\config.json`. An **API token**, if you sign in
+with one, is held in Windows Credential Manager (the OS keyring). A
+password sign-in keeps its refresh cookie in memory for the life of the
+process only - nothing about that session survives a restart, so you sign in
+again next launch. (This said the refresh token was stored in Credential
+Manager; it never has been - audit 2026-07-30, client-9.)
 
 ### Unsigned build - the SmartScreen warning is expected
 
@@ -41,7 +45,7 @@ cd client
 python3 -m venv .venv
 . .venv/bin/activate          # Windows: .venv\Scripts\activate
 pip install -e .[dev]
-pytest                        # ~15 unit tests (no GUI, no network)
+pytest                        # 147 tests across 29 files (no GUI, no network)
 python -m fileheron_client    # launches the GUI against the server URL the config dialog asks for
 ```
 

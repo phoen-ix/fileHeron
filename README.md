@@ -63,7 +63,7 @@ done
 docker compose up -d       # binds everything to 127.0.0.1; add a Traefik route on the host
 ```
 
-**Development** (auto-reload + HMR + DB exposed on `127.0.0.1:3306`):
+**Development** (auto-reload + HMR + DB exposed on `127.0.0.1:3307`, override with `DB_EXTERNAL_PORT`):
 
 ```bash
 cp .env.example .env       # required - the base compose fail-fasts on the secrets
@@ -330,9 +330,9 @@ always pass.
 | Share approval | `/admin/settings/share-approval` | The four-eyes workflow (who approves, which shares, content review, self-approval). |
 | Email-change policy | `/admin/settings/email-change` | Whether users may change their own sign-in email and the verification mode (`immediate` / `verify_new` / `verify_both`) + what happens to an OIDC binding on change. |
 | Branding & legal | `/admin/settings/branding` | Logo (magic-byte-validated; per-surface toggles), optional logo link, and the imprint/privacy pages (per-language ProseMirror, nh3-sanitised). |
-| Site | `/admin/settings/site` | Site URL (overrides `APP_URL` for links) + IANA timezone (drives 24-h timestamps). |
-| Quarantine / Home / MOTD / Share defaults / File preview | `/admin/settings/{quarantine,home-page,motd,share-defaults,general}` | Single-knob toggles (also grouped on **General**). |
-| Self-update | `/admin/settings/updates` | Releases API URL (forks repoint it) + `auto` (24-h poll) vs `manual`. |
+| Site | `/admin/settings/general` | Site URL (overrides `APP_URL` for links) + IANA timezone (drives 24-h timestamps). A section of **General**, not its own route. |
+| Quarantine / Home / MOTD / Share defaults / File preview | `/admin/settings/quarantine`, `/admin/settings/home-page`, and sections of `/admin/settings/general` | Single-knob toggles. MOTD and share defaults are sections of **General**, not routes of their own. |
+| Self-update | `/admin/settings/general` | Releases API URL (forks repoint it). A section of **General**; the poll cadence lives on [Scheduled tasks](#scheduled-tasks-adminscheduled-tasks), not here. |
 | Maintenance mode | `/admin/settings/maintenance` | Pause **new** transfers (in-progress + resumable ones finish); standalone or via drain-before-update. |
 | Configuration backup | `/admin/settings/backup` | Export/import settings/branding/OIDC/webhooks/groups/users (+ optional logs) to one `*.fhbackup.json`; three secret modes (passphrase / ciphertext / exclude). Files excluded; import invalidates active shares + revokes sessions. |
 | Advanced | `/admin/settings/advanced` | The **registry overlay**: ~40 env-default knobs (session cap, token TTLs, rate-limit + lockout, public-link lockout, all retention windows, upload cap, signed-URL TTL, storage thresholds, **anomaly-detection** thresholds, error-alert cooldown/cap, HIBP, app name) editable **live, clamped to safe bounds**. |
@@ -488,7 +488,8 @@ write `.env` by hand, confirm each of these before going live:
   (see [Backups](#backups)).
 
 The runtime already applies `no-new-privileges`, runs the app services as UID 1000,
-and pins image digests; Argon2id + HIBP guard passwords.
+and pins image TAGS (`FH_TAG`, moved only by the in-app updater - digest pinning is
+not in place); Argon2id + HIBP guard passwords.
 
 ## Storage layout
 
@@ -526,7 +527,7 @@ via `S3_BUCKET` / `S3_REGION` / `S3_ENDPOINT_URL` / `S3_ACCESS_KEY_ID` /
 
 ```bash
 ./scripts/backup.sh
-# → ./backups/<YYYYMMDD-HHMM>/{db.sql, files.tar.gz, quarantine.tar.gz, redis.rdb, manifest.txt}
+# → ./backups/<YYYY-MM-DD_HHMMSS>/{db.sql, files.tar.gz, quarantine.tar.gz, redis.rdb, manifest.txt}
 ```
 
 With `BACKUP_RESTIC_REPO` + `BACKUP_RESTIC_PASSWORD` set, the dated dir is also pushed
@@ -592,7 +593,14 @@ for routine upgrades - it maintains its own rollback state
 
 ## Health checks & metrics
 
-- `GET /api/health` → `{"status":"ok"}` or `{"status":"degraded","degraded":[…]}`; each container has its own Docker healthcheck (`docker compose ps`).
+- `GET /api/health` → `{"status":"ok"}`, or `{"status":"db_unavailable"}` with a 503
+  when the database is unreachable. A Redis or ClamAV outage does NOT change
+  `status` - it adds a `degraded: [...]` field alongside `"status":"ok"`, because
+  the app still serves requests with rate-limit and AV fail-open semantics.
+  **Alert on the presence of `degraded`, not on `status`.** Build identifiers,
+  pool stats and `degraded` are returned only to loopback / compose-network
+  callers; a public caller gets bare liveness.
+  Each container also has its own Docker healthcheck (`docker compose ps`).
 - `GET /api/metrics` - Prometheus exposition, guarded by `METRICS_BEARER_TOKEN` and/or `METRICS_ALLOWED_IPS` (cached `METRICS_CACHE_TTL_SEC`).
 
 ## Background jobs & housekeeping

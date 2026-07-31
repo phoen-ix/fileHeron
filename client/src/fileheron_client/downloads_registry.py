@@ -101,6 +101,26 @@ def upsert(
         _save_unlocked(reg)
 
 
+def set_total(file_id: str, total: int) -> None:
+    """Record the transfer size once it is known.
+
+    `upsert` runs BEFORE the first byte, when the size is not known yet, so
+    every fresh download was registered with total=0 - and a Resume offered
+    after an app restart read that 0 and could show neither a percentage nor a
+    progress bar (audit 2026-07-30, client-5). No-op when nothing changes, so
+    this is safe to call from the progress tick."""
+    if total <= 0:
+        return
+    with _lock:
+        reg = _load_unlocked()
+        row = reg.get(file_id)
+        if row is None or int(row.get("total") or 0) == int(total):
+            return
+        row["total"] = int(total)
+        row["updated_at"] = time.time()
+        _save_unlocked(reg)
+
+
 def set_status(file_id: str, status: str, *, bytes_done: Optional[int] = None) -> None:
     with _lock:
         reg = _load_unlocked()

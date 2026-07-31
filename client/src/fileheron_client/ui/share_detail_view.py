@@ -844,6 +844,9 @@ class ShareDetailView(ctk.CTkFrame):
             if not alive(self) or row is None or not alive(row["bar"]):
                 return  # view/row torn down mid-download (C6)
             row["last"] = (done, total)
+            # The registry row was created before the size was known; without
+            # this a Resume after an app restart has total=0 (client-5).
+            dlreg.set_total(file_id, total)
             if cancel.is_set() or pause.is_set():
                 return  # don't clobber the "Cancelling…/Pausing…" label
             if total > 0:

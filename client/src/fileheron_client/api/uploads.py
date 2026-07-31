@@ -16,6 +16,44 @@ from .client import ApiClient, _envelope_from_response, json_or_raise
 from ..models import DirectUploadResponse, UploadInitResponse
 
 
+class _ProgressReader:
+    """File wrapper that reports how much has been handed to the transport.
+
+    httpx reads the file object in chunks while streaming the multipart body,
+    so counting bytes as they leave is the only way to know progress for a
+    non-resumable upload. Deliberately minimal: httpx needs `read`, and `seek`
+    / `tell` for length detection."""
+
+    def __init__(self, raw, total: int, on_progress: Callable[[int, int], None]):
+        self._raw = raw
+        self._total = total
+        self._sent = 0
+        self._on_progress = on_progress
+
+    def read(self, size: int = -1) -> bytes:
+        chunk = self._raw.read(size)
+        if chunk:
+            self._sent += len(chunk)
+            try:
+                self._on_progress(min(self._sent, self._total), self._total)
+            except Exception:  # a UI callback must never break the upload
+                pass
+        return chunk
+
+    def seek(self, *args, **kwargs):
+        # A retry rewinds the body; the counter has to rewind with it or the
+        # bar would run past 100%.
+        result = self._raw.seek(*args, **kwargs)
+        self._sent = self._raw.tell()
+        return result
+
+    def tell(self) -> int:
+        return self._raw.tell()
+
+    def __iter__(self):
+        return iter(self._raw)
+
+
 def upload_direct(
     api: ApiClient,
     *,
@@ -24,14 +62,21 @@ def upload_direct(
     mime_type: Optional[str] = None,
     on_progress: Optional[Callable[[int, int], None]] = None,
 ) -> DirectUploadResponse:
-    """One-shot multipart upload. ``on_progress`` is called by httpx
-    via the chunked send; for very small files it may fire once.
-    Caller should keep file_path open for the duration of this call.
+    """One-shot multipart upload.
+
+    ``on_progress(sent, total)`` fires as the body is consumed. It used to fire
+    exactly ONCE, after the request returned, with (size, size) - so every
+    direct upload (anything up to 100 MB, i.e. the common case) sat on
+    "Pending" at 0% for its entire duration and then jumped straight to done.
+    On a slow link that is minutes of a UI that looks stuck, next to a
+    resumable upload that reports progress properly (audit 2026-07-30,
+    client-4).
     """
     size = file_path.stat().st_size
     headers = {"Authorization": f"Bearer {api.bearer}"} if api.bearer else {}
     headers["Accept"] = "application/json"
-    with file_path.open("rb") as f:
+    with file_path.open("rb") as raw:
+        f = _ProgressReader(raw, size, on_progress) if on_progress else raw
         files = {
             "file": (
                 file_path.name,

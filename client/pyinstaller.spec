@@ -31,8 +31,15 @@ HERE = Path(SPECPATH).resolve()  # noqa: F821
 # regression would silently ship a .exe that crashes on launch (missing
 # customtkinter theme JSON) or on drag-drop (missing tkinterdnd2 `tkdnd`
 # Tcl lib). collect_all returns (datas, binaries, hiddenimports) and is
-# self-healing across versions; the CI self-check (see client-release.yml)
-# proves the bundle actually launches.
+# self-healing across versions.
+#
+# NOTE: nothing proves the bundle actually launches. This comment used to claim
+# a "CI self-check (see client-release.yml)" did - the workflow says the
+# opposite, in its own note: a runtime `--selfcheck` was tried and removed
+# because a windowed (console=False) PyInstaller binary hangs the runner. The
+# build is verified by the checksum step and by the structural tests, and a
+# launch failure is found by a human running the .exe (audit 2026-07-30,
+# ci-13).
 _ctk_datas, _ctk_bins, _ctk_hidden = collect_all("customtkinter")
 _dnd_datas, _dnd_bins, _dnd_hidden = collect_all("tkinterdnd2")
 

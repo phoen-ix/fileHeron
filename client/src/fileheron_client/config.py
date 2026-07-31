@@ -2,9 +2,15 @@
 
 Config (server URL, last email, etc.) lives in a JSON file under
 the platform-appropriate user-config dir (``%APPDATA%\\fileHeron``
-on Windows, ``~/.config/fileheron`` elsewhere). Secrets (the refresh
-token or an API token) live in the OS keyring so they survive app
-restarts but never end up in a flat file on disk.
+on Windows, ``~/.config/fileheron`` elsewhere).
+
+The only secret persisted here is an **API token**, in the OS keyring, so it
+survives a restart without ever landing in a flat file. A PASSWORD sign-in is
+not persisted at all: its refresh cookie lives in the requests session for the
+life of the process. This module's docstring claimed the refresh token was
+stored in the keyring too - it never has been, and the difference is exactly
+what an operator needs to know to answer "what is on this laptop"
+(audit 2026-07-30, client-9).
 """
 from __future__ import annotations
 

@@ -348,10 +348,22 @@ class SettingsOverlay(ctk.CTkFrame):
         from .. import api as api_pkg
         from ..config import clear_secret
 
-        try:
-            api_pkg.logout(self._api)
-        except Exception:
-            pass
+        # The server-side revoke runs OFF the Tk thread. Called inline it froze
+        # the whole window for the length of an HTTP round-trip - and for the
+        # full httpx timeout when the server was unreachable, which is one of
+        # the times a user most wants to sign out (audit 2026-07-30, client-3).
+        #
+        # Fire-and-forget on purpose: the local teardown below must happen
+        # whether or not the server can be reached, or a laptop that has left
+        # the office keeps its credentials on disk. The server-side session
+        # then expires on its own.
+        api = self._api
+        run_in_background(
+            self._app_root,
+            lambda: api_pkg.logout(api),
+            on_done=lambda _r: None,
+            on_failed=lambda _e: None,
+        )
         clear_secret("refresh", self._api.server_url)
         clear_secret("api_token", self._api.server_url)
         # Remove this overlay first, then hand off to the controller (which

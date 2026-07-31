@@ -260,7 +260,8 @@ Browsable server-error log + (separately) email alerts. Admin: Error log
 
 ## SSO (multi-provider OIDC)
 
-- **Table** `oidc_providers` (UUID PK): preset ∈ entra|google|authentik|keycloak|custom, issuer_url, client_id, `client_secret_encrypted` (Fernet, HKDF over JWT_SECRET), groups_claim, admin/employee_groups, redirect_uri, enabled. **Binding:** `users.oidc_provider_id` + composite unique `(provider_id, oidc_subject)` - each user binds to one provider. Presets in `services/oidc.py::PROVIDER_PRESETS`.
+- **Table** `oidc_providers` (UUID PK): preset ∈ entra|google|authentik|keycloak|custom, issuer_url, client_id, `client_secret_encrypted` (Fernet, HKDF over JWT_SECRET), redirect_uri, enabled. **No group→role mapping:** `groups_claim`/`admin_groups`/`employee_groups` were dropped in v2.x (migration `202607040001_drop_oidc_group_role_fields`); roles are set in fileHeron, never by the IdP. **Binding:** `users.oidc_provider_id` + composite unique `(provider_id, oidc_subject)` - each user binds to one provider. Presets in `services/oidc.py::PROVIDER_PRESETS`.
+- **Roles are local.** An IdP group claim changes nothing: linking binds an identity, it does not grant a role. (This section documented a `groups_claim` + admin/employee group mapping until the 2026-07-30 audit - four releases after the columns were dropped.)
 - **Callbacks:** `handle_callback` (anon login) - `(provider, sub)` match → return; else verified-email match against an **un-linked** local user → link + audit (via=`auto_link`); else `OIDC_NO_ACCOUNT` (403), **no auto-create**. `handle_connect_callback` (authed) refuses `OIDC_ALREADY_LINKED`/`OIDC_EMAIL_MISMATCH`/`OIDC_SUBJECT_TAKEN`.
 - **Verification:** sig + issuer + audience + expiry + nonce (pyjwt); JWKS cached per-provider (`services/jwks.py`). Allowlist `RS256/384/512`, `ES256/384` - **`none` and `HS*` refused** (downgrade defense).
 - DELETE provider refuses `OIDC_PROVIDER_HAS_USERS`. Login UI reads `/api/config-public` providers list.
@@ -269,7 +270,7 @@ Browsable server-error log + (separately) email alerts. Admin: Error log
 
 - **Shell:** `/admin` = `AdminLayout.vue` (sidebar + nested routes), `requireAdmin` meta + `get_current_admin` dependency. Pages + their endpoints are in `routers/admin/*` and README §Admin guide. `Admin` link lives in the user-menu dropdown.
 - **Right-to-erasure** (`services/erasure.py::erase_user`, irreversible): hard-delete the target's files; delete TOTP/recovery/refresh/API tokens; anonymize the row (`email→erased-<id>@erased.invalid`, `display_name→[erased]`, `password_hash→""`, `is_disabled`, `oidc_subject=NULL`); audit `user_erased`. Pre-flight counts + verifiable PDF receipt (reportlab). Self-erasure refused.
-- **Self-service profile:** `PATCH /api/account/{locale,display-name,default-landing-page}`; landing resolution mirrored in `services/account_prefs.py::effective_landing_route`.
+- **Self-service profile:** `PATCH /api/account/{locale,display-name,default-landing-page}`. `services/account_prefs.py` holds only the ALLOWLIST (`ALLOWED_LANDING_ROUTES`); the resolution itself is frontend-side in `composables/useEffectiveLanding.ts`. There is no `effective_landing_route` function - this line named one until the 2026-07-30 audit.
 - **Invites:** `POST /api/account/invite` pre-flights `USER_EXISTS`/`INVITE_PENDING`/`GROUP_NOT_FOUND`; `initial_group_ids` auto-applied on consume.
 
 ### Settings store (`app_settings`)
@@ -342,7 +343,8 @@ ARQ worker (`workers/worker.py::WorkerSettings`), queue `fileheron:default`,
 `max_tries=5`. Schedules are admin-tunable since v1.28.0 via
 `services/cron_schedule.py::REGISTRY` + the minute `cron_dispatch`; all idempotent.
 
-- **Hourly-ish:** `expire_files`, `share_expiring_24h_warning`, `ops_check` (cron+Redis health → `ops_alert`), `cleanup_expired_tokens`, `quota_reconcile`, `cleanup_abandoned_uploads`, `cleanup_stale_uploads`, `release_check` (filter `^v\d+\.\d+\.\d+`), `disk_check`, `anomaly_check`, `rescan_inbound_attachments`.
+- **Hourly-ish:** `expire_files`, `share_expiring_24h_warning`, `ops_check` (cron+Redis health → `ops_alert`), `cleanup_expired_tokens`, `quota_reconcile`, `cleanup_abandoned_uploads`, `cleanup_stale_uploads`, `disk_check`, `anomaly_check`, `rescan_inbound_attachments`.
+- **Daily:** `release_check` (1440-minute interval in `REGISTRY`; filter `^v\d+\.\d+\.\d+`, exact match, drafts and prereleases skipped). It was listed as hourly here, which is what an operator would have believed when deciding how quickly an update surfaces.
 - **Every 5 min:** `imap_poll` (self-gated on `imap.enabled`/mode/interval).
 - **Every minute:** `drain_pending_update` (see Maintenance).
 - **Daily ~02:xx:** `purge_old_quarantine`, `cleanup_pending_invites`, `cleanup_read_notifications`, `prune_history`, `reclaim_orphaned_files`, `analytics_aggregate`.
@@ -458,9 +460,11 @@ workers `imap_poll` + `rescan_inbound_attachments`; admin `/admin/inbox` +
 `Webhook` + `WebhookDelivery`.
 - **`emit` never writes the delivery row** - the caller's transaction is
   uncommitted; the WORKER creates and owns `webhook_deliveries` from the enqueued
-  args. `emit` is best-effort and never raises into the originating action. (It
-  enqueues synchronously though, so a post-emit rollback can still deliver a
-  ghost event - a known report-only edge.)
+  args. `emit` is best-effort and never raises into the originating action.
+  **The ghost-event edge is closed:** `services/audit.py` defers the `emit` call
+  to `run_after_commit`, so a rollback drops it instead of delivering an event
+  for a change that never happened. (This said the edge was open and
+  report-only until the 2026-07-30 audit.)
 - Worker **self-re-enqueues** with backoff `{1:5,2:15,3:30,4:60}`s (max 5), NOT
   ARQ's generic retry (which would lose the row).
 - **SSRF re-validated per delivery attempt** (`utils/net.py::assert_public_http_url`)

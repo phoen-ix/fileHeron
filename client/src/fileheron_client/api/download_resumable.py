@@ -177,10 +177,12 @@ def _run_single(
         if etag:
             req_headers["If-Range"] = etag
 
-    ckpt.write(
-        dest,
-        ckpt.Checkpoint(file_id=file_id, total=total or 0, etag=etag, mode="single"),
-    )
+    # The checkpoint is written AFTER the response headers, not before the
+    # request: when the initial probe fails, `total` here is None, and a
+    # checkpoint recording total=0 can never match the real size on a later
+    # resume - so the partial is discarded and every byte already downloaded is
+    # thrown away, silently (audit 2026-07-30, client-6). The write moved below,
+    # where the response has told us the real total.
     _raise_if_stopped(cancel, pause)
     try:
         # follow_redirects for an S3 backend's 307 -> presigned URL (see download_file).
@@ -206,6 +208,16 @@ def _run_single(
                 resp.read()
                 raise _envelope_from_response(resp)
 
+            # Now the size is known (from Content-Range on a 206 or
+            # Content-Length on a 200), so the checkpoint records something a
+            # resume can actually match.
+            ckpt.write(
+                dest,
+                ckpt.Checkpoint(
+                    file_id=file_id, total=total or 0, etag=etag, mode="single"
+                ),
+            )
+
             done = start_at
             with open(part, write_mode) as out:
                 if write_mode == "r+b":
@@ -217,9 +229,21 @@ def _run_single(
                     if on_progress is not None:
                         on_progress(done, total or done)
     except DownloadPaused:
-        raise  # keep part + checkpoint
+        raise  # keep part + checkpoint - that is what makes Resume work
     except DownloadCancelled:
         ckpt.discard(dest)
+        raise
+    except Exception:
+        # A transport/server failure keeps the partial ONLY if it is actually
+        # resumable. Without this, a download that died before any bytes landed
+        # left a .fhdownload sidecar (and possibly an empty .part) sitting in
+        # the user's Downloads folder forever, next to no file - the app has no
+        # UI that ever mentions it again (audit 2026-07-30, client-7).
+        try:
+            if not part.exists() or part.stat().st_size == 0:
+                ckpt.discard(dest)
+        except OSError:
+            ckpt.discard(dest)
         raise
 
     os.replace(part, dest)

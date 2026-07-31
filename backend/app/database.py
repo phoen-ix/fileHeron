@@ -92,7 +92,7 @@ def _fh_drop_after_commit(session: Session) -> None:
     session.info.pop(_AFTER_COMMIT_KEY, None)
 
 
-def get_db() -> Generator[Session, None, None]:
+def get_db() -> Generator[Session]:
     db = SessionLocal()
     try:
         yield db

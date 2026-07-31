@@ -107,7 +107,7 @@ instead of being sent - handy for dev. Full operator walkthrough: [First install
 
 | Layer | Choice |
 |---|---|
-| Backend | Python 3.12, FastAPI, SQLAlchemy 2.0, Alembic, Pydantic v2, ARQ |
+| Backend | Python 3.14, FastAPI, SQLAlchemy 2.0, Alembic, Pydantic v2, ARQ |
 | Auth / crypto | argon2-cffi (Argon2id), PyJWT, py_webauthn, multi-provider OIDC code flow |
 | Data / cache | MariaDB 11, Redis 7-alpine (ARQ queue, rate limits, quota Lua, SSE pubsub) |
 | Upload | tusd (Go) + Uppy (browser) + any TUS client (API) |

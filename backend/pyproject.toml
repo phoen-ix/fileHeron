@@ -9,7 +9,7 @@ name = "fileheron-backend"
 version = "2.1.0"
 description = "fileHeron backend - bidirectional self-hosted file-sharing platform"
 license = { text = "MIT" }
-requires-python = ">=3.12"
+requires-python = ">=3.14"
 
 dependencies = [
     # NOT `fastapi[standard]`: that extra pulls fastapi-cli -> fastapi-cloud-cli,
@@ -84,7 +84,7 @@ include = ["app*", "scripts*"]
 
 [tool.ruff]
 line-length = 120
-target-version = "py312"
+target-version = "py314"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "N", "UP", "B", "S", "ASYNC", "C4", "SIM"]
@@ -112,7 +112,7 @@ ignore = [
 "tests/**/*.py" = ["S105", "S106", "S107", "S108", "S311", "S608"]
 
 [tool.mypy]
-python_version = "3.12"
+python_version = "3.14"
 strict_optional = true
 warn_unused_ignores = true
 

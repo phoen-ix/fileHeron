@@ -1,5 +1,5 @@
 # Dev image: Vite dev server with HMR, mounted source.
-FROM node:22-alpine
+FROM node:24-alpine
 WORKDIR /app
 
 COPY frontend/package.json frontend/package-lock.json ./

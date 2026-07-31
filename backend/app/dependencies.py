@@ -14,7 +14,7 @@ from .services import rate_limit as rate_limit_svc
 from .services.auth import resolve_user_from_access_token
 
 
-def get_db() -> Generator[Session, None, None]:
+def get_db() -> Generator[Session]:
     db = SessionLocal()
     try:
         yield db

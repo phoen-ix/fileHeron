@@ -150,7 +150,7 @@ operation supersedes); zxcvbn-ts strength meter (HIBP is the real defense).
 
 ## Tech stack (locked decisions)
 
-Python 3.12 + FastAPI + SQLAlchemy 2.0 + Alembic + Pydantic v2 · MariaDB 11 ·
+Python 3.14 + FastAPI + SQLAlchemy 2.0 + Alembic + Pydantic v2 · MariaDB 11 ·
 Redis 7 (ARQ queue, rate limits, quota Lua) · tusd standalone (resumable upload) ·
 Vue 3 + Vite + Pinia + Vue Router + Uppy + axios + dayjs + vue-i18n + vitest.
 

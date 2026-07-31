@@ -104,6 +104,48 @@ def _json_safe(value: Any) -> Any:
     return value
 
 
+_PENDING_EMAIL_JOBS_KEY = "_fh_pending_email_jobs"
+
+
+def _queue_email_job(db: Session, kwargs: dict) -> None:
+    """Hold a `send_email_job` until this session commits, and push the whole
+    batch over ONE Redis connection when it does.
+
+    Registering a separate after-commit thunk per recipient meant a share to
+    twenty people built twenty event loops and twenty ARQ pools, serially, on
+    the request thread while the sender waited for the response (audit
+    2026-07-30, dos-15). The jobs accumulate on the session instead, and a
+    single flush thunk is registered the first time - so the cost is one pool
+    per commit, whatever the recipient count.
+
+    Deliberately still per-recipient before this point: the render, the
+    notification row and the mail-log row stay inline. Moving those behind the
+    queue would change bell latency and would mean a Redis outage produced no
+    rows at all, instead of rows whose sends failed and can be retried."""
+    from ..database import run_after_commit, run_after_rollback
+
+    pending = db.info.get(_PENDING_EMAIL_JOBS_KEY)
+    if pending is None:
+        pending = []
+        db.info[_PENDING_EMAIL_JOBS_KEY] = pending
+
+        def _flush() -> None:
+            # `pop`, not read-then-clear: the hook fires once per commit, and a
+            # second dispatch on the same session after that must start a fresh
+            # batch rather than re-send this one.
+            batch = db.info.pop(_PENDING_EMAIL_JOBS_KEY, [])
+            job_queue.enqueue_many([("send_email_job", (), kw) for kw in batch])
+
+        run_after_commit(db, _flush)
+        # A rollback drops the flush thunk but knows nothing about the batch it
+        # was going to send. Left behind, that batch would be silently adopted
+        # by the NEXT dispatch on this session - which finds a non-None
+        # `pending`, registers no thunk of its own, and so sends the
+        # rolled-back emails on the next commit or never sends its own.
+        run_after_rollback(db, lambda: db.info.pop(_PENDING_EMAIL_JOBS_KEY, None))
+    pending.append(kwargs)
+
+
 def dispatch(
     db: Session,
     *,
@@ -216,18 +258,16 @@ def dispatch(
             # the email with it, and the worker must not pick up the job before
             # the row is durable (audit M8). Deferred via the session's
             # after-commit hook; dropped on rollback.
-            from ..database import run_after_commit
-            run_after_commit(
+            _queue_email_job(
                 db,
-                lambda: job_queue.enqueue(
-                    "send_email_job",
-                    to=email_to,
-                    subject=subject,
-                    text_body=text,
-                    html_body=html,
-                    email_log_id=eid,
-                    list_unsubscribe=list_unsub,
-                ),
+                {
+                    "to": email_to,
+                    "subject": subject,
+                    "text_body": text,
+                    "html_body": html,
+                    "email_log_id": eid,
+                    "list_unsubscribe": list_unsub,
+                },
             )
         except Exception:
             logger.exception(

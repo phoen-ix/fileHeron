@@ -166,10 +166,61 @@ def test_redaction_keeps_enough_to_identify_the_job():
 
 
 def test_no_call_site_still_logs_raw_args():
-    """The two loggers must both route through _redact - fixing one and not the
-    other leaves the leak in the sync path, which is the one uploads use."""
+    """No enqueue logger may render `args`/`kwargs` except through `_redact`.
+
+    This used to assert `src.count("_redact(args, kwargs)") == 2`, which is a
+    proxy for the invariant and not the invariant: it fails when a THIRD logger
+    is added correctly (the batch path, v2.6.0) and would keep passing if
+    someone added a fourth that logged raw values. Stated properly, the rule is
+    about what reaches a log line, so that is what is checked."""
+    import ast
     import inspect
 
     src = inspect.getsource(job_queue)
     assert "%r,%r" not in src, "an enqueue logger still formats raw args"
-    assert src.count("_redact(args, kwargs)") == 2
+
+    secret_bearing = {"args", "kwargs"}
+    log_methods = {"debug", "info", "warning", "error", "exception", "critical"}
+
+    def leaked(node) -> set[str]:
+        """Names this expression would put into a string. `_redact(...)` is the
+        sanctioned exit, so its subtree is pruned rather than walked."""
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "_redact"
+        ):
+            return set()
+        found = set()
+        if isinstance(node, ast.Name) and node.id in secret_bearing:
+            found.add(node.id)
+        for child in ast.iter_child_nodes(node):
+            found |= leaked(child)
+        return found
+
+    tree = ast.parse(src)
+    # `_redact` is the redactor: touching args is its whole job, and the two
+    # tests above assert on what it actually produces. Scanning its body here
+    # would only flag `len(args)` - the arity, which is the safe part.
+    body = [
+        n
+        for n in tree.body
+        if not (isinstance(n, ast.FunctionDef) and n.name == "_redact")
+    ]
+    for node in [x for n in body for x in ast.walk(n)]:
+        # Anything interpolated into a string is a log line waiting to happen.
+        if isinstance(node, ast.JoinedStr):
+            assert not leaked(node), "an f-string interpolates raw enqueue args"
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr in log_methods
+        ):
+            for arg in node.args:
+                assert not leaked(arg), (
+                    f"logger.{node.func.attr} receives raw enqueue args"
+                )
+
+    # And the sanctioned exit must actually be in use - a module that stopped
+    # logging failures altogether would pass everything above.
+    assert "_redact(" in src

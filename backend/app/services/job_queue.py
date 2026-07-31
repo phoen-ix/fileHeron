@@ -15,6 +15,12 @@ closed - cheap because it's a single Redis round-trip. Mixing
 ``asyncio.run`` into an existing event loop raises ``RuntimeError``
 and silently drops the enqueue, so we can't lazily wrap async with
 sync. Hence the dual API.
+
+``enqueue_many(jobs)`` / ``aenqueue_many(jobs)`` exist because "cheap
+because it's a single round-trip" stops being true N times over: a
+fan-out that pushed one job per recipient built and tore down a pool
+per recipient, serially, on the request thread. Use them wherever the
+count scales with anything a user controls.
 """
 from __future__ import annotations
 
@@ -39,6 +45,24 @@ async def aenqueue(name: str, *args: Any, **kwargs: Any) -> None:
     )
     try:
         await pool.enqueue_job(name, *args, _queue_name="fileheron:default", **kwargs)
+    finally:
+        await pool.aclose()
+
+
+async def aenqueue_many(jobs: list[tuple[str, tuple, dict]]) -> None:
+    """Push a batch of jobs over ONE pool, concurrently."""
+    if not jobs:
+        return
+    pool = await create_pool(
+        RedisSettings(host=settings.REDIS_HOST, port=settings.REDIS_PORT)
+    )
+    try:
+        await asyncio.gather(
+            *(
+                pool.enqueue_job(name, *args, _queue_name="fileheron:default", **kwargs)
+                for name, args, kwargs in jobs
+            )
+        )
     finally:
         await pool.aclose()
 
@@ -101,3 +125,47 @@ def enqueue(name: str, *args: Any, **kwargs: Any) -> None:
 
     task = loop.create_task(aenqueue(name, *args, **kwargs))
     task.add_done_callback(_log_task_failure(name, args, kwargs))
+
+
+def enqueue_many(jobs: list[tuple[str, tuple, dict]]) -> None:
+    """Sync-context batch enqueue: one event loop, one Redis pool, N jobs.
+
+    `enqueue` opens and closes a pool per call, which is cheap once and
+    expensive N times. A share to twenty people fanned out twenty
+    `asyncio.run` calls, each building and tearing down its own connection
+    pool, serially, on the request thread while the user waited (audit
+    2026-07-30, dos-15). This is the same work with one connection.
+
+    Same failure posture as `enqueue`: logged, never raised - a missed
+    notification email must not fail the action that produced it. `gather`
+    means one failing push aborts the rest of the batch, which matches the
+    single-job behaviour on a Redis outage (nothing gets through) rather than
+    introducing a partial-success mode nothing downstream expects.
+    """
+    if not jobs:
+        return
+    shape = f"{len(jobs)} jobs: " + ", ".join(
+        f"{name}[{_redact(args, kwargs)}]" for name, args, kwargs in jobs[:3]
+    )
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+
+    if loop is None:
+        try:
+            asyncio.run(aenqueue_many(jobs))
+        except Exception as e:
+            logger.error("failed to enqueue batch [%s]: %s", shape, e)
+        return
+
+    task = loop.create_task(aenqueue_many(jobs))
+
+    def _on_done(t: asyncio.Task) -> None:
+        if t.cancelled():
+            return
+        exc = t.exception()
+        if exc is not None:
+            logger.error("failed to enqueue batch [%s]: %s", shape, exc)
+
+    task.add_done_callback(_on_done)

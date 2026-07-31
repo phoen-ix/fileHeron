@@ -73,14 +73,17 @@ def emit(db: Session, event_type: str, payload: dict) -> int:
     enqueued = 0
     try:
         webhooks = db.query(Webhook).filter(Webhook.active.is_(True)).all()
-        for wh in webhooks:
-            if not _subscribed(wh, event_type):
-                continue
-            try:
-                job_queue.enqueue("webhook_deliver", wh.id, event_type, payload)
-                enqueued += 1
-            except Exception:
-                logger.exception("webhook enqueue failed (webhook=%s)", wh.id)
+        # One pool for the whole fan-out. Per-endpoint enqueue meant one event
+        # loop and one ARQ connection pool per subscribed webhook, built and
+        # torn down serially inside the originating request (audit 2026-07-30,
+        # the same shape as dos-15 on the notification path).
+        jobs = [
+            ("webhook_deliver", (wh.id, event_type, payload), {})
+            for wh in webhooks
+            if _subscribed(wh, event_type)
+        ]
+        job_queue.enqueue_many(jobs)
+        enqueued = len(jobs)
     except Exception:
         # A webhook problem must never break the originating action.
         logger.exception("webhook.emit failed for event=%s", event_type)

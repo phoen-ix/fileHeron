@@ -267,14 +267,29 @@ def _no_op_job_queue(monkeypatch):
     test. Tests that actually want to assert on enqueued jobs (see
     test_notification_dispatch.py + test_quarantine_admin_notify.py)
     re-monkeypatch `app.services.notification.job_queue.enqueue` and
-    that override wins."""
+    that override wins.
+
+    The batch entry points need the same treatment - leaving
+    `enqueue_many` live would let every notification test reach for
+    Redis through the batched fan-out instead. It delegates to
+    `enqueue` rather than no-op'ing, resolved at CALL time, so a test
+    that patches `job_queue.enqueue` to collect jobs sees a batch as
+    its constituent jobs and does not care which path produced them.
+    (`test_enqueue_batching.py` is the exception: it restores the real
+    functions, because the pool count is its whole subject.)"""
     from app.services import job_queue
 
     async def _aenqueue(*_a, **_kw):
         return None
 
+    def _enqueue_many(jobs):
+        for name, args, kwargs in jobs:
+            job_queue.enqueue(name, *args, **kwargs)
+
     monkeypatch.setattr(job_queue, "aenqueue", _aenqueue)
     monkeypatch.setattr(job_queue, "enqueue", lambda *_a, **_kw: None)
+    monkeypatch.setattr(job_queue, "aenqueue_many", _aenqueue)
+    monkeypatch.setattr(job_queue, "enqueue_many", _enqueue_many)
 
 
 @pytest.fixture(autouse=True)

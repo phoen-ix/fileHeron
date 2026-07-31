@@ -37,9 +37,22 @@ log() {
 # the backend's _read_state, and the backend logs a PermissionError
 # traceback every poll tick. chmod *before* rename so there's no
 # window where the file is 0600 and visible.
+#
+# The temp file MUST live in $STATE_DIR. `mktemp` with no argument creates it
+# in the container's own /tmp, and /state is a bind mount - so `mv` was a
+# CROSS-DEVICE move, which degrades to copy-then-unlink and is not atomic. The
+# backend polls this file about once a second during an update, so it could
+# read a half-copied file and fail to parse it (audit 2026-07-30,
+# flow-selfupdate-9). Use shim_mktemp below rather than bare `mktemp`.
 install_state() {
     chmod 0644 "$1"
     mv "$1" "$STATE_FILE"
+}
+
+# A temp file on the SAME filesystem as the state file, so install_state's mv
+# is a rename.
+shim_mktemp() {
+    mktemp "$STATE_DIR/.state.XXXXXX"
 }
 
 log "fileheron-updater-shim starting (poll=${POLL_INTERVAL_SEC}s, ghcr=$GHCR_OWNER, project=$COMPOSE_PROJECT)"
@@ -58,7 +71,7 @@ if [ -f "$STATE_FILE" ]; then
     status=$(jq -r '.status // ""' "$STATE_FILE" 2>/dev/null || echo "")
     if [ "$status" = "pulling" ] || [ "$status" = "running" ] || [ "$status" = "restarting" ] || [ "$status" = "rolling_back" ]; then
         log "found in-flight job (status=$status) on startup - marking failed"
-        tmp=$(mktemp)
+        tmp=$(shim_mktemp)
         jq '. + {status: "failed", error: "shim restarted mid-job", finished_at: now | todate}' \
             "$STATE_FILE" > "$tmp" && install_state "$tmp"
     fi
@@ -78,7 +91,7 @@ while true; do
             action=$(jq -r '.action // "update"' "$STATE_FILE")
             if [ -z "$target_tag" ]; then
                 log "ERROR pending job has no target_tag - marking failed"
-                tmp=$(mktemp)
+                tmp=$(shim_mktemp)
                 jq '. + {status: "failed", error: "missing target_tag", finished_at: now | todate}' \
                     "$STATE_FILE" > "$tmp" && install_state "$tmp"
                 continue
@@ -87,7 +100,7 @@ while true; do
             log "claiming job=$job_id action=$action target_tag=$target_tag"
             # Claim atomically: if another shim instance somehow exists,
             # only one flips status from pending → claiming first.
-            tmp=$(mktemp)
+            tmp=$(shim_mktemp)
             jq --arg now "$(date -u +%Y-%m-%dT%H:%M:%S)" \
                '. + {status: "claiming", claimed_at: $now}' \
                "$STATE_FILE" > "$tmp" && install_state "$tmp"
@@ -100,7 +113,7 @@ while true; do
             log "pulling $executor_image"
             if ! docker pull "$executor_image"; then
                 log "pull failed; marking job failed"
-                tmp=$(mktemp)
+                tmp=$(shim_mktemp)
                 jq --arg err "executor pull failed: $executor_image" \
                    --arg now "$(date -u +%Y-%m-%dT%H:%M:%S)" \
                    '. + {status: "failed", error: $err, finished_at: $now}' \
@@ -142,7 +155,7 @@ while true; do
                 final=$(jq -r '.status // ""' "$STATE_FILE")
                 if [ "$final" != "healthy" ] && [ "$final" != "failed" ] && [ "$final" != "rolled_back" ]; then
                     log "executor exited without terminal status; marking failed"
-                    tmp=$(mktemp)
+                    tmp=$(shim_mktemp)
                     jq --arg err "executor crashed (exit $exit_code) without writing status" \
                        --arg now "$(date -u +%Y-%m-%dT%H:%M:%S)" \
                        '. + {status: "failed", error: $err, finished_at: $now}' \
@@ -161,7 +174,7 @@ while true; do
                 now_epoch=$(date -u +%s)
                 if [ "$started_epoch" -gt 0 ] && [ $((now_epoch - started_epoch)) -gt "$STUCK_THRESHOLD_SEC" ]; then
                     log "job in-flight for > ${STUCK_THRESHOLD_SEC}s - marking failed"
-                    tmp=$(mktemp)
+                    tmp=$(shim_mktemp)
                     jq --arg now "$(date -u +%Y-%m-%dT%H:%M:%S)" \
                        '. + {status: "failed", error: "stuck (no progress)", finished_at: $now}' \
                        "$STATE_FILE" > "$tmp" && install_state "$tmp"

@@ -54,18 +54,37 @@ def read_job() -> dict:
 
 
 def _write_state_text(text: str) -> None:
-    """Write+chmod helper. The state file is read by the backend
-    process (uid 1000 appuser); the executor runs as root. Without an
-    explicit chmod, the file's mode is whatever the previous writer
-    left - and shim writes via mktemp+mv default to 0600, which
-    silently breaks the backend's _read_state on every subsequent
-    poll. Set 0644 on every write so the state file stays readable
-    regardless of who wrote it last."""
-    STATE_FILE.write_text(text)
+    """Atomically replace the state file, mode 0644.
+
+    Mode: the file is read by the BACKEND (uid 1000 appuser) while the executor
+    runs as root, so without an explicit chmod the mode is whatever the last
+    writer left - and a mktemp+mv default of 0600 silently breaks the backend's
+    _read_state on every poll thereafter.
+
+    Atomicity: this used to be a plain `write_text`, which truncates and then
+    writes. The backend polls this file every second or two DURING the update,
+    so it regularly read a half-written file and got a JSONDecodeError - once
+    per log line, which is when the file is rewritten. Writing a sibling temp
+    file and os.replace()ing it makes every read see one complete version or
+    the other (audit 2026-07-30, flow-selfupdate-8). The temp file must be in
+    the SAME directory: /state is a bind mount, and os.replace across
+    filesystems raises."""
+    tmp = STATE_FILE.with_name(f".{STATE_FILE.name}.tmp")
     try:
-        os.chmod(STATE_FILE, 0o644)
+        tmp.write_text(text)
+        os.chmod(tmp, 0o644)
+        os.replace(tmp, STATE_FILE)
     except OSError:
-        pass
+        # Last resort: a non-atomic write beats losing the status entirely.
+        try:
+            tmp.unlink(missing_ok=True)
+        except OSError:
+            pass
+        STATE_FILE.write_text(text)
+        try:
+            os.chmod(STATE_FILE, 0o644)
+        except OSError:
+            pass
 
 
 def write_job_field(**kwargs) -> None:
@@ -195,6 +214,28 @@ def capture_alembic_head() -> str | None:
     log_line(f"captured pre-update alembic head: {rev}" if rev
              else "WARN `alembic current` produced no parseable revision")
     return rev
+
+
+def _write_rollback_file(tag: str, alembic_head: str | None) -> None:
+    """Record the tag a rollback should return to. Same atomic-replace shape as
+    the state file: the backend reads this to decide whether to offer the
+    Rollback control at all."""
+    payload = json.dumps({"tag": tag, "alembic_head": alembic_head})
+    tmp = ROLLBACK_FILE.with_name(f".{ROLLBACK_FILE.name}.tmp")
+    try:
+        tmp.write_text(payload)
+        os.chmod(tmp, 0o644)
+        os.replace(tmp, ROLLBACK_FILE)
+    except OSError:
+        try:
+            tmp.unlink(missing_ok=True)
+        except OSError:
+            pass
+        ROLLBACK_FILE.write_text(payload)
+        try:
+            os.chmod(ROLLBACK_FILE, 0o644)
+        except OSError:
+            pass
 
 
 def _read_rollback_file() -> dict:
@@ -358,16 +399,19 @@ def main() -> int:
     # Persist FH_TAG before up -d so a mid-recreate crash leaves the
     # next `docker compose up` consistent with the requested tag.
     write_current_tag(target_tag)
-    # Record rollback target on update (rolling back doesn't update it),
-    # including the pre-update alembic head so a later rollback can stamp the
-    # DB pointer back across any migration this update applies.
-    if action == "update" and previous_tag != target_tag:
+    # Record where a later rollback should go, including the pre-update alembic
+    # head so it can stamp the DB pointer back across any migration this update
+    # applied.
+    #
+    # A ROLLBACK also has to update it, and used to not: after rolling B -> A
+    # the file still said "roll back to A", so the SPA offered a Rollback button
+    # that would have redeployed the version the operator was already on, while
+    # the version they had just fled (B) was no longer recorded anywhere (audit
+    # 2026-07-30, flow-selfupdate-10). The rollback target after rolling back is
+    # the tag we just left.
+    if previous_tag != target_tag:
         try:
-            ROLLBACK_FILE.write_text(json.dumps({"tag": previous_tag, "alembic_head": previous_head}))
-            try:
-                os.chmod(ROLLBACK_FILE, 0o644)
-            except OSError:
-                pass
+            _write_rollback_file(previous_tag, previous_head)
             log_line(f"rollback target recorded: {previous_tag} (head={previous_head})")
         except Exception as e:
             log_line(f"WARN rollback-target write failed: {e}")

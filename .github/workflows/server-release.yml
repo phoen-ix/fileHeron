@@ -102,10 +102,16 @@ jobs:
           build-args: |
             FH_VERSION=${{ steps.meta.outputs.version }}
             FH_GIT_SHA=${{ steps.meta.outputs.git_sha }}
-          # Cache via GHA's per-repo cache; halves cold-build time on
-          # tag pushes that follow recent main commits.
-          cache-from: type=gha,scope=${{ matrix.image }}
-          cache-to: type=gha,scope=${{ matrix.image }},mode=max
+          # No buildx GHA cache. It was configured as a cold-build accelerator
+          # and could never hit: GitHub Actions caches are scoped by ref, and
+          # NOTHING writes these scopes except this workflow, which only runs on
+          # a tag push. A cache written under refs/tags/v2.4.0 is not visible to
+          # a run under refs/tags/v2.5.0, so every release wrote a mode=max cache
+          # (gigabytes, per image, per release) that no run would ever read -
+          # while evicting the pip and npm caches that DO work, out of the same
+          # 10 GB repo quota (audit 2026-07-30, ci-14). If image-layer caching is
+          # wanted later, the write has to happen on the DEFAULT BRANCH for a tag
+          # build to restore it.
           # Build amd64 only. The host runs amd64; multi-arch ramps the
           # build time without callers asking for it today. Add arm64
           # when a self-hoster requests it.

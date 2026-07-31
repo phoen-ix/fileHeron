@@ -49,11 +49,29 @@ if ! command -v docker >/dev/null 2>&1; then
     exit 1
 fi
 
+# The compose file uses the long-form `env_file:` + `required: false`, added in
+# Compose 2.24. Older v2 releases reject the file outright, so checking only for
+# "compose exists" let the install proceed to a confusing parse error at the
+# first `docker compose up` (audit 2026-07-30, docker-8).
 if ! docker compose version >/dev/null 2>&1; then
     echo "FATAL: docker compose plugin is missing. Install it:" >&2
     echo "  https://docs.docker.com/compose/install/linux/#install-using-the-repository" >&2
     exit 1
 fi
+
+_compose_ver=$(docker compose version --short 2>/dev/null | tr -d 'v')
+if [ -n "$_compose_ver" ]; then
+    _major=${_compose_ver%%.*}
+    _rest=${_compose_ver#*.}
+    _minor=${_rest%%.*}
+    if [ "${_major:-0}" -lt 2 ] || { [ "${_major:-0}" -eq 2 ] && [ "${_minor:-0}" -lt 24 ]; }; then
+        echo "FATAL: Docker Compose >= 2.24 is required (found $_compose_ver)." >&2
+        echo "       docker-compose.yml uses env_file: with required: false," >&2
+        echo "       which older releases reject outright." >&2
+        exit 1
+    fi
+fi
+unset _compose_ver _major _minor _rest
 
 if ! command -v openssl >/dev/null 2>&1; then
     echo "FATAL: openssl is required to generate secrets." >&2

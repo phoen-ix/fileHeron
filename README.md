@@ -370,7 +370,11 @@ Audience: whoever runs the server. Linux host, Docker + Compose, Traefik on the 
 
 ## System requirements
 
-- Linux host with Docker Engine ≥ 24 and Docker Compose v2.
+- Linux host with Docker Engine ≥ 24 and **Docker Compose ≥ 2.24**. The
+  compose file uses the long-form `env_file:` with `required: false`, which
+  older Compose v2 releases reject outright - so "Compose v2" was not a
+  sufficient requirement and an operator on 2.20 met the documented floor and
+  still could not start the stack (audit 2026-07-30).
 - ~2 GB RAM minimum (clamd holds ~1.5 GB of signatures in memory).
 - Disk: ~500 MB for images + signatures + DB; the rest is uploads.
 - Outbound HTTPS for ClamAV `freshclam` updates and HIBP checks.

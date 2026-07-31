@@ -41,10 +41,24 @@ jobs:
           python-version: '3.12'
           cache: pip
           cache-dependency-path: backend/pyproject.toml
-      # [dev] adds pytest/httpx/aiosqlite/moto - CI-only; the runtime image
-      # still installs only [project].dependencies via `pip install .`.
-      - name: Install (with dev extras)
-        run: pip install .[dev]
+      # Install the LOCKED closure first, then the dev extras on top.
+      #
+      # `pip install .[dev]` alone resolves the `>=` ranges fresh from PyPI, so
+      # the suite ran against whatever was newest that morning while the image
+      # ships requirements.lock - two different dependency closures, with the
+      # tested one being the closure that never reaches production (audit
+      # 2026-07-30, deps-8). The lock goes in with hashes; `--no-deps` on the
+      # project install stops pip re-resolving what the lock just pinned; the
+      # dev tools are test-only and stay unpinned apart from ruff, which
+      # pyproject pins deliberately.
+      - name: Install locked runtime deps
+        run: pip install --require-hashes -r requirements.lock
+      - name: Install the project + dev extras
+        run: |
+          pip install --no-deps -e .
+          pip install '.[dev]' --no-deps
+          pip install pytest pytest-asyncio pytest-cov mypy aiosqlite 'moto[s3]' pip-audit
+          pip install "ruff==$(sed -n 's/.*"ruff==\([0-9.]*\)".*/\1/p' pyproject.toml)"
       # pip check guards the declared dependency closure (same gate the
       # backend image build runs).
       - name: pip check

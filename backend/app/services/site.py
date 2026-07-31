@@ -55,6 +55,11 @@ def get_site_timezone(db: Session) -> str:
         return DEFAULT_TIMEZONE
     try:
         ZoneInfo(stored)
-    except ZoneInfoNotFoundError:
+    except (ZoneInfoNotFoundError, ValueError):
+        # An absolute path, an empty segment or a ".." key raises ValueError
+        # rather than ZoneInfoNotFoundError, and this read sits on the anonymous
+        # /api/config-public path the LOGIN PAGE needs - so one malformed
+        # setting took the whole front door down with a 500 instead of falling
+        # back to UTC (audit 2026-07-30).
         return DEFAULT_TIMEZONE
     return stored

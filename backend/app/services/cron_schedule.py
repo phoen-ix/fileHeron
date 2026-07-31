@@ -163,7 +163,10 @@ def _parse_hhmm(value: str) -> tuple[int, int]:
 def _zone(tz_name: str) -> ZoneInfo:
     try:
         return ZoneInfo(tz_name or "UTC")
-    except ZoneInfoNotFoundError:
+    except (ZoneInfoNotFoundError, ValueError):
+        # Same widening as services/site.py: a path-shaped key raises
+        # ValueError, and here it would kill the whole cron dispatcher rather
+        # than one job.
         return ZoneInfo("UTC")
 
 

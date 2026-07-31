@@ -14,7 +14,16 @@ import enum
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import JSON, BigInteger, Boolean, DateTime, ForeignKey, Integer, String
+from sqlalchemy import (
+    JSON,
+    BigInteger,
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    UniqueConstraint,
+)
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -51,6 +60,17 @@ class AdminNavCollapseMode(str, enum.Enum):
 
 class User(Base):
     __tablename__ = "users"
+    # The OIDC binding guarantee has lived in the migration since Phase 10
+    # (202605020922, uq_users_provider_subject) but was never declared here, so
+    # the create_all test database had no uniqueness on the pair at all: a
+    # duplicate (provider, subject) passed every test and became a 1062 on the
+    # live callback, locking that user out of SSO until someone resolved it by
+    # hand (audit 2026-07-30).
+    __table_args__ = (
+        UniqueConstraint(
+            "oidc_provider_id", "oidc_subject", name="uq_users_provider_subject"
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
 

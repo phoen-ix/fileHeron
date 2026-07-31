@@ -15,9 +15,11 @@ keep this to what would cause a wrong move if unknown.
 
 ## Status
 
-Backend **`v2.6.1`** (the 2026-07-30 audit fully closed - **nothing left
-accepted**; .1 fixes a v2.6.0 regression that charged the desktop client's size
-probe as a download), desktop client **`client-v1.1.0`** - shipped + in production,
+Backend **`v2.7.0`** (dependency/runtime sweep: Python 3.14, Node 24 LTS,
+TypeScript 6, ESLint 10, Vite 8, Pinia 4 - zero open dependency PRs. v2.6.x
+closed out the 2026-07-30 audit with **nothing left accepted**; v2.6.1 fixed a
+v2.6.0 regression that charged the desktop client's size probe as a download),
+desktop client **`client-v1.1.0`** - shipped + in production,
 published for public self-hosting. v2.6.0 needs no host step and no migration.
 **v2.5.0 needed ONE host step** (compose file changed: `docker compose up -d
 redis backend worker` after the in-app Update - Redis maxmemory headroom +
@@ -31,6 +33,21 @@ route returns the decrypted plaintext link URL. (README's server/client version
 badges read live from the git tags, so they never need a manual bump; this line
 does - keep it current on release.)
 
+> **v2.7.0 invariants worth knowing before you touch these areas.**
+> **Bump frontend toolchains as a SET.** Dependabot proposes one package at a
+> time and four such PRs could not have passed at any point: TS 7 removes the
+> `./lib/tsc` export vue-tsc calls (the frontend IMAGE fails to build - a
+> release would publish no frontend image), ESLint 10 needs `@eslint/js` +
+> `globals` + eslint-plugin-vue 10 declared, `node:25` is a non-LTS odd major,
+> and `@types/node` must track the RUNTIME or the build passes and the image
+> fails. All four are now `ignore`d in `.github/dependabot.yml` with the reason
+> attached. **There is deliberately no `frontend/.npmrc`** - `legacy-peer-deps`
+> suppressed every peer conflict, not just the vue-router-5/pinia-2 one it was
+> added for; pinia 4 satisfies that peer and the flag is gone. Don't reintroduce
+> it to silence a conflict. CI's setup-python/setup-node now MATCH the images
+> (3.14 / 24); `client-tests` and `client-release` stay on 3.12 because the .exe
+> bundles its own interpreter.
+>
 > **v2.6.0/.1 invariants worth knowing before you touch these areas.**
 > **Never write a bare `if is_partial_continuation(request)` around a counter, a
 > log write or a state check.** And never charge a ranged download on WHERE it

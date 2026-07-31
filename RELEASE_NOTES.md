@@ -1,69 +1,104 @@
-# file:Heron v2.6.1
+# file:Heron v2.7.0
 
-**A regression fix for v2.6.0.** If you run the desktop client, update before you use
-it. No host step, no migration.
+**Everything current.** Python 3.14, Node 24 LTS, Alpine 3.24, TypeScript 6,
+ESLint 10, Vite 8, Pinia 4 - plus the whole dependency tail. No host step, no
+migration, no API change. Every open dependency PR is resolved: eleven were
+proposed, and the result is not the eleven merges it looks like.
 
-v2.6.0 made a `Range:` continuation prove itself instead of merely claiming to be
-one. That was right, and it closed a real unlimited-download bypass. But the
-desktop client opens **every** download with a one-byte ranged request to learn
-the file's size and whether the server honours ranges - and that probe was
-relying on the property v2.6.0 removed. So the probe started being charged as a
-download.
+> If you self-host from source rather than the published images, note that the
+> backend now declares `requires-python = ">=3.14"`, because that is the only
+> runtime it is built and tested on.
 
-The effect, on v2.6.0 only:
+---
 
-- every first download from the desktop client spent **two** units of a share's
-  download budget instead of one, and appeared twice in the owner's download
-  history and audit log;
-- a share with `download_limit = 1` became **undownloadable from the client**:
-  the probe spent the single allowance, and the transfer that followed was
-  refused with `410 SHARE_DOWNLOAD_LIMIT_REACHED`. The same share downloaded
-  normally in a browser, which is what made it look like a client bug;
-- a limit of N gave the client floor(N/2) downloads.
+## The interesting part: half of them could not be merged
 
-Public links and browser downloads were unaffected.
+Automated dependency PRs bump one package at a time. Toolchains do not move one
+package at a time, and four of these could not have passed no matter how many
+times they were rebased:
 
-## The fix
+- **TypeScript 7** removes the `./lib/tsc` export that `vue-tsc` calls, so the
+  frontend **image build dies**. Merged, the next release tag would have
+  published no frontend image, and the in-app updater would have had nothing to
+  pull. This release goes to TypeScript **6.0.3** instead - the ceiling until
+  `vue-tsc` and `typescript-eslint` (whose peer range still ends below 6.1) ship
+  TS 7 support.
+- **ESLint 10** alone fails: the config imports `@eslint/js`, which was never
+  declared and resolved only because ESLint 9 hoisted its own copy. It also
+  needs `eslint-plugin-vue` 10, and a `globals.browser` declaration - ESLint 10
+  stopped assuming an environment, so without it `no-undef` fires 122 times on
+  `window` and `document` and it looks like the code broke.
+- **Node 25** is an odd-numbered release: Current, not LTS, six months of
+  support and then nothing. It was proposed for the image that builds the SPA
+  published for public self-hosting. This release uses **Node 24**, the Active
+  LTS.
+- **`@types/node` 26** was the only fully green PR of the set, and the one most
+  worth declining. The runtime is Node 24; types two majors ahead type-check
+  APIs that do not exist where the code runs, so the build passes and the image
+  fails. Types now track the runtime.
 
-A download is now charged on **how much is being taken, not on where it starts**.
+Those four constraints are recorded in `.github/dependabot.yml`, because all
+four were re-proposed within minutes of being rejected.
 
-That distinction is the whole thing. `Range: bytes=1-` asks for the entire file
-minus one byte - it is a download, and treating it as a free continuation is
-exactly the bypass v2.6.0 closed. `Range: bytes=1-1` asks for one byte. The
-server now recognises a single-byte range on a larger file as a size probe and
-does not charge it, does not log it, and does not count it against the link's
-budget. Everything else is unchanged: a genuine resume still has to be
-corroborated, and a fabricated range still pays.
+## Runtimes
 
-The exemption is deliberately one byte wide. Reading a file through it would
-cost one authenticated, rate-limited request per byte, against a product whose
-normal file is measured in gigabytes - and it would yield nothing the caller
-could not get by spending a single download they are already authorised to make.
-A download budget limits how many copies leave; it was never the thing deciding
-whether this person may have one.
+Python **3.12 -> 3.14** and Node **22 -> 24 LTS** across every image, with
+Alpine 3.24 for the updater shim.
 
-Updating the server repairs **already-installed** desktop clients. There is no
-client update to install for this.
+The important half of that is what it forced into alignment. CI pinned its own
+Python and Node versions independently of the images, so before this release
+every unit gate tested a runtime that was not the one shipping. They match now.
+The desktop client stays on Python 3.12 deliberately - it bundles its own
+interpreter, so its tests must match what is actually shipped in the `.exe`.
 
-## How it was found, and what it says
+Two things surfaced on the way and were fixed rather than carried:
 
-This was the audit's own signature failure, committed by the remediation itself:
-a docstring asserting a property the code no longer had. The client's probe
-function documented its reasoning in full -
+- `ruff`'s target version follows `requires-python`, so moving to 3.14 turned on
+  a rule the codebase had two instances of. That is the same mechanism that once
+  shipped a red lint gate.
+- A newer Starlette deprecates its synchronous test client. The last test still
+  using it now drives the app the way the rest of the suite does, and covers all
+  three byte-serving routes instead of one.
 
-> Probes at `bytes=1-1` (not `0-0`): [...] A start > 0 is treated as an uncounted
-> continuation.
+## A flag that should not have outlived its reason
 
-- and v2.6.0 deleted that sentence's truth from the server without anyone
-looking at the client that depended on it. The backend suite did not catch it
-because no backend test sent the request the client actually sends.
+`frontend/.npmrc` carried `legacy-peer-deps=true`. Its comment explained
+exactly why: the app stayed on Pinia 2 while `vue-router` 5 declared an optional
+peer on Pinia 3.
 
-It now does. There is a test named for the client's real byte sequence, and a
-test that fails if the client's docstring drifts from the server's rule again.
+Pinia 4 satisfies that peer, so the flag is gone - and that matters more than it
+sounds. `legacy-peer-deps` suppresses **every** peer conflict, not the one it was
+added for. For as long as it was there, a genuinely incompatible dependency
+would have installed silently rather than failing. Peer resolution is strict
+again, verified by installing from the lock file with no `.npmrc` present and
+building the real image without it.
+
+## Everything else
+
+Vite 8, Vitest 4.1.10, Pinia 4, `@vitejs/plugin-vue` 6, Vue 3.5.40, vue-router
+5.2.0, vue-i18n 11.4.8, ruff 0.16.0, nine GitHub Actions, three ProseMirror
+patches, the fonts, Prettier and typescript-eslint.
+
+**happy-dom 15 -> 20** is worth calling out on its own: it is a test-only
+dependency, and it clears three CRITICAL advisories that `npm audit
+--omit=dev` cannot see, because that command only looks at production
+dependencies.
+
+One real piece of dead code turned up: a template ref in the upload component
+that was declared, bound and never read. The file picker opens through the
+wrapping `<label>`, so it did nothing.
+
+## Verification
+
+Every image was built and run, not just type-checked: the backend suite
+(1705 tests) executed **inside** the Python 3.14 image, which still runs as UID
+1000 - the property the `data/` bind mounts depend on; the frontend image built
+on Node 24 with its nginx config tested; the updater executor and shim built and
+their runtimes confirmed. The frontend gate - install from lock, `vue-tsc -b` +
+`vite build`, lint, 184 tests - was run against **current main content** rather
+than each PR's stale base, because main had moved five releases since the oldest
+of them opened.
 
 ## Upgrading
 
-In-app Update, or `FH_TAG=v2.6.1`. Nothing else to do.
-
-If you are still on v2.5.0 or earlier, you never had the regression - update
-straight to v2.6.1 and read the v2.6.0 notes for what changed there.
+In-app Update, or `FH_TAG=v2.7.0`. Nothing else to do.

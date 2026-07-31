@@ -72,11 +72,43 @@ def active_downloads() -> int:
 
 
 def active_uploads(db: Session) -> int:
-    """In-flight uploads = files still in the `uploading` state (TUS)."""
-    from ..models.file import File, FileState
+    """In-flight uploads: rows in `uploading` that plausibly still have bytes
+    moving.
 
+    An unqualified `COUNT(*) WHERE state = uploading` counted every abandoned
+    row too. Rows only leave `uploading` via the tusd post-finish hook, so a
+    browser tab closed mid-upload leaves one behind until
+    `cleanup_abandoned_uploads` runs - up to TUS_UPLOAD_ABANDONED_AFTER_HOURS
+    (24) later. The drain therefore almost never reached zero, the admin
+    dialog showed permanent phantom activity, and a postponed update waited out
+    its full deadline instead of firing when the stack was actually idle
+    (audit 2026-07-30).
+
+    Bounded by a freshness window tied to UPLOAD_STALE_AFTER_HOURS - the same
+    knob the stale-upload sweeper uses, so the two agree on what "still going"
+    means. The downloads counter is already self-healing via its age prune;
+    this gives the uploads counter the same property.
+
+    NOT filtered on `tus_upload_id IS NOT NULL`, which the finding suggested:
+    `create_pending` sets state=uploading BEFORE tusd assigns an id, and a
+    direct upload (POST /api/uploads/direct, up to 100 MB) never gets one at
+    all. That filter would have made every direct upload invisible to the
+    drain - the same blind spot as the unregistered preview streams fixed
+    alongside this. The repo's own test_maintenance.py caught it."""
+    from datetime import timedelta
+
+    from ..config import settings
+    from ..models.file import File, FileState
+    from ..utils.timeutil import utc_now
+
+    cutoff = utc_now() - timedelta(hours=max(1, settings.UPLOAD_STALE_AFTER_HOURS))
     return int(
-        db.query(File).filter(File.state == FileState.uploading).count()
+        db.query(File)
+        .filter(
+            File.state == FileState.uploading,
+            File.created_at > cutoff,
+        )
+        .count()
     )
 
 

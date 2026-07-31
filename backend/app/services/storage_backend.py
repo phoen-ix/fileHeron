@@ -22,6 +22,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import BinaryIO
 
+from fastapi.responses import FileResponse
+
 from ..config import settings
 from ..utils.timeutil import utc_now
 
@@ -285,6 +287,36 @@ def safe_media_type(mime_type: str | None) -> str:
     return base
 
 
+class _CountedFileResponse(FileResponse):
+    """FileResponse that releases its drain-counter entry no matter how the
+    response ends.
+
+    The release used to ride on `FileResponse(background=...)`, and Starlette
+    only runs a BackgroundTask after a response has been sent. An unsatisfiable
+    or malformed `Range` header raises inside `FileResponse.__call__` BEFORE
+    anything is sent, so the entry registered a moment earlier was never
+    released - it sat in the ZSET until the 6-hour age prune, holding the
+    drain-before-update open against a transfer that never happened. One
+    `curl -H 'Range: bytes=99999999-'` per phantom (audit 2026-07-30).
+
+    `finally` covers the send path, the raise path and client disconnect
+    alike, which is the same shape zip_stream.py already uses for its own
+    counter."""
+
+    def __init__(self, *args, dl_id: str | None = None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._dl_id = dl_id
+
+    async def __call__(self, scope, receive, send) -> None:
+        try:
+            await super().__call__(scope, receive, send)
+        finally:
+            if self._dl_id is not None:
+                from . import transfer_activity
+
+                transfer_activity.download_finished(self._dl_id)
+
+
 def serve_response(
     backend: StorageBackend,
     *,
@@ -310,7 +342,7 @@ def serve_response(
     so the maintenance-mode drain knows when transfers finish. Only the local
     FileResponse can be tracked - an S3 redirect streams bytes the backend never
     sees, so it is not counted."""
-    from fastapi.responses import FileResponse, RedirectResponse
+    from fastapi.responses import RedirectResponse
 
     mime_type = safe_media_type(mime_type)
 
@@ -324,21 +356,18 @@ def serve_response(
     if url is not None:
         return RedirectResponse(url, status_code=307)
 
-    background = None
+    dl_id = None
     if count:
-        from starlette.background import BackgroundTask
-
         from . import transfer_activity
+
         dl_id = transfer_activity.download_started()
-        if dl_id is not None:
-            background = BackgroundTask(transfer_activity.download_finished, dl_id)
-    return FileResponse(
+    return _CountedFileResponse(
         path=backend.local_path(locator),
         media_type=mime_type,
         filename=filename,
         content_disposition_type=disposition,
         headers=extra_headers or None,
-        background=background,
+        dl_id=dl_id,
     )
 
 

@@ -387,6 +387,7 @@ def public_preview(
         ttl_sec=ttl,
         disposition="inline",
         extra_headers=preview_svc.SECURITY_HEADERS,
+        count=True,
     )
 
 

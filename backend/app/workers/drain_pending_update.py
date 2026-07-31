@@ -23,8 +23,30 @@ from ..utils.timeutil import utc_now
 logger = logging.getLogger("fileheron.workers.drain_pending_update")
 
 
-@track_cron("drain_pending_update")
 async def drain_pending_update(_ctx) -> dict:
+    """Untracked outer shell.
+
+    This worker runs every minute, so wrapping the whole thing in @track_cron
+    wrote 1440 `cron_runs` rows a day - which then evicted its own failure rows
+    from any retention window inside about three hours, so the one run that
+    mattered was gone before anyone looked. The dispatcher itself is
+    deliberately not tracked for exactly this reason
+    (cron_schedule: "1440x/day would flood cron_runs").
+
+    Nothing is pending on the overwhelming majority of ticks, so check that
+    first and only enter the tracked body when there is real work
+    (audit 2026-07-30)."""
+    db = SessionLocal()
+    try:
+        if maintenance_svc.get_pending_update(db) is None:
+            return {"pending": False}
+    finally:
+        db.close()
+    return await _drain_pending_update_tracked(_ctx)
+
+
+@track_cron("drain_pending_update")
+async def _drain_pending_update_tracked(_ctx) -> dict:
     db = SessionLocal()
     try:
         pending = maintenance_svc.get_pending_update(db)

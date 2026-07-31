@@ -163,16 +163,64 @@ def apply_pending_update(
         request=request,
     )
     db.commit()
+    # The direct /system/update path fans an ops alert out to every admin; the
+    # postponed path did not, so the update an admin scheduled and walked away
+    # from restarted the stack with nobody told. Same event, same audience,
+    # regardless of which path fired it (audit 2026-07-30). Best-effort: a
+    # notification failure must not unwind an update that has already been
+    # handed to the executor.
+    try:
+        _dispatch_update_started_to_admins(db, tag=pending["target_tag"], via=reason)
+    except Exception:
+        logger.exception("pending update: admin ops alert failed (update proceeds)")
     logger.info("pending update applied: tag=%s via=%s", pending["target_tag"], reason)
     return result
+
+
+def _dispatch_update_started_to_admins(db: Session, *, tag: str, via: str) -> None:
+    """Same ops_alert fan-out the direct /system/update route performs.
+
+    Lives here rather than in routers/admin/system.py because the postponed and
+    forced paths run from the worker, which has no router to import from. The
+    router keeps its own copy for the click-through path; both hit the same
+    NotificationCategory.ops_alert, so an admin sees one consistent event
+    whichever way the update was triggered."""
+    from ..models.notification import NotificationCategory
+    from ..models.user import UserRole
+    from .notification import dispatch
+
+    admins = (
+        db.query(User)
+        .filter(User.role == UserRole.admin, User.is_disabled.is_(False))
+        .all()
+    )
+    for a in admins:
+        try:
+            dispatch(
+                db,
+                user=a,
+                category=NotificationCategory.ops_alert,
+                payload={"reason": "update_triggered", "target_tag": tag, "via": via},
+                link_url="/admin/system",
+                email_to=a.email,
+            )
+        except Exception:
+            logger.exception("update ops alert failed for admin=%s", a.id)
 
 
 def cancel_pending_update(db: Session, *, actor: User | None, request=None) -> bool:
     """Cancel a postponed update and leave maintenance mode. Returns True if there
     was something to cancel."""
     had_pending = get_pending_update(db) is not None
+    if not had_pending:
+        # Nothing to cancel - and crucially, do NOT touch the maintenance flag.
+        # This used to disable maintenance unconditionally, so an admin who had
+        # enabled it by hand to run a database operation could have it silently
+        # lifted by a colleague clicking Cancel on an update banner that was
+        # already gone. Cancel only undoes what postpone did (audit 2026-07-30).
+        return False
     set_pending_update(db, None, actor=actor)
-    set_enabled(db, False, actor=actor, audit=False)
+    set_enabled(db, False, actor=actor)
     record_audit_event(
         db,
         event_type=AuditEventType.update_postpone_cancelled,

@@ -578,6 +578,20 @@ def update_maintenance_settings(
 ) -> MaintenanceSettingsResponse:
     from ...services import maintenance as maintenance_svc
 
+    # Refuse to switch maintenance OFF from here while an update is postponed.
+    # This page and /admin/system share one flag: turning it off here left
+    # `maintenance.pending_update` armed, so the minute drain worker still saw a
+    # drained stack and restarted it - an unannounced restart during what the
+    # admin believed was normal operation, because they thought they had
+    # cancelled something (audit 2026-07-30). Cancelling is a different action
+    # with a different audit event, so point them at it rather than guessing.
+    if not payload.enabled and maintenance_svc.get_pending_update(db) is not None:
+        raise AppError(
+            409,
+            "UPDATE_PENDING",
+            "An update is postponed and waiting for transfers to drain. Cancel "
+            "it on the System page before leaving maintenance mode.",
+        )
     maintenance_svc.set_enabled(
         db, payload.enabled, actor=admin, message=payload.message, request=request
     )

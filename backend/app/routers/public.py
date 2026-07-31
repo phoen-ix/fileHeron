@@ -254,16 +254,28 @@ def public_download(
     # `downloads_remaining` never moving and no download_log row, no audit
     # entry and no owner notification (audit 2026-07-30, flow-publiclink-7).
     #
-    # `was_download_recent` is the evidence: this instance actually started
-    # serving that file inside the 30-minute window. It is keyed on the FILE,
-    # not the client, so a phone changing networks mid-download keeps its
-    # continuation - and it fails OPEN when Redis is down, because a refused
-    # resume is worse than a missed bypass. Residual, deliberately: whoever
-    # pays for one download gets a 30-minute window of free continuations.
-    # Bounded, unlike unlimited-forever.
+    # The evidence is that THIS LINK already PAID for this file inside the
+    # window - not that this instance served it recently.
+    #
+    # v2.6.0 used the serving mark (`was_download_recent`), which answers the
+    # question the maintenance drain asks, not the one a budget asks. The
+    # difference was reachable three ways: the share owner previewing their own
+    # file wrote that mark and handed every link holder unlimited free copies;
+    # the authenticated and public ZIP routes derived the same key and
+    # corroborated each other across the auth boundary; and because the mark was
+    # written wherever bytes were served, a free continuation refreshed it, so
+    # the window renewed itself indefinitely while the comment here claimed it
+    # was bounded.
+    #
+    # Keyed on (link, file) rather than the client, so a phone changing networks
+    # mid-download keeps its continuation. Fails OPEN when Redis is down,
+    # because a refused resume is worse than a missed bypass. The residual is
+    # now what the old comment claimed: one payment buys free continuations for
+    # one window, and cannot extend itself, because only the payment path marks.
+    paid_key = f"link:{link.id}:file:{file_id}"
     is_continuation = is_partial_continuation(
         request
-    ) and transfer_activity.was_download_recent(file_id)
+    ) and transfer_activity.was_download_paid(paid_key)
 
     public_link_svc.assert_link_usable(
         db, link, allow_exhausted_continuation=is_continuation
@@ -316,6 +328,10 @@ def public_download(
             raise AppError(
                 410, "PUBLIC_LINK_EXHAUSTED", "This public link's download limit has been reached."
             )
+        # Paid. This is the only place the continuation mark is written, which
+        # is what keeps the free window bounded: a continuation never reaches
+        # here, so it cannot renew its own licence.
+        transfer_activity.mark_download_paid(paid_key)
 
         ip = request.client.host if request.client else None
         db.add(
@@ -522,15 +538,21 @@ def public_download_zip(
             )
         byte_range = (parsed.start, parsed.end) if parsed else None
 
-    # A resume is free; a CLAIM of one is not. Evidence is that this instance
-    # really did start serving this exact archive inside the recency window -
-    # keyed on the share and the ETag, so a Range against a changed member list
-    # is a new download and pays like one. Without this, `Range: bytes=1-` would
-    # be an unlimited free-download bypass, which is the defect the old
-    # always-charge rule was avoiding by refusing to resume at all.
-    recent_key = f"zip:{share.id}:{etag}"
+    # A resume is free; a CLAIM of one is not. Evidence is that THIS LINK
+    # already paid for this exact archive inside the window - keyed on the link
+    # AND the ETag, so a Range against a changed member list is a new download
+    # and pays like one. Without this, `Range: bytes=1-` would be an unlimited
+    # free-download bypass, which is the defect the old always-charge rule was
+    # avoiding by refusing to resume at all.
+    #
+    # The link id is load-bearing. v2.6.0 keyed this on `zip:{share_id}:{etag}`
+    # and corroborated it with the SERVING mark - and the authenticated ZIP
+    # route derives an identical key from the same reproducible archive
+    # identity, so an owner downloading their own archive silently authorised
+    # unlimited anonymous ones. Different principals, one key.
+    paid_key = f"link:{link.id}:zip:{etag}"
     resuming = bool(byte_range) and byte_range[0] > 0
-    corroborated = resuming and transfer_activity.was_download_recent(recent_key)
+    corroborated = resuming and transfer_activity.was_download_paid(paid_key)
 
     downloads_remaining = link.downloads_remaining
     if not corroborated:
@@ -542,6 +564,8 @@ def public_download_zip(
                 "PUBLIC_LINK_EXHAUSTED",
                 "This public link's download limit has been reached.",
             )
+        # Only the payment path marks, so a free continuation cannot renew it.
+        transfer_activity.mark_download_paid(paid_key)
 
         ip = request.client.host if request.client else None
         ua = ua_fingerprint_hash(request.headers.get("user-agent", ""))
@@ -590,5 +614,5 @@ def public_download_zip(
         mtime=mtime,
         byte_range=byte_range,
         etag=etag,
-        recent_key=recent_key,
+        recent_key=f"zip:{share.id}:{etag}",
     )

@@ -157,3 +157,53 @@ def snapshot(db: Session) -> dict:
         "active_uploads": active_uploads(db),
         "active_downloads": active_downloads(),
     }
+
+
+# --- the PAYMENT mark, which is a different question -------------------------
+#
+# `was_download_recent` answers "did this instance serve bytes for this thing
+# recently". That is the right question for the maintenance drain, and the wrong
+# one for a download budget, which needs "has THIS CALLER already paid for it".
+# v2.6.0 used the serving mark for both, and the difference was reachable:
+#
+# - the share owner previewing their own file wrote the mark, so every holder of
+#   the public link got unlimited free copies until it expired;
+# - the authenticated ZIP and the public ZIP derived an identical key from the
+#   same reproducible archive identity, so one corroborated the other across the
+#   auth boundary;
+# - and because the mark was written wherever bytes were served, a FREE
+#   continuation refreshed it - so the window renewed itself indefinitely, while
+#   the comment beside it said "Bounded, unlike unlimited-forever".
+#
+# So the budget gets its own mark, written only where the counter actually moves
+# and namespaced by the principal that moved it. One principal's activity can no
+# longer corroborate another's, and a free continuation cannot extend its own
+# licence because it never reaches the payment path.
+_PAID_KEY_PREFIX = "fh:transfer:paid:"
+
+
+def mark_download_paid(principal_key: str) -> None:
+    """Record that `principal_key` just PAID for a transfer.
+
+    Call this where the counter is decremented, never where bytes are served.
+    `principal_key` must identify the payer as well as the thing paid for -
+    e.g. `link:{link_id}:file:{file_id}`."""
+    try:
+        get_redis().set(
+            f"{_PAID_KEY_PREFIX}{principal_key}", "1", ex=RECENT_DOWNLOAD_TTL_SEC
+        )
+    except Exception:
+        logger.warning("transfer_activity: paid-mark failed (redis)")
+
+
+def was_download_paid(principal_key: str) -> bool:
+    """Whether `principal_key` paid inside the window.
+
+    Fails OPEN, for the same reason `was_download_recent` does: with Redis
+    unreachable a genuine resume and a fabricated range are indistinguishable,
+    and refusing the resume is the worse outcome."""
+    try:
+        return get_redis().get(f"{_PAID_KEY_PREFIX}{principal_key}") is not None
+    except Exception:
+        logger.warning("transfer_activity: paid-check failed (redis); allowing")
+        return True

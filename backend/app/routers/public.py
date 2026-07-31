@@ -52,6 +52,7 @@ from ..services.storage_backend import get_storage_backend
 from ..utils.crypto import constant_time_equals
 from ..utils.http_range import (
     UnsatisfiableRangeError,
+    is_metadata_probe,
     is_partial_continuation,
     parse_single_range,
 )
@@ -295,12 +296,18 @@ def public_download(
         logger.error("public download: storage missing for %s", file.id)
         raise AppError(500, "STORAGE_MISSING", "File data is missing.")
 
+    # A size probe is not a download - see utils/http_range.is_metadata_probe.
+    # The counter and the log only: `assert_link_usable` above already refused a
+    # spent link, so a probe cannot be used to confirm a link is still live
+    # after its budget is gone.
+    is_probe = is_metadata_probe(request.headers.get("range"), file.size_bytes)
+
     # Parallel/segmented downloads send several ranged GETs for one logical
     # download; the byte-0 (or full) request counts it + logs, the continuation
     # ranges must not re-decrement or re-log. See utils/http_range - and note
     # this uses the CORROBORATED `is_continuation` computed above, not the bare
     # header test.
-    if not is_continuation:
+    if not is_continuation and not is_probe:
         # Counter (atomic). On success, `downloads_remaining` reflects the
         # post-decrement value used by the owner notification below.
         allowed, downloads_remaining = public_link_svc.decrement_counter(db, link=link)

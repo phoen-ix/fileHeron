@@ -58,12 +58,23 @@ def _probe(
     """One tiny ranged GET. Returns (total, etag) iff the server honours
     ranges (HTTP 206 with a parseable Content-Range), else None.
 
-    Probes at ``bytes=1-1`` (not ``0-0``): the backend counts a range that
-    starts at byte 0 as a full download (it isn't a partial *continuation*), so
-    a ``0-0`` probe double-charged the share's download budget and got refused
-    under maintenance mode. A start > 0 is treated as an uncounted continuation.
-    A file under 2 bytes answers 416, which falls through to the single-stream
-    path below - correct, since a 1-byte file needs no segmentation.
+    Asks for exactly one byte, and that is what makes it free: the server
+    charges a ranged download on how much is being TAKEN, not on where it
+    starts, so a single-byte range is a size probe and anything larger is a
+    download (``utils/http_range.is_metadata_probe``).
+
+    This docstring used to justify ``bytes=1-1`` differently - "a start > 0 is
+    treated as an uncounted continuation" - and server v2.6.0 removed exactly
+    that property, because any client could assert it and take a whole file for
+    free. The probe was then charged like a download, so a first transfer cost
+    two units and a ``download_limit=1`` share became undownloadable from this
+    client while a browser could still fetch it. Server v2.6.1 restored the
+    exemption on the honest ground. Do not widen the probe past one byte: the
+    slack is what the server measures.
+
+    A file of 1 byte or fewer is not probe-able (the "probe" would be the whole
+    file); the server declines, and the single-stream path below handles it -
+    correct, since such a file needs no segmentation.
     """
     try:
         with api._http.stream(

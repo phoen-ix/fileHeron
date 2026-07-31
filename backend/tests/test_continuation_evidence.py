@@ -227,9 +227,13 @@ def test_both_public_decisions_use_the_same_corroborated_boolean():
     src = inspect.getsource(public_router.public_download)
     assert "was_download_recent" in src
     assert "allow_exhausted_continuation=is_continuation" in src
-    assert "if not is_continuation:" in src
+    # The counter/log block is gated on the corroborated boolean. It may carry
+    # additional exemptions (the size probe, v2.6.1) but `is_continuation` must
+    # be one of its terms.
+    assert "if not is_continuation" in src
     # The bare header test must not be consulted for either decision.
     assert "allow_exhausted_continuation=is_partial_continuation" not in src
+    assert "if not is_partial_continuation" not in src
 
 
 def test_the_authed_path_uses_durable_evidence():

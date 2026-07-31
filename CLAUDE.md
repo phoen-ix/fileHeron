@@ -15,8 +15,9 @@ keep this to what would cause a wrong move if unknown.
 
 ## Status
 
-Backend **`v2.6.0`** (the 2026-07-30 audit fully closed - **nothing left
-accepted**), desktop client **`client-v1.1.0`** - shipped + in production,
+Backend **`v2.6.1`** (the 2026-07-30 audit fully closed - **nothing left
+accepted**; .1 fixes a v2.6.0 regression that charged the desktop client's size
+probe as a download), desktop client **`client-v1.1.0`** - shipped + in production,
 published for public self-hosting. v2.6.0 needs no host step and no migration.
 **v2.5.0 needed ONE host step** (compose file changed: `docker compose up -d
 redis backend worker` after the in-app Update - Redis maxmemory headroom +
@@ -30,9 +31,15 @@ route returns the decrypted plaintext link URL. (README's server/client version
 badges read live from the git tags, so they never need a manual bump; this line
 does - keep it current on release.)
 
-> **v2.6.0 invariants worth knowing before you touch these areas.**
+> **v2.6.0/.1 invariants worth knowing before you touch these areas.**
 > **Never write a bare `if is_partial_continuation(request)` around a counter, a
-> log write or a state check.** The header is a claim; every exemption pairs it
+> log write or a state check.** And never charge a ranged download on WHERE it
+> starts - charge on HOW MUCH it takes. The desktop client opens every transfer
+> with `Range: bytes=1-1` to learn the size; v2.6.0 charged that probe as a
+> download and made a `download_limit=1` share undownloadable from the client
+> while a browser still worked. `utils/http_range.is_metadata_probe` is the
+> exemption, and `PROBE_MAX_BYTES` is 1 on purpose - the slack is what an
+> extraction attack would spend. The header is a claim; every exemption pairs it
 > with evidence - `transfer_activity.was_download_recent(key)` on the anonymous
 > paths (30 min, fails OPEN), `file.has_recent_counted_download(...)` windowed by
 > `downloads.resume_credit_hours` on the authenticated ones (durable, survives a

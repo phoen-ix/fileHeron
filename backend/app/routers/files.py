@@ -23,6 +23,7 @@ from ..services.audit import record_audit_event
 from ..services.storage_backend import get_storage_backend
 from ..utils.http_range import (
     UnsatisfiableRangeError,
+    is_metadata_probe,
     is_partial_continuation,
     parse_single_range,
 )
@@ -324,7 +325,16 @@ def download_file(
         )
     )
 
-    if not is_continuation:
+    # A size probe is not a download. The desktop client opens every transfer
+    # with `Range: bytes=1-1` to learn the total and whether ranges are honoured
+    # - which rode the old start-above-zero exemption, and which the corroborated
+    # rule above took away with it. The result was a first download charged
+    # twice, and a `download_limit=1` share that a browser could fetch and the
+    # client could not. Charged on how much is TAKEN, not on where it starts;
+    # see utils/http_range.is_metadata_probe.
+    is_probe = is_metadata_probe(request.headers.get("range"), file.size_bytes)
+
+    if not is_continuation and not is_probe:
         # A pending share only reaches here for an approver reviewing its
         # content. That must not consume the not-yet-live recipient budget -
         # but it IS a person who is not a recipient taking a full copy of

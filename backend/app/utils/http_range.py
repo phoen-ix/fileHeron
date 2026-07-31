@@ -36,6 +36,13 @@ def is_partial_continuation(request: Request) -> bool:
     return start.isdigit() and int(start) > 0
 
 
+# A range this small is a client asking "how big is this, and do you do ranges?",
+# not a client taking the file. One byte, deliberately: the desktop client's
+# `_probe` sends exactly `bytes=1-1`, and every extra byte of slack multiplies
+# how cheaply the exemption could be used to extract content without paying.
+PROBE_MAX_BYTES = 1
+
+
 class ByteRange(NamedTuple):
     start: int
     end: int  # inclusive, RFC 9110 style
@@ -99,3 +106,36 @@ def parse_single_range(header: str | None, total: int) -> ByteRange | None:
     if end < start:
         raise UnsatisfiableRangeError
     return ByteRange(start, end)
+
+
+def is_metadata_probe(header: str | None, total: int) -> bool:
+    """True for a ranged GET that asks for at most `PROBE_MAX_BYTES` of a
+    larger resource - a size/range-support probe, not a download.
+
+    The desktop client opens EVERY download with `Range: bytes=1-1` to learn the
+    total size and whether the server honours ranges, then segments the real
+    transfer. Before v2.6.0 that request rode the "any range above byte 0 is a
+    continuation" exemption; v2.6.0 correctly removed that exemption and
+    incorrectly took the probe with it, so a first download was charged twice
+    and a `download_limit=1` share became undownloadable from the client while
+    still working in a browser.
+
+    Charging on how much is being TAKEN rather than on where it starts is what
+    separates the two cases. `bytes=1-` asks for the whole file minus one byte
+    and is a download; `bytes=1-1` asks for one byte. Extracting content through
+    this exemption costs one authenticated, rate-limited round trip per byte -
+    against a product whose normal file is measured in gigabytes - and yields
+    nothing the caller could not obtain by spending a single download they are
+    already authorized to make. The budget limits how many copies leave, not
+    whether this caller may have one.
+
+    `total <= PROBE_MAX_BYTES` returns False: for a resource that small the
+    "probe" is the whole thing.
+    """
+    if total <= PROBE_MAX_BYTES:
+        return False
+    try:
+        rng = parse_single_range(header, total)
+    except UnsatisfiableRangeError:
+        return False
+    return rng is not None and rng.length <= PROBE_MAX_BYTES

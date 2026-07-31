@@ -64,11 +64,16 @@ async def test_pre_create_reserves_max_size_not_client_size(make_user, db, monke
     captured = {}
     monkeypatch.setattr(
         tus_hooks.quota_svc, "reserve_bytes",
-        lambda db, *, user, additional_bytes: captured.update(n=additional_bytes) or 0,
+        lambda db, *, user, additional_bytes, exclude_file_id=None: (
+            captured.update(n=additional_bytes, excluded=exclude_file_id) or 0
+        ),
     )
     # Deferred-length upload: tusd reports Size=0.
     tus_hooks.handle_pre_create(db, _body(owner.id, upload_size=0))
     assert captured["n"] == _MAX  # reserved the authorised max, NOT 0
+    # The row is already committed and in STORED_STATES by now, so it must be
+    # kept out of any lazy counter seed or it is charged twice.
+    assert captured["excluded"] == _FILE_ID
 
 
 @pytest.mark.asyncio

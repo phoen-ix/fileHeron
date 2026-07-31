@@ -294,3 +294,95 @@ async def test_a_public_zip_resume_by_the_payer_is_still_free(
     assert resumed.status_code in (200, 206), resumed.text
     db.refresh(link)
     assert link.downloads_remaining == 0
+
+
+# --- res-01: the preview trace must not be defeated by one header -----------
+
+
+@pytest.mark.asyncio
+async def test_a_ranged_preview_is_still_traced(client, db, owned_public_share, redis_stub):
+    """Preview hands an anonymous caller the COMPLETE original bytes and never
+    touches the download budget, so the audit row is the ONLY record that a file
+    left the server. It was gated on a bare `is_partial_continuation`, so
+    `Range: bytes=1-` on every request fetched every previewable file - images,
+    PDFs, any text/* - and left nothing behind at all."""
+    from app.models.audit_log import AuditEventType, AuditLog
+
+    owner, sh, f, link, token = owned_public_share
+
+    r = await client.get(
+        f"/api/public/{token}/files/{f.id}/preview", headers={"Range": "bytes=1-"}
+    )
+    assert r.status_code in (200, 206), r.text
+
+    rows = (
+        db.query(AuditLog)
+        .filter(AuditEventType.public_link_previewed == AuditLog.event_type)
+        .count()
+    )
+    assert rows >= 1, "a ranged preview left no trace at all"
+
+
+@pytest.mark.asyncio
+async def test_a_real_preview_continuation_is_not_re_traced(
+    client, db, owned_public_share, redis_stub
+):
+    """What the exemption is for: a PDF viewer fetching in chunks must not write
+    a row per chunk."""
+    from app.models.audit_log import AuditEventType, AuditLog
+
+    owner, sh, f, link, token = owned_public_share
+
+    first = await client.get(f"/api/public/{token}/files/{f.id}/preview")
+    assert first.status_code == 200, first.text
+    after_first = (
+        db.query(AuditLog)
+        .filter(AuditEventType.public_link_previewed == AuditLog.event_type)
+        .count()
+    )
+
+    for _ in range(2):
+        await client.get(
+            f"/api/public/{token}/files/{f.id}/preview", headers={"Range": "bytes=1-"}
+        )
+    after_chunks = (
+        db.query(AuditLog)
+        .filter(AuditEventType.public_link_previewed == AuditLog.event_type)
+        .count()
+    )
+    assert after_chunks == after_first, "a chunked preview wrote a row per chunk"
+
+
+# --- res-04: the retracted claim must not survive in the code ---------------
+
+
+def test_maintenance_no_longer_documents_the_budget_as_unguarded():
+    """`maintenance.py` is the first file anyone opens when working the download
+    gate, and it still said the budget was "deliberately NOT" corroborated, and
+    that this was "a documented, accepted tradeoff" justified by a phone
+    switching networks.
+
+    Both halves were retracted: the tradeoff was closed in v2.6.0, and the
+    network-switch reasoning never applied, because the mark is keyed on the
+    file and has never looked at the client. The correction reached the release
+    notes, CLAUDE.md and the audit record, and missed this copy - leaving the
+    only surviving statement of the retracted reasoning exactly where it would
+    invite someone to strip the corroboration back out for consistency."""
+    import inspect
+
+    from app.services import maintenance
+
+    src = inspect.getsource(maintenance)
+    assert "Deliberately NOT applied to the download BUDGET" not in src
+    # It may be quoted as a retraction - that is the point of writing down what
+    # was wrong - but not asserted.
+    if "accepted tradeoff" in src:
+        assert "used to claim" in src
+
+
+def test_the_two_marks_are_not_the_same_key():
+    """The drain and the budget ask different questions, and conflating them is
+    what made an owner's own activity spend an anonymous budget."""
+    from app.services import transfer_activity as ta
+
+    assert ta._RECENT_KEY_PREFIX != ta._PAID_KEY_PREFIX

@@ -118,7 +118,7 @@ def test_the_preview_route_records_the_transfer():
 
     src = inspect.getsource(public_router)
     idx = src.index("public preview: storage missing")
-    window = src[idx : idx + 1400]
+    window = src[idx : idx + 3000]
     assert "public_link_previewed" in window, (
         "an anonymous caller can still take the full bytes with no trace"
     )
@@ -126,13 +126,22 @@ def test_the_preview_route_records_the_transfer():
 
 def test_range_continuations_do_not_write_a_row_each():
     """A PDF viewer fetches in chunks; one row per chunk would bury the signal
-    the row exists to provide."""
+    the row exists to provide.
+
+    The skip must be CORROBORATED, not a bare header test. As shipped it was
+    bare, so `Range: bytes=1-` on every request fetched every previewable file
+    and left nothing behind at all - and this route's audit row is the only
+    record it produces, because preview never touches the download budget
+    (res-01)."""
     from app.routers import public as public_router
 
     src = inspect.getsource(public_router)
     idx = src.index("public preview: storage missing")
-    window = src[idx : idx + 1400]
+    window = src[idx : idx + 3000]
     assert "is_partial_continuation(request)" in window
+    assert "was_download_paid" in window, (
+        "the preview trace is gated on a bare Range header again"
+    )
 
 
 @pytest.mark.parametrize("field", ["file_id", "share_id", "bytes"])

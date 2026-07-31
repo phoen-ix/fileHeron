@@ -1,11 +1,16 @@
 """Hourly: reconcile Redis quota counters against DB sums.
 
 The Redis counter at ``fh:quota:user:{id}`` is the source of truth for
-the quota check in ``services/quota.py``. On Redis restart/flush, the
-lazy DB seed (``_initialize_from_db``) only runs on next access AND only
-seeds from finalized files - in-flight ``uploading`` rows aren't yet
-visible at seed time in many race orderings, so the counter under-reports
-the user's true commitment.
+the quota check in ``services/quota.py``. On Redis restart/flush the lazy
+DB seed (``_initialize_from_db``) only runs on the next access, and two
+reservations racing that first access can each seed from a sum that already
+contains the other's in-flight row, so the counter drifts upward.
+
+(This paragraph used to say the seed "only seeds from finalized files -
+in-flight ``uploading`` rows aren't yet visible at seed time". That was
+false: ``uploading`` is in ``STORED_STATES``. Believing it is what produced
+the double-charge that refused a quota'd user's first large upload, and the
+claim survived four releases because a docstring cannot carry a test.)
 
 This job sums the DB authoritatively and overwrites the Redis counter
 when drift exceeds ``_DRIFT_THRESHOLD`` (1 MiB). DB always wins.

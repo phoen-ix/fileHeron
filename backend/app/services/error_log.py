@@ -10,6 +10,9 @@ What qualifies (``should_log``):
 - HTTP 4xx -> logged only when ``error_log.capture_4xx`` is on AND the status is
   in the ``error_log.http_4xx_codes`` allowlist (empty allowlist = capture
   nothing, so a stray toggle can't flood the log with 401/404/422 noise).
+- CSP violation reports -> logged whenever ``error_log.enabled``. They are not
+  4xx and never rode the allowlist; gating them on the 4xx SWITCH silently
+  emptied the evidence the CSP rollout plan depends on.
 
 Everything is fail-open: a logging failure must never break the worker job.
 """
@@ -63,9 +66,18 @@ def should_log(db: Session, event: dict[str, Any]) -> bool:
         return True
     if source == "csp":
         # A CSP report is not an HTTP status, so it cannot ride the 4xx
-        # allowlist. It rides the same opt-in SWITCH, because the reports only
-        # matter while an admin is watching what the policy would break.
-        return settings_svc.get_bool(db, K.ERROR_LOG_CAPTURE_4XX, default=False)
+        # allowlist - and it must not ride the 4xx SWITCH either. It used to,
+        # and that switch is off by default, so a default instance discarded
+        # every report. The rollout plan for the policy is "enforce once the
+        # reports come back empty", and empty was the default state: the
+        # criterion was satisfiable by a policy that had never been exercised
+        # (audit 2026-07-30 residual sweep, res-06).
+        #
+        # It rides `error_log.enabled`, checked at the top of this function,
+        # like 5xx and cron failures. Volume is bounded by the sink's own
+        # per-IP rate limit, not by an opt-in an operator has no reason to
+        # turn on before they need the data it produces.
+        return True
     status = int(event.get("status_code") or 0)
     if status >= 500:
         return True
@@ -83,14 +95,17 @@ _CACHE_TTL_SEC = 60.0
 _cache_expires = 0.0
 _cap4xx = False
 _rate_per_min = 300
+_log_enabled = True
 
 
 def _refresh_cache() -> None:
-    global _cap4xx, _rate_per_min, _cache_expires
+    global _cap4xx, _rate_per_min, _log_enabled, _cache_expires
     cap = False
+    enabled = True
     rate = int(settings_registry.env_default(settings_registry.BY_KEY[K.ERROR_LOG_SCAN_CAPTURE_PER_MIN]))
     db = SessionLocal()
     try:
+        enabled = settings_svc.get_bool(db, K.ERROR_LOG_ENABLED, default=True)
         if settings_svc.get_bool(db, K.ERROR_LOG_CAPTURE_4XX, default=False):
             cap = bool(parse_4xx_codes(settings_svc.get(db, K.ERROR_LOG_4XX_CODES)))
         rate = int(settings_registry.effective(db, K.ERROR_LOG_SCAN_CAPTURE_PER_MIN))
@@ -99,13 +114,28 @@ def _refresh_cache() -> None:
         cap = False
     finally:
         db.close()
-    _cap4xx, _rate_per_min = cap, rate
+    _cap4xx, _rate_per_min, _log_enabled = cap, rate, enabled
     _cache_expires = time.monotonic() + _CACHE_TTL_SEC
 
 
 def _ensure_fresh() -> None:
     if time.monotonic() >= _cache_expires:
         _refresh_cache()
+
+
+def log_enabled_cached() -> bool:
+    """Cheap, cached mirror of `error_log.enabled` (default ON).
+
+    Distinct from `capture_4xx_enabled_cached`, and the distinction matters for
+    anything that is not an HTTP 4xx. A CSP violation report is not a 4xx: the
+    browser is telling us a policy WOULD have blocked something. Gating it on
+    the 4xx capture flag - which is off by default - meant the report sink threw
+    everything away on a default instance, while the CSP rollout plan says to
+    enforce "after the reports come back empty". Empty was the default state,
+    so the criterion could be met by a policy that had never been exercised at
+    all (audit 2026-07-30 residual sweep, res-06)."""
+    _ensure_fresh()
+    return _log_enabled
 
 
 def capture_4xx_enabled_cached() -> bool:

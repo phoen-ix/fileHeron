@@ -64,11 +64,18 @@ def release(
     db.flush()
 
     # Re-reserve uploader quota (release_bytes was called when the file
-    # entered quarantine).
+    # entered quarantine). The flush above already put this row back into
+    # STORED_STATES, so it has to be excluded from a lazy counter seed or the
+    # seed and the reservation would each charge the same bytes.
     uploader = db.query(User).filter(User.id == file.uploaded_by_id).one_or_none()
     if uploader is not None:
         try:
-            reserve_bytes(db, user=uploader, additional_bytes=file.size_bytes)
+            reserve_bytes(
+                db,
+                user=uploader,
+                additional_bytes=file.size_bytes,
+                exclude_file_id=file.id,
+            )
         except AppError:
             # If the uploader is now over quota (admin tightened it after
             # the upload), still allow the release - the bytes already

@@ -10,11 +10,28 @@ otherwise one parallel download would count as N and could trip the limit.
 question - does the range start above byte 0 - which any client can assert. It
 used to be the whole basis for three exemptions, and `Range: bytes=1-` on a
 fresh connection therefore bought unlimited free downloads (audit 2026-07-30).
-Every caller now pairs it with independent evidence that a download of this
-thing really is in flight: `transfer_activity.was_download_recent()` on the
-anonymous paths, a recent `download_log` row on the authenticated ones. Do not
-reintroduce a bare `if is_partial_continuation(request)` around a counter, a log
-write or a state check.
+Every caller now pairs it with independent evidence. Which evidence depends on
+what the exemption protects, and they are not interchangeable:
+
+- a **budget** asks "has this principal already PAID for this thing" -
+  `transfer_activity.was_download_paid(...)`, keyed on the payer, written only
+  where the counter moves. Using the serving mark here let one principal's
+  activity buy another's free downloads.
+- an **audit trail** asks "have I already recorded this" - same mark, opposite
+  bias: when in doubt, write the row. A duplicate entry is noise; a missing one
+  defeats the control.
+- the **maintenance drain** asks "did this instance serve bytes for this
+  recently" - `was_download_recent()`, which is serving-based and correct for
+  that and for nothing else.
+- the **authenticated** paths use a recent `download_log` row: durable and
+  user-scoped by construction, so an overnight resume still works.
+
+Do not reintroduce a bare `if is_partial_continuation(request)` around a
+counter, a log write, or any decision that is not re-checked downstream. (The
+one bare use that remains is deliberate and marked as such: the
+`assert_link_usable` pre-check in `routers/public.py` lets an exhausted link
+proceed far enough to compute the archive identity its real corroboration is
+keyed on, and the authoritative decision is taken a few lines later.)
 """
 from __future__ import annotations
 

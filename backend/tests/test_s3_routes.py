@@ -203,3 +203,80 @@ async def test_maintenance_still_refuses_on_the_s3_path(
     finally:
         maintenance_svc.set_enabled(db, False, actor=None)
         db.commit()
+
+
+# --- res-03: the recency mark must survive the redirect ---------------------
+
+
+def test_the_s3_redirect_still_writes_the_recency_mark(monkeypatch, tmp_path):
+    """`serve_response` returned the 307 BEFORE the line that marks the file as
+    recently served, so on S3 the mark was never written and
+    `was_download_recent` was always False.
+
+    Consequence, S3 only: the maintenance gate refused every genuine resumed
+    download during a drain. Strictly more restrictive than intended - not a
+    bypass - and invisible on a local deployment, which is why it survived.
+
+    The stub is load-bearing: `was_download_recent` FAILS OPEN, so a test that
+    let it reach a real (absent) Redis would pass against the broken code."""
+    from app.services import storage_backend as sb
+    from app.services import transfer_activity
+
+    marked: list = []
+    monkeypatch.setattr(
+        transfer_activity, "mark_download_recent", lambda fid: marked.append(fid)
+    )
+
+    class _S3ish:
+        def download_url(self, **_kw):
+            return "https://bucket.example.invalid/obj?sig=x"
+
+        def local_path(self, _loc):
+            return None
+
+    resp = sb.serve_response(
+        backend=_S3ish(),
+        locator="2026/08/abc.bin",
+        filename="abc.bin",
+        mime_type="application/octet-stream",
+        ttl_sec=900,
+        count=True,
+        file_id="file-abc",
+    )
+    assert resp.status_code == 307
+    assert marked == ["file-abc"], (
+        "the redirect returned before the mark was written; on S3 every resumed "
+        "download looks like a new one to the maintenance gate"
+    )
+
+
+def test_the_s3_redirect_does_not_register_a_drain_entry(monkeypatch):
+    """There is no stream for this process to finish, so registering one would
+    leak a ZSET entry that only the age-prune could clear - holding the drain
+    open for nothing."""
+    from app.services import storage_backend as sb
+    from app.services import transfer_activity
+
+    started: list = []
+    monkeypatch.setattr(transfer_activity, "mark_download_recent", lambda fid: None)
+    monkeypatch.setattr(
+        transfer_activity, "download_started", lambda fid=None: started.append(fid)
+    )
+
+    class _S3ish:
+        def download_url(self, **_kw):
+            return "https://bucket.example.invalid/obj?sig=x"
+
+        def local_path(self, _loc):
+            return None
+
+    sb.serve_response(
+        backend=_S3ish(),
+        locator="2026/08/abc.bin",
+        filename="abc.bin",
+        mime_type="application/octet-stream",
+        ttl_sec=900,
+        count=True,
+        file_id="file-abc",
+    )
+    assert started == []

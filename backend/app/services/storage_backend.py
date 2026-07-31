@@ -364,6 +364,23 @@ def serve_response(
         disposition=disposition,
     )
     if url is not None:
+        # Object store: the client fetches the bytes straight from the bucket, so
+        # this process never sees them and cannot count the stream for the
+        # maintenance drain - that limitation is inherent and documented.
+        #
+        # The recency MARK is a different thing and was lost with it, purely
+        # because the redirect returned before the line that writes it. On S3
+        # `was_download_recent` was therefore always False, so the maintenance
+        # gate refused every genuine resumed download during a drain: strictly
+        # more restrictive than intended, not a bypass, and invisible on a local
+        # deployment (audit 2026-07-30 residual sweep, res-03).
+        #
+        # Marked here, without a drain registration: there is no stream to
+        # finish, so there is nothing to decrement and no leaked ZSET entry.
+        if count and file_id:
+            from . import transfer_activity
+
+            transfer_activity.mark_download_recent(file_id)
         return RedirectResponse(url, status_code=307)
 
     dl_id = None

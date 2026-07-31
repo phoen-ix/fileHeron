@@ -472,12 +472,17 @@ async def test_a_csp_report_lands_in_the_error_log(client, db, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_the_sink_is_silent_while_capture_is_off(client, monkeypatch):
-    """Anonymous and unauthenticated: it must cost nothing when nobody asked
-    for it."""
+async def test_the_sink_is_silent_while_the_error_log_is_off(client, monkeypatch):
+    """Anonymous and unauthenticated: it must cost nothing when the error log
+    itself is switched off.
+
+    This used to assert silence while the 4XX CAPTURE switch was off - which is
+    off by default, so it was asserting that a default instance discards every
+    CSP report. That is the defect res-06 fixed: the rollout plan says to
+    enforce "once the reports come back empty", and empty was the default."""
     from app.services import error_log, job_queue
 
-    monkeypatch.setattr(error_log, "capture_4xx_enabled_cached", lambda: False)
+    monkeypatch.setattr(error_log, "log_enabled_cached", lambda: False)
     enqueued = []
     monkeypatch.setattr(
         job_queue, "enqueue", lambda name, **kw: enqueued.append(name)
@@ -507,20 +512,32 @@ async def test_a_malformed_report_never_errors_the_browser(client, monkeypatch):
         assert resp.status_code == 204, body[:20]
 
 
-def test_a_csp_event_is_captured_only_while_the_switch_is_on(db):
-    """It carries no HTTP status, so it cannot ride the 4xx allowlist - it rides
-    the same opt-in switch instead."""
+def test_a_csp_event_is_captured_on_a_default_instance(db):
+    """It carries no HTTP status, so it cannot ride the 4xx allowlist - and it
+    must not ride the 4xx SWITCH either, which is off by default.
+
+    This test previously asserted the opposite, and asserting it is what kept it
+    true: a default instance discarded every report, so the CSP's stated exit
+    criterion ("enforce once the reports come back empty") was satisfiable by a
+    policy that had never been exercised once (res-06)."""
     from app.services import error_log
     from app.services import settings as settings_svc
 
     event = {"source": "csp", "status_code": 0}
-    assert error_log.should_log(db, event) is False
+    assert (
+        settings_svc.get_bool(
+            db, settings_svc.Keys.ERROR_LOG_CAPTURE_4XX, default=False
+        )
+        is False
+    )
+    assert error_log.should_log(db, event) is True
 
+    # The one switch that does still silence them.
     settings_svc.set_value(
-        db, key=settings_svc.Keys.ERROR_LOG_CAPTURE_4XX, value="true", actor=None
+        db, key=settings_svc.Keys.ERROR_LOG_ENABLED, value="false", actor=None
     )
     db.commit()
-    assert error_log.should_log(db, event) is True
+    assert error_log.should_log(db, event) is False
 
 
 # --- fe-i18n-a11y-2: the bell can name every category it shows ---------------
@@ -723,3 +740,48 @@ def test_every_counted_download_route_identifies_what_it_is_serving():
             assert "file_id=" in call_tail or "recent_key=" in call_tail, (
                 f"{mod.__name__}: a counted response does not identify what it serves"
             )
+
+
+def test_a_csp_report_is_not_gated_on_the_4xx_capture_switch(db):
+    """res-06. The CSP ships Report-Only with the stated exit criterion
+    "enforce after the reports come back empty". Reports were gated on
+    `error_log.capture_4xx`, which is OFF by default - so on a default instance
+    every report was discarded and "empty" was the default state. The criterion
+    was satisfiable by a policy that had never been exercised once.
+
+    They are not 4xx events. They ride `error_log.enabled` (default ON) like
+    5xx and cron failures; the sink's per-IP rate limit is what bounds volume."""
+    from app.services import error_log
+    from app.services import settings as _s
+    from app.services import settings as settings_svc
+
+    # Default instance: 4xx capture off.
+    assert settings_svc.get_bool(db, _s.Keys.ERROR_LOG_CAPTURE_4XX, default=False) is False
+
+    assert error_log.should_log(db, {"source": "csp", "status_code": None}) is True, (
+        "a CSP report was discarded on a default instance, so the rollout "
+        "criterion 'reports come back empty' can never be meaningfully met"
+    )
+
+
+def test_turning_the_error_log_off_still_silences_csp_reports(db):
+    """The one switch that must still govern them."""
+    from app.services import error_log
+    from app.services import settings as _s
+    from app.services import settings as settings_svc
+
+    settings_svc.set_value(db, key=_s.Keys.ERROR_LOG_ENABLED, value="false", actor=None)
+    db.commit()
+    assert error_log.should_log(db, {"source": "csp", "status_code": None}) is False
+
+
+def test_the_csp_sink_gate_matches_the_worker_gate():
+    """The route's cheap front-guard and the worker's authoritative check have
+    to agree, or reports are accepted and then thrown away (or vice versa)."""
+    import inspect
+
+    from app.routers import telemetry
+
+    src = inspect.getsource(telemetry)
+    assert "error_log.log_enabled_cached()" in src
+    assert "capture_4xx_enabled_cached" not in src.split("csp-report")[-1][:1500]

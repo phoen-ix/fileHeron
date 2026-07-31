@@ -92,12 +92,24 @@ def refuse_if_maintenance(
     `transfer_activity.RECENT_DOWNLOAD_TTL_SEC`, which is what makes
     "continuation" a claim we can check rather than one we take on trust.
 
-    Deliberately NOT applied to the download BUDGET (see utils/http_range): a
-    counter keyed on the same evidence would charge a second download to anyone
-    resuming after the window - or, on a public link, after a phone switched
-    networks - which is a worse failure than the bypass it closes on an
-    instance where the attacker already holds the link. That remains a
-    documented, accepted tradeoff.
+    The download BUDGET is corroborated too, and has been since v2.6.0 - but on
+    DIFFERENT evidence, and the difference is load-bearing. This gate asks "did
+    this instance serve bytes for this file recently", which is the right
+    question for a drain and the wrong one for a budget: it is not keyed on who
+    is asking, so under it one principal's activity corroborated another's. The
+    budget asks "has THIS principal already PAID", via
+    `transfer_activity.was_download_paid` on the anonymous paths and a recent
+    `download_log` row on the authenticated ones.
+
+    Do not "restore consistency" by pointing the budget back at this mark. This
+    docstring used to claim the opposite - that leaving the budget uncorroborated
+    was "a documented, accepted tradeoff", justified by a phone switching
+    networks. Both halves were wrong: the tradeoff was closed in v2.6.0, and the
+    network-switch reasoning never applied, because the mark is keyed on the
+    file and has never looked at the client. It was corrected in the release
+    notes, in CLAUDE.md and in the audit record, and this copy was missed - which
+    left the only surviving statement of the retracted reasoning sitting in the
+    first file anyone opens when working on this gate.
     """
     if not is_enabled(db):
         return

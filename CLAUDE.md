@@ -15,7 +15,7 @@ keep this to what would cause a wrong move if unknown.
 
 ## Status
 
-Backend **`v2.7.2`** (dependency/runtime sweep in .0: Python 3.14, Node 24 LTS,
+Backend **`v2.7.3`** (dependency/runtime sweep in .0: Python 3.14, Node 24 LTS,
 TypeScript 6, ESLint 10, Vite 8, Pinia 4 - zero open dependency PRs. v2.6.x
 closed out the 2026-07-30 audit with **nothing left accepted**; v2.6.1 fixed a
 v2.6.0 regression that charged the desktop client's size probe as a download),
@@ -33,6 +33,31 @@ route returns the decrypted plaintext link URL. (README's server/client version
 badges read live from the git tags, so they never need a manual bump; this line
 does - keep it current on release.)
 
+> **v2.7.3 invariants worth knowing before you touch these areas.**
+> **There are TWO marks and they answer different questions.**
+> `transfer_activity.was_download_recent` = "did this instance serve bytes for
+> this recently" - correct for the maintenance DRAIN and nothing else.
+> `was_download_paid` = "has THIS PRINCIPAL already paid" - the only thing a
+> BUDGET may consult, written ONLY where the counter moves and keyed on the
+> payer (`link:{id}:...`). v2.6.0 used the serving mark for both, so an owner
+> previewing their own file bought every link holder unlimited free downloads,
+> the two ZIP routes corroborated each other across the auth boundary, and a
+> free continuation refreshed its own licence indefinitely. Never point a budget
+> at the serving mark. An AUDIT trail uses the paid mark too but with the
+> opposite bias: when in doubt, WRITE the row.
+> **Quota:** `_initialize_from_db` takes `exclude_file_id` - `uploading` is in
+> STORED_STATES and the tus row is committed a round-trip before pre-create
+> reserves against it, so without the exclusion the seed and the INCRBY each
+> charged the same file. `reserve_bytes_once` clears its marker when the
+> reservation raises; leaving it set let the next pre-create skip the charge
+> entirely (unmetered upload).
+> **CSP reports ride `error_log.enabled` (default ON), never
+> `error_log.capture_4xx` (default OFF)** - gating them on the 4xx switch made
+> the policy's own exit criterion ("enforce once reports come back empty")
+> satisfiable by a policy never exercised.
+> The S3 redirect writes the recency mark BEFORE returning; it returned first
+> and the mark was never written on S3 at all.
+>
 > **v2.7.2 invariants worth knowing before you touch these areas.**
 > **v2.7.2 HAS A MIGRATION** (`202607310001`, the `av_unscanned` backfill) - the
 > first since v2.2.0, so a rollback past it hits the

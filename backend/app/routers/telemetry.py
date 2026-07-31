@@ -102,7 +102,15 @@ async def report_csp_violation(request: Request) -> Response:
     Browsers POST this with `Content-Type: application/csp-report`, so the body
     is read and parsed by hand rather than declared as a JSON model."""
     try:
-        if not error_log.capture_4xx_enabled_cached():
+        # Gated on `error_log.enabled` (default ON), NOT on the 4xx capture flag
+        # (default OFF). A CSP report is not a 4xx - the browser is reporting
+        # that a policy WOULD have blocked something. Gating it on 4xx capture
+        # meant a default instance discarded every report, while the rollout
+        # plan for this policy is "enforce once the reports come back empty":
+        # empty was the default state, so the criterion was satisfied by a
+        # policy that had never been exercised (res-06). The rate limit below is
+        # what bounds the volume, not the capture flag.
+        if not error_log.log_enabled_cached():
             return Response(status_code=204)
         ip = request.client.host if request.client else ""
         if not rate_limit.check_ip_allowed("csp_report", ip, limit=20, window_sec=60):

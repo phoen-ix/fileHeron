@@ -440,7 +440,26 @@ def public_preview(
     # left the server, while the download counter still read zero
     # (audit 2026-07-30). Range continuations are skipped so a PDF viewer
     # fetching in chunks does not write a row per chunk.
-    if not is_partial_continuation(request):
+    #
+    # That skip was a BARE header test, which is the defect v2.6.0 closed
+    # everywhere it governed a counter and missed here, where it governs the
+    # only forensic record this route produces. `Range: bytes=1-` on each
+    # request fetched every previewable file - images, PDFs, any text/* - and
+    # left nothing behind at all.
+    #
+    # The evidence direction is the opposite of the budget's, and deliberately
+    # so. A budget must fail CLOSED (no proof of payment means charge), so it
+    # asks "did this link already pay". An audit trail must fail OPEN in the
+    # other sense: when in doubt, WRITE the row. A duplicate audit entry costs
+    # a little noise; a missing one is the whole point of the control. So the
+    # exemption here is narrow - only a real continuation of a preview this
+    # link has already been recorded for, and only a request that is not
+    # taking the file (a one-byte metadata probe is not a preview).
+    already_traced = transfer_activity.was_download_paid(
+        f"link:{link.id}:preview:{file.id}"
+    )
+    is_traced_continuation = is_partial_continuation(request) and already_traced
+    if not is_traced_continuation:
         record_audit_event(
             db,
             event_type=AuditEventType.public_link_previewed,
@@ -455,6 +474,9 @@ def public_preview(
             request=request,
         )
         db.commit()
+        # Only the traced path marks, so a continuation cannot extend its own
+        # exemption - the same rule the budget mark follows.
+        transfer_activity.mark_download_paid(f"link:{link.id}:preview:{file.id}")
 
     ttl = settings_registry.effective(db, settings_registry.K.DOWNLOAD_SIGNED_URL_TTL_SEC)
     return serve_response(

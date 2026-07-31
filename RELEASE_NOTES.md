@@ -1,118 +1,123 @@
-# file:Heron v2.7.2
+# file:Heron v2.7.3
 
-**A schema migration runs on this one** - the first since v2.2.0. It is a data
-repair, it runs automatically on update, and it needs nothing from you. No host
-step. Read the rollback note at the end before updating if you keep a rollback
-path open.
+**A public link's download budget could be spent by somebody else's action** -
+including an action the share owner takes in their own browser. That is the
+headline, and it was not on the list this release was meant to clear. No host
+step, no migration.
 
-Two of the tests shipped in v2.7.1 did not test what they claimed, and an
-adversarial review proved it by breaking the code and watching them pass. That
-is the same failure this whole wave has been chasing, one level up: not a
-comment asserting something false, but a *test* asserting it.
+Also: a quota bypass that let an over-quota upload through unmetered, a false
+refusal that blocked a large first upload, an audit trail that one header
+switched off, a policy rollout whose success criterion could never be met, and
+a comment telling the next reader to undo a fix.
 
 ---
 
-## Files that were never scanned, and were never labelled
+## The budget could be spent by someone who is not the recipient
 
-`.env.example` shipped `AV_MAX_SCAN_BYTES=32212254720` (30 GiB) for four
-releases, and `install.sh` copies it onto every fresh install. v2.7.1 clamped
-the setting so that stops happening. It did not repair what had already
-happened: on any instance that took the shipped defaults, files between about
-2 GiB and 30 GB are still recorded as `clean` and **unflagged**, which is
-indistinguishable from a file the scanner actually read.
+v2.6.0 made a resumed download prove itself rather than just claim to be a
+resume. The evidence it used was *"this server started sending that file
+recently."* That is the right question for **maintenance mode**, which needs to
+know whether a transfer is in flight. It is the wrong question for a **budget**,
+which needs to know whether *this particular recipient* has already paid. Both
+were reading the same record.
 
-The migration that introduced the flag declined to backfill, and explained why:
+Three ways that difference was reachable, none of which involve touching the
+link:
 
-> this migration cannot know which historical files were oversize at the time
-> they were scanned, and back-filling from size_bytes would flag files that WERE
-> genuinely scanned under whatever limit was configured then.
+- **The share owner opening a preview of their own file** wrote that record. For
+  the next half hour, anyone holding the public link could download it
+  repeatedly for free. The counter never moved, nothing appeared in the download
+  history, no audit entry, no notification.
+- **The same across whole-share ZIP downloads, and across the sign-in boundary.**
+  The archive is byte-identical every time it is built - deliberately, because
+  that is what makes resuming one possible - so the signed-in and anonymous
+  routes derived the same record. An owner downloading their own archive
+  authorised unlimited anonymous ones.
+- **The window renewed itself.** The record was written wherever bytes were
+  sent, and a free resume sends bytes. One paid download plus one request every
+  half hour was indefinite. The note in the code said *"Bounded, unlike
+  unlimited-forever."* It was not.
 
-That is right for one band and wrong for another, and the difference is the
-whole fix. Between an operator's configured limit and clamd's own ceiling, files
-really were scanned - flagging those retroactively would be a lie in the other
-direction. **Above clamd's ceiling, no configuration ever mattered.** clamd
-clamps its own maximum to about 2 GiB whatever it is asked for; past that it
-stops reading and answers "OK". A row that is `clean`, unflagged and larger than
-that carries a verdict produced without opening the file - on every version this
-product has shipped.
+The budget now keeps its own record: written only where the counter actually
+moves, and stamped with **which link paid**. One person's activity can no longer
+authorise another's, and a resume cannot renew its own free window, because it
+never reaches the point where payment happens.
 
-So the backfill flags exactly that: `clean`, unflagged, larger than the ceiling.
-Nothing at or below it. Nothing in any other state - `infected` and `deleted` are
-verdicts of their own, and `ready_unscanned` has not been decided yet. It logs
-how many rows it touched, and running it twice touches nothing.
+Signed-in downloads needed no change - they were already judged on a real
+download-history entry, which is tied to the person by construction.
 
-The files stay downloadable. They now carry the `unscanned` badge they should
-always have had.
+## A quota bypass, and the refusal that hid it
 
-## The public link page never showed that badge
+**A large first upload was refused when it should have fit.** The usage counter
+is rebuilt from the database the first time it is needed - after a restart, or
+for a user who has never uploaded. That rebuild counted the upload that was
+already in progress, and then charged it again. A 6 GB upload against a 10 GB
+quota was refused outright, after the interface had accepted it.
 
-Since v2.2.0 the signed-in file list has marked files released without a verdict.
-The anonymous `/d/{token}` page did not - so the one recipient who cannot ask the
-sender about it was the one person not told. The API has always sent the field,
-and `schemas/public_link.py` says in its own comment that "the UI surfaces this
-as an explicit warning rather than implying `clean`". It didn't. Now it does.
+**Retrying was worse than failing.** The refusal left behind a marker meaning
+"these bytes are already accounted for", so the next attempt at the same upload
+skipped the charge completely and went through **unmetered**. A user who was
+genuinely over quota was refused once and then sailed past.
 
-## Two tests that were not testing anything
+Both are fixed: the rebuild leaves out the file being charged, and a failed
+reservation clears its own marker.
 
-Both were caught by mutation - reverting the fix and confirming the suite went
-green anyway.
+Releasing a file from quarantine had the same double charge, which silently
+inflated usage until the hourly reconciliation corrected it.
 
-**The retry-backoff test re-implemented the formula it was checking.** v2.7.1
-lengthened the antivirus retry backoff so it outlasts a scanner cold start. The
-test computed the expected total using the same expression as the source, so the
-multiplier - the entire change - was hardcoded into the assertion. Putting the
-old, too-short backoff back left all 27 antivirus tests passing. It now reads the
-delay off the retry the worker actually raises.
+## One header turned off the only record a preview leaves
 
-**The mid-scan deletion test never reached the code it named.** A share can
-expire and delete a file's bytes *while* a scan is running, and the worker has a
-guard so it does not then flip that row back to `clean` and advertise a file that
-is gone. The test set the file to `deleted` before starting the scan, so the
-worker short-circuited at its first state check and the guard never executed -
-the guard could be deleted outright with the full suite still green. The deletion
-now happens during the scan, which is when it happens in production.
+Preview hands an anonymous visitor the complete original file and deliberately
+does not touch the download budget - so the audit entry is the **only** record
+that anything left the server. It was skipped for any request that asked for a
+byte range, which meant one header fetched every previewable file in a share -
+images, PDFs, any text - and left nothing behind at all.
 
-Neither was a defect in shipped behaviour. The code was right; the tests just
-weren't holding it, which is worse than not having them, because they read as
-coverage.
+It now needs the same corroboration everything else does, with one deliberate
+difference: a budget must fail towards charging, an audit trail must fail
+towards **writing the row**. A duplicate entry is noise; a missing one defeats
+the point.
 
-## Four more claims that were not true
+## A rollout criterion that could not be met
 
-Tracing the above turned up others of the same kind:
+The Content-Security-Policy ships in report-only mode, and the plan for turning
+it on is *"enforce once the reports come back empty."* Reports were being
+discarded unless a separate, unrelated setting was switched on - and that
+setting is off by default. So on any default installation the reports came back
+empty because nothing was ever kept.
 
-- The antivirus worker still pointed at "a manual rescan" as the recovery path
-  for a scan that errors. There is no manual rescan anywhere in the product -
-  v2.7.1 deleted that phantom from one file and it survived, two files over, on
-  the one branch that still parks a file waiting.
-- A comment v2.7.1 itself added said the error-log path "should surface" a
-  repeatedly failing scan. Tracing it: nothing does. That is now written down as
-  a known blind spot instead of an assurance.
-- `docker-compose.yml` told operators to keep clamd's limit "in sync with backend
-  `AV_MAX_SCAN_BYTES`". Following that now produces a clamped value and a
-  warning, and it contradicted the guidance in `clamd.conf` written in the same
-  wave.
-- README and a docstring said an over-size file "scans as `error` and is not
-  served". True between the streaming limit and clamd's ceiling; false above it,
-  where the file is no longer streamed to the scanner at all.
+Whoever eventually enforced that policy would have looked at an empty list, read
+it as the criterion being met, and enforced a policy that had never been tested
+once. Reports are now kept whenever the error log is on, which is the default.
 
-Also: the recovery sweep re-queued up to 500 files one connection at a time, and
-its query had no `ORDER BY` under its `LIMIT` - so with a backlog larger than the
-batch, the same files could be passed over indefinitely. Oldest first now, one
-batch, one connection.
+## Two more, quieter
+
+**A comment invited the next person to undo a fix.** The maintenance code still
+described the download budget as deliberately unguarded, and called it an
+accepted tradeoff - which stopped being true in v2.6.0. That correction reached
+the release notes, the internal docs and the audit record, and missed the copy
+in the code, leaving the only surviving statement of the retracted reasoning
+sitting in the first file anyone opens when working on that gate.
+
+**Object-storage installations refused legitimate resumes during maintenance.**
+The redirect that hands the download off to the bucket returned before the line
+that records the transfer, so on those setups the record was never written. More
+restrictive than intended rather than less, and invisible on a normal
+installation.
+
+## Verification
+
+Every fix has a test proven to fail against the previous release. Four existing
+tests had to be rewritten rather than fixed, because they asserted the defective
+behaviour: two encoded the CSP reports being discarded by default, one asserted
+that oversized files were correctly excluded from recovery, and one pinned the
+preview trace to the header check that defeated it.
+
+The budget finding was not on the plan for this release. It came out of a
+cross-checking pass over the five fixes that were - a pass whose only job was to
+look for interactions between them - and it was reproduced against the shipped
+code before anything was changed.
 
 ## Upgrading
 
-In-app Update, or `FH_TAG=v2.7.2`. The migration runs automatically when the
-backend container starts; there is nothing to run by hand.
-
-`docker-compose.yml` does change, and the updater does not replace it - but the
-change is **a comment only**, correcting advice that would now produce a clamped
-value and a warning. Nothing about the running stack depends on it, so there is
-no host step. Pick it up whenever you next pull the repo.
-
-**If you keep a rollback path open, note this one.** Going back to a v2.7.1
-image *after* this migration has run will fail at boot - the older image's
-migration history does not contain this revision, and it stops rather than
-guess. Recovery is to stamp the previous revision from the newer image and then
-bring the old tag up. This is the standard consequence of any schema change here;
-it is called out because the last four releases had none.
+In-app Update, or `FH_TAG=v2.7.3`. Nothing else to do.

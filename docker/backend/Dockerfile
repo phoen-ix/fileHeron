@@ -14,9 +14,18 @@ LABEL org.opencontainers.image.version="${FH_VERSION}" \
       org.opencontainers.image.revision="${FH_GIT_SHA}" \
       org.opencontainers.image.source="https://github.com/phoen-ix/fileHeron"
 
-# System deps for pymysql/cryptography wheels + healthcheck (urllib via stdlib)
+# curl backs the compose HEALTHCHECK. That is the whole list.
+#
+# `gcc` and `libmariadb-dev` used to be here "for pymysql/cryptography wheels" -
+# but pymysql is pure Python, cryptography and argon2-cffi ship manylinux
+# wheels, and nothing in the lock is source-only. So the runtime image carried a
+# C toolchain and MariaDB headers it never used: ~200 MB of image, and a
+# compiler sitting in a container that processes untrusted uploads (audit
+# 2026-07-30, docker-12). If a future dependency ever needs to build from
+# source, the build fails loudly here - which is the right place to find out,
+# and the fix is a builder stage, not a compiler in production.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        gcc libmariadb-dev curl \
+        curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Python deps first (cache layer). Install from the committed, fully-pinned +

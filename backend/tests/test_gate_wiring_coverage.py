@@ -424,3 +424,100 @@ def test_cleanup_abandoned_uploads_removes_a_stale_orphan(db, tmp_path, monkeypa
     monkeypatch.setattr(mod, "SessionLocal", lambda: db)
     asyncio.run(mod.cleanup_abandoned_uploads(None))
     assert not stale.exists(), "a month-old orphan was left on disk forever"
+
+
+# --- the CSP report sink (fe-xss-5's other half) ----------------------------
+
+
+@pytest.mark.asyncio
+async def test_a_csp_report_lands_in_the_error_log(client, db, monkeypatch):
+    """Report-only without a sink observes nothing, which on a single-tenant
+    self-hosted instance is the whole of the rollout plan."""
+    from app.services import error_log
+    from app.services import settings as settings_svc
+
+    settings_svc.set_value(
+        db, key=settings_svc.Keys.ERROR_LOG_CAPTURE_4XX, value="true", actor=None
+    )
+    settings_svc.set_value(
+        db, key=settings_svc.Keys.ERROR_LOG_4XX_CODES, value="404", actor=None
+    )
+    db.commit()
+    monkeypatch.setattr(error_log, "capture_4xx_enabled_cached", lambda: True)
+
+    enqueued = []
+    from app.services import job_queue
+    monkeypatch.setattr(
+        job_queue, "enqueue", lambda name, **kw: enqueued.append((name, kw))
+    )
+
+    resp = await client.post(
+        "/api/telemetry/csp-report",
+        content=(
+            '{"csp-report":{"document-uri":"https://fh.test/admin/settings",'
+            '"violated-directive":"script-src","effective-directive":"script-src",'
+            '"blocked-uri":"https://evil.test/x.js"}}'
+        ),
+        headers={"Content-Type": "application/csp-report"},
+    )
+    assert resp.status_code == 204
+    assert enqueued, "the report went nowhere"
+    _name, kw = enqueued[0]
+    event = kw["event"]
+    assert event["source"] == "csp"
+    assert event["code"] == "CSP_VIOLATION"
+    assert "script-src" in event["message"]
+    assert "evil.test" in event["message"]
+    assert event["path"] == "/admin/settings"
+
+
+@pytest.mark.asyncio
+async def test_the_sink_is_silent_while_capture_is_off(client, monkeypatch):
+    """Anonymous and unauthenticated: it must cost nothing when nobody asked
+    for it."""
+    from app.services import error_log, job_queue
+
+    monkeypatch.setattr(error_log, "capture_4xx_enabled_cached", lambda: False)
+    enqueued = []
+    monkeypatch.setattr(
+        job_queue, "enqueue", lambda name, **kw: enqueued.append(name)
+    )
+    resp = await client.post(
+        "/api/telemetry/csp-report",
+        content='{"csp-report":{"blocked-uri":"x"}}',
+        headers={"Content-Type": "application/csp-report"},
+    )
+    assert resp.status_code == 204
+    assert enqueued == []
+
+
+@pytest.mark.asyncio
+async def test_a_malformed_report_never_errors_the_browser(client, monkeypatch):
+    """Fire-and-forget: a browser sending something unexpected must not get a
+    5xx, and must not raise inside the request."""
+    from app.services import error_log
+
+    monkeypatch.setattr(error_log, "capture_4xx_enabled_cached", lambda: True)
+    for body in (b"", b"not json", b'{"csp-report":"a string"}', b"x" * 20000):
+        resp = await client.post(
+            "/api/telemetry/csp-report",
+            content=body,
+            headers={"Content-Type": "application/csp-report"},
+        )
+        assert resp.status_code == 204, body[:20]
+
+
+def test_a_csp_event_is_captured_only_while_the_switch_is_on(db):
+    """It carries no HTTP status, so it cannot ride the 4xx allowlist - it rides
+    the same opt-in switch instead."""
+    from app.services import error_log
+    from app.services import settings as settings_svc
+
+    event = {"source": "csp", "status_code": 0}
+    assert error_log.should_log(db, event) is False
+
+    settings_svc.set_value(
+        db, key=settings_svc.Keys.ERROR_LOG_CAPTURE_4XX, value="true", actor=None
+    )
+    db.commit()
+    assert error_log.should_log(db, event) is True

@@ -38,11 +38,19 @@ services:
     security_opt: ["no-new-privileges:true"]  # no setuid escalation (audit L23)
     mem_limit: ${REDIS_MEM_LIMIT:-512m}
     cpus: ${REDIS_CPUS:-1.0}
-    # noeviction + larger maxmemory so we never silently drop rate-limit
-    # buckets or ARQ jobs under load. Under pressure, Redis writes start
-    # erroring loudly - the ops_check cron surfaces those to admins
-    # rather than silently breaking the per-IP login lockout.
-    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy noeviction
+    # noeviction so we never silently drop rate-limit buckets or ARQ jobs under
+    # load. Under pressure Redis writes start erroring LOUDLY and the ops_check
+    # cron surfaces that to admins, rather than silently breaking the per-IP
+    # login lockout.
+    #
+    # maxmemory is deliberately BELOW mem_limit. At 512mb against a 512m
+    # container the two limits raced and the kernel usually won: the OOM killer
+    # SIGKILLs redis-server, which loses the in-flight AOF write and restarts
+    # with no error anywhere except a dmesg line - the exact opposite of the
+    # loud failure the noeviction policy is chosen for. Redis also needs
+    # headroom above maxmemory for its own copy-on-write and client buffers
+    # (audit 2026-07-30, docker-10). 400mb leaves ~22%.
+    command: redis-server --appendonly yes --maxmemory ${REDIS_MAXMEMORY:-400mb} --maxmemory-policy noeviction
     volumes:
       - ${COMPOSE_HOST_ROOT:-${PWD:-/opt/fileHeron}}/data/redis:/data
     networks: [internal]
@@ -76,12 +84,29 @@ services:
     # (WEBAUTHN_RP_ID, STORAGE_BACKEND/S3_*, METRICS_*, retention/lockout knobs, ...).
     # The curated `environment:` keys below still win by precedence and keep their
     # ${VAR:?} fail-fast; config Settings is extra="ignore" so infra-only keys
-    # (DB_ROOT_PASSWORD, FH_TAG, ...) are harmless. required:false leaves the e2e
-    # stack (shell-env only, no .env file) unaffected.
+    # (FH_TAG, ...) are harmless - EXCEPT the operator-only secrets, which are
+    # blanked explicitly below rather than left "harmless but present".
+    # required:false leaves the e2e stack (shell-env only, no .env) unaffected.
     env_file:
       - path: .env
         required: false
     environment:
+      # Host-only secrets, blanked HERE so they do not reach this container.
+      #
+      # `env_file: .env` exists so every documented app setting arrives without
+      # having to enumerate it - but .env also holds credentials that belong to
+      # the OPERATOR's tooling, not the app: the DB *root* password (backup.sh,
+      # restore.sh, the drill) and the restic repository password. The app reads
+      # neither; it ignores them as extra keys. They were nonetheless present in
+      # the environment of the two containers that process untrusted uploads,
+      # readable by anything that gets code execution there and by anyone who
+      # can run `docker inspect` (audit 2026-07-30, docker-7).
+      #
+      # `environment:` wins over `env_file:`, so an empty value here removes
+      # them without asking operators to restructure their .env.
+      DB_ROOT_PASSWORD: ""
+      BACKUP_RESTIC_REPO: ""
+      BACKUP_RESTIC_PASSWORD: ""
       ENVIRONMENT: ${ENVIRONMENT:-development}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       DB_HOST: db
@@ -216,6 +241,22 @@ services:
       - path: .env
         required: false
     environment:
+      # Host-only secrets, blanked HERE so they do not reach this container.
+      #
+      # `env_file: .env` exists so every documented app setting arrives without
+      # having to enumerate it - but .env also holds credentials that belong to
+      # the OPERATOR's tooling, not the app: the DB *root* password (backup.sh,
+      # restore.sh, the drill) and the restic repository password. The app reads
+      # neither; it ignores them as extra keys. They were nonetheless present in
+      # the environment of the two containers that process untrusted uploads,
+      # readable by anything that gets code execution there and by anyone who
+      # can run `docker inspect` (audit 2026-07-30, docker-7).
+      #
+      # `environment:` wins over `env_file:`, so an empty value here removes
+      # them without asking operators to restructure their .env.
+      DB_ROOT_PASSWORD: ""
+      BACKUP_RESTIC_REPO: ""
+      BACKUP_RESTIC_PASSWORD: ""
       ENVIRONMENT: ${ENVIRONMENT:-development}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       DB_HOST: db

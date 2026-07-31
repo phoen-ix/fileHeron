@@ -19,6 +19,17 @@ nginx-12  `return 200` builds the response before `add_header` runs, and
 nginx-4   the file's own comment claimed access_log was off for /api and
           /uploads. It was not, so signed `?dt=` download tokens and
           /api/public/<token> paths were written to a json-file log.
+docker-9  an upstream written as a literal hostname is resolved ONCE, at config
+          load. `docker compose up -d backend` on its own therefore left this
+          container proxying to an address nothing answers on - and, worse, an
+          unresolvable upstream at STARTUP makes nginx refuse to boot at all, so
+          a tusd that is slow to come up took the entire SPA down with it.
+files-9   client_max_body_size was pinned at 110m to "match
+          MAX_DIRECT_UPLOAD_BYTES", which is an admin-tunable value: raising it
+          in the UI changed nothing except that the refusal came from nginx as a
+          bare 413 with no error envelope.
+fe-xss-5  the SPA shipped with no CSP, justified in a comment by Element Plus -
+          removed two releases earlier.
 
 From the 2026-07-30 audit.
 """
@@ -146,3 +157,91 @@ def test_token_bearing_routes_do_not_log_request_lines(conf, loc):
     """`?dt=` signed download tokens and /api/public/<token> both live in the
     request line."""
     assert "access_log off;" in _location_blocks(conf)[loc]
+
+
+# --- docker-9 ---------------------------------------------------------------
+
+
+def test_upstreams_are_resolved_per_request(conf):
+    """A literal hostname in proxy_pass is resolved once and cached for the life
+    of the worker; a variable forces a lookup per request."""
+    assert "resolver 127.0.0.11" in conf, "no resolver, so no re-resolution"
+    literal = re.findall(r"proxy_pass\s+http://(?!\$)([a-z]+):", conf)
+    assert not literal, f"these upstreams are pinned at startup: {set(literal)}"
+
+
+def test_every_proxy_pass_carries_the_request_uri(conf):
+    """Naming the upstream through a variable disables proxy_pass's implicit URI
+    handling. Forgetting $request_uri sends every request to `/`."""
+    for m in re.finditer(r"proxy_pass\s+(http://\$[^;]+);", conf):
+        assert "$request_uri" in m.group(1), m.group(1)
+
+
+# --- files-9 ----------------------------------------------------------------
+
+
+def test_the_api_body_cap_is_above_the_tunable_ceiling(conf):
+    """The BACKEND must be what enforces the direct-upload limit, so that
+    exceeding it produces the standard error envelope rather than a bare nginx
+    413 the SPA cannot explain."""
+    body = _location_blocks(conf)["/api/"]
+    m = re.search(r"client_max_body_size\s+(\d+)m;", body)
+    assert m, "the /api/ body cap is gone; nginx defaults to 1 MB"
+    assert int(m.group(1)) >= 512, (
+        f"{m.group(1)}m is at or near the admin-tunable ceiling; raising "
+        "MAX_DIRECT_UPLOAD_BYTES would 413 at the edge instead"
+    )
+
+
+def test_the_tus_path_stays_uncapped(conf):
+    """Control: resumable uploads run to ~30 GB and must never be capped here."""
+    assert "client_max_body_size 0;" in _location_blocks(conf)["/uploads/"]
+
+
+# --- fe-xss-5 / fe-auth-10 --------------------------------------------------
+
+
+def test_a_csp_is_shipped(conf):
+    assert "Content-Security-Policy" in conf
+
+
+def test_the_csp_is_report_only_for_now(conf):
+    """Enforcing is a separate, deliberate release step: a wrong policy is a
+    blank SPA, which reads as a total outage."""
+    assert "Content-Security-Policy-Report-Only" in conf
+    assert re.search(r"add_header\s+Content-Security-Policy\s", conf) is None
+
+
+def test_the_policy_has_somewhere_to_report_to(conf):
+    """Without a sink, "observe for a release" observes nothing."""
+    assert "report-uri /api/telemetry/csp-report" in conf
+
+
+@pytest.mark.parametrize(
+    "directive",
+    ["script-src 'self'", "object-src 'none'", "frame-ancestors 'none'",
+     "base-uri 'self'", "form-action 'self'"],
+)
+def test_the_policy_locks_down_the_directives_that_matter(conf, directive):
+    assert directive in conf
+
+
+def test_script_src_has_no_unsafe_escape_hatch(conf):
+    """style-src keeps 'unsafe-inline' deliberately; script-src is the directive
+    doing the actual work, and an escape hatch there voids the whole policy."""
+    csp = re.search(r'set \$fh_csp "([^"]+)"', conf).group(1)
+    script = [d for d in csp.split(";") if d.strip().startswith("script-src")][0]
+    assert "unsafe-inline" not in script and "unsafe-eval" not in script
+
+
+def test_no_comment_still_blames_a_removed_library(conf):
+    """The comment may reference Element Plus only to record that it USED to be
+    the excuse - never as a live reason."""
+    raw = CONF.read_text(encoding="utf-8")
+    for idx in [
+        m.start() for m in re.finditer(r"Element Plus", raw)
+    ]:
+        window = raw[max(0, idx - 200): idx + 200]
+        assert "was removed" in window or "removed two releases" in window, (
+            "Element Plus is cited as a live constraint; it was removed in v1.14"
+        )

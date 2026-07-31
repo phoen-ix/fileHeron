@@ -98,7 +98,13 @@ cd "$INSTALL_DIR"
 # ---- secrets generation ---------------------------------------------
 
 if [ ! -f .env ]; then
-    cp .env.example .env
+    # umask FIRST, then copy: `cp` creates the file with the ambient umask, so
+    # .env existed world-readable for the whole window in which the secrets were
+    # generated into it, and the chmod 600 at the end of the script closed the
+    # door after they were already on disk. On a multi-user host that window is
+    # the entire install (audit 2026-07-30, ops-12).
+    (umask 077; cp .env.example .env)
+    chmod 600 .env
     created_env=1
     echo "[install] created .env from .env.example"
 else
@@ -115,6 +121,14 @@ fi
 # published database credentials, and the backend then refused to boot on the
 # DB_PASSWORD placeholder (audit 2026-07-30). Keep this rule in lockstep with
 # backend/app/config.py::_PLACEHOLDER_RE.
+# `sed -i.bak` writes .env.bak with the ambient umask and it holds the PREVIOUS
+# contents - which after the first substitution already includes generated
+# secrets. Tighten it as soon as it can exist; it is removed below either way.
+_secure_env_files() {
+    chmod 600 .env 2>/dev/null || true
+    [ -f .env.bak ] && chmod 600 .env.bak 2>/dev/null || true
+}
+
 gen_secret() {
     local key="$1"
     local current
@@ -127,6 +141,7 @@ gen_secret() {
         else
             echo "${key}=${new_val}" >> .env
         fi
+        _secure_env_files
         echo "  generated $key"
     fi
 }
@@ -155,8 +170,14 @@ set_kv() {
     if grep -qE "^${key}=" .env; then
         sed -i.bak "s|^${key}=.*|${key}=${val}|" .env
     else
+        # Append when the key is absent. An operator upgrading from an older
+        # release has an .env predating whatever key this release added, and
+        # silently doing nothing here would leave the setting at its code
+        # default with no sign of it in the file they read (ops-13).
         echo "${key}=${val}" >> .env
     fi
+    _secure_env_files
+    rm -f .env.bak
 }
 
 set_kv APP_URL "$APP_URL"

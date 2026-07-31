@@ -61,6 +61,11 @@ def should_log(db: Session, event: dict[str, Any]) -> bool:
     source = event.get("source")
     if source == "worker":
         return True
+    if source == "csp":
+        # A CSP report is not an HTTP status, so it cannot ride the 4xx
+        # allowlist. It rides the same opt-in SWITCH, because the reports only
+        # matter while an admin is watching what the policy would break.
+        return settings_svc.get_bool(db, K.ERROR_LOG_CAPTURE_4XX, default=False)
     status = int(event.get("status_code") or 0)
     if status >= 500:
         return True

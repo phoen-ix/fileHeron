@@ -41,5 +41,11 @@ COPY docker/frontend/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /build/dist /usr/share/nginx/html
 
 EXPOSE 80
+# 127.0.0.1, not `localhost`: nginx in this image listens on IPv4 only, and
+# busybox wget resolves `localhost` to ::1 first - which is exactly why the
+# compose healthcheck for this service spells it out. The image's own built-in
+# HEALTHCHECK kept the broken form, so anyone running the image outside this
+# compose file (or reading it to learn the right invocation) got a container
+# that reports unhealthy while serving perfectly (audit 2026-07-30, docker-11).
 HEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=3 \
-    CMD wget --no-verbose --tries=1 --spider http://localhost/healthz || exit 1
+    CMD wget --no-verbose --tries=1 --spider http://127.0.0.1/healthz || exit 1

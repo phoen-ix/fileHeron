@@ -234,12 +234,13 @@ jobs:
             echo "::endgroup::"
           done
       # nginx resolves proxy_pass upstreams at CONFIG-PARSE time, so the compose
-      # service names must exist or `nginx -t` fails on DNS rather than on
-      # syntax. --add-host stubs them; we are checking the config, not the
-      # network.
+      # The upstreams are now named through variables, so nginx no longer
+      # resolves them at config load and `nginx -t` needs no --add-host stubs.
+      # (That is the point of docker-9: a literal hostname made an unresolvable
+      # upstream a STARTUP failure, so a slow tusd took the whole SPA down.)
       - name: nginx -t
         run: |
-          docker run --rm --add-host backend:127.0.0.1 --add-host tusd:127.0.0.1 \
+          docker run --rm \
             -v "$PWD/docker/frontend/nginx.conf:/etc/nginx/conf.d/default.conf:ro" \
             nginx:alpine nginx -t
 

@@ -4,17 +4,25 @@
 .env
 .env.local
 .env.*.local
+# `**/` matters: a bare `node_modules/` is ANCHORED TO THE CONTEXT ROOT, so it
+# ignored a directory that does not exist while frontend/node_modules - 207 MB,
+# root-owned on this host - was copied into every build context, slowing each
+# build and putting whatever happened to be installed locally inside the image
+# layer cache (audit 2026-07-30, docker-4). Same for the caches below.
 .venv/
 venv/
-node_modules/
-__pycache__/
+**/node_modules/
+**/__pycache__/
 *.pyc
 *.pyo
-.pytest_cache/
-.ruff_cache/
-.mypy_cache/
+**/.pytest_cache/
+**/.ruff_cache/
+**/.mypy_cache/
+**/*.egg-info/
 .coverage
 htmlcov/
+**/dist/
+**/*.tsbuildinfo
 data/
 backups/
 plans/

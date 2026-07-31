@@ -43,10 +43,13 @@ def test_links_get_rel():
     assert 'rel="noopener noreferrer nofollow"' in out
 
 
-def test_render_markdown_safe_for_migration():
-    out = richtext.render_markdown_safe("# Hi\n\nsome **body**")
-    assert "<h1>Hi</h1>" in out
-    assert "<strong>body</strong>" in out
+def test_the_module_no_longer_carries_a_markdown_renderer():
+    """`render_markdown_safe` was documented as being "for the one-time
+    Markdown->HTML migration", but that migration builds its own renderer and
+    nothing else ever called this - a live-looking entry point into a format
+    the app stopped authoring two releases ago (audit 2026-07-30, deps-13)."""
+    assert not hasattr(richtext, "render_markdown_safe")
+    assert not hasattr(richtext, "_md")
 
 
 def test_email_inline_alignment_helper():

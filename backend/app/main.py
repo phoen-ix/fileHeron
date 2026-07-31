@@ -9,6 +9,7 @@ serve static files.
 """
 from __future__ import annotations
 
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI
@@ -60,6 +61,18 @@ async def lifespan(_app: FastAPI):
     db = SessionLocal()
     try:
         bootstrap_admin_if_configured(db)
+        # A postponed update keeps maintenance ON across the hand-off, because
+        # the image pull is precisely when a new upload must not start. THIS
+        # container starting is the hand-off concluding, so it is what lifts the
+        # gate again (audit 2026-07-30, flow-maintenance-5). No-op unless
+        # maintenance was set by that flow.
+        from .services import maintenance as maintenance_svc
+        try:
+            maintenance_svc.clear_maintenance_after_update(db)
+        except Exception:
+            logging.getLogger("fileheron.startup").exception(
+                "could not lift post-update maintenance"
+            )
     finally:
         db.close()
     yield

@@ -139,11 +139,19 @@ def handle_pre_create(db: Session, body: dict[str, Any]) -> None:
     # bound to a single tusd upload, and @uppy/tus replays the creation POST
     # whenever its response is lost - so the same file used to reserve its bytes
     # twice while only ever being released once, locking the uploader out of
-    # their own quota until the hourly reconcile repaired the counter. A
-    # non-NULL tus_upload_id here means an earlier pre-create for this file
-    # already reserved.
+    # their own quota until the hourly reconcile repaired the counter.
+    #
+    # Two independent guards, because each has a hole the other covers: a
+    # non-NULL tus_upload_id means an earlier pre-create already reserved, but
+    # only tusd v2 supplies Upload.ID here; the Redis marker does not depend on
+    # the tusd version, but needs Redis (audit 2026-07-30).
     if file_row.tus_upload_id is None:
-        quota_svc.reserve_bytes(db, user=user, additional_bytes=envelope["max_size"])
+        quota_svc.reserve_bytes_once(
+            db,
+            user=user,
+            additional_bytes=envelope["max_size"],
+            file_id=file_row.id,
+        )
 
     # Link the row to the tusd upload NOW, not at finalize.
     #
@@ -254,6 +262,8 @@ def handle_post_terminate(db: Session, body: dict[str, Any]) -> None:
         # Release exactly what pre-create reserved (the authorised max_size), never
         # the client-reported Size (attacker-controllable and unbounded).
         quota_svc.release_bytes(user_id=envelope["owner_user_id"], bytes_to_free=envelope["max_size"])
+        # Let a genuine retry of this file reserve again.
+        quota_svc.clear_reserve_marker(envelope["file_id"])
         file_row.state = FileState.deleted
         db.commit()
 

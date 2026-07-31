@@ -350,6 +350,26 @@ async def change_email(
     return {"ok": True, "applied": outcome.applied, "mode": outcome.mode}
 
 
+@router.delete("/email", status_code=status.HTTP_200_OK)
+def cancel_own_email_change(
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Withdraw my own pending email change(s).
+
+    `cancel_email_change`'s `user=` branch has existed since the feature
+    shipped, documented in its own docstring as "self/admin revoke", with no
+    endpoint reaching it: someone who typed the wrong address had to wait 24h
+    for the token to expire or find the cancel link mailed to their old address
+    (audit 2026-07-30, flow-emailchange-8)."""
+    from ..services import email_change as email_change_svc
+
+    count = email_change_svc.cancel_email_change(db, user=user, request=request)
+    db.commit()
+    return {"ok": True, "cancelled": count}
+
+
 @router.post("/invite", status_code=status.HTTP_201_CREATED)
 async def create_invite(
     payload: InviteRequest,

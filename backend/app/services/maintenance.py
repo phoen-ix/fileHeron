@@ -20,6 +20,7 @@ from ..middleware.errors import AppError
 from ..models.audit_log import AuditEventType
 from ..models.user import User
 from ..utils.http_range import is_partial_continuation
+from ..utils.timeutil import utc_now
 from . import settings as settings_svc
 from .audit import record_audit_event
 
@@ -115,22 +116,68 @@ def set_pending_update(db: Session, record: dict | None, *, actor: User | None) 
     )
 
 
+# How long a handed-off update may leave the gate shut before the drain worker
+# decides no new container is coming and lifts it. Generously above a normal
+# pull+restart; the failure it bounds is "the executor died", not "the pull is
+# slow".
+HANDOFF_STALE_MIN = 30
+
+
+def set_handoff_at(db: Session, value: str | None, *, actor: User | None = None) -> None:
+    settings_svc.set_value(
+        db,
+        key=settings_svc.Keys.MAINTENANCE_UPDATE_HANDOFF_AT,
+        value=value,
+        actor=actor,
+    )
+
+
+def get_handoff_at(db: Session) -> str | None:
+    return settings_svc.get(db, settings_svc.Keys.MAINTENANCE_UPDATE_HANDOFF_AT)
+
+
+def clear_maintenance_after_update(db: Session) -> bool:
+    """Lift maintenance once an update hand-off has concluded.
+
+    Called from the backend's boot (the new container IS the conclusion) and
+    from the drain worker (which covers the hand-off that never produced one).
+    No-op unless maintenance is on with nothing pending. Returns whether it
+    lifted anything."""
+    if not is_enabled(db):
+        return False
+    if get_pending_update(db) is not None:
+        return False
+    if get_handoff_at(db) is None:
+        # Maintenance an operator turned on by hand: not ours to lift.
+        return False
+    set_enabled(db, False, actor=None, audit=False)
+    set_handoff_at(db, None, actor=None)
+    db.commit()
+    logger.info("maintenance lifted after update hand-off")
+    return True
+
+
 def apply_pending_update(
     db: Session, *, actor: User | None = None, request=None, reason: str = "drain"
 ) -> dict | None:
-    """Fire the deferred update: clear maintenance + the pending record (committed
-    first so the freshly-updated container never boots stuck in maintenance), then
-    hand the tag to the updater. Used by the drain worker and the admin
+    """Fire the deferred update: clear the pending record, keep maintenance ON,
+    and hand the tag to the updater. Used by the drain worker and the admin
     'update now' control. Returns the job dict, or None if nothing is pending.
 
-    The clear-then-hand-off order is deliberate (a container replaced mid-call
-    must not come back stuck in maintenance), but it used to be unconditional:
-    if `release_apply` then failed, the pending record was already gone and
-    maintenance already lifted, so the postponed update silently evaporated with
-    nothing to retry. That was not a rare path - the drain worker runs in the
-    worker container, which had no /state bind mount, so this call failed EVERY
-    time (audit 2026-07-30). The mount is fixed in docker-compose.yml; this
-    restores the state on failure so the next drain tick tries again.
+    **Maintenance is deliberately NOT lifted here.** It used to be, on the
+    reasoning that a container replaced mid-call must not come back stuck in
+    maintenance - but that opened the gate for the whole image-pull window, the
+    one stretch where a new upload is most likely to be interrupted by the
+    restart it just raced. The property is preserved from the other end
+    instead: the new container clears maintenance on boot when nothing is
+    pending (see main.py's lifespan), and the drain worker lifts it if the
+    hand-off produces no new container within the stale window
+    (audit 2026-07-30, flow-maintenance-5).
+
+    On a hand-off FAILURE the pending record is restored so the next drain tick
+    retries. That was not a rare path - the drain worker runs in the worker
+    container, which had no /state bind mount, so this call failed EVERY time
+    (audit 2026-07-30). The mount is fixed in docker-compose.yml.
     """
     pending = get_pending_update(db)
     if not pending:
@@ -150,11 +197,13 @@ def apply_pending_update(
         # never become valid once a minute forever.
         logger.error("pending update has an invalid target_tag=%r; discarding", tag)
         set_pending_update(db, None, actor=actor)
+        # Nothing is going to happen, so the gate must not stay shut.
         set_enabled(db, False, actor=actor, audit=False)
+        set_handoff_at(db, None, actor=actor)
         db.commit()
         return None
-    set_enabled(db, False, actor=actor, audit=False)
     set_pending_update(db, None, actor=actor)
+    set_handoff_at(db, utc_now().isoformat(), actor=actor)
     db.commit()
 
     from .release_apply import apply as _release_apply
@@ -164,6 +213,7 @@ def apply_pending_update(
         db.rollback()
         set_enabled(db, True, actor=actor, audit=False)
         set_pending_update(db, pending, actor=actor)
+        set_handoff_at(db, None, actor=actor)
         db.commit()
         logger.exception(
             "pending update hand-off failed for tag=%s; restored maintenance + "

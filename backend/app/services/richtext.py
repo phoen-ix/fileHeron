@@ -14,16 +14,14 @@ Key safety properties:
 - ``a``/``img`` URLs restricted to http/https/mailto (no ``javascript:``/``data:``).
 - ``rel="noopener noreferrer nofollow"`` forced on links.
 
-``render_markdown_safe`` remains for the one-time Markdown->HTML migration of
-pre-existing content (and any legacy caller); it renders CommonMark with raw
-HTML disabled, then sanitises with the same allowlist.
+There is no Markdown here. `render_markdown_safe` used to live in this module
+"for the one-time Markdown->HTML migration", but that migration
+(202606130001) builds its own renderer, so nothing ever called it - it and the
+module-level MarkdownIt instance were removed in the 2026-07-30 audit.
 """
 from __future__ import annotations
 
 import nh3
-from markdown_it import MarkdownIt
-
-_md = MarkdownIt("commonmark", {"html": False, "breaks": True})
 
 # The four alignment utility classes the editor emits (align attr -> class). The
 # public legal CSS + the email CSS-inliner both key off exactly these names.
@@ -83,10 +81,3 @@ def sanitize_html(html: str | None) -> str:
         link_rel="noopener noreferrer nofollow",
     )
 
-
-def render_markdown_safe(markdown: str | None) -> str:
-    """Render CommonMark (raw HTML off) to sanitised HTML. Retained for the
-    one-time Markdown->HTML migration of pre-existing legal/email content."""
-    if not markdown or not markdown.strip():
-        return ""
-    return sanitize_html(_md.render(markdown))

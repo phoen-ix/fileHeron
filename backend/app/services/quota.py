@@ -108,6 +108,53 @@ def reserve_bytes(db: Session, *, user: User, additional_bytes: int) -> int:
         return additional_bytes
 
 
+# One reservation per file, whatever the caller does.
+#
+# The tus pre-create hook is the one hook that cannot be bound to a single tusd
+# upload, and @uppy/tus replays the creation POST whenever its response is lost,
+# so the same file could reserve its bytes twice while only ever being released
+# once - locking the uploader out of their own quota until the hourly reconcile
+# repaired the counter. The DB guard (a non-NULL tus_upload_id) covers this only
+# when tusd supplies Upload.ID at pre-create, which older tusd versions do not;
+# this marker does not depend on that (audit 2026-07-30, flow-upload-5).
+_RESERVE_MARKER_TTL_SEC = 24 * 3600
+
+
+def _marker_key(file_id: str) -> str:
+    return f"fh:quota:reserved:{file_id}"
+
+
+def reserve_bytes_once(
+    db: Session, *, user: User, additional_bytes: int, file_id: str
+) -> int | None:
+    """Reserve for `file_id` at most once. Returns the new total, or None when
+    a reservation for this file was already recorded.
+
+    Redis being unreachable falls back to reserving (which itself fails open) -
+    the double-charge this prevents is self-healing within the hour, while
+    refusing the upload is not."""
+    try:
+        first = get_redis().set(
+            _marker_key(file_id), "1", nx=True, ex=_RESERVE_MARKER_TTL_SEC
+        )
+    except Exception:
+        logger.warning("quota reserve-once marker unavailable for file=%s", file_id)
+        first = True
+    if not first:
+        logger.info("quota reserve skipped: file=%s already reserved", file_id)
+        return None
+    return reserve_bytes(db, user=user, additional_bytes=additional_bytes)
+
+
+def clear_reserve_marker(file_id: str) -> None:
+    """Drop the once-marker when the reservation is released, so a genuine
+    retry after a terminate can reserve again."""
+    try:
+        get_redis().delete(_marker_key(file_id))
+    except Exception:
+        logger.warning("quota reserve-once marker not cleared for file=%s", file_id)
+
+
 def release_bytes(*, user_id: int, bytes_to_free: int) -> None:
     """Decrement the Redis counter when an upload is abandoned (post-terminate)
     or a file is deleted. Best-effort - if Redis is down, we accept the

@@ -41,9 +41,10 @@ def test_failed_handoff_restores_maintenance_and_pending(db, postponed, monkeypa
     assert maintenance_svc.is_enabled(db) is True
 
 
-def test_successful_handoff_clears_state(db, postponed, monkeypatch):
-    """Control: the happy path must still clear both, or a successful update
-    would leave the new container booting into maintenance mode."""
+def test_successful_handoff_clears_the_pending_record_only(db, postponed, monkeypatch):
+    """The pending record must go (or the drain worker fires the same update
+    again next minute), but maintenance stays on across the pull and is lifted
+    by the new container's boot - see clear_maintenance_after_update."""
     monkeypatch.setattr(
         "app.services.release_apply.apply",
         lambda **_kwargs: {"job_id": "job-123"},
@@ -53,7 +54,7 @@ def test_successful_handoff_clears_state(db, postponed, monkeypatch):
 
     assert result["job_id"] == "job-123"
     assert maintenance_svc.get_pending_update(db) is None
-    assert maintenance_svc.is_enabled(db) is False
+    assert maintenance_svc.is_enabled(db) is True
 
 
 def test_nothing_pending_is_a_noop(db):

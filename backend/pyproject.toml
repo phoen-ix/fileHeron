@@ -12,7 +12,16 @@ license = { text = "MIT" }
 requires-python = ">=3.12"
 
 dependencies = [
-    "fastapi[standard]>=0.115",
+    # NOT `fastapi[standard]`: that extra pulls fastapi-cli -> fastapi-cloud-cli,
+    # which drags a commercial cloud CLI, the Sentry SDK and two Rust-extension
+    # packages (fastar, rignore) into the PRODUCTION image - about a sixth of
+    # the lock file - for a `fastapi dev` command this project never runs
+    # (uvicorn is the server; see docker/backend/Dockerfile). Everything the app
+    # imports from the extra is declared explicitly below: httpx, jinja2,
+    # python-multipart, pydantic-settings; email-validator and
+    # pydantic-extra-types still arrive with the remaining extra
+    # (audit 2026-07-30, deps-15).
+    "fastapi[standard-no-fastapi-cloud-cli]>=0.115",
     "uvicorn[standard]>=0.30",
     "sqlalchemy>=2.0",
     "pymysql>=1.1",
@@ -25,11 +34,17 @@ dependencies = [
     "qrcode>=7.4",
     "pyjwt[crypto]>=2.8",
     "jinja2>=3.1",
-    # email.py imports these directly (Markdown→HTML render + nh3 sanitise for the
-    # admin-editable templates, v1.25.0). nh3 has no transitive puller - omitting
-    # it crash-looped v1.25.0/.1; markdown-it-py only rode in via rich. Pin both.
-    "markdown-it-py>=3.0",
+    # nh3 sanitises every admin-authored HTML fragment (legal pages + email
+    # templates, v1.25.0). It has no transitive puller - omitting it
+    # crash-looped v1.25.0/.1.
     "nh3>=0.2.18",
+    # markdown-it-py is NOT used at runtime any more: the app authors HTML, and
+    # the dead renderers in email.py/richtext.py were removed in the 2026-07-30
+    # audit. It stays declared because alembic revision 202606130001 imports it
+    # to convert pre-v1.50 Markdown content, and dropping it would break the
+    # upgrade path for anyone still on an older release. It only ever rode in
+    # via rich, so it must stay explicit.
+    "markdown-it-py>=3.0",
     "python-multipart>=0.0.9",
     "redis>=5.0",
     "arq>=0.26",

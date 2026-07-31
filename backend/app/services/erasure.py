@@ -78,6 +78,38 @@ def _unlink_tus_partial(tus_upload_id: str) -> None:
             logger.warning("erasure: tus partial unlink failed %s: %s", p, e)
 
 
+def _erased_file_totals(db: Session, user_id: int) -> tuple[int, int]:
+    """(files, bytes) hard-deleted for this user across EVERY erasure attempt,
+    read back from the `file_deleted` audit rows this flow writes.
+
+    Each attempt commits per file, so these rows are the only place the work of
+    an aborted attempt survives."""
+    # Keyed on the FILE ids, not the audit actor: the actor on these rows is the
+    # admin performing the erasure, and a retry may be run by a different one.
+    file_ids = {
+        fid for (fid,) in db.query(File.id).filter(File.uploaded_by_id == user_id).all()
+    }
+    if not file_ids:
+        return 0, 0
+    rows = (
+        db.query(AuditLog)
+        .filter(
+            AuditLog.event_type == AuditEventType.file_deleted.value,
+            AuditLog.target_type == "file",
+            AuditLog.target_id.in_(file_ids),
+        )
+        .all()
+    )
+    seen: dict[str, int] = {}
+    for r in rows:
+        extra = r.extra or {}
+        if extra.get("reason") != "user_erased":
+            continue
+        # One row per file even if an earlier attempt somehow logged twice.
+        seen[r.target_id] = int(extra.get("size_bytes") or 0)
+    return len(seen), sum(seen.values())
+
+
 def erase_user(
     db: Session, *, actor: User, target: User, request=None
 ) -> dict:
@@ -476,6 +508,14 @@ def erase_user(
     target.oidc_provider_id = None
     target.last_login_at = None
     db.flush()
+
+    # Count from the durable record, not from this attempt's locals. The
+    # documented recovery for a failed unlink is "clean the disk and retry", and
+    # a retry only sees files that are still un-deleted - so everything the
+    # FIRST attempt destroyed was missing from the receipt the admin hands to
+    # the data subject, understating what was erased in the one document whose
+    # whole purpose is to state it (audit 2026-07-30, flow-erasure-2).
+    deleted_count, deleted_bytes = _erased_file_totals(db, target.id)
 
     record_audit_event(
         db,

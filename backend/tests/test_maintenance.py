@@ -117,7 +117,12 @@ def test_active_uploads_counts_uploading(db, make_user):
 # pending update record + drain worker
 # --------------------------------------------------------------------------- #
 
-def test_apply_pending_update_clears_state(db, monkeypatch):
+def test_apply_pending_update_hands_off_with_the_gate_still_shut(db, monkeypatch):
+    """Maintenance used to be lifted here, at job-WRITE time, which re-opened
+    uploads and downloads for the whole image-pull window - the one stretch
+    where a new transfer is most likely to be cut off by the restart it just
+    raced. It now stays on until the new container boots (audit 2026-07-30,
+    flow-maintenance-5)."""
     from app.services import release_apply
 
     calls = {}
@@ -134,8 +139,13 @@ def test_apply_pending_update_clears_state(db, monkeypatch):
     result = maintenance_svc.apply_pending_update(db, reason="drain")
     assert result["job_id"] == "job-1"
     assert calls == {"action": "update", "target_tag": "v9.9.9"}
-    assert maintenance_svc.is_enabled(db) is False
+    assert maintenance_svc.is_enabled(db) is True, "the gate re-opened mid-pull"
     assert maintenance_svc.get_pending_update(db) is None
+    assert maintenance_svc.get_handoff_at(db) is not None
+
+    # ...and the new container's boot is what lifts it.
+    assert maintenance_svc.clear_maintenance_after_update(db) is True
+    assert maintenance_svc.is_enabled(db) is False
 
 
 @pytest.mark.asyncio
@@ -183,7 +193,8 @@ async def test_drain_worker_fires_when_drained(db, monkeypatch):
     out = await mod.drain_pending_update(None)
     assert out["triggered"] is True
     assert out["reason"] == "drain"
-    assert maintenance_svc.is_enabled(db) is False
+    # Still shut: the updated container lifts it on boot, not the hand-off.
+    assert maintenance_svc.is_enabled(db) is True
     assert maintenance_svc.get_pending_update(db) is None
 
 

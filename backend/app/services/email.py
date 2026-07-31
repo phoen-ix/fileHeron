@@ -21,7 +21,6 @@ from pathlib import Path
 
 import nh3
 from jinja2 import Environment, FileSystemLoader, pass_context, select_autoescape
-from markdown_it import MarkdownIt
 from sqlalchemy.orm import Session
 
 from ..config import settings
@@ -80,18 +79,6 @@ def _format_dt_locale(jctx, value, locale_code: str = "en") -> str:
 
 
 _env.filters["dt_locale"] = _format_dt_locale
-
-# --- Markdown override rendering (admin-editable templates, v1.25.0) ---------
-# CommonMark with raw HTML DISABLED (raw HTML in the admin's source is escaped
-# as text). breaks=True turns single newlines into <br> so typed line breaks
-# survive in email. nh3 sanitizes the output as defense-in-depth.
-_md = MarkdownIt("commonmark", {"html": False, "breaks": True})
-# Don't percent-encode/validate link destinations at markdown time: a token like
-# [RESET_LINK] must survive verbatim in the href so we can substitute the real
-# URL before sanitizing. nh3's scheme allowlist (below) is the actual gate, so
-# disabling markdown-it's own link checks here is safe.
-_md.normalizeLink = lambda url: url
-_md.validateLink = lambda url: True
 _ALLOWED_TAGS = {
     "p", "strong", "b", "em", "i", "a", "ul", "ol", "li",
     "blockquote", "code", "pre", "h1", "h2", "h3", "h4", "br", "hr",

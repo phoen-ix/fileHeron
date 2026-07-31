@@ -233,6 +233,25 @@ async def change_user_email(
     )
 
 
+@router.delete("/users/{user_id}/email", status_code=200)
+def cancel_user_email_change(
+    user_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(get_current_admin),
+) -> dict:
+    """Withdraw a user's pending email change(s).
+
+    The service branch this calls has existed since the feature shipped,
+    documented as "self/admin revoke", with nothing calling it - so an admin who
+    started a change to a mistyped address could only wait 24h for the token to
+    expire (audit 2026-07-30, flow-emailchange-8)."""
+    target = um_svc.get_or_404(db, user_id)
+    count = email_change_svc.cancel_email_change(db, user=target, request=request)
+    db.commit()
+    return {"ok": True, "cancelled": count}
+
+
 @router.get("/users/{user_id}/erase/preflight")
 def erase_preflight(
     user_id: int,

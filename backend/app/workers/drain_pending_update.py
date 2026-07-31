@@ -39,10 +39,34 @@ async def drain_pending_update(_ctx) -> dict:
     db = SessionLocal()
     try:
         if maintenance_svc.get_pending_update(db) is None:
-            return {"pending": False}
+            # No pending update, but maintenance may still be held shut by a
+            # hand-off that never produced a new container (the executor died,
+            # the pull failed). The new backend clears the gate on boot; this
+            # is the other end of that, so a failed update cannot leave the
+            # instance refusing transfers forever (flow-maintenance-5).
+            return {"pending": False, "lifted": _lift_if_stale(db)}
     finally:
         db.close()
     return await _drain_pending_update_tracked(_ctx)
+
+
+def _lift_if_stale(db) -> bool:
+    stamp = maintenance_svc.get_handoff_at(db)
+    if not stamp:
+        return False
+    try:
+        from datetime import datetime, timedelta
+
+        handed_off = datetime.fromisoformat(stamp)
+    except ValueError:
+        return maintenance_svc.clear_maintenance_after_update(db)
+    if utc_now() - handed_off < timedelta(minutes=maintenance_svc.HANDOFF_STALE_MIN):
+        return False
+    logger.warning(
+        "update hand-off at %s produced no new container within %d min; "
+        "lifting maintenance", stamp, maintenance_svc.HANDOFF_STALE_MIN,
+    )
+    return maintenance_svc.clear_maintenance_after_update(db)
 
 
 @track_cron("drain_pending_update")

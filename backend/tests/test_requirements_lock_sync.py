@@ -27,7 +27,6 @@ import re
 import tomllib
 from pathlib import Path
 
-import pytest
 from packaging.requirements import Requirement
 from packaging.utils import canonicalize_name
 from packaging.version import Version
@@ -86,14 +85,32 @@ def test_locked_versions_satisfy_the_declared_constraints():
     )
 
 
-@pytest.mark.parametrize("extra", ["standard"])
-def test_extras_are_recorded_so_their_closure_is_intentional(extra):
-    """`fastapi[standard]` drags a cloud CLI, sentry-sdk and two Rust wheels into
-    the runtime image. That is a live finding (deps-15); this test does not
-    assert it away, it just pins the fact that an extra is declared so removing
-    it is a deliberate edit to a test rather than a silent behaviour change."""
+def test_the_runtime_image_does_not_carry_the_cloud_cli():
+    """`fastapi[standard]` pulled fastapi-cli -> fastapi-cloud-cli, which drags a
+    commercial cloud CLI, the Sentry SDK and two Rust-extension wheels into the
+    PRODUCTION image - about a sixth of the lock file - for a `fastapi dev`
+    command this project never runs (deps-15, closed 2026-07-31)."""
     declared = {r.name: r for r in _declared()}
     fastapi = declared.get("fastapi")
     assert fastapi is not None
-    # Intentionally records current state. When deps-15 lands, this flips.
-    assert extra in fastapi.extras or not fastapi.extras
+    assert "standard" not in fastapi.extras, (
+        "the plain `standard` extra is back; it re-adds fastapi-cloud-cli"
+    )
+
+    locked = _locked()
+    for gone in (
+        "fastapi-cloud-cli", "sentry-sdk", "fastar", "rignore", "detect-installer",
+    ):
+        assert canonicalize_name(gone) not in locked, (
+            f"{gone} is back in the runtime lock file"
+        )
+
+
+def test_what_the_app_actually_imports_is_still_locked():
+    """Control: dropping the extra must not drop anything the code needs. These
+    arrive via the extra on a normal `fastapi[standard]` install and are
+    declared explicitly in pyproject for exactly this reason."""
+    locked = _locked()
+    for needed in ("httpx", "jinja2", "python-multipart", "pydantic-settings",
+                   "email-validator", "uvicorn"):
+        assert canonicalize_name(needed) in locked, f"{needed} is missing"

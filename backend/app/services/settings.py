@@ -210,6 +210,11 @@ class Keys:
     MAINTENANCE_ENABLED = "maintenance.enabled"          # boolean
     MAINTENANCE_MESSAGE = "maintenance.message"          # optional banner text
     MAINTENANCE_PENDING_UPDATE = "maintenance.pending_update"  # JSON or absent
+    # ISO timestamp of the moment a postponed update was handed to the updater.
+    # Maintenance stays ON across the hand-off (the image pull is exactly when
+    # new transfers must not start), so this is the stamp that lets the drain
+    # worker lift it again if the hand-off never produces a new container.
+    MAINTENANCE_UPDATE_HANDOFF_AT = "maintenance.update_handoff_at"
     # Registry tunable: how long the postpone flow waits for transfers to drain
     # before applying the update anyway.
     UPDATES_DRAIN_MAX_WAIT_MIN = "updates.drain_max_wait_min"

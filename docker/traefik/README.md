@@ -16,10 +16,14 @@ proxies external HTTPS to those local ports.
    tusd webhook receiver lives there with HMAC envelope auth +
    optional source-IP allowlist (see `TUS_HOOK_ALLOWED_IPS`), but
    defense-in-depth requires the proxy to also refuse the path.
-2. **TLS terminates at Traefik.** The backend reads
-   `X-Forwarded-Proto` to decide whether to issue Secure cookies -
-   if the proxy strips that header, login silently breaks. Make
-   sure Traefik forwards it (the snippet below does).
+2. **TLS terminates at Traefik.** Secure cookies come from `COOKIE_SECURE`,
+   which `ENVIRONMENT=production` forces to true - the backend never reads
+   `X-Forwarded-Proto` for that decision, so stripping the header does NOT
+   break login. (This doc said it did; it never has.) The header still
+   matters, but for tusd: nginx maps it into `$fh_proto` and tusd builds its
+   upload `Location` from it, so stripping it makes TUS PATCH redirect
+   http->https mid-upload and large uploads fail. Forward it (the snippet
+   below does).
 3. **Body-size limits matter for uploads - but scope them to the
    direct-upload path only.** The SPA uploads <100 MB files via
    `POST /api/uploads/direct`; cap that with the `buffering` middleware
@@ -265,6 +269,20 @@ providers:
 
 - [ ] `curl https://files.example.com/api/internal/tus-hooks` → 404
 - [ ] `curl -I https://files.example.com/` → `Strict-Transport-Security`
+      **only if you added the headers middleware below.** Neither the sample
+      `dynamic.yml` in README.md nor the frontend nginx emits HSTS, so this
+      check failed on a correctly-installed stack until you add it
+      (audit 2026-07-30):
+
+      ```yaml
+      http:
+        middlewares:
+          fh-hsts:
+            headers:
+              stsSeconds: 31536000
+              stsIncludeSubdomains: true
+      ```
+      then reference `fh-hsts` from both routers.
       header present
 - [ ] Login from a browser; check that the `fh_refresh` cookie is
       `Secure; HttpOnly; SameSite=Lax`

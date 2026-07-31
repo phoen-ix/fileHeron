@@ -684,7 +684,7 @@ via `/admin/settings/advanced`.
 |---|---|---|
 | `TUS_HOOK_SECRET` | - (**required**, ≥32) | HMAC for the tusd↔backend hook envelope. |
 | `TUS_HOOK_ALLOWED_IPS` | empty | Optional source-IP allowlist for `/api/internal/tus-hooks`. |
-| `MAX_DIRECT_UPLOAD_BYTES` | `104857600` (100 MB) | Direct-multipart cap; larger → TUS. ↻ |
+| `MAX_DIRECT_UPLOAD_BYTES` | `104857600` (100 MB) | Direct-multipart cap; larger → TUS. **Raising this alone is not enough** - `client_max_body_size` in `docker/frontend/nginx.conf` (110m) and Traefik's `maxRequestBodyBytes` both cap the same request, so a larger value 413s at the edge before the backend sees it. ↻ |
 | `UPLOAD_STALE_AFTER_HOURS` | `3` | When an `uploading` row is treated as abandoned. ↻ |
 | `STORAGE_ROOT` / `TUS_UPLOAD_DIR` / `QUARANTINE_DIR` | `/data/files` / `/data/uploads` / `/data/quarantine` | **Must share one filesystem.** |
 | `STORAGE_BACKEND` | `local` | `local` or `s3` (+ `S3_*`). |

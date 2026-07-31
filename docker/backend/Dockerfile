@@ -60,11 +60,17 @@ USER appuser
 
 EXPOSE 8000
 ENTRYPOINT ["/entrypoint.sh"]
-# --proxy-headers tells uvicorn to honor X-Forwarded-For/Proto from the
-# reverse proxy. --forwarded-allow-ips="*" trusts any source - safe here
-# because the backend port is bound to 127.0.0.1 in compose; external
-# clients can never reach uvicorn directly, so any incoming connection
-# is by definition from a trusted proxy (Traefik on the host, or the
-# frontend nginx container on the internal network).
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", \
-     "--proxy-headers", "--forwarded-allow-ips=*"]
+# --proxy-headers tells uvicorn to honor X-Forwarded-For/Proto from the reverse
+# proxy. The trusted-source list defaults to "*", which is safe in the shipped
+# topology: compose binds the backend to 127.0.0.1 and nothing outside the
+# internal network can reach uvicorn, so any incoming connection is by
+# definition a proxy hop.
+#
+# It is now driven by FORWARDED_ALLOW_IPS rather than hardcoded. The value was
+# baked into the CMD, so an operator following the documented hardening advice
+# to pin it to their proxy's address changed nothing at all - the setting they
+# were told to set had no reader (audit 2026-07-30). Shell form so the variable
+# expands; entrypoint.sh still execs this as the CMD.
+ENV FORWARDED_ALLOW_IPS="*"
+CMD uvicorn app.main:app --host 0.0.0.0 --port 8000 \
+    --proxy-headers --forwarded-allow-ips="$FORWARDED_ALLOW_IPS"

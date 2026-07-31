@@ -65,7 +65,14 @@ TUNABLES: list[Tunable] = [
     Tunable(K.TUS_UPLOAD_ABANDONED_AFTER_HOURS, "TUS_UPLOAD_ABANDONED_AFTER_HOURS", "int", "retention", 1, 8760),
     Tunable(K.UPLOAD_STALE_AFTER_HOURS, "UPLOAD_STALE_AFTER_HOURS", "int", "retention", 1, 720),
     # --- Uploads / security / branding ---
-    Tunable(K.MAX_DIRECT_UPLOAD_BYTES, "MAX_DIRECT_UPLOAD_BYTES", "int", "uploads", 1_000_000, 5_368_709_120),
+    # Ceiling lowered from 5 GiB to 104 MB, which is what the stack can actually
+    # accept. `client_max_body_size 110m` in docker/frontend/nginx.conf and
+    # Traefik's maxRequestBodyBytes both cap the SAME request, so any value
+    # above ~110 MB was accepted by this control and then 413'd at the edge -
+    # an admin-facing setting whose upper range did nothing but produce failed
+    # uploads. Raising it for real means changing the proxy layers too, which
+    # is a host step, not a runtime knob (audit 2026-07-30).
+    Tunable(K.MAX_DIRECT_UPLOAD_BYTES, "MAX_DIRECT_UPLOAD_BYTES", "int", "uploads", 1_000_000, 104_857_600),
     # --- Downloads ---
     # Signed-url TTL: 30s floor, 1h ceiling. The URL is an UNgated, transferable
     # bearer of the file bytes for its whole lifetime (audit #3), so the ceiling

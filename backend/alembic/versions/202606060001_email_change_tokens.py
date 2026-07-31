@@ -16,48 +16,12 @@ from __future__ import annotations
 import sqlalchemy as sa
 
 from alembic import op
+from app.db_guards import _has_index, _has_table
 
 revision = "202606060001"
 down_revision = "202606051500"
 branch_labels = None
 depends_on = None
-
-
-def _has_table(bind, table: str) -> bool:
-    if bind.dialect.name == "mysql":
-        rows = bind.execute(
-            sa.text(
-                "SELECT 1 FROM information_schema.tables "
-                "WHERE table_schema = DATABASE() AND table_name = :t LIMIT 1"
-            ),
-            {"t": table},
-        ).fetchone()
-        return rows is not None
-    rows = bind.execute(
-        sa.text("SELECT 1 FROM sqlite_master WHERE type='table' AND name=:t"),
-        {"t": table},
-    ).fetchone()
-    return rows is not None
-
-
-def _has_index(bind, table: str, index: str) -> bool:
-    if bind.dialect.name == "mysql":
-        rows = bind.execute(
-            sa.text(
-                "SELECT 1 FROM information_schema.statistics "
-                "WHERE table_schema = DATABASE() AND table_name = :t "
-                "AND index_name = :i LIMIT 1"
-            ),
-            {"t": table, "i": index},
-        ).fetchone()
-        return rows is not None
-    rows = bind.execute(
-        sa.text(
-            "SELECT 1 FROM sqlite_master WHERE type='index' AND name=:i AND tbl_name=:t"
-        ),
-        {"i": index, "t": table},
-    ).fetchone()
-    return rows is not None
 
 
 _INDEXES = [

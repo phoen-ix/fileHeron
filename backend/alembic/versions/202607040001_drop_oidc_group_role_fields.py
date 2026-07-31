@@ -17,6 +17,7 @@ from __future__ import annotations
 import sqlalchemy as sa
 
 from alembic import op
+from app.db_guards import _has_column
 
 revision = "202607040001"
 down_revision = "202606160001"
@@ -24,21 +25,6 @@ branch_labels = None
 depends_on = None
 
 _COLS = ("groups_claim", "admin_groups", "employee_groups")
-
-
-def _has_column(bind, table: str, column: str) -> bool:
-    if bind.dialect.name == "mysql":
-        rows = bind.execute(
-            sa.text(
-                "SELECT 1 FROM information_schema.columns "
-                "WHERE table_schema = DATABASE() AND table_name = :t "
-                "AND column_name = :c"
-            ),
-            {"t": table, "c": column},
-        ).fetchone()
-        return rows is not None
-    rows = bind.execute(sa.text(f"PRAGMA table_info({table})")).fetchall()
-    return any(r[1] == column for r in rows)
 
 
 def upgrade() -> None:

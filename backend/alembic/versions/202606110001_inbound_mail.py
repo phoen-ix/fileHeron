@@ -9,15 +9,12 @@ from __future__ import annotations
 import sqlalchemy as sa
 
 from alembic import op
+from app.db_guards import _has_index, _has_table
 
 revision = "202606110001"
 down_revision = "202606100001"
 branch_labels = None
 depends_on = None
-
-
-def _has_table(bind, name: str) -> bool:
-    return sa.inspect(bind).has_table(name)
 
 
 def _big_int():
@@ -58,8 +55,17 @@ def upgrade() -> None:
                 name="fk_inbound_sender_user",
             ),
         )
-        op.create_index("ix_inbound_class_created", "inbound_messages", ["classification", "created_at"])
-        op.create_index("ix_inbound_status_created", "inbound_messages", ["status", "created_at"])
+
+    # Indexes are created OUTSIDE the table guard, each guarded on its own name.
+    # Nested inside it, a crash between create_table and create_index left the
+    # index missing forever: the rerun saw the table and skipped the whole block
+    # (audit 2026-07-30).
+    for name, cols in (
+        ("ix_inbound_class_created", ["classification", "created_at"]),
+        ("ix_inbound_status_created", ["status", "created_at"]),
+    ):
+        if not _has_index(bind, "inbound_messages", name):
+            op.create_index(name, "inbound_messages", cols)
 
     if not _has_table(bind, "inbound_attachments"):
         op.create_table(

@@ -14,6 +14,7 @@ from __future__ import annotations
 import sqlalchemy as sa
 
 from alembic import op
+from app.db_guards import _column_nullable, _has_column
 
 revision = "202605170200"
 down_revision = "202605161900"
@@ -21,16 +22,15 @@ branch_labels = None
 depends_on = None
 
 
-def _column_nullable(bind, table: str, column: str) -> bool | None:
-    for c in sa.inspect(bind).get_columns(table):
-        if c["name"] == column:
-            return bool(c.get("nullable", False))
-    return None
-
-
 def upgrade() -> None:
     bind = op.get_bind()
-    if _column_nullable(bind, "shares", "expires_at") is False:
+    # `_has_column` first: the shared guard answers False for an absent column
+    # (it is asked "does this still need tightening"), where this revision's
+    # local copy answered None. Without the existence check the alter would be
+    # attempted against a column that is not there.
+    if _has_column(bind, "shares", "expires_at") and not _column_nullable(
+        bind, "shares", "expires_at"
+    ):
         op.alter_column(
             "shares",
             "expires_at",

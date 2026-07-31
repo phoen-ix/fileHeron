@@ -9,26 +9,12 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 
 from alembic import op
+from app.db_guards import _has_column
 
 revision: str = "202605020924"
 down_revision: str | None = "202605020923"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
-
-
-def _has_column(bind, table: str, column: str) -> bool:
-    if bind.dialect.name == "mysql":
-        rows = bind.execute(
-            sa.text(
-                "SELECT 1 FROM information_schema.columns "
-                "WHERE table_schema = DATABASE() AND table_name = :t "
-                "AND column_name = :c"
-            ),
-            {"t": table, "c": column},
-        ).fetchone()
-        return rows is not None
-    rows = bind.execute(sa.text(f"PRAGMA table_info({table})")).fetchall()
-    return any(r[1] == column for r in rows)
 
 
 def upgrade() -> None:

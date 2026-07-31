@@ -13,15 +13,12 @@ from __future__ import annotations
 import sqlalchemy as sa
 
 from alembic import op
+from app.db_guards import _has_column
 
 revision = "202605161900"
 down_revision = "202605030001"
 branch_labels = None
 depends_on = None
-
-
-def _has_column(bind, table: str, column: str) -> bool:
-    return any(c["name"] == column for c in sa.inspect(bind).get_columns(table))
 
 
 def upgrade() -> None:

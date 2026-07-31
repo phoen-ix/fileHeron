@@ -9,15 +9,12 @@ from __future__ import annotations
 import sqlalchemy as sa
 
 from alembic import op
+from app.db_guards import _has_index, _has_table
 
 revision = "202606080001"
 down_revision = "202606070001"
 branch_labels = None
 depends_on = None
-
-
-def _has_table(bind, name: str) -> bool:
-    return sa.inspect(bind).has_table(name)
 
 
 def upgrade() -> None:
@@ -53,8 +50,17 @@ def upgrade() -> None:
             sa.ForeignKeyConstraint(["webhook_id"], ["webhooks.id"], ondelete="CASCADE"),
             sa.PrimaryKeyConstraint("id"),
         )
-        op.create_index("ix_webhook_deliveries_webhook_id", "webhook_deliveries", ["webhook_id"])
-        op.create_index("ix_webhook_deliveries_created_at", "webhook_deliveries", ["created_at"])
+
+    # Indexes are created OUTSIDE the table guard, each guarded on its own name.
+    # Nested inside it, a crash between create_table and create_index left the
+    # index missing forever: the rerun saw the table and skipped the whole block
+    # (audit 2026-07-30).
+    for name, cols in (
+        ("ix_webhook_deliveries_webhook_id", ["webhook_id"]),
+        ("ix_webhook_deliveries_created_at", ["created_at"]),
+    ):
+        if not _has_index(bind, "webhook_deliveries", name):
+            op.create_index(name, "webhook_deliveries", cols)
 
 
 def downgrade() -> None:

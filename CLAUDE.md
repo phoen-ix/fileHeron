@@ -155,7 +155,7 @@ sendfile()`; no X-Accel-Redirect.
 - **Refresh rotation:** reuse-detection revokes the entire user family.
 - **HIBP check:** k-anonymity (no plaintext sent); fail-open on outage.
 - **Email storage:** plaintext in `users.email` (+ `invite_tokens.email`, `login_attempts.email`), normalised on write via `utils/crypto.normalize_email`. Plaintext required so notification dispatchers can send.
-- **Migrations:** every alembic revision uses `_has_table`/`_has_column`/`_has_index` from `alembic/env.py` → re-runnable after partial failure.
+- **Migrations:** guards live in `app/db_guards.py` (`_has_table`/`_has_column`/`_has_index`/`_column_nullable`); revisions import them from there, **not** from `alembic/env.py` - inside a revision the name `alembic` resolves to the installed library. Guard **each op separately**: nesting an index or a NOT NULL tightening inside the `create_table` / `add_column` guard means a crash between them skips it forever on the retry (`tests/test_migration_reruns.py` fails if a revision reintroduces either).
 - **Site URL + timezone:** kv `site.url` + `site.timezone`, admin-editable; `services/site.py::get_site_url(db)` feeds every user-facing URL (falls back to `APP_URL`), `get_site_timezone(db)` drives 24h render. **Two surfaces stay on env:** `services/webauthn.py` RP origin + `services/oidc.py::_redirect_uri_for` (IdP-registered allowlist).
 - **Service-not-router:** routers parse + delegate + serialise; business logic, audit, notification dispatch live in `services/`.
 - **No comments unless WHY is non-obvious.** Don't explain WHAT.

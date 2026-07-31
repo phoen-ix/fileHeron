@@ -20,46 +20,12 @@ from __future__ import annotations
 import sqlalchemy as sa
 
 from alembic import op
+from app.db_guards import _has_column, _has_index
 
 revision = "202607300001"
 down_revision = "202607040001"
 branch_labels = None
 depends_on = None
-
-
-def _has_column(bind, table: str, column: str) -> bool:
-    if bind.dialect.name == "mysql":
-        rows = bind.execute(
-            sa.text(
-                "SELECT 1 FROM information_schema.columns "
-                "WHERE table_schema = DATABASE() AND table_name = :t "
-                "AND column_name = :c"
-            ),
-            {"t": table, "c": column},
-        ).fetchone()
-        return rows is not None
-    rows = bind.execute(sa.text(f"PRAGMA table_info({table})")).fetchall()
-    return any(r[1] == column for r in rows)
-
-
-def _has_index(bind, table: str, index: str) -> bool:
-    if bind.dialect.name == "mysql":
-        rows = bind.execute(
-            sa.text(
-                "SELECT 1 FROM information_schema.statistics "
-                "WHERE table_schema = DATABASE() AND table_name = :t "
-                "AND index_name = :i LIMIT 1"
-            ),
-            {"t": table, "i": index},
-        ).fetchone()
-        return rows is not None
-    rows = bind.execute(
-        sa.text(
-            "SELECT 1 FROM sqlite_master WHERE type='index' AND name=:i AND tbl_name=:t"
-        ),
-        {"i": index, "t": table},
-    ).fetchone()
-    return rows is not None
 
 
 def upgrade() -> None:

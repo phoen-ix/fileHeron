@@ -14,26 +14,12 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 
 from alembic import op
+from app.db_guards import _column_nullable, _has_column, _has_index
 
 revision: str = "202605031600"
 down_revision: str | None = "202605031400"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
-
-
-def _has_column(bind, table: str, column: str) -> bool:
-    if bind.dialect.name == "mysql":
-        rows = bind.execute(
-            sa.text(
-                "SELECT 1 FROM information_schema.columns "
-                "WHERE table_schema = DATABASE() AND table_name = :t "
-                "AND column_name = :c"
-            ),
-            {"t": table, "c": column},
-        ).fetchone()
-        return rows is not None
-    rows = bind.execute(sa.text(f"PRAGMA table_info({table})")).fetchall()
-    return any(r[1] == column for r in rows)
 
 
 def _drop_constraints_referencing_column(bind, table: str, column: str) -> None:
@@ -59,14 +45,24 @@ def _drop_constraints_referencing_column(bind, table: str, column: str) -> None:
 def upgrade() -> None:
     bind = op.get_bind()
 
+    # Every step below is guarded independently. Nesting the NOT NULL + UNIQUE
+    # tightening inside the add_column guard meant a crash between the two (DDL
+    # auto-commits on MariaDB, and alembic_version is not bumped until the
+    # revision returns) left `users.email` nullable and NOT unique forever: the
+    # rerun saw the column already present and skipped the whole block, so the
+    # uniqueness this migration exists to establish was silently absent (audit
+    # 2026-07-30).
+
     # ---- users -----------------------------------------------------------
     if not _has_column(bind, "users", "email"):
         op.add_column(
             "users",
             sa.Column("email", sa.String(length=254), nullable=True),
         )
+    if _has_column(bind, "users", "email"):
         # Backfill placeholder per-row so the UNIQUE NOT NULL constraint
         # below applies. Real users are renamed via SQL / admin UI after.
+        # Idempotent: WHERE email IS NULL matches nothing on a rerun.
         bind.execute(
             sa.text(
                 "UPDATE users SET email = CONCAT('legacy-', id, '@placeholder.invalid') "
@@ -75,16 +71,20 @@ def upgrade() -> None:
         )
         # Tighten to NOT NULL UNIQUE.
         if bind.dialect.name == "mysql":
-            op.alter_column(
-                "users", "email",
-                existing_type=sa.String(length=254),
-                nullable=False,
-            )
-            op.create_index("ix_users_email", "users", ["email"], unique=True)
+            if _column_nullable(bind, "users", "email"):
+                op.alter_column(
+                    "users", "email",
+                    existing_type=sa.String(length=254),
+                    nullable=False,
+                )
+            if not _has_index(bind, "users", "ix_users_email"):
+                op.create_index("ix_users_email", "users", ["email"], unique=True)
         else:
-            with op.batch_alter_table("users") as batch:
-                batch.alter_column("email", nullable=False)
-                batch.create_index("ix_users_email", ["email"], unique=True)
+            if _column_nullable(bind, "users", "email"):
+                with op.batch_alter_table("users") as batch:
+                    batch.alter_column("email", nullable=False)
+            if not _has_index(bind, "users", "ix_users_email"):
+                op.create_index("ix_users_email", "users", ["email"], unique=True)
 
     if _has_column(bind, "users", "email_hash"):
         _drop_constraints_referencing_column(bind, "users", "email_hash")
@@ -98,6 +98,7 @@ def upgrade() -> None:
             "invite_tokens",
             sa.Column("email", sa.String(length=254), nullable=True),
         )
+    if _has_column(bind, "invite_tokens", "email"):
         bind.execute(
             sa.text(
                 "UPDATE invite_tokens SET email = "
@@ -105,17 +106,18 @@ def upgrade() -> None:
                 "WHERE email IS NULL"
             )
         )
-        if bind.dialect.name == "mysql":
-            op.alter_column(
-                "invite_tokens", "email",
-                existing_type=sa.String(length=254),
-                nullable=False,
-            )
+        if _column_nullable(bind, "invite_tokens", "email"):
+            if bind.dialect.name == "mysql":
+                op.alter_column(
+                    "invite_tokens", "email",
+                    existing_type=sa.String(length=254),
+                    nullable=False,
+                )
+            else:
+                with op.batch_alter_table("invite_tokens") as batch:
+                    batch.alter_column("email", nullable=False)
+        if not _has_index(bind, "invite_tokens", "ix_invite_tokens_email"):
             op.create_index("ix_invite_tokens_email", "invite_tokens", ["email"])
-        else:
-            with op.batch_alter_table("invite_tokens") as batch:
-                batch.alter_column("email", nullable=False)
-                batch.create_index("ix_invite_tokens_email", ["email"])
 
     if _has_column(bind, "invite_tokens", "email_hash"):
         _drop_constraints_referencing_column(bind, "invite_tokens", "email_hash")
@@ -129,6 +131,9 @@ def upgrade() -> None:
             "login_attempts",
             sa.Column("email", sa.String(length=254), nullable=True),
         )
+    if _has_column(bind, "login_attempts", "email") and not _has_index(
+        bind, "login_attempts", "ix_login_attempts_email"
+    ):
         op.create_index("ix_login_attempts_email", "login_attempts", ["email"])
     if _has_column(bind, "login_attempts", "email_hash"):
         _drop_constraints_referencing_column(bind, "login_attempts", "email_hash")

@@ -9,15 +9,12 @@ from __future__ import annotations
 import sqlalchemy as sa
 
 from alembic import op
+from app.db_guards import _has_table
 
 revision = "202606100001"
 down_revision = "202606090001"
 branch_labels = None
 depends_on = None
-
-
-def _has_table(bind, name: str) -> bool:
-    return sa.inspect(bind).has_table(name)
 
 
 def upgrade() -> None:

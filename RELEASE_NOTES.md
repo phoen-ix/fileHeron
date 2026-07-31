@@ -1,104 +1,119 @@
-# file:Heron v2.7.0
+# file:Heron v2.7.1
 
-**Everything current.** Python 3.14, Node 24 LTS, Alpine 3.24, TypeScript 6,
-ESLint 10, Vite 8, Pinia 4 - plus the whole dependency tail. No host step, no
-migration, no API change. Every open dependency PR is resolved: eleven were
-proposed, and the result is not the eleven merges it looks like.
+**Two ways a file could become permanently unavailable, and one way a fresh
+install trusted an antivirus verdict it never got.** No host step, no migration.
 
-> If you self-host from source rather than the published images, note that the
-> backend now declares `requires-python = ">=3.14"`, because that is the only
-> runtime it is built and tested on.
+If you self-host and copied `.env.example` at any point since v2.2.0, read the
+first section - your instance is affected and this release repairs it on
+restart, with nothing for you to edit.
 
 ---
 
-## The interesting part: half of them could not be merged
+## Fresh installs trusted verdicts clamd never produced
 
-Automated dependency PRs bump one package at a time. Toolchains do not move one
-package at a time, and four of these could not have passed no matter how many
-times they were rebased:
+`.env.example` shipped `AV_MAX_SCAN_BYTES=32212254720` - 30 GiB - and
+`install.sh` copies that file onto every fresh install. clamd clamps its own
+maximum to about 2 GiB whatever its configuration says: past that it stops
+reading and answers "OK" without having looked.
 
-- **TypeScript 7** removes the `./lib/tsc` export that `vue-tsc` calls, so the
-  frontend **image build dies**. Merged, the next release tag would have
-  published no frontend image, and the in-app updater would have had nothing to
-  pull. This release goes to TypeScript **6.0.3** instead - the ceiling until
-  `vue-tsc` and `typescript-eslint` (whose peer range still ends below 6.1) ship
-  TS 7 support.
-- **ESLint 10** alone fails: the config imports `@eslint/js`, which was never
-  declared and resolved only because ESLint 9 hoisted its own copy. It also
-  needs `eslint-plugin-vue` 10, and a `globals.browser` declaration - ESLint 10
-  stopped assuming an environment, so without it `no-undef` fires 122 times on
-  `window` and `document` and it looks like the code broke.
-- **Node 25** is an odd-numbered release: Current, not LTS, six months of
-  support and then nothing. It was proposed for the image that builds the SPA
-  published for public self-hosting. This release uses **Node 24**, the Active
-  LTS.
-- **`@types/node` 26** was the only fully green PR of the set, and the one most
-  worth declining. The runtime is Node 24; types two majors ahead type-check
-  APIs that do not exist where the code runs, so the build passes and the image
-  fails. Types now track the runtime.
+So on any instance that took the shipped `.env.example`, a file between 2 GiB
+and 30 GB was recorded as **`clean`, not flagged**. No `unscanned` badge in the
+UI, no `file_served_unscanned` audit row - nothing distinguishing it from a file
+the scanner actually read. That is the exact defect v2.5.0 fixed, surviving its
+own fix one order of magnitude up.
 
-Those four constraints are recorded in `.github/dependabot.yml`, because all
-four were re-proposed within minutes of being rejected.
+The setting is now clamped in the backend, so an instance carrying the bad value
+is corrected the moment it restarts, with a warning naming what happened. A
+*lower* limit is still yours to set; a higher one buys nothing and never did.
 
-## Runtimes
+Files above the clamp are still served - fileHeron deliberately accepts uploads
+far larger than any scanner reads - but they are flagged, badged and audited as
+unscanned. Rows written before this release keep whatever they were given; only
+new scans are affected.
 
-Python **3.12 -> 3.14** and Node **22 -> 24 LTS** across every image, with
-Alpine 3.24 for the updater shim.
+## A large file whose scan was interrupted could never recover
 
-The important half of that is what it forced into alignment. CI pinned its own
-Python and Node versions independently of the images, so before this release
-every unit gate tested a runtime that was not the one shipping. They match now.
-The desktop client stays on Python 3.12 deliberately - it bundles its own
-interpreter, so its tests must match what is actually shipped in the `.exe`.
+Every download of it answered `425` - *"Antivirus scan still in progress; try
+again shortly"* - about a scan that was never going to run again. Forever. Its
+bytes kept counting against the uploader's quota, and getting it back needed
+hand-written SQL.
 
-Two things surfaced on the way and were fixed rather than carried:
+Three things had to line up, and on a busy instance they did:
 
-- `ruff`'s target version follows `requires-python`, so moving to 3.14 turned on
-  a rule the codebase had two instances of. That is the same mechanism that once
-  shipped a red lint gate.
-- A newer Starlette deprecates its synchronous test client. The last test still
-  using it now drives the app the way the rest of the suite does, and covers all
-  three byte-serving routes instead of one.
+- The retry budget for "clamd is not answering" totalled about **50 seconds**,
+  while the antivirus container is allowed **180 seconds** to become healthy -
+  and its first signature sync is far longer. So a clamav restart, a host reboot
+  or an out-of-memory kill burned every scan in flight.
+- The sweep that recovers stuck scans - the only automated recovery there is -
+  deliberately **skipped files over the size limit**, on the grounds that
+  re-scanning them would loop forever.
+- That reasoning was true on object storage and false on local disk, and it was
+  applied to both.
 
-## A flag that should not have outlived its reason
+So a file under the limit healed itself within thirty minutes, and a file over
+it never did. Which is also why this went unnoticed: every test and every
+development upload exercised the path that works, and the failure was reserved
+for the flagship large-file workload.
 
-`frontend/.npmrc` carried `legacy-peer-deps=true`. Its comment explained
-exactly why: the app stayed on Pinia 2 while `vue-router` 5 declared an optional
-peer on Pinia 3.
+Now the scanner decides *before* reading that a file is past what clamd can
+scan, and releases it as unscanned in one pass - on either storage backend. That
+makes re-queueing safe, so the recovery sweep no longer skips anything, and the
+retry budget outlasts a cold start. As a side effect, oversize files on object
+storage are no longer streamed out in full only to be rejected on arrival.
 
-Pinia 4 satisfies that peer, so the flag is gone - and that matters more than it
-sounds. `legacy-peer-deps` suppresses **every** peer conflict, not the one it was
-added for. For as long as it was there, a genuinely incompatible dependency
-would have installed silently rather than failing. Peer resolution is strict
-again, verified by installing from the lock file with no `.npmrc` present and
-building the real image without it.
+**If you have files stuck at "scan in progress" right now, they will clear
+themselves within about thirty minutes of updating.** Nothing to run.
 
-## Everything else
+## The backup does not contain your `.env`, and the manual never said so
 
-Vite 8, Vitest 4.1.10, Pinia 4, `@vitejs/plugin-vue` 6, Vue 3.5.40, vue-router
-5.2.0, vue-i18n 11.4.8, ruff 0.16.0, nine GitHub Actions, three ProseMirror
-patches, the fonts, Prettier and typescript-eslint.
+`scripts/backup.sh` has carried this warning in a comment for a long time.
+README's Backups section - the page an operator actually reads - did not mention
+`.env` or `JWT_SECRET` at all.
 
-**happy-dom 15 -> 20** is worth calling out on its own: it is a test-only
-dependency, and it clears three CRITICAL advisories that `npm audit
---omit=dev` cannot see, because that command only looks at production
-dependencies.
+Every encrypted field in the database is encrypted under a key derived from
+`JWT_SECRET`: TOTP secrets, SSO client secrets, SMTP and IMAP passwords,
+public-link tokens, webhook secrets. Restore onto replacement hardware without
+that key and all of it comes back **intact and permanently unreadable**. Every
+two-factor user locked out, SSO dead, outgoing mail dead. Row counts, checksums
+and the restore script's own output all look correct, because the data is
+there - it simply cannot be decrypted, and nothing recovers it.
 
-One real piece of dead code turned up: a template ref in the upload component
-that was declared, bound and never read. The file picker opens through the
-wrapping `<label>`, so it did nothing.
+The weekly restore drill cannot catch this either: it restores on the same host,
+reading the same `.env`.
+
+README now says so, next to the backup command. **Go and check that your `.env`
+is in your password manager or secret store.** That is the whole action.
+
+## Why these three shipped together
+
+All three are the same failure the 2026-07-30 audit kept finding: a comment, a
+document or a default asserting something the code does not do.
+
+A code comment said re-scanning large files "would loop forever" - it does not,
+on the backend most people run. Another named a "manual rescan" as the recovery
+path; no such rescan exists anywhere in the product. A shipped configuration
+file described a limit as needing to match a scanner setting that the scanner
+ignores. And a warning that mattered lived only in a shell script nobody has a
+reason to open.
+
+Each was read many times. None was checked.
 
 ## Verification
 
-Every image was built and run, not just type-checked: the backend suite
-(1705 tests) executed **inside** the Python 3.14 image, which still runs as UID
-1000 - the property the `data/` bind mounts depend on; the frontend image built
-on Node 24 with its nginx config tested; the updater executor and shim built and
-their runtimes confirmed. The frontend gate - install from lock, `vue-tsc -b` +
-`vite build`, lint, 184 tests - was run against **current main content** rather
-than each PR's stale base, because main had moved five releases since the oldest
-of them opened.
+Every fix has a test proven to fail against the previous release - eight of
+them, each failing on the assertion rather than an import. The test that
+asserted the old exclusion (`oversize excluded (would loop)`) encoded the defect
+and was rewritten to state the real rule.
+
+The check that matters most is not about oversize files at all: skipping the
+scan is only safe if a file's recorded size cannot be claimed by its uploader,
+or a small hostile file declaring itself enormous would go unscanned where the
+previous code would have caught and quarantined it. It cannot be claimed - the
+resumable-upload hook refuses any upload whose final size differs from the
+authorised one, and the direct-upload route records what it actually received.
+That chain is now pinned by its own test, because it is load-bearing and
+invisible from the code that depends on it.
 
 ## Upgrading
 
-In-app Update, or `FH_TAG=v2.7.0`. Nothing else to do.
+In-app Update, or `FH_TAG=v2.7.1`. Nothing else to do.

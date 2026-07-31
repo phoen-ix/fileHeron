@@ -150,8 +150,26 @@ async def cleanup_stale_uploads(_ctx) -> dict:
         db.commit()
 
         # Recover scans that never completed: re-enqueue ready_unscanned files
-        # stuck past _RESCAN_STUCK_AFTER_MIN. Oversize files are excluded - clamd
-        # can't fully scan them (audit H3), so re-scanning would loop forever.
+        # stuck past _RESCAN_STUCK_AFTER_MIN.
+        #
+        # This used to exclude `size_bytes > AV_MAX_SCAN_BYTES`, on the grounds
+        # that clamd cannot scan them so "re-scanning would loop forever". The
+        # premise was an object-store failure mode generalised to both backends,
+        # and the exclusion turned a recoverable state into a permanent one:
+        # a file over the limit whose scan job burned its retries (any clamav
+        # restart, reboot or OOM would do it) stayed at `ready_unscanned` with
+        # nothing left to move it, and every download of it - browser, desktop
+        # client or public link - answered `425 SCAN_IN_PROGRESS`, "try again
+        # shortly", forever. Its bytes kept counting against quota. Recovery
+        # needed hand-written SQL. Files UNDER the limit self-healed here within
+        # 30 minutes, so every test and dev upload exercised the working path
+        # and the failure was reserved for the flagship 30 GB workload
+        # (audit 2026-07-30).
+        #
+        # `av_scan_file` now decides oversize BEFORE scanning and releases those
+        # files as `clean` + `av_unscanned` in one pass, on either backend, so
+        # re-enqueueing them terminates. Do not reintroduce a size filter here:
+        # this sweep is the only automated recovery there is.
         rescan_cutoff = utc_now() - timedelta(minutes=_RESCAN_STUCK_AFTER_MIN)
         stuck = (
             db.query(File)
@@ -159,7 +177,6 @@ async def cleanup_stale_uploads(_ctx) -> dict:
                 File.state == FileState.ready_unscanned,
                 File.finalized_at.isnot(None),
                 File.finalized_at < rescan_cutoff,
-                File.size_bytes <= settings.AV_MAX_SCAN_BYTES,
             )
             .limit(_RESCAN_BATCH)
             .all()

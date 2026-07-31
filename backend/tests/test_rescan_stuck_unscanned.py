@@ -1,6 +1,17 @@
 """L8/L7: cleanup_stale_uploads re-enqueues scans for files stuck in
-ready_unscanned (a failed/missed scan), excluding oversize files (which clamd
-can't fully scan, so re-scanning would loop)."""
+ready_unscanned (a failed or missed scan).
+
+The oversize exclusion this file used to assert - "excluding oversize files
+(which clamd can't fully scan, so re-scanning would loop)" - was the defect,
+not the feature. It is the only automated recovery there is, so excluding a
+class of file from it made `ready_unscanned` permanent for that class: every
+download answered 425 "try again shortly" about a scan that would never run
+(audit 2026-07-30 residual sweep). `av_scan_file` now decides oversize before
+scanning and releases such files in one pass, so re-enqueueing them terminates.
+See test_oversize_scan_recovery.py.
+
+Age is the only thing that gates this sweep now, which is the point.
+"""
 from __future__ import annotations
 
 from datetime import timedelta
@@ -60,6 +71,9 @@ async def test_rescan_requeues_stuck_unscanned(make_user, db, monkeypatch):
 
     requeued = {a[0] for (name, a) in calls if name == "av_scan_file"}
     assert stuck.id in requeued
-    assert fresh.id not in requeued        # finalized too recently
-    assert oversize.id not in requeued     # oversize excluded (would loop)
-    assert result["rescans_requeued"] == 1
+    assert fresh.id not in requeued        # finalized too recently - still in flight
+    assert oversize.id in requeued, (
+        "an oversize file was excluded from the only automated recovery there "
+        "is, which is what made ready_unscanned permanent for it"
+    )
+    assert result["rescans_requeued"] == 2

@@ -25,6 +25,72 @@ from ..services.quarantine import quarantine_file
 
 logger = logging.getLogger("fileheron.workers.av_scan")
 
+# Ceiling on the per-attempt backoff when clamd is unavailable. With
+# WorkerSettings.max_tries = 5 the four retries span 30+60+90+120 = 300s, which
+# has to cover a clamav COLD START - docker-compose budgets its healthcheck 180s
+# and freshclam's first mirror sync is far longer.
+_RETRY_MAX_DEFER_SEC = 300
+
+
+def _release_unscanned(db, *, file_id: str, file: File) -> dict:
+    """Release a file clamd cannot scan: `clean` state, `av_unscanned = True`,
+    and a durable audit row saying so.
+
+    This is the terminal outcome for anything past AV_MAX_SCAN_BYTES, on either
+    storage backend. fileHeron deliberately accepts uploads far larger than
+    anything clamd will read - clamd clamps MaxFileSize to INT_MAX whatever
+    clamd.conf says - so the choice is between serving the file with an honest
+    label and never serving it at all. It is served, and the API, the UI badge
+    and the audit trail all say it was not scanned.
+
+    Terminal matters as much as honest: the previous behaviour on the object
+    store left these files at `ready_unscanned` forever, where every download
+    answered `425 SCAN_IN_PROGRESS` - "try again shortly" - about a scan that
+    was never going to happen."""
+    # Conditional flip, same reason as the clean path: share expiry may have
+    # committed `deleted` and freed the bytes while this ran.
+    updated = (
+        db.query(File)
+        .filter(File.id == file_id, File.state == FileState.ready_unscanned)
+        .update(
+            {File.state: FileState.clean, File.av_unscanned: True},
+            synchronize_session=False,
+        )
+    )
+    if updated == 0:
+        db.rollback()
+        logger.info(
+            "av_scan: %s left ready_unscanned mid-scan; not releasing", file_id
+        )
+        return {"file_id": file_id, "state": "superseded"}
+    # Written in the same transaction as the state flip.
+    record_audit_event(
+        db,
+        event_type=AuditEventType.file_served_unscanned,
+        actor_user_id=file.uploaded_by_id,
+        target_type="file",
+        target_id=file_id,
+        metadata={
+            "size_bytes": file.size_bytes,
+            "av_max_scan_bytes": settings.AV_MAX_SCAN_BYTES,
+            "reason": "exceeds_clamd_max_file_size",
+        },
+    )
+    db.commit()
+    logger.warning(
+        "av_scan: %s is %d bytes, over AV_MAX_SCAN_BYTES (%d); clamd cannot "
+        "scan it - serving as UNSCANNED, not clean",
+        file_id,
+        file.size_bytes or 0,
+        settings.AV_MAX_SCAN_BYTES,
+    )
+    return {
+        "file_id": file_id,
+        "state": "clean",
+        "av_unscanned": True,
+        "size_bytes": file.size_bytes,
+    }
+
 
 async def av_scan_file(_ctx, file_id: str) -> dict:
     """Scan a single file. Idempotent - silently skips files not in
@@ -51,6 +117,30 @@ async def av_scan_file(_ctx, file_id: str) -> dict:
         from ..services.storage_backend import get_storage_backend
         backend = get_storage_backend()
         local = backend.local_path(file.storage_path)
+
+        # Decide oversize BEFORE scanning. clamd cannot produce a verdict for a
+        # file past its MaxFileSize, and the two backends failed differently on
+        # it: a path-scan answers a meaningless "OK" (handled below), while
+        # INSTREAM answers `error` - which is not a terminal state, so the file
+        # sat at ready_unscanned and got re-enqueued forever. Every download of
+        # it, browser or client or public link, returned 425 "try again shortly"
+        # about something that was never going to succeed (audit 2026-07-30).
+        #
+        # Not scanning at all is the honest answer, and it terminates: there is
+        # no verdict to be had, so record the file as served-unscanned in one
+        # pass. It also stops streaming multi-gigabyte objects out of S3 to be
+        # rejected on arrival.
+        #
+        # This branch skips the AV scan, so it is only safe because size_bytes
+        # cannot be inflated to reach it: the tus pre-finish hook refuses the
+        # upload unless the final size equals the HMAC-authorised max_size
+        # (tus_hooks._pre_finish), and that authorised size is what the row
+        # carries; the direct-upload route records the bytes it actually
+        # received. Getting here therefore costs a real multi-gigabyte transfer
+        # - which is exactly the case where clamd was never going to produce a
+        # verdict anyway. Do not relax either check without revisiting this.
+        if (file.size_bytes or 0) > settings.AV_MAX_SCAN_BYTES and not settings.AV_SKIP:
+            return _release_unscanned(db, file_id=file_id, file=file)
         # Both scan paths are BLOCKING socket I/O, and this is an `async def`
         # running on the ARQ worker's single event loop - so a slow scan used to
         # freeze every other job in the process (send_email, webhook_deliver,
@@ -71,31 +161,26 @@ async def av_scan_file(_ctx, file_id: str) -> dict:
             # cleanup_stale_uploads recovers anything that outlives the retries.
             attempt = _ctx.get("job_try", 1)
             logger.warning("clamd unavailable for %s (try %d): %s", file_id, attempt, e)
-            raise Retry(defer=min(60, 5 * attempt)) from e
+            # The backoff has to outlast a clamav COLD START, not just a blip.
+            # `min(60, 5 * attempt)` gave 5+10+15+20 = 50 seconds across the
+            # four retries `max_tries=5` allows, while docker-compose budgets
+            # clamav 180s to become healthy (freshclam's first mirror sync is
+            # far longer). So any clamav restart, host reboot or OOM burned
+            # every in-flight scan job. 30+60+90+120 = 300s covers it, and
+            # cleanup_stale_uploads is still the backstop for anything that
+            # outlives even that (audit 2026-07-30).
+            raise Retry(defer=min(_RETRY_MAX_DEFER_SEC, 30 * attempt)) from e
 
         if result.state == "clean":
-            # clamd answers "clean" for a file past its size limit without ever
-            # reading it - it just stops scanning. So a "clean" verdict above
-            # AV_MAX_SCAN_BYTES is not evidence of anything.
-            #
-            # That limit is not the operator's to raise: clamd clamps
-            # MaxFileSize to INT_MAX (~2 GiB) whatever clamd.conf says, so no
-            # configuration makes it scan a 5 GB upload. fileHeron deliberately
-            # supports uploads far larger than that, so the file IS still
-            # served - but it is recorded as unscanned rather than clean, and
-            # the API, UI and audit trail say so (audit 2026-07-30).
-            oversize = (
+            # Defence in depth. The oversize case returns before scanning, so
+            # reaching here with an oversize file means that guard was bypassed
+            # - and a "clean" verdict for a file clamd never read is not
+            # evidence of anything, so it must not be recorded as one.
+            if (
                 (file.size_bytes or 0) > settings.AV_MAX_SCAN_BYTES
                 and not settings.AV_SKIP
-            )
-            if oversize:
-                logger.warning(
-                    "av_scan: %s is %d bytes, over AV_MAX_SCAN_BYTES (%d); clamd "
-                    "cannot scan it - serving as UNSCANNED, not clean",
-                    file_id,
-                    file.size_bytes or 0,
-                    settings.AV_MAX_SCAN_BYTES,
-                )
+            ):
+                return _release_unscanned(db, file_id=file_id, file=file)
             # Conditional flip: a slow scan can run while share expiry commits
             # `deleted` (bytes gone). Only mark clean if the row is still
             # ready_unscanned, else we would resurrect a deleted file whose
@@ -104,7 +189,7 @@ async def av_scan_file(_ctx, file_id: str) -> dict:
                 db.query(File)
                 .filter(File.id == file_id, File.state == FileState.ready_unscanned)
                 .update(
-                    {File.state: FileState.clean, File.av_unscanned: oversize},
+                    {File.state: FileState.clean, File.av_unscanned: False},
                     synchronize_session=False,
                 )
             )
@@ -115,29 +200,7 @@ async def av_scan_file(_ctx, file_id: str) -> dict:
                     file_id,
                 )
                 return {"file_id": file_id, "state": "superseded"}
-            if oversize:
-                # Durable record that a file was released without a real
-                # verdict. Written in the same transaction as the state flip.
-                record_audit_event(
-                    db,
-                    event_type=AuditEventType.file_served_unscanned,
-                    actor_user_id=file.uploaded_by_id,
-                    target_type="file",
-                    target_id=file_id,
-                    metadata={
-                        "size_bytes": file.size_bytes,
-                        "av_max_scan_bytes": settings.AV_MAX_SCAN_BYTES,
-                        "reason": "exceeds_clamd_max_file_size",
-                    },
-                )
             db.commit()
-            if oversize:
-                return {
-                    "file_id": file_id,
-                    "state": "clean",
-                    "av_unscanned": True,
-                    "size_bytes": file.size_bytes,
-                }
             logger.info("av_scan: %s clean", file_id)
             return {"file_id": file_id, "state": "clean"}
 

@@ -234,7 +234,10 @@ def handle_post_finish(db: Session, body: dict[str, Any]) -> None:
     # Enqueue the AV scan. The file is in `ready_unscanned` after
     # finalize_to_disk; downloads are blocked until the worker flips it
     # to `clean`. Failures here are logged but don't fail the upload -
-    # a manual rescan can recover.
+    # the `cleanup_stale_uploads` cron re-enqueues anything still
+    # `ready_unscanned` 30 minutes after finalize. (This said "a manual rescan
+    # can recover", which named a thing that does not exist: there is no rescan
+    # endpoint or admin action anywhere. The cron is the recovery.)
     from . import job_queue
     job_queue.enqueue("av_scan_file", file_row.id)
 

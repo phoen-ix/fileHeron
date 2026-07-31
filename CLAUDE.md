@@ -15,7 +15,7 @@ keep this to what would cause a wrong move if unknown.
 
 ## Status
 
-Backend **`v2.7.0`** (dependency/runtime sweep: Python 3.14, Node 24 LTS,
+Backend **`v2.7.1`** (dependency/runtime sweep in .0: Python 3.14, Node 24 LTS,
 TypeScript 6, ESLint 10, Vite 8, Pinia 4 - zero open dependency PRs. v2.6.x
 closed out the 2026-07-30 audit with **nothing left accepted**; v2.6.1 fixed a
 v2.6.0 regression that charged the desktop client's size probe as a download),
@@ -33,6 +33,23 @@ route returns the decrypted plaintext link URL. (README's server/client version
 badges read live from the git tags, so they never need a manual bump; this line
 does - keep it current on release.)
 
+> **v2.7.1 invariants worth knowing before you touch these areas.**
+> `AV_MAX_SCAN_BYTES` is **clamped** to `config.CLAMD_MAX_FILE_SIZE` (clamd's own
+> INT_MAX ceiling) by a field_validator - `.env.example` shipped 30 GiB for four
+> releases and `install.sh` copies it, so every fresh self-host recorded 2-30 GB
+> files as `clean` with `av_unscanned=False`. Never "raise" this to match a
+> clamd.conf value; clamd ignores its own. `av_scan_file` decides oversize
+> **before scanning** and calls `_release_unscanned` (clean + `av_unscanned` +
+> a `file_served_unscanned` audit row) - terminal on BOTH backends, because
+> INSTREAM answers `error` for an oversize stream and `error` is not a state
+> flip. That branch skips AV, so it is only safe because `size_bytes` cannot be
+> claimed (tus pre-finish forces final == authorised size; direct upload records
+> what it received) - don't relax either check. **`cleanup_stale_uploads` must
+> keep NO size filter**: it is the only automated rescan there is, and excluding
+> a class of file from it makes `ready_unscanned` permanent for that class
+> (every download 425s forever). The `av_scan_file` retry backoff has to outlast
+> a clamav COLD START (180s healthcheck budget), not a blip.
+>
 > **v2.7.0 invariants worth knowing before you touch these areas.**
 > **Bump frontend toolchains as a SET.** Dependabot proposes one package at a
 > time and four such PRs could not have passed at any point: TS 7 removes the

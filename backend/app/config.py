@@ -11,7 +11,12 @@ import sys
 import warnings
 from urllib.parse import quote_plus
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings
+
+# clamd clamps MaxFileSize to INT_MAX internally, whatever clamd.conf asks for,
+# so this is a hard ceiling on what any verdict can be based on - not a tunable.
+CLAMD_MAX_FILE_SIZE = 2147483645
 
 
 class Settings(BaseSettings):
@@ -269,7 +274,37 @@ class Settings(BaseSettings):
     #
     # Files above this are still served, but are recorded with
     # `files.av_unscanned = True` and surfaced as unscanned rather than clean.
-    AV_MAX_SCAN_BYTES: int = 2147483645  # clamd's INT_MAX clamp on MaxFileSize
+    AV_MAX_SCAN_BYTES: int = CLAMD_MAX_FILE_SIZE  # clamd's INT_MAX clamp
+
+    @field_validator("AV_MAX_SCAN_BYTES")
+    @classmethod
+    def _clamp_av_max_scan_bytes(cls, v: int) -> int:
+        """Refuse to trust a verdict clamd cannot produce.
+
+        The default is already correct, but this is an ENV-overridable setting
+        and `.env.example` shipped `32212254720` (30 GiB) for four releases -
+        copied verbatim by `install.sh` onto every fresh self-host. On those
+        deployments a 30 GB upload was recorded `clean` with `av_unscanned =
+        False`: no badge in the UI, no `file_served_unscanned` audit row,
+        nothing to distinguish it from a file clamd actually read. That is the
+        original H3 defect, surviving its own fix one order of magnitude up.
+
+        Clamping here rather than documenting-against it repairs those
+        deployments on the next restart without asking the operator to edit
+        anything, and makes the misconfiguration unrepresentable rather than
+        merely warned about in three places. Raising the value never bought
+        coverage anyway: clamd clamps its own MaxFileSize to INT_MAX whatever
+        clamd.conf says, so past this point it stops reading and answers OK.
+        """
+        if v > CLAMD_MAX_FILE_SIZE:
+            warnings.warn(
+                f"AV_MAX_SCAN_BYTES={v} exceeds what clamd can scan "
+                f"({CLAMD_MAX_FILE_SIZE}); clamping. Files above the clamp are "
+                "still served, recorded as av_unscanned rather than clean.",
+                stacklevel=2,
+            )
+            return CLAMD_MAX_FILE_SIZE
+        return max(0, v)
     # Public-link tunables.
     PUBLIC_LINK_BASE_PATH: str = "/d"
     PUBLIC_LINK_PASSWORD_RATE_LIMIT: int = 10  # max attempts per (link, IP) per window

@@ -536,6 +536,27 @@ via `S3_BUCKET` / `S3_REGION` / `S3_ENDPOINT_URL` / `S3_ACCESS_KEY_ID` /
 # → ./backups/<YYYY-MM-DD_HHMMSS>/{db.sql, files.tar.gz, quarantine.tar.gz, redis.rdb, manifest.txt}
 ```
 
+> **Back up `.env` separately - the backup does not contain it, and a restore
+> without it is unrecoverable.**
+>
+> Every encrypted field in the database - TOTP secrets, OIDC client secrets,
+> SMTP/IMAP passwords, public-link tokens, webhook secrets - is encrypted under
+> a key derived from `JWT_SECRET`. Restore onto a host with a different one and
+> all of those rows come back **intact and permanently unreadable**: every 2FA
+> user locked out, SSO dead, outbound mail dead. Row counts, checksums and the
+> restore script's own output all look correct, because the data is there - it
+> just cannot be decrypted, and nothing can recover it.
+>
+> Secrets are kept out of `./backups` deliberately: it is a plain directory,
+> frequently synced onward. Keep `.env` in your password manager or secret
+> store, and re-save it whenever you rotate `JWT_SECRET`.
+> `scripts/restore_validate.py` samples those fields and fails loudly on a key
+> mismatch - but only once you are already on the new host, which is too late to
+> go and fetch the old key.
+>
+> The weekly restore drill cannot catch this: it restores on the same host,
+> reading the same `.env`.
+
 With `BACKUP_RESTIC_REPO` + `BACKUP_RESTIC_PASSWORD` set, the dated dir is also pushed
 to that restic repo (S3/B2/SFTP/REST/local; password via `--password-file`, not env).
 Schedule it nightly. A ready-made systemd timer ships in `scripts/ops/` (adapt

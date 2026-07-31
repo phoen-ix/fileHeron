@@ -28,6 +28,7 @@ from ..models.download_log import DownloadLog
 from ..models.email_log import EmailLog
 from ..models.error_log import ErrorLog
 from ..models.login_attempt import LoginAttempt
+from ..models.public_link_attempt import PublicLinkAttempt
 from ..models.webhook import WebhookDelivery
 from ..services.cron_tracker import track_cron
 from ..utils.timeutil import utc_now
@@ -91,6 +92,7 @@ async def prune_history(_ctx) -> dict:
         webhook_days = _sr.effective(_db0, _sr.K.WEBHOOK_DELIVERY_RETENTION_DAYS)
         inbound_days = _sr.effective(_db0, _sr.K.IMAP_MESSAGE_RETENTION_DAYS)
         error_days = _sr.effective(_db0, _sr.K.ERROR_LOG_RETENTION_DAYS)
+        link_attempt_days = _sr.effective(_db0, _sr.K.PUBLIC_LINK_ATTEMPT_RETENTION_DAYS)
     finally:
         _db0.close()
     audit_pruned = await _prune_table(
@@ -114,8 +116,20 @@ async def prune_history(_ctx) -> dict:
     error_pruned = await _prune_table(
         "error_log", error_days, ErrorLog.created_at, ErrorLog
     )
+    # Every unlock attempt against a password-protected public link writes a row
+    # here, and nothing ever removed one: the only cascade is from the parent
+    # link, and revoke() does not delete that. The rows carry client IPs, so a
+    # product that ships right-to-erasure was accumulating identifiable data for
+    # the life of the instance with no retention at all (audit 2026-07-30).
+    link_attempt_pruned = await _prune_table(
+        "public_link_password_attempts",
+        link_attempt_days,
+        PublicLinkAttempt.attempted_at,
+        PublicLinkAttempt,
+    )
     inbound_pruned = await _prune_inbound(inbound_days)
     return {
+        "public_link_password_attempts": link_attempt_pruned,
         "audit_log": audit_pruned,
         "download_log": download_pruned,
         "email_log": email_pruned,

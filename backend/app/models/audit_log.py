@@ -66,6 +66,8 @@ class AuditEventType(str, enum.Enum):
     public_link_consumed = "public_link_consumed"          # Phase 5
     role_changed = "role_changed"                          # Phase 6b
     user_disabled = "user_disabled"                        # Phase 6b
+    user_enabled = "user_enabled"                          # admin re-enabled a disabled account
+    user_updated = "user_updated"                          # admin edited quota / display name
     user_erased = "user_erased"                            # Phase 6b
     oidc_linked = "oidc_linked"                            # Phase 7
     oidc_unlinked = "oidc_unlinked"                        # Phase 10

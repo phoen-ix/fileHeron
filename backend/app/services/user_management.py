@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import logging
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..middleware.errors import AppError
@@ -168,22 +169,34 @@ def update_user(
 
     if changed:
         db.flush()
-        ev = (
-            AuditEventType.user_disabled
-            if changed.get("is_disabled") is True
-            else AuditEventType.role_changed
-            if "role" in changed
-            else AuditEventType.user_registered  # closest existing for misc edits
-        )
-        record_audit_event(
-            db,
-            event_type=ev,
-            actor_user_id=actor.id,
-            target_type="user",
-            target_id=target.id,
-            metadata={"changes": changed},
-            request=request,
-        )
+        # One row per semantic change, not one row with a guessed type.
+        #
+        # The old expression picked a SINGLE event by precedence, so a PATCH
+        # that both demoted someone and disabled them emitted only
+        # `user_disabled` - the privilege change was invisible to anyone
+        # filtering the audit log for `role_changed`, which is exactly the query
+        # a reviewer runs. Re-enabling an account and editing a quota both
+        # landed as `user_registered`, a lie about what happened, chosen because
+        # it was "the closest existing" member (audit 2026-07-30).
+        events: list[AuditEventType] = []
+        if "role" in changed:
+            events.append(AuditEventType.role_changed)
+        if changed.get("is_disabled") is True:
+            events.append(AuditEventType.user_disabled)
+        elif changed.get("is_disabled") is False:
+            events.append(AuditEventType.user_enabled)
+        if not events or any(k not in ("role", "is_disabled") for k in changed):
+            events.append(AuditEventType.user_updated)
+        for ev in events:
+            record_audit_event(
+                db,
+                event_type=ev,
+                actor_user_id=actor.id,
+                target_type="user",
+                target_id=target.id,
+                metadata={"changes": changed},
+                request=request,
+            )
     return target
 
 
@@ -293,7 +306,17 @@ async def create_user_as_admin(
         created_by_id=actor.id,
     )
     db.add(user)
-    db.flush()
+    try:
+        db.flush()
+    except IntegrityError:
+        # A parallel registration won the UNIQUE(email) race between the
+        # pre-flight SELECT above and this flush. The invite path already
+        # answers 409 here; leaving this one bare surfaced a raw 500 to the
+        # user plus an error-log row and an admin alert email, for a routine
+        # collision (audit 2026-07-30).
+        raise AppError(
+            409, "USER_EXISTS", "An account already exists for this email."
+        ) from None
 
     from .group import add_member as _add_group_member
 

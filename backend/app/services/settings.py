@@ -232,6 +232,7 @@ class Keys:
     ERROR_LOG_CAPTURE_4XX = "error_log.capture_4xx"    # boolean (default false) - also persist allowlisted 4xx
     ERROR_LOG_4XX_CODES = "error_log.http_4xx_codes"   # CSV of HTTP status codes (e.g. "429,409")
     ERROR_LOG_RETENTION_DAYS = "error_log.retention_days"  # registry tunable (int; 0 disables prune)
+    PUBLIC_LINK_ATTEMPT_RETENTION_DAYS = "retention.public_link_attempt_days"  # registry tunable
     ERROR_LOG_SCAN_CAPTURE_PER_MIN = "error_log.scan_capture_per_min"  # registry tunable (int; 4xx capture rate/min)
 
 

@@ -162,3 +162,81 @@ def test_a_new_backup_round_trips_at_the_new_cost():
         )
         == b"payload"
     )
+
+
+# --- admin-9: one audit row per semantic change ------------------------------
+
+
+def test_a_combined_demote_and_disable_records_both(db, make_user):
+    """The old expression picked ONE event by precedence, so a PATCH that both
+    demoted and disabled someone emitted only `user_disabled` - the privilege
+    change was invisible to anyone filtering for `role_changed`, which is
+    exactly the query a reviewer runs."""
+    from app.models.audit_log import AuditLog
+    from app.models.user import UserRole
+    from app.services import user_management
+
+    admin = make_user(email="boss@test.local", role=UserRole.admin)
+    other = make_user(email="admin2@test.local", role=UserRole.admin)
+    target = make_user(email="t@test.local", role=UserRole.admin)
+    assert other is not None  # keeps the last-admin guard satisfied
+
+    user_management.update_user(
+        db, actor=admin, target=target, role=UserRole.employee, is_disabled=True,
+        display_name=None, quota_bytes=None,
+    )
+    db.commit()
+
+    kinds = {
+        r.event_type
+        for r in db.query(AuditLog).filter(AuditLog.target_id == str(target.id)).all()
+    }
+    assert AuditEventType.role_changed.value in kinds
+    assert AuditEventType.user_disabled.value in kinds
+
+
+def test_a_quota_edit_is_no_longer_recorded_as_a_registration(db, make_user):
+    """`user_registered` was chosen as "the closest existing" member - a lie
+    about what happened, in the log people read to find out what happened."""
+    from app.models.audit_log import AuditLog
+    from app.models.user import UserRole
+    from app.services import user_management
+
+    admin = make_user(email="boss@test.local", role=UserRole.admin)
+    target = make_user(email="t@test.local", role=UserRole.employee)
+
+    user_management.update_user(
+        db, actor=admin, target=target, quota_bytes=1024,
+        role=None, is_disabled=None, display_name=None,
+    )
+    db.commit()
+
+    kinds = {
+        r.event_type
+        for r in db.query(AuditLog).filter(AuditLog.target_id == str(target.id)).all()
+    }
+    assert AuditEventType.user_updated.value in kinds
+    assert AuditEventType.user_registered.value not in kinds
+
+
+# --- dos-12 / publiclink-11: the table with no retention ---------------------
+
+
+def test_the_brute_force_attempt_table_is_swept():
+    """Rows carry client IPs, the only cascade is from the parent link, and
+    revoke() does not delete that - so they accumulated for the life of the
+    instance in a product that ships right-to-erasure."""
+    import inspect
+
+    from app.workers import prune_history
+
+    src = inspect.getsource(prune_history)
+    assert "PublicLinkAttempt" in src
+    assert "public_link_password_attempts" in src
+
+
+def test_the_retention_window_is_admin_tunable():
+    from app.services import settings_registry as sr
+
+    keys = {t.key for t in sr.TUNABLES}
+    assert sr.K.PUBLIC_LINK_ATTEMPT_RETENTION_DAYS in keys

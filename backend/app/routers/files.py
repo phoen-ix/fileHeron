@@ -16,6 +16,7 @@ from ..models.share import Share, ShareState
 from ..models.user import User, UserRole
 from ..services import download_token as download_token_svc
 from ..services import file as file_svc
+from ..services import settings_registry as _sr
 from ..services import share as share_svc
 from ..services import zip_stream as zip_stream_svc
 from ..services.audit import record_audit_event
@@ -300,7 +301,25 @@ def download_file(
     # Parallel/segmented downloads send several ranged GETs for one logical
     # download; the byte-0 (or full) request counts it, the continuation
     # ranges must not re-decrement or re-log. See utils/http_range.
-    if not is_partial_continuation(request):
+    #
+    # The header alone is not proof of that. `Range: bytes=1-` on a fresh
+    # connection claimed the same exemption, so the per-share download budget
+    # could be spent without ever moving (audit 2026-07-30). The evidence here
+    # is durable rather than the public path's short Redis mark: the desktop
+    # client can pause a download and resume it the next day, so a
+    # `download_log` row for THIS user and THIS file inside the credit window is
+    # what buys the free continuation - and it grants nothing to a caller who
+    # never downloaded the file.
+    is_continuation = is_partial_continuation(request) and (
+        file_svc.has_recent_counted_download(
+            db,
+            file_id=file.id,
+            user_id=user.id,
+            within_hours=int(_sr.effective(db, _sr.K.DOWNLOAD_RESUME_CREDIT_HOURS)),
+        )
+    )
+
+    if not is_continuation:
         # A pending share only reaches here for an approver reviewing its
         # content. That must not consume the not-yet-live recipient budget -
         # but it IS a person who is not a recipient taking a full copy of

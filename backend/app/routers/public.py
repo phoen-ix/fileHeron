@@ -46,6 +46,7 @@ from ..schemas.public_link import (
 from ..services import file as file_svc
 from ..services import public_link as public_link_svc
 from ..services import settings as settings_svc
+from ..services import transfer_activity
 from ..services import zip_stream as zip_stream_svc
 from ..services.audit import record_audit_event
 from ..services.storage_backend import get_storage_backend
@@ -238,10 +239,30 @@ def public_download(
     fh_dl_unlock: str | None = Cookie(default=None),
 ) -> Response:
     link = public_link_svc.get_link_by_token(db, token)
+
     # A Range continuation of the download that consumed the last unit must be
     # allowed to finish (the counter already hit 0); it isn't re-counted below.
+    #
+    # But "continuation" has to be CORROBORATED, not just claimed. The header
+    # test alone is "does Range start above byte 0", so `Range: bytes=1-` on a
+    # brand-new connection got both the exhausted-check waiver and the free
+    # ride: a link holder could re-download every file, unlimited times, with
+    # `downloads_remaining` never moving and no download_log row, no audit
+    # entry and no owner notification (audit 2026-07-30, flow-publiclink-7).
+    #
+    # `was_download_recent` is the evidence: this instance actually started
+    # serving that file inside the 30-minute window. It is keyed on the FILE,
+    # not the client, so a phone changing networks mid-download keeps its
+    # continuation - and it fails OPEN when Redis is down, because a refused
+    # resume is worse than a missed bypass. Residual, deliberately: whoever
+    # pays for one download gets a 30-minute window of free continuations.
+    # Bounded, unlike unlimited-forever.
+    is_continuation = is_partial_continuation(
+        request
+    ) and transfer_activity.was_download_recent(file_id)
+
     public_link_svc.assert_link_usable(
-        db, link, allow_exhausted_continuation=is_partial_continuation(request)
+        db, link, allow_exhausted_continuation=is_continuation
     )
 
     if not _is_unlocked(link, fh_dl_unlock):
@@ -273,8 +294,10 @@ def public_download(
 
     # Parallel/segmented downloads send several ranged GETs for one logical
     # download; the byte-0 (or full) request counts it + logs, the continuation
-    # ranges must not re-decrement or re-log. See utils/http_range.
-    if not is_partial_continuation(request):
+    # ranges must not re-decrement or re-log. See utils/http_range - and note
+    # this uses the CORROBORATED `is_continuation` computed above, not the bare
+    # header test.
+    if not is_continuation:
         # Counter (atomic). On success, `downloads_remaining` reflects the
         # post-decrement value used by the owner notification below.
         allowed, downloads_remaining = public_link_svc.decrement_counter(db, link=link)

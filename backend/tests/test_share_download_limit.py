@@ -288,32 +288,97 @@ def test_is_partial_continuation_helper():
 
 
 @pytest.mark.asyncio
-async def test_partial_range_does_not_decrement(
+async def test_an_uncorroborated_range_is_charged(
     make_user, db, client, login_as, monkeypatch
 ):
+    """`Range: bytes=5-10` used to be free on the strength of the header alone,
+    so the per-share budget could be spent without ever moving: a recipient
+    could re-download any file unlimited times by never asking for byte 0
+    (audit 2026-07-30). With no prior counted download there is nothing to
+    continue, so it is charged like any other download."""
     sender, recipient, share, file_row = _setup_share_with_file(
         make_user, db, monkeypatch, download_limit=1
     )
     token, _ = await login_as("rec@test.local", "Pass12345678!")
     headers = {"Authorization": f"Bearer {token}"}
 
-    # A continuation range (start > 0) returns 206 but must NOT decrement.
     r = await client.get(
         f"/api/files/{file_row.id}/download",
         headers={**headers, "Range": "bytes=5-10"},
     )
     assert r.status_code == 206, r.text
     db.refresh(share)
-    assert share.downloads_remaining == 1  # untouched
+    assert share.downloads_remaining == 0, (
+        "a range continuation with nothing to continue was served free"
+    )
 
-    # The byte-0 range counts the download once.
+
+@pytest.mark.asyncio
+async def test_a_corroborated_range_is_free(
+    make_user, db, client, login_as, monkeypatch
+):
+    """The exemption's real purpose: the byte-0 request pays, and the
+    continuation ranges of that same download - including a resume the next day
+    from the desktop client - do not pay again."""
+    sender, recipient, share, file_row = _setup_share_with_file(
+        make_user, db, monkeypatch, download_limit=2
+    )
+    token, _ = await login_as("rec@test.local", "Pass12345678!")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # Byte 0 pays and writes the download_log row that is the evidence.
     r = await client.get(
         f"/api/files/{file_row.id}/download",
         headers={**headers, "Range": "bytes=0-3"},
     )
     assert r.status_code == 206, r.text
     db.refresh(share)
-    assert share.downloads_remaining == 0
+    assert share.downloads_remaining == 1
+
+    # The continuation is corroborated by that row, so it is free.
+    r = await client.get(
+        f"/api/files/{file_row.id}/download",
+        headers={**headers, "Range": "bytes=5-10"},
+    )
+    assert r.status_code == 206, r.text
+    db.refresh(share)
+    assert share.downloads_remaining == 1, "the continuation was charged again"
+
+
+@pytest.mark.asyncio
+async def test_the_credit_belongs_to_the_user_who_paid(
+    make_user, db, client, login_as, monkeypatch
+):
+    """Evidence is per (file, user). Another recipient's paid download must not
+    buy anyone else a free continuation."""
+    sender, recipient, share, file_row = _setup_share_with_file(
+        make_user, db, monkeypatch, download_limit=5
+    )
+    other = make_user(email="other@test.local", role=UserRole.employee, password="Pass12345678!")
+    from app.models.share_recipient import ShareRecipient
+
+    db.add(ShareRecipient(share_id=share.id, recipient_user_id=other.id))
+    db.commit()
+
+    rec_token, _ = await login_as("rec@test.local", "Pass12345678!")
+    r = await client.get(
+        f"/api/files/{file_row.id}/download",
+        headers={"Authorization": f"Bearer {rec_token}", "Range": "bytes=0-3"},
+    )
+    assert r.status_code == 206, r.text
+    db.refresh(share)
+    remaining_after_paid = share.downloads_remaining
+
+    other_token, _ = await login_as("other@test.local", "Pass12345678!")
+    r = await client.get(
+        f"/api/files/{file_row.id}/download",
+        headers={"Authorization": f"Bearer {other_token}", "Range": "bytes=5-10"},
+    )
+    assert r.status_code == 206, r.text
+    db.refresh(share)
+    assert share.downloads_remaining == remaining_after_paid - 1, (
+        "one user's paid download bought another user a free continuation"
+    )
 
 
 @pytest.mark.asyncio

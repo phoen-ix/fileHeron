@@ -165,6 +165,11 @@ class Keys:
     UPLOAD_STALE_AFTER_HOURS = "retention.upload_stale_hours"
     MAX_DIRECT_UPLOAD_BYTES = "uploads.max_direct_bytes"
     DOWNLOAD_SIGNED_URL_TTL_SEC = "downloads.signed_url_ttl_sec"
+    # How long a counted download entitles the SAME user to free ranged
+    # continuations of the SAME file. The desktop client can pause a download
+    # and resume it the next day, so this is measured in hours and evidenced by
+    # a real download_log row - not by the shape of a Range header.
+    DOWNLOAD_RESUME_CREDIT_HOURS = "downloads.resume_credit_hours"
     HIBP_ENABLED = "security.hibp_enabled"
     APP_NAME = "branding.app_name"
     # Site branding (v1.31.0): an admin-uploaded logo + where it shows + an

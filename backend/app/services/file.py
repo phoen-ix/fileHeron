@@ -11,7 +11,7 @@ distinct filesystems inside the container, hence the fallback.
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from sqlalchemy.orm import Session
@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 from ..config import settings
 from ..middleware.errors import AppError
 from ..models.audit_log import AuditEventType
+from ..models.download_log import DownloadLog
 from ..models.file import File, FileState
 from ..models.share import Share, ShareState
 from ..models.user import User
@@ -277,6 +278,31 @@ def revoke_share_if_empty(
 # `locator` is None for an infected file: its bytes were MOVED to quarantine and
 # its quota already released, so both must be left alone.
 PurgeEntry = tuple[str | None, int, int]
+
+
+def has_recent_counted_download(
+    db: Session, *, file_id: str, user_id: int, within_hours: int
+) -> bool:
+    """Whether this user already paid for a download of this file recently.
+
+    The evidence a ranged continuation needs on the AUTHENTICATED path. The
+    public path uses a short Redis mark (browser resumes happen in seconds), but
+    the desktop client can pause a download and resume it the next day, so this
+    is measured in hours and read from `download_log` - a durable row written
+    when the download was counted. It survives a Redis restart, and it grants
+    nothing at all to a caller who never downloaded the file (audit 2026-07-30,
+    the authenticated sibling of flow-publiclink-7)."""
+    cutoff = utc_now() - timedelta(hours=max(1, within_hours))
+    return (
+        db.query(DownloadLog.id)
+        .filter(
+            DownloadLog.file_id == file_id,
+            DownloadLog.accessed_by_user_id == user_id,
+            DownloadLog.accessed_at >= cutoff,
+        )
+        .first()
+        is not None
+    )
 
 
 def mark_deleted_for_expiry(db: Session, *, file: File) -> PurgeEntry | None:

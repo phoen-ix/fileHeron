@@ -159,6 +159,11 @@ class Settings(BaseSettings):
     # longer; shorter = a url leaked into a proxy/access log is usable for
     # a smaller window. Admin-tunable via the registry. Default 15 min.
     DOWNLOAD_SIGNED_URL_TTL_SEC: int = 900
+    # Window in which a ranged continuation of an already-counted download is
+    # served without charging the share's budget again. Long enough for the
+    # desktop client's pause/resume; evidenced per (file, user) from
+    # download_log, so it grants nothing to a caller who never downloaded.
+    DOWNLOAD_RESUME_CREDIT_HOURS: int = 24
     # Maintenance-mode postpone: how long the deferred-update drain worker waits
     # for in-flight transfers to finish before applying the update anyway.
     # Admin-tunable via the registry. Default 30 min.

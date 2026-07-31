@@ -81,6 +81,12 @@ TUNABLES: list[Tunable] = [
     # download, without turning a leaked/forwarded URL into a day-long key. (Was
     # 24h.) Shorter still is better if you don't need resume.
     Tunable(K.DOWNLOAD_SIGNED_URL_TTL_SEC, "DOWNLOAD_SIGNED_URL_TTL_SEC", "int", "downloads", 30, 3600),
+    # Resume credit: 1h floor, 7d ceiling. A ranged continuation inside this
+    # window, from the user who already paid for the download, is not charged
+    # again - which is what makes the desktop client's pause/resume free. Lower
+    # it to tighten the budget; it can never grant anything to a caller with no
+    # prior counted download of that file.
+    Tunable(K.DOWNLOAD_RESUME_CREDIT_HOURS, "DOWNLOAD_RESUME_CREDIT_HOURS", "int", "downloads", 1, 168),
     # --- Updates ---
     # Postpone-update drain cap: 1 min floor, 24h ceiling. After this the
     # deferred update applies even if transfers haven't fully drained.

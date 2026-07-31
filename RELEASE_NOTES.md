@@ -1,249 +1,186 @@
-# file:Heron v2.5.0
+# file:Heron v2.6.0
 
-**The audit, finished.** v2.2.0 took the high-severity findings, v2.3.0 the
-serious remainder, v2.4.0 the mediums. This release closes **every one of the
-232 findings that were left** - the low and informational tail the earlier waves
-deliberately deferred, plus the accepted tradeoffs, re-examined.
+**The three findings v2.5.0 said it was accepting.** The 2026-07-30 audit is now
+closed with nothing left open. No host step, no migration, no breaking API
+change - in-app Update is sufficient on its own.
 
-> **One host step, no migration.** In-app Update ships the backend, worker and
-> frontend images and is sufficient for everything user-facing. Two changes live
-> in `docker-compose.yml`, which the updater does not replace - see
-> **[Host step](#host-step)** at the end. No schema migration; no breaking API
-> change.
-
-The tail is not glamorous, and that is the point of publishing it. A
-low-severity finding is usually a control that is *almost* right, and the
-recurring shape in this batch is sharper than in any earlier wave:
-
-**a comment, a document or a test that asserted a property the code did not
-have - and the assertion is why nobody looked.**
-
-The CI step that type-checked zero files while reporting success. The `nginx -t`
-gate that could not have caught the config's real defect. The restore step that
-copied a Redis snapshot the server ignores, and said "done". The rotation script
-whose safety notes described a transaction model it does not use. Nine
-documented facts in README and CLAUDE.md that were simply false. Each had been
-read many times; none had been checked.
+> The headline is a bulk ZIP download that can be **resumed**. A 9 GB archive
+> whose transfer dies at 90% no longer means starting over, and no longer costs
+> a second download against the link's budget.
 
 ---
 
-## Transfers, downloads and the edge
+## A correction first
 
-**A single `Range: bytes=1-` header bypassed maintenance mode entirely.** The
-gate lets a ranged request through because a resumed download is finishing an
-in-progress transfer, not starting a new one - but that was taken from the shape
-of the header alone, so any fresh connection could claim it. The exemption now
-also requires this instance to have actually started serving that file in the
-last 30 minutes. Genuine resumes complete; a fabricated range does not. Redis
-being unreachable fails open, because a refused resume is worse than a missed
-bypass.
+The v2.5.0 notes said this:
 
-**The SPA shipped with no Content-Security-Policy**, justified in two files by
-Element Plus - a dependency removed two releases earlier. The policy now ships in
-**Report-Only** mode with somewhere for the reports to go: violations land in the
-admin error log as `source="csp"`, so you can see exactly what enforcing would
-break before it is enforced. Enforcement is a later release, deliberately: a
-wrong policy is a blank page, which reads as a total outage.
+> Three findings remain open by choice [...] A `Range:` continuation still skips
+> the per-share download counter. Gating that on the same evidence the
+> maintenance fix uses would charge a second download to anyone resuming after
+> the window - or, on a public link, after a phone switched networks [...]
 
-**nginx pinned its upstreams at startup.** An upstream written as a literal
-hostname is resolved once, so `docker compose up -d backend` on its own left the
-SPA proxying to an address nothing answers on. Worse, an upstream that was
-merely absent at startup made nginx refuse to boot at all - a slow tusd took the
-whole SPA down with it, not just uploads. Both verified against a scratch stack,
-both fixed: the new config boots and serves the SPA with neither upstream
-present.
+Two things were wrong with that paragraph, and both mattered.
 
-**Raising the direct-upload limit did nothing but move the error.**
-`client_max_body_size` was pinned at 110 MB to "match" an admin-tunable setting,
-so raising it in the UI produced a bare nginx 413 with no error envelope. The
-edge cap now sits well above the registry ceiling, leaving the backend as the
-thing that enforces the limit and explains it.
+It said "three findings" and then described one tradeoff, which covers two of
+them. The third went unmentioned: it was the cost of fanning a share out to many
+recipients, and had nothing to do with `Range:` at all. A reader was told the
+ledger was closed apart from a single understood issue. It was not.
 
-**A file could be taken in full with the download counter reading zero.** The
-anonymous public *preview* route served complete original bytes and recorded
-nothing - no download log, no audit row. Approver content-review downloads had
-the same hole: someone who is not a recipient could pull every file in a share
-and leave no trace. Both are now recorded; neither spends the recipients'
-download budget.
+And the stated reason did not apply to the mechanism that had actually shipped.
+The recency check is keyed on the **file alone** - it has never looked at the
+client's IP address, so a phone changing networks cannot invalidate it. The main
+argument for leaving the public-link bypass open was about a failure the code
+could not produce.
 
-**Direct uploads no longer pin a database connection for their whole life.** A
-100 MB upload over a slow link held one connection out of a 10+20 pool for
-minutes while doing no database work at all. The share is re-checked after the
-body arrives, which also closes the window where a share was revoked mid-upload.
+Both are fixed below rather than re-argued.
 
-## Data lifecycle
+---
 
-**Two owner-driven paths destroyed bytes before their transaction committed** -
-the exact ordering the hourly expiry cron was restructured away from in an
-earlier audit. A failed commit left rows still marked `clean` over files that
-were already gone: data loss the UI cannot show, because the row says the file
-is fine. All three paths now share one two-phase helper.
+## A `Range:` header is a claim, not proof
 
-**A postponed update re-opened transfers for the whole image-pull window.**
-Maintenance was lifted when the job was written, not when the new container
-started. It now stays shut across the hand-off, and the updated container lifts
-it on boot - with the drain worker as a backstop if a hand-off never produces
-one, so a dead updater cannot leave an instance refusing transfers forever.
+The continuation test answers exactly one question: does the requested byte
+range start above zero. Any client can assert that. Three separate exemptions
+were granted on the strength of it; v2.5.0 bound the maintenance one to real
+evidence and left the two download-budget ones alone.
 
-**A replayed upload double-charged quota.** The tus pre-create hook cannot be
-bound to a single upload, and the browser client replays that request whenever
-its response is lost - so the same file reserved its bytes twice and released
-them once, locking the uploader out of their own quota until the hourly
-reconcile repaired it.
+**On a public link**, `Range: bytes=1-` skipped both the exhausted check and the
+download counter. Someone holding the URL could re-download every file an
+unlimited number of times, with the remaining-downloads count never moving, no
+entry in the download log, no audit record and no notification to the owner -
+including after the link was spent, where the only thing they could not fetch
+was byte 0. The same bypass applied to the per-share budget on the authenticated
+path.
 
-**The GDPR erasure receipt under-reported after a retry.** The documented
-recovery from a failed unlink is "clean the disk and retry", and a retry only
-sees files that are still there - so everything the first attempt destroyed was
-missing from the signed receipt handed to the data subject. The totals now come
-from the committed audit rows, which is where an aborted attempt's work actually
-survives. The SPA also finally calls the pre-flight endpoint (what the erasure
-will destroy, before you confirm) and offers the receipt PDF - both shipped with
-the feature and neither was reachable from the UI.
+A continuation is now free only when the server can corroborate it, and the two
+paths use deliberately different evidence:
 
-**Quarantined files were purged off the wrong clock**, and turning share
-approval off stranded every share already in the queue with no way for anyone,
-including an admin, to decide them.
+- **Public**: this instance really did start serving that file within the last
+  30 minutes. Keyed on the file rather than the client, so a phone changing
+  networks mid-download keeps its continuation, and it fails **open** when Redis
+  is unavailable - a refused resume is worse than a missed bypass.
+- **Authenticated**: a download-log entry for this user and this file inside
+  **`downloads.resume_credit_hours`** (new Advanced setting, default 24 hours,
+  range 1-168). Thirty minutes is not enough here: the desktop client can pause
+  a download and resume it the next morning, and a durable record also survives
+  a Redis restart.
 
-## Migrations
+Residual, stated plainly: whoever pays for one download gets a window of free
+continuations after it. That is inherent to any time-based credit, and it is
+bounded - unlike unlimited, forever.
 
-**Three migrations guarded the wrong thing.** MariaDB commits each DDL statement
-as it runs and alembic does not record a revision until it returns, so a crash
-partway through leaves the database partly migrated and the revision is retried.
-That retry is what the guards exist for - and one nested the `users.email` NOT
-NULL + UNIQUE tightening inside its "does the column exist" check. A crash
-between the two left the login identity column nullable and non-unique
-permanently, because the retry saw the column and skipped the rest. Four more
-created indexes inside a table guard, including the UNIQUE index the daily
-analytics snapshot's idempotency depends on. And the Markdown-to-HTML conversion
-was not idempotent: a second pass escaped the HTML, turning the public imprint
-and privacy pages into visible tag soup.
+---
 
-The guards themselves had drifted into **seven different implementations across
-28 revisions**, one of which raises where the others return False - while both
-CLAUDE.md and `alembic/env.py` stated they were shared. They now are, in one
-module, and the new tests drive each revision from the state a crash actually
-leaves behind.
+## The bulk ZIP resumes for real
 
-## Images, supply chain and operations
+The archive was charged before its first byte and could only ever be served
+whole. A transfer that died at 90% was therefore unrecoverable: the budget was
+already spent, every retry restarted at byte 0, and once the budget ran out the
+retries got 410 for good.
 
-- **The backend image lost 198 MB** (549 to 351): it carried gcc and the MariaDB
-  headers "for wheels" that all ship prebuilt - a C toolchain sitting in the
-  container that processes untrusted uploads.
-- **`fastapi[standard]` dragged a commercial cloud CLI, the Sentry SDK and two
-  Rust-extension packages into production.** Removed; the lock was regenerated
-  under constraints so exactly five packages left and nothing else moved.
-- **The DB root password and the restic repository password were being handed to
-  the backend and worker containers.** The app ignores them; that is not the
-  same as them not being there.
-- **The Redis restore step was a no-op.** Redis 7 started with AOF enabled
-  ignores `dump.rdb` entirely - it creates an empty log instead - so restoring a
-  backup reported success and came back with zero keys, losing every rate-limit
-  bucket and queued job. Verified both ways; the sequence that works is now used
-  and its result is checked.
-- **`install.sh` created `.env` world-readable** and only tightened it at the
-  end, so on a multi-user host the file sat readable for the entire window in
-  which its secrets were generated - and left an equally readable `.env.bak`.
-- **Redis could be OOM-killed instead of refusing writes**, which is the whole
-  reason `noeviction` is configured: `maxmemory` equalled the container limit, so
-  the kernel usually won and the in-flight AOF write was lost silently.
-- The self-update state file was rewritten non-atomically on every log line while
-  the backend polls it once a second, the shim's temp files were on the wrong
-  filesystem so its "atomic" move was a copy, and `rollback_target.json` was
-  never updated after a rollback - so the UI offered to redeploy the version you
-  were already running.
+The old always-charge rule was not carelessness - it was the only safe answer
+while the response ignored `Range` anyway, because honouring the header would
+have handed back the entire archive for free. Resuming safely needs the archive
+to be *seekable* and the continuation to be *corroborated*. Both now hold, so
+the tradeoff is gone rather than accepted.
 
-## The SPA
+**Seekable.** The writer already computed the exact archive length
+arithmetically, from member names and sizes. The same arithmetic makes any byte
+offset addressable, so a resume finds its starting point directly - no
+generating and discarding gigabytes to get there. The full download is now the
+same code path, resuming from zero.
 
-Twenty-nine findings, all the same shape: a control that looked like it worked.
+**Reproducible.** Two downloads of one unchanged share have to be
+byte-identical, or the two halves of a resumed transfer belong to different
+archives. The timestamp stamped on each member came from the clock and was
+rendered in the container's local timezone; it now comes from the share's
+creation date, in UTC. Members are ordered totally, rather than by a timestamp
+that ties when two files were uploaded in the same second.
 
-- Two admin tables had rows reachable only with a mouse. **Escape closed no
-  modal in the app** - every one bound the handler to a backdrop that can never
-  receive the event. Collapsed admin nav categories kept their links in the tab
-  order and in the accessibility tree.
-- The notification bell **opened two live connections per mount**, burning two of
-  the five per-user slots and delivering everything twice.
-- Six list views had no out-of-order guard, so a slow earlier search could
-  overwrite a newer one; the file preview had the same race with worse
-  consequences - the previous file's contents under the current file's name.
-- A failed file delete had no error handling at all: a refusal looked exactly
-  like success, and the natural next action is to click it again.
-- **Nothing pluralised** ("in 1 days"), `<html lang>` never followed the initial
-  locale, all 57 page titles were hardcoded English, six notification categories
-  rendered raw i18n keys, and `formatBytes` existed three times with two
-  different precisions - so the same file read "1.46 MB" in one list and
-  "1.5 MB" in another.
-- The public share page offered a Download button for files the server always
-  refuses with 425, and SSO sign-in silently discarded the deep link you were
-  trying to reach.
+**Identified.** A strong `ETag` covers the member list, their sizes and the
+layout. A file quarantined or added mid-transfer changes it, the client's
+`If-Range` misses, and it restarts cleanly - instead of splicing two different
+archives into a file that opens and is quietly wrong.
 
-## Desktop client
+**Correct, or refused.** A member behind the resume point still needs its
+checksum for the archive's index. It comes from a cache filled as the full
+download streams past; on a miss the member is read again. When that would cost
+more than 2 GiB of re-reading, the whole archive is returned with a 200 instead
+- always a valid answer to a range request, and better than making the client
+wait minutes for its first byte. No path emits a guessed checksum.
 
-Direct uploads - everything under 100 MB, the common case - reported no progress
-at all until they finished. Signing out froze the window for a full HTTP timeout
-when the server was unreachable, which is one of the moments you most want to
-sign out. A download whose first probe failed wrote a checkpoint that could never
-match, so resuming threw away every byte already fetched; one that failed before
-any bytes landed left an orphan sidecar in your Downloads folder forever. And the
-README claimed your refresh token lives in Windows Credential Manager - it never
-has.
+**Charged once.** The free resume needs the same corroboration as above, keyed
+on the share and the archive's ETag - so a range request against a changed
+member list is a new download and pays like one.
 
-*(The desktop client is not re-released here; these land in the next
-`client-v*` build.)*
+Also: a `416` carrying the archive length for a range past the end, and a
+multi-range request falls back to the full 200 rather than pretending to serve a
+format nothing here produces.
 
-## Tests and CI
+Verified byte-for-byte. Any concatenation of ranged reads equals the full
+archive - checked at every structural boundary in the format and one byte either
+side of it - and the reassembled bytes open with Python's `zipfile` with every
+member's contents intact.
 
-The gates themselves were part of the audit, because several were reporting
-success without checking anything.
+---
 
-- **CI's frontend type-check examined zero files** (a solution-style tsconfig
-  with `"files": []`). Replaced with the real `npm run build`.
-- **CI installed a different dependency closure than the image ships** -
-  resolving version ranges fresh from PyPI, so the suite tested whatever was
-  newest that morning while production runs the lock file.
-- **The quota enforcement Lua script had never been executed by a test.** The
-  fake Redis re-implemented it in Python and the service was asserted against
-  that - a mock checked against itself, guarding the decision that refuses an
-  over-quota upload. A new CI job runs it against a real Redis.
-- **Foreign keys were off in the test database.** The suite ran against
-  something that silently accepted rows MariaDB rejects, so ~30 `ondelete=`
-  declarations were never exercised. Turning it on exposed eight tests writing
-  data production cannot produce.
-- The self-update shim and executor - the code that replaces every other piece
-  of code on the host - had no tests and no CI gate at all. nginx.conf had no
-  runtime assertions. The clamd reply parser, the only code that decides clean
-  versus infected, had never been tested.
+## Sending a share stops costing one Redis connection per recipient
 
-The suites now run **1594 backend tests, 184 frontend, 183 desktop client and 24
+Notification fan-out opened a fresh event loop and a fresh Redis connection pool
+for **every recipient**, one after another, on the request thread while the
+sender waited for a response. A share to twenty people built twenty of each. The
+cost scaled with a number the sender chooses.
+
+The jobs are now collected and pushed over a single connection when the
+transaction commits. Ten recipients: one pool instead of ten. Webhook delivery
+had the identical shape and gets the same treatment.
+
+What deliberately did *not* move behind the queue: the message render, the
+in-app notification row and the mail-log entry. Keeping those inline is what
+makes the bell light up immediately, and what means a Redis outage leaves you
+with rows whose sends can be retried rather than no record at all.
+
+---
+
+## Verification
+
+Every fix here has a test that was **proven to fail against the pre-fix code** -
+run against the previous commit, with the failure confirmed to be the assertion
+rather than a missing import.
+
+Beyond that, eighteen deliberate defects were reintroduced one at a time - a
+dropped bounds clamp in the seek arithmetic, the timestamp back on the clock, a
+partial checksum written to the cache, a batch of emails surviving a rollback, a
+log line rendering raw job arguments - and each turned the test that claims to
+cover it red.
+
+Two did not, on the first attempt. Both tests were rewritten rather than the
+result accepted:
+
+- "the default timestamp is fixed" compared two archives built in the same
+  millisecond. Those also match when the timestamp comes from the clock, because
+  the format's timestamps have two-second resolution - so the test passed
+  against the very defect it existed to catch, and would have failed in
+  production only when a download straddled a two-second boundary. It now pins
+  the value.
+- the raw-arguments guard counted redaction call sites and expected exactly two.
+  That is a proxy for the rule, not the rule: it breaks when a third correct one
+  is added, and would have passed a fourth that logged secrets. It now walks the
+  syntax tree and refuses any log line that renders job arguments outside the
+  redactor.
+
+The suites now run **1688 backend tests, 184 frontend, 183 desktop client and 25
 end-to-end journeys**, with shellcheck, hadolint, actionlint and `nginx -t` over
 the configuration.
 
-Twelve of the fixes were verified by **reintroducing the defect and confirming
-the suite goes red in the test that claims to cover it** - all twelve did.
-
-## Still accepted, deliberately
-
-Three findings remain open by choice, and it is better to say so than to let a
-closed ledger imply otherwise. A `Range:` continuation still skips the
-per-share download counter. Gating that on the same evidence the maintenance
-fix uses would charge a second download to anyone resuming after the window -
-or, on a public link, after a phone switched networks - which on a
-download-limited link means the resume simply fails. On an instance where
-whoever sends the range already holds the link, that is a worse failure than the
-bypass it would close. The reasoning now lives in the code, next to the
-behaviour.
-
 ---
 
-## Host step
+## Upgrading
 
-`docker-compose.yml` changed, and the in-app updater replaces images, not the
-compose file. After updating, from the deployment directory:
+In-app Update, or `FH_TAG=v2.6.0` if you deploy by hand. Nothing else to do - no
+compose change, no migration.
 
-```bash
-docker compose up -d redis            # picks up the new maxmemory headroom
-docker compose up -d backend worker   # drops the operator-only secrets from their env
-```
-
-Neither is urgent and neither touches data. Skipping them leaves Redis with its
-previous memory ceiling and the two containers with two environment variables
-they do not read.
+One behaviour change worth knowing: bulk ZIP archives are now byte-identical
+across repeated downloads of an unchanged share, where before every generation
+differed in its internal timestamps. Anything that hashed a downloaded archive
+and compared it against an earlier one will now see them match. That is the
+point, but it is a change.

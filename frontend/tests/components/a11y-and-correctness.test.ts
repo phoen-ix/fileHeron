@@ -179,7 +179,19 @@ describe('useSSE.start', () => {
     vi.stubGlobal('EventSource', FakeES as unknown as typeof EventSource)
 
     const { useSSE } = await import('@/composables/useSSE')
-    const sse = useSSE({ url: '/api/stream', onMessage() {} })
+
+    // useSSE registers onBeforeUnmount, so calling it bare warns "called when
+    // there is no active component instance" and - more to the point - leaves
+    // the composable's teardown unregistered, which is not how it runs in the
+    // app. Mount it the way a component does.
+    let sse!: ReturnType<typeof useSSE>
+    const host = defineComponent({
+      setup() {
+        sse = useSSE({ url: '/api/stream', onMessage() {} })
+        return () => null
+      },
+    })
+    const wrapper = mount(host)
 
     sse.start()
     sse.start()
@@ -188,7 +200,7 @@ describe('useSSE.start', () => {
     await new Promise((r) => setTimeout(r, 0))
 
     expect(FakeES.instances).toBe(1)
-    sse.stop()
+    wrapper.unmount()
     vi.unstubAllGlobals()
   })
 })

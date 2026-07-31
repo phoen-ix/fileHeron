@@ -170,7 +170,10 @@ The inbox lists shares addressed to you (directly or via a group). Per file you 
 **Download** button (scanned clean), "Scan in progress" (`425`), "Quarantined"
 (`410`), or "Deleted" (`410`). Downloads stream via kernel `sendfile()`; each is
 logged (your IP, user, file, timestamp). A **Download all (ZIP)** option streams the
-whole share as one archive.
+whole share as one archive - built on the fly, never cached to disk, and
+**resumable**: an interrupted archive download continues from where it stopped
+rather than starting over, and the resume is not charged a second time against
+the share's download budget.
 
 ## Managing your shares (`/outbox`)
 
@@ -185,7 +188,10 @@ revoke).
 The recipient opens `/d/{token}` - subject + file list, no login. A password prompts
 to unlock first (10 wrong tries in 15 min locks the **link** for everyone). Each
 download decrements the counter atomically; at zero the link refuses further
-downloads.
+downloads. An interrupted download - a single file or the whole-share ZIP - can
+be resumed without spending another unit, as long as the server can corroborate
+that it really was in flight; a bare `Range:` header from a fresh connection is
+charged like any other download.
 
 ## In-browser preview
 
@@ -717,6 +723,7 @@ via `/admin/settings/advanced`.
 | `PUBLIC_LINK_BASE_PATH` | `/d` | Public-link URL prefix. |
 | `PUBLIC_LINK_PASSWORD_RATE_LIMIT` / `_WINDOW_SEC` / `PUBLIC_LINK_LOCKOUT_SEC` | `10`/`900`/`900` | Per-link password brute-force guard. ↻ |
 | `DOWNLOAD_SIGNED_URL_TTL_SEC` | `900` | Signed-download-URL lifetime (30s-1h). ↻ |
+| `DOWNLOAD_RESUME_CREDIT_HOURS` | `24` | How long a logged download lets the same user resume it for free (1-168h). Shorter tightens the download budget; longer suits clients that pause overnight. ↻ |
 
 </details>
 

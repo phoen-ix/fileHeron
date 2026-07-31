@@ -15,12 +15,13 @@ keep this to what would cause a wrong move if unknown.
 
 ## Status
 
-Backend **`v2.5.0`** (the 2026-07-30 audit closed out: all 232 remaining
-findings), desktop client **`client-v1.1.0`** - shipped + in production,
-published for public self-hosting. **v2.5.0 needs ONE host step** (compose file
-changed: `docker compose up -d redis backend worker` after the in-app Update -
-Redis maxmemory headroom + dropping operator-only secrets from the app
-containers) and no migration. v2.4.0 and v2.3.0 needed neither. (v2.2.0 did:
+Backend **`v2.6.0`** (the 2026-07-30 audit fully closed - **nothing left
+accepted**), desktop client **`client-v1.1.0`** - shipped + in production,
+published for public self-hosting. v2.6.0 needs no host step and no migration.
+**v2.5.0 needed ONE host step** (compose file changed: `docker compose up -d
+redis backend worker` after the in-app Update - Redis maxmemory headroom +
+dropping operator-only secrets from the app containers) and no migration. v2.4.0
+and v2.3.0 needed neither. (v2.2.0 did:
 ClamAV 1.5.3 + a worker `/state` mount, plus the `files.av_unscanned` migration -
 so a rollback past v2.2.0 still needs the `alembic stamp` recovery.) **v2.3.0
 adds the `public_links:read` API-token scope**: a token scoped `shares:read` only
@@ -29,13 +30,33 @@ route returns the decrypted plaintext link URL. (README's server/client version
 badges read live from the git tags, so they never need a manual bump; this line
 does - keep it current on release.)
 
+> **v2.6.0 invariants worth knowing before you touch these areas.**
+> **Never write a bare `if is_partial_continuation(request)` around a counter, a
+> log write or a state check.** The header is a claim; every exemption pairs it
+> with evidence - `transfer_activity.was_download_recent(key)` on the anonymous
+> paths (30 min, fails OPEN), `file.has_recent_counted_download(...)` windowed by
+> `downloads.resume_credit_hours` on the authenticated ones (durable, survives a
+> Redis restart, and the desktop client's overnight pause needs it).
+> The bulk ZIP is now **resumable, and therefore its bytes are load-bearing**:
+> `SizedZipStream` must stay reproducible (caller-supplied `mtime`, `time.gmtime`
+> not `localtime`) and `file.downloadable_files` must keep its `File.id`
+> tiebreaker, or a resume splices two different archives. `iter_from(0)` IS the
+> full stream - one code path on purpose. A member behind the resume point needs
+> its CRC from `fh:zip:crc:{file_id}` or a re-read; if that would cost more than
+> `zip_stream.MAX_RESUME_REREAD_BYTES` the route serves a **200 full archive**.
+> Never emit a guessed CRC, and never cache the partial CRC of a window that
+> closed mid-member. `LAYOUT_VERSION` must be bumped when the produced bytes
+> change - it is in the ETag, which is what makes an in-flight `If-Range`
+> restart instead of corrupt.
+> Fan-outs use `job_queue.enqueue_many` (one pool); `notification.dispatch`
+> accumulates on `db.info` and pairs its `run_after_commit` flush with a
+> `run_after_rollback` clear - without the latter a rolled-back batch is
+> silently adopted by the next dispatch on that session.
+>
 > **v2.5.0 invariants worth knowing before you touch these areas.**
-> The maintenance gate's `Range:` exemption now requires
+> The maintenance gate's `Range:` exemption requires
 > `transfer_activity.was_download_recent(file_id)` - a per-file mark written
-> when a download starts, 30-minute TTL, **fails open** when Redis is down. The
-> download BUDGET exemption is still unguarded, deliberately (a resume after a
-> network switch would be double-charged); the reasoning is in
-> `maintenance.refuse_if_maintenance`. `expire_share_now` and
+> when a download starts, 30-minute TTL, **fails open** when Redis is down. `expire_share_now` and
 > `invalidate_all_active_shares` now RETURN a `to_purge` list and the caller
 > unlinks bytes AFTER committing - never reintroduce a purge inside the
 > transaction. Alembic guards live in `app/db_guards.py` and each op is guarded

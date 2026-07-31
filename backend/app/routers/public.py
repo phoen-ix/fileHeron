@@ -378,6 +378,30 @@ def public_preview(
         logger.error("public preview: storage missing for %s", file.id)
         raise AppError(500, "STORAGE_MISSING", "File data is missing.")
 
+    # Preview is free of charge by design - it does not decrement the download
+    # budget - but it still hands an anonymous caller the COMPLETE original
+    # bytes. Nothing anywhere recorded that: no download_log row, no audit
+    # entry. So a share could be exfiltrated in full through the preview route
+    # and neither the owner nor an investigator would find any trace that it had
+    # left the server, while the download counter still read zero
+    # (audit 2026-07-30). Range continuations are skipped so a PDF viewer
+    # fetching in chunks does not write a row per chunk.
+    if not is_partial_continuation(request):
+        record_audit_event(
+            db,
+            event_type=AuditEventType.public_link_previewed,
+            actor_user_id=None,
+            target_type="public_link",
+            target_id=link.id,
+            metadata={
+                "file_id": file.id,
+                "share_id": link.share_id,
+                "bytes": file.size_bytes,
+            },
+            request=request,
+        )
+        db.commit()
+
     ttl = settings_registry.effective(db, settings_registry.K.DOWNLOAD_SIGNED_URL_TTL_SEC)
     return serve_response(
         backend,

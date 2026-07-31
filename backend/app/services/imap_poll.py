@@ -9,10 +9,12 @@ from __future__ import annotations
 
 import contextlib
 import logging
+import secrets
 
 from sqlalchemy.orm import Session
 
 from ..database import SessionLocal
+from ..redis_client import get_redis
 from ..utils.timeutil import utc_now
 from . import imap_config, inbound_mail, inbound_parse
 from . import settings as settings_svc
@@ -37,18 +39,65 @@ def _int_setting(db: Session, key: str) -> int:
         return 0
 
 
+_POLL_LOCK_KEY = "fh:imap:poll:lock"
+# Generous against a slow mailbox but short enough that a killed worker frees it
+# within a couple of cron ticks rather than blocking ingestion until someone
+# restarts the stack.
+_POLL_LOCK_TTL_SEC = 900
+
+
+def _acquire_poll_lock() -> str | None:
+    """Claim the mailbox, or return None if another run already holds it.
+
+    `fetch-now` runs the poll inline while the five-minute cron can enter the
+    same function concurrently, and two runs both read the same `last_uid`,
+    both fetch the same messages and race on the dedup insert. Redis being
+    unavailable means no lock, not no poll: ingestion matters more than the
+    narrow duplicate-fetch window this closes (audit 2026-07-30)."""
+    token = secrets.token_hex(8)
+    try:
+        if get_redis().set(_POLL_LOCK_KEY, token, nx=True, ex=_POLL_LOCK_TTL_SEC):
+            return token
+        return None
+    except Exception:
+        logger.warning("imap: poll lock unavailable (redis); proceeding unguarded")
+        return token
+
+
+def _release_poll_lock(token: str) -> None:
+    """Only release a lock we still own - a run that overran the TTL must not
+    delete the successor's claim."""
+    try:
+        r = get_redis()
+        if r.get(_POLL_LOCK_KEY) == token:
+            r.delete(_POLL_LOCK_KEY)
+    except Exception:
+        pass
+
+
 def run_poll(*, manual: bool, db: Session | None = None, session_opener=open_session) -> dict:
     """Fetch new mail and ingest it. ``manual`` marks the admin "Fetch now" call
     (kept for symmetry; scheduling is handled by the cron dispatcher now). Opens
     its own DB session when one isn't supplied (the worker thread case)."""
     own = db is None
     db = db or SessionLocal()
+    lock_token: str | None = None
     try:
         # Feature guard only. Cadence/enable is owned by the cron scheduler
         # (services/cron_schedule.py 'imap_poll') as of v1.28.0; this no longer
         # self-gates on interval/mode.
         if not imap_config.is_enabled(db):
             return {"ok": True, "skipped": "disabled"}
+
+        # One poll at a time across the whole stack. `fetch-now` runs this
+        # inline in the request while the five-minute cron can enter it
+        # concurrently in the worker; both then read the same `last_uid`, fetch
+        # the same messages and race on the dedup insert - and with a
+        # post-fetch action of delete/move, the loser can apply that action to
+        # a message the winner is mid-ingest on (audit 2026-07-30).
+        lock_token = _acquire_poll_lock()
+        if lock_token is None:
+            return {"ok": True, "skipped": "already_running"}
 
         cfg = imap_config.resolve_imap_config(db)
         if not cfg.is_configured:
@@ -192,6 +241,8 @@ def run_poll(*, manual: bool, db: Session | None = None, session_opener=open_ses
         logger.exception("imap poll failed")
         return {"ok": False, "error": f"{type(exc).__name__}: {str(exc)[:200]}"}
     finally:
+        if lock_token is not None:
+            _release_poll_lock(lock_token)
         if own:
             db.close()
 

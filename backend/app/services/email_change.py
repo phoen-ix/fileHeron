@@ -106,22 +106,25 @@ def _assert_email_available(db: Session, em: str, *, exclude_user_id: int) -> No
 
 def _supersede_pending(db: Session, *, user_id: int) -> int:
     """Cancel any still-live pending change for this user so only the latest
-    request's link(s) can confirm. Returns the count superseded."""
-    rows = (
-        db.query(EmailChangeToken)
-        .filter(
+    request's link(s) can confirm. Returns the count superseded.
+
+    A single conditional UPDATE rather than read-then-assign. Two concurrent
+    requests both read an empty set, both inserted, and the account was left
+    with two simultaneously-live pending changes to DIFFERENT addresses - so
+    whichever confirmation link was clicked second silently won, and the "only
+    the latest request's link works" guarantee this function exists to provide
+    did not hold (audit 2026-07-30)."""
+    result = db.execute(
+        update(EmailChangeToken)
+        .where(
             EmailChangeToken.user_id == user_id,
             EmailChangeToken.used_at.is_(None),
             EmailChangeToken.cancelled_at.is_(None),
         )
-        .all()
+        .values(cancelled_at=utc_now())
     )
-    now = utc_now()
-    for r in rows:
-        r.cancelled_at = now
-    if rows:
-        db.flush()
-    return len(rows)
+    db.flush()
+    return int(result.rowcount or 0)
 
 
 def _apply_email_change(
@@ -403,7 +406,28 @@ def cancel_email_change(
             )
         if record.expires_at < utc_now():
             raise AppError(410, "EMAIL_CHANGE_TOKEN_EXPIRED", "This link has expired.")
-        record.cancelled_at = utc_now()
+        # Atomic conditional UPDATE, not a read-then-assign. The read above and
+        # the write below were separated, so a cancel arriving while the
+        # confirm was applying reported success to the user while the change
+        # went through anyway - the "it wasn't me" kill switch telling someone
+        # their account was safe when it had just changed hands
+        # (audit 2026-07-30). Losing the race now says so.
+        now = utc_now()
+        result = db.execute(
+            update(EmailChangeToken)
+            .where(
+                EmailChangeToken.id == record.id,
+                EmailChangeToken.used_at.is_(None),
+                EmailChangeToken.cancelled_at.is_(None),
+            )
+            .values(cancelled_at=now)
+        )
+        if result.rowcount == 0:
+            raise AppError(
+                409,
+                "EMAIL_CHANGE_ALREADY_SETTLED",
+                "This change was already completed or cancelled.",
+            )
         db.flush()
         record_audit_event(
             db,

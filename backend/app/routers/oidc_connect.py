@@ -17,13 +17,22 @@ Endpoints:
 - ``GET    /api/account/oidc/links`` - current user's link (0 or 1).
 - ``DELETE /api/account/oidc/links`` - unlink.
 
-The callback validates the actor in two ways:
-1. The state cookie carries the user_id who initiated the round-trip.
-2. The user is required to be authenticated when hitting the callback,
-   and we cross-check `cookie_user_id == authed.id`.
+The callback validates the actor with ONE check: the signed state cookie
+carries the user_id that initiated the round-trip, and that id is what the
+binding is applied to.
 
-Both checks must pass - defense-in-depth against a confused-deputy
-where a malicious IdP would somehow learn another user's auth.
+This docstring used to describe a second check - that the callback requires an
+authenticated session and cross-checks `cookie_user_id == authed.id` - and
+called the pair defense-in-depth. That check has never existed: the callback is
+a top-level browser navigation returning from the IdP, so it carries no
+Authorization header and takes no user dependency. Describing a guard that is
+not there is worse than having one guard, because the next person to touch this
+reads the docstring and assumes the cookie is belt-and-braces rather than the
+whole belt (audit 2026-07-30).
+
+What actually protects the flow: the cookie is HMAC-signed, single-use, and
+scoped to the callback path, so an attacker cannot forge the actor id, and the
+IdP-asserted email must still match the target user's before a bind is written.
 """
 from __future__ import annotations
 

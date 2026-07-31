@@ -58,6 +58,7 @@
     "CONTENT_CHANGED": "Diese Freigabe hat sich geändert, seit Sie sie geöffnet haben. Bitte prüfen Sie sie erneut, bevor Sie genehmigen.",
     "DIRECT_UPLOAD_TOO_LARGE": "Diese Datei ist für einen Direkt-Upload zu groß.",
     "DOWNLOAD_TOKEN_EXPIRED": "Dieser Download-Link ist abgelaufen. Laden Sie die Seite neu, um einen neuen zu erhalten.",
+    "EMAIL_CHANGE_ALREADY_SETTLED": "Diese Änderung wurde bereits abgeschlossen oder storniert.",
     "EMAIL_CHANGE_DISABLED": "E-Mail-Änderungen sind durch die Administration deaktiviert.",
     "EMAIL_CHANGE_TOKEN_CANCELLED": "Diese E-Mail-Änderung wurde abgebrochen.",
     "EMAIL_CHANGE_TOKEN_EXPIRED": "Dieser Link zur E-Mail-Änderung ist abgelaufen. Bitte die Änderung erneut anfordern.",

@@ -58,6 +58,7 @@
     "CONTENT_CHANGED": "This share changed since you opened it. Review it again before approving.",
     "DIRECT_UPLOAD_TOO_LARGE": "This file is too large for a direct upload.",
     "DOWNLOAD_TOKEN_EXPIRED": "This download link has expired. Reload the page to get a fresh one.",
+    "EMAIL_CHANGE_ALREADY_SETTLED": "This change was already completed or cancelled.",
     "EMAIL_CHANGE_DISABLED": "Email changes are disabled by your administrator.",
     "EMAIL_CHANGE_TOKEN_CANCELLED": "This email change has been cancelled.",
     "EMAIL_CHANGE_TOKEN_EXPIRED": "This email-change link has expired. Request the change again.",

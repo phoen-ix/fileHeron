@@ -106,7 +106,21 @@ async def _discovery(provider: OIDCProvider) -> dict[str, Any]:
     except httpx.HTTPError as e:
         logger.warning("OIDC discovery failed provider=%s: %s", provider.id, e)
         raise AppError(503, "OIDC_UNAVAILABLE", "Identity provider is unreachable.") from e
-    doc = json.loads(bytes(buf))
+    # Parse INSIDE the failure contract. This sat outside every try, so an IdP
+    # answering 200 with a non-JSON body - a captive portal, an HTML error
+    # page, a truncated response - raised a bare JSONDecodeError and surfaced
+    # as an unhandled 500 instead of the OIDC_UNAVAILABLE this function
+    # otherwise promises. services/jwks.py already gets this right; discovery
+    # and token exchange did not (audit 2026-07-30).
+    try:
+        doc = json.loads(bytes(buf))
+    except (ValueError, json.JSONDecodeError) as e:
+        logger.warning(
+            "OIDC discovery returned a non-JSON body provider=%s", provider.id
+        )
+        raise AppError(
+            503, "OIDC_UNAVAILABLE", "Identity provider is unreachable."
+        ) from e
     # The discovery document's `issuer` MUST equal the issuer we fetched it from
     # (OIDC Discovery spec); otherwise a tampered/rogue discovery endpoint could
     # advertise a different issuer that later weakens ID-token validation (Info-3).
@@ -183,7 +197,12 @@ async def build_authorize_url(
         "state": state,
         "nonce": nonce,
     }
-    qs = "&".join(f"{k}={httpx.QueryParams({k: v})[k]}" for k, v in params.items())
+    # `httpx.QueryParams({k: v})[k]` gives the value back DECODED, so building
+    # the string that way percent-encoded nothing at all - a redirect_uri or
+    # state containing & or = would have split the query. Stringifying one
+    # QueryParams over all six pairs is what actually encodes
+    # (audit 2026-07-30).
+    qs = str(httpx.QueryParams(params))
     return f"{auth_endpoint}?{qs}", state, nonce
 
 
@@ -217,7 +236,15 @@ async def _exchange_code(
     except httpx.HTTPError as e:
         logger.warning("OIDC token exchange failed provider=%s: %s", provider.id, e)
         raise AppError(401, "OIDC_TOKEN_EXCHANGE_FAILED", "Token exchange failed.") from e
-    return resp.json()
+    try:
+        return resp.json()
+    except (ValueError, json.JSONDecodeError) as e:
+        logger.warning(
+            "OIDC token endpoint returned a non-JSON body provider=%s", provider.id
+        )
+        raise AppError(
+            401, "OIDC_TOKEN_EXCHANGE_FAILED", "Token exchange failed."
+        ) from e
 
 
 async def _verify_id_token(

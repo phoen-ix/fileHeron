@@ -509,6 +509,7 @@ async def _send_resolved(
     text_body: str,
     html_body: str | None = None,
     category: str | None = None,
+    recipient_user_id: int | None = None,
 ) -> None:
     """Helper for the direct senders below. Opens its own short-lived
     session, resolves SMTP config from DB-overlay-env, then sends.
@@ -518,7 +519,13 @@ async def _send_resolved(
     (best-effort, masked at rest) and re-raises any send error so the
     auth flow still sees the failure. The recipient user is resolved by
     email lookup so direct sends (reset / invite / lockout) still link to
-    a user in the admin 'Emails to this user' panel."""
+    a user in the admin 'Emails to this user' panel.
+
+    ``recipient_user_id`` overrides that lookup for the cases where the address
+    is deliberately NOT the user's current one - the post-apply notice to the
+    OLD address being the whole reason this parameter exists. That row used to
+    land with recipient_user_id=NULL, so it appeared under nobody in the admin
+    panel (audit 2026-07-30, flow-emailchange-1)."""
     db = SessionLocal()
     try:
         cfg = resolve_smtp_config(db)
@@ -551,7 +558,9 @@ async def _send_resolved(
             error_message = str(err)
         log_db = SessionLocal()
         try:
-            ruid = log_db.query(User.id).filter(User.email == to).scalar()
+            ruid = recipient_user_id
+            if ruid is None:
+                ruid = log_db.query(User.id).filter(User.email == to).scalar()
             mail_log.record_direct(
                 log_db,
                 recipient_email=to,
@@ -934,7 +943,7 @@ async def send_email_change_alert(
     *, to: str, locale: Locale | str, display_name: str, new_email: str,
     cancel_token: str | None = None, by_admin: bool = False, applied: bool = False,
     app_url: str | None = None, site_timezone: str | None = None,
-    db: Session | None = None,
+    db: Session | None = None, user_id: int | None = None,
 ) -> None:
     """Security notice to the OLD address. When ``applied`` (immediate mode)
     the change is already live, so no cancel link; otherwise (verify_new) a
@@ -954,7 +963,8 @@ async def send_email_change_alert(
         recipient_email=to, category="email_change_alert",
     )
     await _send_resolved(
-        to=to, subject=subject, text_body=body, html_body=html, category="email_change_alert"
+        to=to, subject=subject, text_body=body, html_body=html,
+        category="email_change_alert", recipient_user_id=user_id,
     )
 
 
@@ -962,7 +972,7 @@ async def send_email_change_completed(
     *, to: str, locale: Locale | str, display_name: str, new_email: str,
     oidc_reset: bool = False,
     app_url: str | None = None, site_timezone: str | None = None,
-    db: Session | None = None,
+    db: Session | None = None, user_id: int | None = None,
 ) -> None:
     """Token-free courtesy notice to the NEW (now current) address."""
     base = _app_url(app_url)
@@ -978,5 +988,6 @@ async def send_email_change_completed(
         recipient_email=to, category="email_change_completed",
     )
     await _send_resolved(
-        to=to, subject=subject, text_body=body, html_body=html, category="email_change_completed"
+        to=to, subject=subject, text_body=body, html_body=html,
+        category="email_change_completed", recipient_user_id=user_id,
     )

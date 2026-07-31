@@ -515,6 +515,7 @@ async def dispatch_request_emails(db: Session, outcome: RequestOutcome) -> None:
                 to=outcome.new_email, locale=loc, display_name=name,
                 new_email=outcome.new_email, oidc_reset=outcome.oidc_reset,
                 app_url=base, site_timezone=tz, db=db,
+                user_id=outcome.user_id,
             ),
         ))
         sends.append((
@@ -523,6 +524,7 @@ async def dispatch_request_emails(db: Session, outcome: RequestOutcome) -> None:
                 to=outcome.old_email, locale=loc, display_name=name,
                 new_email=outcome.new_email, by_admin=outcome.by_admin,
                 applied=True, app_url=base, site_timezone=tz, db=db,
+                user_id=outcome.user_id,
             ),
         ))
         await _send_each(*sends)
@@ -548,6 +550,7 @@ async def dispatch_request_emails(db: Session, outcome: RequestOutcome) -> None:
                     new_email=outcome.new_email, cancel_token=outcome.cancel_token,
                     by_admin=outcome.by_admin, applied=False,
                     app_url=base, site_timezone=tz, db=db,
+                user_id=outcome.user_id,
                 ),
             )
         )
@@ -588,6 +591,7 @@ async def dispatch_confirm_emails(db: Session, outcome: ConfirmOutcome) -> None:
             to=outcome.new_email, locale=outcome.locale,
             display_name=outcome.display_name, new_email=outcome.new_email,
             oidc_reset=outcome.oidc_reset, app_url=base, site_timezone=tz, db=db,
+                user_id=outcome.user_id,
         ),
     ))
     await _send_each(*sends)

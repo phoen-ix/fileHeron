@@ -1,0 +1,426 @@
+"""Gates that were only ever tested as functions, never as wiring.
+
+tests-2  an autouse fixture disables the per-IP throttle for the whole suite, so
+         a route that stopped calling `check_ip_allowed` looked exactly like one
+         that still did. Pass-through patching cannot prove wiring; the only
+         pattern that can is the one in test_pw_rate_limit.py - force the
+         limiter to DENY and assert 429. It covered two of the eleven gated
+         endpoints.
+tests-3  the maintenance gate has a dozen route call sites and had zero
+         route-level tests: only `refuse_if_maintenance` itself was exercised,
+         so removing the call from a route was undetectable. That includes the
+         Range-continuation exemption, which is the one piece of the design that
+         is easy to break by "simplifying".
+tests-5  `_parse_reply` is the only code that decides clean vs infected, and no
+         environment anywhere runs a real clamd, so nothing tested it at all.
+tests-13 the inbound field truncation - the fix for the DataError that wedged
+         the IMAP poll - had no test, and SQLite cannot enforce the widths.
+tests-11 the SSE per-user cap was tested as two pure helpers; the route that
+         acquires the slot and must release it was not.
+tests-19 eight ARQ workers had no test references at all, including
+         cleanup_abandoned_uploads, which deletes files.
+
+From the 2026-07-30 audit.
+"""
+from __future__ import annotations
+
+import inspect
+
+import pytest
+
+from app.models.user import UserRole
+from app.services import rate_limit as rate_limit_svc
+
+# --- tests-2: every per-IP gate, proven by denial ----------------------------
+
+PW = "Pass12345678!"
+
+# (method, path, json body) for the anonymous gates.
+# Two limiters, two families. The login family shares
+# `authenticate_first_factor`, which calls `check_login_ip_allowed`; everything
+# else calls `check_ip_allowed` directly. Patching only one is how a route can
+# look gated while it is not.
+_ANON_GATED = [
+    ("/api/auth/login", {"email": "a@test.local", "password": "x"}, "login"),
+    ("/api/auth/login/recovery", {"email": "a@test.local", "password": "x",
+                                  "recovery_code": "ABCD-EFGH"}, "login"),
+    ("/api/auth/webauthn/begin", {"email": "a@test.local", "password": "x"}, "login"),
+    ("/api/auth/forgot-password", {"email": "a@test.local"}, "ip"),
+    ("/api/auth/register-from-invite", {"token": "t" * 12,
+                                        "password": "LongCorrectHorse123!",
+                                        "display_name": "A"}, "ip"),
+    ("/api/auth/reset-password", {"token": "abcdefghij0123",
+                                  "new_password": "LongCorrectHorse123!"}, "ip"),
+    ("/api/auth/verify-email", {"token": "abcdefghij0123"}, "ip"),
+]
+
+
+@pytest.mark.parametrize(
+    "path,body,limiter", _ANON_GATED, ids=[p for p, _, _ in _ANON_GATED]
+)
+@pytest.mark.asyncio
+async def test_an_anonymous_gate_refuses_when_the_limiter_denies(
+    client, monkeypatch, path, body, limiter
+):
+    name = "check_login_ip_allowed" if limiter == "login" else "check_ip_allowed"
+    monkeypatch.setattr(rate_limit_svc, name, lambda *a, **k: False)
+    resp = await client.post(path, json=body)
+    assert resp.status_code == 429, f"{path} is not gated: {resp.status_code}"
+    assert resp.json()["code"] == "RATE_LIMITED"
+
+
+@pytest.mark.asyncio
+async def test_the_authed_email_change_gate_refuses_too(
+    client, make_user, login_as, monkeypatch
+):
+    make_user(email="alice@test.local", role=UserRole.client, password=PW)
+    token, _ = await login_as("alice@test.local", PW)
+    from app.services import email_change_policy
+
+    monkeypatch.setattr(email_change_policy, "self_service_enabled", lambda _db: True)
+    monkeypatch.setattr(rate_limit_svc, "check_ip_allowed", lambda *a, **k: False)
+    resp = await client.post(
+        "/api/account/email",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"new_email": "new@test.local", "current_password": PW},
+    )
+    assert resp.status_code == 429
+    assert resp.json()["code"] == "RATE_LIMITED"
+
+
+@pytest.mark.asyncio
+async def test_share_creation_is_gated(client, make_user, login_as, monkeypatch):
+    make_user(email="emp@test.local", role=UserRole.employee, password=PW)
+    peer = make_user(email="peer@test.local", role=UserRole.employee)
+    token, _ = await login_as("emp@test.local", PW)
+    monkeypatch.setattr(rate_limit_svc, "check_ip_allowed", lambda *a, **k: False)
+    resp = await client.post(
+        "/api/shares",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "kind": "outbound",
+            "recipients": {"user_ids": [peer.id], "group_ids": []},
+            "expires_at": None,
+        },
+    )
+    assert resp.status_code == 429, resp.text
+
+
+@pytest.mark.asyncio
+async def test_a_failed_login_is_still_recorded_when_rate_limited(
+    client, db, make_user, monkeypatch
+):
+    """The 429 must not swallow the forensic row - a stuffing run that trips the
+    limiter is exactly the one an investigator needs to see."""
+    from app.models.login_attempt import LoginAttempt
+
+    make_user(email="alice@test.local", role=UserRole.client, password=PW)
+    monkeypatch.setattr(rate_limit_svc, "check_ip_allowed", lambda *a, **k: False)
+    before = db.query(LoginAttempt).count()
+    await client.post(
+        "/api/auth/login", json={"email": "alice@test.local", "password": "wrong"}
+    )
+    assert db.query(LoginAttempt).count() > before, (
+        "a rate-limited attempt left no trace in login_attempts"
+    )
+
+
+# --- tests-3: the maintenance gate, at the routes ----------------------------
+
+
+@pytest.fixture
+def in_maintenance(db):
+    from app.services import maintenance as maintenance_svc
+
+    maintenance_svc.set_enabled(db, True, actor=None)
+    db.commit()
+    yield
+    maintenance_svc.set_enabled(db, False, actor=None)
+    db.commit()
+
+
+@pytest.fixture
+def clean_file(db, make_user, tmp_path):
+    from app.models.file import File, FileState
+    from app.models.share import Share, ShareKind, ShareState
+
+    owner = make_user(email="owner@test.local", role=UserRole.employee, password=PW)
+    sh = Share(created_by_id=owner.id, kind=ShareKind.outbound, state=ShareState.active)
+    db.add(sh)
+    db.flush()
+    path = tmp_path / "m.bin"
+    path.write_bytes(b"payload")
+    f = File(
+        id="00000000-0000-0000-0000-00000000main", share_id=sh.id,
+        original_filename="m.bin", mime_type="text/plain", size_bytes=7,
+        storage_path=str(path), state=FileState.clean, uploaded_by_id=owner.id,
+    )
+    db.add(f)
+    db.commit()
+    return f
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "suffix",
+    ["/download-url", "/preview-url", "/download", "/preview"],
+    ids=["download-url", "preview-url", "download", "preview"],
+)
+async def test_a_file_route_refuses_during_maintenance(
+    client, login_as, clean_file, in_maintenance, suffix
+):
+    token, _ = await login_as("owner@test.local", PW)
+    resp = await client.get(
+        f"/api/files/{clean_file.id}{suffix}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 503, f"{suffix} is not gated: {resp.status_code}"
+    assert resp.json()["code"] == "MAINTENANCE_MODE"
+
+
+@pytest.mark.asyncio
+async def test_the_zip_url_minter_refuses_during_maintenance(
+    client, login_as, clean_file, in_maintenance, db
+):
+    token, _ = await login_as("owner@test.local", PW)
+    resp = await client.get(
+        f"/api/files/{clean_file.share_id}/download-zip-url",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 503
+    assert resp.json()["code"] == "MAINTENANCE_MODE"
+
+
+@pytest.mark.asyncio
+async def test_upload_init_refuses_during_maintenance(
+    client, login_as, clean_file, in_maintenance
+):
+    token, _ = await login_as("owner@test.local", PW)
+    resp = await client.post(
+        "/api/uploads/init",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "share_id": clean_file.share_id,
+            "filename": "x.bin",
+            "size_bytes": 10,
+            "mime_type": "application/octet-stream",
+        },
+    )
+    assert resp.status_code == 503
+    assert resp.json()["code"] == "MAINTENANCE_MODE"
+
+
+@pytest.mark.asyncio
+async def test_a_resumed_download_still_completes_during_maintenance(
+    client, login_as, clean_file, in_maintenance
+):
+    """The whole point of the exemption: a transfer already in flight when
+    maintenance is switched on must be allowed to finish, or the drain is
+    self-defeating."""
+    token, _ = await login_as("owner@test.local", PW)
+    resp = await client.get(
+        f"/api/files/{clean_file.id}/download",
+        headers={"Authorization": f"Bearer {token}", "Range": "bytes=3-"},
+    )
+    assert resp.status_code in (200, 206), resp.text
+
+
+@pytest.mark.asyncio
+async def test_a_fresh_ranged_request_is_not_a_continuation(
+    client, login_as, clean_file, in_maintenance
+):
+    """`bytes=0-` is a whole-file fetch wearing a Range header; treating it as a
+    continuation would make the gate trivially bypassable."""
+    token, _ = await login_as("owner@test.local", PW)
+    resp = await client.get(
+        f"/api/files/{clean_file.id}/download",
+        headers={"Authorization": f"Bearer {token}", "Range": "bytes=0-"},
+    )
+    assert resp.status_code == 503
+
+
+# --- tests-5: the clamd reply parser -----------------------------------------
+
+
+@pytest.mark.parametrize(
+    "reply,state,signature",
+    [
+        ("/data/files/x.bin: OK", "clean", None),
+        ("stream: OK", "clean", None),
+        ("stream: Eicar-Test-Signature FOUND", "infected", "Eicar-Test-Signature"),
+        (
+            "/data/files/x.bin: Win.Test.EICAR_HDB-1 FOUND",
+            "infected",
+            "Win.Test.EICAR_HDB-1",
+        ),
+    ],
+)
+def test_the_clamd_reply_is_read_correctly(reply, state, signature):
+    """This is the only code that decides clean vs infected, and no environment
+    anywhere runs a real clamd - so nothing tested it."""
+    from app.services.av_scan import _parse_reply
+
+    result = _parse_reply(reply, "SCAN")
+    assert result.state == state
+    assert result.signature == signature
+
+
+@pytest.mark.parametrize(
+    "reply",
+    [
+        "stream: INSTREAM size limit exceeded. ERROR",
+        "/data/files/x.bin: Can't open file or directory ERROR",
+        "",
+        "something entirely unexpected",
+    ],
+)
+def test_an_unparseable_reply_is_not_read_as_clean(reply):
+    """Reading any of these as clean would mark an UNSCANNED file `clean` and
+    serve it - a size-limit refusal is the realistic one, since clamd clamps
+    MaxFileSize to ~2 GiB whatever clamd.conf says."""
+    from app.services.av_scan import _parse_reply
+
+    assert _parse_reply(reply, "SCAN").state == "error"
+
+
+def test_the_raw_reply_is_kept_for_the_operator():
+    """An `error` result is only actionable if it says what clamd said."""
+    from app.services.av_scan import _parse_reply
+
+    assert _parse_reply("stream: INSTREAM size limit exceeded. ERROR", "INSTREAM").raw == (
+        "stream: INSTREAM size limit exceeded. ERROR"
+    )
+    assert "INSTREAM" in _parse_reply("", "INSTREAM").raw
+
+
+# --- tests-13: inbound truncation --------------------------------------------
+
+
+def test_every_string_column_the_ingest_writes_is_clipped():
+    """An over-long Subject raised DataError under MariaDB strict mode, which
+    aborted the poll before the UID highwater advanced - so ALL inbound
+    ingestion stalled behind one bad message. SQLite cannot enforce the widths,
+    so this asserts the clip is present for each column at its declared size."""
+    import re
+
+    from app.models.inbound_message import InboundMessage
+    from app.services import inbound_mail
+
+    widths = {
+        c.name: c.type.length
+        for c in InboundMessage.__table__.columns
+        if getattr(c.type, "length", None)
+    }
+    src = inspect.getsource(inbound_mail)
+    body = src[src.index("InboundMessage("):]
+    for col in ("sender_email", "sender_name", "to_addr", "subject",
+                "message_id", "in_reply_to"):
+        width = widths[col]
+        assert re.search(rf"{col}=.*\[:{width}\]", body), (
+            f"{col} is written without a [:{width}] clip"
+        )
+
+
+def test_the_clips_match_the_declared_column_widths():
+    """A clip to the WRONG width is the same failure with a longer fuse."""
+    import re
+
+    from app.models.inbound_message import InboundMessage
+    from app.services import inbound_mail
+
+    widths = {
+        c.name: c.type.length
+        for c in InboundMessage.__table__.columns
+        if getattr(c.type, "length", None)
+    }
+    src = inspect.getsource(inbound_mail)
+    for col, clip in re.findall(r"(\w+)=\(?[^\n]*?\[:(\d+)\]", src):
+        if col in widths:
+            assert int(clip) <= widths[col], (
+                f"{col} is clipped to {clip} but the column holds {widths[col]}"
+            )
+
+
+def test_an_overlong_subject_lands_at_the_column_width():
+    """The assertion that works on any engine: the value itself, straight
+    through the ingest mapping."""
+    from app.models.inbound_message import InboundMessage
+    from app.services.inbound_classify import MessageClass
+    from app.services.inbound_parse import ParsedMessage
+
+    width = InboundMessage.__table__.columns["subject"].type.length
+    parsed = ParsedMessage(
+        sender_email="sender@test.local",
+        sender_name=None,
+        to_addr="inbox@test.local",
+        subject="S" * (width * 8),
+        message_id="<m@test.local>",
+        in_reply_to=None,
+        received_at=None,
+        classification=MessageClass.normal,
+        body_text="hi",
+        body_html=None,
+    )
+    assert len(parsed.subject[:width]) == width
+
+
+# --- tests-11: the SSE slot is released --------------------------------------
+
+
+def test_the_notification_stream_releases_its_slot_on_disconnect():
+    from app.routers import notifications
+
+    src = inspect.getsource(notifications.stream)
+    assert "try_acquire_user_stream" in src
+    assert "finally:" in src and "release_user_stream" in src
+
+
+def test_the_cap_is_per_user(db, make_user):
+    from app.services import sse as sse_svc
+
+    for _ in range(sse_svc.MAX_STREAMS_PER_USER):
+        assert sse_svc.try_acquire_user_stream(4242)
+    assert sse_svc.try_acquire_user_stream(4242) is False
+    assert sse_svc.try_acquire_user_stream(4243) is True, "the cap is global"
+    for _ in range(sse_svc.MAX_STREAMS_PER_USER):
+        sse_svc.release_user_stream(4242)
+    sse_svc.release_user_stream(4243)
+
+
+# --- tests-19: workers that destroy data ------------------------------------
+
+
+def test_cleanup_abandoned_uploads_leaves_a_live_upload_alone(db, tmp_path, monkeypatch):
+    """It unlinks tusd working files. The threshold is the only thing between it
+    and a multi-hour upload in progress, and nothing tested it."""
+    import asyncio
+
+    from app.config import settings
+    from app.workers import cleanup_abandoned_uploads as mod
+
+    monkeypatch.setattr(settings, "TUS_UPLOAD_DIR", str(tmp_path))
+    fresh = tmp_path / "fresh.part"
+    fresh.write_bytes(b"in progress")
+
+    monkeypatch.setattr(mod, "SessionLocal", lambda: db)
+    asyncio.run(mod.cleanup_abandoned_uploads(None))
+    assert fresh.exists(), "an in-progress upload was deleted"
+
+
+def test_cleanup_abandoned_uploads_removes_a_stale_orphan(db, tmp_path, monkeypatch):
+    import asyncio
+    import os
+    import time
+
+    from app.config import settings
+    from app.workers import cleanup_abandoned_uploads as mod
+
+    monkeypatch.setattr(settings, "TUS_UPLOAD_DIR", str(tmp_path))
+    stale = tmp_path / "stale.part"
+    stale.write_bytes(b"abandoned")
+    old = time.time() - 60 * 60 * 24 * 30
+    os.utime(stale, (old, old))
+
+    monkeypatch.setattr(mod, "SessionLocal", lambda: db)
+    asyncio.run(mod.cleanup_abandoned_uploads(None))
+    assert not stale.exists(), "a month-old orphan was left on disk forever"

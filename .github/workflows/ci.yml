@@ -105,6 +105,44 @@ jobs:
           APP_NAME: fileHeron
         run: pytest -q -p no:cacheprovider -rs tests/test_alembic_roundtrip.py
 
+  # Runs the handful of tests that need a REAL Redis. The quota enforcement Lua
+  # is the reason: the main suite's fake Redis re-implements it in Python, so the
+  # script that decides whether an upload is refused was asserted against a mock
+  # of itself and could not fail (audit 2026-07-30, tests-4). Skipped by default
+  # like the alembic roundtrip; this job is where it actually runs.
+  redis-tests:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping" --health-interval=10s
+          --health-timeout=5s --health-retries=10
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+      - name: Install (with dev extras)
+        run: pip install .[dev]
+      - name: Redis-backed tests
+        env:
+          RUN_REDIS_TESTS: '1'
+          REDIS_HOST: 127.0.0.1
+          REDIS_PORT: '6379'
+          JWT_SECRET: ci-redis-jwt-secret-aaaaaaaaaaaaaaaaaaaaaaaa
+          TUS_HOOK_SECRET: ci-redis-tus-secret-aaaaaaaaaaaaaaaaaaaaaaaa
+        run: pytest -q -p no:cacheprovider -rs tests/test_quota_lua_real_redis.py
+
   # Type-check + lint + unit-test the SPA.
   #
   # This job ran `npx vue-tsc --noEmit` from frontend/ and type-checked EXACTLY

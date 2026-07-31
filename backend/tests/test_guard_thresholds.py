@@ -32,7 +32,6 @@ from app.middleware.errors import AppError
 from app.models.user import User
 from app.services.site import DEFAULT_TIMEZONE, get_site_timezone
 
-
 # --- download-8 -------------------------------------------------------------
 
 
@@ -122,3 +121,65 @@ def test_it_covers_the_pair_not_either_column_alone():
         if getattr(c, "name", None) == "uq_users_provider_subject"
     )
     assert {c.name for c in con.columns} == {"oidc_provider_id", "oidc_subject"}
+
+
+# --- flow-selfupdate-12: two admins, one job file ---------------------------
+
+
+def test_the_update_claim_is_serialised():
+    """Reading the in-flight status and writing the new job were two steps with
+    nothing between them, and os.replace overwrites unconditionally. Two admins
+    clicking Update in the same second both passed the check and both wrote a
+    job; the second overwrote the first, and the first admin then polled a job
+    id that no longer existed - JOB_NOT_FOUND forever, while an update they did
+    not recognise ran."""
+    import inspect
+
+    from app.services import release_apply
+
+    src = inspect.getsource(release_apply.apply)
+    assert "with _claim_lock():" in src
+    lock_at = src.index("with _claim_lock():")
+    check_at = src.index("existing = _read_state()")
+    assert lock_at < check_at, "the check still happens outside the lock"
+
+
+def test_the_lock_path_follows_state_dir(tmp_path, monkeypatch):
+    """Bound at call time, not module import: the test fixture monkeypatches
+    STATE_DIR onto tmp_path, and a module constant would leave every test
+    trying to write the real /state."""
+    from app.services import release_apply
+
+    monkeypatch.setattr(release_apply, "STATE_DIR", tmp_path)
+    with release_apply._claim_lock():
+        pass
+    assert (tmp_path / ".claim.lock").exists()
+
+
+def test_an_unwritable_state_dir_does_not_block_the_update(monkeypatch):
+    """Best-effort by design: /state being read-only is already fatal a few
+    lines later with a clearer message, so the lock must not be the thing that
+    reports it."""
+    from pathlib import Path
+
+    from app.services import release_apply
+
+    monkeypatch.setattr(release_apply, "STATE_DIR", Path("/proc/nonexistent/nope"))
+    with release_apply._claim_lock():
+        pass  # must not raise
+
+
+# --- flow-emailchange-7: an alert that described the wrong flow -------------
+
+
+def test_the_applied_alert_does_not_promise_a_verification_link():
+    """This branch runs when the change is ALREADY live. Telling the old address
+    that a verification link was sent implies the change is still pending and
+    could be stopped, at the one moment the reader needs to act."""
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1] / "app" / "templates" / "email"
+    for locale in ("en", "de"):
+        body = (root / locale / "email_change_alert.txt.j2").read_text(encoding="utf-8")
+        assert "verification link was sent" not in body
+        assert "Bestätigungslink wurde dorthin gesendet" not in body

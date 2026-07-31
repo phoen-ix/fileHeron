@@ -15,11 +15,13 @@ This replaces the v0.x HMAC-over-HTTP design.
 """
 from __future__ import annotations
 
+import fcntl
 import json
 import logging
 import os
 import tempfile
 import uuid
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -131,6 +133,41 @@ def _normalize_state(s: str) -> str:
     return s
 
 
+@contextmanager
+def _claim_lock():
+    """Serialise the whole check-then-write below.
+
+    Reading the in-flight status and writing the new job were two steps with
+    nothing between them, and `os.replace` overwrites unconditionally - so two
+    admins clicking Update in the same second (or one double-submitting before
+    the modal disabled) both passed the check and both wrote a job file. The
+    second overwrote the first, and the first admin then polled a job id that no
+    longer existed, getting JOB_NOT_FOUND forever while an update they did not
+    recognise ran (audit 2026-07-30).
+
+    The lock path is derived from STATE_DIR at CALL time rather than bound to a
+    module constant, so tests/test_release_apply.py's autouse fixture - which
+    monkeypatches STATE_DIR onto tmp_path - keeps it inside the temp directory.
+    Best-effort: if the lock file cannot be created (read-only /state, which is
+    already fatal a few lines later), proceed rather than block the update."""
+    lock_path = STATE_DIR / ".claim.lock"
+    try:
+        STATE_DIR.mkdir(parents=True, exist_ok=True)
+        handle = open(lock_path, "a+")  # noqa: SIM115 - released in the finally below
+    except OSError:
+        logger.warning("release_apply: could not take the claim lock; proceeding")
+        yield
+        return
+    try:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+        yield
+    finally:
+        try:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+        finally:
+            handle.close()
+
+
 def apply(*, action: str, target_tag: str | None) -> dict:
     """Write a new job to the state file. Returns the job id; the
     caller (admin endpoint) hands that to the SPA which polls /jobs/{id}
@@ -140,51 +177,52 @@ def apply(*, action: str, target_tag: str | None) -> dict:
     - action=update → target_tag must be supplied
     - action=rollback → target_tag is read from rollback_target.json
     """
-    # Refuse if a job is in flight. Same UX as the v0.x single-flight
-    # check, just enforced here via the file's status field.
-    existing = _read_state()
-    if existing is not None:
-        s = existing.get("status")
-        if s in {"pending", "claiming", "pulling", "restarting", "rolling_back"}:
+    with _claim_lock():
+        # Refuse if a job is in flight. Same UX as the v0.x single-flight
+        # check, just enforced here via the file's status field.
+        existing = _read_state()
+        if existing is not None:
+            s = existing.get("status")
+            if s in {"pending", "claiming", "pulling", "restarting", "rolling_back"}:
+                raise AppError(
+                    409,
+                    "UPDATE_IN_PROGRESS",
+                    "An update is already in progress.",
+                    details={"job_id": existing.get("id")},
+                )
+
+        if action == "rollback":
+            target = _read_rollback_target()
+            if not target:
+                raise AppError(
+                    409,
+                    "NO_ROLLBACK_TARGET",
+                    "No previous version to roll back to.",
+                )
+        else:
+            if not target_tag:
+                raise AppError(400, "INVALID_INPUT", "target_tag is required.")
+            target = target_tag
+
+        try:
+            STATE_DIR.mkdir(parents=True, exist_ok=True)
+        except Exception as e:
+            # If we can't create the state dir, the shim can't read it
+            # either - surface clearly.
             raise AppError(
-                409,
-                "UPDATE_IN_PROGRESS",
-                "An update is already in progress.",
-                details={"job_id": existing.get("id")},
-            )
+                503,
+                "UPDATER_NOT_CONFIGURED",
+                "Updater state directory is not writable; check the /state bind mount.",
+            ) from e
 
-    if action == "rollback":
-        target = _read_rollback_target()
-        if not target:
-            raise AppError(
-                409,
-                "NO_ROLLBACK_TARGET",
-                "No previous version to roll back to.",
-            )
-    else:
-        if not target_tag:
-            raise AppError(400, "INVALID_INPUT", "target_tag is required.")
-        target = target_tag
-
-    try:
-        STATE_DIR.mkdir(parents=True, exist_ok=True)
-    except Exception as e:
-        # If we can't create the state dir, the shim can't read it
-        # either - surface clearly.
-        raise AppError(
-            503,
-            "UPDATER_NOT_CONFIGURED",
-            "Updater state directory is not writable; check the /state bind mount.",
-        ) from e
-
-    job = {
-        "id": str(uuid.uuid4()),
-        "action": action,
-        "target_tag": target,
-        "status": "pending",
-        "created_at": _utcnow_iso(),
-        "log_tail": [],
-    }
-    _write_state_text(json.dumps(job, indent=2))
-    logger.info("update job written: id=%s action=%s target=%s", job["id"], action, target)
-    return {"job_id": job["id"], "action": action, "target_tag": target}
+        job = {
+            "id": str(uuid.uuid4()),
+            "action": action,
+            "target_tag": target,
+            "status": "pending",
+            "created_at": _utcnow_iso(),
+            "log_tail": [],
+        }
+        _write_state_text(json.dumps(job, indent=2))
+        logger.info("update job written: id=%s action=%s target=%s", job["id"], action, target)
+        return {"job_id": job["id"], "action": action, "target_tag": target}

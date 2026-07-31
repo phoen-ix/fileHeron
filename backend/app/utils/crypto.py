@@ -162,10 +162,19 @@ def decrypt_totp_secret(ciphertext: bytes) -> str:
 # "passphrase". The salt + scrypt params travel in the (cleartext) envelope.
 # ---------------------------------------------------------------------------
 
-# scrypt cost params. n=2^14 keeps derivation well under a second on server
-# hardware while staying memory-hard. Stored in the envelope so a future bump
-# stays backwards-readable.
-SCRYPT_N = 2**14
+# scrypt cost params for NEW exports. n=2^17 (128 MiB, roughly a second) is the
+# current OWASP floor. 2^14 was scrypt's original "interactive login" setting,
+# which is the wrong trade for this file: with include_env it carries
+# JWT_SECRET, DB_PASSWORD, every users.password_hash and every decrypted TOTP
+# secret; it is MEANT to be stored off-site; and it travels with its salt and
+# cost params in cleartext, so a leaked copy can be ground offline against a
+# 12-character human passphrase. Derivation runs once per export and once per
+# import, so the extra second buys an 8x memory cost per guess for no
+# user-visible latency. The params live in the envelope, which is exactly what
+# that was for - backups written under the old value keep opening - and
+# validate_scrypt_params bounds whatever comes back out of one
+# (audit 2026-07-30).
+SCRYPT_N = 2**17
 SCRYPT_R = 8
 SCRYPT_P = 1
 
@@ -176,8 +185,8 @@ SCRYPT_P = 1
 # container before the passphrase is even checked (audit 2026-07-30).
 #
 # The ceiling is on the PRODUCT, not just the individual values, because the
-# three multiply. 256 MiB is far above anything this project writes (2**14 * 8 *
-# 1 = 16 MiB) while staying survivable.
+# three multiply. 256 MiB leaves headroom over what this project writes today
+# (2**17 * 8 * 1 = 128 MiB) while staying survivable.
 _SCRYPT_MAX_MEMORY_BYTES = 256 * 1024 * 1024
 _SCRYPT_MAX_N = 2**20
 _SCRYPT_MAX_R = 64

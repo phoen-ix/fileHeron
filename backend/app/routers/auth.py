@@ -5,7 +5,17 @@ NEVER attached to other API routes (uploads, downloads, etc.).
 """
 from __future__ import annotations
 
-from fastapi import APIRouter, Cookie, Depends, Request, Response, status
+import logging
+
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Cookie,
+    Depends,
+    Request,
+    Response,
+    status,
+)
 from sqlalchemy.orm import Session
 
 from ..config import settings
@@ -35,6 +45,7 @@ from ..utils.crypto import refresh_token_hash
 from ..utils.timeutil import utc_now
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
+logger = logging.getLogger("fileheron.routers.auth")
 
 _REFRESH_COOKIE = "fh_refresh"
 _REFRESH_PATH = "/api/auth"
@@ -164,10 +175,33 @@ def logout(
     return response
 
 
+async def _send_password_reset_detached(
+    *, to: str, locale, display_name: str, token: str,
+    app_url: str, site_timezone: str,
+) -> None:
+    """Runs after the response is on the wire, so the request-scoped session is
+    already closed and this opens its own. A send failure must not escape: the
+    caller has already been answered 200, and the mail log records the failure
+    either way."""
+    from ..database import SessionLocal
+
+    db = SessionLocal()
+    try:
+        await email_svc.send_password_reset_email(
+            to=to, locale=locale, display_name=display_name, token=token,
+            app_url=app_url, site_timezone=site_timezone, db=db,
+        )
+    except Exception:
+        logger.warning("password-reset email send failed", exc_info=True)
+    finally:
+        db.close()
+
+
 @router.post("/forgot-password", status_code=status.HTTP_200_OK)
 async def forgot_password(
     payload: ForgotPasswordRequest,
     request: Request,
+    background: BackgroundTasks,
     db: Session = Depends(get_db),
 ) -> dict:
     """Always returns 200 - never reveals whether the email exists."""
@@ -181,12 +215,26 @@ async def forgot_password(
     if result is not None:
         user, plaintext = result
         from ..services import site as site_svc
-        await email_svc.send_password_reset_email(
-            to=payload.email, locale=user.locale, display_name=user.display_name,
+
+        # Hand the send to a background task rather than awaiting it here.
+        #
+        # The docstring above promises this never reveals whether the address
+        # exists, and the body is identical either way - but the LATENCY was
+        # not. The unknown-address branch returned immediately while the
+        # known-address branch first paid a full SMTP connect, TLS handshake and
+        # DATA round-trip, routinely hundreds of milliseconds. That is a
+        # trivially measurable account-existence oracle on an endpoint whose
+        # entire purpose is not to be one, and this codebase already maintains
+        # a _DUMMY_PASSWORD_HASH on the login path for precisely the same
+        # reason (audit 2026-07-30).
+        background.add_task(
+            _send_password_reset_detached,
+            to=payload.email,
+            locale=user.locale,
+            display_name=user.display_name,
             token=plaintext,
             app_url=site_svc.get_site_url(db),
             site_timezone=site_svc.get_site_timezone(db),
-            db=db,
         )
     return {"ok": True}
 

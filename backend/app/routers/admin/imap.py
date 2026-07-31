@@ -253,16 +253,43 @@ def update_inbox_status(
 @router.delete("/inbox/{msg_id}", status_code=204)
 def delete_inbox_message(
     msg_id: int,
+    request: Request,
     db: Session = Depends(get_db),
-    _admin: User = Depends(get_current_admin),
+    admin: User = Depends(get_current_admin),
 ) -> None:
     m = _get_message_or_404(db, msg_id)
     backend = storage_svc.get_storage_backend()
-    for a in db.query(InboundAttachment).filter(InboundAttachment.message_id == m.id).all():
+    attachments = (
+        db.query(InboundAttachment)
+        .filter(InboundAttachment.message_id == m.id)
+        .all()
+    )
+    sender = m.sender_email
+    filenames = [a.filename for a in attachments]
+    for a in attachments:
         try:
             backend.delete(a.storage_key)
         except Exception:
             pass
+    # The IMAP post-fetch action can be set to delete from the server after
+    # ingest, so this row and these bytes are frequently the only copy of a
+    # client's correspondence. Every other irreversible admin action in the
+    # codebase records who destroyed what; this one recorded nothing at all, so
+    # a deleted message left no trace that it had ever existed
+    # (audit 2026-07-30).
+    record_audit_event(
+        db,
+        event_type=AuditEventType.inbound_message_deleted,
+        actor_user_id=admin.id,
+        target_type="inbound_message",
+        target_id=str(m.id),
+        metadata={
+            "sender_email": sender,
+            "attachment_count": len(attachments),
+            "attachments": filenames[:20],
+        },
+        request=request,
+    )
     db.delete(m)
     db.commit()
 

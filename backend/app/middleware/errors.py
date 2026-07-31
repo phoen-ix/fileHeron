@@ -63,6 +63,33 @@ class AppError(Exception):
         self.details = details or {}
 
 
+# Two anonymous route families carry a live bearer secret in the PATH itself:
+# the public-link token (/api/public/<token>/...) and the 180-day
+# manage-notifications token. Anything captured here is persisted to
+# `error_log.path`, browsable at /admin/error-log, streamed by the CSV export,
+# and rendered into the server_error alert mail - which under
+# recipients_mode=custom goes to arbitrary addresses. A raw token would
+# therefore outlive the link it opens and hand full download access to whoever
+# read the alert (audit 2026-07-30). The query string was already excluded for
+# exactly this reason; the path was not.
+_SECRET_PATH_PREFIXES = ("/api/public", "/api/notification-subscriptions")
+
+
+def _redact_path(path: str) -> str:
+    """Collapse the token segment of a secret-bearing path to `:token`.
+
+    Keeps the route shape, which is what error triage and the `signature`
+    grouping actually need, and drops the credential."""
+    for prefix in _SECRET_PATH_PREFIXES:
+        if path == prefix or path.startswith(prefix + "/"):
+            parts = path.split("/")
+            # ["", "api", "public", "<token>", ...] - the 4th element is the secret.
+            if len(parts) > 3 and parts[3]:
+                parts[3] = ":token"
+            return "/".join(parts)
+    return path
+
+
 def _maybe_enqueue_error_event(
     request: Request, *, status_code: int, code: str, exc: Exception
 ) -> None:
@@ -95,8 +122,9 @@ def _maybe_enqueue_error_event(
             "exception_type": type(exc).__name__,
             "message": (getattr(exc, "message", None) or str(exc))[:500],
             "method": request.method,
-            # Path only - never the query string (may carry tokens/PII).
-            "path": request.url.path,
+            # Path only - never the query string (may carry tokens/PII) - and
+            # with any secret-bearing segment collapsed (see _redact_path).
+            "path": _redact_path(request.url.path),
             "status_code": status_code,
             "code": code,
             "ip": request.client.host if request.client else None,

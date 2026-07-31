@@ -22,3 +22,11 @@ interface ImportMeta {
     },
   ): Record<string, T>
 }
+
+// TypeScript 6 (TS2882) requires a declaration for a side-effect import of a
+// non-code module. These are the stylesheet imports Vite resolves and injects -
+// `import './styles/global.css'` in main.ts and the three ProseMirror
+// stylesheets in RichTextEditor.vue. They contribute no bindings, hence the
+// empty declarations.
+declare module '*.css'
+declare module '*.scss'

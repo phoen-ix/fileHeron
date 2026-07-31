@@ -9,7 +9,6 @@
       @drop.prevent="onDrop"
     >
       <input
-        ref="fileInput"
         type="file"
         multiple
         class="dropzone-input"
@@ -61,7 +60,6 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
-const fileInput = ref<HTMLInputElement | null>(null)
 const dragging = ref(false)
 
 function onFileChange(e: Event) {

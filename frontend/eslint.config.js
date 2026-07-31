@@ -1,6 +1,7 @@
 import js from '@eslint/js'
 import a11y from 'eslint-plugin-vuejs-accessibility'
 import vue from 'eslint-plugin-vue'
+import globals from 'globals'
 import tseslint from 'typescript-eslint'
 import prettierConfig from 'eslint-config-prettier'
 
@@ -33,6 +34,12 @@ export default [
   },
   {
     languageOptions: {
+      // ESLint 10 no longer assumes an environment. Without this every
+      // `window`, `document`, `fetch`, `localStorage` and `setTimeout` in the
+      // SPA is an undeclared global and `no-undef` fires 122 times - which
+      // reads as "the upgrade broke the code" and is really "the config never
+      // said where this code runs".
+      globals: { ...globals.browser },
       parserOptions: {
         parser: tseslint.parser,
         ecmaVersion: 'latest',

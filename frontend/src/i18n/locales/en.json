@@ -221,7 +221,8 @@
     "generic": "Something didn't work. Please try again.",
     "UPLOAD_FAILED": "The upload failed. Try again.",
     "UPLOAD_NOT_READY": "This share is not ready for uploads yet.",
-    "FILE_NOT_SCANNED": "This file was too large to scan for viruses, so it can't be previewed in the browser. Download it and check it locally."
+    "FILE_NOT_SCANNED": "This file was too large to scan for viruses, so it can't be previewed in the browser. Download it and check it locally.",
+    "ALERT_RECIPIENTS_EMPTY": "Custom recipients are selected but the list is empty, so alerts would reach nobody. Add an address or switch to admins."
   },
   "login": {
     "title": "Sign in",
@@ -418,7 +419,10 @@
     "import_done": "Configuration imported.",
     "confirm_title": "Replace configuration?",
     "confirm_body": "This replaces configuration, purges unlisted users and groups, invalidates {shares} active share(s) and signs everyone out. This cannot be undone.",
-    "confirm_cta": "Replace & import"
+    "confirm_cta": "Replace & import",
+    "sum_admins_installed": "Installs {n} administrator account(s)",
+    "sum_oidc_issuers": "Installs SSO providers",
+    "sum_webhook_urls": "Installs webhooks pointing at"
   },
   "admin_scheduled_tasks": {
     "title": "Scheduled tasks",

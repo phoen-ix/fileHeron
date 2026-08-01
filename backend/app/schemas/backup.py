@@ -51,3 +51,8 @@ class BackupImportSummaryResponse(BaseModel):
     env_dotenv: str | None = None
     version_warning: str | None = None
     warnings: list[str]
+    # What the import INSTALLS. A count told an admin nothing about what they
+    # were approving (audit #2).
+    admins_installed: list[str] = []
+    oidc_issuers: list[str] = []
+    webhook_urls: list[str] = []

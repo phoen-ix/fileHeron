@@ -30,6 +30,29 @@ _CSP = (
 )
 
 
+def apply_security_headers(response, *, is_production: bool) -> None:
+    """Stamp the same headers onto a response built OUTSIDE the middleware
+    stack.
+
+    `add_exception_handler(Exception, ...)` is served by Starlette's
+    ServerErrorMiddleware, which sits outside every user middleware - so an
+    unhandled 500 went out with `content-type` and `content-length` and nothing
+    else: no nosniff, no CSP, no X-Frame-Options, no HSTS in production, and no
+    X-Request-Id. The SPA and the desktop client are both told to quote the
+    request id when reporting a failure, and it was missing from the one
+    response class where that matters (audit #2).
+    """
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    response.headers["Content-Security-Policy"] = _CSP
+    if is_production:
+        response.headers["Strict-Transport-Security"] = (
+            "max-age=31536000; includeSubDomains"
+        )
+
+
 class SecurityHeadersMiddleware:
     def __init__(self, app: ASGIApp, *, is_production: bool = False) -> None:
         self._app = app

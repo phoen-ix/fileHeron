@@ -959,6 +959,10 @@ export interface BackupImportSummary {
   env_dotenv: string | null
   version_warning: string | null
   warnings: string[]
+  /** What the import INSTALLS, named rather than counted (audit #2). */
+  admins_installed?: string[]
+  oidc_issuers?: string[]
+  webhook_urls?: string[]
 }
 
 // Export goes through axios (responseType blob) so the in-memory bearer is

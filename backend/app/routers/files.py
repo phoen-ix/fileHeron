@@ -475,13 +475,6 @@ def download_share_zip(
     share_svc.assert_share_file_access(db, user=user, share=share)
 
     from ..services import maintenance as maintenance_svc
-    # No `request=` here on purpose. The Range exemption exists so an
-    # in-progress download can finish, but a ZIP is a single StreamingResponse
-    # that ignores Range and always builds the WHOLE archive from scratch - so
-    # `Range: bytes=1-` started a brand-new multi-GB transfer during
-    # maintenance, which is the one thing maintenance mode exists to stop. Same
-    # reasoning the budget decrement below already applies (audit M5).
-    maintenance_svc.refuse_if_maintenance(db, kind="download")
 
     files = file_svc.downloadable_files(db, share.id)
     if not files:
@@ -524,6 +517,19 @@ def download_share_zip(
     paid_key = f"user:{user.id}:zip:{share.id}:{etag}"
     resuming = bool(byte_range) and byte_range[0] > 0
     corroborated = resuming and transfer_activity.was_download_paid(paid_key)
+
+    # Maintenance is refused HERE, after the archive identity is known, so a
+    # CORROBORATED resume can finish.
+    #
+    # The gate used to sit above with a comment explaining that a ZIP "ignores
+    # Range and always builds the WHOLE archive from scratch", which stopped
+    # being true in v2.7.0 when the archive became seekable. Since then a
+    # recipient 18 GB into a 20 GB archive whose connection dropped during a
+    # postponed update got 503 and had to start over - which is the precise
+    # opposite of what maintenance mode is for (audit #2). A resume with no
+    # payment behind it is still a new transfer and is still refused.
+    if not corroborated:
+        maintenance_svc.refuse_if_maintenance(db, kind="download")
 
     if not corroborated:
         # A pending share only reaches here for an approver reviewing content.

@@ -258,6 +258,16 @@ async function onImport() {
           <li v-if="preview.categories.includes('users')" class="danger">
             {{ t('admin_backup.sum_sessions') }}
           </li>
+          <li v-if="preview.admins_installed?.length" class="danger">
+            {{ t('admin_backup.sum_admins_installed', { n: preview.admins_installed.length }) }}:
+            {{ preview.admins_installed.join(', ') }}
+          </li>
+          <li v-if="preview.oidc_issuers?.length" class="danger">
+            {{ t('admin_backup.sum_oidc_issuers') }}: {{ preview.oidc_issuers.join(', ') }}
+          </li>
+          <li v-if="preview.webhook_urls?.length" class="danger">
+            {{ t('admin_backup.sum_webhook_urls') }}: {{ preview.webhook_urls.join(', ') }}
+          </li>
           <li v-if="preview.purged_users.length" class="danger">
             {{ t('admin_backup.sum_purge_users', { n: preview.purged_users.length }) }}:
             {{ preview.purged_users.join(', ') }}

@@ -221,7 +221,8 @@
     "generic": "Etwas hat nicht funktioniert. Bitte erneut versuchen.",
     "UPLOAD_FAILED": "Der Upload ist fehlgeschlagen. Bitte erneut versuchen.",
     "UPLOAD_NOT_READY": "Diese Freigabe ist noch nicht bereit für Uploads.",
-    "FILE_NOT_SCANNED": "Diese Datei war zu groß für die Virenprüfung und kann daher nicht im Browser angezeigt werden. Laden Sie sie herunter und prüfen Sie sie lokal."
+    "FILE_NOT_SCANNED": "Diese Datei war zu groß für die Virenprüfung und kann daher nicht im Browser angezeigt werden. Laden Sie sie herunter und prüfen Sie sie lokal.",
+    "ALERT_RECIPIENTS_EMPTY": "Es sind eigene Empfänger ausgewählt, aber die Liste ist leer - Warnmeldungen würden niemanden erreichen. Adresse hinzufügen oder auf Administratoren umstellen."
   },
   "login": {
     "title": "Anmelden",
@@ -418,7 +419,10 @@
     "import_done": "Konfiguration importiert.",
     "confirm_title": "Konfiguration ersetzen?",
     "confirm_body": "Dies ersetzt die Konfiguration, entfernt nicht aufgeführte Benutzer und Gruppen, macht {shares} aktive Freigabe(n) ungültig und meldet alle ab. Das kann nicht rückgängig gemacht werden.",
-    "confirm_cta": "Ersetzen & importieren"
+    "confirm_cta": "Ersetzen & importieren",
+    "sum_admins_installed": "Legt {n} Administrator-Konto/-Konten an",
+    "sum_oidc_issuers": "Legt SSO-Provider an",
+    "sum_webhook_urls": "Legt Webhooks an, die zeigen auf"
   },
   "admin_scheduled_tasks": {
     "title": "Geplante Aufgaben",

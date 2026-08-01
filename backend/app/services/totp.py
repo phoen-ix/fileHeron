@@ -275,8 +275,27 @@ def disable(db: Session, *, user: User, password: str, code_or_recovery: str, re
     if user.totp is None or user.totp.enabled_at is None:
         raise AppError(409, "TOTP_NOT_ENABLED", "Two-factor auth is not enabled.")
 
+    # A recovery code alone is enough when the SECRET cannot be decrypted -
+    # which is the JWT_SECRET-rotated-without-re-encrypting case
+    # `SecretUndecryptableError` exists to name. Before this, `verify_at_login`
+    # raised 503 out of the `or`, so the user could sign in with a recovery code
+    # but could not disable 2FA, could not mint new recovery codes, and no admin
+    # endpoint could clear it: after the tenth code the account was permanently
+    # unreachable through the API, and the 503's own message named an admin
+    # remedy that does not exist (audit #2).
+    try:
+        totp_ok = verify_at_login(db, user=user, code=code_or_recovery)
+    except AppError as e:
+        if e.code != "TOTP_SECRET_UNAVAILABLE":
+            raise
+        logger.warning(
+            "totp: disabling 2FA for user_id=%s on a recovery code alone - the "
+            "stored secret cannot be decrypted",
+            user.id,
+        )
+        totp_ok = False
     if not (
-        verify_at_login(db, user=user, code=code_or_recovery)
+        totp_ok
         or consume_recovery_code(db, user=user, code=code_or_recovery, request=request)
     ):
         raise AppError(401, "INVALID_TOTP", "Provide a valid TOTP code or recovery code.")
@@ -304,8 +323,16 @@ def regenerate_recovery_codes(
         raise AppError(401, "INVALID_CREDENTIALS", "Password incorrect.")
     if user.totp is None or user.totp.enabled_at is None:
         raise AppError(409, "TOTP_NOT_ENABLED", "Two-factor auth is not enabled.")
+    # Same reasoning as `disable`: an undecryptable secret must not be able to
+    # lock a user out of minting fresh recovery codes (audit #2).
+    try:
+        totp_ok = verify_at_login(db, user=user, code=code_or_recovery)
+    except AppError as e:
+        if e.code != "TOTP_SECRET_UNAVAILABLE":
+            raise
+        totp_ok = False
     if not (
-        verify_at_login(db, user=user, code=code_or_recovery)
+        totp_ok
         or consume_recovery_code(db, user=user, code=code_or_recovery, request=request)
     ):
         raise AppError(401, "INVALID_TOTP", "Provide a valid TOTP code or recovery code.")

@@ -34,9 +34,10 @@ BACKEND_HEALTH_URL = os.environ.get(
 )
 HEALTH_TIMEOUT_SEC = int(os.environ.get("EXECUTOR_HEALTH_TIMEOUT_SEC", "90"))
 
-# Services compose recreates per update. Shim is intentionally excluded -
-# the perpetual shim never updates itself (architectural decision: keep
-# the shim trivial enough that it doesn't need updating).
+# Services compose recreates per update, in this order, while the job is
+# in-flight. The shim is NOT one of them - recreating it mid-job would have its
+# replacement's startup sweep mark this very job failed. It is recreated at the
+# end instead, after the terminal status is written; see the note in main().
 SERVICES = ["backend", "worker", "frontend"]
 # Images we pull. Includes the updater images so subsequent updates
 # don't have to re-pull them on a slow link.
@@ -498,6 +499,31 @@ def main() -> int:
         return 4
 
     write_job_field(status="healthy", finished_at=utcnow_iso())
+
+    # Recreate the shim LAST, after the terminal status is written.
+    #
+    # "The perpetual shim never updates itself" held right up until v2.5.0
+    # shipped a fix TO the shim - which then could not reach a single
+    # instance, because neither the in-app update nor the release's host step
+    # recreates it. The release notes said it was fixed (audit #2).
+    #
+    # Ordering is load-bearing: the new shim's startup sweep marks any
+    # non-terminal job failed, so this must not run while the job is still
+    # in-flight. And the executor is a `docker run` sibling, not a compose
+    # child of the shim, so replacing its parent does not kill it. A failure
+    # here is logged, never fatal - the update itself has already succeeded.
+    try:
+        rc = run_capture(
+            ["docker", "compose", "-f", str(COMPOSE_FILE), "up", "-d", "updater-shim"],
+            env=_compose_env(target_tag),
+        )
+        log_line(
+            "updater-shim recreated" if rc == 0
+            else f"WARN could not recreate updater-shim (exit {rc}); it stays on the old image"
+        )
+    except Exception as e:
+        log_line(f"WARN could not recreate updater-shim: {type(e).__name__}: {e}")
+
     log_line(f"DONE - running on {target_tag}")
     return 0
 

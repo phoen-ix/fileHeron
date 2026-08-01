@@ -132,6 +132,22 @@ async def report_csp_violation(request: Request) -> Response:
         ip = request.client.host if request.client else ""
         if not rate_limit.check_ip_allowed("csp_report", ip, limit=20, window_sec=60):
             return Response(status_code=204)
+        # A GLOBAL ceiling as well as the per-IP one. This is the only
+        # error-capture entry point that had no aggregate cap, and it is on by
+        # default: on the s3 backend every preview is a 307 to a presigned
+        # bucket URL, which the shipped policy does not allow, so twenty people
+        # browsing shares produce hundreds of reports a minute - each an
+        # error_log row and an ARQ job. The one screen the "enforce once the
+        # reports come back empty" criterion is read from would be the first
+        # thing drowned (audit #2). Same shape and the same tunable as the 4xx
+        # pre-guard.
+        if not rate_limit.check_ip_allowed(
+            "csp_report_global",
+            "global",
+            limit=error_log.capture_rate_per_min_cached(),
+            window_sec=60,
+        ):
+            return Response(status_code=204)
         raw = await request.body()
         if len(raw) > 8192:
             return Response(status_code=204)

@@ -448,7 +448,35 @@ async def authenticate_first_factor(
         raise AppError(401, "INVALID_CREDENTIALS", "Invalid email or password.")
 
     # 3. Account lockout (423 with retry-after hint baked into details)
-    if rate_limit_svc.is_account_locked(user):
+    #
+    # The password is verified FIRST, and its result decides which answer the
+    # caller gets. Answering 423 on the strength of the address alone was an
+    # account-existence oracle: six wrong passwords turned a real account into
+    # `423 ACCOUNT_LOCKED` with a `locked_until` timestamp while an unknown
+    # address answered 401 all six times - one probe per address, inside a
+    # single per-IP window, no timing analysis needed. The same sequence also
+    # locked every confirmed account for 15 minutes and mailed it a lockout
+    # warning, so the probe doubled as a targeted denial of service and a
+    # phishing pretext (audit #2).
+    #
+    # A locked account with the RIGHT password still gets 423 with its
+    # `locked_until` - the honest owner needs to know why they cannot get in.
+    # A wrong password gets the same 401 as an address that does not exist.
+    locked = rate_limit_svc.is_account_locked(user)
+    if locked and not await _averify(user.password_hash, password):
+        _record_login_attempt(db, email_value=em_email, ip=ip, outcome=LoginOutcome.locked)
+        record_audit_event(
+            db,
+            event_type=AuditEventType.login_failure,
+            actor_user_id=user.id,
+            target_type="user",
+            target_id=user.id,
+            metadata={"reason": "bad_password_while_locked"},
+            request=request,
+        )
+        db.commit()
+        raise AppError(401, "INVALID_CREDENTIALS", "Invalid email or password.")
+    if locked:
         _record_login_attempt(db, email_value=em_email, ip=ip, outcome=LoginOutcome.locked)
         record_audit_event(
             db,

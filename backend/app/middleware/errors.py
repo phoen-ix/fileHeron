@@ -250,4 +250,14 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
     body: dict[str, Any] = {"error": "Internal server error.", "code": "INTERNAL_ERROR"}
     if request_id:
         body["request_id"] = request_id
-    return JSONResponse(status_code=500, content=body)
+    response = JSONResponse(status_code=500, content=body)
+    # This handler is served by ServerErrorMiddleware, which sits OUTSIDE every
+    # user middleware, so the response never passes through SecurityHeaders or
+    # RequestId. Stamp both here (audit #2).
+    from ..config import settings as _settings
+    from .security_headers import apply_security_headers
+
+    apply_security_headers(response, is_production=_settings.is_production)
+    if request_id:
+        response.headers["X-Request-Id"] = request_id
+    return response

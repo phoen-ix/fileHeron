@@ -38,6 +38,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from ..middleware.errors import AppError
 from ..models.notification import NotificationCategory
 from ..models.user import User, UserRole
 from ..redis_client import get_redis
@@ -398,6 +399,18 @@ def _maybe_alert(
     if sent and row_id:
         error_log_svc.mark_alerted(db, row_id)
         db.commit()
+    if not sent:
+        # Reporting "sent" for an alert that reached nobody is how an instance
+        # can 500 continuously for weeks behind a green settings page: the
+        # cooldown and hourly-cap budget are spent, every later occurrence is
+        # deduped, and the only counter-evidence is `alerted=0` on the row,
+        # which reads exactly like "throttled" (audit #2).
+        logger.error(
+            "error alert for %s resolved to NO recipients (mode=%s) - the alert "
+            "was not delivered to anyone",
+            sig, mode,
+        )
+        return {"status": "no_recipients", "signature": sig, "recipients": 0}
     return {"status": "sent", "signature": sig, "recipients": sent}
 
 
@@ -448,6 +461,16 @@ def update_settings(
 ) -> dict[str, Any]:
     """Persist all error-alert + error-log settings. Caller commits. Numeric
     bounds are enforced by the registry's ``coerce_for_store`` (clamped)."""
+    if enabled and recipients_mode == "custom" and not custom_recipients:
+        # Storing this combination is storing a control that does nothing: the
+        # page renders "alerting: on" and every alert goes nowhere. Same
+        # reasoning as share_approval's APPROVAL_POLICY_INERT (audit #2).
+        raise AppError(
+            400,
+            "ALERT_RECIPIENTS_EMPTY",
+            "Custom recipients are selected but the list is empty, so alerts "
+            "would reach nobody. Add an address or switch to admins.",
+        )
     for key, flag in (
         (K.ERROR_ALERT_ENABLED, enabled),
         (K.ERROR_ALERT_SOURCE_HTTP_5XX, source_http_5xx),

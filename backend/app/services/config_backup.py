@@ -656,6 +656,12 @@ class ImportSummary:
     env_dotenv: str | None = None
     version_warning: str | None = None
     warnings: list[str] = field(default_factory=list)
+    # What the import INSTALLS, named rather than counted - see the dry-run
+    # builder. An admin approving a restore has to be able to see the identities
+    # and the outbound endpoints it brings with it (audit #2).
+    admins_installed: list[str] = field(default_factory=list)
+    oidc_issuers: list[str] = field(default_factory=list)
+    webhook_urls: list[str] = field(default_factory=list)
 
 
 def _version_warning(db: Session, parsed: ParsedBackup) -> str | None:
@@ -708,6 +714,26 @@ def preview_backup(db: Session, parsed: ParsedBackup) -> ImportSummary:
         summary.counts["users_insert"] = len(backup_emails - existing_emails)
         summary.counts["users_update"] = len(backup_emails & existing_emails)
         summary.purged_users = sorted(existing_emails - backup_emails)
+        # Name the ADMINS the import installs. "users_insert: 6" told an admin
+        # nothing about what they were approving: a backup handed over "from the
+        # old server" can carry an admin row with a known password hash, and the
+        # preview had no way to show it (audit #2).
+        summary.admins_installed = sorted(
+            normalize_email(u["email"])
+            for u in p["users"].get("users", [])
+            if str(u.get("role", "")).endswith("admin")
+        )
+    ow = p.get("oidc_webhooks", {})
+    if ow:
+        # Same reasoning: an OIDC provider pointing at an attacker's IdP, or a
+        # webhook shipping every share event to an external host, is a durable
+        # grant that survives the admin rotating their own password.
+        summary.oidc_issuers = sorted(
+            str(d.get("issuer_url") or "") for d in ow.get("oidc_providers", [])
+        )
+        summary.webhook_urls = sorted(
+            str(d.get("url") or "") for d in ow.get("webhooks", [])
+        )
     if "logs" in p:
         summary.counts["logs"] = {k: len(v) for k, v in p["logs"].items()}
     if "env_snapshot" in p:
@@ -808,10 +834,32 @@ def _reinsert_preserved_audit(db, rows: list[dict]) -> None:
     if not rows:
         return
     existing = {r[0] for r in db.query(User.id).all()}
+    # Skip anything the restore has ALREADY put back. A backup that includes
+    # `logs` carries the same `user_erased` rows this snapshot preserved, so
+    # re-importing an instance's own backup wrote the erasure receipt twice -
+    # and again on every later restore. A legal record that reads as two
+    # separate erasures for one person is worse than no copy of it (audit #2).
+    # `(event_type, target_id, created_at)` identifies an audit row; ids are not
+    # comparable across the wipe.
+    present = {
+        (e, t, c.isoformat() if hasattr(c, "isoformat") else str(c))
+        for (e, t, c) in db.query(
+            AuditLog.event_type, AuditLog.target_id, AuditLog.created_at
+        ).all()
+    }
     for d in rows:
         d = dict(d)
         if d.get("actor_user_id") is not None and d["actor_user_id"] not in existing:
             d["actor_user_id"] = None
+        created = d.get("created_at")
+        key = (
+            d.get("event_type"),
+            d.get("target_id"),
+            created.isoformat() if hasattr(created, "isoformat") else str(created),
+        )
+        if key in present:
+            continue
+        present.add(key)
         db.add(_build(AuditLog, d, skip=frozenset({"id"})))
     db.flush()
 
@@ -947,6 +995,15 @@ def _validate_backup_payload(p: dict, actor: User) -> None:
             _ingest_secret_totp(t.get("secret"))
         for r in users.get("user_recovery_codes", []):
             _ = (r["user_id"], r["code_hash"])
+        # These three were missing, so a backup carrying any of them still
+        # produced the wipe-then-500 this function exists to prevent: step 1
+        # invalidates every active share and unlinks the files, committed, and
+        # THEN step 3 raises KeyError 'client_user_id' (audit #2).
+        for c in users.get("client_employee_connections", []):
+            _ = (c["client_user_id"], c["employee_user_id"])
+        for d in users.get("users", []):
+            if not isinstance(d.get("email"), str):
+                raise ValueError("a user row's 'email' is not a string")
         for c in users.get("user_webauthn_credentials", []):
             _build(UserWebAuthnCredential, c, overrides={"user_id": 0},
                    skip=frozenset({"id", "user_id"}))
@@ -1184,6 +1241,16 @@ def apply_backup(db: Session, *, parsed: ParsedBackup, actor: User, request=None
     # 4. User sub-tables (2FA + notification prefs) - delete-for-affected + insert.
     if has_users:
         local_ids = set(user_id_map.values())
+        # NOT the importing admin's. Their sessions are revoked at the end of
+        # the import, so the very next thing they do is log in - and a DR
+        # rebuild restores a backup from the OLD server, whose TOTP secret is on
+        # a phone that no longer exists and whose ten recovery-code hashes are
+        # equally stale. Their password is preserved (the user upsert keeps it),
+        # so they would reach TOTP_REQUIRED against a secret they cannot produce,
+        # with every other admin purged or replaced by the backup and no in-app
+        # way back: recovery was a `docker compose exec` to delete a row
+        # (audit #2).
+        local_ids.discard(actor.id)
         if local_ids:
             db.query(UserTOTP).filter(UserTOTP.user_id.in_(local_ids)).delete(synchronize_session=False)
             db.query(UserRecoveryCode).filter(UserRecoveryCode.user_id.in_(local_ids)).delete(synchronize_session=False)
@@ -1192,6 +1259,8 @@ def apply_backup(db: Session, *, parsed: ParsedBackup, actor: User, request=None
             db.flush()
         for t in p["users"].get("user_totp", []):
             uid = user_id_map.get(t["user_id"])
+            if uid == actor.id:
+                continue
             sec = _ingest_secret_totp(t.get("secret"))
             if uid is None or sec is None:
                 continue
@@ -1201,7 +1270,7 @@ def apply_backup(db: Session, *, parsed: ParsedBackup, actor: User, request=None
             ))
         for r in p["users"].get("user_recovery_codes", []):
             uid = user_id_map.get(r["user_id"])
-            if uid is None:
+            if uid is None or uid == actor.id:
                 continue
             db.add(UserRecoveryCode(
                 user_id=uid, code_hash=r["code_hash"],
@@ -1209,7 +1278,7 @@ def apply_backup(db: Session, *, parsed: ParsedBackup, actor: User, request=None
             ))
         for c in p["users"].get("user_webauthn_credentials", []):
             uid = user_id_map.get(c["user_id"])
-            if uid is None:
+            if uid is None or uid == actor.id:
                 continue
             db.add(_build(UserWebAuthnCredential, c, overrides={"user_id": uid},
                           skip=frozenset({"id", "user_id"})))

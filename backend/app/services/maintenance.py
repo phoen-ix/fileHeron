@@ -170,6 +170,25 @@ def get_handoff_at(db: Session) -> str | None:
     return settings_svc.get(db, settings_svc.Keys.MAINTENANCE_UPDATE_HANDOFF_AT)
 
 
+# How long an update hand-off stamp can explain the maintenance flag. Past this
+# the update it belonged to is over, one way or another.
+_HANDOFF_MAX_AGE_SEC = 6 * 3600
+
+
+def _handoff_is_stale(stamp: str) -> bool:
+    from datetime import datetime
+
+    try:
+        when = datetime.fromisoformat(stamp)
+    except (TypeError, ValueError):
+        return True
+    if when.tzinfo is not None:
+        from ..utils.timeutil import to_naive_utc
+
+        when = to_naive_utc(when)
+    return (utc_now() - when).total_seconds() > _HANDOFF_MAX_AGE_SEC
+
+
 def clear_maintenance_after_update(db: Session) -> bool:
     """Lift maintenance once an update hand-off has concluded.
 
@@ -181,8 +200,25 @@ def clear_maintenance_after_update(db: Session) -> bool:
         return False
     if get_pending_update(db) is not None:
         return False
-    if get_handoff_at(db) is None:
+    handoff = get_handoff_at(db)
+    if handoff is None:
         # Maintenance an operator turned on by hand: not ours to lift.
+        return False
+    # A STALE stamp is not ours either. The stamp is written at hand-off and
+    # cleared when the new container boots; a hand-off that never produced one
+    # leaves it behind indefinitely. An operator who later turned maintenance on
+    # by hand - to run a storage migration or a DB restore - had it lifted
+    # inside 60 seconds by the drain worker, on the strength of a stamp from
+    # weeks earlier, with no audit row explaining why (audit #2).
+    if _handoff_is_stale(handoff):
+        logger.warning(
+            "maintenance: ignoring an update hand-off stamp from %s - too old to "
+            "be about the maintenance currently enabled; clearing it and leaving "
+            "maintenance on",
+            handoff,
+        )
+        set_handoff_at(db, None, actor=None)
+        db.commit()
         return False
     set_enabled(db, False, actor=None, audit=False)
     set_handoff_at(db, None, actor=None)

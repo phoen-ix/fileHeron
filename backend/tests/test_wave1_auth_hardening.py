@@ -23,22 +23,42 @@ from app.utils.timeutil import utc_now
 
 @pytest.mark.asyncio
 async def test_webauthn_begin_enforces_lockout_and_records_attempts(make_user, db, client):
+    """The lockout is enforced here - but it is not ANNOUNCED to a caller who
+    cannot produce the password.
+
+    This test used to assert that six wrong guesses eventually returned 423
+    ACCOUNT_LOCKED, which is the account-existence oracle written down as a
+    guarantee: a real address flipped to 423 while an unknown one answered 401
+    forever, so one probe per address - inside a single per-IP window, no timing
+    analysis - enumerated the whole staff list, locked every confirmed account
+    for 15 minutes and mailed each one a lockout warning (audit #2).
+
+    The invariant is: wrong password, 401, indistinguishable from an unknown
+    address; RIGHT password on a locked account, 423 with `locked_until`,
+    because the honest owner needs to know why they cannot get in."""
+    from app.models.user import User
+
     make_user(email="pk@test.local", password="CorrectHorse9!")
 
-    saw_locked = False
     for _ in range(12):
         resp = await client.post(
             "/api/auth/webauthn/begin",
             json={"email": "pk@test.local", "password": "wrong-guess"},
         )
-        if resp.status_code == 423:
-            saw_locked = True
-            assert resp.json()["code"] == "ACCOUNT_LOCKED"
-            break
         assert resp.status_code == 401, resp.text
         assert resp.json()["code"] == "INVALID_CREDENTIALS"
 
-    assert saw_locked, "account never locked - the lockout gate is not applied on /webauthn/begin"
+    db.expire_all()
+    user = db.query(User).filter(User.email == "pk@test.local").one()
+    assert user.locked_until is not None, "the lockout itself must still happen"
+
+    honest = await client.post(
+        "/api/auth/webauthn/begin",
+        json={"email": "pk@test.local", "password": "CorrectHorse9!"},
+    )
+    assert honest.status_code == 423
+    assert honest.json()["code"] == "ACCOUNT_LOCKED"
+    assert honest.json()["details"]["locked_until"]
 
     # The bad attempts are now visible to the forensics pipeline (previously zero).
     bad = (

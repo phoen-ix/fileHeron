@@ -109,6 +109,9 @@ def _to_response(summary: cb.ImportSummary) -> BackupImportSummaryResponse:
         env_dotenv=summary.env_dotenv,
         version_warning=summary.version_warning,
         warnings=summary.warnings,
+        admins_installed=summary.admins_installed,
+        oidc_issuers=summary.oidc_issuers,
+        webhook_urls=summary.webhook_urls,
     )
 
 

@@ -36,7 +36,6 @@ export const useSiteStore = defineStore('site', () => {
   const defaultLocale = ref<'en' | 'de'>('en')
   const providers = ref<PublicProvider[]>([])
   const motd = ref<{ text: string } | null>(null)
-  const runningVersion = ref<string>('')
   const timezone = ref<string>(DEFAULT_TIMEZONE)
   const branding = ref<PublicBranding>({ ...EMPTY_BRANDING })
   const legal = ref<PublicLegal>({ ...EMPTY_LEGAL })
@@ -48,7 +47,6 @@ export const useSiteStore = defineStore('site', () => {
     defaultLocale.value = cfg.default_locale
     providers.value = cfg.providers
     motd.value = cfg.motd ?? null
-    runningVersion.value = cfg.running_version
     timezone.value = cfg.site_timezone || DEFAULT_TIMEZONE
     branding.value = cfg.branding ?? { ...EMPTY_BRANDING }
     legal.value = cfg.legal ?? { ...EMPTY_LEGAL }
@@ -72,7 +70,6 @@ export const useSiteStore = defineStore('site', () => {
     defaultLocale,
     providers,
     motd,
-    runningVersion,
     timezone,
     branding,
     legal,

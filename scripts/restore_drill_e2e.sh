@@ -122,7 +122,12 @@ log "preparing isolated workspace at $WORKSPACE ..."
 mkdir -p "$WORKSPACE/data/db" "$WORKSPACE/data/redis" "$WORKSPACE/data/files" \
          "$WORKSPACE/data/quarantine" "$WORKSPACE/data/uploads" "$WORKSPACE/data/updater" \
          "$WORKSPACE/docker/mariadb"
-cp "$ROOT/docker/mariadb/init.sql" "$WORKSPACE/docker/mariadb/init.sql"
+# init.sh, not init.sql: the .sql was renamed away on 2026-07-30 (6629aa7) and
+# this line kept copying it, so `set -e` killed the drill on the next Sunday
+# tick and every one after. The unit failed silently and
+# backups/LAST_SUCCESSFUL_DRILL kept showing an old timestamp - the same
+# "the drill has been broken for months" finding as last time (audit #2).
+cp "$ROOT/docker/mariadb/init.sh" "$WORKSPACE/docker/mariadb/init.sh"
 # The UID-1000 containers must own the bind-mount dirs (see the data-dir gotcha).
 docker run --rm -v "$WORKSPACE/data":/d alpine chown -R 1000:1000 /d >/dev/null
 

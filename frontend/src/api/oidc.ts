@@ -31,7 +31,6 @@ export interface PublicConfigResponse {
   /** Admin-set login-page banner. Absent when disabled or text is empty. */
   motd?: { text: string }
   /** Running app version (baked at image build). Phase 1 self-update. */
-  running_version: string
   /** Admin-set site-wide display timezone (IANA name). Always present;
    *  defaults to "UTC" when unset. Drives every timestamp formatter via
    *  the site Pinia store. */

@@ -22,11 +22,15 @@ async def test_health_exposes_running_version(client):
 
 
 @pytest.mark.asyncio
-async def test_config_public_exposes_running_version(client):
+async def test_config_public_does_not_expose_running_version(client):
+    """This asserted the opposite until audit #2. /api/health hides the build
+    identifiers from anonymous callers because they say which security fixes an
+    instance is missing - and this endpoint, anonymous by design, handed the
+    same fact to anyone who asked. Nothing in the SPA rendered it; the admin
+    surface reads its version from /api/admin/system/status."""
     r = await client.get("/api/config-public")
     assert r.status_code == 200
-    body = r.json()
-    assert body.get("running_version")
+    assert "running_version" not in r.json()
 
 
 def test_version_module_reads_from_env(monkeypatch):

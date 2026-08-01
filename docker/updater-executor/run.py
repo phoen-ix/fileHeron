@@ -261,6 +261,31 @@ def _read_rollback_file() -> dict:
         return {}
 
 
+def resolve_running_version() -> str | None:
+    """Ask the running backend which version it actually is.
+
+    `.env` ships `FH_TAG=latest` (install.sh writes it, .env.example documents
+    it), and `:latest` is re-pointed at every release - so recording "latest" as
+    the rollback anchor recorded nothing. Rollback then pulled `:latest`, which
+    IS the version being fled, brought it back up, waited for
+    `running_version == "latest"` (which never matches a real version string),
+    and reported failure after moving the DB pointer backwards under running
+    code (audit #2). Resolve the floating tag to the concrete version first.
+    """
+    try:
+        result = subprocess.run(
+            ["curl", "-fsS", "--max-time", "5", BACKEND_HEALTH_URL],
+            capture_output=True, text=True, timeout=10,
+        )
+        if result.returncode == 0 and result.stdout:
+            running = json.loads(result.stdout).get("running_version")
+            if running and running not in ("latest", "unknown", ""):
+                return str(running)
+    except Exception as e:
+        log_line(f"WARN could not resolve running version: {type(e).__name__}: {e}")
+    return None
+
+
 def wait_for_backend_health(expected_tag: str) -> bool:
     """Poll backend /api/health until running_version == expected_tag
     or timeout. Returns True on success."""
@@ -365,6 +390,20 @@ def main() -> int:
         return 1
 
     previous_tag = read_current_tag()
+    # A floating tag is not a rollback anchor - see resolve_running_version.
+    # `previous_tag` is still used for the .env rewrite (it is what the stack is
+    # currently running under); only the RECORDED rollback target is pinned.
+    rollback_anchor = previous_tag
+    if previous_tag in ("latest", ""):
+        resolved = resolve_running_version()
+        if resolved:
+            log_line(f"resolved floating tag {previous_tag!r} to {resolved} for rollback")
+            rollback_anchor = resolved
+        else:
+            log_line(
+                "WARN running under a floating tag and the version could not be "
+                "resolved; a rollback would redeploy the same image"
+            )
     # Capture the DB's current head from the still-running OLD backend, so a
     # rollback (auto or manual) can stamp the version pointer back across any
     # migration the new image applies.
@@ -425,7 +464,7 @@ def main() -> int:
     # the tag we just left.
     if previous_tag != target_tag:
         try:
-            _write_rollback_file(previous_tag, previous_head)
+            _write_rollback_file(rollback_anchor, previous_head)
             log_line(f"rollback target recorded: {previous_tag} (head={previous_head})")
         except Exception as e:
             log_line(f"WARN rollback-target write failed: {e}")

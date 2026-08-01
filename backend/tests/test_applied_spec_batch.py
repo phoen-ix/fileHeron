@@ -44,11 +44,19 @@ def _req(host: str | None):
     return _R()
 
 
-@pytest.mark.parametrize("host", ["127.0.0.1", "172.19.0.4", "10.1.2.3", "192.168.1.9"])
+@pytest.mark.parametrize("host", ["127.0.0.1", "::1"])
 def test_operators_still_see_the_diagnostics(host):
     """Every consumer that needs the detail - the compose HEALTHCHECK, the
     updater's running_version poll, an operator on the box - arrives over
-    loopback or the docker bridge."""
+    loopback or from a sibling container on the compose network.
+
+    This used to assert that 10.1.2.3 and 192.168.1.9 were operators too, which
+    is where the over-broad `addr.is_private` came from: on a host whose LAN is
+    192.168/24, or behind a proxy that forwards a private client address, the
+    diagnostic body went to callers that are not operators at all (audit #2).
+    The compose-network half is covered behaviourally in
+    tests/test_health_disclosure_gate.py, against the CIDR the deployment
+    actually uses."""
     from app.routers.health import _peer_is_operator
 
     assert _peer_is_operator(_req(host)) is True

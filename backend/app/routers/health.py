@@ -4,6 +4,10 @@ buttons for."""
 from __future__ import annotations
 
 import ipaddress
+import logging
+import os
+import socket
+from functools import lru_cache
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
@@ -15,6 +19,8 @@ from ..database import SessionLocal
 from ..dependencies import get_db
 from ..services import oidc_admin as oidc_admin_svc
 from ..version import GIT_SHA, VERSION
+
+logger = logging.getLogger("fileheron.health")
 
 router = APIRouter(tags=["health"])
 
@@ -81,7 +87,48 @@ def _peer_is_operator(request: Request) -> bool:
         addr = ipaddress.ip_address(host)
     except ValueError:
         return False
-    return addr.is_loopback or addr.is_private or addr.is_link_local
+    if addr.is_loopback:
+        return True
+    return any(addr in net for net in _trusted_networks())
+
+
+@lru_cache(maxsize=1)
+def _trusted_networks() -> tuple[ipaddress.IPv4Network | ipaddress.IPv6Network, ...]:
+    """The networks that count as "the compose network".
+
+    This used to accept EVERY RFC1918 address - 10/8, 172.16/12 and 192.168/16,
+    plus link-local - which is not what the docstring above says and is not the
+    same set. On a host whose LAN is 192.168.0.0/24, or behind a proxy that
+    forwards a private client address, the diagnostic body went to callers that
+    are not operators at all (audit #2).
+
+    Derived from this container's OWN address, so the two real consumers keep
+    working: the compose HEALTHCHECK arrives over loopback, and the updater
+    executor arrives from a sibling container on the same compose network.
+    `HEALTH_DETAIL_TRUSTED_CIDRS` (comma-separated) overrides it for a
+    deployment that puts them somewhere else.
+    """
+    raw = os.environ.get("HEALTH_DETAIL_TRUSTED_CIDRS", "").strip()
+    if raw:
+        out = []
+        for item in raw.split(","):
+            item = item.strip()
+            if not item:
+                continue
+            try:
+                out.append(ipaddress.ip_network(item, strict=False))
+            except ValueError:
+                logger.warning("ignoring unparseable HEALTH_DETAIL_TRUSTED_CIDRS entry %r", item)
+        return tuple(out)
+    try:
+        own = ipaddress.ip_address(socket.gethostbyname(socket.gethostname()))
+    except Exception:
+        return ()
+    if own.is_loopback:
+        return ()
+    # Compose allocates its networks out of /16 pools, so the container's own
+    # /16 is the smallest bound that reliably contains its siblings.
+    return (ipaddress.ip_network(f"{own}/16", strict=False),)
 
 
 @router.get("/api/health")
@@ -201,7 +248,13 @@ def public_config(db: Session = Depends(get_db)) -> dict:
         "app_name": site_svc.get_app_name(db),
         "default_locale": "en",
         "providers": providers,
-        "running_version": VERSION,
+        # No `running_version` here. /api/health hides the build identifiers
+        # from anonymous callers because they map one-to-one onto a public
+        # source tree and say exactly which security fixes an instance is
+        # missing - and this endpoint, which is anonymous by design, handed the
+        # same fact to anyone who asked, defeating that gate entirely. Nothing
+        # in the SPA rendered it; the admin surface reads its version from
+        # /api/admin/system/status (audit #2).
         "site_timezone": site_svc.get_site_timezone(db),
         "branding": branding,
         "legal": legal,

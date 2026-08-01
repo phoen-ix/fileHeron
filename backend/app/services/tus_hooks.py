@@ -231,16 +231,6 @@ def handle_post_finish(db: Session, body: dict[str, Any]) -> None:
     file_svc.finalize_to_disk(db, file=file_row, tus_upload_id=tus_upload_id)
     db.commit()
 
-    # The share's `share_created` announcement is deferred until its files have
-    # actually landed - see share.announce_if_ready. No-op for every share that
-    # already announced.
-    from . import share as share_svc
-    try:
-        if share_svc.announce_if_ready(db, file_row.share_id):
-            db.commit()
-    except Exception:
-        db.rollback()
-        logger.exception("deferred share announcement failed for %s", file_row.share_id)
 
     # Enqueue the AV scan. The file is in `ready_unscanned` after
     # finalize_to_disk; downloads are blocked until the worker flips it

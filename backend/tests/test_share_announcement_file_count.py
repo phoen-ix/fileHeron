@@ -262,3 +262,123 @@ def test_inbound_staff_fan_out_also_waits_for_the_files(db, make_user, kind):
     rows = _announcements(db, emp.id)
     assert len(rows) == 1
     assert rows[0].payload_json["file_count"] == 1
+
+
+# --- audit #2 cross-check: the announcement fired one file too early ---------
+
+
+def test_a_sequential_upload_does_not_announce_after_the_first_file(db, make_user):
+    """Every shipped client uploads SEQUENTIALLY, and a file's row is created
+    when ITS upload starts - so between file 1 finishing and file 2 starting,
+    "nothing is uploading" is momentarily true. Announcing there said "1 file"
+    for a three-file share: the same defect one size smaller."""
+    sender = make_user(email="s8@test.local", role=UserRole.employee)
+    rec = make_user(email="r8@test.local", role=UserRole.employee)
+    share = share_svc.create_share(
+        db,
+        created_by=sender,
+        kind=ShareKind.outbound,
+        recipient_user_ids=[rec.id],
+        expires_at=_future(),
+    )
+    land_file(db, share, sender, name="one-of-three.pdf")
+    db.commit()
+
+    # The sweep's view: quiet is required, and this share is not quiet.
+    assert share_svc.announce_if_ready(db, share.id, require_quiet=True) is False
+    assert _announcements(db, rec.id) == []
+
+
+def test_the_sweep_announces_once_the_share_goes_quiet(db, make_user, monkeypatch):
+    """The fallback for a client that sends no batch signal - an API-token
+    integration, or a browser tab closed mid-batch."""
+    sender = make_user(email="s9@test.local", role=UserRole.employee)
+    rec = make_user(email="r9@test.local", role=UserRole.employee)
+    share = share_svc.create_share(
+        db,
+        created_by=sender,
+        kind=ShareKind.outbound,
+        recipient_user_ids=[rec.id],
+        expires_at=_future(),
+    )
+    land_file(db, share, sender, name="a.pdf")
+    land_file(db, share, sender, name="b.pdf")
+    db.commit()
+
+    monkeypatch.setattr(share_svc, "ANNOUNCE_QUIET_SECONDS", 0)
+    assert share_svc.announce_if_ready(db, share.id, require_quiet=True) is True
+    db.commit()
+    rows = _announcements(db, rec.id)
+    assert len(rows) == 1
+    assert rows[0].payload_json["file_count"] == 2
+
+
+def test_the_batch_signal_still_announces_immediately(db, make_user):
+    """The fast path: the owner's client says the batch is over, so the
+    recipient is told now rather than up to a minute later."""
+    sender = make_user(email="s10@test.local", role=UserRole.employee)
+    rec = make_user(email="r10@test.local", role=UserRole.employee)
+    share = share_svc.create_share(
+        db,
+        created_by=sender,
+        kind=ShareKind.outbound,
+        recipient_user_ids=[rec.id],
+        expires_at=_future(),
+    )
+    f = land_file(db, share, sender)
+    share_svc.register_files_added(
+        db, user=sender, share=share, file_ids=[f.id], notify=True
+    )
+    db.commit()
+    assert len(_announcements(db, rec.id)) == 1
+
+
+def test_an_approval_granted_mid_upload_does_not_announce_yet(db, make_user):
+    """Add-files is allowed on a pending share on purpose, so an approver can
+    decide while the owner is still uploading. Dispatching there announced
+    whatever count existed at that instant, with nothing to correct it."""
+    import json
+
+    from app.models.file import File, FileState
+    from app.services import settings as settings_svc
+
+    k = settings_svc.Keys
+    admin = make_user(email="ap2@test.local", role=UserRole.admin)
+    sender = make_user(email="s11@test.local", role=UserRole.employee)
+    rec = make_user(email="r11@test.local", role=UserRole.employee)
+    for key, value in (
+        (k.SHARE_APPROVAL_ENABLED, "true"),
+        (k.SHARE_APPROVAL_APPROVER_MODE, "admins_only"),
+        (k.SHARE_APPROVAL_SCOPE, "outbound"),
+        (k.SHARE_APPROVAL_APPROVER_USERS, json.dumps([admin.id])),
+    ):
+        settings_svc.set_value(db, key=key, value=value, actor=None)
+    db.commit()
+
+    share = share_svc.create_share(
+        db,
+        created_by=sender,
+        kind=ShareKind.outbound,
+        recipient_user_ids=[rec.id],
+        expires_at=_future(),
+    )
+    assert share.state == ShareState.pending_approval
+    db.add(
+        File(
+            id="00000000-0000-0000-0000-0000000ann02",
+            share_id=share.id,
+            original_filename="still-going.pdf",
+            mime_type="application/pdf",
+            size_bytes=10,
+            state=FileState.uploading,
+            uploaded_by_id=sender.id,
+        )
+    )
+    db.commit()
+
+    share_svc.approve_share(db, user=admin, share=share)
+    db.commit()
+    assert _announcements(db, rec.id) == [], (
+        "approved mid-upload and announced a count that was not final"
+    )
+    assert share.notify_on_activation is not None, "the announcement is still owed"

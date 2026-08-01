@@ -13,7 +13,7 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
-import { createShare } from '@/api/shares'
+import { createShare, registerFilesAdded } from '@/api/shares'
 import ExpiryPicker from '@/components/ExpiryPicker.vue'
 import FileUploadArea from '@/components/FileUploadArea.vue'
 import RecipientPicker from '@/components/RecipientPicker.vue'
@@ -161,6 +161,23 @@ async function onSubmit() {
     // one advance. Uploads keep running here because useUpload stays mounted.
     phase.value = 'progress'
     await upload.start()
+    // Tell the server the batch is over, so the recipient notification goes out
+    // now with the right count rather than waiting for the fallback sweep. The
+    // announcement is deferred until the files land - a share is empty at
+    // create time, which is why every notification used to say "0 files"
+    // (audit #2). Best-effort: the sweep covers a failure here.
+    if (shareId.value) {
+      try {
+        await registerFilesAdded(shareId.value, {
+          notify: notifyRecipients.value,
+          file_ids: upload.items.value
+            .filter((i) => i.state === 'done' && i.fileId)
+            .map((i) => i.fileId as string),
+        })
+      } catch {
+        /* the announce sweep will pick it up within a minute */
+      }
+    }
     if (allUploadsDone.value) {
       ui.pushToast(
         createdPending.value

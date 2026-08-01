@@ -39,6 +39,7 @@ const form = ref({
   move_folder: 'fileHeron/Processed',
   notify_mode: 'off' as 'off' | 'human' | 'all',
   require_known_sender: true,
+  tls_insecure: false,
 })
 
 function hydrate(s: ImapSettingsResponse) {
@@ -55,6 +56,7 @@ function hydrate(s: ImapSettingsResponse) {
     move_folder: s.move_folder,
     notify_mode: s.notify_mode,
     require_known_sender: s.require_known_sender ?? true,
+    tls_insecure: s.tls_insecure ?? false,
   }
   isPasswordSet.value = s.is_password_set
   lastPollAt.value = s.last_poll_at
@@ -237,6 +239,13 @@ v-if="errorMsg" class="fh-notice" role="alert"
         <select v-model="form.notify_mode" class="fh-field-input">
           <option v-for="n in notifyOptions" :key="n" :value="n">{{ t(`admin_imap.notify_${n}`) }}</option>
         </select>
+      </label>
+      <label class="fh-field check-row">
+        <input v-model="form.tls_insecure" type="checkbox" />
+        <span>
+          <span class="fh-field-label">{{ t('admin_imap.tls_insecure') }}</span>
+          <span class="fh-field-help">{{ t('admin_imap.tls_insecure_help') }}</span>
+        </span>
       </label>
       <label class="fh-field check-row">
         <input v-model="form.require_known_sender" type="checkbox" />

@@ -26,6 +26,7 @@ class ImapSettingsResponse(APIBaseModel):
     move_folder: str
     notify_mode: str
     require_known_sender: bool
+    tls_insecure: bool
     # Polling cadence/enable now lives on the Scheduled tasks page (cron 'imap_poll').
     last_poll_at: str | None
     last_success_at: str | None
@@ -48,6 +49,11 @@ class UpdateImapSettingsRequest(APIBaseModel):
     # Refuse mail whose From matches no enabled user. Default true - see
     # services/imap_config.require_known_sender.
     require_known_sender: bool = True
+    # Do not verify the mail server's certificate. Default false; the only way
+    # to set it was to write app_settings by hand, so an internal server with a
+    # private CA lost inbound mail the moment TLS verification was turned on,
+    # with no in-app remedy (audit #2 cross-check).
+    tls_insecure: bool = False
 
 
 class TestImapRequest(APIBaseModel):

@@ -147,8 +147,16 @@ async def reclaim_orphaned_files(_ctx) -> dict:
                     skipped += 1
                     continue
                 size = f2.size_bytes
-                file_svc.hard_delete(db, file=f2, reason="orphan_reclaim")
+                # Deferred purge: this loop holds row locks, and unlinking
+                # multi-GB files inside them is how a commit hits a lock-wait
+                # timeout - after which the row is back to `clean` pointing at
+                # nothing and the next run releases the same bytes again
+                # (audit #2 cross-check).
+                locator = file_svc.hard_delete(
+                    db, file=f2, reason="orphan_reclaim", purge=False
+                )
                 db.commit()
+                file_svc.purge_locators([locator])
                 reclaimed += 1
                 bytes_freed += size
             except Exception as e:

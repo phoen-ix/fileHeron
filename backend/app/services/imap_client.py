@@ -141,6 +141,23 @@ class ImapSession:
                 return int(m.group(1))
         return None
 
+    def fetch_headers(self, uid: int) -> bytes | None:
+        """The message's headers only.
+
+        Used to decide whether this instance wants the message at all before
+        downloading it. The known-sender gate refuses mail from an address with
+        no account, and refusing it AFTER pulling a 40 MB attachment across the
+        wire spends exactly the resource the gate exists to protect (audit #2
+        cross-check).
+        """
+        typ, data = self._c.uid("FETCH", str(uid), "(BODY.PEEK[HEADER])")
+        if typ != "OK" or not data:
+            return None
+        for part in data:
+            if isinstance(part, tuple) and len(part) >= 2 and part[1]:
+                return part[1]
+        return None
+
     def fetch_raw(self, uid: int, *, max_bytes: int | None = None) -> bytes | None:
         """Download a message. With `max_bytes`, ask for a partial body instead
         of the whole thing.

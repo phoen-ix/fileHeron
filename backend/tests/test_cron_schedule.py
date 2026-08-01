@@ -16,12 +16,25 @@ def _res(**kw):
 
 
 def test_registry_covers_all_jobs():
-    assert len(cs.REGISTRY) == 19
+    """Counted against the WORKER's cron list rather than a literal: the number
+    is not the property - "every scheduled job is in the registry, and the
+    registry schedules nothing that does not exist" is."""
+    from app.workers import worker
+
+    # `functions`, not `cron_jobs`: the single minute dispatcher enqueues by
+    # NAME from the registry (v1.28.0), so a registry entry with no matching
+    # worker function is a job that can never run.
+    scheduled = {fn.__name__ for fn in worker.WorkerSettings.functions}
+    assert len(cs.REGISTRY) >= 20
     assert "imap_poll" in cs.REGISTRY and "prune_history" in cs.REGISTRY
     assert "drain_pending_update" in cs.REGISTRY
     assert "rescan_inbound_attachments" in cs.REGISTRY  # audit L18
     # release_check defaults to ~daily so it doesn't poll GitHub hourly.
     assert cs.REGISTRY["release_check"].default_interval_min == 1440
+    assert "announce_ready_shares" in cs.REGISTRY
+    if scheduled:
+        missing = {n for n in cs.REGISTRY if n not in scheduled and n != "cron_dispatch"}
+        assert missing == set(), f"in the registry but not scheduled: {missing}"
 
 
 def test_interval_due():

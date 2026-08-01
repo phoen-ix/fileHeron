@@ -93,6 +93,43 @@ def ingested_by_uid(db: Session, *, uidvalidity: int, uid: int) -> bool:
     )
 
 
+def sender_is_accepted(db: Session, raw_headers: bytes | None) -> bool:
+    """Whether this instance will accept mail with these headers.
+
+    Decided from the HEADERS alone, so an unknown sender's body is never
+    downloaded - refusing after the fetch spends the resource the gate exists to
+    protect. `None` (the server declined the header fetch, or an older test
+    double) means "cannot tell": accept, and let `ingest` decide on the full
+    message, which is where the authoritative check still lives.
+    """
+    if raw_headers is None:
+        return True
+    if not imap_config.require_known_sender(db):
+        return True
+    try:
+        from . import inbound_parse
+
+        parsed = inbound_parse.parse(raw_headers)
+    except Exception:
+        logger.warning("inbound: could not parse headers for the sender pre-check")
+        return True
+    if not parsed.sender_email:
+        return False
+    known = (
+        db.query(User.id)
+        .filter(User.email == parsed.sender_email, User.is_disabled.is_(False))
+        .scalar()
+    )
+    if known is None:
+        logger.info(
+            "inbound: refusing mail from unknown sender %r before fetching the body "
+            "(imap.require_known_sender)",
+            parsed.sender_email,
+        )
+        return False
+    return True
+
+
 class UnknownSenderError(Exception):
     """The From address matches no enabled user and `imap.require_known_sender`
     is on. Raised before anything is stored so the poll can skip the message and

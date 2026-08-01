@@ -25,7 +25,7 @@ async def test_list_crons(make_user, client, login_as):
     r = await client.get("/api/admin/crons", headers=_h(t))
     assert r.status_code == 200, r.text
     body = r.json()
-    assert len(body["items"]) == 19
+    assert len(body["items"]) == len(__import__("app.services.cron_schedule", fromlist=["REGISTRY"]).REGISTRY)
     names = {i["name"] for i in body["items"]}
     assert "expire_files" in names and "imap_poll" in names
     assert "rescan_inbound_attachments" in names  # audit L18

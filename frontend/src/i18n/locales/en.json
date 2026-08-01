@@ -976,7 +976,9 @@
     "fetch_skipped": "Skipped: {reason}",
     "fetch_failed": "Fetch failed",
     "require_known_sender": "Only accept mail from registered users",
-    "require_known_sender_help": "Refuses mail whose sender address matches no enabled account, before anything is stored. Refused mail is left on the server."
+    "require_known_sender_help": "Refuses mail whose sender address matches no enabled account, before anything is stored. Refused mail is left on the server.",
+    "tls_insecure": "Do not verify the server certificate",
+    "tls_insecure_help": "Only for an internal mail server with a private or self-signed certificate. The connection is still encrypted, but anyone on the network path can impersonate the server and read the login."
   },
   "admin_inbox": {
     "eyebrow": "Messaging",

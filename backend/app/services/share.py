@@ -29,7 +29,7 @@ import secrets
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
-from sqlalchemy import and_, or_, update
+from sqlalchemy import and_, func, or_, update
 from sqlalchemy.orm import Session, joinedload
 
 from ..middleware.errors import AppError
@@ -420,6 +420,17 @@ def create_share(
     return share
 
 
+def _still_uploading(db: Session, share: Share) -> bool:
+    from ..models.file import File, FileState
+
+    return (
+        db.query(File.id)
+        .filter(File.share_id == share.id, File.state == FileState.uploading)
+        .first()
+        is not None
+    )
+
+
 def _has_landed_file(db: Session, share: Share) -> bool:
     from ..models.file import File, FileState
 
@@ -434,30 +445,51 @@ def _has_landed_file(db: Session, share: Share) -> bool:
     )
 
 
-def announce_if_ready(db: Session, share_id: str) -> bool:
+# How long a share must have been quiet before the fallback sweep decides its
+# batch is finished. Every shipped client uploads SEQUENTIALLY, so "nothing is
+# in `uploading` right now" is true in the gap between file 1 finishing and file
+# 2 starting - announcing there would have said "1 file" for a three-file share,
+# which is the same defect one size smaller (audit #2 cross-check).
+ANNOUNCE_QUIET_SECONDS = 90
+
+
+def announce_if_ready(db: Session, share_id: str, *, require_quiet: bool = False) -> bool:
     """Send the deferred `share_created` announcement once the share's uploads
     have landed. Returns True if this call is the one that sent it.
 
-    Called from every finalize path (tus post-finish, direct upload) and from
-    the owner's explicit batch-complete signal. Idempotent and concurrency-safe:
-    the claim is a conditional UPDATE clearing `notify_on_activation`, so of two
-    files finalizing at the same instant exactly one announces.
+    Two callers, two meanings:
+
+    - The owner's explicit batch-complete signal (`files-added`) knows the batch
+      is over, so it calls with `require_quiet=False` and announces at once.
+    - The fallback sweep, for clients that send no such signal, calls with
+      `require_quiet=True`: nothing uploading AND nothing new for
+      `ANNOUNCE_QUIET_SECONDS`. Without that a sequential upload announces after
+      the first file.
+
+    Idempotent and concurrency-safe: the claim is a conditional UPDATE clearing
+    `notify_on_activation`, so of two callers racing exactly one announces.
     """
-    from ..models.file import File, FileState
+    from datetime import timedelta
+
+    from ..models.file import File
 
     share = db.query(Share).filter(Share.id == share_id).one_or_none()
     if share is None or share.state != ShareState.active:
         return False
     if share.notify_on_activation is None:
         return False
-    still_uploading = (
-        db.query(File.id)
-        .filter(File.share_id == share.id, File.state == FileState.uploading)
-        .first()
-        is not None
-    )
-    if still_uploading or not _has_landed_file(db, share):
+    if _still_uploading(db, share) or not _has_landed_file(db, share):
         return False
+    if require_quiet:
+        newest = (
+            db.query(func.max(File.created_at))
+            .filter(File.share_id == share.id)
+            .scalar()
+        )
+        if newest is not None and newest > utc_now() - timedelta(
+            seconds=ANNOUNCE_QUIET_SECONDS
+        ):
+            return False
 
     notify = bool(share.notify_on_activation)
     claimed = db.execute(
@@ -813,8 +845,23 @@ def approve_share(
         metadata={"creator_id": share.created_by_id},
         request=request,
     )
-    notify = share.notify_on_activation if share.notify_on_activation is not None else True
-    _dispatch_share_created(db, share, notify_recipients=notify)
+    # Announce only if the files are actually there. An approver can decide
+    # while the owner is still uploading (add-files is allowed on a pending
+    # share, deliberately), and dispatching here announced whatever count
+    # existed at that instant - "0 files" for an approval granted before the
+    # first upload landed, with nothing to correct it afterwards (audit #2
+    # cross-check). If they are not there yet, the frozen flag stays set and
+    # the batch signal or the announce sweep does it.
+    if _has_landed_file(db, share) and not _still_uploading(db, share):
+        notify = (
+            share.notify_on_activation if share.notify_on_activation is not None else True
+        )
+        _dispatch_share_created(db, share, notify_recipients=notify)
+    elif share.notify_on_activation is None:
+        # Never went through create_share's deferral (an older row): keep the
+        # default so the sweep still announces it.
+        share.notify_on_activation = True
+        db.flush()
     _notify_share_decision(
         db, share, category=NotificationCategory.share_approved, reason=None
     )

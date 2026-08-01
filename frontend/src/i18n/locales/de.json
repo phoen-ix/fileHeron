@@ -976,7 +976,9 @@
     "fetch_skipped": "Übersprungen: {reason}",
     "fetch_failed": "Abruf fehlgeschlagen",
     "require_known_sender": "Nur E-Mails von registrierten Benutzern annehmen",
-    "require_known_sender_help": "Weist E-Mails ab, deren Absenderadresse zu keinem aktiven Konto gehört - bevor irgendetwas gespeichert wird. Abgewiesene E-Mails bleiben auf dem Server."
+    "require_known_sender_help": "Weist E-Mails ab, deren Absenderadresse zu keinem aktiven Konto gehört - bevor irgendetwas gespeichert wird. Abgewiesene E-Mails bleiben auf dem Server.",
+    "tls_insecure": "Serverzertifikat nicht prüfen",
+    "tls_insecure_help": "Nur für einen internen Mailserver mit privatem oder selbstsigniertem Zertifikat. Die Verbindung bleibt verschlüsselt, aber jeder auf dem Netzwerkweg kann sich als der Server ausgeben und die Anmeldedaten mitlesen."
   },
   "admin_inbox": {
     "eyebrow": "Nachrichten",

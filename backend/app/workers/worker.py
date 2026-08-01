@@ -32,6 +32,7 @@ from ..config import settings
 from ..services.release_check import release_check
 from ..utils.logger import configure_logging
 from .analytics_aggregate import analytics_aggregate
+from .announce_ready_shares import announce_ready_shares
 from .anomaly_check import anomaly_check
 from .av_scan import av_scan_file
 from .cleanup_abandoned_uploads import cleanup_abandoned_uploads
@@ -85,6 +86,7 @@ class WorkerSettings:
         imap_poll,
         rescan_inbound_attachments,
         drain_pending_update,
+        announce_ready_shares,
         cron_dispatch,
         notify_admin_error,
     ]

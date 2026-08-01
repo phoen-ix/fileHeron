@@ -180,6 +180,21 @@ def run_poll(*, manual: bool, db: Session | None = None, session_opener=open_ses
                         )
                         last_uid = max(last_uid, uid)
                         continue
+                    # Refuse an unwanted SENDER before the body is fetched.
+                    # Refusing after the download spends the very resource the
+                    # known-sender gate protects - a 40 MB attachment from a
+                    # stranger crosses the wire either way (audit #2
+                    # cross-check). Headers are a few hundred bytes.
+                    if not inbound_mail.sender_is_accepted(
+                        db, sess.fetch_headers(uid) if hasattr(sess, "fetch_headers") else None
+                    ):
+                        refused += 1
+                        last_uid = max(last_uid, uid)
+                        settings_svc.set_value(
+                            db, key=K.IMAP_LAST_UID, value=str(last_uid), actor=None
+                        )
+                        db.commit()
+                        continue
                     # An unknown size used to fall through to an UNBOUNDED
                     # download - which is the one thing this guard exists to
                     # prevent, and `fetch_size` returns None whenever the server

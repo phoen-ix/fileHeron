@@ -67,6 +67,7 @@ def _settings_response(db: Session) -> ImapSettingsResponse:
         move_folder=imap_config.move_folder(db),
         notify_mode=imap_config.notify_mode(db),
         require_known_sender=imap_config.require_known_sender(db),
+        tls_insecure=cfg.tls_insecure,
         last_poll_at=settings_svc.get(db, K.IMAP_LAST_POLL_AT),
         last_success_at=settings_svc.get(db, K.IMAP_LAST_SUCCESS_AT),
     )
@@ -97,6 +98,7 @@ def update_imap_settings(
         (K.IMAP_MOVE_FOLDER, payload.move_folder or None),
         (K.IMAP_NOTIFY_MODE, payload.notify_mode),
         (K.IMAP_REQUIRE_KNOWN_SENDER, "true" if payload.require_known_sender else "false"),
+        (K.IMAP_TLS_INSECURE, "true" if payload.tls_insecure else "false"),
     ]
     for key, value in pairs:
         settings_svc.set_value(db, key=key, value=value, actor=admin, request=request)
@@ -121,7 +123,8 @@ def update_imap_settings(
         metadata={"enabled": payload.enabled,
                   "post_fetch_action": payload.post_fetch_action,
                   "notify_mode": payload.notify_mode,
-                  "require_known_sender": payload.require_known_sender},
+                  "require_known_sender": payload.require_known_sender,
+                  "tls_insecure": payload.tls_insecure},
         request=request,
     )
     db.commit()

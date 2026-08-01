@@ -932,29 +932,17 @@ def _purge_user(db, user, *, actor, request) -> str:
         return "deleted"
     except Exception:
         sp.rollback()
-    # `erase_user` calls `db.rollback()` on failure - and this runs INSIDE the
-    # import's transaction, so that rollback discarded everything apply_backup
-    # had done so far (settings, OIDC providers, webhooks, groups, the user
-    # upsert) while the remaining steps carried on committing on top of a
-    # rolled-back session. The import then reported success with a warning and
-    # left the instance matching neither the backup nor the previous
-    # configuration (audit #2).
+    # NOT here. `erase_user` both COMMITS (per file, deliberately - each unlink
+    # is irreversible) and calls `db.rollback()` on failure, so running it
+    # inside the import's transaction either commits the import early or
+    # discards it wholesale. A savepoint does not contain either: SQLAlchemy's
+    # `Session.rollback()` unwinds the whole transaction, savepoints included
+    # (audit #2 cross-check found this in the savepoint that was supposed to be
+    # the fix).
     #
-    # A savepoint contains it: a failed erasure rolls back to here and nothing
-    # earlier in the import is lost. The caller still records the user as
-    # "failed" and surfaces it in the import result.
-    sp2 = db.begin_nested()
-    try:
-        erase_user(db, actor=actor, target=user, request=request)
-        sp2.commit()
-        return "anonymised"
-    except Exception:
-        try:
-            sp2.rollback()
-        except Exception:
-            logger.exception("config import: could not roll back the purge savepoint")
-        logger.exception("config import: purge failed for user=%s", user.id)
-        return "failed"
+    # Defer it. The caller runs the deferred erasures AFTER the import commits,
+    # where erase_user's own transaction semantics are the only ones in play.
+    return "deferred"
 
 
 _USER_FIELD_SKIP = frozenset({"id", "email", "created_by_id", "oidc_provider_id"})
@@ -1064,6 +1052,10 @@ def _validate_backup_payload(p: dict, actor: User) -> None:
 
 
 def apply_backup(db: Session, *, parsed: ParsedBackup, actor: User, request=None) -> ImportSummary:
+    # Users whose FK-bound rows mean a plain delete cannot work: erased AFTER
+    # the import commits, because erase_user owns its own transaction (see
+    # _purge_user).
+    deferred_erasures: list[int] = []
     p = parsed.payload
     # Reject a malformed-but-parseable payload up front, BEFORE anything
     # destructive runs - the share invalidation below is irreversible (audit M6).
@@ -1318,6 +1310,8 @@ def apply_backup(db: Session, *, parsed: ParsedBackup, actor: User, request=None
             )
             db.flush()
             outcome = _purge_user(db, u, actor=actor, request=request)
+            if outcome == "deferred":
+                deferred_erasures.append(u.id)
             summary.purged_users.append(
                 u.email if outcome == "deleted" else f"{u.email} ({outcome})"
             )
@@ -1444,4 +1438,21 @@ def apply_backup(db: Session, *, parsed: ParsedBackup, actor: User, request=None
         request=request,
     )
     db.commit()
+
+    # Now, outside the import transaction. A failure here leaves the imported
+    # configuration intact and is reported rather than silently discarding it.
+    for user_id in deferred_erasures:
+        target = db.query(User).filter(User.id == user_id).one_or_none()
+        if target is None:
+            continue
+        try:
+            erase_user(db, actor=actor, target=target, request=request)
+            db.commit()
+        except Exception:
+            db.rollback()
+            logger.exception("config import: deferred erasure failed for user=%s", user_id)
+            summary.warnings.append(
+                f"user {user_id} could not be erased after the import; "
+                "their account is still present and disabled"
+            )
     return summary

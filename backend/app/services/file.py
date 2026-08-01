@@ -209,9 +209,12 @@ def hard_delete(
     and the next sweep releases the same bytes from the quota counter a second
     time (audit #2).
 
-    `purge=True` (the default) keeps the old ordering for the one caller that
-    needs it: GDPR erasure must learn that an unlink failed BEFORE it writes a
-    receipt claiming the data is gone.
+    `purge=True` (the default) keeps the old ordering where the caller must
+    learn that an unlink FAILED before it does anything else: GDPR erasure, so
+    it does not write a receipt claiming the data is gone, and the config-import
+    purge, which reports per-user outcomes. Everything else - the interactive
+    delete routes and the orphan-reclaim cron - defers (audit #2 cross-check
+    corrected this note, which named a single caller).
 
     `actor_user_id` defaults to the uploader (a self-service delete); pass an
     admin's id for an admin-initiated delete so the audit records the real
@@ -286,7 +289,17 @@ def purge_locators(locators: list[str | None]) -> None:
         try:
             backend.delete(locator)
         except Exception:
-            logger.warning("deferred purge failed for %s", locator, exc_info=True)
+            # ERROR, not warning: the row is already committed as `deleted`, so
+            # no sweeper will look at this locator again and these bytes are now
+            # invisible to every reclaim path. One log line is the only trace
+            # there will ever be, so it should be one an operator's alerting
+            # can find (audit #2 cross-check).
+            logger.error(
+                "deferred purge FAILED for %s - the row is deleted, so these bytes "
+                "are now orphaned and no sweeper will find them",
+                locator,
+                exc_info=True,
+            )
 
 
 def revoke_share_if_empty(

@@ -537,15 +537,6 @@ def public_download_zip(
         raise AppError(401, "UNLOCK_REQUIRED", "Submit the password first.")
 
     from ..services import maintenance as maintenance_svc
-    # No `request` here on purpose. The ranged-continuation exemption inside the
-    # gate exists so a resumed download can finish, but a ZIP is one
-    # StreamingResponse that hands back the whole archive whatever the Range
-    # header says - the budget code below already refuses to honour the same
-    # predicate for exactly that reason. Passing the request let one header start
-    # a brand-new multi-gigabyte transfer during the window that is meant to
-    # admit none, and hold the drain open for as long as it ran.
-    maintenance_svc.refuse_if_maintenance(db, kind="download")
-
     files = file_svc.downloadable_files(db, link.share_id)
     if not files:
         raise AppError(400, "NO_DOWNLOADABLE_FILES", "This share has no downloadable files.")
@@ -587,6 +578,16 @@ def public_download_zip(
     paid_key = f"link:{link.id}:zip:{etag}"
     resuming = bool(byte_range) and byte_range[0] > 0
     corroborated = resuming and transfer_activity.was_download_paid(paid_key)
+
+    # Maintenance is refused HERE, after the archive identity is known, so a
+    # CORROBORATED resume can finish - the same ordering the authenticated ZIP
+    # route uses. The gate used to sit at the top with a comment explaining that
+    # a ZIP "hands back the whole archive whatever the Range header says", which
+    # stopped being true in v2.7.0; the sibling fix retired that reasoning and
+    # this copy was missed (audit #2 cross-check). A resume with no payment
+    # behind it is still a new transfer and is still refused.
+    if not corroborated:
+        maintenance_svc.refuse_if_maintenance(db, kind="download")
 
     downloads_remaining = link.downloads_remaining
     if not corroborated:

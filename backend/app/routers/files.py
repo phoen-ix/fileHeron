@@ -260,7 +260,11 @@ def preview_file(
     maintenance_svc.refuse_if_maintenance(
         db, request=request, kind="download", file_id=file_id
     )
-    _assert_file_state_servable(file)
+    # The gate belongs HERE, on the route that hands over the bytes. Putting it
+    # only on the URL mint left the serve path unguarded, and the mint is a
+    # pre-flight convenience - a `?dt=` token can be replayed straight at this
+    # route (audit #2 cross-check).
+    _assert_previewable_state(file)
     if not settings_svc.get_bool(
         db, settings_svc.Keys.FILE_PREVIEW_ENABLED, default=True
     ):
@@ -276,6 +280,24 @@ def preview_file(
     if not file.storage_path or not backend.exists(file.storage_path):
         logger.error("preview: missing storage_path for %s: %r", file.id, file.storage_path)
         raise AppError(500, "STORAGE_MISSING", "File data is missing.")
+
+    # An APPROVER previewing a pending share is a person who is not a recipient
+    # reading someone else's file. The single-file download route records that,
+    # and the archive route was fixed to; preview - the third door, and the one
+    # the review screen actually offers - recorded nothing at all (audit #2
+    # cross-check). No budget is spent: preview is "look", and that has not
+    # changed.
+    if share.state == ShareState.pending_approval:
+        record_audit_event(
+            db,
+            event_type=AuditEventType.file_downloaded,
+            actor_user_id=user.id,
+            target_type="file",
+            target_id=file.id,
+            metadata={"via": "preview", "share_id": file.share_id, "review": True},
+            request=request,
+        )
+        db.commit()
 
     ttl = settings_registry.effective(db, settings_registry.K.DOWNLOAD_SIGNED_URL_TTL_SEC)
     return serve_response(

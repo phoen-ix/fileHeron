@@ -24,6 +24,44 @@ _SKIP = pytest.mark.skipif(
 )
 
 
+def _seed(engine) -> None:
+    """Put a row in the tables the data migrations actually touch.
+
+    The roundtrip ran against an EMPTY schema, so every data migration's UPDATE
+    matched zero rows and the whole class of "the DDL is fine, the backfill is
+    wrong" was outside the gate (audit #2). One row per touched table is enough:
+    what is being exercised is the statement, not the volume.
+    """
+    import sqlalchemy as sa
+
+    with engine.begin() as conn:
+        conn.execute(
+            sa.text(
+                "INSERT INTO users (email, password_hash, display_name, role, "
+                "is_disabled, email_verified, locale, created_at) VALUES "
+                "('roundtrip@test.invalid', 'x', 'Roundtrip', 'employee', 0, 1, "
+                "'en', NOW())"
+            )
+        )
+        conn.execute(
+            sa.text(
+                "INSERT INTO shares (id, created_by_id, kind, state, created_at) "
+                "SELECT '00000000-0000-0000-0000-0000000rt001', id, 'outbound', "
+                "'active', NOW() FROM users WHERE email = 'roundtrip@test.invalid'"
+            )
+        )
+        conn.execute(
+            sa.text(
+                "INSERT INTO files (id, share_id, original_filename, mime_type, "
+                "size_bytes, state, uploaded_by_id, created_at) SELECT "
+                "'00000000-0000-0000-0000-0000000rt002', "
+                "'00000000-0000-0000-0000-0000000rt001', 'big.bin', "
+                "'application/octet-stream', 3000000000, 'clean', id, NOW() "
+                "FROM users WHERE email = 'roundtrip@test.invalid'"
+            )
+        )
+
+
 @_SKIP
 def test_alembic_full_downgrade_roundtrip():
     """upgrade head -> downgrade base -> upgrade head against the configured
@@ -39,6 +77,64 @@ def test_alembic_full_downgrade_roundtrip():
     upgrade(cfg, "head")
     downgrade(cfg, "base")
     upgrade(cfg, "head")
+
+
+@_SKIP
+def test_a_data_migration_runs_against_rows_that_exist():
+    """The roundtrip above proves the DDL. It cannot prove a BACKFILL: it runs
+    against an empty schema, so every data migration's UPDATE matches zero rows
+    and the whole class of "the DDL is fine, the backfill is wrong" was outside
+    the gate (audit #2) - a silent early `return` in one shipped this way.
+
+    Step back over just the backfill revision (its downgrade is deliberately a
+    no-op, so the table and the rows survive) and forward again, with a row that
+    the backfill must touch.
+    """
+    import sqlalchemy as sa
+    from alembic.command import downgrade, upgrade
+    from alembic.config import Config
+
+    from app.config import settings
+
+    cfg = Config(str(Path(__file__).resolve().parent.parent / "alembic.ini"))
+    upgrade(cfg, "head")
+
+    engine = sa.create_engine(settings.database_url)
+    try:
+        _seed(engine)
+        # 202607300001 adds files.av_unscanned; 202607310001 backfills it.
+        downgrade(cfg, "202607300001")
+        with engine.begin() as conn:
+            conn.execute(
+                sa.text(
+                    "UPDATE files SET av_unscanned = 0 WHERE id = "
+                    "'00000000-0000-0000-0000-0000000rt002'"
+                )
+            )
+        upgrade(cfg, "head")
+        with engine.connect() as conn:
+            flagged = conn.execute(
+                sa.text(
+                    "SELECT av_unscanned FROM files WHERE id = "
+                    "'00000000-0000-0000-0000-0000000rt002'"
+                )
+            ).scalar()
+        assert flagged == 1, (
+            "a 3 GB clean file came through the backfill unflagged - the UPDATE "
+            "matched nothing, which is what an empty schema always did"
+        )
+    finally:
+        with engine.begin() as conn:
+            conn.execute(
+                sa.text("DELETE FROM files WHERE id = '00000000-0000-0000-0000-0000000rt002'")
+            )
+            conn.execute(
+                sa.text("DELETE FROM shares WHERE id = '00000000-0000-0000-0000-0000000rt001'")
+            )
+            conn.execute(
+                sa.text("DELETE FROM users WHERE email = 'roundtrip@test.invalid'")
+            )
+        engine.dispose()
 
 
 # Columns/tables that legitimately differ between the models and the migrated

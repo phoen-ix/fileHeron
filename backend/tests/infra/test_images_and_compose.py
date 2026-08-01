@@ -156,3 +156,43 @@ def test_operator_only_secrets_are_blanked_for_the_app_containers(compose, key):
 def test_the_database_still_gets_its_root_password(compose):
     """Control: blanking these must not break the one service that needs one."""
     assert "MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?" in compose
+
+
+# --- audit #2: the restore drill copies files that must still exist ---------
+
+
+def test_the_restore_drill_only_copies_files_that_exist():
+    """The drill has now silently rotted twice.
+
+    It copied `docker/mariadb/init.sql`, which was renamed to `init.sh` on
+    2026-07-30. `set -e` killed the run on the next Sunday tick and every one
+    after; the systemd unit failed with no alert and
+    `backups/LAST_SUCCESSFUL_DRILL` kept showing an old timestamp, so the first
+    real end-to-end exercise of scripts/restore.sh would have happened during an
+    incident.
+
+    Reading the paths out of the script - rather than asserting one filename -
+    is what makes this catch the NEXT rename too.
+    """
+    root = ROOT
+    drill = (root / "scripts" / "restore_drill_e2e.sh").read_text()
+    missing = []
+    for src in re.findall(r'cp[^\n]*"\$ROOT/([^"]+)"', drill):
+        if "$" in src:  # a variable path - not resolvable here
+            continue
+        if not (root / src).exists():
+            missing.append(src)
+    assert missing == [], f"the drill copies files that no longer exist: {missing}"
+
+
+def test_the_drill_copies_the_db_init_file_compose_actually_mounts():
+    """Tied to the mount, so a rename has to break this test rather than the
+    Sunday timer."""
+    compose = (ROOT / "docker-compose.yml").read_text()
+    m = re.search(r"docker/mariadb/(\S+?):/docker-entrypoint-initdb\.d/", compose)
+    assert m, "compose no longer mounts a mariadb init file - update this test"
+    mounted = m.group(1)
+    drill = (ROOT / "scripts" / "restore_drill_e2e.sh").read_text()
+    assert f"docker/mariadb/{mounted}" in drill, (
+        f"compose mounts docker/mariadb/{mounted} and the drill copies something else"
+    )

@@ -1,69 +1,39 @@
-# Desktop client 1.2.0
+# Desktop client 1.3.0
 
-**Five fixes to transfers and to signing out - including a resume that could
-throw away everything it had already downloaded.** All were found in the
-2026-07-30 audit; this is the build that carries them.
+**Two fixes, both about telling you the truth.** Expiry times were rendered *and
+read back* in your laptop's timezone while the web interface uses the instance's,
+and every error the server sent arrived in English no matter which language you
+had chosen.
 
-Requires server **v2.6.1 or newer**. See *Server compatibility* below.
+Both were found in the 2026-08-01 audit. Requires server **v2.6.1 or newer**.
 
-## Downloads
+---
 
-**A failed size probe could discard a completed partial.** Every download opens
-with a one-byte request to learn the file's size. If that probe failed, the
-client still wrote a checkpoint recording the total as zero - and a zero total
-can never match the real one on the next attempt. So the resume was refused, the
-`.part` file was discarded, and every byte already fetched was fetched again. On
-a 30 GB file that is the entire point of resumable downloads, undone by one
-transient failure at the very start.
+## Expiry times were up to a working day out
 
-**Resume after restarting the app had no progress bar.** The downloads registry
-recorded a total of zero for every fresh download, because it was written before
-the first byte arrived and nothing wrote the real size back afterwards. The
-Resume offered on the next launch worked; it just had nothing to draw a bar
-against.
+The web interface renders every date and time in the **instance's** timezone -
+the one an administrator sets under Site settings - and interprets what you type
+the same way. This client used **your machine's** timezone for both, and showed
+no zone on either screen.
 
-**A download that died before any bytes landed left a stray file behind.** An
-orphaned `.fhdownload` bookmark stayed in your Downloads folder, referenced by
-nothing and mentioned by no screen again.
+Concretely: an instance on Europe/Vienna, a laptop on America/New_York. You set
+a share to expire at 17:00. The client sent 21:00 UTC. The recipient opened the
+same share in their browser and saw 23:00. Neither surface said which zone it
+meant, so you believed 17:00 and they believed 23:00 - and the same six hours
+applied in reverse to any expiry set on the web and read here.
 
-## Uploads
+The client now reads the instance's timezone when you sign in, renders in it,
+interprets the expiry picker in it, and **says which zone it is using** in the
+dialog. A server too old to report one, or an unreadable value, falls back to
+local time exactly as before.
 
-**Direct uploads showed no progress at all.** Everything up to 100 MB - the
-common case - reported once, after the transfer had already finished: the row sat
-at "Pending", 0%, for the whole upload and then jumped straight to done. The
-resumable path immediately beside it reported properly throughout, which made the
-small-file path look stalled.
+## Errors arrived in English
 
-## Signing out
-
-**Sign-out froze the window, and froze it longest when it mattered most.** The
-settings overlay called the server on the interface thread, so the app stopped
-responding for the round trip - and for the client's *full* network timeout when
-the server could not be reached at all. That is exactly the situation in which
-someone wants to sign out: a laptop that has left the office.
-
-It now runs in the background, and the local credentials are cleared either way.
-Signing out no longer depends on the server being reachable.
-
-## Server compatibility
-
-**Server v2.6.1 or newer.**
-
-The one-byte size probe each download opens with is the reason. Server v2.6.0
-briefly counted that probe as a download in its own right, which charged two
-units of a share's budget for a single transfer and made a share limited to one
-download impossible to fetch from this client - while a browser could still fetch
-it. v2.6.1 fixed that on the server, so updating the server repairs any client
-already installed; nothing here works around it.
-
-Servers at v2.5.0 and earlier are fine too, for a different reason. **v2.6.0
-exactly** is the one to avoid.
-
-## Also
-
-The bundled documentation described a program that did not quite exist - a test
-count off by an order of magnitude, and a UI toolkit named in the test notes that
-this client has never used. Corrected.
+Every label around them was translated; the one piece of text that mattered when
+something went wrong was not. The client now translates the server's errors from
+the error code - the stable part of the response - using the same wording as the
+web interface, and falls back to the server's own text for a code this build has
+never heard of. An expiry of "Never" is translated too.
 
 ---
 

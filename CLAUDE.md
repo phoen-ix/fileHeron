@@ -15,7 +15,7 @@ keep this to what would cause a wrong move if unknown.
 
 ## Status
 
-Backend **`v2.8.0`** (audit #2, a change-weighted re-sweep at v2.7.3 - see the
+Backend **`v2.8.1`** (audit #2, a change-weighted re-sweep at v2.7.3 - see the
 block below; .0 also carried the dependency/runtime sweep: Python 3.14, Node 24
 LTS, TypeScript 6, ESLint 10, Vite 8, Pinia 4, zero open dependency PRs).
 Desktop client **`client-v1.4.0`** - shipped + in production, published for
@@ -35,6 +35,21 @@ route returns the decrypted plaintext link URL. (README's server/client version
 badges read live from the git tags, so they never need a manual bump; this line
 does - keep it current on release.)
 
+> **v2.8.1 invariants worth knowing before you touch these areas.**
+> **A deferred purge must record its own failure.** `purge_locators` runs AFTER
+> the caller's commit, so the row already says `deleted` - and
+> `reclaim_orphaned_files` only walks `clean`/`ready_unscanned`, so a failed
+> unlink is unreachable by every retry path in the system. It therefore takes a
+> Session, writes a `file_purge_failed` audit row per failure (the same thing
+> `purge_expired_bytes` has done since v2.5.0) and RETURNS the locators it could
+> not remove. `logger.error` is not a record: it reaches neither `error_log`
+> (5xx + allowlisted 4xx only) nor any alert, and container stdout rotates.
+> **The reclaim cron must count what it FREED**, not what it attempted - it
+> incremented `reclaimed`/`bytes_freed` regardless and then emailed every admin
+> "Reclaimed N orphaned file(s) (X MB)" for bytes still on the volume, having
+> just moved the row out of its own filter forever. v2.7.3 raised here and
+> self-healed on the next run; the deferral turned that into a silent success.
+>
 > **v2.7.3 invariants worth knowing before you touch these areas.**
 > **There are TWO marks and they answer different questions.**
 > `transfer_activity.was_download_recent` = "did this instance serve bytes for

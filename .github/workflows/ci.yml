@@ -218,8 +218,25 @@ jobs:
   # until release day - on a direct-push repo, that is the whole time between
   # client releases. The suite is AST/structural (CI has no tkinter), so it
   # needs no display and costs seconds (audit 2026-07-30).
+  #
+  # ON WINDOWS TOO, since client-v1.3.0. This client ships as a Windows .exe and
+  # NOTHING else, and this job ran on ubuntu only - so the sole Windows
+  # execution of the suite was on the release tag itself, in
+  # client-release.yml. A Windows-only defect was therefore undetectable until
+  # the tag was already public: `zoneinfo.ZoneInfo("Europe/Vienna")` raises on
+  # Windows (no system tz database), so the new site-timezone support silently
+  # fell back to the machine's local zone - the exact thing it existed to fix,
+  # on the only platform it runs on. The tag build caught it, which is to say
+  # it was caught after the version number was spent.
+  #
+  # ubuntu stays in the matrix: it is where every OTHER job runs, it is faster,
+  # and a divergence between the two is itself worth seeing.
   client-tests:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     permissions:
       contents: read
     defaults:

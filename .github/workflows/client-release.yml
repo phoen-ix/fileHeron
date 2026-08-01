@@ -46,14 +46,39 @@ jobs:
         working-directory: client
         run: |
           ls -lh dist/
-        # NOTE: a runtime `--selfcheck` smoke-test of the built .exe was
-        # tried here but a windowed (console=False) PyInstaller binary hangs
-        # under `Start-Process -Wait` on the headless runner, stalling the
-        # release. The pyinstaller.spec now uses collect_all() for
-        # customtkinter + tkinterdnd2 (the reliable, standard way to bundle
-        # their data), which is the actual fix; the unit-test step above
-        # still gates the build. The `--selfcheck` flag remains in __main__
-        # for manual/console diagnosis.
+
+      # Run the thing. Until now NOTHING executed the built .exe: the unit
+      # tests gate the SOURCE, and a package whose data files the spec fails to
+      # bundle passes every one of them and fails on a user's machine. That is
+      # the shape that cost client-v1.3.0 a version number.
+      #
+      # A previous attempt used `Start-Process -Wait`, which hung on a
+      # windowed (console=False) binary and stalled the release - so this waits
+      # with a DEADLINE and kills the process if it is exceeded. A hang is then
+      # a build failure, which is what it should have been in the first place.
+      # `--selfcheck` returns before any Tk root is constructed, so it needs no
+      # display.
+      - name: Smoke-test the built .exe (--selfcheck)
+        working-directory: client
+        shell: pwsh
+        run: |
+          $exe = "dist/fileheron-client.exe"
+          $out = New-TemporaryFile
+          $err = New-TemporaryFile
+          $p = Start-Process -FilePath $exe -ArgumentList "--selfcheck" `
+                 -PassThru -NoNewWindow `
+                 -RedirectStandardOutput $out -RedirectStandardError $err
+          if (-not $p.WaitForExit(120000)) {
+            $p.Kill()
+            Write-Host "--- stderr ---"; Get-Content $err
+            throw "selfcheck did not finish within 120s - the bundle hangs on startup"
+          }
+          Write-Host "--- stdout ---"; Get-Content $out
+          Write-Host "--- stderr ---"; Get-Content $err
+          if ($p.ExitCode -ne 0) {
+            throw "selfcheck failed (exit $($p.ExitCode)) - the .exe is missing bundled data"
+          }
+          Write-Host "selfcheck passed"
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:

@@ -17,6 +17,33 @@ _display_tz: Optional[tzinfo] = None
 _display_tz_name: str = ""
 
 
+def timezone_database_problem() -> Optional[str]:
+    """None if a real IANA zone can be resolved, else why not.
+
+    Windows ships no time-zone database, so `ZoneInfo` raises there unless the
+    `tzdata` package is installed AND bundled into the .exe - and when it does,
+    `set_display_timezone` falls back to local time, silently. That is the whole
+    feature failing closed on the only platform this client runs on, and it
+    shipped as client-v1.3.0.
+
+    Lives HERE rather than in `__main__._selfcheck` so it can be executed by the
+    test suite: importing `__main__` pulls in the GUI stack, which headless CI
+    has no Tk for - which is precisely why the frozen-bundle check could not be
+    exercised anywhere before the release runner.
+    """
+    try:
+        from zoneinfo import ZoneInfo
+
+        ZoneInfo("Europe/Vienna")
+    except Exception as exc:
+        return (
+            f"the IANA time-zone database is unavailable ({type(exc).__name__}: "
+            f"{exc}) - every timestamp would render in this machine's local zone "
+            "instead of the instance's"
+        )
+    return None
+
+
 def set_display_timezone(name: Optional[str]) -> None:
     """Adopt the instance's timezone. Unknown or missing -> stay local."""
     global _display_tz, _display_tz_name

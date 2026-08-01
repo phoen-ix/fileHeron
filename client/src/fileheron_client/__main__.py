@@ -114,6 +114,22 @@ def _selfcheck() -> int:
     if not ctk_assets.is_dir():
         problems.append(f"customtkinter assets missing: {ctk_assets}")
 
+    # tzdata: the IANA time-zone database. Windows ships none of its own, so
+    # without this bundled, `ZoneInfo` raises and the client silently falls back
+    # to the machine's local zone - which is exactly what the site-timezone
+    # support exists to stop doing, on the only platform this .exe runs on. That
+    # shipped as client-v1.3.0 and cost a version number.
+    #
+    # Checked BEHAVIOURALLY, by constructing a real non-UTC zone, rather than by
+    # looking for a directory: what matters is that `zoneinfo` can resolve one,
+    # and a data-file layout check would pass while resolution failed. The probe
+    # itself lives in formatters so the test suite can execute it - see there.
+    from fileheron_client.formatters import timezone_database_problem
+
+    tz_problem = timezone_database_problem()
+    if tz_problem:
+        problems.append(f"tzdata: {tz_problem}")
+
     # tkinterdnd2 ships its native `tkdnd` Tcl library under the package;
     # without it, drag-drop crashes at startup in the frozen .exe.
     dnd_root = Path(tkinterdnd2.__file__).resolve().parent

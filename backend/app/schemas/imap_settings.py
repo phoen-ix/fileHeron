@@ -25,6 +25,7 @@ class ImapSettingsResponse(APIBaseModel):
     post_fetch_action: str
     move_folder: str
     notify_mode: str
+    require_known_sender: bool
     # Polling cadence/enable now lives on the Scheduled tasks page (cron 'imap_poll').
     last_poll_at: str | None
     last_success_at: str | None
@@ -44,6 +45,9 @@ class UpdateImapSettingsRequest(APIBaseModel):
     post_fetch_action: str = Field(pattern="^(mark_read|untouched|move|delete)$")
     move_folder: str = Field(default="fileHeron/Processed", max_length=255)
     notify_mode: str = Field(pattern="^(off|human|all)$")
+    # Refuse mail whose From matches no enabled user. Default true - see
+    # services/imap_config.require_known_sender.
+    require_known_sender: bool = True
 
 
 class ImapTestResponse(APIBaseModel):

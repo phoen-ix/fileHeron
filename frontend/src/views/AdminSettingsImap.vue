@@ -38,6 +38,7 @@ const form = ref({
   post_fetch_action: 'mark_read' as 'mark_read' | 'untouched' | 'move' | 'delete',
   move_folder: 'fileHeron/Processed',
   notify_mode: 'off' as 'off' | 'human' | 'all',
+  require_known_sender: true,
 })
 
 function hydrate(s: ImapSettingsResponse) {
@@ -53,6 +54,7 @@ function hydrate(s: ImapSettingsResponse) {
     post_fetch_action: s.post_fetch_action,
     move_folder: s.move_folder,
     notify_mode: s.notify_mode,
+    require_known_sender: s.require_known_sender ?? true,
   }
   isPasswordSet.value = s.is_password_set
   lastPollAt.value = s.last_poll_at
@@ -225,6 +227,13 @@ onMounted(load)
         <select v-model="form.notify_mode" class="fh-field-input">
           <option v-for="n in notifyOptions" :key="n" :value="n">{{ t(`admin_imap.notify_${n}`) }}</option>
         </select>
+      </label>
+      <label class="fh-field check-row">
+        <input v-model="form.require_known_sender" type="checkbox" />
+        <span>
+          <span class="fh-field-label">{{ t('admin_imap.require_known_sender') }}</span>
+          <span class="fh-field-help">{{ t('admin_imap.require_known_sender_help') }}</span>
+        </span>
       </label>
 
       <div class="actions">

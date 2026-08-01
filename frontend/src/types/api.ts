@@ -1215,6 +1215,7 @@ export interface TestSendEmailTemplateResponse {
 
 // Inbound mailbox / IMAP (v1.27.0)
 export interface ImapSettingsResponse {
+  require_known_sender?: boolean
   enabled: boolean
   use_smtp_credentials: boolean
   host: string

@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from email.header import decode_header, make_header
 from email.message import Message
+from urllib.parse import unquote
 
 from ..models.inbound_message import MessageClass
 
@@ -32,9 +33,18 @@ _BOUNCE_SENDER_HINTS = ("mailer-daemon", "postmaster")
 def classify(msg: Message) -> MessageClass:
     ctype = (msg.get_content_type() or "").lower()
     # get_param returns a (charset, lang, value) tuple for an RFC2231-encoded
-    # parameter, so guard the type - a crafted `report-type*=...` header would
-    # otherwise raise AttributeError on .lower() and crash classification.
+    # parameter. Guarding the type stopped the AttributeError but DISCARDED the
+    # value, so a legal `report-type*=us-ascii''delivery-status` - which real
+    # MTAs emit - was classified `normal`: with notify_mode=human every admin
+    # got a "new inbound message" mail for a bounce, and in the inbox the bounce
+    # was indistinguishable from a client reply (audit #2). Decode it instead.
     _rt = msg.get_param("report-type") if msg.get("Content-Type") else None
+    if isinstance(_rt, tuple):
+        _rt = _rt[2] if len(_rt) == 3 else ""
+        try:
+            _rt = unquote(_rt)
+        except Exception:
+            _rt = ""
     report_type = (_rt if isinstance(_rt, str) else "").lower()
     from_addr = (msg.get("From") or "").lower()
     # Decode RFC2047-encoded words (=?utf-8?...?=) before matching, else an

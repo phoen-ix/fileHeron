@@ -18,6 +18,27 @@ from . import email as email_svc  # reuse the nh3 _sanitize_html helper
 from . import inbound_classify
 
 _MAX_BODY = 1_000_000  # 1 MB cap per body part (defensive)
+# ...and a TOTAL cap across parts. Per-part alone was not a bound: a 20 MB mail
+# of twenty 1 MB text parts assembled a 20 MB body_text, whose INSERT exceeds
+# MariaDB's default max_allowed_packet (16 MB). The server answers 1153 and
+# drops the connection, the per-message handler swallows it and advances the
+# highwater, so the mail is gone from fileHeron's point of view while still
+# sitting unread on the server with no record that it arrived (audit #2).
+_MAX_BODY_TOTAL = 4_000_000
+
+
+def _join_capped(parts: list[str]) -> str | None:
+    """Join body parts, stopping at the total cap and saying so in the text."""
+    out: list[str] = []
+    used = 0
+    for part in parts:
+        if used + len(part) > _MAX_BODY_TOTAL:
+            out.append(part[: max(0, _MAX_BODY_TOTAL - used)])
+            out.append("\n[fileHeron] message body truncated at the size limit.")
+            break
+        out.append(part)
+        used += len(part)
+    return "\n".join(out).strip() or None
 
 
 @dataclass
@@ -108,8 +129,8 @@ def parse(raw: bytes) -> ParsedMessage:
         elif ctype == "text/html":
             html_parts.append(text[:_MAX_BODY])
 
-    body_text = "\n".join(text_parts).strip() or None
-    raw_html = "\n".join(html_parts).strip() or None
+    body_text = _join_capped(text_parts)
+    raw_html = _join_capped(html_parts)
     body_html = email_svc._sanitize_html(raw_html) if raw_html else None
 
     return ParsedMessage(

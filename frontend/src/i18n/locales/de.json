@@ -917,7 +917,9 @@
     "fetch_done": "Abgerufen - {n} neue Nachricht(en)",
     "fetch_empty": "Keine neue Mail - {mailbox} hat {total} Nachricht(en)",
     "fetch_skipped": "Übersprungen: {reason}",
-    "fetch_failed": "Abruf fehlgeschlagen"
+    "fetch_failed": "Abruf fehlgeschlagen",
+    "require_known_sender": "Nur E-Mails von registrierten Benutzern annehmen",
+    "require_known_sender_help": "Weist E-Mails ab, deren Absenderadresse zu keinem aktiven Konto gehört - bevor irgendetwas gespeichert wird. Abgewiesene E-Mails bleiben auf dem Server."
   },
   "admin_inbox": {
     "eyebrow": "Nachrichten",

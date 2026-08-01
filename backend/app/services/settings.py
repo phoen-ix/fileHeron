@@ -133,6 +133,10 @@ class Keys:
     IMAP_POST_FETCH_ACTION = "imap.post_fetch_action"
     IMAP_MOVE_FOLDER = "imap.move_folder"      # target folder when action='move'
     IMAP_NOTIFY_MODE = "imap.notify_mode"      # 'off' (default) | 'human' | 'all'
+    # Only accept mail whose From matches a registered, enabled user. Default
+    # true - "no anonymous senders" is the product's stated policy and was
+    # documented as implemented while nothing enforced it (audit #2).
+    IMAP_REQUIRE_KNOWN_SENDER = "imap.require_known_sender"
     # Cron state (set with actor=None; not user-facing settings).
     IMAP_LAST_POLL_AT = "imap.last_poll_at"
     IMAP_LAST_SUCCESS_AT = "imap.last_success_at"

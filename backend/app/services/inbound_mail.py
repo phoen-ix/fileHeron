@@ -29,6 +29,9 @@ logger = logging.getLogger("fileheron.inbound")
 
 # Skip storing absurdly large attachments (defensive; configurable later).
 _MAX_ATTACHMENT_BYTES = 50 * 1024 * 1024
+# Attachments stored per message. Bounds the fan-out of file writes, clamd
+# sessions and DB rows a single mail can trigger; see the note at the call site.
+MAX_ATTACHMENTS_PER_MESSAGE = 50
 
 
 def _already_ingested(db: Session, *, uidvalidity: int, uid: int, message_id: str | None) -> bool:
@@ -90,7 +93,21 @@ def ingested_by_uid(db: Session, *, uidvalidity: int, uid: int) -> bool:
     )
 
 
-def _store_attachment(db: Session, message_id_pk: int, att: ParsedAttachment) -> None:
+class UnknownSenderError(Exception):
+    """The From address matches no enabled user and `imap.require_known_sender`
+    is on. Raised before anything is stored so the poll can skip the message and
+    leave it on the server."""
+
+
+def _store_attachment(db: Session, message_id_pk: int, att: ParsedAttachment) -> bool:
+    """Store one attachment. Returns False if the bytes could not be persisted.
+
+    The caller must act on that: a storage failure used to be swallowed with a
+    bare `return`, the message was committed with `has_attachments=True` and no
+    attachment row, and `post_fetch_action=delete` then expunged the mail from
+    the server - so a client's contract existed nowhere at all, and the admin
+    saw an inbox entry claiming attachments and listing none (audit #2).
+    """
     backend = storage_svc.get_storage_backend()
     locator = backend.generate_locator(f"inbound-{uuid.uuid4().hex}")
     # Scan the bytes before they land anywhere servable. If clamd is
@@ -123,7 +140,7 @@ def _store_attachment(db: Session, message_id_pk: int, att: ParsedAttachment) ->
         logger.exception("failed to store inbound attachment %s", att.filename)
         if tmp_name and os.path.exists(tmp_name):
             os.unlink(tmp_name)
-        return
+        return False
     # The bytes are on the storage backend already and the commit belongs to
     # run_poll, several layers up. If that commit never lands, the blob is
     # orphaned: no InboundAttachment row references it, and every sweeper in the
@@ -148,6 +165,7 @@ def _store_attachment(db: Session, message_id_pk: int, att: ParsedAttachment) ->
             av_state=av_state,
         )
     )
+    return True
 
 
 def _notify_admins(db: Session, msg: InboundMessage) -> None:
@@ -213,8 +231,23 @@ def ingest(
     sender_user_id = None
     if parsed.sender_email:
         sender_user_id = (
-            db.query(User.id).filter(User.email == parsed.sender_email).scalar()
+            db.query(User.id)
+            .filter(User.email == parsed.sender_email, User.is_disabled.is_(False))
+            .scalar()
         )
+    if sender_user_id is None and imap_config.require_known_sender(db):
+        # Refused BEFORE anything is stored, and the caller leaves the mail on
+        # the server: nothing is written to the storage backend for a sender
+        # this instance does not know. A From header is forgeable, so this is a
+        # resource gate, not an authentication decision - the impersonation half
+        # is handled by only binding `sender_user_id` for a sender that matches
+        # a real, enabled account.
+        logger.info(
+            "inbound: refusing uid=%s from unknown sender %r "
+            "(imap.require_known_sender)",
+            uid, parsed.sender_email,
+        )
+        raise UnknownSenderError(parsed.sender_email or "")
 
     # Truncate every String-column field to its length: an over-long header
     # (spam/malformed) otherwise raises DataError on commit under MariaDB strict
@@ -234,16 +267,46 @@ def ingest(
         classification=parsed.classification,
         body_text=parsed.body_text,
         body_html=parsed.body_html,
-        has_attachments=bool(parsed.attachments),
+        has_attachments=False,  # set below from what was actually stored
     )
     db.add(msg)
     db.flush()
 
-    for att in parsed.attachments:
+    stored = 0
+    dropped: list[str] = []
+    for att in parsed.attachments[:MAX_ATTACHMENTS_PER_MESSAGE]:
         if len(att.content) > _MAX_ATTACHMENT_BYTES:
+            # Recorded in the message body, not only in a log line the admin
+            # will never see: with post_fetch_action=delete the mail is gone
+            # from the server too, so this note is the only evidence that a
+            # file arrived at all (audit #2).
+            dropped.append(f"{att.filename} ({len(att.content)} bytes, over the limit)")
             logger.warning("skipping oversized inbound attachment %s", att.filename)
             continue
-        _store_attachment(db, msg.id, att)
+        if _store_attachment(db, msg.id, att):
+            stored += 1
+        else:
+            dropped.append(f"{att.filename} (could not be stored)")
+            msg._fh_incomplete = True
+    if len(parsed.attachments) > MAX_ATTACHMENTS_PER_MESSAGE:
+        # A 16 MB mail can declare ~171,000 minimal parts; one file, one clamd
+        # session and one row each would run for hours and exhaust the volume's
+        # inodes, and every guard before this one passes because each part is a
+        # single byte (audit #2).
+        extra = len(parsed.attachments) - MAX_ATTACHMENTS_PER_MESSAGE
+        dropped.append(f"{extra} further attachments (over the per-message limit)")
+        msg._fh_incomplete = True
+        logger.warning(
+            "inbound uid=%s declares %d attachments; stored the first %d",
+            uid, len(parsed.attachments), MAX_ATTACHMENTS_PER_MESSAGE,
+        )
+
+    # `has_attachments` used to be set from the PARSED message, so a paperclip
+    # appeared for attachments that had been dropped or had failed to store.
+    msg.has_attachments = stored > 0
+    if dropped:
+        note = "[fileHeron] attachments not stored: " + "; ".join(dropped)
+        msg.body_text = f"{note}\n\n{msg.body_text or ''}"
 
     _notify_admins(db, msg)
     return msg

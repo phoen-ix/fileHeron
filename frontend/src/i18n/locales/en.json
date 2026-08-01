@@ -917,7 +917,9 @@
     "fetch_done": "Fetched - {n} new message(s)",
     "fetch_empty": "No new mail - {mailbox} has {total} message(s)",
     "fetch_skipped": "Skipped: {reason}",
-    "fetch_failed": "Fetch failed"
+    "fetch_failed": "Fetch failed",
+    "require_known_sender": "Only accept mail from registered users",
+    "require_known_sender_help": "Refuses mail whose sender address matches no enabled account, before anything is stored. Refused mail is left on the server."
   },
   "admin_inbox": {
     "eyebrow": "Messaging",

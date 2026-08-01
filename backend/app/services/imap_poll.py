@@ -36,6 +36,16 @@ MAX_MESSAGE_BYTES = 64 * 1024 * 1024
 # first threatened a 512 MB worker in measurement.
 MAX_MESSAGE_PARTS = 5_000
 
+# Messages handled per run. The first poll against an existing mailbox searched
+# ALL and iterated the lot: enabling inbound on an account with years of history
+# meant one run trying to fetch tens of thousands of messages - the admin's
+# "Fetch now" never returned (it runs inline in the request handler), the poll
+# lock expired mid-run, ARQ killed and retried the job while the original thread
+# kept going, and with `post_fetch_action=delete` the run expunged the whole
+# historical mailbox. Bounded, the backlog drains over successive ticks with the
+# highwater persisted after every message (audit #2).
+MAX_MESSAGES_PER_RUN = 200
+
 
 def _int_setting(db: Session, key: str) -> int:
     raw = settings_svc.get(db, key)
@@ -46,10 +56,15 @@ def _int_setting(db: Session, key: str) -> int:
 
 
 _POLL_LOCK_KEY = "fh:imap:poll:lock"
-# Generous against a slow mailbox but short enough that a killed worker frees it
-# within a couple of cron ticks rather than blocking ingestion until someone
-# restarts the stack.
-_POLL_LOCK_TTL_SEC = 900
+# Must outlive the ARQ job it protects (`worker.job_timeout = 2100`), or the
+# lock expires under a still-running poll and the next cron tick starts a
+# second one against the same mailbox: with `post_fetch_action=delete` the
+# newcomer can expunge a message the first run is still mid-handling, and the
+# two race on the highwater. "One poll at a time across the whole stack" was
+# only true for runs shorter than the TTL (audit #2). A killed worker still
+# frees this within the window; the batch cap below is what keeps a run from
+# needing anything like it.
+_POLL_LOCK_TTL_SEC = 2400
 
 
 def _acquire_poll_lock() -> str | None:
@@ -114,7 +129,7 @@ def run_poll(*, manual: bool, db: Session | None = None, session_opener=open_ses
         last_uid = _int_setting(db, K.IMAP_LAST_UID)
         prev_validity = _int_setting(db, K.IMAP_UIDVALIDITY)
 
-        fetched = ingested = total = skipped = 0
+        fetched = ingested = total = skipped = refused = backlog = 0
         with session_opener(cfg) as sess:
             uidvalidity = sess.select(cfg.mailbox)
             total = getattr(sess, "message_count", 0)
@@ -123,7 +138,14 @@ def run_poll(*, manual: bool, db: Session | None = None, session_opener=open_ses
             # duplicate ingestion; treat it as "unchanged" and keep the highwater.
             if uidvalidity and uidvalidity != prev_validity:
                 last_uid = 0  # mailbox reset -> re-evaluate from the start
-            for uid in sess.search_uids_after(last_uid):
+            pending = sess.search_uids_after(last_uid)
+            backlog = max(0, len(pending) - MAX_MESSAGES_PER_RUN)
+            if backlog:
+                logger.info(
+                    "imap poll: %d messages pending, handling %d this run",
+                    len(pending), MAX_MESSAGES_PER_RUN,
+                )
+            for uid in pending[:MAX_MESSAGES_PER_RUN]:
                 # Per-message boundary. Without it, one message that parse() or
                 # ingest() chokes on propagates to the outer handler - which
                 # returns before `last_uid` is ever persisted. The next poll
@@ -158,7 +180,15 @@ def run_poll(*, manual: bool, db: Session | None = None, session_opener=open_ses
                         )
                         last_uid = max(last_uid, uid)
                         continue
-                    raw = sess.fetch_raw(uid)
+                    # An unknown size used to fall through to an UNBOUNDED
+                    # download - which is the one thing this guard exists to
+                    # prevent, and `fetch_size` returns None whenever the server
+                    # declines RFC822.SIZE. Ask for a bounded body instead.
+                    raw = (
+                        sess.fetch_raw(uid)
+                        if size is not None
+                        else sess.fetch_raw(uid, max_bytes=MAX_MESSAGE_BYTES)
+                    )
                     if raw is None:
                         continue
                     # Belt and braces for a server that under-reports or does
@@ -211,7 +241,18 @@ def run_poll(*, manual: bool, db: Session | None = None, session_opener=open_ses
                     db.commit()
                     fetched += 1
                     parsed = inbound_parse.parse(raw)
-                    msg = inbound_mail.ingest(db, parsed, uid=uid, uidvalidity=uidvalidity)
+                    try:
+                        msg = inbound_mail.ingest(
+                            db, parsed, uid=uid, uidvalidity=uidvalidity
+                        )
+                    except inbound_mail.UnknownSenderError:
+                        # Nothing was stored. Skip it and leave it on the server
+                        # so an admin can still see it in the mailbox and, if it
+                        # is legitimate, invite the sender.
+                        db.rollback()
+                        refused += 1
+                        last_uid = max(last_uid, uid)
+                        continue
                     if msg is not None:
                         ingested += 1
                     db.commit()
@@ -233,7 +274,18 @@ def run_poll(*, manual: bool, db: Session | None = None, session_opener=open_ses
                 owns_message = msg is not None or inbound_mail.ingested_by_uid(
                     db, uidvalidity=uidvalidity, uid=uid
                 )
-                if owns_message:
+                # A message whose attachments could not all be stored is NOT
+                # safely ours: `delete` would expunge the only remaining copy of
+                # a file that exists nowhere else (audit #2). Downgrade to the
+                # non-destructive action and leave the mail on the server.
+                incomplete = bool(msg is not None and getattr(msg, "_fh_incomplete", False))
+                if incomplete:
+                    logger.warning(
+                        "imap poll: uid %s stored with missing attachment bytes; "
+                        "leaving the message on the server",
+                        uid,
+                    )
+                if owns_message and not incomplete:
                     try:
                         if action == "mark_read":
                             sess.mark_seen(uid)
@@ -267,12 +319,14 @@ def run_poll(*, manual: bool, db: Session | None = None, session_opener=open_ses
         settings_svc.set_value(db, key=K.IMAP_LAST_SUCCESS_AT, value=now_iso, actor=None)
         db.commit()
         logger.info(
-            "imap poll: mailbox=%s total=%d fetched=%d ingested=%d skipped=%d last_uid=%d",
-            cfg.mailbox, total, fetched, ingested, skipped, last_uid,
+            "imap poll: mailbox=%s total=%d fetched=%d ingested=%d skipped=%d "
+            "refused=%d backlog=%d last_uid=%d",
+            cfg.mailbox, total, fetched, ingested, skipped, refused, backlog, last_uid,
         )
         return {
             "ok": True, "fetched": fetched, "ingested": ingested,
-            "skipped": skipped,
+            "skipped": skipped, "refused_unknown_sender": refused,
+            "backlog": backlog,
             "last_uid": last_uid, "mailbox": cfg.mailbox, "total": total,
         }
     except Exception as exc:  # noqa: BLE001 - surface to caller/cron tracker

@@ -120,6 +120,21 @@ def move_folder(db: Session) -> str:
     return settings_svc.get(db, settings_svc.Keys.IMAP_MOVE_FOLDER) or "fileHeron/Processed"
 
 
+def require_known_sender(db: Session) -> bool:
+    """Whether ingest refuses mail from an address with no user account.
+
+    CLAUDE.md and the product's model both say "no anonymous senders", and
+    nothing implemented it: any internet sender could land admin-downloadable
+    attachments on the storage backend, attributable to no user, counted
+    against no quota and behind no rate limit - 50,000 x 40 MB fills the volume
+    that MariaDB and every upload share (audit #2). Default ON, and admin
+    -tunable for an instance that genuinely wants an open mailbox.
+    """
+    return settings_svc.get_bool(
+        db, settings_svc.Keys.IMAP_REQUIRE_KNOWN_SENDER, default=True
+    )
+
+
 def notify_mode(db: Session) -> str:
     v = settings_svc.get(db, settings_svc.Keys.IMAP_NOTIFY_MODE)
     return v if v in NOTIFY_MODES else "off"

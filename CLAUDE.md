@@ -566,7 +566,11 @@ built-in filesystem Jinja template - **"Reset to default" just deletes the row**
 
 Services `imap_{client,config,poll}.py` + `inbound_{mail,parse,classify}.py`;
 workers `imap_poll` + `rescan_inbound_attachments`; admin `/admin/inbox` +
-`/admin/settings/imap`. No anonymous senders by policy.
+`/admin/settings/imap`. **No anonymous senders:** `imap.require_known_sender`
+(default **true**, admin-tunable) refuses mail whose From matches no enabled
+user, before anything is written - the policy was documented here for four
+releases while nothing enforced it (audit #2). Refused mail is left on the
+server, counted in the poll result as `refused_unknown_sender`.
 - Cadence/enabled moved to the **cron scheduler** (v1.28) - `run_poll` only
   feature-gates on `imap.enabled`.
 - **Dedup** by `(uidvalidity, imap_uid)` AND `message_id`; a UIDVALIDITY change

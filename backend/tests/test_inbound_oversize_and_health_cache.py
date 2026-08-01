@@ -39,7 +39,7 @@ class _FakeSession:
     def fetch_size(self, uid):
         return self._sizes.get(uid)
 
-    def fetch_raw(self, uid):
+    def fetch_raw(self, uid, *, max_bytes=None):
         self.fetched.append(uid)
         return self._bodies[uid]
 

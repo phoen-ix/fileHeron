@@ -81,7 +81,7 @@ class _FakeSession:
     def search_uids_after(self, last_uid):
         return sorted(u for u in self._messages if u > last_uid)
 
-    def fetch_raw(self, uid):
+    def fetch_raw(self, uid, *, max_bytes=None):
         return self._messages[uid]
 
     def mark_seen(self, uid):

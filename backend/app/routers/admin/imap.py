@@ -7,6 +7,7 @@ loaded only on detail). Attachment download is gated on a clean AV scan.
 from __future__ import annotations
 
 import asyncio
+import logging
 
 from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy import or_
@@ -35,6 +36,8 @@ from ...services import settings as settings_svc
 from ...services import storage_backend as storage_svc
 from ...services.audit import record_audit_event
 
+logger = logging.getLogger("fileheron.admin.imap")
+
 router = APIRouter()
 K = settings_svc.Keys
 
@@ -62,6 +65,7 @@ def _settings_response(db: Session) -> ImapSettingsResponse:
         post_fetch_action=imap_config.post_fetch_action(db),
         move_folder=imap_config.move_folder(db),
         notify_mode=imap_config.notify_mode(db),
+        require_known_sender=imap_config.require_known_sender(db),
         last_poll_at=settings_svc.get(db, K.IMAP_LAST_POLL_AT),
         last_success_at=settings_svc.get(db, K.IMAP_LAST_SUCCESS_AT),
     )
@@ -91,6 +95,7 @@ def update_imap_settings(
         (K.IMAP_POST_FETCH_ACTION, payload.post_fetch_action),
         (K.IMAP_MOVE_FOLDER, payload.move_folder or None),
         (K.IMAP_NOTIFY_MODE, payload.notify_mode),
+        (K.IMAP_REQUIRE_KNOWN_SENDER, "true" if payload.require_known_sender else "false"),
     ]
     for key, value in pairs:
         settings_svc.set_value(db, key=key, value=value, actor=admin, request=request)
@@ -114,7 +119,8 @@ def update_imap_settings(
         target_id="imap",
         metadata={"enabled": payload.enabled,
                   "post_fetch_action": payload.post_fetch_action,
-                  "notify_mode": payload.notify_mode},
+                  "notify_mode": payload.notify_mode,
+                  "require_known_sender": payload.require_known_sender},
         request=request,
     )
     db.commit()
@@ -266,11 +272,15 @@ def delete_inbox_message(
     )
     sender = m.sender_email
     filenames = [a.filename for a in attachments]
-    for a in attachments:
-        try:
-            backend.delete(a.storage_key)
-        except Exception:
-            pass
+    # Collected now, unlinked AFTER the commit. Unlinking first inverted the
+    # invariant the rest of the codebase follows: a rollback anywhere below - a
+    # deadlock on the attachments cascade, a lost connection, a failure inside
+    # record_audit_event - left the rows in place and the bytes gone, so the
+    # message reappeared in /admin/inbox with its attachments still listed
+    # `clean` and downloading one 500'd on a locator with nothing behind it.
+    # Under post_fetch_action=delete that was the only remaining copy of a
+    # client's file (audit #2).
+    to_purge = [a.storage_key for a in attachments if a.storage_key]
     # The IMAP post-fetch action can be set to delete from the server after
     # ingest, so this row and these bytes are frequently the only copy of a
     # client's correspondence. Every other irreversible admin action in the
@@ -292,6 +302,11 @@ def delete_inbox_message(
     )
     db.delete(m)
     db.commit()
+    for key in to_purge:
+        try:
+            backend.delete(key)
+        except Exception:
+            logger.warning("inbox delete: could not unlink attachment blob %s", key)
 
 
 @router.get("/inbox/{msg_id}/attachments/{att_id}/download")

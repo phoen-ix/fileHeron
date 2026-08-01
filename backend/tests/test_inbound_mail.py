@@ -1,5 +1,10 @@
 """Inbound mailbox service tests (v1.27.0) - classify, parse, ingest dedup,
-poll gating + fake IMAP, attachment AV gating."""
+poll gating + fake IMAP, attachment AV gating.
+
+These exercise the ingest MECHANICS, so they run with the known-sender gate off
+(`imap.require_known_sender`, on by default since audit #2). The gate itself is
+covered in tests/test_inbound_hardening.py.
+"""
 from __future__ import annotations
 
 import contextlib
@@ -11,6 +16,12 @@ from app.models.inbound_message import InboundMessage, MessageClass
 from app.models.user import UserRole
 from app.services import av_scan, imap_poll, inbound_mail, inbound_parse
 from app.services import settings as s
+
+
+@pytest.fixture(autouse=True)
+def _open_mailbox(db):
+    s.set_value(db, key=s.Keys.IMAP_REQUIRE_KNOWN_SENDER, value="false", actor=None)
+    db.commit()
 
 NORMAL = b"""From: Grace Hopper <grace@example.com>
 To: noreply@fileheron.local
@@ -85,7 +96,7 @@ class _FakeSession:
     def search_uids_after(self, last):
         return sorted(u for u in self.msgs if u > last)
 
-    def fetch_raw(self, uid):
+    def fetch_raw(self, uid, *, max_bytes=None):
         return self.msgs.get(uid)
 
     def mark_seen(self, uid):

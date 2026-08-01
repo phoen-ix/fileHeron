@@ -316,3 +316,53 @@ async def test_an_approver_taking_a_pending_share_by_zip_leaves_a_record(
     assert len(rows) == 1, "no audit trail for a non-recipient taking the whole share"
     assert rows[0].extra.get("review") is True
     assert rows[0].actor_user_id == admin.id
+
+
+@pytest.mark.asyncio
+async def test_a_zip_resume_survives_a_redis_restart(client, db, budgeted_share, redis_stub):
+    """The evidence must be durable as well as fast.
+
+    Replacing the download_log check with a Redis mark closed the bypass and
+    introduced a new failure: a restart - which the v2.5.0 host step performs,
+    and which any host reboot does - erased the proof, so a legitimate resume
+    was re-charged and, on a spent budget, answered 410 (audit #2 cross-check).
+    The desktop client can pause a download and resume it the next day."""
+    owner, rec, sh, files = budgeted_share
+    zip_url = f"/api/files/{sh.id}/download-zip?dt={_dt(sh.id, rec.id)}"
+
+    full = await client.get(zip_url)
+    assert full.status_code == 200, full.text
+    db.refresh(sh)
+    assert sh.downloads_remaining == 0
+
+    redis_stub.store.clear()  # the restart
+
+    cut = len(full.content) - 200
+    resumed = await client.get(zip_url, headers={"Range": f"bytes={cut}-"})
+    assert resumed.status_code == 206, (
+        "a paid resume was refused because the Redis mark was gone"
+    )
+    db.refresh(sh)
+    assert sh.downloads_remaining == 0, "and it must not have been charged again"
+
+
+@pytest.mark.asyncio
+async def test_the_durable_evidence_is_archive_specific(
+    client, db, budgeted_share, redis_stub, tmp_path
+):
+    """Its predecessor accepted a download_log row for ONE member as evidence
+    that an archive transfer was in progress, which is what made the bypass
+    possible. Adding a file changes the archive, and the old payment must not
+    corroborate the new one."""
+    owner, rec, sh, files = budgeted_share
+    zip_url = f"/api/files/{sh.id}/download-zip?dt={_dt(sh.id, rec.id)}"
+    assert (await client.get(zip_url)).status_code == 200
+    sh.downloads_remaining = 0
+    db.commit()
+    redis_stub.store.clear()
+
+    _add_file(db, sh, owner, tmp_path, "late.bin", b"L" * 200, 8)
+    db.commit()
+
+    ranged = await client.get(zip_url, headers={"Range": "bytes=1-"})
+    assert ranged.status_code == 410

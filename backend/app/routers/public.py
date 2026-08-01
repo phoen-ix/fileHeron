@@ -268,10 +268,14 @@ def public_download(
     # was bounded.
     #
     # Keyed on (link, file) rather than the client, so a phone changing networks
-    # mid-download keeps its continuation. Fails OPEN when Redis is down,
-    # because a refused resume is worse than a missed bypass. The residual is
-    # now what the old comment claimed: one payment buys free continuations for
-    # one window, and cannot extend itself, because only the payment path marks.
+    # mid-download keeps its continuation. Fails CLOSED when Redis is down: this
+    # comment promised the opposite until audit #2, and while a refused resume
+    # is annoying, the other direction meant that for the whole duration of an
+    # outage a spent link served the file to anyone sending `Range: bytes=1-`,
+    # repeatedly, with the counter unmoved and nothing written down. The
+    # residual is what the old comment claimed: one payment buys free
+    # continuations for one window, and cannot extend itself, because only the
+    # payment path marks.
     paid_key = f"link:{link.id}:file:{file_id}"
     is_continuation = is_partial_continuation(
         request

@@ -505,6 +505,40 @@ def announce_if_ready(db: Session, share_id: str, *, require_quiet: bool = False
     return True
 
 
+def has_recent_archive_download(
+    db: Session, *, share_id: str, user_id: int, etag: str, within_hours: int
+) -> bool:
+    """Whether this user already paid for THIS EXACT archive recently.
+
+    The durable half of the bulk-ZIP resume evidence. The Redis payment mark is
+    the fast path and vanishes on a restart - which the v2.5.0 host step
+    performs, and which any host reboot does - after which a legitimate resume
+    was re-charged and, on a spent budget, answered 410 (audit #2 cross-check).
+    The desktop client can pause a download and resume it the next day, so this
+    is measured in hours.
+
+    Keyed on the ETAG, so it is evidence about an ARCHIVE. Its predecessor
+    accepted a `download_log` row for one member as evidence that an archive
+    transfer was in progress, which is what made the bypass possible.
+    """
+    from datetime import timedelta
+
+    from ..models.audit_log import AuditEventType, AuditLog
+
+    cutoff = utc_now() - timedelta(hours=max(1, within_hours))
+    rows = (
+        db.query(AuditLog.extra)
+        .filter(
+            AuditLog.event_type == AuditEventType.share_downloaded.value,
+            AuditLog.target_id == share_id,
+            AuditLog.actor_user_id == user_id,
+            AuditLog.created_at >= cutoff,
+        )
+        .all()
+    )
+    return any(isinstance(e, dict) and e.get("etag") == etag for (e,) in rows)
+
+
 def get_share_or_404(db: Session, share_id: str) -> Share:
     share = db.query(Share).filter(Share.id == share_id).one_or_none()
     if share is None:

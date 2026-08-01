@@ -538,7 +538,21 @@ def download_share_zip(
     # that stale evidence, so the new member came out free too (audit #2).
     paid_key = f"user:{user.id}:zip:{share.id}:{etag}"
     resuming = bool(byte_range) and byte_range[0] > 0
-    corroborated = resuming and transfer_activity.was_download_paid(paid_key)
+    corroborated = resuming and (
+        transfer_activity.was_download_paid(paid_key)
+        # ...or the durable record of the same payment. The Redis mark is the
+        # fast path; this is what survives a Redis restart and an overnight
+        # pause, which is exactly what the desktop client's resumable download
+        # does. Archive-specific, unlike the per-file download_log row this
+        # replaced.
+        or share_svc.has_recent_archive_download(
+            db,
+            share_id=share.id,
+            user_id=user.id,
+            etag=etag,
+            within_hours=int(_sr.effective(db, _sr.K.DOWNLOAD_RESUME_CREDIT_HOURS)),
+        )
+    )
 
     # Maintenance is refused HERE, after the archive identity is known, so a
     # CORROBORATED resume can finish.
@@ -594,7 +608,19 @@ def download_share_zip(
                     via=via,
                 )
             )
-        metadata = {"via": via.value, "file_count": len(files), "archive": True}
+        # `etag` identifies WHICH archive was paid for. It is what makes a
+        # resume corroborable after the Redis mark is gone - a restart (the
+        # v2.5.0 host step performs one), a host reboot, or simply a pause
+        # longer than the mark's window. Without it the only durable evidence
+        # was a per-file download_log row, which is evidence of a FILE download
+        # and is what made the bypass possible in the first place (audit #2
+        # cross-check).
+        metadata = {
+            "via": via.value,
+            "file_count": len(files),
+            "archive": True,
+            "etag": etag,
+        }
         if is_review:
             metadata["review"] = True
         record_audit_event(

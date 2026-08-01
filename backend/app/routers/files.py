@@ -18,6 +18,7 @@ from ..services import download_token as download_token_svc
 from ..services import file as file_svc
 from ..services import settings_registry as _sr
 from ..services import share as share_svc
+from ..services import transfer_activity
 from ..services import zip_stream as zip_stream_svc
 from ..services.audit import record_audit_event
 from ..services.storage_backend import get_storage_backend
@@ -486,27 +487,41 @@ def download_share_zip(
             )
         byte_range = (parsed.start, parsed.end) if parsed else None
 
-    # A continuation is free; a claim of one is not. `Range: bytes=1-` from a
-    # caller who never downloaded this share would otherwise be an unlimited
-    # bypass of the share budget - the same defect closed on the single-file
-    # path (audit 2026-07-30). Evidence is a download_log row for this user and
-    # one of these files inside the resume-credit window, which survives a Redis
-    # restart and an overnight pause.
+    # A continuation is free; a claim of one is not. Evidence must be that THIS
+    # principal already PAID for THIS exact archive - keyed on the user and the
+    # ETag, mirroring the public route.
+    #
+    # It used to be "a download_log row for this user and files[0] inside the
+    # credit window", which is evidence of a FILE download, not of an archive
+    # transfer in progress. A recipient who downloaded one member normally, and
+    # so spent the share's last download, could then send `Range: bytes=1-` at
+    # the ZIP and receive the complete archive - the 410 the plain request had
+    # just returned - with the counter unmoved and no download_log or audit row
+    # written. Adding a file to the share afterwards changed the ETag but not
+    # that stale evidence, so the new member came out free too (audit #2).
+    paid_key = f"user:{user.id}:zip:{share.id}:{etag}"
     resuming = bool(byte_range) and byte_range[0] > 0
-    corroborated = resuming and file_svc.has_recent_counted_download(
-        db,
-        file_id=files[0].id,
-        user_id=user.id,
-        within_hours=int(_sr.effective(db, _sr.K.DOWNLOAD_RESUME_CREDIT_HOURS)),
-    )
+    corroborated = resuming and transfer_activity.was_download_paid(paid_key)
 
-    if share.state == ShareState.active and not corroborated:
-        if share.download_limit is not None and not share_svc.try_decrement_share_counter(
-            db, share=share
+    if not corroborated:
+        # A pending share only reaches here for an approver reviewing content.
+        # That must not consume the not-yet-live recipient budget - but it IS a
+        # person who is not a recipient taking a full copy of someone else's
+        # files, so it is recorded like any other transfer. The single-file
+        # route was fixed for this in v2.6.0 and the archive route, which hands
+        # over EVERY file at once, was left recording nothing at all (audit #2).
+        is_review = share.state == ShareState.pending_approval
+
+        if (
+            share.state == ShareState.active
+            and share.download_limit is not None
+            and not share_svc.try_decrement_share_counter(db, share=share)
         ):
             raise AppError(
                 410, "SHARE_DOWNLOAD_LIMIT_REACHED", "This share has reached its download limit."
             )
+        # Only the paying path marks, so a free continuation cannot renew it.
+        transfer_activity.mark_download_paid(paid_key)
 
         via = (
             DownloadVia.api_token
@@ -529,13 +544,16 @@ def download_share_zip(
                     via=via,
                 )
             )
+        metadata = {"via": via.value, "file_count": len(files), "archive": True}
+        if is_review:
+            metadata["review"] = True
         record_audit_event(
             db,
             event_type=AuditEventType.share_downloaded,
             actor_user_id=user.id,
             target_type="share",
             target_id=share.id,
-            metadata={"via": via.value, "file_count": len(files), "archive": True},
+            metadata=metadata,
             request=request,
         )
         db.commit()

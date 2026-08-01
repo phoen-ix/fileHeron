@@ -217,20 +217,33 @@ async def test_a_genuine_resume_after_a_paid_download_is_still_free(
 
 @pytest.mark.asyncio
 async def test_many_probes_cannot_drain_the_file(client, db, budgeted_share):
-    """A probe exemption is a hole if it can be repeated to extract the file.
-    It cannot: each probe yields a single byte, so draining a 4 KB file needs
-    4000 round trips and yields nothing a single paid download would not.
-    Assert the budget is untouched and that no bulk transfer happened."""
+    """A probe exemption is a hole if it can be AIMED. This test used to walk
+    the offset - `bytes=1-1`, `bytes=2-2`, ... - assert every one was free, and
+    conclude the exemption was safe because each response was small. That is the
+    defect written down as an invariant: repeat it `size_bytes` times and the
+    whole file is out, and on the anonymous public-link route it left the budget
+    intact, no download_log row and no owner notification (audit #2).
+
+    The real invariant is that the exemption covers exactly one offset - the one
+    every shipped client probes - so repeating it yields that same byte forever,
+    and moving off it costs a download like any other read."""
     owner, sh, f = budgeted_share
     url = f"/api/files/{f.id}/download?dt={_dt(f.id, owner.id)}"
 
-    for i in range(20):
-        r = await client.get(url, headers={"Range": f"bytes={i + 1}-{i + 1}"})
-        assert r.status_code in (200, 206)
-        assert len(r.content) <= 1
-
+    for _ in range(20):
+        r = await client.get(url, headers={"Range": "bytes=1-1"})
+        assert r.status_code == 206
+        assert len(r.content) == 1
     db.refresh(sh)
     assert sh.downloads_remaining == 1
+
+    moved = await client.get(url, headers={"Range": "bytes=2-2"})
+    assert moved.status_code in (200, 206)
+    db.refresh(sh)
+    assert sh.downloads_remaining == 0, (
+        "a range at any offset other than the probe offset is a read of the "
+        "file and pays for one"
+    )
 
 
 @pytest.mark.asyncio

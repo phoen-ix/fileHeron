@@ -67,6 +67,29 @@ def _subscribed(wh: Webhook, event_type: str) -> bool:
     return "*" in types or event_type in types
 
 
+def emit_after_commit(db: Session, event_type: str, payload: dict) -> None:
+    """Fan out AFTER the caller's commit, from a session of its own.
+
+    `run_after_commit` fires inside SQLAlchemy's `after_commit` event, where the
+    originating session is in `committed` state and raises InvalidRequestError
+    on any SQL. `emit` opens with `db.query(Webhook)`, so every deferred emit
+    raised, was swallowed by emit's never-raise guard, and delivered nothing -
+    with no `webhook_deliveries` row to show for it, because the worker owns
+    that row (audit #2). A fresh session has its own transaction and is under no
+    such restriction; it only reads subscriptions.
+    """
+    from ..database import SessionLocal, run_after_commit
+
+    def _fan_out() -> None:
+        s = SessionLocal()
+        try:
+            emit(s, event_type, payload)
+        finally:
+            s.close()
+
+    run_after_commit(db, _fan_out)
+
+
 def emit(db: Session, event_type: str, payload: dict) -> int:
     """Enqueue a delivery for every active webhook subscribed to `event_type`.
     Returns how many were enqueued. Never raises."""

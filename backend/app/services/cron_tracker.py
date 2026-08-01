@@ -133,12 +133,9 @@ def _maybe_alert_admins(db: Session, job_name: str, error_msg: str) -> None:
                 "ops_alert dispatch to admin=%d failed", admin.id
             )
 
-    from ..database import run_after_commit
     from . import webhook as webhook_svc
     emit_payload = {"target_type": "ops", "target_id": "cron_failed", "metadata": payload}
-    run_after_commit(
-        db, lambda: webhook_svc.emit(db, webhook_svc.OPS_ALERT_EVENT, emit_payload)
-    )
+    webhook_svc.emit_after_commit(db, webhook_svc.OPS_ALERT_EVENT, emit_payload)
 
 
 def track_cron(job_name: str) -> Callable[[Callable[..., Awaitable[Any]]], Callable[..., Awaitable[Any]]]:

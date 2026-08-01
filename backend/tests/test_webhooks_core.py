@@ -71,18 +71,26 @@ def test_is_webhook_event():
 
 
 def test_record_audit_event_emits_for_allowlisted_only(db, monkeypatch):
-    emitted = []
-    monkeypatch.setattr(webhook_svc, "emit", lambda _db, et, payload: emitted.append(et))
+    # Collect at the QUEUE boundary, not by replacing `emit`. Replacing it with
+    # a list-appending lambda emits no SQL, and so could not reach the defect
+    # that made every deferred emit fail against a committed session - see
+    # test_deferred_webhook_emit.py (audit #2).
+    jobs: list = []
+    monkeypatch.setattr(webhook_svc.job_queue, "enqueue_many", lambda batch: jobs.extend(batch))
+    _mk_webhook(db, events=["*"])
 
     from app.models.audit_log import AuditEventType
     from app.services.audit import record_audit_event
 
     record_audit_event(db, event_type=AuditEventType.share_created, target_type="share", target_id="s1")
+    db.commit()
+    assert len(jobs) == 1
+    assert jobs[0][1][1] == "share_created"
+
+    jobs.clear()
     record_audit_event(db, event_type=AuditEventType.login_success, target_type="user", target_id="1")
     db.commit()
-
-    assert "share_created" in emitted
-    assert "login_success" not in emitted
+    assert jobs == []
 
 
 # ---- delivery worker -------------------------------------------------------

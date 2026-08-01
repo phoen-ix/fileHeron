@@ -58,6 +58,13 @@ def is_partial_continuation(request: Request) -> bool:
 # `_probe` sends exactly `bytes=1-1`, and every extra byte of slack multiplies
 # how cheaply the exemption could be used to extract content without paying.
 PROBE_MAX_BYTES = 1
+# The one offset a probe may read. Pinned, not merely bounded in length: a probe
+# that could be aimed anywhere is a free byte-at-a-time read of the whole
+# resource - which on the ANONYMOUS public-link route reconstructed a file in
+# full while the download budget never moved and nothing was logged or notified
+# (audit #2). Every shipped client sends exactly `bytes=1-1`
+# (client/src/fileheron_client/api/download_resumable.py::_probe).
+PROBE_OFFSET = 1
 
 
 class ByteRange(NamedTuple):
@@ -139,20 +146,27 @@ def is_metadata_probe(header: str | None, total: int) -> bool:
 
     Charging on how much is being TAKEN rather than on where it starts is what
     separates the two cases. `bytes=1-` asks for the whole file minus one byte
-    and is a download; `bytes=1-1` asks for one byte. Extracting content through
-    this exemption costs one authenticated, rate-limited round trip per byte -
-    against a product whose normal file is measured in gigabytes - and yields
-    nothing the caller could not obtain by spending a single download they are
-    already authorized to make. The budget limits how many copies leave, not
-    whether this caller may have one.
+    and is a download; `bytes=1-1` asks for one byte.
 
-    `total <= PROBE_MAX_BYTES` returns False: for a resource that small the
-    "probe" is the whole thing.
+    The exemption is pinned to ONE offset, `PROBE_OFFSET`. Bounding only the
+    LENGTH left `bytes=0-0, 1-1, 2-2, ...` free, which reconstructed the whole
+    file - and this route is reached anonymously through a public link, with no
+    authentication and no rate limit, so the justification that once stood here
+    ("one authenticated, rate-limited round trip per byte") did not hold where
+    it mattered most. With the offset pinned, the exemption yields exactly one
+    byte the caller learns nothing from (audit #2).
+
+    `total <= PROBE_OFFSET` returns False: for a resource that small the
+    "probe" would be the whole thing.
     """
-    if total <= PROBE_MAX_BYTES:
+    if total <= PROBE_OFFSET:
         return False
     try:
         rng = parse_single_range(header, total)
     except UnsatisfiableRangeError:
         return False
-    return rng is not None and rng.length <= PROBE_MAX_BYTES
+    return (
+        rng is not None
+        and rng.start == PROBE_OFFSET
+        and rng.length <= PROBE_MAX_BYTES
+    )

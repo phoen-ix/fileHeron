@@ -1,4 +1,12 @@
-"""Per-share `notify_recipients` flag + admin kv default + group fan-out."""
+"""Per-share `notify_recipients` flag + admin kv default + group fan-out.
+
+The announcement is DEFERRED until the share's uploads land - a share is empty
+at create time, because files attach at upload (audit #2). These tests used to
+observe the fan-out on an empty share, which is exactly the shape that let
+"shared 0 files with you" ship: they asserted THAT a notification was sent and
+never looked at what it said. `land_file_and_announce` is the second half of the
+real flow.
+"""
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
@@ -15,6 +23,8 @@ from app.models.user_notification_preference import (
 from app.services import group as group_svc
 from app.services import settings as settings_svc
 from app.services import share as share_svc
+
+from ._share_helpers import land_file_and_announce
 
 
 def _future() -> datetime:
@@ -43,13 +53,14 @@ def test_default_kv_true_dispatches_to_direct_recipient(
     rec = make_user(email="rec@test.local", role=UserRole.client)
     enqueued = _patch_email_capture(monkeypatch)
 
-    share_svc.create_share(
+    sh = share_svc.create_share(
         db,
         created_by=admin,
         kind=ShareKind.outbound,
         recipient_user_ids=[rec.id],
         expires_at=_future(),
     )
+    land_file_and_announce(db, sh, admin)
     db.commit()
 
     rows = (
@@ -69,7 +80,7 @@ def test_explicit_false_skips_dispatch(make_user, db, monkeypatch):
     rec = make_user(email="rec@test.local", role=UserRole.client)
     enqueued = _patch_email_capture(monkeypatch)
 
-    share_svc.create_share(
+    sh = share_svc.create_share(
         db,
         created_by=admin,
         kind=ShareKind.outbound,
@@ -77,6 +88,7 @@ def test_explicit_false_skips_dispatch(make_user, db, monkeypatch):
         expires_at=_future(),
         notify_recipients=False,
     )
+    land_file_and_announce(db, sh, admin)
     db.commit()
 
     rows = (
@@ -100,13 +112,14 @@ def test_kv_false_no_field_skips_dispatch(make_user, db, monkeypatch):
     db.commit()
     enqueued = _patch_email_capture(monkeypatch)
 
-    share_svc.create_share(
+    sh = share_svc.create_share(
         db,
         created_by=admin,
         kind=ShareKind.outbound,
         recipient_user_ids=[rec.id],
         expires_at=_future(),
     )
+    land_file_and_announce(db, sh, admin)
     db.commit()
 
     assert (
@@ -128,7 +141,7 @@ def test_explicit_true_overrides_kv_false(make_user, db, monkeypatch):
     db.commit()
     _patch_email_capture(monkeypatch)
 
-    share_svc.create_share(
+    sh = share_svc.create_share(
         db,
         created_by=admin,
         kind=ShareKind.outbound,
@@ -136,6 +149,7 @@ def test_explicit_true_overrides_kv_false(make_user, db, monkeypatch):
         expires_at=_future(),
         notify_recipients=True,
     )
+    land_file_and_announce(db, sh, admin)
     db.commit()
 
     assert (
@@ -156,13 +170,14 @@ def test_group_fan_out_to_all_active_members(make_user, db, monkeypatch):
     db.commit()
     enqueued = _patch_email_capture(monkeypatch)
 
-    share_svc.create_share(
+    sh = share_svc.create_share(
         db,
         created_by=admin,
         kind=ShareKind.outbound,
         recipient_group_ids=[g.id],
         expires_at=_future(),
     )
+    land_file_and_announce(db, sh, admin)
     db.commit()
 
     notified_user_ids = {
@@ -190,13 +205,14 @@ def test_group_fan_out_excludes_sender(make_user, db, monkeypatch):
     db.commit()
     _patch_email_capture(monkeypatch)
 
-    share_svc.create_share(
+    sh = share_svc.create_share(
         db,
         created_by=admin,
         kind=ShareKind.outbound,
         recipient_group_ids=[g.id],
         expires_at=_future(),
     )
+    land_file_and_announce(db, sh, admin)
     db.commit()
 
     notified_user_ids = {
@@ -229,13 +245,14 @@ def test_group_fan_out_excludes_disabled_member(
     db.commit()
     enqueued = _patch_email_capture(monkeypatch)
 
-    share_svc.create_share(
+    sh = share_svc.create_share(
         db,
         created_by=admin,
         kind=ShareKind.outbound,
         recipient_group_ids=[g.id],
         expires_at=_future(),
     )
+    land_file_and_announce(db, sh, admin)
     db.commit()
 
     notified_user_ids = {
@@ -263,7 +280,7 @@ def test_direct_and_group_overlap_dedupes_to_single_dispatch(
     db.commit()
     _patch_email_capture(monkeypatch)
 
-    share_svc.create_share(
+    sh = share_svc.create_share(
         db,
         created_by=admin,
         kind=ShareKind.outbound,
@@ -271,6 +288,7 @@ def test_direct_and_group_overlap_dedupes_to_single_dispatch(
         recipient_group_ids=[g.id],
         expires_at=_future(),
     )
+    land_file_and_announce(db, sh, admin)
     db.commit()
 
     rows = (
@@ -301,7 +319,7 @@ def test_recipient_with_off_preference_still_blocked_when_notify_true(
     db.commit()
     enqueued = _patch_email_capture(monkeypatch)
 
-    share_svc.create_share(
+    sh = share_svc.create_share(
         db,
         created_by=admin,
         kind=ShareKind.outbound,
@@ -309,6 +327,7 @@ def test_recipient_with_off_preference_still_blocked_when_notify_true(
         expires_at=_future(),
         notify_recipients=True,
     )
+    land_file_and_announce(db, sh, admin)
     db.commit()
 
     assert (

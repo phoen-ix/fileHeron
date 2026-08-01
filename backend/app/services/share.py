@@ -175,6 +175,10 @@ def _dispatch_share_created(
     from . import notification as notif_svc
     from . import site as site_svc
 
+    # Cleared either way: the announcement for this share has now been made (or
+    # has been established to go to nobody), and `notify_on_activation` is what
+    # `announce_if_ready` reads to decide whether one is still owed.
+    share.notify_on_activation = None
     notify_user_ids = _recipient_notify_ids(
         db, share, notify_recipients=notify_recipients
     )
@@ -399,8 +403,74 @@ def create_share(
     )
     # Inbound notifies all staff regardless of the flag; outbound honours it.
     # Each recipient still applies their own per-category preference.
-    _dispatch_share_created(db, share, notify_recipients=resolved_notify)
+    #
+    # Files attach at UPLOAD time (file_svc.create_pending sets files.share_id),
+    # and every client creates the share first: the SPA posts the form, then
+    # starts Uppy; the desktop client does the same. So at this point the share
+    # is empty, and announcing here told every recipient "shared 0 files with
+    # you" and linked them to a share page reading "Files (0)" - in mail, in the
+    # bell, in both locales, for every share this product has ever sent
+    # (audit #2). Freeze the choice the same way the approval path does and let
+    # `announce_if_ready` fire it once the uploads land.
+    if _has_landed_file(db, share):
+        _dispatch_share_created(db, share, notify_recipients=resolved_notify)
+    else:
+        share.notify_on_activation = resolved_notify
+        db.flush()
     return share
+
+
+def _has_landed_file(db: Session, share: Share) -> bool:
+    from ..models.file import File, FileState
+
+    return (
+        db.query(File.id)
+        .filter(
+            File.share_id == share.id,
+            File.state.notin_((FileState.uploading, FileState.deleted)),
+        )
+        .first()
+        is not None
+    )
+
+
+def announce_if_ready(db: Session, share_id: str) -> bool:
+    """Send the deferred `share_created` announcement once the share's uploads
+    have landed. Returns True if this call is the one that sent it.
+
+    Called from every finalize path (tus post-finish, direct upload) and from
+    the owner's explicit batch-complete signal. Idempotent and concurrency-safe:
+    the claim is a conditional UPDATE clearing `notify_on_activation`, so of two
+    files finalizing at the same instant exactly one announces.
+    """
+    from ..models.file import File, FileState
+
+    share = db.query(Share).filter(Share.id == share_id).one_or_none()
+    if share is None or share.state != ShareState.active:
+        return False
+    if share.notify_on_activation is None:
+        return False
+    still_uploading = (
+        db.query(File.id)
+        .filter(File.share_id == share.id, File.state == FileState.uploading)
+        .first()
+        is not None
+    )
+    if still_uploading or not _has_landed_file(db, share):
+        return False
+
+    notify = bool(share.notify_on_activation)
+    claimed = db.execute(
+        update(Share)
+        .where(Share.id == share.id, Share.notify_on_activation.isnot(None))
+        .values(notify_on_activation=None)
+    ).rowcount
+    if not claimed:
+        return False
+    db.flush()
+    db.refresh(share)
+    _dispatch_share_created(db, share, notify_recipients=notify)
+    return True
 
 
 def get_share_or_404(db: Session, share_id: str) -> Share:
@@ -1123,6 +1193,13 @@ def register_files_added(
         metadata={"count": added_count, "file_ids": valid_ids, "notified": bool(notify)},
         request=request,
     )
+
+    # If the share has not announced itself yet - the normal case for the very
+    # first batch, since files attach at upload time - this IS the announcement,
+    # not a "files were added" follow-up. Sending both would tell the recipient
+    # about a share and then immediately about an addition to it.
+    if announce_if_ready(db, share.id):
+        return share
 
     # Never for a share still awaiting approval: the recipients cannot see it
     # yet, and telling them files were added to something they have no access

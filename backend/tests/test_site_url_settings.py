@@ -12,6 +12,8 @@ from app.models.user import UserRole
 from app.services import settings as settings_svc
 from app.services import site as site_svc
 
+from ._share_helpers import land_file_and_announce
+
 
 def _now_naive() -> datetime:
     return datetime.now(tz=timezone.utc).replace(tzinfo=None)
@@ -128,6 +130,8 @@ def test_share_notification_uses_kv_override_url(make_user, db):
         recipient_group_ids=[],
         subject="t",
     )
+    # The announcement is deferred until the share's uploads land (audit #2).
+    land_file_and_announce(db, share, sender)
     db.commit()
 
     notif = (

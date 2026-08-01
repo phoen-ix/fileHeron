@@ -505,7 +505,9 @@
         "force_title": "Update auf {v} jetzt anwenden?",
         "cancel": "Update abbrechen",
         "cancelled": "Verschobenes Update abgebrochen; Wartungsmodus aus."
-      }
+      },
+      "rollback_head_unknown": "Die Datenbank-Revision von vor diesem Update wurde nicht erfasst; ein Rollback über eine Migration hinweg erfordert daher ein manuelles `alembic stamp`.",
+      "rollback_head_unknown_confirm": "Die Datenbank-Revision von vor dem Update wurde nicht erfasst. Falls dieses Release eine Migration enthielt, startet die ältere Version erst, nachdem jemand `alembic stamp` von Hand ausführt (siehe README, Rollback). Nur fortfahren, wenn das Release keine Migration enthielt oder Zugriff auf den Host besteht."
     },
     "live": {
       "heading": "Live-Prüfungen",
@@ -1117,7 +1119,9 @@
       "disabled": "Token deaktiviert.",
       "reactivated": "Token reaktiviert.",
       "revoked": "Token endgültig widerrufen."
-    }
+    },
+    "picked_user": "Ausgewählt: {name} ({email})",
+    "plaintext_owner": "Dieses Token gehört zu {name}."
   },
   "admin_token_policy": {
     "title": "API-Token-Richtlinie",

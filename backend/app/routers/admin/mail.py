@@ -30,6 +30,7 @@ from ...schemas.admin import (
 )
 from ...services import job_queue
 from ...services.audit import record_audit_event
+from ...utils.timeutil import to_naive_utc
 
 router = APIRouter()
 
@@ -89,6 +90,8 @@ def _mail_query(
         query = query.filter(EmailLog.category == category)
     if status:
         query = query.filter(EmailLog.status == status)
+    from_ts = to_naive_utc(from_ts)
+    to_ts = to_naive_utc(to_ts)
     if from_ts:
         query = query.filter(EmailLog.created_at >= from_ts)
     if to_ts:

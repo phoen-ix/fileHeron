@@ -18,6 +18,7 @@ from ...middleware.errors import AppError
 from ...models.audit_log import AuditLog
 from ...models.user import User
 from ...schemas.admin import AdminAuditResponse, AdminAuditRow
+from ...utils.timeutil import to_naive_utc
 
 router = APIRouter()
 
@@ -68,6 +69,8 @@ def _audit_query(
         q = q.filter(AuditLog.target_type == target_type)
     if target_id:
         q = q.filter(AuditLog.target_id == target_id)
+    from_ts = to_naive_utc(from_ts)
+    to_ts = to_naive_utc(to_ts)
     if from_ts:
         q = q.filter(AuditLog.created_at >= from_ts)
     if to_ts:

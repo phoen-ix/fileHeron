@@ -9,6 +9,7 @@ import { useDebouncedSearch } from '@/composables/useDebouncedSearch'
 import { useSiteDateFormat } from '@/composables/useSiteDateFormat'
 import { useUiStore } from '@/stores/ui'
 import type { AdminAuditRow } from '@/types/api'
+import { siteLocalIsoToUtcIso } from '@/utils/datetime'
 import { downloadBlob } from '@/utils/downloadBlob'
 
 const { t } = useI18n()
@@ -34,8 +35,14 @@ const filterParams = computed(() => {
   if (eventType.value) p.event_type = eventType.value
   if (targetType.value) p.target_type = targetType.value
   if (targetId.value) p.target_id = targetId.value
-  if (fromTs.value) p.from = fromTs.value
-  if (toTs.value) p.to = toTs.value
+  // `datetime-local` yields a bare wall-clock string. Sent as-is it was
+  // compared as naive UTC, so in a site timezone of UTC+2 a filter set to the
+  // moment shown on a row excluded that row and the next two hours - the
+  // investigator saw an empty table and the same hole landed in the CSV
+  // export (audit #2). Convert to an instant, interpreting the picker's value
+  // in the site timezone, exactly as the display does.
+  if (fromTs.value) p.from = siteLocalIsoToUtcIso(fromTs.value)
+  if (toTs.value) p.to = siteLocalIsoToUtcIso(toTs.value)
   return p
 })
 

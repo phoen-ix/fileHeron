@@ -900,6 +900,7 @@ export interface CreateApiTokenResponse {
   expires_at: string | null
   scopes: string[] | null
   owner_user_id?: number
+  owner_display_name?: string
 }
 
 /* Admin API tokens (post-Phase 10) */

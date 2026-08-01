@@ -198,22 +198,36 @@ def capture_alembic_head() -> str | None:
     Returns None on failure - auto_rollback then skips the stamp and warns.
     Safe even against a future broken image: alembic/env.py imports only
     app.config, never app.main (the layer that an nh3-style miss breaks)."""
-    try:
-        result = subprocess.run(
-            ["docker", "compose", "-f", str(COMPOSE_FILE),
-             "exec", "-T", "backend", "alembic", "current"],
-            capture_output=True, text=True, cwd=str(WORKSPACE), timeout=30,
-        )
-    except Exception as e:
-        log_line(f"WARN could not capture alembic head: {type(e).__name__}: {e}")
-        return None
-    if result.returncode != 0:
-        log_line(f"WARN `alembic current` failed (exit {result.returncode}): {result.stderr.strip()[:200]}")
-        return None
-    rev = _parse_alembic_revision(result.stdout)
-    log_line(f"captured pre-update alembic head: {rev}" if rev
-             else "WARN `alembic current` produced no parseable revision")
-    return rev
+    # Retried, and with a longer ceiling than the original single 30 s attempt.
+    # This runs during the drain, when the box is at its busiest; one slow
+    # `alembic current` was enough to lose the head, and losing it silently
+    # downgrades a one-click Rollback into "boots into the migration trap"
+    # (audit #2).
+    last = ""
+    for attempt in (1, 2, 3):
+        try:
+            result = subprocess.run(
+                ["docker", "compose", "-f", str(COMPOSE_FILE),
+                 "exec", "-T", "backend", "alembic", "current"],
+                capture_output=True, text=True, cwd=str(WORKSPACE), timeout=60,
+            )
+        except Exception as e:
+            last = f"{type(e).__name__}: {e}"
+            log_line(f"WARN alembic head capture attempt {attempt}/3 failed: {last}")
+            continue
+        if result.returncode != 0:
+            last = f"exit {result.returncode}: {result.stderr.strip()[:200]}"
+            log_line(f"WARN alembic head capture attempt {attempt}/3 failed: {last}")
+            continue
+        rev = _parse_alembic_revision(result.stdout)
+        if rev:
+            log_line(f"captured pre-update alembic head: {rev}")
+            return rev
+        last = "no parseable revision"
+        log_line(f"WARN alembic head capture attempt {attempt}/3: {last}")
+    log_line(f"WARN could not capture alembic head after 3 attempts ({last}) - "
+             "a rollback across a migration will need a manual `alembic stamp`")
+    return None
 
 
 def _write_rollback_file(tag: str, alembic_head: str | None) -> None:

@@ -28,6 +28,9 @@ class CreateApiTokenResponse(APIBaseModel):
     expires_at: datetime | None = None
     scopes: list[str] | None = None  # null = unrestricted
     owner_user_id: int | None = None  # populated for admin-create-on-behalf
+    # Named, not just numbered: the one-time disclosure is the last chance to
+    # notice the token was minted for the wrong person (audit #2).
+    owner_display_name: str | None = None
 
 
 class ApiTokenListItem(APIBaseModel):

@@ -500,6 +500,12 @@ const headlineFailures = computed(() => {
         >
           <span class="rollback-text">
             {{ t('admin_system.update.rollback_available', { v: updaterStatus.rollback_target }) }}
+            <span
+              v-if="updaterStatus.rollback_alembic_head_known === false"
+              class="rollback-warning"
+            >
+              {{ t('admin_system.update.rollback_head_unknown') }}
+            </span>
           </span>
           <button type="button" class="btn-secondary" @click="openConfirm('rollback')">
             {{ t('admin_system.update.btn_rollback') }}
@@ -604,6 +610,13 @@ const headlineFailures = computed(() => {
             }}
           </h2>
           <p class="modal-body">{{ t('admin_system.update.confirm.body') }}</p>
+          <div
+            v-if="confirming === 'rollback' && updaterStatus?.rollback_alembic_head_known === false"
+            class="fh-notice"
+            data-tone="warning"
+          >
+            {{ t('admin_system.update.rollback_head_unknown_confirm') }}
+          </div>
           <div
             v-if="confirming === 'update' && activeTransfers > 0"
             class="fh-notice"
@@ -781,6 +794,10 @@ const headlineFailures = computed(() => {
   justify-content: space-between;
   align-items: center;
   gap: var(--fh-space-3);
+}
+.rollback-warning {
+  display: block;
+  color: var(--fh-color-warning, #b45309);
 }
 .rollback-text { color: var(--fh-subtle); font-size: var(--fh-text-body-sm); }
 .job-banner {

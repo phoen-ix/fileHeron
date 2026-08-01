@@ -69,7 +69,10 @@ NETWORK_NAME="${COMPOSE_PROJECT}_internal"
 # mid-run", not "executor is still happily running somewhere".
 if [ -f "$STATE_FILE" ]; then
     status=$(jq -r '.status // ""' "$STATE_FILE" 2>/dev/null || echo "")
-    if [ "$status" = "pulling" ] || [ "$status" = "running" ] || [ "$status" = "restarting" ] || [ "$status" = "rolling_back" ]; then
+    # `claiming` belongs here too: the shim sets it, then blocks pulling the
+    # executor image. A reboot inside that window left a job the startup sweep
+    # skipped and the (inert) stuck detector never reached (audit #2).
+    if [ "$status" = "claiming" ] || [ "$status" = "pulling" ] || [ "$status" = "running" ] || [ "$status" = "restarting" ] || [ "$status" = "rolling_back" ]; then
         log "found in-flight job (status=$status) on startup - marking failed"
         tmp=$(shim_mktemp)
         jq '. + {status: "failed", error: "shim restarted mid-job", finished_at: now | todate}' \
@@ -170,7 +173,20 @@ while true; do
             # older than the threshold, mark failed.
             started_raw=$(jq -r '.started_at // .claimed_at // ""' "$STATE_FILE")
             if [ -n "$started_raw" ]; then
-                started_epoch=$(date -d "$started_raw" +%s 2>/dev/null || echo 0)
+                # busybox `date -d` cannot parse an ISO 8601 timestamp with a
+                # `T` - it answers "invalid date" for every value the updater
+                # writes, so this evaluated to 0 and the detector never fired
+                # once. A job interrupted while `claiming` (host reboot during
+                # the executor image pull) then stayed in-flight forever: every
+                # Update and Rollback returned 409 UPDATE_IN_PROGRESS and the
+                # only recovery was hand-deleting a JSON file no doc mentions
+                # (audit #2). busybox needs the format via -D; GNU date is the
+                # fallback for anyone running this outside the alpine image.
+                started_clean=${started_raw%%.*}
+                started_clean=${started_clean%Z}
+                started_epoch=$(date -D "%Y-%m-%dT%H:%M:%S" -d "$started_clean" +%s 2>/dev/null \
+                                || date -d "$started_clean" +%s 2>/dev/null \
+                                || echo 0)
                 now_epoch=$(date -u +%s)
                 if [ "$started_epoch" -gt 0 ] && [ $((now_epoch - started_epoch)) -gt "$STUCK_THRESHOLD_SEC" ]; then
                     log "job in-flight for > ${STUCK_THRESHOLD_SEC}s - marking failed"

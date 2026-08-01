@@ -24,6 +24,8 @@ from app.services import settings as settings_svc
 from app.services import share as share_svc
 from app.services import share_approval as approval_svc
 
+from ._share_helpers import land_file_and_announce
+
 PW = "Pass12345678!"
 
 
@@ -87,8 +89,8 @@ def _attach_clean_file(db, monkeypatch, share, uploader_id, *, mime="text/plain"
     return f
 
 
-def _make_share(db, creator, recipient, **kw):
-    return share_svc.create_share(
+def _make_share(db, creator, recipient, *, with_file=True, **kw):
+    share = share_svc.create_share(
         db,
         created_by=creator,
         kind=ShareKind.outbound,
@@ -97,6 +99,11 @@ def _make_share(db, creator, recipient, **kw):
         subject="quarterly numbers",
         **kw,
     )
+    if with_file:
+        # A share is empty at create time - files attach at upload - so the
+        # recipient announcement is deferred until they land (audit #2).
+        land_file_and_announce(db, share, creator)
+    return share
 
 
 # ---------------------------------------------------------------------------

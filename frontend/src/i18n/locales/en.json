@@ -505,7 +505,9 @@
         "force_title": "Apply update to {v} now?",
         "cancel": "Cancel update",
         "cancelled": "Postponed update cancelled; maintenance mode off."
-      }
+      },
+      "rollback_head_unknown": "The database revision from before that update was not recorded, so a rollback across a migration will need a manual `alembic stamp`.",
+      "rollback_head_unknown_confirm": "The pre-update database revision was not recorded. If that release included a migration, the older version will not boot until an operator runs `alembic stamp` by hand (see README, Rollback). Continue only if you know the release carried no migration, or you can reach the host."
     },
     "live": {
       "heading": "Live checks",
@@ -1117,7 +1119,9 @@
       "disabled": "Token disabled.",
       "reactivated": "Token reactivated.",
       "revoked": "Token permanently revoked."
-    }
+    },
+    "picked_user": "Selected: {name} ({email})",
+    "plaintext_owner": "This token belongs to {name}."
   },
   "admin_token_policy": {
     "title": "API token policy",

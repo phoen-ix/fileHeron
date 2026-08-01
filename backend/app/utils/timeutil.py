@@ -15,6 +15,22 @@ def utc_now() -> datetime:
     return datetime.now(tz=timezone.utc).replace(tzinfo=None)
 
 
+def to_naive_utc(dt: datetime | None) -> datetime | None:
+    """Normalise a client-supplied datetime to the storage convention.
+
+    An offset-aware value is converted to UTC and stripped; a naive one is
+    passed through as already-UTC. Query parameters that reach a `created_at`
+    comparison MUST go through this: comparing an aware value against a naive
+    DATETIME column is a silently wrong comparison, and accepting a bare
+    wall-clock string as if it were UTC is the same bug from the other side
+    (audit #2 - the admin log date filters)."""
+    if dt is None:
+        return None
+    if dt.tzinfo is not None:
+        return dt.astimezone(timezone.utc).replace(tzinfo=None)
+    return dt
+
+
 def utc_now_aware() -> datetime:
     """Timezone-aware UTC - for JWT iat/exp where epoch math matters."""
     return datetime.now(tz=timezone.utc)

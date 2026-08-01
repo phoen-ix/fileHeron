@@ -256,6 +256,9 @@ export function runLiveChecks() {
 export interface UpdaterStatus {
   current_tag: string
   rollback_target: string | null
+  /** False when the pre-update alembic head was not captured: a rollback
+   *  across a migration will then need a manual `alembic stamp`. */
+  rollback_alembic_head_known?: boolean
   job_in_progress: string | null
 }
 

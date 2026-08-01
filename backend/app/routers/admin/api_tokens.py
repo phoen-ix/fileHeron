@@ -233,6 +233,7 @@ def admin_create_api_token(
         expires_at=record.expires_at,
         scopes=record.scopes_list,
         owner_user_id=record.owner_user_id,
+        owner_display_name=target.display_name,
     )
 
 

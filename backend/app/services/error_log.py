@@ -27,7 +27,7 @@ from sqlalchemy.orm import Session
 
 from ..database import SessionLocal
 from ..models.error_log import ErrorLog
-from ..utils.timeutil import utc_now
+from ..utils.timeutil import to_naive_utc, utc_now
 from . import settings as settings_svc
 from . import settings_registry
 
@@ -250,6 +250,8 @@ def filtered_query(
         q = q.filter(ErrorLog.source == source)
     if ip:
         q = q.filter(ErrorLog.ip == ip)
+    from_ts = to_naive_utc(from_ts)
+    to_ts = to_naive_utc(to_ts)
     if from_ts:
         q = q.filter(ErrorLog.created_at >= from_ts)
     if to_ts:

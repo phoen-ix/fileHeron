@@ -76,10 +76,15 @@ def _write_state_text(text: str) -> None:
 
 
 def _read_rollback_target() -> str | None:
+    return (_read_rollback_record() or {}).get("tag")
+
+
+def _read_rollback_record() -> dict | None:
     if not ROLLBACK_FILE.exists():
         return None
     try:
-        return json.loads(ROLLBACK_FILE.read_text()).get("tag")
+        rec = json.loads(ROLLBACK_FILE.read_text())
+        return rec if isinstance(rec, dict) else None
     except Exception:
         return None
 
@@ -92,9 +97,18 @@ def get_version() -> dict:
     state = _read_state() or {}
     status = state.get("status")
     in_flight_states = {"pending", "claiming", "pulling", "restarting", "rolling_back"}
+    rollback = _read_rollback_record() or {}
     return {
         "current_tag": current_tag,
-        "rollback_target": _read_rollback_target(),
+        "rollback_target": rollback.get("tag"),
+        # False when the pre-update alembic head could not be captured (or the
+        # target predates the field). The rollback is still offered - most
+        # releases carry no migration and it is the recovery path - but the
+        # admin has to be told, because if the release DID migrate, the old
+        # image's boot-time `alembic upgrade head` dies with "Can't locate
+        # revision" and the instance is down on a version that cannot boot
+        # (audit #2).
+        "rollback_alembic_head_known": bool(rollback.get("alembic_head")),
         "job_in_progress": state.get("id") if status in in_flight_states else None,
     }
 

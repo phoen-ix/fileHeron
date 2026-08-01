@@ -121,6 +121,13 @@ watch(userQuery, () => {
   if (selectedUser.value && selectedUser.value.display_name === userQuery.value) {
     return
   }
+  // The text no longer names the picked user, so the pick is stale. Dropping it
+  // here is what makes "type over the box and press Enter" fail closed: it used
+  // to submit the PREVIOUS selection, so an admin who typed "ali", clicked
+  // Alice, then retyped "Bob" and submitted handed Bob a full-privilege token
+  // acting as Alice - with every audit row attributing his actions to her, and
+  // nothing on screen naming the owner (audit #2).
+  selectedUser.value = null
   if (!userQuery.value || userQuery.value.length < 2) {
     userSuggestions.value = []
     return
@@ -234,6 +241,9 @@ onMounted(load)
 
       <label class="fh-field">
         <span class="fh-field-label">{{ t('admin_api_tokens.target_user') }}</span>
+        <span v-if="selectedUser" class="picked-user fh-mono">
+          {{ t('admin_api_tokens.picked_user', { name: selectedUser.display_name, email: selectedUser.email }) }}
+        </span>
         <input
           v-model.trim="userQuery"
           type="search"
@@ -311,6 +321,9 @@ onMounted(load)
     <!-- Plaintext one-time disclosure -->
     <div v-if="plaintextResult" class="plaintext-box fh-rise">
       <div class="plaintext-eyebrow">{{ t('admin_api_tokens.plaintext_eyebrow') }}</div>
+      <div class="plaintext-owner">
+        {{ t('admin_api_tokens.plaintext_owner', { name: plaintextResult.owner_display_name || plaintextResult.owner_user_id }) }}
+      </div>
       <div class="plaintext-warning">{{ t('admin_api_tokens.plaintext_warning') }}</div>
       <pre class="plaintext-token fh-mono">{{ plaintextResult.plaintext_token }}</pre>
       <div class="plaintext-actions">

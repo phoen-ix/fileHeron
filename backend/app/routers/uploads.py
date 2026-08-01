@@ -229,6 +229,14 @@ async def direct_upload(
     file_row.finalized_at = when
     db.commit()
 
+    # Same deferred announcement as the tus path (services/share.announce_if_ready).
+    try:
+        if share_svc.announce_if_ready(db, file_row.share_id):
+            db.commit()
+    except Exception:
+        db.rollback()
+        logger.exception("deferred share announcement failed for %s", file_row.share_id)
+
     # Enqueue AV scan (Phase 5). Same path as the tusd post-finish hook.
     # `await` the async variant: this route is `async def`, and the
     # sync `enqueue` would otherwise have to detour around the running

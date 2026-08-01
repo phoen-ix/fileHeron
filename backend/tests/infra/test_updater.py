@@ -217,3 +217,57 @@ def test_the_shim_is_deliberately_not_recreated():
     assert m
     assert "updater-shim" not in m.group(1)
     assert {"backend", "worker", "frontend"} == set(ast.literal_eval(m.group(1)))
+
+
+# --- audit #2: the stuck detector and the rollback head ---------------------
+
+
+def test_the_stuck_detector_can_parse_the_timestamps_the_updater_writes():
+    """busybox `date -d` answers "invalid date" for every ISO 8601 value with a
+    `T` - which is every value the shim and the executor write. `started_epoch`
+    was therefore 0 on every poll and the branch below it never executed once.
+
+    A job interrupted while `claiming` (host reboot during the executor image
+    pull) then stayed in-flight permanently: Update and Rollback both returned
+    409 UPDATE_IN_PROGRESS, and the only recovery was hand-deleting a JSON file
+    under data/updater/ that no document mentions.
+    """
+    src = SHIM.read_text()
+    assert 'date -D "%Y-%m-%dT%H:%M:%S"' in src, (
+        "the detector parses with bare `date -d`, which busybox cannot do"
+    )
+    assert "started_clean=${started_raw%%.*}" in src, (
+        "fractional seconds are not stripped; `alembic`-style isoformat() "
+        "timestamps carry microseconds"
+    )
+
+
+def test_the_startup_sweep_covers_the_claiming_state():
+    """The shim sets `claiming` and then blocks pulling the executor image -
+    the widest window for an interruption, and the one state the sweep skipped."""
+    src = SHIM.read_text()
+    sweep = src.split("while true; do")[0]
+    assert '"$status" = "claiming"' in sweep
+
+
+def test_the_alembic_head_capture_is_retried():
+    """It runs during the drain, when the box is busiest. One slow
+    `alembic current` used to lose the head silently."""
+    src = EXECUTOR.read_text()
+    body = src.split("def capture_alembic_head")[1].split("\ndef ")[0]
+    assert "for attempt in" in body
+    assert "timeout=60" in body
+
+
+def test_the_status_endpoint_says_whether_a_rollback_is_safe():
+    """Rollback was offered as a one-click control with no way for the admin to
+    know the stamp would be skipped. If the release carried a migration, the old
+    image's boot-time `alembic upgrade head` dies with "Can't locate revision",
+    the backend crash-loops, and the SPA has no backend left to recover from."""
+    src = (ROOT / "backend" / "app" / "services" / "release_apply.py").read_text()
+    assert '"rollback_alembic_head_known"' in src
+
+    spa = (ROOT / "frontend" / "src" / "views" / "AdminSystem.vue").read_text()
+    assert "rollback_alembic_head_known === false" in spa, (
+        "the SPA offers the control without surfacing the risk"
+    )

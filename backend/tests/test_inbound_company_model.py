@@ -15,9 +15,15 @@ from app.models.user import UserRole
 from app.services import group as group_svc
 from app.services import share as share_svc
 
+from ._share_helpers import land_file_and_announce
+
 
 def _inbound(db, creator) -> Share:
+    """Create AND land a file: the `share_created` announcement is deferred
+    until the uploads arrive, because a share is empty at create time
+    (audit #2)."""
     s = share_svc.create_share(db, created_by=creator, kind=ShareKind.inbound, expires_at=None)
+    land_file_and_announce(db, s, creator)
     db.commit()
     return s
 

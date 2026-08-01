@@ -149,6 +149,11 @@ def test_times_render_in_the_instances_timezone():
     )
 
     instant = datetime(2026, 8, 5, 15, 0, tzinfo=timezone.utc)
+    # Deliberately strict. On Windows `zoneinfo` has no database of its own, so
+    # this silently rendered in the machine's local zone - the exact defect the
+    # feature exists to fix, on the only platform the client ships for. The
+    # `tzdata` dependency is what makes it pass; if that is ever dropped, this
+    # is the test that says so (client-v1.3.1).
     try:
         set_display_timezone("Europe/Vienna")
         assert format_datetime(instant) == "2026-08-05 17:00"

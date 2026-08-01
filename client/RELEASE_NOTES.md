@@ -1,4 +1,4 @@
-# Desktop client 1.3.0
+# Desktop client 1.3.1
 
 **Two fixes, both about telling you the truth.** Expiry times were rendered *and
 read back* in your laptop's timezone while the web interface uses the instance's,
@@ -6,6 +6,12 @@ and every error the server sent arrived in English no matter which language you
 had chosen.
 
 Both were found in the 2026-08-01 audit. Requires server **v2.6.1 or newer**.
+
+*(1.3.1 replaces 1.3.0, which never shipped: the timezone fix silently did
+nothing on Windows, because Windows has no time-zone database of its own and
+the client fell back to the machine's local zone - the exact defect the fix
+exists to close, on the only platform this client runs on. The database now
+ships inside the .exe.)*
 
 ---
 

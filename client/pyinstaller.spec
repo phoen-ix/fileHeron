@@ -78,7 +78,11 @@ hiddenimports = [
     # Linux (SecretService) and macOS backends are dead weight in the
     # .exe (~200 KB saved by v0.6.2 trim).
     "keyring.backends.Windows",
+    # tzdata is a pure-DATA package - its zone files have to be collected
+    # explicitly or the frozen .exe has the import and none of the database.
+    "tzdata",
 ]
+datas += collect_data_files("tzdata")
 hiddenimports += _ctk_hidden + _dnd_hidden
 
 a = Analysis(

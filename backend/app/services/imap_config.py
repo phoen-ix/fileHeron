@@ -53,7 +53,13 @@ def resolve_imap_config(db: Session) -> ImapConfig:
     except (TypeError, ValueError):
         port = settings.IMAP_PORT
 
-    tls_mode = _eff(settings_svc.Keys.IMAP_TLS_MODE, "") or ""
+    # The ENV value is the fallback, like every other field here. It used to
+    # pass `""`, so `IMAP_TLS_MODE` - declared in config.py, documented in
+    # .env.example and in the README - was read by nothing and the mode was
+    # always inferred from the port (audit #2). An operator who set
+    # `IMAP_TLS_MODE=starttls` on port 993 got implicit TLS and no indication
+    # that their setting had been ignored.
+    tls_mode = _eff(settings_svc.Keys.IMAP_TLS_MODE, settings.IMAP_TLS_MODE) or ""
     if tls_mode not in TLS_MODES:
         tls_mode = "starttls" if port == 143 else "implicit"
 

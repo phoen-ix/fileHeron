@@ -708,7 +708,9 @@ via `/admin/settings/advanced`.
 | `SMTP_FROM_EMAIL`/`SMTP_FROM_NAME` | `noreply@fileheron.local`/`fileHeron` | Envelope sender. |
 | `SMTP_HELO_HOST` | empty | EHLO/HELO name (empty = container FQDN). |
 | `IMAP_HOST`/`IMAP_PORT`/`IMAP_USER`/`IMAP_PASSWORD` | empty/`993`/empty/empty | Inbound mailbox (DB overrides via `/admin/settings/imap`; off unless enabled). |
-| `IMAP_TLS_MODE`/`IMAP_MAILBOX` | `implicit`/`INBOX` | Inbound fetch tuning. Poll cadence lives on [Scheduled tasks](#scheduled-tasks-adminscheduled-tasks), not an env var. |
+| `IMAP_TLS_MODE`/`IMAP_MAILBOX` | `implicit`/`INBOX` | Inbound fetch tuning; both are overridden by the admin settings page. Poll cadence lives on [Scheduled tasks](#scheduled-tasks-adminscheduled-tasks), not an env var. |
+| `imap.require_known_sender` (admin setting) | `true` | Refuse mail whose sender address matches no enabled account, before anything is stored. **Turn it off if your instance accepts mail from people without accounts.** |
+| `imap.tls_insecure` (admin setting) | `false` | Do not verify the mail server's certificate. Only for an internal server with a private CA - the connection stays encrypted, but an on-path attacker can impersonate the server and read the login. |
 | `RATE_LIMIT_LOGIN` | `10` | Login attempts / IP / window. ↻ |
 | `RATE_LIMIT_REGISTER` | `3` | Register/forgot/verify / IP / window. ↻ |
 | `LOGIN_RATE_WINDOW_SEC` | `900` | Per-IP login window. ↻ |

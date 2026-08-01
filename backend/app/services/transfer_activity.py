@@ -188,7 +188,14 @@ _PAID_KEY_PREFIX = "fh:transfer:paid:"
 # PUBLIC_LINK_EXHAUSTED - the exact outcome flow-publiclink-5 was filed for and
 # the route docstring claims is fixed (audit #2). Matched to the authenticated
 # path's resume credit, which is measured in hours for the same reason.
-PAID_TTL_SEC = 12 * 3600
+# Long enough for the transfer it exists to protect - a 9 GB archive on a
+# 25 Mbit/s line is ~50 minutes - and no longer. It is not a free-download
+# window: a continuation must start past byte 0, so a full fetch still pays.
+# But `Range: bytes=1-` is very nearly the whole file, so every extra hour here
+# is an hour in which one paid download can be repeated (audit #2 cross-check
+# flagged 12 h as a day pass; the 30 minutes it replaced was too short to finish
+# the transfer at all).
+PAID_TTL_SEC = 2 * 3600
 
 
 def mark_download_paid(principal_key: str) -> None:

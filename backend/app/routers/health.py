@@ -127,8 +127,13 @@ def _trusted_networks() -> tuple[ipaddress.IPv4Network | ipaddress.IPv6Network, 
     if own.is_loopback:
         return ()
     # Compose allocates its networks out of /16 pools, so the container's own
-    # /16 is the smallest bound that reliably contains its siblings.
-    return (ipaddress.ip_network(f"{own}/16", strict=False),)
+    # /16 usually contains its siblings - EXCEPT on a host-network deployment,
+    # where the container's address is the host's LAN address and a /16 would
+    # re-admit the whole 192.168.x.x LAN: the exact set this check was written
+    # to stop trusting (audit #2 cross-check). Docker's default pools live in
+    # 172.16/12 and 10/8; a 192.168 address is a LAN, so bound it to its /24.
+    prefix = 24 if own in ipaddress.ip_network("192.168.0.0/16") else 16
+    return (ipaddress.ip_network(f"{own}/{prefix}", strict=False),)
 
 
 @router.get("/api/health")

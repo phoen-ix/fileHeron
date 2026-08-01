@@ -35,14 +35,22 @@ def test_ordinary_ranges_still_parse():
 # --- the payment mark -------------------------------------------------------
 
 
-def test_the_paid_window_outlives_a_large_transfer():
-    """30 minutes was the SERVING mark's TTL. A 9 GB archive on a 25 Mbit/s line
-    takes ~50 minutes, so the mark expired mid-transfer and the resume was
-    answered 410 PUBLIC_LINK_EXHAUSTED - the exact outcome flow-publiclink-5 was
-    filed for."""
+def test_the_paid_window_fits_a_large_transfer_and_no_more():
+    """Two bounds, not one.
+
+    30 minutes was the SERVING mark's TTL and too short: a 9 GB archive on a
+    25 Mbit/s line takes ~50 minutes, so the mark expired mid-transfer and the
+    resume was answered 410 PUBLIC_LINK_EXHAUSTED - the outcome
+    flow-publiclink-5 was filed for.
+
+    But the window is also how long one paid download can be REPEATED: a
+    continuation must start past byte 0, so a full fetch still pays, yet
+    `Range: bytes=1-` is very nearly the whole file. 12 hours was a day pass
+    (audit #2 cross-check)."""
     from app.services import transfer_activity
 
-    assert transfer_activity.PAID_TTL_SEC >= 6 * 3600
+    assert transfer_activity.PAID_TTL_SEC >= 90 * 60, "too short to finish a 9 GB transfer"
+    assert transfer_activity.PAID_TTL_SEC <= 4 * 3600, "long enough to be a day pass"
 
 
 def test_the_payment_check_fails_closed(monkeypatch):
@@ -224,3 +232,61 @@ def test_the_download_path_still_serves_an_unscanned_file():
 
     src = inspect.getsource(files_router._assert_file_state_servable)
     assert "FILE_NOT_SCANNED" not in src
+
+
+# --- audit #2 cross-check ---------------------------------------------------
+
+
+@pytest.mark.parametrize("header", ["bytes=\xb2-", "bytes=٢-"])
+def test_the_other_range_parser_is_hardened_too(header):
+    """`is_partial_continuation` runs BEFORE `parse_single_range` on the
+    download routes, so hardening only the latter left the 500 reachable."""
+    from app.utils.http_range import is_partial_continuation
+
+    class _Req:
+        headers = {"range": header}
+
+    assert is_partial_continuation(_Req()) is False
+
+
+def test_a_resume_is_not_promised_a_seek_the_backend_cannot_do():
+    """`resume_cost` returned 0 whenever the CRC was cached - but `iter_from`
+    can only skip the prefix on a SEEKABLE source. On the S3 path `open_fn`
+    returns a streaming body, the reader falls back to a full re-read, and the
+    caller has already been told it was free."""
+    import inspect
+
+    from app.services import zip_writer
+
+    src = inspect.getsource(zip_writer.SizedZipStream.resume_cost)
+    assert "_can_skip_prefix" in src
+    probe = inspect.getsource(zip_writer.SizedZipStream._can_skip_prefix)
+    assert "seekable" in probe
+
+
+def test_the_operator_network_does_not_swallow_a_home_lan(monkeypatch):
+    """The /16 heuristic is right for Docker's own pools and wrong on a
+    host-network deployment, where the container's address IS the host's LAN
+    address - a /16 there re-admits the whole 192.168.x.x LAN, the exact set
+    this check was written to stop trusting."""
+    import socket
+
+    from app.routers import health
+
+    monkeypatch.delenv("HEALTH_DETAIL_TRUSTED_CIDRS", raising=False)
+    monkeypatch.setattr(socket, "gethostbyname", lambda _h: "192.168.1.10")
+    health._trusted_networks.cache_clear()
+    try:
+        nets = health._trusted_networks()
+        assert nets and nets[0].prefixlen == 24
+        assert ipaddress_in(nets, "192.168.1.200") is True
+        assert ipaddress_in(nets, "192.168.9.9") is False
+    finally:
+        health._trusted_networks.cache_clear()
+
+
+def ipaddress_in(nets, addr: str) -> bool:
+    import ipaddress
+
+    ip = ipaddress.ip_address(addr)
+    return any(ip in net for net in nets)

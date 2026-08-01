@@ -40,6 +40,19 @@ from typing import NamedTuple
 from starlette.requests import Request
 
 
+def _is_number(text: str) -> bool:
+    """ASCII digits only.
+
+    `str.isdigit()` is True for characters like the latin-1 superscript two, and
+    `int()` then raises ValueError - straight out of the route, as an unhandled
+    500 with an error_log row and a `notify_admin_error` enqueue per request. So
+    `Range: bytes=\xb2-` let an unauthenticated caller holding any public-link
+    token manufacture 5xx alerts at will and flood the error log, on every
+    download, preview and ZIP route (audit #2).
+    """
+    return text.isascii() and text.isdigit()
+
+
 def is_partial_continuation(request: Request) -> bool:
     """True for a ranged GET whose first byte offset is > 0."""
     rng = request.headers.get("range")
@@ -50,7 +63,11 @@ def is_partial_continuation(request: Request) -> bool:
         return False
     first = spec[len("bytes="):].split(",", 1)[0].strip()
     start = first.split("-", 1)[0].strip()
-    return start.isdigit() and int(start) > 0
+    # `_is_number`, not `.isdigit()`. This function runs BEFORE
+    # `parse_single_range` on the download routes, so hardening only that one
+    # left the 500 reachable: `.isdigit()` is True for a latin-1 superscript and
+    # `int()` then raises straight out of the route (audit #2 cross-check).
+    return _is_number(start) and int(start) > 0
 
 
 # A range this small is a client asking "how big is this, and do you do ranges?",
@@ -78,19 +95,6 @@ class ByteRange(NamedTuple):
 
 class UnsatisfiableRangeError(Exception):
     """The header was well-formed but asks for bytes outside the resource."""
-
-
-def _is_number(text: str) -> bool:
-    """ASCII digits only.
-
-    `str.isdigit()` is True for characters like the latin-1 superscript two, and
-    `int()` then raises ValueError - straight out of the route, as an unhandled
-    500 with an error_log row and a `notify_admin_error` enqueue per request. So
-    `Range: bytes=\xb2-` let an unauthenticated caller holding any public-link
-    token manufacture 5xx alerts at will and flood the error log, on every
-    download, preview and ZIP route (audit #2).
-    """
-    return text.isascii() and text.isdigit()
 
 
 def parse_single_range(header: str | None, total: int) -> ByteRange | None:

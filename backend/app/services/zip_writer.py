@@ -264,14 +264,35 @@ class SizedZipStream:
                 if self._cached_crc(e) is None:
                     cost += e.size
                 continue
-            if offset > d_start and self._cached_crc(e) is None:
-                # With the CRC cached, `iter_from` seeks past this prefix
-                # instead of reading it (see the note there), so it costs
-                # nothing. Counting it anyway is what declined every resume of
-                # a large archive.
+            if offset > d_start and not self._can_skip_prefix(e):
+                # With the CRC cached AND a seekable source, `iter_from` skips
+                # this prefix instead of reading it (see the note there), so it
+                # costs nothing. Counting it anyway is what declined every
+                # resume of a large archive - but promising a seek the backend
+                # cannot do is worse: on the S3 path `open_fn` returns a
+                # streaming body, the reader falls back to a full re-read, and
+                # the caller has already been told it was free (audit #2
+                # cross-check).
                 cost += min(offset, desc_start) - d_start
             break
         return cost
+
+    def _can_skip_prefix(self, e: _Entry) -> bool:
+        """Whether `iter_from` will be able to seek past this member's prefix:
+        the CRC has to be known AND the source has to be seekable."""
+        if self._cached_crc(e) is None:
+            return False
+        try:
+            fh = e.open_fn()
+        except Exception:  # pragma: no cover - a probe must never break a cost
+            return False
+        try:
+            return bool(getattr(fh, "seekable", lambda: False)())
+        finally:
+            try:
+                fh.close()
+            except Exception:  # pragma: no cover
+                pass
 
     def _cached_crc(self, e: _Entry) -> int | None:
         if self._crc_cache is None or e.cache_key is None:

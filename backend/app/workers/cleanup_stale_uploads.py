@@ -134,6 +134,25 @@ async def cleanup_stale_uploads(_ctx) -> dict:
                 continue
             has_usable = any(fl.state in _USABLE_FILE_STATES for fl in share.files)
             if has_usable:
+                # Some files DID land. The share stays active - and its deferred
+                # `share_created` announcement is now owed, because the stuck
+                # sibling that was holding it back has just been reaped. Without
+                # this the recipient is never told about a share that has real
+                # files in it: the announce sweep requires nothing to be
+                # uploading, and the stale row satisfied that only after this
+                # pass runs (audit #2 cross-check).
+                try:
+                    from ..services import share as share_svc
+
+                    if share_svc.announce_if_ready(db, share.id, require_quiet=True):
+                        logger.info(
+                            "cleanup_stale_uploads: announced share %s after reaping "
+                            "its stuck upload(s)", share.id,
+                        )
+                except Exception:
+                    logger.exception(
+                        "cleanup_stale_uploads: deferred announce failed for %s", share.id
+                    )
                 continue
             share.state = ShareState.failed
             share.terminated_at = now

@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import logging
 
+from sqlalchemy import String, cast
 from sqlalchemy.orm import Session
 
 from ..middleware.errors import AppError
@@ -465,7 +466,44 @@ def erase_user(
     # drop the addresses. This runs AFTER `prior_emails` has been read off these
     # same rows, which is what makes the email-keyed purges above complete
     # (audit 2026-07-30).
+    # Driven by ADDRESS, not by event type. Enumerating the two email-change
+    # events left the same person's plaintext address in `invite_created`,
+    # `invite_revoked` and `email_undeliverable` - and would have missed every
+    # event added afterwards, silently, because nothing ties the list to the
+    # call sites that write addresses (audit #2). Matching on the addresses the
+    # erasure already had to collect closes the family and stays closed.
+    addresses = {a for a in prior_emails if a}
+    addresses.add(target.email)
     scrubbed = 0
+    seen_rows: set[int] = set()
+    for addr in addresses:
+        rows = (
+            db.query(AuditLog)
+            .filter(
+                (AuditLog.target_id == addr)
+                | cast(AuditLog.extra, String).contains(addr)
+            )
+            .all()
+        )
+        for row in rows:
+            if row.id in seen_rows:
+                continue
+            seen_rows.add(row.id)
+            changed = False
+            if row.target_id in addresses:
+                row.target_id = "[erased]"
+                changed = True
+            extra = dict(row.extra or {})
+            for k, v in list(extra.items()):
+                if isinstance(v, str) and v in addresses:
+                    extra[k] = "[erased]"
+                    changed = True
+            if changed:
+                row.extra = extra
+                scrubbed += 1
+    # The email-change events keep their dedicated pass: they are keyed on the
+    # user id rather than on an address, and one side of the change may be an
+    # address the collection above could not have seen.
     for row in (
         db.query(AuditLog)
         .filter(
@@ -486,7 +524,9 @@ def erase_user(
         for k in present:
             extra[k] = "[erased]"
         row.extra = extra
-        scrubbed += 1
+        if row.id not in seen_rows:
+            seen_rows.add(row.id)
+            scrubbed += 1
     pii_purged["audit_log_scrubbed"] = scrubbed
 
     # Deliberately retained: `share_recipients` rows reference the (now

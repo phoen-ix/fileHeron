@@ -147,7 +147,19 @@ def finalize_to_disk(
     # names the locator, so the orphan sweeper has something to act on whichever
     # side of the move the failure lands.
     file.storage_path = locator
-    db.flush()
+    # COMMIT, not flush. A flush is invisible to everyone outside this
+    # transaction, so the "recording the intent first makes the failure
+    # recoverable" above was not true: a rollback took the locator with it and
+    # left the bytes exactly as orphaned as before - while the tusd working
+    # file, the only other way to find them, had already been consumed by the
+    # move (audit #2). Committed, the row names the locator, so
+    # `cleanup_stale_uploads` finds an `uploading` row past its retention
+    # window and deletes the bytes it points at.
+    #
+    # Safe to commit here: the caller (tus_hooks.handle_post_finish) has
+    # nothing else pending - `tus_upload_id` was committed by the pre-finish
+    # hook - so this commits the locator and only the locator.
+    db.commit()
 
     backend.finalize(str(src), locator)
 

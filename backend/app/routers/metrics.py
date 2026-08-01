@@ -160,7 +160,12 @@ def _render(db: Session) -> str:
               help_="ClamAV reachable/skipped (1) or down (0)."),
     ]
 
-    if disk is not None:
+    # `error` means statvfs failed, and get_disk_stats fills the numbers with
+    # zeros. Emitting those would publish "0 bytes free, 0 bytes total" as
+    # measurements - a scrape target cannot tell that apart from a real reading,
+    # and an alert rule on free_bytes would fire on a path that was merely
+    # unreadable. Absent series is the honest answer (audit #2).
+    if disk is not None and "error" not in disk:
         parts.append(_line("fileheron_storage_free_bytes", disk.get("free_bytes", 0),
                            help_="Free bytes on the local storage volume."))
         parts.append(_line("fileheron_storage_total_bytes", disk.get("total_bytes", 0),

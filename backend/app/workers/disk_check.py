@@ -114,8 +114,30 @@ async def disk_check(_ctx) -> dict:
     try:
         stats = storage_svc.get_disk_stats(settings.STORAGE_ROOT)
         if "error" in stats:
+            # An unreadable storage root is not "plenty of space". The upload
+            # gate still fails OPEN by design (a filesystem hiccup must not
+            # refuse every upload) - which is exactly why this has to be loud:
+            # `is_storage_critical_low` answers False forever, the volume fills,
+            # and finalize starts 500ing. This branch used to log one warning to
+            # worker stdout and RETURN, so `@track_cron` recorded a success and
+            # the only evidence anywhere was that line - while the bind-mount
+            # root going missing is a documented recurring failure on this host
+            # (audit #2).
+            #
+            # Alert immediately, and raise so the run is recorded as a failure:
+            # `ops_check._check_failing_crons` then escalates a persistent one
+            # even if the alert mail itself cannot be delivered.
             logger.warning("disk_check: statvfs error: %s", stats.get("error"))
-            return {"error": stats.get("error")}
+            _alert_admins(
+                db,
+                payload={
+                    "reason": "storage_unreadable",
+                    "detail": str(stats.get("error"))[:200],
+                    "path": settings.STORAGE_ROOT,
+                },
+            )
+            db.commit()
+            raise RuntimeError(f"storage root unreadable: {stats.get('error')}")
 
         is_critical = storage_svc.is_storage_critical_low(db, settings.STORAGE_ROOT)
         was_critical = settings_svc.get_bool(

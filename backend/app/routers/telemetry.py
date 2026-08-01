@@ -19,6 +19,7 @@ import logging
 from fastapi import APIRouter, Request, Response
 from pydantic import BaseModel, Field
 
+from ..middleware.errors import _redact_path
 from ..services import error_log, job_queue, rate_limit
 from ..utils.timeutil import utc_now
 
@@ -57,6 +58,19 @@ class CspReportEnvelope(BaseModel):
     model_config = {"populate_by_name": True, "extra": "ignore"}
 
 
+def _redact_uri(uri: str) -> str:
+    """Strip the query string and collapse any token segment of a URI, keeping
+    scheme+host so an operator can still tell first-party from third-party."""
+    if not uri:
+        return ""
+    base = uri.split("?", 1)[0]
+    if "://" not in base:
+        return _redact_path(base)[:512]
+    scheme, rest = base.split("://", 1)
+    host, _, path = rest.partition("/")
+    return f"{scheme}://{host}{_redact_path('/' + path) if path else ''}"[:512]
+
+
 @router.post("/page-404", status_code=204)
 def report_page_404(body: Page404Request, request: Request) -> Response:
     try:
@@ -67,8 +81,11 @@ def report_page_404(body: Page404Request, request: Request) -> Response:
         ip = request.client.host if request.client else ""
         if not rate_limit.check_ip_allowed("client_404", ip, limit=10, window_sec=60):
             return Response(status_code=204)
-        # Path only - drop the query string (may carry junk/tokens), then truncate.
-        path = (body.path or "").split("?", 1)[0][:512]
+        # Path only - drop the query string (may carry junk/tokens), collapse
+        # any token segment, then truncate. The path is client-asserted, and
+        # the SPA's own token routes are exactly the ones a user mistypes into
+        # a 404 (audit #2).
+        path = _redact_path((body.path or "").split("?", 1)[0])[:512]
         event = {
             "source": "spa",
             "exception_type": "ClientNavigation",
@@ -129,11 +146,14 @@ async def report_csp_violation(request: Request) -> Response:
         for sep in ("://",):
             if sep in doc:
                 doc = "/" + doc.split(sep, 1)[1].split("/", 1)[-1] if "/" in doc.split(sep, 1)[1] else "/"
+        doc = _redact_path(doc)
         event = {
             "source": "csp",
             "exception_type": "CspViolation",
+            # The blocked URI is browser-supplied and can be a same-origin
+            # URL - so it gets the same token collapsing as the document URI.
             "message": f"CSP would block {directive or 'a resource'}: "
-                       f"{report.blocked_uri or '(inline)'}"[:500],
+                       f"{_redact_uri(report.blocked_uri) or '(inline)'}"[:500],
             "method": "POST",
             "path": doc[:512],
             "status_code": 0,

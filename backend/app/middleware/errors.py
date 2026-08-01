@@ -72,7 +72,25 @@ class AppError(Exception):
 # therefore outlive the link it opens and hand full download access to whoever
 # read the alert (audit 2026-07-30). The query string was already excluded for
 # exactly this reason; the path was not.
+# API paths whose FOURTH segment is a credential: /api/<x>/<token>/...
 _SECRET_PATH_PREFIXES = ("/api/public", "/api/notification-subscriptions")
+
+# SPA paths whose SECOND segment is a credential: /<x>/<token>. These arrive
+# from the CSP sink and the SPA 404 beacon as browser-supplied document URIs -
+# a live public-link token, or a one-hour account-takeover token, in a table an
+# admin browses, a CSV anyone can be handed, and every DB backup for 90 days
+# (audit #2). Kept in lockstep with frontend/src/router/index.ts by
+# tests/test_error_log_path_redaction.py.
+_SECRET_SPA_PREFIXES = (
+    "/d",
+    "/register",
+    "/reset-password",
+    "/set-password",
+    "/verify-email",
+    "/confirm-email-change",
+    "/cancel-email-change",
+    "/manage-notifications",
+)
 
 
 def _redact_path(path: str) -> str:
@@ -87,7 +105,54 @@ def _redact_path(path: str) -> str:
             if len(parts) > 3 and parts[3]:
                 parts[3] = ":token"
             return "/".join(parts)
+    for prefix in _SECRET_SPA_PREFIXES:
+        if path.startswith(prefix + "/"):
+            parts = path.split("/")
+            # ["", "d", "<token>", ...] - the 3rd element is the secret. Anything
+            # after it is a typo'd suffix, not route shape, so it goes too: a
+            # mistyped /reset-password/<token>x still carries the token.
+            if len(parts) > 2 and parts[2]:
+                return "/".join(parts[:2] + [":token"])
     return path
+
+
+def _safe_error_message(exc: Exception) -> str:
+    """The one-line description that goes into `error_log.message` and into the
+    server_error alert email.
+
+    `str()` on a SQLAlchemy error appends the failing statement AND its bound
+    parameters: an IntegrityError on user creation rendered as
+
+        (IntegrityError) UNIQUE constraint failed: users.email
+        [SQL: INSERT INTO users (email, password_hash, ...) VALUES (?, ...)]
+        [parameters: ('victim@corp.example', '$argon2id$v=19$m=65536,...
+
+    - an address and the leading bytes of a password hash, in a table admins
+    browse, in the CSV export, in every backup, and in an alert mail that
+    `recipients_mode=custom` can point at an external ticketing mailbox (audit
+    #2). The same path exposed inbound mail subjects, reset-token hashes and
+    encrypted secrets - anything that reaches a failing statement.
+
+    The full traceback still goes to the container log via `logger.exception`,
+    keyed by the same `request_id`, where it is operator-only. What is dropped
+    here is dropped only from the admin-facing surfaces.
+    """
+    from sqlalchemy.exc import StatementError
+
+    if isinstance(exc, StatementError):
+        orig = getattr(exc, "orig", None)
+        args = getattr(orig, "args", ()) or ()
+        # The DBAPI error CODE is diagnostic; its message quotes the offending
+        # value, so it is not carried.
+        code = args[0] if args and isinstance(args[0], int) else None
+        name = type(orig).__name__ if orig is not None else type(exc).__name__
+        return f"{name} in {type(exc).__name__}" + (f" (db error {code})" if code else "")
+    text = str(getattr(exc, "message", None) or exc)
+    # Belt and braces for anything that wraps a statement error by hand.
+    cut = text.find("[SQL:")
+    if cut != -1:
+        text = text[:cut].rstrip()
+    return text[:500]
 
 
 def _maybe_enqueue_error_event(
@@ -120,7 +185,7 @@ def _maybe_enqueue_error_event(
         event = {
             "source": "http",
             "exception_type": type(exc).__name__,
-            "message": (getattr(exc, "message", None) or str(exc))[:500],
+            "message": _safe_error_message(exc),
             "method": request.method,
             # Path only - never the query string (may carry tokens/PII) - and
             # with any secret-bearing segment collapsed (see _redact_path).

@@ -277,29 +277,42 @@ def hard_delete(
     return deferred
 
 
-def purge_locators(locators: list[str | None]) -> None:
-    """Unlink bytes AFTER the caller's commit. Never raises: the rows are
-    already committed as `deleted`, so a failure here leaks bytes that the
-    orphan sweeper can still find, whereas raising would 500 a delete that has
-    already happened."""
+def purge_locators(
+    db: Session, locators: list[str | None], *, reason: str
+) -> list[str]:
+    """Unlink bytes AFTER the caller's commit. Returns the locators that could
+    NOT be unlinked.
+
+    Never raises - the rows are already committed as `deleted`, and raising
+    would 500 a delete that has already happened. But it must not stay silent
+    either: `reclaim_orphaned_files` works from DB rows and only looks at
+    `clean`/`ready_unscanned` ones, so a `deleted` row's locator is unreachable
+    the moment this fails. A log line is not durable (container stdout rotates,
+    and a bare `logger.error` reaches neither `error_log` nor an alert), so each
+    failure gets a `file_purge_failed` audit row - exactly what
+    `purge_expired_bytes` has done since v2.5.0.
+
+    This function's own docstring used to claim "a failure here leaks bytes
+    that the orphan sweeper can still find" while the comment inside its except
+    block said the opposite. The except block was right.
+    """
     backend = get_storage_backend()
+    failed: list[str] = []
     for locator in locators:
         if not locator:
             continue
         try:
             backend.delete(locator)
         except Exception:
-            # ERROR, not warning: the row is already committed as `deleted`, so
-            # no sweeper will look at this locator again and these bytes are now
-            # invisible to every reclaim path. One log line is the only trace
-            # there will ever be, so it should be one an operator's alerting
-            # can find (audit #2 cross-check).
             logger.error(
                 "deferred purge FAILED for %s - the row is deleted, so these bytes "
                 "are now orphaned and no sweeper will find them",
                 locator,
                 exc_info=True,
             )
+            failed.append(locator)
+            record_orphan_locator(db, locator=locator, reason=reason)
+    return failed
 
 
 def revoke_share_if_empty(

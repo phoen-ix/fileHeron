@@ -105,7 +105,7 @@ def admin_reclaim_orphan(
         request=request, purge=False,
     )
     db.commit()
-    file_svc.purge_locators([purge])
+    file_svc.purge_locators(db, [purge], reason="admin_reclaim")
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -141,5 +141,5 @@ def admin_delete_file(
         request=request,
     )
     db.commit()
-    file_svc.purge_locators([purge])
+    file_svc.purge_locators(db, [purge], reason="admin_delete")
     return Response(status_code=status.HTTP_204_NO_CONTENT)

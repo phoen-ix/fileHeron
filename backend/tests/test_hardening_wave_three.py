@@ -124,20 +124,31 @@ def test_a_wrong_recovery_code_still_fails(db, make_user, monkeypatch):
 # --- the 500 response -------------------------------------------------------
 
 
-def test_an_unhandled_500_carries_the_security_headers_and_the_request_id():
+@pytest.mark.asyncio
+async def test_an_unhandled_500_carries_the_security_headers_and_the_request_id():
     """`add_exception_handler(Exception, ...)` is served by ServerErrorMiddleware,
     which sits OUTSIDE every user middleware - so a 500 went out with
     content-type and content-length and nothing else: no nosniff, no CSP, no
     X-Frame-Options, no HSTS in production, and no X-Request-Id. The SPA and the
     desktop client are both told to quote the request id when reporting a
     failure."""
-    import inspect
+    # The RESPONSE, not the handler's source. Nothing anywhere looked at a 500's
+    # headers, so a source grep was the only thing standing between this and a
+    # bare 500 again (audit #2 cross-check, MUT-3).
+    from starlette.requests import Request
 
     from app.middleware import errors
 
-    src = inspect.getsource(errors.unhandled_exception_handler)
-    assert "apply_security_headers" in src
-    assert "X-Request-Id" in src
+    scope = {
+        "type": "http", "method": "GET", "path": "/api/boom", "headers": [],
+        "query_string": b"", "client": ("127.0.0.1", 1234),
+    }
+    request = Request(scope)
+    request.state.request_id = "req-abc123"
+    resp = await errors.unhandled_exception_handler(request, ValueError("boom"))
+    assert resp.status_code == 500
+    assert resp.headers.get("x-content-type-options") == "nosniff"
+    assert resp.headers.get("x-request-id") == "req-abc123"
 
 
 # --- alerting that reaches nobody -------------------------------------------

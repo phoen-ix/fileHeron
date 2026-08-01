@@ -227,3 +227,55 @@ async def test_orphaned_filter_and_flag(client, db, make_user, login_as):
     assert len(items) == 1
     assert items[0]["file_id"] == orphan_f.id
     assert items[0]["is_orphaned"] is True
+
+
+@pytest.mark.asyncio
+async def test_the_cron_does_not_report_bytes_it_could_not_free(make_user, db, monkeypatch):
+    """v2.8.0 deferred the byte unlink until after the commit so a multi-GB
+    delete could not hold row locks. Right call, but the failure went inside
+    out: `purge_locators` swallowed the error while `reclaimed` and
+    `bytes_freed` were incremented regardless, so the run reported success and
+    emailed every admin "Reclaimed 1 orphaned file(s) (X MB)" for bytes still on
+    the volume - and the row was now `deleted`, which is outside this sweeper's
+    own filter, so nothing ever retried. v2.7.3 raised here, left the row
+    `clean`, and self-healed on the next nightly run (audit #2 cross-check,
+    INT-5).
+    """
+    from app.services import file as file_svc
+    from app.workers.reclaim_orphaned_files import reclaim_orphaned_files
+
+    owner = make_user(email="u@test.local", role=UserRole.employee)
+    share = _make_share(db, owner.id, state=ShareState.revoked, terminated_ago_days=10)
+    f = _make_file(db, share.id, owner.id, state=FileState.clean)
+    db.commit()
+
+    def _refuse(_self, _locator):
+        raise OSError(30, "Read-only file system")
+
+    monkeypatch.setattr(
+        type(file_svc.get_storage_backend()), "delete", _refuse, raising=True
+    )
+
+    res = await reclaim_orphaned_files(None)
+    assert res["reclaimed"] == 0, "reported freeing bytes that are still on disk"
+    assert res["bytes_freed"] == 0
+    assert res["failed"] == 1
+
+    from app.models.audit_log import AuditLog
+
+    assert (
+        db.query(AuditLog)
+        .filter(AuditLog.event_type == "file_purge_failed")
+        .count()
+        == 1
+    ), "no durable trace of bytes that are still on the volume"
+
+    # Why the record is the only recourse: the row is `deleted` now, and this
+    # sweeper only walks clean/ready_unscanned, so it will never see this file
+    # again however many times it runs.
+    db.refresh(f)
+    assert f.state == FileState.deleted
+    res2 = await reclaim_orphaned_files(None)
+    assert res2["reclaimed"] == 0 and res2["failed"] == 0, (
+        "the file is out of the sweeper's reach; nothing will retry it"
+    )

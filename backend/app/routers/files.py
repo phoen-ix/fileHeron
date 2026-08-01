@@ -679,4 +679,4 @@ def delete_file(
         request=request,
     )
     db.commit()
-    file_svc.purge_locators([purge])
+    file_svc.purge_locators(db, [purge], reason="file_deleted")

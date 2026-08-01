@@ -87,10 +87,19 @@ def test_metrics_publishes_no_disk_series_it_cannot_measure(db, statvfs_broken):
     stats = storage_svc.get_disk_stats("/does/not/matter")
     assert stats["free_bytes"] == 0 and "error" in stats, "the control"
 
-    import inspect
-
-    src = inspect.getsource(metrics_router)
-    assert '"error" not in disk' in src, (
+    # Render the real exposition rather than grepping this module's source: a
+    # source check passes whatever the condition evaluates to, so flipping the
+    # `and` to an `or` republished the zeroed gauges with the whole suite green
+    # (audit #2 cross-check, MUT-2).
+    body = metrics_router._render(db)
+    published = [
+        line for line in body.splitlines()
+        if not line.startswith("#")
+        and line.split("{")[0].split(" ")[0] in (
+            "fileheron_storage_free_bytes", "fileheron_storage_total_bytes",
+        )
+    ]
+    assert not published, (
         "the gauges are emitted from zeroed stats, publishing a measurement "
-        "that was never taken"
+        f"that was never taken: {published}"
     )

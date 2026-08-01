@@ -89,7 +89,10 @@ async def test_an_anonymous_health_probe_gets_liveness_only(client, monkeypatch)
     assert r.status_code in (200, 503)
     body = r.json()
     assert body.get("status")
-    for leaked in ("running_sha", "degraded", "db_latency_ms"):
+    # running_version FIRST: it is the field the module names as the reason
+    # the gate exists (an anonymous caller learning the exact build to match
+    # against advisories), and it was the one field this list omitted.
+    for leaked in ("running_version", "running_sha", "degraded", "db_latency_ms"):
         assert leaked not in body, f"{leaked} disclosed to an anonymous caller"
 
 

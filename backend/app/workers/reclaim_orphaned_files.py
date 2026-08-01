@@ -156,9 +156,18 @@ async def reclaim_orphaned_files(_ctx) -> dict:
                     db, file=f2, reason="orphan_reclaim", purge=False
                 )
                 db.commit()
-                file_svc.purge_locators([locator])
-                reclaimed += 1
-                bytes_freed += size
+                # Count what was actually FREED. A failed unlink used to
+                # increment both counters anyway, so the run reported success,
+                # emailed admins "Reclaimed 1 orphaned file(s) (X MB)" for bytes
+                # still on the volume, and - because the row is now `deleted` -
+                # dropped out of this sweeper's filter for good. Before the
+                # deferred purge landed, the same failure raised, the row stayed
+                # `clean`, and the next nightly run retried it.
+                if file_svc.purge_locators(db, [locator], reason="orphan_reclaim"):
+                    failed += 1
+                else:
+                    reclaimed += 1
+                    bytes_freed += size
             except Exception as e:
                 db.rollback()
                 failed += 1

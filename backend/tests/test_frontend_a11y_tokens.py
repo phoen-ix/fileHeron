@@ -83,7 +83,18 @@ def test_a_focusable_row_keeps_its_outline(view, table):
     assert blocks, f"{view} has no :focus-visible rule for its rows"
     for block in blocks:
         assert "outline: none" not in block, f"{view}: focus ring removed"
-        assert "outline: 2px solid" in block, f"{view}: no visible ring"
+        ring = re.search(r"outline:\s*2px solid\s+([^;]+);", block)
+        assert ring, f"{view}: no visible ring"
+        # `outline: 2px solid transparent` satisfied the old substring check and
+        # is a ring nobody can see (audit #2 cross-check, MUT-6). Resolve the
+        # colour and hold it to the same non-text floor as the ring token.
+        colour = ring.group(1).strip()
+        token = re.fullmatch(r"var\((--fh-[a-z0-9-]+)\)", colour)
+        resolved = _token(token.group(1)[2:]) if token else colour
+        assert re.fullmatch(r"#[0-9a-fA-F]{6}", resolved), (
+            f"{view}: focus ring is {colour!r}, which is not a solid colour"
+        )
+        assert _contrast(resolved, _token("fh-paper-raised")) >= 3.0
 
 
 def test_every_referenced_design_token_exists():
@@ -210,12 +221,49 @@ def test_the_recipient_picker_honours_the_combobox_contract():
     for attr in ('role="combobox"', "aria-expanded", "aria-activedescendant", "aria-controls"):
         assert attr in src, attr
 
+    # The vocabulary being present says nothing about it pointing anywhere: an
+    # aria-activedescendant naming an id no element has is announced as
+    # silence, exactly like having no attribute at all (audit #2 cross-check,
+    # MUT-5). Compare the id TEMPLATE the computed builds against the one the
+    # option rows bind.
+    active = re.search(r"activeOptionId = computed\((.*?)\)\n", src, re.S)
+    assert active, "activeOptionId moved; this test no longer sees it"
+    active_tpl = re.search(r"`\$\{inputId\}(-opt-)\$\{", active.group(1))
+    assert active_tpl, "activeOptionId no longer builds an option id"
+    option_ids = re.findall(r':id="`\$\{inputId\}(-opt-)\$\{', src)
+    assert option_ids, "the option rows no longer mint ids"
+    assert all(o == active_tpl.group(1) for o in option_ids), (
+        "aria-activedescendant points at an id pattern no option row uses"
+    )
 
-@pytest.mark.parametrize("pair", [("fh-subtle", "fh-paper"), ("fh-field-edge", "fh-paper")])
-def test_placeholder_and_field_edges_are_legible(pair):
-    """Placeholder text measured 2.39:1 and the input boundary 1.44:1, so the
-    filter bar on /admin/mail-log was three empty gaps to a low-vision admin -
-    and on /account the user's own address is shown ONLY as a placeholder."""
-    token, surface = pair
-    floor = 4.5 if token == "fh-subtle" else 3.0
-    assert _contrast(_token(token), _token(surface)) >= floor
+    # And the listbox the combobox controls has to be the one it names.
+    controls = re.search(r':aria-controls="`\$\{inputId\}([a-z-]+)`"', src)
+    assert controls, "aria-controls is not bound to a minted id"
+    assert f':id="`${{inputId}}{controls.group(1)}`"' in src, (
+        "aria-controls names a listbox id no element has"
+    )
+
+
+def test_placeholders_are_legible():
+    """Placeholder text measured 2.39:1, so the filter bar on /admin/mail-log
+    was three empty gaps to a low-vision admin - and on /account the user's own
+    address is shown ONLY as a placeholder.
+
+    Reads the RULE and resolves whichever token it names. Asserting on
+    `--fh-subtle` instead checked a token the fix never touched: the whole
+    pre-fix frontend satisfied it, and swapping the rule back to
+    `--fh-subtle-soft` left every backend and vitest test green (audit #2
+    cross-check, MUT-1).
+    """
+    css = (FRONTEND / "styles" / "global.css").read_text()
+    block = re.search(r"\.fh-field-input::placeholder\s*\{(.*?)\}", css, re.S)
+    assert block, "the placeholder rule moved; this test no longer sees it"
+    named = re.search(r"color:\s*var\((--fh-[a-z0-9-]+)\)", block.group(1))
+    assert named, "the placeholder colour is no longer a design token"
+    assert _contrast(_token(named.group(1)[2:]), _token("fh-paper")) >= 4.5
+
+
+def test_field_edges_are_visible():
+    """The input boundary measured 1.44:1 - a field a low-vision user cannot
+    see the extent of."""
+    assert _contrast(_token("fh-field-edge"), _token("fh-paper")) >= 3.0

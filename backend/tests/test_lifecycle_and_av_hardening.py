@@ -129,14 +129,14 @@ def test_the_post_commit_purge_removes_them(db, one_file):
     owner, sh, f, blob = one_file
     locator = file_svc.hard_delete(db, file=f, reason="user_request", purge=False)
     db.commit()
-    file_svc.purge_locators([locator])
+    file_svc.purge_locators(db, [locator], reason="user_request")
     assert not blob.exists()
 
 
 def test_the_purge_helper_never_raises(db):
     from app.services import file as file_svc
 
-    file_svc.purge_locators([None, "/nonexistent/nowhere.bin"])
+    file_svc.purge_locators(db, [None, "/nonexistent/nowhere.bin"], reason="x")
 
 
 # --- the GDPR receipt -------------------------------------------------------
@@ -290,3 +290,43 @@ def ipaddress_in(nets, addr: str) -> bool:
 
     ip = ipaddress.ip_address(addr)
     return any(ip in net for net in nets)
+
+
+# --- a failed deferred purge must stay findable -----------------------------
+#
+# v2.8.0 moved the byte unlink AFTER the commit so a multi-GB delete could not
+# hold row locks. That was right, but it turned the failure mode inside out:
+# the row is `deleted` before the unlink is attempted, and
+# `reclaim_orphaned_files` only walks `clean`/`ready_unscanned` rows, so a
+# failed unlink left bytes no sweeper would ever look at again. Before the
+# change the same failure raised, the row stayed `clean`, and the nightly run
+# retried it until the filesystem was fixed (audit #2 cross-check, INT-5).
+
+
+def test_a_failed_purge_leaves_a_durable_record(db, one_file, monkeypatch):
+    """A log line is not a record: it reaches neither error_log nor an alert,
+    and container stdout rotates."""
+    from app.models.audit_log import AuditLog
+    from app.services import file as file_svc
+
+    owner, sh, f, blob = one_file
+    locator = file_svc.hard_delete(db, file=f, reason="user_request", purge=False)
+    db.commit()
+
+    def _refuse(_self, _locator):
+        raise OSError(30, "Read-only file system")
+
+    monkeypatch.setattr(
+        type(file_svc.get_storage_backend()), "delete", _refuse, raising=True
+    )
+    failed = file_svc.purge_locators(db, [locator], reason="user_request")
+
+    assert failed == [locator], "the caller cannot tell the bytes are still there"
+    assert blob.exists(), "precondition: the unlink really did fail"
+    rows = (
+        db.query(AuditLog)
+        .filter(AuditLog.event_type == "file_purge_failed")
+        .all()
+    )
+    assert len(rows) == 1, "no durable trace of bytes that are still on the volume"
+    assert rows[0].target_id == locator

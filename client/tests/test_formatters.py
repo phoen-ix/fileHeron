@@ -42,8 +42,16 @@ def test_to_local_aware_preserves_instant():
 
 
 def test_format_expiry_renders_none_as_never_word():
-    # v1.1.4 "Never" preset - backend sends expires_at: null.
-    assert format_expiry(None) == "Never"
+    # v1.1.4 "Never" preset - backend sends expires_at: null. Localised since
+    # audit #2: this literal was the only thing pinning it to English, on a
+    # client whose every other label is translated.
+    from fileheron_client.i18n import set_locale, t
+
+    set_locale("en")
+    assert format_expiry(None) == t("common.never") == "Never"
+    set_locale("de")
+    assert format_expiry(None) == "Nie"
+    set_locale("en")
 
 
 # ---- exact local rendering (POSIX only - needs a pinned TZ) -----------------
@@ -122,3 +130,78 @@ def test_rate_estimator_eta_none_when_complete_or_unknown_total():
     est2.update(0, 100, now=0.0)
     _, eta2 = est2.update(100, 100, now=1.0)  # complete
     assert eta2 is None
+
+
+# --- audit #2: the instance's timezone, and localised backend errors --------
+
+
+def test_times_render_in_the_instances_timezone():
+    """The SPA renders AND interprets every wall-clock time in
+    `site.timezone`; the client used the machine's local zone for both, so a
+    laptop on America/New_York against a Europe/Vienna instance was six hours
+    out in each direction - with no zone label on either client surface to
+    reveal it."""
+    from datetime import datetime, timezone
+
+    from fileheron_client.formatters import (
+        format_datetime,
+        set_display_timezone,
+        timezone_label,
+    )
+
+    instant = datetime(2026, 8, 5, 15, 0, tzinfo=timezone.utc)
+    try:
+        set_display_timezone("Europe/Vienna")
+        assert format_datetime(instant) == "2026-08-05 17:00"
+        assert timezone_label() == "Europe/Vienna"
+
+        set_display_timezone("America/New_York")
+        assert format_datetime(instant) == "2026-08-05 11:00"
+    finally:
+        set_display_timezone(None)
+
+
+def test_an_unknown_timezone_falls_back_to_local():
+    """An older server sends no `site_timezone`, and a bad value must not throw
+    on a background thread during sign-in."""
+    from fileheron_client.formatters import display_timezone, set_display_timezone
+
+    set_display_timezone("Not/AZone")
+    assert display_timezone() is None
+    set_display_timezone(None)
+    assert display_timezone() is None
+
+
+def test_a_backend_error_is_shown_in_the_users_language():
+    """Every label around the user was translated and the error itself was
+    not: `ApiError.message` is whatever the backend wrote, and the backend
+    writes English."""
+    from fileheron_client.api.client import ApiError
+    from fileheron_client.i18n import set_locale
+
+    err = ApiError(
+        status_code=410,
+        code="SHARE_NOT_ACTIVE",
+        message="This share is no longer active.",
+    )
+    try:
+        set_locale("de")
+        localized = err.localized()
+        assert localized != err.message
+        assert localized.strip()
+    finally:
+        set_locale("en")
+
+
+def test_an_unknown_code_falls_back_to_the_servers_text():
+    """A newer server can emit a code this client build has never heard of;
+    showing a raw key would be worse than showing English."""
+    from fileheron_client.api.client import ApiError
+    from fileheron_client.i18n import set_locale
+
+    err = ApiError(status_code=418, code="A_CODE_FROM_THE_FUTURE", message="Teapot.")
+    set_locale("de")
+    try:
+        assert err.localized() == "Teapot."
+    finally:
+        set_locale("en")

@@ -424,7 +424,7 @@ class UploadPanel(ctk.CTkFrame):
             if not alive(self):
                 return  # panel gone; nothing to restore (C6)
             self.send_btn.configure(state="normal", text=t("upload.send_btn"))
-            msg = getattr(exc, "message", None) or str(exc)
+            msg = (exc.localized() if hasattr(exc, "localized") else str(exc))
             self.status_var.set(t("upload.status_err", detail=msg))
 
         from ._async import run_in_background

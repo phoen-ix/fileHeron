@@ -31,6 +31,20 @@ class ApiError(Exception):
     def __str__(self) -> str:  # pragma: no cover - trivial
         return f"[{self.status_code} {self.code}] {self.message}"
 
+    def localized(self) -> str:
+        """The message to show a person, in THEIR language.
+
+        `message` is whatever the backend wrote, and the backend writes English
+        - so a German user saw every label around them in German and the error
+        itself in English (audit #2). Keyed on the code, which is the stable
+        part of the envelope; an unknown code falls back to the server's text
+        rather than to nothing.
+        """
+        from ..i18n import has, t
+
+        key = f"errors.{self.code}"
+        return t(key) if has(key) else (self.message or self.code)
+
 
 class SessionExpiredError(ApiError):
     """Raised when a 401 could not be recovered by a token refresh - the

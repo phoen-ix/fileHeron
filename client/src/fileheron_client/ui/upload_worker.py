@@ -75,7 +75,7 @@ def start_upload(
         on_done(path_str, file_id)
 
     def _on_failed(exc):
-        msg = getattr(exc, "message", None) or str(exc)
+        msg = (exc.localized() if hasattr(exc, "localized") else str(exc))
         on_failed(path_str, msg)
 
     return run_with_progress(

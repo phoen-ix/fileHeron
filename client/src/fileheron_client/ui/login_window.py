@@ -440,7 +440,7 @@ class LoginOverlay(ctk.CTkFrame):
                 self._show_error(t("login.err_invalid_recovery"))
                 self.code_var.set("")
                 return
-            self._show_error(exc.message or t("login.err_signin_failed"))
+            self._show_error(exc.localized() or t("login.err_signin_failed"))
             return
         # Network / TLS / DNS.
         self._show_error(t("login.err_unreachable", detail=str(exc)))

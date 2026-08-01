@@ -13,6 +13,8 @@ entirely")."""
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+
+from ..formatters import display_timezone, timezone_label
 from typing import Optional, Tuple
 
 import customtkinter as ctk
@@ -30,14 +32,21 @@ class ExpiryDialog:
         self._win.resizable(False, False)
         self._win.transient(parent)
 
-        default = current if current is not None else (datetime.now() + timedelta(days=7))
+        zone0 = display_timezone()
+        default = current if current is not None else (
+            (datetime.now(tz=zone0) if zone0 else datetime.now()) + timedelta(days=7)
+        )
         self._result: Optional[Tuple[str, Optional[datetime]]] = None
 
         outer = ctk.CTkFrame(self._win, fg_color="transparent")
         outer.pack(fill="both", expand=True, padx=18, pady=18)
 
         ctk.CTkLabel(
-            outer, text=t("expiry_dialog.intro"), anchor="w",
+            outer,
+            text=t("expiry_dialog.intro")
+            + "  "
+            + t("common.timezone_note", tz=timezone_label()),
+            anchor="w",
         ).pack(fill="x", pady=(0, 12))
 
         # DateEntry is date-only; pair with HH/MM CTk entries
@@ -53,7 +62,7 @@ class ExpiryDialog:
             year=default.year,
             month=default.month,
             day=default.day,
-            mindate=datetime.now().date(),
+            mindate=(datetime.now(tz=display_timezone()) if display_timezone() else datetime.now()).date(),
         )
         self._date.pack(side="left", padx=(0, 8))
 
@@ -118,8 +127,14 @@ class ExpiryDialog:
             )
             return
         d = self._date.get_date()
-        chosen = datetime(d.year, d.month, d.day, hh, mm)
-        if chosen <= datetime.now():
+        # Interpreted in the SAME zone it is rendered in. Building a naive
+        # local datetime meant a laptop in another timezone than the instance
+        # sent an instant six hours from the one the operator typed, and the
+        # recipient's browser then showed that other instant (audit #2).
+        zone = display_timezone()
+        chosen = datetime(d.year, d.month, d.day, hh, mm, tzinfo=zone)
+        now = datetime.now(tz=zone) if zone else datetime.now()
+        if chosen <= now:
             from ._messagebox import warn
             warn(
                 self._win,

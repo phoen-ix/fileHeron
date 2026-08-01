@@ -110,6 +110,19 @@ class AppController:
         except Exception as exc:
             trace(f"locale wiring failed (non-fatal): {exc!r}")
 
+        # Adopt the instance's timezone for rendering AND for interpreting the
+        # expiry the operator types. Without it the client used the machine's
+        # local zone for both while the SPA used `site.timezone`, so a
+        # travelling employee set an expiry six hours from the one the
+        # recipient saw, with no zone label anywhere to reveal it (audit #2).
+        try:
+            from ..api.site import public_config
+            from ..formatters import set_display_timezone
+
+            set_display_timezone(public_config(api).get("site_timezone"))
+        except Exception as exc:
+            trace(f"site timezone wiring failed (non-fatal): {exc!r}")
+
         # Build the main UI behind the overlay, THEN remove the overlay so the
         # root is never momentarily empty. If MainWindow construction raises,
         # the exception propagates back into LoginOverlay._done, which keeps

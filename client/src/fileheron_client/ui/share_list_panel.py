@@ -275,7 +275,7 @@ class ShareListPanel(ctk.CTkFrame):
                 self._render()
 
         def _failed(exc):
-            msg = getattr(exc, "message", None) or str(exc)
+            msg = (exc.localized() if hasattr(exc, "localized") else str(exc))
             self.status_var.set(t("share_list.status_err", detail=msg))
 
         run_in_background(self._app_root, _fetch, on_done=_done, on_failed=_failed)

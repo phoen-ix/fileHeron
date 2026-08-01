@@ -157,7 +157,7 @@ class _InlineUserSearch(_InlineMultiSelectPanel):
                 return
             self.empty_var.set(
                 f'{t("recipient_picker.search_failed_title")}: '
-                f'{getattr(exc, "message", None) or str(exc)}'
+                f'{(exc.localized() if hasattr(exc, "localized") else str(exc))}'
             )
 
         run_in_background(self._app_root, _fetch, on_done=_done, on_failed=_failed)
@@ -184,7 +184,7 @@ class _InlineGroupSearch(_InlineMultiSelectPanel):
                 return
             self.empty_var.set(
                 f'{t("recipient_picker.load_groups_failed_title")}: '
-                f'{getattr(exc, "message", None) or str(exc)}'
+                f'{(exc.localized() if hasattr(exc, "localized") else str(exc))}'
             )
 
         run_in_background(self._app_root, _fetch, on_done=_done, on_failed=_failed)

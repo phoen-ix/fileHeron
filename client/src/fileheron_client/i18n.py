@@ -82,6 +82,19 @@ def _lookup(table: dict[str, Any], dotted: str) -> Any:
     return node
 
 
+def has(key: str) -> bool:
+    """Whether `key` resolves in the ACTIVE locale (not the fallback).
+
+    Used by ApiError.localized: an unknown backend code must fall through to
+    the server's own text rather than render a raw key."""
+    if _active_table is None:
+        set_locale(_active)
+    found = _lookup(_active_table or {}, key)
+    if found is None:
+        found = _lookup(_fallback_table or {}, key)
+    return isinstance(found, str)
+
+
 def t(key: str, **kwargs: Any) -> str:
     """Resolve ``key`` (dotted) through the active locale, falling
     back to English on miss. ``kwargs`` are passed to ``str.format``.

@@ -295,7 +295,7 @@ class ShareDetailView(ctk.CTkFrame):
         def _failed(exc):
             if not alive(self):
                 return  # view gone; nothing to warn about (C6)
-            msg = getattr(exc, "message", None) or str(exc)
+            msg = (exc.localized() if hasattr(exc, "localized") else str(exc))
             self._toast(f'{t("share_detail.could_not_load_title")}: {msg}', kind="error")
             self._on_back()
 
@@ -422,7 +422,7 @@ class ShareDetailView(ctk.CTkFrame):
             self._toast(t("share_detail.ended_body"), kind="success")
 
         def _failed(exc):
-            msg = getattr(exc, "message", None) or str(exc)
+            msg = (exc.localized() if hasattr(exc, "localized") else str(exc))
             self._toast(f'{t("share_detail.end_share_failed_title")}: {msg}', kind="error")
 
         run_in_background(self._app_root, _do, on_done=_done, on_failed=_failed)
@@ -453,7 +453,7 @@ class ShareDetailView(ctk.CTkFrame):
             self._toast(t("share_detail.expiry_updated_body"), kind="success")
 
         def _failed(exc):
-            msg = getattr(exc, "message", None) or str(exc)
+            msg = (exc.localized() if hasattr(exc, "localized") else str(exc))
             self._toast(f'{t("share_detail.edit_failed_title")}: {msg}', kind="error")
 
         run_in_background(self._app_root, _do, on_done=_done, on_failed=_failed)
@@ -489,7 +489,7 @@ class ShareDetailView(ctk.CTkFrame):
             self._toast(t("share_detail.limit_updated_body"), kind="success")
 
         def _failed(exc):
-            msg = getattr(exc, "message", None) or str(exc)
+            msg = (exc.localized() if hasattr(exc, "localized") else str(exc))
             self._toast(f'{t("share_detail.edit_failed_title")}: {msg}', kind="error")
 
         run_in_background(self._app_root, _do, on_done=_done, on_failed=_failed)
@@ -898,7 +898,7 @@ class ShareDetailView(ctk.CTkFrame):
             else:
                 dlreg.remove(file_id)
                 self._set_actions_idle(file_id)
-            msg = getattr(exc, "message", None) or str(exc)
+            msg = (exc.localized() if hasattr(exc, "localized") else str(exc))
             self._toast(
                 f'{t("share_detail.download_failed_title")}: {msg}', kind="error"
             )

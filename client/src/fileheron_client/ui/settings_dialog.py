@@ -306,7 +306,7 @@ class SettingsOverlay(ctk.CTkFrame):
         except Exception as exc:
             self._status_var.set(
                 t("settings.language_save_failed",
-                  detail=getattr(exc, "message", None) or str(exc),
+                  detail=(exc.localized() if hasattr(exc, "localized") else str(exc)),
                   locale=applied)
             )
 

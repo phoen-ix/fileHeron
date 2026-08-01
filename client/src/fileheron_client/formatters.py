@@ -5,8 +5,43 @@ into the test process (see ``tests/conftest.py``)."""
 from __future__ import annotations
 
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timezone, tzinfo
 from typing import Optional
+
+# The instance's timezone, once the client has read /api/config-public. The SPA
+# renders AND interprets every wall-clock time in it, and the client used the
+# machine's local zone for both - so a laptop on America/New_York against a
+# Europe/Vienna instance was six hours out in each direction, with no zone label
+# on either client surface to reveal it (audit #2).
+_display_tz: Optional[tzinfo] = None
+_display_tz_name: str = ""
+
+
+def set_display_timezone(name: Optional[str]) -> None:
+    """Adopt the instance's timezone. Unknown or missing -> stay local."""
+    global _display_tz, _display_tz_name
+    if not name:
+        _display_tz, _display_tz_name = None, ""
+        return
+    try:
+        from zoneinfo import ZoneInfo
+
+        _display_tz = ZoneInfo(name)
+        _display_tz_name = name
+    except Exception:
+        _display_tz, _display_tz_name = None, ""
+
+
+def display_timezone() -> Optional[tzinfo]:
+    return _display_tz
+
+
+def timezone_label() -> str:
+    """The zone every rendered timestamp is in, for the UI to show beside
+    them."""
+    if _display_tz_name:
+        return _display_tz_name
+    return datetime.now().astimezone().strftime("%Z") or "local time"
 
 
 def to_local(value: datetime) -> datetime:
@@ -17,7 +52,7 @@ def to_local(value: datetime) -> datetime:
     from their own, with no tz label. Treat a naive value as UTC, then
     convert to local; an already-aware value is just converted."""
     aware = value if value.tzinfo is not None else value.replace(tzinfo=timezone.utc)
-    return aware.astimezone()
+    return aware.astimezone(_display_tz) if _display_tz else aware.astimezone()
 
 
 def format_datetime(value: datetime) -> str:
@@ -33,7 +68,9 @@ def format_expiry(value: Optional[datetime]) -> str:
     render it as the word ``"Never"`` rather than an em-dash or empty
     string so the row reads as a deliberate choice, not missing data."""
     if value is None:
-        return "Never"
+        from .i18n import t as _t
+
+        return _t("common.never")
     return to_local(value).strftime("%Y-%m-%d %H:%M")
 
 

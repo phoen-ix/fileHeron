@@ -2118,7 +2118,9 @@
     "limit_placeholder": "Leer für unbegrenzt",
     "limit_help": "Nach dieser Anzahl Downloads wird der Link automatisch widerrufen.",
     "notify_label": "Bei jedem Download per E-Mail benachrichtigen",
-    "notify_help": "E-Mail erhalten, wenn jemand über diesen Link herunterlädt."
+    "notify_help": "E-Mail erhalten, wenn jemand über diesen Link herunterlädt.",
+    "locked": "Gesperrt",
+    "locked_until": "Nach zu vielen fehlgeschlagenen Passwortversuchen gesperrt - wird {when} entsperrt. Empfänger können ihn bis dahin nicht öffnen."
   },
   "public_share": {
     "eyebrow": "file:Heron",

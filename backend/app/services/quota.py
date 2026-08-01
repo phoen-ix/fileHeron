@@ -34,17 +34,48 @@ logger = logging.getLogger("fileheron.quota")
 
 # Lua: GET key (default 0), if (limit > 0 AND current+size > limit) → return -1.
 # Else INCRBY size and return new total. All atomic, no race.
+# Returns {status, new_total}: status 0 = reserved, 1 = would exceed.
+#
+# It used to return the new total, with -1 meaning "over quota" - and -1 is also
+# a legitimate total when the counter is transiently negative (a release for
+# bytes that were never reserved, after a Redis flush). A 1000-byte reservation
+# against a counter at -1001 then charged the bytes AND raised QUOTA_EXCEEDED,
+# and the retry charged them again (audit #2). A separate status field cannot
+# collide with a value.
 _RESERVE_LUA = """
 local key = KEYS[1]
 local size = tonumber(ARGV[1])
 local limit = tonumber(ARGV[2])
 local current = tonumber(redis.call('GET', key) or '0')
+if current < 0 then
+    -- A negative counter is drift, not credit. Treat it as zero for the
+    -- decision AND repair it here, atomically, rather than in a second round
+    -- trip that can land between another caller's read and write.
+    current = 0
+    redis.call('SET', key, 0)
+end
 local new_total = current + size
 if limit > 0 and new_total > limit then
-    return -1
+    return {1, current}
 end
 redis.call('INCRBY', key, size)
-return new_total
+return {0, new_total}
+"""
+
+# Decrement and floor, in ONE round trip. The old read-then-SET could wipe a
+# reservation another request made in between: after a Redis restart, a 5 GB
+# delete drove the counter negative while a 20 GB reservation landed, and the
+# floor's `SET 0` erased it - the in-flight upload became uncounted and the user
+# could reserve their whole quota again on top of it (audit #2).
+_RELEASE_LUA = """
+local key = KEYS[1]
+local size = tonumber(ARGV[1])
+local remaining = redis.call('DECRBY', key, size)
+if remaining < 0 then
+    redis.call('SET', key, 0)
+    return 0
+end
+return remaining
 """
 
 
@@ -109,9 +140,11 @@ def reserve_bytes(
         if not redis.exists(_key(user.id)):
             _initialize_from_db(db, user.id, exclude_file_id=exclude_file_id)
 
-        result = redis.eval(_RESERVE_LUA, 1, _key(user.id), additional_bytes, quota_limit)
-        new_total = int(result)
-        if new_total == -1:
+        status, new_total = redis.eval(
+            _RESERVE_LUA, 1, _key(user.id), additional_bytes, quota_limit
+        )
+        status, new_total = int(status), int(new_total)
+        if status == 1:
             raise AppError(
                 413,
                 "QUOTA_EXCEEDED",
@@ -195,11 +228,8 @@ def release_bytes(*, user_id: int, bytes_to_free: int) -> None:
     if bytes_to_free <= 0:
         return
     try:
-        remaining = get_redis().decrby(_key(user_id), bytes_to_free)
-        # A release for bytes that were never reserved (counter uninitialized at
-        # reserve time) must not drive the counter negative - floor at 0.
-        if remaining < 0:
-            get_redis().set(_key(user_id), 0)
+        # Atomic decrement-and-floor - see _RELEASE_LUA.
+        get_redis().eval(_RELEASE_LUA, 1, _key(user_id), bytes_to_free)
     except Exception:
         logger.warning("quota release failed (redis): user=%d bytes=%d", user_id, bytes_to_free)
 

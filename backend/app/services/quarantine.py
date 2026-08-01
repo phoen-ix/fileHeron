@@ -23,6 +23,7 @@ from sqlalchemy.orm import Session
 from ..models.audit_log import AuditEventType
 from ..models.file import File, FileState
 from ..models.share import Share, ShareState
+from ..utils.timeutil import utc_now
 from .audit import record_audit_event
 from .quota import release_bytes
 from .storage_backend import get_storage_backend
@@ -101,6 +102,14 @@ def quarantine_file(
         ShareState.pending_approval,
     ):
         share.state = ShareState.revoked
+        # Stamp WHEN. This is the only terminal share transition that did not,
+        # so the orphan-reclaim grace window for the share's remaining clean
+        # files started whenever the nightly cron got round to filling the
+        # field in - up to ~18 hours late - and anyone reading `terminated_at`
+        # for incident timing saw the cron's clock, not the quarantine's
+        # (audit #2).
+        if getattr(share, "terminated_at", None) is None:
+            share.terminated_at = utc_now()
         record_audit_event(
             db,
             event_type=AuditEventType.share_revoked,

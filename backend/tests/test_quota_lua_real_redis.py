@@ -46,9 +46,22 @@ def redis_conn():
 
 
 def _reserve(redis_conn, key: str, size: int, limit: int) -> int:
+    """Returns the new total, or -1 when refused.
+
+    The script returns {status, total} since audit #2 - a bare -1 was both the
+    refusal sentinel AND a legitimate total for a transiently negative counter,
+    which charged the bytes and raised at the same time. Kept as -1 HERE so the
+    assertions below still read as "refused"."""
     from app.services.quota import _RESERVE_LUA
 
-    return int(redis_conn.eval(_RESERVE_LUA, 1, key, size, limit))
+    status, total = redis_conn.eval(_RESERVE_LUA, 1, key, size, limit)
+    return -1 if int(status) == 1 else int(total)
+
+
+def _release(redis_conn, key: str, size: int) -> int:
+    from app.services.quota import _RELEASE_LUA
+
+    return int(redis_conn.eval(_RELEASE_LUA, 1, key, size))
 
 
 def test_a_reservation_within_the_limit_returns_the_new_total(redis_conn):
@@ -139,4 +152,32 @@ def test_the_reconcile_seeds_an_absent_counter_only_when_it_expected_one(redis_c
     redis_conn.set(key, 123)
     assert int(redis_conn.eval(_RECONCILE_CAS_LUA, 1, key, "", "700", "0")) == 0
     assert int(redis_conn.get(key)) == 123
+    redis_conn.delete(key)
+
+
+# --- audit #2: the two edges the sentinel and the floor got wrong ------------
+
+
+def test_a_negative_counter_does_not_refuse_a_legitimate_reservation(redis_conn):
+    """After a Redis flush a release can drive the counter negative. A 1000-byte
+    reservation against -1001 produced a new total of -1 - which the old script
+    returned as its "over quota" sentinel, so the bytes were charged AND the
+    caller was refused, and the retry charged them a second time."""
+    key = "fh:quota:user:99998"
+    redis_conn.set(key, -1001)
+    assert _reserve(redis_conn, key, 1000, 10_000) == 1000
+    assert int(redis_conn.get(key)) == 1000, "the drift must be repaired, not credited"
+    redis_conn.delete(key)
+
+
+def test_release_floors_atomically(redis_conn):
+    """The floor used to be a second round trip: `DECRBY` then, if negative,
+    `SET 0`. A reservation landing between the two was erased - the in-flight
+    upload became uncounted and the user could reserve their whole quota again
+    on top of it."""
+    key = "fh:quota:user:99999"
+    redis_conn.set(key, 100)
+    assert _release(redis_conn, key, 30) == 70
+    assert _release(redis_conn, key, 500) == 0
+    assert int(redis_conn.get(key)) == 0
     redis_conn.delete(key)

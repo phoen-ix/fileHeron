@@ -60,13 +60,22 @@ class _FakeRedis:
         self.store.pop(key, None)
         return 1
 
-    def eval(self, _script, _n, key, additional, limit):
+    def eval(self, script, _n, key, *args):
+        """{status, total} since audit #2 - see quota._RESERVE_LUA. The scripts
+        themselves run against a real Redis in test_quota_lua_real_redis.py."""
+        if "DECRBY" in script:
+            remaining = int(self.store.get(key, 0)) - int(args[0])
+            self.store[key] = str(max(0, remaining))
+            return max(0, remaining)
+        additional, limit = int(args[0]), int(args[1])
         cur = int(self.store.get(key, 0))
-        additional, limit = int(additional), int(limit)
+        if cur < 0:
+            cur = 0
+            self.store[key] = "0"
         if limit > 0 and cur + additional > limit:
-            return -1
+            return [1, cur]
         self.store[key] = str(cur + additional)
-        return cur + additional
+        return [0, cur + additional]
 
 
 @pytest.fixture

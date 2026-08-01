@@ -89,8 +89,17 @@ def safe_arcname(name: str, taken: set[str]) -> str:
     """Reduce an arbitrary stored filename to a safe, unique archive entry name.
     The ZIP writer does NOT sanitize arcnames, so a stored name like
     `../../etc/passwd` would otherwise land verbatim. Strip directory components
-    + null bytes, then de-duplicate collisions with a ` (n)` suffix."""
-    base = Path(name).name.replace("\x00", "").strip() or "file"
+    + null bytes, then de-duplicate collisions with a ` (n)` suffix.
+
+    Backslashes are separators here too. `Path(...).name` treats them as
+    ordinary characters on Linux, so `..\\..\\Users\\Public\\Startup\\x.exe`
+    came through whole and 7-Zip on Windows would write it outside the target
+    directory. A leading-dots-only name (`..`) is not a filename either
+    (audit #2). No route writes such a row today - this is defence in depth
+    that was not holding."""
+    base = Path(name.replace("\\", "/")).name.replace("\x00", "").strip() or "file"
+    if set(base) <= {"."}:
+        base = "file"
     if base not in taken:
         taken.add(base)
         return base

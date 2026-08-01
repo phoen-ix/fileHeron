@@ -35,14 +35,25 @@ class RequestIdMiddleware:
             if key == _HEADER_LOWER:
                 incoming = value.decode("latin-1")
                 break
-        request_id = incoming if incoming and len(incoming) <= 64 else uuid.uuid4().hex
+        # ALWAYS ours. An inbound X-Request-Id used to become the value
+        # persisted in audit_log and error_log, so a caller could pick the
+        # correlation key their own rows are filed under: an incident responder
+        # filtering on it got an arbitrary set of unrelated events, and distinct
+        # requests could be collapsed into one (audit #2). A client value is
+        # still echoed back for its own tracing, under a separate header, but it
+        # is not what anything is stored against.
+        request_id = uuid.uuid4().hex
+        client_id = incoming if incoming and len(incoming) <= 64 else None
         # Backed by scope["state"], so request.state.request_id resolves
         # downstream (routers, audit service, error handlers).
         scope.setdefault("state", {})["request_id"] = request_id
 
         async def send_wrapper(message: Message) -> None:
             if message["type"] == "http.response.start":
-                MutableHeaders(raw=message.setdefault("headers", []))[_HEADER] = request_id
+                headers = MutableHeaders(raw=message.setdefault("headers", []))
+                headers[_HEADER] = request_id
+                if client_id is not None:
+                    headers["X-Client-Request-Id"] = client_id
             await send(message)
 
         await self._app(scope, receive, send_wrapper)

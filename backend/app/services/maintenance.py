@@ -113,13 +113,20 @@ def refuse_if_maintenance(
     """
     if not is_enabled(db):
         return
-    if kind == "download" and request is not None and is_partial_continuation(request):
-        if file_id is None:
-            return
-        from . import transfer_activity
-
-        if transfer_activity.was_download_recent(file_id):
-            return
+    # NO FILE ID, NO EXEMPTION. `file_id is None` used to RETURN - a caller that
+    # passed a request but no file id got the exemption on the bare header. Any
+    # new ranged surface written in the shape of the existing request-less call
+    # sites would have honoured `Range: bytes=1-` as a continuation and started
+    # a brand-new transfer mid-drain, and the unit test passed only through that
+    # hole (audit #2).
+    if (
+        kind == "download"
+        and request is not None
+        and file_id is not None
+        and is_partial_continuation(request)
+        and _transfer_is_in_flight(file_id)
+    ):
+        return
     raise AppError(
         503,
         "MAINTENANCE_MODE",
@@ -173,6 +180,12 @@ def get_handoff_at(db: Session) -> str | None:
 # How long an update hand-off stamp can explain the maintenance flag. Past this
 # the update it belonged to is over, one way or another.
 _HANDOFF_MAX_AGE_SEC = 6 * 3600
+
+
+def _transfer_is_in_flight(file_id: str) -> bool:
+    from . import transfer_activity
+
+    return transfer_activity.was_download_recent(file_id)
 
 
 def _handoff_is_stale(stamp: str) -> bool:

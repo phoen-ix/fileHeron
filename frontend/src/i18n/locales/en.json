@@ -2118,7 +2118,9 @@
     "limit_placeholder": "Leave blank for unlimited",
     "limit_help": "After this many downloads, the link auto-revokes.",
     "notify_label": "Email me on each download",
-    "notify_help": "Get notified when someone downloads via this link."
+    "notify_help": "Get notified when someone downloads via this link.",
+    "locked": "Locked",
+    "locked_until": "Locked after too many failed password attempts - unlocks {when}. Recipients cannot open it until then."
   },
   "public_share": {
     "eyebrow": "file:Heron",

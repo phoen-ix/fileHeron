@@ -190,6 +190,13 @@ def run_poll(*, manual: bool, db: Session | None = None, session_opener=open_ses
                         else sess.fetch_raw(uid, max_bytes=MAX_MESSAGE_BYTES)
                     )
                     if raw is None:
+                        # Advance past it. The `continue` used to skip the
+                        # highwater update, so a UID whose FETCH returns nothing
+                        # - a message deleted in webmail between the SEARCH and
+                        # the FETCH - was re-selected on every poll from then
+                        # on, indefinitely (audit #2).
+                        skipped += 1
+                        last_uid = max(last_uid, uid)
                         continue
                     # Belt and braces for a server that under-reports or does
                     # not answer RFC822.SIZE at all.

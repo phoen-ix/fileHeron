@@ -293,6 +293,17 @@ hr {
   color: var(--fh-paper-raised);
 }
 
+/* Irreversible actions. Four components already asked for this class and no
+   stylesheet defined it, so bulk-expire - which unlinks files from disk - and
+   its confirmation rendered as the ordinary primary button, identical to every
+   Save in the product (audit #2). */
+.fh-btn--danger,
+.fh-btn--danger:hover {
+  background: var(--fh-danger);
+  border-color: var(--fh-danger);
+  color: var(--fh-paper);
+}
+
 .fh-btn:active {
   transform: translateY(1px);
 }

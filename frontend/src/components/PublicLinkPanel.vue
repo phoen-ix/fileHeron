@@ -50,6 +50,12 @@
             }}
           </span>
         </div>
+        <div v-if="active.locked_until" class="kv">
+          <span class="kv-label">{{ t('public_link.locked') }}</span>
+          <span class="kv-value locked">
+            {{ t('public_link.locked_until', { when: formatDate(active.locked_until) }) }}
+          </span>
+        </div>
         <div class="kv">
           <span class="kv-label">{{ t('public_link.notify') }}</span>
           <span class="kv-value">
@@ -147,6 +153,7 @@ import {
   revokePublicLink,
 } from '@/api/publicLinks'
 import { useApiError } from '@/composables/useApiError'
+import { useSiteDateFormat } from '@/composables/useSiteDateFormat'
 import { useUiStore } from '@/stores/ui'
 import type {
   CreatePublicLinkResponse,
@@ -157,6 +164,7 @@ const props = defineProps<{ shareId: string }>()
 
 const { t } = useI18n()
 const { describe } = useApiError()
+const { formatDate } = useSiteDateFormat()
 const ui = useUiStore()
 
 const active = ref<PublicLinkResponse | null>(null)

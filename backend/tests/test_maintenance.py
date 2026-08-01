@@ -42,8 +42,38 @@ def test_gate_allows_ranged_download_continuation(db):
         maintenance_svc.refuse_if_maintenance(db, request=_Req(), kind="download")
     with pytest.raises(AppError):
         maintenance_svc.refuse_if_maintenance(db, request=_Req("bytes=0-"), kind="download")
-    # ...but a continuation (start > 0) is finishing an in-progress download -> allowed
-    maintenance_svc.refuse_if_maintenance(db, request=_Req("bytes=500-"), kind="download")
+    # ...and so is a "continuation" with NO file id: the header alone is a
+    # claim anyone can make, and this test passed only through that hole
+    # (audit #2). It read as if the continuation case were covered.
+    with pytest.raises(AppError):
+        maintenance_svc.refuse_if_maintenance(
+            db, request=_Req("bytes=500-"), kind="download"
+        )
+
+
+def test_gate_allows_a_corroborated_ranged_continuation(db, monkeypatch):
+    """The exemption this gate exists for: an in-progress download finishes.
+    Evidence is the per-file serving mark, not the header."""
+    from app.services import transfer_activity
+
+    maintenance_svc.set_enabled(db, True, actor=None)
+    db.commit()
+    monkeypatch.setattr(transfer_activity, "was_download_recent", lambda _f: True)
+    maintenance_svc.refuse_if_maintenance(
+        db, request=_Req("bytes=500-"), kind="download", file_id="f-1"
+    )
+
+
+def test_gate_refuses_a_ranged_claim_with_no_transfer_behind_it(db, monkeypatch):
+    from app.services import transfer_activity
+
+    maintenance_svc.set_enabled(db, True, actor=None)
+    db.commit()
+    monkeypatch.setattr(transfer_activity, "was_download_recent", lambda _f: False)
+    with pytest.raises(AppError):
+        maintenance_svc.refuse_if_maintenance(
+            db, request=_Req("bytes=500-"), kind="download", file_id="f-1"
+        )
 
 
 def test_custom_message_surfaced(db):

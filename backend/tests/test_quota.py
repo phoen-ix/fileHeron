@@ -45,14 +45,26 @@ class _FakeRedis:
         self._store[key] = int(self._store.get(key, 0)) - int(amount)
         return self._store[key]
 
-    def eval(self, _script, _num_keys, key, size, limit):
-        size, limit = int(size), int(limit)
+    def eval(self, script, _num_keys, key, *args):
+        """Dispatch on WHICH script. Both are re-implementations, which is what
+        a fake must be - the scripts themselves are executed by a real Redis in
+        tests/test_quota_lua_real_redis.py, because a mock checked against
+        itself proves nothing (tests-4, and the sentinel/floor edges from audit
+        #2)."""
+        if "DECRBY" in script:
+            remaining = int(self._store.get(key, 0)) - int(args[0])
+            self._store[key] = max(0, remaining)
+            return self._store[key]
+        size, limit = int(args[0]), int(args[1])
         current = int(self._store.get(key, 0))
+        if current < 0:
+            current = 0
+            self._store[key] = 0
         new_total = current + size
         if limit > 0 and new_total > limit:
-            return -1
+            return [1, current]
         self._store[key] = new_total
-        return new_total
+        return [0, new_total]
 
 
 @pytest.fixture

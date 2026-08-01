@@ -175,3 +175,29 @@ def test_the_import_preview_names_what_it_installs(needle):
     password hash and a webhook shipping every share event to an external
     host."""
     assert needle in _read("views/AdminSettingsBackup.vue")
+
+
+# --- audit #2, low findings on the same surfaces ----------------------------
+
+
+def test_the_danger_button_class_exists():
+    """Four components asked for `fh-btn--danger` and no stylesheet defined it,
+    so bulk-expire - which unlinks files from disk - and its confirmation
+    rendered identically to every Save button in the product."""
+    css = _read("styles/global.css")
+    assert ".fh-btn--danger" in css
+    users = [
+        p.name
+        for p in FRONTEND.rglob("*.vue")
+        if "fh-btn--danger" in p.read_text()
+    ]
+    assert users, "nothing uses the class - check the selector"
+
+
+def test_a_locked_public_link_is_visible_to_its_owner():
+    """`locked_until` was fetched and typed and never rendered, so an owner saw
+    a green ACTIVE pill while every recipient was being refused - and their
+    reasonable next step, re-sending the same URL, kept failing."""
+    src = _read("components/PublicLinkPanel.vue")
+    assert "active.locked_until" in src
+    assert "public_link.locked_until" in src

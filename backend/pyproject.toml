@@ -44,6 +44,13 @@ dependencies = [
     # to convert pre-v1.50 Markdown content, and dropping it would break the
     # upgrade path for anyone still on an older release. It only ever rode in
     # via rich, so it must stay explicit.
+    #
+    # Audit #2 re-raised this as "a runtime dependency in the image that
+    # processes untrusted uploads, reachable by nothing". Kept deliberately:
+    # the alternative is an upgrade from pre-v1.50 that silently leaves email
+    # overrides as raw Markdown, and a correct upgrade path beats a marginal
+    # reduction in surface for a pure-Python parser that no request can reach.
+    # Revisit when pre-v1.50 upgrades stop being supported.
     "markdown-it-py>=3.0",
     "python-multipart>=0.0.9",
     "redis>=5.0",

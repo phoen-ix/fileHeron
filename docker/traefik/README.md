@@ -175,7 +175,7 @@ http:
       # unlimited by default), which would break large downloads. The
       # direct-upload response is tiny JSON, so buffering it is harmless.
       buffering:
-        maxRequestBodyBytes: 115343360  # ~110 MiB
+        maxRequestBodyBytes: 1073741824  # 1 GiB, matching nginx client_max_body_size
         memRequestBodyBytes: 6291456    # 6 MiB in RAM before spilling to disk
 ```
 

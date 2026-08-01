@@ -3,7 +3,7 @@ name: E2E
 # Playwright against the REAL stack: builds the prod images from source, stands
 # the compose stack up (AV_SKIP + seeded accounts via docker-compose.e2e.yml),
 # and drives the critical user journeys. Catches the integration breakage the
-# 980 backend + 167 vitest unit tests can't see (router guards, silent refresh,
+# the backend and vitest unit suites can't see (router guards, silent refresh,
 # the upload + public-link wiring). Slower than the unit gates, so it's its own
 # workflow: runs daily + on-demand (workflow_dispatch) + on any PR. This is a
 # direct-to-main repo (no PRs, no branch protection), so the DAILY run is the

@@ -7,6 +7,7 @@ cron_tracker has recorded any of their failures). Checks:
 - AV reachability (via av_scan.ping)
 - Redis reachability (ping)
 - Recent SMTP undeliverable count in the audit_log (last 1h)
+- Crons that are failing repeatedly (cron_runs, last 3h)
 
 For each unhealthy signal, dispatches an `ops_alert` notification to
 every non-disabled admin. De-duplicated via Redis keys
@@ -21,8 +22,11 @@ from __future__ import annotations
 import logging
 from datetime import timedelta
 
+from sqlalchemy import func
+
 from ..database import SessionLocal
 from ..models.audit_log import AuditEventType, AuditLog
+from ..models.cron_run import CronRun, CronRunStatus
 from ..models.notification import NotificationCategory
 from ..models.user import User, UserRole
 from ..redis_client import get_redis
@@ -34,6 +38,12 @@ logger = logging.getLogger("fileheron.workers.ops_check")
 
 _DEDUP_TTL_SEC = 3600
 _SMTP_FAILURE_LOOKBACK = timedelta(hours=1)
+# Wide enough to catch a five-minute cron that has been failing for a while, and
+# a threshold rather than "any failure" so a single transient does not train
+# operators to ignore the alert. imap_poll on a real instance produced 12
+# failures in an hour, which is the shape this is sized for.
+_CRON_FAILURE_LOOKBACK = timedelta(hours=3)
+_CRON_FAILURE_THRESHOLD = 3
 
 
 
@@ -107,6 +117,44 @@ def _check_redis() -> str | None:
         return f"Redis ping raised: {e}"
 
 
+def _check_failing_crons(db) -> str | None:
+    """Crons that failed repeatedly and recently.
+
+    This docstring used to say ops_check runs "after the other crons have had a
+    chance to fire (and the cron_tracker has recorded any of their failures)",
+    which reads as though those failures were consumed here. They were not:
+    the only alert reasons were av/redis/smtp, and there was no
+    consecutive-failure detection anywhere in the backend.
+
+    So a cron could fail forever and the only way an operator learned of it was
+    by opening /admin/scheduled-tasks unprompted. Observed on a live instance:
+    `imap_poll` failed 12 times in an hour, was correctly recorded as failed
+    both in `cron_runs` and in the error log, and alerted nobody (audit #2, L1).
+
+    Threshold rather than "any failure": a single transient failure is what the
+    retry and the next scheduled run are for, and alerting on it would train
+    operators to ignore the alert."""
+    cutoff = utc_now() - _CRON_FAILURE_LOOKBACK
+    rows = (
+        db.query(CronRun.job_name, func.count(CronRun.id))
+        .filter(
+            CronRun.status == CronRunStatus.failure,
+            CronRun.started_at >= cutoff,
+        )
+        .group_by(CronRun.job_name)
+        .having(func.count(CronRun.id) >= _CRON_FAILURE_THRESHOLD)
+        .all()
+    )
+    if not rows:
+        return None
+    worst = sorted(rows, key=lambda r: -r[1])
+    return "; ".join(
+        f"{name} failed {n} times in the last "
+        f"{int(_CRON_FAILURE_LOOKBACK.total_seconds() // 3600)}h"
+        for name, n in worst
+    )
+
+
 def _check_smtp(db) -> str | None:
     cutoff = utc_now() - _SMTP_FAILURE_LOOKBACK
     n = (
@@ -126,7 +174,7 @@ def _check_smtp(db) -> str | None:
 async def ops_check(_ctx) -> dict:
     db = SessionLocal()
     dispatched = 0
-    summary = {"av": "ok", "redis": "ok", "smtp": "ok"}
+    summary = {"av": "ok", "redis": "ok", "smtp": "ok", "crons": "ok"}
     try:
         av_err = _check_av(db)
         if av_err:
@@ -142,6 +190,11 @@ async def ops_check(_ctx) -> dict:
         if smtp_err:
             summary["smtp"] = smtp_err
             dispatched += _alert_admins(db, reason="smtp_failing", detail=smtp_err)
+
+        cron_err = _check_failing_crons(db)
+        if cron_err:
+            summary["crons"] = cron_err
+            dispatched += _alert_admins(db, reason="cron_failing", detail=cron_err)
 
         db.commit()
         return {"dispatched": dispatched, **summary}

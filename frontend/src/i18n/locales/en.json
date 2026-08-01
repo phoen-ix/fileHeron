@@ -2351,7 +2351,8 @@
     "source": {
       "http": "HTTP",
       "spa": "Page (browser)",
-      "worker": "Scheduled task"
+      "worker": "Scheduled task",
+      "csp": "CSP violation"
     },
     "col": {
       "when": "When",

@@ -212,13 +212,41 @@ async def test_a_file_deleted_mid_scan_is_not_resurrected(
 def test_the_recovery_sweep_has_no_size_filter():
     """The exclusion is what made the state permanent. It is the only automated
     recovery there is, so a size filter here is a data-availability bug."""
+    import ast
     import inspect
 
     from app.workers import cleanup_stale_uploads
 
     src = inspect.getsource(cleanup_stale_uploads)
-    assert "File.size_bytes <= settings.AV_MAX_SCAN_BYTES" not in src
-    assert "File.size_bytes >" not in src.split("rescan_cutoff")[-1]
+    # Parse rather than substring-match. The previous version asserted two exact
+    # strings were absent - and "File.size_bytes" occurs ZERO times in this
+    # module, so both negatives were vacuously true and would have caught only a
+    # byte-identical re-introduction. `f.size_bytes >`, a line-broken
+    # expression, or a subquery all passed (audit #2, F2 - my own test).
+    tree = ast.parse(src)
+    fn = next(
+        n for n in ast.walk(tree)
+        if isinstance(n, ast.AsyncFunctionDef | ast.FunctionDef)
+        and n.name == "cleanup_stale_uploads"
+    )
+    # Scoped to COMPARISONS. The defect was a filter predicate
+    # (`File.size_bytes <= settings.AV_MAX_SCAN_BYTES`); a plain reference is
+    # not - line 121 puts `f.size_bytes` in an audit-event metadata dict, which
+    # is legitimate and which the first draft of this assertion wrongly flagged.
+    def _mentions_size(node) -> bool:
+        return any(
+            isinstance(n, ast.Attribute) and n.attr == "size_bytes"
+            for n in ast.walk(node)
+        )
+
+    size_comparisons = [
+        n for n in ast.walk(fn) if isinstance(n, ast.Compare) and _mentions_size(n)
+    ]
+    assert not size_comparisons, (
+        "the stuck-file rescan sweep compares on size_bytes again; excluding a "
+        "class of file from the only automated recovery makes ready_unscanned "
+        "permanent for it"
+    )
 
 
 @pytest.mark.asyncio

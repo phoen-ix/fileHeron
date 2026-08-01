@@ -15,11 +15,11 @@ keep this to what would cause a wrong move if unknown.
 
 ## Status
 
-Backend **`v2.7.3`** (dependency/runtime sweep in .0: Python 3.14, Node 24 LTS,
+Backend **`v2.8.0`** (dependency/runtime sweep in .0: Python 3.14, Node 24 LTS,
 TypeScript 6, ESLint 10, Vite 8, Pinia 4 - zero open dependency PRs. v2.6.x
 closed out the 2026-07-30 audit with **nothing left accepted**; v2.6.1 fixed a
 v2.6.0 regression that charged the desktop client's size probe as a download),
-desktop client **`client-v1.1.0`** - shipped + in production,
+desktop client **`client-v1.2.0`** - shipped + in production,
 published for public self-hosting. v2.6.0 needs no host step and no migration.
 **v2.5.0 needed ONE host step** (compose file changed: `docker compose up -d
 redis backend worker` after the in-app Update - Redis maxmemory headroom +

@@ -103,8 +103,17 @@ jobs:
           python-version: '3.14'
           cache: pip
           cache-dependency-path: backend/pyproject.toml
-      - name: Install (with dev extras)
-        run: pip install .[dev]
+      # Install the LOCKED closure, not resolved ranges. backend-tests does this
+      # already and explains why; these two jobs did not, so alembic-roundtrip
+      # and redis-tests were exercising a dependency set that never ships
+      # (audit #2, N-06). A schema or Lua defect that only appears under the
+      # shipped versions could pass here.
+      - name: Install (locked closure, matching the image)
+        run: |
+          pip install --require-hashes -r requirements.lock
+          pip install --no-deps -e .
+          pip install '.[dev]' --no-deps
+          pip install pytest pytest-asyncio aiosqlite
       - name: Alembic downgrade roundtrip (against MariaDB)
         env:
           RUN_ALEMBIC_ROUNDTRIP: '1'
@@ -146,8 +155,17 @@ jobs:
           python-version: '3.14'
           cache: pip
           cache-dependency-path: backend/pyproject.toml
-      - name: Install (with dev extras)
-        run: pip install .[dev]
+      # Install the LOCKED closure, not resolved ranges. backend-tests does this
+      # already and explains why; these two jobs did not, so alembic-roundtrip
+      # and redis-tests were exercising a dependency set that never ships
+      # (audit #2, N-06). A schema or Lua defect that only appears under the
+      # shipped versions could pass here.
+      - name: Install (locked closure, matching the image)
+        run: |
+          pip install --require-hashes -r requirements.lock
+          pip install --no-deps -e .
+          pip install '.[dev]' --no-deps
+          pip install pytest pytest-asyncio aiosqlite
       - name: Redis-backed tests
         env:
           RUN_REDIS_TESTS: '1'
@@ -195,7 +213,7 @@ jobs:
       - name: Unit tests (vitest)
         run: npm run test
 
-  # The desktop client's 147 tests ran ONLY on a `client-v*` release tag, so
+  # The desktop client's tests ran ONLY on a `client-v*` release tag, so
   # every ordinary push and PR could break the client and nothing would say so
   # until release day - on a direct-push repo, that is the whole time between
   # client releases. The suite is AST/structural (CI has no tkinter), so it

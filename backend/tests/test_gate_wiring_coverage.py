@@ -778,10 +778,63 @@ def test_turning_the_error_log_off_still_silences_csp_reports(db):
 def test_the_csp_sink_gate_matches_the_worker_gate():
     """The route's cheap front-guard and the worker's authoritative check have
     to agree, or reports are accepted and then thrown away (or vice versa)."""
+    import ast
     import inspect
 
     from app.routers import telemetry
 
     src = inspect.getsource(telemetry)
-    assert "error_log.log_enabled_cached()" in src
-    assert "capture_4xx_enabled_cached" not in src.split("csp-report")[-1][:1500]
+    # Parse rather than slice. The previous version asserted
+    #   "capture_4xx_enabled_cached" not in src.split("csp-report")[-1][:1500]
+    # and could never fail: "csp-report" occurs four times, the last is a
+    # DOCSTRING at index 4187, and the single real occurrence of the forbidden
+    # symbol is at 2521 - 1666 characters before the slice even begins. It also
+    # left the last 956 characters of the module unchecked, and any new comment
+    # containing "csp-report" would move the anchor and shrink the window
+    # further (audit #2, F1 - my own test, written the day before).
+    fn = next(
+        n for n in ast.walk(ast.parse(src))
+        if isinstance(n, ast.AsyncFunctionDef | ast.FunctionDef)
+        and "csp" in n.name
+    )
+    body = ast.get_source_segment(src, fn) or ""
+    assert "error_log.log_enabled_cached()" in body, (
+        "the CSP sink is not gated on the error-log switch"
+    )
+    assert "capture_4xx_enabled_cached" not in body, (
+        "the CSP sink is gated on the 4xx capture switch again; that switch is "
+        "off by default, so a default instance discards every report"
+    )
+
+
+def test_the_spa_offers_every_error_log_source_the_backend_writes():
+    """CSP reports were stored with source="csp" and the admin filter offered
+    only http/spa/worker, so they were invisible in the one screen the CSP
+    rollout criterion ("enforce once the reports come back empty") is read
+    from. The reports came back empty because nobody could filter for them.
+
+    Reads BOTH sides rather than hardcoding a list, so they cannot drift again
+    (audit #2, B1 - the incomplete half of my own res-06 fix)."""
+    import pathlib
+    import re
+
+    for base in (pathlib.Path("/repo"), pathlib.Path(__file__).resolve().parents[2]):
+        if (base / "frontend/src/views/AdminErrorLog.vue").exists():
+            break
+
+    backend_sources = set()
+    for f in (base / "backend/app").rglob("*.py"):
+        for m in re.finditer(r'"source"\s*:\s*"([a-z]+)"', f.read_text()):
+            backend_sources.add(m.group(1))
+    assert backend_sources, "no source literals found; the probe is broken"
+
+    vue = (base / "frontend/src/views/AdminErrorLog.vue").read_text()
+    opts = re.search(r"const sourceOptions\s*=\s*\[([^\]]*)\]", vue)
+    assert opts, "sourceOptions not found in AdminErrorLog.vue"
+    offered = {v.strip().strip("'\"") for v in opts.group(1).split(",")}
+
+    missing = backend_sources - offered
+    assert not missing, (
+        f"the backend writes error_log.source values the admin filter does not "
+        f"offer: {sorted(missing)} - those rows are stored and invisible"
+    )

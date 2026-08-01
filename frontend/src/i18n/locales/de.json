@@ -2351,7 +2351,8 @@
     "source": {
       "http": "HTTP",
       "spa": "Seite (Browser)",
-      "worker": "Geplante Aufgabe"
+      "worker": "Geplante Aufgabe",
+      "csp": "CSP-Verstoss"
     },
     "col": {
       "when": "Wann",

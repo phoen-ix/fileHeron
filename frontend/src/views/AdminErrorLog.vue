@@ -31,7 +31,12 @@ const loading = ref(true)
 const errorMsg = ref<string | null>(null)
 const expanded = ref<number | null>(null)
 
-const sourceOptions = ['', 'http', 'spa', 'worker']
+// Every value the backend can write to error_log.source. `csp` was added with
+// the report sink and missed here, so CSP violations were stored and then
+// invisible in the one screen the rollout decision ("enforce once the reports
+// come back empty") is read from - the reports came back empty because nobody
+// could filter for them (audit #2, B1).
+const sourceOptions = ['', 'http', 'spa', 'worker', 'csp']
 
 function statusTone(s: number): 'active' | 'warn' | 'danger' | undefined {
   if (s >= 500) return 'danger'

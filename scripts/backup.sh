@@ -151,8 +151,14 @@ echo "[backup] pruning local backups (keep last 7) …"
 # lexical sort is exactly chronological, and unlike mtime it cannot be
 # rewritten by a sync tool, a restore, or a `touch`. This also drops the
 # `ls`-parsing that shellcheck flagged (SC2045) once it was finally run.
+#
+# `if` rather than a trailing `&&`: under `set -e` + `pipefail` the loop adopts
+# the exit status of its last command, so a final iteration whose test is false
+# fails the whole pipeline and aborts the script - after the backup is already
+# written, one line short of reporting success. A manifest-less directory that
+# sorts last (`pre-v2.7.2-…`, since `p` > `2`) did exactly that.
 for d in "$ROOT"/backups/*/; do
-    [ -f "$d/manifest.txt" ] && printf '%s\n' "$d"
+    if [ -f "$d/manifest.txt" ]; then printf '%s\n' "$d"; fi
 done | sort -r | tail -n +8 | xargs -r rm -rf
 
 # Sweep abandoned stages from earlier interrupted runs.

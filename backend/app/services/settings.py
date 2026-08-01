@@ -124,6 +124,10 @@ class Keys:
     IMAP_PASSWORD = "imap.password"            # encrypted at rest
     IMAP_TLS_MODE = "imap.tls_mode"            # 'implicit' | 'starttls' | 'none'
     IMAP_MAILBOX = "imap.mailbox"              # source folder, default 'INBOX'
+    # Opt OUT of TLS certificate verification. Default false = verify. Exists
+    # only so an internal server with a self-signed cert is a deliberate,
+    # auditable choice rather than the silent default it used to be.
+    IMAP_TLS_INSECURE = "imap.tls_insecure"     # boolean, default false
     # What to do with a message on the server after ingest:
     #   'mark_read' (default) | 'untouched' | 'move' | 'delete'
     IMAP_POST_FETCH_ACTION = "imap.post_fetch_action"

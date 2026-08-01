@@ -32,6 +32,9 @@ class ImapConfig:
     password: str
     tls_mode: str  # 'implicit' (993) | 'starttls' (143) | 'none'
     mailbox: str
+    # When true, the TLS handshake does not verify the server certificate or
+    # hostname. This used to be the ONLY behaviour - see open_session.
+    tls_insecure: bool = False
 
     @property
     def is_configured(self) -> bool:
@@ -92,6 +95,9 @@ def resolve_imap_config(db: Session) -> ImapConfig:
         password=password,
         tls_mode=tls_mode,
         mailbox=_eff(settings_svc.Keys.IMAP_MAILBOX, settings.IMAP_MAILBOX),
+        tls_insecure=settings_svc.get_bool(
+            db, settings_svc.Keys.IMAP_TLS_INSECURE, default=False
+        ),
     )
 
 

@@ -29,6 +29,12 @@ K = settings_svc.Keys
 # several copies: the raw bytes, the decoded payload per part, a BytesIO for the
 # AV stream and a temp file.
 MAX_MESSAGE_BYTES = 64 * 1024 * 1024
+# A cap on MIME parts, because the byte cap does not bound memory. Parsing
+# allocates one object per part and the graph runs 20-30x the wire size, so a
+# message well under MAX_MESSAGE_BYTES can still exceed the worker's memory
+# limit. 5,000 parts is far above any real mail and far below the ~340,000 that
+# first threatened a 512 MB worker in measurement.
+MAX_MESSAGE_PARTS = 5_000
 
 
 def _int_setting(db: Session, key: str) -> int:
@@ -166,6 +172,43 @@ def run_poll(*, manual: bool, db: Session | None = None, session_opener=open_ses
                         )
                         last_uid = max(last_uid, uid)
                         continue
+                    # Bound the STRUCTURE, not just the byte count. The two
+                    # guards above bound raw octets; `email.message_from_bytes`
+                    # then builds one Message object per MIME part, and for many
+                    # tiny parts the object graph is 20-30x the wire size.
+                    # Measured in a container at the worker's 512m limit: 48 MB
+                    # of ~513,000 minimal parts passed both size guards and was
+                    # SIGKILLed; 63 MB peaked at 883 MB RSS.
+                    #
+                    # SIGKILL raises nothing, so the per-message try/except
+                    # cannot help - and the highwater for this UID is only
+                    # written further down, AFTER the parse, so the next poll
+                    # re-selected the same message and died again. Docker
+                    # restarts the worker, cron re-enqueues every 5 minutes, and
+                    # inbound ingestion, AV scanning, outbound email and every
+                    # other cron stop permanently until someone deletes the mail
+                    # by hand. Exactly the wedge the size guard was added to
+                    # close, reachable by a dimension it did not measure
+                    # (audit #2, inbound).
+                    parts = raw.count(b"Content-Type:")
+                    if parts > MAX_MESSAGE_PARTS:
+                        skipped += 1
+                        logger.warning(
+                            "imap poll: uid %s declares %d MIME parts (limit %d) "
+                            "in %d bytes; skipping without parsing (message left "
+                            "on the server)",
+                            uid, parts, MAX_MESSAGE_PARTS, len(raw),
+                        )
+                        last_uid = max(last_uid, uid)
+                        continue
+                    # Advance the highwater BEFORE parsing. A hard process kill
+                    # during parse must not re-select the same message forever;
+                    # losing one message to a skip is recoverable, an endless
+                    # crash loop is not.
+                    settings_svc.set_value(
+                        db, key=K.IMAP_LAST_UID, value=str(max(last_uid, uid)), actor=None
+                    )
+                    db.commit()
                     fetched += 1
                     parsed = inbound_parse.parse(raw)
                     msg = inbound_mail.ingest(db, parsed, uid=uid, uidvalidity=uidvalidity)

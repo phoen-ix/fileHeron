@@ -9,6 +9,7 @@ from __future__ import annotations
 import imaplib
 import logging
 import re
+import ssl
 from collections.abc import Iterator
 from contextlib import contextmanager
 
@@ -133,14 +134,55 @@ class ImapSession:
             self.delete(uid)
 
 
+def _tls_context(cfg: ImapConfig) -> ssl.SSLContext:
+    """The TLS context for an IMAP connection.
+
+    `imaplib.IMAP4_SSL(...)` and `IMAP4.starttls()` with no `ssl_context` both
+    fall back to `ssl._create_stdlib_context()`, which is an alias for
+    `_create_unverified_context`: `verify_mode=CERT_NONE`, `check_hostname=False`,
+    no CA store. So BOTH of the modes this product presents as the secure ones
+    accepted any certificate for any hostname, and anyone on the path between
+    the worker and the mail provider could complete the handshake and read the
+    LOGIN that follows.
+
+    What that leaks is not an isolated mailbox password:
+    `imap_config.uses_smtp_credentials` defaults to True, so these are the SMTP
+    credentials - the account this instance sends all outbound mail from.
+
+    Every piece of prose around it said the opposite. `imap_config` logs an
+    error only for `tls_mode='none'` "because that is almost certainly a
+    mistake", framing implicit/starttls as safe; the poll's own error text tells
+    admins to "use implicit for port 993"; README and .env.example present the
+    three modes as a security ladder. Nothing asserted the property, because
+    this module had no test referencing it at all (audit #2, inbound dimension -
+    one of the two that crashed in the 2026-07-30 audit and never re-ran).
+    """
+    if cfg.tls_insecure:
+        # Deliberate, auditable opt-out for an internal server with a
+        # self-signed certificate. Loud, because it restores the old behaviour.
+        logger.warning(
+            "IMAP tls_insecure=true for host %r - the server certificate is NOT "
+            "verified; credentials are exposed to anyone on the network path.",
+            cfg.host,
+        )
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        return ctx
+    return ssl.create_default_context()
+
+
 @contextmanager
 def open_session(cfg: ImapConfig) -> Iterator[ImapSession]:
+    ctx = _tls_context(cfg)
     if cfg.tls_mode == "implicit":
-        conn = imaplib.IMAP4_SSL(cfg.host, cfg.port, timeout=_TIMEOUT)
+        conn = imaplib.IMAP4_SSL(
+            cfg.host, cfg.port, ssl_context=ctx, timeout=_TIMEOUT
+        )
     else:
         conn = imaplib.IMAP4(cfg.host, cfg.port, timeout=_TIMEOUT)
         if cfg.tls_mode == "starttls":
-            conn.starttls()
+            conn.starttls(ssl_context=ctx)
     try:
         conn.login(cfg.user, cfg.password)
         yield ImapSession(conn)

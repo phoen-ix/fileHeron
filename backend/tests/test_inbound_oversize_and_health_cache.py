@@ -176,3 +176,73 @@ def test_health_cache_ttl_is_short():
     from app.routers import health as health_mod
 
     assert health_mod._PROBE_CACHE_TTL_SEC <= 30
+
+
+# --- audit #2: the byte cap does not bound memory ---------------------------
+
+
+def test_a_many_part_message_under_the_byte_cap_is_skipped(db, imap_enabled, monkeypatch):
+    """The byte guards above bound raw octets. `email.message_from_bytes` then
+    builds one Message per MIME part, and for many tiny parts the object graph
+    runs 20-30x the wire size.
+
+    Measured in a container at the worker's 512m limit: 48 MB of ~513,000
+    minimal parts passed both size guards and was SIGKILLed; 63 MB peaked at
+    883 MB RSS. SIGKILL raises nothing, so the per-message try/except cannot
+    help - and this file's existing tests all feed a FLAT body (`b""` or
+    `b"x"*N`), so none of them exercises the dimension that actually drives
+    memory (audit #2, inbound).
+    """
+    from app.services import imap_poll
+
+    part = b"--bb\r\nContent-Type: application/octet-stream\r\n\r\nx\r\n"
+    raw = b"Subject: t\r\nContent-Type: multipart/mixed; boundary=bb\r\n\r\n" + (
+        part * (imap_poll.MAX_MESSAGE_PARTS + 50)
+    )
+    assert len(raw) < imap_poll.MAX_MESSAGE_BYTES, (
+        "the probe must be UNDER the byte cap, or it proves nothing new"
+    )
+
+    parsed_with: list = []
+    monkeypatch.setattr(
+        imap_poll.inbound_parse, "parse", lambda r: parsed_with.append(r)
+    )
+
+    sess = _FakeSession({7: len(raw)}, {7: raw})
+    out = imap_poll.run_poll(manual=False, db=db, session_opener=lambda _cfg: sess)
+    assert parsed_with == [], (
+        "a message with more parts than the cap was handed to the parser; "
+        "that is the allocation that OOM-kills the worker"
+    )
+    assert out.get("skipped", 0) >= 1
+
+
+def test_the_highwater_advances_before_the_parse(db, imap_enabled, monkeypatch):
+    """A hard process kill during parse must not re-select the same message
+    forever. The highwater used to be written only after the parse returned, so
+    a SIGKILL there meant the next poll fetched the same message and died again
+    - Docker restarts the worker, cron re-enqueues every five minutes, and every
+    background job stops permanently until someone deletes the mail by hand."""
+    from app.services import imap_poll
+    from app.services import settings as settings_svc
+
+    raw = b"Subject: t\r\n\r\nbody"
+
+    class _Boom(BaseException):
+        """Not an Exception - stands in for SIGKILL, which the per-message
+        try/except cannot catch either."""
+
+    def _die(_r):
+        raise _Boom()
+
+    monkeypatch.setattr(imap_poll.inbound_parse, "parse", _die)
+
+    sess = _FakeSession({42: len(raw)}, {42: raw})
+    with pytest.raises(_Boom):
+        imap_poll.run_poll(manual=False, db=db, session_opener=lambda _cfg: sess)
+
+    saved = settings_svc.get(db, settings_svc.Keys.IMAP_LAST_UID)
+    assert saved is not None and int(saved) >= 42, (
+        "the highwater was not persisted before the parse, so a process kill "
+        "re-selects this message on every subsequent poll, forever"
+    )

@@ -118,7 +118,9 @@ async function onExport() {
     <hr class="fh-rule" />
 
     <div v-if="loading" class="fh-notice">{{ t('common.loading') }}</div>
-    <div v-else-if="errorMsg" class="fh-notice" data-tone="error">{{ errorMsg }}</div>
+    <div
+v-else-if="errorMsg" class="fh-notice" role="alert"
+        data-tone="error">{{ errorMsg }}</div>
 
     <template v-else-if="data">
       <!-- Storage trend -->

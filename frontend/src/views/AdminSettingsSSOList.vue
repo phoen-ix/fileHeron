@@ -42,7 +42,7 @@ onMounted(load)
   <div class="sso-list" data-density="operator">
     <div class="header-row">
       <div>
-        <span class="fh-eyebrow">{{ t('admin_settings.eyebrow') }} / {{ t('admin_sso_list.title') }}</span>
+        <h1 class="fh-eyebrow">{{ t('admin_settings.eyebrow') }} / {{ t('admin_sso_list.title') }}</h1>
       </div>
       <button type="button" class="fh-btn" @click="newProvider">
         + {{ t('admin_sso_list.add_button') }}
@@ -54,7 +54,9 @@ onMounted(load)
     <hr class="fh-rule" />
 
     <div v-if="loading" class="loading">{{ t('common.loading') }}</div>
-    <div v-else-if="errorMsg" class="fh-notice" data-tone="error">{{ errorMsg }}</div>
+    <div
+v-else-if="errorMsg" class="fh-notice" role="alert"
+        data-tone="error">{{ errorMsg }}</div>
 
     <div v-else-if="items.length === 0" class="empty fh-notice" data-tone="muted">
       <strong>{{ t('admin_sso_list.empty_title') }}</strong>

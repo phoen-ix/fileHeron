@@ -13,7 +13,9 @@
           <span v-if="item.locked" class="locked-note">{{ t('notif_prefs.locked') }}</span>
         </td>
         <td>
-          <!-- A bare <select> in a table cell has no accessible name: the
+          <!-- A bare <select
+        :aria-label="t('common.filter')"
+      > in a table cell has no accessible name: the
                column header is not associated with it, so it announced only
                its current value (audit 2026-07-30, fe-i18n-a11y-15). -->
           <select

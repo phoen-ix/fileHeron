@@ -120,18 +120,25 @@ onMounted(load)
     <div class="filters">
       <input
         v-model.trim="q"
+        :aria-label="t('admin_inbox.search_placeholder')"
         type="search"
         class="fh-field-input"
         :placeholder="t('admin_inbox.search_placeholder')"
         @keyup.enter="applyFilters"
       />
-      <select v-model="classification" class="fh-field-input" @change="applyFilters">
+      <select
+        v-model="classification" class="fh-field-input" :aria-label="t('common.filter')"
+  @change="applyFilters"
+>
         <option value="">{{ t('admin_inbox.class_all') }}</option>
         <option value="normal">{{ t('admin_inbox.class_normal') }}</option>
         <option value="bounce">{{ t('admin_inbox.class_bounce') }}</option>
         <option value="auto_reply">{{ t('admin_inbox.class_auto') }}</option>
       </select>
-      <select v-model="status" class="fh-field-input" @change="applyFilters">
+      <select
+        v-model="status" class="fh-field-input" :aria-label="t('common.filter')"
+  @change="applyFilters"
+>
         <option value="">{{ t('admin_inbox.status_all') }}</option>
         <option value="new">{{ t('admin_inbox.status_new') }}</option>
         <option value="read">{{ t('admin_inbox.status_read') }}</option>
@@ -139,7 +146,9 @@ onMounted(load)
       </select>
     </div>
 
-    <div v-if="errorMsg" class="fh-notice" data-tone="danger">{{ errorMsg }}</div>
+    <div
+v-if="errorMsg" class="fh-notice" role="alert"
+        data-tone="danger">{{ errorMsg }}</div>
     <div v-if="loading" class="loading">{{ t('common.loading') }}</div>
     <p v-else-if="!items.length" class="empty">{{ t('admin_inbox.empty') }}</p>
 

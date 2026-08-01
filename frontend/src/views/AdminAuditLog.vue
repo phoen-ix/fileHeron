@@ -101,7 +101,7 @@ onMounted(load)
   <div class="fh-page" data-density="operator">
     <div class="header-row">
       <div>
-        <span class="fh-eyebrow">{{ t('admin_audit.eyebrow') }}</span>
+        <h1 class="fh-eyebrow">{{ t('admin_audit.eyebrow') }}</h1>
       </div>
       <button type="button" class="fh-btn fh-btn-ghost" :disabled="exporting" @click="onExportCsv">
         {{ t('admin_audit.export_csv') }}
@@ -111,15 +111,32 @@ onMounted(load)
     <hr class="fh-rule" />
 
     <div class="filters">
-      <input v-model.trim="eventType" class="fh-field-input" :placeholder="t('admin_audit.filter.event_type')" />
-      <input v-model.trim="targetType" class="fh-field-input" :placeholder="t('admin_audit.filter.target_type')" />
-      <input v-model.trim="targetId" class="fh-field-input" :placeholder="t('admin_audit.filter.target_id')" />
-      <input v-model="fromTs" class="fh-field-input" type="datetime-local" :title="t('admin_audit.filter.from')" />
-      <input v-model="toTs" class="fh-field-input" type="datetime-local" :title="t('admin_audit.filter.to')" />
+      <input
+        v-model.trim="eventType" class="fh-field-input" :placeholder="t('admin_audit.filter.event_type')"
+        :aria-label="t('admin_audit.filter.event_type')"
+/>
+      <input
+        v-model.trim="targetType" class="fh-field-input" :placeholder="t('admin_audit.filter.target_type')"
+        :aria-label="t('admin_audit.filter.target_type')"
+/>
+      <input
+        v-model.trim="targetId" class="fh-field-input" :placeholder="t('admin_audit.filter.target_id')"
+        :aria-label="t('admin_audit.filter.target_id')"
+/>
+      <input
+        v-model="fromTs" class="fh-field-input" type="datetime-local" :title="t('admin_audit.filter.from')"
+        :aria-label="t('admin_audit.filter.from')"
+/>
+      <input
+        v-model="toTs" class="fh-field-input" type="datetime-local" :title="t('admin_audit.filter.to')"
+        :aria-label="t('admin_audit.filter.to')"
+/>
     </div>
 
     <div v-if="loading" class="loading">{{ t('common.loading') }}</div>
-    <div v-else-if="errorMsg" class="fh-notice" data-tone="error">{{ errorMsg }}</div>
+    <div
+v-else-if="errorMsg" class="fh-notice" role="alert"
+        data-tone="error">{{ errorMsg }}</div>
 
     <table v-else class="audit-table">
       <thead>

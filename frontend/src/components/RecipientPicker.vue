@@ -35,6 +35,11 @@
         :placeholder="t('recipient.search_placeholder')"
         autocomplete="off"
         :disabled="disabled"
+        role="combobox"
+        aria-autocomplete="list"
+        :aria-expanded="showResults && (filteredUsers.length > 0 || filteredGroups.length > 0)"
+        :aria-controls="`${inputId}-listbox`"
+        :aria-activedescendant="activeOptionId"
         @focus="showResults = true"
         @blur="onBlur"
         @keydown.down.prevent="moveCursor(1)"
@@ -44,6 +49,7 @@
       />
       <div
         v-if="showResults && (filteredUsers.length || filteredGroups.length || loading)"
+        :id="`${inputId}-listbox`"
         class="results"
         role="listbox"
       >
@@ -53,6 +59,7 @@
           <div class="section-eyebrow">{{ t('recipient.section_users') }}</div>
           <button
             v-for="(u, idx) in filteredUsers"
+            :id="`${inputId}-opt-${idx}`"
             :key="`u-${u.user_id}`"
             type="button"
             class="result-row"
@@ -63,6 +70,7 @@
             @mouseenter="cursorIdx = idx"
           >
             <span class="row-icon" aria-hidden="true">◆</span>
+            <span class="fh-sr-only">{{ t('recipient.section_users') }}</span>
             <span class="row-name">{{ u.display_name }}</span>
             <span class="row-hint fh-mono">{{ u.email }}</span>
             <span class="row-role fh-mono">{{ u.role }}</span>
@@ -73,6 +81,7 @@
           <div class="section-eyebrow">{{ t('recipient.section_groups') }}</div>
           <button
             v-for="(g, idx) in filteredGroups"
+            :id="`${inputId}-opt-${filteredUsers.length + idx}`"
             :key="`g-${g.id}`"
             type="button"
             class="result-row"
@@ -133,6 +142,13 @@ const emit = defineEmits<{
 const { t } = useI18n()
 const { describe } = useApiError()
 const inputId = `rp-${Math.random().toString(36).slice(2, 8)}`
+
+/** The option the arrow keys have landed on, for `aria-activedescendant`.
+ *  Without it the highlight moved visually and the screen reader said nothing
+ *  on any keystroke - on the primary share flow (audit #2). */
+const activeOptionId = computed(() =>
+  cursorIdx.value >= 0 ? `${inputId}-opt-${cursorIdx.value}` : undefined,
+)
 
 const query = ref('')
 const showResults = ref(false)

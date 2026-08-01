@@ -26,6 +26,16 @@ export default [
       'vuejs-accessibility/aria-role': 'error',
       'vuejs-accessibility/aria-props': 'error',
       'vuejs-accessibility/role-has-required-aria-props': 'error',
+      // Stays off, but NOT for the reason the note above gives for
+      // label-has-for. It fired 38 times (audit #2) - 11 of them <select>,
+      // which has no placeholder to fall back on, so a screen-reader admin
+      // heard "combo box, collapsed, All" with no idea what it filtered, and
+      // one was the config-backup FILE input, indistinguishable from the
+      // passphrase field beside it. All 38 now carry an accessible name, but
+      // most are BOUND (`:aria-label="t(...)"`) and this rule only recognises a
+      // static attribute, so it cannot be the gate. The gate is
+      // backend/tests/test_frontend_a11y_tokens.py, which understands both.
+      'vuejs-accessibility/form-control-has-label': 'off',
       // label-has-for fires 161 times: the codebase uses a standalone <label> beside
       // its input rather than for/id or nesting. Real, but it is a 161-site
       // refactor, not a gate - it lands with the frontend accessibility work.

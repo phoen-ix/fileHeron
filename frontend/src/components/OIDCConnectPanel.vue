@@ -104,7 +104,8 @@ onMounted(async () => {
     <div
       v-else-if="errorMsg"
       class="fh-notice"
-      data-tone="error"
+      role="alert"
+        data-tone="error"
     >
       {{ errorMsg }}
     </div>

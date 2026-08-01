@@ -87,7 +87,7 @@ onMounted(load)
   <div class="fh-page" data-density="operator">
     <div class="header-row">
       <div>
-        <span class="fh-eyebrow">{{ t('admin_sessions.eyebrow') }}</span>
+        <h1 class="fh-eyebrow">{{ t('admin_sessions.eyebrow') }}</h1>
       </div>
       <span class="fh-mono total-count">{{ t('admin_sessions.total_count', { n: total }) }}</span>
     </div>
@@ -99,6 +99,7 @@ onMounted(load)
     <div class="filters">
       <input
         v-model.trim="q"
+        :aria-label="t('admin_sessions.search_placeholder')"
         type="search"
         class="fh-field-input search"
         :placeholder="t('admin_sessions.search_placeholder')"
@@ -110,7 +111,9 @@ onMounted(load)
     </div>
 
     <div v-if="loading" class="loading">{{ t('common.loading') }}</div>
-    <div v-else-if="errorMsg" class="fh-notice" data-tone="error">{{ errorMsg }}</div>
+    <div
+v-else-if="errorMsg" class="fh-notice" role="alert"
+        data-tone="error">{{ errorMsg }}</div>
 
     <table v-else-if="items.length > 0" class="sessions-table">
       <thead>

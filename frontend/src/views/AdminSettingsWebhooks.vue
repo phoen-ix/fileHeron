@@ -214,7 +214,9 @@ onMounted(load)
 
     <!-- List -->
     <div v-if="loading" class="fh-notice">{{ t('common.loading') }}</div>
-    <div v-else-if="errorMsg" class="fh-notice" data-tone="error">{{ errorMsg }}</div>
+    <div
+v-else-if="errorMsg" class="fh-notice" role="alert"
+        data-tone="error">{{ errorMsg }}</div>
     <p v-else-if="items.length === 0" class="fh-field-help empty">{{ t('admin_webhooks.none') }}</p>
 
     <ul v-else class="hooks">

@@ -121,7 +121,7 @@ onMounted(load)
   <div class="fh-page" data-density="operator">
     <div class="header-row">
       <div>
-        <span class="fh-eyebrow">{{ t('admin_error_log.eyebrow') }}</span>
+        <h1 class="fh-eyebrow">{{ t('admin_error_log.eyebrow') }}</h1>
         <p class="fh-field-help intro">{{ t('admin_error_log.intro') }}</p>
       </div>
       <button type="button" class="fh-btn fh-btn-ghost" :disabled="exporting" @click="onExportCsv">
@@ -132,27 +132,45 @@ onMounted(load)
     <hr class="fh-rule" />
 
     <div class="filters">
-      <input v-model.trim="code" class="fh-field-input" :placeholder="t('admin_error_log.filter.code')" />
-      <input v-model.trim="ip" class="fh-field-input" :placeholder="t('admin_error_log.filter.ip')" />
+      <input
+        v-model.trim="code" class="fh-field-input" :placeholder="t('admin_error_log.filter.code')"
+        :aria-label="t('admin_error_log.filter.code')"
+/>
+      <input
+        v-model.trim="ip" class="fh-field-input" :placeholder="t('admin_error_log.filter.ip')"
+        :aria-label="t('admin_error_log.filter.ip')"
+/>
       <input
         v-model.trim="statusCode"
+        :aria-label="t('admin_error_log.filter.status')"
         class="fh-field-input"
         type="number"
         min="100"
         max="599"
         :placeholder="t('admin_error_log.filter.status')"
       />
-      <select v-model="source" class="fh-field-input">
+      <select
+        v-model="source" class="fh-field-input"
+        :aria-label="t('common.filter')"
+      >
         <option v-for="s in sourceOptions" :key="s" :value="s">
           {{ s ? t(`admin_error_log.source.${s}`) : t('admin_error_log.filter.source_any') }}
         </option>
       </select>
-      <input v-model="fromTs" class="fh-field-input" type="datetime-local" :title="t('admin_error_log.filter.from')" />
-      <input v-model="toTs" class="fh-field-input" type="datetime-local" :title="t('admin_error_log.filter.to')" />
+      <input
+        v-model="fromTs" class="fh-field-input" type="datetime-local" :title="t('admin_error_log.filter.from')"
+        :aria-label="t('admin_error_log.filter.from')"
+/>
+      <input
+        v-model="toTs" class="fh-field-input" type="datetime-local" :title="t('admin_error_log.filter.to')"
+        :aria-label="t('admin_error_log.filter.to')"
+/>
     </div>
 
     <div v-if="loading" class="loading">{{ t('common.loading') }}</div>
-    <div v-else-if="errorMsg" class="fh-notice" data-tone="error">{{ errorMsg }}</div>
+    <div
+v-else-if="errorMsg" class="fh-notice" role="alert"
+        data-tone="error">{{ errorMsg }}</div>
     <div v-else-if="items.length === 0" class="loading">{{ t('admin_error_log.empty') }}</div>
 
     <table v-else class="error-table">

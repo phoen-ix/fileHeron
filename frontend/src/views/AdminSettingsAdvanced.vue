@@ -111,7 +111,7 @@ onMounted(load)
 
 <template>
   <div class="advanced-settings">
-    <span class="fh-eyebrow">{{ t('admin_advanced.eyebrow') }}</span>
+    <h1 class="fh-eyebrow">{{ t('admin_advanced.eyebrow') }}</h1>
     <p class="fh-field-help intro">{{ t('admin_advanced.intro') }}</p>
 
     <div v-if="loading" class="loading">{{ t('common.loading') }}</div>
@@ -177,7 +177,9 @@ onMounted(load)
         </div>
       </section>
 
-      <div v-if="errorMsg" class="fh-notice" data-tone="error">{{ errorMsg }}</div>
+      <div
+v-if="errorMsg" class="fh-notice" role="alert"
+        data-tone="error">{{ errorMsg }}</div>
 
       <div class="actions">
         <button type="submit" class="fh-btn" :disabled="saving || !dirty">

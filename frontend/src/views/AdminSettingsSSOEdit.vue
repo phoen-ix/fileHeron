@@ -233,9 +233,9 @@ onMounted(init)
 
 <template>
   <div class="sso-edit" data-density="operator">
-    <span class="fh-eyebrow">
+    <h1 class="fh-eyebrow">
       {{ t('admin_settings.eyebrow') }} / {{ t('admin_sso_list.title') }} / {{ isEdit ? t('admin_sso_edit.heading_edit') : t('admin_sso_edit.heading_new') }}
-    </span>
+    </h1>
 
     <div v-if="loading" class="loading">{{ t('common.loading') }}</div>
 
@@ -352,7 +352,9 @@ onMounted(init)
         <div v-else class="test-detail fh-mono">{{ testResult.error }}</div>
       </div>
 
-      <div v-if="errorMsg" class="fh-notice" data-tone="error">{{ errorMsg }}</div>
+      <div
+v-if="errorMsg" class="fh-notice" role="alert"
+        data-tone="error">{{ errorMsg }}</div>
 
       <div class="actions">
         <button type="submit" class="fh-btn" :disabled="saving">

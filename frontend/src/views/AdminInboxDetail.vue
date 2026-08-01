@@ -87,7 +87,9 @@ onMounted(load)
   <div class="msg-page" data-density="operator">
     <RouterLink :to="{ name: 'admin-inbox' }" class="fh-btn-text back">← {{ t('admin_inbox.back') }}</RouterLink>
 
-    <div v-if="errorMsg" class="fh-notice" data-tone="danger">{{ errorMsg }}</div>
+    <div
+v-if="errorMsg" class="fh-notice" role="alert"
+        data-tone="danger">{{ errorMsg }}</div>
     <div v-if="loading" class="loading">{{ t('common.loading') }}</div>
 
     <article v-else-if="msg" class="msg">

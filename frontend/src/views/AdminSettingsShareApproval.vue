@@ -168,9 +168,9 @@ onMounted(load)
 
 <template>
   <div class="policy-page" data-density="operator">
-    <span class="fh-eyebrow">
+    <h1 class="fh-eyebrow">
       {{ t('admin_settings.eyebrow') }} / {{ t('admin_share_approval.title') }}
-    </span>
+    </h1>
 
     <p class="fh-field-help intro">{{ t('admin_share_approval.intro') }}</p>
 
@@ -214,6 +214,7 @@ onMounted(load)
             </ul>
             <input
               v-model.trim="userQuery"
+              :aria-label="t('admin_share_approval.users_placeholder')"
               type="search"
               class="fh-field-input"
               autocomplete="off"
@@ -276,7 +277,9 @@ onMounted(load)
         {{ t('admin_share_approval.inert_warning') }}
       </div>
 
-      <div v-if="errorMsg" class="fh-notice" data-tone="error">{{ errorMsg }}</div>
+      <div
+v-if="errorMsg" class="fh-notice" role="alert"
+        data-tone="error">{{ errorMsg }}</div>
 
       <div class="actions">
         <button type="submit" class="fh-btn" :disabled="saving || policyIsInert">

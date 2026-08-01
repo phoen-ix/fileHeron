@@ -47,9 +47,9 @@ function jumpTo(id: string) {
 <template>
   <div class="general-layout" data-density="operator">
     <div class="general-prose">
-      <span class="fh-eyebrow">
+      <h1 class="fh-eyebrow">
         {{ t('admin_settings.eyebrow') }} / {{ t('admin_general.title') }}
-      </span>
+      </h1>
 
       <p class="fh-field-help intro">{{ t('admin_general.intro') }}</p>
 

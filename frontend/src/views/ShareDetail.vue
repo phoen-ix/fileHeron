@@ -378,7 +378,9 @@ onMounted(load)
   <div class="fh-page" data-density="operator">
     <div v-if="loading" class="loading">{{ t('common.loading') }}</div>
 
-    <div v-else-if="errorMsg" class="fh-notice" data-tone="error">{{ errorMsg }}</div>
+    <div
+v-else-if="errorMsg" class="fh-notice" role="alert"
+        data-tone="error">{{ errorMsg }}</div>
 
     <template v-else-if="share">
       <span class="fh-eyebrow">
@@ -530,7 +532,9 @@ onMounted(load)
         v-if="isOwner && share.state === 'rejected'"
         class="approval-box"
       >
-        <p class="fh-notice" data-tone="error">
+        <p
+class="fh-notice" role="alert"
+        data-tone="error">
           {{ t('approvals.rejected_owner_banner') }}
         </p>
         <p v-if="share.rejection_reason" class="reject-reason">

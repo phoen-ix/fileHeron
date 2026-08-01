@@ -8,6 +8,7 @@
         type="button"
         class="preset-btn"
         :class="{ active: activePreset === preset.id }"
+        :aria-pressed="activePreset === preset.id"
         :disabled="disabled"
         @click="applyPreset(preset)"
       >
@@ -16,6 +17,7 @@
     </div>
     <input
       v-model="inputValue"
+      :aria-label="t('expiry.custom_placeholder')"
       type="datetime-local"
       class="fh-field-input custom-picker"
       :placeholder="t('expiry.custom_placeholder')"

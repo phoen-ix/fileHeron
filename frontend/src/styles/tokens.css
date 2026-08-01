@@ -35,6 +35,13 @@
      `currentColor` and those hairlines rendered in the ink colour instead
      (audit #2). */
   --fh-rule: var(--fh-hairline);
+  /* Text-input boundary. The decorative hairline measured 1.44:1 on the paper,
+     so the filter bar on /admin/mail-log looked like three empty gaps to a
+     low-vision admin: no visible field edges, and the only text in them (the
+     placeholder naming each filter) at 2.39:1. A form control's boundary is a
+     non-text UI component - WCAG 1.4.11, 3:1 - and this clears it on all three
+     page surfaces (audit #2). */
+  --fh-field-edge: #8a8371;
 
   --fh-success: #4d7c0f;
   --fh-warning: #b45309;

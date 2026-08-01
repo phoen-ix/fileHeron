@@ -77,9 +77,9 @@ onMounted(load)
 
 <template>
   <div class="policy-page" data-density="operator">
-    <span class="fh-eyebrow">
+    <h1 class="fh-eyebrow">
       {{ t('admin_settings.eyebrow') }} / {{ t('admin_settings_email_change.title') }}
-    </span>
+    </h1>
 
     <p class="fh-field-help intro">{{ t('admin_settings_email_change.intro') }}</p>
 
@@ -131,7 +131,9 @@ onMounted(load)
         <p class="fh-field-help">{{ t('admin_settings_email_change.self_service_help') }}</p>
       </fieldset>
 
-      <div v-if="errorMsg" class="fh-notice" data-tone="error">{{ errorMsg }}</div>
+      <div
+v-if="errorMsg" class="fh-notice" role="alert"
+        data-tone="error">{{ errorMsg }}</div>
 
       <div class="actions">
         <button type="submit" class="fh-btn" :disabled="saving">

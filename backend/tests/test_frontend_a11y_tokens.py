@@ -109,3 +109,113 @@ def test_every_advanced_tunable_has_an_accessible_name():
 def test_no_control_is_wrapped_in_an_empty_label():
     src = (FRONTEND / "views" / "AdminSettingsAdvanced.vue").read_text()
     assert not re.search(r"<label[^>]*class=\"switch\"", src)
+
+
+# --- audit #2: named controls, headings, live regions -----------------------
+
+
+def _controls(src: str) -> list[str]:
+    """Opening tags of every form control in a template."""
+    return re.findall(r"<(?:input|select|textarea)\b[^>]*>", src, re.S)
+
+
+def test_every_form_control_has_an_accessible_name():
+    """38 had none - 11 of them `<select>`, which has no placeholder to fall
+    back on, so a screen-reader admin heard "combo box, collapsed, All" with no
+    idea what it filtered; one was the config-backup FILE input, which they
+    could not tell from the passphrase field beside it (audit #2).
+
+    Not an eslint gate: most of these names are BOUND (`:aria-label="t(...)"`)
+    and `vuejs-accessibility/form-control-has-label` only recognises a static
+    attribute. This check understands both, and a wrapping or `for`-associated
+    <label>.
+    """
+    offenders: list[str] = []
+    for path in list(FRONTEND.rglob("*.vue")):
+        src = path.read_text()
+        # Between the FIRST <template> and the LAST </template>. Partitioning on
+        # the opening tag alone swept the <script> block in too, and matched an
+        # `<input>` written inside a comment there.
+        start = src.find("<template>")
+        end = src.rfind("</template>")
+        if start == -1 or end == -1:
+            continue
+        template = src[start:end]
+        for tag in _controls(template):
+            if re.search(r'\baria-label\b|\baria-labelledby\b|:aria-label\b', tag):
+                continue
+            if 'type="hidden"' in tag or "v-model" not in tag and "type=" not in tag:
+                continue
+            # `<label>` wrapping this control, or pointing at its id.
+            m = re.search(r':?id="([^"]+)"', tag)
+            if m and f'for="{m.group(1)}"' in template:
+                continue
+            if m and f':for="{m.group(1)}"' in template:
+                continue
+            idx = template.find(tag)
+            before = template[max(0, idx - 400) : idx]
+            if "<label" in before and "</label>" not in before.split("<label")[-1]:
+                continue
+            offenders.append(f"{path.name}: {tag[:70].strip()}")
+    assert offenders == [], (
+        f"{len(offenders)} form control(s) with no accessible name: {offenders[:8]}"
+    )
+
+
+def test_every_page_view_renders_a_page_heading():
+    """30 of 55 views had no <h1> and 12 had no heading element at all, so a
+    screen-reader admin landing on /admin/error-log heard "no headings" and had
+    nothing to distinguish it from /admin/mail-log."""
+    views = FRONTEND / "views"
+    missing = [
+        p.name
+        for p in sorted(views.rglob("*.vue"))
+        if "<h1" not in p.read_text().partition("<template>")[2]
+        and p.name not in {"AdminLayout.vue", "HomePlaceholder.vue", "NotFound.vue"}
+    ]
+    assert missing == [], f"views with no page heading: {missing}"
+
+
+def test_error_notices_are_live_regions():
+    """58 of 67 were not, so a failed public-link unlock, 2FA setup or password
+    change was announced to nobody - and on the public link page a few silent
+    retries trip the brute-force counter, locking every OTHER recipient out of
+    that share."""
+    offenders: list[str] = []
+    for path in list(FRONTEND.rglob("*.vue")):
+        src = path.read_text()
+        for tag in re.findall(r"<(?:div|p)\b[^>]*data-tone=\"(?:error|danger)\"[^>]*>", src, re.S):
+            if "role=" not in tag and "aria-live" not in tag:
+                offenders.append(f"{path.name}: {tag[:60].strip()}")
+    assert offenders == [], f"{len(offenders)} error notice(s) announced to nobody"
+
+
+def test_toggle_groups_expose_their_selected_state():
+    """The header LanguageSwitcher does it right; its two duplicates and the
+    expiry presets did not, so a blind user could not tell which option was
+    active before or after activating one."""
+    for rel in (
+        "views/Account.vue",
+        "views/RegisterFromInvite.vue",
+        "components/ExpiryPicker.vue",
+    ):
+        assert "aria-pressed" in (FRONTEND / rel).read_text(), rel
+
+
+def test_the_recipient_picker_honours_the_combobox_contract():
+    """Arrow-key navigation on the primary share flow was silent: no
+    aria-expanded, so the list opening was unannounced, and no
+    aria-activedescendant, so no keystroke said anything."""
+    src = (FRONTEND / "components" / "RecipientPicker.vue").read_text()
+    for attr in ('role="combobox"', "aria-expanded", "aria-activedescendant", "aria-controls"):
+        assert attr in src, attr
+
+
+@pytest.mark.parametrize("pair", [("fh-subtle", "fh-paper"), ("fh-field-edge", "fh-paper")])
+def test_placeholder_and_field_edges_are_legible(pair):
+    """Placeholder text measured 2.39:1 and the input boundary 1.44:1, so the
+    filter bar on /admin/mail-log was three empty gaps to a low-vision admin -
+    and on /account the user's own address is shown ONLY as a placeholder."""
+    token, surface = pair
+    floor = 4.5 if token == "fh-subtle" else 3.0
+    assert _contrast(_token(token), _token(surface)) >= floor

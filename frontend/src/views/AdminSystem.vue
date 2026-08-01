@@ -369,7 +369,7 @@ const headlineFailures = computed(() => {
 <template>
   <section class="system-page">
     <header class="page-header">
-      <span class="fh-eyebrow">{{ t('admin_system.eyebrow') }}</span>
+      <h1 class="fh-eyebrow">{{ t('admin_system.eyebrow') }}</h1>
       <p class="page-sub">{{ t('admin_system.sub') }}</p>
       <div class="actions">
         <button class="btn-secondary" :disabled="loading" @click="load">

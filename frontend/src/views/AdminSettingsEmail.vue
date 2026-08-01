@@ -192,9 +192,9 @@ onMounted(load)
 
 <template>
   <div class="email-page" data-density="operator">
-    <span class="fh-eyebrow">
+    <h1 class="fh-eyebrow">
       {{ t('admin_settings.eyebrow') }} / {{ t('admin_email.title') }}
-    </span>
+    </h1>
 
     <p class="fh-field-help intro">{{ t('admin_email.intro') }}</p>
 
@@ -317,7 +317,9 @@ onMounted(load)
           />
         </label>
 
-        <div v-if="errorMsg" class="fh-notice" data-tone="error">{{ errorMsg }}</div>
+        <div
+v-if="errorMsg" class="fh-notice" role="alert"
+        data-tone="error">{{ errorMsg }}</div>
 
         <div class="actions">
           <button type="submit" class="fh-btn" :disabled="saving || authBlocked">
@@ -335,6 +337,7 @@ onMounted(load)
         <div class="test-row">
           <input
             v-model.trim="testTo"
+            :aria-label="t('admin_email.test_placeholder')"
             class="fh-field-input fh-field-mono"
             type="email"
             :placeholder="t('admin_email.test_placeholder')"

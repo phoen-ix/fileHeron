@@ -211,7 +211,9 @@ async function disable() {
           <span class="fh-field-help">{{ $t('twofa.verify_help') }}</span>
         </div>
 
-        <div v-if="error" class="fh-notice" data-tone="error">{{ error }}</div>
+        <div
+v-if="error" class="fh-notice" role="alert"
+        data-tone="error">{{ error }}</div>
 
         <button class="fh-btn" :disabled="submitting">
           {{ $t('twofa.enable_submit') }} <span aria-hidden="true">→</span>
@@ -331,7 +333,9 @@ async function disable() {
           />
         </div>
 
-        <div v-if="error" class="fh-notice" data-tone="error">{{ error }}</div>
+        <div
+v-if="error" class="fh-notice" role="alert"
+        data-tone="error">{{ error }}</div>
 
         <div style="display: flex; gap: var(--fh-space-3); align-items: baseline">
           <button type="submit" class="fh-btn-danger fh-btn" :disabled="submitting">

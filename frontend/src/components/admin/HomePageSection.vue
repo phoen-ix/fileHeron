@@ -71,7 +71,9 @@ onMounted(load)
         <li>{{ t('admin_home_page.effect_redirect') }}</li>
       </ul>
 
-      <div v-if="errorMsg" class="fh-notice" data-tone="error">{{ errorMsg }}</div>
+      <div
+v-if="errorMsg" class="fh-notice" role="alert"
+        data-tone="error">{{ errorMsg }}</div>
 
       <div class="actions">
         <button type="submit" class="fh-btn" :disabled="saving">

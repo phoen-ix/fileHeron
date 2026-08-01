@@ -28,16 +28,15 @@ LOCALES = REPO / "frontend" / "src" / "i18n" / "locales"
 
 # Raised only from the admin console, or never surfaced to a human at all
 # (tusd hook plumbing, worker-internal). Deliberately untranslated.
-ALLOWLIST_PREFIXES = ("BACKUP_", "CRON_", "IMAP_", "SMTP_", "WEBHOOK_", "UPDATE_")
-ALLOWLIST = {
-    "INTERNAL_ERROR",  # has a key, but is emitted by middleware not AppError()
-    "HOOK_HANDLER_ERROR",
-    "TUS_HOOK_FORBIDDEN",  # returned to tusd, never rendered to a person
-    "URL_BLOCKED",
-    "URL_NOT_ALLOWED",
-    "INVALID_ADMIN_NAV_MODE",
-    "INVALID_ADMIN_NAV_CATEGORY",
-}
+# Empty since audit #2. The exemptions below covered 51 codes that DO reach a
+# person: every restore, quarantine-release, self-update, webhook and
+# email-template failure rendered the backend's literal English message
+# mid-page on an otherwise fully German admin screen - and the en/de parity test
+# stayed green throughout, because both locales were equally missing all of
+# them. Parity is not coverage. All 222 codes now have keys in both locales;
+# keep it that way rather than re-widening this list.
+ALLOWLIST_PREFIXES: tuple[str, ...] = ()
+ALLOWLIST: set[str] = set()
 
 
 def _codes_by_file() -> dict[str, set[str]]:

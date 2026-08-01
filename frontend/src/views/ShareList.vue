@@ -218,6 +218,7 @@ onMounted(load)
       <select
         v-else-if="partyKind === 'group'"
         v-model="partyGroup"
+        :aria-label="t('common.filter')"
         class="filter-select"
         @change="pickGroup"
       >
@@ -249,7 +250,9 @@ onMounted(load)
     </div>
 
     <div v-if="loading" class="loading">{{ t('common.loading') }}</div>
-    <div v-else-if="errorMsg" class="fh-notice" data-tone="error">{{ errorMsg }}</div>
+    <div
+v-else-if="errorMsg" class="fh-notice" role="alert"
+        data-tone="error">{{ errorMsg }}</div>
 
     <template v-else-if="items.length > 0">
       <div v-for="g in groupedItems" :key="g.key" class="group-section">

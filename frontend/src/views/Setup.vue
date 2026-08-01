@@ -104,7 +104,9 @@ async function onSubmit() {
         />
       </label>
 
-      <div v-if="errorMsg" class="fh-notice" data-tone="error">{{ errorMsg }}</div>
+      <div
+v-if="errorMsg" class="fh-notice" role="alert"
+        data-tone="error">{{ errorMsg }}</div>
 
       <button type="submit" class="fh-btn" :disabled="submitting || !email || !password">
         {{ submitting ? t('common.loading') : t('setup.submit') }}

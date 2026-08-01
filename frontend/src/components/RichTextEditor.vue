@@ -50,7 +50,10 @@
 
       <template v-if="placeholders.length > 0">
         <span class="rt-toolbar-spacer" />
-        <select class="rt-select rt-placeholder" :disabled="disabled" :value="''" @change="onPlaceholder">
+        <select
+        class="rt-select rt-placeholder" :disabled="disabled" :value="''" :aria-label="t('common.filter')"
+  @change="onPlaceholder"
+>
           <option value="" disabled>{{ t('richtext.insert_placeholder') }}</option>
           <option v-for="p in placeholders" :key="p.token" :value="p.token">{{ p.label || p.token }}</option>
         </select>

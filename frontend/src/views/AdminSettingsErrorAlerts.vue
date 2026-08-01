@@ -158,9 +158,9 @@ onMounted(() => {
 
 <template>
   <div class="policy-page" data-density="operator">
-    <span class="fh-eyebrow">
+    <h1 class="fh-eyebrow">
       {{ t('admin_settings.eyebrow') }} / {{ t('admin_error_alerts.title') }}
-    </span>
+    </h1>
 
     <p class="fh-field-help intro">{{ t('admin_error_alerts.intro') }}</p>
 
@@ -190,6 +190,7 @@ onMounted(() => {
               v-model="codes4xxText"
               class="fh-input"
               :placeholder="t('admin_error_alerts.codes_4xx_placeholder')"
+              :aria-label="t('admin_error_alerts.codes_4xx_placeholder')"
             />
             <p class="fh-field-help">{{ t('admin_error_alerts.codes_4xx_help') }}</p>
           </template>
@@ -244,6 +245,7 @@ onMounted(() => {
           <template v-if="recipientsMode === 'custom'">
             <textarea
               v-model="customRecipientsText"
+              :aria-label="t('admin_error_alerts.recipients_placeholder')"
               class="fh-input recipients-area"
               rows="4"
               :placeholder="t('admin_error_alerts.recipients_placeholder')"
@@ -269,7 +271,9 @@ onMounted(() => {
       </template>
 
       <div v-if="validationError" class="fh-notice" data-tone="warning">{{ validationError }}</div>
-      <div v-if="errorMsg" class="fh-notice" data-tone="error">{{ errorMsg }}</div>
+      <div
+v-if="errorMsg" class="fh-notice" role="alert"
+        data-tone="error">{{ errorMsg }}</div>
 
       <div class="actions">
         <button type="submit" class="fh-btn" :disabled="!canSave">

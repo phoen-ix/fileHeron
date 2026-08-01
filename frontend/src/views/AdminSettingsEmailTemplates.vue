@@ -234,9 +234,9 @@ onBeforeRouteLeave(async () => {
 
 <template>
   <div class="tpl-page" data-density="operator">
-    <span class="fh-eyebrow">
+    <h1 class="fh-eyebrow">
       {{ t('admin_settings.eyebrow') }} / {{ t('admin_email_templates.title') }}
-    </span>
+    </h1>
     <p class="fh-field-help intro">{{ t('admin_email_templates.intro') }}</p>
 
     <div v-if="loading" class="loading">{{ t('common.loading') }}</div>
@@ -291,7 +291,9 @@ onBeforeRouteLeave(async () => {
           </button>
         </div>
 
-        <div v-if="errorMsg" class="fh-notice" data-tone="danger">{{ errorMsg }}</div>
+        <div
+v-if="errorMsg" class="fh-notice" role="alert"
+        data-tone="danger">{{ errorMsg }}</div>
 
         <div v-if="detailLoading" class="loading">{{ t('common.loading') }}</div>
 

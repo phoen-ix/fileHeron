@@ -155,13 +155,15 @@ onMounted(load)
 
 <template>
   <div class="branding-page" data-density="operator">
-    <span class="fh-eyebrow">
+    <h1 class="fh-eyebrow">
       {{ t('admin_settings.eyebrow') }} / {{ t('admin_branding.title') }}
-    </span>
+    </h1>
     <p class="fh-field-help intro">{{ t('admin_branding.intro') }}</p>
 
     <div v-if="loading" class="loading">{{ t('common.loading') }}</div>
-    <div v-else-if="errorMsg" class="fh-notice" data-tone="error">{{ errorMsg }}</div>
+    <div
+v-else-if="errorMsg" class="fh-notice" role="alert"
+        data-tone="error">{{ errorMsg }}</div>
 
     <template v-else>
       <!-- Logo ------------------------------------------------------------ -->
@@ -177,6 +179,7 @@ onMounted(load)
           <div class="logo-actions">
             <input
               ref="fileInput"
+              :aria-label="t('common.filter')"
               type="file"
               accept="image/png,image/jpeg,image/webp"
               class="visually-hidden"

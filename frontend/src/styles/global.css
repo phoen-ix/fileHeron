@@ -166,7 +166,15 @@ hr {
   line-height: 1.1;
 }
 
+/* Also used as the page <h1> on the operator surfaces: 30 of 55 views had no
+   h1 at all and 12 had no heading element of any kind, so a screen-reader admin
+   landing on /admin/error-log heard "no headings" and had nothing to
+   distinguish it from /admin/mail-log (audit #2). The look is unchanged - the
+   reset below neutralises the h1 defaults. */
 .fh-eyebrow {
+  font-weight: 400;
+  line-height: 1.2;
+  margin-top: 0;
   font-family: var(--fh-font-mono);
   font-size: var(--fh-text-mono-sm);
   text-transform: uppercase;
@@ -222,13 +230,16 @@ hr {
   color: var(--fh-ink);
   background: transparent;
   border: none;
-  border-bottom: var(--fh-border-strong);
+  border-bottom: 1px solid var(--fh-field-edge);
   padding: var(--fh-space-2) 0;
   transition: border-color var(--fh-duration-fast) var(--fh-easing);
 }
 
 .fh-field-input::placeholder {
-  color: var(--fh-subtle-soft);
+  /* --fh-subtle, not --fh-subtle-soft: the soft one is 2.39:1, below the 4.5:1
+     WCAG 1.4.3 floor for text - and on /account the user's own current address
+     is shown ONLY as a placeholder (audit #2). */
+  color: var(--fh-subtle);
 }
 
 .fh-field-input:hover {
@@ -420,4 +431,20 @@ hr {
   font-family: var(--fh-font-mono);
   font-size: var(--fh-text-mono-md);
   color: var(--fh-ink);
+}
+
+/* Visually hidden, still announced. Used where an icon carries meaning a screen
+   reader cannot get at - e.g. telling a person apart from a group in the
+   recipient picker, whose only distinguishing mark was a decorative
+   aria-hidden glyph (audit #2). */
+.fh-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }

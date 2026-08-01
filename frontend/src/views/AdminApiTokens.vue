@@ -216,7 +216,7 @@ onMounted(load)
   <div class="fh-page" data-density="operator">
     <div class="header-row">
       <div>
-        <span class="fh-eyebrow">{{ t('admin_api_tokens.eyebrow') }}</span>
+        <h1 class="fh-eyebrow">{{ t('admin_api_tokens.eyebrow') }}</h1>
       </div>
       <button
         v-if="!showCreateForm"
@@ -302,7 +302,9 @@ onMounted(load)
         </div>
       </fieldset>
 
-      <div v-if="createError" class="fh-notice" data-tone="error">{{ createError }}</div>
+      <div
+v-if="createError" class="fh-notice" role="alert"
+        data-tone="error">{{ createError }}</div>
 
       <div class="form-actions">
         <button
@@ -340,11 +342,15 @@ onMounted(load)
       <div class="filters">
         <input
           v-model.trim="q"
+          :aria-label="t('admin_api_tokens.search_placeholder')"
           type="search"
           class="fh-field-input search"
           :placeholder="t('admin_api_tokens.search_placeholder')"
         />
-        <select v-model="status" class="status-select">
+        <select
+        v-model="status" class="status-select"
+        :aria-label="t('common.filter')"
+      >
           <option value="">{{ t('admin_api_tokens.status_all') }}</option>
           <option value="active">{{ t('admin_api_tokens.status.active') }}</option>
           <option value="disabled">{{ t('admin_api_tokens.status.disabled') }}</option>
@@ -354,7 +360,9 @@ onMounted(load)
       </div>
 
       <div v-if="loading" class="loading">{{ t('common.loading') }}</div>
-      <div v-else-if="errorMsg" class="fh-notice" data-tone="error">{{ errorMsg }}</div>
+      <div
+v-else-if="errorMsg" class="fh-notice" role="alert"
+        data-tone="error">{{ errorMsg }}</div>
 
       <table v-else-if="items.length > 0" class="token-table">
         <thead>

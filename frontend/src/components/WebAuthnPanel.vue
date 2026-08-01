@@ -3,7 +3,9 @@
     <h3 class="panel-h3">{{ t('webauthn.title') }}</h3>
     <p class="fh-field-help intro">{{ t('webauthn.intro') }}</p>
 
-    <div v-if="!supported" class="fh-notice" data-tone="error">
+    <div
+v-if="!supported" class="fh-notice" role="alert"
+        data-tone="error">
       {{ t('webauthn.unsupported') }}
     </div>
 
@@ -66,7 +68,9 @@
         </button>
       </div>
 
-      <div v-if="errorMsg" class="fh-notice" data-tone="error">{{ errorMsg }}</div>
+      <div
+v-if="errorMsg" class="fh-notice" role="alert"
+        data-tone="error">{{ errorMsg }}</div>
     </div>
   </section>
 </template>

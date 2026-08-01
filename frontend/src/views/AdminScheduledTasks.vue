@@ -123,10 +123,12 @@ onBeforeUnmount(() => sse.stop())
 
 <template>
   <div class="cron-page" data-density="operator">
-    <span class="fh-eyebrow">{{ t('admin.eyebrow') }} / {{ t('admin_scheduled_tasks.title') }}</span>
+    <h1 class="fh-eyebrow">{{ t('admin.eyebrow') }} / {{ t('admin_scheduled_tasks.title') }}</h1>
     <p class="fh-field-help intro">{{ t('admin_scheduled_tasks.intro', { tz: siteTz }) }}</p>
 
-    <div v-if="errorMsg" class="fh-notice" data-tone="danger">{{ errorMsg }}</div>
+    <div
+v-if="errorMsg" class="fh-notice" role="alert"
+        data-tone="danger">{{ errorMsg }}</div>
     <div v-if="loading" class="loading">{{ t('common.loading') }}</div>
 
     <template v-else>
@@ -165,13 +167,17 @@ onBeforeUnmount(() => sse.stop())
                 </td>
                 <td class="sched-cell">
                   <div class="cell-row">
-                    <select v-model="it.kind" class="fh-field-input kind">
+                    <select
+        v-model="it.kind" class="fh-field-input kind"
+        :aria-label="t('common.filter')"
+      >
                       <option value="interval">{{ t('admin_scheduled_tasks.kind_interval') }}</option>
                       <option value="daily">{{ t('admin_scheduled_tasks.kind_daily') }}</option>
                     </select>
                     <span v-if="it.kind === 'interval'" class="sched-input">
                       <input
                         v-model.number="it.interval_minutes"
+                        :aria-label="t('common.filter')"
                         type="number"
                         class="fh-field-input num"
                         :min="it.min_interval_minutes"
@@ -180,7 +186,10 @@ onBeforeUnmount(() => sse.stop())
                       {{ t('admin_scheduled_tasks.minutes') }}
                     </span>
                     <span v-else class="sched-input">
-                      <input v-model="it.daily_time" type="time" class="fh-field-input time" />
+                      <input
+        v-model="it.daily_time" type="time" class="fh-field-input time"
+        :aria-label="t('common.filter')"
+/>
                     </span>
                   </div>
                 </td>

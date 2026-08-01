@@ -212,7 +212,9 @@ onMounted(load)
           />
         </label>
         <p class="fh-field-help">{{ t('public_share.password_help') }}</p>
-        <div v-if="unlockError" class="fh-notice" data-tone="error">{{ unlockError }}</div>
+        <div
+v-if="unlockError" class="fh-notice" role="alert"
+        data-tone="error">{{ unlockError }}</div>
         <button class="fh-btn" :disabled="unlocking || !password">
           {{ unlocking ? t('common.loading') : t('public_share.unlock') }}
         </button>

@@ -214,10 +214,26 @@ describe('localization of the app shell', () => {
     expect(src).toMatch(/titleKey: '/)
   })
 
-  it('every title key resolves in both locales', () => {
+  it('every route HAS a title key, and it resolves in both locales', () => {
     const src = source('/src/router/index.ts')
     const keys = [...src.matchAll(/titleKey: '([^']+)'/g)].map((m) => m[1])
-    expect(keys.length).toBeGreaterThan(20)
+    // Counting the keys that exist cannot detect a route that LOST one -
+    // proven by mutation: removing `titleKey: 'login'` left all 17 tests in
+    // this file green while the login page reverted to the bare 'file:Heron'
+    // title, which is the exact regression the note in router/index.ts cites
+    // (audit #2). Compare against the route count instead.
+    // Routes that RENDER something. A pure `redirect:` entry and the /admin
+    // layout wrapper show no page of their own, so they carry no title.
+    const rendering = src
+      .split(/\n(?=\s*\{)/)
+      .filter((block) => /^\s*path: '/m.test(block) && /component:/.test(block))
+      .filter((block) => !/redirect:/.test(block))
+      .filter((block) => !/AdminLayout\.vue/.test(block))
+    expect(rendering.length).toBeGreaterThan(20)
+    const withoutKey = rendering
+      .filter((block) => !/titleKey:/.test(block))
+      .map((block) => /path: '([^']+)'/.exec(block)?.[1])
+    expect(withoutKey, 'route(s) missing a titleKey').toEqual([])
     for (const key of keys) {
       expect((en as Messages).page_title[key], `en page_title.${key}`).toBeTruthy()
       expect((de as Messages).page_title[key], `de page_title.${key}`).toBeTruthy()
@@ -247,11 +263,28 @@ describe('pluralisation', () => {
     expect(deI18n.global.t('expiry.in_days', { n: 3 }, 3)).toBe('in 3 Tagen')
   })
 
-  it('the views pass the count as the plural argument', () => {
+  it('every view passes the count as the plural argument', () => {
     // `t(key, { n })` alone always renders the plural branch - the count has to
-    // be the second (or third) argument.
-    const src = source('/src/components/ExpiryPicker.vue')
-    expect(src).toMatch(/t\('expiry\.in_days', \{ n: days \}, days\)/)
+    // be the last argument. Checking ONE component could not see PublicShare
+    // dropping it, which made a link with one download left read "1 downloads
+    // left" (audit #2). Scan every source instead.
+    // Only keys that ACTUALLY have a plural form (a `|` in the message) need
+    // the count - `Files ({n})` is one message and passing a count would be
+    // noise.
+    const messages = en as Messages
+    const isPlural = (key: string): boolean => {
+      const value = key
+        .split('.')
+        .reduce<unknown>((acc, part) => (acc as Messages)?.[part], messages)
+      return typeof value === 'string' && value.includes('|')
+    }
+    const offenders: string[] = []
+    for (const [file, src] of Object.entries(SOURCES)) {
+      for (const m of src.matchAll(/\bt\(\s*'([^']+)'\s*,\s*\{\s*n:\s*([^}]+)\}\s*([,)])/g)) {
+        if (m[3] === ')' && isPlural(m[1])) offenders.push(`${file}: ${m[1]}`)
+      }
+    }
+    expect(offenders, 'plural call with no count argument').toEqual([])
   })
 })
 

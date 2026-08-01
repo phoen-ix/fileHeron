@@ -135,9 +135,9 @@ async function onImport() {
 
 <template>
   <div class="policy-page" data-density="operator">
-    <span class="fh-eyebrow">
+    <h1 class="fh-eyebrow">
       {{ t('admin_settings.eyebrow') }} / {{ t('admin_backup.title') }}
-    </span>
+    </h1>
     <p class="fh-field-help intro">{{ t('admin_backup.intro') }}</p>
 
     <!-- EXPORT --------------------------------------------------------- -->
@@ -171,6 +171,7 @@ async function onImport() {
         <legend>{{ t('admin_backup.passphrase_label') }}</legend>
         <input
           v-model="passphrase"
+          :aria-label="t('admin_backup.passphrase_ph', { n: MIN_PASSPHRASE })"
           type="password"
           class="fh-input"
           autocomplete="new-password"
@@ -178,6 +179,7 @@ async function onImport() {
         />
         <input
           v-model="passphraseConfirm"
+          :aria-label="t('admin_backup.passphrase_confirm_ph')"
           type="password"
           class="fh-input"
           autocomplete="new-password"
@@ -186,7 +188,8 @@ async function onImport() {
         <p
           v-if="passphrase && !passphraseOk"
           class="fh-notice"
-          data-tone="error"
+          role="alert"
+        data-tone="error"
         >
           {{ t('admin_backup.passphrase_mismatch', { n: MIN_PASSPHRASE }) }}
         </p>
@@ -218,9 +221,13 @@ async function onImport() {
 
       <fieldset class="group">
         <legend>{{ t('admin_backup.import_file_label') }}</legend>
-        <input type="file" accept=".json,application/json" @change="onPickFile" />
+        <input
+        type="file" accept=".json,application/json" :aria-label="t('common.filter')"
+  @change="onPickFile"
+/>
         <input
           v-model="importPassphrase"
+          :aria-label="t('admin_backup.import_passphrase_ph')"
           type="password"
           class="fh-input"
           autocomplete="off"
@@ -239,7 +246,9 @@ async function onImport() {
         </button>
       </div>
 
-      <div v-if="importError" class="fh-notice" data-tone="error">{{ importError }}</div>
+      <div
+v-if="importError" class="fh-notice" role="alert"
+        data-tone="error">{{ importError }}</div>
 
       <!-- preview / result summary -->
       <div v-if="preview" class="summary">

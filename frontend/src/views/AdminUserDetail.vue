@@ -353,7 +353,9 @@ onMounted(load)
   <div class="fh-page" data-density="operator">
     <div v-if="loading" class="loading">{{ t('common.loading') }}</div>
 
-    <div v-else-if="loadError" class="fh-notice" data-tone="error">
+    <div
+v-else-if="loadError" class="fh-notice" role="alert"
+        data-tone="error">
       {{ loadError }}
     </div>
 
@@ -403,7 +405,9 @@ onMounted(load)
           <input v-model="editDisabled" type="checkbox" :disabled="isErased" />
           <span class="cb-label">{{ t('admin_user_detail.disable_label') }}</span>
         </label>
-        <div v-if="savingError" class="fh-notice" data-tone="error">{{ savingError }}</div>
+        <div
+v-if="savingError" class="fh-notice" role="alert"
+        data-tone="error">{{ savingError }}</div>
         <div class="actions">
           <button type="submit" class="fh-btn" :disabled="saving || isErased">
             {{ saving ? t('common.loading') : t('common.save') }}
@@ -454,7 +458,9 @@ onMounted(load)
           <input v-model="skipVerification" type="checkbox" :disabled="isErased || changingEmail" />
           <span class="cb-label">{{ t('admin_user_detail.change_email_skip') }}</span>
         </label>
-        <div v-if="changeEmailError" class="fh-notice" data-tone="error">{{ changeEmailError }}</div>
+        <div
+v-if="changeEmailError" class="fh-notice" role="alert"
+        data-tone="error">{{ changeEmailError }}</div>
         <div class="actions">
           <button
             type="submit"

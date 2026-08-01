@@ -83,7 +83,7 @@ onMounted(load)
   <div class="fh-page" data-density="operator">
     <div class="header-row">
       <div>
-        <span class="fh-eyebrow">{{ t('admin_groups.eyebrow') }}</span>
+        <h1 class="fh-eyebrow">{{ t('admin_groups.eyebrow') }}</h1>
       </div>
       <button v-if="!showForm" type="button" class="fh-btn" @click="showForm = true">
         {{ t('admin_groups.new_group') }} <span aria-hidden="true">→</span>
@@ -121,7 +121,9 @@ onMounted(load)
           <span class="cb-help">{{ t('admin_groups.is_inbox_help') }}</span>
         </span>
       </label>
-      <div v-if="formError" class="fh-notice" data-tone="error">{{ formError }}</div>
+      <div
+v-if="formError" class="fh-notice" role="alert"
+        data-tone="error">{{ formError }}</div>
       <div class="form-actions">
         <button type="submit" class="fh-btn" :disabled="creating || !newName">
           {{ creating ? t('common.loading') : t('admin_groups.create_submit') }}
@@ -133,7 +135,9 @@ onMounted(load)
     </form>
 
     <div v-if="loading" class="loading">{{ t('common.loading') }}</div>
-    <div v-else-if="errorMsg" class="fh-notice" data-tone="error">{{ errorMsg }}</div>
+    <div
+v-else-if="errorMsg" class="fh-notice" role="alert"
+        data-tone="error">{{ errorMsg }}</div>
 
     <table v-else-if="items.length > 0" class="group-table">
       <thead>

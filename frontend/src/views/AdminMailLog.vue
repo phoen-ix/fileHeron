@@ -128,7 +128,7 @@ onMounted(() => {
   <div class="fh-page" data-density="operator">
     <div class="header-row">
       <div>
-        <span class="fh-eyebrow">{{ t('admin_mail.eyebrow') }}</span>
+        <h1 class="fh-eyebrow">{{ t('admin_mail.eyebrow') }}</h1>
         <p class="fh-field-help intro">{{ t('admin_mail.intro') }}</p>
       </div>
       <button type="button" class="fh-btn fh-btn-ghost" :disabled="exporting" @click="onExportCsv">
@@ -139,8 +139,14 @@ onMounted(() => {
     <hr class="fh-rule" />
 
     <div class="filters">
-      <input v-model.trim="q" class="fh-field-input" :placeholder="t('admin_mail.filter.q')" />
-      <input v-model.trim="recipientEmail" class="fh-field-input" :placeholder="t('admin_mail.filter.recipient')" />
+      <input
+        v-model.trim="q" class="fh-field-input" :placeholder="t('admin_mail.filter.q')"
+        :aria-label="t('admin_mail.filter.q')"
+/>
+      <input
+        v-model.trim="recipientEmail" class="fh-field-input" :placeholder="t('admin_mail.filter.recipient')"
+        :aria-label="t('admin_mail.filter.recipient')"
+/>
       <button
         v-if="recipientUserId !== null"
         type="button"
@@ -149,18 +155,32 @@ onMounted(() => {
       >
         {{ t('admin_mail.filter.user_scope', { id: recipientUserId }) }} x
       </button>
-      <input v-model.trim="category" class="fh-field-input" :placeholder="t('admin_mail.filter.category')" />
-      <select v-model="status" class="fh-field-input">
+      <input
+        v-model.trim="category" class="fh-field-input" :placeholder="t('admin_mail.filter.category')"
+        :aria-label="t('admin_mail.filter.category')"
+/>
+      <select
+        v-model="status" class="fh-field-input"
+        :aria-label="t('common.filter')"
+      >
         <option v-for="s in statusOptions" :key="s" :value="s">
           {{ s ? t(`admin_mail.status.${s}`) : t('admin_mail.filter.status_any') }}
         </option>
       </select>
-      <input v-model="fromTs" class="fh-field-input" type="datetime-local" :title="t('admin_mail.filter.from')" />
-      <input v-model="toTs" class="fh-field-input" type="datetime-local" :title="t('admin_mail.filter.to')" />
+      <input
+        v-model="fromTs" class="fh-field-input" type="datetime-local" :title="t('admin_mail.filter.from')"
+        :aria-label="t('admin_mail.filter.from')"
+/>
+      <input
+        v-model="toTs" class="fh-field-input" type="datetime-local" :title="t('admin_mail.filter.to')"
+        :aria-label="t('admin_mail.filter.to')"
+/>
     </div>
 
     <div v-if="loading" class="loading">{{ t('common.loading') }}</div>
-    <div v-else-if="errorMsg" class="fh-notice" data-tone="error">{{ errorMsg }}</div>
+    <div
+v-else-if="errorMsg" class="fh-notice" role="alert"
+        data-tone="error">{{ errorMsg }}</div>
     <div v-else-if="items.length === 0" class="loading">{{ t('admin_mail.empty') }}</div>
 
     <table v-else class="mail-table">

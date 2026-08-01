@@ -54,7 +54,9 @@ onMounted(load)
     <p class="fh-field-help intro">{{ t('approvals.intro') }}</p>
 
     <div v-if="loading" class="loading">{{ t('common.loading') }}</div>
-    <div v-else-if="errorMsg" class="fh-notice" data-tone="error">{{ errorMsg }}</div>
+    <div
+v-else-if="errorMsg" class="fh-notice" role="alert"
+        data-tone="error">{{ errorMsg }}</div>
     <p v-else-if="items.length === 0" class="fh-field-help empty">
       {{ t('approvals.empty') }}
     </p>

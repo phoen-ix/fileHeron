@@ -257,7 +257,7 @@ onMounted(() => {
   <div class="fh-page" data-density="operator">
     <div class="header-row">
       <div>
-        <span class="fh-eyebrow">{{ t('admin_users.eyebrow') }}</span>
+        <h1 class="fh-eyebrow">{{ t('admin_users.eyebrow') }}</h1>
       </div>
       <button
         v-if="!showInviteForm"
@@ -341,7 +341,9 @@ onMounted(() => {
         <span class="fh-field-help">{{ t('admin_users.invite_password_help') }}</span>
         <PasswordStrength :password="invitePassword" />
       </label>
-      <div v-if="inviteError" class="fh-notice" data-tone="error">{{ inviteError }}</div>
+      <div
+v-if="inviteError" class="fh-notice" role="alert"
+        data-tone="error">{{ inviteError }}</div>
       <div class="form-actions">
         <button
           type="submit"
@@ -374,7 +376,9 @@ onMounted(() => {
       <h2 class="section-h2">{{ t('admin_users.invites.heading') }}</h2>
       <p class="fh-field-help section-help">{{ t('admin_users.invites.help') }}</p>
       <div v-if="invitesLoading" class="loading">{{ t('common.loading') }}</div>
-      <div v-else-if="invitesErrorMsg" class="fh-notice" data-tone="error">{{ invitesErrorMsg }}</div>
+      <div
+v-else-if="invitesErrorMsg" class="fh-notice" role="alert"
+        data-tone="error">{{ invitesErrorMsg }}</div>
       <table v-else class="invites-table">
         <thead>
           <tr>
@@ -453,11 +457,15 @@ onMounted(() => {
     <div class="filters">
       <input
         v-model.trim="q"
+        :aria-label="t('admin_users.search_placeholder')"
         type="search"
         class="fh-field-input search"
         :placeholder="t('admin_users.search_placeholder')"
       />
-      <select v-model="role" class="role-select">
+      <select
+        v-model="role" class="role-select"
+        :aria-label="t('common.filter')"
+      >
         <option value="">{{ t('admin_users.role_all') }}</option>
         <option value="admin">admin</option>
         <option value="employee">employee</option>
@@ -466,7 +474,9 @@ onMounted(() => {
     </div>
 
     <div v-if="loading" class="loading">{{ t('common.loading') }}</div>
-    <div v-else-if="errorMsg" class="fh-notice" data-tone="error">{{ errorMsg }}</div>
+    <div
+v-else-if="errorMsg" class="fh-notice" role="alert"
+        data-tone="error">{{ errorMsg }}</div>
 
     <table v-else-if="items.length" class="user-table">
       <thead>
@@ -593,7 +603,9 @@ onMounted(() => {
           />
           <span class="fh-field-help">{{ t('admin_users.invites.activate.display_name_help') }}</span>
         </label>
-        <div v-if="activateError" class="fh-notice" data-tone="error">{{ activateError }}</div>
+        <div
+v-if="activateError" class="fh-notice" role="alert"
+        data-tone="error">{{ activateError }}</div>
         <div class="form-actions">
           <button
             type="button"

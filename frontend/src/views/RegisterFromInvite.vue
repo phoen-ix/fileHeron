@@ -80,6 +80,7 @@ async function onSubmit() {
             type="button"
             class="locale-opt"
             :class="{ active: locale === 'en' }"
+            :aria-pressed="locale === 'en'"
             @click="locale = 'en'"
           >
             English
@@ -88,6 +89,7 @@ async function onSubmit() {
             type="button"
             class="locale-opt"
             :class="{ active: locale === 'de' }"
+            :aria-pressed="locale === 'de'"
             @click="locale = 'de'"
           >
             Deutsch

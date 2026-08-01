@@ -135,7 +135,9 @@ onMounted(load)
 <template>
   <div class="fh-page" data-density="operator">
     <div v-if="loading" class="loading">{{ t('common.loading') }}</div>
-    <div v-else-if="errorMsg" class="fh-notice" data-tone="error">{{ errorMsg }}</div>
+    <div
+v-else-if="errorMsg" class="fh-notice" role="alert"
+        data-tone="error">{{ errorMsg }}</div>
 
     <template v-else-if="group">
       <span class="fh-eyebrow">{{ t('admin_group_detail.eyebrow') }}</span>
@@ -193,6 +195,7 @@ onMounted(load)
       <div class="add-member">
         <input
           v-model.trim="userQuery"
+          :aria-label="t('admin_group_detail.add_placeholder')"
           type="text"
           class="fh-field-input"
           :placeholder="t('admin_group_detail.add_placeholder')"

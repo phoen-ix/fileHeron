@@ -318,6 +318,7 @@ function jumpTo(id: string) {
             type="button"
             class="locale-opt"
             :class="{ active: locale === 'en' }"
+            :aria-pressed="locale === 'en'"
             @click="changeLocale('en')"
           >
             English
@@ -326,6 +327,7 @@ function jumpTo(id: string) {
             type="button"
             class="locale-opt"
             :class="{ active: locale === 'de' }"
+            :aria-pressed="locale === 'de'"
             @click="changeLocale('de')"
           >
             Deutsch
@@ -432,7 +434,9 @@ function jumpTo(id: string) {
             required
           />
         </div>
-        <div v-if="emailError" class="fh-notice" data-tone="error">{{ emailError }}</div>
+        <div
+v-if="emailError" class="fh-notice" role="alert"
+        data-tone="error">{{ emailError }}</div>
         <button class="fh-btn" :disabled="emailSubmitting || !emailNew">
           {{ emailSubmitting ? $t('common.loading') : $t('account.email_change_submit') }}
         </button>
@@ -470,7 +474,9 @@ function jumpTo(id: string) {
           />
           <PasswordStrength :password="newPw" />
         </div>
-        <div v-if="pwError" class="fh-notice" data-tone="error">{{ pwError }}</div>
+        <div
+v-if="pwError" class="fh-notice" role="alert"
+        data-tone="error">{{ pwError }}</div>
         <button class="fh-btn" :disabled="pwSubmitting">
           {{ $t('account.change_password_submit') }}
         </button>

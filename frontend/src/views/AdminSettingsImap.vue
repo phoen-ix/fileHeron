@@ -142,7 +142,7 @@ onMounted(load)
 
 <template>
   <div class="policy-page" data-density="operator">
-    <span class="fh-eyebrow">{{ t('admin_settings.eyebrow') }} / {{ t('admin_imap.title') }}</span>
+    <h1 class="fh-eyebrow">{{ t('admin_settings.eyebrow') }} / {{ t('admin_imap.title') }}</h1>
     <p class="fh-field-help intro">{{ t('admin_imap.intro') }}</p>
 
     <div v-if="loading" class="loading">{{ t('common.loading') }}</div>
@@ -156,7 +156,9 @@ onMounted(load)
         </span>
       </label>
 
-      <div v-if="errorMsg" class="fh-notice" data-tone="danger">{{ errorMsg }}</div>
+      <div
+v-if="errorMsg" class="fh-notice" role="alert"
+        data-tone="danger">{{ errorMsg }}</div>
 
       <h2 class="form-h2">{{ t('admin_imap.connection') }}</h2>
 

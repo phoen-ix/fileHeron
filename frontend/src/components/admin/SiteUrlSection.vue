@@ -101,7 +101,9 @@ onMounted(load)
         {{ t('admin_site_url.security_note') }}
       </p>
 
-      <div v-if="errorMsg" class="fh-notice" data-tone="error">{{ errorMsg }}</div>
+      <div
+v-if="errorMsg" class="fh-notice" role="alert"
+        data-tone="error">{{ errorMsg }}</div>
 
       <div class="actions">
         <button

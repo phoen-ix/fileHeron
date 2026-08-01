@@ -112,7 +112,7 @@ onMounted(load)
   <div class="fh-page" data-density="operator">
     <div class="header-row">
       <div>
-        <span class="fh-eyebrow">{{ t('admin_file_history.eyebrow') }}</span>
+        <h1 class="fh-eyebrow">{{ t('admin_file_history.eyebrow') }}</h1>
       </div>
       <span class="fh-mono total-count">{{ t('admin_file_history.total_count', { n: total }) }}</span>
     </div>
@@ -124,11 +124,15 @@ onMounted(load)
     <div class="filters">
       <input
         v-model.trim="q"
+        :aria-label="t('admin_file_history.search_placeholder')"
         type="search"
         class="fh-field-input search"
         :placeholder="t('admin_file_history.search_placeholder')"
       />
-      <select v-model="stateFilter" class="filter-select">
+      <select
+        v-model="stateFilter" class="filter-select"
+        :aria-label="t('common.filter')"
+      >
         <option value="">{{ t('admin_file_history.file_state_all') }}</option>
         <option value="clean">clean</option>
         <option value="ready_unscanned">ready_unscanned</option>
@@ -136,7 +140,10 @@ onMounted(load)
         <option value="deleted">deleted</option>
         <option value="uploading">uploading</option>
       </select>
-      <select v-model="shareStateFilter" class="filter-select">
+      <select
+        v-model="shareStateFilter" class="filter-select"
+        :aria-label="t('common.filter')"
+      >
         <option value="">{{ t('admin_file_history.share_state_all') }}</option>
         <option value="active">{{ t('share_state.active') }}</option>
         <option value="pending_approval">{{ t('share_state.pending_approval') }}</option>
@@ -165,7 +172,9 @@ onMounted(load)
     </div>
 
     <div v-if="loading" class="loading">{{ t('common.loading') }}</div>
-    <div v-else-if="errorMsg" class="fh-notice" data-tone="error">{{ errorMsg }}</div>
+    <div
+v-else-if="errorMsg" class="fh-notice" role="alert"
+        data-tone="error">{{ errorMsg }}</div>
 
     <table v-else-if="items.length > 0" class="files-table">
       <thead>

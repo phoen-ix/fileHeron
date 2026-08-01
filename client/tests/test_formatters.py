@@ -53,7 +53,26 @@ def test_format_expiry_renders_none_as_never_word():
     set_locale("en")
 
 
-# ---- exact local rendering (POSIX only - needs a pinned TZ) -----------------
+# ---- exact rendering, on every platform -------------------------------------
+#
+# These pinned the zone with TZ + `time.tzset()`, which is POSIX-only, so they
+# SKIPPED on the one platform this client ships for - three assertions about how
+# a timestamp is rendered, never once evaluated on Windows. They pin the zone
+# through `set_display_timezone` instead: the same mechanism the client itself
+# uses, backed by `zoneinfo` and the bundled `tzdata`, and identical on both
+# platforms. The TZ/tzset fixture is kept below for the one property that is
+# genuinely about the machine's own zone.
+
+
+@pytest.fixture
+def display_tz():
+    from fileheron_client.formatters import set_display_timezone
+
+    def _set(name: str):
+        set_display_timezone(name)
+
+    yield _set
+    set_display_timezone(None)
 
 
 @pytest.fixture
@@ -65,21 +84,29 @@ def tz(monkeypatch):
     time.tzset()  # restore the real zone after monkeypatch resets TZ
 
 
-@pytest.mark.skipif(not _HAS_TZSET, reason="time.tzset is POSIX-only")
-def test_format_expiry_naive_is_treated_as_utc(tz):
-    tz("UTC")
+def test_format_expiry_naive_is_treated_as_utc(display_tz):
+    display_tz("UTC")
     assert format_expiry(datetime(2026, 5, 17, 14, 30)) == "2026-05-17 14:30"
 
 
-@pytest.mark.skipif(not _HAS_TZSET, reason="time.tzset is POSIX-only")
-def test_format_expiry_converts_to_local(tz):
-    tz("Etc/GMT-2")  # POSIX sign inversion → UTC+2
+def test_format_expiry_converts_to_the_display_zone(display_tz):
+    display_tz("Europe/Vienna")  # UTC+2 in May
     assert format_expiry(datetime(2026, 5, 17, 14, 30)) == "2026-05-17 16:30"
 
 
+def test_format_datetime_uses_the_display_zone(display_tz):
+    display_tz("Europe/Vienna")
+    assert format_datetime(datetime(2026, 5, 17, 14, 30)) == "2026-05-17 16:30"
+
+
 @pytest.mark.skipif(not _HAS_TZSET, reason="time.tzset is POSIX-only")
-def test_format_datetime_local(tz):
-    tz("Etc/GMT-2")
+def test_with_no_display_zone_it_falls_back_to_the_machine(tz):
+    """The fallback path, which IS about the machine's own zone - so this one
+    legitimately needs tzset and legitimately skips on Windows."""
+    from fileheron_client.formatters import set_display_timezone
+
+    set_display_timezone(None)
+    tz("Etc/GMT-2")  # POSIX sign inversion -> UTC+2
     assert format_datetime(datetime(2026, 5, 17, 14, 30)) == "2026-05-17 16:30"
 
 

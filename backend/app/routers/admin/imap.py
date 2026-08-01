@@ -27,6 +27,7 @@ from ...schemas.imap_settings import (
     InboxDetail,
     InboxListItem,
     InboxListResponse,
+    TestImapRequest,
     UpdateImapSettingsRequest,
     UpdateInboxStatusRequest,
 )
@@ -129,9 +130,35 @@ def update_imap_settings(
 
 @router.post("/settings/imap/test", response_model=ImapTestResponse)
 async def test_imap(
-    db: Session = Depends(get_db), _admin: User = Depends(get_current_admin)
+    payload: TestImapRequest | None = None,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(get_current_admin),
 ) -> ImapTestResponse:
-    result = await asyncio.to_thread(imap_poll_svc.test_connection, db)
+    """Test a connection. With a body, test THOSE settings; without one, the
+    stored ones.
+
+    `test_connection` has always taken an `override`, and nothing ever passed
+    it - so "Test connection" tested the saved config while the admin was
+    looking at an edited form. A typo'd new host reported "Connection OK" (it
+    tested the old one) and was saved; a correct new host reported "Connection
+    failed" because the stored one was broken, and the admin backed out a
+    working change (audit #2).
+    """
+    override = None
+    if payload is not None and payload.host:
+        stored = imap_config.resolve_imap_config(db)
+        override = imap_config.ImapConfig(
+            host=payload.host,
+            port=payload.port,
+            # A blank password means "keep the stored one" here exactly as it
+            # does on the PUT - the form never round-trips the secret.
+            user=payload.user or stored.user,
+            password=payload.password or stored.password,
+            tls_mode=payload.tls_mode,
+            mailbox=payload.mailbox or "INBOX",
+            tls_insecure=stored.tls_insecure,
+        )
+    result = await asyncio.to_thread(imap_poll_svc.test_connection, db, override=override)
     return ImapTestResponse(**result)
 
 

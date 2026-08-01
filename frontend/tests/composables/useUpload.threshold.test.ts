@@ -1,12 +1,22 @@
-/* The 100 MB direct-vs-TUS branch in useUpload.startItem(): under the threshold
- * goes through a single directUpload(); at/over it goes the resumable path
+/* The direct-vs-TUS branch in useUpload.startItem(): under the ceiling goes
+ * through a single directUpload(); at/over it goes the resumable path
  * (initUpload + Uppy.addFile + Uppy.upload). Sizes are faked via a redefined
  * `size` so we never allocate 100 MB. Mirrors the Uppy-mock style of
- * useUpload.test.ts. */
+ * useUpload.test.ts.
+ *
+ * The ceiling is the LIVE server value from the site store, not a build-time
+ * constant - an admin lowering `uploads.max_direct_bytes` used to make every
+ * file between the new cap and 100 MB stream in full and then fail (audit #2).
+ * The store's default matches the old constant, so these cases are unchanged. */
 
 import { mount } from '@vue/test-utils'
+import { createPinia, setActivePinia } from 'pinia'
 import { defineComponent, h, ref, type Ref } from 'vue'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+beforeEach(() => {
+  setActivePinia(createPinia())
+})
 
 const uppyCalls = { addFile: 0, upload: 0 }
 vi.mock('@uppy/tus', () => ({ default: class {} }))

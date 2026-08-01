@@ -3,9 +3,10 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, Depends, Request, Response, status
 from sqlalchemy.orm import Session
 
+from ..config import settings
 from ..dependencies import get_actor, get_current_admin, get_current_user, get_db
 from ..middleware.errors import AppError
 from ..models.api_token import ApiToken
@@ -265,6 +266,7 @@ def update_admin_nav_open(
 async def change_password(
     payload: ChangePasswordRequest,
     request: Request,
+    response: Response,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict:
@@ -304,7 +306,31 @@ async def change_password(
         logging.getLogger("fileheron.account").exception(
             "password-changed alert failed for user=%d", user.id
         )
-    return {"ok": True}
+
+    # Re-establish THIS device's session. `change_password` revokes every
+    # refresh token, including the caller's own - so the tab kept working on its
+    # unexpired access token and was then bounced to /login up to
+    # ACCESS_TOKEN_EXPIRE_MINUTES later, mid-task, losing whatever the user was
+    # composing. The SPA comment at the call site asserted the opposite (audit
+    # #2). Every OTHER device stays signed out, which is the point of the
+    # revocation.
+    access, expires_in, refresh_plain = auth_svc.finalize_successful_login(
+        db, user=user, request=request, settings=settings,
+        via="password_change", notify_new_device=False,
+    )
+    db.commit()
+    response.set_cookie(
+        key="fh_refresh",
+        value=refresh_plain,
+        max_age=settings_registry.effective(
+            db, settings_registry.K.REFRESH_TOKEN_EXPIRE_DAYS
+        ) * 24 * 3600,
+        httponly=True,
+        secure=settings.COOKIE_SECURE,
+        samesite="lax",
+        path="/api/auth",
+    )
+    return {"ok": True, "access_token": access, "expires_in_seconds": expires_in}
 
 
 @router.post("/email", status_code=status.HTTP_200_OK)

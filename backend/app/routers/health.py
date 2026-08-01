@@ -215,6 +215,7 @@ def public_config(db: Session = Depends(get_db)) -> dict:
     # from the response when disabled so the SPA doesn't render an
     # empty notice.
     from ..services import settings as settings_svc
+    from ..services import settings_registry
     from ..services import site as site_svc
     motd: dict | None = None
     if settings_svc.get_bool(db, settings_svc.Keys.MOTD_ENABLED, default=False):
@@ -255,6 +256,15 @@ def public_config(db: Session = Depends(get_db)) -> dict:
         # same fact to anyone who asked, defeating that gate entirely. Nothing
         # in the SPA rendered it; the admin surface reads its version from
         # /api/admin/system/status (audit #2).
+        # The LIVE direct-upload ceiling. The SPA used to decide direct vs
+        # resumable from a build-time constant, so an admin who lowered
+        # `uploads.max_direct_bytes` on a small VPS made every mid-size upload
+        # stream the whole file and then fail with "too large for a direct
+        # upload", repeatably, for every user - while a much bigger file worked
+        # (audit #2). Not a secret: it is the number the client has to respect.
+        "max_direct_upload_bytes": int(
+            settings_registry.effective(db, settings_registry.K.MAX_DIRECT_UPLOAD_BYTES)
+        ),
         "site_timezone": site_svc.get_site_timezone(db),
         "branding": branding,
         "legal": legal,

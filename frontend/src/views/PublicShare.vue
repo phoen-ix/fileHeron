@@ -124,7 +124,22 @@ function closePreview() {
 function onPreviewDownload() {
   if (previewFile.value) {
     window.location.href = publicDownloadUrl(token.value, previewFile.value.id)
+    void refreshAfterDownload()
   }
+}
+
+/** Re-read the link after a download starts.
+ *
+ * A plain `<a href>` cannot report a failure: the browser shelf says "Failed"
+ * and the page is unchanged. So a link with `download_limit=1` over two files
+ * kept saying "1 download left" and kept offering the second file and the ZIP
+ * after the first click spent the budget, and clicking again produced a silent
+ * 410 with nothing on screen to explain it. Refreshing the metadata makes the
+ * page say what the server now believes - the remaining count, and the
+ * exhausted/expired banner from `load()`'s own error handling (audit #2). */
+async function refreshAfterDownload() {
+  await new Promise((r) => window.setTimeout(r, 1200))
+  await load()
 }
 
 // Bulk-ZIP includes only `clean` files; offer it when there's ≥1 and the
@@ -219,6 +234,7 @@ onMounted(load)
           :href="publicZipUrl(token)"
           class="fh-btn-text zip-all"
           :download="`share-${token.slice(0, 8)}.zip`"
+          @click="refreshAfterDownload"
         >
           {{ t('public_share.download_all_zip') }} <span aria-hidden="true">↓</span>
         </a>
@@ -267,6 +283,7 @@ onMounted(load)
                 :href="publicDownloadUrl(token, f.id)"
                 class="fh-btn-text"
                 :download="f.original_filename"
+                @click="refreshAfterDownload"
               >
                 {{ t('public_share.download') }} <span aria-hidden="true">↓</span>
               </a>

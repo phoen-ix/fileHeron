@@ -56,7 +56,7 @@ const {
   isSelected,
   toggleSelected,
   clearSelection,
-  selectAllActive,
+  setGroupSelection,
 } = useShareListState(box)
 
 const bulkConfirmOpen = ref(false)
@@ -265,7 +265,7 @@ onMounted(load)
                   type="checkbox"
                   :aria-label="t('share_list.bulk.select_all_aria')"
                   :checked="g.items.some((i) => i.state === 'active') && g.items.filter((i) => i.state === 'active').every((i) => isSelected(i.id))"
-                  @change="(e) => (e.target as HTMLInputElement).checked ? selectAllActive() : clearSelection()"
+                  @change="(e) => setGroupSelection(g.items.filter((i) => i.state === 'active').map((i) => i.id), (e.target as HTMLInputElement).checked)"
                   @click.stop
                 />
               </th>

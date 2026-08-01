@@ -40,6 +40,9 @@ export const useSiteStore = defineStore('site', () => {
   const branding = ref<PublicBranding>({ ...EMPTY_BRANDING })
   const legal = ref<PublicLegal>({ ...EMPTY_LEGAL })
   const maintenance = ref<{ enabled: boolean; message: string } | null>(null)
+  /** Live server ceiling for a single-POST upload. The client used to decide
+   *  direct vs resumable from a build-time constant (audit #2). */
+  const maxDirectUploadBytes = ref<number>(100 * 1024 * 1024)
   const loaded = ref(false)
 
   function _apply(cfg: PublicConfigResponse) {
@@ -51,6 +54,7 @@ export const useSiteStore = defineStore('site', () => {
     branding.value = cfg.branding ?? { ...EMPTY_BRANDING }
     legal.value = cfg.legal ?? { ...EMPTY_LEGAL }
     maintenance.value = cfg.maintenance ?? null
+    if (cfg.max_direct_upload_bytes) maxDirectUploadBytes.value = cfg.max_direct_upload_bytes
     loaded.value = true
   }
 
@@ -74,6 +78,7 @@ export const useSiteStore = defineStore('site', () => {
     branding,
     legal,
     maintenance,
+    maxDirectUploadBytes,
     loaded,
     loadConfig,
   }

@@ -35,6 +35,7 @@ export interface PublicConfigResponse {
    *  defaults to "UTC" when unset. Drives every timestamp formatter via
    *  the site Pinia store. */
   site_timezone: string
+  max_direct_upload_bytes?: number
   /** Site branding (logo + display surfaces + link). */
   branding: PublicBranding
   /** Which legal footer pages are enabled. */

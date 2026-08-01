@@ -44,6 +44,16 @@ export interface UseSSEOptions {
 const RECONNECT_BASE_MS = 1500
 const RECONNECT_CAP_MS = 30_000
 const MAX_CONSECUTIVE_ERRORS = 5
+// After giving up, keep trying at a LOW rate rather than never again.
+//
+// Five failures at the backoff above is ~22 seconds - shorter than a routine
+// in-app Update - so every open, focused tab lost live notifications until the
+// user reloaded or switched away and back, with no error, no "disconnected"
+// state and no retry control. The rationale for the hard cap was a fail2ban
+// jail at 10 requests/hour, which one attempt a minute at a single endpoint
+// does not approach; and the `givenUp` flag stays set so the UI can still say
+// so (audit #2).
+const RETRY_AFTER_GIVEUP_MS = 60_000
 
 export function useSSE(opts: UseSSEOptions) {
   const connected = ref(false)
@@ -74,7 +84,11 @@ export function useSSE(opts: UseSSEOptions) {
   }
 
   async function _connect() {
-    if (stopped || givenUp.value) return
+    // NOT gated on `givenUp`: the slow retry above deliberately runs after it
+    // is set, so the flag means "degraded, telling the user" rather than
+    // "dead forever". `stopped` is still absolute.
+    if (stopped) return
+    givenUp.value = false
     // Set BEFORE the first await: the URL factory is async (it mints a signed
     // token), so `es` stays null across that await and three synchronous
     // start() calls would each get past an `es === null` check and open their
@@ -123,10 +137,17 @@ export function useSSE(opts: UseSSEOptions) {
     consecutiveErrors += 1
     if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
       givenUp.value = true
-      stopped = true
       if (reconnectTimer !== null) {
         window.clearTimeout(reconnectTimer)
         reconnectTimer = null
+      }
+      if (!stopped) {
+        reconnectTimer = window.setTimeout(() => {
+          reconnectTimer = null
+          consecutiveErrors = 0
+          reconnectAttempt = 0
+          _connect()
+        }, RETRY_AFTER_GIVEUP_MS)
       }
       return
     }

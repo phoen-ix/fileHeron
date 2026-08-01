@@ -3,7 +3,14 @@
  * Phase 3a/3b backend smoke tests, not here. */
 import { defineComponent, h, ref, type Ref } from 'vue'
 import { mount } from '@vue/test-utils'
-import { describe, expect, it, vi } from 'vitest'
+import { createPinia, setActivePinia } from 'pinia'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+// `useUpload` reads the LIVE direct-upload ceiling from the site store rather
+// than a build-time constant (audit #2), so these need a Pinia.
+beforeEach(() => {
+  setActivePinia(createPinia())
+})
 
 // Stub Uppy's plugin chain - the composable's add/remove/retry
 // branches don't call into Uppy until start(), and we never call

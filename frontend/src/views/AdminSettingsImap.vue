@@ -94,7 +94,15 @@ async function onTest() {
   testing.value = true
   testResult.value = null
   try {
-    const { data } = await testImap()
+    // The EDITED form, not the stored settings - see the route's note.
+    const { data } = await testImap({
+      host: form.value.host,
+      port: form.value.port,
+      user: form.value.use_smtp_credentials ? '' : form.value.user,
+      password: form.value.use_smtp_credentials ? null : form.value.password || null,
+      tls_mode: form.value.tls_mode,
+      mailbox: form.value.mailbox,
+    })
     testResult.value = data
   } catch (err) {
     errorMsg.value = describe(err)

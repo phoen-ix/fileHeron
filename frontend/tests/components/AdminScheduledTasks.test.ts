@@ -37,7 +37,11 @@ vi.mock('@/api/admin', () => ({
   runCron: (n: string) => runCron(n),
 }))
 vi.mock('@/api/notifications', () => ({ getStreamToken: vi.fn(async () => ({ data: { token: 'x' } })) }))
-vi.mock('@/composables/useSSE', () => ({ useSSE: () => ({}) }))
+// The page now STARTS the stream (it never did, so a hand-triggered cron showed
+// `running` forever - audit #2), so the stub needs the control surface.
+vi.mock('@/composables/useSSE', () => ({
+  useSSE: () => ({ start: vi.fn(), stop: vi.fn(), connected: { value: false }, givenUp: { value: false } }),
+}))
 
 const pushToast = vi.fn()
 vi.mock('@/stores/ui', () => ({ useUiStore: () => ({ pushToast }) }))

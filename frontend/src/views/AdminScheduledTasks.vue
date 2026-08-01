@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { getCrons, runCron, updateCronSchedule } from '@/api/admin'
@@ -55,6 +55,12 @@ async function load() {
 
 async function onSave(it: CronScheduleItem) {
   savingName.value = it.name
+  // Snapshot to roll back on failure. The row is bound with v-model, so a
+  // refused PUT (below `min_interval_min`, or a cleared field that 422s to the
+  // generic message) left the table showing a cadence that is not in effect,
+  // with the recomputed Next-run beside it - and anyone who opened the page
+  // later on that tab read the same wrong number (audit #2).
+  const before = { ...it }
   try {
     const { data } = await updateCronSchedule(it.name, {
       enabled: it.enabled,
@@ -66,7 +72,8 @@ async function onSave(it: CronScheduleItem) {
     Object.assign(it, data)
     ui.pushToast(t('admin_scheduled_tasks.saved'), 'success')
   } catch (err) {
-    ui.pushToast(describe(err), 'warn')
+    Object.assign(it, before)
+    ui.pushToast(describe(err), 'error')
   } finally {
     savingName.value = null
   }
@@ -93,7 +100,7 @@ function statusTone(it: CronScheduleItem): string {
 }
 
 let reloadTimer: ReturnType<typeof setTimeout> | null = null
-useSSE({
+const sse = useSSE({
   async url() {
     const { data } = await getStreamToken()
     return `/api/admin/system/stream?token=${encodeURIComponent(data.token)}`
@@ -104,7 +111,14 @@ useSSE({
   },
 })
 
-onMounted(load)
+onMounted(() => {
+  void load()
+  // The stream was never started, so a row triggered by hand showed `running`
+  // forever and an operator watching the page concluded the worker was wedged
+  // (audit #2).
+  sse.start()
+})
+onBeforeUnmount(() => sse.stop())
 </script>
 
 <template>

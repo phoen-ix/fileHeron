@@ -62,6 +62,21 @@ export function useShareListState(box: ComputedRef<'outbox' | 'inbox'>) {
     selectedIds.value = next
   }
 
+  /** Select (or clear) exactly the active shares in ONE group.
+   *
+   * A grouped list gives every group header its own checkbox, and it used to
+   * call `selectAllActive` - so ticking "the three shares to this contractor"
+   * selected all forty active shares on the page, and the action behind the
+   * bulk bar unlinks bytes from disk (audit #2). */
+  function setGroupSelection(ids: string[], selected: boolean) {
+    const next = new Set(selectedIds.value)
+    for (const id of ids) {
+      if (selected) next.add(id)
+      else next.delete(id)
+    }
+    selectedIds.value = next
+  }
+
   // Default to 'active' so the list opens with only usable shares; the
   // dropdown still has "All states" for opt-in.
   const stateFilter = ref<ShareState | ''>('active')
@@ -332,5 +347,6 @@ export function useShareListState(box: ComputedRef<'outbox' | 'inbox'>) {
     toggleSelected,
     clearSelection,
     selectAllActive,
+    setGroupSelection,
   }
 }

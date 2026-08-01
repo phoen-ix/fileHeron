@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import api from '@/api/client'
@@ -11,6 +11,7 @@ import {
 import Pager from '@/components/Pager.vue'
 import { useApiError } from '@/composables/useApiError'
 import { useDebouncedSearch } from '@/composables/useDebouncedSearch'
+import { useEscapeToClose } from '@/composables/useEscapeToClose'
 import { usePaginatedList } from '@/composables/usePaginatedList'
 import { useSiteDateFormat } from '@/composables/useSiteDateFormat'
 import { useUiStore } from '@/stores/ui'
@@ -82,6 +83,14 @@ function openConfirm(kind: ConfirmKind, file: AdminFileItem) {
 function closeConfirm() {
   confirm.value = null
 }
+
+// Escape must close the one dialog in the admin shell that irreversibly
+// destroys evidence of an infected upload. The backdrop's @keydown.escape never
+// fired - the backdrop is not on the key event's propagation path (audit #2).
+useEscapeToClose(
+  computed(() => confirm.value !== null),
+  closeConfirm,
+)
 
 async function submitConfirm() {
   const c = confirm.value
@@ -182,8 +191,8 @@ onMounted(load)
 
     <Pager v-model:page="page" :total="total" :page-size="pageSize" />
 
-    <!-- eslint-disable-next-line vuejs-accessibility/no-static-element-interactions -- modal backdrop: click-outside is a convenience, Escape is the keyboard path; revisited with the modal focus work -->
-    <div v-if="confirm" class="confirm-backdrop" @click.self="closeConfirm" @keydown.escape="closeConfirm">
+    <!-- eslint-disable-next-line vuejs-accessibility/no-static-element-interactions, vuejs-accessibility/click-events-have-key-events -- modal backdrop: click-outside is a convenience; Escape is handled by useEscapeToClose (a document listener), not by this element - the backdrop is not on the key event's propagation path, which is why the @keydown.escape that used to sit here never fired (audit #2) -->
+    <div v-if="confirm" class="confirm-backdrop" @click.self="closeConfirm">
       <div
         class="confirm-card"
         role="dialog"

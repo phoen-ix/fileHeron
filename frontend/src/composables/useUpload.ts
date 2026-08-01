@@ -25,6 +25,7 @@ import { computed, onBeforeUnmount, ref, type Ref } from 'vue'
 
 import { asEnvelope } from '@/api/client'
 import { directUpload, initUpload } from '@/api/uploads'
+import { useSiteStore } from '@/stores/site'
 
 // Mirror backend's MAX_DIRECT_UPLOAD_BYTES default. Cheap-enough for the
 // smallest VPS - files above this take the chunked path with resume. Build-time
@@ -86,6 +87,7 @@ let uidCounter = 0
 const nextUid = () => `u${++uidCounter}_${Date.now().toString(36)}`
 
 export function useUpload(shareId: Ref<string | null>) {
+  const site = useSiteStore()
   const items = ref<UploadItem[]>([])
   const log = ref<LogEntry[]>([])
   let logCounter = 0
@@ -203,7 +205,12 @@ export function useUpload(shareId: Ref<string | null>) {
     item.state = 'preparing'
 
     try {
-      if (item.file.size < DIRECT_UPLOAD_THRESHOLD) {
+      // The LIVE server ceiling when the config endpoint has supplied one -
+      // the build-time constant is only the fallback. An admin lowering
+      // `uploads.max_direct_bytes` used to make every file between the new cap
+      // and 100 MB stream in full and then fail, repeatably (audit #2).
+      const directLimit = site.maxDirectUploadBytes || DIRECT_UPLOAD_THRESHOLD
+      if (item.file.size < directLimit) {
         // Direct path: one POST, server-managed progress estimation.
         pushLog(item, 'started')
         const { data } = await directUpload(

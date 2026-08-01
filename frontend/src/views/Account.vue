@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import { setAccessToken } from '@/api/client'
 import * as accountApi from '@/api/account'
 import * as twoFaApi from '@/api/twoFactor'
 import SectionQuickNav, {
@@ -170,13 +171,19 @@ async function changePassword() {
   pwError.value = null
   pwSubmitting.value = true
   try {
-    await accountApi.changePassword({ current_password: currentPw.value, new_password: newPw.value })
+    const res = await accountApi.changePassword({
+      current_password: currentPw.value,
+      new_password: newPw.value,
+    })
     currentPw.value = ''
     newPw.value = ''
     ui.pushToast(t('account.password_changed_toast'), 'success')
-    // The current refresh cookie remains valid since change_password revokes
-    // all of the user's tokens - but the backend deliberately does not include
-    // a fresh cookie in the response. Force a refresh round-trip:
+    // `change_password` revokes EVERY refresh token, this device's included, so
+    // the tab used to keep working on its unexpired access token and then get
+    // bounced to /login up to 15 minutes later, mid-task. The route now mints a
+    // fresh session for this device (every other device stays signed out, which
+    // is the point) - adopt it (audit #2).
+    if (res?.data?.access_token) setAccessToken(res.data.access_token)
     await auth.refreshMe()
   } catch (e) {
     pwError.value = describe(e)

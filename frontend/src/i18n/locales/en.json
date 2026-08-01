@@ -1281,7 +1281,8 @@
       "share_files_added": "Files added to a share",
       "share_pending_approval": "Share awaiting approval",
       "share_rejected": "Share rejected"
-    }
+    },
+    "disconnected": "Live updates are disconnected - retrying. Reload the page to reconnect now."
   },
   "notif_prefs": {
     "title": "Notifications",
@@ -1508,7 +1509,9 @@
     "emails_view_all": "View in Mail log →",
     "emails_empty": "No emails sent to this user.",
     "erase_preflight_files": "{n} file(s) will be permanently deleted ({bytes}).",
-    "erase_preflight_shares": "{created} share(s) they created will be revoked; {received} received share(s) will be anonymised."
+    "erase_preflight_shares": "{created} share(s) they created will be revoked; {received} received share(s) will be anonymised.",
+    "change_email_old_link_eyebrow": "Confirmation link for the OLD address",
+    "change_email_old_link_help": "In verify-both mode BOTH links must be opened. The change does not apply until the old address is confirmed too."
   },
   "admin_mail": {
     "eyebrow": "Admin / Mail log",
@@ -1522,7 +1525,8 @@
       "category": "category",
       "status_any": "Any status",
       "from": "from",
-      "to": "to"
+      "to": "to",
+      "user_scope": "Limited to user #{id} - click to clear"
     },
     "col": {
       "when": "When",
@@ -1809,7 +1813,7 @@
   "files": {
     "state": {
       "pending": "Pending",
-      "ready_unscanned": "Ready",
+      "ready_unscanned": "Scanning",
       "clean": "Clean",
       "infected": "Infected",
       "failed": "Failed",

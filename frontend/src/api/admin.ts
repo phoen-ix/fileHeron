@@ -876,8 +876,15 @@ export function updateImapSettings(payload: UpdateImapSettingsRequest) {
   return api.put<ImapSettingsResponse>('/admin/settings/imap', payload)
 }
 
-export function testImap() {
-  return api.post<ImapTestResponse>('/admin/settings/imap/test')
+export function testImap(body?: {
+  host: string
+  port: number
+  user: string
+  password: string | null
+  tls_mode: string
+  mailbox: string
+}) {
+  return api.post<ImapTestResponse>('/admin/settings/imap/test', body ?? {})
 }
 
 export function fetchInboxNow() {

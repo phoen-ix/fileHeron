@@ -115,12 +115,16 @@ async function onDownload() {
 }
 
 function canDownload(state: FileState): boolean {
-  return state === 'clean' || state === 'ready_unscanned'
+  // `ready_unscanned` is NOT downloadable: the backend answers 425
+  // SCAN_IN_PROGRESS unconditionally. Offering the button anyway produced a
+  // toast that contradicted the row's own green "Ready" pill, and the bulk ZIP
+  // quietly handed over an archive missing those files (audit #2).
+  return state === 'clean'
 }
 
 function pillForFile(state: FileState): 'active' | 'warn' | 'danger' | undefined {
-  if (state === 'clean' || state === 'ready_unscanned') return 'active'
-  if (state === 'uploading') return 'warn'
+  if (state === 'clean') return 'active'
+  if (state === 'uploading' || state === 'ready_unscanned') return 'warn'
   if (state === 'infected') return 'danger'
   return undefined
 }

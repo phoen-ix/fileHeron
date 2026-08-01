@@ -1281,7 +1281,8 @@
       "share_files_added": "Dateien zu einer Freigabe hinzugefügt",
       "share_pending_approval": "Freigabe wartet auf Genehmigung",
       "share_rejected": "Freigabe abgelehnt"
-    }
+    },
+    "disconnected": "Live-Aktualisierungen sind getrennt - es wird erneut versucht. Zum sofortigen Verbinden die Seite neu laden."
   },
   "notif_prefs": {
     "title": "Benachrichtigungen",
@@ -1508,7 +1509,9 @@
     "emails_view_all": "Im E-Mail-Protokoll ansehen →",
     "emails_empty": "Keine E-Mails an diese:n Nutzer:in gesendet.",
     "erase_preflight_files": "{n} Datei(en) werden endgültig gelöscht ({bytes}).",
-    "erase_preflight_shares": "{created} von dieser Person erstellte Freigabe(n) werden widerrufen; {received} empfangene Freigabe(n) werden anonymisiert."
+    "erase_preflight_shares": "{created} von dieser Person erstellte Freigabe(n) werden widerrufen; {received} empfangene Freigabe(n) werden anonymisiert.",
+    "change_email_old_link_eyebrow": "Bestätigungslink für die ALTE Adresse",
+    "change_email_old_link_help": "Im Modus \"beide bestätigen\" müssen BEIDE Links geöffnet werden. Die Änderung wird erst wirksam, wenn auch die alte Adresse bestätigt ist."
   },
   "admin_mail": {
     "eyebrow": "Admin / E-Mail-Protokoll",
@@ -1522,7 +1525,8 @@
       "category": "Kategorie",
       "status_any": "Beliebiger Status",
       "from": "von",
-      "to": "bis"
+      "to": "bis",
+      "user_scope": "Auf Benutzer #{id} eingeschränkt - zum Aufheben klicken"
     },
     "col": {
       "when": "Wann",
@@ -1809,7 +1813,7 @@
   "files": {
     "state": {
       "pending": "Ausstehend",
-      "ready_unscanned": "Bereit",
+      "ready_unscanned": "Wird geprüft",
       "clean": "Sauber",
       "infected": "Infiziert",
       "failed": "Fehlgeschlagen",

@@ -112,6 +112,11 @@ async function onExportCsv() {
 
 onMounted(() => {
   const ruid = route.query.recipient_user_id
+  // Kept in a ref the template renders and can clear. It used to be invisible:
+  // an admin arriving from a user's detail page then typed an address into the
+  // visible Recipient box, got zero rows for a query that still carried
+  // `recipient_user_id`, and concluded the mail had never been sent - with
+  // every visible filter consistent with that conclusion (audit #2).
   if (typeof ruid === 'string' && ruid) recipientUserId.value = Number(ruid)
   const remail = route.query.recipient_email
   if (typeof remail === 'string' && remail) recipientEmail.value = remail
@@ -136,6 +141,14 @@ onMounted(() => {
     <div class="filters">
       <input v-model.trim="q" class="fh-field-input" :placeholder="t('admin_mail.filter.q')" />
       <input v-model.trim="recipientEmail" class="fh-field-input" :placeholder="t('admin_mail.filter.recipient')" />
+      <button
+        v-if="recipientUserId !== null"
+        type="button"
+        class="fh-btn-text user-filter-chip"
+        @click="recipientUserId = null"
+      >
+        {{ t('admin_mail.filter.user_scope', { id: recipientUserId }) }} x
+      </button>
       <input v-model.trim="category" class="fh-field-input" :placeholder="t('admin_mail.filter.category')" />
       <select v-model="status" class="fh-field-input">
         <option v-for="s in statusOptions" :key="s" :value="s">

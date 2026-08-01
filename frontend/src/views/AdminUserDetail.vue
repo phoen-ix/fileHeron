@@ -46,6 +46,7 @@ const loading = ref(true)
 const editName = ref('')
 const editRole = ref<UserRole>('client')
 const editQuota = ref<number | null>(null)
+const loadError = ref<string | null>(null)
 const editDisabled = ref(false)
 const saving = ref(false)
 const savingError = ref<string | null>(null)
@@ -58,6 +59,9 @@ const skipVerification = ref(false)
 const changingEmail = ref(false)
 const changeEmailError = ref<string | null>(null)
 const changeEmailLink = ref<string | null>(null)
+// `verify_both` mints TWO tokens; only the new-address one was ever shown, so
+// on an SMTP-less instance the change could never complete (audit #2).
+const changeEmailOldLink = ref<string | null>(null)
 
 const eraseStep = ref<0 | 1 | 2>(0)
 const erasing = ref(false)
@@ -81,6 +85,7 @@ const isErased = computed(() => user.value?.email?.endsWith('@erased.invalid') ?
 
 async function load() {
   loading.value = true
+  loadError.value = null
   try {
     const { data } = await getUser(Number(route.params.id))
     user.value = data
@@ -91,6 +96,13 @@ async function load() {
     await loadSessions()
     await loadFiles()
     await loadEmails()
+  } catch (err) {
+    // Without this the page painted the admin sidebar and an entirely empty
+    // content area - no message, no not-found state, nothing to suggest a
+    // request had failed. A bookmarked link to a purged account read as a
+    // broken admin panel (audit #2).
+    loadError.value = describe(err)
+    user.value = null
   } finally {
     loading.value = false
   }
@@ -202,7 +214,15 @@ async function onSave() {
     const payload: Parameters<typeof updateUser>[1] = {}
     if (editName.value !== user.value.display_name) payload.display_name = editName.value
     if (editRole.value !== user.value.role) payload.role = editRole.value
-    if (editQuota.value !== user.value.quota_bytes) payload.quota_bytes = editQuota.value
+    // `v-model.number` on an empty field yields '' (not null), which the API
+    // rejects 422 and the SPA reports as "Something didn't work" - so the
+    // "leave blank for unlimited" the help text promises was impossible, and 0
+    // (the only input that worked) reads as "zero bytes allowed" (audit #2).
+    const quota =
+      editQuota.value === null || (editQuota.value as unknown as string) === ''
+        ? null
+        : Number(editQuota.value)
+    if (quota !== user.value.quota_bytes) payload.quota_bytes = quota
     if (editDisabled.value !== user.value.is_disabled) payload.is_disabled = editDisabled.value
 
     if (Object.keys(payload).length === 0) {
@@ -241,6 +261,7 @@ async function onChangeEmail() {
   changingEmail.value = true
   changeEmailError.value = null
   changeEmailLink.value = null
+  changeEmailOldLink.value = null
   try {
     const { data } = await changeUserEmail(user.value.id, {
       new_email: next,
@@ -251,6 +272,7 @@ async function onChangeEmail() {
     } else {
       ui.pushToast(t('admin_user_detail.change_email_pending'), 'success')
       changeEmailLink.value = data.confirm_url
+      changeEmailOldLink.value = data.old_confirm_url ?? null
     }
     if (data.oidc_reset) {
       ui.pushToast(t('admin_user_detail.change_email_oidc_reset'), 'info')
@@ -330,6 +352,10 @@ onMounted(load)
 <template>
   <div class="fh-page" data-density="operator">
     <div v-if="loading" class="loading">{{ t('common.loading') }}</div>
+
+    <div v-else-if="loadError" class="fh-notice" data-tone="error">
+      {{ loadError }}
+    </div>
 
     <template v-else-if="user">
       <span class="fh-eyebrow">{{ t('admin_user_detail.eyebrow') }}</span>
@@ -444,6 +470,13 @@ onMounted(load)
         <div class="reset-eyebrow">{{ t('admin_user_detail.change_email_link_eyebrow') }}</div>
         <p class="warning">{{ t('admin_user_detail.change_email_link_help') }}</p>
         <pre class="token fh-mono">{{ changeEmailLink }}</pre>
+        <template v-if="changeEmailOldLink">
+          <div class="reset-eyebrow">
+            {{ t('admin_user_detail.change_email_old_link_eyebrow') }}
+          </div>
+          <p class="warning">{{ t('admin_user_detail.change_email_old_link_help') }}</p>
+          <pre class="token fh-mono">{{ changeEmailOldLink }}</pre>
+        </template>
       </div>
 
       <hr class="fh-rule" />

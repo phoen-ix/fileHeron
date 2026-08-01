@@ -5,6 +5,8 @@
       class="bell-trigger"
       :aria-expanded="open"
       :aria-label="t('notif_bell.aria')"
+      :title="sse.givenUp.value ? t('notif_bell.disconnected') : undefined"
+      :data-disconnected="sse.givenUp.value ? 'true' : undefined"
       @click="open = !open"
     >
       <svg

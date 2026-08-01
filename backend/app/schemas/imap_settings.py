@@ -50,6 +50,18 @@ class UpdateImapSettingsRequest(APIBaseModel):
     require_known_sender: bool = True
 
 
+class TestImapRequest(APIBaseModel):
+    """The settings the admin currently has ON SCREEN. Sent by the Test button
+    so it tests what they are about to save rather than what is stored."""
+
+    host: str = Field(default="", max_length=255)
+    port: int = Field(default=993, ge=1, le=65535)
+    user: str = Field(default="", max_length=320)
+    password: str | None = None
+    tls_mode: str = Field(default="implicit", pattern="^(implicit|starttls|none)$")
+    mailbox: str = Field(default="INBOX", max_length=255)
+
+
 class ImapTestResponse(APIBaseModel):
     ok: bool
     error: str | None = None

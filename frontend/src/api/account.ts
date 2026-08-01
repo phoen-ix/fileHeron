@@ -53,7 +53,12 @@ export function updateAdminNavOpenCategories(open: string[]) {
 }
 
 export function changePassword(payload: { current_password: string; new_password: string }) {
-  return api.post('/account/change-password', payload)
+  // The response carries a FRESH session for this device: the route revokes
+  // every refresh token, this one included (audit #2).
+  return api.post<{ ok: boolean; access_token?: string; expires_in_seconds?: number }>(
+    '/account/change-password',
+    payload,
+  )
 }
 
 /** Self-service email change (gated on the `email_change.self_service` policy). */

@@ -157,7 +157,6 @@ def zip_streaming_response(
     mtime: float | None = None,
     byte_range: tuple[int, int] | None = None,
     etag: str | None = None,
-    recent_key: str | None = None,
 ) -> Response:
     """Stream a ZIP_STORED archive of `files` with an exact `Content-Length`, so
     the browser shows real progress. `archive_basename` becomes `<basename>.zip`
@@ -173,9 +172,15 @@ def zip_streaming_response(
     `count=True` registers the stream as an in-flight download
     (services/transfer_activity) so the maintenance-mode drain knows when it
     finishes - decremented in the generator's `finally`, which fires even when
-    the client disconnects mid-stream. `recent_key` additionally leaves the
-    short-lived mark a later resume needs as its evidence that this archive
-    really was in flight; without it a `Range` header is only a claim."""
+    the client disconnects mid-stream.
+
+    There used to be a `recent_key` here, documented as "the evidence a later
+    resume needs". Nothing read it: both ZIP routes corroborate a resume with
+    the principal-keyed PAYMENT mark, and removing the write left every resume
+    behaviour unchanged (measured). It was a Redis write with a 30-minute TTL
+    against a `noeviction` instance, and a docstring telling a maintainer the
+    archive resume had a serving-side corroboration it does not have
+    (audit #2)."""
     zs = build_zip_stream(files, mtime=mtime, crc_cache=RedisCrcCache())
     total = len(zs)
 
@@ -208,7 +213,7 @@ def zip_streaming_response(
         from . import transfer_activity
 
         def _counted():
-            dl_id = transfer_activity.download_started(recent_key)
+            dl_id = transfer_activity.download_started(None)
             try:
                 yield from zs.iter_from(start, length)
             finally:

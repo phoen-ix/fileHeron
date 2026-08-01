@@ -235,7 +235,20 @@ async def av_scan_file(_ctx, file_id: str) -> dict:
             # mid-scan (share expiry committed `deleted` and freed the bytes),
             # don't resurrect it into `infected` - which would also revoke a
             # dead share and fire an infection notice for a file that's gone.
-            current_state = db.query(File.state).filter(File.id == file_id).scalar()
+            # A LOCKING read. Under MariaDB's REPEATABLE READ a plain SELECT
+            # answers from this transaction's snapshot, so a `deleted` the API
+            # connection committed while clamd was working is invisible - the
+            # guard could not fire at all, and quarantine_file then flipped a
+            # deleted row back to `infected`, revoked a share that still had
+            # other clean files in it, released the same bytes from the quota a
+            # second time and emailed the uploader about a file they had already
+            # deleted (audit #2).
+            current_state = (
+                db.query(File.state)
+                .filter(File.id == file_id)
+                .with_for_update()
+                .scalar()
+            )
             if current_state != FileState.ready_unscanned:
                 db.rollback()
                 logger.info(

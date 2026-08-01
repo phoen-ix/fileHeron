@@ -23,7 +23,7 @@ from sqlalchemy import delete
 from sqlalchemy.orm import Session
 
 from ..database import SessionLocal
-from ..models.audit_log import AuditLog
+from ..models.audit_log import AuditEventType, AuditLog
 from ..models.download_log import DownloadLog
 from ..models.email_log import EmailLog
 from ..models.error_log import ErrorLog
@@ -42,7 +42,7 @@ _INTER_BATCH_SLEEP_SEC = 5.0
 
 
 async def _prune_table(
-    table_name: str, days: int, age_column, model
+    table_name: str, days: int, age_column, model, *, keep=None
 ) -> int:
     """DELETE FROM <table> WHERE age_column < cutoff, in batches.
 
@@ -56,13 +56,10 @@ async def _prune_table(
     while True:
         db: Session = SessionLocal()
         try:
-            ids = [
-                pk
-                for (pk,) in db.query(model.id)
-                .filter(age_column < cutoff)
-                .limit(_BATCH_SIZE)
-                .all()
-            ]
+            q = db.query(model.id).filter(age_column < cutoff)
+            if keep is not None:
+                q = q.filter(keep)
+            ids = [pk for (pk,) in q.limit(_BATCH_SIZE).all()]
             if not ids:
                 break
             result = db.execute(delete(model).where(model.id.in_(ids)))
@@ -95,8 +92,17 @@ async def prune_history(_ctx) -> dict:
         link_attempt_days = _sr.effective(_db0, _sr.K.PUBLIC_LINK_ATTEMPT_RETENTION_DAYS)
     finally:
         _db0.close()
+    # `user_erased` rows are the GDPR receipt. `config_backup.apply_backup` is
+    # explicitly forbidden from destroying them - and the nightly prune deleted
+    # them on the ordinary retention clock, so a receipt a regulator or the data
+    # subject asked for a year later answered 404 and nothing in the system
+    # could reproduce the file count or the bytes (audit #2).
     audit_pruned = await _prune_table(
-        "audit_log", audit_days, AuditLog.created_at, AuditLog
+        "audit_log",
+        audit_days,
+        AuditLog.created_at,
+        AuditLog,
+        keep=AuditLog.event_type != AuditEventType.user_erased.value,
     )
     download_pruned = await _prune_table(
         "download_log", download_days, DownloadLog.accessed_at, DownloadLog

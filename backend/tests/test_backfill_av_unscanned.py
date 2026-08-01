@@ -21,16 +21,43 @@ CEILING = 2147483645
 
 
 def _run_backfill(conn) -> int:
-    """The migration's statement, run against the test connection."""
-    result = conn.execute(
-        text(
-            "UPDATE files SET av_unscanned = 1 "
-            "WHERE state = 'clean' AND av_unscanned = 0 "
-            "AND size_bytes > :ceiling"
-        ),
-        {"ceiling": CEILING},
+    """The migration's REAL `upgrade()`, not a copy of its SQL.
+
+    This used to re-execute a duplicate of the UPDATE, so the revision's own
+    body was exercised by nothing: inserting `return` at the top of `upgrade()`
+    (or mistyping the column in its `_has_column` guard) left the entire suite
+    green and both alembic CI jobs passing - measured - while every affected
+    file on a real instance kept a `clean` badge for a verdict clamd produced
+    without opening it, with no second chance because the flag is only ever set
+    at scan time (audit #2).
+    """
+    import importlib.util
+    import pathlib as _pathlib
+
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+
+    path = (
+        _pathlib.Path(__file__).resolve().parents[1]
+        / "alembic"
+        / "versions"
+        / "202607310001_backfill_av_unscanned.py"
     )
-    return result.rowcount or 0
+    spec = importlib.util.spec_from_file_location("_bf_rev", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    before = _count_flagged(conn)
+    ctx = MigrationContext.configure(conn)
+    with Operations.context(ctx):
+        module.upgrade()
+    return _count_flagged(conn) - before
+
+
+def _count_flagged(conn) -> int:
+    return conn.execute(
+        text("SELECT COUNT(*) FROM files WHERE av_unscanned = 1")
+    ).scalar_one()
 
 
 @pytest.fixture

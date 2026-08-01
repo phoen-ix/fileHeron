@@ -418,6 +418,18 @@ def public_preview(
         )
     if file.state == FileState.infected:
         raise AppError(410, "FILE_INFECTED", "File was quarantined.")
+    if file.av_unscanned:
+        # `clean` here means "no verdict", not "a clean verdict" - clamd clamps
+        # MaxFileSize to ~2 GiB, so anything larger is served with an
+        # `unscanned` badge and never opened by the scanner. Downloading it is
+        # the visitor's informed choice; rendering it INLINE into their PDF
+        # viewer, one anonymous click from a public link, is not (audit #2).
+        raise AppError(
+            409,
+            "FILE_NOT_SCANNED",
+            "This file was too large to scan for viruses, so it can't be "
+            "previewed in the browser. Download it and check it locally.",
+        )
     if file.state == FileState.deleted:
         raise AppError(410, "FILE_DELETED", "File has been deleted.")
     if not preview_svc.is_previewable(file.mime_type):
@@ -636,5 +648,4 @@ def public_download_zip(
         mtime=mtime,
         byte_range=byte_range,
         etag=etag,
-        recent_key=f"zip:{share.id}:{etag}",
     )

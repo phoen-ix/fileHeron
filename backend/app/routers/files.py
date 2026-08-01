@@ -52,6 +52,28 @@ def _get_file_or_404(db: Session, file_id: str) -> File:
     return file
 
 
+def _assert_previewable_state(file: File) -> None:
+    """The preview gate, which is stricter than the download gate.
+
+    `av_unscanned` files are `clean` - the state means "no verdict", not "a
+    clean verdict": clamd clamps MaxFileSize to ~2 GiB, so anything larger is
+    marked clean-but-unscanned and served with a badge. The download path can
+    do that, because the user is choosing to take a file they were told was not
+    scanned. Preview is different: the bytes are rendered INLINE, into the
+    browser's PDF/image viewer, on a path an anonymous public-link visitor can
+    reach with one click - and the trust model written three lines above the
+    previewable-type allowlist assumed clamd had read them (audit #2).
+    """
+    _assert_file_state_servable(file)
+    if getattr(file, "av_unscanned", False):
+        raise AppError(
+            409,
+            "FILE_NOT_SCANNED",
+            "This file was too large to scan for viruses, so it can't be "
+            "previewed in the browser. Download it and check it locally.",
+        )
+
+
 def _assert_file_state_servable(file: File) -> None:
     """Same AV/state gate the download path applies - only `clean` files are
     servable; we never hand out (or render inline) unscanned/quarantined bytes."""
@@ -193,7 +215,7 @@ def get_preview_url(
     share_svc.assert_share_file_access(db, user=user, share=share)
     from ..services import maintenance as maintenance_svc
     maintenance_svc.refuse_if_maintenance(db, kind="download")
-    _assert_file_state_servable(file)
+    _assert_previewable_state(file)
     if not settings_svc.get_bool(
         db, settings_svc.Keys.FILE_PREVIEW_ENABLED, default=True
     ):
@@ -565,7 +587,6 @@ def download_share_zip(
         mtime=mtime,
         byte_range=byte_range,
         etag=etag,
-        recent_key=f"zip:{share.id}:{etag}",
     )
 
 
@@ -589,7 +610,11 @@ def delete_file(
             "via /admin/quarantine (release back, purge, or download).",
         )
     share_id = file.share_id
-    file_svc.hard_delete(db, file=file, reason="user_request", request=request)
+    # Deferred purge: the bytes go after the commit, so a commit failure cannot
+    # leave a `clean` row pointing at nothing (audit #2).
+    purge = file_svc.hard_delete(
+        db, file=file, reason="user_request", request=request, purge=False
+    )
     # If this was the last non-deleted file in an active share, auto-revoke it
     # (shared helper - same behavior as the admin delete path).
     file_svc.revoke_share_if_empty(
@@ -600,3 +625,4 @@ def delete_file(
         request=request,
     )
     db.commit()
+    file_svc.purge_locators([purge])

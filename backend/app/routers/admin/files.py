@@ -100,10 +100,12 @@ def admin_reclaim_orphan(
 
     from ...services import file as file_svc
 
-    file_svc.hard_delete(
-        db, file=file, reason="admin_reclaim", actor_user_id=admin.id, request=request
+    purge = file_svc.hard_delete(
+        db, file=file, reason="admin_reclaim", actor_user_id=admin.id,
+        request=request, purge=False,
     )
     db.commit()
+    file_svc.purge_locators([purge])
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -127,8 +129,9 @@ def admin_delete_file(
     from ...services import file as file_svc
 
     share_id = file.share_id
-    file_svc.hard_delete(
-        db, file=file, reason="admin_delete", actor_user_id=admin.id, request=request
+    purge = file_svc.hard_delete(
+        db, file=file, reason="admin_delete", actor_user_id=admin.id,
+        request=request, purge=False,
     )
     file_svc.revoke_share_if_empty(
         db,
@@ -138,4 +141,5 @@ def admin_delete_file(
         request=request,
     )
     db.commit()
+    file_svc.purge_locators([purge])
     return Response(status_code=status.HTTP_204_NO_CONTENT)

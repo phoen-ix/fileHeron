@@ -884,10 +884,27 @@ def _purge_user(db, user, *, actor, request) -> str:
         return "deleted"
     except Exception:
         sp.rollback()
+    # `erase_user` calls `db.rollback()` on failure - and this runs INSIDE the
+    # import's transaction, so that rollback discarded everything apply_backup
+    # had done so far (settings, OIDC providers, webhooks, groups, the user
+    # upsert) while the remaining steps carried on committing on top of a
+    # rolled-back session. The import then reported success with a warning and
+    # left the instance matching neither the backup nor the previous
+    # configuration (audit #2).
+    #
+    # A savepoint contains it: a failed erasure rolls back to here and nothing
+    # earlier in the import is lost. The caller still records the user as
+    # "failed" and surfaces it in the import result.
+    sp2 = db.begin_nested()
     try:
         erase_user(db, actor=actor, target=user, request=request)
+        sp2.commit()
         return "anonymised"
     except Exception:
+        try:
+            sp2.rollback()
+        except Exception:
+            logger.exception("config import: could not roll back the purge savepoint")
         logger.exception("config import: purge failed for user=%s", user.id)
         return "failed"
 

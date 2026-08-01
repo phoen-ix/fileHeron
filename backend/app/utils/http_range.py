@@ -80,6 +80,19 @@ class UnsatisfiableRangeError(Exception):
     """The header was well-formed but asks for bytes outside the resource."""
 
 
+def _is_number(text: str) -> bool:
+    """ASCII digits only.
+
+    `str.isdigit()` is True for characters like the latin-1 superscript two, and
+    `int()` then raises ValueError - straight out of the route, as an unhandled
+    500 with an error_log row and a `notify_admin_error` enqueue per request. So
+    `Range: bytes=\xb2-` let an unauthenticated caller holding any public-link
+    token manufacture 5xx alerts at will and flood the error log, on every
+    download, preview and ZIP route (audit #2).
+    """
+    return text.isascii() and text.isdigit()
+
+
 def parse_single_range(header: str | None, total: int) -> ByteRange | None:
     """Resolve a `Range` header against a resource of `total` bytes.
 
@@ -110,21 +123,21 @@ def parse_single_range(header: str | None, total: int) -> ByteRange | None:
 
     if not first:
         # Suffix range: the LAST n bytes. `bytes=-0` is unsatisfiable.
-        if not last.isdigit():
+        if not _is_number(last):
             return None
         n = int(last)
         if n == 0:
             raise UnsatisfiableRangeError
         start = max(0, total - n)
         return ByteRange(start, total - 1) if total else None
-    if not first.isdigit():
+    if not _is_number(first):
         return None
     start = int(first)
     if start >= total:
         raise UnsatisfiableRangeError
     if not last:
         return ByteRange(start, total - 1)
-    if not last.isdigit():
+    if not _is_number(last):
         return None
     end = min(int(last), total - 1)
     if end < start:

@@ -220,7 +220,8 @@
     "WEBAUTHN_VERIFY_FAILED": "The passkey could not be verified.",
     "generic": "Something didn't work. Please try again.",
     "UPLOAD_FAILED": "The upload failed. Try again.",
-    "UPLOAD_NOT_READY": "This share is not ready for uploads yet."
+    "UPLOAD_NOT_READY": "This share is not ready for uploads yet.",
+    "FILE_NOT_SCANNED": "This file was too large to scan for viruses, so it can't be previewed in the browser. Download it and check it locally."
   },
   "login": {
     "title": "Sign in",

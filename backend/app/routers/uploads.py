@@ -227,6 +227,25 @@ async def direct_upload(
     file_row.state = file_row.state.__class__.ready_unscanned
     file_row.sha256_hex = sha.hexdigest()
     file_row.finalized_at = when
+    # The bytes are already on the storage backend and cannot roll back with the
+    # transaction. If the commit below fails, the row never exists, no sweeper
+    # can find the blob (they all walk `files` rows), and the Redis reservation
+    # stays charged to the uploader until the hourly reconcile - the same shape
+    # `inbound_mail._store_attachment` compensates for (audit #2).
+    from ..database import run_after_rollback
+
+    def _compensate(loc: str = locator, n: int = reserved or 0) -> None:
+        try:
+            backend.delete(loc)
+        except Exception:
+            logger.warning("direct upload: could not drop orphaned blob %s", loc)
+        if n:
+            try:
+                quota_svc.release_bytes(user_id=user_id, bytes_to_free=n)
+            except Exception:
+                logger.warning("direct upload: could not release reservation")
+
+    run_after_rollback(db, _compensate)
     db.commit()
 
     # Same deferred announcement as the tus path (services/share.announce_if_ready).

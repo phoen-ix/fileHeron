@@ -264,7 +264,11 @@ class SizedZipStream:
                 if self._cached_crc(e) is None:
                     cost += e.size
                 continue
-            if offset > d_start:
+            if offset > d_start and self._cached_crc(e) is None:
+                # With the CRC cached, `iter_from` seeks past this prefix
+                # instead of reading it (see the note there), so it costs
+                # nothing. Counting it anyway is what declined every resume of
+                # a large archive.
                 cost += min(offset, desc_start) - d_start
             break
         return cost
@@ -446,18 +450,43 @@ class SizedZipStream:
                 if remaining <= 0:
                     return
 
-            # The CRC covers the whole member, so the data is read from byte 0
-            # even when the window starts later; the skipped prefix is
-            # discarded. One pass over the member either way.
+            # The CRC covers the whole member, so the data has to be read from
+            # byte 0 when the CRC is not already known - the skipped prefix is
+            # read and discarded.
+            #
+            # When it IS known (cached from an earlier full transfer) and the
+            # source is seekable, skip straight to the window. Without this a
+            # resume of the archives this feature exists for was always
+            # declined: a single 9 GB member costs its whole 8.1 GiB prefix,
+            # over any sane re-read ceiling, so the client that asked for byte
+            # 7.7e9 got a 200 and the whole 9 GB from zero - restarting forever
+            # on a flaky link, and on the public route paying a budget unit each
+            # time once the paid window had lapsed (audit #2).
+            cached = self._cached_crc(e)
+            data_skip = max(0, min(offset, desc_start) - d_start)
             crc = 0
             read = 0
             fh = e.open_fn()
+            seeked = False
+            if cached is not None and data_skip > 0:
+                try:
+                    if fh.seekable():
+                        fh.seek(data_skip)
+                        seeked = True
+                        crc = cached
+                        read = data_skip
+                except Exception:  # pragma: no cover - fall back to a full read
+                    logger.warning("zip resume: seek failed for %r", e.arcname, exc_info=True)
+                    seeked = False
+                    crc = 0
+                    read = 0
             try:
                 while read < e.size:
                     chunk = fh.read(min(_READ_CHUNK, e.size - read))
                     if not chunk:
                         break
-                    crc = zlib.crc32(chunk, crc)
+                    if not seeked:
+                        crc = zlib.crc32(chunk, crc)
                     start = d_start + read
                     read += len(chunk)
                     lo = max(0, offset - start)
@@ -487,7 +516,8 @@ class SizedZipStream:
                     f"{e.arcname}: declared {e.size} bytes, produced {read}"
                 )
             crc &= 0xFFFFFFFF
-            self._remember_crc(e, crc)
+            if not seeked:
+                self._remember_crc(e, crc)
             crcs.append(crc)
 
             block = self._descriptor(e, crc)

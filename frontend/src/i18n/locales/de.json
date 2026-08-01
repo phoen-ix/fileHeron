@@ -220,7 +220,8 @@
     "WEBAUTHN_VERIFY_FAILED": "Der Passkey konnte nicht verifiziert werden.",
     "generic": "Etwas hat nicht funktioniert. Bitte erneut versuchen.",
     "UPLOAD_FAILED": "Der Upload ist fehlgeschlagen. Bitte erneut versuchen.",
-    "UPLOAD_NOT_READY": "Diese Freigabe ist noch nicht bereit für Uploads."
+    "UPLOAD_NOT_READY": "Diese Freigabe ist noch nicht bereit für Uploads.",
+    "FILE_NOT_SCANNED": "Diese Datei war zu groß für die Virenprüfung und kann daher nicht im Browser angezeigt werden. Laden Sie sie herunter und prüfen Sie sie lokal."
   },
   "login": {
     "title": "Anmelden",

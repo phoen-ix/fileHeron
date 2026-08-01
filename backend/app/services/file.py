@@ -196,8 +196,22 @@ def hard_delete(
     reason: str = "user_request",
     actor_user_id: int | None = None,
     request=None,
-) -> None:
+    purge: bool = True,
+) -> str | None:
     """Hard-delete from disk + DB row marker.
+
+    With `purge=False` the bytes are NOT unlinked; the locator is returned and
+    the caller must unlink it AFTER committing. That is the ordering v2.5.0
+    established for share expiry and the one to prefer: unlinking first means a
+    commit that then fails (a lock-wait timeout, a dropped connection) rolls the
+    row back to `clean` with a `storage_path` pointing at nothing - the file
+    shows as present in the admin browser, a download 500s out of FileResponse,
+    and the next sweep releases the same bytes from the quota counter a second
+    time (audit #2).
+
+    `purge=True` (the default) keeps the old ordering for the one caller that
+    needs it: GDPR erasure must learn that an unlink failed BEFORE it writes a
+    receipt claiming the data is gone.
 
     `actor_user_id` defaults to the uploader (a self-service delete); pass an
     admin's id for an admin-initiated delete so the audit records the real
@@ -214,7 +228,7 @@ def hard_delete(
     # would re-run release_bytes and double-credit the uploader's quota
     # (finding L11). Bail out - the row is already a deleted marker.
     if file.state == FileState.deleted:
-        return
+        return None
 
     # Capture the pre-delete state so we don't double-release quota for
     # files that already went through quarantine (services/quarantine.py
@@ -235,8 +249,12 @@ def hard_delete(
     # quota_reconcile recomputes from disk and is the source of truth.
     reserved = file.state != FileState.uploading or file.tus_upload_id is not None
 
+    deferred: str | None = None
     if file.storage_path:
-        get_storage_backend().delete(file.storage_path)
+        if purge:
+            get_storage_backend().delete(file.storage_path)
+        else:
+            deferred = file.storage_path
 
     file.state = FileState.deleted
     db.flush()
@@ -253,6 +271,22 @@ def hard_delete(
         metadata={"reason": reason, "size_bytes": file.size_bytes},
         request=request,
     )
+    return deferred
+
+
+def purge_locators(locators: list[str | None]) -> None:
+    """Unlink bytes AFTER the caller's commit. Never raises: the rows are
+    already committed as `deleted`, so a failure here leaks bytes that the
+    orphan sweeper can still find, whereas raising would 500 a delete that has
+    already happened."""
+    backend = get_storage_backend()
+    for locator in locators:
+        if not locator:
+            continue
+        try:
+            backend.delete(locator)
+        except Exception:
+            logger.warning("deferred purge failed for %s", locator, exc_info=True)
 
 
 def revoke_share_if_empty(

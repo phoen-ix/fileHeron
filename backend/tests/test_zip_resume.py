@@ -23,7 +23,9 @@ the central directory, so it comes from the cache or is re-read - never guessed.
 from __future__ import annotations
 
 import io
+import struct
 import zipfile
+import zlib
 
 import pytest
 
@@ -321,16 +323,30 @@ def test_a_cache_that_raises_is_survivable():
     assert b"".join(_build(cache=_Broken()).iter_from(cut)) == full[cut:]
 
 
-def test_resuming_forward_of_a_member_costs_only_its_discarded_prefix():
-    """The member straddling the resume point is read from byte 0 for its CRC,
-    so the prefix is read and thrown away. `resume_cost` says so rather than
-    reporting a free lunch."""
+def test_a_cold_resume_pays_for_the_discarded_prefix():
+    """With the CRC unknown, the member straddling the resume point must be read
+    from byte 0 to compute it, so the prefix is read and thrown away.
+    `resume_cost` says so rather than reporting a free lunch."""
+    zs = _build(cache=_DictCache())
+    data_start = _LOCAL_HEADER + len("alpha.bin") + _LOCAL_ZIP64_EXTRA
+    assert zs.resume_cost(data_start + 200) == 200
+
+
+def test_a_warm_resume_seeks_instead_of_paying_for_the_prefix():
+    """Once the CRC is cached, the prefix does not need reading at all - so the
+    cost is zero and the resume is accepted.
+
+    This test asserted the opposite until audit #2, which is why it never
+    surfaced that a resume was declined for exactly the archives the feature
+    exists for: a single 9 GB member costs its whole 8.1 GiB prefix on the old
+    accounting, over any sane ceiling, so the client that asked for byte 7.7e9
+    got a 200 and the whole 9 GB from zero - restarting forever on a flaky
+    link."""
     warm = _DictCache()
     b"".join(_build(cache=warm))
     zs = _build(cache=warm)
-    # 200 bytes into the first member's data.
     data_start = _LOCAL_HEADER + len("alpha.bin") + _LOCAL_ZIP64_EXTRA
-    assert zs.resume_cost(data_start + 200) == 200
+    assert zs.resume_cost(data_start + 200) == 0
 
 
 def test_a_range_that_closes_mid_member_does_not_cache_a_partial_crc():
@@ -371,3 +387,64 @@ def test_the_cached_crc_is_the_one_the_archive_carries():
 
     for name, data in MEMBERS:
         assert cache.store[f"key-{name}"] == zlib.crc32(data) & 0xFFFFFFFF
+
+
+# --- audit #2: the data descriptor -------------------------------------------
+
+
+def _parse_stream(zs, blob: bytes) -> list[tuple[str, int, bytes]]:
+    """Read each member's bytes and its EMITTED data descriptor out of the
+    stream. Returns (name, descriptor_crc, data).
+
+    The member sizes in a local header are ZERO here - that is the whole point
+    of the data-descriptor flag, and the reason a streaming extractor depends on
+    the descriptor being right - so the offsets come from the writer's own
+    layout rather than from the header fields.
+    """
+    out: list[tuple[str, int, bytes]] = []
+    for e, (_h, d_start, desc_start) in zip(
+        zs._entries, zs._positions(), strict=True
+    ):
+        data = blob[d_start : d_start + e.size]
+        sig, dcrc, dc, du = struct.unpack(
+            "<IIQQ", blob[desc_start : desc_start + _DATA_DESCRIPTOR]
+        )
+        assert sig == 0x08074B50, f"{e.arcname}: not a data descriptor"
+        assert dc == du == e.size
+        out.append((e.arcname, dcrc, data))
+    return out
+
+
+def test_every_data_descriptor_carries_the_real_crc():
+    """Nothing tested the descriptor.
+
+    Mutating `_descriptor` to emit `crc ^ 0xDEADBEEF` left the entire suite
+    green, and `unzip -t` and `zipfile.testzip()` both reported no errors -
+    they read the CENTRAL DIRECTORY, which carries a second, correct copy. Only
+    a streaming extractor (libarchive/bsdtar, `unzip` from a pipe) reads the
+    descriptor, and for those the archive was truncated garbage: measured, a
+    1441-byte `a.txt` where 60 bytes were expected, `b.bin` never created, exit
+    1 (audit #2).
+    """
+    zs = _build()
+    blob = b"".join(zs)
+    members = _parse_stream(zs, blob)
+    assert members, "the stream parser found no members - check the walk"
+    for name, descriptor_crc, data in members:
+        assert descriptor_crc == zlib.crc32(data) & 0xFFFFFFFF, (
+            f"{name}: the data descriptor's CRC does not match the bytes it "
+            "describes; a streaming extractor rejects this archive"
+        )
+
+
+def test_a_warm_resume_still_carries_the_real_crc():
+    """The seek-instead-of-read path reuses a CACHED crc for the descriptor. If
+    the cache and the bytes ever disagree, this is where it shows."""
+    warm = _DictCache()
+    zs = _build(cache=warm)
+    full = b"".join(zs)
+    data_start = _LOCAL_HEADER + len("alpha.bin") + _LOCAL_ZIP64_EXTRA
+    resumed = b"".join(_build(cache=warm).iter_from(data_start + 200))
+    assert full[data_start + 200 :] == resumed
+    for name, descriptor_crc, data in _parse_stream(zs, full):
+        assert descriptor_crc == zlib.crc32(data) & 0xFFFFFFFF, name

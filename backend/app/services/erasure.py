@@ -111,6 +111,34 @@ def _erased_file_totals(db: Session, user_id: int) -> tuple[int, int]:
     return len(seen), sum(seen.values())
 
 
+_ERASURE_LOCK_PREFIX = "fh:erasure:"
+_ERASURE_LOCK_TTL_SEC = 1800
+
+
+def _claim_erasure(user_id: int) -> bool | None:
+    """Claim the right to erase `user_id`. False when another run holds it,
+    None when Redis is unavailable (fail open - see the call site)."""
+    try:
+        from ..redis_client import get_redis
+
+        ok = get_redis().set(
+            f"{_ERASURE_LOCK_PREFIX}{user_id}", "1", nx=True, ex=_ERASURE_LOCK_TTL_SEC
+        )
+        return bool(ok)
+    except Exception:
+        logger.warning("erasure: could not take the run lock (redis); proceeding")
+        return None
+
+
+def _release_erasure(user_id: int) -> None:
+    try:
+        from ..redis_client import get_redis
+
+        get_redis().delete(f"{_ERASURE_LOCK_PREFIX}{user_id}")
+    except Exception:
+        pass
+
+
 def erase_user(
     db: Session, *, actor: User, target: User, request=None
 ) -> dict:
@@ -141,6 +169,37 @@ def erase_user(
     target = locked
     if _is_erased(target):
         raise AppError(409, "ALREADY_ERASED", "This user has already been erased.")
+
+    # The row lock above does NOT hold for the run: the file loop below commits
+    # after every file (deliberately - each unlink is irreversible and a retry
+    # must resume cleanly), and the first of those commits releases it. A second
+    # erasure started in that window found `email` unchanged, walked the files
+    # the first had not reached yet, and released the same bytes from the quota
+    # counter twice - so the uploader could exceed their quota until the hourly
+    # reconcile - and produced two receipts for one person (audit #2).
+    #
+    # An application lock outlives the transaction. Fails OPEN by design: with
+    # Redis down the row lock is still there for the first file, and refusing
+    # every erasure because a cache is unavailable would be worse than the race
+    # it prevents.
+    lock = _claim_erasure(target.id)
+    if lock is False:
+        raise AppError(
+            409, "ERASURE_IN_PROGRESS", "An erasure for this user is already running."
+        )
+    try:
+        return _erase_user_locked(
+            db, actor=actor, target=target, request=request
+        )
+    finally:
+        if lock:
+            _release_erasure(target.id)
+
+
+def _erase_user_locked(
+    db: Session, *, actor: User, target: User, request=None
+) -> dict:
+    """The body of `erase_user`, under its run lock."""
 
     # 1. Hard-delete files this user uploaded. If any unlink fails, abort
     # the whole erasure - partial erasure would leave the user

@@ -720,13 +720,16 @@ def test_serving_a_file_records_the_mark():
 
 
 def test_every_counted_download_route_identifies_what_it_is_serving():
-    """A counted response must name the thing it is serving, or the mark a later
-    resume looks for is never written - and the resume is then refused during
-    maintenance, and charged again against the download budget.
+    """A counted SINGLE-FILE response must name the file it is serving, or the
+    serving mark a later resume looks for is never written and the resume is
+    refused during maintenance.
 
-    Single files identify by `file_id=`; a bulk ZIP has no single file, so it
-    identifies by `recent_key=` (share id + archive ETag). Either is fine;
-    neither is not."""
+    The ZIP routes are deliberately excluded. They used to pass a `recent_key`,
+    which this test accepted as equivalent - but nothing ever read that mark:
+    both ZIP routes corroborate a resume with the principal-keyed PAYMENT mark,
+    and removing the write left every resume behaviour unchanged (measured).
+    Accepting it here is what let a dead Redis write look like a control
+    (audit #2)."""
     import inspect
     import re
 
@@ -737,7 +740,9 @@ def test_every_counted_download_route_identifies_what_it_is_serving():
         src = inspect.getsource(mod)
         for m in re.finditer(r"count=True,?", src):
             call_tail = src[m.start() : m.start() + 400]
-            assert "file_id=" in call_tail or "recent_key=" in call_tail, (
+            if "zip_streaming_response" in src[max(0, m.start() - 400) : m.start()]:
+                continue  # an archive has no single file to name
+            assert "file_id=" in call_tail, (
                 f"{mod.__name__}: a counted response does not identify what it serves"
             )
 

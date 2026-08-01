@@ -182,6 +182,15 @@ def snapshot(db: Session) -> dict:
 _PAID_KEY_PREFIX = "fh:transfer:paid:"
 
 
+# The payment mark's own window. RECENT_DOWNLOAD_TTL_SEC (30 min) is the SERVING
+# mark's TTL and is far too short here: a 9 GB archive on a 25 Mbit/s line takes
+# 50 minutes, so the mark expired mid-transfer and the resume was answered 410
+# PUBLIC_LINK_EXHAUSTED - the exact outcome flow-publiclink-5 was filed for and
+# the route docstring claims is fixed (audit #2). Matched to the authenticated
+# path's resume credit, which is measured in hours for the same reason.
+PAID_TTL_SEC = 12 * 3600
+
+
 def mark_download_paid(principal_key: str) -> None:
     """Record that `principal_key` just PAID for a transfer.
 
@@ -189,9 +198,7 @@ def mark_download_paid(principal_key: str) -> None:
     `principal_key` must identify the payer as well as the thing paid for -
     e.g. `link:{link_id}:file:{file_id}`."""
     try:
-        get_redis().set(
-            f"{_PAID_KEY_PREFIX}{principal_key}", "1", ex=RECENT_DOWNLOAD_TTL_SEC
-        )
+        get_redis().set(f"{_PAID_KEY_PREFIX}{principal_key}", "1", ex=PAID_TTL_SEC)
     except Exception:
         logger.warning("transfer_activity: paid-mark failed (redis)")
 
@@ -199,11 +206,20 @@ def mark_download_paid(principal_key: str) -> None:
 def was_download_paid(principal_key: str) -> bool:
     """Whether `principal_key` paid inside the window.
 
-    Fails OPEN, for the same reason `was_download_recent` does: with Redis
-    unreachable a genuine resume and a fabricated range are indistinguishable,
-    and refusing the resume is the worse outcome."""
+    Fails CLOSED, unlike the serving mark. The serving mark answers "is a
+    transfer in flight", where a wrong answer costs a paused download; this one
+    answers "has this caller already paid", where a wrong answer costs the
+    budget itself. Failing open meant that for the duration of a Redis outage a
+    public link with `downloads_remaining = 0` served the complete archive to
+    anyone sending `Range: bytes=1-`, repeatedly, with no counter movement, no
+    download_log row and nothing in the owner's history (audit #2).
+
+    The cost of failing closed is that a genuine resume during an outage pays a
+    second download rather than being free. That is recoverable; unlimited free
+    extraction is not.
+    """
     try:
         return get_redis().get(f"{_PAID_KEY_PREFIX}{principal_key}") is not None
     except Exception:
-        logger.warning("transfer_activity: paid-check failed (redis); allowing")
-        return True
+        logger.warning("transfer_activity: paid-check failed (redis); charging")
+        return False

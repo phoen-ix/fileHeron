@@ -161,12 +161,22 @@ async def test_a_corroborated_continuation_is_free(
 
 
 @pytest.mark.asyncio
-async def test_redis_down_lets_the_continuation_through(
+async def test_redis_down_charges_rather_than_giving_the_file_away(
     client, db, public_file, monkeypatch
 ):
-    """Fail OPEN. Without Redis a genuine resume and a fabricated range are
-    indistinguishable, and refusing the resume is the worse outcome - the same
-    posture the quota counter takes."""
+    """Fail CLOSED on the PAYMENT mark.
+
+    This asserted fail-open until audit #2, borrowing the posture of the
+    SERVING mark - where a wrong answer costs a paused download. Here a wrong
+    answer costs the budget itself: for the whole duration of a Redis outage, a
+    public link with `downloads_remaining = 0` served the file (and, on the ZIP
+    route, the complete archive) to anyone sending `Range: bytes=1-`,
+    repeatedly, with no counter movement, no download_log row and nothing in the
+    owner's history.
+
+    The cost of the other direction is that a genuine resume during an outage
+    pays a second download. That is recoverable; unlimited free extraction is
+    not."""
     from app.services import transfer_activity
 
     f, sh, link, token = public_file
@@ -181,7 +191,33 @@ async def test_redis_down_lets_the_continuation_through(
     r = await client.get(
         f"/api/public/{token}/files/{f.id}/download", headers={"Range": "bytes=1-"}
     )
+    assert r.status_code == 410, r.text
+    assert r.json()["code"] == "PUBLIC_LINK_EXHAUSTED"
+
+
+@pytest.mark.asyncio
+async def test_redis_down_still_serves_a_link_with_budget_left(
+    client, db, public_file, monkeypatch
+):
+    """The control on the other side: failing closed must charge, not refuse.
+    A link with downloads left keeps working through an outage."""
+    from app.services import transfer_activity
+
+    f, sh, link, token = public_file
+
+    def _boom():
+        raise RuntimeError("redis down")
+
+    monkeypatch.setattr(transfer_activity, "get_redis", _boom)
+    link.downloads_remaining = 2
+    db.commit()
+
+    r = await client.get(
+        f"/api/public/{token}/files/{f.id}/download", headers={"Range": "bytes=1-"}
+    )
     assert r.status_code in (200, 206), r.text
+    db.refresh(link)
+    assert link.downloads_remaining == 1
 
 
 @pytest.mark.asyncio
@@ -225,7 +261,19 @@ def test_both_public_decisions_use_the_same_corroborated_boolean():
     from app.routers import public as public_router
 
     src = inspect.getsource(public_router.public_download)
-    assert "was_download_recent" in src
+    # `was_download_paid`, not `was_download_recent`. The serving mark answers
+    # "is a transfer in flight" and was the wrong evidence for a budget
+    # decision; the payment mark is principal-keyed and written only where the
+    # counter moves. This line used to assert the string "was_download_recent",
+    # which is present in the function's HISTORICAL COMMENT - so rewording that
+    # comment turned the suite red while any change to the actual evidence
+    # helper went unnoticed (audit #2).
+    body = src.split('"""', 2)[-1]
+    code = "\n".join(
+        line for line in body.splitlines() if not line.lstrip().startswith("#")
+    )
+    assert "was_download_paid" in code
+    assert "was_download_recent" not in code
     assert "allow_exhausted_continuation=is_continuation" in src
     # The counter/log block is gated on the corroborated boolean. It may carry
     # additional exemptions (the size probe, v2.6.1) but `is_continuation` must

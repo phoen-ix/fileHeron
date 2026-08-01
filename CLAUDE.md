@@ -243,6 +243,11 @@ does - keep it current on release.)
 > error-log knobs; v1.56.0 = the audit fix-wave, no new admin surface).
 > v1.52 also: the new-device login alert now ships the real client IP + browser
 > version + raw user-agent (was a geohash + version-less summary).
+> **v2.8.0 (audit #2)** added two admin settings to `/admin/settings/imap`
+> (`imap.require_known_sender`, default ON; `imap.tls_insecure`, default off), a
+> `announce_ready_shares` minute-cron, and the `FILE_NOT_SCANNED` /
+> `ALERT_RECIPIENTS_EMPTY` / `ERASURE_IN_PROGRESS` error codes. README's env
+> table lists the two settings; nothing else in the admin surface moved.
 
 **Open / deferred (don't re-propose):** per-file envelope encryption - deferred
 until storage leaves single-server bind mounts (KEK + ciphertext would otherwise

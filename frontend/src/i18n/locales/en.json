@@ -728,7 +728,8 @@
         "password_window_sec": "Window the public-link password attempts are counted over. (30-86400 sec, default 900.)",
         "lockout_sec": "How long a public link stays locked (all IPs) after too many wrong passwords. (30-86400 sec, default 900.)"
       }
-    }
+    },
+    "reset_aria": "Reset {name} to its default ({default})"
   },
   "admin_general": {
     "title": "General",

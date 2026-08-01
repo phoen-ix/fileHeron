@@ -20,18 +20,32 @@
   --fh-accent: #b45309;
   --fh-accent-hover: #92400e;
   --fh-accent-soft: rgba(180, 83, 9, 0.08);
+  /* Row/cell hover + keyboard-focus surface. Referenced by the share and SSO
+     tables since v1.x and never defined, so those rows had NO hover and - since
+     they also set `outline: none` - no focus indicator at all (audit #2). */
+  --fh-hover: #f2ede1;
 
   --fh-subtle: #6b7280;
   --fh-subtle-soft: #9ca3af;
   --fh-hairline: #e5e1d8;
   --fh-hairline-strong: #d6d1c4;
+  /* Alias. 20 components draw borders with `var(--fh-rule)`, which was never
+     defined: an unresolvable var() makes the declaration invalid at
+     computed-value time, so `border-color` fell back to its initial
+     `currentColor` and those hairlines rendered in the ink colour instead
+     (audit #2). */
+  --fh-rule: var(--fh-hairline);
 
   --fh-success: #4d7c0f;
   --fh-warning: #b45309;
   --fh-danger: #991b1b;
   --fh-danger-soft: rgba(153, 27, 27, 0.08);
 
-  --fh-focus-ring: rgba(180, 83, 9, 0.35);
+  /* Solid, not a 35% wash. Composited over the warm paper the wash measured
+     1.63:1, below the 3:1 WCAG 1.4.11 floor for a non-text indicator, so the
+     app-wide keyboard ring was unreliable on every page for every control.
+     The solid accent is 4.76:1 on --fh-paper (audit #2). */
+  --fh-focus-ring: #b45309;
 
   /* --- typography --------------------------------------------------------- */
   --fh-font-display: 'Instrument Serif', 'Iowan Old Style', 'Palatino Linotype',

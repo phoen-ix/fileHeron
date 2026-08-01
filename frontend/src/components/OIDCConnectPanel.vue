@@ -210,7 +210,7 @@ onMounted(async () => {
 
 .account-h2 {
   font-family: var(--fh-font-display);
-  font-size: var(--fh-text-h2);
+  font-size: var(--fh-text-body-lg);
   margin-bottom: var(--fh-space-2);
 }
 </style>

@@ -585,10 +585,19 @@ onMounted(load)
   transition: background 120ms;
 }
 
-.share-table tbody tr:hover,
+.share-table tbody tr:hover {
+  background: var(--fh-hover);
+}
+
+/* These rows are `tabindex="0"` and Enter navigates, so they need a real
+   indicator. They used to set `outline: none` and rely on a background from an
+   undefined custom property: focus moved through the table invisibly and Enter
+   opened whichever row happened to have it (audit #2). Inset, because an
+   outset ring on a table row is clipped by the neighbouring cells. */
 .share-table tbody tr:focus-visible {
   background: var(--fh-hover);
-  outline: none;
+  outline: 2px solid var(--fh-focus-ring);
+  outline-offset: -2px;
 }
 
 .subject {

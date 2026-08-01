@@ -285,7 +285,7 @@ onMounted(refresh)
 
 .panel-header h3 {
   margin: 0;
-  font-size: var(--fh-text-display-sm, 1.5rem);
+  font-size: var(--fh-text-display-md);
   font-family: var(--fh-font-display);
 }
 

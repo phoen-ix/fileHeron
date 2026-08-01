@@ -119,36 +119,56 @@ onMounted(load)
     <form v-else @submit.prevent="onSave">
       <section v-for="g in groups" :key="g.group" class="group">
         <h2 class="group-h2">{{ groupLabel(g.group) }}</h2>
+        <!-- The visible name is a sibling <span>, so it has to be associated
+             programmatically: without `for`/`id` a screen reader announced
+             these as bare "check box not checked" / "spin button 900", and in
+             a two-column grid the reading order does not reliably pair a
+             control with the text beside it. Every one of these tunables is
+             security- or retention-relevant (audit #2). -->
         <div v-for="it in g.items" :key="it.key" class="field-row">
           <div class="field-text">
-            <span class="field-label">{{ labelFor(it.key) }}</span>
-            <span v-if="helpFor(it.key)" class="fh-field-help">{{ helpFor(it.key) }}</span>
+            <label class="field-label" :for="`tunable-${it.key}`">{{ labelFor(it.key) }}</label>
+            <span
+              v-if="helpFor(it.key)"
+              :id="`tunable-help-${it.key}`"
+              class="fh-field-help"
+            >{{ helpFor(it.key) }}</span>
           </div>
           <div class="field-control">
-            <label v-if="it.kind === 'bool'" class="switch">
-              <input v-model="draft[it.key]" type="checkbox" />
-            </label>
+            <span v-if="it.kind === 'bool'" class="switch">
+              <input
+                :id="`tunable-${it.key}`"
+                v-model="draft[it.key]"
+                type="checkbox"
+                :aria-describedby="helpFor(it.key) ? `tunable-help-${it.key}` : undefined"
+              />
+            </span>
             <input
               v-else-if="it.kind === 'int'"
+              :id="`tunable-${it.key}`"
               v-model.number="draft[it.key]"
               class="fh-field-input num"
               type="number"
               :min="it.min ?? undefined"
               :max="it.max ?? undefined"
               :placeholder="String(it.default)"
+              :aria-describedby="helpFor(it.key) ? `tunable-help-${it.key}` : undefined"
             />
             <input
               v-else
+              :id="`tunable-${it.key}`"
               v-model.trim="draft[it.key]"
               class="fh-field-input"
               type="text"
               :placeholder="String(it.default)"
+              :aria-describedby="helpFor(it.key) ? `tunable-help-${it.key}` : undefined"
             />
             <button
               type="button"
               class="reset-btn"
               :disabled="draft[it.key] === it.default"
               :title="t('admin_advanced.reset_title', { default: String(it.default) })"
+              :aria-label="t('admin_advanced.reset_aria', { name: labelFor(it.key), default: String(it.default) })"
               @click="resetOne(it)"
             >
               {{ t('admin_advanced.reset') }}

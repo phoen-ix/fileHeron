@@ -383,7 +383,7 @@ async function onExport() {
 }
 .data-table td {
   padding: 6px 0;
-  border-bottom: var(--fh-hairline-rule, 1px solid var(--fh-hairline));
+  border-bottom: 1px solid var(--fh-hairline);
   vertical-align: top;
 }
 .data-table .num {

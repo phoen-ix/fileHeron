@@ -728,7 +728,8 @@
         "password_window_sec": "Fenster, über das die Passwortversuche öffentlicher Links gezählt werden. (30-86400 Sek., Standard 900.)",
         "lockout_sec": "Wie lange ein öffentlicher Link (für alle IPs) nach zu vielen falschen Passwörtern gesperrt bleibt. (30-86400 Sek., Standard 900.)"
       }
-    }
+    },
+    "reset_aria": "{name} auf Standardwert zurücksetzen ({default})"
   },
   "admin_general": {
     "title": "Allgemein",

@@ -797,7 +797,7 @@ const headlineFailures = computed(() => {
 }
 .rollback-warning {
   display: block;
-  color: var(--fh-color-warning, #b45309);
+  color: var(--fh-warning);
 }
 .rollback-text { color: var(--fh-subtle); font-size: var(--fh-text-body-sm); }
 .job-banner {

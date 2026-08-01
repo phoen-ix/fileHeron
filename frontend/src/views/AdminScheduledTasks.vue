@@ -259,7 +259,7 @@ onMounted(load)
   vertical-align: top;
 }
 .cron-table tbody tr:hover td {
-  background: var(--fh-surface-2, rgba(0, 0, 0, 0.02));
+  background: var(--fh-paper-sunk);
 }
 .task-cell .enable {
   display: flex;

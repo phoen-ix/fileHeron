@@ -265,7 +265,7 @@ onMounted(load)
 }
 
 .row:hover td {
-  background: var(--fh-surface-2, rgba(0, 0, 0, 0.02));
+  background: var(--fh-paper-sunk);
 }
 
 .nowrap {
@@ -292,7 +292,7 @@ onMounted(load)
 }
 
 .detail-row td {
-  background: var(--fh-surface-2, rgba(0, 0, 0, 0.02));
+  background: var(--fh-paper-sunk);
 }
 
 .detail {

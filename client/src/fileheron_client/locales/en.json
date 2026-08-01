@@ -51,7 +51,8 @@
     "err_invalid_recovery": "Recovery code is invalid or already used. Each code can only be used once.",
     "err_signin_failed": "Sign-in failed.",
     "err_unreachable": "Could not reach server: {detail}",
-    "err_open_main_window": "Signed in OK but failed to open main window: {detail}"
+    "err_open_main_window": "Signed in OK but failed to open main window: {detail}",
+    "warn_token_not_stored": "Signed in, but this token could not be saved: Windows credential storage is unavailable, so you will be asked for it again next launch."
   },
   "main_window": {
     "tab_inbox": "Inbox",
@@ -203,6 +204,7 @@
     "save_all_dir_title": "Save all to folder",
     "nothing_to_save_title": "Nothing to save",
     "nothing_to_save_body": "No downloadable files.",
+    "save_all_skipped_body": "{count} file(s) could not be saved because the server sent a name this system cannot use: {names}",
     "downloaded_title": "Downloaded",
     "downloaded_body": "Saved to:\n{path}",
     "download_failed_title": "Download failed",

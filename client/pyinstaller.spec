@@ -33,13 +33,15 @@ HERE = Path(SPECPATH).resolve()  # noqa: F821
 # Tcl lib). collect_all returns (datas, binaries, hiddenimports) and is
 # self-healing across versions.
 #
-# NOTE: nothing proves the bundle actually launches. This comment used to claim
-# a "CI self-check (see client-release.yml)" did - the workflow says the
-# opposite, in its own note: a runtime `--selfcheck` was tried and removed
-# because a windowed (console=False) PyInstaller binary hangs the runner. The
-# build is verified by the checksum step and by the structural tests, and a
-# launch failure is found by a human running the .exe (audit 2026-07-30,
-# ci-13).
+# The release workflow RUNS the built .exe with `--selfcheck` before publishing
+# it, so a package listed here but not actually bundled fails the build. An
+# earlier attempt was abandoned because `Start-Process -Wait` hung on a windowed
+# (console=False) binary; the step now waits with a 120s deadline and kills the
+# process, which turns a hang into a build failure instead of a hung runner.
+#
+# Anything added below must also be checked in `__main__._selfcheck` -
+# `tests/test_bundle_selfcheck.py` fails if the two lists drift apart, which is
+# how tzdata got collected here and never verified there.
 _ctk_datas, _ctk_bins, _ctk_hidden = collect_all("customtkinter")
 _dnd_datas, _dnd_bins, _dnd_hidden = collect_all("tkinterdnd2")
 

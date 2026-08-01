@@ -6,8 +6,8 @@ admins see all; employees see their memberships + every
 company_inbox; clients see only company_inbox groups)."""
 from __future__ import annotations
 
-from .client import ApiClient
 from ..models import GroupListResponse
+from .client import ApiClient
 
 
 def list_recipient_groups(api: ApiClient) -> GroupListResponse:

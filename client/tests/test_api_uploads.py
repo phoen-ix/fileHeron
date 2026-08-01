@@ -8,7 +8,6 @@ import respx
 from fileheron_client.api import ApiClient, ApiError
 from fileheron_client.api import uploads as uploads_api
 
-
 SERVER = "https://files.example.com"
 
 

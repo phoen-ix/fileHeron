@@ -7,8 +7,8 @@ connected employees only; employees see all employees + connected
 clients; admins see everyone)."""
 from __future__ import annotations
 
-from .client import ApiClient
 from ..models import UserSearchResponse
+from .client import ApiClient
 
 
 def search_users(api: ApiClient, q: str = "") -> UserSearchResponse:

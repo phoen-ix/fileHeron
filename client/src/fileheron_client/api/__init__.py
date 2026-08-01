@@ -1,7 +1,7 @@
 from .account import get_current_api_token, patch_locale
-from .client import ApiClient, ApiError, SessionExpiredError
-from .auth import login, login_with_recovery, refresh, logout, me
+from .auth import login, login_with_recovery, logout, me, refresh
 from .branding import branding_logo_png
+from .client import ApiClient, ApiError, SessionExpiredError
 from .download_resumable import download_file_resumable
 from .files import DownloadCancelled, DownloadPaused, download_file
 from .groups import list_recipient_groups

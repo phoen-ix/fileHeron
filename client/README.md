@@ -15,12 +15,27 @@ Grab the latest `fileheron-client.exe` from the
 [releases page](https://github.com/phoen-ix/fileHeron/releases) and
 run it. First launch asks for the server URL
 (e.g. `https://files.example.com`) and credentials. Config is
-stored at `%APPDATA%\fileHeron\config.json`. An **API token**, if you sign in
+stored at `%LOCALAPPDATA%\fileHeron\config.json` (logs alongside it in
+`Logs\`; note LOCAL AppData, not roaming). An **API token**, if you sign in
 with one, is held in Windows Credential Manager (the OS keyring). A
 password sign-in keeps its refresh cookie in memory for the life of the
 process only - nothing about that session survives a restart, so you sign in
 again next launch. (This said the refresh token was stored in Credential
 Manager; it never has been - audit 2026-07-30, client-9.)
+
+### Behind a corporate proxy or TLS inspection
+
+The client trusts the **Windows certificate store** as well as the bundled
+public-CA list, so an organisation's own root CA - the kind a TLS-inspecting
+proxy presents, pushed to the machine by group policy - is accepted exactly as
+your browser accepts it. No configuration needed.
+
+An explicit proxy is read from the standard `HTTPS_PROXY` / `HTTP_PROXY`
+environment variables. A proxy configured only through **automatic
+configuration (PAC / WPAD)** is *not* discovered - Windows resolves those inside
+WinHTTP, which this client does not use. If your browser reaches the server and
+the client reports a connection error, set `HTTPS_PROXY` to the proxy your PAC
+script would have chosen.
 
 ### Unsigned build - the SmartScreen warning is expected
 

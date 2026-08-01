@@ -355,7 +355,10 @@ class LoginOverlay(ctk.CTkFrame):
                 trace("_attempt api_token")
                 api = ApiClient(server, api_token=api_token)
                 me = api_pkg.me(api)
-                set_secret("api_token", server, api_token)
+                if not set_secret("api_token", server, api_token):
+                    # Sign-in SUCCEEDED; only persistence failed. Say so, or the
+                    # user is silently asked for the token again every launch.
+                    self._warn_token_not_stored()
                 return api, me, "api_token", server, ""
 
             run_in_background(self._app_root, _attempt, on_done=self._done, on_failed=self._failed)
@@ -413,10 +416,11 @@ class LoginOverlay(ctk.CTkFrame):
         # traceback - the surface message alone isn't enough to debug DLL-load
         # / SSL-import / OS-level failures.
         try:
-            import platformdirs
             import traceback
             from datetime import datetime
             from pathlib import Path
+
+            import platformdirs
             log_path = (
                 Path(platformdirs.user_log_dir("fileHeron", appauthor=False)) / "crash.log"
             )
@@ -444,6 +448,16 @@ class LoginOverlay(ctk.CTkFrame):
             return
         # Network / TLS / DNS.
         self._show_error(t("login.err_unreachable", detail=str(exc)))
+
+    def _warn_token_not_stored(self) -> None:
+        """Called from the sign-in WORKER thread, so it marshals back to the Tk
+        thread rather than touching a StringVar directly."""
+        try:
+            self._app_root.after(
+                0, lambda: self._show_error(t("login.warn_token_not_stored"))
+            )
+        except Exception:  # root already gone
+            pass
 
     def _show_error(self, msg: str) -> None:
         self.error_var.set(msg)

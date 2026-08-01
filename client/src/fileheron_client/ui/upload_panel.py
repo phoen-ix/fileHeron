@@ -10,13 +10,14 @@ from tkinter import filedialog
 from typing import Callable, Optional
 
 import customtkinter as ctk
-from .date_entry import DateEntry
 from tkinterdnd2 import DND_FILES
 
 from .. import api as api_pkg
 from ..api import ApiClient
-from ..i18n import get_locale, t
+from ..formatters import display_timezone, timezone_label
+from ..i18n import t
 from ..models import MeResponse, ShareResponse
+from .date_entry import DateEntry
 from .recipient_picker import RecipientPickerWidget
 from .upload_progress_view import UploadProgressView
 from .widgets import alive, human_size
@@ -174,11 +175,16 @@ class UploadPanel(ctk.CTkFrame):
         row = ctk.CTkFrame(inner, fg_color="transparent")
         row.pack(fill="x", pady=(0, 4))
 
-        default = datetime.now() + timedelta(days=7)
+        # Default, minimum and the value the user types are all the INSTANCE's
+        # wall clock, matching ExpiryDialog and the web interface - see
+        # _collect_expiry.
+        zone = display_timezone()
+        now = datetime.now(tz=zone) if zone else datetime.now()
+        default = now + timedelta(days=7)
         self._expiry_date = DateEntry(
             row,
             year=default.year, month=default.month, day=default.day,
-            mindate=datetime.now().date(),
+            mindate=now.date(),
         )
         self._expiry_date.pack(side="left")
         ctk.CTkLabel(row, text="@", width=20).pack(side="left", padx=4)
@@ -187,6 +193,10 @@ class UploadPanel(ctk.CTkFrame):
         ctk.CTkLabel(row, text=":", width=10).pack(side="left")
         self._expiry_min = ctk.StringVar(value=f"{default.minute:02d}")
         ctk.CTkEntry(row, textvariable=self._expiry_min, width=50).pack(side="left")
+        ctk.CTkLabel(
+            row, text=t("common.timezone_note", tz=timezone_label()),
+            anchor="w", text_color="gray",
+        ).pack(side="left", padx=(8, 0))
 
         self._never_var = ctk.BooleanVar(value=False)
         ctk.CTkCheckBox(
@@ -338,7 +348,13 @@ class UploadPanel(ctk.CTkFrame):
             self._toast(t("upload.err_invalid_time_body"), kind="error")
             return None, False
         d = self._expiry_date.get_date()
-        chosen = datetime(d.year, d.month, d.day, hh, mm)
+        # Interpreted in the zone this row is labelled with - the instance's,
+        # matching ExpiryDialog and the web interface. A naive value here was
+        # localised to the machine's zone on serialisation, so a laptop abroad
+        # created shares that expired at a different instant than the one typed
+        # (audit #2; the edit dialog was fixed in client-v1.3.0 and this half of
+        # the same feature was not).
+        chosen = datetime(d.year, d.month, d.day, hh, mm, tzinfo=display_timezone())
         return chosen, False
 
     def _collect_share_limit(self) -> tuple[Optional[int], bool]:

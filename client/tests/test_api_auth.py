@@ -8,7 +8,6 @@ import respx
 from fileheron_client.api import ApiClient, ApiError, SessionExpiredError
 from fileheron_client.api import auth as auth_api
 
-
 SERVER = "https://files.example.com"
 
 

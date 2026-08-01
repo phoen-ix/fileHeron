@@ -35,9 +35,9 @@ from ..formatters import (
 )
 from ..i18n import t
 from ..models import FileInShareResponse, MeResponse, ShareResponse
-from ..safe_path import safe_join
-from ._async import run_in_background, run_with_progress
+from ..safe_path import safe_download_leaf, safe_join
 from . import _messagebox as mb
+from ._async import run_in_background, run_with_progress
 from .add_files_dialog import AddFilesDialog
 from .expiry_dialog import ExpiryDialog
 from .limit_dialog import LimitDialog
@@ -570,8 +570,12 @@ class ShareDetailView(ctk.CTkFrame):
     def _download_one(self, file_id: str, filename: str) -> None:
         dest_str = filedialog.asksaveasfilename(
             parent=self.winfo_toplevel(),
+            # Sanitized even though the user confirms the dialog: the Win32
+            # save dialog resolves directory components in the initial-filename
+            # field, so a server-supplied '..\..\name' would silently preset a
+            # different folder than the one the dialog says it opened in.
+            initialfile=safe_download_leaf(filename),
             title=t("share_detail.save_file_as"),
-            initialfile=filename,
         )
         if not dest_str:
             return
@@ -595,13 +599,29 @@ class ShareDetailView(ctk.CTkFrame):
             return
         base = Path(dir_str)
         used: set[str] = set()
+        rejected: list[str] = []
         for f in downloadable:
             # SECURITY (audit H4): f.original_filename is server-controlled.
             # Never join it raw - a '../' / absolute / UNC / reserved-device
             # name would write outside the chosen folder. Reduce to a safe,
             # de-duplicated leaf and assert containment.
-            dest = safe_join(base, f.original_filename, used)
+            #
+            # Per file, because safe_join REJECTS by raising: one hostile or
+            # unrepresentable name used to abandon every file after it in the
+            # batch, and in a windowed build the traceback goes nowhere, so the
+            # user saw some files arrive and no error at all.
+            try:
+                dest = safe_join(base, f.original_filename, used)
+            except (ValueError, OSError):
+                rejected.append(f.original_filename)
+                continue
             self._spawn_download(f.id, dest)
+        if rejected:
+            self._toast(
+                t("share_detail.save_all_skipped_body", count=len(rejected),
+                  names=", ".join(rejected[:3])),
+                kind="error",
+            )
 
     def _show_open_actions(self, row: dict, dest: Path) -> None:
         """After a successful save, replace the row's Download/Cancel button
@@ -655,7 +675,12 @@ class ShareDetailView(ctk.CTkFrame):
         # see _open_path; scoped noqa for the ruff-S subprocess false-positives.
         try:
             if sys.platform.startswith("win"):
-                subprocess.Popen(["explorer", "/select,", str(path)])  # noqa: S603, S607
+                # ONE argument: explorer parses "/select,<path>" as a single
+                # token. Passing "/select," and the path separately puts a space
+                # between them on the command line, which explorer reads as an
+                # empty selection - it opens the default folder and the file the
+                # user asked to see is not there.
+                subprocess.Popen(["explorer", f"/select,{path}"])  # noqa: S603, S607
             elif sys.platform == "darwin":
                 subprocess.Popen(["open", "-R", str(path)])  # noqa: S603, S607
             else:

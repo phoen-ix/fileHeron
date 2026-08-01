@@ -19,6 +19,60 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      # These run FIRST, before install/test/build.
+      #
+      # They cost a sed and a grep and need nothing but the checkout, and
+      # they used to run after a five-minute PyInstaller build - so a tag
+      # whose version files disagreed spent the whole build before saying
+      # so. The tag is already immutable by then (the repo ruleset forbids
+      # deleting or moving a client-v* tag), so the version number is spent
+      # either way; failing in ten seconds at least says why immediately.
+      #
+      # The gate that stops a number being burned at all lives in ci.yml and
+      # runs on every push to main: the three version-bearing files have to
+      # agree with each other BEFORE anyone tags.
+      # Only publish to a Release when the run was triggered by a
+      # client-v* tag. Manual workflow_dispatch runs stop here.
+      - name: Compute release version
+        if: startsWith(github.ref, 'refs/tags/client-v')
+        id: ver
+        run: echo "version=${GITHUB_REF_NAME#client-v}" >> "$GITHUB_OUTPUT"
+
+      # Two guards the server release has and this one never got. Both failure
+      # modes are silent: the release publishes, and the wrong thing is in it.
+      #
+      # NOTE the version, not the tag. The server workflow greps GITHUB_REF_NAME
+      # ("v2.7.3") against its notes header, and copying that literally here
+      # would fail every client release - the convention is
+      # "# Desktop client 1.2.0", with no "client-v" prefix.
+      - name: RELEASE_NOTES.md must name this version
+        if: startsWith(github.ref, 'refs/tags/client-v')
+        run: |
+          set -euo pipefail
+          if ! head -5 client/RELEASE_NOTES.md | grep -qF "${{ steps.ver.outputs.version }}"; then
+            echo "::error::client/RELEASE_NOTES.md does not mention ${{ steps.ver.outputs.version }} in its first 5 lines."
+            echo "First line is: $(head -1 client/RELEASE_NOTES.md)"
+            exit 1
+          fi
+
+      # The server gets this free: its image carries an FH_VERSION build-arg
+      # from the tag. The client's version is baked into the .exe from these two
+      # files, so a tag that disagrees with them ships a binary that reports the
+      # wrong version and no one finds out.
+      - name: pyproject and __init__ must match the tag
+        if: startsWith(github.ref, 'refs/tags/client-v')
+        run: |
+          set -euo pipefail
+          want='${{ steps.ver.outputs.version }}'
+          got_pyproject=$(sed -n 's/^version = "\(.*\)"/\1/p' client/pyproject.toml | head -1)
+          got_init=$(sed -n 's/^__version__ = "\(.*\)"/\1/p' client/src/fileheron_client/__init__.py | head -1)
+          if [ "$got_pyproject" != "$want" ] || [ "$got_init" != "$want" ]; then
+            echo "::error::tag says $want but pyproject.toml says '$got_pyproject' and __init__.py says '$got_init'."
+            exit 1
+          fi
+          echo "version $want matches both files"
+
+
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.12'
@@ -75,6 +129,11 @@ jobs:
           }
           Write-Host "--- stdout ---"; Get-Content $out
           Write-Host "--- stderr ---"; Get-Content $err
+          # A windowed build with no usable stream falls back to crash.log, and
+          # an unhandled exception lands there too - without this, a failure
+          # here is an exit code and two empty files.
+          $crash = "$env:LOCALAPPDATA\fileHeron\Logs\crash.log"
+          if (Test-Path $crash) { Write-Host "--- crash.log ---"; Get-Content $crash }
           if ($p.ExitCode -ne 0) {
             throw "selfcheck failed (exit $($p.ExitCode)) - the .exe is missing bundled data"
           }
@@ -85,47 +144,6 @@ jobs:
           name: fileheron-client-windows
           path: client/dist/fileheron-client.exe
           if-no-files-found: error
-
-      # Only publish to a Release when the run was triggered by a
-      # client-v* tag. Manual workflow_dispatch runs stop here.
-      - name: Compute release version
-        if: startsWith(github.ref, 'refs/tags/client-v')
-        id: ver
-        run: echo "version=${GITHUB_REF_NAME#client-v}" >> "$GITHUB_OUTPUT"
-
-      # Two guards the server release has and this one never got. Both failure
-      # modes are silent: the release publishes, and the wrong thing is in it.
-      #
-      # NOTE the version, not the tag. The server workflow greps GITHUB_REF_NAME
-      # ("v2.7.3") against its notes header, and copying that literally here
-      # would fail every client release - the convention is
-      # "# Desktop client 1.2.0", with no "client-v" prefix.
-      - name: RELEASE_NOTES.md must name this version
-        if: startsWith(github.ref, 'refs/tags/client-v')
-        run: |
-          set -euo pipefail
-          if ! head -5 client/RELEASE_NOTES.md | grep -qF "${{ steps.ver.outputs.version }}"; then
-            echo "::error::client/RELEASE_NOTES.md does not mention ${{ steps.ver.outputs.version }} in its first 5 lines."
-            echo "First line is: $(head -1 client/RELEASE_NOTES.md)"
-            exit 1
-          fi
-
-      # The server gets this free: its image carries an FH_VERSION build-arg
-      # from the tag. The client's version is baked into the .exe from these two
-      # files, so a tag that disagrees with them ships a binary that reports the
-      # wrong version and no one finds out.
-      - name: pyproject and __init__ must match the tag
-        if: startsWith(github.ref, 'refs/tags/client-v')
-        run: |
-          set -euo pipefail
-          want='${{ steps.ver.outputs.version }}'
-          got_pyproject=$(sed -n 's/^version = "\(.*\)"/\1/p' client/pyproject.toml | head -1)
-          got_init=$(sed -n 's/^__version__ = "\(.*\)"/\1/p' client/src/fileheron_client/__init__.py | head -1)
-          if [ "$got_pyproject" != "$want" ] || [ "$got_init" != "$want" ]; then
-            echo "::error::tag says $want but pyproject.toml says '$got_pyproject' and __init__.py says '$got_init'."
-            exit 1
-          fi
-          echo "version $want matches both files"
 
       # The .exe is unsigned by design (build-and-self-sign is documented in
       # client/README.md); publish a SHA-256 so downloaders can verify integrity.

@@ -12,8 +12,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Callable, Optional
 
-from .client import ApiClient, _envelope_from_response, json_or_raise
 from ..models import DirectUploadResponse, UploadInitResponse
+from .client import ApiClient, _envelope_from_response, json_or_raise
 
 
 class _ProgressReader:

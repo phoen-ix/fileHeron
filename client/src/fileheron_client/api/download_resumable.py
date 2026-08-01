@@ -20,12 +20,12 @@ the server's HTTP Range support (Starlette ``FileResponse``). The single-stream
 from __future__ import annotations
 
 import logging
-import os
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Callable, Optional
 
+from .. import motw
 from . import download_checkpoint as ckpt
 from .client import ApiClient, ApiError, _envelope_from_response
 from .download_segmented import (
@@ -162,6 +162,16 @@ def download_file_resumable(
     )
 
 
+def _finalize(api: ApiClient, part: Path, dest: Path) -> None:
+    """Move the completed partial into place and mark it Internet-zone.
+
+    The mark goes on the FINAL name: an alternate data stream belongs to the
+    file, and writing it to the .part would work but tells the shell about a
+    file the user never sees."""
+    ckpt.replace_with_retry(part, dest)
+    motw.tag_downloaded(dest, host_url=str(api.server_url).rstrip("/"))
+
+
 def _run_single(
     api: ApiClient, url: str, headers: dict, *, file_id: str, dest: Path,
     total: Optional[int], etag: Optional[str], ranges_ok: bool,
@@ -173,7 +183,7 @@ def _run_single(
     if resume is not None and part.exists():
         offset = part.stat().st_size
         if total and offset >= total:  # already fully on disk
-            os.replace(part, dest)
+            _finalize(api, part, dest)
             ckpt.clear(dest)
             if on_progress is not None:
                 on_progress(total, total)
@@ -257,9 +267,30 @@ def _run_single(
             ckpt.discard(dest)
         raise
 
-    os.replace(part, dest)
+    _finalize(api, part, dest)
     ckpt.clear(dest)
     return dest
+
+
+def _preallocate(part: Path, total: int) -> None:
+    """Create ``part`` at its final size so segments can be written at their
+    own offsets, and so a resume can check the size for pre-allocation drift.
+
+    Seek-then-write-one-byte, NOT ``truncate(total)``. Python's ``truncate``
+    goes through the C runtime's ``_chsize_s`` on Windows, which zero-FILLS the
+    new region - it physically writes the bytes. On a platform whose whole
+    purpose here is 30 GB files, that means a multi-GB download sits at 0% with
+    no network traffic while the disk writes the file once in zeros before the
+    first byte arrives, then writes it again for real. Extending by writing a
+    single byte at the end sets the size through ``SetFilePointer`` +
+    ``WriteFile`` instead: NTFS tracks a valid-data-length and returns zeros
+    for the gap without materialising it, and on Linux the gap is a hole. The
+    file is the same size and reads the same either way.
+    """
+    with open(part, "wb") as f:
+        if total > 0:
+            f.seek(total - 1)
+            f.write(b"\0")
 
 
 def _run_segmented(
@@ -282,8 +313,7 @@ def _run_segmented(
 
     if resume is None:
         completed = set()
-        with open(part, "wb") as f:
-            f.truncate(total)
+        _preallocate(part, total)
 
     def _persist() -> None:
         ckpt.write(
@@ -340,6 +370,6 @@ def _run_segmented(
         _persist()
         raise
 
-    os.replace(part, dest)
+    _finalize(api, part, dest)
     ckpt.clear(dest)
     return dest

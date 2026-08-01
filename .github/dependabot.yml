@@ -17,6 +17,22 @@ updates:
       backend-minor-patch:
         update-types: [minor, patch]
 
+  # The desktop client: watched by nothing until 2026-08-01, even though its
+  # dependencies are the ones that end up INSIDE a signed-by-nobody .exe that
+  # users download and run. httpx, keyring, pydantic, customtkinter and
+  # tkinterdnd2 all ship in the bundle; an advisory in any of them was reaching
+  # no one. The .exe carries its own 3.12 interpreter, which is why this tree
+  # stays on 3.12 while the backend moved to 3.14.
+  - package-ecosystem: pip
+    directory: /client
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels: [dependencies, client]
+    groups:
+      client-minor-patch:
+        update-types: [minor, patch]
+
   - package-ecosystem: npm
     directory: /frontend
     schedule:

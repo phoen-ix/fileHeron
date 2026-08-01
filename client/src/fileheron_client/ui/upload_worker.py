@@ -15,9 +15,26 @@ from ..api import ApiClient
 from ..tus import upload_tus
 from ._async import run_with_progress
 
-
 # Match backend default unless overridden at runtime.
 DIRECT_LIMIT_BYTES = 100 * 1024 * 1024
+
+# A private database rather than the module-level `mimetypes.guess_type`.
+#
+# `mimetypes.init()` merges the WINDOWS REGISTRY (HKEY_CLASSES_ROOT\.ext ->
+# "Content Type") into the module database, so on the platform this client
+# ships for the answer depends on whatever the uploader happens to have
+# installed. Two colleagues uploading the same .pdf could record different MIME
+# types, and the value is stored server-side and served back to everyone - so a
+# machine with an odd registry entry mislabels a file for every recipient, in
+# the browser as much as here. `MimeTypes()` builds from Python's own table
+# only, which is the same table on every machine.
+_MIME = mimetypes.MimeTypes()
+
+
+def guess_mime(path: str) -> str:
+    """Deterministic, machine-independent MIME type for an upload."""
+    mime, _ = _MIME.guess_type(path)
+    return mime or "application/octet-stream"
 
 
 def start_upload(
@@ -40,8 +57,7 @@ def start_upload(
 
     def _do(tick):
         size = file_path.stat().st_size
-        mime, _ = mimetypes.guess_type(path_str)
-        mime = mime or "application/octet-stream"
+        mime = guess_mime(path_str)
         if size <= DIRECT_LIMIT_BYTES:
             resp = api_pkg.upload_direct(
                 api,

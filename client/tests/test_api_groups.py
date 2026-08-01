@@ -8,7 +8,6 @@ from fileheron_client.api import ApiClient
 from fileheron_client.api import groups as groups_api
 from fileheron_client.api import users as users_api
 
-
 SERVER = "https://files.example.com"
 
 

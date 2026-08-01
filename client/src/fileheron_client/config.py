@@ -1,8 +1,11 @@
 """On-disk config + keyring-backed secret storage.
 
 Config (server URL, last email, etc.) lives in a JSON file under
-the platform-appropriate user-config dir (``%APPDATA%\\fileHeron``
-on Windows, ``~/.config/fileheron`` elsewhere).
+the platform-appropriate user-config dir (``%LOCALAPPDATA%\\fileHeron``
+on Windows, ``~/.config/fileheron`` elsewhere). LOCAL, not roaming:
+``platformdirs`` defaults to ``roaming=False``, so a support instruction naming
+``%APPDATA%`` sends the operator to an empty folder. Logs are one level in,
+under ``Logs\\``.
 
 The only secret persisted here is an **API token**, in the OS keyring, so it
 survives a restart without ever landing in a flat file. A PASSWORD sign-in is
@@ -159,18 +162,52 @@ def get_secret(kind: str, server_url: str) -> Optional[str]:
         return None
 
 
-def set_secret(kind: str, server_url: str, value: str) -> None:
-    """Persist a secret. Best-effort: if the keyring backend is
-    unavailable/locked, log and return rather than raising (finding C1) -
-    the token is still live in memory for the session; the only cost is
-    re-authenticating next launch. Crashing sign-in here surfaced as a
-    false 'could not reach server' error even though auth had succeeded."""
+def set_secret(kind: str, server_url: str, value: str) -> bool:
+    """Persist a secret; return whether it was actually stored.
+
+    Best-effort: if the keyring backend is unavailable/locked, log and return
+    rather than raising (finding C1) - the token is still live in memory for
+    the session; the only cost is re-authenticating next launch. Crashing
+    sign-in here surfaced as a false 'could not reach server' error even
+    though auth had succeeded.
+
+    The RETURN VALUE is what makes that cost visible. Windows Credential
+    Manager is routinely switched off by enterprise policy ("Do not allow
+    storage of passwords and credentials for network authentication", or a
+    disabled VaultSvc), and `keyring` then resolves to a backend that raises on
+    every write. The warning below goes to a logger that is silenced unless
+    diagnostics are on, so the token simply stopped persisting and the user was
+    asked for it again every launch with nothing to explain why.
+    """
     try:
         keyring.set_password(
             KEYRING_SERVICE, _secret_username(kind, server_url), value
         )
+        return True
     except Exception as exc:
         _log.warning("keyring set_secret(%s) failed: %r", kind, exc)
+        return False
+
+
+def keyring_problem() -> Optional[str]:
+    """Describe why the keyring cannot store anything, or None if it can.
+
+    Importable without the GUI stack so `--selfcheck` and the test suite can
+    both run it - support's first question on "it forgets my token" is which
+    backend resolved.
+    """
+    try:
+        backend = keyring.get_keyring()
+    except Exception as exc:
+        return f"no keyring backend could be loaded ({type(exc).__name__}: {exc})"
+    name = type(backend).__module__ + "." + type(backend).__name__
+    if "fail" in type(backend).__module__:
+        return (
+            f"the resolved backend is {name}, which stores nothing - on Windows "
+            "this means Credential Manager is unavailable (VaultSvc disabled, or "
+            "credential storage blocked by policy)"
+        )
+    return None
 
 
 def clear_secret(kind: str, server_url: str) -> None:

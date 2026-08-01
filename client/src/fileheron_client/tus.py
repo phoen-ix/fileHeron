@@ -25,6 +25,8 @@ from urllib.parse import urljoin, urlsplit, urlunsplit
 
 import httpx
 
+from .api.client import _ssl_context
+
 logger = logging.getLogger("fileheron_client.tus")
 
 TUS_VERSION = "1.0.0"
@@ -95,7 +97,9 @@ def upload_tus(
 
     create_url = _absolute(server_url, tus_endpoint)
 
-    with httpx.Client(timeout=timeout) as cli:
+    # Same trust store as ApiClient, or a corporate root CA would let the
+    # session sign in and then fail every upload over 100 MB.
+    with httpx.Client(timeout=timeout, verify=_ssl_context()) as cli:
         # 1. Create.
         create_headers = {**base_headers, "Upload-Length": str(size)}
         resp = cli.post(create_url, headers=create_headers)

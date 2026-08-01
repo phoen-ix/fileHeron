@@ -10,7 +10,6 @@ import respx
 from fileheron_client.api import ApiClient
 from fileheron_client.api import shares as shares_api
 
-
 SERVER = "https://files.example.com"
 
 

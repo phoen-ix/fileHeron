@@ -7,6 +7,7 @@ import threading
 from pathlib import Path
 from typing import Callable, Optional
 
+from .. import motw
 from .client import ApiClient, _envelope_from_response
 
 logger = logging.getLogger("fileheron_client.files")
@@ -69,4 +70,5 @@ def download_file(
         except OSError:
             pass
         raise
+    motw.tag_downloaded(dest, host_url=str(api.server_url).rstrip("/"))
     return dest

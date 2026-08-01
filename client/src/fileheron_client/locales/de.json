@@ -51,7 +51,8 @@
     "err_invalid_recovery": "Wiederherstellungscode ist ungültig oder bereits verwendet. Jeder Code lässt sich nur einmal verwenden.",
     "err_signin_failed": "Anmeldung fehlgeschlagen.",
     "err_unreachable": "Server nicht erreichbar: {detail}",
-    "err_open_main_window": "Anmeldung erfolgreich, Hauptfenster konnte aber nicht geöffnet werden: {detail}"
+    "err_open_main_window": "Anmeldung erfolgreich, Hauptfenster konnte aber nicht geöffnet werden: {detail}",
+    "warn_token_not_stored": "Anmeldung erfolgreich, aber dieses Token konnte nicht gespeichert werden: Der Windows-Anmeldeinformationsspeicher ist nicht verfügbar, daher wird es beim nächsten Start erneut abgefragt."
   },
   "main_window": {
     "tab_inbox": "Eingang",
@@ -203,6 +204,7 @@
     "save_all_dir_title": "Alle in Ordner speichern",
     "nothing_to_save_title": "Nichts zu speichern",
     "nothing_to_save_body": "Keine herunterladbaren Dateien.",
+    "save_all_skipped_body": "{count} Datei(en) konnten nicht gespeichert werden, weil der Server einen für dieses System unbrauchbaren Namen gesendet hat: {names}",
     "downloaded_title": "Heruntergeladen",
     "downloaded_body": "Gespeichert unter:\n{path}",
     "download_failed_title": "Download fehlgeschlagen",

@@ -20,7 +20,7 @@ except ImportError:
         "ERROR: install dev tools first: pip install pillow cairosvg",
         file=sys.stderr,
     )
-    raise SystemExit(1)
+    raise SystemExit(1) from None
 
 
 HERE = Path(__file__).resolve().parent.parent

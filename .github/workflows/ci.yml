@@ -254,6 +254,41 @@ jobs:
       - name: Pytest
         run: pytest -q -p no:cacheprovider -rs
 
+      # The client had no lint or type gate of any kind - the backend's stops at
+      # backend/. Its first run found a call whose import was missing, which the
+      # structural tests could not see and which raised NameError on every
+      # single-file download. Ubuntu leg only: the findings are platform-neutral
+      # and running it twice would only double the noise on a failure.
+      - name: Ruff
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          pip install "ruff==$(sed -n 's/.*"ruff==\([0-9.]*\)".*/\1/p' ../backend/pyproject.toml)"
+          ruff check .
+
+      # Runs on every push, so a version mismatch is a red commit on main
+      # rather than a burned tag. `client-v*` tags are immutable by repo
+      # ruleset: once pushed, that number cannot be reused, and the release
+      # workflow can only tell you the files disagree AFTER the tag exists.
+      # client-v1.3.0 died that way (to a Windows-only test failure, which the
+      # matrix above now catches on the same push).
+      - name: Client version files must agree
+        if: matrix.os == 'ubuntu-latest'
+        shell: bash
+        run: |
+          set -euo pipefail
+          pyproject=$(sed -n 's/^version = "\(.*\)"/\1/p' pyproject.toml | head -1)
+          init=$(sed -n 's/^__version__ = "\(.*\)"/\1/p' src/fileheron_client/__init__.py | head -1)
+          if [ "$pyproject" != "$init" ]; then
+            echo "::error::pyproject.toml says '$pyproject' and __init__.py says '$init'."
+            exit 1
+          fi
+          if ! head -5 RELEASE_NOTES.md | grep -qF "$pyproject"; then
+            echo "::error::client/RELEASE_NOTES.md does not name $pyproject in its first 5 lines."
+            echo "First line is: $(head -1 RELEASE_NOTES.md)"
+            exit 1
+          fi
+          echo "client version $pyproject is consistent across all three files"
+
   # Config, shell and workflow linting. None of these surfaces had ANY gate:
   # five shell scripts carry `# shellcheck disable=` directives that nothing has
   # ever validated, the workflows declare `workflow_call` + explicit permissions

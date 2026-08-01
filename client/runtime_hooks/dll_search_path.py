@@ -26,7 +26,6 @@ from __future__ import annotations
 import os
 import sys
 
-
 if sys.platform == "win32":
     bundle = getattr(sys, "_MEIPASS", None)
     if bundle:

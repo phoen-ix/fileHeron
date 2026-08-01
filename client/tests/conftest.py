@@ -1,10 +1,15 @@
 """Test fixtures.
 
 Tests deliberately avoid importing the ``ui`` package at module scope: that
-pulls in CustomTkinter, hence tkinter, which CI runners do not have - the UI
-tests are AST/structural for exactly this reason. Pytest discovers modules under
-``tests/`` only, so as long as we don't ``import fileheron_client.ui`` here we
-are fine.
+pulls in CustomTkinter, hence tkinter, which the LINUX CI image does not have -
+the UI tests are AST/structural for exactly this reason. Pytest discovers
+modules under ``tests/`` only, so as long as we don't ``import
+fileheron_client.ui`` here we are fine.
+
+The Windows runner DOES have Tcl/Tk, and this premise was carried over to it
+unexamined when the matrix gained that leg. ``test_windows_divergence.py``
+imports every UI module there - the closest CI gets to launching the app, and a
+gate no structural test can be.
 
 (This said "PySide6" until the 2026-07-30 audit. The client has never shipped
 Qt; the toolkit decision was CustomTkinter from the first commit, and a wrong

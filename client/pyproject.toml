@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "fileheron-client"
-version = "1.3.1"
+version = "1.4.0"
 description = "Desktop GUI client for the file:Heron self-hosted file-sharing platform."
 requires-python = ">=3.12"
 license = { text = "MIT" }
@@ -57,3 +57,42 @@ fileheron_client = ["py.typed", "locales/*.json"]
 addopts = "-q"
 testpaths = ["tests"]
 asyncio_mode = "auto"
+
+# Lint gate. The desktop client had NO lint or type gate at all - the backend's
+# stopped at backend/ - and the first run found a genuine defect: a call to
+# `safe_download_leaf` whose import was missing, which a structural test could
+# not see and which would have raised NameError on every single-file download.
+#
+# Introduced at a PASSING baseline, like mypy was on the backend: the select
+# list matches backend/pyproject.toml so the two agree on what "clean" means,
+# and each ignore below carries the reason it is not simply a deferred fix.
+[tool.ruff]
+line-length = 120
+target-version = "py312"   # the .exe bundles its own 3.12 interpreter
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "S", "C4", "SIM"]
+ignore = [
+    "S101",    # assert: the test suite is 400+ of them
+    "S110",    # try-except-pass: deliberate best-effort blocks (keyring, Tk
+               # teardown, crash logging) where raising is the worse outcome
+    "S105",    # "hardcoded password": keyring USERNAME constants and the
+               # `kind="api_token"` discriminator - no secrets
+    "S106",    # same, as a function argument
+    "S108",    # "hardcoded temp file": tmp_path-based test fixtures
+    "SIM105",  # contextlib.suppress over try/except/pass - the explicit form
+               # is where the WHY comment lives on these paths
+    "N818",    # DownloadCancelled / DownloadPaused: control-flow signals, not
+               # errors, and renaming them to *Error would say the opposite
+    "N802",    # setState/setText on the CTk widget wrappers mirror the widget
+               # API they wrap; renaming half of a call site pair is worse
+    "UP045",   # Optional[X] over X | None: 150 occurrences, cosmetic, and the
+    "UP006",   # annotations here are read as documentation by the AST tests
+    "UP035",
+    "UP037",
+    "UP017",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["E501"]
+

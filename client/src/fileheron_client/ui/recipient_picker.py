@@ -318,7 +318,10 @@ class RecipientPickerWidget(ctk.CTkFrame):
             pass
 
     def _on_inline_done_users(self, ids: list[int], labels: list[str]) -> None:
-        for iid, label in zip(ids, labels):
+        # strict: ids and labels are two views of one selection - a length
+        # mismatch means the picker lost a row, and silently dropping the tail
+        # would show the user a name for someone else's id.
+        for iid, label in zip(ids, labels, strict=True):
             if iid not in self._user_ids:
                 self._user_ids.append(iid)
                 self._user_labels.append(label)
@@ -326,7 +329,7 @@ class RecipientPickerWidget(ctk.CTkFrame):
         self._render()
 
     def _on_inline_done_groups(self, ids: list[int], labels: list[str]) -> None:
-        for iid, label in zip(ids, labels):
+        for iid, label in zip(ids, labels, strict=True):
             if iid not in self._group_ids:
                 self._group_ids.append(iid)
                 self._group_labels.append(label)

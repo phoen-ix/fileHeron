@@ -21,7 +21,7 @@ BANNED = ("tkcalendar",)
 
 
 def _py_files() -> list[Path]:
-    return [p for p in (ROOT / "src").rglob("*.py")]
+    return list((ROOT / "src").rglob("*.py"))
 
 
 def test_no_banned_import_anywhere_in_the_client():

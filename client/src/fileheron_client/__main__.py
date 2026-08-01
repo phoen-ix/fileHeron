@@ -37,7 +37,8 @@ import traceback
 from datetime import datetime
 from pathlib import Path
 
-from fileheron_client._trace import init as init_trace, trace
+from fileheron_client._trace import init as init_trace
+from fileheron_client._trace import report, trace
 from fileheron_client.config import load_config
 from fileheron_client.i18n import set_locale
 from fileheron_client.ui._async import init_async
@@ -136,12 +137,44 @@ def _selfcheck() -> int:
     if not (dnd_root / "tkdnd").is_dir() and not any(dnd_root.glob("tkdnd*")):
         problems.append(f"tkinterdnd2 tkdnd lib missing under: {dnd_root}")
 
+    # The spec's OWN data trees, not just the third-party collect_all() ones.
+    # These are plain (source, dest) entries, which is exactly why they were
+    # overlooked: nothing about them looks fragile until a path in the spec
+    # goes stale and the .exe ships with no translations - every label rendered
+    # as its raw i18n key - or no icon.
+    bundle = Path(getattr(sys, "_MEIPASS", "") or Path(__file__).resolve().parent.parent)
+    locales = bundle / "fileheron_client" / "locales"
+    if not (locales / "en.json").is_file():
+        problems.append(f"locale files missing: {locales}")
+    assets = bundle / "assets"
+    if getattr(sys, "frozen", False) and not assets.is_dir():
+        problems.append(f"assets missing: {assets}")
+
+    # NOTES, not problems: these describe the MACHINE, not the bundle, so they
+    # are reported and do not affect the exit code. The release job runs this
+    # against the freshly built .exe - failing it because a CI runner has no
+    # credential vault would be precisely the kind of gate that fails for a
+    # reason unrelated to what it is gating.
+    from fileheron_client.config import keyring_problem
+
+    keyring_issue = keyring_problem()
+    if keyring_issue:
+        # The first question support asks when a user reports "it forgets my
+        # token every launch", and otherwise invisible: the failure is logged
+        # to a logger that is silenced unless diagnostics are switched on.
+        _report(f"selfcheck NOTE: keyring: {keyring_issue}")
+
     if problems:
         for p in problems:
-            sys.stderr.write(f"selfcheck FAIL: {p}\n")
+            _report(f"selfcheck FAIL: {p}")
         return 1
-    sys.stderr.write("selfcheck OK\n")
+    _report("selfcheck OK")
     return 0
+
+
+def _report(line: str) -> None:
+    """Self-check output, via the console-less-safe sink in _trace."""
+    report(line, _log_dir() / "crash.log")
 
 
 def main(argv: list[str] | None = None) -> int:

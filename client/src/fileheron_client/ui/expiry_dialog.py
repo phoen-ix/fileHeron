@@ -13,15 +13,14 @@ entirely")."""
 from __future__ import annotations
 
 from datetime import datetime, timedelta
-
-from ..formatters import display_timezone, timezone_label
 from typing import Optional, Tuple
 
 import customtkinter as ctk
-from .date_entry import DateEntry
 
-from ..i18n import get_locale, t
+from ..formatters import display_timezone, timezone_label
+from ..i18n import t
 from .app import center_window
+from .date_entry import DateEntry
 
 
 class ExpiryDialog:

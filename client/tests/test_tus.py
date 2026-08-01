@@ -7,7 +7,6 @@ import respx
 
 from fileheron_client.tus import TusError, upload_tus
 
-
 SERVER = "https://files.example.com"
 TUS_URL = f"{SERVER}/uploads/"
 NEW_UPLOAD_URL = f"{SERVER}/uploads/new-id"

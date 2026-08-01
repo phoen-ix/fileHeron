@@ -4,20 +4,43 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Optional
 
-from .client import ApiClient
+from ..formatters import display_timezone
 from ..models import ShareListResponse, ShareResponse
+from .client import ApiClient
 
 
 def _expiry_to_utc_iso(dt: datetime) -> str:
     """Serialize a share-expiry datetime as an offset-bearing UTC ISO string.
 
-    The expiry picker hands us a *naive* datetime that is the user's local
-    wall-clock choice. The backend reads a tz-less ISO string as UTC, so a naive
-    value would be off by the machine's UTC offset; attach the local offset (or
-    keep an already-aware value's) and convert to UTC before sending.
+    The expiry pickers hand us a *naive* wall-clock choice. The backend reads a
+    tz-less ISO string as UTC, so a naive value would be off by whatever offset
+    we fail to attach.
+
+    Attach the INSTANCE's timezone, not the machine's: that is the zone the
+    pickers render in and label, and the zone the web interface interprets the
+    same field in. client-v1.3.x converted the rendering and left this on
+    ``.astimezone()``, so a laptop in another zone sent an instant hours from
+    the one the operator typed while the dialog beside it claimed otherwise -
+    the tz label made the mismatch worse than the unlabelled version it
+    replaced. Falls back to the machine zone only when the server reported no
+    timezone, which is also what the label says in that case.
     """
-    aware = dt if dt.tzinfo is not None else dt.astimezone()
+    if dt.tzinfo is not None:
+        aware = dt
+    else:
+        zone = display_timezone()
+        # .astimezone() on a naive value asks the platform to localise it, and
+        # Windows' localtime() rejects pre-epoch inputs with OSError where glibc
+        # answers. Only the no-instance-zone fallback can reach it.
+        aware = dt.replace(tzinfo=zone) if zone else _localize_naive(dt)
     return aware.astimezone(timezone.utc).isoformat()
+
+
+def _localize_naive(dt: datetime) -> datetime:
+    try:
+        return dt.astimezone()
+    except (OSError, OverflowError, ValueError):
+        return dt.replace(tzinfo=timezone.utc)
 
 
 def list_shares(

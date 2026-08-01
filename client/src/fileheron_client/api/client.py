@@ -12,10 +12,15 @@ the login window and clearing the keyring entry.
 """
 from __future__ import annotations
 
+import logging
+import ssl
 from dataclasses import dataclass, field
+from functools import lru_cache
 from typing import Any, Optional
 
 import httpx
+
+logger = logging.getLogger("fileheron_client.api.client")
 
 DEFAULT_TIMEOUT = httpx.Timeout(30.0, connect=10.0, read=120.0)
 
@@ -86,6 +91,32 @@ def json_or_raise(resp: httpx.Response) -> Any:
         ) from exc
 
 
+@lru_cache(maxsize=1)
+def _ssl_context() -> ssl.SSLContext:
+    """Trust the OS certificate store IN ADDITION TO certifi's bundle.
+
+    httpx verifies against certifi alone. On Windows that ignores the machine's
+    Trusted Root store, which is where an organisation's TLS-inspecting proxy
+    (and any internal CA) puts its root via group policy - so every browser on
+    the laptop reaches the instance and this client alone fails at sign-in with
+    CERTIFICATE_VERIFY_FAILED, which reads like a server fault. `ssl`'s default
+    context loads that store on Windows and the system bundle elsewhere.
+
+    Additive, deliberately: certifi is loaded on top, so a machine whose store
+    is missing a public root is no worse off than before. Verification stays
+    ON - this widens who is trusted to include the operator's own CAs, it does
+    not weaken the check.
+    """
+    ctx = ssl.create_default_context()  # calls load_default_certs()
+    try:
+        import certifi
+
+        ctx.load_verify_locations(cafile=certifi.where())
+    except Exception:  # pragma: no cover - certifi ships with httpx
+        logger.debug("certifi bundle unavailable; using OS trust store only")
+    return ctx
+
+
 class ApiClient:
     """One-per-session HTTP client. Methods return parsed JSON dicts;
     callers wrap them in Pydantic models."""
@@ -104,6 +135,7 @@ class ApiClient:
             base_url=self.server_url,
             timeout=DEFAULT_TIMEOUT,
             follow_redirects=False,
+            verify=_ssl_context(),
         )
 
     # ---- lifecycle -----------------------------------------------------

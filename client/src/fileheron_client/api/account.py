@@ -6,8 +6,8 @@ parity with the SPA's Account.vue grows (display_name, default
 landing page, etc.), they belong here too."""
 from __future__ import annotations
 
-from .client import ApiClient
 from ..models import MeResponse
+from .client import ApiClient
 
 
 def patch_locale(api: ApiClient, locale: str) -> MeResponse:

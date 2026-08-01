@@ -65,10 +65,26 @@ def display_timezone() -> Optional[tzinfo]:
 
 def timezone_label() -> str:
     """The zone every rendered timestamp is in, for the UI to show beside
-    them."""
+    them.
+
+    The fallback (no instance zone reported) is a UTC OFFSET, not ``%Z``.
+    ``%Z`` is whatever the platform says: a short abbreviation like ``CEST`` on
+    Linux, but a long localized name on Windows - "Mitteleuropaeische
+    Sommerzeit" under a German system locale - decoded through the ANSI code
+    page, so it can arrive as mojibake and it overflows the label it sits in.
+    An offset means the same thing on both, in the same width, and cannot be
+    mis-decoded.
+    """
     if _display_tz_name:
         return _display_tz_name
-    return datetime.now().astimezone().strftime("%Z") or "local time"
+    local = datetime.now().astimezone()
+    offset = local.utcoffset()
+    if offset is None:  # pragma: no cover - astimezone() always sets one
+        return "local time"
+    total = int(offset.total_seconds())
+    sign = "+" if total >= 0 else "-"
+    hours, minutes = divmod(abs(total) // 60, 60)
+    return f"UTC{sign}{hours:02d}:{minutes:02d}"
 
 
 def to_local(value: datetime) -> datetime:

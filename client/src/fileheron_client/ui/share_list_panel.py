@@ -29,7 +29,6 @@ from ._async import run_in_background
 from .share_detail_view import ShareDetailView
 from .widgets import PillLabel, human_size
 
-
 # Column-header i18n keys + grid weights. Resolved at build time so
 # they pick up the active locale; not re-resolved on locale switch.
 _COL_KEYS = (
@@ -176,7 +175,11 @@ class ShareListPanel(ctk.CTkFrame):
         header = ctk.CTkFrame(self._list_frame, fg_color=("gray80", "gray25"), corner_radius=4)
         header.pack(fill="x", padx=8, pady=(0, 2))
         col_labels = [t(k) for k in _COL_KEYS]
-        for col_idx, (col_name, weight) in enumerate(zip(col_labels, _COL_WEIGHTS)):
+        # strict: the labels are derived from _COL_KEYS, so a mismatch with
+        # _COL_WEIGHTS is a column added to one list and not the other.
+        for col_idx, (col_name, weight) in enumerate(
+            zip(col_labels, _COL_WEIGHTS, strict=True)
+        ):
             header.grid_columnconfigure(col_idx, weight=weight, uniform="cols")
             ctk.CTkLabel(
                 header,

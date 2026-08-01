@@ -1,6 +1,9 @@
 """Ingest a parsed inbound message into the admin inbox (v1.27.0).
 
-Dedup by ``(uidvalidity, imap_uid)`` and ``message_id`` so re-polling is a no-op.
+Dedup by ``(uidvalidity, imap_uid)`` - server-assigned, so re-polling is a
+no-op. ``message_id`` is stored but deliberately does NOT decide: it is an
+attacker-controlled header, and letting it decide meant a forged value could
+silently delete a later genuine mail (audit #2, N-15).
 Attachment bytes are stored via the pluggable storage backend and ClamAV-scanned
 inline (``scan_stream``; ``AV_SKIP`` short-circuits clean in dev/CI). New mail
 optionally notifies admins per ``imap.notify_mode``.
@@ -29,16 +32,48 @@ _MAX_ATTACHMENT_BYTES = 50 * 1024 * 1024
 
 
 def _already_ingested(db: Session, *, uidvalidity: int, uid: int, message_id: str | None) -> bool:
-    q = db.query(InboundMessage.id).filter(
-        InboundMessage.uidvalidity == uidvalidity, InboundMessage.imap_uid == uid
+    """Whether this mailbox slot has already been ingested.
+
+    Keyed on `(uidvalidity, imap_uid)` ONLY. That pair is assigned by the IMAP
+    server, is stable for the life of the mailbox, and is what actually makes
+    re-polling idempotent.
+
+    `message_id` used to be a second, independent key here: any prior row with
+    the same Message-ID meant "already ingested", regardless of UID. But
+    Message-ID comes straight off the wire (`inbound_parse` reads the header
+    verbatim) and is trivially forgeable, so a sender who knew or guessed an
+    already-ingested value could make a later genuine mail be treated as a
+    duplicate - and the poll then advances its UID highwater past it, so it is
+    never reconsidered. Dropped with a log line, no row, nothing admin-visible.
+    Non-adversarially the same thing happened by accident whenever a bulk
+    sender, mailing list or forwarding loop reused an ID (audit #2, N-15).
+
+    An attacker-controlled header must not be able to silently delete mail, so
+    it no longer decides. It is still STORED, and `message_id_seen_before`
+    below lets callers surface a collision instead of acting on it."""
+    return (
+        db.query(InboundMessage.id)
+        .filter(
+            InboundMessage.uidvalidity == uidvalidity,
+            InboundMessage.imap_uid == uid,
+        )
+        .first()
+        is not None
     )
-    if q.first() is not None:
-        return True
-    return bool(
-        message_id
-        and db.query(InboundMessage.id)
+
+
+def message_id_seen_before(db: Session, *, message_id: str | None) -> bool:
+    """Whether this Message-ID has been ingested before, under any UID.
+
+    Advisory only - a caller may record or surface the collision, but must not
+    drop the message on the strength of it. See `_already_ingested`."""
+    if not message_id:
+        return False
+    return (
+        db.query(InboundMessage.id)
         .filter(InboundMessage.message_id == message_id)
         .first()
+        is not None
     )
 
 
@@ -158,23 +193,20 @@ def ingest(
     # highwater advances past it, so it is never seen again and nothing records
     # that it existed. Message-IDs are client-generated and not guaranteed
     # unique; a misconfigured sender can reuse one across genuinely different
-    # mails. Log it loudly so an operator can find the mail on the server
-    # (audit 2026-07-30).
+    # mails. Log it loudly so an operator can see the reuse (audit 2026-07-30).
     if parsed.message_id and not ingested_by_uid(
         db, uidvalidity=uidvalidity, uid=uid
-    ):
-        collision = (
-            db.query(InboundMessage.id)
-            .filter(InboundMessage.message_id == parsed.message_id)
-            .first()
+    ) and message_id_seen_before(db, message_id=parsed.message_id):
+        # Recorded, NOT acted on. This used to drop the message, which handed a
+        # forgeable header the power to delete mail silently; it is now advisory
+        # (audit #2, N-15). A duplicate row is recoverable, a missing one is not.
+        logger.warning(
+            "inbound: uid=%s (uidvalidity=%s) reuses Message-ID %r, which has "
+            "been ingested before. Both are kept - a repeated Message-ID is "
+            "normal for bulk senders and forwarding loops, and is forgeable, so "
+            "it does not decide whether mail is dropped.",
+            uid, uidvalidity, parsed.message_id,
         )
-        if collision is not None:
-            logger.warning(
-                "inbound: dropping uid=%s (uidvalidity=%s) - Message-ID %r collides "
-                "with already-ingested message id=%s. If these are different mails, "
-                "the newer one is on the server unread and will not be re-fetched.",
-                uid, uidvalidity, parsed.message_id, collision[0],
-            )
     if _already_ingested(db, uidvalidity=uidvalidity, uid=uid, message_id=parsed.message_id):
         return None
 

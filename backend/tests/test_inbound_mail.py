@@ -136,14 +136,59 @@ def test_parse_fields_and_attachment():
 # --- ingest -----------------------------------------------------------------
 
 def test_ingest_dedup(db):
+    """Dedup is keyed on (uidvalidity, imap_uid) - server-assigned, stable, and
+    what actually makes re-polling idempotent."""
     p = inbound_parse.parse(NORMAL)
     assert inbound_mail.ingest(db, p, uid=5, uidvalidity=100) is not None
     db.commit()
-    # same uid → dedup
+    # same slot -> dedup
     assert inbound_mail.ingest(db, p, uid=5, uidvalidity=100) is None
-    # same message_id, different uid → still dedup
-    assert inbound_mail.ingest(db, p, uid=6, uidvalidity=100) is None
     assert db.query(InboundMessage).count() == 1
+
+
+def test_a_reused_message_id_does_not_delete_the_second_mail(db):
+    """This test used to assert the opposite - "same message_id, different uid
+    -> still dedup" - and that assertion is what kept the defect alive.
+
+    Message-ID comes straight off the wire and is trivially forgeable, so
+    letting it decide meant a sender who knew or guessed an already-ingested
+    value could make a later genuine mail be treated as a duplicate. The poll
+    then advances its UID highwater past it, so it is never reconsidered:
+    silent, targeted mail loss. Non-adversarially, bulk senders, mailing lists
+    and forwarding loops reuse Message-IDs by accident and lost mail the same
+    way (audit #2, N-15).
+
+    A duplicate row is recoverable. A missing one is not."""
+    p = inbound_parse.parse(NORMAL)
+    assert inbound_mail.ingest(db, p, uid=5, uidvalidity=100) is not None
+    db.commit()
+
+    second = inbound_mail.ingest(db, p, uid=6, uidvalidity=100)
+    assert second is not None, (
+        "a second mail reusing an ingested Message-ID was dropped; a forgeable "
+        "header must not be able to delete mail"
+    )
+    assert db.query(InboundMessage).count() == 2
+
+
+def test_the_reuse_is_still_recorded(db, caplog):
+    """Not acted on, but not silent either - an operator can still see it."""
+    import logging
+
+    p = inbound_parse.parse(NORMAL)
+    inbound_mail.ingest(db, p, uid=5, uidvalidity=100)
+    db.commit()
+    with caplog.at_level(logging.WARNING):
+        inbound_mail.ingest(db, p, uid=6, uidvalidity=100)
+    assert "reuses Message-ID" in caplog.text
+
+
+def test_a_new_uidvalidity_is_a_different_mailbox(db):
+    """UIDs are only unique within a UIDVALIDITY generation."""
+    p = inbound_parse.parse(NORMAL)
+    assert inbound_mail.ingest(db, p, uid=5, uidvalidity=100) is not None
+    db.commit()
+    assert inbound_mail.ingest(db, p, uid=5, uidvalidity=101) is not None
 
 
 def test_ingest_matches_sender_user(make_user, db):

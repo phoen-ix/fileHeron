@@ -115,6 +115,203 @@ ignore = [
 python_version = "3.14"
 strict_optional = true
 warn_unused_ignores = true
+# Wired into CI (infra-lint) since audit #2. It had been INSTALLED and never
+# invoked, and this config read by nothing, for as long as both existed - so
+# "mypy is set up" was true and "mypy runs" was not.
+#
+# It is introduced at a baseline that passes: the 47 modules below
+# currently have errors (130 of them, mostly str-vs-Literal narrowing at
+# response-model boundaries and untyped third-party callbacks) and are exempt
+# per-module. Everything else is checked from now on. A gate added red is a
+# gate nobody keeps; an exemption list is debt you can see and shorten.
+
+[[tool.mypy.overrides]]
+module = "app.database"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "app.models.inbound_attachment"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "app.models.inbound_message"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "app.routers.account"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "app.routers.admin.api_tokens"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "app.routers.admin.backup"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "app.routers.admin.crons"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "app.routers.admin.invites"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "app.routers.admin.oidc"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "app.routers.admin.settings"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "app.routers.admin.system"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "app.routers.files"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "app.routers.public"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "app.routers.uploads"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "app.services.analytics"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "app.services.auth"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "app.services.config_backup"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "app.services.email_change"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "app.services.erasure"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "app.services.error_alert"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "app.services.file_admin"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "app.services.image"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "app.services.imap_client"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "app.services.inbound_mail"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "app.services.inbound_parse"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "app.services.jwt_session"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "app.services.maintenance"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "app.services.public_link"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "app.services.quarantine"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "app.services.quota"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "app.services.rate_limit"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "app.services.share"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "app.services.storage_backend"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "app.services.totp"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "app.services.transfer_activity"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "app.services.webauthn"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "app.services.webhook"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "app.services.zip_stream"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "app.utils.qr"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "app.workers.av_scan"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "app.workers.cleanup_pending_invites"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "app.workers.prune_history"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "app.workers.purge_old_quarantine"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "app.workers.quota_reconcile"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "app.workers.rescan_inbound_attachments"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "app.workers.share_expiring"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "app.workers.worker"
+ignore_errors = true
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

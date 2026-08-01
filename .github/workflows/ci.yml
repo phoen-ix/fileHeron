@@ -256,6 +256,17 @@ jobs:
         run: |
           docker run --rm -v "$PWD:/repo" -w /repo \
             rhysd/actionlint:1.7.7 -color
+      # mypy was installed by backend-tests and INVOKED BY NOTHING, and
+      # [tool.mypy] in pyproject.toml was read by nothing, for as long as both
+      # existed - so "mypy is set up" was true and "mypy runs" was not
+      # (audit #2). Introduced at a baseline that passes: 47 modules are exempt
+      # per-module in pyproject.toml with the count of what they owe.
+      - name: mypy
+        run: |
+          docker run --rm -v "$PWD/backend:/w" -w /w python:3.14-slim sh -c '
+            pip install -q -e ".[dev]" >/dev/null 2>&1
+            python -m mypy app
+          '
       - name: hadolint
         run: |
           for f in docker/*/Dockerfile docker/*/Dockerfile.dev; do

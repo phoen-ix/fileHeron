@@ -22,8 +22,15 @@ jobs:
   ci:
     uses: ./.github/workflows/ci.yml
 
+  # The unit gates cannot see the edge: router guards, silent refresh, the
+  # upload + public-link wiring. On a direct-push repo the daily e2e run is the
+  # net for ordinary commits, but a TAG publishes images - so it has to pass
+  # before anything is pushed to GHCR, not up to 24 hours afterwards (audit #2).
+  e2e:
+    uses: ./.github/workflows/e2e.yml
+
   build:
-    needs: ci
+    needs: [ci, e2e]
     runs-on: ubuntu-latest
     permissions:
       contents: read

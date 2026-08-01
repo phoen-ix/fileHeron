@@ -15,12 +15,14 @@ keep this to what would cause a wrong move if unknown.
 
 ## Status
 
-Backend **`v2.8.0`** (dependency/runtime sweep in .0: Python 3.14, Node 24 LTS,
-TypeScript 6, ESLint 10, Vite 8, Pinia 4 - zero open dependency PRs. v2.6.x
-closed out the 2026-07-30 audit with **nothing left accepted**; v2.6.1 fixed a
-v2.6.0 regression that charged the desktop client's size probe as a download),
-desktop client **`client-v1.2.0`** - shipped + in production,
-published for public self-hosting. v2.6.0 needs no host step and no migration.
+Backend **`v2.8.0`** (audit #2, a change-weighted re-sweep at v2.7.3 - see the
+block below; .0 also carried the dependency/runtime sweep: Python 3.14, Node 24
+LTS, TypeScript 6, ESLint 10, Vite 8, Pinia 4, zero open dependency PRs).
+Desktop client **`client-v1.3.0`** - shipped + in production, published for
+public self-hosting. **v2.8.0 needs no host step and no migration**, but it DOES
+change one default: `imap.require_known_sender` is ON, so an instance that
+accepts inbound mail from addresses with no user account must turn it off at
+`/admin/settings/imap` after updating.
 **v2.5.0 needed ONE host step** (compose file changed: `docker compose up -d
 redis backend worker` after the in-app Update - Redis maxmemory headroom +
 dropping operator-only secrets from the app containers) and no migration. v2.4.0
@@ -141,6 +143,39 @@ does - keep it current on release.)
 > `run_after_rollback` clear - without the latter a rolled-back batch is
 > silently adopted by the next dispatch on that session.
 >
+> **v2.8.0 (audit #2) invariants worth knowing before you touch these areas.**
+> The `inbound` and `errors` dimensions crashed during the 2026-07-30 sweep and
+> never re-ran; everything they were carrying landed here. **IMAP TLS now
+> verifies** (`imap_client._tls_context`) - both modes previously accepted any
+> certificate, and `uses_smtp_credentials` defaults true, so the LOGIN carried
+> the org's outbound-mail password. Mailbox names are QUOTED (`_mbox`) and CR/LF
+> is refused; `delete()` uses UID EXPUNGE; a failed MOVE **raises** rather than
+> falling through to a delete. `imap.require_known_sender` defaults **true** -
+> the "no anonymous senders" policy this file has claimed for four releases.
+> Bounds that did not exist: `MAX_MESSAGE_PARTS`, `MAX_ATTACHMENTS_PER_MESSAGE`,
+> `MAX_MESSAGES_PER_RUN`, `_MAX_BODY_TOTAL`, and the poll lock now outlives the
+> ARQ job timeout.
+>
+> **Two marks, two postures.** `was_download_recent` (serving, drain) fails
+> OPEN; `was_download_paid` (budget) fails **CLOSED** and its TTL is
+> `PAID_TTL_SEC` (12 h), not the serving mark's 30 minutes. The probe exemption
+> is pinned to `PROBE_OFFSET` - bounding only the LENGTH let `bytes=i-i` walk a
+> whole file out for free on the anonymous route. The authenticated ZIP
+> corroborates on `user:{id}:zip:{share}:{etag}`, never on a download_log row.
+>
+> **`run_after_commit` thunks cannot emit SQL** - the session is in `committed`
+> state. Use `webhook.emit_after_commit` (own session); every deferred emit was
+> silently dead. `hard_delete(purge=False)` returns the locator so the caller
+> unlinks AFTER committing (`purge_locators`); erasure keeps the old ordering
+> deliberately. `prune_history` never deletes `user_erased`. Erasure holds a
+> Redis run lock, because its per-file commit releases the row lock.
+>
+> The share `share_created` announcement is **deferred** until the uploads land
+> (`share.announce_if_ready`) - a share is empty at create time, so every
+> notification this product has ever sent said "0 files". `_peer_is_operator`
+> trusts loopback plus the container's own compose network, not all of RFC1918,
+> and `/api/config-public` no longer discloses `running_version`.
+
 > **v2.5.0 invariants worth knowing before you touch these areas.**
 > The maintenance gate's `Range:` exemption requires
 > `transfer_activity.was_download_recent(file_id)` - a per-file mark written

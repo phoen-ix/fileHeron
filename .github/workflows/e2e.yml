@@ -12,6 +12,10 @@ name: E2E
 on:
   pull_request: {}
   workflow_dispatch: {}
+  # Callable, so the release gate can require it. A tag that publishes images
+  # with the edge broken is the one case where waiting for the daily run is
+  # useless - the images are already out (audit #2).
+  workflow_call: {}
   # Path-filtered push trigger. No check can GATE a push on a direct-push repo,
   # but waiting up to 24h for the daily run to tell you the stack is broken is a
   # choice, not a constraint. The filter keeps doc-only and comment-only pushes

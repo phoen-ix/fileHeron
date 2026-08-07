@@ -169,6 +169,28 @@ gen_secret DB_PASSWORD
 gen_secret DB_ROOT_PASSWORD
 gen_secret JWT_SECRET
 gen_secret TUS_HOOK_SECRET
+
+# Pin the updater's host paths to where we ACTUALLY installed, since --dir= may
+# not be the default. These must be absolute host paths: the shim hands them to
+# `docker run -v`, which the daemon resolves against the host, not the
+# container. Left unset, docker-compose.yml falls back to ${PWD} - and the
+# updater runs compose from inside a container where PWD is /workspace, so each
+# update silently misconfigured the shim it recreated and broke the NEXT update
+# (v2.10.1). Rewritten on every run, including upgrades of an existing .env,
+# because an instance installed before this may still carry the bad value.
+set_env_path() {
+    local key="$1" val="$2"
+    if grep -qE "^${key}=" .env; then
+        sed -i.bak "s|^${key}=.*|${key}=${val}|" .env
+    else
+        echo "${key}=${val}" >> .env
+    fi
+    _secure_env_files
+}
+set_env_path UPDATER_HOST_WORKSPACE "$INSTALL_DIR"
+set_env_path UPDATER_HOST_STATE "$INSTALL_DIR/data/updater"
+echo "  pinned updater host paths to $INSTALL_DIR"
+
 rm -f .env.bak
 
 # Refuse to continue if any of them somehow survived - booting on a published

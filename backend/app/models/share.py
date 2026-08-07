@@ -117,6 +117,18 @@ class Share(Base):
     # `notify_on_activation` freezes the sender's "notify recipients" choice at
     # create time so the deferred `share_created` dispatch (fired on approval)
     # honours it. All NULL for shares that never went through approval.
+    # Whether this share was gated by four-eyes at creation. Read when a file is
+    # added later to decide if it needs its own review.
+    #
+    # It is a stored fact, not a live re-evaluation of the policy: the policy is
+    # admin-tunable and its scope depends on the recipient set, so re-asking
+    # `is_approval_required` at upload time would answer for TODAY'S settings
+    # about a share approved under yesterday's - silently un-gating shares when
+    # an admin narrows the scope, and retro-gating shares that never queued.
+    approval_was_required: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+
     approval_decided_by_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )

@@ -211,15 +211,57 @@ def content_fingerprint(db: Session, share: Share) -> str:
     The owner may keep uploading into a pending share by design, and
     ``approve_share`` re-checks only the state - so a file added after the
     approver opened the review page shipped on approve. The approver's client
-    echoes this value back and the decision is refused if it moved."""
-    file_ids = sorted(f.id for f in share.files if f.state != FileState.deleted)
+    echoes this value back and the decision is refused if it moved.
+
+    The digest covers each file's CONTENT, not just its identity. Keying on the
+    id alone made it stable across `uploading -> clean`: `create_pending` writes
+    a row with a client-declared name and size before a single byte lands, so an
+    approver could echo a perfectly matching fingerprint and still sign off on
+    bytes that did not exist when they looked. Size, digest and state all move
+    when the upload completes, so now it moves too."""
+    parts = []
+    for f in sorted(
+        (f for f in share.files if f.state != FileState.deleted), key=lambda f: f.id
+    ):
+        parts.append(
+            f"{f.id}:{f.size_bytes}:{f.sha256_hex or ''}:{f.state.value}:{f.approval_state.value}"
+        )
     link_id = (
         db.query(PublicLink.id)
         .filter(PublicLink.share_id == share.id, PublicLink.revoked_at.is_(None))
         .scalar()
     )
-    raw = "|".join([*(str(i) for i in file_ids), f"link={link_id or ''}"])
+    raw = "|".join([*parts, f"link={link_id or ''}"])
     return hashlib.sha256(raw.encode()).hexdigest()[:16]
+
+
+def can_review_added_files(db: Session, user: User) -> bool:
+    """True if ``user`` may fetch the bytes of a file that was added to an
+    already-approved share and is awaiting its own decision.
+
+    Share-state-independent, unlike :func:`can_review_pending`: the share these
+    files hang off is `active`, which is exactly why the share-level check
+    cannot express this."""
+    if not allow_content_review(db):
+        return False
+    return can_approve(db, user)
+
+
+def files_awaiting_review(db: Session, share: Share) -> list[str]:
+    """IDs of this share's files still waiting on a post-approval decision."""
+    from ..models.file import File, FileApprovalState
+
+    return [
+        fid
+        for (fid,) in db.query(File.id)
+        .filter(
+            File.share_id == share.id,
+            File.approval_state == FileApprovalState.pending_review,
+            File.state != FileState.deleted,
+        )
+        .order_by(File.created_at.asc(), File.id.asc())
+        .all()
+    ]
 
 
 def can_review_pending(db: Session, user: User, share: Share) -> bool:

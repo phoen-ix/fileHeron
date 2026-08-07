@@ -84,6 +84,17 @@ class FileInShareResponse(_Base):
     created_at: datetime
     finalized_at: Optional[datetime] = None
     sha256_hex: Optional[str] = None
+    # True when the file was released WITHOUT a real antivirus verdict because
+    # it is larger than clamd can scan. `state` is still "clean" - that is what
+    # keeps it downloadable - so this flag is the ONLY thing distinguishing
+    # "scanned and clean" from "never scanned". The backend has sent it since
+    # v2.4.0 and the web UI warns on it; this client silently dropped it, so
+    # desktop users were the only ones who could not tell the difference.
+    av_unscanned: bool = False
+    # "pending_review" while a file added to an already-approved share waits for
+    # its own four-eyes decision (server v2.9.0). Only the owner and approvers
+    # ever receive such a row; recipients get a 409 on the bytes.
+    approval_state: str = "approved"
 
 
 class GroupRecipientRef(_Base):

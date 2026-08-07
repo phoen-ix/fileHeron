@@ -15,6 +15,21 @@ keep this to what would cause a wrong move if unknown.
 
 ## Status
 
+**v2.9.0 has FOUR breaking API changes**, all deliberate re-auth / integrity
+gates. Any API-token or scripted client doing these must be updated:
+1. `POST /api/shares/{id}/approve` requires a body with `content_fingerprint`.
+2. `POST /api/admin/backup/export` requires `password` (the caller's own).
+3. `POST /api/admin/backup/import` requires a `password` form field.
+4. `POST /api/admin/users/{id}/erase` requires a body with `password`.
+5. `POST /api/account/api-tokens` requires `password`.
+
+It also HAS TWO MIGRATIONS (`202608070001` per-file approval state +
+`shares.approval_was_required`; `202608070002` `users.sessions_invalidated_at`),
+so a rollback past them needs the [[reference_rollback_migration_trap]]
+`alembic stamp` recovery. **No host step.** Every new column defaults to the
+permissive/NULL value, so existing rows, in-flight sessions and
+approval-disabled deployments are unaffected by the upgrade itself.
+
 Backend **`v2.8.1`** (audit #2, a change-weighted re-sweep at v2.7.3 - see the
 block below; .0 also carried the dependency/runtime sweep: Python 3.14, Node 24
 LTS, TypeScript 6, ESLint 10, Vite 8, Pinia 4, zero open dependency PRs).
@@ -35,6 +50,81 @@ route returns the decrypted plaintext link URL. (README's server/client version
 badges read live from the git tags, so they never need a manual bump; this line
 does - keep it current on release.)
 
+> **v2.9.0 invariants worth knowing before you touch these areas.**
+> **Four-eyes is a per-FILE mark now, not just a share state.**
+> `is_approval_required` still has exactly one caller (`create_share`), so the
+> SHARE is judged once at birth - but the upload gate admits `active` as well as
+> `pending_approval`, so an owner could get a benign share approved and then
+> upload the payload into the live share. The fix is `files.approval_state`
+> (`approved` | `pending_review`) plus `shares.approval_was_required`, a STORED
+> fact (never a live re-evaluation - the policy is admin-tunable and its scope
+> reads the recipient set, so re-asking at upload time answers for today's
+> settings about a share approved under yesterday's).
+> **Never flip a live share back to `pending_approval` to express this.**
+> `assert_share_downloadable` and `public_link.assert_link_usable` are
+> active-only, so one appended file would 410 every existing recipient, darken a
+> live public link and hard-fail the desktop client's resume - an outage caused
+> by attaching an appendix. Gate the FILES; the share stays `active`.
+> Delivery gating lives in two places and both are needed: pass `file=` to
+> `share.assert_share_file_access` on every single-file route, and
+> `file.downloadable_files` filters the ZIP member list (unconditionally - a
+> per-viewer member list would make the archive non-reproducible and break
+> resume). The public routes 404 a `pending_review` file rather than 409, because
+> an anonymous holder learning that unreleased content exists is the disclosure.
+> **`content_fingerprint` is MANDATORY and content-bound.** It digested file IDs
+> only, which is stable across `uploading -> clean` - `create_pending` writes a
+> row with a client-declared name and size before a byte lands, so an approver
+> could echo a perfectly matching digest and still sign off on bytes that did not
+> exist. It now covers size + sha256 + state per file, `approve_share` refuses
+> `FILES_NOT_READY` while anything is still uploading, and the optional-field
+> back-compat carve-out is gone (a check the caller may omit is not a check;
+> the party who benefits from omitting it is the one under review). **Breaking
+> for API-token clients that approve shares** - they must echo the digest.
+> A public link may no longer be attached to an already-approved share
+> (`APPROVAL_REQUIRED`); admins pass, since they are the approver floor.
+> **Step-up re-auth is a POLICY, not an updater quirk.**
+> `services/step_up.py::verify_password_or_403` now gates config-backup
+> export/import, right-to-erasure and API-token creation as well as self-update.
+> It answers **403 INVALID_PASSWORD, never 401** - the caller IS authenticated,
+> and a 401 trips the SPA's refresh interceptor, which silently retries with the
+> same wrong password and shows the user nothing. An SSO-only account cannot
+> clear it (no local hash); that is deliberate, the CLI escape hatch is the
+> recovery. Backup export is the highest-value one: it is the ONLY admin surface
+> that reads secrets back out (password hashes, decrypted TOTP seeds, and with
+> `include_env` the JWT/DB/TUS/S3 secrets).
+> **`users.sessions_invalidated_at` is what makes "revoke" cover access tokens.**
+> Stamped in `jwt_session.revoke_all_user_refresh_tokens` (one chokepoint for
+> logout-others, password change/reset, email change, admin revoke-all, reuse
+> detection and backup import) and checked in `resolve_user_from_access_token`
+> on the User row already being SELECTed. Compared at **second granularity with
+> `<`, not `<=`**, on purpose: `change_password` revokes and re-mints inside one
+> request, so a stricter comparison signs the user out for changing their
+> password. The cost is a <=1s window, pinned by a test. Single-session `logout`
+> deliberately does NOT stamp it - the mark is per-user and would close every
+> other tab.
+> API tokens default to **scoped + 90-day expiry** in the SPA now; NULL still
+> means unrestricted/never on the API, so the defaults are the control.
+> `utils/net.py::assert_safe_host` guards the SMTP/IMAP **test-connection**
+> host overrides, which connect and hand back the error text - a non-blind SSRF
+> probe, and stronger than the webhook path that was already guarded. It
+> **fails open on an unresolvable host**, unlike `assert_public_http_url`: these
+> endpoints exist to report connection errors legibly, and a host that does not
+> resolve cannot be a target anyway.
+> `ADMIN_BOOTSTRAP_EMAIL` Path 2 is now bounded by `setup.is_setup_complete` -
+> it re-promoted and re-ENABLED that account on every boot, so a deliberate
+> demotion silently reverted on the next restart.
+> **Deferred-length tus uploads are refused** (`DEFERRED_LENGTH_REFUSED`) and
+> pre-create requires `announced_size == max_size`, not `<=`. A
+> `Upload-Defer-Length: 1` creation announced Size=0, sailed through, then
+> PATCHed an arbitrary later-declared length against ONE authorised file row -
+> no hook fires on a PATCH and tusd carried no `-max-size` (now set, 1 TiB,
+> mirroring `MAX_DECLARED_UPLOAD_BYTES`). `refuse_if_critical_low` cannot
+> throttle that: it reads a kv flag written by the HOURLY disk_check cron, not a
+> live stat. The @uppy/tus creation-retry path must keep working - it replays the
+> POST when the response is lost, which is why pre-create stays idempotent rather
+> than unlinking the superseded working file (that would delete a file tusd still
+> has open).
+>
 > **v2.8.1 invariants worth knowing before you touch these areas.**
 > **A deferred purge must record its own failure.** `purge_locators` runs AFTER
 > the caller's commit, so the row already says `deleted` - and
@@ -598,7 +688,17 @@ consume `…/download-zip?dt=`; public `GET /api/public/{token}/download-zip`.
   `policy_gate`'s permissive `everyone` default - resolved locally, not via the
   shared gate).
 - **No self-approval, ever** - `can_decide` refuses `user.id ==
-  share.created_by_id` even for admins.
+  share.created_by_id` even for admins. `decide_added_files` repeats the check
+  in the same ORDER (`can_approve` → self → state): an ordinary employee hits
+  `FORBIDDEN` one check earlier, so a test asserting `SELF_APPROVAL` must use an
+  approver as the creator or it never exercises the rule it names.
+- **The share is judged once; files added later carry their own decision**
+  (v2.9.0, see the invariant block at the top). `POST
+  /api/shares/{id}/added-files/decide` releases or discards them;
+  `files_awaiting_review` on the share payload is what surfaces it. Rejection
+  hard-deletes the bytes - there is no per-file resubmit, and leaving them
+  `pending_review` forever would hold the uploader's quota against content an
+  approver refused. Locators are RETURNED for the router to purge after commit.
 - `is_approval_required` must run **after recipient rows are flushed** (the
   `outbound_to_clients` scope reads them). `exempt_approvers` (default true)
   auto-approves an approver's own shares; `allow_content_review` gates whether an

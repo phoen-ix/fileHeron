@@ -366,20 +366,32 @@ def test_approve_with_a_current_fingerprint_succeeds(db, make_user):
     assert share.state == ShareState.active
 
 
-def test_omitting_the_fingerprint_still_approves(db, make_user):
-    """Deliberate back-compat: API-token clients that predate the field are not
-    broken by it. Documented as the residual - the SPA always sends it."""
-    admin = make_user(email="admin@test.local", role=UserRole.admin, password=PW)
+@pytest.mark.asyncio
+async def test_approving_without_a_fingerprint_is_refused(
+    db, make_user, client, login_as
+):
+    """The inverse of the old back-compat carve-out. An approval that does not
+    say WHAT it approves is not a four-eyes control: the caller who benefits
+    from omitting the digest is the one being reviewed, and for one release any
+    API-token client could simply leave it out. Now the body is required and
+    FastAPI refuses the request before the service is reached."""
+    make_user(email="admin@test.local", role=UserRole.admin, password=PW)
     creator = make_user(email="emp@test.local", role=UserRole.employee, password=PW)
     rec = make_user(email="rec@test.local", role=UserRole.employee, password=PW)
     _enable(db)
     share = _make_share(db, creator, rec)
     db.commit()
+    token, _ = await login_as("admin@test.local", PW)
 
-    share_svc.approve_share(db, user=admin, share=share)
-    db.commit()
+    for body in ({}, None):
+        resp = await client.post(
+            f"/api/shares/{share.id}/approve",
+            json=body,
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert resp.status_code == 422, resp.text
     db.refresh(share)
-    assert share.state == ShareState.active
+    assert share.state == ShareState.pending_approval
 
 
 @pytest.mark.asyncio
@@ -440,3 +452,250 @@ async def test_settled_shares_have_no_fingerprint(db, make_user, client, login_a
     ).json()
     assert body["state"] == "active"
     assert body["content_fingerprint"] is None
+
+
+# --- the post-approval window (2026-08-07) ----------------------------------
+#
+# The three flows above all close the door WHILE the share is pending. None of
+# them looked at what happens after it opens. `is_approval_required` has exactly
+# one caller - `create_share` - so approval was decided once, at birth, and the
+# upload gate admits `active` as well as `pending_approval`. An owner could get
+# a benign share approved and then upload the real payload into the live share.
+
+
+def _approve(db, admin, share):
+    share_svc.approve_share(
+        db, user=admin, share=share,
+        expect_fingerprint=approval_svc.content_fingerprint(db, share),
+    )
+    db.commit()
+    db.refresh(share)
+
+
+def test_a_file_added_after_approval_is_withheld_from_recipients(db, make_user):
+    """The defect itself: appended bytes must not reach the recipient on the
+    strength of a decision taken before they existed."""
+    admin = make_user(email="admin@test.local", role=UserRole.admin, password=PW)
+    creator = make_user(email="emp@test.local", role=UserRole.employee, password=PW)
+    rec = make_user(email="rec@test.local", role=UserRole.employee, password=PW)
+    _enable(db)
+    share = _make_share(db, creator, rec)
+    reviewed = _attach_file(
+        db, share, creator.id, file_id="00000000-0000-0000-0000-0000000000a1"
+    )
+    _approve(db, admin, share)
+    assert share.state == ShareState.active
+
+    from app.services import file as file_svc
+    appended = file_svc.create_pending(
+        db, share=share, uploader=creator,
+        original_filename="payroll.xlsx", mime_type="text/plain", size_bytes=5,
+    )
+    appended.state = FileState.clean
+    appended.storage_path = reviewed.storage_path
+    db.commit()
+
+    from app.models.file import FileApprovalState
+    assert appended.approval_state == FileApprovalState.pending_review
+    assert reviewed.approval_state == FileApprovalState.approved
+
+    with pytest.raises(AppError) as exc:
+        share_svc.assert_share_file_access(db, user=rec, share=share, file=appended)
+    assert exc.value.code == "FILE_PENDING_APPROVAL"
+
+
+def test_the_already_approved_files_keep_flowing_meanwhile(db, make_user):
+    """The share must stay `active` while the appended file waits. Flipping it
+    back to `pending_approval` would 410 every existing recipient and darken a
+    live public link - an outage caused by someone attaching an appendix."""
+    admin = make_user(email="admin@test.local", role=UserRole.admin, password=PW)
+    creator = make_user(email="emp@test.local", role=UserRole.employee, password=PW)
+    rec = make_user(email="rec@test.local", role=UserRole.employee, password=PW)
+    _enable(db)
+    share = _make_share(db, creator, rec)
+    reviewed = _attach_file(
+        db, share, creator.id, file_id="00000000-0000-0000-0000-0000000000b1"
+    )
+    _approve(db, admin, share)
+
+    from app.services import file as file_svc
+    appended = file_svc.create_pending(
+        db, share=share, uploader=creator,
+        original_filename="extra.txt", mime_type="text/plain", size_bytes=5,
+    )
+    appended.state = FileState.clean
+    appended.storage_path = reviewed.storage_path
+    db.commit()
+    db.refresh(share)
+
+    assert share.state == ShareState.active
+    # The reviewed file is still served, no exception.
+    share_svc.assert_share_file_access(db, user=rec, share=share, file=reviewed)
+    # And the ZIP carries only the approved member.
+    zip_ids = [f.id for f in file_svc.downloadable_files(db, share.id)]
+    assert zip_ids == [reviewed.id]
+
+
+def test_the_owner_and_approvers_can_still_see_the_pending_file(db, make_user):
+    """The owner is assembling the batch and must be able to verify what they
+    uploaded; the approver needs the bytes to decide. Only recipients wait."""
+    admin = make_user(email="admin@test.local", role=UserRole.admin, password=PW)
+    creator = make_user(email="emp@test.local", role=UserRole.employee, password=PW)
+    rec = make_user(email="rec@test.local", role=UserRole.employee, password=PW)
+    _enable(db)
+    share = _make_share(db, creator, rec)
+    seed = _attach_file(
+        db, share, creator.id, file_id="00000000-0000-0000-0000-0000000000c1"
+    )
+    _approve(db, admin, share)
+
+    from app.services import file as file_svc
+    appended = file_svc.create_pending(
+        db, share=share, uploader=creator,
+        original_filename="extra.txt", mime_type="text/plain", size_bytes=5,
+    )
+    appended.state = FileState.clean
+    appended.storage_path = seed.storage_path
+    db.commit()
+
+    share_svc.assert_file_approved(db, user=creator, share=share, file=appended)
+    share_svc.assert_file_approved(db, user=admin, share=share, file=appended)
+    with pytest.raises(AppError):
+        share_svc.assert_file_approved(db, user=rec, share=share, file=appended)
+
+
+def test_deciding_the_added_files_releases_them(db, make_user):
+    admin = make_user(email="admin@test.local", role=UserRole.admin, password=PW)
+    creator = make_user(email="emp@test.local", role=UserRole.employee, password=PW)
+    rec = make_user(email="rec@test.local", role=UserRole.employee, password=PW)
+    _enable(db)
+    share = _make_share(db, creator, rec)
+    seed = _attach_file(
+        db, share, creator.id, file_id="00000000-0000-0000-0000-0000000000d1"
+    )
+    _approve(db, admin, share)
+
+    from app.services import file as file_svc
+    appended = file_svc.create_pending(
+        db, share=share, uploader=creator,
+        original_filename="extra.txt", mime_type="text/plain", size_bytes=5,
+    )
+    appended.state = FileState.clean
+    appended.storage_path = seed.storage_path
+    db.commit()
+
+    share_svc.decide_added_files(
+        db, user=admin, share=share, approve=True,
+        expect_fingerprint=approval_svc.content_fingerprint(db, share),
+    )
+    db.commit()
+    db.refresh(appended)
+
+    from app.models.file import FileApprovalState
+    assert appended.approval_state == FileApprovalState.approved
+    share_svc.assert_share_file_access(db, user=rec, share=share, file=appended)
+
+
+def test_the_owner_cannot_release_their_own_appended_files(db, make_user):
+    """No self-approval, ever - the same rule `_assert_can_decide` enforces for
+    the share-level decision.
+
+    The creator here is an ADMIN (with `exempt_approvers` off, so their share
+    still queues). An ordinary employee would be stopped one check earlier by
+    `can_approve` and return FORBIDDEN, which would pass a naive assertion
+    without ever exercising the self-approval rule."""
+    admin = make_user(email="admin@test.local", role=UserRole.admin, password=PW)
+    creator = make_user(email="admin2@test.local", role=UserRole.admin, password=PW)
+    rec = make_user(email="rec@test.local", role=UserRole.employee, password=PW)
+    _enable(db, exempt=False)
+    share = _make_share(db, creator, rec)
+    seed = _attach_file(
+        db, share, creator.id, file_id="00000000-0000-0000-0000-0000000000e1"
+    )
+    assert share.state == ShareState.pending_approval
+    _approve(db, admin, share)
+
+    from app.services import file as file_svc
+    appended = file_svc.create_pending(
+        db, share=share, uploader=creator,
+        original_filename="extra.txt", mime_type="text/plain", size_bytes=5,
+    )
+    appended.state = FileState.clean
+    appended.storage_path = seed.storage_path
+    db.commit()
+
+    with pytest.raises(AppError) as exc:
+        share_svc.decide_added_files(
+            db, user=creator, share=share, approve=True,
+            expect_fingerprint=approval_svc.content_fingerprint(db, share),
+        )
+    assert exc.value.code == "SELF_APPROVAL"
+
+
+def test_a_public_link_cannot_be_attached_after_approval(db, make_user):
+    """flow-approval-2 one state later: bolting a link onto an APPROVED share
+    turns a reviewed named-recipient share into a world-readable URL."""
+    admin = make_user(email="admin@test.local", role=UserRole.admin, password=PW)
+    creator = make_user(email="emp@test.local", role=UserRole.employee, password=PW)
+    rec = make_user(email="rec@test.local", role=UserRole.employee, password=PW)
+    _enable(db)
+    share = _make_share(db, creator, rec)
+    _attach_file(db, share, creator.id, file_id="00000000-0000-0000-0000-0000000000f5")
+    _approve(db, admin, share)
+
+    with pytest.raises(AppError) as exc:
+        public_link_svc.create_link(
+            db, share=share, actor=creator,
+            password=None, download_limit=None, notify_on_download=False,
+        )
+    assert exc.value.code == "APPROVAL_REQUIRED"
+
+
+def test_approval_is_refused_while_a_file_is_still_uploading(db, make_user):
+    """`create_pending` writes a row with a client-declared name and size before
+    a single byte lands, and the digest used to be stable across
+    `uploading -> clean`. An approver could echo a perfectly matching
+    fingerprint and still sign off on bytes that did not exist yet."""
+    admin = make_user(email="admin@test.local", role=UserRole.admin, password=PW)
+    creator = make_user(email="emp@test.local", role=UserRole.employee, password=PW)
+    rec = make_user(email="rec@test.local", role=UserRole.employee, password=PW)
+    _enable(db)
+    share = _make_share(db, creator, rec)
+    from app.services import file as file_svc
+    file_svc.create_pending(
+        db, share=share, uploader=creator,
+        original_filename="pending.bin", mime_type="text/plain", size_bytes=5,
+    )
+    db.commit()
+    db.refresh(share)
+
+    with pytest.raises(AppError) as exc:
+        share_svc.approve_share(
+            db, user=admin, share=share,
+            expect_fingerprint=approval_svc.content_fingerprint(db, share),
+        )
+    assert exc.value.code == "FILES_NOT_READY"
+
+
+def test_the_fingerprint_moves_when_the_bytes_land(db, make_user):
+    """The digest covered file IDs only, so it did not move as a row went
+    `uploading -> clean`. Content, not identity, is what an approver signs."""
+    creator = make_user(email="emp@test.local", role=UserRole.employee, password=PW)
+    rec = make_user(email="rec@test.local", role=UserRole.employee, password=PW)
+    _enable(db)
+    share = _make_share(db, creator, rec)
+    from app.services import file as file_svc
+    f = file_svc.create_pending(
+        db, share=share, uploader=creator,
+        original_filename="pending.bin", mime_type="text/plain", size_bytes=5,
+    )
+    db.commit()
+    db.refresh(share)
+    before = approval_svc.content_fingerprint(db, share)
+
+    f.state = FileState.clean
+    f.sha256_hex = "a" * 64
+    db.commit()
+    db.refresh(share)
+
+    assert approval_svc.content_fingerprint(db, share) != before

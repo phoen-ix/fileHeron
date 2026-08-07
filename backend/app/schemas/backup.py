@@ -16,6 +16,12 @@ class BackupExportRequest(BaseModel):
     secret_mode: SecretMode
     passphrase: str | None = None
     include_env: bool = False
+    # The caller's OWN password, re-confirmed. Export is the one admin surface
+    # that reads secrets back out (password hashes, decrypted TOTP seeds, and
+    # with include_env the JWT/DB secrets), so it gets the same re-auth gate the
+    # self-update routes have always had. Distinct from `passphrase`, which
+    # encrypts the artifact.
+    password: str = Field(..., min_length=1, max_length=512)
 
     @model_validator(mode="after")
     def _check(self) -> BackupExportRequest:

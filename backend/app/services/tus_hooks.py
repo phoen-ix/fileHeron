@@ -108,12 +108,34 @@ def handle_pre_create(db: Session, body: dict[str, Any]) -> None:
     upload, meta = _extract_upload(body)
     envelope = _extract_envelope(meta, enforce_exp=True)
 
+    # A deferred-length creation (`Upload-Defer-Length: 1`) announces Size=0 and
+    # declares the real length later, on a PATCH that fires no hook. Nothing
+    # downstream bounds it: tusd carries no `-max-size`, so the client can then
+    # push arbitrary bytes into the working dir against ONE authorised file row.
+    # pre-finish does reject the mismatch, but only after the bytes have landed,
+    # and the only thing that reclaims them is the 24h abandoned-upload sweeper -
+    # `refuse_if_critical_low` cannot throttle the burst because it reads a kv
+    # flag written by the HOURLY disk_check cron, not a live stat.
+    #
+    # The envelope authorises exactly `max_size` bytes, so an upload that
+    # declines to state its length up front has nothing legitimate to gain.
+    if upload.get("SizeIsDeferred"):
+        raise AppError(
+            400,
+            "DEFERRED_LENGTH_REFUSED",
+            "Deferred-length uploads are not accepted; declare Upload-Length up front.",
+        )
+
+    # Equality, not `<=`. The envelope IS the authorisation and pre-finish
+    # already forces the final size to equal it, so an announcement that
+    # disagrees is either a client bug or an attempt to widen the window
+    # between what was authorised and what is written.
     announced_size = int(upload.get("Size", 0))
-    if announced_size > envelope["max_size"]:
+    if announced_size != envelope["max_size"]:
         raise AppError(
             413,
             "SIZE_OVER_ENVELOPE",
-            f"Announced size ({announced_size}) exceeds authorised max ({envelope['max_size']}).",
+            f"Announced size ({announced_size}) doesn't match the authorised size ({envelope['max_size']}).",
         )
 
     # Pre-create runs BEFORE tusd assigns its upload id, so we can't store

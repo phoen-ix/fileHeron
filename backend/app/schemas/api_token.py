@@ -11,6 +11,13 @@ from .common import APIBaseModel
 
 class CreateApiTokenRequest(APIBaseModel):
     name: str = Field(..., min_length=1, max_length=120)
+    # The caller's own password, re-confirmed. A valid access JWT alone used to
+    # be enough to mint a token that (by default) never expires and carries no
+    # scope restriction - and nothing revokes API tokens on password reset or
+    # "sign out other sessions". That turned theft of a 15-minute browser token
+    # into permanent access which survives the victim's obvious remediation, so
+    # creation is gated the same way /change-password and /email already are.
+    password: str = Field(..., min_length=1, max_length=512)
     # Optional expiry. Omit / null = never expires.
     expires_at: datetime | None = None
     # Optional least-privilege scopes. Omit / null = unrestricted (full access).

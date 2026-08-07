@@ -105,10 +105,30 @@ export function listPendingApprovals(
 /** `contentFingerprint` is the digest the review screen rendered. The owner may
  *  keep adding files to a pending share, so sending it back is what makes the
  *  approval a decision about what was actually reviewed - the backend returns
- *  409 CONTENT_CHANGED if it moved. */
-export function approveShare(shareId: string, contentFingerprint?: string | null) {
+ *  409 CONTENT_CHANGED if it moved.
+ *
+ *  REQUIRED as of v2.9.0: it used to be optional (`?? null`) for API-token
+ *  clients that predated it, but a check the caller may omit is not a check.
+ *  The backend now 422s a request without it. */
+export function approveShare(shareId: string, contentFingerprint: string) {
   return api.post<ShareResponse>(`/shares/${shareId}/approve`, {
-    content_fingerprint: contentFingerprint ?? null,
+    content_fingerprint: contentFingerprint,
+  })
+}
+
+/** Decide on files appended to an ALREADY-approved share. The share stays
+ *  `active` throughout - only the new files are gated - so this is a separate
+ *  decision from approve/reject, which act on the share's own state. */
+export function decideAddedFiles(
+  shareId: string,
+  approve: boolean,
+  contentFingerprint: string,
+  reason?: string | null,
+) {
+  return api.post<ShareResponse>(`/shares/${shareId}/added-files/decide`, {
+    approve,
+    content_fingerprint: contentFingerprint,
+    reason: reason ?? null,
   })
 }
 

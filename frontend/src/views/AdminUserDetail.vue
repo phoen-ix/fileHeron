@@ -64,6 +64,8 @@ const changeEmailLink = ref<string | null>(null)
 const changeEmailOldLink = ref<string | null>(null)
 
 const eraseStep = ref<0 | 1 | 2>(0)
+// Re-auth for the irreversible step; cleared as soon as the call returns.
+const erasePassword = ref('')
 const erasing = ref(false)
 
 const sessions = ref<AdminSessionRow[]>([])
@@ -313,7 +315,7 @@ async function onErase() {
   }
   erasing.value = true
   try {
-    const { data } = await eraseUser(user.value.id)
+    const { data } = await eraseUser(user.value.id, erasePassword.value)
     receiptAuditId.value = data.audit_id
     ui.pushToast(
       t('admin_user_detail.erased_toast', {
@@ -623,10 +625,23 @@ v-if="changeEmailError" class="fh-notice" role="alert"
         <p v-if="eraseStep === 2" class="fh-notice" data-tone="error" role="alert">
           {{ t('admin_user_detail.erase_step2') }}
         </p>
+        <!-- Re-auth on the last step. Erasure is irreversible, and an admin
+             access token alone should not be enough to spend it - the same
+             reasoning the self-update routes have always applied. -->
+        <label v-if="eraseStep === 2" class="fh-field">
+          <span class="fh-field-label">{{ t('admin_user_detail.erase_password_label') }}</span>
+          <input
+            v-model="erasePassword"
+            type="password"
+            class="fh-field-input"
+            autocomplete="current-password"
+            :placeholder="t('admin_user_detail.erase_password_placeholder')"
+          />
+        </label>
         <button
           type="button"
           class="fh-btn fh-btn-danger"
-          :disabled="erasing || isErased"
+          :disabled="erasing || isErased || (eraseStep === 2 && !erasePassword)"
           @click="onErase"
         >
           {{

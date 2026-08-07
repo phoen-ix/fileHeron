@@ -351,6 +351,14 @@ async def test_email_send(
             persisted.password if ov.password is None else ov.password
         )
 
+        # The override host is attacker-reachable through a hijacked admin
+        # session and this route CONNECTS and reports the result, so it is a
+        # non-blind SSRF probe - stronger than the webhook path, which is
+        # guarded. Apply the same address policy before the socket opens.
+        from ...utils.net import assert_safe_host
+
+        assert_safe_host(_o(ov.host, persisted.host), port)
+
         override = SmtpConfig(
             host=_o(ov.host, persisted.host),
             port=port,

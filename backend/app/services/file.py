@@ -20,7 +20,7 @@ from ..config import settings
 from ..middleware.errors import AppError
 from ..models.audit_log import AuditEventType
 from ..models.download_log import DownloadLog
-from ..models.file import File, FileState
+from ..models.file import File, FileApprovalState, FileState
 from ..models.share import Share, ShareState
 from ..models.user import User
 from ..utils.timeutil import utc_now
@@ -53,7 +53,16 @@ def downloadable_files(db: Session, share_id: str) -> list[File]:
     backend = get_storage_backend()
     rows = (
         db.query(File)
-        .filter(File.share_id == share_id, File.state == FileState.clean)
+        .filter(
+            File.share_id == share_id,
+            File.state == FileState.clean,
+            # A file still awaiting its own four-eyes decision is not part of
+            # the archive. This is the recipient-facing artifact and the public
+            # link consumes it too, so the exclusion is unconditional rather
+            # than viewer-dependent - a per-viewer member list would also make
+            # the ZIP non-reproducible and break resume.
+            File.approval_state == FileApprovalState.approved,
+        )
         .order_by(File.created_at.asc(), File.id.asc())
         .all()
     )
@@ -91,13 +100,27 @@ def create_pending(
 ) -> File:
     """Insert a `files` row in state=uploading. Returns the row (caller
     commits).
+
+    A file landing on a share that was four-eyes-gated and is ALREADY past its
+    decision needs its own review before recipients can reach it - otherwise the
+    owner appends to an approved share and the payload ships unreviewed. While
+    the share is still `pending_approval` the pending decision covers it, so it
+    arrives `approved` and the share-level gate does the work.
     """
+    needs_review = (
+        share.approval_was_required and share.state == ShareState.active
+    )
     record = File(
         share_id=share.id,
         original_filename=safe_original_filename(original_filename),
         mime_type=(mime_type or "application/octet-stream")[:255],
         size_bytes=size_bytes,
         state=FileState.uploading,
+        approval_state=(
+            FileApprovalState.pending_review
+            if needs_review
+            else FileApprovalState.approved
+        ),
         uploaded_by_id=uploader.id,
     )
     db.add(record)

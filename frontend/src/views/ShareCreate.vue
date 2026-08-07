@@ -268,6 +268,12 @@ function onCreateAnother() {
         </div>
 
         <div class="col">
+          <!-- A client submission goes to the whole organisation, not to one
+               person. That was documented nowhere the sender could see it, so
+               say it here, where they are deciding what to upload. -->
+          <p v-if="isClient" class="fh-notice" data-tone="info">
+            {{ t('share_create.client_audience_notice') }}
+          </p>
           <template v-if="!isClient">
             <RecipientPicker
               v-model="recipients"

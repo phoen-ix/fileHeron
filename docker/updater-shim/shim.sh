@@ -92,10 +92,21 @@ while true; do
             target_tag=$(jq -r '.target_tag // ""' "$STATE_FILE")
             job_id=$(jq -r '.id // ""' "$STATE_FILE")
             action=$(jq -r '.action // "update"' "$STATE_FILE")
-            if [ -z "$target_tag" ]; then
-                log "ERROR pending job has no target_tag - marking failed"
+            # Validate INSIDE the privileged boundary, not only at the API.
+            #
+            # `UpdateApplyRequest._validate_target_tag` already enforces this
+            # shape, but that check runs in the backend - the very component
+            # whose compromise this container's docker.sock would amplify. The
+            # /state channel must therefore never be more permissive than the
+            # API in front of it. The registry path comes from this shim's own
+            # compose env and never from the job file, so a tag can only ever
+            # select an image the vendor published; this keeps it to a release
+            # tag rather than relying on `docker pull` happening to reject
+            # whatever string arrives.
+            if ! printf '%s' "$target_tag" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+                log "ERROR pending job has a missing or malformed target_tag - marking failed"
                 tmp=$(shim_mktemp)
-                jq '. + {status: "failed", error: "missing target_tag", finished_at: now | todate}' \
+                jq '. + {status: "failed", error: "invalid target_tag", finished_at: now | todate}' \
                     "$STATE_FILE" > "$tmp" && install_state "$tmp"
                 continue
             fi

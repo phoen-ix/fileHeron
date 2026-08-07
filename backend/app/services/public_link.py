@@ -87,6 +87,21 @@ def create_link(
         )
     if share.created_by_id != actor.id and actor.role != UserRole.admin:
         raise AppError(403, "FORBIDDEN", "Only the share owner or an admin can do that.")
+    # Bolting a link onto a share that ALREADY cleared four-eyes turns an
+    # approved named-recipient share into a world-readable URL with no second
+    # review - the same escalation attaching a link while pending was fixed for,
+    # one state later. An admin passes (they are the approver set's floor and can
+    # already approve anything); the owner cannot self-serve it.
+    if (
+        share.approval_was_required
+        and share.state == ShareState.active
+        and actor.role != UserRole.admin
+    ):
+        raise AppError(
+            409,
+            "APPROVAL_REQUIRED",
+            "This share was approved without a public link. Ask an approver to attach one.",
+        )
 
     # `share_id` carries a plain UNIQUE constraint with no revoked-row
     # exclusion, so the table can hold exactly ONE row per share, revoked or

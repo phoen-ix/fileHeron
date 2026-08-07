@@ -272,7 +272,11 @@ async def test_export_requires_admin(client, make_user, login_as):
     token, _ = await login_as("client@test.local", "TestPassword123!")
     resp = await client.post(
         "/api/admin/backup/export",
-        json={"categories": ["settings_branding"], "secret_mode": "exclude"},
+        json={
+            "categories": ["settings_branding"],
+            "secret_mode": "exclude",
+            "password": "TestPassword123!",
+        },
         headers={"Authorization": f"Bearer {token}"},
     )
     assert resp.status_code == 403
@@ -284,7 +288,11 @@ async def test_export_admin_downloads(client, make_user, login_as):
     token, _ = await login_as("boss@test.local", "TestPassword123!")
     resp = await client.post(
         "/api/admin/backup/export",
-        json={"categories": ["settings_branding"], "secret_mode": "exclude"},
+        json={
+            "categories": ["settings_branding"],
+            "secret_mode": "exclude",
+            "password": "TestPassword123!",
+        },
         headers={"Authorization": f"Bearer {token}"},
     )
     assert resp.status_code == 200

@@ -284,10 +284,14 @@ async def test_approve_flow(make_user, db, client, login_as, monkeypatch):
     r = await client.get(f"/api/files/{file_row.id}/download-url", headers=rec_headers)
     assert r.status_code == 410, r.text
 
-    # Admin approves.
+    # Admin approves. The fingerprint is mandatory - an approval that doesn't
+    # say what it approves is not a four-eyes control.
+    from app.services import share_approval as approval_svc
+
     admin_token, _ = await login_as("admin@test.local", PW)
     r = await client.post(
         f"/api/shares/{share.id}/approve",
+        json={"content_fingerprint": approval_svc.content_fingerprint(db, share)},
         headers={"Authorization": f"Bearer {admin_token}"},
     )
     assert r.status_code == 200, r.text
@@ -367,9 +371,16 @@ async def test_no_self_approval(make_user, db, client, login_as):
     db.commit()
     assert share.state == ShareState.pending_approval
 
+    from app.services import share_approval as approval_svc
+
     token, _ = await login_as("admin@test.local", PW)
+    # A VALID fingerprint, so the request reaches the self-approval rule rather
+    # than being turned away by body validation - otherwise this test would go
+    # green on a 422 without ever exercising what it is named for.
     r = await client.post(
-        f"/api/shares/{share.id}/approve", headers={"Authorization": f"Bearer {token}"}
+        f"/api/shares/{share.id}/approve",
+        json={"content_fingerprint": approval_svc.content_fingerprint(db, share)},
+        headers={"Authorization": f"Bearer {token}"},
     )
     assert r.status_code == 403
     assert r.json()["code"] == "SELF_APPROVAL"

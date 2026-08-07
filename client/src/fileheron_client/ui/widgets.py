@@ -23,6 +23,13 @@ _PILL_COLOURS: dict[str, tuple[str, str]] = {
     "clean": ("#dcfce7", "#166534"),
     "ready_unscanned": ("#fef3c7", "#92400e"),
     "infected": ("#fee2e2", "#991b1b"),
+    # Not server states: UI-only tones. `warn` marks a file released without a
+    # real AV verdict (too large for clamd), `pending` one still awaiting its
+    # own four-eyes decision. Both would otherwise fall through to the neutral
+    # grey default, which reads as "nothing to see here" - the opposite of the
+    # point.
+    "warn": ("#fef3c7", "#92400e"),
+    "pending": ("#e0e7ff", "#3730a3"),
 }
 
 

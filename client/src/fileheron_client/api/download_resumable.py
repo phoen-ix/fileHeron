@@ -162,12 +162,29 @@ def download_file_resumable(
     )
 
 
-def _finalize(api: ApiClient, part: Path, dest: Path) -> None:
+def _finalize(api: ApiClient, part: Path, dest: Path, total: Optional[int] = None) -> None:
     """Move the completed partial into place and mark it Internet-zone.
 
     The mark goes on the FINAL name: an alternate data stream belongs to the
     file, and writing it to the .part would work but tells the shell about a
-    file the user never sees."""
+    file the user never sees.
+
+    `total` is the size the server said to expect. Checking it here is the last
+    line of defence: nothing else compared the finished file against it, so a
+    transfer that ended short - or long, if a peer ignored `Range` and every
+    worker wrote a whole copy - was renamed into place and reported as success.
+    A wrong file that looks finished is worse than a failed download, so refuse
+    the rename and keep the .part for a resume."""
+    if total is not None:
+        try:
+            actual = part.stat().st_size
+        except OSError as e:
+            raise OSError(f"cannot stat downloaded file: {e}") from e
+        if actual != total:
+            raise OSError(
+                f"downloaded {actual} bytes, expected {total} - refusing to "
+                "save a file that does not match the server"
+            )
     ckpt.replace_with_retry(part, dest)
     motw.tag_downloaded(dest, host_url=str(api.server_url).rstrip("/"))
 
@@ -183,7 +200,10 @@ def _run_single(
     if resume is not None and part.exists():
         offset = part.stat().st_size
         if total and offset >= total:  # already fully on disk
-            _finalize(api, part, dest)
+            # `>=`, so a partial LARGER than the server's size lands here too -
+            # exactly the shape an ignored-Range overwrite leaves behind. Pass
+            # `total` so _finalize refuses it instead of renaming it into place.
+            _finalize(api, part, dest, total)
             ckpt.clear(dest)
             if on_progress is not None:
                 on_progress(total, total)
@@ -267,7 +287,7 @@ def _run_single(
             ckpt.discard(dest)
         raise
 
-    _finalize(api, part, dest)
+    _finalize(api, part, dest, total)
     ckpt.clear(dest)
     return dest
 
@@ -370,6 +390,6 @@ def _run_segmented(
         _persist()
         raise
 
-    _finalize(api, part, dest)
+    _finalize(api, part, dest, total)
     ckpt.clear(dest)
     return dest

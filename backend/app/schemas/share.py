@@ -132,6 +132,10 @@ class FileInShareResponse(APIBaseModel):
     # WITHOUT a real antivirus verdict (see config.AV_MAX_SCAN_BYTES). The
     # UI surfaces this as an explicit warning rather than implying `clean`.
     av_unscanned: bool = False
+    # `pending_review` when the file was added to a share that had ALREADY been
+    # approved, so it waits for its own decision before recipients can fetch it.
+    # Defaults to `approved`, which is what every file on an ungated share is.
+    approval_state: str = "approved"
 
 
 class GroupRecipientRef(APIBaseModel):
@@ -202,12 +206,29 @@ class ShareResponse(APIBaseModel):
     # Digest of the file set + attached link, populated while pending. Echoed
     # back on approve so a share that changed under the approver is refused.
     content_fingerprint: str | None = None
+    # File IDs appended to an already-approved share and still awaiting a
+    # decision. Non-empty means the approvals view should offer this share even
+    # though its state is `active`.
+    files_awaiting_review: list[str] = []
 
 
 class ApproveShareRequest(APIBaseModel):
-    """Body for `POST /api/shares/{id}/approve`. Optional for API-token clients
-    that predate the check; the SPA always sends the fingerprint it rendered."""
-    content_fingerprint: str | None = Field(default=None, max_length=64)
+    """Body for `POST /api/shares/{id}/approve`.
+
+    `content_fingerprint` is REQUIRED. It was optional for one release so
+    API-token clients that predated it kept working, but an integrity check the
+    caller may omit is not an integrity check - and the party who benefits from
+    omitting it is the one under review. Clients must read the digest from the
+    share detail response and echo it back."""
+    content_fingerprint: str = Field(..., min_length=1, max_length=64)
+
+
+class DecideAddedFilesRequest(APIBaseModel):
+    """Body for `POST /api/shares/{id}/added-files/decide` - the decision on
+    files appended to an already-approved share."""
+    approve: bool
+    content_fingerprint: str = Field(..., min_length=1, max_length=64)
+    reason: str | None = Field(default=None, max_length=1000)
 
 
 class RejectShareRequest(APIBaseModel):

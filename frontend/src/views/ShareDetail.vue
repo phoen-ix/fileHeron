@@ -7,6 +7,7 @@ import { asEnvelope } from '@/api/client'
 import { getDownloadUrl, getPreviewUrl, getShareZipUrl } from '@/api/files'
 import {
   approveShare,
+  decideAddedFiles,
   deleteShare,
   expireShareNow,
   getShare,
@@ -69,8 +70,60 @@ const resubmitting = ref(false)
 const showRejectForm = ref(false)
 const rejectReason = ref('')
 
+// Files appended to an already-approved share carry their own decision. The
+// share stays `active` throughout, so this is separate from approve/reject.
+const decidingAdded = ref(false)
+const addedAwaitingReview = computed(
+  () => (share.value?.files_awaiting_review ?? []).length,
+)
+const canDecideAdded = computed(
+  () =>
+    addedAwaitingReview.value > 0 &&
+    share.value?.state === 'active' &&
+    // Same rule as the share-level decision: never your own content.
+    share.value?.created_by_id !== auth.user?.id &&
+    (auth.user?.role === 'admin' || auth.user?.role === 'employee'),
+)
+
+async function onDecideAdded(approve: boolean) {
+  if (!share.value?.content_fingerprint) return
+  decidingAdded.value = true
+  try {
+    const { data } = await decideAddedFiles(
+      share.value.id,
+      approve,
+      share.value.content_fingerprint,
+      approve ? null : rejectReason.value,
+    )
+    share.value = data
+    rejectReason.value = ''
+    ui.pushToast(
+      approve
+        ? t('approvals.added_files_approved_toast')
+        : t('approvals.added_files_rejected_toast'),
+      'success',
+    )
+  } catch (err) {
+    if (asEnvelope(err)?.code === 'CONTENT_CHANGED') {
+      await load()
+      ui.pushToast(t('approvals.content_changed'), 'warn')
+      return
+    }
+    ui.pushToast(describe(err), 'error')
+  } finally {
+    decidingAdded.value = false
+  }
+}
+
 async function onApprove() {
   if (!share.value) return
+  // The digest is mandatory server-side; without one the request would 422, so
+  // reload rather than fire a request that cannot succeed.
+  if (!share.value.content_fingerprint) {
+    await load()
+    ui.pushToast(t('approvals.content_changed'), 'warn')
+    return
+  }
   approving.value = true
   try {
     const { data } = await approveShare(
@@ -552,6 +605,33 @@ class="fh-notice" role="alert"
           </button>
           <button type="button" class="fh-btn-text" @click="onDiscard">
             {{ t('approvals.discard_cta') }}
+          </button>
+        </div>
+      </div>
+
+      <!-- Files appended AFTER this share was approved. The share itself is
+           live and its approved files keep flowing; only these wait, so this is
+           a decision of its own rather than a re-run of approve/reject. -->
+      <div v-if="addedAwaitingReview > 0" class="approval-box">
+        <p class="fh-notice" data-tone="warn">
+          {{ t('approvals.added_files_banner', { count: addedAwaitingReview }) }}
+        </p>
+        <div v-if="canDecideAdded" class="approver-buttons">
+          <button
+            type="button"
+            class="fh-btn"
+            :disabled="decidingAdded"
+            @click="onDecideAdded(true)"
+          >
+            {{ decidingAdded ? t('common.loading') : t('approvals.added_files_approve_cta') }}
+          </button>
+          <button
+            type="button"
+            class="fh-btn-danger fh-btn"
+            :disabled="decidingAdded"
+            @click="onDecideAdded(false)"
+          >
+            {{ t('approvals.added_files_reject_cta') }}
           </button>
         </div>
       </div>

@@ -348,7 +348,7 @@ async def test_create_via_api_validates_and_audits_scopes(make_user, db, client,
     # Unknown scope -> 400 at the router boundary.
     bad = await client.post(
         "/api/account/api-tokens",
-        json={"name": "x", "scopes": ["bogus"]},
+        json={"name": "x", "scopes": ["bogus"], "password": "Pass12345678!"},
         headers=_h(token),
     )
     assert bad.status_code == 400
@@ -357,7 +357,7 @@ async def test_create_via_api_validates_and_audits_scopes(make_user, db, client,
     # Valid scopes -> 201, response echoes sorted scopes, audit records them.
     ok = await client.post(
         "/api/account/api-tokens",
-        json={"name": "ci", "scopes": ["shares:create", "files:upload"]},
+        json={"name": "ci", "scopes": ["shares:create", "files:upload"], "password": "Pass12345678!"},
         headers=_h(token),
     )
     assert ok.status_code == 201, ok.text

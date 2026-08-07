@@ -397,8 +397,11 @@ export function changeUserEmail(id: number, payload: AdminChangeEmailRequest) {
   return api.post<AdminChangeEmailResponse>(`/admin/users/${id}/email`, payload)
 }
 
-export function eraseUser(id: number) {
-  return api.post<EraseUserResponse>(`/admin/users/${id}/erase`)
+/** `password` is the acting admin's own, re-confirmed. Erasure is
+ *  irreversible and had no re-auth gate at all, while the recoverable
+ *  self-update routes have always required one. */
+export function eraseUser(id: number, password: string) {
+  return api.post<EraseUserResponse>(`/admin/users/${id}/erase`, { password })
 }
 
 /** What the irreversible erase is about to destroy. The endpoint has existed
@@ -950,6 +953,10 @@ export interface BackupExportRequest {
   secret_mode: BackupSecretMode
   passphrase?: string | null
   include_env?: boolean
+  /** The acting admin's OWN password, re-confirmed. Distinct from
+   *  `passphrase`, which encrypts the artifact: this one proves the session
+   *  still belongs to the admin before secrets are read back out. */
+  password: string
 }
 
 export interface BackupImportSummary {
@@ -985,10 +992,18 @@ export function previewBackupImport(file: File, passphrase?: string) {
   return api.post<BackupImportSummary>('/admin/backup/import/preview', form)
 }
 
-export function importConfigBackup(file: File, passphrase?: string) {
+/** `password` is the acting admin's own, re-confirmed - separate from
+ *  `passphrase`, which decrypts the artifact. Import replaces users, purges
+ *  identities, invalidates every share and deletes the bytes. */
+export function importConfigBackup(
+  file: File,
+  passphrase: string | undefined,
+  password: string,
+) {
   const form = new FormData()
   form.append('file', file)
   if (passphrase) form.append('passphrase', passphrase)
   form.append('confirm', 'true')
+  form.append('password', password)
   return api.post<BackupImportSummary>('/admin/backup/import', form)
 }

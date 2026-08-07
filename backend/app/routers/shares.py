@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from ..config import settings
 from ..dependencies import get_db, request_has_scope, require_scope
 from ..middleware.errors import AppError
-from ..models.file import FileState
+from ..models.file import FileApprovalState, FileState
 from ..models.group import Group
 from ..models.share import Share, ShareKind, ShareState
 from ..models.share_recipient import ShareRecipient
@@ -18,6 +18,7 @@ from ..schemas.share import (
     BulkExpireRequest,
     BulkExpireResponse,
     CreateShareRequest,
+    DecideAddedFilesRequest,
     FileInShareResponse,
     FilesAddedRequest,
     GroupRecipientRef,
@@ -105,6 +106,29 @@ def _to_share_response(db: Session, share, *, viewer: User | None = None) -> Sha
         rec_groups = [g for g in rec_groups if g.id in own_groups]
     all_files = list(share.files)
     files = [f for f in all_files if f.state != FileState.deleted]
+    files_pending = [
+        f.id for f in files if f.approval_state == FileApprovalState.pending_review
+    ]
+    # A recipient must not even see the NAME of a file that is still awaiting
+    # review - the gate exists so unreviewed content does not reach them, and a
+    # filename is content. The owner keeps sight of their own upload, and
+    # approvers need it to decide.
+    if files_pending and viewer is not None:
+        may_see_pending = (
+            viewer.id == share.created_by_id
+            or share_approval_svc.can_review_added_files(db, viewer)
+            or viewer.role == UserRole.admin
+        )
+        if not may_see_pending:
+            files = [
+                f
+                for f in files
+                if f.approval_state != FileApprovalState.pending_review
+            ]
+    elif files_pending and viewer is None:
+        files = [
+            f for f in files if f.approval_state != FileApprovalState.pending_review
+        ]
     return ShareResponse(
         id=share.id,
         kind=share.kind,
@@ -128,6 +152,7 @@ def _to_share_response(db: Session, share, *, viewer: User | None = None) -> Sha
                 finalized_at=f.finalized_at,
                 sha256_hex=f.sha256_hex,
                 av_unscanned=f.av_unscanned,
+                approval_state=f.approval_state.value,
             )
             for f in files
         ],
@@ -141,11 +166,15 @@ def _to_share_response(db: Session, share, *, viewer: User | None = None) -> Sha
             else False
         ),
         public_link_summary=_public_link_summary(db, share, viewer),
+        # Also populated for an ACTIVE share carrying appended files that are
+        # still awaiting review - that decision echoes the digest back too, so
+        # withholding it there would make the endpoint unusable.
         content_fingerprint=(
             share_approval_svc.content_fingerprint(db, share)
-            if share.state == ShareState.pending_approval
+            if share.state == ShareState.pending_approval or files_pending
             else None
         ),
+        files_awaiting_review=files_pending,
     )
 
 
@@ -494,20 +523,54 @@ def list_pending_approval(
 def approve_share_route(
     share_id: str,
     request: Request,
-    payload: ApproveShareRequest | None = None,
+    payload: ApproveShareRequest,
     user: User = Depends(require_scope("shares:manage")),
     db: Session = Depends(get_db),
 ) -> ShareResponse:
-    """Approver approves a pending share → active; recipients are notified now."""
+    """Approver approves a pending share → active; recipients are notified now.
+
+    The body is REQUIRED now, and so is its `content_fingerprint`: an approval
+    that does not say what it is approving is not a four-eyes control. This is a
+    deliberate breaking change for API-token clients written against the
+    one release where the field was optional."""
     share = share_svc.get_share_or_404(db, share_id)
     share_svc.approve_share(
         db,
         user=user,
         share=share,
         request=request,
-        expect_fingerprint=payload.content_fingerprint if payload else None,
+        expect_fingerprint=payload.content_fingerprint,
     )
     db.commit()
+    db.refresh(share)
+    return _to_share_response(db, share, viewer=user)
+
+
+@router.post("/{share_id}/added-files/decide", response_model=ShareResponse)
+def decide_added_files_route(
+    share_id: str,
+    payload: DecideAddedFilesRequest,
+    request: Request,
+    user: User = Depends(require_scope("shares:manage")),
+    db: Session = Depends(get_db),
+) -> ShareResponse:
+    """Approver releases (or refuses) files appended to an already-approved
+    share. The share itself stays `active` throughout - only the new files are
+    gated, so existing recipients keep their access while these wait."""
+    share = share_svc.get_share_or_404(db, share_id)
+    _, to_purge = share_svc.decide_added_files(
+        db,
+        user=user,
+        share=share,
+        approve=payload.approve,
+        expect_fingerprint=payload.content_fingerprint,
+        reason=payload.reason,
+        request=request,
+    )
+    db.commit()
+    # Bytes go after the commit - the ordering v2.5.0 established.
+    if to_purge:
+        file_svc.purge_locators(db, to_purge, reason="approval_rejected")
     db.refresh(share)
     return _to_share_response(db, share, viewer=user)
 

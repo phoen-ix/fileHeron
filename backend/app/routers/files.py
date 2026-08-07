@@ -161,7 +161,7 @@ def get_download_url(
     than a confusing browser error after navigation."""
     file = _get_file_or_404(db, file_id)
     share = db.query(Share).filter(Share.id == file.share_id).one()
-    share_svc.assert_share_file_access(db, user=user, share=share)
+    share_svc.assert_share_file_access(db, user=user, share=share, file=file)
     from ..services import maintenance as maintenance_svc
     maintenance_svc.refuse_if_maintenance(db, kind="download")
     if file.state == FileState.uploading:
@@ -212,7 +212,7 @@ def get_preview_url(
 
     file = _get_file_or_404(db, file_id)
     share = db.query(Share).filter(Share.id == file.share_id).one()
-    share_svc.assert_share_file_access(db, user=user, share=share)
+    share_svc.assert_share_file_access(db, user=user, share=share, file=file)
     from ..services import maintenance as maintenance_svc
     maintenance_svc.refuse_if_maintenance(db, kind="download")
     _assert_previewable_state(file)
@@ -255,7 +255,7 @@ def preview_file(
     user = _resolve_download_user(request, db, file_id, dt, authorization)
     file = _get_file_or_404(db, file_id)
     share = db.query(Share).filter(Share.id == file.share_id).one()
-    share_svc.assert_share_file_access(db, user=user, share=share)
+    share_svc.assert_share_file_access(db, user=user, share=share, file=file)
     from ..services import maintenance as maintenance_svc
     maintenance_svc.refuse_if_maintenance(
         db, request=request, kind="download", file_id=file_id
@@ -325,7 +325,7 @@ def download_file(
     file = _get_file_or_404(db, file_id)
     share = db.query(Share).filter(Share.id == file.share_id).one()
 
-    share_svc.assert_share_file_access(db, user=user, share=share)
+    share_svc.assert_share_file_access(db, user=user, share=share, file=file)
 
     from ..services import maintenance as maintenance_svc
     maintenance_svc.refuse_if_maintenance(

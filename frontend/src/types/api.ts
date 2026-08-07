@@ -272,6 +272,10 @@ export interface FileInShareResponse {
    * downloadable); this is what distinguishes "scanned and clean" from
    * "never scanned". Surface it, don't imply safety. */
   av_unscanned?: boolean
+  /** 'pending_review' when this file was added to a share that had ALREADY been
+   *  approved, so it waits for its own four-eyes decision before recipients can
+   *  fetch it. Only the owner and approvers ever see such a row. */
+  approval_state?: 'approved' | 'pending_review'
 }
 
 export interface GroupRecipientRef {
@@ -323,9 +327,13 @@ export interface ShareResponse {
    *  Never carries the URL - it exists so an approver can see that approving
    *  this share also publishes a world-readable link. */
   public_link_summary?: PublicLinkSummary | null
-  /** Digest of the reviewed file set + attached link, present while pending.
+  /** Digest of the reviewed file set + attached link. Present while pending,
+   *  and also on an ACTIVE share carrying files that still await review.
    *  Echoed back on approve; a stale value is refused with 409. */
   content_fingerprint?: string | null
+  /** File IDs appended to an already-approved share and still awaiting a
+   *  decision. Non-empty means this active share needs an approver's attention. */
+  files_awaiting_review?: string[]
 }
 
 export interface PublicLinkSummary {
@@ -425,6 +433,10 @@ export interface PublicShareFile {
    * downloadable); this is what distinguishes "scanned and clean" from
    * "never scanned". Surface it, don't imply safety. */
   av_unscanned?: boolean
+  /** 'pending_review' when this file was added to a share that had ALREADY been
+   *  approved, so it waits for its own four-eyes decision before recipients can
+   *  fetch it. Only the owner and approvers ever see such a row. */
+  approval_state?: 'approved' | 'pending_review'
 }
 
 export interface PublicShareResponse {

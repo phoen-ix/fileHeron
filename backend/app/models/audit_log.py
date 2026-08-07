@@ -89,6 +89,10 @@ class AuditEventType(str, enum.Enum):
     share_submitted_for_approval = "share_submitted_for_approval"
     share_approved = "share_approved"
     share_rejected = "share_rejected"
+    # Files added to an already-approved share carry their own decision - the
+    # share itself stays `active` throughout, so these are not share_approved.
+    share_files_approved = "share_files_approved"
+    share_files_rejected = "share_files_rejected"
     share_resubmitted = "share_resubmitted"
     share_approval_policy_changed = "share_approval_policy_changed"
     share_limit_updated = "share_limit_updated"              # v1.1.0 (per-share download budget)

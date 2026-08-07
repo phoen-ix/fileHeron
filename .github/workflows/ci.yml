@@ -356,6 +356,19 @@ jobs:
         run: |
           pip install pip-audit
           pip-audit -r backend/requirements.lock --progress-spinner off
+      # The desktop client's runtime deps are BUNDLED into a distributed .exe -
+      # end users cannot patch them, only a new release can - and nothing here
+      # or in client-release.yml was auditing them. 3.12 to match the leg that
+      # actually builds the executable. Runtime deps only: the `dev`/`build`
+      # extras (pytest, pyinstaller) never ship.
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - name: pip-audit (desktop client, shipped runtime deps)
+        working-directory: client
+        run: |
+          pip install pip-audit
+          pip-audit --progress-spinner off .
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
         with:
           node-version: '24'

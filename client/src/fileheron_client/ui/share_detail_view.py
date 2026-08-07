@@ -512,7 +512,17 @@ class ShareDetailView(ctk.CTkFrame):
             ctk.CTkLabel(row, text=human_size(f.size_bytes), anchor="e").grid(
                 row=0, column=1, padx=8
             )
-            PillLabel(row, text=f.state, state=f.state).grid(row=0, column=2, padx=8)
+            # `clean` on an oversize file means "no verdict", not "a clean
+            # verdict" - clamd never read it. The web UI has warned about this
+            # since v2.4.0; showing a bare `clean` pill here told desktop users
+            # the opposite of what the server actually knows.
+            pill_state = f.state
+            pill_text = f.state
+            if f.approval_state == "pending_review":
+                pill_state, pill_text = "pending", t("share_detail.file_pending_review")
+            elif f.av_unscanned:
+                pill_state, pill_text = "warn", t("share_detail.file_unscanned")
+            PillLabel(row, text=pill_text, state=pill_state).grid(row=0, column=2, padx=8)
             # The action cell hosts a variable button set: Download → Pause +
             # Cancel (while downloading) → Resume + Discard (paused/interrupted)
             # → Open + Folder (after a successful save).

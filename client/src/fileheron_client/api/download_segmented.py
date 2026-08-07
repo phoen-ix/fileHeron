@@ -36,6 +36,21 @@ def _split(total: int, seg: int) -> list[tuple[int, int]]:
     return out
 
 
+def _parse_content_range(value: Optional[str]) -> Optional[tuple]:
+    """`bytes 100-199/1234` -> (100, 199). None when absent or unparseable -
+    the caller treats that as "cannot verify" rather than "wrong", since a
+    well-behaved 206 always carries it and a malformed one is already caught by
+    the byte-count check."""
+    if not value:
+        return None
+    try:
+        spec = value.strip().split(" ", 1)[1].split("/", 1)[0]
+        lo, hi = spec.split("-", 1)
+        return (int(lo), int(hi))
+    except (IndexError, ValueError):
+        return None
+
+
 def _fetch_segment(
     api: ApiClient,
     url: str,
@@ -58,9 +73,27 @@ def _fetch_segment(
             with api._http.stream(
                 "GET", url, headers=rng, follow_redirects=True
             ) as resp:
-                if resp.status_code not in (206, 200):
+                # 206 only. A 200 means the peer ignored `Range` and is sending
+                # the WHOLE file - and every worker would then write a full copy
+                # at its own offset, producing a corrupt (and oversized) result
+                # that still reported success. `_probe` normally keeps us off
+                # this path, but an intermediary that honours a 1-byte range and
+                # not a 16 MiB one gets here, and silent corruption is the worst
+                # possible failure mode for a file-transfer tool.
+                if resp.status_code != 206:
                     resp.read()
-                    raise OSError(f"segment {start}-{end}: HTTP {resp.status_code}")
+                    raise OSError(
+                        f"segment {start}-{end}: expected 206, got HTTP {resp.status_code}"
+                    )
+                # Trust the header, then verify it: a 206 whose Content-Range
+                # does not describe the span we asked for would splice the wrong
+                # bytes into the middle of the file.
+                got = _parse_content_range(resp.headers.get("Content-Range"))
+                if got is not None and got != (start, end):
+                    resp.read()
+                    raise OSError(
+                        f"segment {start}-{end}: server answered range {got[0]}-{got[1]}"
+                    )
                 with open(part, "r+b") as f:
                     f.seek(start)
                     for chunk in resp.iter_bytes(CHUNK):
@@ -71,6 +104,15 @@ def _fetch_segment(
                         f.write(chunk)
                         written += len(chunk)
                         bump(len(chunk))
+            expected = end - start + 1
+            if written != expected:
+                # A short segment leaves a hole of stale bytes in the middle of
+                # the .part file. Nothing downstream would notice: the size is
+                # right (it was pre-allocated) and there is no digest check.
+                # Raise so the retry loop re-fetches this span.
+                raise OSError(
+                    f"segment {start}-{end}: got {written} bytes, expected {expected}"
+                )
             return
         except (DownloadCancelled, DownloadPaused):
             raise  # never retry a cancel/pause

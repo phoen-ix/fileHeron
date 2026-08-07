@@ -112,7 +112,7 @@ async def test_create_via_api(make_user, client, db):
     access = login.json()["access_token"]
     resp = await client.post(
         "/api/account/api-tokens",
-        json={"name": "ci"},
+        json={"name": "ci", "password": "LongCorrectHorse123!"},
         headers={"Authorization": f"Bearer {access}"},
     )
     assert resp.status_code == 201, resp.text

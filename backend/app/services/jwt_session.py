@@ -33,7 +33,7 @@ from ..models.audit_log import AuditEventType
 from ..models.refresh_token import RefreshToken
 from ..models.user import User
 from ..utils.crypto import random_token, refresh_token_hash
-from ..utils.timeutil import utc_now, utc_now_aware
+from ..utils.timeutil import to_epoch, utc_now, utc_now_aware
 from .audit import record_audit_event
 
 if TYPE_CHECKING:
@@ -95,6 +95,22 @@ def resolve_user_from_access_token(db: Session, token: str, settings: Settings) 
     user = db.query(User).filter(User.id == user_id).one_or_none()
     if user is None or user.is_disabled:
         raise AppError(401, "AUTH_REQUIRED", "Authentication failed.")
+
+    # Refuse a token minted before the user's sessions were invalidated. Same
+    # row, no extra query.
+    #
+    # Compared at SECOND granularity, and deliberately with `<` rather than
+    # `<=`: `iat` is whole seconds, and `routers/account.py::change_password`
+    # revokes and then re-mints inside one request, so a strict comparison
+    # against a sub-second mark would reject the very token it just issued and
+    # sign the user out for changing their password. The cost is that a token
+    # minted in the same second as the revoke survives - a <=1s window, against
+    # the 15 minutes (up to 24 h on a raised TTL) it survived before.
+    invalidated = user.sessions_invalidated_at
+    if invalidated is not None:
+        iat = payload.get("iat")
+        if isinstance(iat, int) and iat < int(to_epoch(invalidated)):
+            raise AppError(401, "TOKEN_REVOKED", "This session was revoked.")
     return user
 
 
@@ -249,13 +265,27 @@ def create_refresh_token(db: Session, user: User, request: Request | None, setti
 
 def revoke_all_user_refresh_tokens(db: Session, user_id: int) -> int:
     """Coarse-but-safe family revoke. Used when reuse is detected or on
-    password reset / change. Returns number of rows affected."""
+    password reset / change. Returns number of rows affected.
+
+    Also stamps `users.sessions_invalidated_at`, which is what makes already-
+    issued ACCESS tokens stop working. Revoking only the refresh rows left a
+    stolen access JWT usable for its full TTL through password reset, password
+    change, logout-others, admin revoke-all and config-backup import - every
+    path that funnels through here - so "all sessions were revoked" was not true
+    of the credential actually presented on each request.
+
+    Deliberately NOT done by single-session `logout`: the mark is per-user, so
+    bumping it there would sign the user out of every other tab because they
+    closed one. That session's own access token dies with the tab and is capped
+    by the TTL regardless.
+    """
     now = utc_now()
     result = db.execute(
         update(RefreshToken)
         .where(RefreshToken.user_id == user_id, RefreshToken.revoked_at.is_(None))
         .values(revoked_at=now)
     )
+    db.execute(update(User).where(User.id == user_id).values(sessions_invalidated_at=now))
     return result.rowcount or 0
 
 

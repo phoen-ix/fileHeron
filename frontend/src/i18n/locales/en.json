@@ -58,6 +58,7 @@
     "API_TOKEN_EXPIRED": "That API token has expired.",
     "API_TOKEN_NOT_ALLOWED": "Your administrator has restricted API token creation.",
     "APPROVAL_POLICY_INERT": "That combination would queue nothing for approval. Widen the approver set or the scope.",
+    "APPROVAL_REQUIRED": "This share was approved without a public link. Ask an approver to attach one.",
     "ATTACHMENT_NOT_CLEAN": "This attachment has not passed the antivirus scan yet.",
     "ATTACHMENT_NOT_FOUND": "Attachment not found.",
     "AUTH_REQUIRED": "Please sign in to continue.",
@@ -73,6 +74,7 @@
     "CANNOT_ERASE_SELF": "An administrator cannot erase their own account.",
     "CONTENT_CHANGED": "This share changed since you opened it. Review it again before approving.",
     "CRON_UNKNOWN": "No scheduled task by that name.",
+    "DEFERRED_LENGTH_REFUSED": "This upload must state its size before it starts. Please start it again.",
     "DELIVERY_NOT_FOUND": "Delivery not found.",
     "DIRECT_UPLOAD_TOO_LARGE": "This file is too large for a direct upload.",
     "DOWNLOAD_TOKEN_EXPIRED": "This download link has expired. Reload the page to get a fresh one.",
@@ -90,11 +92,13 @@
     "ERASURE_IN_PROGRESS": "An erasure for this user is already running.",
     "ERROR_LOG_NOT_FOUND": "Error log entry not found.",
     "EXPIRY_IN_PAST": "The expiry date must be in the future.",
+    "FILES_NOT_READY": "This share is still receiving files. Review it once they've all landed.",
     "FILE_DELETED": "This file has been deleted.",
     "FILE_INFECTED": "This file was quarantined by antivirus and can’t be downloaded.",
     "FILE_NOT_FOUND": "That file no longer exists.",
     "FILE_NOT_INFECTED": "Only files currently in quarantine support this action.",
     "FILE_NOT_SCANNED": "This file was too large to scan for viruses, so it can't be previewed in the browser. Download it and check it locally.",
+    "FILE_PENDING_APPROVAL": "This file was added after the share was approved and is awaiting review.",
     "FILE_QUARANTINED_ADMIN_ONLY": "This file was flagged by antivirus. Only an administrator can act on it via Quarantine.",
     "FILE_RECORD_MISSING": "That upload is no longer registered. Please start it again.",
     "FINAL_SIZE_MISMATCH": "The uploaded size did not match what was announced.",
@@ -164,6 +168,7 @@
     "NOT_API_TOKEN": "This endpoint requires an API token.",
     "NOT_ORPHANED": "That file is not orphaned, so it cannot be reclaimed.",
     "NO_DOWNLOADABLE_FILES": "There are no downloadable files in this share.",
+    "NO_FILES_PENDING": "No files on this share are awaiting review.",
     "NO_PENDING_UPDATE": "There is no update waiting.",
     "NO_RECIPIENTS": "Choose at least one recipient.",
     "NO_ROLLBACK_TARGET": "There is no version to roll back to.",
@@ -226,7 +231,7 @@
     "SHARE_NOT_PENDING": "That share is no longer awaiting approval.",
     "SHARE_NOT_REJECTED": "That share was not rejected, so it cannot be resubmitted.",
     "SIZE_MISMATCH": "The uploaded size did not match what was announced.",
-    "SIZE_OVER_ENVELOPE": "The upload is larger than was authorised.",
+    "SIZE_OVER_ENVELOPE": "The upload size does not match what was authorised.",
     "SSE_TOKEN_EXPIRED": "The live-updates connection expired. Reload the page.",
     "STILL_UPLOADING": "That file is still uploading.",
     "STORAGE_CRITICAL_LOW": "Uploads are paused: the server is low on storage.",
@@ -235,6 +240,7 @@
     "TOKEN_NOT_FOUND": "API token not found.",
     "TOKEN_REUSE": "Suspicious sign-in detected. All sessions have been revoked.",
     "TOKEN_REVOKED": "Permanently-revoked tokens cannot be reactivated.",
+    "TOKEN_REVOKED": "This session was revoked. Please sign in again.",
     "TOO_MANY_STREAMS": "Too many live connections are open. Close another tab and retry.",
     "TOTP_ALREADY_ENABLED": "Two-factor auth is already on for this account.",
     "TOTP_NOT_ENABLED": "Two-factor auth is not enabled.",
@@ -413,6 +419,9 @@
     "banner_default": "The server is in maintenance mode. New uploads and downloads are paused; in-progress transfers will finish."
   },
   "admin_backup": {
+    "admin_password_help": "Re-entered because this file can contain password hashes, two-factor seeds and server secrets.",
+    "admin_password_label": "Confirm your password",
+    "admin_password_ph": "Your account password",
     "title": "Backup & restore",
     "intro": "Export this instance's configuration to rebuild it after a crash, or import a backup to restore it. Shared files are not included - importing a backup invalidates every active share.",
     "export_title": "Export configuration",
@@ -1512,6 +1521,8 @@
     }
   },
   "admin_user_detail": {
+    "erase_password_label": "Confirm your password",
+    "erase_password_placeholder": "Your account password",
     "eyebrow": "Admin / Users",
     "profile": "Profile",
     "role": "Role",
@@ -1883,6 +1894,9 @@
     "av_unscanned_hint": "This file is larger than the virus scanner can process, so it was never scanned. Open it only if you trust the sender."
   },
   "api_tokens": {
+    "password_help": "API tokens keep working after a password reset or signing out other sessions, so creating one is confirmed with your password.",
+    "password_label": "Confirm your password",
+    "password_placeholder": "Your account password",
     "title": "API tokens",
     "intro": "Tokens authorize programmatic uploads via the API or TUS clients. Create one per script or device.",
     "sessions_note": "These are separate from your browser/app sessions: signing out other sessions does not revoke them. Revoke a token here to disconnect its client (e.g. the desktop app) immediately.",
@@ -1962,6 +1976,11 @@
     "inbound": "Inbound"
   },
   "approvals": {
+    "added_files_approve_cta": "Release added files",
+    "added_files_approved_toast": "Added files released to recipients.",
+    "added_files_banner": "{count} file(s) were added after this share was approved and are waiting for review. Recipients cannot download them yet.",
+    "added_files_reject_cta": "Discard added files",
+    "added_files_rejected_toast": "Added files discarded.",
     "approve_cta": "Approve",
     "approved_toast": "Share approved.",
     "confirm_reject_cta": "Reject share",
@@ -1999,6 +2018,7 @@
     "failed": "Failed"
   },
   "share_create": {
+    "client_audience_notice": "Files you send here go to the whole organisation: every employee and administrator can see and download them, along with anyone in your shared groups.",
     "eyebrow": "Compose",
     "title": "New share",
     "intro": {

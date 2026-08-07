@@ -100,6 +100,21 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(), nullable=False, default=utc_now)
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(), nullable=True)
 
+    # High-water mark for access-token validity. Logout-others, password change,
+    # password reset, email change, admin revoke-all, refresh-reuse detection and
+    # config-backup import all funnel through
+    # `jwt_session.revoke_all_user_refresh_tokens`, which stamps this - and
+    # `resolve_user_from_access_token` refuses any token minted before it.
+    #
+    # Without it "Session revoked." was only true of the REFRESH token: a stolen
+    # access JWT stayed valid for its full TTL (15 min by default, but the TTL is
+    # admin-raisable to 24 h) through every one of those actions. The check costs
+    # nothing - it reads a column on the User row that is already being SELECTed
+    # to test `is_disabled`.
+    sessions_invalidated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(), nullable=True
+    )
+
     # Phase 7: populated when a user logs in via OIDC. Phase 10 makes
     # uniqueness composite with `oidc_provider_id` so two providers can
     # both have an "alice" subject without colliding.

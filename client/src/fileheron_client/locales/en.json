@@ -210,7 +210,9 @@
     "download_failed_title": "Download failed",
     "open_file_btn": "Open",
     "open_folder_btn": "Folder",
-    "open_failed": "Couldn't open it: {detail}"
+    "open_failed": "Couldn't open it: {detail}",
+    "file_unscanned": "unscanned",
+    "file_pending_review": "in review"
   },
   "upload": {
     "subject_label": "Subject",

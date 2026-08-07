@@ -18,12 +18,14 @@ from ...schemas.admin import (
     AdminUserItem,
     AdminUserListResponse,
     CreateUserRequest,
+    EraseUserRequest,
     EraseUserResponse,
     ForcePasswordResetResponse,
     UpdateUserRequest,
 )
 from ...services import email_change as email_change_svc
 from ...services import erasure as erasure_svc
+from ...services import step_up
 from ...services import user_management as um_svc
 
 router = APIRouter()
@@ -303,10 +305,12 @@ def erasure_receipt_pdf(
 )
 def erase_user(
     user_id: int,
+    payload: EraseUserRequest,
     request: Request,
     db: Session = Depends(get_db),
     admin: User = Depends(get_current_admin),
 ) -> EraseUserResponse:
+    step_up.verify_password_or_403(admin, payload.password)
     target = um_svc.get_or_404(db, user_id)
     summary = erasure_svc.erase_user(
         db, actor=admin, target=target, request=request

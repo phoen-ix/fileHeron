@@ -49,7 +49,7 @@ async def test_token_minting_is_blocked_without_2fa(
 
     resp = await client.post(
         "/api/account/api-tokens",
-        json={"name": "escape-hatch", "scopes": None, "expires_at": None},
+        json={"name": "escape-hatch", "scopes": None, "expires_at": None, "password": "TestPassword123!"},
         headers=_auth(token),
     )
 
@@ -118,7 +118,7 @@ async def test_token_minting_works_once_policy_is_satisfied(
 
     resp = await client.post(
         "/api/account/api-tokens",
-        json={"name": "legit", "scopes": None, "expires_at": None},
+        json={"name": "legit", "scopes": None, "expires_at": None, "password": "TestPassword123!"},
         headers=_auth(token),
     )
 

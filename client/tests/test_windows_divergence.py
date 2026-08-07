@@ -287,11 +287,16 @@ def test_motw_failure_never_breaks_a_download(tmp_path, monkeypatch):
 
 def test_every_completed_download_gets_marked():
     """Both finalize paths, or the mark depends on which transfer mode the
-    file happened to take."""
+    file happened to take.
+
+    Counts CALL SITES, not one exact argument spelling. Pinning the literal
+    `_finalize(api, part, dest)` meant that adding the final size check - a
+    fourth argument - failed this test while the property it names (every
+    completion routes through the one marking helper) was untouched."""
     assert "motw.tag_downloaded" in _code(SRC / "api" / "files.py")
     resumable = _code(SRC / "api" / "download_resumable.py")
     assert "motw.tag_downloaded" in resumable
-    assert resumable.count("_finalize(api, part, dest)") == 3
+    assert len(re.findall(r"\b_finalize\(api, part, dest\b", resumable)) == 3
 
 
 # --------------------------------------------------------------------------

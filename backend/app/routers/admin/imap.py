@@ -150,6 +150,13 @@ async def test_imap(
     override = None
     if payload is not None and payload.host:
         stored = imap_config.resolve_imap_config(db)
+        # Same reasoning as the SMTP test route: an inline host override that
+        # connects and reports the error back is a non-blind SSRF probe, so it
+        # gets the same address policy the URL-based paths already have.
+        from ...utils.net import assert_safe_host
+
+        assert_safe_host(payload.host, payload.port)
+
         override = imap_config.ImapConfig(
             host=payload.host,
             port=payload.port,

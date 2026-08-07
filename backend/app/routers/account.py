@@ -621,6 +621,12 @@ def create_api_token(
             "API_TOKEN_NOT_ALLOWED",
             "Your administrator has restricted API token creation.",
         )
+    # Re-auth: a token outlives the session that minted it and is not revoked by
+    # password reset or "sign out other sessions", so it must cost more than a
+    # borrowed access token.
+    from ..services.step_up import verify_password_or_403
+
+    verify_password_or_403(user, payload.password)
     expires_at = api_token_svc.normalize_expiry(payload.expires_at)
     scopes = api_token_svc.normalize_scopes(payload.scopes)
     record, plaintext = api_token_svc.create_token(

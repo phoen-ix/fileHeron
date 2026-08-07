@@ -52,7 +52,7 @@ async def test_create_via_api_persists_expiry(make_user, db, client, login_as):
     expires = (_utcnow() + timedelta(days=30)).isoformat()
     resp = await client.post(
         "/api/account/api-tokens",
-        json={"name": "ci", "expires_at": expires},
+        json={"name": "ci", "expires_at": expires, "password": "LongCorrectHorse123!"},
         headers={"Authorization": f"Bearer {token}"},
     )
     assert resp.status_code == 201, resp.text
@@ -69,7 +69,7 @@ async def test_create_via_api_rejects_past_expiry(make_user, client, login_as):
     past = (_utcnow() - timedelta(days=1)).isoformat()
     resp = await client.post(
         "/api/account/api-tokens",
-        json={"name": "ci", "expires_at": past},
+        json={"name": "ci", "expires_at": past, "password": "LongCorrectHorse123!"},
         headers={"Authorization": f"Bearer {token}"},
     )
     assert resp.status_code == 400, resp.text
@@ -82,7 +82,7 @@ async def test_create_via_api_no_expiry_is_unlimited(make_user, db, client, logi
     token, _ = await login_as("hr@test.local", "LongCorrectHorse123!")
     resp = await client.post(
         "/api/account/api-tokens",
-        json={"name": "ci"},  # no expires_at
+        json={"name": "ci", "password": "LongCorrectHorse123!"},  # no expires_at
         headers={"Authorization": f"Bearer {token}"},
     )
     assert resp.status_code == 201, resp.text

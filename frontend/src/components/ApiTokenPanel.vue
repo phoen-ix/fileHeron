@@ -66,11 +66,27 @@
         </div>
       </fieldset>
 
+      <!-- Re-auth. The token outlives this session and is not revoked by a
+           password reset or "sign out other sessions", so creating one asks for
+           the password the same way changing it does. -->
+      <label class="fh-field">
+        <span class="fh-field-label">{{ t('api_tokens.password_label') }}</span>
+        <input
+          v-model="createPassword"
+          class="fh-field-input"
+          type="password"
+          autocomplete="current-password"
+          :placeholder="t('api_tokens.password_placeholder')"
+          required
+        />
+        <span class="fh-field-help">{{ t('api_tokens.password_help') }}</span>
+      </label>
+
       <div class="create-form-actions">
         <button
           type="submit"
           class="fh-btn"
-          :disabled="creatingBusy || !newName || (scopeMode === 'limited' && selectedScopes.length === 0)"
+          :disabled="creatingBusy || !newName || !createPassword || (scopeMode === 'limited' && selectedScopes.length === 0)"
         >
           {{ creatingBusy ? t('common.loading') : t('api_tokens.create_submit') }}
         </button>
@@ -157,6 +173,15 @@ import { TOKEN_SCOPE_GROUPS, scopeLabelKey } from '@/utils/tokenScopes'
 // token stays unlimited unless the user opts into an expiry.
 const TOKEN_PRESETS = ['7d', '30d', '90d', '1y', 'never'] as const
 
+/** 90 days out, in the site-local format ExpiryPicker binds to. */
+function DEFAULT_EXPIRY_LOCAL(): string {
+  const d = new Date()
+  d.setDate(d.getDate() + 90)
+  // `toISOString` is UTC; the picker wants a local `YYYY-MM-DDTHH:mm`.
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
 const { t } = useI18n()
 const { formatDate } = useSiteDateFormat()
 const { describe } = useApiError()
@@ -168,9 +193,16 @@ const loading = ref(false)
 const creating = ref(false)
 const creatingBusy = ref(false)
 const newName = ref('')
-const expiresAtLocal = ref<string | null>(null)  // null = Never (default)
-const scopeMode = ref<'full' | 'limited'>('full')  // full = unrestricted (default)
+// Defaults are now least-privilege. They used to be "never expires" +
+// "unrestricted", so the path of least resistance produced a permanent
+// full-access credential - and nothing revokes API tokens on password reset or
+// "sign out other sessions". Both wide options are still one click away, but
+// they have to be chosen.
+const expiresAtLocal = ref<string | null>(DEFAULT_EXPIRY_LOCAL())
+const scopeMode = ref<'full' | 'limited'>('limited')
 const selectedScopes = ref<string[]>([])
+// Re-auth for creation - see the API client for why.
+const createPassword = ref('')
 const plaintext = ref<CreateApiTokenResponse | null>(null)
 
 function scopeLabel(scope: string): string {
@@ -200,12 +232,18 @@ async function onCreate() {
         ? null
         : siteLocalIsoToUtcIso(expiresAtLocal.value)
     const scopes = scopeMode.value === 'full' ? null : selectedScopes.value
-    const { data } = await createToken(newName.value, expiresAt, scopes)
+    const { data } = await createToken(
+      newName.value,
+      expiresAt,
+      scopes,
+      createPassword.value,
+    )
     plaintext.value = data
     creating.value = false
     newName.value = ''
-    expiresAtLocal.value = null
-    scopeMode.value = 'full'
+    createPassword.value = ''
+    expiresAtLocal.value = DEFAULT_EXPIRY_LOCAL()
+    scopeMode.value = 'limited'
     selectedScopes.value = []
     await refresh()
   } catch (err) {

@@ -39,6 +39,24 @@ class FileState(str, enum.Enum):
     deleted = "deleted"
 
 
+class FileApprovalState(str, enum.Enum):
+    """Whether this file has cleared four-eyes review.
+
+    Four-eyes was evaluated once, in `create_share`, and never again - but the
+    upload gate admits `active` as well as `pending_approval`, so an owner could
+    get a benign share approved and then upload the real payload into the live
+    share, reaching the recipients with no second sign-off. The share-level state
+    cannot express that: flipping an active share back to `pending_approval`
+    would 410 every existing recipient and darken a live public link, turning a
+    routine "here's the appendix" upload into an outage.
+
+    So the mark lives on the FILE. `approved` is the default, which is what every
+    pre-existing row and every deployment with approval switched off must be.
+    """
+    approved = "approved"
+    pending_review = "pending_review"
+
+
 
 
 def _new_uuid() -> str:
@@ -80,6 +98,17 @@ class File(Base):
     # the API, the UI warning and the audit trail read (audit 2026-07-30).
     av_unscanned: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="0", index=True
+    )
+
+    # Files added to a share that was ALREADY approved wait for their own
+    # decision; everything else is `approved` on arrival. Indexed because the
+    # approvals queue filters on it.
+    approval_state: Mapped[FileApprovalState] = mapped_column(
+        SAEnum(FileApprovalState, native_enum=False, length=20),
+        nullable=False,
+        default=FileApprovalState.approved,
+        server_default=FileApprovalState.approved.value,
+        index=True,
     )
 
     uploaded_by_id: Mapped[int] = mapped_column(

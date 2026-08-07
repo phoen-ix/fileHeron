@@ -377,7 +377,10 @@ def create_share(
     if approval_svc.is_approval_required(db, share):
         # Hold the share for review: freeze the notify choice, ping the
         # approvers, and DON'T notify recipients yet - that happens on approval.
+        # `approval_was_required` outlives the decision: it is what tells a later
+        # upload into the (by then active) share that it needs its own review.
         share.state = ShareState.pending_approval
+        share.approval_was_required = True
         share.notify_on_activation = resolved_notify
         db.flush()
         record_audit_event(
@@ -611,17 +614,49 @@ def is_authorized_to_view(db: Session, *, user: User, share: Share) -> bool:
     return is_authorized_to_download(db, user=user, share=share)
 
 
-def assert_share_file_access(db: Session, *, user: User, share: Share) -> None:
+def assert_share_file_access(
+    db: Session, *, user: User, share: Share, file=None
+) -> None:
     """Gate access to a share's file BYTES (download / preview / zip). An
     approver reviewing a pending share is allowed when content review is on;
     otherwise normal authorization + the active-lifecycle gate apply (so a
-    recipient still can't fetch a pending/rejected share's bytes)."""
+    recipient still can't fetch a pending/rejected share's bytes).
+
+    Pass ``file`` on any route that serves ONE file: a file added to an
+    already-approved share carries its own `pending_review` mark, and the
+    share-level checks above cannot see it. The bulk-ZIP routes pass no file
+    because `file_svc.downloadable_files` filters the member list instead."""
     from . import share_approval as approval_svc
     if approval_svc.can_review_pending(db, user, share):
         return
     if not is_authorized_to_download(db, user=user, share=share):
         raise AppError(403, "FORBIDDEN", "You don't have access to this file.")
     assert_share_downloadable(share)
+    if file is not None:
+        assert_file_approved(db, user=user, share=share, file=file)
+
+
+def assert_file_approved(db: Session, *, user: User, share: Share, file) -> None:
+    """Refuse a file that is still awaiting its own four-eyes decision.
+
+    The owner keeps access to what they uploaded (they are assembling the batch
+    and must be able to verify it), and approvers may fetch it when content
+    review is on - that is the whole point of the queue. Everyone else,
+    recipients included, waits for the decision."""
+    from ..models.file import FileApprovalState
+    from . import share_approval as approval_svc
+
+    if file.approval_state == FileApprovalState.approved:
+        return
+    if user.id == share.created_by_id:
+        return
+    if approval_svc.can_review_added_files(db, user):
+        return
+    raise AppError(
+        409,
+        "FILE_PENDING_APPROVAL",
+        "This file was added after the share was approved and is awaiting review.",
+    )
 
 
 VALID_SORT_COLUMNS = {
@@ -826,29 +861,38 @@ def approve_share(
     user: User,
     share: Share,
     request=None,
-    expect_fingerprint: str | None = None,
+    expect_fingerprint: str,
 ) -> Share:
     """Approver flips a pending share live, fires the deferred recipient
     notifications, and tells the creator. Atomic flip guards double-approve.
 
     ``expect_fingerprint`` is the content digest the approver's review screen
-    rendered. The owner may keep adding files to a pending share, so approving
-    without it would sign off on whatever the share happens to contain at the
-    instant the button is clicked. When supplied and stale the decision is
-    refused with 409 so the approver re-reads (audit 2026-07-30)."""
+    rendered, and it is REQUIRED. The owner may keep adding files to a pending
+    share, so approving without it signs off on whatever the share happens to
+    contain at the instant the button is clicked. It was optional for one
+    release so API-token clients that predated it kept working - but a control
+    a caller may simply omit is not a control, and the party that benefits from
+    omitting it is the one being reviewed. Stale digests are refused 409."""
     from ..models.notification import NotificationCategory
     from . import share_approval as approval_svc
 
     _assert_can_decide(db, user, share)
-    if expect_fingerprint is not None:
-        current = approval_svc.content_fingerprint(db, share)
-        if not secrets.compare_digest(expect_fingerprint, current):
-            raise AppError(
-                409,
-                "CONTENT_CHANGED",
-                "This share changed since you opened it - review it again before approving.",
-                details={"content_fingerprint": current},
-            )
+    # Nothing may be mid-flight: `create_pending` writes a row before any byte
+    # lands, so approving now would sign off on a filename and a promised size.
+    if _still_uploading(db, share):
+        raise AppError(
+            409,
+            "FILES_NOT_READY",
+            "This share is still receiving files - review it once they've all landed.",
+        )
+    current = approval_svc.content_fingerprint(db, share)
+    if not secrets.compare_digest(expect_fingerprint, current):
+        raise AppError(
+            409,
+            "CONTENT_CHANGED",
+            "This share changed since you opened it - review it again before approving.",
+            details={"content_fingerprint": current},
+        )
     if share.expires_at is not None and share.expires_at < utc_now():
         raise AppError(
             409,
@@ -947,6 +991,166 @@ def reject_share(
         db, share, category=NotificationCategory.share_rejected, reason=reason
     )
     return share
+
+
+def _dispatch_files_added_after_approval(
+    db: Session, share: Share, *, file_ids: list[str]
+) -> None:
+    """Files added to an approved share just became reachable - send the
+    recipients the same `share_files_added` notice `register_files_added` sends
+    for an ungated share. It was suppressed at upload time because the files
+    were not downloadable yet."""
+    if share.state != ShareState.active:
+        return
+    owner = share.created_by or db.query(User).get(share.created_by_id)
+    if owner is None:
+        return
+    notify = share.notify_on_activation if share.notify_on_activation is not None else True
+    if not notify:
+        return
+    _notify_recipients_files_added(
+        db, share, actor=owner, added_count=len(file_ids)
+    )
+
+
+def _notify_added_files_decision(
+    db: Session, share: Share, *, approved: bool, reason: str | None
+) -> None:
+    """Tell the owner what happened to the files they appended. Reuses the
+    share-level approved/rejected categories: from the sender's point of view it
+    is the same event ("your content was reviewed"), and inventing a second
+    template pair for it would add two locales of copy for no new information."""
+    from ..models.notification import NotificationCategory
+
+    _notify_share_decision(
+        db,
+        share,
+        category=(
+            NotificationCategory.share_approved
+            if approved
+            else NotificationCategory.share_rejected
+        ),
+        reason=reason,
+    )
+
+
+def decide_added_files(
+    db: Session,
+    *,
+    user: User,
+    share: Share,
+    approve: bool,
+    expect_fingerprint: str,
+    reason: str | None = None,
+    request=None,
+) -> tuple[Share, list[str | None]]:
+    """Approve or reject the files added to an ALREADY-approved share.
+
+    Returns ``(share, to_purge)``. On rejection the caller must unlink the
+    returned locators AFTER committing - the ordering v2.5.0 established, so a
+    commit that then fails cannot leave a `clean` row pointing at nothing.
+
+    The share stays `active` throughout, deliberately. Reverting it to
+    `pending_approval` would be destructive rather than additive:
+    `assert_share_downloadable` and `public_link.assert_link_usable` are
+    active-only, so every existing recipient would start getting 410 and a live
+    public link would go dark because someone appended a file. Only the new
+    files are gated, so the approved set keeps flowing while these wait.
+
+    Rejection hard-deletes the added bytes: unlike a rejected share there is no
+    resubmit path for a single file, and leaving them `pending_review` forever
+    would hold the uploader's quota against content an approver refused.
+    """
+    from ..models.file import File, FileApprovalState
+    from . import share_approval as approval_svc
+    from .file import hard_delete
+
+    if not approval_svc.can_approve(db, user):
+        raise AppError(403, "FORBIDDEN", "You may not decide on shares.")
+    if share.created_by_id == user.id:
+        raise AppError(403, "SELF_APPROVAL", "You can't decide on your own share.")
+    if _still_uploading(db, share):
+        raise AppError(
+            409,
+            "FILES_NOT_READY",
+            "This share is still receiving files - review it once they've all landed.",
+        )
+    pending = approval_svc.files_awaiting_review(db, share)
+    if not pending:
+        raise AppError(409, "NO_FILES_PENDING", "No files are awaiting review on this share.")
+
+    current = approval_svc.content_fingerprint(db, share)
+    if not secrets.compare_digest(expect_fingerprint, current):
+        raise AppError(
+            409,
+            "CONTENT_CHANGED",
+            "This share changed since you opened it - review it again before deciding.",
+            details={"content_fingerprint": current},
+        )
+
+    now = utc_now()
+    # `list[str | None]` rather than `list[str]`: `purge_locators` takes that
+    # type and Python lists are invariant, so the narrower annotation would not
+    # be assignable at the call site.
+    to_purge: list[str | None] = []
+    if approve:
+        # Conditional UPDATE, mirroring approve_share's atomic flip: two
+        # approvers clicking at once must not both count as the decider.
+        result = db.execute(
+            update(File)
+            .where(
+                File.share_id == share.id,
+                File.approval_state == FileApprovalState.pending_review,
+            )
+            .values(approval_state=FileApprovalState.approved)
+        )
+        if result.rowcount == 0:
+            raise AppError(409, "NO_FILES_PENDING", "No files are awaiting review on this share.")
+        db.flush()
+        record_audit_event(
+            db,
+            event_type=AuditEventType.share_files_approved,
+            actor_user_id=user.id,
+            target_type="share",
+            target_id=share.id,
+            metadata={"creator_id": share.created_by_id, "file_ids": pending, "decided_at": now.isoformat()},
+            request=request,
+        )
+        _dispatch_files_added_after_approval(db, share, file_ids=pending)
+    else:
+        reason = (reason or "").strip()[:1000] or None
+        for f in (
+            db.query(File)
+            .filter(
+                File.share_id == share.id,
+                File.approval_state == FileApprovalState.pending_review,
+            )
+            .all()
+        ):
+            locator = hard_delete(
+                db,
+                file=f,
+                reason="approval_rejected",
+                actor_user_id=user.id,
+                request=request,
+                purge=False,
+            )
+            if locator:
+                to_purge.append(locator)
+        db.flush()
+        record_audit_event(
+            db,
+            event_type=AuditEventType.share_files_rejected,
+            actor_user_id=user.id,
+            target_type="share",
+            target_id=share.id,
+            metadata={"creator_id": share.created_by_id, "file_ids": pending, "has_reason": reason is not None},
+            request=request,
+        )
+    _notify_added_files_decision(
+        db, share, approved=approve, reason=None if approve else reason
+    )
+    return share, to_purge
 
 
 def resubmit_share(db: Session, *, user: User, share: Share, request=None) -> Share:
@@ -1285,73 +1489,94 @@ def register_files_added(
     # Never for a share still awaiting approval: the recipients cannot see it
     # yet, and telling them files were added to something they have no access
     # to is both confusing and a disclosure of the share's existence.
-    if notify and added_count > 0 and share.state == ShareState.active:
-        from ..models.notification import NotificationCategory
-        from . import notification as notif_svc
-        from . import site as site_svc
+    #
+    # A file added to an ALREADY-approved share is held for its own decision, so
+    # the recipients must not hear about it either - they would be told about
+    # content they get 409 on. Ping the approvers instead; the recipient notice
+    # fires from `decide_added_files` once the file is released.
+    from . import share_approval as approval_svc
 
-        # Same recipient resolution as create_share's notify block, but
-        # sourced from the share's existing recipient rows.
-        notify_user_ids: set[int] = set()
-        if share.kind == ShareKind.inbound:
-            staff_rows = (
-                db.query(User.id)
+    if added_count > 0 and approval_svc.files_awaiting_review(db, share):
+        _notify_approvers_pending(db, share)
+    elif notify and added_count > 0 and share.state == ShareState.active:
+        _notify_recipients_files_added(db, share, actor=user, added_count=added_count)
+
+    db.flush()
+    return share
+
+
+def _notify_recipients_files_added(
+    db: Session, share: Share, *, actor: User, added_count: int
+) -> None:
+    """Tell a share's recipients that files were added to it. Extracted so the
+    post-approval release path (`decide_added_files`) fires the same notice at
+    the moment the files actually become reachable, rather than at upload time
+    when they are still gated."""
+    if added_count <= 0:
+        return
+    from ..models.notification import NotificationCategory
+    from . import notification as notif_svc
+    from . import site as site_svc
+
+    # Same recipient resolution as create_share's notify block, but
+    # sourced from the share's existing recipient rows.
+    notify_user_ids: set[int] = set()
+    if share.kind == ShareKind.inbound:
+        staff_rows = (
+            db.query(User.id)
+            .filter(
+                User.role.in_([UserRole.employee, UserRole.admin]),
+                User.is_disabled.is_(False),
+            )
+            .all()
+        )
+        notify_user_ids = {uid for (uid,) in staff_rows}
+    else:
+        direct_ids = [
+            r.recipient_user_id
+            for r in share.recipients
+            if r.recipient_user_id is not None
+        ]
+        group_ids = [
+            r.recipient_group_id
+            for r in share.recipients
+            if r.recipient_group_id is not None
+        ]
+        notify_user_ids = set(direct_ids)
+        if group_ids:
+            member_rows = (
+                db.query(GroupMember.user_id)
+                .join(User, User.id == GroupMember.user_id)
                 .filter(
-                    User.role.in_([UserRole.employee, UserRole.admin]),
+                    GroupMember.group_id.in_(group_ids),
                     User.is_disabled.is_(False),
                 )
                 .all()
             )
-            notify_user_ids = {uid for (uid,) in staff_rows}
-        else:
-            direct_ids = [
-                r.recipient_user_id
-                for r in share.recipients
-                if r.recipient_user_id is not None
-            ]
-            group_ids = [
-                r.recipient_group_id
-                for r in share.recipients
-                if r.recipient_group_id is not None
-            ]
-            notify_user_ids = set(direct_ids)
-            if group_ids:
-                member_rows = (
-                    db.query(GroupMember.user_id)
-                    .join(User, User.id == GroupMember.user_id)
-                    .filter(
-                        GroupMember.group_id.in_(group_ids),
-                        User.is_disabled.is_(False),
-                    )
-                    .all()
-                )
-                for (uid,) in member_rows:
-                    notify_user_ids.add(uid)
-        notify_user_ids.discard(user.id)
+            for (uid,) in member_rows:
+                notify_user_ids.add(uid)
+    notify_user_ids.discard(actor.id)
 
-        if notify_user_ids:
-            base_url = site_svc.get_site_url(db)
-            payload_base = {
-                "sender_name": user.display_name,
-                "subject": share.subject,
-                "added_count": added_count,
-                "share_url": f"{base_url}/share/{share.id}",
-            }
-            recipients = db.query(User).filter(User.id.in_(notify_user_ids)).all()
-            for u in recipients:
-                payload = dict(payload_base)
-                payload["recipient_name"] = u.display_name
-                notif_svc.dispatch(
-                    db,
-                    user=u,
-                    category=NotificationCategory.share_files_added,
-                    payload=payload,
-                    link_url=payload["share_url"],
-                    email_to=u.email,
-                )
-
-    db.flush()
-    return share
+    if notify_user_ids:
+        base_url = site_svc.get_site_url(db)
+        payload_base = {
+            "sender_name": actor.display_name,
+            "subject": share.subject,
+            "added_count": added_count,
+            "share_url": f"{base_url}/share/{share.id}",
+        }
+        recipients = db.query(User).filter(User.id.in_(notify_user_ids)).all()
+        for u in recipients:
+            payload = dict(payload_base)
+            payload["recipient_name"] = u.display_name
+            notif_svc.dispatch(
+                db,
+                user=u,
+                category=NotificationCategory.share_files_added,
+                payload=payload,
+                link_url=payload["share_url"],
+                email_to=u.email,
+            )
 
 
 def invalidate_all_active_shares(

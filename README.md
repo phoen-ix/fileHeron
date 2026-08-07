@@ -168,7 +168,16 @@ deduplicated to once per 6 h). After login you land on your **default landing pa
 
 The inbox lists shares addressed to you (directly or via a group). Per file you see a
 **Download** button (scanned clean), "Scan in progress" (`425`), "Quarantined"
-(`410`), or "Deleted" (`410`). Downloads stream via kernel `sendfile()`; each is
+(`410`), or "Deleted" (`410`).
+
+> **Client submissions are company-wide, by design.** A share a *client* sends in
+> (an "inbound" share) is not addressed to one person: **every employee and admin
+> can see and download it**, as can any other client who shares at least one group
+> with the sender. Clients do not pick recipients — they send to the organisation.
+> Outbound shares (staff → client) are the opposite: only the named recipients and
+> the members of recipient groups can see them. If you need per-recipient isolation
+> for inbound files, fileHeron is not a multi-tenant platform and does not provide
+> it. Tell your clients what the audience is before you invite them. Downloads stream via kernel `sendfile()`; each is
 logged (your IP, user, file, timestamp). A **Download all (ZIP)** option streams the
 whole share as one archive - built on the fly, never cached to disk, and
 **resumable**: an interrupted archive download continues from where it stopped
@@ -197,11 +206,18 @@ charged like any other download.
 
 Supported files get a **Preview** button (in the share view and on `/d/{token}`) that
 renders inline instead of downloading: **PDF**, raster images (**PNG / JPEG / GIF /
-WebP**), and **plain text** (any `text/*`, shown as source). Preview never consumes a
-download-count budget and isn't logged. Content is served from a strict allowlist with
+WebP**), and **plain text** (any `text/*`, shown as source). Content is served from a strict allowlist with
 `nosniff` + a restrictive CSP; SVG is never inline-rendered and HTML is served as
 `text/plain`. Admins can disable the whole feature at *Settings → General → File
 preview*.
+
+**Preview does not consume the download-count budget and is not logged as a
+download.** It delivers the original file, so anyone who can preview a file can
+save a copy of it without moving the counter — a preview-capable recipient is
+always someone already authorised to download. Treat `download_limit` as a cap
+on counted *download* actions, not as a hard cap on retrievals: if you need the
+latter for images, PDFs or text files, turn preview off at *Settings → General →
+File preview*. (Once the budget is fully spent, preview is refused too.)
 
 ## Share approval (four-eyes)
 
@@ -211,6 +227,17 @@ recipients aren't notified and can't access anything until an **approver** appro
 or the rejection reason + a **Resubmit** button (files kept). Configure who approves,
 which shares need it, whether approvers may open files to review them, and whether
 approvers' own shares auto-approve, at *Settings → Share approval*. Off by default.
+
+**Approval covers the content, not just the share.** A share is judged when it is
+created, but its owner can keep adding files afterwards - so a file uploaded into
+a share that was *already* approved is held for its own decision instead of
+riding on the earlier one. The share itself stays live throughout: everything
+already approved keeps downloading, and any public link keeps working. Approvers
+see "N file(s) added after approval" on the share and can **release** them to
+recipients or **discard** them. For the same reason, a public link can no longer
+be attached to a share after it has been approved (ask an approver), a share
+cannot be approved while a file is still uploading, and an approval is refused if
+the contents changed since the approver opened the page.
 
 ## Account page (`/account`)
 

@@ -339,6 +339,12 @@ services:
       # upload). tusd doesn't sign requests itself; auth rides on the metadata.
       - "-hooks-http-forward-headers=Upload-Metadata"
       - "-hooks-enabled-events=pre-create,pre-finish,post-finish,post-terminate"
+      # Edge backstop mirroring schemas/upload.py::MAX_DECLARED_UPLOAD_BYTES.
+      # The pre-create hook is the real authorisation gate, but it can only
+      # refuse what it is told: a PATCH carries no hook, so without a ceiling
+      # here tusd would accept an arbitrary Upload-Length. Defence in depth for
+      # the deferred-length class of bug, not the primary control.
+      - "-max-size=${TUSD_MAX_SIZE_BYTES:-1099511627776}"  # 1 TiB
       - "-behind-proxy"
       - "-disable-cors"  # CORS is handled by the front-facing proxy/Vite
     volumes:

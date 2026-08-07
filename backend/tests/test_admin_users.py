@@ -214,6 +214,7 @@ async def test_erase_user_hard_deletes_files_and_anonymizes(
     token, _ = await login_as("admin@test.local", "Pass12345678!")
     resp = await client.post(
         f"/api/admin/users/{target.id}/erase",
+        json={"password": "Pass12345678!"},
         headers={"Authorization": f"Bearer {token}"},
     )
     assert resp.status_code == 200, resp.text
@@ -255,6 +256,7 @@ async def test_admin_erase_self_refused(make_user, client, login_as):
     token, _ = await login_as("admin@test.local", "Pass12345678!")
     resp = await client.post(
         f"/api/admin/users/{admin.id}/erase",
+        json={"password": "Pass12345678!"},
         headers={"Authorization": f"Bearer {token}"},
     )
     assert resp.status_code == 400

@@ -47,7 +47,14 @@ const passphraseOk = computed(
     secretMode.value !== 'passphrase' ||
     (passphrase.value.length >= MIN_PASSPHRASE && passphrase.value === passphraseConfirm.value),
 )
-const canExport = computed(() => anySelected.value && passphraseOk.value && !exporting.value)
+// The acting admin's own password, re-confirmed. Export reads secrets back out
+// and import is destructive, so both re-auth - the gate the self-update routes
+// have always had. Distinct from `passphrase`, which encrypts the artifact.
+const adminPassword = ref('')
+
+const canExport = computed(
+  () => anySelected.value && passphraseOk.value && !exporting.value && !!adminPassword.value,
+)
 
 function onSecretModeChange() {
   if (secretMode.value !== 'passphrase') {
@@ -67,6 +74,7 @@ async function onExport() {
       secret_mode: secretMode.value,
       passphrase: secretMode.value === 'passphrase' ? passphrase.value : null,
       include_env: includeEnv.value,
+      password: adminPassword.value,
     })
     const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '')
     downloadBlob(data as Blob, `fileheron-config-${stamp}.fhbackup.json`)
@@ -122,7 +130,11 @@ async function onImport() {
   importing.value = true
   importError.value = null
   try {
-    const { data } = await importConfigBackup(importFile.value, importPassphrase.value || undefined)
+    const { data } = await importConfigBackup(
+      importFile.value,
+      importPassphrase.value || undefined,
+      adminPassword.value,
+    )
     preview.value = data
     ui.pushToast(t('admin_backup.import_done'), 'success')
   } catch (err) {
@@ -206,6 +218,22 @@ async function onImport() {
       <div v-if="secretMode === 'passphrase'" class="fh-notice" data-tone="warning">
         {{ t('admin_backup.plaintext_warning') }}
       </div>
+
+      <!-- Re-auth. This export can carry password hashes, decrypted TOTP seeds
+           and (with include_env) the instance's own secrets, so an admin
+           session alone is not enough to spend it. -->
+      <fieldset class="group">
+        <legend>{{ t('admin_backup.admin_password_label') }}</legend>
+        <input
+          v-model="adminPassword"
+          :aria-label="t('admin_backup.admin_password_ph')"
+          type="password"
+          class="fh-input"
+          autocomplete="current-password"
+          :placeholder="t('admin_backup.admin_password_ph')"
+        />
+        <p class="fh-field-help">{{ t('admin_backup.admin_password_help') }}</p>
+      </fieldset>
 
       <div class="actions">
         <button type="button" class="fh-btn" :disabled="!canExport" @click="onExport">
@@ -301,8 +329,27 @@ v-if="importError" class="fh-notice" role="alert"
           <pre v-if="preview.env_dotenv" class="env-pre">{{ preview.env_dotenv }}</pre>
         </div>
 
+        <!-- Import replaces users, purges identities, invalidates every active
+             share and deletes the bytes. Same re-auth as export. -->
+        <fieldset v-if="preview.dry_run" class="group">
+          <legend>{{ t('admin_backup.admin_password_label') }}</legend>
+          <input
+            v-model="adminPassword"
+            :aria-label="t('admin_backup.admin_password_ph')"
+            type="password"
+            class="fh-input"
+            autocomplete="current-password"
+            :placeholder="t('admin_backup.admin_password_ph')"
+          />
+        </fieldset>
+
         <div v-if="preview.dry_run" class="actions">
-          <button type="button" class="fh-btn fh-btn--danger" :disabled="importing" @click="onImport">
+          <button
+            type="button"
+            class="fh-btn fh-btn--danger"
+            :disabled="importing || !adminPassword"
+            @click="onImport"
+          >
             {{ importing ? t('common.loading') : t('admin_backup.import_cta') }}
           </button>
         </div>

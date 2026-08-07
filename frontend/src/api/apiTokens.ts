@@ -12,11 +12,16 @@ export function createToken(
   name: string,
   expiresAt: string | null = null,
   scopes: string[] | null = null,
+  password = '',
 ) {
   return api.post<CreateApiTokenResponse>('/account/api-tokens', {
     name,
     expires_at: expiresAt,
     scopes,
+    // Re-auth. A token outlives the session that created it and is NOT revoked
+    // by password reset or "sign out other sessions", so minting one costs more
+    // than a borrowed access token.
+    password,
   })
 }
 

@@ -236,7 +236,12 @@ def test_an_approved_share_announces_with_its_real_count(db, make_user, monkeypa
     land_file(db, share, sender, name="y.pdf")
     db.commit()
 
-    share_svc.approve_share(db, user=admin, share=share)
+    from app.services import share_approval as approval_svc
+
+    share_svc.approve_share(
+        db, user=admin, share=share,
+        expect_fingerprint=approval_svc.content_fingerprint(db, share),
+    )
     db.commit()
 
     rows = _announcements(db, rec.id)
@@ -333,10 +338,14 @@ def test_the_batch_signal_still_announces_immediately(db, make_user):
     assert len(_announcements(db, rec.id)) == 1
 
 
-def test_an_approval_granted_mid_upload_does_not_announce_yet(db, make_user):
-    """Add-files is allowed on a pending share on purpose, so an approver can
-    decide while the owner is still uploading. Dispatching there announced
-    whatever count existed at that instant, with nothing to correct it."""
+def test_an_approval_is_refused_while_a_file_is_still_uploading(db, make_user):
+    """Add-files is allowed on a pending share on purpose, so an approver COULD
+    decide while the owner was still uploading. Dispatching there announced
+    whatever count existed at that instant, with nothing to correct it - and,
+    worse, signed off on a row that was only a client-declared filename and size
+    (`create_pending` writes it before a byte lands). The announcement half was
+    fixed first; the decision itself is now refused outright, which is the half
+    that matters for four-eyes."""
     import json
 
     from app.models.file import File, FileState
@@ -376,9 +385,19 @@ def test_an_approval_granted_mid_upload_does_not_announce_yet(db, make_user):
     )
     db.commit()
 
-    share_svc.approve_share(db, user=admin, share=share)
-    db.commit()
-    assert _announcements(db, rec.id) == [], (
-        "approved mid-upload and announced a count that was not final"
-    )
+    import pytest
+
+    from app.middleware.errors import AppError
+    from app.services import share_approval as approval_svc
+
+    with pytest.raises(AppError) as exc:
+        share_svc.approve_share(
+            db, user=admin, share=share,
+            expect_fingerprint=approval_svc.content_fingerprint(db, share),
+        )
+    assert exc.value.code == "FILES_NOT_READY"
+    db.rollback()
+    db.refresh(share)
+    assert share.state == ShareState.pending_approval
+    assert _announcements(db, rec.id) == [], "nothing announced for a refused decision"
     assert share.notify_on_activation is not None, "the announcement is still owed"

@@ -17,6 +17,7 @@ from ...models.audit_log import AuditEventType
 from ...models.user import User
 from ...schemas.backup import BackupExportRequest, BackupImportSummaryResponse
 from ...services import config_backup as cb
+from ...services import step_up
 from ...services.audit import record_audit_event
 from ...utils.timeutil import utc_now
 
@@ -34,6 +35,10 @@ def export_backup(
     db: Session = Depends(get_db),
     admin: User = Depends(get_current_admin),
 ) -> StreamingResponse:
+    # Re-auth before anything is read. A stolen admin session is the threat the
+    # updater's own confirm-password already names; this route hands over
+    # password hashes and decrypted TOTP seeds, so it is the higher-value one.
+    step_up.verify_password_or_403(admin, payload.password)
     data = cb.build_backup(
         db,
         categories=payload.categories,
@@ -141,9 +146,13 @@ async def import_backup(
     file: UploadFile = File(...),
     passphrase: str | None = Form(None),
     confirm: bool = Form(False),
+    password: str = Form(...),
     db: Session = Depends(get_db),
     admin: User = Depends(get_current_admin),
 ) -> BackupImportSummaryResponse:
+    # `confirm` and `password` answer different questions - "did you mean this"
+    # vs "are you still the person who signed in" - so both are required.
+    step_up.verify_password_or_403(admin, password)
     if not confirm:
         raise AppError(
             400, "BACKUP_CONFIRM_REQUIRED",

@@ -58,6 +58,7 @@
     "API_TOKEN_EXPIRED": "Dieses API-Token ist abgelaufen.",
     "API_TOKEN_NOT_ALLOWED": "Deine Administration hat das Anlegen von API-Tokens eingeschränkt.",
     "APPROVAL_POLICY_INERT": "Diese Kombination würde nichts zur Freigabe einreihen. Erweitern Sie den Kreis der Freigebenden oder den Geltungsbereich.",
+    "APPROVAL_REQUIRED": "Diese Freigabe wurde ohne öffentlichen Link genehmigt. Bitten Sie eine genehmigende Person, einen anzuhängen.",
     "ATTACHMENT_NOT_CLEAN": "Dieser Anhang hat die Virenprüfung noch nicht bestanden.",
     "ATTACHMENT_NOT_FOUND": "Anhang nicht gefunden.",
     "AUTH_REQUIRED": "Bitte zuerst anmelden.",
@@ -73,6 +74,7 @@
     "CANNOT_ERASE_SELF": "Ein Administrator kann sein eigenes Konto nicht löschen.",
     "CONTENT_CHANGED": "Diese Freigabe hat sich geändert, seit Sie sie geöffnet haben. Bitte prüfen Sie sie erneut, bevor Sie genehmigen.",
     "CRON_UNKNOWN": "Keine geplante Aufgabe mit diesem Namen.",
+    "DEFERRED_LENGTH_REFUSED": "Dieser Upload muss seine Größe vor dem Start angeben. Bitte starten Sie ihn erneut.",
     "DELIVERY_NOT_FOUND": "Zustellung nicht gefunden.",
     "DIRECT_UPLOAD_TOO_LARGE": "Diese Datei ist für einen Direkt-Upload zu groß.",
     "DOWNLOAD_TOKEN_EXPIRED": "Dieser Download-Link ist abgelaufen. Laden Sie die Seite neu, um einen neuen zu erhalten.",
@@ -90,11 +92,13 @@
     "ERASURE_IN_PROGRESS": "Für diesen Benutzer läuft bereits eine Löschung.",
     "ERROR_LOG_NOT_FOUND": "Fehlerprotokoll-Eintrag nicht gefunden.",
     "EXPIRY_IN_PAST": "Das Ablaufdatum muss in der Zukunft liegen.",
+    "FILES_NOT_READY": "Diese Freigabe empfängt noch Dateien. Prüfen Sie sie, sobald alle angekommen sind.",
     "FILE_DELETED": "Diese Datei wurde gelöscht.",
     "FILE_INFECTED": "Diese Datei wurde vom Virenscanner blockiert und kann nicht heruntergeladen werden.",
     "FILE_NOT_FOUND": "Diese Datei existiert nicht mehr.",
     "FILE_NOT_INFECTED": "Diese Aktion ist nur für aktuell quarantänierte Dateien möglich.",
     "FILE_NOT_SCANNED": "Diese Datei war zu groß für die Virenprüfung und kann daher nicht im Browser angezeigt werden. Laden Sie sie herunter und prüfen Sie sie lokal.",
+    "FILE_PENDING_APPROVAL": "Diese Datei wurde nach der Genehmigung der Freigabe hinzugefügt und wartet auf Prüfung.",
     "FILE_QUARANTINED_ADMIN_ONLY": "Diese Datei wurde vom Virenscanner markiert. Nur Admins können sie über die Quarantäne bearbeiten.",
     "FILE_RECORD_MISSING": "Dieser Upload ist nicht mehr registriert. Bitte starten Sie ihn erneut.",
     "FINAL_SIZE_MISMATCH": "Die hochgeladene Größe stimmt nicht mit der angekündigten überein.",
@@ -164,6 +168,7 @@
     "NOT_API_TOKEN": "Dieser Endpunkt erfordert ein API-Token.",
     "NOT_ORPHANED": "Diese Datei ist nicht verwaist und kann daher nicht zurückgeholt werden.",
     "NO_DOWNLOADABLE_FILES": "In dieser Freigabe gibt es keine herunterladbaren Dateien.",
+    "NO_FILES_PENDING": "Auf dieser Freigabe warten keine Dateien auf Prüfung.",
     "NO_PENDING_UPDATE": "Es wartet kein Update.",
     "NO_RECIPIENTS": "Wählen Sie mindestens einen Empfänger.",
     "NO_ROLLBACK_TARGET": "Es gibt keine Version, zu der zurückgekehrt werden kann.",
@@ -226,7 +231,7 @@
     "SHARE_NOT_PENDING": "Diese Freigabe wartet nicht mehr auf Genehmigung.",
     "SHARE_NOT_REJECTED": "Diese Freigabe wurde nicht abgelehnt und kann daher nicht erneut eingereicht werden.",
     "SIZE_MISMATCH": "Die hochgeladene Größe stimmt nicht mit der angekündigten überein.",
-    "SIZE_OVER_ENVELOPE": "Der Upload ist größer als autorisiert.",
+    "SIZE_OVER_ENVELOPE": "Die Upload-Größe stimmt nicht mit der autorisierten überein.",
     "SSE_TOKEN_EXPIRED": "Die Verbindung für Live-Updates ist abgelaufen. Laden Sie die Seite neu.",
     "STILL_UPLOADING": "Diese Datei wird noch hochgeladen.",
     "STORAGE_CRITICAL_LOW": "Uploads sind pausiert: Auf dem Server ist wenig Speicherplatz.",
@@ -235,6 +240,7 @@
     "TOKEN_NOT_FOUND": "API-Token nicht gefunden.",
     "TOKEN_REUSE": "Verdächtige Anmeldung erkannt. Alle Sitzungen wurden beendet.",
     "TOKEN_REVOKED": "Endgültig widerrufene Tokens können nicht reaktiviert werden.",
+    "TOKEN_REVOKED": "Diese Sitzung wurde widerrufen. Bitte melden Sie sich erneut an.",
     "TOO_MANY_STREAMS": "Zu viele Live-Verbindungen offen. Schließen Sie einen anderen Tab und versuchen Sie es erneut.",
     "TOTP_ALREADY_ENABLED": "Zwei-Faktor-Auth ist für dieses Konto bereits aktiv.",
     "TOTP_NOT_ENABLED": "Zwei-Faktor-Auth ist nicht aktiviert.",
@@ -413,6 +419,9 @@
     "banner_default": "Der Server befindet sich im Wartungsmodus. Neue Uploads und Downloads sind pausiert; laufende Übertragungen werden beendet."
   },
   "admin_backup": {
+    "admin_password_help": "Erneut erforderlich, weil diese Datei Passwort-Hashes, Zwei-Faktor-Schlüssel und Server-Geheimnisse enthalten kann.",
+    "admin_password_label": "Passwort bestätigen",
+    "admin_password_ph": "Ihr Kontopasswort",
     "title": "Sicherung & Wiederherstellung",
     "intro": "Exportiere die Konfiguration dieser Instanz, um sie nach einem Ausfall wieder aufzubauen, oder importiere eine Sicherung. Geteilte Dateien sind nicht enthalten - ein Import macht jede aktive Freigabe ungültig.",
     "export_title": "Konfiguration exportieren",
@@ -1512,6 +1521,8 @@
     }
   },
   "admin_user_detail": {
+    "erase_password_label": "Passwort bestätigen",
+    "erase_password_placeholder": "Ihr Kontopasswort",
     "eyebrow": "Admin / Benutzer",
     "profile": "Profil",
     "role": "Rolle",
@@ -1883,6 +1894,9 @@
     "av_unscanned_hint": "Diese Datei ist größer, als der Virenscanner verarbeiten kann, und wurde daher nie geprüft. Öffnen Sie sie nur, wenn Sie dem Absender vertrauen."
   },
   "api_tokens": {
+    "password_help": "API-Token funktionieren auch nach einem Passwort-Reset oder dem Abmelden anderer Sitzungen weiter - deshalb wird die Erstellung mit Ihrem Passwort bestätigt.",
+    "password_label": "Passwort bestätigen",
+    "password_placeholder": "Ihr Kontopasswort",
     "title": "API-Tokens",
     "intro": "Tokens autorisieren Uploads über die API oder TUS-Clients. Pro Skript oder Gerät einen Token erstellen.",
     "sessions_note": "Diese sind von deinen Browser-/App-Sitzungen getrennt: Das Abmelden anderer Sitzungen widerruft sie nicht. Widerrufe hier ein Token, um seinen Client (z. B. die Desktop-App) sofort zu trennen.",
@@ -1962,6 +1976,11 @@
     "inbound": "Eingehend"
   },
   "approvals": {
+    "added_files_approve_cta": "Hinzugefügte Dateien freigeben",
+    "added_files_approved_toast": "Hinzugefügte Dateien für Empfänger freigegeben.",
+    "added_files_banner": "{count} Datei(en) wurden nach der Genehmigung dieser Freigabe hinzugefügt und warten auf Prüfung. Empfänger können sie noch nicht herunterladen.",
+    "added_files_reject_cta": "Hinzugefügte Dateien verwerfen",
+    "added_files_rejected_toast": "Hinzugefügte Dateien verworfen.",
     "approve_cta": "Genehmigen",
     "approved_toast": "Freigabe genehmigt.",
     "confirm_reject_cta": "Freigabe ablehnen",
@@ -1999,6 +2018,7 @@
     "failed": "Fehlgeschlagen"
   },
   "share_create": {
+    "client_audience_notice": "Dateien, die Sie hier senden, gehen an die gesamte Organisation: Alle Mitarbeitenden und Administratoren können sie sehen und herunterladen, ebenso Personen in Ihren gemeinsamen Gruppen.",
     "eyebrow": "Verfassen",
     "title": "Neue Freigabe",
     "intro": {

@@ -350,15 +350,15 @@ class UpdateApplyRequest(BaseModel):
 
 
 def _verify_password_or_403(user: User, password: str) -> None:
-    from ...utils.crypto import argon2_verify
-    # 403 (not 401) on a wrong confirm-password: the admin IS authenticated -
-    # this is a re-auth gate, not a session failure. A 401 here collides with
-    # the SPA's global access-token-refresh interceptor, which would silently
-    # refresh the session and re-submit the update with the same wrong
-    # password, masking the error (the user saw "nothing happened"). A
-    # distinct INVALID_PASSWORD code lets the UI show a precise message.
-    if not argon2_verify(user.password_hash, password):
-        raise AppError(403, "INVALID_PASSWORD", "Password incorrect.")
+    """Thin alias for services/step_up.verify_password_or_403.
+
+    The rule moved to a service so the config-backup and erasure routes could
+    apply it too - they are equally irreversible and had no re-auth at all,
+    which made this gate look like a quirk of the updater rather than the policy
+    it is."""
+    from ...services.step_up import verify_password_or_403
+
+    verify_password_or_403(user, password)
 
 
 def _dispatch_ops_to_admins(db: Session, payload: dict, link_url: str) -> None:

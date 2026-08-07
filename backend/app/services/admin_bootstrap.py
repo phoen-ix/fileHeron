@@ -4,11 +4,15 @@ Two paths:
 
 1. ADMIN_BOOTSTRAP_EMAIL set + ADMIN_BOOTSTRAP_PASSWORD set + no admin exists →
    create that user as admin (email-verified) on startup.
-2. ADMIN_BOOTSTRAP_EMAIL set + the user exists → ensure they're role=admin and
-   email_verified=true on startup (idempotent promotion). This is the same
-   pattern as reclaim's `promoteByEmail`.
+2. ADMIN_BOOTSTRAP_EMAIL set + the user exists + **setup is not yet complete** →
+   ensure they're role=admin and email_verified=true (first-run promotion).
 
 If ADMIN_BOOTSTRAP_EMAIL is empty, neither path runs.
+
+Both paths are bounded to first run. Path 2 used to promote on EVERY boot, which
+made a deliberate demotion or disablement of that one account self-reverting -
+see the comment on the guard for why the sticky `setup.completed_at` flag is the
+right authority for both.
 """
 from __future__ import annotations
 
@@ -68,7 +72,31 @@ def bootstrap_admin_if_configured(db: Session) -> None:
         logger.warning("admin_bootstrap: created admin user %s", user.email)
         return
 
-    # Path 2: idempotent promote-and-verify.
+    # Path 2: FIRST-RUN promote-and-verify, not a standing re-promotion.
+    #
+    # This ran unconditionally on every boot and force-set role=admin,
+    # email_verified and is_disabled=False. So an administrator deliberately
+    # demoted or disabled after an incident silently regained everything on the
+    # next restart - and with `restart: unless-stopped` plus the in-app
+    # self-update, restarts are routine. The env var is operator-controlled, so
+    # this is IR-persistence rather than a remotely reachable hole, but it
+    # quietly reverted the product's own admin-revocation control.
+    #
+    # `is_setup_complete` is the sticky one-way flag the 2026-07-30 audit added
+    # for exactly this class of problem; reuse it rather than inventing a second
+    # "this instance is past bootstrap" authority. Once setup is done, the
+    # documented recovery is `scripts/promote_user.py`, which needs shell access
+    # to the host - the right bar for reinstating an admin.
+    from .setup import is_setup_complete
+
+    if is_setup_complete(db):
+        logger.info(
+            "admin_bootstrap: setup already complete; leaving %s as-is "
+            "(use scripts/promote_user.py to reinstate an admin)",
+            user.email,
+        )
+        return
+
     changed = False
     metadata: dict[str, object] = {"reason": "idempotent_promote"}
     if user.role != UserRole.admin:

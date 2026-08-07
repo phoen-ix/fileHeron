@@ -102,6 +102,15 @@ class UpdateEmailChangePolicyRequest(APIBaseModel):
     oidc_mode: EmailChangeOidcMode
 
 
+class EraseUserRequest(APIBaseModel):
+    """Body for `POST /api/admin/users/{id}/erase`.
+
+    Erasure is irreversible and had neither a re-auth gate nor a confirm flag,
+    while the self-update routes - which are recoverable - re-prompted for the
+    password. `password` is the admin's own, re-confirmed."""
+    password: str = Field(..., min_length=1, max_length=512)
+
+
 class EraseUserResponse(APIBaseModel):
     user_id: int
     deleted_files: int

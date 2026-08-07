@@ -33,7 +33,7 @@ from ..dependencies import get_db
 from ..middleware.errors import AppError
 from ..models.audit_log import AuditEventType
 from ..models.download_log import DownloadLog, DownloadVia
-from ..models.file import File, FileState
+from ..models.file import File, FileApprovalState, FileState
 from ..models.public_link import PublicLink
 from ..models.share import Share
 from ..schemas.public_link import (
@@ -136,7 +136,14 @@ def landing(
     share = db.query(Share).filter(Share.id == link.share_id).one()
     files = (
         db.query(File)
-        .filter(File.share_id == share.id, File.state != FileState.deleted)
+        .filter(
+            File.share_id == share.id,
+            File.state != FileState.deleted,
+            # Not even the NAME of a file awaiting review: this listing is
+            # anonymous, and the point of the gate is that nobody outside the
+            # owner/approver pair learns about the content until it is released.
+            File.approval_state == FileApprovalState.approved,
+        )
         .all()
     )
     # A password-protected link that has NOT been unlocked yet must not disclose
@@ -294,7 +301,15 @@ def public_download(
     )
 
     file = db.query(File).filter(File.id == file_id).one_or_none()
-    if file is None or file.share_id != link.share_id:
+    # A file still awaiting its own four-eyes decision is not part of this link.
+    # 404 rather than 409: an anonymous holder is neither the owner nor an
+    # approver, so the only thing a distinct code would tell them is that
+    # unreleased content exists.
+    if (
+        file is None
+        or file.share_id != link.share_id
+        or file.approval_state != FileApprovalState.approved
+    ):
         raise AppError(404, "FILE_NOT_FOUND", "File not found in this public share.")
     if file.state == FileState.uploading:
         raise AppError(409, "STILL_UPLOADING", "File hasn't finished uploading yet.")
@@ -412,7 +427,15 @@ def public_preview(
         raise AppError(403, "PREVIEW_DISABLED", "In-browser preview is disabled.")
 
     file = db.query(File).filter(File.id == file_id).one_or_none()
-    if file is None or file.share_id != link.share_id:
+    # A file still awaiting its own four-eyes decision is not part of this link.
+    # 404 rather than 409: an anonymous holder is neither the owner nor an
+    # approver, so the only thing a distinct code would tell them is that
+    # unreleased content exists.
+    if (
+        file is None
+        or file.share_id != link.share_id
+        or file.approval_state != FileApprovalState.approved
+    ):
         raise AppError(404, "FILE_NOT_FOUND", "File not found in this public share.")
     if file.state == FileState.uploading:
         raise AppError(409, "STILL_UPLOADING", "File hasn't finished uploading yet.")

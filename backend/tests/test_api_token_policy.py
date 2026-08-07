@@ -142,7 +142,7 @@ async def test_route_returns_403_when_policy_blocks(
 
     resp = await client.post(
         "/api/account/api-tokens",
-        json={"name": "ci"},
+        json={"name": "ci", "password": "Pass12345678!"},
         headers={"Authorization": f"Bearer {token}"},
     )
     assert resp.status_code == 403

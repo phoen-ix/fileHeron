@@ -335,8 +335,9 @@ class Settings(BaseSettings):
     PUBLIC_LINK_LOCKOUT_SEC: int = 900  # link locked for 15 min after lockout
 
     # --- Anomaly detection (v1.20.0, heuristic / GeoIP-free) ------------------
-    # Hourly anomaly_check cron; thresholds admin-tunable. Alerts only, never
-    # auto-blocks. Set ANOMALY_ENABLED=false to disable the cron entirely.
+    # Hourly anomaly_check cron; thresholds admin-tunable. Alerts by default;
+    # auto-blocking is opt-in via the scan guard's auth-failure signal (v2.10.0,
+    # off by default). Set ANOMALY_ENABLED=false to disable the cron entirely.
     ANOMALY_ENABLED: bool = True
     ANOMALY_MASS_DOWNLOAD_THRESHOLD: int = 100   # downloads / user / 15 min
     ANOMALY_MULTI_NETWORK_THRESHOLD: int = 4     # distinct networks / user / 30 min
@@ -358,6 +359,29 @@ class Settings(BaseSettings):
     # middleware/errors.py, mirrored to the edge nginx limit_req). Raise for fuller
     # scan visibility; it bounds the worst-case log-write rate during a probe storm.
     ERROR_LOG_SCAN_CAPTURE_PER_MIN: int = 300
+
+    # --- Scan guard (v2.10.0, auto-block scanning sources) -------------------
+    # Ships DISABLED: this is the only control in the product that DENIES service
+    # to a caller, so an operator opts in. Every knob below is a registry tunable
+    # (admin-editable at /admin/settings/scan-guard and on Advanced).
+    #
+    # Sizing against the reference instance (1664 offending requests / 93 IPs in
+    # two months): threshold 3 over a 1h window blocks on the 4th offence, which
+    # trips every burst source and every returning source (~95% of all hits),
+    # while the 62 addresses that appeared once and never returned never trip -
+    # correctly, since there is nothing left to block by the time they would.
+    SCAN_GUARD_THRESHOLD: int = 3            # offences before a block
+    SCAN_GUARD_WINDOW_SEC: int = 3600        # ...within this window
+    SCAN_GUARD_BLOCK_MINUTES: int = 60       # first block; doubles per strike
+    SCAN_GUARD_MAX_BLOCK_MINUTES: int = 1440  # ceiling; there is no "permanent"
+    # Only the api_404 signal uses this. A scanner walks many paths (113 distinct
+    # in 19s was observed); every benign repeat-404 source - uptime monitor,
+    # broken integration, mistyped bookmark, self-update poll - has exactly one.
+    SCAN_GUARD_MIN_DISTINCT_PATHS: int = 15
+    SCAN_GUARD_NETWORK_THRESHOLD: int = 3    # distinct BLOCKED IPs in one /24
+    SCAN_GUARD_NETWORK_LOOKBACK_HOURS: int = 168
+    SCAN_GUARD_MAX_NEW_BLOCKS_PER_MIN: int = 60  # bounds forged-XFF flooding
+    IP_BLOCK_RETENTION_DAYS: int = 90
 
     @property
     def database_url(self) -> str:

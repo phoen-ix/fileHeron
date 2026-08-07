@@ -27,6 +27,7 @@ from ..models.audit_log import AuditEventType, AuditLog
 from ..models.download_log import DownloadLog
 from ..models.email_log import EmailLog
 from ..models.error_log import ErrorLog
+from ..models.ip_block import IpBlock
 from ..models.login_attempt import LoginAttempt
 from ..models.public_link_attempt import PublicLinkAttempt
 from ..models.webhook import WebhookDelivery
@@ -90,6 +91,7 @@ async def prune_history(_ctx) -> dict:
         inbound_days = _sr.effective(_db0, _sr.K.IMAP_MESSAGE_RETENTION_DAYS)
         error_days = _sr.effective(_db0, _sr.K.ERROR_LOG_RETENTION_DAYS)
         link_attempt_days = _sr.effective(_db0, _sr.K.PUBLIC_LINK_ATTEMPT_RETENTION_DAYS)
+        ip_block_days = _sr.effective(_db0, _sr.K.IP_BLOCK_RETENTION_DAYS)
     finally:
         _db0.close()
     # `user_erased` rows are the GDPR receipt. `config_backup.apply_backup` is
@@ -133,6 +135,17 @@ async def prune_history(_ctx) -> dict:
         PublicLinkAttempt.attempted_at,
         PublicLinkAttempt,
     )
+    # Scan-guard blocks carry a client IP, so they get a retention window like
+    # every other IP-bearing table here. `keep` is belt-and-braces: a row is only
+    # ever removed once it has also EXPIRED, so a long-lived block can never be
+    # pruned out from under the cache while it is still in force.
+    ip_block_pruned = await _prune_table(
+        "ip_blocks",
+        ip_block_days,
+        IpBlock.created_at,
+        IpBlock,
+        keep=IpBlock.expires_at < utc_now(),
+    )
     inbound_pruned = await _prune_inbound(inbound_days)
     return {
         "public_link_password_attempts": link_attempt_pruned,
@@ -142,6 +155,7 @@ async def prune_history(_ctx) -> dict:
         "login_attempts": login_pruned,
         "webhook_deliveries": webhook_pruned,
         "error_log": error_pruned,
+        "ip_blocks": ip_block_pruned,
         "inbound_messages": inbound_pruned,
     }
 

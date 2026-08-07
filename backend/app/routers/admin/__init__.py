@@ -36,6 +36,7 @@ from . import (
     mail,
     oidc,
     quarantine,
+    scan_guard,
     sessions,
     settings,
     system,
@@ -46,7 +47,8 @@ from . import (
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 _SUBROUTERS = (
     analytics, api_tokens, audit, backup, crons, email_templates, errors, files, imap,
-    invites, mail, oidc, quarantine, sessions, settings, system, users, webhooks,
+    invites, mail, oidc, quarantine, scan_guard, sessions, settings, system, users,
+    webhooks,
 )
 for _sub in _SUBROUTERS:
     router.include_router(_sub.router)

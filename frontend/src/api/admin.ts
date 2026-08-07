@@ -1007,3 +1007,77 @@ export function importConfigBackup(
   form.append('password', password)
   return api.post<BackupImportSummary>('/admin/backup/import', form)
 }
+
+// --- Scan guard (auto-block scanning sources) -------------------------------
+
+export function getScanGuardSettings() {
+  return api.get<ScanGuardSettings>('/admin/scan-guard')
+}
+
+export function updateScanGuardSettings(payload: UpdateScanGuardSettings) {
+  return api.put<ScanGuardSettings>('/admin/scan-guard', payload)
+}
+
+export function listIpBlocks(params: { active?: boolean; page?: number; page_size?: number } = {}) {
+  return api.get<IpBlockListResponse>('/admin/scan-guard/blocks', { params })
+}
+
+export function createIpBlock(payload: { subject: string; minutes: number; note?: string | null }) {
+  return api.post<IpBlockRow>('/admin/scan-guard/blocks', payload)
+}
+
+export function releaseIpBlock(id: number) {
+  return api.delete(`/admin/scan-guard/blocks/${id}`)
+}
+
+export interface ScanGuardSettings {
+  enabled: boolean
+  signal_probe_path: boolean
+  signal_api_404: boolean
+  signal_auth_failure: boolean
+  escalation: boolean
+  network_escalation: boolean
+  notify_mode: 'off' | 'digest' | 'every_block'
+  allowlist: string
+  extra_paths: string
+  ignore_paths: string
+  threshold: number
+  window_sec: number
+  block_minutes: number
+  max_block_minutes: number
+  min_distinct_paths: number
+  network_threshold: number
+  network_lookback_hours: number
+  max_new_blocks_per_min: number
+  active_ip_blocks: number
+  active_network_blocks: number
+}
+
+/** The PUT body: everything the response carries except the live counts. */
+export type UpdateScanGuardSettings = Omit<
+  ScanGuardSettings,
+  'active_ip_blocks' | 'active_network_blocks'
+>
+
+export interface IpBlockRow {
+  id: number
+  subject: string
+  network: string
+  is_network: boolean
+  reason: string
+  source: string
+  hit_count: number
+  strikes: number
+  last_path: string | null
+  created_at: string
+  expires_at: string
+  released_at: string | null
+  note: string | null
+}
+
+export interface IpBlockListResponse {
+  items: IpBlockRow[]
+  total: number
+  page: number
+  page_size: number
+}

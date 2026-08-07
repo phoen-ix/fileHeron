@@ -15,6 +15,14 @@ keep this to what would cause a wrong move if unknown.
 
 ## Status
 
+**v2.10.0 adds the scan guard** (`/admin/settings/scan-guard`): auto-detect and
+temporarily block scanning sources. **Ships OFF**, so the upgrade is
+behaviour-neutral; it HAS a migration (`202608080001`, the `ip_blocks` table), so
+a rollback past it needs the [[reference_rollback_migration_trap]] `alembic stamp`
+recovery. No host step, no new breaking API change. See the invariant block above
+before touching it - especially the non-global refusal, which is what stops it
+blocking this stack's own frontend.
+
 **v2.9.0 has SIX breaking API changes**, all deliberate re-auth / integrity
 gates. Any API-token or scripted client doing these must be updated:
 1. `POST /api/shares/{id}/approve` requires a body with `content_fingerprint`.
@@ -51,6 +59,51 @@ route returns the decrypted plaintext link URL. (README's server/client version
 badges read live from the git tags, so they never need a manual bump; this line
 does - keep it current on release.)
 
+> **v2.10.0 invariants worth knowing before you touch these areas.**
+> **The scan guard is the only control in this product that DENIES service, so
+> it ships OFF** (`scan_guard.enabled` default false) and is defined by what it
+> refuses to do:
+> **Never count or block a non-`is_global` address** (`utils/client_ip.py::
+> is_blockable`). This is not politeness - the backend has FIVE peers, and bait
+> paths arrive via the frontend **nginx**, not Traefik. `docker/traefik/README.md`
+> and this file both advise pinning `FORWARDED_ALLOW_IPS` to the proxy CIDR; do
+> that and uvicorn stops honouring XFF from nginx, so every scanner request
+> resolves to *nginx's own container address* - one source, 100% of the 404s,
+> maximum path diversity, a textbook scanner. Blocking it takes `/api/` down for
+> the whole SPA. The same refusal covers the bridge gateway, tusd, the updater,
+> the healthcheck, e2e and CI.
+> **Detection lives in `middleware/scan_guard.py`, NOT in
+> `middleware/errors.py`.** That hook is gated on `error_log.capture_4xx` (off by
+> default, empty allowlist) so a guard there does nothing on a stock install, and
+> it is throttled by an *alerting* throttle - detection would stop exactly when a
+> scan got big. Classifying in the middleware also makes the feedback loop
+> structurally impossible: the refusal is emitted ABOVE `ExceptionMiddleware`, so
+> a blocked source produces **no** `error_log` rows and **no** ARQ jobs. Blocking
+> quiets the log rather than flooding it.
+> **The refusal must stay byte-identical to a real 404** - same envelope, same
+> `code`, same headers. Anything that differs is an oracle: a scanner learns which
+> proxies are burned and can binary-search the threshold. This is why the
+> middleware sits INSIDE `RequestId`/`SecurityHeaders` (it inherits both on the
+> way out) and OUTSIDE `ExceptionMiddleware`. `e2e/tests/edge-behaviour.spec.ts`
+> asserts bait probes return 404 with a JSON content-type; a bare 404 breaks it.
+> **The hot path does ZERO I/O.** Block state is a process cache, never a
+> per-request Redis GET - `redis_client` sets `socket_timeout=2`, so a Redis
+> *slowdown* would add two seconds to every request. **Redis down ⇒ fail OPEN**;
+> unlike `rate_limit`'s in-process fallback (which protects credentials), this
+> guard protects nothing that was not already 404ing.
+> **`/api/public/*` is never counted.** `get_link_by_token` answers 404 for an
+> unknown token, and mail-security gateways (SafeLinks, Proofpoint, Mimecast)
+> fetch `/d/{token}` from many egress IPs and retry - so a revoked share link
+> looks exactly like distributed token guessing from a customer's mail
+> infrastructure. Same reason **/24 escalation ships OFF**: escalating the two hot
+> networks on the reference instance would block 512 addresses to suppress 14.
+> **Authenticated requests never count** (0 of 1,664 observed offences carried a
+> session), which is also what stops the self-update poll's `JOB_NOT_FOUND` 404s
+> banning the admin who clicks Update.
+> **Paths are counted `_redact_path`'d**, so a live public-link token never lands
+> in a Redis key or an admin-browsable table. `utils/geohash.ip_geohash5` is a
+> ONE-WAY hash and cannot be reversed to a CIDR - use `ipaddress` for networks.
+>
 > **v2.9.0 invariants worth knowing before you touch these areas.**
 > **Four-eyes is a per-FILE mark now, not just a share state.**
 > `is_approval_required` still has exactly one caller (`create_share`), so the
@@ -775,8 +828,13 @@ server, counted in the poll result as `refused_unknown_sender`.
 
 ### Anomaly detection (v1.22)
 
-`services/anomaly.py` + hourly `anomaly_check`. **Advisory only - always alert an
-admin, never auto-block.** GeoIP-free: `multi_network` approximates
+`services/anomaly.py` + hourly `anomaly_check`. **Advisory BY DEFAULT - it alerts
+an admin.** Since v2.10.0 an admin may additionally have `services/scan_guard.py`
+auto-block a source that trips `login_stuffing`, via
+`scan_guard.signal_auth_failure` - opt-in, ships OFF, so nothing here blocks
+anyone unless someone chose it. (This section said "never auto-block" as a flat
+invariant until v2.10.0; the capability now exists and the sentence would
+otherwise describe a product that no longer ships.) GeoIP-free: `multi_network` approximates
 impossible-travel with `utils/geohash.ip_geohash5` - an IP-prefix hash, NOT
 geography. `login_stuffing` needs >threshold failures across ≥3 distinct emails
 from one IP. Thresholds env-tunable (`ANOMALY_*`); feeds webhooks. (Detector

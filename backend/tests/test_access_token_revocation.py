@@ -47,7 +47,7 @@ async def test_revoking_sessions_kills_an_existing_access_token(
 
     resp = await client.get("/api/account/me", headers=headers)
     assert resp.status_code == 401, resp.text
-    assert resp.json()["code"] == "TOKEN_REVOKED"
+    assert resp.json()["code"] == "SESSION_REVOKED"
 
 
 @pytest.mark.asyncio

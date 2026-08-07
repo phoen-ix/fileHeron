@@ -110,7 +110,7 @@ def resolve_user_from_access_token(db: Session, token: str, settings: Settings) 
     if invalidated is not None:
         iat = payload.get("iat")
         if isinstance(iat, int) and iat < int(to_epoch(invalidated)):
-            raise AppError(401, "TOKEN_REVOKED", "This session was revoked.")
+            raise AppError(401, "SESSION_REVOKED", "This session was revoked.")
     return user
 
 

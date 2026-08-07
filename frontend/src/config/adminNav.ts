@@ -83,6 +83,9 @@ export const ADMIN_NAV: AdminNavCategory[] = [
       { routeName: 'admin-scheduled-tasks', labelKey: 'admin.nav.scheduled_tasks', matchNames: ['admin-scheduled-tasks'] },
       { routeName: 'admin-settings-error-alerts', labelKey: 'admin.nav_item.error_alerts', matchNames: ['admin-settings-error-alerts'] },
       { routeName: 'admin-error-log', labelKey: 'admin.nav.error_log', matchNames: ['admin-error-log'] },
+      // Immediately after the error log: same traffic, but this is the page that
+      // makes it stop arriving.
+      { routeName: 'admin-settings-scan-guard', labelKey: 'admin.nav_item.scan_guard', matchNames: ['admin-settings-scan-guard'] },
       { routeName: 'admin-settings-webhooks', labelKey: 'admin.nav_item.webhooks', matchNames: ['admin-settings-webhooks'] },
       { routeName: 'admin-settings-general', labelKey: 'admin.nav_item.general', matchNames: ['admin-settings-general'] },
       { routeName: 'admin-settings-branding', labelKey: 'admin.nav_item.branding', matchNames: ['admin-settings-branding'] },

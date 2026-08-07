@@ -337,6 +337,12 @@ const router = createRouter({
           meta: { density: 'operator', titleKey: 'admin_settings_email_change', requiresRole: 'admin' },
         },
         {
+          path: 'settings/scan-guard',
+          name: 'admin-settings-scan-guard',
+          component: () => import('@/views/AdminSettingsScanGuard.vue'),
+          meta: { density: 'operator', titleKey: 'admin_settings_scan_guard', requiresRole: 'admin' },
+        },
+        {
           path: 'settings/error-alerts',
           name: 'admin-settings-error-alerts',
           component: () => import('@/views/AdminSettingsErrorAlerts.vue'),

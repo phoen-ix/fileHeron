@@ -21,6 +21,7 @@ from .group_member import GroupMember
 from .inbound_attachment import AttachmentAVState, InboundAttachment
 from .inbound_message import InboundMessage, MessageClass, MessageStatus
 from .invite_token import InviteToken
+from .ip_block import IpBlock
 from .known_device import KnownDevice
 from .login_attempt import LoginAttempt, LoginOutcome
 from .notification import Notification, NotificationCategory
@@ -67,6 +68,7 @@ __all__ = [
     "InboundMessage",
     "MessageClass",
     "MessageStatus",
+    "IpBlock",
     "InviteToken",
     "KnownDevice",
     "Locale",

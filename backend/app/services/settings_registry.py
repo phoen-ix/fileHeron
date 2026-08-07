@@ -60,6 +60,7 @@ TUNABLES: list[Tunable] = [
     Tunable(K.WEBHOOK_DELIVERY_RETENTION_DAYS, "WEBHOOK_DELIVERY_RETENTION_DAYS", "int", "retention", 0, 3650),
     Tunable(K.ERROR_LOG_RETENTION_DAYS, "ERROR_LOG_RETENTION_DAYS", "int", "retention", 0, 3650),
     Tunable(K.PUBLIC_LINK_ATTEMPT_RETENTION_DAYS, "PUBLIC_LINK_ATTEMPT_RETENTION_DAYS", "int", "retention", 0, 3650),
+    Tunable(K.IP_BLOCK_RETENTION_DAYS, "IP_BLOCK_RETENTION_DAYS", "int", "retention", 0, 3650),
     Tunable(K.NOTIFICATION_READ_RETENTION_DAYS, "NOTIFICATION_READ_RETENTION_DAYS", "int", "retention", 0, 3650),
     Tunable(K.QUARANTINE_PURGE_AFTER_DAYS, "QUARANTINE_PURGE_AFTER_DAYS", "int", "retention", 0, 3650),
     Tunable(K.ORPHAN_RECLAIM_AFTER_DAYS, "ORPHAN_RECLAIM_AFTER_DAYS", "int", "retention", 0, 3650),
@@ -96,7 +97,7 @@ TUNABLES: list[Tunable] = [
     # --- Storage / low-disk degradation (≤ 1 TiB byte ceiling) ---
     Tunable(K.STORAGE_LOW_THRESHOLD_PERCENT, "STORAGE_LOW_THRESHOLD_PERCENT", "int", "storage", 0, 50),
     Tunable(K.STORAGE_LOW_THRESHOLD_BYTES, "STORAGE_LOW_THRESHOLD_BYTES", "int", "storage", 0, 1_099_511_627_776),
-    # --- Anomaly detection (heuristic; alerts only) ---
+    # --- Anomaly detection (heuristic; alerts by default, auto-block opt-in) ---
     Tunable(K.ANOMALY_ENABLED, "ANOMALY_ENABLED", "bool", "anomaly"),
     Tunable(K.ANOMALY_MASS_DOWNLOAD_THRESHOLD, "ANOMALY_MASS_DOWNLOAD_THRESHOLD", "int", "anomaly", 1, 100_000),
     Tunable(K.ANOMALY_MULTI_NETWORK_THRESHOLD, "ANOMALY_MULTI_NETWORK_THRESHOLD", "int", "anomaly", 2, 1000),
@@ -105,6 +106,17 @@ TUNABLES: list[Tunable] = [
     Tunable(K.ERROR_ALERT_COOLDOWN_MINUTES, "ERROR_ALERT_COOLDOWN_MINUTES", "int", "error_alert", 1, 1440),
     Tunable(K.ERROR_ALERT_MAX_PER_HOUR, "ERROR_ALERT_MAX_PER_HOUR", "int", "error_alert", 1, 1000),
     Tunable(K.ERROR_LOG_SCAN_CAPTURE_PER_MIN, "ERROR_LOG_SCAN_CAPTURE_PER_MIN", "int", "error_alert", 10, 12000),
+    # --- Scan guard (auto-block scanning sources; ships disabled) ---
+    # `max_block_minutes` is clamped to 30 days on purpose: there is deliberately
+    # no permanent block at any level, so every mistake self-heals unattended.
+    Tunable(K.SCAN_GUARD_THRESHOLD, "SCAN_GUARD_THRESHOLD", "int", "scan_guard", 1, 1000),
+    Tunable(K.SCAN_GUARD_WINDOW_SEC, "SCAN_GUARD_WINDOW_SEC", "int", "scan_guard", 30, 86400),
+    Tunable(K.SCAN_GUARD_BLOCK_MINUTES, "SCAN_GUARD_BLOCK_MINUTES", "int", "scan_guard", 1, 43200),
+    Tunable(K.SCAN_GUARD_MAX_BLOCK_MINUTES, "SCAN_GUARD_MAX_BLOCK_MINUTES", "int", "scan_guard", 1, 43200),
+    Tunable(K.SCAN_GUARD_MIN_DISTINCT_PATHS, "SCAN_GUARD_MIN_DISTINCT_PATHS", "int", "scan_guard", 1, 500),
+    Tunable(K.SCAN_GUARD_NETWORK_THRESHOLD, "SCAN_GUARD_NETWORK_THRESHOLD", "int", "scan_guard", 2, 254),
+    Tunable(K.SCAN_GUARD_NETWORK_LOOKBACK_HOURS, "SCAN_GUARD_NETWORK_LOOKBACK_HOURS", "int", "scan_guard", 1, 8760),
+    Tunable(K.SCAN_GUARD_MAX_NEW_BLOCKS_PER_MIN, "SCAN_GUARD_MAX_NEW_BLOCKS_PER_MIN", "int", "scan_guard", 1, 10000),
 ]
 
 BY_KEY: dict[str, Tunable] = {t.key: t for t in TUNABLES}

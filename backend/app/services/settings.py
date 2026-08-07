@@ -253,6 +253,44 @@ class Keys:
     PUBLIC_LINK_ATTEMPT_RETENTION_DAYS = "retention.public_link_attempt_days"  # registry tunable
     ERROR_LOG_SCAN_CAPTURE_PER_MIN = "error_log.scan_capture_per_min"  # registry tunable (int; 4xx capture rate/min)
 
+    # --- Scan guard (v2.10.0) ------------------------------------------------
+    # Auto-block sources that scan for secrets/CMS paths. The enforcement
+    # counterpart to the error log above: same traffic, but it stops arriving.
+    # Ships OFF - the only control here that denies service to a caller.
+    SCAN_GUARD_ENABLED = "scan_guard.enabled"                  # boolean (default FALSE)
+    # Signals. `probe_path` needs no maintained denylist: nginx already routes
+    # scanner bait to the backend while serving the SPA 200 for every other
+    # unknown page path, so a 4xx on a non-/api/ path IS the bait classification.
+    SCAN_GUARD_SIGNAL_PROBE_PATH = "scan_guard.signal_probe_path"      # bool (default true)
+    # 404s under /api/. OFF by default: an expired public link 404s, so this can
+    # reach a real recipient. Excludes /api/public/* outright and additionally
+    # requires path diversity before it fires.
+    SCAN_GUARD_SIGNAL_API_404 = "scan_guard.signal_api_404"            # bool (default FALSE)
+    # 401/403 - login brute force. OFF by default: account lockout + the per-IP
+    # login limiter already cover credential stuffing, and a NAT'd office shares
+    # one address. Turning this on is what makes brute force auto-blockable.
+    SCAN_GUARD_SIGNAL_AUTH_FAILURE = "scan_guard.signal_auth_failure"  # bool (default FALSE)
+    SCAN_GUARD_ESCALATION = "scan_guard.escalation"                    # bool (default true)
+    # /24 (IPv6 /64) escalation. OFF by default: escalating the reference
+    # instance's two hot networks would block 512 addresses to suppress 14
+    # observed ones, and a customer's mail-security gateway fetching /d/{token}
+    # from many egress IPs in one /24 looks exactly like distributed guessing.
+    SCAN_GUARD_NETWORK_ESCALATION = "scan_guard.network_escalation"    # bool (default FALSE)
+    SCAN_GUARD_NOTIFY_MODE = "scan_guard.notify_mode"      # off | digest | every_block
+    SCAN_GUARD_ALLOWLIST = "scan_guard.allowlist"          # CSV of IPs/CIDRs, never blocked
+    SCAN_GUARD_EXTRA_PATHS = "scan_guard.extra_paths"      # CSV of extra bait prefixes
+    SCAN_GUARD_IGNORE_PATHS = "scan_guard.ignore_paths"    # CSV of prefixes never counted
+    # Registry tunables (int) - see config.Settings for defaults + reasoning.
+    SCAN_GUARD_THRESHOLD = "scan_guard.threshold"
+    SCAN_GUARD_WINDOW_SEC = "scan_guard.window_sec"
+    SCAN_GUARD_BLOCK_MINUTES = "scan_guard.block_minutes"
+    SCAN_GUARD_MAX_BLOCK_MINUTES = "scan_guard.max_block_minutes"
+    SCAN_GUARD_MIN_DISTINCT_PATHS = "scan_guard.min_distinct_paths"
+    SCAN_GUARD_NETWORK_THRESHOLD = "scan_guard.network_threshold"
+    SCAN_GUARD_NETWORK_LOOKBACK_HOURS = "scan_guard.network_lookback_hours"
+    SCAN_GUARD_MAX_NEW_BLOCKS_PER_MIN = "scan_guard.max_new_blocks_per_min"
+    IP_BLOCK_RETENTION_DAYS = "retention.ip_block_days"
+
 
 _ENCRYPTED_KEYS: set[str] = {Keys.SMTP_PASSWORD, Keys.IMAP_PASSWORD}
 

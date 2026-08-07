@@ -52,6 +52,7 @@
     "ACCOUNT_DISABLED": "Dieses Konto wurde deaktiviert. Bitte einen Administrator kontaktieren.",
     "ACCOUNT_LOCKED": "Dieses Konto ist nach zu vielen Fehlversuchen vorübergehend gesperrt. Bitte später erneut versuchen.",
     "ALERT_RECIPIENTS_EMPTY": "Es sind eigene Empfänger ausgewählt, aber die Liste ist leer - Warnmeldungen würden niemanden erreichen. Adresse hinzufügen oder auf Administratoren umstellen.",
+    "ALLOWLIST_INVALID": "Dieser Eintrag in der Ausnahmeliste ist keine gültige IP-Adresse oder kein gültiges Netzwerk.",
     "ALREADY_DELETED": "Dieses Element wurde bereits gelöscht.",
     "ALREADY_ERASED": "Dieser Benutzer wurde bereits gelöscht.",
     "API_TOKEN_DISABLED": "Dieser API-Token ist deaktiviert.",
@@ -218,10 +219,13 @@
     "RESET_TOKEN_EXPIRED": "Dieser Reset-Link ist abgelaufen. Bitte einen neuen anfordern.",
     "RESET_TOKEN_INVALID": "Dieser Reset-Link ist nicht gültig.",
     "RESET_TOKEN_USED": "Dieser Reset-Link wurde bereits verwendet.",
+    "SCAN_GUARD_INVALID_MODE": "Unbekannter Benachrichtigungsmodus.",
+    "SCAN_GUARD_NO_SIGNALS": "Aktivieren Sie mindestens ein Signal, sonst ist der Scan-Schutz aktiv, kann aber nie eingreifen.",
     "SCAN_IN_PROGRESS": "Virenprüfung läuft noch - gleich erneut versuchen.",
     "SELF_APPROVAL": "Sie können Ihre eigene Freigabe nicht genehmigen.",
     "SELF_SHARE": "Sie können keine Freigabe an sich selbst senden.",
     "SESSION_NOT_FOUND": "Diese Sitzung existiert nicht mehr.",
+    "SESSION_REVOKED": "Diese Sitzung wurde widerrufen. Bitte melden Sie sich erneut an.",
     "SETUP_ALREADY_COMPLETE": "Die Einrichtung wurde bereits abgeschlossen.",
     "SHARE_DOWNLOAD_LIMIT_REACHED": "Diese Freigabe hat ihr Download-Limit erreicht.",
     "SHARE_EXPIRED": "Diese Freigabe ist abgelaufen.",
@@ -239,8 +243,7 @@
     "TOKEN_EXPIRED": "Ihre Sitzung ist abgelaufen. Bitte melden Sie sich erneut an.",
     "TOKEN_NOT_FOUND": "API-Token nicht gefunden.",
     "TOKEN_REUSE": "Verdächtige Anmeldung erkannt. Alle Sitzungen wurden beendet.",
-    "TOKEN_REVOKED": "Endgültig widerrufene Tokens können nicht reaktiviert werden.",
-    "TOKEN_REVOKED": "Diese Sitzung wurde widerrufen. Bitte melden Sie sich erneut an.",
+    "TOKEN_REVOKED": "Dauerhaft widerrufene Token können nicht reaktiviert werden.",
     "TOO_MANY_STREAMS": "Zu viele Live-Verbindungen offen. Schließen Sie einen anderen Tab und versuchen Sie es erneut.",
     "TOTP_ALREADY_ENABLED": "Zwei-Faktor-Auth ist für dieses Konto bereits aktiv.",
     "TOTP_NOT_ENABLED": "Zwei-Faktor-Auth ist nicht aktiviert.",
@@ -401,7 +404,8 @@
       "webhooks": "Webhooks",
       "advanced": "Erweitert",
       "maintenance": "Wartungsmodus",
-      "backup": "Sicherung & Wiederherstellung"
+      "backup": "Sicherung & Wiederherstellung",
+      "scan_guard": "Scan-Schutz"
     }
   },
   "admin_maintenance": {
@@ -667,7 +671,8 @@
       "storage": "Speicher & wenig Platz",
       "anomaly": "Anomalie-Erkennung",
       "updates": "Updates",
-      "error_alert": "Fehler & Alarme"
+      "error_alert": "Fehler & Alarme",
+      "scan_guard": "Scan-Schutz"
     },
     "keys": {
       "auth": {
@@ -2539,12 +2544,73 @@
     "manage_notifications": "Benachrichtigungen verwalten",
     "imprint": "Impressum",
     "privacy": "Datenschutz",
-    "not_found": "Nicht gefunden"
+    "not_found": "Nicht gefunden",
+    "admin_settings_scan_guard": "Scan-Schutz"
   },
   "not_found": {
     "eyebrow": "404 · nicht gefunden",
     "headline": "Ein Reiher ist mit dieser Seite davongeflogen.",
     "body": "Versuch es auf der Startseite oder melde dich an.",
     "home_cta": "Startseite"
+  },
+  "admin_scan_guard": {
+    "title": "Scan-Schutz",
+    "intro": "Blockiert automatisch Quellen, die nach Geheimnissen, Konfigurationsdateien und CMS-Pfaden suchen. Standardmäßig deaktiviert - es wird nichts blockiert, bis Sie ihn einschalten.",
+    "master_section": "Schutz",
+    "enabled_label": "Scan-Schutz aktivieren",
+    "enabled_help": "Wenn aktiv, werden Quellen, die ein Signal auslösen, eine Zeit lang abgewiesen. Eine blockierte Anfrage erhält ein normales 404 - ein Scanner erfährt also nichts.",
+    "live_counts": "Aktuell blockiert: {ips} Adresse(n) und {nets} Netzwerk(e).",
+    "signals_section": "Was als Scannen gilt",
+    "probe_path_label": "Abfragen nach Dateien, die nicht zu dieser Anwendung gehören",
+    "probe_path_help": "Anfragen wie /.env, /.git/config oder /wp-login.php. Dafür gibt es hier keine legitime Verwendung, ein Treffer genügt. Es muss keine Liste gepflegt werden.",
+    "api_404_label": "Wiederholt unbekannte API-Pfade",
+    "api_404_help": "Standardmäßig aus, und das sollte so bleiben, sofern nicht wirklich nötig: Ein abgelaufener Freigabelink liefert ebenfalls 404, das kann also echte Empfänger treffen. Öffentliche Freigabelinks werden nie gezählt, und dieses Signal greift erst, wenn eine Quelle viele verschiedene Pfade probiert hat.",
+    "auth_failure_label": "Wiederholt fehlgeschlagene Anmeldungen (Brute Force)",
+    "auth_failure_help": "Standardmäßig aus. Kontosperre und das Anmeldelimit pro Adresse decken das Erraten von Passwörtern bereits ab, und ein Büro hinter einer Adresse teilt sich diese.",
+    "thresholds_section": "Wann blockieren, und wie lange",
+    "threshold_label": "Verstöße vor dem Blockieren",
+    "window_label": "Zählfenster (Sekunden)",
+    "block_minutes_label": "Erste Sperre (Minuten)",
+    "max_block_minutes_label": "Längste Sperre (Minuten)",
+    "escalation_label": "Wiederholungstäter länger sperren",
+    "escalation_help": "Jede weitere Sperre verdoppelt sich, bis zum Maximum. Es gibt keine dauerhafte Sperre: Jeder Eintrag läuft von selbst ab.",
+    "min_distinct_label": "Verschiedene Pfade vor dem Blockieren",
+    "network_section": "Ganze Netzwerke",
+    "network_label": "Auf das gesamte /24 (bzw. IPv6 /64) ausweiten",
+    "network_help": "Standardmäßig aus, und gut zu überlegen: Ein /24 umfasst 256 Adressen - möglicherweise das Büro eines Kunden, ein Mobilfunknetz oder ein geteilter Anbieter. Eine Sperre bedeutet, dass diese Personen weder Freigaben empfangen noch öffnen können.",
+    "network_threshold_label": "Blockierte Adressen in einem Netzwerk",
+    "network_lookback_label": "Gezählt über (Stunden)",
+    "allowlist_section": "Diese nie blockieren",
+    "allowlist_placeholder": "203.0.113.7, 198.51.100.0/24",
+    "allowlist_help": "Adressen oder Netzwerke, kommagetrennt. Tragen Sie hier Ihre eigene Büroadresse ein. Private und Loopback-Adressen werden ohnehin nie blockiert.",
+    "extra_paths_label": "Ebenfalls als Sondierung werten",
+    "extra_paths_placeholder": "/wp-admin, /phpmyadmin",
+    "ignore_paths_label": "Nie zählen",
+    "notify_section": "Benachrichtigungen",
+    "notify": {
+      "off": "Nicht benachrichtigen",
+      "digest": "Tägliche Zusammenfassung",
+      "every_block": "Jede Sperre"
+    },
+    "notify_help": {
+      "off": "Sperren erscheinen weiterhin auf dieser Seite.",
+      "digest": "Eine Nachricht pro Tag mit allen Sperren.",
+      "every_block": "Eine Nachricht pro Sperre. Auf einer belebten Instanz können das Dutzende pro Woche sein."
+    },
+    "blocks_title": "Blockierte Quellen",
+    "include_expired": "Abgelaufene und freigegebene einbeziehen",
+    "no_blocks": "Es ist nichts blockiert.",
+    "col_subject": "Quelle",
+    "col_reason": "Grund",
+    "col_hits": "Treffer",
+    "col_path": "Letzter Pfad",
+    "col_expires": "Läuft ab",
+    "tag_network": "Netzwerk",
+    "released": "freigegeben",
+    "release_cta": "Freigeben",
+    "released_toast": "{subject} freigegeben.",
+    "saved_toast": "Scan-Schutz-Einstellungen gespeichert.",
+    "err_no_signals": "Aktivieren Sie mindestens ein Signal, sonst ist der Schutz aktiv, kann aber nie eingreifen.",
+    "err_max_below_base": "Die längste Sperre darf nicht kürzer sein als die erste Sperre."
   }
 }

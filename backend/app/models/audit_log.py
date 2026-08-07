@@ -91,6 +91,12 @@ class AuditEventType(str, enum.Enum):
     share_rejected = "share_rejected"
     # Files added to an already-approved share carry their own decision - the
     # share itself stays `active` throughout, so these are not share_approved.
+    # Scan guard (v2.10.0). `ip_blocked` is written when a block is CREATED, never
+    # per blocked request - a blocked source keeps hammering, and one row per hit
+    # would make the guard the loudest thing in the audit log.
+    ip_blocked = "ip_blocked"
+    ip_block_released = "ip_block_released"
+    scan_guard_settings_changed = "scan_guard_settings_changed"
     share_files_approved = "share_files_approved"
     share_files_rejected = "share_files_rejected"
     share_resubmitted = "share_resubmitted"

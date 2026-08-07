@@ -52,6 +52,7 @@
     "ACCOUNT_DISABLED": "This account has been disabled. Contact an administrator.",
     "ACCOUNT_LOCKED": "This account is temporarily locked due to too many failed attempts. Please try again later.",
     "ALERT_RECIPIENTS_EMPTY": "Custom recipients are selected but the list is empty, so alerts would reach nobody. Add an address or switch to admins.",
+    "ALLOWLIST_INVALID": "That allowlist entry isn't a valid IP address or network.",
     "ALREADY_DELETED": "That item has already been deleted.",
     "ALREADY_ERASED": "This user has already been erased.",
     "API_TOKEN_DISABLED": "This API token is disabled.",
@@ -218,10 +219,13 @@
     "RESET_TOKEN_EXPIRED": "This reset link has expired. Request a new one.",
     "RESET_TOKEN_INVALID": "This reset link is not valid.",
     "RESET_TOKEN_USED": "This reset link has already been used.",
+    "SCAN_GUARD_INVALID_MODE": "Unknown notification mode.",
+    "SCAN_GUARD_NO_SIGNALS": "Turn on at least one signal, or the scan guard is enabled but can never act.",
     "SCAN_IN_PROGRESS": "Antivirus scan still in progress - try again in a moment.",
     "SELF_APPROVAL": "You cannot approve your own share.",
     "SELF_SHARE": "You cannot send a share to yourself.",
     "SESSION_NOT_FOUND": "That session no longer exists.",
+    "SESSION_REVOKED": "This session was revoked. Please sign in again.",
     "SETUP_ALREADY_COMPLETE": "Setup has already been completed.",
     "SHARE_DOWNLOAD_LIMIT_REACHED": "This share has reached its download limit.",
     "SHARE_EXPIRED": "That share has expired.",
@@ -240,7 +244,6 @@
     "TOKEN_NOT_FOUND": "API token not found.",
     "TOKEN_REUSE": "Suspicious sign-in detected. All sessions have been revoked.",
     "TOKEN_REVOKED": "Permanently-revoked tokens cannot be reactivated.",
-    "TOKEN_REVOKED": "This session was revoked. Please sign in again.",
     "TOO_MANY_STREAMS": "Too many live connections are open. Close another tab and retry.",
     "TOTP_ALREADY_ENABLED": "Two-factor auth is already on for this account.",
     "TOTP_NOT_ENABLED": "Two-factor auth is not enabled.",
@@ -401,7 +404,8 @@
       "webhooks": "Webhooks",
       "advanced": "Advanced",
       "maintenance": "Maintenance mode",
-      "backup": "Backup & restore"
+      "backup": "Backup & restore",
+      "scan_guard": "Scan guard"
     }
   },
   "admin_maintenance": {
@@ -667,7 +671,8 @@
       "storage": "Storage & low-disk",
       "anomaly": "Anomaly detection",
       "updates": "Updates",
-      "error_alert": "Errors & alerts"
+      "error_alert": "Errors & alerts",
+      "scan_guard": "Scan guard"
     },
     "keys": {
       "auth": {
@@ -2539,12 +2544,73 @@
     "manage_notifications": "Manage subscriptions",
     "imprint": "Imprint",
     "privacy": "Privacy",
-    "not_found": "Not found"
+    "not_found": "Not found",
+    "admin_settings_scan_guard": "Scan guard"
   },
   "not_found": {
     "eyebrow": "404 · not found",
     "headline": "A heron flew off with this page.",
     "body": "Try the home page or sign in.",
     "home_cta": "Home"
+  },
+  "admin_scan_guard": {
+    "title": "Scan guard",
+    "intro": "Automatically block sources that probe for secrets, config files and CMS paths. Ships disabled - nothing is ever blocked until you turn it on.",
+    "master_section": "Protection",
+    "enabled_label": "Enable the scan guard",
+    "enabled_help": "When on, sources that trip a signal below are refused for a while. A blocked request gets an ordinary 404, so a scanner learns nothing.",
+    "live_counts": "Currently blocking {ips} address(es) and {nets} network(s).",
+    "signals_section": "What counts as scanning",
+    "probe_path_label": "Probes for files that don't belong to this app",
+    "probe_path_help": "Requests like /.env, /.git/config or /wp-login.php. These have no legitimate use here, so one hit is enough. Needs no list to maintain.",
+    "api_404_label": "Repeated unknown API paths",
+    "api_404_help": "Off by default, and worth leaving off unless you need it: an expired share link also returns 404, so this can reach a real recipient. Public share links are never counted, and this signal only fires once a source has tried many different paths.",
+    "auth_failure_label": "Repeated sign-in failures (brute force)",
+    "auth_failure_help": "Off by default. Account lockout and the per-address sign-in limit already cover password guessing, and an office behind one address shares it.",
+    "thresholds_section": "When to block, and for how long",
+    "threshold_label": "Offences before blocking",
+    "window_label": "Counting window (seconds)",
+    "block_minutes_label": "First block (minutes)",
+    "max_block_minutes_label": "Longest block (minutes)",
+    "escalation_label": "Block repeat offenders for longer",
+    "escalation_help": "Each further block doubles, up to the maximum. There is no permanent block: every entry expires on its own.",
+    "min_distinct_label": "Distinct paths before blocking",
+    "network_section": "Whole networks",
+    "network_label": "Escalate to the whole /24 (or IPv6 /64)",
+    "network_help": "Off by default, and think before enabling: a /24 is 256 addresses, which may be a customer's office, a mobile carrier or a shared provider. Blocking one means those people can neither receive nor open a share.",
+    "network_threshold_label": "Blocked addresses in one network",
+    "network_lookback_label": "Counted over (hours)",
+    "allowlist_section": "Never block these",
+    "allowlist_placeholder": "203.0.113.7, 198.51.100.0/24",
+    "allowlist_help": "Addresses or networks, comma-separated. Put your own office address here. Private and loopback addresses are never blocked regardless.",
+    "extra_paths_label": "Also treat as probes",
+    "extra_paths_placeholder": "/wp-admin, /phpmyadmin",
+    "ignore_paths_label": "Never count",
+    "notify_section": "Telling you about it",
+    "notify": {
+      "off": "Don't notify me",
+      "digest": "A daily summary",
+      "every_block": "Every block"
+    },
+    "notify_help": {
+      "off": "Blocks still appear on this page.",
+      "digest": "One message a day listing what was blocked.",
+      "every_block": "One message per block. On a busy instance this can be dozens a week."
+    },
+    "blocks_title": "Blocked sources",
+    "include_expired": "Include expired and released",
+    "no_blocks": "Nothing is blocked.",
+    "col_subject": "Source",
+    "col_reason": "Reason",
+    "col_hits": "Hits",
+    "col_path": "Last path",
+    "col_expires": "Expires",
+    "tag_network": "network",
+    "released": "released",
+    "release_cta": "Release",
+    "released_toast": "{subject} released.",
+    "saved_toast": "Scan guard settings saved.",
+    "err_no_signals": "Turn on at least one signal, or the guard is enabled but can never act.",
+    "err_max_below_base": "The longest block cannot be shorter than the first block."
   }
 }

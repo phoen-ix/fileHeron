@@ -219,6 +219,42 @@ on counted *download* actions, not as a hard cap on retrievals: if you need the
 latter for images, PDFs or text files, turn preview off at *Settings → General →
 File preview*. (Once the budget is fully spent, preview is refused too.)
 
+## Scan guard (blocking probes and brute force)
+
+Self-hosted instances get scanned constantly - requests for `/.env`,
+`/.git/config`, `/wp-login.php` and similar, looking for leaked secrets. These
+already 404 and land in the [error log](#error-log--alerts); the scan guard is
+the switch that makes them stop arriving.
+
+**It ships off.** Nothing is ever blocked until an admin enables it at
+*Settings -> Scan guard*, and every part of it is configurable there: which
+signals count, how many offences and over what period, how long a block lasts,
+whether repeat offenders are blocked for longer, and whether you are notified
+never, daily, or on every block.
+
+- **Probes for files that don't belong here** (on by default once enabled). One
+  hit is enough - these paths have no legitimate use, and a scanner typically
+  tries a hundred of them in seconds. Needs no list to maintain, though you can
+  add your own patterns.
+- **Repeated unknown API paths** (off). An expired share link also returns 404,
+  so this one can reach a real recipient. Public share links are never counted
+  regardless, and it only fires after many *different* paths.
+- **Repeated sign-in failures** (off) - brute-force blocking, with the same
+  optional escalation to a whole network.
+
+**Safeguards, because blocking is the one thing here that denies service:**
+signed-in users are never blocked; private, loopback and allowlisted addresses
+are never blocked; there is no permanent block at any level, so every mistake
+expires on its own; and blocked requests get an ordinary 404, so a scanner
+learns nothing. Put your own office address in the allowlist.
+
+**Blocking a whole /24 is off by default and worth thinking about before you
+turn it on** - 256 addresses may be a customer's office, a mobile carrier, or a
+mail-security gateway that fetches share links from many addresses at once.
+
+Blocked sources, why they were blocked and when they expire are listed on the
+same page, with a Release button.
+
 ## Share approval (four-eyes)
 
 Optional, admin-controlled. When enabled, a new share enters **pending approval** -

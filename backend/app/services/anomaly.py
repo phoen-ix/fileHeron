@@ -6,8 +6,10 @@ file:Heron has no real geo (utils/geohash.ip_geohash5 is an IP-prefix *hash*,
 not lat/lon), so "multi-network" stands in for impossible-travel: one account's
 token used from several distinct networks in a short window.
 
-These are advisory signals - the action is always to ALERT an admin, never to
-auto-block.
+These are advisory signals: the action is to ALERT an admin. Since v2.10.0 an
+admin MAY additionally have the scan guard auto-block a source that trips
+`login_stuffing` (`scan_guard.signal_auth_failure`), but that is opt-in and
+ships OFF - nothing here blocks anyone on its own.
 """
 from __future__ import annotations
 

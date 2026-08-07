@@ -25,6 +25,7 @@ from .middleware.errors import (
 )
 from .middleware.gzip import SelectiveGZipMiddleware
 from .middleware.request_id import RequestIdMiddleware
+from .middleware.scan_guard import ScanGuardMiddleware
 from .middleware.security_headers import SecurityHeadersMiddleware
 from .routers import (
     account,
@@ -95,6 +96,13 @@ app = FastAPI(
 # file-download responses (gzipping a multi-GB binary is pointless + defeats
 # FileResponse sendfile, making downloads crawl).
 app.add_middleware(SelectiveGZipMiddleware, minimum_size=1024)
+# scan_guard sits INSIDE request_id + security_headers on purpose: its refusal
+# response then picks up the request id and every security header on the way out,
+# which is what makes a blocked request byte-identical to a genuine 404. It is
+# also OUTSIDE Starlette's ExceptionMiddleware, so a short-circuited response
+# never reaches the error handlers - no error_log row, no ARQ job, no feedback
+# loop. See middleware/scan_guard.py.
+app.add_middleware(ScanGuardMiddleware)
 app.add_middleware(RequestIdMiddleware)
 app.add_middleware(SecurityHeadersMiddleware, is_production=settings.is_production)
 

@@ -1,77 +1,55 @@
-# file:Heron v2.10.0
+# file:Heron v2.10.1
 
-Adds the **scan guard**: automatic, configurable blocking of sources that probe
-your instance for secrets and config files. One migration, no host step, and
-**nothing changes until you switch it on** — it ships disabled.
+Fixes a bug in the in-app updater that made it **single-use**: every successful
+update quietly broke the next one. If your last update failed with *"executor
+crashed (exit 1) without writing status"*, this is why — and the recovery is
+below.
 
----
-
-## Before you update
-
-Safe to take unattended. The new feature is off, the new table starts empty, and
-no existing behaviour, API or setting changes. There is a migration
-(`202608080001`, the `ip_blocks` table), so rolling back past this release needs
-the usual `alembic stamp` recovery.
+No migration, no host step, no setting changes.
 
 ---
 
-## Scan guard
+## The updater broke the update after itself
 
-Every self-hosted instance on a public address gets scanned constantly. On the
-reference instance that was **1,664 requests from 93 addresses over two months** —
-`/.env`, `/.git/config`, `/.aws/credentials`, `/wp-config.php`, `/.stripe/` —
-people looking for a leaked secret file. Those already returned 404 and appeared
-in the error log. The scan guard is the switch that makes them stop arriving.
+The updater runs `docker compose up -d` from inside a container whose working
+directory is `/workspace`. Two host-path settings in `docker-compose.yml` fall
+back to `${PWD}`, so the `updater-shim` that this command recreates was left
+believing the host state directory is `/workspace/data/updater` instead of the
+real one.
 
-Find it at *Settings → Scan guard*. **It ships off**, and everything about it is
-yours to configure: which signals count, how many offences over what period, how
-long a block lasts, whether repeat offenders get longer, and whether you hear
-about it never, once a day, or on every block.
+Nothing looked wrong at the time — the shim's own mount still resolved correctly.
+The damage showed up on the *next* update: the shim launched the executor
+pointed at a directory that did not exist, Docker obligingly created it empty,
+and the executor exited before it could even report why.
 
-Three signals, each independent:
+So the pattern was: install an update, and the following one fails. A first
+update after a hand-rolled `docker compose up` would work, and the second would
+not.
 
-- **Probes for files that don't belong here** — on once you enable the guard. One
-  hit is enough: these paths have no legitimate use, and a scanner typically
-  tries a hundred of them in seconds (113 distinct paths in 19 seconds was
-  measured). There is no list to maintain, though you can add your own patterns.
-- **Repeated unknown API paths** — off. An expired share link also returns 404,
-  so this one can reach a real recipient. Public share links are never counted
-  regardless, and it only fires once a source has tried many *different* paths.
-- **Repeated sign-in failures** — off. Brute-force blocking, with the same
-  optional escalation to a whole network.
+Both sides are fixed. The executor now pins every host path explicitly instead
+of letting `${PWD}` decide, and the shim hands over the paths it already knows
+rather than making the executor reconstruct them. There is a regression test
+over both.
 
-Blocked sources appear on the same page with the reason, the hit count, when the
-block expires, and a Release button. You can also block an address yourself.
+## If your update is currently failing
 
-### The safeguards matter more than the feature
+The fix cannot install itself — the broken shim is the thing that would run it.
+Recreate the shim from your compose directory first, which takes a second and
+touches nothing else:
 
-This is the only control in file:Heron that refuses to serve someone, so it is
-built around what it will *not* do:
+```
+cd /opt/fileHeron && docker compose up -d updater-shim
+```
 
-- **Signed-in users are never blocked.** Not one of those 1,664 requests came
-  from a logged-in session, so this costs nothing — and it means you cannot lock
-  yourself out by using your own product.
-- **Private, loopback and allowlisted addresses are never blocked**, whatever the
-  settings say. Put your office address in the allowlist.
-- **No permanent blocks anywhere.** Every entry expires on its own, so a mistake
-  heals without anyone intervening.
-- **A blocked request gets an ordinary 404**, identical to any other miss, so a
-  scanner learns nothing about what tripped or when.
-- **If Redis is unavailable, nobody is blocked.** The guard protects nothing that
-  was not already returning 404, so it fails open rather than risk an outage.
+Then update from **Admin → System → Update** as usual. Once you are on v2.10.1
+the problem does not come back.
 
-### Blocking whole networks is off, and worth thinking about
+You may also find an empty `/workspace/data/updater` directory on your host,
+created by Docker during a failed attempt. It is junk and safe to delete.
 
-The guard can escalate from a single address to its whole /24. On the reference
-instance that would have covered 59% of the traffic — but a /24 is 256 addresses,
-and it may be a customer's office, a mobile carrier, or a mail-security gateway
-that opens share links from many addresses at once. Enable it deliberately, not
-by default.
+## Note on v2.10.0
 
-## Smaller things
-
-- Blocked-source records carry an IP, so they get a retention window like every
-  other such table, prunable at *Settings → Advanced*.
-- Anomaly detection has always been advisory. It still is by default, but if you
-  turn on the sign-in-failure signal it can now act. The documentation that said
-  it "never auto-blocks" has been corrected rather than quietly deleted.
+v2.10.0 itself is sound — it is the release the old updater struggled to
+*install*, not the cause. Everything in it (the [scan
+guard](https://github.com/phoen-ix/fileHeron/releases/tag/v2.10.0)) is included
+here, so update straight to v2.10.1.

@@ -155,6 +155,8 @@ while true; do
                 -v "$HOST_STATE:/state" \
                 -e "COMPOSE_PROJECT_NAME=$COMPOSE_PROJECT" \
                 -e "COMPOSE_HOST_ROOT=$HOST_WORKSPACE" \
+                -e "UPDATER_HOST_WORKSPACE=$HOST_WORKSPACE" \
+                -e "UPDATER_HOST_STATE=$HOST_STATE" \
                 -e "GHCR_OWNER=$GHCR_OWNER" \
                 "$executor_image" \
                 || exit_code=$?

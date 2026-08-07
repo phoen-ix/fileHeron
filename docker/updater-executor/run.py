@@ -166,13 +166,43 @@ def write_current_tag(new_tag: str) -> None:
 
 def _compose_env(tag: str) -> dict[str, str]:
     """Env for a `docker compose` invocation: pin FH_TAG (which image to
-    use) and forward COMPOSE_HOST_ROOT so bind-mount sources resolve to
-    the HOST compose dir, not the executor's /workspace (see the up -d
-    call below - omitting it silently forks the data layer)."""
+    use) and pin every host-path variable so they resolve against the HOST
+    compose dir, not the executor's /workspace.
+
+    All three matter, and forgetting the last two made the updater
+    SINGLE-USE. `docker-compose.yml` defines them as::
+
+        UPDATER_HOST_WORKSPACE: ${UPDATER_HOST_WORKSPACE:-${PWD:-/opt/fileHeron}}
+        UPDATER_HOST_STATE:     ${UPDATER_HOST_STATE:-${PWD:-/opt/fileHeron}/data/updater}
+
+    so when compose runs from in here, `$PWD` is `/workspace` and the
+    updater-shim this very command recreates is left believing the host state
+    directory is `/workspace/data/updater`. The shim's own `/state` mount still
+    resolves correctly (that line uses COMPOSE_HOST_ROOT), so nothing looks
+    wrong - until the NEXT update, when the shim spawns an executor with
+    `-v /workspace/data/updater:/state`, Docker helpfully creates that path
+    empty and root-owned on the host, and the executor exits 1 with
+    "no /state/current_job.json" before it can write a status.
+
+    Net effect: every SUCCESSFUL update broke the one after it. Observed
+    v2.9.0 -> v2.10.0; the v2.8.0 -> v2.9.0 update worked only because that
+    shim had been created by a host-side `docker compose up`.
+
+    Derived from COMPOSE_HOST_ROOT rather than read from our own environment,
+    because the shim that launched us may predate this fix and pass neither.
+    """
     env = {"FH_TAG": tag}
     host_root = os.environ.get("COMPOSE_HOST_ROOT")
     if host_root:
         env["COMPOSE_HOST_ROOT"] = host_root
+        # Prefer an explicit value if a newer shim supplied one; otherwise
+        # reconstruct it the same way docker-compose.yml's default does.
+        env["UPDATER_HOST_WORKSPACE"] = (
+            os.environ.get("UPDATER_HOST_WORKSPACE") or host_root
+        )
+        env["UPDATER_HOST_STATE"] = (
+            os.environ.get("UPDATER_HOST_STATE") or f"{host_root}/data/updater"
+        )
     return env
 
 

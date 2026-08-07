@@ -59,12 +59,25 @@ async def test_the_same_second_window_is_a_known_property(
     `change_password`, which revokes and re-mints in one request, does not sign
     the user out - see the test above. Documented here so a future tightening to
     `<=` is a deliberate decision with a visible cost, not a silent one."""
+    import datetime
+
+    import jwt as pyjwt
+
+    from app.config import settings as app_settings
+
     user = make_user(email="u@test.local", role=UserRole.employee, password=PW)
     token, _ = await login_as("u@test.local", PW)
 
-    from app.services import jwt_session
-
-    jwt_session.revoke_all_user_refresh_tokens(db, user.id)
+    # Pin the mark to EXACTLY the token's own second rather than calling
+    # revoke_all_user_refresh_tokens and hoping the two land in the same one -
+    # that raced, and a test for a one-second window must not itself depend on
+    # winning a one-second race.
+    iat = pyjwt.decode(
+        token, app_settings.JWT_SECRET, algorithms=[app_settings.JWT_ALGORITHM]
+    )["iat"]
+    user.sessions_invalidated_at = datetime.datetime.fromtimestamp(
+        iat, tz=datetime.timezone.utc
+    ).replace(tzinfo=None)
     db.commit()
 
     resp = await client.get(

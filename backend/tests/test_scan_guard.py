@@ -103,12 +103,46 @@ def test_401_is_not_counted_unless_auth_failure_is_on():
     """The SPA's own refresh interceptor generates 401 storms, so counting them
     by default would block real users mid-session."""
     assert sg.classify(
-        status=401, path="/api/shares", authenticated=False, snap=_snap()
+        status=401, path="/api/auth/login", authenticated=False, snap=_snap()
     ) is None
     on = _snap(signal_auth_failure=True)
     assert sg.classify(
-        status=401, path="/api/shares", authenticated=False, snap=on
+        status=401, path="/api/auth/login", authenticated=False, snap=on
     ) == sg.SIGNAL_AUTH_FAILURE
+
+
+def test_auth_failure_only_counts_credential_endpoints():
+    """The bug that banned an admin in production (v2.10.0).
+
+    `auth_failure` counted ANY 401/403. That is not brute force, it is an
+    expired session - and the SPA's refresh interceptor, a stale cookie and an
+    expired SSE token all produce them from legitimate users. Brute force is
+    repeated CREDENTIAL SUBMISSION, so only the routes that accept credentials
+    may count."""
+    on = _snap(signal_auth_failure=True)
+    for path in ("/api/auth/login", "/api/auth/forgot-password", "/api/webauthn/begin"):
+        assert sg.classify(
+            status=401, path=path, authenticated=False, snap=on
+        ) == sg.SIGNAL_AUTH_FAILURE, path
+    for path in ("/api/shares", "/api/account/me", "/api/files/x/download"):
+        assert sg.classify(
+            status=401, path=path, authenticated=False, snap=on
+        ) is None, path
+
+
+def test_the_sse_streams_can_never_cause_a_block():
+    """The exact production lockout. EventSource cannot send an auth header, so
+    these authenticate with a signed `?token=` that expires after 300s; every
+    reconnect past expiry is a legitimate 401 from an authorised admin. There is
+    no `user_id` on the request at that point, so the `authenticated`
+    short-circuit does not cover them. Counting them banned an admin for leaving
+    the system page open - and the block then reached the login route too."""
+    on = _snap(signal_auth_failure=True, signal_api_404=True)
+    for path in ("/api/admin/system/stream", "/api/notifications/stream"):
+        for status in (401, 403, 404):
+            assert sg.classify(
+                status=status, path=path, authenticated=False, snap=on
+            ) is None, f"{path} {status}"
 
 
 def test_admin_lists_extend_and_suppress():

@@ -77,6 +77,31 @@ _NEVER_COUNT_PREFIXES = (
     "/api/internal/",
     "/api/health",
     "/api/telemetry/",  # client-asserted; must never drive a denial of service
+    # SSE. EventSource cannot send an Authorization header, so these
+    # authenticate with a signed `?token=` that expires after 300s - every
+    # reconnect past expiry is a legitimate 401 from an authorised admin. They
+    # also carry no `user_id` on the request at the point the middleware sees
+    # the status, so the `authenticated` short-circuit does not cover them.
+    # Counting these banned an admin for leaving the system page open, and the
+    # block then reached the login route too (production, v2.10.0).
+    "/api/admin/system/stream",
+    "/api/notifications/stream",
+)
+
+# The ONLY paths where a 401/403 means "someone is guessing a credential".
+#
+# `auth_failure` used to count any 401/403 anywhere, which is not brute force -
+# it is an expired session. The SPA's refresh interceptor, an expired SSE token
+# and a stale cookie all produce 401 storms from legitimate users. Brute force
+# is repeated CREDENTIAL SUBMISSION, so the signal is scoped to the routes that
+# accept credentials and nothing else.
+_CREDENTIAL_PREFIXES = (
+    "/api/auth/login",
+    "/api/auth/register-from-invite",
+    "/api/auth/forgot-password",
+    "/api/auth/reset-password",
+    "/api/webauthn/",
+    "/api/oidc/",
 )
 
 _CACHE_TTL_SEC = 15.0
@@ -320,7 +345,11 @@ def classify(
             return SIGNAL_PROBE_PATH
     if snap.get("signal_api_404") and status == 404 and is_api:
         return SIGNAL_API_404
-    if snap.get("signal_auth_failure") and status in (401, 403):
+    if (
+        snap.get("signal_auth_failure")
+        and status in (401, 403)
+        and any(path.startswith(p) for p in _CREDENTIAL_PREFIXES)
+    ):
         return SIGNAL_AUTH_FAILURE
     return None
 

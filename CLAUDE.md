@@ -15,6 +15,15 @@ keep this to what would cause a wrong move if unknown.
 
 ## Status
 
+**v2.11.0 is a scan-guard fix release** - no migration, no host step, no API
+break, and behaviour-neutral unless network escalation is on. It fixes a LIVE bug
+(a network block that could re-arm for the whole `network_lookback_hours` week -
+see the invariant block), makes the IPv6 grouping prefix a tunable whose default
+does NOT move, gives `notify_mode` a real consumer, adds
+`scripts/unblock_ip.py`, and deletes two false claims that stood in this file and
+in `anomaly.py`. v2.10.1/.2/.3 were the updater path-pin and the auth_failure
+lockout - see the invariant block and `git log`.
+
 **v2.10.0 adds the scan guard** (`/admin/settings/scan-guard`): auto-detect and
 temporarily block scanning sources. **Ships OFF**, so the upgrade is
 behaviour-neutral; it HAS a migration (`202608080001`, the `ip_blocks` table), so

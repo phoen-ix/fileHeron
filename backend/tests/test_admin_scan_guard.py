@@ -17,7 +17,9 @@ def _payload(**over):
         "signal_auth_failure": False,
         "escalation": True,
         "network_escalation": False,
-        "notify_mode": "digest",
+        # `digest` was removed - it had no backend consumer for a whole release,
+        # an inert control on the page that refuses inert configurations.
+        "notify_mode": "off",
         "allowlist": "",
         "extra_paths": "",
         "ignore_paths": "",
@@ -29,6 +31,7 @@ def _payload(**over):
         "network_threshold": 3,
         "network_lookback_hours": 168,
         "max_new_blocks_per_min": 60,
+        "network_prefix_v6": 64,
     }
     body.update(over)
     return body

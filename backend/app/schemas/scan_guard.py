@@ -16,7 +16,7 @@ class ScanGuardSettingsResponse(APIBaseModel):
     signal_auth_failure: bool
     escalation: bool
     network_escalation: bool
-    notify_mode: Literal["off", "digest", "every_block"]
+    notify_mode: Literal["off", "every_block"]
     allowlist: str
     extra_paths: str
     ignore_paths: str
@@ -30,6 +30,7 @@ class ScanGuardSettingsResponse(APIBaseModel):
     network_threshold: int = Field(ge=2, le=254)
     network_lookback_hours: int = Field(ge=1, le=8760)
     max_new_blocks_per_min: int = Field(ge=1, le=10000)
+    network_prefix_v6: int = Field(default=64, ge=56, le=128)
     # Live counts, so the page can say what is in force without a second call.
     active_ip_blocks: int = 0
     active_network_blocks: int = 0
@@ -42,7 +43,7 @@ class UpdateScanGuardSettingsRequest(APIBaseModel):
     signal_auth_failure: bool
     escalation: bool
     network_escalation: bool
-    notify_mode: Literal["off", "digest", "every_block"] = "digest"
+    notify_mode: Literal["off", "every_block"] = "off"
     allowlist: str = Field(default="", max_length=4000)
     extra_paths: str = Field(default="", max_length=4000)
     ignore_paths: str = Field(default="", max_length=4000)
@@ -54,6 +55,10 @@ class UpdateScanGuardSettingsRequest(APIBaseModel):
     network_threshold: int = Field(ge=2, le=254)
     network_lookback_hours: int = Field(ge=1, le=8760)
     max_new_blocks_per_min: int = Field(ge=1, le=10000)
+    # Defaulted, unlike its neighbours: adding a REQUIRED int here would 422
+    # every existing client's PUT, including the shipped SPA, until both moved
+    # in the same commit.
+    network_prefix_v6: int = Field(default=64, ge=56, le=128)
 
 
 class IpBlockRow(APIBaseModel):

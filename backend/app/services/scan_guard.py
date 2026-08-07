@@ -64,7 +64,16 @@ SIGNAL_PROBE_PATH = "probe_path"
 SIGNAL_API_404 = "api_404"
 SIGNAL_AUTH_FAILURE = "auth_failure"
 
-NOTIFY_MODES = ("off", "digest", "every_block")
+# Only values with a real consumer. `digest` was listed here, in the schema, the
+# API client and a radio button for a whole release with NOTHING reading it -
+# an inert control on the very page whose update_settings refuses inert
+# configurations. Removed rather than left as decoration; it can come back with
+# a cron behind it.
+NOTIFY_MODES = ("off", "every_block")
+
+# IPv6 escalation prefix bounds. /48 is deliberately unreachable - see network_of.
+V6_PREFIX_MIN = 56
+V6_PREFIX_MAX = 128
 
 # Never counted, whatever the signals say. `/api/public/*` is the load-bearing
 # one: `get_link_by_token` answers 404 for an unknown token, and mail-security
@@ -119,17 +128,42 @@ _allow_nets: tuple = ()
 # ---------------------------------------------------------------------------
 
 
-def network_of(ip: str) -> str:
-    """The /24 (IPv4) or /64 (IPv6) containing ``ip``, as a CIDR string.
+def network_of(ip: str, *, v6: int = 64) -> str:
+    """The /24 (IPv4) or configurable-prefix (IPv6) containing ``ip``.
 
     Computed with `ipaddress`, never by splitting the text. `utils/geohash.py`
     documents why string surgery mishandles a compressed IPv6 `::`. Note also
     that `geohash.ip_geohash5` is a ONE-WAY hash and cannot be reversed into a
     CIDR, so it is unusable here despite grouping by the same prefix.
+
+    IPv4 is deliberately NOT configurable: /24 is the smallest routable IPv4
+    unit, and there is no evidence anything wider is wanted.
+
+    IPv6 is configurable, and the default stays /64. It is tempting to widen it -
+    a routed /48 holds 65,536 /64s, so rotating them looks free - but prefix
+    length is NOT a proxy for tenancy on the public internet. The one /48 that
+    motivated widening turned out to be RIPE object `DE-NETCUP-KVM-VIE`, a VPS
+    pool assigning one /64 per customer: that /48 is up to 65,536 unrelated
+    tenants. Hetzner and Vultr allocate the same way, and OVH and Linode put
+    several customers inside ONE /64. So /48 is never offered; the floor is /56,
+    which is RIPE-690's residential end-site size and still ~256 VPSes at a
+    hosting provider.
+
+    Clamped here as well as in the registry `Tunable`, because `_defaults()`
+    reads `env_default()` unclamped and `config_backup` imports app_settings with
+    a raw `db.add` that bypasses `coerce_for_store` - so an out-of-range value
+    can reach this function by two routes that never see the registry.
     """
     addr = ipaddress.ip_address(ip)
-    prefix = 24 if addr.version == 4 else 64
+    if addr.version == 4:
+        return str(ipaddress.ip_network(f"{ip}/24", strict=False))
+    prefix = max(V6_PREFIX_MIN, min(int(v6), V6_PREFIX_MAX))
     return str(ipaddress.ip_network(f"{ip}/{prefix}", strict=False))
+
+
+def network_of_snap(ip: str, snap: dict) -> str:
+    """`network_of` using the cached settings snapshot."""
+    return network_of(ip, v6=int(snap.get("network_prefix_v6", 64)))
 
 
 def parse_networks(raw: str | None) -> tuple:
@@ -173,7 +207,7 @@ def _defaults() -> dict:
         "signal_auth_failure": False,
         "escalation": True,
         "network_escalation": False,
-        "notify_mode": "digest",
+        "notify_mode": "off",
         "allowlist": "",
         "extra_paths": "",
         "ignore_paths": "",
@@ -185,6 +219,7 @@ def _defaults() -> dict:
         "network_threshold": int(env_default(by_key[K.SCAN_GUARD_NETWORK_THRESHOLD])),
         "network_lookback_hours": int(env_default(by_key[K.SCAN_GUARD_NETWORK_LOOKBACK_HOURS])),
         "max_new_blocks_per_min": int(env_default(by_key[K.SCAN_GUARD_MAX_NEW_BLOCKS_PER_MIN])),
+        "network_prefix_v6": int(env_default(by_key[K.SCAN_GUARD_NETWORK_PREFIX_V6])),
     }
 
 
@@ -199,7 +234,13 @@ def get_settings(db: Session) -> dict:
         "signal_auth_failure": gb(db, K.SCAN_GUARD_SIGNAL_AUTH_FAILURE, default=False),
         "escalation": gb(db, K.SCAN_GUARD_ESCALATION, default=True),
         "network_escalation": gb(db, K.SCAN_GUARD_NETWORK_ESCALATION, default=False),
-        "notify_mode": (g(db, K.SCAN_GUARD_NOTIFY_MODE) or "digest"),
+        # Defaults to "off" now that `digest` is gone: an instance that stored
+        # "digest" before must not fall through to a mode that no longer exists.
+        "notify_mode": (
+            g(db, K.SCAN_GUARD_NOTIFY_MODE)
+            if g(db, K.SCAN_GUARD_NOTIFY_MODE) in NOTIFY_MODES
+            else "off"
+        ),
         "allowlist": g(db, K.SCAN_GUARD_ALLOWLIST) or "",
         "extra_paths": g(db, K.SCAN_GUARD_EXTRA_PATHS) or "",
         "ignore_paths": g(db, K.SCAN_GUARD_IGNORE_PATHS) or "",
@@ -211,6 +252,7 @@ def get_settings(db: Session) -> dict:
         "network_threshold": int(eff(db, K.SCAN_GUARD_NETWORK_THRESHOLD)),
         "network_lookback_hours": int(eff(db, K.SCAN_GUARD_NETWORK_LOOKBACK_HOURS)),
         "max_new_blocks_per_min": int(eff(db, K.SCAN_GUARD_MAX_NEW_BLOCKS_PER_MIN)),
+        "network_prefix_v6": int(eff(db, K.SCAN_GUARD_NETWORK_PREFIX_V6)),
     }
 
 
@@ -299,6 +341,14 @@ def is_blocked(ip: str | None) -> bool:
     if not _blocked_ips and not _blocked_nets:
         return False
     if ip_in_networks(ip, _allow_nets):
+        return False
+    # The same refusal `note_offence` applies, enforced again on the SERVING
+    # side. A network block is a CIDR, and a wide one can contain loopback,
+    # RFC1918 or link-local addresses - so without this a single bad network row
+    # would refuse the compose HEALTHCHECK, the frontend nginx, tusd and the
+    # updater, and the container would restart into the same block. Checking it
+    # only where blocks are CREATED left the serving path unguarded.
+    if not is_blockable(ip):
         return False
     if ip in _blocked_ips:
         return True
@@ -462,7 +512,7 @@ def apply_block(
     """Create or extend a block. Caller commits."""
     snap = snap or snapshot()
     now = utc_now()
-    network = subject if is_network else network_of(subject)
+    network = subject if is_network else network_of_snap(subject, snap)
 
     live = (
         db.query(IpBlock)
@@ -516,6 +566,8 @@ def apply_block(
     db.add(row)
     db.flush()
 
+    _maybe_notify_block(db, row, snap)
+
     from ..models.audit_log import AuditEventType
     from .audit import record_audit_event
 
@@ -536,6 +588,48 @@ def apply_block(
     return row
 
 
+def _maybe_notify_block(db: Session, row, snap: dict) -> None:
+    """Tell admins about a new block when `notify_mode` asks for it.
+
+    Fires on CREATION only, never per blocked request - a blocked source keeps
+    hammering, and one notification per hit would make the guard the loudest
+    thing on the instance. Uses `ops_alert`, which is admin-only and defaults to
+    in-app precisely to avoid mailstorms; the `reason` discriminator is the
+    established idiom (see workers/ops_check.py, cron_tracker.py).
+
+    Best-effort: a notification failure must never roll back the block.
+    """
+    if snap.get("notify_mode") != "every_block":
+        return
+    try:
+        from ..models.notification import NotificationCategory
+        from ..models.user import User, UserRole
+        from .notification import dispatch
+
+        admins = (
+            db.query(User)
+            .filter(User.role == UserRole.admin, User.is_disabled.is_(False))
+            .all()
+        )
+        payload = {
+            "reason": "scan_guard_block",
+            "subject": row.subject,
+            "block_reason": row.reason,
+            "is_network": row.is_network,
+            "expires_at": row.expires_at.isoformat(),
+        }
+        for admin in admins:
+            dispatch(
+                db,
+                user=admin,
+                category=NotificationCategory.ops_alert,
+                payload=payload,
+                link_url="/admin/settings/scan-guard",
+            )
+    except Exception:
+        logger.warning("scan_guard: block notification failed", exc_info=True)
+
+
 def _maybe_escalate_network(
     db: Session, *, network: str, snap: dict, lookback
 ) -> None:
@@ -549,14 +643,48 @@ def _maybe_escalate_network(
     suppress 14 observed ones, and a customer's mail gateway can look exactly
     like a distributed scan.
     """
-    if ip_in_networks_any_allowlisted(network):
+    # Allowlist comes from the SNAPSHOT the caller already holds, never from the
+    # module cache. `ip_in_networks_any_allowlisted` calls `_ensure_fresh()`,
+    # which opens its own SessionLocal - a nested session opened while this
+    # caller has an uncommitted INSERT pending. In production those are separate
+    # connections so it merely costs a round trip on a write path; under the test
+    # harness's StaticPool they share one connection and closing the nested
+    # session ROLLS BACK the pending block. Reading from `snap` is both correct
+    # and cheaper.
+    if _network_contains_allowlisted(network, parse_networks(snap.get("allowlist"))):
         return
+
+    # Evidence must be FRESH - counted since the last network block on this
+    # prefix ended, not over the whole lookback window.
+    #
+    # Without this the rule is a hair trigger with a week-long memory:
+    # `network_lookback_hours` defaults to 168h while a network block lasts
+    # `block_minutes` (60). So once a prefix had ever accumulated `threshold`
+    # blocked addresses, the block expired after an hour and then ONE new
+    # blocked address re-blocked the entire prefix for another hour - over and
+    # over, for seven days. At /24 that is a rolling week over 256 addresses;
+    # on a hosting provider's IPv6 prefix it is tens of thousands of unrelated
+    # tenants. The "self-heals fast" note below was only ever true of the first
+    # hour (found by adversarial review, v2.11.0).
+    prior = (
+        db.query(IpBlock.expires_at)
+        .filter(
+            IpBlock.subject == network,
+            IpBlock.is_network.is_(True),
+        )
+        .order_by(IpBlock.expires_at.desc())
+        .first()
+    )
+    since = lookback
+    if prior is not None and prior[0] is not None:
+        since = max(since, prior[0])
+
     distinct = (
         db.query(IpBlock.subject)
         .filter(
             IpBlock.network == network,
             IpBlock.is_network.is_(False),
-            IpBlock.created_at >= lookback,
+            IpBlock.created_at >= since,
         )
         .distinct()
         .count()
@@ -576,7 +704,9 @@ def _maybe_escalate_network(
     if live is not None:
         return
     # A wider block carries a SHORTER commitment: same ladder, but never longer
-    # than a single base period, so a mistaken network block self-heals fast.
+    # than a single base period, so a mistaken network block self-heals fast -
+    # and, with the freshness rule above, stays healed until new evidence
+    # arrives rather than snapping back on a single address.
     apply_block(
         db,
         subject=network,
@@ -587,19 +717,28 @@ def _maybe_escalate_network(
     )
 
 
-def ip_in_networks_any_allowlisted(network: str) -> bool:
+def _network_contains_allowlisted(network: str, allow_nets: tuple) -> bool:
     """True when an allowlisted address falls inside ``network`` - such a network
-    must never be escalated, or one allowlist entry silently stops protecting
-    the very address it names."""
-    _ensure_fresh()
-    if not _allow_nets:
+    must never be escalated, or one allowlist entry silently stops protecting the
+    very address it names.
+
+    Takes the parsed allowlist rather than reading the module cache, so it can be
+    called from inside an open transaction without opening a nested session.
+    """
+    if not allow_nets:
         return False
     try:
         net = ipaddress.ip_network(network, strict=False)
     except ValueError:
         return True  # unparseable: refuse to escalate
-    return any(n.subnet_of(net) or net.subnet_of(n) for n in _allow_nets
+    return any(n.subnet_of(net) or net.subnet_of(n) for n in allow_nets
                if n.version == net.version)
+
+
+def ip_in_networks_any_allowlisted(network: str) -> bool:
+    """Cached-snapshot form, for callers outside a transaction."""
+    _ensure_fresh()
+    return _network_contains_allowlisted(network, _allow_nets)
 
 
 def release(db: Session, *, block_id: int, actor_id: int | None) -> IpBlock | None:
@@ -679,7 +818,7 @@ def update_settings(
             "SCAN_GUARD_NO_SIGNALS",
             "Enable at least one signal, or the guard is on but can never act.",
         )
-    mode = values.get("notify_mode", "digest")
+    mode = values.get("notify_mode", "off")
     if mode not in NOTIFY_MODES:
         raise AppError(400, "SCAN_GUARD_INVALID_MODE", "Unknown notification mode.")
     # Validate the free-text networks BEFORE storing: a typo that silently
@@ -718,7 +857,13 @@ def update_settings(
         K.SCAN_GUARD_NETWORK_THRESHOLD: "network_threshold",
         K.SCAN_GUARD_NETWORK_LOOKBACK_HOURS: "network_lookback_hours",
         K.SCAN_GUARD_MAX_NEW_BLOCKS_PER_MIN: "max_new_blocks_per_min",
+        K.SCAN_GUARD_NETWORK_PREFIX_V6: "network_prefix_v6",
     }
+    prefix_changed = (
+        "network_prefix_v6" in values
+        and int(values["network_prefix_v6"])
+        != int(settings_registry.effective(db, K.SCAN_GUARD_NETWORK_PREFIX_V6))
+    )
     changed: list[str] = []
     for key, field in bools.items():
         if field in values:
@@ -755,6 +900,34 @@ def update_settings(
         metadata={"keys": sorted(set(changed))},
         request=request,
     )
+    if prefix_changed:
+        # `ip_blocks.network` is a DENORMALISED CACHE of network_of(), and both
+        # the escalation count and the "already blocked?" check compare it by
+        # string equality. Leave old rows in place across a prefix change and
+        # two things break silently: every accumulated piece of escalation
+        # evidence stops matching (the feature goes quiet just as the admin
+        # widened it expecting the opposite), and a live /64 block no longer
+        # matches the /56 lookup, so a second overlapping network block is
+        # inserted - releasing the visible one leaves the orphan still blocking.
+        # Releasing live network blocks is the cheap, honest answer; per-address
+        # blocks are unaffected because their subject is the address itself.
+        released = 0
+        for row in (
+            db.query(IpBlock)
+            .filter(
+                IpBlock.is_network.is_(True),
+                IpBlock.released_at.is_(None),
+                IpBlock.expires_at > utc_now(),
+            )
+            .all()
+        ):
+            row.released_at = utc_now()
+            row.released_by_id = getattr(actor, "id", None)
+            released += 1
+        if released:
+            db.flush()
+            changed.append(f"released_network_blocks={released}")
+
     result = get_settings(db)
     # The writing process must see its own change immediately, or an admin who
     # disables the guard watches it keep blocking for another cache TTL.

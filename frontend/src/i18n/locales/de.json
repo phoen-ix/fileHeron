@@ -2589,12 +2589,10 @@
     "notify_section": "Benachrichtigungen",
     "notify": {
       "off": "Nicht benachrichtigen",
-      "digest": "Tägliche Zusammenfassung",
       "every_block": "Jede Sperre"
     },
     "notify_help": {
       "off": "Sperren erscheinen weiterhin auf dieser Seite.",
-      "digest": "Eine Nachricht pro Tag mit allen Sperren.",
       "every_block": "Eine Nachricht pro Sperre. Auf einer belebten Instanz können das Dutzende pro Woche sein."
     },
     "blocks_title": "Blockierte Quellen",
@@ -2611,6 +2609,8 @@
     "released_toast": "{subject} freigegeben.",
     "saved_toast": "Scan-Schutz-Einstellungen gespeichert.",
     "err_no_signals": "Aktivieren Sie mindestens ein Signal, sonst ist der Schutz aktiv, kann aber nie eingreifen.",
-    "err_max_below_base": "Die längste Sperre darf nicht kürzer sein als die erste Sperre."
+    "err_max_below_base": "Die längste Sperre darf nicht kürzer sein als die erste Sperre.",
+    "v6_prefix_label": "IPv6-Gruppierung (Präfixlänge)",
+    "v6_prefix_help": "64 gruppiert ein einzelnes LAN und ist die sichere Voreinstellung. Kleinere Werte gruppieren weiter — bei Hosting-Anbietern ist ein weiteres Präfix aber NICHT ein Kunde: netcup, Hetzner und Vultr vergeben ein /64 pro Server, OVH und Linode teilen ein /64 sogar auf mehrere Kunden auf. Ein /48 kann dort Zehntausende nicht zusammengehörende Kunden umfassen — deshalb ist 56 der weiteste angebotene Wert. Erweitern Sie dies nur, wenn Sie sicher wissen, dass der Bereich zu einem einzigen Betreiber gehört."
   }
 }

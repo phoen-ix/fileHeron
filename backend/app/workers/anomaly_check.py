@@ -4,8 +4,9 @@ Runs at minute :33. Reads admin-tunable thresholds, runs the three GeoIP-free
 detectors in services/anomaly.py, and for each finding (deduped 1h per
 type+subject, mirroring ops_check) records an `anomaly_detected` audit event
 (which auto-fires subscribed webhooks) and dispatches an `ops_alert` to every
-admin. Advisory by default - it alerts, and only blocks if an admin has switched
-on the scan guard's auth-failure signal (v2.10.0, off by default). Disabled wholesale by the
+admin. Advisory only - it alerts an admin and never blocks. The scan guard's
+auth-failure signal is a separate, middleware-level control that does not
+read these findings. Disabled wholesale by the
 `anomaly.enabled` kv switch.
 """
 from __future__ import annotations

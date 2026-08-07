@@ -6,10 +6,16 @@ file:Heron has no real geo (utils/geohash.ip_geohash5 is an IP-prefix *hash*,
 not lat/lon), so "multi-network" stands in for impossible-travel: one account's
 token used from several distinct networks in a short window.
 
-These are advisory signals: the action is to ALERT an admin. Since v2.10.0 an
-admin MAY additionally have the scan guard auto-block a source that trips
-`login_stuffing` (`scan_guard.signal_auth_failure`), but that is opt-in and
-ships OFF - nothing here blocks anyone on its own.
+These are advisory signals: the action is to ALERT an admin. Nothing here blocks
+anyone, and no setting makes it.
+
+An earlier version of this note claimed `scan_guard.signal_auth_failure` could
+auto-block a source that tripped `login_stuffing`. That was never true: the
+signal is a MIDDLEWARE classification over credential-endpoint 401/403s and it
+never reads these findings, never requires >= 3 distinct accounts, and cannot see
+a Finding at all. The claim was written during the v2.10.0 documentation sweep and
+described a wiring that does not exist - the more dangerous kind of stale comment,
+because it asserts a control rather than a mechanism (adversarial review, v2.11.0).
 """
 from __future__ import annotations
 
@@ -82,7 +88,17 @@ def multi_network(db: Session, *, cutoff: datetime, threshold: int) -> list[Find
 def login_stuffing(db: Session, *, cutoff: datetime, threshold: int) -> list[Finding]:
     """IPs with more than `threshold` failed logins since `cutoff` spread across
     >= `_MIN_DISTINCT_EMAILS` distinct accounts (cross-account stuffing that
-    per-account lockout doesn't catch)."""
+    per-account lockout doesn't catch), and with NO successful login in the same
+    window.
+
+    That last clause is what separates an attack from an office. A real stuffer
+    guesses and never gets in, so their success count is ~zero. A shared egress
+    address - a NAT'd office, a VPN concentrator - produces failures from people
+    mistyping passwords AND a steady stream of successes from everyone else, and
+    it was previously indistinguishable from stuffing on the failure count
+    alone. Without this the alert fires on the busiest legitimate sources on the
+    instance, which is precisely backwards.
+    """
     cnt = func.count()
     distinct_emails = func.count(func.distinct(LoginAttempt.email))
     rows = (
@@ -96,11 +112,25 @@ def login_stuffing(db: Session, *, cutoff: datetime, threshold: int) -> list[Fin
         .having(cnt > threshold)
         .all()
     )
+    if not rows:
+        return []
+    # One extra query, not one per candidate: the candidate set is tiny.
+    succeeded = {
+        ip
+        for (ip,) in db.query(LoginAttempt.ip)
+        .filter(
+            LoginAttempt.attempted_at >= cutoff,
+            LoginAttempt.outcome == LoginOutcome.success.value,
+            LoginAttempt.ip.in_([r[0] for r in rows]),
+        )
+        .distinct()
+        .all()
+    }
     return [
         Finding(
             "login_stuffing", ip, int(n),
             {"ip": ip, "failures": int(n), "distinct_emails": int(emails)},
         )
         for ip, n, emails in rows
-        if int(emails) >= _MIN_DISTINCT_EMAILS
+        if int(emails) >= _MIN_DISTINCT_EMAILS and ip not in succeeded
     ]

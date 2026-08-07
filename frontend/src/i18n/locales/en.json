@@ -2589,12 +2589,10 @@
     "notify_section": "Telling you about it",
     "notify": {
       "off": "Don't notify me",
-      "digest": "A daily summary",
       "every_block": "Every block"
     },
     "notify_help": {
       "off": "Blocks still appear on this page.",
-      "digest": "One message a day listing what was blocked.",
       "every_block": "One message per block. On a busy instance this can be dozens a week."
     },
     "blocks_title": "Blocked sources",
@@ -2611,6 +2609,8 @@
     "released_toast": "{subject} released.",
     "saved_toast": "Scan guard settings saved.",
     "err_no_signals": "Turn on at least one signal, or the guard is enabled but can never act.",
-    "err_max_below_base": "The longest block cannot be shorter than the first block."
+    "err_max_below_base": "The longest block cannot be shorter than the first block.",
+    "v6_prefix_label": "IPv6 grouping (prefix length)",
+    "v6_prefix_help": "64 groups one LAN and is the safe default. Lower numbers group wider — but on hosting providers a wider prefix is NOT one customer: netcup, Hetzner and Vultr give one /64 per server, and OVH and Linode put several customers inside a single /64. A /48 there can be tens of thousands of unrelated tenants, which is why 56 is the widest offered. Only widen this if you have confirmed the range belongs to a single operator."
   }
 }

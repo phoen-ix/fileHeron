@@ -335,9 +335,10 @@ class Settings(BaseSettings):
     PUBLIC_LINK_LOCKOUT_SEC: int = 900  # link locked for 15 min after lockout
 
     # --- Anomaly detection (v1.20.0, heuristic / GeoIP-free) ------------------
-    # Hourly anomaly_check cron; thresholds admin-tunable. Alerts by default;
-    # auto-blocking is opt-in via the scan guard's auth-failure signal (v2.10.0,
-    # off by default). Set ANOMALY_ENABLED=false to disable the cron entirely.
+    # Hourly anomaly_check cron; thresholds admin-tunable. Alerts only - these
+    # findings never block anyone, and the scan guard's auth-failure signal is a
+    # separate middleware control that does not read them. Set
+    # ANOMALY_ENABLED=false to disable the cron entirely.
     ANOMALY_ENABLED: bool = True
     ANOMALY_MASS_DOWNLOAD_THRESHOLD: int = 100   # downloads / user / 15 min
     ANOMALY_MULTI_NETWORK_THRESHOLD: int = 4     # distinct networks / user / 30 min
@@ -381,6 +382,10 @@ class Settings(BaseSettings):
     SCAN_GUARD_NETWORK_THRESHOLD: int = 3    # distinct BLOCKED IPs in one /24
     SCAN_GUARD_NETWORK_LOOKBACK_HOURS: int = 168
     SCAN_GUARD_MAX_NEW_BLOCKS_PER_MIN: int = 60  # bounds forged-XFF flooding
+    # IPv6 escalation prefix. Default /64 keeps the upgrade behaviour-neutral.
+    # Widening is an explicit admin choice and the floor is /56 - see
+    # services/scan_guard.py::network_of for why /48 is never offered.
+    SCAN_GUARD_NETWORK_PREFIX_V6: int = 64
     IP_BLOCK_RETENTION_DAYS: int = 90
 
     @property

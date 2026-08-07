@@ -103,6 +103,29 @@ does - keep it current on release.)
 > **Paths are counted `_redact_path`'d**, so a live public-link token never lands
 > in a Redis key or an admin-browsable table. `utils/geohash.ip_geohash5` is a
 > ONE-WAY hash and cannot be reversed to a CIDR - use `ipaddress` for networks.
+> **IPv6 grouping is a setting, and /48 is deliberately unreachable** (v2.11.0).
+> At /64 escalation is inert for IPv6 - a routed /48 holds 65,536 /64s, so the
+> threshold is never met - but widening is NOT the obvious fix: the one /48 that
+> grouped on the reference instance resolved to RIPE `DE-NETCUP-KVM-VIE`, a VPS
+> pool with one /64 PER CUSTOMER. Prefix length is not a proxy for tenancy;
+> Hetzner and Vultr allocate the same way and OVH/Linode share a /64 between
+> customers. Floor is /56, clamped in `network_of` itself as well as the registry
+> because `_defaults()` and `config_backup` both reach it unclamped. IPv4 stays
+> hardcoded /24.
+> **Escalation evidence must be FRESH.** `network_lookback_hours` (168h) is far
+> longer than a network block (60 min), so counting over the whole window let ONE
+> new address resurrect a lapsed network block, hourly, for a week. Count since
+> the last network block on that prefix ended.
+> **`ip_blocks.network` is a denormalised cache** of `network_of()`, compared by
+> string equality - so changing the prefix must release live network blocks, or
+> evidence stops matching AND an orphaned overlapping block survives the release
+> of the visible one.
+> **`is_blocked` re-checks `is_blockable`.** A network block is a CIDR and a wide
+> one can contain loopback; checking only where blocks are created left the
+> serving path able to 404 the healthcheck, nginx, tusd and the updater.
+> **Never call `_ensure_fresh()` from inside an open transaction** - it opens its
+> own `SessionLocal`, and the escalation path did, which under the test harness's
+> StaticPool rolled back the caller's pending block. Pass the snapshot instead.
 >
 > **v2.9.0 invariants worth knowing before you touch these areas.**
 > **Four-eyes is a per-FILE mark now, not just a share state.**
@@ -828,13 +851,14 @@ server, counted in the poll result as `refused_unknown_sender`.
 
 ### Anomaly detection (v1.22)
 
-`services/anomaly.py` + hourly `anomaly_check`. **Advisory BY DEFAULT - it alerts
-an admin.** Since v2.10.0 an admin may additionally have `services/scan_guard.py`
-auto-block a source that trips `login_stuffing`, via
-`scan_guard.signal_auth_failure` - opt-in, ships OFF, so nothing here blocks
-anyone unless someone chose it. (This section said "never auto-block" as a flat
-invariant until v2.10.0; the capability now exists and the sentence would
-otherwise describe a product that no longer ships.) GeoIP-free: `multi_network` approximates
+`services/anomaly.py` + hourly `anomaly_check`. **Advisory only - it alerts an
+admin and never blocks.** v2.10.0 documentation claimed `scan_guard.
+signal_auth_failure` could auto-block a `login_stuffing` finding; that wiring
+never existed - the signal is a middleware classification over credential-endpoint
+401/403s and cannot see a Finding. Corrected in v2.11.0, along with a
+success-discriminator on `login_stuffing`: a source that also logged in
+SUCCESSFULLY in the window is excluded, because a stuffer never gets in while a
+NAT'd office does it constantly. GeoIP-free: `multi_network` approximates
 impossible-travel with `utils/geohash.ip_geohash5` - an IP-prefix hash, NOT
 geography. `login_stuffing` needs >threshold failures across ≥3 distinct emails
 from one IP. Thresholds env-tunable (`ANOMALY_*`); feeds webhooks. (Detector

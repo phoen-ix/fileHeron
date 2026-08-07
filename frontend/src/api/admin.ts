@@ -1037,7 +1037,7 @@ export interface ScanGuardSettings {
   signal_auth_failure: boolean
   escalation: boolean
   network_escalation: boolean
-  notify_mode: 'off' | 'digest' | 'every_block'
+  notify_mode: 'off' | 'every_block'
   allowlist: string
   extra_paths: string
   ignore_paths: string
@@ -1049,6 +1049,7 @@ export interface ScanGuardSettings {
   network_threshold: number
   network_lookback_hours: number
   max_new_blocks_per_min: number
+  network_prefix_v6: number
   active_ip_blocks: number
   active_network_blocks: number
 }

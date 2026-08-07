@@ -28,7 +28,7 @@ const signalApi404 = ref(false)
 const signalAuthFailure = ref(false)
 const escalation = ref(true)
 const networkEscalation = ref(false)
-const notifyMode = ref<'off' | 'digest' | 'every_block'>('digest')
+const notifyMode = ref<'off' | 'every_block'>('off')
 const allowlist = ref('')
 const extraPaths = ref('')
 const ignorePaths = ref('')
@@ -40,6 +40,7 @@ const minDistinctPaths = ref(15)
 const networkThreshold = ref(3)
 const networkLookbackHours = ref(168)
 const maxNewBlocksPerMin = ref(60)
+const networkPrefixV6 = ref(64)
 const activeIpBlocks = ref(0)
 const activeNetworkBlocks = ref(0)
 
@@ -79,6 +80,7 @@ function apply(d: Awaited<ReturnType<typeof getScanGuardSettings>>['data']) {
   networkThreshold.value = d.network_threshold
   networkLookbackHours.value = d.network_lookback_hours
   maxNewBlocksPerMin.value = d.max_new_blocks_per_min
+  networkPrefixV6.value = d.network_prefix_v6
   activeIpBlocks.value = d.active_ip_blocks
   activeNetworkBlocks.value = d.active_network_blocks
 }
@@ -130,6 +132,7 @@ async function onSave() {
       network_threshold: networkThreshold.value,
       network_lookback_hours: networkLookbackHours.value,
       max_new_blocks_per_min: maxNewBlocksPerMin.value,
+      network_prefix_v6: networkPrefixV6.value,
     })
     apply(data)
     ui.pushToast(t('admin_scan_guard.saved_toast'), 'success')
@@ -248,6 +251,13 @@ onMounted(() => {
             <span>{{ t('admin_scan_guard.network_lookback_label') }}</span>
             <input v-model.number="networkLookbackHours" type="number" class="fh-input" min="1" max="8760" />
           </label>
+          <label class="num-field">
+            <span>{{ t('admin_scan_guard.v6_prefix_label') }}</span>
+            <input v-model.number="networkPrefixV6" type="number" class="fh-input" min="56" max="128" />
+          </label>
+          <!-- The tenancy reality, not "one site". Widening this is the single
+               most collateral-prone control on the page. -->
+          <p class="fh-notice" data-tone="warning">{{ t('admin_scan_guard.v6_prefix_help') }}</p>
         </template>
       </fieldset>
 
@@ -274,7 +284,7 @@ v-model="extraPaths" type="text" class="fh-input"
 
       <fieldset class="toggle-fieldset">
         <legend class="legend">{{ t('admin_scan_guard.notify_section') }}</legend>
-        <label v-for="mode in (['off', 'digest', 'every_block'] as const)" :key="mode" class="toggle">
+        <label v-for="mode in (['off', 'every_block'] as const)" :key="mode" class="toggle">
           <input v-model="notifyMode" type="radio" :value="mode" />
           <span>
             <strong>{{ t(`admin_scan_guard.notify.${mode}`) }}</strong>

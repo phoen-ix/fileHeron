@@ -194,6 +194,64 @@ def test_network_of_uses_ipaddress_not_string_surgery():
     )
 
 
+# The six IPv6 sources actually observed scanning the reference instance. They
+# are the evidence behind the /64 default, and any future prefix change should
+# have to confront them rather than re-argue from first principles.
+REAL_IPV6_SCANNERS = (
+    "2a04:c300:400::15",
+    "2a0a:4cc0:80:33a7:3a2f:9d8c:7b4e:1a9d",
+    "2a04:4e40:e000:0:6e6:ae4e:310a:4542",
+    "2a04:4e40:4400:0:7f:2b2b:d9f:d5fb",
+    "2605:3b80:111:b351::1",
+    "2a0a:4cc0:80:5a3e::1",
+)
+
+
+def test_ipv4_prefix_is_not_configurable():
+    """/24 is the smallest routable IPv4 unit and there is no evidence anything
+    wider is wanted. Widening it was rejected: /16 is 65,536 addresses."""
+    assert sg.network_of("195.178.110.72", v6=56) == "195.178.110.0/24"
+
+
+def test_the_v6_prefix_is_clamped_inside_network_of():
+    """Not only in the registry Tunable. `_defaults()` reads `env_default()`
+    unclamped, and `config_backup` imports app_settings with a raw `db.add` that
+    bypasses `coerce_for_store` - two routes that never see the registry."""
+    # /48 is never reachable, however it arrives: both a below-floor request and
+    # a nonsense one land on the /56 floor, NOT on the /48 that would group the
+    # netcup pool.
+    floor = "2a0a:4cc0:80:5a00::/56"
+    assert sg.network_of("2a0a:4cc0:80:5a3e::1", v6=48) == floor
+    assert sg.network_of("2a0a:4cc0:80:5a3e::1", v6=0) == floor
+    assert sg.network_of("2a0a:4cc0:80:5a3e::1", v6=999).endswith("/128")
+
+
+def test_the_real_ipv6_scanners_do_not_group_at_the_default():
+    """Why the default stays /64 despite escalation being inert for IPv6.
+
+    At /64 these six sit in six distinct networks, so `network_threshold` (3)
+    can never be reached - the escalation genuinely cannot fire. Widening looks
+    tempting until you resolve the one /48 that groups: `2a0a:4cc0:80::/48` is
+    RIPE object DE-NETCUP-KVM-VIE, a VPS pool assigning one /64 PER CUSTOMER.
+    Grouping there would blocklist up to 65,536 unrelated tenants to suppress
+    two. Hetzner and Vultr allocate the same way; OVH and Linode put several
+    customers inside one /64.
+
+    So this test pins a deliberate trade: IPv6 escalation is off rather than
+    wrong. An admin who has confirmed a prefix belongs to one operator can widen
+    it to /56; the code refuses to make that choice for them."""
+    at64 = {sg.network_of(ip) for ip in REAL_IPV6_SCANNERS}
+    assert len(at64) == 6, "no two of these share a /64 - escalation cannot fire"
+
+    at56 = {sg.network_of(ip, v6=56) for ip in REAL_IPV6_SCANNERS}
+    assert len(at56) == 6, "nor a /56"
+
+    # The netcup pool is the only thing that groups, and only below the floor.
+    netcup = [ip for ip in REAL_IPV6_SCANNERS if ip.startswith("2a0a:4cc0:80:")]
+    assert len(netcup) == 2
+    assert len({ipaddress.ip_network(f"{ip}/48", strict=False) for ip in netcup}) == 1
+
+
 def test_allowlist_parsing_drops_junk_without_raising():
     nets = sg.parse_networks("203.0.113.0/24, 198.51.100.7 ,,garbage, 2001:db8::/32")
     assert len(nets) == 3
@@ -340,3 +398,110 @@ def test_is_blocked_honours_expiry_release_and_allowlist(db, make_user):
     db.commit()
     sg._reset_cache()
     assert sg.is_blocked(PUBLIC_IP) is False, "an expired block must lapse on its own"
+
+
+def test_an_expired_network_block_needs_fresh_evidence_to_return(db):
+    """The hair-trigger bug: a wide block that snapped back on one address.
+
+    `network_lookback_hours` is 168h but a network block lasts `block_minutes`
+    (60). Counting evidence over the whole lookback meant that once a prefix had
+    ever reached the threshold, the block expired after an hour and then a SINGLE
+    new blocked address re-blocked the entire prefix for another hour - over and
+    over, for a week. At /24 that is a rolling week across 256 addresses.
+
+    Evidence must be counted since the last network block on that prefix ended.
+    """
+    from datetime import timedelta
+
+    snap = _snap(network_escalation=True, network_threshold=3, block_minutes=60)
+    for ip in ("195.178.110.72", "195.178.110.73", "195.178.110.74"):
+        sg.apply_block(db, subject=ip, reason="probe_path", snap=snap)
+    db.commit()
+    net = db.query(IpBlock).filter(IpBlock.is_network.is_(True)).one()
+    assert net.subject == "195.178.110.0/24"
+
+    # Wind the clock realistically: the three addresses were blocked two hours
+    # ago, the network block they triggered ran its 60 minutes and lapsed an
+    # hour ago. Backdating matters - leave the originals stamped "seconds ago"
+    # and they are trivially newer than the lapsed expiry, which tests nothing.
+    for row in db.query(IpBlock).filter(IpBlock.is_network.is_(False)).all():
+        row.created_at = utc_now() - timedelta(hours=2)
+    net.expires_at = utc_now() - timedelta(hours=1)
+    db.commit()
+
+    # ONE more address in that /24. Under the old rule this re-blocked the whole
+    # network immediately, because the three originals were still inside the
+    # 168h lookback.
+    sg.apply_block(db, subject="195.178.110.75", reason="probe_path", snap=snap)
+    db.commit()
+    live_nets = (
+        db.query(IpBlock)
+        .filter(IpBlock.is_network.is_(True), IpBlock.expires_at > utc_now())
+        .count()
+    )
+    assert live_nets == 0, "one address must not resurrect a lapsed network block"
+
+    # Three FRESH addresses (the .75 above plus two more) escalate again - the
+    # rule is freshness, not a permanent ban on the prefix.
+    for ip in ("195.178.110.76", "195.178.110.77"):
+        sg.apply_block(db, subject=ip, reason="probe_path", snap=snap)
+    db.commit()
+    assert (
+        db.query(IpBlock)
+        .filter(IpBlock.is_network.is_(True), IpBlock.expires_at > utc_now())
+        .count()
+        == 1
+    )
+
+
+def test_is_blocked_refuses_to_act_on_a_non_global_address(db):
+    """A network block is a CIDR, and a wide or hand-entered one can contain
+    loopback or RFC1918. The refusal lived only where blocks are CREATED, so the
+    SERVING path would happily 404 the compose healthcheck, nginx, tusd and the
+    updater - and the container would restart straight back into the block."""
+    from app.services import settings as settings_svc
+
+    settings_svc.set_value(
+        db, key=settings_svc.Keys.SCAN_GUARD_ENABLED, value="true", actor=None
+    )
+    db.commit()
+    row = sg.apply_block(
+        db, subject="10.0.0.0/8", reason="manual", source="manual",
+        is_network=True, snap=_snap(), minutes=60,
+    )
+    db.commit()
+    sg._reset_cache()
+    assert row.is_network
+    assert sg.is_blocked("10.0.0.5") is False
+    assert sg.is_blocked("127.0.0.1") is False
+
+
+def test_changing_the_v6_prefix_releases_live_network_blocks(db, make_user):
+    """`ip_blocks.network` is a denormalised cache queried by string equality.
+    Leave stale rows across a prefix change and escalation evidence silently
+    stops matching, AND a live /64 block no longer matches the /56 lookup - so a
+    second overlapping block is inserted and releasing the visible one leaves the
+    orphan still blocking."""
+    from app.models.user import UserRole
+
+    admin = make_user(email="a@test.local", role=UserRole.admin)
+    snap = _snap(network_escalation=True)
+    sg.apply_block(
+        db, subject="2a0a:4cc0:80:5a3e::/64", reason="network",
+        is_network=True, snap=snap, minutes=60,
+    )
+    db.commit()
+    assert db.query(IpBlock).filter(IpBlock.is_network.is_(True)).count() == 1
+
+    sg.update_settings(db, values={"network_prefix_v6": 56}, actor=admin)
+    db.commit()
+    live = (
+        db.query(IpBlock)
+        .filter(
+            IpBlock.is_network.is_(True),
+            IpBlock.released_at.is_(None),
+            IpBlock.expires_at > utc_now(),
+        )
+        .count()
+    )
+    assert live == 0, "a prefix change must not leave orphaned network blocks"

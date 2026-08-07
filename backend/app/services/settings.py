@@ -289,6 +289,10 @@ class Keys:
     SCAN_GUARD_NETWORK_THRESHOLD = "scan_guard.network_threshold"
     SCAN_GUARD_NETWORK_LOOKBACK_HOURS = "scan_guard.network_lookback_hours"
     SCAN_GUARD_MAX_NEW_BLOCKS_PER_MIN = "scan_guard.max_new_blocks_per_min"
+    # IPv6 escalation prefix. v4 is deliberately NOT configurable (/24 is the
+    # smallest routable IPv4 unit). Clamped 56-128 - /48 is never offered because
+    # at a hosting provider it is tens of thousands of unrelated tenants.
+    SCAN_GUARD_NETWORK_PREFIX_V6 = "scan_guard.network_prefix_v6"
     IP_BLOCK_RETENTION_DAYS = "retention.ip_block_days"
 
 

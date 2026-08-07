@@ -54,6 +54,8 @@ def _settings_response(db: Session) -> ScanGuardSettingsResponse:
     )
     data["active_ip_blocks"] = live.filter(IpBlock.is_network.is_(False)).count()
     data["active_network_blocks"] = live.filter(IpBlock.is_network.is_(True)).count()
+    data.pop("_extra_prefixes", None)
+    data.pop("_ignore_prefixes", None)
     return ScanGuardSettingsResponse(**data)
 
 

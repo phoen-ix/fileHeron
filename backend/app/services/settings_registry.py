@@ -117,6 +117,7 @@ TUNABLES: list[Tunable] = [
     Tunable(K.SCAN_GUARD_NETWORK_THRESHOLD, "SCAN_GUARD_NETWORK_THRESHOLD", "int", "scan_guard", 2, 254),
     Tunable(K.SCAN_GUARD_NETWORK_LOOKBACK_HOURS, "SCAN_GUARD_NETWORK_LOOKBACK_HOURS", "int", "scan_guard", 1, 8760),
     Tunable(K.SCAN_GUARD_MAX_NEW_BLOCKS_PER_MIN, "SCAN_GUARD_MAX_NEW_BLOCKS_PER_MIN", "int", "scan_guard", 1, 10000),
+    Tunable(K.SCAN_GUARD_NETWORK_PREFIX_V6, "SCAN_GUARD_NETWORK_PREFIX_V6", "int", "scan_guard", 56, 128),
 ]
 
 BY_KEY: dict[str, Tunable] = {t.key: t for t in TUNABLES}

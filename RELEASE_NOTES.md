@@ -1,4 +1,4 @@
-# file:Heron v2.10.1
+# file:Heron v2.10.2
 
 **If you enabled the scan guard's sign-in-failure signal in v2.10.0, update.**
 That signal could block you out of your own instance, including the login page.

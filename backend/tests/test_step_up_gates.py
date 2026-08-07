@@ -85,6 +85,25 @@ async def test_erase_refuses_without_a_body(make_user, db, client, login_as):
 
 
 @pytest.mark.asyncio
+async def test_admin_minting_a_token_for_someone_else_refuses_a_wrong_password(
+    make_user, db, client, login_as
+):
+    """The self-service gate is worthless on its own: this route mints a token
+    for ANY user, so a stolen admin session would simply target its victim
+    instead of itself."""
+    headers = await _admin(make_user, login_as)
+    target = make_user(email="victim@test.local", role=UserRole.client, password=PW)
+    db.commit()
+    resp = await client.post(
+        "/api/admin/api-tokens",
+        json={"target_user_id": target.id, "name": "x", "password": WRONG},
+        headers=headers,
+    )
+    assert resp.status_code == 403, resp.text
+    assert resp.json()["code"] == "INVALID_PASSWORD"
+
+
+@pytest.mark.asyncio
 async def test_backup_import_refuses_a_wrong_password(make_user, client, login_as):
     headers = await _admin(make_user, login_as)
     resp = await client.post(

@@ -102,6 +102,9 @@ const userQuery = ref('')
 const userSuggestions = ref<UserSearchItem[]>([])
 const selectedUser = ref<UserSearchItem | null>(null)
 const newName = ref('')
+// Re-auth: this route mints a token for ANY user, so it is the one a stolen
+// admin session would reach for.
+const adminPassword = ref('')
 const tokenExpiresAt = ref<string | null>(null)  // null = Never (default)
 const scopeMode = ref<'full' | 'limited'>('full')  // full = unrestricted (default)
 const selectedScopes = ref<string[]>([])
@@ -176,8 +179,10 @@ async function onCreateForUser() {
           ? null
           : siteLocalIsoToUtcIso(tokenExpiresAt.value),
       scopes: scopeMode.value === 'full' ? null : selectedScopes.value,
+      password: adminPassword.value,
     })
     plaintextResult.value = data
+    adminPassword.value = ''
     showCreateForm.value = false
     userQuery.value = ''
     selectedUser.value = null
@@ -306,11 +311,25 @@ onMounted(load)
 v-if="createError" class="fh-notice" role="alert"
         data-tone="error">{{ createError }}</div>
 
+      <!-- Re-auth. Minting a token on someone else's behalf is the strongest
+           form of this action, so it is gated like the self-service one. -->
+      <label class="fh-field">
+        <span class="fh-field-label">{{ t('api_tokens.password_label') }}</span>
+        <input
+          v-model="adminPassword"
+          class="fh-field-input"
+          type="password"
+          autocomplete="current-password"
+          :placeholder="t('api_tokens.password_placeholder')"
+          required
+        />
+      </label>
+
       <div class="form-actions">
         <button
           type="submit"
           class="fh-btn"
-          :disabled="creating || !selectedUser || !newName || (scopeMode === 'limited' && selectedScopes.length === 0)"
+          :disabled="creating || !selectedUser || !newName || !adminPassword || (scopeMode === 'limited' && selectedScopes.length === 0)"
         >
           {{ creating ? t('common.loading') : t('admin_api_tokens.create_submit') }}
         </button>

@@ -82,7 +82,14 @@ async def test_admin_create_for_returns_plaintext_and_audits(
 
     resp = await client.post(
         "/api/admin/api-tokens",
-        json={"target_user_id": target.id, "name": "t-ci"},
+        json={
+            "target_user_id": target.id,
+            "name": "t-ci",
+            # Minting a token on someone else's behalf re-confirms the admin's
+            # own password - gating only the self-service route would let a
+            # stolen admin session walk around it by targeting a victim.
+            "password": "Pass12345678!",
+        },
         headers={"Authorization": f"Bearer {token}"},
     )
     assert resp.status_code == 201, resp.text

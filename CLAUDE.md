@@ -15,13 +15,14 @@ keep this to what would cause a wrong move if unknown.
 
 ## Status
 
-**v2.9.0 has FOUR breaking API changes**, all deliberate re-auth / integrity
+**v2.9.0 has SIX breaking API changes**, all deliberate re-auth / integrity
 gates. Any API-token or scripted client doing these must be updated:
 1. `POST /api/shares/{id}/approve` requires a body with `content_fingerprint`.
 2. `POST /api/admin/backup/export` requires `password` (the caller's own).
 3. `POST /api/admin/backup/import` requires a `password` form field.
 4. `POST /api/admin/users/{id}/erase` requires a body with `password`.
 5. `POST /api/account/api-tokens` requires `password`.
+6. `POST /api/admin/api-tokens` requires `password` (the admin's own).
 
 It also HAS TWO MIGRATIONS (`202608070001` per-file approval state +
 `shares.approval_was_required`; `202608070002` `users.sessions_invalidated_at`),

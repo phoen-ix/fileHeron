@@ -216,7 +216,17 @@ async def test_a_resumed_download_still_completes_during_maintenance(
 ):
     """The whole point of the exemption: a transfer already in flight when
     maintenance is switched on must be allowed to finish, or the drain is
-    self-defeating."""
+    self-defeating.
+
+    The `Range` header is only a CLAIM; the exemption pairs it with evidence -
+    a per-file recency mark written when the download started. Mark the file
+    first, because that is what "already in flight" means. Without this the
+    test passed only where Redis was UNREACHABLE (the mark fails open), so it
+    proved the fail-open branch and, against a working Redis, asserted the
+    opposite of its own name."""
+    from app.services import transfer_activity
+
+    transfer_activity.mark_download_recent(clean_file.id)
     token, _ = await login_as("owner@test.local", PW)
     resp = await client.get(
         f"/api/files/{clean_file.id}/download",

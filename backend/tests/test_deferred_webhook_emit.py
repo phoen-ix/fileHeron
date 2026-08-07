@@ -95,6 +95,19 @@ def test_an_ops_alert_reaches_the_webhook_queue(db, make_user, collected, monkey
     _active_wildcard(db)
     db.commit()
 
+    # `_alert_admins` opens with a Redis-backed dedup on the reason, and that
+    # key OUTLIVES the process - so the first run of this test armed it and
+    # every run inside the TTL then returned 0 without emitting anything. The
+    # test only ever passed where Redis was unreachable (the dedup fails open),
+    # which is why it was green in CI and red against a live stack. Clear the
+    # key so the assertion is about the emit path, not about Redis history.
+    try:
+        from app.redis_client import get_redis
+
+        get_redis().delete("fh:ops:alert:redis_unhealthy")
+    except Exception:
+        pass  # Redis down: the dedup fails open anyway, nothing to clear.
+
     monkeypatch.setattr(ops, "dispatch", lambda *a, **kw: None)
     ops._alert_admins(db, reason="redis_unhealthy", detail="probe")
     db.commit()

@@ -10,7 +10,14 @@ test('a shares:read token is refused on a shares:create call (403)', async () =>
 
   const created = await apiFetch(admin, '/api/account/api-tokens', {
     method: 'POST',
-    body: JSON.stringify({ name: 'e2e-readonly', scopes: ['shares:read'] }),
+    // `password` re-confirms the caller: a token outlives the session that
+    // minted it and is not revoked by a password reset, so creating one is
+    // gated the same way changing a password is.
+    body: JSON.stringify({
+      name: 'e2e-readonly',
+      scopes: ['shares:read'],
+      password: ADMIN.password,
+    }),
   })
   expect(created.status).toBe(201)
   const token = (await created.json()).plaintext_token as string

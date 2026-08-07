@@ -7,8 +7,34 @@ from __future__ import annotations
 
 import os
 
-# These must be set before any `from app...` import below.
-os.environ.setdefault("ENVIRONMENT", "development")
+# A handful of settings decide what the suite is even TESTING, so they are
+# FORCED rather than defaulted.
+#
+# `setdefault` is a no-op when the variable is already set, and the app's own
+# environment is exactly what a developer is likely to have around - running the
+# suite inside the backend image, or with a sourced `.env`, silently swaps in
+# production values. `COOKIE_SECURE=true` alone makes every refresh-cookie test
+# fail with a bare 401 (the test client will not send a Secure cookie over
+# http://test), and `REQUIRE_2FA=admins` 403s every admin-authored request.
+# Neither says anything about the code. CI has a bare environment, so main stayed
+# green while a local run showed seven unrelated-looking failures.
+#
+# Infrastructure POINTERS (DB_*, REDIS_URL) stay `setdefault` below: the
+# redis-tests and alembic-roundtrip CI jobs legitimately point the suite at real
+# services.
+# Written as straight assignments, not a loop: ruff's E402 exempts direct
+# `os.environ` manipulation before imports, but does not recognise it wrapped in
+# a loop, and adding an E402 ignore here would blind the file to real ordering
+# mistakes.
+os.environ["ENVIRONMENT"] = "development"
+os.environ["COOKIE_SECURE"] = "false"
+os.environ["REQUIRE_2FA"] = ""
+os.environ["ADMIN_BOOTSTRAP_EMAIL"] = ""
+os.environ["ADMIN_BOOTSTRAP_PASSWORD"] = ""
+os.environ["TEST_ACCOUNT_EMAIL"] = ""
+os.environ["TEST_ACCOUNT_PASSWORD"] = ""
+os.environ["SMTP_HOST"] = ""  # logs-fallback in services/email.py
+
 os.environ.setdefault("LOG_LEVEL", "WARNING")
 os.environ.setdefault("DB_HOST", "localhost")
 os.environ.setdefault("DB_PORT", "3306")
@@ -19,13 +45,7 @@ os.environ.setdefault("JWT_SECRET", "test_jwt_secret_at_least_thirty_two_charact
 os.environ.setdefault("JWT_ALGORITHM", "HS256")
 os.environ.setdefault("ACCESS_TOKEN_EXPIRE_MINUTES", "15")
 os.environ.setdefault("REFRESH_TOKEN_EXPIRE_DAYS", "7")
-os.environ.setdefault("COOKIE_SECURE", "false")
-os.environ.setdefault("ADMIN_BOOTSTRAP_EMAIL", "")
-os.environ.setdefault("ADMIN_BOOTSTRAP_PASSWORD", "")
-os.environ.setdefault("TEST_ACCOUNT_EMAIL", "")
-os.environ.setdefault("TEST_ACCOUNT_PASSWORD", "")
 os.environ.setdefault("TEST_ACCOUNT_DISPLAY_NAME", "")
-os.environ.setdefault("SMTP_HOST", "")  # logs-fallback in services/email.py
 os.environ.setdefault("APP_URL", "http://test.fileheron.local")
 os.environ.setdefault("APP_NAME", "fileHeron")
 # Lower Argon2 cost in tests to keep the suite fast.

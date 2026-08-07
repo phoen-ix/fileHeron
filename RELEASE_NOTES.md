@@ -1,7 +1,7 @@
 # file:Heron v2.9.0
 
 Remediation of an external security review. Two migrations, no host step - but
-**five endpoints now require a field they did not before**, so read
+**six endpoints now require a field they did not before**, so read
 *Before you update* if anything scripts against the API.
 
 ---
@@ -21,6 +21,7 @@ new field, and each of them is a re-authentication or integrity gate:
 | `POST /api/admin/backup/import` | `password` form field |
 | `POST /api/admin/users/{id}/erase` | `password` in the body |
 | `POST /api/account/api-tokens` | `password` in the body |
+| `POST /api/admin/api-tokens` | `password` (the admin's own) |
 
 The web interface and the desktop client send all of these already. Only your
 own scripts and API-token integrations need updating.

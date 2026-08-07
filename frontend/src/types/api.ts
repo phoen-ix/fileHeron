@@ -979,6 +979,10 @@ export interface AdminCreateApiTokenRequest {
   name: string
   expires_at?: string | null
   scopes?: string[] | null
+  /** The acting ADMIN's own password, re-confirmed. This route mints a token
+   *  for any user, so it needs the same gate as self-service creation - and
+   *  more so: it is the one a stolen admin session would reach for. */
+  password: string
 }
 
 /* Admin file history (post-Phase 10) */

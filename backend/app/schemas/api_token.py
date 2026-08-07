@@ -134,6 +134,10 @@ class AdminApiTokenListResponse(APIBaseModel):
 class AdminCreateApiTokenRequest(APIBaseModel):
     target_user_id: int
     name: str = Field(..., min_length=1, max_length=120)
+    # The ADMIN's own password, re-confirmed. Gating only the self-service route
+    # would have been theatre: this one mints a token for ANY user, so a stolen
+    # admin session could still walk around the gate by targeting its victim.
+    password: str = Field(..., min_length=1, max_length=512)
     # Optional expiry. Omit / null = never expires.
     expires_at: datetime | None = None
     # Optional least-privilege scopes. Omit / null = unrestricted (full access).

@@ -445,11 +445,25 @@ until storage leaves single-server bind mounts (KEK + ciphertext would otherwise
 share a container). **Dropped:** Locust load-test baseline (real-load
 operation supersedes); zxcvbn-ts strength meter (HIBP is the real defense).
 
-> **Restore drills now exist (don't re-flag as a gap):** `scripts/restore_drill_e2e.sh`
-> restores the latest backup into an isolated throwaway compose project + runs
-> `restore_validate.py` (proven end-to-end against the 2026-05-04 backup); host
-> systemd units in `scripts/ops/` schedule it weekly. Last success is recorded in
+> **Restore drills exist as CODE; scheduling them is a separate host step
+> (don't confuse the two).** `scripts/restore_drill_e2e.sh` restores the latest
+> backup into an isolated throwaway compose project + runs `restore_validate.py`
+> (proven end-to-end against the 2026-05-04 backup), and records success in
 > `backups/LAST_SUCCESSFUL_DRILL`.
+> **The units in `scripts/ops/` do not schedule anything by existing.** They must
+> be copied to `/etc/systemd/system/` AND `systemctl enable --now`'d. On the
+> reference host they were copied on 2026-08-01 and never enabled, so as of
+> 2026-08-15 **no backup had ever been taken there** - `./backups` was empty,
+> both timers read `disabled`/`inactive`, and `BACKUP_RESTIC_REPO` was unset, so
+> there was no offsite copy either. The v2.8.0 correction block below says the
+> units "now are" installed on this host; installed is not enabled, and that
+> distinction hid the gap for two weeks.
+> Note the installed units are **copies**, not symlinks - editing
+> `scripts/ops/*` in the repo changes nothing on a host until they are copied
+> again and `systemctl daemon-reload` is run.
+> `OnFailure=` ships commented out in both units, so a failed backup is a
+> `failed` unit and a journald line and nothing else. Wire it before trusting
+> the schedule.
 
 ## Quickstart
 
@@ -727,7 +741,7 @@ UUID where it leaves the system.
 
 ## Backups + restore
 
-→ README §Backups & Restore (`scripts/backup.sh` → `./backups/<stamp>/{db.sql, files.tar.gz, quarantine.tar.gz, redis.rdb, manifest.txt}`, optional restic; `scripts/restore.sh` sha256-verifies + prompts literal `restore`). **Drilled:** `scripts/restore_drill_e2e.sh` restores the latest backup into an isolated throwaway compose project (own project name/data/port, never touches the live stack) + `alembic upgrade head` + `restore_validate.py`; weekly via `scripts/ops/fileheron-restore-drill.timer`. Last success in `backups/LAST_SUCCESSFUL_DRILL`.
+→ README §Backups & Restore (`scripts/backup.sh` → `./backups/<stamp>/{db.sql, files.tar.gz, quarantine.tar.gz, redis.rdb, manifest.txt}`, optional restic; `scripts/restore.sh` sha256-verifies + prompts literal `restore`). **Drilled:** `scripts/restore_drill_e2e.sh` restores the latest backup into an isolated throwaway compose project (own project name/data/port, never touches the live stack) + `alembic upgrade head` + `restore_validate.py`; the drill refuses an auto-selected backup older than `DRILL_MAX_BACKUP_AGE_HOURS` (48) so it cannot go green after backups stop. Last success in `backups/LAST_SUCCESSFUL_DRILL`. **`scripts/ops/*` schedules nothing until copied to `/etc/systemd/system/` and `systemctl enable --now`'d** - see the drill block above; on the reference host that step was never done.
 
 ## Back-filled subsystems (v1.15-v1.32)
 

@@ -669,8 +669,28 @@ Or via host cron:
 restores the latest backup into an **isolated throwaway compose project** (own name,
 data, port - never touches the live stack), runs `alembic upgrade head`, then
 `scripts/restore_validate.py` (row counts, on-disk files, no orphan FKs, schema at
-head), and records success in `backups/LAST_SUCCESSFUL_DRILL`. Schedule weekly via the
-shipped systemd units in `scripts/ops/`.
+head), and records success in `backups/LAST_SUCCESSFUL_DRILL`. It refuses an
+auto-selected backup older than `DRILL_MAX_BACKUP_AGE_HOURS` (default 48), so a
+drill cannot report green once backups have stopped arriving.
+
+> **Neither the backup nor the drill runs until you schedule it.** The units in
+> `scripts/ops/` ship with the repo; shipping is not scheduling. Install and
+> enable them explicitly, and check the result — a copied-but-not-enabled unit
+> is the failure mode that leaves an instance with no backups at all while the
+> files look present:
+>
+> ```bash
+> sudo cp scripts/ops/fileheron-*.{service,timer} /etc/systemd/system/
+> sudo systemctl daemon-reload
+> sudo systemctl enable --now fileheron-backup.timer fileheron-restore-drill.timer
+> systemctl list-timers 'fileheron-*'     # confirm both are listed and active
+> ```
+>
+> The units are copied, not symlinked, so re-copy and `daemon-reload` after
+> changing them. `OnFailure=` is commented out in both: until you point it at a
+> unit that notifies you, a failed backup is only a `failed` unit and a journald
+> line. Set `BACKUP_RESTIC_REPO`/`BACKUP_RESTIC_PASSWORD` if you want the
+> archive pushed offsite; unset means local-only.
 
 ## Upgrades
 

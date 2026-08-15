@@ -311,3 +311,35 @@ async def test_export_include_env_requires_passphrase(client, make_user, login_a
         headers={"Authorization": f"Bearer {token}"},
     )
     assert resp.status_code == 422
+
+
+# --- privilege allowlists on a settings-only import --------------------------
+
+
+def test_a_settings_only_import_drops_ids_it_cannot_vouch_for(db):
+    """approver_user_ids and friends are privilege ALLOWLISTS, and both
+    consumers test bare `user.id in allowed_users` with no role or existence
+    check. On a settings-only restore there is no identity mapping, so a raw id
+    from the source instance used to be written verbatim - granting approval
+    rights to whoever happens to hold that id on the target."""
+    import json
+
+    from app.models.app_setting import AppSetting
+    from app.services import settings as s
+
+    # Source instance: an approver allowlist naming two ids.
+    s.set_value(db, key=s.Keys.SHARE_APPROVAL_APPROVER_USERS,
+                value=json.dumps([4242, 4343]), actor=None)
+    db.commit()
+
+    tgt, actor, summary = _roundtrip(db, categories=["settings_branding"])
+
+    row = tgt.query(AppSetting).filter(
+        AppSetting.key == s.Keys.SHARE_APPROVAL_APPROVER_USERS
+    ).one()
+    kept = json.loads(row.value)
+    assert kept == [], (
+        "ids from a backup with no identity data were written verbatim into a "
+        f"privilege allowlist: {kept}"
+    )
+    assert any("dropped" in w for w in summary.warnings), summary.warnings

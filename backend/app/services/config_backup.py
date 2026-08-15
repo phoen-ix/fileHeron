@@ -758,6 +758,42 @@ def _remap_json_ids(val: str | None, idmap: dict[int, int]) -> str:
     return json.dumps([idmap[i] for i in ids if i in idmap])
 
 
+def _existing_user_ids(db) -> set[int]:
+    from ..models.user import User
+
+    return {i for (i,) in db.query(User.id).all()}
+
+
+def _existing_group_ids(db) -> set[int]:
+    from ..models.group import Group
+
+    return {i for (i,) in db.query(Group.id).all()}
+
+
+def _keep_existing_ids(val, existing: set[int], key: str, warnings: list[str]):
+    """Drop ids from a privilege allowlist that name nobody on THIS instance.
+
+    Used when the backup carries no identity categories, so there is no mapping
+    to apply and a raw id means whatever it happens to mean locally - which for
+    an allowlist is a silent privilege grant to a stranger.
+    """
+    try:
+        ids = json.loads(val) if isinstance(val, str) else val
+    except (TypeError, ValueError):
+        return val
+    if not isinstance(ids, list):
+        return val
+    kept = [i for i in ids if i in existing]
+    dropped = [i for i in ids if i not in existing]
+    if dropped:
+        warnings.append(
+            f"{key}: dropped {len(dropped)} id(s) that do not exist on this "
+            f"instance ({dropped}) - the backup carried no identity data, so "
+            f"they could not be matched to anyone here."
+        )
+    return json.dumps(kept)
+
+
 def _resolve_log_user(bid, user_id_map, has_users, db, *, existing_ids):
     if bid is None:
         return None
@@ -1366,10 +1402,34 @@ def apply_backup(db: Session, *, parsed: ParsedBackup, actor: User, request=None
                 ))
             else:
                 val = row.get("value")
-                if has_users and key in _JSON_USER_ID_KEYS:
-                    val = _remap_json_ids(val, user_id_map)
-                elif has_groups and key in _JSON_GROUP_ID_KEYS:
-                    val = _remap_json_ids(val, group_id_map)
+                # These keys are privilege ALLOWLISTS - share_approval
+                # approvers, public-link creators, API-token minters - and both
+                # consumers test bare `user.id in allowed_users` with no role,
+                # existence or disabled check. When the identity categories are
+                # part of this backup the ids are remapped; when they are NOT
+                # (a settings-only restore is a first-class artifact here) they
+                # used to be written VERBATIM, so a backup naming user 7 granted
+                # those privileges to whoever happens to be id 7 on the target
+                # instance. Symmetrically, a group id landing on a nonexistent
+                # local group silently REMOVES mandatory 2FA from whoever it
+                # covered.
+                #
+                # Same fail-closed rule the rest of this file already uses:
+                # _remap_json_ids drops unmapped ids, and _resolve_log_user
+                # validates a raw id against local rows when there is no
+                # identity import. Drop what cannot be vouched for, and say so.
+                if key in _JSON_USER_ID_KEYS:
+                    val = (
+                        _remap_json_ids(val, user_id_map)
+                        if has_users
+                        else _keep_existing_ids(val, _existing_user_ids(db), key, warnings)
+                    )
+                elif key in _JSON_GROUP_ID_KEYS:
+                    val = (
+                        _remap_json_ids(val, group_id_map)
+                        if has_groups
+                        else _keep_existing_ids(val, _existing_group_ids(db), key, warnings)
+                    )
                 db.add(AppSetting(
                     key=key, value=val, is_encrypted=False,
                     updated_at=utc_now(), updated_by_id=actor.id,

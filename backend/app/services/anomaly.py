@@ -85,19 +85,40 @@ def multi_network(db: Session, *, cutoff: datetime, threshold: int) -> list[Find
     ]
 
 
+# A source is treated as ordinary shared egress when its successes are a
+# meaningful share of its traffic. One success against fifty failures is a
+# stuffer who got in once; fifty successes against fifty failures is an office.
+# Exactly one success used to be enough to suppress ANY volume of failures.
+_SHARED_EGRESS_SUCCESS_RATIO = 0.2
+
+
+def _looks_like_shared_egress(failures: int, successes: int) -> bool:
+    """Whether this source's success volume explains its failures."""
+    if successes <= 0:
+        return False
+    return successes >= max(1, failures * _SHARED_EGRESS_SUCCESS_RATIO)
+
+
 def login_stuffing(db: Session, *, cutoff: datetime, threshold: int) -> list[Finding]:
     """IPs with more than `threshold` failed logins since `cutoff` spread across
     >= `_MIN_DISTINCT_EMAILS` distinct accounts (cross-account stuffing that
     per-account lockout doesn't catch), and with NO successful login in the same
     window.
 
-    That last clause is what separates an attack from an office. A real stuffer
-    guesses and never gets in, so their success count is ~zero. A shared egress
-    address - a NAT'd office, a VPN concentrator - produces failures from people
-    mistyping passwords AND a steady stream of successes from everyone else, and
-    it was previously indistinguishable from stuffing on the failure count
-    alone. Without this the alert fires on the busiest legitimate sources on the
-    instance, which is precisely backwards.
+    That last clause is what separates an attack from an office - but it has to
+    be a RATIO, not a presence test. The rationale was always volumetric ("their
+    success count is ~zero", "a steady stream of successes"), while the code
+    tested `ip not in succeeded`, i.e. a threshold of exactly one. So a single
+    success anywhere in the window switched the detector off for that source
+    entirely: a stuffer who cracks one account, or who simply holds one valid
+    credential of their own, becomes invisible - and stays invisible for the
+    whole window, which is `max(15, cadence + overlap)` = ~65 minutes on the
+    stock hourly cadence, longer if an admin slows the cron.
+
+    A NAT'd office is still excluded, because that is what a ratio describes:
+    many people signing in successfully alongside a few fat-fingered failures.
+    What is no longer excluded is a source that is overwhelmingly failures with
+    one success in it.
     """
     cnt = func.count()
     distinct_emails = func.count(func.distinct(LoginAttempt.email))
@@ -115,22 +136,23 @@ def login_stuffing(db: Session, *, cutoff: datetime, threshold: int) -> list[Fin
     if not rows:
         return []
     # One extra query, not one per candidate: the candidate set is tiny.
-    succeeded = {
-        ip
-        for (ip,) in db.query(LoginAttempt.ip)
+    # COUNT, not a set-membership test - the ratio below needs the volume.
+    success_counts = dict(
+        db.query(LoginAttempt.ip, cnt)
         .filter(
             LoginAttempt.attempted_at >= cutoff,
             LoginAttempt.outcome == LoginOutcome.success.value,
             LoginAttempt.ip.in_([r[0] for r in rows]),
         )
-        .distinct()
+        .group_by(LoginAttempt.ip)
         .all()
-    }
+    )
     return [
         Finding(
             "login_stuffing", ip, int(n),
             {"ip": ip, "failures": int(n), "distinct_emails": int(emails)},
         )
         for ip, n, emails in rows
-        if int(emails) >= _MIN_DISTINCT_EMAILS and ip not in succeeded
+        if int(emails) >= _MIN_DISTINCT_EMAILS
+        and not _looks_like_shared_egress(int(n), int(success_counts.get(ip, 0)))
     ]

@@ -134,8 +134,62 @@ def test_login_stuffing_requires_distinct_emails(db):
 
 
 def test_login_stuffing_ignores_successful_logins(db):
+    """NB: this inserts only SUCCESS rows, so the failure query returns nothing
+    and the function returns before the discriminator is even built. It pins
+    "no failures, no finding" - not what its name suggests. The two tests below
+    are the ones that exercise the discriminator.
+    """
     for em in ("a@x", "b@x", "c@x", "d@x"):
         db.add(LoginAttempt(email=em, ip="7.7.7.7", outcome=LoginOutcome.success.value, attempted_at=utc_now()))
     db.commit()
     findings = anomaly.login_stuffing(db, cutoff=utc_now() - timedelta(minutes=15), threshold=2)
+    assert findings == []
+
+
+def _fail_n(db, ip: str, n: int, *, start_email: int = 0):
+    from app.models.login_attempt import LoginAttempt, LoginOutcome
+
+    for i in range(n):
+        db.add(LoginAttempt(
+            email=f"victim{start_email + i}@x", ip=ip,
+            outcome=LoginOutcome.bad_password.value, attempted_at=utc_now(),
+        ))
+
+
+def _succeed_n(db, ip: str, n: int):
+    from app.models.login_attempt import LoginAttempt, LoginOutcome
+
+    for i in range(n):
+        db.add(LoginAttempt(
+            email=f"staff{i}@x", ip=ip,
+            outcome=LoginOutcome.success.value, attempted_at=utc_now(),
+        ))
+
+
+def test_one_success_no_longer_hides_a_stuffing_run(db):
+    """The defect: the discriminator was `ip not in succeeded`, a threshold of
+    exactly ONE. A stuffer who cracks a single account - or who simply holds one
+    valid credential - switched the detector off for their whole source, for the
+    entire ~65-minute window."""
+    _fail_n(db, "9.9.9.9", 30)
+    _succeed_n(db, "9.9.9.9", 1)
+    db.commit()
+
+    findings = anomaly.login_stuffing(
+        db, cutoff=utc_now() - timedelta(minutes=15), threshold=2
+    )
+    assert {f.subject for f in findings} == {"9.9.9.9"}
+
+
+def test_a_busy_shared_office_is_still_excluded(db):
+    """And this is why the clause exists at all - deleting it would fire the
+    alert on the busiest legitimate sources on the instance, which is precisely
+    backwards. A ratio keeps that property; a presence test over-applied it."""
+    _fail_n(db, "8.8.8.8", 10)
+    _succeed_n(db, "8.8.8.8", 40)
+    db.commit()
+
+    findings = anomaly.login_stuffing(
+        db, cutoff=utc_now() - timedelta(minutes=15), threshold=2
+    )
     assert findings == []

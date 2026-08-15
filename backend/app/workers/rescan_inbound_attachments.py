@@ -14,6 +14,7 @@ doesn't hammer a dead daemon. Idempotent: a clean/infected row is never revisite
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from sqlalchemy import func
@@ -93,13 +94,26 @@ async def rescan_inbound_attachments(_ctx) -> dict:
         for att in pending:
             # Local backend -> path-scan (clamd reads the shared mount); object
             # store -> stream the bytes via INSTREAM. Same choice as av_scan_file.
-            try:
-                local = backend.local_path(att.storage_key)
+            # Both scan paths are BLOCKING socket I/O and this is an `async
+            # def` on the ARQ worker's single event loop, so a slow clamd froze
+            # every other job in the process - send_email, webhook_deliver, and
+            # cron_dispatch itself, which is the every-minute tick that drives
+            # all the others. With _BATCH = 200 and SOCKET_TIMEOUT_SEC = 1800
+            # the worst case is 100 hours of frozen loop, and job_timeout cannot
+            # cut it short: asyncio.wait_for cannot pre-empt a blocking recv.
+            #
+            # workers/av_scan.py:160-172 already does this correctly, with a
+            # comment describing this exact failure - the 2026-07-30 fix was
+            # applied to one of the two call sites.
+            def _scan(key: str = att.storage_key) -> av_scan.ScanResult:
+                local = backend.local_path(key)
                 if local is not None:
-                    result = av_scan.scan_path(local)
-                else:
-                    with backend.open(att.storage_key) as fh:
-                        result = av_scan.scan_stream(fh)
+                    return av_scan.scan_path(local)
+                with backend.open(key) as fh:
+                    return av_scan.scan_stream(fh)
+
+            try:
+                result = await asyncio.to_thread(_scan)
             except av_scan.AVUnavailableError:
                 logger.warning(
                     "rescan_inbound_attachments: clamd unavailable; deferring "

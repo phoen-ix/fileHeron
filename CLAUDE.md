@@ -15,7 +15,17 @@ keep this to what would cause a wrong move if unknown.
 
 ## Status
 
-**UNRELEASED (branch `fix/audit-2026-08`) - the 2026-08-15 audit fix wave.**
+**v2.12.0 is the 2026-08-15 audit fix wave** - 24 commits, every finding
+reproduced before it was fixed and every fix mutation-checked. It closes two
+things that were costing this instance already (the upload reaper killing
+transfers over 3h; a single deleted file destroying the whole night's backup),
+five security gaps (2FA skipped on SSO **and** passkey logins, the mail
+test-connection credential leak, revoke-others not revoking, an unthrottled
+step-up prompt, four-eyes blind to group recipients), and a set of
+inbound/delivery defects. Desktop client **1.4.1** ships alongside it on its own
+tag. One finding was deliberately CLOSED as an accepted residual (replayed tus
+creation) with the reasoning in its commit.
+
 **It HAS a migration** (`202608150001`, `files.last_progress_at`) so a rollback
 past it needs the [[reference_rollback_migration_trap]] `alembic stamp`
 recovery, **and it HAS a host step**: the tusd service's command changed

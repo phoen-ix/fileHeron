@@ -17,6 +17,7 @@ import logging
 
 from aiosmtplib.errors import (
     SMTPConnectError,
+    SMTPRecipientsRefused,
     SMTPResponseException,
     SMTPServerDisconnected,
     SMTPTimeoutError,
@@ -45,6 +46,21 @@ _TRANSIENT_ERRORS = (
 # itself must finalize the row on the final try - otherwise it sits `queued`
 # forever (the mail-log's terminal-status contract).
 _MAX_TRIES = 5
+
+
+def _recipient_refusal_detail(exc: SMTPRecipientsRefused) -> tuple[int | None, str]:
+    """Pull an SMTP code + message out of a plural recipient refusal.
+
+    `.recipients` is a list of SMTPRecipientRefused (singular), each of which
+    DOES carry `.code`/`.message`. Guarded because the list can be empty, and an
+    IndexError here would drop the row into the generic handler - reintroducing
+    exactly the silence this exists to end.
+    """
+    refusals = getattr(exc, "recipients", None) or []
+    first = refusals[0] if refusals else None
+    code = getattr(first, "code", None)
+    message = getattr(first, "message", None) or str(exc)
+    return code, message
 
 
 def _record_undeliverable_audit(to: str, subject: str, smtp_code: int | None, message: str) -> None:
@@ -244,6 +260,32 @@ async def send_email_job(
             error_message=e.message,
         )
         return {"to": to, "subject": subject, "status": "failed", "code": e.code}
+    except SMTPRecipientsRefused as e:
+        # A hard bounce, and NOT an SMTPResponseException - SMTPRecipientsRefused
+        # subclasses SMTPException and carries `.recipients`, not `.code`, so it
+        # fell through to the generic handler below: status `error`, smtp_code
+        # NULL, no audit row. ops_check's smtp_failing alert and the
+        # email_undeliverable_24h counter both count ONLY those audit rows, so
+        # the commonest bounce shape was invisible to both.
+        #
+        # utils/emailing.py always sets a single To, so one refused recipient IS
+        # all recipients, which is precisely when aiosmtplib raises the plural.
+        # In other words this is the normal path for a rejected address, not an
+        # exotic one.
+        code, message = _recipient_refusal_detail(e)
+        logger.error(
+            "permanent SMTP failure (%s) sending to %s: %s - giving up", code, to, message
+        )
+        _record_undeliverable_audit(to, subject, code, message)
+        _finalize_log(
+            email_log_id,
+            EmailStatus.failed,
+            ctx.get("job_try", 1),
+            smtp_code=code,
+            error_class=type(e).__name__,
+            error_message=message,
+        )
+        return {"to": to, "subject": subject, "status": "failed", "code": code}
     except Exception as e:
         logger.exception("unexpected error sending email to %s", to)
         _finalize_log(

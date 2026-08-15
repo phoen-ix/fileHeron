@@ -44,8 +44,11 @@ _Body = Text().with_variant(LONGTEXT(), "mysql")
 class EmailStatus(str, enum.Enum):
     queued = "queued"
     sent = "sent"
-    failed = "failed"  # SMTP rejected (5xx) or a direct-sender exception
-    error = "error"    # unexpected non-SMTP error
+    failed = "failed"  # SMTP rejected (5xx, incl. a refused recipient) or a direct-sender exception
+    # Unexpected non-SMTP error. A hard bounce used to land HERE, because
+    # SMTPRecipientsRefused is not an SMTPResponseException - so the commonest
+    # delivery failure was recorded as, and triaged as, a code bug.
+    error = "error"
 
 
 class EmailVia(str, enum.Enum):

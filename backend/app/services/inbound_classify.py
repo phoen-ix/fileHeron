@@ -11,12 +11,25 @@ from urllib.parse import unquote
 from ..models.inbound_message import MessageClass
 
 
-def _decoded_subject(msg: Message) -> str:
-    raw = msg.get("Subject") or ""
+def _decoded_header(msg: Message, name: str) -> str:
+    """Decode a header to str, tolerating compat32's Header objects.
+
+    `msg.get(...)` returns an email.header.Header - NOT a str - whenever the
+    value contains a raw 8-bit byte. Calling a str method on that raises
+    AttributeError and takes the whole classify() call down, which takes the
+    whole poll down with it. Every header read here goes through this.
+    """
+    raw = msg.get(name)
+    if not raw:
+        return ""
     try:
         return str(make_header(decode_header(raw)))
     except Exception:
-        return raw
+        return str(raw)
+
+
+def _decoded_subject(msg: Message) -> str:
+    return _decoded_header(msg, "Subject")
 
 
 _AUTO_SUBJECT_HINTS = (
@@ -46,7 +59,7 @@ def classify(msg: Message) -> MessageClass:
         except Exception:
             _rt = ""
     report_type = (_rt if isinstance(_rt, str) else "").lower()
-    from_addr = (msg.get("From") or "").lower()
+    from_addr = _decoded_header(msg, "From").lower()
     # Decode RFC2047-encoded words (=?utf-8?...?=) before matching, else an
     # encoded "Automatische Antwort" subject never matches the auto-reply hints.
     subject = _decoded_subject(msg).lower()
@@ -62,10 +75,10 @@ def classify(msg: Message) -> MessageClass:
         return MessageClass.bounce
 
     # --- Auto-reply ---
-    auto_submitted = (msg.get("Auto-Submitted") or "").lower()
+    auto_submitted = _decoded_header(msg, "Auto-Submitted").lower()
     if auto_submitted and auto_submitted != "no":
         return MessageClass.auto_reply
-    precedence = (msg.get("Precedence") or "").lower()
+    precedence = _decoded_header(msg, "Precedence").lower()
     if precedence in ("auto_reply", "bulk", "junk", "list"):
         return MessageClass.auto_reply
     if msg.get("X-Autoreply") or msg.get("X-Autorespond"):

@@ -83,7 +83,15 @@ def _naive_utc(dt: datetime | None) -> datetime | None:
 def parse(raw: bytes) -> ParsedMessage:
     msg: Message = message_from_bytes(raw)
 
-    name, addr = parseaddr(msg.get("From") or "")
+    # `_decode` first, exactly like every other header below. Under compat32 a
+    # From carrying a raw 8-bit byte comes back as an email.header.Header, not a
+    # str, and parseaddr's `isinstance(addr, str)` guard then returns ('','') -
+    # so `José García <jose@client.example>` yielded NO sender address at all.
+    # With require_known_sender on (the default) the poll then refuses the
+    # message at the pre-fetch gate, advances the UID highwater, commits, and
+    # never selects it again: permanently invisible, recoverable only by hand on
+    # the IMAP server. From was the one unguarded consumer.
+    name, addr = parseaddr(_decode(msg.get("From")))
     subject = _decode(msg.get("Subject")) or "(no subject)"
     try:
         received = _naive_utc(parsedate_to_datetime(msg.get("Date"))) if msg.get("Date") else None

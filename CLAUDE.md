@@ -421,8 +421,10 @@ does - keep it current on release.)
 > while a browser still worked. `utils/http_range.is_metadata_probe` is the
 > exemption, and `PROBE_MAX_BYTES` is 1 on purpose - the slack is what an
 > extraction attack would spend. The header is a claim; every exemption pairs it
-> with evidence - `transfer_activity.was_download_recent(key)` on the anonymous
-> paths (30 min, fails OPEN), `file.has_recent_counted_download(...)` windowed by
+> with evidence - `transfer_activity.was_download_paid(key)` on the anonymous
+> paths (2 h, fails **CLOSED** - this named `was_download_recent`, the 30-minute
+> fail-OPEN serving mark, which the v2.8.0 block below correctly says a budget
+> may never consult), `file.has_recent_counted_download(...)` windowed by
 > `downloads.resume_credit_hours` on the authenticated ones (durable, survives a
 > Redis restart, and the desktop client's overnight pause needs it).
 > The bulk ZIP is now **resumable, and therefore its bytes are load-bearing**:
@@ -456,7 +458,10 @@ does - keep it current on release.)
 >
 > **Two marks, two postures.** `was_download_recent` (serving, drain) fails
 > OPEN; `was_download_paid` (budget) fails **CLOSED** and its TTL is
-> `PAID_TTL_SEC` (12 h), not the serving mark's 30 minutes. The probe exemption
+> `PAID_TTL_SEC` (**2 h**), not the serving mark's 30 minutes - this said 12 h
+> for four releases, which is the value `transfer_activity.py:189-200` records
+> having deliberately REJECTED as "a day pass". Six times too long is exactly
+> the direction that matters for a budget exemption. The probe exemption
 > is pinned to `PROBE_OFFSET` - bounding only the LENGTH let `bytes=i-i` walk a
 > whole file out for free on the anonymous route. The authenticated ZIP
 > corroborates on `user:{id}:zip:{share}:{etag}`, never on a download_log row.
@@ -712,7 +717,7 @@ admin-tunable via `email_change.*` kv.
 - URL `/d/{token}` → SPA wraps `GET /api/public/{token}` (metadata) + `…/files/{id}/download`.
 - **Password:** Argon2. `POST …/unlock` sets signed cookie `fh_dl_unlock` (HMAC under JWT_SECRET, path-scoped, lifetime min(24h, expires_at)).
 - **Counter:** atomic `UPDATE … downloads_remaining-1 WHERE remaining>0` + rowcount. NULL = unlimited.
-- **Brute-force:** `public_link_password_attempts`; after `PUBLIC_LINK_PASSWORD_RATE_LIMIT` (10) in `PUBLIC_LINK_PASSWORD_WINDOW_SEC` (900), `locked_until` set on the **link** (all IPs).
+- **Brute-force:** `public_link_password_attempts`; after `PUBLIC_LINK_PASSWORD_RATE_LIMIT` (10) in `PUBLIC_LINK_PASSWORD_WINDOW_SEC` (900) **AND** from `MIN_DISTINCT_IPS_FOR_LOCK` (3) distinct IPs, `locked_until` is set on the **link** (all IPs). The distinct-IP condition is the whole point and this line omitted it: a link-wide lock reachable by ONE address is a ~10-guess denial of service against the legitimate recipients (audit M5). A single IP gets the router's per-IP 429 and nothing more.
 - **Policy** kv `public_link.policy_mode` ∈ everyone|employees_admins|admins_only + allowlists; single gate `services/public_link.py::is_allowed_to_create` (admin always passes).
 
 ## Notifications
@@ -942,7 +947,11 @@ releases while nothing enforced it (audit #2). Refused mail is left on the
 server, counted in the poll result as `refused_unknown_sender`.
 - Cadence/enabled moved to the **cron scheduler** (v1.28) - `run_poll` only
   feature-gates on `imap.enabled`.
-- **Dedup** by `(uidvalidity, imap_uid)` AND `message_id`; a UIDVALIDITY change
+- **Dedup** by `(uidvalidity, imap_uid)` ONLY - `message_id` was removed as a
+  vulnerability, not simplified away: it comes verbatim off the wire, so a
+  forged value made a later genuine mail look like a duplicate and the poll
+  advanced its highwater past it (mail silently destroyed). It survives as an
+  advisory `message_id_seen_before` that only logs. A UIDVALIDITY change
   resets `last_uid` to 0. Post-fetch server action (mark_read/move/delete)
   applies **only after successful ingest+commit**.
 - **Attachments are clamd-scanned inline before landing anywhere servable.**
@@ -998,9 +1007,11 @@ SUCCESSFULLY in the window is excluded, because a stuffer never gets in while a
 NAT'd office does it constantly. GeoIP-free: `multi_network` approximates
 impossible-travel with `utils/geohash.ip_geohash5` - an IP-prefix hash, NOT
 geography. `login_stuffing` needs >threshold failures across ≥3 distinct emails
-from one IP. Thresholds env-tunable (`ANOMALY_*`); feeds webhooks. (Detector
-lookback windows are fixed while the cron cadence is tunable - a burst outside
-the last window is missed, a known report-only gap.)
+from one IP. Thresholds env-tunable (`ANOMALY_*`); feeds webhooks. Detector
+lookback windows **scale with the cron cadence** - `anomaly_check.py:98` adds
+`_WINDOW_OVERLAP_MIN` to the effective cadence and the module constants are
+FLOORS, so consecutive scans leave no gap. (This file called the windows fixed
+and the gap a known limitation until v2.12.0; it was closed in v1.60.0.)
 
 ### Analytics (v1.18)
 

@@ -13,7 +13,12 @@ Password rate limit: per-(link, ip), counted from
 `public_link_password_attempts` rows in the last
 `PUBLIC_LINK_PASSWORD_WINDOW_SEC` window. Hitting the cap sets
 `locked_until` on the link itself (so all IPs are blocked, not just the
-attacking one) - defense against distributed brute-forcing.
+attacking one) - defense against distributed brute-forcing - but ONLY
+once the failures come from `MIN_DISTINCT_IPS_FOR_LOCK` distinct
+addresses. That second condition is not a detail: without it, ten
+guesses from one address lock the link for every legitimate recipient,
+which is a denial of service dressed as a control (audit M5). This
+docstring omitted it while the code 220 lines below enforced it.
 """
 from __future__ import annotations
 

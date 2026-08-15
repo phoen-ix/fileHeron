@@ -195,7 +195,9 @@ revoke).
 ## Public links (anonymous recipients)
 
 The recipient opens `/d/{token}` - subject + file list, no login. A password prompts
-to unlock first (10 wrong tries in 15 min locks the **link** for everyone). Each
+to unlock first (10 wrong tries in 15 min *from at least 3 different addresses*
+locks the **link** for everyone; a single address just gets rate-limited, so one
+attacker cannot lock your recipients out). Each
 download decrements the counter atomically; at zero the link refuses further
 downloads. An interrupted download - a single file or the whole-share ZIP - can
 be resumed without spending another unit, as long as the server can corroborate
@@ -357,8 +359,10 @@ user's; both audited.
 
 Files ClamAV flagged. Bytes stay under `./data/quarantine/{share_id}/{filename}`. Per
 row: **Download** (forensics), **Release** (back to active, re-reserves quota,
-conditionally restores the share), **Purge** (unlink bytes, keep the marker row). Both
-mutations require a reason. Companion toggle at **`/admin/settings/quarantine`** fans an
+conditionally restores the share), **Purge** (unlink bytes, keep the marker row). **Release**
+requires a reason; Purge takes no body - you have already seen the file in the
+list and confirmed the dialog, and the `file_quarantine_purged` audit row
+records the actor and the file. Companion toggle at **`/admin/settings/quarantine`** fans an
 infection alert out to all admins.
 
 ## Analytics (`/admin/analytics`)

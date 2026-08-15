@@ -14,6 +14,12 @@
 Description=fileHeron nightly backup
 After=docker.service
 Requires=docker.service
+# MUST live in [Unit] - systemd parses OnFailure= here only. In [Service] it is
+# silently ignored ("Unknown key 'OnFailure' in section [Service]"), which is
+# how this shipped inert in v2.12.0: the unit looked wired and `systemctl show
+# -p OnFailure` returned empty. fileheron-alert-failure@.service mails the app's
+# configured alert recipients; install it alongside this unit.
+OnFailure=fileheron-alert-failure@%n.service
 
 [Service]
 Type=oneshot
@@ -24,6 +30,3 @@ ExecStart=/opt/fileHeron/scripts/backup.sh
 # DB dump + tarring files/quarantine can take a while on a large store.
 TimeoutStartSec=1800
 Nice=10
-# Alerting on failure. fileheron-alert-failure@.service mails the app's
-# configured alert recipients; install it alongside this unit.
-OnFailure=fileheron-alert-failure@%n.service

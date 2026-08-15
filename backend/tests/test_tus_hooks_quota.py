@@ -153,8 +153,57 @@ async def test_uppy_style_creation_retry_still_succeeds(make_user, db, monkeypat
     )
     tus_hooks.handle_pre_create(db, _body(owner.id, _MAX, upload_id="first"))
     tus_hooks.handle_pre_create(db, _body(owner.id, _MAX, upload_id="second"))
-    # Both accepted; charged exactly once (the tus_upload_id guard).
+    # Both accepted; charged exactly once.
+    #
+    # NB: passing upload_id here does NOT exercise what it looks like. tusd
+    # v2.9.2 sends Event.Upload.ID == "" at pre-create - measured against the
+    # pinned image - so files.tus_upload_id is NULL for the whole transfer and
+    # that guard never fires in production. What actually holds the charge to
+    # one is quota.reserve_bytes_once's Redis NX marker, keyed on file_id. The
+    # test below pins that directly, so the real mechanism has cover even if
+    # this fixture's shape stops matching reality again.
     assert calls == [_MAX]
+
+
+@pytest.mark.asyncio
+async def test_a_replayed_creation_is_charged_once_by_the_redis_marker(
+    make_user, db, monkeypatch
+):
+    """The mechanism that actually bounds the replay, with tus_upload_id left
+    NULL exactly as tusd leaves it.
+
+    The replay itself is an accepted residual, not a defect: only ONE upload can
+    finalize (pre-finish and post-finish both gate on state == uploading), so
+    permanent storage is capped at the 1x max_size that was charged;
+    post-terminate marks the row deleted, after which further replays 404;
+    cleanup_abandoned_uploads reclaims superseded working files within 24h; and
+    quota_bytes is NULL by default, so a stock install has no quota to bypass.
+    Commit 6f09cf9 adjudicated it privilege-equivalent on those grounds and the
+    reasoning still holds. What is left is transient staging-space
+    amplification on an install that HAS set a quota - and pre-create's
+    idempotency is load-bearing for the @uppy/tus retry above, so tightening it
+    would trade a real regression for a bounded, self-healing one.
+    """
+    owner = make_user(email="up2@test.local", role=UserRole.client)
+    _seed(db, owner)
+    charged = []
+    monkeypatch.setattr(
+        tus_hooks.quota_svc, "reserve_bytes",
+        lambda db, *, user, additional_bytes, exclude_file_id=None: charged.append(additional_bytes) or 0,
+    )
+
+    # No upload_id at all - the shape tusd actually sends at pre-create.
+    for _ in range(3):
+        tus_hooks.handle_pre_create(db, _body(owner.id, _MAX, upload_id=""))
+
+    assert charged == [_MAX], (
+        "the Redis reservation marker did not hold the charge to one; "
+        "tus_upload_id is NULL here, so nothing else can"
+    )
+    row = db.query(File).filter(File.id == _FILE_ID).one()
+    assert row.tus_upload_id is None, (
+        "fixture drift: tusd sends no upload id at pre-create"
+    )
 
 
 @pytest.mark.asyncio

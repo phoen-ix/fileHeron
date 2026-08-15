@@ -375,9 +375,49 @@ def list_shares(
         else {}
     )
 
+    rows_by_id = {s_.id: s_ for s_ in rows}
+
     # Recipients per share, materialised as ShareRecipientRef rows.
+    #
+    # Same co-recipient privacy rule the DETAIL serialiser applies (see
+    # _to_share_response) - it was missing here, so `GET /api/shares?box=inbox`
+    # handed any recipient the display name and role of every other recipient
+    # plus the name of every group the share was addressed to. That is strictly
+    # more than the detail route discloses even to a fully privileged viewer,
+    # which exposes only user ids. Reachable by the least-privileged role on
+    # stock configuration.
+    #
+    # Creators, admins and approvers see the full roster, as they do on detail.
+    own_group_ids: set[int] = set()
+    if user.role != UserRole.admin:
+        from ..models.group_member import GroupMember
+
+        own_group_ids = {
+            gid
+            for (gid,) in db.query(GroupMember.group_id)
+            .filter(GroupMember.user_id == user.id)
+            .all()
+        }
+
+    def _may_see_full_roster(share_id: str) -> bool:
+        if user.role == UserRole.admin:
+            return True
+        sh = rows_by_id.get(share_id)
+        if sh is None:
+            return False
+        if sh.created_by_id == user.id:
+            return True
+        return share_approval_svc.can_decide(db, user, sh)
+
     recips_by_share: dict[str, list[ShareRecipientRef]] = {sid: [] for sid in share_ids}
     for r in recipient_rows:
+        if not _may_see_full_roster(r.share_id):
+            # Project to the viewer's own need-to-know: themselves, and the
+            # groups they are actually in.
+            if r.recipient_user_id is not None and r.recipient_user_id != user.id:
+                continue
+            if r.recipient_group_id is not None and r.recipient_group_id not in own_group_ids:
+                continue
         if r.recipient_user_id is not None:
             u = users_by_id.get(r.recipient_user_id)
             if u is not None:

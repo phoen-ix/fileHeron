@@ -385,6 +385,10 @@ async def test_the_credit_belongs_to_the_user_who_paid(
 async def test_parallel_ranges_count_once_and_log_once(
     make_user, db, client, login_as, monkeypatch
 ):
+    """NB: these requests are SEQUENTIAL, so the second one sees the first
+    one's committed DownloadLog row. That is the resume case, not the parallel
+    one - the test below covers what happens when the durable row is not
+    visible yet, which is the actual concurrent shape."""
     from app.models.download_log import DownloadLog
 
     sender, recipient, share, file_row = _setup_share_with_file(
@@ -430,3 +434,50 @@ async def test_unlimited_share_downloads_freely(
     db.refresh(share)
     assert share.download_limit is None
     assert share.downloads_remaining is None
+
+
+@pytest.mark.asyncio
+async def test_a_concurrent_range_does_not_recharge_before_the_row_commits(
+    make_user, db, client, login_as, monkeypatch
+):
+    """The race: the credit check was an unlocked SELECT taken before the
+    counter moved, and the DownloadLog row only commits at the END of the
+    request. A client opening several ranges at once - the desktop client
+    submits its whole first wave to a thread pool - therefore had every segment
+    read "no prior download" and take the PAYING branch: N decrements, N log
+    rows, N audit rows for one logical download, and on a limit-1 share the
+    losing segments 410.
+
+    True concurrency is not expressible against this harness (single
+    connection, sequential client), so the condition is reproduced directly:
+    the durable row is made invisible, exactly as it is to a sibling request
+    that started before the commit. The Redis paid-mark is what must carry the
+    credit across that window.
+    """
+    from app.models.download_log import DownloadLog
+    from app.services import file as file_svc
+
+    sender, recipient, share, file_row = _setup_share_with_file(
+        make_user, db, monkeypatch, download_limit=1
+    )
+    token, _ = await login_as("rec@test.local", "Pass12345678!")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    r0 = await client.get(
+        f"/api/files/{file_row.id}/download", headers={**headers, "Range": "bytes=0-9"}
+    )
+    assert r0.status_code == 206, r0.text
+
+    # The sibling range cannot see the committed row yet.
+    monkeypatch.setattr(file_svc, "has_recent_counted_download", lambda *a, **k: False)
+
+    r_n = await client.get(
+        f"/api/files/{file_row.id}/download", headers={**headers, "Range": "bytes=10-22"}
+    )
+
+    assert r_n.status_code == 206, (
+        "the concurrent segment was charged again and hit the limit: " + r_n.text
+    )
+    db.refresh(share)
+    assert share.downloads_remaining == 0, "charged more than once"
+    assert db.query(DownloadLog).filter(DownloadLog.file_id == file_row.id).count() == 1

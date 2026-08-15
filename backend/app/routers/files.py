@@ -361,8 +361,25 @@ def download_file(
     # `download_log` row for THIS user and THIS file inside the credit window is
     # what buys the free continuation - and it grants nothing to a caller who
     # never downloaded the file.
+    #
+    # Corroborated by a Redis mark as well as the durable row, exactly as the
+    # ZIP route below does. The DB lookup alone is an unlocked SELECT taken
+    # before the counter is touched and the row is only committed at the end of
+    # the request, so a client that opens several ranges at once - the desktop
+    # client submits its whole first wave to a thread pool - had every segment
+    # read "no prior download" and take the PAYING branch: N decrements, N
+    # download_log rows, N audit rows for one logical download, which also
+    # inflates anomaly.mass_download. On a share with download_limit=1 or 2 the
+    # counter empties and the losing segments 410.
+    #
+    # The mark is written at the paying moment BELOW, before the commit, so a
+    # concurrent sibling can see it immediately. The durable row remains the
+    # restart-surviving fallback - the desktop client's overnight pause needs
+    # it, and Redis being down must not start charging N.
+    paid_key = f"user:{user.id}:file:{file.id}"
     is_continuation = is_partial_continuation(request) and (
-        file_svc.has_recent_counted_download(
+        transfer_activity.was_download_paid(paid_key)
+        or file_svc.has_recent_counted_download(
             db,
             file_id=file.id,
             user_id=user.id,
@@ -403,6 +420,12 @@ def download_file(
                 "SHARE_DOWNLOAD_LIMIT_REACHED",
                 "This share has reached its download limit.",
             )
+
+        # Mark BEFORE the commit, so a concurrent sibling range sees the
+        # payment immediately instead of racing the transaction. Only the
+        # paying path marks, so a free continuation cannot renew its own
+        # licence. Same discipline as the ZIP route below.
+        transfer_activity.mark_download_paid(paid_key)
 
         # Log the download.
         via = DownloadVia.api_token if getattr(request.state, "auth_via", "") == "api_token" else DownloadVia.auth

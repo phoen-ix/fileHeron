@@ -59,9 +59,29 @@ os.environ.setdefault(
     "TUS_HOOK_SECRET", "test_tus_hook_secret_at_least_thirty_two_characters_long_xx"
 )
 os.environ.setdefault("MAX_DIRECT_UPLOAD_BYTES", "104857600")
-os.environ.setdefault("STORAGE_ROOT", "/tmp/fileheron-test/files")
-os.environ.setdefault("TUS_UPLOAD_DIR", "/tmp/fileheron-test/uploads")
-os.environ.setdefault("QUARANTINE_DIR", "/tmp/fileheron-test/quarantine")
+# FORCED, not setdefault - these three decide where the suite writes BYTES.
+#
+# `setdefault` only applies when the variable is unset, and the documented way
+# to run this suite on a deployed host is `docker compose run --rm --no-deps
+# ... backend`, which injects STORAGE_ROOT=/data/files, TUS_UPLOAD_DIR=
+# /data/uploads and QUARANTINE_DIR=/data/quarantine from the production .env -
+# onto bind mounts pointing at the live data tree. So the defaults never
+# applied there and every run wrote test artifacts into production storage:
+# ~52 `inbound-*.bin` files (4-byte `xxxx` payloads) plus ~20 quarantine dirs
+# per run, 2,718 files accumulated across two sessions before anyone noticed
+# (2026-08-15).
+#
+# It stayed invisible because CI leaves these unset, so there the defaults DID
+# apply and the suite was correctly sandboxed - the bug existed only on the
+# machines where it could do damage.
+#
+# Most tests escape this by monkeypatching `settings.STORAGE_ROOT` to a
+# `tmp_path`; the ones that resolve the path through `get_storage_backend()`
+# instead (inbound attachments) do not, and cannot be expected to remember.
+# Sandboxing at the root is the only version of this that stays fixed.
+os.environ["STORAGE_ROOT"] = "/tmp/fileheron-test/files"
+os.environ["TUS_UPLOAD_DIR"] = "/tmp/fileheron-test/uploads"
+os.environ["QUARANTINE_DIR"] = "/tmp/fileheron-test/quarantine"
 os.environ.setdefault("TUS_PUBLIC_BASE", "/uploads/")
 
 import pytest

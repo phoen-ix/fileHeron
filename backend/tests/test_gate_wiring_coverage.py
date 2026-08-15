@@ -936,3 +936,32 @@ async def test_the_rest_of_the_admin_surface_is_still_gated(client):
         r = await client.get(path)
         assert r.status_code == 401, path
         assert r.json()["code"] == "AUTH_REQUIRED", path
+
+
+# --- tests-16: the suite must never write bytes into host storage ------------
+
+
+def test_the_suite_never_resolves_host_storage_paths():
+    """Behavioural guard on where this suite writes BYTES.
+
+    The documented way to run these tests on a deployed host is
+    `docker compose run --rm --no-deps ... backend`, which injects the
+    production STORAGE_ROOT / TUS_UPLOAD_DIR / QUARANTINE_DIR from .env onto
+    bind mounts pointing at the live data tree. conftest used `setdefault` for
+    all three, so the sandbox defaults never applied and the suite wrote test
+    artifacts into production storage - 2,718 files before it was spotted.
+
+    Asserted on the RESOLVED settings rather than on conftest's source, because
+    what matters is where the bytes land, not how the value got there. In CI
+    (vars unset) this passes either way; on a deployed host it is the only
+    thing that catches a regression, which is exactly where the damage happens.
+    """
+    from app.config import settings
+
+    for name in ("STORAGE_ROOT", "TUS_UPLOAD_DIR", "QUARANTINE_DIR"):
+        value = str(getattr(settings, name))
+        assert value.startswith("/tmp/"), (
+            f"{name} resolves to {value!r} - the suite would write bytes there. "
+            "conftest must FORCE these, not setdefault them, or a run on a "
+            "deployed host writes into live storage."
+        )

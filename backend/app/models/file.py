@@ -118,6 +118,14 @@ class File(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(), nullable=False, default=utc_now)
     finalized_at: Mapped[datetime | None] = mapped_column(DateTime(), nullable=True)
 
+    # Last time tusd reported bytes arriving for this row (post-receive hook).
+    # `created_at` is stamped at /api/uploads/init, before the first byte, so it
+    # says when the upload STARTED, never whether it is still going - reaping on
+    # it killed every transfer slower than the stale cutoff. NULL means "no
+    # progress reported yet"; every reader COALESCEs to created_at, which keeps
+    # pre-upgrade rows and direct uploads behaving exactly as before.
+    last_progress_at: Mapped[datetime | None] = mapped_column(DateTime(), nullable=True)
+
     # Set during the upload, cleared after post-finish move.
     tus_upload_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
 

@@ -135,18 +135,21 @@ def active_uploads(db: Session) -> int:
     all. That filter would have made every direct upload invisible to the
     drain - the same blind spot as the unregistered preview streams fixed
     alongside this. The repo's own test_maintenance.py caught it."""
-    from datetime import timedelta
-
-    from ..config import settings
     from ..models.file import File, FileState
-    from ..utils.timeutil import utc_now
+    from . import upload_liveness
 
-    cutoff = utc_now() - timedelta(hours=max(1, settings.UPLOAD_STALE_AFTER_HOURS))
+    # Both the window and the liveness column come from upload_liveness so this
+    # and the reaper cannot drift apart. This used to read
+    # config.settings.UPLOAD_STALE_AFTER_HOURS directly while the reaper read
+    # the admin-tunable override, so raising the knob moved one and not the
+    # other; and both keyed on created_at, so a long upload was simultaneously
+    # "abandoned" to the reaper and invisible here.
+    cutoff = upload_liveness.stale_cutoff(db)
     return int(
         db.query(File)
         .filter(
             File.state == FileState.uploading,
-            File.created_at > cutoff,
+            upload_liveness.last_activity() > cutoff,
         )
         .count()
     )

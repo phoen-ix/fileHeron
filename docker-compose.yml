@@ -338,7 +338,16 @@ services:
       # each upload request (it carries the HMAC envelope authorising this
       # upload). tusd doesn't sign requests itself; auth rides on the metadata.
       - "-hooks-http-forward-headers=Upload-Metadata"
-      - "-hooks-enabled-events=pre-create,pre-finish,post-finish,post-terminate"
+      # post-receive is the ONLY hook that fires while bytes are moving, and it
+      # is what lets the backend tell a live multi-hour upload from an abandoned
+      # one. Without it nothing touched the files row between pre-create and
+      # pre-finish, so the stale-upload sweeper measured age-since-START and
+      # reaped every transfer slower than its cutoff.
+      - "-hooks-enabled-events=pre-create,pre-finish,post-receive,post-finish,post-terminate"
+      # Default is 1s, i.e. one hook round-trip and one UPDATE per second per
+      # in-flight upload. 30s is far finer than the multi-hour staleness cutoff
+      # it feeds while cutting that traffic by 30x.
+      - "-progress-hooks-interval=30s"
       # Edge backstop mirroring schemas/upload.py::MAX_DECLARED_UPLOAD_BYTES.
       # The pre-create hook is the real authorisation gate, but it can only
       # refuse what it is told: a PATCH carries no hook, so without a ceiling

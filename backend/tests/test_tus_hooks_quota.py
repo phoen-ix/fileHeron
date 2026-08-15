@@ -169,3 +169,54 @@ async def test_post_terminate_releases_max_size_not_client_size(make_user, db, m
     # Attacker sets a huge Upload.Size before the terminate.
     tus_hooks.handle_post_terminate(db, _body(owner.id, upload_size=999_000_000_000))
     assert captured["n"] == _MAX  # released only the authorised max, NOT 999 GB
+
+
+# --- post-receive: the only hook that fires while bytes are moving ---------
+
+
+@pytest.mark.asyncio
+async def test_post_receive_stamps_progress(make_user, db, monkeypatch):
+    """Without this the files row is untouched between pre-create and
+    pre-finish, so the sweeper can only measure age-since-start."""
+    owner = make_user(email="p@test.local", role=UserRole.admin)
+    _seed(db, owner)
+    before = db.query(File).filter(File.id == _FILE_ID).one()
+    assert before.last_progress_at is None
+
+    tus_hooks.handle_post_receive(db, _body(owner.id, upload_size=_MAX, upload_id="tus-live-1"))
+
+    row = db.query(File).filter(File.id == _FILE_ID).one()
+    assert row.last_progress_at is not None
+    # post-receive is also the first hook that carries a real upload id, which
+    # is what makes cleanup_abandoned_uploads' live-upload guard reachable.
+    assert row.tus_upload_id == "tus-live-1"
+
+
+@pytest.mark.asyncio
+async def test_post_receive_is_inert_once_the_row_left_uploading(make_user, db, monkeypatch):
+    """A late progress tick must not resurrect a finalized or reaped row."""
+    owner = make_user(email="p2@test.local", role=UserRole.admin)
+    _seed(db, owner)
+    row = db.query(File).filter(File.id == _FILE_ID).one()
+    row.state = FileState.deleted
+    db.commit()
+
+    tus_hooks.handle_post_receive(db, _body(owner.id, upload_size=_MAX, upload_id="tus-late"))
+
+    row = db.query(File).filter(File.id == _FILE_ID).one()
+    assert row.last_progress_at is None
+    assert row.state == FileState.deleted
+
+
+@pytest.mark.asyncio
+async def test_post_receive_with_a_bad_envelope_does_not_raise(make_user, db, monkeypatch):
+    """This fires every progress interval for the whole transfer. Raising here
+    would turn one unverifiable upload into a per-tick error storm, and tusd
+    logs a failed progress hook on each one."""
+    owner = make_user(email="p3@test.local", role=UserRole.admin)
+    _seed(db, owner)
+    bad = {"Event": {"Upload": {"ID": "x", "Size": 1, "MetaData": {"fh_payload": "junk", "fh_sig": "junk"}}}}
+
+    tus_hooks.handle_post_receive(db, bad)  # must not raise
+
+    assert db.query(File).filter(File.id == _FILE_ID).one().last_progress_at is None

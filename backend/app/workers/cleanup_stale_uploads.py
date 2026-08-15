@@ -90,16 +90,25 @@ async def cleanup_stale_uploads(_ctx) -> dict:
     shares_failed = 0
     scanned = 0
     try:
-        from ..services import settings_registry
+        from ..services import upload_liveness
 
-        hours = settings_registry.effective(
-            db, settings_registry.K.UPLOAD_STALE_AFTER_HOURS
-        )
-        cutoff = utc_now() - timedelta(hours=hours)
+        cutoff = upload_liveness.stale_cutoff(db)
 
+        # Reap on evidence of NO PROGRESS, not on age since the upload started.
+        # `created_at` is stamped at /api/uploads/init before the first byte, and
+        # nothing refreshed the row for the duration of the transfer, so this
+        # filter used to mean "started more than N hours ago" - which killed
+        # every upload slower than N hours mid-flight and flipped its share to
+        # `failed` with reason "upload_abandoned", blaming the uploader for a
+        # server-side reap. tusd's post-receive hook now stamps last_progress_at;
+        # COALESCE keeps rows that predate it (and direct uploads) on the old
+        # behaviour rather than making them immortal.
         stale = (
             db.query(File)
-            .filter(File.state == FileState.uploading, File.created_at < cutoff)
+            .filter(
+                File.state == FileState.uploading,
+                upload_liveness.last_activity() < cutoff,
+            )
             .all()
         )
         scanned = len(stale)

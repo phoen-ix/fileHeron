@@ -15,6 +15,18 @@ keep this to what would cause a wrong move if unknown.
 
 ## Status
 
+**UNRELEASED (branch `fix/audit-2026-08`) - the 2026-08-15 audit fix wave.**
+**It HAS a migration** (`202608150001`, `files.last_progress_at`) so a rollback
+past it needs the [[reference_rollback_migration_trap]] `alembic stamp`
+recovery, **and it HAS a host step**: the tusd service's command changed
+(`post-receive` enabled, `-progress-hooks-interval=30s`), and **the in-app
+updater only swaps the backend/worker/frontend images**, so tusd keeps running
+its old command until someone runs `docker compose up -d tusd` on the host.
+Ship it without that and the migration lands, `last_progress_at` stays NULL
+forever, every reader falls back to `created_at` - and the upload reaper goes on
+killing long uploads exactly as before, silently, while the release notes say it
+is fixed. See the invariant block below before touching uploads.
+
 **v2.11.0 is a scan-guard fix release** - no migration, no host step, no API
 break, and behaviour-neutral unless network escalation is on. It fixes a LIVE bug
 (a network block that could re-arm for the whole `network_lookback_hours` week -
@@ -68,6 +80,45 @@ route returns the decrypted plaintext link URL. (README's server/client version
 badges read live from the git tags, so they never need a manual bump; this line
 does - keep it current on release.)
 
+> **Upload liveness (2026-08-15 audit wave) - invariants worth knowing.**
+> **`files.created_at` is stamped at `/api/uploads/init`, BEFORE the first byte,
+> and is never refreshed.** Any predicate built on it measures "time since the
+> upload started", never "is it still going". `cleanup_stale_uploads` did
+> exactly that and reaped every transfer slower than `UPLOAD_STALE_AFTER_HOURS`
+> (3) mid-flight, flipping the parent share to `failed` with reason
+> `upload_abandoned` - blaming the uploader for a server-side reap, at ~23
+> Mbit/s sustained for the 30 GB this product advertises. Three shares died this
+> way on the reference instance (two 3.07 GiB ISOs, one 366 MiB installer).
+> **`ShareState.failed` is terminal**: it is written in exactly one place and
+> there is no un-fail path anywhere in the backend.
+> **The tusd `.info` sidecar's mtime is NOT a liveness signal.** Measured
+> against the pinned `tusproject/tusd:v2.9.2`: the sidecar is written at
+> creation and at finish only, so its mtime tracks `created_at`, while the bare
+> data file's mtime advances on every PATCH. "Read the sidecar mtime like
+> `cleanup_abandoned_uploads` does" reproduces the bug with a different clock.
+> **tusd does NOT supply `Event.Upload.ID` on pre-create** - measured, it is
+> `""`. A comment in `tus_hooks.py` asserted the opposite for four releases, and
+> a fix written on that premise (`0c58dc7`) therefore never worked:
+> `tus_upload_id` stayed NULL for the whole transfer, which made
+> `cleanup_abandoned_uploads`' live-upload guard (`tus_upload_id == <id> AND
+> state == uploading`) unmatchable by any live upload. **post-receive is the
+> first hook that carries a real id**, and stamping it there is what makes that
+> guard reachable.
+> **Both sweepers and the drain counter must share one definition** -
+> `services/upload_liveness.py`. They previously disagreed twice over: one read
+> the admin-tunable window via `settings_registry.effective` and the other read
+> `config.settings` directly (so raising the knob moved one and not the other),
+> and both keyed on `created_at` (so a long upload was simultaneously
+> "abandoned" to the reaper and invisible to the drain, which then let a
+> maintenance restart land mid-transfer).
+> **Readers COALESCE to `created_at`** so direct uploads (which never get a tus
+> id or a progress tick) and rows written before the column existed keep their
+> old behaviour instead of becoming immortal.
+> **post-receive must never raise and must stay cheap.** It fires per
+> `-progress-hooks-interval` for the whole transfer, so an exception there is a
+> per-tick error storm, and the default 1s interval would be one UPDATE per
+> second per upload (hence 30s).
+>
 > **v2.10.0 invariants worth knowing before you touch these areas.**
 > **The scan guard is the only control in this product that DENIES service, so
 > it ships OFF** (`scan_guard.enabled` default false) and is defined by what it

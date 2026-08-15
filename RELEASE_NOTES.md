@@ -1,70 +1,214 @@
-# file:Heron v2.11.0
+# file:Heron v2.12.0
 
-Fixes for the scan guard, all found by reviewing it against real traffic rather
-than by reasoning about it. **One is a live bug** that could keep a whole network
-blocked for a week. No migration, no host step, and nothing changes unless you
-have network escalation switched on.
+**An audit fix-wave.** Every finding here was reproduced before it was fixed,
+and every fix was checked by breaking it again to confirm the test noticed.
+
+Two of these were costing you something already: uploads longer than three
+hours were being killed mid-transfer, and a single file deleted during the
+nightly backup destroyed that whole night's backup.
+
+**This release needs a host step and has a migration.** See "Upgrading" at the
+bottom — the in-app updater alone is not enough this time.
 
 ---
 
-## A network block could get stuck for a week
+## Uploads longer than three hours were killed mid-transfer
 
-The rule that escalates from single addresses to a whole network counted its
-evidence over the full lookback window (a week by default), while the block
-itself only lasts an hour. So once a network had ever accumulated enough blocked
-addresses, the block would expire — and then **a single new address would
-re-block the entire network for another hour**, over and over, for the rest of
-the week.
+The sweeper that clears abandoned uploads decided what was abandoned by looking
+at when the upload *started*, not whether it was still going — and nothing
+refreshed that timestamp while bytes were arriving. So any transfer running
+longer than three hours was reaped, the share was marked **failed**, and the
+audit trail recorded the reason as `upload_abandoned`: it blamed the person
+uploading for something the server did.
 
-Evidence is now counted only since the last network block on that range ended.
-Fresh evidence escalates; stale evidence does not.
+Three shares died this way on the reference instance — two 3 GB disc images and
+a 366 MB installer. At the 30 GB this product advertises, three hours is about
+23 Mbit/s sustained, so this was a routine failure and not an edge case.
 
-## IPv6 grouping is now a setting — and the default did not change
+tusd now reports progress while an upload is running, and the sweeper reaps on
+**absence of progress**. A slow upload is no longer an abandoned one.
 
-IPv6 escalation groups by /64, and on a real instance that means it can never
-fire: every scanner arrived from its own /64, so the threshold was never met.
-The obvious fix is to group wider. **The obvious fix is wrong**, and the
-measurement is worth stating because it is counter-intuitive:
+> The obvious fix here was wrong, which is worth recording. The natural move is
+> to read the timestamp on tusd's little `.info` sidecar file — but tusd writes
+> that file when the upload is created and again when it finishes, never in
+> between. Its timestamp tracks the *start*, so that fix would have reproduced
+> the bug with a different clock. Measured, not assumed.
 
-The one /48 that did group turned out to be a hosting provider's VPS pool that
-gives **one /64 per customer** — so grouping there would have blocked up to
-65,536 unrelated customers to stop two. Hetzner and Vultr allocate the same way,
-and OVH and Linode put several customers inside a single /64. **Prefix length is
-not a measure of how many people you are blocking.**
+## One deleted file destroyed the whole night's backup
 
-So the grouping is now adjustable, the default stays /64, and /48 is not offered
-at all — the widest setting is /56. Widen it only if you know the range belongs
-to one operator; the settings page says so next to the control.
+`tar` exits with a warning — not an error — when a file disappears while it is
+being read. The backup script treated that as fatal, aborted before writing its
+manifest, and its cleanup trap then deleted everything it had produced so far,
+**including the completed database dump**.
 
-## Smaller fixes
+The file that disappears is not exotic: your own hourly expiry job deletes
+files, and it drifts through the backup window rather than avoiding it. The
+result was an occasional night with no backup at all, reported nowhere.
 
-- **A wide network block could have refused the server's own health check.** The
-  "never block a private or loopback address" rule was applied when blocks were
-  created but not when requests were served, so a hand-entered or very wide range
-  could have taken out the frontend and the upload service. Now checked on both.
-- **Changing the grouping releases existing network blocks.** They are stored
-  under the grouping in force at the time, so leaving them behind would silently
-  discard evidence and could leave a hidden block that survived releasing the
-  visible one.
-- **The "notify on every block" setting now actually notifies.** It shipped with
-  no implementation behind it. The daily-digest option is removed rather than
-  left as decoration; it can return when there is something behind it.
-- **Fewer false credential-stuffing alerts.** A source that also signed in
-  *successfully* during the window is no longer reported. A real attacker never
-  gets in; a shared office address does it all day.
-- **`scripts/unblock_ip.py`** — release blocks from the host when you cannot
-  reach the admin page, which is exactly the situation a mistaken block creates:
+A file vanishing mid-archive is now recorded as a warning beside the backup and
+the run completes. A real error still fails, as it should.
 
-  ```
-  docker compose exec backend python scripts/unblock_ip.py --list
-  docker compose exec backend python scripts/unblock_ip.py --all
-  ```
+## A restore drill that could not fail
 
-## A correction
+The weekly drill verified "the newest backup" without ever checking how old it
+was. After a night like the one above, it would happily re-verify a week-old
+archive and report success — so the one signal telling you backups were healthy
+was the signal least able to notice they had stopped.
 
-v2.10.0's documentation said an administrator could have the scan guard
-auto-block a source flagged for credential stuffing. **That was never true** —
-no such wiring existed. The claim has been removed rather than quietly patched
-over, and automatic blocking from stuffing detection is deliberately still not
-implemented: existing account lockout and per-address sign-in limits already
-cover password guessing.
+It now refuses to certify a backup older than 48 hours, and reports the age of
+what it checked on every run.
+
+## Backups were never actually scheduled
+
+Related, and worth stating plainly: **shipping the systemd units is not the same
+as scheduling them.** The units live in `scripts/ops/`, but they do nothing
+until they are installed *and* enabled — and on the reference instance that
+second step had never been done, so no backup had ever run. The documentation
+said the drill ran weekly; it did not.
+
+README now carries the exact install-and-verify commands, including the check
+that tells you whether the timers are actually armed. If you have never run
+`systemctl enable --now fileheron-backup.timer`, you have no backups. Please
+check.
+
+A failed backup or drill also now e-mails whoever your error alerts go to,
+instead of being a `failed` unit nobody polls.
+
+---
+
+## Security
+
+### Two-factor authentication was skipped entirely for SSO and passkey sign-ins
+
+If you signed in through SSO or with a passkey, an enrolled authenticator app
+was never asked for — while your account page said two-factor was on. Both
+paths handed out a full session on one factor.
+
+Both now stop and ask for the second factor. Recovery codes work there too, so
+losing your authenticator does not lock you out of an SSO account.
+
+> A passkey is not automatically two factors: the sign-in ceremony does not
+> require the device to verify who is holding it, so it can be a single
+> possession factor. That is why the passkey path needed this as much as SSO
+> did.
+
+### The mail "Test connection" button could send your mail password anywhere
+
+Both the SMTP and IMAP test buttons filled in the stored mail password — so the
+form never has to round-trip the secret — while taking the destination server
+from whatever the request asked for. An admin session could therefore read the
+organisation's mail password back out of the installation by pointing a test at
+a server it controlled. Confirmed by doing it.
+
+The stored password now only ever travels to the server you have saved. Testing
+a *different* server asks you to confirm your own password first, and records
+the attempt with the target host. Testing your saved server is unchanged and
+asks for nothing — that is the case you actually click.
+
+### "Sign out all other sessions" did not sign anything out
+
+It revoked the other devices' ability to *renew* their sessions but left their
+current sessions working — up to 15 minutes by default, and longer on instances
+that raised the token lifetime. The button reported success immediately; the
+other browsers kept working.
+
+Other devices are now signed out at the moment you press it. The same gap
+applied to the notification stream, which kept delivering to a revoked session;
+that is closed too.
+
+### Password re-entry prompts could be guessed at without limit
+
+The password confirmation in front of config-backup export, account erasure,
+API-token creation and self-update had no rate limit and left no record — so a
+stolen admin session could guess indefinitely, invisibly. It is now throttled
+per account and every failure is recorded.
+
+The throttle deliberately does **not** lock the account: that would let a stolen
+session lock the real administrator out of their own login page.
+
+### Four-eyes approval ignored group recipients
+
+With approval scoped to "shares leaving the organisation", a share addressed to
+a *group* containing external clients skipped approval entirely, while the same
+share addressed to those clients by name was held. Group recipients are now
+seen, and because the share was recorded as never having needed approval, two
+later safeguards had been silently disabled for its whole life as well.
+
+### Erasure left filenames behind
+
+A right-to-erasure request scrubbed filenames only on files that still existed.
+Files already expired kept their original names indefinitely — and those are
+most of them, by the time such a request arrives. They were still listable in
+the admin file browser and recoverable from the audit log. Both are now cleared.
+
+### Smaller security fixes
+
+- **A single-sign-on provider whose address ends in `/` could never sign anyone
+  in.** This affected the shipped Authentik preset, and the connection test
+  reported "OK" for it, because the test compared addresses differently from the
+  sign-in path.
+- **Restoring a settings-only backup planted the original instance's user IDs
+  into permission lists**, granting approval rights or public-link creation to
+  whoever happens to hold that ID here. Unknown IDs are now dropped and reported.
+- **A scanner using long URLs could switch the scan guard off.** The path was
+  stored without trimming, the database rejected the row, and the failure was
+  swallowed — so no block was recorded.
+- **Credential-stuffing detection could be switched off by one success.** An
+  attacker who cracked a single account, or simply held one valid login, made
+  their whole source invisible for the next hour. It now weighs successes
+  against failures rather than looking for any success at all.
+
+---
+
+## Inbound mail and delivery
+
+- **A bounced e-mail was recorded as an unknown error**, so the "SMTP is
+  failing" alert could not see the commonest delivery failure there is.
+- **An accented name in a `From:` header made the message permanently
+  invisible.** It was refused as coming from an unknown sender, the mailbox
+  position advanced past it, and it was never looked at again — the mail sat
+  unread on the server with no way to recover it through fileHeron.
+- **A crafted message could restart the background worker repeatedly.** The
+  limit on message complexity counted something the mail parser does not, so a
+  message that expands to 200,000 parts counted as one.
+- **A slow virus scanner could freeze every background job** — e-mail, webhooks
+  and all scheduled tasks — for as long as the scan took.
+
+## Downloads
+
+Downloading one file over several connections at once could charge the share's
+download budget several times, and on a share limited to one or two downloads
+the extra connections were refused outright. One download is charged once again.
+
+## Desktop client 1.4.1
+
+Long transfers no longer die when the sign-in ages out mid-download, and an
+expired session now says so instead of reporting "couldn't reach the server".
+Released separately — see `client/RELEASE_NOTES.md`.
+
+---
+
+## Upgrading
+
+**This release needs a host step.** The in-app updater replaces the backend,
+worker and frontend images only, and this release also changes the upload
+service's configuration — without the host step the upload fix silently does
+nothing:
+
+```bash
+git pull
+docker compose up -d tusd     # REQUIRED: the upload-progress fix lives here
+```
+
+**It has a migration** (`202608150001`), which runs automatically at start-up.
+Rolling back to an earlier version afterwards requires the `alembic stamp`
+recovery described in the README.
+
+**If you use SSO or passkeys with two-factor enabled**, those sign-ins now stop
+at a second-factor prompt. Nothing to configure; expect the extra step.
+
+**If any script drives the mail test endpoints**, testing a server other than
+the saved one now requires the caller's password.
+
+**And check your backups are actually scheduled** — see above. That is the
+single most valuable thing to verify after this upgrade.

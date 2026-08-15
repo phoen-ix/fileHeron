@@ -60,7 +60,11 @@ cd e2e && npm ci && npx playwright install --with-deps && npm test
 - **Naming:** the product is **file:Heron** in UI/prose; everything in code, paths,
   containers, packages, and env vars is **fileHeron** (no colon).
 - **Migrations** must be re-runnable: use the `_has_table` / `_has_column` /
-  `_has_index` helpers from `alembic/env.py`, and test the `downgrade()` roundtrip.
+  `_has_index` helpers from **`app/db_guards.py`** — *not* from `alembic/env.py`,
+  where inside a revision the name `alembic` resolves to the installed library.
+  Guard **each op separately**: nesting an index or a NOT NULL tightening inside
+  the `create_table` / `add_column` guard means a crash between them skips it
+  forever on the retry. Test the `downgrade()` roundtrip.
 - **Service-not-router:** routers parse + delegate + serialise; business logic,
   audit, and notification dispatch live in `services/`.
 - New backend imports go in `backend/pyproject.toml` in the same change.

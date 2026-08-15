@@ -645,6 +645,25 @@ via `S3_BUCKET` / `S3_REGION` / `S3_ENDPOINT_URL` / `S3_ACCESS_KEY_ID` /
 
 With `BACKUP_RESTIC_REPO` + `BACKUP_RESTIC_PASSWORD` set, the dated dir is also pushed
 to that restic repo (S3/B2/SFTP/REST/local; password via `--password-file`, not env).
+Every snapshot carries a stable `fileheron` tag plus a per-run `fileheron-<stamp>`
+one, and retention selects on the stable tag - so the sweep only ever touches
+fileHeron's own snapshots and a repo shared with another application is safe.
+
+> **Upgrading to v2.12.0 with an existing restic repo:** snapshots written by
+> earlier versions carry only the per-run tag, so retention will skip them and
+> they will accumulate. Nothing was ever pruned before this release either, so
+> this is not new - but to bring the backlog under the policy, adopt them once
+> (needs `jq`):
+>
+> ```bash
+> restic --repo "$BACKUP_RESTIC_REPO" snapshots --json \
+>   | jq -r '.[] | select(any(.tags[]?; startswith("fileheron-"))) | .short_id' \
+>   | xargs -r restic --repo "$BACKUP_RESTIC_REPO" tag --add fileheron
+> ```
+>
+> The next nightly run then applies keep-daily 7 / weekly 4 / monthly 12 to
+> them. Check what it would drop first with `forget --dry-run`.
+
 Schedule it nightly. A ready-made systemd timer ships in `scripts/ops/` (adapt
 `User=`/paths to your install):
 

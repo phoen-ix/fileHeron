@@ -165,8 +165,13 @@ if [ -n "${BACKUP_RESTIC_REPO:-}" ]; then
         restic --repo "$BACKUP_RESTIC_REPO" --password-file "$PWD_FILE" \
             snapshots > /dev/null 2>&1 || \
             restic --repo "$BACKUP_RESTIC_REPO" --password-file "$PWD_FILE" init
+        # TWO tags, and the stable one is load-bearing. `fileheron-$STAMP` is
+        # unique per run, so it can only ever identify a snapshot - it cannot
+        # select the set. Retention in step 7 needs a tag that is the same on
+        # every snapshot we own, both to find ours and to leave anyone else's
+        # alone; see the comment there.
         restic --repo "$BACKUP_RESTIC_REPO" --password-file "$PWD_FILE" \
-            backup --tag "fileheron-$STAMP" "$DEST"
+            backup --tag fileheron --tag "fileheron-$STAMP" "$DEST"
         rm -f "$PWD_FILE"
         trap - EXIT
     fi
@@ -207,8 +212,31 @@ if [ -n "${BACKUP_RESTIC_REPO:-}" ] && [ -n "${BACKUP_RESTIC_PASSWORD:-}" ] && c
     trap 'rm -f "$PWD_FILE"' EXIT
     printf '%s' "$BACKUP_RESTIC_PASSWORD" > "$PWD_FILE"
     echo "[backup] applying restic retention …"
+    # `--tag fileheron --group-by ''` is what makes this command mean what the
+    # comment above says, and without BOTH it means close to the opposite.
+    #
+    # restic's default grouping is `host,paths`, and step 4b writes each night
+    # into a NEW dated directory - so every snapshot had its own distinct path,
+    # landed in a group of one, and `--keep-daily 7` dutifully kept the one
+    # snapshot in it. Thirty nightly snapshots went in and thirty came out:
+    # retention had never once dropped anything, and the repo grew without
+    # bound exactly as this block exists to prevent. `--group-by ''` puts them
+    # all in a single group, which is the only grouping under which a
+    # date-based policy can mean anything for per-run paths.
+    #
+    # The tag filter is the other half. `forget` with no filter considers EVERY
+    # snapshot in the repo, so on a repo shared with another application ours
+    # was the only one being spared: a co-tenant taking hourly snapshots lost
+    # 10 of 12 to fileHeron's keep-daily policy on each nightly run. Measured,
+    # both halves, against restic in a throwaway repo.
+    #
+    # Snapshots written before this fix carry only `fileheron-<stamp>` and so
+    # are not selected here. That is deliberate and not a regression - nothing
+    # was ever forgotten before either - but it does mean the old backlog stays
+    # until adopted; README documents the one-off `restic tag --add fileheron`.
     restic --repo "$BACKUP_RESTIC_REPO" --password-file "$PWD_FILE" \
-        forget --keep-daily 7 --keep-weekly 4 --keep-monthly 12 --prune \
+        forget --tag fileheron --group-by '' \
+        --keep-daily 7 --keep-weekly 4 --keep-monthly 12 --prune \
         > /dev/null
     rm -f "$PWD_FILE"
     trap - EXIT

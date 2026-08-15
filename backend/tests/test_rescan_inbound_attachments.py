@@ -78,3 +78,30 @@ async def test_rescan_defers_when_clamd_unavailable(db, monkeypatch):
     db.expire_all()
     a = db.query(InboundAttachment).filter_by(id=att.id).one()
     assert a.av_state == AttachmentAVState.pending  # untouched, retries next run
+
+
+def test_the_scan_does_not_run_on_the_event_loop():
+    """Both scan paths are blocking socket I/O and this is an `async def` on the
+    ARQ worker's single event loop. With _BATCH = 200 and a 1800s socket
+    timeout the worst case is ~100 hours of frozen loop - and job_timeout cannot
+    cut it short, because asyncio.wait_for cannot pre-empt a blocking recv. That
+    freezes cron_dispatch itself, the every-minute tick every other job depends
+    on.
+
+    Asserted structurally because the failure is the ABSENCE of a yield point:
+    a behavioural test would have to actually block the loop to observe it.
+    workers/av_scan.py carries the same guarantee, established by the
+    2026-07-30 audit - which fixed one of the two call sites.
+    """
+    import inspect
+
+    from app.workers import rescan_inbound_attachments as mod
+
+    src = inspect.getsource(mod.rescan_inbound_attachments)
+    assert "asyncio.to_thread" in src, (
+        "the blocking clamd call is back on the event loop"
+    )
+    for direct in ("av_scan.scan_path(", "av_scan.scan_stream("):
+        # They may appear inside the threaded closure; what must not happen is a
+        # bare await-less call in the loop body.
+        assert f"result = {direct}" not in src, f"{direct} is called inline again"

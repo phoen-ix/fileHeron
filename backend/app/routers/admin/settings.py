@@ -95,7 +95,7 @@ from ...schemas.updates_settings import (
     UpdateUpdatesSettingsRequest,
 )
 from ...services import email as email_svc
-from ...services import email_change_policy, error_alert, richtext, settings_registry
+from ...services import email_change_policy, error_alert, mail_test_gate, richtext, settings_registry
 from ...services import public_link as public_link_svc
 from ...services import settings as settings_svc
 from ...services import share_approval as share_approval_svc
@@ -322,8 +322,9 @@ def update_email_settings(
 @router.post("/settings/email/test", response_model=TestEmailResponse)
 async def test_email_send(
     payload: TestEmailRequest,
+    request: Request,
     db: Session = Depends(get_db),
-    _admin: User = Depends(get_current_admin),
+    admin: User = Depends(get_current_admin),
 ) -> TestEmailResponse:
     """Sends a fixed test email synchronously, bypassing the ARQ queue
     so the admin sees the actual SMTP error in real time.
@@ -350,19 +351,48 @@ async def test_email_send(
         password = (
             persisted.password if ov.password is None else ov.password
         )
+        host = _o(ov.host, persisted.host)
+        user = _o(ov.user, persisted.user)
+
+        # Leaving the password blank means "use the stored one". Combined with a
+        # freely chosen host that is a credential-exfiltration primitive, so a
+        # stored secret may only travel to the saved server unless the caller
+        # re-authenticates. Compared on RESOLVED values, never the raw payload:
+        # the SPA sends `port: undefined` while the number input is momentarily
+        # empty, which means "keep persisted" and must not read as a mismatch.
+        mail_test_gate.guard_and_audit(
+            db,
+            admin=admin,
+            request=request,
+            event_type=AuditEventType.smtp_test_foreign_target,
+            target_id="smtp",
+            confirm_password=payload.confirm_password,
+            reuses_stored_secret=ov.password is None,
+            target_matches_persisted=(
+                host == persisted.host
+                and port == persisted.port
+                and user == persisted.user
+            ),
+            host=host,
+            port=port,
+            tls_mode=tls_mode,
+        )
 
         # The override host is attacker-reachable through a hijacked admin
         # session and this route CONNECTS and reports the result, so it is a
         # non-blind SSRF probe - stronger than the webhook path, which is
         # guarded. Apply the same address policy before the socket opens.
+        # NOTE: this is an ADDRESS policy only (allow_private=True, fails open
+        # on an unresolvable name). It never mitigated the credential leak
+        # above; the gate does.
         from ...utils.net import assert_safe_host
 
-        assert_safe_host(_o(ov.host, persisted.host), port)
+        assert_safe_host(host, port)
 
         override = SmtpConfig(
-            host=_o(ov.host, persisted.host),
+            host=host,
             port=port,
-            user=_o(ov.user, persisted.user),
+            user=user,
             password=password,
             from_email=_o(ov.from_email, persisted.from_email),
             from_name=_o(ov.from_name, persisted.from_name),

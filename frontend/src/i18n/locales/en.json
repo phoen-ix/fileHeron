@@ -283,7 +283,8 @@
     "WEBAUTHN_UNKNOWN_CREDENTIAL": "This passkey is not registered for this account.",
     "WEBAUTHN_VERIFY_FAILED": "The passkey could not be verified.",
     "WEBHOOK_NOT_FOUND": "Webhook not found.",
-    "generic": "Something didn't work. Please try again."
+    "generic": "Something didn't work. Please try again.",
+    "STEP_UP_REQUIRED": "Confirm your password to continue."
   },
   "login": {
     "title": "Sign in",
@@ -936,7 +937,10 @@
     "test_button": "Send test email",
     "test_ok": "Test email sent successfully.",
     "test_failed": "Test email failed.",
-    "hint_label": "What to try:"
+    "hint_label": "What to try:",
+    "step_up_title": "Confirm your password",
+    "step_up_help": "You are testing a different mail server from the one saved. Because the saved password would be sent to it, confirm your own password first.",
+    "step_up_label": "Your password"
   },
   "admin_imap": {
     "title": "Inbound mail (IMAP)",
@@ -992,7 +996,10 @@
     "require_known_sender": "Only accept mail from registered users",
     "require_known_sender_help": "Refuses mail whose sender address matches no enabled account, before anything is stored. Refused mail is left on the server.",
     "tls_insecure": "Do not verify the server certificate",
-    "tls_insecure_help": "Only for an internal mail server with a private or self-signed certificate. The connection is still encrypted, but anyone on the network path can impersonate the server and read the login."
+    "tls_insecure_help": "Only for an internal mail server with a private or self-signed certificate. The connection is still encrypted, but anyone on the network path can impersonate the server and read the login.",
+    "step_up_title": "Confirm your password",
+    "step_up_help": "You are testing a different mail server from the one saved. Because the saved password would be sent to it, confirm your own password first.",
+    "step_up_label": "Your password"
   },
   "admin_inbox": {
     "eyebrow": "Messaging",

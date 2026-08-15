@@ -226,11 +226,23 @@ does - keep it current on release.)
 > and a 401 trips the SPA's refresh interceptor, which silently retries with the
 > same wrong password and shows the user nothing. An SSO-only account cannot
 > clear it (no local hash); that is deliberate, the CLI escape hatch is the
-> recovery. Backup export is the highest-value one: it is **almost** the only
-> admin surface that reads secrets back out (password hashes, decrypted TOTP
-> seeds, and with `include_env` the JWT/DB/TUS/S3 secrets) - this file claimed
-> "the ONLY" for two releases while the SMTP/IMAP test-connection routes sent
-> the stored mail password to a caller-supplied host with no step-up at all.
+> recovery. Backup export is the highest-value one (password hashes, decrypted
+> TOTP seeds, and with `include_env` the JWT/DB/TUS/S3 secrets) - but this file
+> claimed it was **the ONLY** surface reading secrets back out for two releases
+> while the SMTP/IMAP test-connection routes handed the stored mail password to
+> any host the caller named. Measured, not theorised: the secret arrived at
+> `mx.attacker.tld:2525` in cleartext.
+> **`services/mail_test_gate.py` is that gate, and its condition is an
+> INTERSECTION**: the stored secret may only travel to the SAVED server unless
+> the caller re-authenticates. Testing the saved server, or testing a new one
+> with a freshly typed password, prompts for nothing - gating on host mismatch
+> alone would break "try a new provider before saving it", which is the entire
+> reason the override exists. Compare **resolved** values, never the raw
+> payload: the SPA sends `user: ''` for "use SMTP credentials" and omits `port`
+> while the number input is empty, and both mean "keep the stored one", so a raw
+> comparison prompts on every click and the fix gets reverted as unusable.
+> `assert_safe_host` never mitigated this and cannot: it is an ADDRESS policy
+> with `allow_private=True` that fails open on an unresolvable name.
 > **The signature is `(db, user, password, *, request)` since 2026-08-15**, and
 > that is load-bearing: as a pure `(user, password)` function it structurally
 > could not rate-limit, count or audit, and none of its eight call sites added

@@ -52,6 +52,13 @@ class UpdateEmailSettingsRequest(APIBaseModel):
 
 class TestEmailRequest(APIBaseModel):
     to: str = Field(..., min_length=3, max_length=320)
+    # The CALLER's own password, re-confirmed - not the SMTP account's, which
+    # lives on `override.password`. Required only when the request would send
+    # the STORED secret to a server other than the saved one; optional
+    # otherwise, so testing the saved config (and testing a new host with a
+    # freshly typed password) stays promptless. That is why this is not the
+    # required `password: str` the unconditionally-gated schemas use.
+    confirm_password: str | None = Field(default=None, max_length=512)
     # When set, the test uses these values (typically the unsaved form
     # state) instead of the persisted config. Only the fields the admin
     # edits in the UI; password follows the same null-keep semantics

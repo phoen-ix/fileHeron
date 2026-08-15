@@ -31,7 +31,7 @@ from ...schemas.imap_settings import (
     UpdateImapSettingsRequest,
     UpdateInboxStatusRequest,
 )
-from ...services import imap_config
+from ...services import imap_config, mail_test_gate
 from ...services import imap_poll as imap_poll_svc
 from ...services import settings as settings_svc
 from ...services import storage_backend as storage_svc
@@ -133,9 +133,10 @@ def update_imap_settings(
 
 @router.post("/settings/imap/test", response_model=ImapTestResponse)
 async def test_imap(
+    request: Request,
     payload: TestImapRequest | None = None,
     db: Session = Depends(get_db),
-    _admin: User = Depends(get_current_admin),
+    admin: User = Depends(get_current_admin),
 ) -> ImapTestResponse:
     """Test a connection. With a body, test THOSE settings; without one, the
     stored ones.
@@ -150,9 +151,37 @@ async def test_imap(
     override = None
     if payload is not None and payload.host:
         stored = imap_config.resolve_imap_config(db)
+        # Resolve BEFORE comparing. The SPA sends `user: ''` whenever "use SMTP
+        # credentials" is on, and `''` means "the stored user" - comparing the
+        # raw payload would make every test on such an install look like a
+        # foreign target and prompt for a password each time.
+        eff_user = payload.user or stored.user
+
+        # A blank password means "keep the stored one", which combined with a
+        # freely chosen host would hand the stored mail credential to any server
+        # the caller names. Only the saved server gets it without re-auth.
+        mail_test_gate.guard_and_audit(
+            db,
+            admin=admin,
+            request=request,
+            event_type=AuditEventType.imap_test_foreign_target,
+            target_id="imap",
+            confirm_password=payload.confirm_password,
+            reuses_stored_secret=not payload.password,
+            target_matches_persisted=(
+                payload.host == stored.host
+                and payload.port == stored.port
+                and eff_user == stored.user
+            ),
+            host=payload.host,
+            port=payload.port,
+            tls_mode=payload.tls_mode,
+        )
+
         # Same reasoning as the SMTP test route: an inline host override that
         # connects and reports the error back is a non-blind SSRF probe, so it
-        # gets the same address policy the URL-based paths already have.
+        # gets the same address policy the URL-based paths already have. It is
+        # an ADDRESS policy only and never mitigated the credential leak above.
         from ...utils.net import assert_safe_host
 
         assert_safe_host(payload.host, payload.port)
@@ -160,9 +189,7 @@ async def test_imap(
         override = imap_config.ImapConfig(
             host=payload.host,
             port=payload.port,
-            # A blank password means "keep the stored one" here exactly as it
-            # does on the PUT - the form never round-trips the secret.
-            user=payload.user or stored.user,
+            user=eff_user,
             password=payload.password or stored.password,
             tls_mode=payload.tls_mode,
             mailbox=payload.mailbox or "INBOX",

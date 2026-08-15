@@ -1053,6 +1053,10 @@ export interface UpdateEmailSettingsRequest {
 export interface TestEmailRequest {
   to: string
   override?: UpdateEmailSettingsRequest
+  /** The admin's OWN password, re-confirmed. Required only when the test would
+   *  send the STORED mail secret to a server other than the saved one; the
+   *  backend answers 403 STEP_UP_REQUIRED when it is needed and absent. */
+  confirm_password?: string
 }
 
 export interface TestEmailResponse {

@@ -19,6 +19,10 @@ isolation alone - review your proxy config.
 Behaviour by hook event:
 - pre-create   → return 200 to allow, 4xx to reject.
 - pre-finish   → final last-chance to reject.
+- post-receive → progress tick while bytes are arriving; stamps
+  ``files.last_progress_at`` so the sweepers can tell a live multi-hour upload
+  from an abandoned one. Fires per ``-progress-hooks-interval`` (30s), so it
+  must stay cheap and must never raise.
 - post-finish  → already finalized; we move file + mark ready.
 - post-terminate → upload abandoned; release reservation.
 """

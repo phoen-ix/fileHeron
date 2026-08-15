@@ -31,6 +31,7 @@ from sqlalchemy.orm import Session
 from ..middleware.errors import AppError
 from ..models.file import File, FileState
 from ..models.user import User
+from ..utils.timeutil import utc_now
 from . import file as file_svc
 from . import quota as quota_svc
 from .tus_signing import UploadEnvelope, verify_envelope
@@ -185,9 +186,16 @@ def handle_pre_create(db: Session, body: dict[str, Any]) -> None:
     # ever satisfy. The only thing protecting a slow multi-hour upload from the
     # sweeper was the mtime cutoff (audit 2026-07-30).
     #
-    # tusd v2 supplies Event.Upload.ID on pre-create. Guarded because a tusd
-    # version that omits it must not break upload authorisation - the mtime
-    # cutoff still applies in that case, i.e. exactly today's behaviour.
+    # This comment used to assert "tusd v2 supplies Event.Upload.ID on
+    # pre-create". It does not. Measured against the pinned
+    # tusproject/tusd:v2.9.2 with a logging hooks-dir, the pre-create payload
+    # carries `"ID": ""` - the id does not exist yet, because the upload has not
+    # been created. So this branch never fired, tus_upload_id stayed NULL for the
+    # whole transfer, and the guard this stamp was added to enable stayed
+    # unreachable. handle_post_receive does the stamping that actually works;
+    # this is kept because a future tusd that does populate the field costs
+    # nothing here, and because removing it would silently change behaviour if
+    # one ever does.
     pre_create_id = upload.get("ID")
     if pre_create_id:
         try:
@@ -295,9 +303,56 @@ def handle_post_terminate(db: Session, body: dict[str, Any]) -> None:
         db.commit()
 
 
+# ---------------------------------------------------------------------------
+# post-receive - tusd reports progress for an in-flight upload, on the interval
+# set by -progress-hooks-interval. This is the ONLY hook that fires while bytes
+# are moving, and enabling it is what makes "is this upload still alive?" an
+# answerable question.
+# ---------------------------------------------------------------------------
+
+
+def handle_post_receive(db: Session, body: dict[str, Any]) -> None:
+    upload, meta = _extract_upload(body)
+    try:
+        envelope = _extract_envelope(meta)
+    except AppError:
+        # Progress is advisory. An unverifiable envelope must not 4xx: tusd logs
+        # a failed progress hook and, worse, this runs on every interval tick,
+        # so a noisy failure here would be a per-second error for the whole
+        # transfer. The sweepers' COALESCE fallback covers a row we cannot stamp.
+        logger.warning("post-receive with invalid envelope; ignoring")
+        return
+
+    file_row = db.query(File).filter(File.id == envelope["file_id"]).one_or_none()
+    if file_row is None or file_row.state != FileState.uploading:
+        return
+
+    now = utc_now()
+    file_row.last_progress_at = now
+
+    # Stamp the tusd upload id here too. It is NOT available at pre-create -
+    # measured against the pinned tusproject/tusd v2.9.2, Event.Upload.ID is the
+    # empty string there, which the comment above handle_pre_create's stamp
+    # assumed otherwise. That left tus_upload_id NULL for the whole transfer,
+    # which in turn made cleanup_abandoned_uploads' "leave it alone, the finalize
+    # hook may yet land" guard - `tus_upload_id == <id> AND state == uploading` -
+    # unmatchable by any live upload. post-receive is the first hook that
+    # actually carries the id, so stamping it here is what makes that guard real.
+    if not file_row.tus_upload_id:
+        pre_id = upload.get("ID")
+        if pre_id:
+            try:
+                file_row.tus_upload_id = _check_tus_upload_id(pre_id)
+            except AppError:
+                logger.warning("post-receive supplied an unusable upload id for file %s", file_row.id)
+
+    db.commit()
+
+
 HOOK_DISPATCH = {
     "pre-create": handle_pre_create,
     "pre-finish": handle_pre_finish,
+    "post-receive": handle_post_receive,
     "post-finish": handle_post_finish,
     "post-terminate": handle_post_terminate,
 }

@@ -32,6 +32,42 @@ _MAX = 1_000_000_000
 _FILE_ID = "00000000-0000-0000-0000-0000000000ff"
 
 
+@pytest.fixture
+def fake_quota_redis(monkeypatch):
+    """An in-memory stand-in for `quota`'s Redis, following conftest's
+    `_isolated_transfer_marks`.
+
+    Not a nicety. `reserve_bytes_once` reaches Redis through a bare
+    `get_redis()`, and this suite runs inside the compose network, so without
+    this the once-marker is written to the LIVE Redis - which is also the only
+    reason a marker test can pass locally at all. CI's `backend-tests` job has
+    no Redis, `reserve_bytes_once` then fails OPEN by design, and the assertion
+    that the charge is held to one becomes false. A test whose result depends on
+    whether a production service happens to be reachable is not a test.
+    """
+    from app.services import quota as quota_svc
+
+    store: dict[str, str] = {}
+
+    class _Fake:
+        def set(self, key, value, ex=None, nx=False):
+            if nx and key in store:
+                return None
+            store[key] = value
+            return True
+
+        def get(self, key):
+            return store.get(key)
+
+        def delete(self, *keys):
+            for k in keys:
+                store.pop(k, None)
+
+    monkeypatch.setattr(quota_svc, "get_redis", lambda: _Fake())
+    yield store
+    store.clear()
+
+
 def _seed(db, owner):
     share = Share(
         created_by_id=owner.id, kind=ShareKind.outbound, subject=None, message=None,
@@ -167,7 +203,7 @@ async def test_uppy_style_creation_retry_still_succeeds(make_user, db, monkeypat
 
 @pytest.mark.asyncio
 async def test_a_replayed_creation_is_charged_once_by_the_redis_marker(
-    make_user, db, monkeypatch
+    make_user, db, monkeypatch, fake_quota_redis
 ):
     """The mechanism that actually bounds the replay, with tus_upload_id left
     NULL exactly as tusd leaves it.
@@ -203,6 +239,45 @@ async def test_a_replayed_creation_is_charged_once_by_the_redis_marker(
     row = db.query(File).filter(File.id == _FILE_ID).one()
     assert row.tus_upload_id is None, (
         "fixture drift: tusd sends no upload id at pre-create"
+    )
+
+
+@pytest.mark.asyncio
+async def test_a_replay_with_redis_down_charges_every_time_by_design(
+    make_user, db, monkeypatch
+):
+    """With Redis unreachable the once-marker cannot be taken, and
+    `reserve_bytes_once` deliberately falls back to reserving - it fails OPEN.
+
+    So the replay bound documented on the test above exists ONLY while Redis is
+    up. That is the intended trade (`quota.py`: the double-charge self-heals
+    within the hour, refusing the upload does not), but it was unwritten, and
+    the gap is exactly what made the marker test pass locally against a live
+    Redis and fail in CI where there is none. Pinning the fallback here means
+    the next person sees both halves instead of rediscovering one of them from
+    a red pipeline.
+    """
+    owner = make_user(email="up3@test.local", role=UserRole.client)
+    _seed(db, owner)
+
+    def _down():
+        raise RuntimeError("redis unreachable")
+
+    from app.services import quota as quota_svc
+
+    monkeypatch.setattr(quota_svc, "get_redis", _down)
+    charged = []
+    monkeypatch.setattr(
+        tus_hooks.quota_svc, "reserve_bytes",
+        lambda db, *, user, additional_bytes, exclude_file_id=None: charged.append(additional_bytes) or 0,
+    )
+
+    for _ in range(3):
+        tus_hooks.handle_pre_create(db, _body(owner.id, _MAX, upload_id=""))
+
+    assert charged == [_MAX, _MAX, _MAX], (
+        "reserve_bytes_once must fail OPEN when the marker is unavailable - "
+        "refusing the upload instead would turn a Redis blip into a failed transfer"
     )
 
 

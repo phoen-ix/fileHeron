@@ -1,3 +1,35 @@
+# Desktop client 1.4.1
+
+**Long transfers no longer die when your sign-in gets old.**
+
+A download that took longer than your session's access token simply stopped -
+and it stopped looking like a network problem, so there was nothing to tell you
+that signing in again would fix it. Large files were the ones that hit it,
+because they are the ones that take long enough.
+
+Requires server **v2.6.1 or newer**.
+
+---
+
+## Downloads survive an expiring sign-in
+
+Every byte transfer sent the same authorisation header it had captured when the
+transfer started. Sessions expire (15 minutes by default), and nothing renewed
+that header mid-transfer - so a segmented download of a large file would run
+until the token aged out and then fail, no matter how much had already been
+transferred. Resuming hit the same wall immediately.
+
+Transfers now renew the session automatically and carry on. If the session has
+genuinely ended, the app says so and returns you to the sign-in screen, instead
+of reporting it as a connection failure.
+
+## "Couldn't reach the server" when the server was fine
+
+Resuming a paused download with an expired sign-in reported
+`Couldn't reach the server to resume this download; try again` - and trying
+again reproduced it forever, because nothing was renewing the session. That
+message now only appears when the server really is unreachable.
+
 # Desktop client 1.4.0
 
 **The Windows release that actually gets tested on Windows.**

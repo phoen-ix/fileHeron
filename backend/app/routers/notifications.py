@@ -29,7 +29,7 @@ from ..schemas.notification import (
     PreferencesResponse,
     UpdatePreferencesRequest,
 )
-from ..services import notification_prefs, rate_limit
+from ..services import jwt_session, notification_prefs, rate_limit
 from ..services import sse as sse_svc
 from ..services import sse_token as sse_token_svc
 
@@ -185,7 +185,7 @@ def _resolve_stream_user(
     """SSE auth: signed `?token=` (browser) or Authorization: Bearer
     (curl/CI). Mirrors `_resolve_download_user` in routers/files.py."""
     if token:
-        user_id = sse_token_svc.verify(token)
+        user_id, issued_at = sse_token_svc.verify_full(token)
         user = (
             db.query(User)
             .filter(User.id == user_id, User.is_disabled.is_(False))
@@ -193,6 +193,12 @@ def _resolve_stream_user(
         )
         if user is None:
             raise AppError(401, "INVALID_SSE_TOKEN", "Bad SSE token.")
+        # This token is a second bearer credential for the session, so it has to
+        # honour the same revocation mark the access token does. It did not, so
+        # "sign out all other sessions" left the revoked device reading the
+        # event stream for the rest of the token's life.
+        if jwt_session.was_issued_before_revocation(user, issued_at):
+            raise AppError(401, "SESSION_REVOKED", "This session was revoked.")
         request.state.user_id = user.id
         request.state.auth_via = "sse_token"
         return user

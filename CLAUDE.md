@@ -267,6 +267,24 @@ does - keep it current on release.)
 > password. The cost is a <=1s window, pinned by a test. Single-session `logout`
 > deliberately does NOT stamp it - the mark is per-user and would close every
 > other tab.
+> **That chokepoint list named `logout-others` for two releases while
+> `POST /api/auth/sessions/revoke-others` did not call it** - it stamped
+> `refresh_tokens.revoked_at` only, so every "signed-out" device kept working on
+> its unexpired ACCESS token, 15 min by default and admin-raisable to 1440,
+> while the SPA promised "all other browsers will need to log in again". The
+> admin-side `DELETE /api/admin/users/{id}/sessions` did go through the
+> chokepoint, so the user-facing panic button was the odd one out. Fixed
+> 2026-08-15: it calls the chokepoint and then **re-mints the caller's own
+> session**, following `change_password`, because the mark is per-user and
+> would otherwise sign the caller out by pressing it.
+> **The SSE stream token is a SECOND bearer credential for the same session and
+> must honour the same mark.** It did not - a revoked session kept reading
+> `/api/notifications/stream` for the token's remaining life. It now carries an
+> issue time (`<user_id>.<iat>.<exp>.<sig>`, all four signed) and both stream
+> consumers call `jwt_session.was_issued_before_revocation`. Deriving the issue
+> time from `exp - TTL` instead would have rejected tokens minted legitimately
+> *after* a revoke for a whole TTL. Any future signed token standing in for a
+> session comes through that predicate too.
 > API tokens default to **scoped + 90-day expiry** in the SPA now; NULL still
 > means unrestricted/never on the API, so the defaults are the control.
 > `utils/net.py::assert_safe_host` guards the SMTP/IMAP **test-connection**

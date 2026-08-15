@@ -15,9 +15,14 @@ bearer header (curl/CI path).
 
 Token format (compact, URL-safe, mirrors ``download_token``):
 
-    <user_id>.<exp_unix>.<sig_base64url>
+    <user_id>.<iat_unix>.<exp_unix>.<sig_base64url>
 
-where sig = HMAC-SHA256(b"sse|<user_id>|<exp_unix>", JWT_SECRET).
+where sig = HMAC-SHA256(b"sse|<user_id>|<iat_unix>|<exp_unix>", JWT_SECRET).
+
+The issue time is carried because this token is a second bearer credential
+for the session, and `users.sessions_invalidated_at` can only be enforced
+against something that says when it was minted. Deriving it from `exp - TTL`
+would reject tokens minted legitimately AFTER a revoke for the whole TTL.
 
 The ``"sse|"`` domain prefix prevents cross-context confusion if a
 future signed-token feature ever uses the same secret with a
@@ -54,19 +59,24 @@ def _sign(payload: bytes) -> str:
 
 def issue(user_id: int, ttl_sec: int = DEFAULT_TTL_SEC) -> str:
     """Mint a signed SSE token for `user_id` with `ttl_sec` lifetime."""
-    exp = _now() + ttl_sec
-    payload = f"sse|{user_id}|{exp}".encode()
-    sig = _sign(payload)
-    return f"{user_id}.{exp}.{sig}"
+    iat = _now()
+    exp = iat + ttl_sec
+    sig = _sign(f"sse|{user_id}|{iat}|{exp}".encode())
+    return f"{user_id}.{iat}.{exp}.{sig}"
 
 
-def verify(token: str) -> int:
-    """Parse + verify a token. Returns the user_id it was issued for.
-    Raises AppError(401) on any failure (malformed, expired, or bad
-    signature)."""
+def verify_full(token: str) -> tuple[int, int]:
+    """Parse + verify a token. Returns (user_id, issued_at_epoch).
+
+    Raises AppError(401) on any failure (malformed, expired, or bad signature).
+    A token in the pre-2026-08 three-part format fails to parse and so 401s;
+    the SPA already re-mints on a stream 401, and the whole population of such
+    tokens is at most one TTL old.
+    """
     try:
-        user_str, exp_str, sig = token.split(".", 2)
+        user_str, iat_str, exp_str, sig = token.split(".", 3)
         user_id = int(user_str)
+        iat = int(iat_str)
         exp = int(exp_str)
     except (ValueError, AttributeError):
         raise AppError(401, "INVALID_SSE_TOKEN", "Bad SSE token.") from None
@@ -74,9 +84,14 @@ def verify(token: str) -> int:
     if exp < _now():
         raise AppError(401, "SSE_TOKEN_EXPIRED", "SSE token expired.")
 
-    expected = _sign(f"sse|{user_id}|{exp}".encode())
+    expected = _sign(f"sse|{user_id}|{iat}|{exp}".encode())
     # Constant-time compare to defeat timing oracles.
     if not constant_time_equals(expected, sig):
         raise AppError(401, "INVALID_SSE_TOKEN", "Bad SSE token.")
 
-    return user_id
+    return user_id, iat
+
+
+def verify(token: str) -> int:
+    """Back-compat wrapper: just the user id."""
+    return verify_full(token)[0]

@@ -186,12 +186,19 @@ async def system_stream(
     from ...services import sse_token as sse_token_svc
 
     if token:
-        user_id = sse_token_svc.verify(token)
+        user_id, issued_at = sse_token_svc.verify_full(token)
         user = (
             db.query(User)
             .filter(User.id == user_id, User.is_disabled.is_(False))
             .one_or_none()
         )
+        # Same rule as the notifications stream: this token stands in for the
+        # session, so a revoked session must not keep reading it.
+        if user is not None:
+            from ...services import jwt_session
+
+            if jwt_session.was_issued_before_revocation(user, issued_at):
+                raise AppError(401, "SESSION_REVOKED", "This session was revoked.")
     elif authorization and authorization.lower().startswith("bearer "):
         from ...services.auth import resolve_user_from_access_token
         jwt_str = authorization.split(" ", 1)[1].strip()

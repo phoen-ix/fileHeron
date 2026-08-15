@@ -9,13 +9,14 @@ sign-out-other-sessions.
 """
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timedelta, timezone
 
 import pytest
 
 from app.models.notification import Notification, NotificationCategory
 from app.models.refresh_token import RefreshToken
-from app.models.user import UserRole
+from app.models.user import User, UserRole
 from app.services import settings as settings_svc
 
 
@@ -168,3 +169,76 @@ async def test_revoke_others_keeps_current(make_user, db, client, login_as):
         .count()
     )
     assert active == 1  # only the current session survives
+
+
+@pytest.mark.asyncio
+async def test_revoke_others_kills_the_other_devices_access_token(
+    make_user, db, client, login_as
+):
+    """The defect: this stamped only refresh_tokens.revoked_at, so every other
+    device kept working on its unexpired ACCESS token - 15 minutes by default
+    and admin-raisable to 1440 - while the SPA promised "all other browsers
+    will need to log in again". The admin-side revoke already behaved
+    correctly, so the user-facing panic button was the odd one out."""
+    make_user(email="ro2@test.local", role=UserRole.client, password="Pass12345678!")
+    token1, _ = await login_as("ro2@test.local", "Pass12345678!")   # the device to evict
+
+    # The mark is compared at SECOND granularity with a strict `<` - deliberate,
+    # so that revoking and re-minting inside one request does not sign the
+    # caller out. A test that logs in and revokes inside the same second
+    # therefore passes for the wrong reason. Cross the boundary for real rather
+    # than hand-writing sessions_invalidated_at: this test exists to prove the
+    # ROUTE stamps it, and the audit's own finding was that the column's only
+    # coverage hand-wrote it, so deleting the stamp left the suite green.
+    await asyncio.sleep(1.1)
+
+    token2, _ = await login_as("ro2@test.local", "Pass12345678!")   # the caller
+
+    # Both work beforehand.
+    assert (await client.get("/api/account/me",
+                             headers={"Authorization": f"Bearer {token1}"})).status_code == 200
+
+    r = await client.post(
+        "/api/auth/sessions/revoke-others",
+        headers={"Authorization": f"Bearer {token2}"},
+    )
+    assert r.status_code == 200, r.text
+
+    evicted = await client.get("/api/account/me",
+                               headers={"Authorization": f"Bearer {token1}"})
+    assert evicted.status_code == 401, evicted.text
+    assert evicted.json()["code"] == "SESSION_REVOKED"
+
+    # And the route - not the test - is what set the mark.
+    db.expire_all()
+    revoked_user = db.query(User).filter(User.email == "ro2@test.local").one()
+    assert revoked_user.sessions_invalidated_at is not None
+
+
+@pytest.mark.asyncio
+async def test_revoke_others_does_not_sign_the_caller_out(make_user, db, client, login_as):
+    """sessions_invalidated_at is per-user, so it necessarily invalidates the
+    caller's own token too. Without the re-mint the admin signs themselves out
+    by pressing "sign out other devices" - which is why this follows the
+    change_password precedent rather than just stamping the mark."""
+    make_user(email="ro3@test.local", role=UserRole.client, password="Pass12345678!")
+    await login_as("ro3@test.local", "Pass12345678!")
+    token2, _ = await login_as("ro3@test.local", "Pass12345678!")
+
+    r = await client.post(
+        "/api/auth/sessions/revoke-others",
+        headers={"Authorization": f"Bearer {token2}"},
+    )
+    assert r.status_code == 200, r.text
+    # The refresh cookie was replaced, so the SPA can bootstrap a fresh access
+    # token immediately rather than being bounced to /login.
+    assert "fh_refresh" in r.headers.get("set-cookie", "")
+
+    db.expire_all()
+    active = (
+        db.query(RefreshToken)
+        .join(User, User.id == RefreshToken.user_id)
+        .filter(User.email == "ro3@test.local", RefreshToken.revoked_at.is_(None))
+        .count()
+    )
+    assert active == 1, "exactly the re-minted session survives"

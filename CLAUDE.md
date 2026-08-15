@@ -15,6 +15,11 @@ keep this to what would cause a wrong move if unknown.
 
 ## Status
 
+**v2.12.1** is a one-line correction to v2.12.0: `OnFailure=` sat in
+`[Service]` in the two ops units, where systemd ignores it, so the backup/drill
+alerting that release announced was inert. It is a `[Unit]` directive. The host
+units are COPIES - re-copy them or the fix never reaches the host.
+
 **v2.12.0 is the 2026-08-15 audit fix wave** - 31 commits, every finding
 reproduced before it was fixed and every fix mutation-checked. It closes two
 things that were costing this instance already (the upload reaper killing

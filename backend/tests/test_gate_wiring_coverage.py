@@ -906,3 +906,33 @@ def test_a_long_path_is_stored_clipped(db, make_user):
     row = db.query(IpBlock).filter(IpBlock.subject == "203.0.113.9").one()
     assert row.last_path is not None, "no block row was written at all"
     assert len(row.last_path) <= IpBlock.__table__.c.last_path.type.length
+
+
+# --- tests-15: the admin SSE stream must escape the global gate --------------
+
+
+@pytest.mark.asyncio
+async def test_the_admin_stream_is_reachable_without_an_authorization_header(client):
+    """The route accepts a signed ?token= precisely BECAUSE EventSource cannot
+    send an Authorization header - but it was mounted inside the global `_gate`,
+    which calls get_actor and requires exactly that header. So it answered 401
+    AUTH_REQUIRED before reaching its handler and had never once connected from
+    the admin system page it exists for.
+
+    The distinction that matters is WHICH 401: AUTH_REQUIRED means the gate
+    refused it, INVALID_SSE_TOKEN means the handler ran and judged the token.
+    """
+    r = await client.get("/api/admin/system/stream?token=bogus")
+    assert r.status_code == 401
+    assert r.json()["code"] == "INVALID_SSE_TOKEN", (
+        "the admin stream is back behind the gate that EventSource cannot pass"
+    )
+
+
+@pytest.mark.asyncio
+async def test_the_rest_of_the_admin_surface_is_still_gated(client):
+    """Moving the stream out must not take anything else with it."""
+    for path in ("/api/admin/users", "/api/admin/settings/imap"):
+        r = await client.get(path)
+        assert r.status_code == 401, path
+        assert r.json()["code"] == "AUTH_REQUIRED", path

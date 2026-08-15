@@ -43,7 +43,48 @@ else
     [ -n "$BACKUP" ] || fail "no backup found under ./backups"
 fi
 [ -f "$BACKUP/manifest.txt" ] || fail "$BACKUP is not a fileHeron backup (no manifest.txt)"
-log "drilling backup: $BACKUP"
+
+# --- refuse stale evidence --------------------------------------------------
+#
+# The selection above takes the newest backup BY NAME and asserted nothing
+# about its age. So once backups stopped arriving - which is exactly what the
+# tar self-destruct in backup.sh used to cause, silently - this drill happily
+# re-verified the same old archive and refreshed LAST_SUCCESSFUL_DRILL every
+# week. A green drill then meant "some old backup is still intact", not
+# "backups are being taken", while README.md and CLAUDE.md both cite that file
+# as proof the pipeline works. A drill that cannot go red when the pipeline
+# stops is not evidence.
+: "${DRILL_MAX_BACKUP_AGE_HOURS:=48}"
+backup_age_hours() {
+    local dir="$1" stamp epoch="" now
+    stamp="$(basename "$dir")"
+    # Directory names are `date -u +%Y-%m-%d_%H%M%S` - the same field the
+    # selection sorts on, so trusting it here is consistent with trusting it
+    # there. Fall back to mtime for a hand-passed directory that does not
+    # follow the convention.
+    if [[ "$stamp" =~ ^([0-9]{4}-[0-9]{2}-[0-9]{2})_([0-9]{2})([0-9]{2})([0-9]{2})$ ]]; then
+        epoch="$(date -u -d \
+            "${BASH_REMATCH[1]} ${BASH_REMATCH[2]}:${BASH_REMATCH[3]}:${BASH_REMATCH[4]}" \
+            +%s 2>/dev/null || echo "")"
+    fi
+    [ -n "$epoch" ] || epoch="$(stat -c %Y "$dir")"
+    now="$(date -u +%s)"
+    echo $(( (now - epoch) / 3600 ))
+}
+
+AGE_HOURS="$(backup_age_hours "$BACKUP")"
+if [ "$AGE_HOURS" -gt "$DRILL_MAX_BACKUP_AGE_HOURS" ]; then
+    if [ -n "${1:-}" ]; then
+        log "WARNING: $BACKUP is ${AGE_HOURS}h old (limit ${DRILL_MAX_BACKUP_AGE_HOURS}h);" \
+            "drilling it anyway because it was named explicitly"
+    else
+        fail "newest backup is ${AGE_HOURS}h old (limit ${DRILL_MAX_BACKUP_AGE_HOURS}h)" \
+             "- backups have stopped arriving. Fix the backup job first; a drill" \
+             "against a stale archive proves nothing about the pipeline."
+    fi
+fi
+
+log "drilling backup: $BACKUP (${AGE_HOURS}h old)"
 
 # --- 0. cheap artifact integrity check first --------------------------------
 #

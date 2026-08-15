@@ -38,7 +38,7 @@ def export_backup(
     # Re-auth before anything is read. A stolen admin session is the threat the
     # updater's own confirm-password already names; this route hands over
     # password hashes and decrypted TOTP seeds, so it is the higher-value one.
-    step_up.verify_password_or_403(admin, payload.password)
+    step_up.verify_password_or_403(db, admin, payload.password, request=request)
     data = cb.build_backup(
         db,
         categories=payload.categories,
@@ -152,7 +152,7 @@ async def import_backup(
 ) -> BackupImportSummaryResponse:
     # `confirm` and `password` answer different questions - "did you mean this"
     # vs "are you still the person who signed in" - so both are required.
-    step_up.verify_password_or_403(admin, password)
+    step_up.verify_password_or_403(db, admin, password, request=request)
     if not confirm:
         raise AppError(
             400, "BACKUP_CONFIRM_REQUIRED",

@@ -310,7 +310,7 @@ def erase_user(
     db: Session = Depends(get_db),
     admin: User = Depends(get_current_admin),
 ) -> EraseUserResponse:
-    step_up.verify_password_or_403(admin, payload.password)
+    step_up.verify_password_or_403(db, admin, payload.password, request=request)
     target = um_svc.get_or_404(db, user_id)
     summary = erasure_svc.erase_user(
         db, actor=admin, target=target, request=request

@@ -226,9 +226,25 @@ does - keep it current on release.)
 > and a 401 trips the SPA's refresh interceptor, which silently retries with the
 > same wrong password and shows the user nothing. An SSO-only account cannot
 > clear it (no local hash); that is deliberate, the CLI escape hatch is the
-> recovery. Backup export is the highest-value one: it is the ONLY admin surface
-> that reads secrets back out (password hashes, decrypted TOTP seeds, and with
-> `include_env` the JWT/DB/TUS/S3 secrets).
+> recovery. Backup export is the highest-value one: it is **almost** the only
+> admin surface that reads secrets back out (password hashes, decrypted TOTP
+> seeds, and with `include_env` the JWT/DB/TUS/S3 secrets) - this file claimed
+> "the ONLY" for two releases while the SMTP/IMAP test-connection routes sent
+> the stored mail password to a caller-supplied host with no step-up at all.
+> **The signature is `(db, user, password, *, request)` since 2026-08-15**, and
+> that is load-bearing: as a pure `(user, password)` function it structurally
+> could not rate-limit, count or audit, and none of its eight call sites added
+> any of that - so the gate in front of secret export, erasure, token minting
+> and self-update was an unlimited, unlogged password oracle, at 64 MiB of
+> Argon2id per guess. It now throttles on `rate_limit.check_user_allowed`
+> (per-USER, `LOCKOUT_THRESHOLD` per 15 min, 429) and writes a `step_up_failed`
+> audit row, **committing it before raising** - an AppError aborts the request,
+> so an uncommitted row rolls back and the failure leaves no trace.
+> **Never route step-up failures into `rate_limit.record_failure`.** That writes
+> `users.locked_until`, which the LOGIN path reads, so a hijacked session could
+> lock the real admin out of their own login page by failing step-up - the same
+> shape of over-broad auth-failure signal that `2b2117a` had to undo in
+> production. The per-user counter locks nothing and expires on its own.
 > **`users.sessions_invalidated_at` is what makes "revoke" cover access tokens.**
 > Stamped in `jwt_session.revoke_all_user_refresh_tokens` (one chokepoint for
 > logout-others, password change/reset, email change, admin revoke-all, reuse

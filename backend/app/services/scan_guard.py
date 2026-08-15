@@ -496,6 +496,15 @@ def _duration_minutes(strikes: int, snap: dict) -> int:
     return min(base, int(snap["max_block_minutes"]))
 
 
+# The column is String(512) and the value is an attacker-controlled URI. An
+# over-long path raised DataError under MariaDB strict mode, and note_offence's
+# blanket `except` swallowed it - so NO block row was written and _reset_cache()
+# never ran. A scanner with long URLs therefore disabled the guard built to stop
+# it, silently. SQLite ignores VARCHAR widths, so no behavioural test can catch
+# this; test_gate_wiring_coverage asserts the clip structurally instead.
+_LAST_PATH_MAX = IpBlock.__table__.c.last_path.type.length
+
+
 def apply_block(
     db: Session,
     *,
@@ -546,7 +555,7 @@ def apply_block(
         live.strikes = max(live.strikes, strikes)
         live.expires_at = max(live.expires_at, expires)
         if last_path:
-            live.last_path = last_path
+            live.last_path = last_path[:_LAST_PATH_MAX]
         db.flush()
         return live
 
@@ -558,7 +567,7 @@ def apply_block(
         source=source,
         hit_count=1,
         strikes=strikes,
-        last_path=last_path,
+        last_path=last_path[:_LAST_PATH_MAX] if last_path else None,
         created_at=now,
         expires_at=expires,
         note=note,

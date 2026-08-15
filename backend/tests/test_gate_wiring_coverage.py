@@ -853,3 +853,56 @@ def test_the_spa_offers_every_error_log_source_the_backend_writes():
         f"the backend writes error_log.source values the admin filter does not "
         f"offer: {sorted(missing)} - those rows are stored and invisible"
     )
+
+
+# --- tests-14: VARCHAR widths the SQLite harness cannot enforce --------------
+
+
+def test_scan_guard_clips_last_path_to_the_column_width():
+    """ip_blocks.last_path is String(512) and the value is an attacker-
+    controlled URI. Over-long, it raised DataError under MariaDB strict mode -
+    and note_offence's blanket `except` swallowed it, so no block row was
+    written AND the cache was never reset. A scanner with long URLs disabled
+    the guard built to stop it, silently.
+
+    Asserted behaviourally where possible (the clip is in Python, so SQLite
+    sees it) plus a width assertion, because a clip to the WRONG width is the
+    same failure with a longer fuse."""
+    from app.models.ip_block import IpBlock
+    from app.services import scan_guard
+
+    declared = IpBlock.__table__.c.last_path.type.length
+    assert scan_guard._LAST_PATH_MAX == declared, (
+        "the clip width drifted from the column width"
+    )
+
+
+def test_the_orphan_locator_clip_matches_its_column():
+    """audit_log.target_id is String(64); this clipped to 255 - four times the
+    column - so a locator longer than the column still raised DataError, and
+    record_orphan_locator's own `except` swallowed it, losing the durable
+    orphan trace its docstring says a log line cannot replace."""
+    from app.models.audit_log import AuditLog
+    from app.services import file as file_svc
+
+    declared = AuditLog.__table__.c.target_id.type.length
+    assert file_svc._AUDIT_TARGET_ID_MAX == declared
+    assert declared < 255, "the old clip was wider than the column; that is the bug"
+
+
+def test_a_long_path_is_stored_clipped(db, make_user):
+    """End to end through apply_block: the row must exist (the DataError used to
+    prevent that) and the stored value must fit."""
+    from app.models.ip_block import IpBlock
+    from app.services import scan_guard
+
+    long_path = "/" + ("A" * 900) + ".php"
+    scan_guard.apply_block(
+        db, subject="203.0.113.9", reason="probe_path",
+        last_path=long_path, snap=scan_guard.snapshot(),
+    )
+    db.commit()
+
+    row = db.query(IpBlock).filter(IpBlock.subject == "203.0.113.9").one()
+    assert row.last_path is not None, "no block row was written at all"
+    assert len(row.last_path) <= IpBlock.__table__.c.last_path.type.length

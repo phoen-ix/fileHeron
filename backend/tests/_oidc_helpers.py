@@ -30,7 +30,12 @@ def make_claims(provider, *, sub: str, email: str, email_verified: bool = True, 
     missing exp/iat, so every test claim set needs them."""
     now = int(time.time())
     claims: dict[str, Any] = {
-        "iss": provider.issuer_url.rstrip("/"),
+        # The IdP echoes its issuer VERBATIM, trailing slash and all. This used
+        # to be `provider.issuer_url.rstrip("/")` - the exact expression the
+        # code under test applies to its expectation - so the assertion could
+        # never disagree with the implementation, and a whole class of issuer
+        # mismatch was untestable by construction.
+        "iss": provider.issuer_url,
         "aud": provider.client_id,
         "sub": sub,
         "email": email,

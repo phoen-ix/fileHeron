@@ -286,7 +286,14 @@ async def _verify_id_token(
             key,
             algorithms=[alg],
             audience=provider.client_id,
-            issuer=provider.issuer_url.rstrip("/"),
+            # `issuer=` is deliberately NOT passed. pyjwt compares the `iss`
+            # claim byte-for-byte, so passing a normalised expectation while the
+            # IdP echoes its issuer verbatim rejected every provider whose
+            # canonical issuer ends in "/" - including the shipped Authentik
+            # preset, which could therefore never complete a login. Discovery
+            # had always rstripped BOTH sides, so the mismatch only surfaced at
+            # the last step, and test-connection reported "ok" because it
+            # rstrips too. Checked below instead, on both sides.
             # 60s leeway is the OAuth2-standard tolerance for clock skew
             # between us and the IdP; otherwise a tens-of-seconds drift
             # would intermittently reject perfectly valid tokens.
@@ -298,6 +305,8 @@ async def _verify_id_token(
     except jwt.InvalidAudienceError as e:
         raise AppError(401, "OIDC_BAD_AUDIENCE", "ID token audience mismatch.") from e
     except jwt.InvalidIssuerError as e:
+        # Unreachable while `issuer=` is not passed - kept so that re-adding it
+        # produces a 401 rather than an unhandled 500.
         raise AppError(401, "OIDC_BAD_ISSUER", "ID token issuer mismatch.") from e
     except jwt.InvalidSignatureError as e:
         logger.warning("OIDC bad signature provider=%s kid=%s", provider.id, kid)
@@ -306,6 +315,20 @@ async def _verify_id_token(
         raise AppError(401, "OIDC_BAD_ID_TOKEN", f"ID token missing required claim: {e.claim}.") from e
     except jwt.InvalidTokenError as e:
         raise AppError(401, "OIDC_BAD_ID_TOKEN", f"ID token invalid: {e}") from e
+
+    # Issuer, normalised on BOTH sides. `iss` is not in the `require` list
+    # above, and dropping pyjwt's `issuer=` kwarg means nothing else demands it
+    # either - so the presence check has to live here, or a token with no
+    # issuer at all would sail through.
+    #
+    # This tolerates exactly one difference, a trailing slash, and nothing else.
+    # OIDC Core says `iss` must match exactly; the deviation is deliberate and
+    # is bounded by the fact that the provider row is already selected by id,
+    # so this comparison confirms an expectation rather than choosing one.
+    iss = claims.get("iss")
+    if not isinstance(iss, str) or iss.rstrip("/") != provider.issuer_url.rstrip("/"):
+        logger.warning("OIDC issuer mismatch provider=%s iss=%r", provider.id, iss)
+        raise AppError(401, "OIDC_BAD_ISSUER", "ID token issuer mismatch.")
 
     if expected_nonce is not None and claims.get("nonce") != expected_nonce:
         logger.warning("OIDC nonce mismatch provider=%s", provider.id)

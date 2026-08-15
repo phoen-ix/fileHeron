@@ -62,7 +62,11 @@ def _fetch_segment(
     cancel: Optional[threading.Event] = None,
     pause: Optional[threading.Event] = None,
 ) -> None:
-    rng = {**headers, "Range": f"bytes={start}-{end}"}
+    # Read the Authorization header FRESH each attempt rather than trusting the
+    # snapshot the caller passed in: a segmented transfer of a large file
+    # routinely outlives the 15-minute access token, and the old behaviour was
+    # to keep presenting the dead one until the retries ran out.
+    rng = {**headers, **api.auth_header(), "Range": f"bytes={start}-{end}"}
     for attempt in range(MAX_RETRIES):
         written = 0
         try:
@@ -80,6 +84,14 @@ def _fetch_segment(
                 # this path, but an intermediary that honours a 1-byte range and
                 # not a 16 MiB one gets here, and silent corruption is the worst
                 # possible failure mode for a file-transfer tool.
+                if resp.status_code == 401:
+                    # The access token expired mid-transfer. Refresh once and
+                    # retry this segment; a dead session raises
+                    # SessionExpiredError, which the UI turns into a re-login
+                    # prompt instead of a generic transfer failure.
+                    resp.read()
+                    rng.update(api.refresh_bearer_header())
+                    continue
                 if resp.status_code != 206:
                     resp.read()
                     raise OSError(

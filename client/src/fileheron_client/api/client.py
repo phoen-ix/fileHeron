@@ -250,6 +250,57 @@ class ApiClient:
             )
         return resp
 
+    def refresh_bearer(self) -> str:
+        """Refresh the access token for a call site that cannot use request().
+
+        Byte transfers stream their responses, so they issue requests straight
+        against the transport and never pass through request()'s
+        401 -> refresh -> replay. They also snapshotted the Authorization
+        header once, at kick-off - so any transfer outliving the access token
+        (15 minutes by default, and the server can lower it) died mid-flight.
+        Worse, it surfaced as a transport error rather than SessionExpiredError,
+        so the UI never offered a re-login and the user just saw a failed
+        download.
+
+        Returns the new header value. Raises SessionExpiredError if the session
+        is genuinely gone, which is what the UI listens for.
+        """
+        if self.api_token is not None:
+            # API tokens do not expire and cannot be refreshed, so a 401 on one
+            # is a real authorisation failure, not an expiry.
+            raise SessionExpiredError(
+                status_code=401,
+                code="SESSION_EXPIRED",
+                message="This API token is no longer accepted.",
+            )
+        ref = self._http.post("/api/auth/refresh", headers={"Accept": "application/json"})
+        token = None
+        if ref.status_code == 200:
+            try:
+                token = ref.json().get("access_token")
+            except ValueError:
+                token = None
+        if not token:
+            raise SessionExpiredError(
+                status_code=401,
+                code="SESSION_EXPIRED",
+                message="Your session expired. Please sign in again.",
+            )
+        self.access_token = token
+        return f"Bearer {token}"
+
+    def refresh_bearer_header(self) -> dict:
+        """`refresh_bearer` as a header dict, for the byte-transfer call sites."""
+        return {"Authorization": self.refresh_bearer()}
+
+    def auth_header(self) -> dict:
+        """Current Authorization header, read fresh.
+
+        Call sites must not cache this: the whole defect was a value snapshot
+        taken once at kick-off.
+        """
+        return {"Authorization": f"Bearer {self.bearer}"} if self.bearer else {}
+
     def request_or_raise(
         self,
         method: str,

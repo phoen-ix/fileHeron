@@ -106,12 +106,25 @@ def resolve_user_from_access_token(db: Session, token: str, settings: Settings) 
     # sign the user out for changing their password. The cost is that a token
     # minted in the same second as the revoke survives - a <=1s window, against
     # the 15 minutes (up to 24 h on a raised TTL) it survived before.
-    invalidated = user.sessions_invalidated_at
-    if invalidated is not None:
-        iat = payload.get("iat")
-        if isinstance(iat, int) and iat < int(to_epoch(invalidated)):
-            raise AppError(401, "SESSION_REVOKED", "This session was revoked.")
+    iat = payload.get("iat")
+    if isinstance(iat, int) and was_issued_before_revocation(user, iat):
+        raise AppError(401, "SESSION_REVOKED", "This session was revoked.")
     return user
+
+
+def was_issued_before_revocation(user: User, issued_at_epoch: int) -> bool:
+    """Whether a credential minted at `issued_at_epoch` predates the user's
+    revocation mark.
+
+    Shared with the SSE stream token, which is a SECOND bearer credential for
+    the same session and was not consulting the mark at all - so a revoked
+    session kept reading the event stream for the token's remaining life. Any
+    future signed token standing in for a session has to come through here too.
+    """
+    invalidated = user.sessions_invalidated_at
+    if invalidated is None:
+        return False
+    return issued_at_epoch < int(to_epoch(invalidated))
 
 
 # ---------------------------------------------------------------------------
@@ -273,6 +286,11 @@ def revoke_all_user_refresh_tokens(db: Session, user_id: int) -> int:
     change, logout-others, admin revoke-all and config-backup import - every
     path that funnels through here - so "all sessions were revoked" was not true
     of the credential actually presented on each request.
+
+    NB: this docstring listed `logout-others` for two releases while
+    `POST /api/auth/sessions/revoke-others` did NOT call this function - it
+    stamped the refresh rows itself. Fixed 2026-08-15; the route now calls this
+    and re-mints the caller, since the mark is per-user.
 
     Deliberately NOT done by single-session `logout`: the mark is per-user, so
     bumping it there would sign the user out of every other tab because they

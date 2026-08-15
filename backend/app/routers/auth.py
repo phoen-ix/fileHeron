@@ -424,21 +424,59 @@ def revoke_session(
 
 @router.post("/sessions/revoke-others")
 def revoke_other_sessions(
+    request: Request,
+    response: Response,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     fh_refresh: str | None = Cookie(default=None),
 ) -> dict:
-    """Revoke every active session for this user EXCEPT the current device
-    (identified by the refresh cookie). The current session is left intact so
-    the caller stays signed in. Returns {revoked: n}."""
+    """Revoke every active session for this user EXCEPT the current device.
+
+    This stamped only `refresh_tokens.revoked_at`, so every other device kept
+    working on its unexpired ACCESS token - up to ACCESS_TOKEN_EXPIRE_MINUTES,
+    and that is admin-raisable to 1440. "Sign out all other sessions" therefore
+    did not sign anything out at the moment it was pressed, while the SPA
+    promised "all other browsers will need to log in again". The admin-side
+    DELETE /api/admin/users/{id}/sessions already went through the chokepoint
+    and 401'd immediately, so the user-facing panic button was the odd one out.
+
+    `users.sessions_invalidated_at` is what makes a revoke cover access tokens,
+    and it is per-user, so it necessarily invalidates the CALLER's token too.
+    That is why this follows the change_password precedent exactly: stamp via
+    the chokepoint, then re-mint this device's session before returning
+    (services/auth.py::change_password + routers/account.py). Without the
+    re-mint the caller signs themselves out by pressing it.
+
+    The response body stays {revoked: n} - the new session rides the httpOnly
+    cookie, so frontend/src/api/account.ts needs no change.
+    """
     current_hash = refresh_token_hash(fh_refresh) if fh_refresh else None
-    now = utc_now()
     q = db.query(RefreshToken).filter(
         RefreshToken.user_id == user.id,
         RefreshToken.revoked_at.is_(None),
     )
     if current_hash is not None:
         q = q.filter(RefreshToken.token_hash != current_hash)
-    revoked = q.update({"revoked_at": now}, synchronize_session=False)
+    revoked = int(q.count())
+
+    # The chokepoint revokes ALL rows including the caller's and stamps the
+    # per-user mark; the count above is what the caller actually asked about.
+    jwt_session.revoke_all_user_refresh_tokens(db, user.id)
+
+    _access, _expires_in, refresh_plain = auth_svc.finalize_successful_login(
+        db, user=user, request=request, settings=settings,
+        via="revoke_others", notify_new_device=False,
+    )
     db.commit()
-    return {"revoked": int(revoked or 0)}
+    response.set_cookie(
+        key="fh_refresh",
+        value=refresh_plain,
+        max_age=settings_registry.effective(
+            db, settings_registry.K.REFRESH_TOKEN_EXPIRE_DAYS
+        ) * 24 * 3600,
+        httponly=True,
+        secure=settings.COOKIE_SECURE,
+        samesite="lax",
+        path="/api/auth",
+    )
+    return {"revoked": revoked}

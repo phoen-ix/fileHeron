@@ -147,18 +147,48 @@ def approver_user_ids(db: Session) -> set[int]:
 
 
 def _has_client_recipient(db: Session, share: Share) -> bool:
-    """True if the share has at least one direct recipient user with the client
-    role (the test for the `outbound_to_clients` scope)."""
-    hit = (
+    """True if the share REACHES at least one client, directly or via a group.
+
+    The scope is `outbound_to_clients` - "does this leave the organisation" -
+    so what matters is who receives it, not how they were addressed. This used
+    to inner-join User on `recipient_user_id`, which is NULL on a group
+    recipient row (`share.py` sets one or the other, never both), so the join
+    silently dropped every group and the whole four-eyes policy did nothing for
+    a share addressed to a group containing clients. The docstring said "direct
+    recipient user", so the code was self-consistent - the SCOPE was what it got
+    wrong.
+
+    Group membership is resolved at query time, matching how
+    `is_authorized_to_download` decides who can actually fetch the bytes.
+    """
+    direct = (
         db.query(ShareRecipient.recipient_user_id)
         .join(User, User.id == ShareRecipient.recipient_user_id)
         .filter(
             ShareRecipient.share_id == share.id,
             User.role == UserRole.client,
+            User.is_disabled.is_(False),
         )
         .first()
     )
-    return hit is not None
+    if direct is not None:
+        return True
+
+    via_group = (
+        db.query(GroupMember.user_id)
+        .join(User, User.id == GroupMember.user_id)
+        .join(
+            ShareRecipient,
+            ShareRecipient.recipient_group_id == GroupMember.group_id,
+        )
+        .filter(
+            ShareRecipient.share_id == share.id,
+            User.role == UserRole.client,
+            User.is_disabled.is_(False),
+        )
+        .first()
+    )
+    return via_group is not None
 
 
 def is_approval_required(db: Session, share: Share) -> bool:

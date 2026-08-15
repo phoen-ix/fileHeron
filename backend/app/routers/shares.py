@@ -399,15 +399,29 @@ def list_shares(
             .all()
         }
 
+    # Memoised per SHARE, not per recipient row. `can_decide` short-circuits on
+    # the state check for anything that is not `pending_approval`, so an inbox
+    # of active shares costs nothing either way - but an approver's page of
+    # pending ones would otherwise re-resolve the approver policy once per
+    # recipient instead of once per share.
+    _roster_seen: dict[str, bool] = {}
+
     def _may_see_full_roster(share_id: str) -> bool:
+        cached = _roster_seen.get(share_id)
+        if cached is not None:
+            return cached
         if user.role == UserRole.admin:
-            return True
-        sh = rows_by_id.get(share_id)
-        if sh is None:
-            return False
-        if sh.created_by_id == user.id:
-            return True
-        return share_approval_svc.can_decide(db, user, sh)
+            verdict = True
+        else:
+            sh = rows_by_id.get(share_id)
+            if sh is None:
+                verdict = False
+            elif sh.created_by_id == user.id:
+                verdict = True
+            else:
+                verdict = share_approval_svc.can_decide(db, user, sh)
+        _roster_seen[share_id] = verdict
+        return verdict
 
     recips_by_share: dict[str, list[ShareRecipientRef]] = {sid: [] for sid in share_ids}
     for r in recipient_rows:

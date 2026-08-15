@@ -137,7 +137,13 @@ def login_stuffing(db: Session, *, cutoff: datetime, threshold: int) -> list[Fin
         return []
     # One extra query, not one per candidate: the candidate set is tiny.
     # COUNT, not a set-membership test - the ratio below needs the volume.
-    success_counts = dict(
+    # Indexed rather than `dict(rows)` or `{ip: n for ip, n in rows}`: mypy
+    # rejects the first (a SQLAlchemy Row is not a tuple[K, V] to it) and ruff's
+    # C416 rejects the second as a redundant comprehension. Subscripting the Row
+    # satisfies both, and the annotation is needed either way. Keyed `str | None`
+    # to match `LoginAttempt.ip`, so `.get(ip, 0)` below lines up with the ip
+    # coming off `rows`.
+    success_rows = (
         db.query(LoginAttempt.ip, cnt)
         .filter(
             LoginAttempt.attempted_at >= cutoff,
@@ -147,6 +153,7 @@ def login_stuffing(db: Session, *, cutoff: datetime, threshold: int) -> list[Fin
         .group_by(LoginAttempt.ip)
         .all()
     )
+    success_counts: dict[str | None, int] = {r[0]: r[1] for r in success_rows}
     return [
         Finding(
             "login_stuffing", ip, int(n),

@@ -13,7 +13,9 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timedelta
 from pathlib import Path
+from typing import cast
 
+from sqlalchemy import String
 from sqlalchemy.orm import Session
 
 from ..config import settings
@@ -451,7 +453,15 @@ def mark_deleted_for_expiry(db: Session, *, file: File) -> PurgeEntry | None:
 # losing the durable orphan trace its docstring says a log line cannot replace.
 # The default local locator (~60 chars) fits; a longer STORAGE_ROOT or an S3
 # prefix does not.
-_AUDIT_TARGET_ID_MAX = AuditLog.__table__.c.target_id.type.length
+# `.type` is typed TypeEngine[Any], so the cast is what lets mypy see `.length`.
+# Reading the width off the column rather than repeating 64 is the point: a clip
+# to the wrong width is the same bug with a longer fuse. If the column ever
+# loses its width, `length` is None and `s[:None]` silently stops clipping - so
+# this raises at import instead of shipping a no-op clip.
+_target_id_type = cast(String, AuditLog.__table__.c.target_id.type)
+if _target_id_type.length is None:  # pragma: no cover - defends the invariant
+    raise RuntimeError("audit_log.target_id must declare a length to clip against")
+_AUDIT_TARGET_ID_MAX: int = _target_id_type.length
 
 
 def record_orphan_locator(db: Session, *, locator: str, reason: str) -> None:

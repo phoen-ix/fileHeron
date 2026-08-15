@@ -1,0 +1,23 @@
+# Alerts that a fileHeron ops unit failed. Instance name is the failing unit,
+# so both the backup and the restore drill share one template:
+#   OnFailure=fileheron-alert-failure@%n.service
+#
+# Install alongside the units it serves:
+#   sudo cp scripts/ops/fileheron-alert-failure@.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#
+# Sends through the app's own SMTP config and the app's alert-recipient policy
+# (Admin -> Settings -> Error alerts), so there is one place to configure who
+# hears about problems. It therefore needs the stack to be up; a failure caused
+# by the stack being down stays visible as `systemctl --failed` only.
+[Unit]
+Description=Alert that %i failed
+After=docker.service
+
+[Service]
+Type=oneshot
+User=getafix
+Group=getafix
+WorkingDirectory=/opt/fileHeron
+ExecStart=/opt/fileHeron/scripts/ops/notify_failure.sh %i
+TimeoutStartSec=120

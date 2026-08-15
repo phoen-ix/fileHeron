@@ -7,7 +7,9 @@
 # Runs backup.sh: dumps the DB, tars files+quarantine, snapshots Redis, writes a
 # sha256 manifest, optionally pushes to restic, and prunes to the last 7 local
 # backups. A non-zero exit marks the unit `failed` (systemctl --failed +
-# journald); wire OnFailure= to your alerting for a push/email.
+# journald) AND triggers fileheron-alert-failure@.service, which mails the
+# app's configured alert recipients. Install that unit too, or the OnFailure=
+# line below refers to a unit that does not exist.
 [Unit]
 Description=fileHeron nightly backup
 After=docker.service
@@ -22,5 +24,6 @@ ExecStart=/opt/fileHeron/scripts/backup.sh
 # DB dump + tarring files/quarantine can take a while on a large store.
 TimeoutStartSec=1800
 Nice=10
-# Uncomment + provide a unit to get alerted on a failed backup:
-# OnFailure=status-email@%n.service
+# Alerting on failure. fileheron-alert-failure@.service mails the app's
+# configured alert recipients; install it alongside this unit.
+OnFailure=fileheron-alert-failure@%n.service

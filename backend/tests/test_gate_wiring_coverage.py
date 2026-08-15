@@ -872,7 +872,7 @@ def test_scan_guard_clips_last_path_to_the_column_width():
     from app.services import scan_guard
 
     declared = IpBlock.__table__.c.last_path.type.length
-    assert scan_guard._LAST_PATH_MAX == declared, (
+    assert declared == scan_guard._LAST_PATH_MAX, (
         "the clip width drifted from the column width"
     )
 
@@ -886,7 +886,7 @@ def test_the_orphan_locator_clip_matches_its_column():
     from app.services import file as file_svc
 
     declared = AuditLog.__table__.c.target_id.type.length
-    assert file_svc._AUDIT_TARGET_ID_MAX == declared
+    assert declared == file_svc._AUDIT_TARGET_ID_MAX
     assert declared < 255, "the old clip was wider than the column; that is the bug"
 
 

@@ -235,6 +235,58 @@ def _disable_ip_rate_limit(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _isolated_transfer_marks(monkeypatch):
+    """Give transfer_activity a per-test in-memory Redis.
+
+    Its paid/serving marks go through a bare `get_redis()`, and the suite runs
+    inside the compose network - so without this the marks are written to the
+    LIVE Redis, where they both pollute production and leak BETWEEN tests: the
+    keys embed user and file ids, which restart at 1 for every test against the
+    in-memory DB, so one test's payment silently credits the next one's.
+    """
+    from app.services import transfer_activity
+
+    store: dict[str, str] = {}
+
+    class _Fake:
+        def set(self, key, value, ex=None, nx=False):
+            if nx and key in store:
+                return None
+            store[key] = value
+            return True
+
+        def get(self, key):
+            return store.get(key)
+
+        def delete(self, *keys):
+            for k in keys:
+                store.pop(k, None)
+
+        def zadd(self, key, mapping):
+            store.setdefault(key, {})
+            store[key].update(mapping)
+
+        def zrem(self, key, *members):
+            for m in members:
+                store.get(key, {}).pop(m, None)
+
+        def zcard(self, key):
+            return len(store.get(key, {}))
+
+        def zremrangebyscore(self, key, lo, hi):
+            d = store.get(key, {})
+            for m in [m for m, sc in d.items() if lo <= sc <= hi]:
+                d.pop(m, None)
+
+        def zscore(self, key, member):
+            return store.get(key, {}).get(member)
+
+    monkeypatch.setattr(transfer_activity, "get_redis", lambda: _Fake())
+    yield
+    store.clear()
+
+
+@pytest.fixture(autouse=True)
 def _reset_oidc_caches():
     """Discovery + JWKS caches are process-global; reset between tests
     so stale entries from one provider don't bleed into another."""

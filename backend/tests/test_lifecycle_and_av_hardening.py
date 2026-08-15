@@ -329,4 +329,14 @@ def test_a_failed_purge_leaves_a_durable_record(db, one_file, monkeypatch):
         .all()
     )
     assert len(rows) == 1, "no durable trace of bytes that are still on the volume"
-    assert rows[0].target_id == locator
+    # The full locator lives in `extra`, which is JSON and unbounded - that is
+    # the record's actual content, and it must be complete or an operator
+    # cannot find the bytes.
+    assert rows[0].extra["locator"] == locator
+    # target_id is String(64) and is an INDEX, not the payload. This used to
+    # assert the whole path fitted there, which the column cannot guarantee:
+    # the write clipped to 255, four times the width, so a long locator raised
+    # DataError under MariaDB strict mode and record_orphan_locator's own
+    # `except` swallowed it - losing the very record this test is named for.
+    assert len(rows[0].target_id) <= AuditLog.__table__.c.target_id.type.length
+    assert locator.startswith(rows[0].target_id)

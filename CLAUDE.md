@@ -15,16 +15,38 @@ keep this to what would cause a wrong move if unknown.
 
 ## Status
 
-**v2.12.0 is the 2026-08-15 audit fix wave** - 24 commits, every finding
+**v2.12.0 is the 2026-08-15 audit fix wave** - 31 commits, every finding
 reproduced before it was fixed and every fix mutation-checked. It closes two
 things that were costing this instance already (the upload reaper killing
 transfers over 3h; a single deleted file destroying the whole night's backup),
-five security gaps (2FA skipped on SSO **and** passkey logins, the mail
+six security gaps (2FA skipped on SSO **and** passkey logins, the mail
 test-connection credential leak, revoke-others not revoking, an unthrottled
-step-up prompt, four-eyes blind to group recipients), and a set of
-inbound/delivery defects. Desktop client **1.4.1** ships alongside it on its own
-tag. One finding was deliberately CLOSED as an accepted residual (replayed tus
-creation) with the reasoning in its commit.
+step-up prompt, four-eyes blind to group recipients, and the share LIST handing
+every recipient the full co-recipient roster), and a set of inbound/delivery
+defects. Desktop client **1.4.1** ships alongside it on its own tag. One finding
+was deliberately CLOSED as an accepted residual (replayed tus creation) with the
+reasoning in its commit.
+
+The audit's 48-lead unverified tail was triaged separately: 31 promote (0 high,
+3 medium, 28 low), 7 close, 5 defer, 5 already fixed here. **All three mediums
+are fixed** - the roster leak above, the admin live-status SSE route (mounted
+inside the global gate, which demands the Authorization header EventSource
+cannot send, so it had never once connected), and restic retention (below). The
+28 lows are a recorded backlog in `.claude/audit-2026-08-15.md`, which is
+**gitignored** - it exists only on this host.
+
+> **Two invariants from that tail.** The co-recipient privacy projection must be
+> applied on the LIST route as well as the detail serialiser - it existed only
+> on detail, and the list route then disclosed display names, roles and group
+> names, i.e. strictly MORE than detail shows a fully privileged viewer.
+> **A route that authenticates via a signed `?token=` cannot live behind
+> `_gate`**: the gate calls `get_actor`, which requires an Authorization header,
+> which is the exact thing EventSource cannot send. `admin.stream_router` and
+> `notifications.stream_router` are both mounted ungated in `main.py` for this
+> reason and must stay that way; folding either back into its parent router
+> re-breaks it silently, since the failure is a 401 that looks like any other.
+> The distinguishing evidence is the CODE: `AUTH_REQUIRED` = the gate refused
+> it, `INVALID_SSE_TOKEN` = the handler ran.
 
 **It HAS a migration** (`202608150001`, `files.last_progress_at`) so a rollback
 past it needs the [[reference_rollback_migration_trap]] `alembic stamp`
@@ -861,6 +883,19 @@ UUID where it leaves the system.
 ## Backups + restore
 
 → README §Backups & Restore (`scripts/backup.sh` → `./backups/<stamp>/{db.sql, files.tar.gz, quarantine.tar.gz, redis.rdb, manifest.txt}`, optional restic; `scripts/restore.sh` sha256-verifies + prompts literal `restore`). **Drilled:** `scripts/restore_drill_e2e.sh` restores the latest backup into an isolated throwaway compose project (own project name/data/port, never touches the live stack) + `alembic upgrade head` + `restore_validate.py`; the drill refuses an auto-selected backup older than `DRILL_MAX_BACKUP_AGE_HOURS` (48) so it cannot go green after backups stop. Last success in `backups/LAST_SUCCESSFUL_DRILL`. **`scripts/ops/*` schedules nothing until copied to `/etc/systemd/system/` and `systemctl enable --now`'d** - see the drill block above; on the reference host that step was never done.
+
+> **restic retention needs BOTH a stable tag and `--group-by ''`** (v2.12.0),
+> and either alone still fails. Every run writes a NEW dated directory, and
+> restic groups by `host,paths` by default - so each snapshot formed a group of
+> one and `--keep-daily 7` kept it: 30 nightly snapshots in, 30 out, retention
+> had never dropped anything. Meanwhile `forget` with no tag filter considers
+> EVERY snapshot in the repo, so on a shared repo ours were the only ones spared
+> - a co-tenant on an hourly cadence lost 10 of 12 per run. Hence
+> `backup --tag fileheron --tag "fileheron-$STAMP"` (the stamp identifies a
+> snapshot, it can never select the set) and `forget --tag fileheron
+> --group-by ''`. Snapshots predating this carry only the stamp tag and are not
+> selected - deliberate, since nothing was ever pruned before; README has the
+> one-off adoption command. Both halves measured against real restic.
 
 ## Back-filled subsystems (v1.15-v1.32)
 

@@ -161,6 +161,10 @@ app.include_router(notifications.router, dependencies=_gate)
 # headers) OR bearer for curl/CI. Same pattern as files.download_router.
 app.include_router(notifications.stream_router)
 app.include_router(admin.router, dependencies=_gate)
+# admin.stream_router intentionally NOT gated, same reason as
+# notifications.stream_router above: EventSource cannot send an Authorization
+# header, so the route auths via a signed `?token=` and checks admin itself.
+app.include_router(admin.stream_router)
 app.include_router(oidc_connect.router, dependencies=_gate)
 # The connect callback is a top-level IdP browser redirect (cookies only, no
 # Bearer); it authenticates via the signed state cookie, so it stays OUTSIDE _gate.

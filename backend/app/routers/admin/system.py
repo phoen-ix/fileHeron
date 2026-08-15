@@ -35,6 +35,15 @@ from ...utils.timeutil import utc_now
 
 router = APIRouter()
 
+# The SSE stream lives on its own router because it CANNOT sit behind the
+# global `_gate`: that gate calls get_actor, which requires an Authorization
+# header, and EventSource cannot send one - which is the entire reason this
+# endpoint accepts a signed `?token=` instead. Mounted ungated in main.py,
+# exactly as notifications.stream_router is. Until 2026-08-15 it was inside the
+# gate, so the admin system page's stream answered 401 AUTH_REQUIRED before
+# reaching this handler and had never once connected.
+stream_router = APIRouter()
+
 # Allowlist for the on-demand run endpoint = the cron schedule registry (single
 # source of truth, v1.28.0). Each is in WorkerSettings.functions (enqueueable by
 # name) and idempotent.
@@ -170,7 +179,7 @@ def system_status(
     }
 
 
-@router.get("/system/stream")
+@stream_router.get("/system/stream")
 async def system_stream(
     request: Request,
     db: Session = Depends(get_db),

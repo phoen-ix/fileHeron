@@ -52,3 +52,8 @@ _SUBROUTERS = (
 )
 for _sub in _SUBROUTERS:
     router.include_router(_sub.router)
+
+# Ungated sibling: see the comment on system.stream_router. main.py mounts this
+# WITHOUT `dependencies=_gate`; folding it into `router` above would re-break it.
+stream_router = APIRouter(prefix="/api/admin", tags=["admin"])
+stream_router.include_router(system.stream_router)

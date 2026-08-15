@@ -284,7 +284,9 @@
     "WEBAUTHN_VERIFY_FAILED": "The passkey could not be verified.",
     "WEBHOOK_NOT_FOUND": "Webhook not found.",
     "generic": "Something didn't work. Please try again.",
-    "STEP_UP_REQUIRED": "Confirm your password to continue."
+    "STEP_UP_REQUIRED": "Confirm your password to continue.",
+    "PENDING_2FA_EXPIRED": "That sign-in timed out. Please start again.",
+    "INVALID_RECOVERY_CODE": "That recovery code is not valid. Each code can only be used once."
   },
   "login": {
     "title": "Sign in",
@@ -2619,5 +2621,15 @@
     "err_max_below_base": "The longest block cannot be shorter than the first block.",
     "v6_prefix_label": "IPv6 grouping (prefix length)",
     "v6_prefix_help": "64 groups one LAN and is the safe default. Lower numbers group wider — but on hosting providers a wider prefix is NOT one customer: netcup, Hetzner and Vultr give one /64 per server, and OVH and Linode put several customers inside a single /64. A /48 there can be tens of thousands of unrelated tenants, which is why 56 is the widest offered. Only widen this if you have confirmed the range belongs to a single operator."
+  },
+  "login_2fa": {
+    "eyebrow": "Two-factor authentication",
+    "totp_help": "Enter the 6-digit code from your authenticator app to finish signing in.",
+    "recovery_help": "Enter one of your recovery codes. Each code works once.",
+    "totp_label": "Authentication code",
+    "recovery_label": "Recovery code",
+    "submit": "Continue",
+    "use_recovery": "Use a recovery code",
+    "use_totp": "Use an authenticator code"
   }
 }

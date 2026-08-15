@@ -30,10 +30,11 @@ from ..config import settings
 from ..dependencies import get_db
 from ..middleware.errors import AppError
 from ..services import auth as auth_svc
+from ..services import jwt_session, settings_registry
 from ..services import oidc as oidc_svc
 from ..services import oidc_admin as oidc_admin_svc
 from ..services import rate_limit as rate_limit_svc
-from ..services import settings_registry
+from ..services import totp as totp_svc
 
 logger = logging.getLogger("fileheron.routers.oidc")
 
@@ -139,6 +140,30 @@ async def _callback_inner(
         request=request,
     )
 
+    from ..services import site as site_svc
+
+    # A user with TOTP enabled must present it, whatever the first factor was.
+    # This path used to finalize outright, so enabling 2FA did nothing at all
+    # for anyone signing in through SSO - silently, which is the worst version.
+    # `twofa_policy.is_2fa_required` is the WRONG predicate here: it returns
+    # False once the user HAS TOTP, because it answers "must they still set it
+    # up". `totp_svc.is_enabled` is what the password flow asks.
+    if totp_svc.is_enabled(user):
+        # NB: record_success is NOT called yet. It clears failed_login_count and
+        # locked_until, so calling it at the first factor would hand a failing
+        # second factor a freshly reset lockout counter.
+        pending = jwt_session.create_pending_2fa_token(user.id, settings, via="oidc")
+        db.commit()
+        # The pending token rides the URL because the browser is mid-redirect
+        # and holds no session yet. It is why that token grants nothing on its
+        # own and lives five minutes.
+        resp = RedirectResponse(
+            url=f"{site_svc.get_site_url(db)}/login/2fa?pending={pending}",
+            status_code=302,
+        )
+        resp.delete_cookie(oidc_svc.STATE_COOKIE, path="/api/auth/oidc")
+        return resp
+
     rate_limit_svc.record_success(db, user=user)
     # The access token is deliberately discarded: the browser gets only the
     # httpOnly refresh cookie, and the SPA exchanges it on first paint.
@@ -147,7 +172,6 @@ async def _callback_inner(
     )
     db.commit()
 
-    from ..services import site as site_svc
     response = RedirectResponse(url=f"{site_svc.get_site_url(db)}/", status_code=302)
     response.set_cookie(
         key="fh_refresh",

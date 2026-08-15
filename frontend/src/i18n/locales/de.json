@@ -284,7 +284,9 @@
     "WEBAUTHN_VERIFY_FAILED": "Der Passkey konnte nicht verifiziert werden.",
     "WEBHOOK_NOT_FOUND": "Webhook nicht gefunden.",
     "generic": "Etwas hat nicht funktioniert. Bitte erneut versuchen.",
-    "STEP_UP_REQUIRED": "Bestätigen Sie Ihr Passwort, um fortzufahren."
+    "STEP_UP_REQUIRED": "Bestätigen Sie Ihr Passwort, um fortzufahren.",
+    "PENDING_2FA_EXPIRED": "Die Anmeldung ist abgelaufen. Bitte erneut versuchen.",
+    "INVALID_RECOVERY_CODE": "Dieser Wiederherstellungscode ist ungültig. Jeder Code kann nur einmal verwendet werden."
   },
   "login": {
     "title": "Anmelden",
@@ -2619,5 +2621,15 @@
     "err_max_below_base": "Die längste Sperre darf nicht kürzer sein als die erste Sperre.",
     "v6_prefix_label": "IPv6-Gruppierung (Präfixlänge)",
     "v6_prefix_help": "64 gruppiert ein einzelnes LAN und ist die sichere Voreinstellung. Kleinere Werte gruppieren weiter — bei Hosting-Anbietern ist ein weiteres Präfix aber NICHT ein Kunde: netcup, Hetzner und Vultr vergeben ein /64 pro Server, OVH und Linode teilen ein /64 sogar auf mehrere Kunden auf. Ein /48 kann dort Zehntausende nicht zusammengehörende Kunden umfassen — deshalb ist 56 der weiteste angebotene Wert. Erweitern Sie dies nur, wenn Sie sicher wissen, dass der Bereich zu einem einzigen Betreiber gehört."
+  },
+  "login_2fa": {
+    "eyebrow": "Zwei-Faktor-Authentifizierung",
+    "totp_help": "Geben Sie den 6-stelligen Code aus Ihrer Authenticator-App ein, um die Anmeldung abzuschließen.",
+    "recovery_help": "Geben Sie einen Ihrer Wiederherstellungscodes ein. Jeder Code funktioniert einmal.",
+    "totp_label": "Authentifizierungscode",
+    "recovery_label": "Wiederherstellungscode",
+    "submit": "Weiter",
+    "use_recovery": "Wiederherstellungscode verwenden",
+    "use_totp": "Authenticator-Code verwenden"
   }
 }

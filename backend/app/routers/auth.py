@@ -25,6 +25,7 @@ from ..models.refresh_token import RefreshToken
 from ..models.user import User
 from ..schemas.auth import (
     CancelEmailChangeRequest,
+    CompleteSecondFactorRequest,
     ConfirmEmailChangeRequest,
     ForgotPasswordRequest,
     LoginRecoveryRequest,
@@ -146,6 +147,44 @@ async def login_recovery(
         db,
         email=payload.email,
         password=payload.password,
+        recovery_code=payload.recovery_code,
+        request=request,
+        settings=settings,
+    )
+    db.commit()
+    _set_refresh_cookie(response, refresh_plain, db)
+    return LoginResponse(access_token=access, expires_in_seconds=expires_in)
+
+
+@router.post("/2fa/complete", status_code=status.HTTP_200_OK, response_model=LoginResponse)
+async def complete_second_factor(
+    payload: CompleteSecondFactorRequest,
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
+) -> LoginResponse:
+    """Finish a login that presented its first factor via OIDC or a passkey.
+
+    Neither of those paths challenged an enrolled TOTP factor - both went
+    straight to finalize_successful_login - so switching 2FA on did nothing for
+    anyone who signed in that way, silently. This is where the second factor is
+    actually demanded.
+
+    Throttled per-IP as well as by the account lockout the service applies:
+    the pending token names its own subject, so without an IP budget an
+    attacker holding one leaked token could grind TOTP codes at line rate.
+    """
+    ip = request.client.host if request.client else ""
+    if not rate_limit_svc.check_ip_allowed(
+        "twofa_complete", ip,
+        settings_registry.effective(db, settings_registry.K.RATE_LIMIT_LOGIN),
+    ):
+        raise AppError(429, "RATE_LIMITED", "Too many attempts; try again shortly.")
+
+    _user, access, expires_in, refresh_plain = await auth_svc.complete_pending_second_factor(
+        db,
+        pending_token=payload.pending_token,
+        totp_code=payload.totp_code,
         recovery_code=payload.recovery_code,
         request=request,
         settings=settings,

@@ -77,6 +77,67 @@ def create_access_token(user_id: int, settings, db: Session | None = None) -> tu
     return token, minutes * 60
 
 
+# A second factor cannot be demanded without somewhere to hold "first factor
+# done, second factor outstanding". There was no such state: create_access_token
+# minted exactly one token type, meaning "fully authenticated", with no amr/acr
+# claim, so no downstream dependency could tell a one-factor session from a
+# two-factor one. This is that state, kept deliberately additive - nothing about
+# the access token changes, and resolve_user_from_access_token already rejects
+# any type that is not "access", so a pending token fails closed everywhere a
+# real one is expected.
+PENDING_2FA_TTL_SEC = 300
+
+
+def create_pending_2fa_token(user_id: int, settings, *, via: str) -> str:
+    """Mint a short-lived credential proving only the FIRST factor.
+
+    Five minutes: long enough to open an authenticator app, short enough that a
+    token leaked via the redirect URL (referrer, history, shoulder) is stale
+    before it is useful. It grants nothing on its own - the only endpoint that
+    accepts it is the second-factor exchange.
+
+    `via` records which first factor was presented, so the audit trail on the
+    completed login still distinguishes an SSO login from a passkey one.
+    """
+    now_aware = utc_now_aware()
+    payload = {
+        "sub": str(user_id),
+        "iat": int(now_aware.timestamp()),
+        "exp": int((now_aware + timedelta(seconds=PENDING_2FA_TTL_SEC)).timestamp()),
+        "jti": uuid.uuid4().hex,
+        "type": "pending_2fa",
+        "via": via,
+    }
+    return jwt.encode(payload, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
+
+
+def resolve_pending_2fa_token(db: Session, token: str, settings: Settings) -> tuple[User, str]:
+    """Validate a pending-2FA token. Returns (user, via)."""
+    try:
+        payload = jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
+    except jwt.ExpiredSignatureError:
+        raise AppError(401, "PENDING_2FA_EXPIRED", "Sign-in timed out; start again.") from None
+    except jwt.InvalidTokenError:
+        raise AppError(401, "INVALID_TOKEN", "Invalid token.") from None
+
+    if payload.get("type") != "pending_2fa":
+        raise AppError(401, "INVALID_TOKEN", "Wrong token type.")
+    try:
+        user_id = int(payload["sub"])
+    except (KeyError, ValueError, TypeError):
+        raise AppError(401, "INVALID_TOKEN", "Invalid token claims.") from None
+
+    user = db.query(User).filter(User.id == user_id).one_or_none()
+    if user is None or user.is_disabled:
+        raise AppError(401, "AUTH_REQUIRED", "Authentication failed.")
+
+    iat = payload.get("iat")
+    if isinstance(iat, int) and was_issued_before_revocation(user, iat):
+        raise AppError(401, "SESSION_REVOKED", "This session was revoked.")
+
+    return user, str(payload.get("via") or "unknown")
+
+
 def resolve_user_from_access_token(db: Session, token: str, settings: Settings) -> User:
     try:
         payload = jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])

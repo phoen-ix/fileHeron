@@ -105,6 +105,27 @@ export const useAuthStore = defineStore('auth', () => {
     return applyUserLocale(me.data)
   }
 
+  /** Finish a login whose FIRST factor was SSO or a passkey.
+   *
+   *  Neither of those paths challenged an enrolled TOTP factor, so switching
+   *  2FA on did nothing for anyone who signed in that way. The backend now
+   *  hands back a short-lived pending token instead of a session, and this
+   *  exchanges it for the real one. */
+  async function completeSecondFactor(
+    pendingToken: string,
+    factor: { totpCode?: string; recoveryCode?: string },
+  ) {
+    const resp = await authApi.completeSecondFactor({
+      pending_token: pendingToken,
+      totp_code: factor.totpCode,
+      recovery_code: factor.recoveryCode,
+    })
+    setAccessToken(resp.data.access_token)
+    const me = await getMe()
+    user.value = me.data
+    return applyUserLocale(me.data)
+  }
+
   /** Passkey-as-second-factor login. Validates email + password,
    *  hands the user a WebAuthn challenge, then completes the
    *  ceremony to mint the same JWT + refresh-cookie as the
@@ -200,6 +221,7 @@ export const useAuthStore = defineStore('auth', () => {
     bootstrap,
     login,
     loginWithRecovery,
+    completeSecondFactor,
     loginWithPasskey,
     registerFromInvite,
     logout,

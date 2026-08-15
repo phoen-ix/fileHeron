@@ -40,8 +40,8 @@ from ..utils.crypto import (
 from ..utils.geohash import ip_geohash5
 from ..utils.timeutil import utc_now
 from ..utils.ua_fingerprint import ua_fingerprint_hash
+from . import jwt_session, settings_registry
 from . import rate_limit as rate_limit_svc
-from . import settings_registry
 from . import totp as totp_svc
 from .audit import record_audit_event
 from .hibp import assert_password_not_breached
@@ -847,3 +847,88 @@ async def change_password(
 
 # Convenience: re-export user role (kept simple - services have flat exports)
 _ALL_ROLES = (UserRole.admin, UserRole.employee, UserRole.client)
+
+
+async def complete_pending_second_factor(
+    db: Session,
+    *,
+    pending_token: str,
+    totp_code: str | None,
+    recovery_code: str | None,
+    request: Request | None,
+    settings,
+) -> tuple[User, str, int, str]:
+    """Exchange a pending-2FA token plus a second factor for a real session.
+
+    The first factor here was OIDC or a passkey, neither of which challenged an
+    enrolled TOTP factor: both called finalize_successful_login directly, so a
+    user who had switched 2FA on was fully authenticated by one factor. That is
+    not a missing branch but a missing STATE - there was no way to represent
+    "first factor done" - which is what jwt_session's pending token adds.
+
+    `twofa_policy.is_2fa_required` is deliberately NOT the predicate: it returns
+    False once a user HAS TOTP, because it answers "must they still set 2FA up".
+    The right question is `totp_svc.is_enabled`, exactly as the password flow
+    asks it.
+
+    Recovery codes are accepted, not just TOTP. The password flow has
+    /login/recovery as an alternate; without the equivalent here a user who
+    loses their authenticator and signs in through SSO has no route back into
+    their own account short of an operator on the host.
+    """
+    user, via = jwt_session.resolve_pending_2fa_token(db, pending_token, settings)
+    ip = _request_ip(request)
+
+    # Re-check account state: the pending token was minted in a prior request.
+    if rate_limit_svc.is_account_locked(user):
+        raise AppError(423, "ACCOUNT_LOCKED", "Account is temporarily locked.")
+    if not totp_svc.is_enabled(user):
+        # Nothing to challenge - refuse rather than mint a session, because a
+        # token issued for a 2FA user should never outlive their 2FA.
+        raise AppError(409, "TOTP_NOT_ENABLED", "Two-factor auth is not enabled.")
+
+    if recovery_code:
+        ok = totp_svc.consume_recovery_code(db, user=user, code=recovery_code, request=request)
+        outcome, reason = LoginOutcome.bad_recovery, "bad_recovery"
+    elif totp_code:
+        ok = totp_svc.verify_at_login(db, user=user, code=totp_code)
+        outcome, reason = LoginOutcome.bad_totp, "bad_totp"
+    else:
+        raise AppError(401, "TOTP_REQUIRED", "Two-factor code required.")
+
+    if not ok:
+        just_locked, _should_email = rate_limit_svc.record_failure(db, user=user)
+        _record_login_attempt(db, email_value=user.email, ip=ip, outcome=outcome)
+        record_audit_event(
+            db,
+            event_type=AuditEventType.login_failure,
+            actor_user_id=user.id,
+            target_type="user",
+            target_id=user.id,
+            metadata={"reason": reason, "via": via, "just_locked": just_locked},
+            request=request,
+        )
+        if just_locked:
+            record_audit_event(
+                db,
+                event_type=AuditEventType.account_locked,
+                actor_user_id=user.id,
+                target_type="user",
+                target_id=user.id,
+                request=request,
+            )
+        db.commit()
+        raise AppError(
+            401,
+            "INVALID_RECOVERY_CODE" if recovery_code else "INVALID_TOTP",
+            "Recovery code is invalid." if recovery_code else "Two-factor code is invalid.",
+        )
+
+    # Only NOW is the login complete. record_success clears failed_login_count
+    # and locked_until, so calling it at the first factor - as the OIDC callback
+    # used to - handed a failing second factor a freshly reset lockout counter.
+    rate_limit_svc.record_success(db, user=user)
+    access, expires_in, refresh_plain = finalize_successful_login(
+        db, user=user, request=request, settings=settings, via=f"{via}+2fa",
+    )
+    return user, access, expires_in, refresh_plain

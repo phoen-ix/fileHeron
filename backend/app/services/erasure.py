@@ -205,12 +205,23 @@ def _erase_user_locked(
     # the whole erasure - partial erasure would leave the user
     # half-anonymised AND lie in the receipt PDF that admins hand back.
     # Better: raise, let admin clean the disk, retry.
+    # Deliberately NOT filtered on `state != deleted`. By the time an Art.17
+    # request arrives, most of a subject's files are already `deleted` - every
+    # expiry sweep marks them so and RETAINS original_filename - and nothing
+    # ever prunes those rows. Skipping them left the subject's real filenames
+    # listable indefinitely through the admin file browser, which drops the
+    # state filter under include_inactive and ships a literal "deleted" option
+    # in its UI.
+    #
+    # Including them is safe: hard_delete early-returns on a row already
+    # `deleted`, before releasing quota and before writing its audit row, so
+    # there is no double credit and no double count. The loop's own
+    # deleted_bytes/deleted_count are overwritten further down by
+    # _erased_file_totals, which counts audit rows, so an already-deleted file
+    # contributes zero to the receipt either way.
     files = (
         db.query(File)
-        .filter(
-            File.uploaded_by_id == target.id,
-            File.state != FileState.deleted,
-        )
+        .filter(File.uploaded_by_id == target.id)
         .all()
     )
     deleted_count = 0
@@ -586,6 +597,35 @@ def _erase_user_locked(
         if row.id not in seen_rows:
             seen_rows.add(row.id)
             scrubbed += 1
+    # Filenames are PII too, and the pass above cannot reach them: it matches
+    # values that ARE e-mail addresses, and a filename never is. Every tus
+    # upload writes a `file_finalized` row carrying {"filename": ...} with the
+    # uploader as actor, and expiry writes `file_expired` the same way - so
+    # after an erasure an admin could still recover the subject's filenames
+    # from /api/admin/audit-log?actor_user_id=<id> and its CSV export, which
+    # the file-row scrub above was specifically written to prevent.
+    for row in (
+        db.query(AuditLog)
+        .filter(
+            AuditLog.event_type.in_(
+                (
+                    AuditEventType.file_finalized.value,
+                    AuditEventType.file_expired.value,
+                )
+            ),
+            AuditLog.actor_user_id == target.id,
+        )
+        .all()
+    ):
+        extra = dict(row.extra or {})
+        if "filename" not in extra:
+            continue
+        extra["filename"] = "[erased]"
+        row.extra = extra
+        if row.id not in seen_rows:
+            seen_rows.add(row.id)
+            scrubbed += 1
+
     pii_purged["audit_log_scrubbed"] = scrubbed
 
     # Deliberately retained: `share_recipients` rows reference the (now

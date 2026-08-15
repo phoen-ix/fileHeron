@@ -272,3 +272,65 @@ def test_pii_purged_accounts_for_every_new_purge(db, admin, victim):
     db.commit()
     for key in ("error_log_scrubbed", "group_members", "inbound_attachments"):
         assert key in result["pii_purged"], f"{key} is not accounted for in the receipt"
+
+
+# --- filenames on rows that were already `deleted` ---------------------------
+
+
+def test_erasure_scrubs_filenames_on_already_deleted_rows(db, make_user):
+    """By the time an Art.17 request arrives, most of a subject's files are
+    already `deleted` - every expiry sweep marks them so and RETAINS
+    original_filename, and nothing prunes those rows. The erasure loop skipped
+    exactly those, so the subject's real filenames stayed listable through the
+    admin file browser, which drops the state filter under include_inactive."""
+    from app.models.file import File, FileState
+    from app.models.share import Share, ShareKind, ShareState
+    from app.models.user import UserRole
+    from app.services import erasure
+
+    admin = make_user(email="adm@test.local", role=UserRole.admin)
+    subject = make_user(email="subj@test.local", role=UserRole.client)
+    share = Share(created_by_id=subject.id, kind=ShareKind.outbound, subject="s",
+                  expires_at=None, state=ShareState.active)
+    db.add(share)
+    db.flush()
+    db.add(File(
+        share_id=share.id, original_filename="severance-agreement.pdf",
+        mime_type="application/pdf", size_bytes=10,
+        state=FileState.deleted, uploaded_by_id=subject.id,
+    ))
+    db.commit()
+
+    erasure.erase_user(db, target=subject, actor=admin, request=None)
+
+    names = [f.original_filename for f in db.query(File).all()]
+    assert "severance-agreement.pdf" not in names, names
+    assert names == ["[erased]"]
+
+
+def test_erasure_scrubs_filenames_out_of_the_audit_log(db, make_user):
+    """Every tus upload writes file_finalized carrying {"filename": ...} with
+    the uploader as actor. The existing audit scrub matches values that ARE
+    e-mail addresses, and a filename never is - so the names survived it and
+    stayed recoverable from /api/admin/audit-log?actor_user_id=<id>."""
+    from app.models.audit_log import AuditEventType, AuditLog
+    from app.models.user import UserRole
+    from app.services import erasure
+
+    admin = make_user(email="adm2@test.local", role=UserRole.admin)
+    subject = make_user(email="subj2@test.local", role=UserRole.client)
+    db.add(AuditLog(
+        event_type=AuditEventType.file_finalized.value,
+        actor_user_id=subject.id, target_type="file", target_id="f-1",
+        extra={"size_bytes": 10, "filename": "medical-report.pdf"},
+    ))
+    db.commit()
+
+    erasure.erase_user(db, target=subject, actor=admin, request=None)
+
+    rows = (
+        db.query(AuditLog)
+        .filter(AuditLog.event_type == AuditEventType.file_finalized.value)
+        .all()
+    )
+    assert rows and all(r.extra["filename"] == "[erased]" for r in rows)

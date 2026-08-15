@@ -246,3 +246,49 @@ def test_the_highwater_advances_before_the_parse(db, imap_enabled, monkeypatch):
         "the highwater was not persisted before the parse, so a process kill "
         "re-selects this message on every subsequent poll, forever"
     )
+
+
+# --- the shapes the old Content-Type heuristic could not see -----------------
+
+
+def test_bare_parts_are_counted():
+    """A MIME part needs no Content-Type of its own - RFC 2045 defaults it to
+    text/plain - so `raw.count(b"Content-Type:")` returned 1 for a message the
+    parser expands into 200,001 Message objects. Measured, not theorised."""
+    from email import message_from_bytes
+
+    from app.services import imap_poll
+
+    hdr = b"From: a@b\r\nContent-Type: multipart/mixed; boundary=bb\r\n\r\n"
+    bomb = hdr + b"--bb\r\n\r\nx\r\n" * 20_000
+
+    assert bomb.count(b"Content-Type:") == 1, "the old signal, for the record"
+    estimated = imap_poll.estimate_mime_parts(bomb)
+    actual = len(list(message_from_bytes(bomb).walk()))
+    assert estimated >= actual - 1, (estimated, actual)
+    assert estimated > imap_poll.MAX_MESSAGE_PARTS
+
+
+def test_a_lowercase_content_type_is_counted():
+    """Header names are case-insensitive per RFC 5322, so `content-type:` was
+    an equally trivial bypass of the old substring."""
+    from app.services import imap_poll
+
+    hdr = b"From: a@b\r\nContent-Type: multipart/mixed; boundary=bb\r\n\r\n"
+    raw = hdr + b"--bb\r\ncontent-type: text/plain\r\n\r\nx\r\n" * 20
+
+    assert imap_poll.estimate_mime_parts(raw) >= 20
+
+
+def test_an_ordinary_message_is_nowhere_near_the_cap():
+    """The bound must not start refusing real mail - a signature convention is
+    `-- ` (dash dash SPACE), which must not read as a boundary."""
+    from app.services import imap_poll
+
+    raw = (
+        b"From: a@b\r\nContent-Type: multipart/mixed; boundary=bb\r\n\r\n"
+        b"--bb\r\nContent-Type: text/plain\r\n\r\nhello\r\n"
+        b"-- \r\nregards\r\n"
+        b"--bb--\r\n"
+    )
+    assert imap_poll.estimate_mime_parts(raw) < 10

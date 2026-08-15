@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import contextlib
 import logging
+import re
 import secrets
 
 from sqlalchemy.orm import Session
@@ -35,6 +36,29 @@ MAX_MESSAGE_BYTES = 64 * 1024 * 1024
 # limit. 5,000 parts is far above any real mail and far below the ~340,000 that
 # first threatened a 512 MB worker in measurement.
 MAX_MESSAGE_PARTS = 5_000
+
+# A MIME part needs no Content-Type of its own - RFC 2045 defaults it to
+# text/plain - so counting that header alone was wrong in BOTH directions, and
+# trivially so. Measured: 200,000 bare `--bb` parts give a Content-Type count of
+# 1 while email.message_from_bytes builds 200,001 Message objects; a lowercase
+# `content-type:` (equally legal) was likewise invisible. In the other direction
+# a forwarded thread or an attached .eml inflates the count and skips
+# legitimate mail.
+#
+# Boundary delimiters are what the parser actually splits on, so count those
+# too and take the larger estimate. `^--\S` deliberately does not match the
+# `-- ` signature convention (dash dash SPACE).
+_BOUNDARY_LINE_RE = re.compile(rb"(?m)^--\S")
+_CONTENT_TYPE_RE = re.compile(rb"(?mi)^content-type:")
+
+
+def estimate_mime_parts(raw: bytes) -> int:
+    """Upper-bound the Message objects a parse of `raw` will build."""
+    return max(
+        len(_CONTENT_TYPE_RE.findall(raw)),
+        len(_BOUNDARY_LINE_RE.findall(raw)),
+    )
+
 
 # Messages handled per run. The first poll against an existing mailbox searched
 # ALL and iterated the lot: enabling inbound on an account with years of history
@@ -242,7 +266,7 @@ def run_poll(*, manual: bool, db: Session | None = None, session_opener=open_ses
                     # by hand. Exactly the wedge the size guard was added to
                     # close, reachable by a dimension it did not measure
                     # (audit #2, inbound).
-                    parts = raw.count(b"Content-Type:")
+                    parts = estimate_mime_parts(raw)
                     if parts > MAX_MESSAGE_PARTS:
                         skipped += 1
                         logger.warning(

@@ -342,3 +342,85 @@ def test_4xx_alert_requires_source_and_allowlist(db, make_user, fake_redis):
     # A 4xx code NOT in the allowlist still won't alert.
     ev409 = _http_4xx_event(status=409, code="CONFLICT")
     assert error_alert.handle_error_event(db, ev409)["status"] == "source_disabled"
+
+
+# --- ops alerts (systemd OnFailure=) ---------------------------------------
+#
+# send_to_configured_recipients is the entry point backend/scripts/send_ops_alert.py
+# uses, which scripts/ops/notify_failure.sh invokes from systemd's OnFailure=.
+# It shares the recipient policy with HTTP error alerting but deliberately NOT
+# the enable/cooldown/cap machinery.
+
+
+def _ops_payload(code="BACKUP_FAILED", unit="fileheron-backup.service"):
+    return {
+        "source": "ops",
+        "exception_type": None,
+        "message": f"{unit} failed",
+        "method": None,
+        "path": None,
+        "job_name": unit,
+        "status_code": None,
+        "code": code,
+        "at": utc_now().isoformat(),
+        "occurrences": 1,
+    }
+
+
+def test_ops_alert_reaches_admins_even_when_error_alerting_is_off(db, make_user):
+    """The whole point: a failed backup must notify whether or not an admin has
+    switched on email-on-server-error. Gating this on error_alert.enabled would
+    make the backup silent on a stock install, which is the default."""
+    make_user(email="a1@test.local", role=UserRole.admin)
+    make_user(email="a2@test.local", role=UserRole.admin)
+    make_user(email="off@test.local", role=UserRole.admin, is_disabled=True)
+    make_user(email="c@test.local", role=UserRole.client)
+    # error_alert.enabled deliberately left at its default (off).
+    assert settings_svc.get(db, K.ERROR_ALERT_ENABLED) in (None, "", "false")
+
+    sent = error_alert.send_to_configured_recipients(db, _ops_payload())
+
+    assert sent == 2  # enabled admins only
+    assert db.query(Notification).filter(
+        Notification.category == NotificationCategory.server_error
+    ).count() == 2
+
+
+def test_ops_alert_honours_custom_recipients(db, monkeypatch):
+    settings_svc.set_value(db, key=K.ERROR_ALERT_RECIPIENTS_MODE, value="custom", actor=None)
+    settings_svc.set_value(
+        db, key=K.ERROR_ALERT_CUSTOM_RECIPIENTS, value="ops@corp.local", actor=None
+    )
+    db.commit()
+    queued = []
+    from app.services import job_queue
+
+    monkeypatch.setattr(job_queue, "enqueue", lambda name, **kw: queued.append(kw))
+
+    sent = error_alert.send_to_configured_recipients(db, _ops_payload())
+
+    assert sent == 1
+    assert [kw["to"] for kw in queued] == ["ops@corp.local"]
+
+
+def test_ops_alert_reports_zero_when_nobody_would_be_told(db):
+    """send_ops_alert.py exits non-zero on 0 so the alert unit itself goes
+    `failed` rather than silently reaching nobody."""
+    settings_svc.set_value(db, key=K.ERROR_ALERT_RECIPIENTS_MODE, value="custom", actor=None)
+    settings_svc.set_value(db, key=K.ERROR_ALERT_CUSTOM_RECIPIENTS, value="", actor=None)
+    db.commit()
+
+    assert error_alert.send_to_configured_recipients(db, _ops_payload()) == 0
+
+
+def test_no_recipients_path_reports_cleanly(db, fake_redis):
+    """The zero-recipients branch logs and returns a status. It had no test, so
+    a refactor that dropped the local it interpolated went green anyway - ruff
+    caught the NameError, not the suite."""
+    _enable(
+        db,
+        **{K.ERROR_ALERT_RECIPIENTS_MODE: "custom", K.ERROR_ALERT_CUSTOM_RECIPIENTS: ""},
+    )
+    res = error_alert.handle_error_event(db, _http_event())
+    assert res["status"] == "no_recipients"
+    assert res["recipients"] == 0

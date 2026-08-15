@@ -303,7 +303,7 @@ jobs:
       - name: shellcheck
         run: |
           docker run --rm -v "$PWD:/mnt" -w /mnt koalaman/shellcheck-alpine:v0.10.0 \
-            shellcheck --severity=warning install.sh scripts/*.sh
+            shellcheck --severity=warning install.sh scripts/*.sh scripts/ops/*.sh
       - name: actionlint
         run: |
           docker run --rm -v "$PWD:/repo" -w /repo \

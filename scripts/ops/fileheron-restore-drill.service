@@ -6,8 +6,10 @@
 # Runs restore_drill_e2e.sh, which: verifies the latest backup's artifacts, then
 # restores it into an ISOLATED throwaway compose project and runs
 # restore_validate.py - never touching the live stack. A non-zero exit marks the
-# unit `failed` (visible in `systemctl --failed` + journald). Wire OnFailure= to
-# your alerting if you want a push/email.
+# unit `failed` (visible in `systemctl --failed` + journald) AND triggers
+# fileheron-alert-failure@.service, which mails the app's configured alert
+# recipients. Install that unit too, or the OnFailure= line below refers to a
+# unit that does not exist.
 [Unit]
 Description=fileHeron end-to-end backup restore drill
 After=docker.service
@@ -22,5 +24,6 @@ ExecStart=/opt/fileHeron/scripts/restore_drill_e2e.sh
 # DB import + forward-migration + validate can take a few minutes.
 TimeoutStartSec=1800
 Nice=10
-# Uncomment + provide a unit to get alerted on a failed drill:
-# OnFailure=status-email@%n.service
+# Alerting on failure. fileheron-alert-failure@.service mails the app's
+# configured alert recipients; install it alongside this unit.
+OnFailure=fileheron-alert-failure@%n.service

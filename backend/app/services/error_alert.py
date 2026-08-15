@@ -307,6 +307,27 @@ def _send_to_custom(db: Session, payload: dict[str, Any], addrs: list[str]) -> i
     return sent
 
 
+def send_to_configured_recipients(db: Session, payload: dict[str, Any]) -> int:
+    """Fan one `server_error` payload out to whoever the recipient policy names.
+
+    Public because operator tooling reaches the same people through the same
+    funnel: `backend/scripts/send_ops_alert.py`, which systemd's `OnFailure=`
+    invokes when a backup or restore drill fails, has no other way to find the
+    admins or to reach SMTP (the host's .env carries no SMTP_HOST on a deploy
+    that configured mail through the admin UI, and smtp.password is Fernet-
+    encrypted under a key derived from JWT_SECRET).
+
+    Deliberately does NOT consult `error_alert.enabled`, the cooldown or the
+    hourly cap: those govern HTTP error alerting, and a failed backup must
+    notify whether or not an admin has switched that on.
+    """
+    mode = (settings_svc.get(db, K.ERROR_ALERT_RECIPIENTS_MODE) or "admins").strip().lower()
+    if mode == "custom":
+        addrs = _parse_recipients(settings_svc.get(db, K.ERROR_ALERT_CUSTOM_RECIPIENTS))
+        return _send_to_custom(db, payload, addrs)
+    return _send_to_admins(db, payload)
+
+
 # ---------------------------------------------------------------------------
 # Entry point (called by the notify_admin_error worker job)
 # ---------------------------------------------------------------------------
@@ -390,12 +411,7 @@ def _maybe_alert(
         return {"status": "deduped", "occurrences": decision.occurrence_count}
 
     payload = _build_payload(event, decision)
-    mode = (settings_svc.get(db, K.ERROR_ALERT_RECIPIENTS_MODE) or "admins").strip().lower()
-    if mode == "custom":
-        addrs = _parse_recipients(settings_svc.get(db, K.ERROR_ALERT_CUSTOM_RECIPIENTS))
-        sent = _send_to_custom(db, payload, addrs)
-    else:
-        sent = _send_to_admins(db, payload)
+    sent = send_to_configured_recipients(db, payload)
     if sent and row_id:
         error_log_svc.mark_alerted(db, row_id)
         db.commit()
@@ -408,7 +424,8 @@ def _maybe_alert(
         logger.error(
             "error alert for %s resolved to NO recipients (mode=%s) - the alert "
             "was not delivered to anyone",
-            sig, mode,
+            sig,
+            settings_svc.get(db, K.ERROR_ALERT_RECIPIENTS_MODE) or "admins",
         )
         return {"status": "no_recipients", "signature": sig, "recipients": 0}
     return {"status": "sent", "signature": sig, "recipients": sent}

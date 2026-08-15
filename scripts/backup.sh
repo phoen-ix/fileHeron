@@ -86,10 +86,43 @@ MYSQL_PWD="$DB_ROOT_PASSWORD" docker compose exec -T -e MYSQL_PWD db \
     "$DB_NAME" > "$DEST/db.sql"
 
 # 2. Files + quarantine.
-echo "[backup] archiving data/files …"
-tar -C "$ROOT/data" -czf "$DEST/files.tar.gz" files
-echo "[backup] archiving data/quarantine …"
-tar -C "$ROOT/data" -czf "$DEST/quarantine.tar.gz" quarantine
+#
+# tar exits 1 - not 0 - when a file it is walking disappears underneath it
+# ("File removed before we read it"). Under `set -e` that aborted the run and
+# fired the EXIT trap above, which deletes the staging directory INCLUDING the
+# already-complete db.sql: one routine deletion cost the whole night's backup,
+# and the only trace was a `failed` unit. The deleter is ordinary - expire_files
+# is an hourly INTERVAL cron so its firing time drifts through the backup
+# window, and reclaim_orphaned_files runs 02:51 in the SITE timezone while the
+# timer fires 03:00 in the HOST's, so the nine-minute gap is not a separation at
+# all.
+#
+# Exit 1 is tar's warning class and the archive it produces is complete and
+# extractable (measured: GNU tar 1.35, `tar -tzf` clean). Exit >=2 is a real
+# error and must stay fatal. Note `--warning=no-file-removed` silences the
+# message but does NOT change the exit status, so it is not a fix.
+archive_tree() {
+    local tree="$1" out="$2" rc=0
+
+    echo "[backup] archiving data/$tree …"
+    set +e
+    tar -C "$ROOT/data" -czf "$out" "$tree"
+    rc=$?
+    set -e
+
+    if [ "$rc" -eq 1 ]; then
+        echo "[backup] WARNING: data/$tree changed while it was being archived;" \
+             "the archive is complete but is not a point-in-time image"
+        echo "$tree: tar exit 1 - files changed or were removed during archiving" \
+            >> "$DEST/warnings.txt"
+    elif [ "$rc" -ne 0 ]; then
+        echo "[backup] FATAL: tar failed on data/$tree (exit $rc)" >&2
+        exit "$rc"
+    fi
+}
+
+archive_tree files "$DEST/files.tar.gz"
+archive_tree quarantine "$DEST/quarantine.tar.gz"
 
 # 3. Redis snapshot - issue SAVE then copy dump.rdb out of the container.
 echo "[backup] saving Redis …"

@@ -42,6 +42,11 @@ class AuditEventType(str, enum.Enum):
     recovery_code_used = "recovery_code_used"              # Phase 1b
     account_locked = "account_locked"                      # Phase 1b
     rate_limited = "rate_limited"                          # Phase 1b
+    # Re-auth gate refused (services/step_up.py). Deliberately NOT login_failure:
+    # these are not logins, and folding them in would pollute the login-failure
+    # dashboards and feed anomaly.login_stuffing, which counts distinct emails
+    # per IP. No migration - event_type is String(64) with a Python-side enum.
+    step_up_failed = "step_up_failed"
     share_created = "share_created"                        # Phase 3a/4
     share_revoked = "share_revoked"                        # Phase 3a/4
     share_expired = "share_expired"                        # Phase 4

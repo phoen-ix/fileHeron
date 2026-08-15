@@ -205,7 +205,7 @@ def admin_create_api_token(
 ) -> CreateApiTokenResponse:
     from ...services.step_up import verify_password_or_403
 
-    verify_password_or_403(admin, payload.password)
+    verify_password_or_403(db, admin, payload.password, request=request)
     target = (
         db.query(User).filter(User.id == payload.target_user_id).one_or_none()
     )

@@ -225,6 +225,13 @@ def _disable_ip_rate_limit(monkeypatch):
     monkeypatch.setattr(
         rate_limit, "check_ip_allowed", lambda *_a, **_kw: True
     )
+    # Same rationale for the per-USER re-auth throttle (step-up). Its Redis
+    # fallback `_local_allow` keeps state in a module-level dict, so without
+    # this a file's cumulative wrong-password tests trip the limit and later
+    # tests see 429 instead of the 403 they assert. Tests that target the
+    # throttle itself re-enable it explicitly (see test_step_up_gates.py).
+    monkeypatch.setattr(rate_limit, "check_user_allowed", lambda *_a, **_kw: True)
+    monkeypatch.setattr(rate_limit, "reset_user_window", lambda *_a, **_kw: None)
 
 
 @pytest.fixture(autouse=True)

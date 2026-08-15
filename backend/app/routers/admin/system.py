@@ -349,7 +349,7 @@ class UpdateApplyRequest(BaseModel):
         return v
 
 
-def _verify_password_or_403(user: User, password: str) -> None:
+def _verify_password_or_403(db: Session, user: User, password: str, *, request: Request) -> None:
     """Thin alias for services/step_up.verify_password_or_403.
 
     The rule moved to a service so the config-backup and erasure routes could
@@ -358,7 +358,7 @@ def _verify_password_or_403(user: User, password: str) -> None:
     it is."""
     from ...services.step_up import verify_password_or_403
 
-    verify_password_or_403(user, password)
+    verify_password_or_403(db, user, password, request=request)
 
 
 def _dispatch_ops_to_admins(db: Session, payload: dict, link_url: str) -> None:
@@ -418,7 +418,7 @@ def apply_update(
     from ...services import release_apply
     from ...services.audit import record_audit_event
 
-    _verify_password_or_403(admin, payload.password)
+    _verify_password_or_403(db, admin, payload.password, request=request)
     if not payload.target_tag:
         raise AppError(400, "INVALID_INPUT", "target_tag is required.")
 
@@ -503,7 +503,7 @@ def apply_rollback(
     from ...services import release_apply
     from ...services.audit import record_audit_event
 
-    _verify_password_or_403(admin, payload.password)
+    _verify_password_or_403(db, admin, payload.password, request=request)
     result = release_apply.apply(action="rollback", target_tag=None)
 
     record_audit_event(
@@ -555,7 +555,7 @@ def force_pending_update(
     drain. Password re-auth, same as the initial Update."""
     from ...services import maintenance as maintenance_svc
 
-    _verify_password_or_403(admin, payload.password)
+    _verify_password_or_403(db, admin, payload.password, request=request)
     result = maintenance_svc.apply_pending_update(
         db, actor=admin, request=request, reason="admin_force"
     )

@@ -147,6 +147,59 @@ def check_ip_allowed(bucket: str, ip: str, limit: int, window_sec: int = _LOGIN_
 
 
 # ---------------------------------------------------------------------------
+# Per-identity throttle for re-auth gates (step-up), deliberately NOT the
+# lockout below.
+# ---------------------------------------------------------------------------
+#
+# A step-up prompt is guessed by someone who already holds the session, so an
+# IP bucket is the wrong key: a stolen token on rotating egress is barely
+# throttled, while colleagues behind one NAT share a budget. Keying on the user
+# binds the limit to the thing actually under attack.
+#
+# It must NOT be `record_failure` below. That writes users.locked_until, which
+# is read by the LOGIN path - so a hijacked session could deliberately lock the
+# real admin out of the login page by failing step-up a few times. That exact
+# shape (an auth-failure signal with a blast radius wider than intended) is what
+# 2b2117a had to undo in production. This counter locks nothing and expires on
+# its own; the worst it does is make the caller wait.
+
+
+def _user_key(bucket: str, user_id: int) -> str:
+    return f"fh:rl:{bucket}:user:{user_id}"
+
+
+def check_user_allowed(bucket: str, user_id: int, limit: int, window_sec: int = 900) -> bool:
+    """True if this user may make another attempt in `bucket`. INCRs the counter.
+
+    Fails OPEN on a Redis outage, like every other limiter here: the thing it
+    guards still demands a correct password, so an outage must not make a
+    legitimate admin unable to export a backup.
+    """
+    if not user_id or limit <= 0:
+        return True
+    try:
+        redis = get_redis()
+        key = _user_key(bucket, user_id)
+        count = redis.incr(key)
+        if count == 1:
+            redis.expire(key, window_sec)
+        return count <= limit
+    except Exception:
+        logger.warning("%s user rate-limit: Redis unavailable, using in-process fallback", bucket)
+        return _local_allow(_user_key(bucket, user_id), limit, window_sec)
+
+
+def reset_user_window(bucket: str, user_id: int) -> None:
+    """Clear the counter after a success, so ordinary use never accumulates."""
+    if not user_id:
+        return
+    try:
+        get_redis().delete(_user_key(bucket, user_id))
+    except Exception:
+        pass
+
+
+# ---------------------------------------------------------------------------
 # Per-account lockout
 # ---------------------------------------------------------------------------
 

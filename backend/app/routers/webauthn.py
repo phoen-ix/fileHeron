@@ -35,8 +35,9 @@ from ..schemas.webauthn import (
     WebAuthnRegisterCompleteRequest,
 )
 from ..services import auth as auth_svc
+from ..services import jwt_session, settings_registry
 from ..services import rate_limit as rate_limit_svc
-from ..services import settings_registry
+from ..services import totp as totp_svc
 from ..services import webauthn as webauthn_svc
 from ..services.audit import record_audit_event
 
@@ -186,6 +187,21 @@ async def auth_complete(
         raise AppError(423, "ACCOUNT_LOCKED", "Account is temporarily locked.")
     if not user.email_verified:
         raise AppError(403, "EMAIL_NOT_VERIFIED", "Please verify your email first.")
+
+    # A passkey is not automatically a second factor: /begin asks for
+    # UserVerificationRequirement.PREFERRED and verification runs with
+    # require_user_verification=False, so the ceremony may well have been a
+    # single possession factor. If the account has TOTP enabled, demand it -
+    # otherwise enabling 2FA silently did nothing for anyone who signs in with
+    # a passkey, exactly as it did nothing for SSO before this wave.
+    if totp_svc.is_enabled(user):
+        # record_success deliberately withheld until the second factor passes:
+        # it clears failed_login_count and locked_until.
+        pending = jwt_session.create_pending_2fa_token(user.id, settings, via="webauthn")
+        db.commit()
+        # Shape mirrors the success return: the SPA branches on which key is
+        # present rather than on a status code.
+        return {"pending_2fa_token": pending}
 
     # Mint the same session + forensic trail the password flow produces.
     rate_limit_svc.record_success(db, user=user)

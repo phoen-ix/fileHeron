@@ -14,6 +14,14 @@ export function login(payload: { email: string; password: string; totp_code?: st
   return api.post<LoginResponse>('/auth/login', payload)
 }
 
+export function completeSecondFactor(payload: {
+  pending_token: string
+  totp_code?: string
+  recovery_code?: string
+}) {
+  return api.post<LoginResponse>('/auth/2fa/complete', payload)
+}
+
 export function loginWithRecovery(payload: {
   email: string
   password: string

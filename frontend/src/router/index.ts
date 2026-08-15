@@ -43,6 +43,15 @@ const router = createRouter({
       meta: { public: true, density: 'editorial', titleKey: 'login' },
     },
     {
+      // Second factor for a login whose first factor was SSO or a passkey.
+      // Public because the browser holds no session at this point - it carries
+      // only a short-lived pending token that grants nothing on its own.
+      path: '/login/2fa',
+      name: 'login-2fa',
+      component: () => import('@/views/LoginSecondFactor.vue'),
+      meta: { public: true, density: 'editorial', titleKey: 'login' },
+    },
+    {
       path: '/register/:token',
       name: 'register',
       component: () => import('@/views/RegisterFromInvite.vue'),

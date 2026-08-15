@@ -30,6 +30,20 @@ class LoginRecoveryRequest(APIBaseModel):
     recovery_code: str = Field(..., min_length=4, max_length=32)
 
 
+class CompleteSecondFactorRequest(APIBaseModel):
+    """Exchange a pending-2FA token for a real session.
+
+    `pending_token` proves the FIRST factor only (OIDC or a passkey) and grants
+    nothing on its own - this is the only endpoint that accepts it. Exactly one
+    of totp_code / recovery_code is expected; recovery is accepted because
+    otherwise an SSO user who loses their authenticator has no way back in.
+    """
+
+    pending_token: str = Field(..., min_length=1, max_length=4096)
+    totp_code: str | None = Field(default=None, min_length=6, max_length=8)
+    recovery_code: str | None = Field(default=None, min_length=1, max_length=64)
+
+
 class LoginResponse(APIBaseModel):
     access_token: str
     expires_in_seconds: int

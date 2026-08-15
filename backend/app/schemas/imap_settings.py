@@ -66,6 +66,11 @@ class TestImapRequest(APIBaseModel):
     password: str | None = None
     tls_mode: str = Field(default="implicit", pattern="^(implicit|starttls|none)$")
     mailbox: str = Field(default="INBOX", max_length=255)
+    # The CALLER's own password, re-confirmed. Distinct from `password` above,
+    # which is the IMAP ACCOUNT's - conflating the two would be a security bug
+    # with a very quiet failure mode. Required only when the request would send
+    # the STORED secret to a server other than the saved one.
+    confirm_password: str | None = Field(default=None, max_length=512)
 
 
 class ImapTestResponse(APIBaseModel):

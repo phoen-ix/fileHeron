@@ -8,6 +8,7 @@ import {
   testImap,
   updateImapSettings,
 } from '@/api/admin'
+import { asEnvelope } from '@/api/client'
 import { useApiError } from '@/composables/useApiError'
 import { useUiStore } from '@/stores/ui'
 import type { ImapSettingsResponse, ImapTestResponse } from '@/types/api'
@@ -22,6 +23,10 @@ const testing = ref(false)
 const fetching = ref(false)
 const errorMsg = ref<string | null>(null)
 const testResult = ref<ImapTestResponse | null>(null)
+// Revealed only when the backend asks for it: testing a server other than
+// the saved one while relying on the stored mail password.
+const stepUpNeeded = ref(false)
+const confirmPassword = ref('')
 const isPasswordSet = ref(false)
 const lastPollAt = ref<string | null>(null)
 const passwordTouched = ref(false)
@@ -104,9 +109,18 @@ async function onTest() {
       password: form.value.use_smtp_credentials ? null : form.value.password || null,
       tls_mode: form.value.tls_mode,
       mailbox: form.value.mailbox,
+      ...(confirmPassword.value ? { confirm_password: confirmPassword.value } : {}),
     })
     testResult.value = data
+    confirmPassword.value = ''
+    stepUpNeeded.value = false
   } catch (err) {
+    // Testing a server other than the saved one, while relying on the stored
+    // password, is the only case that can send that password somewhere new.
+    if (asEnvelope(err)?.code === 'STEP_UP_REQUIRED') {
+      stepUpNeeded.value = true
+      return
+    }
     errorMsg.value = describe(err)
   } finally {
     testing.value = false
@@ -263,6 +277,25 @@ v-if="errorMsg" class="fh-notice" role="alert"
         <button type="button" class="fh-btn-text" :disabled="fetching" @click="onFetchNow">
           {{ t('admin_imap.fetch_now') }}
         </button>
+      </div>
+
+      <!-- Only shown once the server has refused: testing a server other than
+           the saved one, using the saved password, is the one case that can
+           send that password somewhere it has never been sent. -->
+      <div v-if="stepUpNeeded" class="fh-notice" data-tone="warning">
+        <strong>{{ t('admin_imap.step_up_title') }}</strong>
+        <p>{{ t('admin_imap.step_up_help') }}</p>
+        <label class="fh-field">
+          <span class="fh-field-label">{{ t('admin_imap.step_up_label') }}</span>
+          <input
+            v-model="confirmPassword"
+            class="fh-field-input"
+            type="password"
+            autocomplete="current-password"
+            :disabled="testing"
+            @keyup.enter="onTest"
+          />
+        </label>
       </div>
 
       <div v-if="testResult" class="fh-notice" :data-tone="testResult.ok ? 'success' : 'danger'">

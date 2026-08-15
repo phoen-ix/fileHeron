@@ -283,7 +283,8 @@
     "WEBAUTHN_UNKNOWN_CREDENTIAL": "Dieser Passkey ist für dieses Konto nicht registriert.",
     "WEBAUTHN_VERIFY_FAILED": "Der Passkey konnte nicht verifiziert werden.",
     "WEBHOOK_NOT_FOUND": "Webhook nicht gefunden.",
-    "generic": "Etwas hat nicht funktioniert. Bitte erneut versuchen."
+    "generic": "Etwas hat nicht funktioniert. Bitte erneut versuchen.",
+    "STEP_UP_REQUIRED": "Bestätigen Sie Ihr Passwort, um fortzufahren."
   },
   "login": {
     "title": "Anmelden",
@@ -936,7 +937,10 @@
     "test_button": "Test-E-Mail senden",
     "test_ok": "Test-E-Mail erfolgreich versendet.",
     "test_failed": "Test-E-Mail fehlgeschlagen.",
-    "hint_label": "Lösungsvorschlag:"
+    "hint_label": "Lösungsvorschlag:",
+    "step_up_title": "Passwort bestätigen",
+    "step_up_help": "Sie testen einen anderen Mailserver als den gespeicherten. Da dabei das gespeicherte Passwort an diesen Server gesendet würde, bestätigen Sie bitte zuerst Ihr eigenes Passwort.",
+    "step_up_label": "Ihr Passwort"
   },
   "admin_imap": {
     "title": "Posteingang (IMAP)",
@@ -992,7 +996,10 @@
     "require_known_sender": "Nur E-Mails von registrierten Benutzern annehmen",
     "require_known_sender_help": "Weist E-Mails ab, deren Absenderadresse zu keinem aktiven Konto gehört - bevor irgendetwas gespeichert wird. Abgewiesene E-Mails bleiben auf dem Server.",
     "tls_insecure": "Serverzertifikat nicht prüfen",
-    "tls_insecure_help": "Nur für einen internen Mailserver mit privatem oder selbstsigniertem Zertifikat. Die Verbindung bleibt verschlüsselt, aber jeder auf dem Netzwerkweg kann sich als der Server ausgeben und die Anmeldedaten mitlesen."
+    "tls_insecure_help": "Nur für einen internen Mailserver mit privatem oder selbstsigniertem Zertifikat. Die Verbindung bleibt verschlüsselt, aber jeder auf dem Netzwerkweg kann sich als der Server ausgeben und die Anmeldedaten mitlesen.",
+    "step_up_title": "Passwort bestätigen",
+    "step_up_help": "Sie testen einen anderen Mailserver als den gespeicherten. Da dabei das gespeicherte Passwort an diesen Server gesendet würde, bestätigen Sie bitte zuerst Ihr eigenes Passwort.",
+    "step_up_label": "Ihr Passwort"
   },
   "admin_inbox": {
     "eyebrow": "Nachrichten",

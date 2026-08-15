@@ -7,6 +7,7 @@ import {
   testEmailSend,
   updateEmailSettings,
 } from '@/api/admin'
+import { asEnvelope } from '@/api/client'
 import { useApiError } from '@/composables/useApiError'
 import { useUiStore } from '@/stores/ui'
 import type {
@@ -27,6 +28,10 @@ const errorMsg = ref<string | null>(null)
 const current = ref<EmailSettingsResponse | null>(null)
 const testResult = ref<TestEmailResponse | null>(null)
 const testTo = ref('')
+// Revealed only when the backend asks for it: testing a server other than
+// the saved one while relying on the stored mail password.
+const stepUpNeeded = ref(false)
+const confirmPassword = ref('')
 // Most MTAs require SMTP AUTH. We block save/test on blank credentials
 // unless the admin explicitly opts into an anonymous (no-auth) relay.
 const allowAnonymous = ref(false)
@@ -172,9 +177,22 @@ async function onTest() {
     const { data } = await testEmailSend({
       to: testTo.value,
       override: buildPayload(),
+      ...(confirmPassword.value ? { confirm_password: confirmPassword.value } : {}),
     })
     testResult.value = data
+    // Only clear on success - a wrong password should stay put so the admin can
+    // correct a typo rather than retype from scratch.
+    confirmPassword.value = ''
+    stepUpNeeded.value = false
   } catch (err) {
+    // Testing a server other than the saved one, while relying on the stored
+    // password, is the only case that can send that password somewhere new. The
+    // backend refuses it until the admin re-authenticates; reveal the field.
+    if (asEnvelope(err)?.code === 'STEP_UP_REQUIRED') {
+      stepUpNeeded.value = true
+      testResult.value = null
+      return
+    }
     testResult.value = {
       ok: false,
       error_class: 'RequestError',
@@ -351,6 +369,25 @@ v-if="errorMsg" class="fh-notice" role="alert"
           >
             {{ testing ? t('common.loading') : t('admin_email.test_button') }}
           </button>
+        </div>
+
+        <!-- Only shown once the server has refused: testing a server other than
+             the saved one, using the saved password, is the one case that can
+             send that password somewhere it has never been sent. -->
+        <div v-if="stepUpNeeded" class="fh-notice" data-tone="warning">
+          <strong>{{ t('admin_email.step_up_title') }}</strong>
+          <p>{{ t('admin_email.step_up_help') }}</p>
+          <label class="fh-field">
+            <span class="fh-field-label">{{ t('admin_email.step_up_label') }}</span>
+            <input
+              v-model="confirmPassword"
+              class="fh-field-input"
+              type="password"
+              autocomplete="current-password"
+              :disabled="testing"
+              @keyup.enter="onTest"
+            />
+          </label>
         </div>
 
         <div

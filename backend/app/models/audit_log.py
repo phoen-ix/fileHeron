@@ -47,6 +47,12 @@ class AuditEventType(str, enum.Enum):
     # dashboards and feed anomaly.login_stuffing, which counts distinct emails
     # per IP. No migration - event_type is String(64) with a Python-side enum.
     step_up_failed = "step_up_failed"
+    # A mail connection test aimed at a server other than the saved one. Only
+    # the foreign-target case is recorded; routine tests against the stored
+    # config would bury it. The metadata carries the host, which is the whole
+    # forensic point (services/mail_test_gate.py).
+    smtp_test_foreign_target = "smtp_test_foreign_target"
+    imap_test_foreign_target = "imap_test_foreign_target"
     share_created = "share_created"                        # Phase 3a/4
     share_revoked = "share_revoked"                        # Phase 3a/4
     share_expired = "share_expired"                        # Phase 4

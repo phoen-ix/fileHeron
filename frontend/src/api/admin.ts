@@ -883,9 +883,13 @@ export function testImap(body?: {
   host: string
   port: number
   user: string
+  /** The IMAP ACCOUNT's password. Not the caller's - see confirm_password. */
   password: string | null
   tls_mode: string
   mailbox: string
+  /** The admin's OWN password, re-confirmed. Only needed when testing a server
+   *  other than the saved one while relying on the stored credentials. */
+  confirm_password?: string
 }) {
   return api.post<ImapTestResponse>('/admin/settings/imap/test', body ?? {})
 }

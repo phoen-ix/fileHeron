@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session
 
 from ..config import settings
 from ..middleware.errors import AppError
-from ..models.audit_log import AuditEventType
+from ..models.audit_log import AuditEventType, AuditLog
 from ..models.download_log import DownloadLog
 from ..models.file import File, FileApprovalState, FileState
 from ..models.share import Share, ShareState
@@ -445,6 +445,15 @@ def mark_deleted_for_expiry(db: Session, *, file: File) -> PurgeEntry | None:
     return entry
 
 
+# audit_log.target_id is String(64); this used to clip to 255, i.e. FOUR times
+# the column width, so a locator longer than the column raised DataError under
+# MariaDB strict mode - and record_orphan_locator's own `except` swallowed it,
+# losing the durable orphan trace its docstring says a log line cannot replace.
+# The default local locator (~60 chars) fits; a longer STORAGE_ROOT or an S3
+# prefix does not.
+_AUDIT_TARGET_ID_MAX = AuditLog.__table__.c.target_id.type.length
+
+
 def record_orphan_locator(db: Session, *, locator: str, reason: str) -> None:
     """Leave a durable trace of bytes that failed to unlink.
 
@@ -458,7 +467,7 @@ def record_orphan_locator(db: Session, *, locator: str, reason: str) -> None:
             event_type=AuditEventType.file_purge_failed,
             actor_user_id=None,
             target_type="file_bytes",
-            target_id=locator[:255],
+            target_id=locator[:_AUDIT_TARGET_ID_MAX],
             metadata={"locator": locator, "reason": reason},
         )
         db.commit()

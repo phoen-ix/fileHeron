@@ -74,6 +74,31 @@ check.
 A failed backup or drill also now e-mails whoever your error alerts go to,
 instead of being a `failed` unit nobody polls.
 
+## Offsite retention kept everything of ours and pruned everyone else's
+
+If you push backups to a restic repository, the retention sweep did close to the
+opposite of what it claimed, in both directions.
+
+It never dropped one of ours: each night is written to a new dated directory,
+restic groups snapshots by path unless told otherwise, so every snapshot sat in
+a group of one and "keep the last 7 daily" dutifully kept it. Thirty nightly
+snapshots went in and thirty came out. A repository configured a year ago holds
+every snapshot ever taken.
+
+And it pruned other applications': the sweep carried no filter, so on a
+repository shared with anything else, **ours were the only snapshots being
+spared**. A co-tenant taking hourly snapshots lost 10 of every 12 to fileHeron's
+daily policy, on every nightly run.
+
+Both are fixed together — neither fix works alone. Snapshots now carry a stable
+tag, and retention selects on it.
+
+> **If you already have a restic repository**, snapshots written by earlier
+> versions carry only the old per-run tag and will be skipped rather than
+> pruned. Nothing was ever pruned before either, so this is not a new problem —
+> but see README for the one-off command that brings the existing backlog under
+> the policy, and try `forget --dry-run` before you do.
+
 ---
 
 ## Security
@@ -134,6 +159,17 @@ share addressed to those clients by name was held. Group recipients are now
 seen, and because the share was recorded as never having needed approval, two
 later safeguards had been silently disabled for its whole life as well.
 
+### The share list told every recipient who else received the share
+
+Opening your list of received shares returned the full recipient roster for each
+one — every other recipient's display name and role, and the names of any groups
+it was addressed to. Nobody needs that to download a file, and the share's own
+detail page had never disclosed it.
+
+Where it matters most is the case the product is built for: a share sent to
+several clients who are not meant to know about one another. Recipients now see
+only themselves in that list.
+
 ### Erasure left filenames behind
 
 A right-to-erasure request scrubbed filenames only on files that still existed.
@@ -173,6 +209,14 @@ the admin file browser and recoverable from the audit log. Both are now cleared.
   message that expands to 200,000 parts counted as one.
 - **A slow virus scanner could freeze every background job** — e-mail, webhooks
   and all scheduled tasks — for as long as the scan took.
+
+## Admin
+
+The live status panel on the admin system page had never once connected. It uses
+a browser event stream, which cannot send an authorisation header — which is
+exactly why the route takes a signed token in the URL instead — but the route
+was mounted behind the check that demands that header, so every connection was
+refused before reaching the code written to serve it. It works now.
 
 ## Downloads
 

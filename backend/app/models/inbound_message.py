@@ -1,9 +1,13 @@
 """Inbound mailbox - messages fetched from the configured account over IMAP
 (v1.27.0).
 
-One row per ingested message. Dedup is by ``(uidvalidity, imap_uid)`` (the IMAP
-server's stable identity) plus ``message_id`` as a backstop, so re-polling never
-double-ingests - even in the "leave untouched" post-fetch mode. Bodies are
+One row per ingested message. Dedup is by ``(uidvalidity, imap_uid)`` ONLY - the
+IMAP server's stable identity - so re-polling never double-ingests, even in the
+"leave untouched" post-fetch mode. ``message_id`` is NOT a backstop and must not
+be reinstated as one: it is read verbatim off the wire, so a forged value made a
+later genuine mail look like a duplicate, and the poll then advanced its UID
+highwater past it - mail destroyed with nothing admin-visible. See
+``inbound_mail._already_ingested``. Bodies are
 ``deferred`` so the list + count queries never load them; only the detail
 endpoint pulls them. Inbound HTML is sanitised (nh3) at ingest time.
 """

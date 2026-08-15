@@ -24,9 +24,13 @@ Security boundaries:
 - Issuer + audience + expiry + nonce are all verified.
 - Linking is gated on `email_verified=true` from the IdP. If unverified,
   we refuse to auto-link an existing local account.
-- Group-based role mapping is admin > employee > client (first match
-  wins). Providers without group support (e.g. Google) skip role
-  mapping; the user keeps their existing role.
+- Roles are LOCAL and an IdP claim never grants one. Linking binds an
+  identity `(provider_id, oidc_subject)`; it does not confer a role, and
+  removing someone from an IdP group does not demote them here. Until
+  v2.12.0 this heading claimed the opposite - "group-based role mapping
+  is admin > employee > client" - describing columns that migration
+  202607040001 dropped. A reader could believe an IdP group grants
+  admin. It never has since that migration.
 """
 from __future__ import annotations
 

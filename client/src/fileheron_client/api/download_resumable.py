@@ -27,7 +27,7 @@ from typing import Callable, Optional
 
 from .. import motw
 from . import download_checkpoint as ckpt
-from .client import ApiClient, ApiError, _envelope_from_response
+from .client import ApiClient, ApiError, SessionExpiredError, _envelope_from_response
 from .download_segmented import (
     CHUNK,
     MAX_CONNECTIONS,
@@ -53,7 +53,7 @@ def _raise_if_stopped(
 
 
 def _probe(
-    api: ApiClient, url: str, headers: dict
+    api: ApiClient, url: str, headers: dict, _retried: bool = False
 ) -> Optional[tuple[int, Optional[str]]]:
     """One tiny ranged GET. Returns (total, etag) iff the server honours
     ranges (HTTP 206 with a parseable Content-Range), else None.
@@ -78,9 +78,20 @@ def _probe(
     """
     try:
         with api._http.stream(
-            "GET", url, headers={**headers, "Range": "bytes=1-1"},
+            "GET", url, headers={**headers, **api.auth_header(), "Range": "bytes=1-1"},
             follow_redirects=True,
         ) as resp:
+            if resp.status_code == 401:
+                # The probe runs before every transfer, so refreshing here is
+                # what gives the download that follows a live token. Without it
+                # an expired session surfaced as `503 RESUME_PROBE_FAILED` -
+                # "Couldn't reach the server" - which is a lie about the cause
+                # and repeats forever, because nothing else refreshes either.
+                resp.read()
+                if _retried:
+                    return None
+                headers.update(api.refresh_bearer_header())
+                return _probe(api, url, headers, _retried=True)
             cr = resp.headers.get("Content-Range", "")
             etag = resp.headers.get("ETag")
             resp.read()  # drain so the connection is reusable
@@ -88,6 +99,14 @@ def _probe(
                 return None
             tail = cr.rsplit("/", 1)[1].strip()
             return (int(tail), etag) if tail.isdigit() else None
+    except SessionExpiredError:
+        # Must NOT be swallowed. Returning None here sets ranges_ok=False, and
+        # with a checkpoint present the caller then raises 503
+        # RESUME_PROBE_FAILED - "Couldn't reach the server to resume this
+        # download" - which misreports an expired session as a network fault
+        # and repeats forever, since nothing refreshes. The UI listens for this
+        # exception specifically and returns the user to the login screen.
+        raise
     except Exception:
         return None
 
@@ -106,7 +125,10 @@ def download_file_resumable(
     valid checkpoint sits next to ``dest``. Honours ``cancel`` (discard) and
     ``pause`` (keep + resumable). Returns ``dest`` on success."""
     _raise_if_stopped(cancel, pause)
-    headers = {"Authorization": f"Bearer {api.bearer}"} if api.bearer else {}
+    # Read fresh rather than snapshotting: this dict used to be built once and
+    # reused for every segment of a multi-hour transfer, so the whole download
+    # died the moment the 15-minute access token expired.
+    headers = api.auth_header()
     url = f"/api/files/{file_id}/download"
     dest.parent.mkdir(parents=True, exist_ok=True)
 
@@ -226,9 +248,16 @@ def _run_single(
     # where the response has told us the real total.
     _raise_if_stopped(cancel, pause)
     try:
-        # follow_redirects for an S3 backend's 307 -> presigned URL (see download_file).
+        # A single stream cannot expire mid-flight: the server authorises the
+        # request once and never re-checks while the body is being sent. So this
+        # path only needs a VALID token at request time - which `_probe` above
+        # has already refreshed if it had gone stale - and reads the header
+        # fresh rather than using the snapshot taken at kick-off.
+        #
+        # follow_redirects for an S3 backend's 307 -> presigned URL.
         with api._http.stream(
-            "GET", url, headers=req_headers, follow_redirects=True
+            "GET", url, headers={**req_headers, **api.auth_header()},
+            follow_redirects=True,
         ) as resp:
             if resp.status_code == 206:
                 write_mode = "r+b"

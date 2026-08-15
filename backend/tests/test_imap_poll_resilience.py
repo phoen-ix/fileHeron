@@ -35,6 +35,21 @@ Message-ID: <poison-date@example.com>
 body
 """
 
+# Raw 8-bit byte in the FROM header. The existing POISON_8BIT below keeps From
+# pure ASCII, which is exactly why this went unnoticed: under compat32 a From
+# with a raw 8-bit byte comes back as an email.header.Header, not a str, so
+# parseaddr returned ('','') and inbound_classify crashed on .lower(). An empty
+# sender means require_known_sender (on by default) refuses the message at the
+# pre-fetch gate, the UID highwater advances and commits, and the mail is never
+# selected again - permanently invisible, recoverable only by hand on the server.
+POISON_8BIT_FROM = b"""From: Jos\xe9 Garc\xeda <jose@client.example>
+To: inbox@example.com
+Subject: quarterly report
+Message-ID: <8bit-from@client.example>
+
+body
+"""
+
 # Raw 8-bit byte in Subject and Message-ID (never valid, trivially sent).
 POISON_8BIT = b"""From: sender@example.com
 To: inbox@example.com
@@ -54,6 +69,9 @@ body
 """
 
 
+# POISON_8BIT_FROM is deliberately NOT in this parametrisation: it carries a
+# different sender, and loosening the assertion below to accommodate it would
+# weaken a check that is doing real work for the other two.
 @pytest.mark.parametrize("raw", [POISON_DATE, POISON_8BIT], ids=["date", "8bit"])
 def test_parse_survives_hostile_headers(raw):
     """parse() itself must not raise - that is what aborts the poll."""
@@ -185,3 +203,27 @@ async def test_not_configured_is_not_an_error(monkeypatch):
     with contextlib.suppress(AttributeError):
         result = await worker.imap_poll.__wrapped__(None)
         assert result["error"] == "not_configured"
+
+
+def test_parse_survives_an_8bit_from():
+    """Same contract as the parametrised cases above, with this fixture's own
+    expected sender."""
+    assert inbound_parse.parse(POISON_8BIT_FROM).sender_email == "jose@client.example"
+
+
+def test_an_8bit_from_still_yields_a_sender_address():
+    """The address is what decides whether the message is ingested at all."""
+    parsed = inbound_parse.parse(POISON_8BIT_FROM)
+    assert parsed.sender_email == "jose@client.example"
+    assert "Jos" in parsed.sender_name
+
+
+def test_classify_survives_an_8bit_from():
+    """classify() reads From/Auto-Submitted/Precedence with str methods. On a
+    Header object that is an AttributeError, which takes the whole poll down -
+    a harder failure than the empty sender it was masking."""
+    from email import message_from_bytes
+
+    from app.services import inbound_classify
+
+    assert inbound_classify.classify(message_from_bytes(POISON_8BIT_FROM)) is not None

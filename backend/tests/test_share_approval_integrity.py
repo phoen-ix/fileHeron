@@ -699,3 +699,76 @@ def test_the_fingerprint_moves_when_the_bytes_land(db, make_user):
     db.refresh(share)
 
     assert approval_svc.content_fingerprint(db, share) != before
+
+
+# --- outbound_to_clients must see group recipients ---------------------------
+
+
+def _approval_on(db, scope: str = "outbound_to_clients"):
+    from app.services import settings as s
+
+    s.set_value(db, key=s.Keys.SHARE_APPROVAL_ENABLED, value="true", actor=None)
+    s.set_value(db, key=s.Keys.SHARE_APPROVAL_SCOPE, value=scope, actor=None)
+    s.set_value(db, key=s.Keys.SHARE_APPROVAL_APPROVER_MODE, value="admins_only", actor=None)
+    # exempt_approvers defaults true and would auto-approve an approver's own
+    # share, short-circuiting the scope check this test is about.
+    s.set_value(db, key=s.Keys.SHARE_APPROVAL_EXEMPT_APPROVERS, value="false", actor=None)
+    db.commit()
+
+
+def test_a_group_containing_a_client_requires_approval(db, make_user):
+    """The defect: `outbound_to_clients` inner-joined on recipient_user_id,
+    which is NULL for a group row, so a share addressed to a group full of
+    clients skipped four-eyes entirely - and because approval_was_required is
+    stored False, every later gate stayed off for that share's whole life."""
+    from app.models.group import Group
+    from app.models.group_member import GroupMember
+    from app.models.share import Share, ShareKind, ShareState
+    from app.models.share_recipient import ShareRecipient
+    from app.models.user import UserRole
+    from app.services import share_approval
+
+    _approval_on(db)
+    sender = make_user(email="emp@test.local", role=UserRole.employee)
+    client = make_user(email="cli@test.local", role=UserRole.client)
+    grp = Group(name="Customers", name_normalized="customers", created_by_id=sender.id)
+    db.add(grp)
+    db.flush()
+    db.add(GroupMember(group_id=grp.id, user_id=client.id))
+
+    share = Share(created_by_id=sender.id, kind=ShareKind.outbound,
+                  subject="s", expires_at=None, state=ShareState.active)
+    db.add(share)
+    db.flush()
+    db.add(ShareRecipient(share_id=share.id, recipient_group_id=grp.id))
+    db.flush()
+
+    assert share_approval.is_approval_required(db, share) is True
+
+
+def test_a_group_of_employees_does_not(db, make_user):
+    """The scope must still mean what it says - this is not "approve
+    everything"."""
+    from app.models.group import Group
+    from app.models.group_member import GroupMember
+    from app.models.share import Share, ShareKind, ShareState
+    from app.models.share_recipient import ShareRecipient
+    from app.models.user import UserRole
+    from app.services import share_approval
+
+    _approval_on(db)
+    sender = make_user(email="emp2@test.local", role=UserRole.employee)
+    colleague = make_user(email="emp3@test.local", role=UserRole.employee)
+    grp = Group(name="Team", name_normalized="team", created_by_id=sender.id)
+    db.add(grp)
+    db.flush()
+    db.add(GroupMember(group_id=grp.id, user_id=colleague.id))
+
+    share = Share(created_by_id=sender.id, kind=ShareKind.outbound,
+                  subject="s", expires_at=None, state=ShareState.active)
+    db.add(share)
+    db.flush()
+    db.add(ShareRecipient(share_id=share.id, recipient_group_id=grp.id))
+    db.flush()
+
+    assert share_approval.is_approval_required(db, share) is False

@@ -34,6 +34,56 @@ from app.services import settings as settings_svc
 from app.services import storage_guard
 from app.services.tus_hooks import _TUS_UPLOAD_ID_RE, _check_tus_upload_id
 
+# A real signed envelope, so the tus hooks can be driven behaviourally. The
+# helper this mirrors has been in test_tus_hooks_quota.py all along, which is
+# what makes the two source-inspection tests below unnecessary as well as
+# unsound.
+_UPLOAD_FILE_ID = "11111111-1111-1111-1111-111111111111"
+_UPLOAD_SHARE_ID = "00000000-0000-0000-0000-000000000009"
+_UPLOAD_MAX = 5 * 1024 * 1024
+
+
+def _seed_pending_upload(db, make_user):
+    from datetime import timedelta
+
+    from app.models.file import File, FileState
+    from app.models.share import Share, ShareKind, ShareState
+    from app.models.user import UserRole
+    from app.utils.timeutil import utc_now
+
+    owner = make_user(email="up@test.local", role=UserRole.employee)
+    share = Share(
+        id=_UPLOAD_SHARE_ID, created_by_id=owner.id, kind=ShareKind.outbound,
+        state=ShareState.active, expires_at=utc_now() + timedelta(hours=1),
+    )
+    db.add(share)
+    db.flush()
+    db.add(File(
+        id=_UPLOAD_FILE_ID, share_id=share.id, original_filename="big.bin",
+        mime_type="application/octet-stream", size_bytes=_UPLOAD_MAX,
+        state=FileState.uploading, uploaded_by_id=owner.id,
+    ))
+    db.commit()
+    return owner
+
+
+def _signed_body(owner_id, *, upload_id="abc123"):
+    import time
+
+    from app.services import tus_signing as ts
+
+    env = {
+        "v": 1, "share_id": _UPLOAD_SHARE_ID, "file_id": _UPLOAD_FILE_ID,
+        "owner_user_id": owner_id, "filename": "big.bin",
+        "mime_type": "application/octet-stream", "max_size": _UPLOAD_MAX,
+        "exp": int(time.time()) + 600,
+    }
+    payload_b64, sig = ts.sign_envelope(env)
+    return {"Event": {"Upload": {
+        "ID": upload_id, "Size": _UPLOAD_MAX,
+        "MetaData": {"fh_payload": payload_b64, "fh_sig": sig},
+    }}}
+
 # --- tests-12: the validator and the column must agree ----------------------
 
 
@@ -80,32 +130,62 @@ def test_the_guard_is_silent_when_storage_is_fine(db):
     storage_guard.refuse_if_critical_low(db)
 
 
-def test_the_resumable_path_applies_it():
+def test_the_resumable_path_applies_it(db, make_user):
     """The whole finding: the guard existed but not on the path large uploads
-    take. Asserted at source level - handle_pre_create needs a full signed tusd
-    envelope to reach behaviourally."""
-    import inspect
+    take.
 
+    This used to assert `"refuse_if_critical_low" in inspect.getsource(...)`,
+    with the note that a full signed envelope was needed to reach it
+    behaviourally. Two problems: `test_tus_hooks_quota.py` had had exactly such
+    a helper all along, and the token appears in a COMMENT inside the same
+    function - so deleting the call left the test green and multi-GB uploads
+    bypassing the disk-full guard, with a passing test above them."""
     from app.services import tus_hooks
 
-    src = inspect.getsource(tus_hooks.handle_pre_create)
-    assert "refuse_if_critical_low" in src, (
-        "multi-GB resumable uploads still bypass the disk-full guard"
+    owner = _seed_pending_upload(db, make_user)
+    settings_svc.set_value(
+        db, key=settings_svc.Keys.STORAGE_CRITICAL_LOW, value="true", actor=None
     )
+    db.commit()
+
+    with pytest.raises(AppError) as exc:
+        tus_hooks.handle_pre_create(db, _signed_body(owner.id))
+    assert exc.value.status_code == 507
+
+    # Positive control: with space, the same call gets past the guard.
+    settings_svc.set_value(
+        db, key=settings_svc.Keys.STORAGE_CRITICAL_LOW, value="false", actor=None
+    )
+    db.commit()
+    tus_hooks.handle_pre_create(db, _signed_body(owner.id))
 
 
 # --- files-4 / flow-upload-8: the unreachable sweeper guard ------------------
 
 
-def test_pre_create_links_the_row_to_the_tusd_upload():
-    """Without this the sweeper's live-upload guard can never match, because
-    an in-flight row's tus_upload_id is NULL."""
-    import inspect
+def test_post_receive_links_the_row_to_the_tusd_upload(db, make_user):
+    """Without a stamped `tus_upload_id` the sweeper's live-upload guard can
+    never match, because an in-flight row's column is NULL.
 
+    This used to inspect `handle_pre_create` for the substring `tus_upload_id`
+    and claim that proved the guard reachable. It proved nothing twice over: the
+    token appears in four comments and in an unrelated quota check inside that
+    function, so deleting the stamping branch left it green - and the branch is
+    DEAD anyway. `tus_hooks.py` records the measurement: the pinned
+    tusproject/tusd:v2.9.2 sends `"ID": ""` at pre-create, because the upload
+    does not exist yet. `handle_post_receive` does the stamping that works, so
+    that is what this now exercises."""
+    from app.models.file import File
     from app.services import tus_hooks
 
-    src = inspect.getsource(tus_hooks.handle_pre_create)
-    assert "tus_upload_id" in src
+    owner = _seed_pending_upload(db, make_user)
+    tus_hooks.handle_post_receive(db, _signed_body(owner.id, upload_id="live-99"))
+    db.commit()
+
+    row = db.query(File).filter(File.id == _UPLOAD_FILE_ID).one()
+    assert row.tus_upload_id == "live-99", (
+        "an in-flight row still has no tus id, so the sweeper guard cannot match"
+    )
 
 
 def test_the_sweeper_guard_has_something_to_match_on():

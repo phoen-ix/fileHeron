@@ -107,7 +107,24 @@ api.interceptors.response.use(
       url.includes('/auth/register-from-invite') ||
       url.includes('/auth/forgot-password') ||
       url.includes('/auth/reset-password') ||
-      url.includes('/auth/verify-email')
+      url.includes('/auth/verify-email') ||
+      // These four answer 401 INVALID_CREDENTIALS for a WRONG SUBMITTED
+      // PASSWORD from an already-signed-in caller, not for an expired session.
+      // Replaying is worse than useless: the refresh always succeeds, so the
+      // request goes again with the same wrong password and every visible
+      // attempt spends the per-IP budget twice. change-password and
+      // change-email share one 3-per-15-min bucket, so the user's SECOND typo
+      // surfaces as 429 RATE_LIMITED rather than "current password is
+      // incorrect". This is the hazard step_up.py answers 403 to avoid.
+      //
+      // Listed individually, NOT as a blanket `/account/` prefix: the rest of
+      // that namespace (2fa/status, oidc/links, profile PATCHes) 401s for an
+      // expired session, which is precisely what should be refreshed and
+      // replayed. Excluding all of it would sign people out instead.
+      url.includes('/account/change-password') ||
+      url.includes('/account/email') ||
+      url.includes('/account/2fa/disable') ||
+      url.includes('/account/2fa/recovery-codes/regenerate')
 
     if (status === 401 && !original._retry && !isAuthCall) {
       original._retry = true

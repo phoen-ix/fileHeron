@@ -17,7 +17,7 @@ import { useDebouncedSearch } from '@/composables/useDebouncedSearch'
 import { usePaginatedList } from '@/composables/usePaginatedList'
 import { useSiteDateFormat } from '@/composables/useSiteDateFormat'
 import { useUiStore } from '@/stores/ui'
-import { siteLocalIsoToUtcIso } from '@/utils/datetime'
+import { defaultTokenExpiryLocal, siteLocalIsoToUtcIso } from '@/utils/datetime'
 import { TOKEN_SCOPE_GROUPS, scopeLabelKey } from '@/utils/tokenScopes'
 import type {
   AdminApiTokenItem,
@@ -105,8 +105,15 @@ const newName = ref('')
 // Re-auth: this route mints a token for ANY user, so it is the one a stolen
 // admin session would reach for.
 const adminPassword = ref('')
-const tokenExpiresAt = ref<string | null>(null)  // null = Never (default)
-const scopeMode = ref<'full' | 'limited'>('full')  // full = unrestricted (default)
+// Least-privilege, matching ApiTokenPanel.vue. These were "never expires" +
+// "unrestricted", so an admin who filled in name + user + password handed out a
+// permanent full-access credential acting as that user - and nothing revokes
+// API tokens on password reset or "sign out other sessions". The target user
+// cannot see or revoke what was minted for them from their own panel either,
+// which makes this the stronger case of the two, not the weaker one. Both wide
+// options remain one click away; they just have to be chosen.
+const tokenExpiresAt = ref<string | null>(defaultTokenExpiryLocal())
+const scopeMode = ref<'full' | 'limited'>('limited')
 const selectedScopes = ref<string[]>([])
 const creating = ref(false)
 const createError = ref<string | null>(null)
@@ -157,8 +164,8 @@ function resetCreateForm() {
   userSuggestions.value = []
   selectedUser.value = null
   newName.value = ''
-  tokenExpiresAt.value = null
-  scopeMode.value = 'full'
+  tokenExpiresAt.value = defaultTokenExpiryLocal()
+  scopeMode.value = 'limited'
   selectedScopes.value = []
   createError.value = null
 }
@@ -187,8 +194,8 @@ async function onCreateForUser() {
     userQuery.value = ''
     selectedUser.value = null
     newName.value = ''
-    tokenExpiresAt.value = null
-    scopeMode.value = 'full'
+    tokenExpiresAt.value = defaultTokenExpiryLocal()
+    scopeMode.value = 'limited'
     selectedScopes.value = []
     await load()
   } catch (err) {

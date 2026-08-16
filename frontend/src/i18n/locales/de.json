@@ -1961,7 +1961,8 @@
       "public_links_write": "Öffentliche Links erstellen & widerrufen",
       "files_upload": "Dateien hochladen",
       "files_download": "Dateien herunterladen & ansehen",
-      "files_delete": "Dateien löschen"
+      "files_delete": "Dateien löschen",
+      "public_links_read": "Öffentliche Links auflisten & ansehen (gibt die Klartext-URL zurück)"
     }
   },
   "richtext": {

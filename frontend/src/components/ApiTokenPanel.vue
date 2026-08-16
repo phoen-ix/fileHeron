@@ -166,21 +166,15 @@ import { useApiError } from '@/composables/useApiError'
 import { useSiteDateFormat } from '@/composables/useSiteDateFormat'
 import { useUiStore } from '@/stores/ui'
 import type { ApiTokenListItem, CreateApiTokenResponse } from '@/types/api'
-import { parseServerDate, siteLocalIsoToUtcIso } from '@/utils/datetime'
+import { defaultTokenExpiryLocal, parseServerDate, siteLocalIsoToUtcIso } from '@/utils/datetime'
 import { TOKEN_SCOPE_GROUPS, scopeLabelKey } from '@/utils/tokenScopes'
 
 // Token-appropriate durations; default null → the picker shows "Never" so a
 // token stays unlimited unless the user opts into an expiry.
 const TOKEN_PRESETS = ['7d', '30d', '90d', '1y', 'never'] as const
 
-/** 90 days out, in the site-local format ExpiryPicker binds to. */
-function DEFAULT_EXPIRY_LOCAL(): string {
-  const d = new Date()
-  d.setDate(d.getDate() + 90)
-  // `toISOString` is UTC; the picker wants a local `YYYY-MM-DDTHH:mm`.
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
-}
+/** Shared with AdminApiTokens.vue so the two forms cannot drift apart. */
+const DEFAULT_EXPIRY_LOCAL = defaultTokenExpiryLocal
 
 const { t } = useI18n()
 const { formatDate } = useSiteDateFormat()

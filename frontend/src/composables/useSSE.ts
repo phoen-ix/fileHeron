@@ -176,6 +176,18 @@ export function useSSE(opts: UseSSEOptions) {
     // 2026-07-30, fe-correct-1). The visibilitychange handler is a third
     // caller, which is exactly the shape this guard is for.
     if ((es !== null || connecting) && !stopped) return
+    // A pending reconnect is exactly the state the guard above lets through:
+    // `onerror` closes the stream, nulls `es` and SCHEDULES a retry, and
+    // NotificationBell's visibilitychange handler calls start() precisely
+    // when `!connected`. Without this the timer then fires a second
+    // `_connect()` that overwrites `es`, orphaning the first EventSource with
+    // its connection open - unclosable, since stop() can only reach the
+    // current one. Duplicate notifications and a burned stream slot for the
+    // tab's lifetime, which is the very thing the guard exists to prevent.
+    if (reconnectTimer !== null) {
+      window.clearTimeout(reconnectTimer)
+      reconnectTimer = null
+    }
     stopped = false
     givenUp.value = false
     reconnectAttempt = 0

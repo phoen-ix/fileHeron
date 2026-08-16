@@ -1961,7 +1961,8 @@
       "public_links_write": "Create & revoke public links",
       "files_upload": "Upload files",
       "files_download": "Download & preview files",
-      "files_delete": "Delete files"
+      "files_delete": "Delete files",
+      "public_links_read": "List & read public links (returns the plaintext URL)"
     }
   },
   "richtext": {

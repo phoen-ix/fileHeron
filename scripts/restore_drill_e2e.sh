@@ -220,45 +220,103 @@ docker rm -f "$REDIS_LOADER" >/dev/null 2>&1 || true
 docker run -d --rm --name "$REDIS_LOADER" \
     -v "$WORKSPACE/data/redis":/data redis:7-alpine \
     redis-server --appendonly no >/dev/null
-for _ in $(seq 1 30); do
-    docker exec "$REDIS_LOADER" redis-cli PING >/dev/null 2>&1 && break
-    sleep 1
+# Wait for DBSIZE to return an INTEGER, not for the socket to answer.
+#
+# A PING loop is not a readiness gate here. redis-cli exits 0 even when the
+# server replies with an error, so `redis-cli PING >/dev/null && break` breaks
+# on the first iteration as soon as the port is open - while redis is still
+# loading the dataset. DBSIZE then returns "LOADING Redis is loading the
+# dataset in memory", which is not a number, and the check below would call
+# that a corrupt backup. On this instance's 28 KB snapshot that never happens;
+# on a production-sized RDB it is the normal case, so the control would fail
+# loudly and blame the backup for its own impatience. Polling DBSIZE for a
+# pure integer waits for exactly the condition we care about and yields the
+# value in the same step.
+REDIS_KEYS=""
+for _ in $(seq 1 60); do
+    out="$(docker exec "$REDIS_LOADER" redis-cli DBSIZE 2>/dev/null | tr -d '\r' || true)"
+    case "$out" in
+        ''|*[!0-9]*) sleep 1; continue ;;
+    esac
+    REDIS_KEYS="$out"; break
 done
-REDIS_KEYS="$(docker exec "$REDIS_LOADER" redis-cli DBSIZE 2>/dev/null | tr -d '\r')"
-log "redis loaded ${REDIS_KEYS:-0} keys from the snapshot"
+
+loader_down() {
+    docker exec "$REDIS_LOADER" redis-cli SHUTDOWN NOSAVE >/dev/null 2>&1 || true
+    docker rm -f "$REDIS_LOADER" >/dev/null 2>&1 || true
+}
+
+# Distinct from "loaded 0 keys" on purpose: one means the snapshot is empty,
+# the other means we never got a usable answer. Reporting them the same way is
+# how a control teaches people to ignore it.
+if [ -z "$REDIS_KEYS" ]; then
+    loader_down
+    fail "redis never finished loading $BACKUP/redis.rdb within 60s (DBSIZE never returned a number)"
+fi
+log "redis loaded ${REDIS_KEYS} keys from the snapshot"
 
 # A hard failure, not the warning restore.sh emits. There, a human is watching
 # and an empty redis costs rate-limit buckets and queued jobs, not data. Here
 # the whole point is to be the control that goes red on its own - and a drill
 # that only warns is a drill that passes.
-if ! [ "${REDIS_KEYS:-0}" -gt 0 ] 2>/dev/null; then
-    docker exec "$REDIS_LOADER" redis-cli SHUTDOWN NOSAVE >/dev/null 2>&1 || true
-    docker rm -f "$REDIS_LOADER" >/dev/null 2>&1 || true
+if [ "$REDIS_KEYS" -eq 0 ]; then
+    loader_down
     fail "redis restored 0 keys from $BACKUP/redis.rdb - the snapshot is empty or was not loaded"
 fi
 
 # Rebuild the AOF from what was just loaded, so the AOF-on service start below
 # reads the restored dataset instead of an empty log.
-docker exec "$REDIS_LOADER" redis-cli CONFIG SET appendonly yes >/dev/null
-sleep 2
-docker exec "$REDIS_LOADER" redis-cli INFO persistence \
-    | grep -q 'aof_last_bgrewrite_status:ok' \
-    || fail "redis AOF rewrite did not report ok - the restored dataset would not survive the restart"
-docker exec "$REDIS_LOADER" redis-cli SHUTDOWN NOSAVE >/dev/null 2>&1 || true
-sleep 2
-docker rm -f "$REDIS_LOADER" >/dev/null 2>&1 || true
+#
+# Check the reply. redis-cli exits 0 on an error reply and writes it to stdout,
+# so redirecting to /dev/null made "ERR Unable to turn on AOF" indistinguishable
+# from OK.
+cfg="$(docker exec "$REDIS_LOADER" redis-cli CONFIG SET appendonly yes 2>&1 | tr -d '\r' || true)"
+if [ "$cfg" != "OK" ]; then
+    loader_down
+    fail "redis refused CONFIG SET appendonly yes: ${cfg:-<no reply>}"
+fi
+
+# Wait for the rewrite to FINISH before shutting the loader down.
+#
+# This was `sleep 2` followed by SHUTDOWN NOSAVE, which can cut a rewrite that
+# is still running and leave a partial AOF - the exact failure the next check
+# would then blame on the restart. The old assertion looked at
+# aof_last_bgrewrite_status, which is initialised to `ok` and only moves to
+# `err` when a rewrite has actually failed, so it read `ok` whether or not a
+# rewrite had ever run: it could not detect the condition its own message
+# named. aof_enabled + aof_rewrite_in_progress are the fields that can.
+aof_ready=0
+for _ in $(seq 1 60); do
+    info="$(docker exec "$REDIS_LOADER" redis-cli INFO persistence 2>/dev/null | tr -d '\r' || true)"
+    if echo "$info" | grep -q '^aof_enabled:1$' \
+       && echo "$info" | grep -q '^aof_rewrite_in_progress:0$'; then
+        echo "$info" | grep -q '^aof_last_bgrewrite_status:ok$' \
+            || { loader_down; fail "redis AOF rewrite reported an error after CONFIG SET appendonly yes"; }
+        aof_ready=1; break
+    fi
+    sleep 1
+done
+[ "$aof_ready" = "1" ] || { loader_down; fail "redis AOF rewrite did not finish within 60s"; }
+
+loader_down
 dc up -d redis
 
 # Prove it survived the AOF-on restart, which is the step the old code got
 # wrong: loading into a throwaway server proves nothing if the real one then
 # comes up empty.
-for _ in $(seq 1 30); do
-    dc exec -T redis redis-cli PING >/dev/null 2>&1 && break
-    sleep 1
+REDIS_KEYS_AFTER=""
+for _ in $(seq 1 60); do
+    out="$(dc exec -T redis redis-cli DBSIZE 2>/dev/null | tr -d '\r' || true)"
+    case "$out" in
+        ''|*[!0-9]*) sleep 1; continue ;;
+    esac
+    REDIS_KEYS_AFTER="$out"; break
 done
-REDIS_KEYS_AFTER="$(dc exec -T redis redis-cli DBSIZE 2>/dev/null | tr -d '\r')"
-log "redis serving ${REDIS_KEYS_AFTER:-0} keys after the AOF-on restart"
-if ! [ "${REDIS_KEYS_AFTER:-0}" -gt 0 ] 2>/dev/null; then
+if [ -z "$REDIS_KEYS_AFTER" ]; then
+    fail "redis never became readable after the AOF-on restart (DBSIZE never returned a number)"
+fi
+log "redis serving ${REDIS_KEYS_AFTER} keys after the AOF-on restart"
+if [ "$REDIS_KEYS_AFTER" -eq 0 ]; then
     fail "redis came back empty after restart - the AOF did not adopt the restored dataset"
 fi
 

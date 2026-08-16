@@ -15,6 +15,31 @@ keep this to what would cause a wrong move if unknown.
 
 ## Status
 
+**v2.13.3 fixes the last two P10 consequences** - found by the same adversarial
+review that caught the v2.13.2 one, and both live in production until now. No
+migration, no host step, no API change, no client change.
+
+**The recurring shape, now three times over: P10 widened WHO may reach a share
+and did not revisit what else keyed on the old, narrower condition.** v2.13.2
+was the download budget. v2.13.3 is (a) the approvals queue, which built
+recipient refs with no viewer gate - harmless while every queue row was a share
+the viewer could decide, a disclosure the moment active shares joined them; and
+(b) `is_authorized_to_view`, which admitted the active case only via the
+content-review-dependent predicate, so with `allow_content_review` off an
+approver was emailed a link to a page that refused them while
+`decide_added_files` accepted their vote. **When you widen an admission, grep
+every predicate that keys on the condition you just relaxed.**
+
+Both were masked by defaults (`allow_content_review` true, `approver_mode`
+admins_only) and by admins short-circuiting `is_authorized_to_download`. Test
+this family with a NON-ADMIN approver or the test proves nothing.
+
+The roster rule now has ONE definition (`RosterVisibility`) instead of the four
+hand-written copies it had grown, and an AST scan pins every future recipient-ref
+builder to it. Also fixed: `has_pending_shares` counted only `pending_approval`,
+so a queue stranded by switching the feature off had a dark nav and no route to
+the decision - `approval_was_required` is sticky, so that state is reachable.
+
 **v2.13.2 fixes a regression v2.13.1 introduced**, found by an adversarial
 review of v2.13.1 run *after* its tag was already immutable. No migration, no
 host step, no API change. Desktop client **1.4.3** ships alongside it.
@@ -114,10 +139,17 @@ cannot send, so it had never once connected), and restic retention (below). The
 gitignored and existed only on this host; it was closed out and deleted at
 v2.13.1, and its residuals live in the accepted-residuals block below.
 
-> **Two invariants from that tail.** The co-recipient privacy projection must be
-> applied on the LIST route as well as the detail serialiser - it existed only
-> on detail, and the list route then disclosed display names, roles and group
-> names, i.e. strictly MORE than detail shows a fully privileged viewer.
+> **Two invariants from that tail.** The co-recipient privacy projection has
+> exactly ONE definition - `services/share.py::RosterVisibility` - and EVERY
+> builder of a `ShareRecipientRef` goes through its `allows_user`/`allows_group`
+> row filters. This said "the LIST route as well as the detail serialiser" for
+> two releases, and that phrasing is what let a THIRD route (the approvals
+> queue) be written without it: the rule had been applied to the two surfaces
+> someone thought of, so the next one was rebuilt from scratch. Pinned
+> generically by an AST scan in `test_share_recipient_privacy.py`, not by a
+> hand-list of the routes that exist today. The disclosure shape to remember:
+> the list refs carry display names, roles and group names, i.e. strictly MORE
+> than detail shows a fully privileged viewer, which exposes bare ids.
 > **A route that authenticates via a signed `?token=` cannot live behind
 > `_gate`**: the gate calls `get_actor`, which requires an Authorization header,
 > which is the exact thing EventSource cannot send. `admin.stream_router` and
@@ -171,7 +203,7 @@ so a rollback past them needs the [[reference_rollback_migration_trap]]
 permissive/NULL value, so existing rows, in-flight sessions and
 approval-disabled deployments are unaffected by the upgrade itself.
 
-Backend **`v2.13.2`** (previous notable sweep: v2.8.1, audit #2 - see the
+Backend **`v2.13.3`** (previous notable sweep: v2.8.1, audit #2 - see the
 block below; .0 also carried the dependency/runtime sweep: Python 3.14, Node 24
 LTS, TypeScript 6, ESLint 10, Vite 8, Pinia 4, zero open dependency PRs).
 Desktop client **`client-v1.4.3`** - shipped + in production, published for
@@ -1184,9 +1216,21 @@ consume `…/download-zip?dt=`; public `GET /api/public/{token}/download-zip`.
   approver refused. Locators are RETURNED for the router to purge after commit.
 - `is_approval_required` must run **after recipient rows are flushed** (the
   `outbound_to_clients` scope reads them). `exempt_approvers` (default true)
-  auto-approves an approver's own shares; `allow_content_review` gates whether an
-  approver may preview/download pending files; add-files at upload is allowed
+  auto-approves an approver's own shares; add-files at upload is allowed
   while `state in {active, pending_approval}` (owner keeps assembling).
+- **`allow_content_review` gates the BYTES, never the page.** It says whether an
+  approver may preview/download a file awaiting review; it does not say whether
+  they may open the share they are being asked to sign off on. Two sibling
+  predicates express that split and must not be folded together:
+  `can_review_this_share` (content-review-dependent → `assert_share_file_access`,
+  `assert_file_approved`, `is_review_access`) and `can_decide_added_files`
+  (independent → `is_authorized_to_view` AND `decide_added_files`, one gate so
+  offered/openable/decidable cannot drift). Until v2.13.3 the page rode the
+  content-review predicate while the decision endpoint did not, so with the
+  toggle off an approver was emailed a link to a page that 403'd them and could
+  still cast the vote blind over the API. The FILENAME redaction in
+  `routers/shares.py` deliberately stays on the content predicate - a filename
+  is content - so "aligning" it to the view predicate is a leak.
 
 ### Email template overrides (v1.25; HTML body v1.50)
 

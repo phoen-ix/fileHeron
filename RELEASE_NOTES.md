@@ -1,3 +1,63 @@
+# file:Heron v2.13.3
+
+**Two more consequences of the same v2.13.1 change, both found by review.**
+
+A patch release, and the third and last instalment of one mistake: v2.13.1 let
+an approver reach a live share carrying files awaiting their decision, and did
+not revisit everything else that depended on them *not* being able to. v2.13.2
+fixed the download budget. These are the remaining two. No migration, no host
+step, no API change, no desktop-client change.
+
+Both only bite specific configurations, described below.
+
+---
+
+## The approvals queue listed other people's recipients
+
+An approver's queue returned, for every share in it, the display name and role
+of every recipient and the name of every group it was addressed to. For shares
+genuinely awaiting approval that is correct and unchanged — deciding whether
+something may go out means knowing who it goes to. But v2.13.1 added *live*
+shares to that queue when files were appended to them, and for those the
+approver is deciding on an attachment, not on the audience. They were shown the
+audience anyway.
+
+The rule that governs this everywhere else in the product now has a single
+definition, and every place that builds a recipient list is checked against it
+automatically — including places not written yet, which is how this one slipped
+through: the rule had been applied to the two screens someone thought of, so the
+third was built from scratch without it.
+
+Affects instances using four-eyes approval where approvers are not admins. The
+web interface never displayed this field, so the exposure was to API clients.
+
+## An approver could be sent to a page that refused them
+
+With content review turned **off**, appending a file to an approved share
+emailed the approver a link to that share — and the link returned "you don't
+have access". They could still approve it through the API, sight unseen, which
+is precisely the blind approval the four-eyes workflow exists to prevent.
+
+The setting says it controls whether approvers may preview or download files
+awaiting review, and now that is all it controls. An approver who may decide can
+open the share and see what they are deciding on; the file contents, including
+filenames, stay hidden unless content review is on, and the download is still
+refused.
+
+Affects instances that turned content review off while leaving approval on.
+
+## A queue with no way in
+
+Requiring approval is recorded on each share when it is created, and that record
+sticks. So a file appended to such a share is held for review even if four-eyes
+has since been switched off — but with it off nobody is notified and the
+Approvals link disappears from the menu, while the queue behind it is not empty.
+The files stayed held with nothing in the interface leading to the decision that
+would release them. The Approvals link now appears whenever there is genuinely
+something waiting.
+
+---
+
 # file:Heron v2.13.2
 
 **A regression v2.13.1 introduced, found by reviewing v2.13.1.**

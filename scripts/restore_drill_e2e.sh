@@ -150,6 +150,9 @@ dc() { docker compose -f "$ROOT/docker-compose.yml" "$@"; }
 
 cleanup() {
     log "tearing down throwaway project ..."
+    # Not part of the compose project, so `dc down` does not see it - and it
+    # bind-mounts the workspace, so a leftover blocks the rm below.
+    docker rm -f "${PROJECT}-redis-restore" >/dev/null 2>&1 || true
     dc down -v --remove-orphans >/dev/null 2>&1 || true
     [ -n "$WORKSPACE" ] && rm -rf "$WORKSPACE" 2>/dev/null || true
     # data dirs may be written root-owned by the containers; force-remove.
@@ -194,10 +197,70 @@ dc exec -T -e MYSQL_PWD db mariadb -uroot "$DB_NAME" < "$BACKUP/db.sql"
 unset MYSQL_PWD
 
 log "restoring redis snapshot ..."
+# This was `docker cp` + restart, against a server running `--appendonly yes`.
+# Redis 7 with AOF enabled IGNORES dump.rdb - with no AOF present it creates an
+# empty one instead of loading the RDB - so the restored instance came back
+# empty and the drill asserted nothing about it. A quarter of what this drill
+# claims to prove would have passed identically with a snapshot of zeros past
+# its header.
+#
+# scripts/restore.sh:74-117 already carries the diagnosis and the sequence that
+# works; this is that sequence, scoped to the throwaway project. The loader
+# container is named per-project so it cannot collide with a real restore
+# running at the same time.
 REDIS_CID="$(dc ps -q redis)"
+REDIS_LOADER="${PROJECT}-redis-restore"
 dc stop redis >/dev/null
+docker run --rm -v "$WORKSPACE/data/redis":/d alpine \
+    sh -c 'rm -rf /d/appendonlydir /d/dump.rdb' >/dev/null
 docker cp "$BACKUP/redis.rdb" "$REDIS_CID:/data/dump.rdb"
+docker run --rm -v "$WORKSPACE/data/redis":/d alpine chown 999:999 /d/dump.rdb >/dev/null
+
+docker rm -f "$REDIS_LOADER" >/dev/null 2>&1 || true
+docker run -d --rm --name "$REDIS_LOADER" \
+    -v "$WORKSPACE/data/redis":/data redis:7-alpine \
+    redis-server --appendonly no >/dev/null
+for _ in $(seq 1 30); do
+    docker exec "$REDIS_LOADER" redis-cli PING >/dev/null 2>&1 && break
+    sleep 1
+done
+REDIS_KEYS="$(docker exec "$REDIS_LOADER" redis-cli DBSIZE 2>/dev/null | tr -d '\r')"
+log "redis loaded ${REDIS_KEYS:-0} keys from the snapshot"
+
+# A hard failure, not the warning restore.sh emits. There, a human is watching
+# and an empty redis costs rate-limit buckets and queued jobs, not data. Here
+# the whole point is to be the control that goes red on its own - and a drill
+# that only warns is a drill that passes.
+if ! [ "${REDIS_KEYS:-0}" -gt 0 ] 2>/dev/null; then
+    docker exec "$REDIS_LOADER" redis-cli SHUTDOWN NOSAVE >/dev/null 2>&1 || true
+    docker rm -f "$REDIS_LOADER" >/dev/null 2>&1 || true
+    fail "redis restored 0 keys from $BACKUP/redis.rdb - the snapshot is empty or was not loaded"
+fi
+
+# Rebuild the AOF from what was just loaded, so the AOF-on service start below
+# reads the restored dataset instead of an empty log.
+docker exec "$REDIS_LOADER" redis-cli CONFIG SET appendonly yes >/dev/null
+sleep 2
+docker exec "$REDIS_LOADER" redis-cli INFO persistence \
+    | grep -q 'aof_last_bgrewrite_status:ok' \
+    || fail "redis AOF rewrite did not report ok - the restored dataset would not survive the restart"
+docker exec "$REDIS_LOADER" redis-cli SHUTDOWN NOSAVE >/dev/null 2>&1 || true
+sleep 2
+docker rm -f "$REDIS_LOADER" >/dev/null 2>&1 || true
 dc up -d redis
+
+# Prove it survived the AOF-on restart, which is the step the old code got
+# wrong: loading into a throwaway server proves nothing if the real one then
+# comes up empty.
+for _ in $(seq 1 30); do
+    dc exec -T redis redis-cli PING >/dev/null 2>&1 && break
+    sleep 1
+done
+REDIS_KEYS_AFTER="$(dc exec -T redis redis-cli DBSIZE 2>/dev/null | tr -d '\r')"
+log "redis serving ${REDIS_KEYS_AFTER:-0} keys after the AOF-on restart"
+if ! [ "${REDIS_KEYS_AFTER:-0}" -gt 0 ] 2>/dev/null; then
+    fail "redis came back empty after restart - the AOF did not adopt the restored dataset"
+fi
 
 # --- bring up backend: entrypoint runs `alembic upgrade head` on the restored
 #     schema (exercises forward-migration of an old backup), then serves ------

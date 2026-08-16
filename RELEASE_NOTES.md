@@ -1,3 +1,60 @@
+# file:Heron v2.13.2
+
+**A regression v2.13.1 introduced, found by reviewing v2.13.1.**
+
+A patch release. One high-severity fix, plus corrections to three checks that
+could not detect what their own failure messages claimed. No migration, no host
+step, no API change, no default moves. Desktop client **1.4.3** ships alongside
+it on its own tag.
+
+---
+
+## An approver reviewing a file could exhaust a share's download budget
+
+v2.13.1 fixed an approver being locked out of the very files they had to decide
+on. That fix let a non-admin approver open an active share carrying files
+awaiting review — but the download routes still treated "this is a review, not a
+delivery" as meaning only *the whole share is awaiting approval*. An approver
+reviewing files appended to a **live** share was therefore charged like a
+recipient.
+
+On a share limited to one download, the approver's own review spent it, and
+every real recipient then got "this share has reached its download limit". The
+files were never delivered to anyone.
+
+Both download routes now decide this through one shared rule: access granted
+purely by review rights is free, and an approver who is also a recipient still
+pays like any other recipient.
+
+This only affects instances using four-eyes approval with content review and a
+per-share download limit. If that is you, any share whose budget was consumed
+this way can be given more downloads from the share's own page.
+
+## Three checks that could not fail for the reason they named
+
+The restore drill gained real Redis assertions in v2.13.1. Two of them were
+wrong in ways that only show up on a bigger instance than the one they were
+written against:
+
+- The readiness wait watched for the port to open rather than for the data to
+  load, so on a production-sized snapshot the drill could declare a perfectly
+  good backup empty. It now waits for Redis to answer with a real key count.
+- The check that the rewritten log had succeeded read a field that says "ok"
+  before any rewrite has happened, so it could not detect the failure it
+  described — and the drill could shut the server down mid-rewrite, causing the
+  very problem the next check would then report. It now waits for the rewrite to
+  actually finish.
+- A refused configuration change was reported as success, because the error text
+  was being discarded.
+
+## Corrections
+
+Two sentences in the v2.13.1 notes were wrong and are fixed above them: the
+approval-fingerprint fix was about non-ASCII values, not oversized ones, and
+four stale comments were corrected in that release, not three.
+
+---
+
 # file:Heron v2.13.1
 
 **Closing the audit backlog — 23 recorded defects, no new features.**
@@ -71,9 +128,9 @@ The check now runs before anything is built.
   prepared and then discarded.
 - Admin-minted API tokens now default to limited scope and a 90-day expiry, as
   the self-service form already did.
-- Notification streams no longer leak a reconnect timer, an oversized
-  fingerprint is rejected cleanly instead of erroring, and the client-side 404
-  beacon has an overall ceiling.
+- Notification streams no longer leak a reconnect timer, a **non-ASCII**
+  approval fingerprint is rejected cleanly instead of erroring the request out,
+  and the client-side 404 beacon has an overall ceiling.
 - German and English both gained a missing permission label.
 
 ## Tests and documentation
@@ -91,7 +148,7 @@ All four were rewritten to fail when the thing they name is removed, and every
 fix in this release was checked the same way: revert the fix, confirm the test
 goes red, restore.
 
-Three comments describing mechanisms that do not exist were corrected — the
+Four comments describing mechanisms that do not exist were corrected — the
 most consequential being the upload-reaper setting, still documented as a cap
 on how long an upload may take. It has measured inactivity since v2.12.0, and
 the old reading is what killed three live transfers.

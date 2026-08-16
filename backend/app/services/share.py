@@ -648,6 +648,32 @@ def assert_share_file_access(
         assert_file_approved(db, user=user, share=share, file=file)
 
 
+def is_review_access(db: Session, *, user: User, share: Share) -> bool:
+    """True when this actor reaches the bytes as an APPROVER rather than as a
+    recipient - the only case that must not spend the recipients' budget.
+
+    ONE definition, consulted by both download routes. They each carried their
+    own `share.state == pending_approval`, which was complete until v2.13.1:
+    P10 admitted a non-recipient approver to an ACTIVE share carrying files
+    awaiting review, and the budget branch keys on `state == active`. So the
+    approver's review download decremented `downloads_remaining`, and on a
+    `download_limit=1` share it exhausted the budget before a single recipient
+    fetched anything - every one of them then got 410. The comment above the
+    old predicate said "a pending share only reaches here for an approver",
+    and P10 is what made that false.
+
+    An approver who is ALSO a recipient pays like any other recipient; only
+    access granted purely by review rights is free.
+    """
+    from . import share_approval as approval_svc
+
+    if share.state == ShareState.pending_approval:
+        return True
+    return approval_svc.can_review_this_share(db, user, share) and not is_authorized_to_download(
+        db, user=user, share=share
+    )
+
+
 def assert_file_approved(db: Session, *, user: User, share: Share, file) -> None:
     """Refuse a file that is still awaiting its own four-eyes decision.
 

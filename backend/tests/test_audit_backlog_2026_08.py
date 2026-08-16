@@ -410,3 +410,118 @@ def test_assert_safe_host_refuses_an_empty_host():
 
     with pytest.raises(AppError):
         assert_safe_host("   ", 25)
+
+
+# --- post-release review finding: the P10 budget regression -----------------
+#
+# Found by an adversarial review AFTER v2.13.1 shipped. P10 admitted a
+# non-recipient approver to an ACTIVE share carrying files awaiting review;
+# the download routes' budget branch keys on `state == active`, and their
+# `is_review` flag only recognised `pending_approval`. So the approver's
+# review download spent the recipients' budget, and a `download_limit=1`
+# share was exhausted before a single recipient fetched anything.
+
+
+def _approval_share(db, make_user, *, awaiting: bool):
+    from datetime import timedelta
+
+    from app.models.file import File, FileApprovalState, FileState
+    from app.models.share import Share, ShareKind, ShareState
+    from app.models.user import UserRole
+    from app.utils.timeutil import utc_now
+
+    owner = make_user(email="own@t.local", role=UserRole.employee)
+    share = Share(
+        created_by_id=owner.id, kind=ShareKind.outbound, state=ShareState.active,
+        expires_at=utc_now() + timedelta(days=1), download_limit=1, downloads_remaining=1,
+    )
+    db.add(share)
+    db.flush()
+    db.add(File(
+        share_id=share.id, original_filename="appendix.bin",
+        mime_type="application/octet-stream", size_bytes=10,
+        state=FileState.clean, uploaded_by_id=owner.id,
+        approval_state=(
+            FileApprovalState.pending_review if awaiting else FileApprovalState.approved
+        ),
+    ))
+    db.commit()
+    return owner, share
+
+
+def test_a_reviewing_approver_does_not_spend_the_recipients_budget(db, make_user):
+    """The regression itself: an approver who is NOT a recipient reaches an
+    active share only because it carries files awaiting their decision."""
+    from app.models.user import UserRole
+    from app.services import settings as settings_svc
+    from app.services import share as share_svc
+
+    settings_svc.set_value(db, key="share_approval.allow_content_review", value="true", actor=None)
+    settings_svc.set_value(db, key="share_approval.enabled", value="true", actor=None)
+    settings_svc.set_value(
+        db, key="share_approval.approver_mode", value="employees_admins", actor=None
+    )
+    db.commit()
+
+    _owner, share = _approval_share(db, make_user, awaiting=True)
+    # An EMPLOYEE approver, not an admin. An admin passes
+    # is_authorized_to_download outright, so they never exercised the branch
+    # P10 changed - which is exactly why the defect survived: every existing
+    # approval test uses an admin.
+    approver = make_user(email="appr@t.local", role=UserRole.employee)
+
+    assert share_svc.is_review_access(db, user=approver, share=share) is True
+
+
+def test_an_approver_on_a_share_with_nothing_to_review_is_not_free(db, make_user):
+    """The scoping matters both ways: with no file awaiting review there is no
+    review to do, so nothing justifies a free download."""
+    from app.models.user import UserRole
+    from app.services import settings as settings_svc
+    from app.services import share as share_svc
+
+    settings_svc.set_value(db, key="share_approval.allow_content_review", value="true", actor=None)
+    settings_svc.set_value(db, key="share_approval.enabled", value="true", actor=None)
+    settings_svc.set_value(
+        db, key="share_approval.approver_mode", value="employees_admins", actor=None
+    )
+    db.commit()
+
+    _owner, share = _approval_share(db, make_user, awaiting=False)
+    approver = make_user(email="appr2@t.local", role=UserRole.employee)
+
+    assert share_svc.is_review_access(db, user=approver, share=share) is False
+
+
+def test_the_budget_branches_consult_the_review_flag():
+    """Both download routes, one definition. Pinned structurally because the
+    alternative - driving two full download routes through an approval setup -
+    is what made the original defect invisible."""
+    import ast
+    import pathlib
+
+    src = pathlib.Path(__file__).resolve().parents[1] / "app" / "routers" / "files.py"
+    tree = ast.parse(src.read_text(encoding="utf-8"))
+
+    decrements = [
+        n for n in ast.walk(tree)
+        if isinstance(n, ast.Call)
+        and isinstance(n.func, ast.Attribute)
+        and n.func.attr == "try_decrement_share_counter"
+    ]
+    assert len(decrements) == 2, f"expected both download routes, found {len(decrements)}"
+
+    guarded = 0
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.If):
+            continue
+        test_src = ast.dump(node.test)
+        if "try_decrement_share_counter" not in test_src:
+            continue
+        # `not is_review` must be one of the conjuncts.
+        if "'is_review'" in test_src and "Not()" in test_src:
+            guarded += 1
+    assert guarded == 2, (
+        "a budget decrement is no longer gated on `not is_review`, so a "
+        "reviewing approver spends the recipients' download budget"
+    )

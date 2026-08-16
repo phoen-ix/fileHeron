@@ -15,11 +15,41 @@ keep this to what would cause a wrong move if unknown.
 
 ## Status
 
+**v2.13.2 fixes a regression v2.13.1 introduced**, found by an adversarial
+review of v2.13.1 run *after* its tag was already immutable. No migration, no
+host step, no API change. Desktop client **1.4.3** ships alongside it.
+
+**The P10 budget regression is the one to remember, because the shape recurs.**
+P10 widened WHO may reach a share's bytes (a non-recipient approver, on an
+ACTIVE share carrying files awaiting review). It did not widen the predicate
+that decides WHETHER THE ACCESS IS CHARGED - both download routes still read
+`is_review = share.state == pending_approval`, while the budget branch keys on
+`state == active`. So the approver paid from the recipients' budget, and a
+`download_limit=1` share was exhausted before a single recipient fetched
+anything. `share.is_review_access()` is now the ONE definition both routes
+consult; an approver who is also a recipient still pays.
+**Test it with a NON-ADMIN approver.** An admin passes
+`is_authorized_to_download` outright and never reaches the branch, which is
+exactly why this survived - CLAUDE.md already said so for P10 itself, and the
+warning applies to everything downstream of that grant.
+
+Also: three checks added to the restore drill in v2.13.1 could not fail for the
+reason they named. A PING loop is not a readiness gate (redis-cli exits 0 on an
+error reply, so it broke while redis was still LOADING and the drill would call
+a healthy production-sized backup empty); `aof_last_bgrewrite_status` reads `ok`
+before any rewrite has run, so it could not observe the rewrite it named - and
+the `sleep 2` before SHUTDOWN could cut that rewrite in half; and CONFIG SET's
+error reply went to /dev/null. Poll DBSIZE for an INTEGER, wait on
+`aof_enabled` + `aof_rewrite_in_progress`, and read the reply.
+
 **v2.13.1 closes the audit backlog.** 23 recorded items plus 2 found while
 verifying them; **no migration, no host step, no API change, no default moves.**
 Desktop client **1.4.2** ships alongside it on its own tag. The backlog file
-`.claude/audit-2026-08-15.md` is now empty of open work and can be retired - its
-two accepted residuals are folded into the invariant blocks below.
+`.claude/audit-2026-08-15.md` held no open work and has been DELETED (it was
+gitignored, so this host was its only copy). Everything it still carried is
+folded into the accepted-residuals block below - five entries, not the two the
+plan expected: its Closed section was holding three more, one of which was a
+false comment of exactly the class this release fixes.
 
 Two of these were CONTROLS that controlled nothing, which is the part worth
 remembering:
@@ -33,7 +63,7 @@ remembering:
   itself skipped, so gating the JOB would silently stop manual `dev-<sha>`
   builds. The tag condition belongs on the STEP.
 
-Everything else is listed in `RELEASE_NOTES.md`. Three stale comments were
+Everything else is listed in `RELEASE_NOTES.md`. Four stale comments were
 corrected; the one that matters is `config.py::UPLOAD_STALE_AFTER_HOURS`, which
 still described a cap on upload DURATION - the reading that killed three live
 transfers - when it has measured inactivity since v2.12.0.
@@ -80,8 +110,9 @@ The audit's 48-lead unverified tail was triaged separately: 31 promote (0 high,
 are fixed** - the roster leak above, the admin live-status SSE route (mounted
 inside the global gate, which demands the Authorization header EventSource
 cannot send, so it had never once connected), and restic retention (below). The
-28 lows are a recorded backlog in `.claude/audit-2026-08-15.md`, which is
-**gitignored** - it exists only on this host.
+28 lows were a recorded backlog in `.claude/audit-2026-08-15.md`, which was
+gitignored and existed only on this host; it was closed out and deleted at
+v2.13.1, and its residuals live in the accepted-residuals block below.
 
 > **Two invariants from that tail.** The co-recipient privacy projection must be
 > applied on the LIST route as well as the detail serialiser - it existed only
@@ -140,10 +171,10 @@ so a rollback past them needs the [[reference_rollback_migration_trap]]
 permissive/NULL value, so existing rows, in-flight sessions and
 approval-disabled deployments are unaffected by the upgrade itself.
 
-Backend **`v2.13.1`** (previous notable sweep: v2.8.1, audit #2 - see the
+Backend **`v2.13.2`** (previous notable sweep: v2.8.1, audit #2 - see the
 block below; .0 also carried the dependency/runtime sweep: Python 3.14, Node 24
 LTS, TypeScript 6, ESLint 10, Vite 8, Pinia 4, zero open dependency PRs).
-Desktop client **`client-v1.4.2`** - shipped + in production, published for
+Desktop client **`client-v1.4.3`** - shipped + in production, published for
 public self-hosting. **v2.8.0 needs no host step and no migration**, but it DOES
 change one default: `imap.require_known_sender` is ON, so an instance that
 accepts inbound mail from addresses with no user account must turn it off at

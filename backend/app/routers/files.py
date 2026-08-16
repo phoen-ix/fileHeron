@@ -404,14 +404,19 @@ def download_file(
         # used to be recorded nowhere at all: no download_log row, no audit
         # entry, nothing for the sender or an investigator to find (audit
         # 2026-07-30).
-        is_review = share.state == ShareState.pending_approval
+        is_review = share_svc.is_review_access(db, user=user, share=share)
 
         # v1.1.0: per-share download budget, live shares only. Atomic
         # decrement; if the counter is already at 0 we refuse with 410 before
         # logging/sending. NULL limit = unlimited, the helper's WHERE clause
         # skips the case.
+        #
+        # `not is_review` is load-bearing since v2.13.1: an approver reviewing
+        # files appended to an ACTIVE share is not a recipient, and charging
+        # them exhausts the recipients' budget before anyone receives anything.
         if (
-            share.state == ShareState.active
+            not is_review
+            and share.state == ShareState.active
             and share.download_limit is not None
             and not share_svc.try_decrement_share_counter(db, share=share)
         ):
@@ -597,10 +602,11 @@ def download_share_zip(
         # files, so it is recorded like any other transfer. The single-file
         # route was fixed for this in v2.6.0 and the archive route, which hands
         # over EVERY file at once, was left recording nothing at all (audit #2).
-        is_review = share.state == ShareState.pending_approval
+        is_review = share_svc.is_review_access(db, user=user, share=share)
 
         if (
-            share.state == ShareState.active
+            not is_review
+            and share.state == ShareState.active
             and share.download_limit is not None
             and not share_svc.try_decrement_share_counter(db, share=share)
         ):

@@ -43,7 +43,23 @@ _HTTP_STATUS_CODES = {
 # it. Expected noise from a poll racing a writer, not an error and not an attack.
 # If these ever need chasing, the signal is the backend log's "state file
 # unreadable" tracebacks (services/release_apply.py::_read_state), not this table.
-_NEVER_CAPTURE_CODES = frozenset({"JOB_NOT_FOUND"})
+#
+# TOKEN_EXPIRED: the 15-minute access token reaching its exp. The SPA refreshes
+# REACTIVELY - there is no proactive refresh timer, so a 401 is how expiry is
+# discovered - and the notification bell's SSE loop re-mints a stream token every
+# ~61.5s (60s server close + 1500ms backoff), which makes it the only timer-driven
+# authenticated request in the product and therefore ALWAYS the one that trips the
+# boundary first. So this is emitted exactly once per token lifetime per open tab,
+# forever, and is always followed within the same second by a successful
+# /api/auth/refresh and a successful replay. It is a protocol step, not an error.
+# Suppressed by CODE, not by status: AUTH_REQUIRED, INVALID_CREDENTIALS,
+# TOTP_REQUIRED and the scanner-bait 401s are all still captured, which is the
+# whole reason not to just drop 401 from error_log.http_4xx_codes - that allowlist
+# is what surfaced the ungated admin SSE route (315 AUTH_REQUIRED in 90 minutes).
+# The cost: a genuine MASS expiry - host clock skew, say - no longer shows up
+# here. It stays visible in the proxy access log and as user-visible re-login
+# churn. Same trade JOB_NOT_FOUND already makes.
+_NEVER_CAPTURE_CODES = frozenset({"JOB_NOT_FOUND", "TOKEN_EXPIRED"})
 
 
 class AppError(Exception):

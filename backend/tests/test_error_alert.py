@@ -4,6 +4,7 @@ recipient modes, the 4xx filter in the handler helper, and Redis fail-open."""
 from __future__ import annotations
 
 import types
+from datetime import timedelta
 
 import pytest
 
@@ -304,6 +305,75 @@ def test_middleware_skips_never_capture_codes(monkeypatch):
         _fake_request(), status_code=404, code="NOT_FOUND", exc=Exception("nope")
     )
     assert len(calls) == 1
+
+
+def test_expired_access_token_is_not_captured_but_its_siblings_are(monkeypatch):
+    """TOKEN_EXPIRED is the 15-minute access token reaching exp: emitted once per
+    token lifetime per open tab by the SSE re-mint, always followed by a successful
+    refresh and replay. Left capturing it drowned everything else in the log (32 of
+    41 rows on one day, on a four-user instance).
+
+    The half that gives the suppression its meaning is the second one: it is keyed
+    on the CODE, so the other 401s - including the AUTH_REQUIRED that surfaced the
+    ungated admin SSE route - keep capturing. Dropping 401 from the allowlist
+    instead would have taken those with it."""
+    from app.middleware import errors
+    from app.services import error_log, job_queue
+
+    calls = []
+    monkeypatch.setattr(job_queue, "enqueue", lambda name, **kw: calls.append((name, kw)))
+    monkeypatch.setattr(error_log, "capture_4xx_enabled_cached", lambda: True)
+    monkeypatch.setattr(error_log, "capture_rate_per_min_cached", lambda: 100)
+
+    errors._maybe_enqueue_error_event(
+        _fake_request(), status_code=401, code="TOKEN_EXPIRED", exc=Exception("expired")
+    )
+    assert calls == [], "the reactive-refresh 401 must not reach the error log"
+
+    # Every other 401 still captures - same status, different code.
+    for code in ("AUTH_REQUIRED", "INVALID_CREDENTIALS", "TOTP_REQUIRED", "SESSION_REVOKED"):
+        errors._maybe_enqueue_error_event(
+            _fake_request(), status_code=401, code=code, exc=Exception(code)
+        )
+    assert [kw["event"]["code"] for _, kw in calls] == [
+        "AUTH_REQUIRED",
+        "INVALID_CREDENTIALS",
+        "TOTP_REQUIRED",
+        "SESSION_REVOKED",
+    ]
+
+
+def test_expired_access_token_really_raises_the_suppressed_code():
+    """The suppression above is keyed on the literal string TOKEN_EXPIRED, and
+    nothing else in the suite pins that the expiry path produces it - so a rename
+    would silently restore the flood with no test going red.
+
+    Assert on what the code PRODUCES: mint a real token with a past exp and put it
+    through the real resolver, rather than re-deriving the string from the source."""
+    import jwt
+
+    from app.config import settings
+    from app.middleware.errors import _NEVER_CAPTURE_CODES, AppError
+    from app.services.jwt_session import resolve_user_from_access_token
+    from app.utils.timeutil import utc_now_aware
+
+    expired = utc_now_aware() - timedelta(minutes=1)
+    token = jwt.encode(
+        {
+            "sub": "1",
+            "type": "access",
+            "iat": int((expired - timedelta(minutes=15)).timestamp()),
+            "exp": int(expired.timestamp()),
+        },
+        settings.JWT_SECRET,
+        algorithm=settings.JWT_ALGORITHM,
+    )
+
+    with pytest.raises(AppError) as exc:
+        resolve_user_from_access_token(None, token, settings)
+    assert exc.value.status_code == 401
+    assert exc.value.code == "TOKEN_EXPIRED"
+    assert exc.value.code in _NEVER_CAPTURE_CODES
 
 
 def test_middleware_enqueues_4xx_when_capture_on(monkeypatch):

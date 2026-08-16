@@ -20,6 +20,13 @@ from app.models.ip_block import IpBlock
 from app.models.user import UserRole
 from app.services import scan_guard as sg
 
+# Bound at import time, which happens during collection - BEFORE conftest's
+# autouse `_disable_ip_rate_limit` replaces the module attribute. This is the
+# real limiter, not a re-implementation of it: a test that re-derived the
+# `count <= limit` arithmetic could not disagree with the code it checks, which
+# is the anti-pattern this suite has been bitten by repeatedly.
+from app.services.rate_limit import check_ip_allowed as _REAL_CHECK_IP_ALLOWED
+
 SCANNER = "45.148.10.67"
 PW = "Pass12345678!"
 
@@ -350,3 +357,383 @@ async def test_redis_down_still_serves_everyone(db, scanner_client, monkeypatch)
         assert (await scanner_client.get("/api/health")).status_code == 200
     assert (await scanner_client.get("/.env")).status_code == 404
     await _settled()
+
+
+# ---------------------------------------------------------------------------
+# Brute-force guard, driven through the real login route.
+#
+# These use the REAL counter (no `check_ip_allowed` stub) with a small
+# `auth_threshold`, because the thing most worth pinning is the arithmetic of
+# which attempt crosses - and a stubbed counter proves nothing about it.
+# ---------------------------------------------------------------------------
+
+
+# The registry's floor for `auth_threshold`, and the lowest value these tests
+# can use: anything smaller is clamped UP, which would silently invalidate every
+# "N attempts are served, the N+1th blocks" assertion below. The floor exists
+# because below 5 a single user who forgot their password crosses before the
+# per-account lockout can convert their failures to uncountable 423s.
+AUTH_FLOOR = 5
+
+
+def _enable_auth_guard(db, threshold=AUTH_FLOOR, **over):
+    _enable(
+        db,
+        signal_probe_path=False,
+        signal_auth_failure=True,
+        auth_threshold=threshold,
+        **over,
+    )
+    assert sg.snapshot()["auth_threshold"] == threshold, (
+        "the registry clamped the threshold; the arithmetic below would be wrong"
+    )
+
+
+class _FakeRedis:
+    """Just enough Redis for the counting path, in a dict.
+
+    Deliberately NOT a stub of `check_ip_allowed`: the real limiter and the real
+    `clear_counters` both have to act on the SAME store, or a test cannot tell
+    "the release cleared the counter" from "the fake never had one". A stubbed
+    limiter made `test_releasing_a_block_does_not_leave_it_re_arming` pass while
+    proving nothing.
+
+    It is also what keeps these tests off the deployment's Redis: the suite runs
+    inside the compose network, so a bare `get_redis()` in code under test
+    reaches the live instance.
+    """
+
+    def __init__(self) -> None:
+        self.store: dict = {}
+
+    def incr(self, key):
+        self.store[key] = int(self.store.get(key, 0)) + 1
+        return self.store[key]
+
+    def expire(self, key, seconds, nx=False):
+        return True
+
+    def delete(self, *keys):
+        for key in keys:
+            self.store.pop(key, None)
+        return len(keys)
+
+    def sadd(self, key, *values):
+        bucket = self.store.setdefault(key, set())
+        before = len(bucket)
+        bucket.update(values)
+        return len(bucket) - before
+
+    def scard(self, key):
+        return len(self.store.get(key, set()))
+
+
+@pytest.fixture
+def _real_ip_counter(monkeypatch):
+    """Run the REAL rate limiter against an in-process Redis."""
+    from app.services import rate_limit
+
+    fake = _FakeRedis()
+    # rate_limit imports the factory at module scope; scan_guard imports it
+    # inside each function. Both have to point at the same fake.
+    monkeypatch.setattr(rate_limit, "get_redis", lambda: fake)
+    monkeypatch.setattr("app.redis_client.get_redis", lambda: fake)
+    monkeypatch.setattr(rate_limit, "check_ip_allowed", _REAL_CHECK_IP_ALLOWED)
+    return fake
+
+
+@pytest.mark.asyncio
+async def test_a_normal_2fa_login_never_earns_an_offence(
+    db, app_with_db, make_user, _real_ip_counter
+):
+    """The defect that made this signal unusable.
+
+    A TOTP-enrolled user posting their password gets 401 TOTP_REQUIRED - the
+    normal first step, not a wrong secret. Counting it meant an office with 2FA
+    on blocked itself by logging in."""
+    from datetime import datetime, timezone
+
+    from app.models.user_totp import UserTOTP
+
+    _enable_auth_guard(db)
+    user = make_user(email="tw@test.local", role=UserRole.employee, password=PW)
+    db.add(
+        UserTOTP(
+            user_id=user.id,
+            secret_encrypted=b"dummy",
+            enabled_at=datetime.now(tz=timezone.utc).replace(tzinfo=None),
+            last_used_counter=0,
+        )
+    )
+    db.commit()
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app_with_db, client=(SCANNER, 51234)),
+        base_url="http://test",
+    ) as ac:
+        for _ in range(6):
+            resp = await ac.post(
+                "/api/auth/login", json={"email": "tw@test.local", "password": PW}
+            )
+            assert resp.status_code == 401
+            assert resp.json()["code"] == "TOTP_REQUIRED"
+        await _settled()
+        assert db.query(IpBlock).count() == 0, "a 2FA login was treated as an attack"
+
+        # Positive control: the same route, same source, with a WRONG password,
+        # crosses the same threshold and does block. Without this the test
+        # passes even if the whole signal is switched off.
+        for _ in range(6):
+            await ac.post(
+                "/api/auth/login",
+                json={"email": "tw@test.local", "password": "WrongPass!123"},
+            )
+        await _settled()
+
+    assert db.query(IpBlock).filter(IpBlock.subject == SCANNER).count() == 1
+
+
+@pytest.mark.asyncio
+async def test_credential_guessing_blocks_at_the_auth_threshold(
+    db, app_with_db, _real_ip_counter
+):
+    """Guessing against an address with no account: the failures stay
+    INVALID_CREDENTIALS (no account to lock, so no 423 conversion)."""
+    _enable_auth_guard(db)
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app_with_db, client=(SCANNER, 51234)),
+        base_url="http://test",
+    ) as ac:
+        for _ in range(AUTH_FLOOR):
+            resp = await ac.post(
+                "/api/auth/login",
+                json={"email": "nobody@test.local", "password": "Guess!12345"},
+            )
+            assert resp.status_code == 401
+        await _settled()
+        # `check_ip_allowed` allows while count <= limit, so exactly `threshold`
+        # attempts are still SERVED and the next one crosses. That `<=` is
+        # load-bearing: the default of 15 is sized so a three-person office
+        # grinding to lockout lands on 15 and is served. "Fixing" it to `<`
+        # re-bans them.
+        assert db.query(IpBlock).count() == 0
+
+        await ac.post(
+            "/api/auth/login",
+            json={"email": "nobody@test.local", "password": "Guess!12345"},
+        )
+        await _settled()
+        row = db.query(IpBlock).filter(IpBlock.subject == SCANNER).one()
+        assert row.reason == "auth_failure"
+
+        # And the block is a byte-identical 404 on an unrelated route.
+        refused = await ac.get("/api/health")
+        assert refused.status_code == 404
+        assert refused.json()["code"] == "NOT_FOUND"
+
+
+@pytest.mark.asyncio
+async def test_the_scan_and_credential_budgets_do_not_pool(
+    db, app_with_db, _real_ip_counter
+):
+    """Two bait probes plus one password typo must not add up to a block.
+
+    Pooling put the typo - which legitimate users produce constantly - in charge
+    of a threshold sized for bait paths, which they never touch."""
+    # Scan budget 3, credential budget 5 - deliberately different, which is the
+    # whole point: one number cannot serve both.
+    _enable(db, signal_probe_path=True, signal_auth_failure=True,
+            threshold=3, auth_threshold=AUTH_FLOOR)
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app_with_db, client=(SCANNER, 51234)),
+        base_url="http://test",
+    ) as ac:
+        # 2 bait probes (under the scan budget of 3) + 5 credential failures
+        # (on the credential budget of 5). Pooled at either limit this blocks.
+        for _ in range(2):
+            assert (await ac.get("/.env")).status_code == 404
+        for _ in range(AUTH_FLOOR):
+            await ac.post(
+                "/api/auth/login",
+                json={"email": "nobody@test.local", "password": "Guess!12345"},
+            )
+        await _settled()
+        assert db.query(IpBlock).count() == 0, "the two budgets pooled"
+
+        # Positive control: one more credential failure crosses the auth budget.
+        for _ in range(1):
+            await ac.post(
+                "/api/auth/login",
+                json={"email": "nobody@test.local", "password": "Guess!12345"},
+            )
+        await _settled()
+
+    assert db.query(IpBlock).filter(IpBlock.subject == SCANNER).count() == 1
+
+
+@pytest.mark.asyncio
+async def test_a_shared_office_with_real_logins_is_not_blocked(
+    db, app_with_db, make_user, _real_ip_counter
+):
+    """The NAT case. Successful logins from the same address, across more than
+    one account, explain the failures - so the block is withheld."""
+    _enable_auth_guard(db)
+    make_user(email="a@office.local", role=UserRole.employee, password=PW)
+    make_user(email="b@office.local", role=UserRole.employee, password=PW)
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app_with_db, client=(SCANNER, 51234)),
+        base_url="http://test",
+    ) as ac:
+        for email in ("a@office.local", "b@office.local"):
+            ok = await ac.post(
+                "/api/auth/login", json={"email": email, "password": PW}
+            )
+            assert ok.status_code == 200, ok.text
+        for _ in range(6):
+            await ac.post(
+                "/api/auth/login",
+                json={"email": "a@office.local", "password": "WrongPass!123"},
+            )
+        await _settled()
+
+    assert db.query(IpBlock).count() == 0, "an office with real logins was blocked"
+
+
+@pytest.mark.asyncio
+async def test_one_account_cannot_launder_a_stuffer(
+    db, app_with_db, make_user, _real_ip_counter
+):
+    """The mirror of the test above, and the reason the exemption needs TWO
+    accounts: otherwise anyone holding one valid login scripts successes from
+    their own address and grinds every other account for free."""
+    _enable_auth_guard(db)
+    make_user(email="mine@test.local", role=UserRole.employee, password=PW)
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app_with_db, client=(SCANNER, 51234)),
+        base_url="http://test",
+    ) as ac:
+        for _ in range(3):
+            ok = await ac.post(
+                "/api/auth/login", json={"email": "mine@test.local", "password": PW}
+            )
+            assert ok.status_code == 200
+        for _ in range(6):
+            await ac.post(
+                "/api/auth/login",
+                json={"email": "victim@test.local", "password": "Guess!12345"},
+            )
+        await _settled()
+
+    assert db.query(IpBlock).filter(IpBlock.subject == SCANNER).count() == 1
+
+
+@pytest.mark.asyncio
+async def test_stale_successes_do_not_launder_todays_failures(
+    db, app_with_db, make_user, _real_ip_counter
+):
+    """Freshness, the same rule network escalation learned: the successes have
+    to be inside the window the failures are counted over."""
+    from datetime import timedelta
+
+    from app.models.login_attempt import LoginAttempt, LoginOutcome
+    from app.utils.timeutil import utc_now
+
+    _enable_auth_guard(db, window_sec=60)
+    old = utc_now() - timedelta(seconds=600)
+    for email in ("a@office.local", "b@office.local"):
+        for _ in range(5):
+            db.add(LoginAttempt(
+                email=email, ip=SCANNER, attempted_at=old,
+                outcome=LoginOutcome.success.value,
+            ))
+    db.commit()
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app_with_db, client=(SCANNER, 51234)),
+        base_url="http://test",
+    ) as ac:
+        for _ in range(6):
+            await ac.post(
+                "/api/auth/login",
+                json={"email": "victim@test.local", "password": "Guess!12345"},
+            )
+        await _settled()
+
+    assert db.query(IpBlock).filter(IpBlock.subject == SCANNER).count() == 1
+
+
+@pytest.mark.asyncio
+async def test_an_expired_session_refreshing_is_never_brute_force(
+    db, app_with_db, _real_ip_counter
+):
+    """`/api/auth/refresh` 401s once per expired tab, and a bearer-less API call
+    401s on every route. Neither is a credential submission - which is why the
+    prefixes are exact and `/api/auth/` is never used as a blanket."""
+    _enable_auth_guard(db)
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app_with_db, client=(SCANNER, 51234)),
+        base_url="http://test",
+    ) as ac:
+        for _ in range(8):
+            assert (await ac.post("/api/auth/refresh")).status_code == 401
+            assert (await ac.get("/api/shares")).status_code == 401
+        await _settled()
+        assert db.query(IpBlock).count() == 0
+
+        # Positive control on the same client and settings.
+        for _ in range(AUTH_FLOOR + 1):
+            await ac.post(
+                "/api/auth/login",
+                json={"email": "nobody@test.local", "password": "Guess!12345"},
+            )
+        await _settled()
+
+    assert db.query(IpBlock).filter(IpBlock.subject == SCANNER).count() == 1
+
+
+@pytest.mark.asyncio
+async def test_releasing_a_block_does_not_leave_it_re_arming(
+    db, app_with_db, make_user, login_as, _real_ip_counter
+):
+    """A release must also forget the counter that produced the block.
+
+    Otherwise the source is still sitting at the threshold for the rest of the
+    window and the very next offending request re-blocks it within seconds - the
+    admin's release looks like it did nothing. Same hair-trigger shape v2.11.0
+    fixed for network escalation, one level down."""
+    _enable_auth_guard(db)
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app_with_db, client=(SCANNER, 51234)),
+        base_url="http://test",
+    ) as ac:
+        for _ in range(AUTH_FLOOR + 1):
+            await ac.post(
+                "/api/auth/login",
+                json={"email": "nobody@test.local", "password": "Guess!12345"},
+            )
+        await _settled()
+        row = db.query(IpBlock).filter(IpBlock.subject == SCANNER).one()
+
+        sg.release(db, block_id=row.id, actor_id=None)
+        db.commit()
+        sg._reset_cache()
+
+        # One more offending request must NOT immediately re-block.
+        await ac.post(
+            "/api/auth/login",
+            json={"email": "nobody@test.local", "password": "Guess!12345"},
+        )
+        await _settled()
+
+    live = (
+        db.query(IpBlock)
+        .filter(IpBlock.subject == SCANNER, IpBlock.released_at.is_(None))
+        .count()
+    )
+    assert live == 0, "the released source was re-blocked off a stale counter"

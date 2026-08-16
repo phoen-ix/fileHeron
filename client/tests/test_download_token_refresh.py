@@ -135,3 +135,142 @@ def test_an_api_token_session_does_not_attempt_a_refresh():
     with pytest.raises(SessionExpiredError):
         api.refresh_bearer()
     assert not refresh.called
+
+
+@respx.mock
+def test_parallel_segments_share_one_refresh():
+    """N download workers share one access token AND one refresh cookie, so they
+    all 401 within milliseconds of each other. Unguarded, each POSTs
+    /api/auth/refresh with the same cookie: exactly one wins, and a loser whose
+    read lands after the winner committed is taken for a replay of a rotated
+    chain link - which revokes every session the user has on every device and
+    files a `refresh_token_reused` row that reads as token theft. On a long
+    download that recurred at every token expiry.
+
+    Passing what the caller presented is what collapses N refreshes into one."""
+    refresh = respx.post(f"{SERVER}/api/auth/refresh").mock(
+        return_value=httpx.Response(200, json={"access_token": "fresh-token"})
+    )
+    api = _session_api()
+
+    first = api.refresh_bearer_header("Bearer stale-token")
+    assert first == {"Authorization": "Bearer fresh-token"}
+    assert refresh.call_count == 1
+
+    # Three sibling workers now arrive holding the SAME stale token.
+    for _ in range(3):
+        assert api.refresh_bearer_header("Bearer stale-token") == first
+    assert refresh.call_count == 1, "siblings must replay, not rotate again"
+
+    # A worker that presents the CURRENT token has genuinely expired: refresh.
+    api.refresh_bearer_header("Bearer fresh-token")
+    assert refresh.call_count == 2
+
+
+@respx.mock
+def test_refresh_is_serialised_across_threads():
+    """The short-circuit above is only sound if the check and the POST happen
+    under ONE lock. Otherwise all four threads read the stale token, all four
+    pass the check, and all four rotate.
+
+    The in-flight refresh has to be SLOW for this to test what it names: with an
+    instant mock the first thread finishes before the others even look, so the
+    short-circuit alone carries the test and it passes with the lock removed.
+    (Verified by mutation - the earlier, instant version of this test did
+    exactly that.) The barrier lines the threads up, the delay holds the window
+    open, and only a real lock keeps the count at one.
+    """
+    import threading
+    import time
+
+    calls = {"n": 0}
+    counter_lock = threading.Lock()
+
+    def _slow_refresh(request: httpx.Request) -> httpx.Response:
+        with counter_lock:
+            calls["n"] += 1
+        time.sleep(0.25)
+        return httpx.Response(200, json={"access_token": "fresh-token"})
+
+    respx.post(f"{SERVER}/api/auth/refresh").mock(side_effect=_slow_refresh)
+    api = _session_api()
+    start = threading.Barrier(4)
+    errors: list[BaseException] = []
+
+    def _worker() -> None:
+        try:
+            start.wait(timeout=5)
+            api.refresh_bearer_header("Bearer stale-token")
+        except BaseException as exc:  # noqa: BLE001 - surfaced by the assert below
+            errors.append(exc)
+
+    threads = [threading.Thread(target=_worker) for _ in range(4)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(timeout=15)
+
+    assert not errors, errors
+    assert calls["n"] == 1, "four threads must produce exactly one rotation"
+    assert api.access_token == "fresh-token"
+
+
+@respx.mock
+def test_a_caller_that_presented_nothing_still_short_circuits():
+    """`seen=None` means the caller presented NO token. If one exists by the time
+    we hold the lock, a sibling minted it - that is conclusive, not inconclusive.
+
+    Requiring `seen is not None` made every such caller opt out of the
+    single-flight and rotate again. It is reachable from request() itself:
+    `token_used` is snapshotted BEFORE the call and may be None, while the 401
+    branch re-reads the current value, so the two disagree exactly when a
+    sibling won the race."""
+    refresh = respx.post(f"{SERVER}/api/auth/refresh").mock(
+        return_value=httpx.Response(200, json={"access_token": "sibling-minted"})
+    )
+    api = ApiClient(SERVER)
+    api.access_token = None  # this caller presented nothing
+
+    # A sibling refreshes first.
+    assert api.refresh_bearer_header("Bearer stale") == {"Authorization": "Bearer sibling-minted"}
+    assert refresh.call_count == 1
+
+    # Our caller now arrives having presented nothing at all.
+    assert api.refresh_bearer_header(None) == {"Authorization": "Bearer sibling-minted"}
+    assert refresh.call_count == 1, "presenting nothing must not force a rotation"
+
+
+@respx.mock
+def test_the_probe_passes_what_it_actually_presented():
+    """_probe merged `api.auth_header()` over `headers` when sending, but passed
+    `headers["Authorization"]` as `seen` - a stale snapshot, not what the server
+    rejected. The short-circuit could then hand back the very token that had just
+    401'd, and the retry would 401 again, surfacing as `503 RESUME_PROBE_FAILED`
+    ("Couldn't reach the server") - the exact misreport _probe's docstring says
+    must not happen."""
+    presented: list[str] = []
+
+    def _handler(request: httpx.Request) -> httpx.Response:
+        presented.append(request.headers.get("authorization", ""))
+        if request.headers.get("authorization") == "Bearer current":
+            return httpx.Response(401, json={"code": "TOKEN_EXPIRED"})
+        return httpx.Response(206, headers={"Content-Range": "bytes 1-1/50", "ETag": ETAG})
+
+    respx.get(url__regex=rf"{SERVER}/api/files/.*").mock(side_effect=_handler)
+    refresh = respx.post(f"{SERVER}/api/auth/refresh").mock(
+        return_value=httpx.Response(200, json={"access_token": "rotated"})
+    )
+
+    api = ApiClient(SERVER)
+    api.access_token = "current"
+    # A STALE value in the caller's dict - auth_header() overrides it on the wire.
+    stale_headers = {"Authorization": "Bearer long-gone"}
+
+    dr._probe(api, f"{SERVER}/api/files/fid/download", stale_headers)
+
+    # The 401 was for "Bearer current", so that is what must be reported as seen.
+    # Passing the stale value would short-circuit (current != long-gone) and
+    # replay the rejected token without ever contacting the server.
+    assert refresh.call_count == 1, "must actually rotate, not short-circuit on a stale seen"
+    assert presented[0] == "Bearer current"
+    assert presented[-1] == "Bearer rotated"

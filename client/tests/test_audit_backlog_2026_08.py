@@ -315,7 +315,9 @@ def test_a_segment_that_is_401_to_the_end_fails_instead_of_reporting_success(
 
     respx.get(f"{SERVER}/api/files/fid/download").mock(side_effect=_always_401)
     monkeypatch.setattr(
-        ApiClient, "refresh_bearer_header", lambda self: {"Authorization": "Bearer new"}
+        ApiClient,
+        "refresh_bearer_header",
+        lambda self, seen=None: {"Authorization": "Bearer new"},
     )
 
     part = tmp_path / "out.bin.part"

@@ -101,10 +101,17 @@ def _probe(
     file); the server declines, and the single-stream path below handles it -
     correct, since such a file needs no segmentation.
     """
+    # Build the headers ONCE and reuse the same dict for the request and for the
+    # `seen` value below. Passing `headers["Authorization"]` while presenting
+    # `{**headers, **api.auth_header()}` meant `seen` was a stale snapshot, not
+    # what the server actually rejected - so the single-flight could short-
+    # circuit and hand back the very token that had just 401'd, leading straight
+    # to the bogus `503 RESUME_PROBE_FAILED` this function's docstring warns
+    # about. download_segmented.py already passes what it presented.
+    sent = {**headers, **api.auth_header(), "Range": "bytes=1-1"}
     try:
         with api._http.stream(
-            "GET", url, headers={**headers, **api.auth_header(), "Range": "bytes=1-1"},
-            follow_redirects=True,
+            "GET", url, headers=sent, follow_redirects=True,
         ) as resp:
             if resp.status_code == 401:
                 # The probe runs before every transfer, so refreshing here is
@@ -115,7 +122,7 @@ def _probe(
                 resp.read()
                 if _retried:
                     return None
-                headers.update(api.refresh_bearer_header())
+                headers.update(api.refresh_bearer_header(sent.get("Authorization")))
                 return _probe(api, url, headers, _retried=True)
             cr = resp.headers.get("Content-Range", "")
             etag = resp.headers.get("ETag")

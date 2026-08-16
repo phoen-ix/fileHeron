@@ -89,8 +89,11 @@ def _fetch_segment(
                     # retry this segment; a dead session raises
                     # SessionExpiredError, which the UI turns into a re-login
                     # prompt instead of a generic transfer failure.
+                    # Pass what THIS segment presented: all workers share one
+                    # token, so they all land here at once, and without it each
+                    # would rotate the shared refresh cookie separately.
                     resp.read()
-                    rng.update(api.refresh_bearer_header())
+                    rng.update(api.refresh_bearer_header(rng.get("Authorization")))
                     continue
                 if resp.status_code != 206:
                     resp.read()

@@ -23,11 +23,22 @@ process that applies a block resets its own cache, so a block takes effect on th
 next request; the TTL only matters under `--workers N`.
 
 **Redis is used only for counting**, through the existing
-`rate_limit.check_ip_allowed` primitive. If Redis is unreachable the guard fails
-OPEN. The codebase decides fail-open vs fail-closed by what a wrong answer costs
-(`transfer_activity`: the serving mark fails open, the budget mark fails closed).
-This guard protects nothing - everything it blocks was already receiving a 404 -
-so failing closed would trade a total outage for zero security gain.
+`rate_limit.check_ip_allowed` primitive.
+
+What a Redis outage actually does, stated precisely because this said "the guard
+fails OPEN" for three releases and that was not true: `check_ip_allowed` catches
+its own Redis errors and falls back to `rate_limit._local_allow`, an in-process
+counter. So `probe_path` and `auth_failure` keep counting - and keep BLOCKING -
+per worker, at the same thresholds. Only `api_404` genuinely fails open, because
+`_distinct_paths_seen` returns None and the caller then declines to block. The
+DB-backed block cache does fail open: a refresh that raises leaves nothing
+blocked.
+
+Where a choice is available, this guard takes the open one. The codebase decides
+fail-open vs fail-closed by what a wrong answer costs (`transfer_activity`: the
+serving mark fails open, the budget mark fails closed); this guard protects
+nothing - everything it blocks was already receiving a 404 - so failing closed
+would trade a total outage for zero security gain.
 
 **Nothing here may raise.** Every entry point is wrapped and defaults to "allow".
 """

@@ -15,6 +15,27 @@ keep this to what would cause a wrong move if unknown.
 
 ## Status
 
+**UNRELEASED (on `feat/scan-guard-bruteforce-and-blocks-page`)** - the scan
+guard becomes usable as a brute-force guard, and grows an admin page. **No
+migration, no host step**, and behaviour-neutral on upgrade:
+`scan_guard.signal_auth_failure` still ships OFF.
+
+The headline is that the auth signal **could not safely be switched on before
+this**. `TOTP_REQUIRED` is a 401 on `/api/auth/login`, raised on the first step
+of every login by every 2FA-enrolled user, and `classify` saw only the status -
+so four ordinary logins from one office address inside an hour would 404 that
+office off the whole product, escalating for a week. Four of the six
+`_CREDENTIAL_PREFIXES` were also inert (two matched no route; three answer
+200/404/410, never 401/403), so real coverage was `/api/auth/login` alone. See
+the invariant block below before touching any of it.
+
+New admin page `/admin/ip-blocks` owns the guard's STATE (blocks, allowlist,
+watchlist); `/admin/settings/scan-guard` keeps only POLICY. Two consequences
+worth knowing: the settings PUT **no longer writes `scan_guard.allowlist`** (it
+was a second writer carrying a whole-CSV snapshot), and the nine scan_guard
+tunables are **gone from `/admin/settings/advanced`**, which wrote them while
+bypassing the side effects `update_settings` applies.
+
 **v2.12.1** is a one-line correction to v2.12.0: `OnFailure=` sat in
 `[Service]` in the two ops units, where systemd ignores it, so the backup/drill
 alerting that release announced was inert. It is a `[Unit]` directive. The host
@@ -156,6 +177,84 @@ does - keep it current on release.)
 > per-tick error storm, and the default 1s interval would be one UPDATE per
 > second per upload (hence 30s).
 >
+> **Brute-force guard invariants (UNRELEASED) - read before touching the auth
+> signal.**
+> **A 401/403 counts only when the envelope `code` says a SUBMITTED SECRET WAS
+> WRONG** (`_COUNTABLE_AUTH_CODES`, an ALLOWLIST). The middleware sees only the
+> status, so `app_error_handler` stamps `request.state.error_code` onto the ASGI
+> scope - the same channel the `authenticated` short-circuit already uses, and
+> it leaves the response bytes untouched. `TOTP_REQUIRED` is a **401 on
+> `/api/auth/login`** and is the normal first step for every 2FA user;
+> `ACCOUNT_DISABLED` and `EMAIL_NOT_VERIFIED` are 403s raised AFTER the password
+> verified. An absent or unknown code does NOT count: a new failure code on a
+> credential route must opt in rather than silently start banning people.
+> **`_CREDENTIAL_PREFIXES` must be real, 401-producing mounts** and is pinned
+> structurally against the router table. Never add `/api/auth/oidc/` (callback
+> failures are 302s, and `OIDC_NO_ACCOUNT` is what a legitimate SSO user without
+> a local account gets) and never use `/api/auth/` as a blanket (it sweeps in
+> `/refresh`, which 401s once per expired tab - exact prefixes are the only
+> reason the SPA's refresh storm is not counted).
+> **Credential failures count in their OWN bucket at their OWN threshold**
+> (`scanguard_auth` / `scan_guard.auth_threshold`, default 15, floor 5). Pooling
+> is wrong both ways: at the scan threshold of 3, two bait probes plus one
+> password typo blocks an office; at 15, bait detection is gutted. 15 is
+> derived - lockout converts failures to 423 after 5 and the per-IP limiter to
+> 429 after 10, so a three-person office grinding to lockout is exactly 15.
+> `check_ip_allowed` allows while `count <= limit`, so that office lands ON the
+> limit and is served; **"fixing" that to `<` re-bans them.**
+> **The shared-egress discriminator counts failures as the four countable
+> outcomes**, never `outcome != success`: `rate_limited`, `locked` and
+> `account_disabled` rows are produced in volume by the very office being
+> protected, and counting them inflates failures, raises the bar the successes
+> must clear, and withholds the exemption. Successes must span **>=2 distinct
+> accounts**, or one attacker-owned login launders unlimited grinding from the
+> same address. Not tunable: a knob to disable it is a knob to ban an office.
+> **A release must clear the counters** (`clear_counters`). Otherwise the source
+> is still at threshold for the rest of the window and the next request
+> re-blocks it - the hair-trigger shape v2.11.0 fixed for network escalation,
+> one level down.
+> **`note_offence` does sync Redis on the event loop, and that is a KNOWN,
+> deliberate non-fix.** It is the whole application's pattern (every per-IP
+> limiter is called that way from an `async def`). Moving only the guard
+> off-loop was tried and reverted: `asyncio.to_thread` puts the guard's own
+> `SessionLocal` on a second thread, which is fine against MariaDB and corrupt
+> against the test harness's single shared SQLite connection (measured
+> `sqlite3.InterfaceError`). Fix it for the whole app or not at all.
+> **A 404 on a path with NO route runs no dependency**, so `user_id` is never
+> set and an authenticated user cannot be exempted there. Bounded (`api_404`
+> ships off and needs 15 distinct paths) and pinned by its own test.
+>
+> **Blocked-sources page invariants (UNRELEASED).**
+> **`scan_guard.allowlist` has ONE writer**: the allowlist endpoints, which
+> serialise on a row lock over the setting's own row (a no-op on SQLite; the
+> first-insert race is closed by the unique key → 409 `CONFLICT_RETRY`). It was
+> also a textarea on the settings form, i.e. a second writer carrying a stale
+> whole-CSV snapshot - saving the form erased entries added elsewhere. The field
+> is gone from the PUT body and from `update_settings`' `strs` map; because
+> `APIBaseModel` allows extras, an older SPA still sending it is ignored rather
+> than 422'd. Do NOT make it `str | None`: the strs loop turns an empty value
+> into `set_value(value=None)`, which DELETES the row.
+> **The watchlist holds PLAINTEXT addresses of sources that are not blocked.**
+> The enforcement counters cannot back it (both key on `sha256(ip)[:16]`), and
+> `error_log` cannot either (`capture_4xx` ships off, so it would render empty
+> exactly where the guard ships). Three fixed Redis keys, never SCAN, capped at
+> 512, quietest evicted first. **Retention is bounded by per-member pruning
+> against the `seen` ZSET, not by EXPIRE** - EXPIRE is whole-key and any other
+> source's write slides it, so one busy scanner would otherwise keep every
+> address alive indefinitely. `scan_guard.watchlist` (default on) turns it off.
+> **A manual block never folds into a live automatic row** - it kept
+> `source=auto`, dropped the note and actor, wrote no audit row and could not
+> SHORTEN the block. It releases the auto row and inserts; the auto path never
+> mutates a manual row.
+> **`scan_guard.*` tunables are NOT on `/admin/settings/advanced`**
+> (`_MANAGED_ELSEWHERE_GROUPS`). That route wrote them while skipping the inert
+> check, the v6-prefix live-network-block release and the cache reset - so
+> changing the prefix there stranded an orphaned network block enforcing
+> invisibly. `config_backup` import is a third raw writer; still a residual.
+> **`unblock_ip.py` matches by CONTAINMENT**, via the shared `blocks_covering`.
+> A string compare meant an admin locked out by a /24 who typed their own
+> address was told "no live block" - at the exact moment the tool exists for.
+>
 > **v2.10.0 invariants worth knowing before you touch these areas.**
 > **The scan guard is the only control in this product that DENIES service, so
 > it ships OFF** (`scan_guard.enabled` default false) and is defined by what it
@@ -185,9 +284,21 @@ does - keep it current on release.)
 > asserts bait probes return 404 with a JSON content-type; a bare 404 breaks it.
 > **The hot path does ZERO I/O.** Block state is a process cache, never a
 > per-request Redis GET - `redis_client` sets `socket_timeout=2`, so a Redis
-> *slowdown* would add two seconds to every request. **Redis down ⇒ fail OPEN**;
-> unlike `rate_limit`'s in-process fallback (which protects credentials), this
-> guard protects nothing that was not already 404ing.
+> *slowdown* would add two seconds to every request.
+> **What a Redis outage does, corrected:** this said "Redis down ⇒ fail OPEN"
+> for three releases and it was false. `check_ip_allowed` catches its own Redis
+> errors and falls back to an in-process counter, so `probe_path` and
+> `auth_failure` keep counting AND blocking, per worker, at the same thresholds.
+> Only `api_404` truly fails open (`_distinct_paths_seen` returns None and the
+> caller declines). The DB-backed block cache does fail open. The old
+> `test_redis_down_blocks_nobody` stubbed `check_ip_allowed` itself to raise - a
+> call path that cannot occur - so it pinned the docstring, not the behaviour.
+> **IPv4-mapped IPv6 is unwrapped at the door** (`utils/client_ip.normalize_ip`,
+> repeated defensively in `network_of`). `is_global` was already safe (Python
+> delegates to the embedded address), but the GROUPING was not:
+> `::ffff:8.8.8.8` is version 6, so `network_of` yielded `::/64` - one prefix
+> covering the whole mapped IPv4 space, and unrescuable by a v4 allowlist entry,
+> since `_network_contains_allowlisted` only compares same-version networks.
 > **`/api/public/*` is never counted.** `get_link_by_token` answers 404 for an
 > unknown token, and mail-security gateways (SafeLinks, Proofpoint, Mimecast)
 > fetch `/d/{token}` from many egress IPs and retry - so a revoked share link

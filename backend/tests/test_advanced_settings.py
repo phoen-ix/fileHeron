@@ -107,3 +107,43 @@ async def test_advanced_requires_admin(client, login_as, make_user):
         "/api/admin/settings/advanced", headers={"Authorization": f"Bearer {token}"}
     )
     assert r.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_scan_guard_tunables_are_not_writable_here(client, login_as, make_user):
+    """The generic knob page is not a second writer for the scan guard.
+
+    It set these keys through the registry directly, skipping everything
+    `scan_guard.update_settings` does around them. Changing
+    `network_prefix_v6` here was the sharp one: `ip_blocks.network` is a
+    denormalised string cache, so live /64 rows stopped matching what
+    `network_of()` produces - their escalation evidence went quiet, and a later
+    escalation inserted an overlapping /56 while the orphaned /64 kept
+    enforcing after the visible block was released.
+    """
+    make_user(email="adm2@test.local", role=UserRole.admin, password="Pass12345678!")
+    token, _ = await login_as("adm2@test.local", "Pass12345678!")
+    h = {"Authorization": f"Bearer {token}"}
+
+    listed = await client.get("/api/admin/settings/advanced", headers=h)
+    keys = {i["key"] for i in listed.json()["items"]}
+    assert not any(k.startswith("scan_guard.") for k in keys), (
+        "the scan guard is managed on its own page and must not be listed here"
+    )
+
+    refused = await client.put(
+        "/api/admin/settings/advanced",
+        json={"updates": {"scan_guard.network_prefix_v6": 56}},
+        headers=h,
+    )
+    assert refused.status_code == 400, refused.text
+    assert refused.json()["code"] == "SETTING_MANAGED_ELSEWHERE"
+
+    # Positive control: an ordinary tunable in the same request shape still works,
+    # so this cannot pass because the whole endpoint broke.
+    ok = await client.put(
+        "/api/admin/settings/advanced",
+        json={"updates": {"rate_limit.login": 11}},
+        headers=h,
+    )
+    assert ok.status_code == 200, ok.text

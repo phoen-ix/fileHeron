@@ -241,10 +241,16 @@ every block.
 - **Repeated unknown API paths** (off). An expired share link also returns 404,
   so this one can reach a real recipient. Public share links are never counted
   regardless, and it only fires after many *different* paths.
-- **Repeated sign-in failures** (off) - counted on sign-in endpoints only, so an
-  expired browser session can't accumulate them. Account lockout and the per-address
-  sign-in limit already cover ordinary password guessing; this is the switch for
-  someone who keeps trying anyway.
+- **Repeated sign-in failures** (off) - counted on sign-in endpoints only, and
+  only when the failure means a *submitted secret was wrong*. The ordinary
+  two-factor prompt, a disabled account and an expired browser session all
+  produce the same status code and none of them count. It has its own, much
+  higher threshold than the probe signals (15 by default), because legitimate
+  people mistype passwords and a whole office can share one address - and a
+  source is exempted outright when its own successful sign-ins, across more than
+  one account, explain its failures. Account lockout and the per-address sign-in
+  limit already cover ordinary password guessing; this is the switch for someone
+  who keeps trying anyway.
 
 **Safeguards, because blocking is the one thing here that denies service:**
 signed-in users are never blocked; private, loopback and allowlisted addresses
@@ -257,8 +263,8 @@ turn it on** - an IPv4 /24 is 256 addresses, which may be a customer's office, a
 mobile carrier, or a mail-security gateway that fetches share links from many
 addresses at once.
 
-For IPv6, how much counts as "one network" is adjustable (*Settings → Advanced →
-`scan_guard.network_prefix_v6`*), because IPv6 addresses are handed out very
+For IPv6, how much counts as "one network" is adjustable (*Settings → Scan
+guard*), because IPv6 addresses are handed out very
 differently depending on where they come from. **A shorter prefix is not simply
 "stricter"** - it is a bet about who else is behind it. The default /64 is one
 customer at most hosting providers. Widening to /56 or /48 is right for a range
@@ -269,16 +275,28 @@ catch a neighbour. Widen it only when you know the answer for that range.
 Changing this releases any network blocks currently in force, since they were
 filed under the old grouping.
 
-Blocked sources, why they were blocked and when they expire are listed on the
-same page, with a Release button. If a block ever locks *you* out - the check
-runs before sign-in, so you can't reach the admin page to undo it - release it
-from the host:
+Everything the guard is currently *doing* lives on its own page, *Blocked
+sources*: every block with its reason and expiry, filters for released and
+expired history, a Release button, "Release + allow" for a source that should
+never have been caught, blocking an address or range by hand, and the allowlist
+itself. It also shows a **watchlist** of sources accruing offences that have not
+been blocked yet, so you can see a scan building up - and allow or block it -
+before it crosses a threshold. (The watchlist keeps those addresses in memory
+for at most one counting window; turn it off under *Settings → Scan guard* if
+you would rather it never held them at all.)
+
+If a block ever locks *you* out - the check runs before sign-in, so you can't
+reach the admin page to undo it - release it from the host:
 
 ```bash
 docker compose exec backend python scripts/unblock_ip.py --list
 docker compose exec backend python scripts/unblock_ip.py --all
 docker compose exec backend python scripts/unblock_ip.py 203.0.113.4
 ```
+
+Naming your own address is enough even when what caught you was a whole *range*:
+the tool releases any block containing that address, not just one filed under
+exactly that text.
 
 ## Share approval (four-eyes)
 

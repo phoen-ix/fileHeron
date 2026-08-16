@@ -18,7 +18,7 @@ vi.mock('@/api/account')
 // otherwise (axios instance, interceptors) so the rest of the graph loads.
 vi.mock('@/api/client', async (importActual) => ({
   ...(await importActual<typeof import('@/api/client')>()),
-  refreshOnce: vi.fn(async () => true),
+  refreshSession: vi.fn(async () => 'ok'),
   setAccessToken: vi.fn(),
   setOnAuthLost: vi.fn(),
 }))
@@ -72,6 +72,87 @@ describe('useAuthStore', () => {
     const auth = useAuthStore()
     await auth.bootstrap()
     expect(auth.bootstrapping).toBe(false)
+    expect(auth.user).toBe(null)
+  })
+
+  it('an unreachable backend at cold boot is not cached as the answer', async () => {
+    // bootstrap() memoises its promise and runs once per page life, so caching
+    // a container-restart blip would leave the tab anonymous until a manual
+    // reload. `expired` IS cached - that is a real verdict.
+    const { refreshSession } = await import('@/api/client')
+    vi.mocked(refreshSession).mockResolvedValueOnce('unavailable')
+    const auth = useAuthStore()
+    await auth.bootstrap()
+    expect(auth.user).toBe(null)
+
+    // Backend is back: the next bootstrap must actually re-ask - but not before
+    // the cooldown, which is what stops `beforeEach` re-probing on every click.
+    vi.mocked(refreshSession).mockResolvedValueOnce('ok')
+    vi.mocked(accountApi.getMe).mockResolvedValueOnce({ data: fakeMe } as never)
+    await auth.bootstrap()
+    expect(auth.user, 'a click during the cooldown must not re-probe').toBe(null)
+
+    vi.useFakeTimers()
+    try {
+      vi.setSystemTime(Date.now() + 5_000)
+      await auth.bootstrap()
+    } finally {
+      vi.useRealTimers()
+    }
+    expect(auth.user).toEqual(fakeMe)
+    expect(auth.isAuthenticated).toBe(true)
+  })
+
+  it('bootstrap never signs out an already-signed-in user', async () => {
+    // Dropping the memo means this can run again, on any navigation. Its else
+    // branch nulls `user`, which was only safe while it ran once at cold start.
+    // A later transient blip would otherwise end a live session and the router
+    // guard would redirect to /login - the restart-logs-you-out bug re-entering
+    // through the store. Signing out is the interceptor's job, on a verdict.
+    // The sequence has to be the real one, or the memo hides the bug: a cold
+    // boot that FAILED (dropping the memo), then a sign-in, then a later
+    // navigation re-entering bootstrap. Asserting on a run whose memo is still
+    // set proves nothing - it never re-runs.
+    const { refreshSession } = await import('@/api/client')
+    const auth = useAuthStore()
+
+    vi.mocked(refreshSession).mockResolvedValueOnce('unavailable')
+    await auth.bootstrap() // cold boot during a restart -> memo dropped
+    expect(auth.user).toBe(null)
+
+    vi.mocked(authApi.login).mockResolvedValueOnce({
+      data: { access_token: 'tok', expires_in_seconds: 900 },
+    } as never)
+    vi.mocked(accountApi.getMe).mockResolvedValueOnce({ data: fakeMe } as never)
+    await auth.login('a@example.com', 'password!')
+    expect(auth.isAuthenticated).toBe(true)
+
+    // The backend blips again while they are signed in. bootstrap() runs on
+    // EVERY navigation, and its else branch nulls `user` - which would end a
+    // live session and bounce them to /login via the router guard.
+    vi.mocked(refreshSession).mockResolvedValue('unavailable')
+    vi.useFakeTimers()
+    try {
+      vi.setSystemTime(Date.now() + 10_000) // past the re-probe cooldown
+      await auth.bootstrap()
+      await auth.bootstrap()
+    } finally {
+      vi.useRealTimers()
+      vi.mocked(refreshSession).mockResolvedValue('ok')
+    }
+    expect(auth.user, 'a live session must survive a re-probe').toEqual(fakeMe)
+    expect(auth.isAuthenticated).toBe(true)
+  })
+
+  it('a real verdict at cold boot IS cached', async () => {
+    const { refreshSession } = await import('@/api/client')
+    // `Once`, so the implementation does not leak into later tests -
+    // vi.clearAllMocks() resets call history but not a persistent impl.
+    vi.mocked(refreshSession).mockResolvedValueOnce('expired')
+    const auth = useAuthStore()
+    await auth.bootstrap()
+    await auth.bootstrap()
+    expect(vi.mocked(refreshSession)).toHaveBeenCalledTimes(1)
     expect(auth.user).toBe(null)
   })
 

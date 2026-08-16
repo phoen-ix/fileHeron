@@ -7,7 +7,7 @@ import { computed, ref } from 'vue'
 
 import * as authApi from '@/api/auth'
 import { getMe } from '@/api/account'
-import { refreshOnce, setAccessToken, setOnAuthLost } from '@/api/client'
+import { refreshSession, setAccessToken, setOnAuthLost } from '@/api/client'
 import { setLocale, type SupportedLocale } from '@/i18n'
 import { useNotificationsStore } from '@/stores/notifications'
 import * as webauthnApi from '@/api/webauthn'
@@ -24,15 +24,23 @@ export const useAuthStore = defineStore('auth', () => {
    * every route to /setup. Polled once during bootstrap. */
   const setupRequired = ref(false)
 
-  /* True while we're attempting a silent refresh on app boot. The router
-   * uses this to defer guard decisions until we know whether a session
-   * exists. */
+  /* True while we're attempting a silent refresh on app boot. Nothing reads it
+   * any more - the router awaits bootstrap()'s promise directly - but it is
+   * cheap and still describes the store's state honestly. */
   const bootstrapping = ref(true)
-  /* Cache the in-flight (or completed) bootstrap promise. The router guard
-   * awaits it on the first navigation - every subsequent guard call gets
-   * the same already-resolved promise (no-op). Replaces a 30 ms setInterval
-   * polling loop. */
+  /* Cache the in-flight (or completed) bootstrap promise. `router.beforeEach`
+   * awaits it on EVERY navigation and main.ts gates app.mount() on it, so the
+   * cache is what stops the whole probe re-running per click. It is dropped in
+   * exactly one case - see the `unreachable` handling below. */
   let bootstrapPromise: Promise<void> | null = null
+  /* When the memo is dropped, `beforeEach` would otherwise re-probe on every
+   * single click - a refresh (lock acquisition + POST) plus a setup probe, with
+   * the router awaiting all of it. doRefresh's own comment forbids turning the
+   * refresh into a sleep-and-retry loop; a per-navigation loop is the same thing
+   * driven by the user. Re-probing is still what recovers the session, so bound
+   * it rather than remove it. */
+  let lastUnreachableAt = 0
+  const REPROBE_COOLDOWN_MS = 3_000
 
   let onAuthLostCallback: (() => void) | null = null
 
@@ -41,18 +49,40 @@ export const useAuthStore = defineStore('auth', () => {
    *  same promise. */
   function bootstrap(): Promise<void> {
     if (bootstrapPromise) return bootstrapPromise
+    // Dropping the memo on `unavailable` means this can now run more than once,
+    // which broke an invariant it used to rely on: that it only ever ran at cold
+    // start, before anyone could be signed in. Once a session exists, re-probing
+    // must never be able to END it - a later transient blip would otherwise null
+    // `user` and the router guard would redirect to /login, which is precisely
+    // the restart-logs-you-out bug this all exists to prevent, re-entering
+    // through the store instead of the interceptor. Signing out is the
+    // interceptor's job, on a real verdict; bootstrap only ever ADOPTS a session.
+    if (user.value !== null) return Promise.resolve()
+    if (lastUnreachableAt && Date.now() - lastUnreachableAt < REPROBE_COOLDOWN_MS) {
+      return Promise.resolve()
+    }
     bootstrapping.value = true
+    let unreachable = false
     bootstrapPromise = (async () => {
       try {
         // Cold load has no in-memory access token, so refresh FIRST (via the
         // httpOnly cookie) instead of letting /me 401 then retry - that saves a
-        // request and avoids a visible 401 in devtools. `refreshOnce` swallows
-        // failure (returns false, never triggers onAuthLost), so an anonymous
-        // visitor on a public /d/:token page is not bounced to /login.
-        if (await refreshOnce()) {
+        // request and avoids a visible 401 in devtools. `refreshSession` swallows
+        // failure (it never triggers onAuthLost), so an anonymous visitor on a
+        // public /d/:token page is not bounced to /login.
+        const outcome = await refreshSession()
+        if (outcome === 'ok') {
           const resp = await getMe()
           user.value = resp.data
         } else {
+          // `unavailable` still renders as anonymous - a cold load against an
+          // unreachable backend has nothing better to offer, and the router
+          // guard sends a protected route to /login from here. But it must not
+          // be CACHED as the answer: bootstrap runs once per page life, so
+          // memoising a container-restart blip would leave the tab anonymous
+          // until a manual reload. Dropping the memo lets the next navigation
+          // ask again.
+          unreachable = outcome === 'unavailable'
           user.value = null
         }
       } catch {
@@ -69,6 +99,10 @@ export const useAuthStore = defineStore('auth', () => {
         setupRequired.value = false
       }
       bootstrapping.value = false
+      if (unreachable) {
+        lastUnreachableAt = Date.now()
+        bootstrapPromise = null
+      }
     })()
     return bootstrapPromise
   }
@@ -177,7 +211,7 @@ export const useAuthStore = defineStore('auth', () => {
       // response, and the cookie is httpOnly + path-scoped so JS cannot clear
       // it here. Swallowing the failure showed the user the login page while a
       // 7-day refresh token stayed live - and the next full page load ran
-      // bootstrap() -> refreshOnce() and silently restored the session. On a
+      // bootstrap() -> refreshSession() and silently restored the session. On a
       // shared machine that is a logout that did not log out
       // (audit 2026-07-30). Local state is still cleared (below) so the tab is
       // not left authenticated, but the caller is told the truth so it can warn.

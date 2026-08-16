@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import logging
 import secrets
+from collections.abc import Callable, Iterable
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
@@ -58,6 +59,91 @@ def _user_group_ids(db: Session, user_id: int) -> list[int]:
         .all()
     )
     return [r[0] for r in rows]
+
+
+class RosterVisibility:
+    """Who may see a share's FULL co-recipient roster, and what everyone else
+    sees instead (audit M4).
+
+    ONE definition, shared by the detail serialiser and BOTH list routes. It was
+    written out twice, so the third route - the approvals queue - was written
+    without it and handed every approver the display names, roles and group
+    names of every share in their queue. That is strictly more than the detail
+    route gives a fully privileged viewer, which exposes bare ids.
+
+    Privileged = admin, the creator, or whoever may decide this share. Everyone
+    else is projected to their own need-to-know: themselves, and the groups they
+    are actually a member of.
+
+    Construct ONE per request and hand it the whole page. The verdict is
+    memoised per SHARE, not per recipient row; the approver policy - which does
+    not vary by share and costs four uncached settings reads plus a membership
+    query - resolves at most once; the viewer's group ids are read at most once,
+    and only if the projection actually needs them.
+
+    Share the ROW FILTERS (`allows_user`/`allows_group`), not just the
+    predicate. The queue's defect was not a forgotten `can_decide` call - it was
+    someone rebuilding the recipient loop from scratch.
+    """
+
+    def __init__(
+        self, db: Session, viewer: User | None, shares: Iterable[Share]
+    ) -> None:
+        self._db = db
+        self._viewer = viewer
+        self._shares: dict[str, Share] = {s.id: s for s in shares}
+        self._verdicts: dict[str, bool] = {}
+        self._own_group_ids: set[int] | None = None
+        self._decide: Callable[[Share], bool] | None = None
+
+    @property
+    def own_group_ids(self) -> set[int]:
+        if self._own_group_ids is None:
+            self._own_group_ids = (
+                set(_user_group_ids(self._db, self._viewer.id))
+                if self._viewer is not None
+                else set()
+            )
+        return self._own_group_ids
+
+    def may_see_full(self, share_id: str) -> bool:
+        # `is not None`, never truthiness: a cached False re-resolved per row
+        # reinstates exactly the per-row cost the memo exists to avoid.
+        cached = self._verdicts.get(share_id)
+        if cached is not None:
+            return cached
+        verdict = self._resolve(share_id)
+        self._verdicts[share_id] = verdict
+        return verdict
+
+    def _resolve(self, share_id: str) -> bool:
+        viewer = self._viewer
+        # No viewer means no projection - reproduces the detail serialiser's
+        # `viewer is not None and ...` guard. Do not "simplify" this to False.
+        if viewer is None:
+            return True
+        if viewer.role == UserRole.admin:
+            return True
+        share = self._shares.get(share_id)
+        if share is None:
+            return False
+        if share.created_by_id == viewer.id:
+            return True
+        if self._decide is None:
+            from . import share_approval as approval_svc
+
+            self._decide = approval_svc.decider_for(self._db, viewer)
+        return self._decide(share)
+
+    def allows_user(self, share_id: str, recipient_user_id: int) -> bool:
+        return self.may_see_full(share_id) or (
+            self._viewer is not None and recipient_user_id == self._viewer.id
+        )
+
+    def allows_group(self, share_id: str, recipient_group_id: int) -> bool:
+        return (
+            self.may_see_full(share_id) or recipient_group_id in self.own_group_ids
+        )
 
 
 def _connected_client_ids_of(db: Session, employee_id: int) -> set[int]:
@@ -600,8 +686,10 @@ def is_authorized_to_download(db: Session, *, user: User, share: Share) -> bool:
 
 def is_authorized_to_view(db: Session, *, user: User, share: Share) -> bool:
     """Who may open a share's detail (metadata only). Same as download for
-    active/terminal shares, plus approvers may view a PENDING share to decide.
-    A recipient can't see a pending or rejected share they were never granted."""
+    active/terminal shares, plus TWO approver admissions: a PENDING share they
+    may decide, and an ACTIVE share carrying files awaiting their decision.
+    Both key on the DECISION right, never on content review. A recipient can't
+    see a pending or rejected share they were never granted."""
     if user.role == UserRole.admin or share.created_by_id == user.id:
         return True
     from . import share_approval as approval_svc
@@ -615,7 +703,16 @@ def is_authorized_to_view(db: Session, *, user: User, share: Share) -> bool:
     # approver is notified about it and must echo a `content_fingerprint` read
     # off this very payload, but was refused here - so they could approve blind
     # over the API and never see what they were approving.
-    if approval_svc.can_review_this_share(db, user, share):
+    #
+    # Keyed on the DECISION right, not on `can_review_this_share`.
+    # `allow_content_review` governs the file BYTES - `assert_share_file_access`
+    # and `assert_file_approved`, both unchanged - and gating the PAGE on it
+    # left an approver who may decide (and who is emailed a link to this page)
+    # looking at a 403 while `decide_added_files` accepted their vote anyway.
+    # Note the pending branch above already admits on `can_approve` alone, so
+    # this makes the two consistent rather than inventing a rule. Appended
+    # FILENAMES stay behind content review; the router redacts them.
+    if approval_svc.can_decide_added_files(db, user, share):
         return True
     return is_authorized_to_download(db, user=user, share=share)
 
@@ -635,11 +732,14 @@ def assert_share_file_access(
     from . import share_approval as approval_svc
     if approval_svc.can_review_pending(db, user, share):
         return
-    # Same admission as `is_authorized_to_view`. `can_review_pending` is False
-    # here by construction (the share is active, not pending), so without this
-    # the download check below refused the approver and
-    # `assert_file_approved`'s `can_review_added_files` branch - written for
-    # exactly this case - was unreachable.
+    # DELIBERATELY NARROWER than `is_authorized_to_view`, which admits the same
+    # approver on `can_decide_added_files` (no content-review term). These are
+    # the BYTES; that is the page. `allow_content_review` is the difference, and
+    # it is the whole point of the setting - so do not "align" this line to the
+    # view predicate. `can_review_pending` is False here by construction (the
+    # share is active, not pending), so without this the download check below
+    # refused the approver and `assert_file_approved`'s `can_review_added_files`
+    # branch - written for exactly this case - was unreachable.
     reviewing = approval_svc.can_review_this_share(db, user, share)
     if not reviewing and not is_authorized_to_download(db, user=user, share=share):
         raise AppError(403, "FORBIDDEN", "You don't have access to this file.")
@@ -1103,10 +1203,22 @@ def decide_added_files(
     from . import share_approval as approval_svc
     from .file import hard_delete
 
-    if not approval_svc.can_approve(db, user):
-        raise AppError(403, "FORBIDDEN", "You may not decide on shares.")
-    if share.created_by_id == user.id:
-        raise AppError(403, "SELF_APPROVAL", "You can't decide on your own share.")
+    # ONE predicate, three messages. This is the same gate `is_authorized_to_view`
+    # admits the approver on, so the right to OPEN this share and the right to
+    # DECIDE on it cannot drift apart - which is exactly what happened when the
+    # view side went through the content-review-dependent `can_review_this_share`
+    # and this side did not. The branches below only pick the error code, in the
+    # documented `can_approve` -> self order that a SELF_APPROVAL test depends on.
+    if not approval_svc.can_decide_added_files(db, user, share):
+        if not approval_svc.can_approve(db, user):
+            raise AppError(403, "FORBIDDEN", "You may not decide on shares.")
+        if share.created_by_id == user.id:
+            raise AppError(403, "SELF_APPROVAL", "You can't decide on your own share.")
+        raise AppError(409, "NO_FILES_PENDING", "No files are awaiting review on this share.")
+    # Still ahead of the fingerprint check, and still wins over NO_FILES_PENDING
+    # in practice: on a share that required approval an in-flight upload is
+    # itself written `pending_review`, so the predicate above is already true
+    # whenever this is.
     if _still_uploading(db, share):
         raise AppError(
             409,
@@ -1114,8 +1226,6 @@ def decide_added_files(
             "This share is still receiving files - review it once they've all landed.",
         )
     pending = approval_svc.files_awaiting_review(db, share)
-    if not pending:
-        raise AppError(409, "NO_FILES_PENDING", "No files are awaiting review on this share.")
 
     current = approval_svc.content_fingerprint(db, share)
     if not secrets.compare_digest(expect_fingerprint, current):

@@ -86,24 +86,13 @@ def _to_share_response(db: Session, share, *, viewer: User | None = None) -> Sha
             GroupRecipientRef(id=g.id, name=g.name, is_company_inbox=g.is_company_inbox)
             for g in groups
         ]
-    # Co-recipient privacy (audit M4): a viewer who is not the creator, an admin,
-    # or an approver has no need to see the FULL recipient roster - project it
-    # to their own need-to-know (themselves + the groups they belong to).
-    if (
-        viewer is not None
-        and viewer.role != UserRole.admin
-        and share.created_by_id != viewer.id
-        and not share_approval_svc.can_decide(db, viewer, share)
-    ):
-        from ..models.group_member import GroupMember
-        own_groups = {
-            gid
-            for (gid,) in db.query(GroupMember.group_id)
-            .filter(GroupMember.user_id == viewer.id)
-            .all()
-        }
-        rec_user_ids = [uid for uid in rec_user_ids if uid == viewer.id]
-        rec_groups = [g for g in rec_groups if g.id in own_groups]
+    # Co-recipient privacy (audit M4). ONE definition, shared with both list
+    # routes - services/share.py::RosterVisibility. Identity maps when the
+    # viewer is privileged; do not "optimise" that away with an `if`, which
+    # reintroduces the branch the shared helper exists to remove.
+    roster = share_svc.RosterVisibility(db, viewer, [share])
+    rec_user_ids = [uid for uid in rec_user_ids if roster.allows_user(share.id, uid)]
+    rec_groups = [g for g in rec_groups if roster.allows_group(share.id, g.id)]
     all_files = list(share.files)
     files = [f for f in all_files if f.state != FileState.deleted]
     files_pending = [
@@ -113,6 +102,13 @@ def _to_share_response(db: Session, share, *, viewer: User | None = None) -> Sha
     # review - the gate exists so unreviewed content does not reach them, and a
     # filename is content. The owner keeps sight of their own upload, and
     # approvers need it to decide.
+    #
+    # `can_review_added_files` is the CONTENT-review predicate, deliberately -
+    # NOT `can_decide_added_files`, which is what admits the approver to this
+    # page in the first place (services/share.py::is_authorized_to_view). The
+    # asymmetry is the feature: with content review off an approver may open the
+    # share and cast the vote, but a filename is content and stays hidden.
+    # "Aligning" this line to the view predicate is the leak.
     if files_pending and viewer is not None:
         may_see_pending = (
             viewer.id == share.created_by_id
@@ -165,7 +161,7 @@ def _to_share_response(db: Session, share, *, viewer: User | None = None) -> Sha
             if viewer is not None
             else False
         ),
-        public_link_summary=_public_link_summary(db, share, viewer),
+        public_link_summary=_public_link_summary(db, share, viewer, roster),
         # Also populated for an ACTIVE share carrying appended files that are
         # still awaiting review - that decision echoes the digest back too, so
         # withholding it there would make the endpoint unusable.
@@ -179,18 +175,23 @@ def _to_share_response(db: Session, share, *, viewer: User | None = None) -> Sha
 
 
 def _public_link_summary(
-    db: Session, share: Share, viewer: User | None
+    db: Session,
+    share: Share,
+    viewer: User | None,
+    roster: share_svc.RosterVisibility,
 ) -> PublicLinkSummary | None:
     """Tell the owner, admins and approvers that a public link is attached.
     Approvers are the reason this exists: a link on a pending share is invisible
-    to them and goes live on approval. Never carries the URL."""
+    to them and goes live on approval. Never carries the URL.
+
+    The audience is the same one that may see the full roster, so it reuses that
+    predicate rather than being a fourth hand-written copy of it."""
+    # This guard stays FIRST and separate: `may_see_full` answers True for a
+    # null viewer (no viewer, no projection), while a link summary for a null
+    # viewer is None. The two semantics genuinely invert here.
     if viewer is None:
         return None
-    if (
-        share.created_by_id != viewer.id
-        and viewer.role != UserRole.admin
-        and not share_approval_svc.can_decide(db, viewer, share)
-    ):
+    if not roster.may_see_full(share.id):
         return None
     link = public_link_svc.get_active_link_for_share(db, share.id)
     if link is None:
@@ -375,64 +376,25 @@ def list_shares(
         else {}
     )
 
-    rows_by_id = {s_.id: s_ for s_ in rows}
-
     # Recipients per share, materialised as ShareRecipientRef rows.
     #
-    # Same co-recipient privacy rule the DETAIL serialiser applies (see
-    # _to_share_response) - it was missing here, so `GET /api/shares?box=inbox`
-    # handed any recipient the display name and role of every other recipient
-    # plus the name of every group the share was addressed to. That is strictly
-    # more than the detail route discloses even to a fully privileged viewer,
-    # which exposes only user ids. Reachable by the least-privileged role on
-    # stock configuration.
+    # Same co-recipient privacy rule the DETAIL serialiser and the approvals
+    # queue apply - it was missing here, so `GET /api/shares?box=inbox` handed
+    # any recipient the display name and role of every other recipient plus the
+    # name of every group the share was addressed to. That is strictly more than
+    # the detail route discloses even to a fully privileged viewer, which
+    # exposes only user ids. Reachable by the least-privileged role on stock
+    # configuration.
     #
     # Creators, admins and approvers see the full roster, as they do on detail.
-    own_group_ids: set[int] = set()
-    if user.role != UserRole.admin:
-        from ..models.group_member import GroupMember
-
-        own_group_ids = {
-            gid
-            for (gid,) in db.query(GroupMember.group_id)
-            .filter(GroupMember.user_id == user.id)
-            .all()
-        }
-
-    # Memoised per SHARE, not per recipient row. `can_decide` short-circuits on
-    # the state check for anything that is not `pending_approval`, so an inbox
-    # of active shares costs nothing either way - but an approver's page of
-    # pending ones would otherwise re-resolve the approver policy once per
-    # recipient instead of once per share.
-    _roster_seen: dict[str, bool] = {}
-
-    def _may_see_full_roster(share_id: str) -> bool:
-        cached = _roster_seen.get(share_id)
-        if cached is not None:
-            return cached
-        if user.role == UserRole.admin:
-            verdict = True
-        else:
-            sh = rows_by_id.get(share_id)
-            if sh is None:
-                verdict = False
-            elif sh.created_by_id == user.id:
-                verdict = True
-            else:
-                verdict = share_approval_svc.can_decide(db, user, sh)
-        _roster_seen[share_id] = verdict
-        return verdict
+    # One definition for all three routes: services/share.py::RosterVisibility.
+    roster = share_svc.RosterVisibility(db, user, rows)
 
     recips_by_share: dict[str, list[ShareRecipientRef]] = {sid: [] for sid in share_ids}
     for r in recipient_rows:
-        if not _may_see_full_roster(r.share_id):
-            # Project to the viewer's own need-to-know: themselves, and the
-            # groups they are actually in.
-            if r.recipient_user_id is not None and r.recipient_user_id != user.id:
-                continue
-            if r.recipient_group_id is not None and r.recipient_group_id not in own_group_ids:
-                continue
         if r.recipient_user_id is not None:
+            if not roster.allows_user(r.share_id, r.recipient_user_id):
+                continue
             u = users_by_id.get(r.recipient_user_id)
             if u is not None:
                 recips_by_share[r.share_id].append(
@@ -444,6 +406,8 @@ def list_shares(
                     )
                 )
         elif r.recipient_group_id is not None:
+            if not roster.allows_group(r.share_id, r.recipient_group_id):
+                continue
             g = groups_by_id.get(r.recipient_group_id)
             if g is not None:
                 recips_by_share[r.share_id].append(
@@ -523,15 +487,30 @@ def list_pending_approval(
         if rec_group_ids
         else {}
     )
+    # Co-recipient privacy, same rule and same object as the other two routes.
+    # This was the one recipient loop written without it: harmless while every
+    # queue row was a share the viewer could decide (and so see in full), and a
+    # disclosure the moment v2.13.1 added ACTIVE shares carrying appended files.
+    # A `pending_approval` row still yields the full roster - an approver must
+    # see who a share is for; an active row projects, exactly as detail does for
+    # the same viewer.
+    #
+    # Project at CONSTRUCTION, never by narrowing the bulk loads above:
+    # `users_by_id` also resolves the sender ref below.
+    roster = share_svc.RosterVisibility(db, user, rows)
     recips_by_share: dict[str, list[ShareRecipientRef]] = {sid: [] for sid in share_ids}
     for r in recipient_rows:
         if r.recipient_user_id is not None:
+            if not roster.allows_user(r.share_id, r.recipient_user_id):
+                continue
             u = users_by_id.get(r.recipient_user_id)
             if u is not None:
                 recips_by_share[r.share_id].append(
                     ShareRecipientRef(kind="user", id=u.id, label=u.display_name, role=u.role.value)
                 )
         elif r.recipient_group_id is not None:
+            if not roster.allows_group(r.share_id, r.recipient_group_id):
+                continue
             g = groups_by_id.get(r.recipient_group_id)
             if g is not None:
                 recips_by_share[r.share_id].append(

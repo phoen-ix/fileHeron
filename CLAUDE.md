@@ -15,6 +15,29 @@ keep this to what would cause a wrong move if unknown.
 
 ## Status
 
+**v2.13.1 closes the audit backlog.** 23 recorded items plus 2 found while
+verifying them; **no migration, no host step, no API change, no default moves.**
+Desktop client **1.4.2** ships alongside it on its own tag. The backlog file
+`.claude/audit-2026-08-15.md` is now empty of open work and can be retired - its
+two accepted residuals are folded into the invariant blocks below.
+
+Two of these were CONTROLS that controlled nothing, which is the part worth
+remembering:
+- **The weekly restore drill never restored Redis** and asserted nothing about
+  it. See the restore-drill block below - the failure shape (a control that
+  cannot go red) is the recurring one on this host.
+- **The release pipeline checked its own changelog last**, after five images
+  were public and `:latest` had moved. The `gate` job in
+  `server-release.yml` fixes it, and **must keep no job-level `if:`**: a
+  `workflow_dispatch` run has no tag, and a job that `needs:` a *skipped* job is
+  itself skipped, so gating the JOB would silently stop manual `dev-<sha>`
+  builds. The tag condition belongs on the STEP.
+
+Everything else is listed in `RELEASE_NOTES.md`. Three stale comments were
+corrected; the one that matters is `config.py::UPLOAD_STALE_AFTER_HOURS`, which
+still described a cap on upload DURATION - the reading that killed three live
+transfers - when it has measured inactivity since v2.12.0.
+
 **v2.13.0** - the scan guard becomes usable as a brute-force guard, and grows
 an admin page. **No migration, no host step**, and behaviour-neutral on upgrade:
 `scan_guard.signal_auth_failure` still ships OFF.
@@ -117,10 +140,10 @@ so a rollback past them needs the [[reference_rollback_migration_trap]]
 permissive/NULL value, so existing rows, in-flight sessions and
 approval-disabled deployments are unaffected by the upgrade itself.
 
-Backend **`v2.13.0`** (previous notable sweep: v2.8.1, audit #2 - see the
+Backend **`v2.13.1`** (previous notable sweep: v2.8.1, audit #2 - see the
 block below; .0 also carried the dependency/runtime sweep: Python 3.14, Node 24
 LTS, TypeScript 6, ESLint 10, Vite 8, Pinia 4, zero open dependency PRs).
-Desktop client **`client-v1.4.0`** - shipped + in production, published for
+Desktop client **`client-v1.4.2`** - shipped + in production, published for
 public self-hosting. **v2.8.0 needs no host step and no migration**, but it DOES
 change one default: `imap.require_known_sender` is ON, so an instance that
 accepts inbound mail from addresses with no user account must turn it off at
@@ -704,11 +727,44 @@ until storage leaves single-server bind mounts (KEK + ciphertext would otherwise
 share a container). **Dropped:** Locust load-test baseline (real-load
 operation supersedes); zxcvbn-ts strength meter (HIBP is the real defense).
 
+**Accepted residuals (deliberately CLOSED, don't re-file).** Carried here from
+`.claude/audit-2026-08-15.md` when that backlog was retired at v2.13.1, because
+a residual nobody records gets re-discovered and re-fixed:
+1. **The replayed tus creation.** @uppy/tus replays the creation POST when the
+   response is lost, so a superseded working file can linger. It is not a quota
+   bypass: `handle_pre_finish`/`handle_post_finish` both gate on
+   `state == uploading` so exactly one upload finalizes, post-terminate sets
+   `state = deleted`, `quota_reconcile` is DB-authoritative, and the per-upload
+   ceiling is the envelope's `max_size` (equality-enforced), not the 1 TiB
+   backstop. The residual is transient staging-space amplification, reclaimed by
+   `cleanup_abandoned_uploads` after 24h. Pre-create must STAY idempotent rather
+   than unlinking the superseded file - that would delete a file tusd holds open.
+2. **Single-source brute force is indistinguishable from a NAT'd office.** The
+   guard cannot separate one determined guesser from a building behind one
+   address, which is why `login_stuffing` needs ≥3 distinct emails and excludes
+   a source that ALSO logged in successfully in the window, and why the auth
+   signal ships OFF. Lockout (`users.locked_until`) is the per-account control
+   for this; the IP guard is not, and widening it to try is how you 404 a
+   customer's whole office.
+
 > **Restore drills exist as CODE; scheduling them is a separate host step
 > (don't confuse the two).** `scripts/restore_drill_e2e.sh` restores the latest
 > backup into an isolated throwaway compose project + runs `restore_validate.py`
 > (proven end-to-end against the 2026-05-04 backup), and records success in
 > `backups/LAST_SUCCESSFUL_DRILL`.
+> **A restore of redis is not a `docker cp` of the RDB** (fixed v2.13.1, and
+> wrong here for as long as the drill existed). Redis 7 started with
+> `--appendonly yes` IGNORES `dump.rdb` - with no AOF present it creates an empty
+> one - so the drill's redis step restored nothing and asserted nothing beyond
+> the file's magic header. The working sequence is in `scripts/restore.sh:74-117`
+> and now in the drill too: wipe `appendonlydir` + the stale rdb, copy the
+> snapshot in, load it with **AOF OFF**, `CONFIG SET appendonly yes` to rebuild
+> the AOF from the loaded dataset, then start the service normally. `DBSIZE` is
+> checked twice - after the load AND after the AOF-on restart - and is a **hard
+> failure** in the drill where `restore.sh` only warns, because a control whose
+> whole job is to go red on its own must not merely warn. The loader container is
+> named per-project and is in the teardown trap; `dc down` cannot see it and it
+> bind-mounts the workspace.
 > **The units in `scripts/ops/` do not schedule anything by existing.** They must
 > be copied to `/etc/systemd/system/` AND `systemctl enable --now`'d. On the
 > reference host they were copied on 2026-08-01 and never enabled, so as of

@@ -1,3 +1,103 @@
+# file:Heron v2.13.1
+
+**Closing the audit backlog — 23 recorded defects, no new features.**
+
+A maintenance release. Nothing here changes how the product is used; it fixes
+things that were wrong underneath. No migration, no host step, no API change,
+and no default moves. Desktop client **1.4.2** ships alongside it on its own
+tag.
+
+Two of these matter more than the rest, and both are controls that were not
+controlling anything: the weekly restore drill never actually restored Redis,
+and the release pipeline checked its own changelog only after publishing five
+images.
+
+---
+
+## The restore drill's Redis step did nothing, and checked nothing
+
+The weekly drill exists to prove the backups restore. It copied the Redis
+snapshot into the container and restarted the service — but Redis runs with
+append-only mode on, and Redis 7 with AOF enabled ignores `dump.rdb` entirely,
+creating an empty log instead of loading the snapshot. The drill then asserted
+nothing about the result beyond the file's magic header.
+
+So a quarter of what the drill claimed to prove would have passed identically
+against a snapshot of zeros. It now performs the load sequence the production
+restore path has used since July, and fails outright if the restored Redis
+comes back empty — checked once after loading and again after the restart.
+
+Verified both ways on the reference instance: green against a real backup,
+red against a valid but empty snapshot.
+
+## Release notes were checked after the images were already public
+
+The pipeline verified that `RELEASE_NOTES.md` had been rewritten for the tag as
+the first step of the *last* job. A tag with stale notes therefore spent the
+full test suite, pushed all five images, moved `:latest` on each of them, and
+only then failed — leaving the new version live for fresh installs with no
+GitHub release attached, and no in-app update banner for existing ones. Release
+tags cannot be reused, so recovery meant burning another version number.
+
+The check now runs before anything is built.
+
+## Security and correctness
+
+- **Legal pages that were switched off were still served.** Disabling the
+  imprint or privacy page hid it in the app but left the content readable
+  directly from the API, so unpublished drafts were reachable.
+- **An SSO login could be accepted with an unverified email.** A provider
+  reporting `email_verified` as the *string* `"false"` was read as true.
+- **Approvers could not see what they were approving.** With four-eyes review
+  on, a non-admin approver was notified that files needed review, then refused
+  access to the share holding them — they could approve through the API but
+  never look first. Scoped to shares that actually have files awaiting review.
+- **Cancelling a pending email change could report success without doing
+  anything**, if the change had already been applied or cancelled.
+- **Releasing a file from quarantine could strand it**, leaving the bytes in
+  neither place if the database write failed afterwards; every retry then
+  failed permanently.
+- **Restoring a configuration backup silently cleared maintenance mode** and
+  the low-disk guard.
+- **Large inbound emails could be lost.** A message whose text grew past the
+  database's packet limit during processing failed after the mailbox had
+  already been advanced past it.
+- **Re-entering your password could be rejected on the wrong grounds** — the
+  browser silently retried a wrong password instead of showing the error.
+- **Signing in with a recovery code stalled the server for about two seconds**,
+  on an endpoint that needs no login — the ten stored codes were verified one
+  after another on the thread serving every other request.
+- **Admins were not always told an update had started.** The notification was
+  prepared and then discarded.
+- Admin-minted API tokens now default to limited scope and a 90-day expiry, as
+  the self-service form already did.
+- Notification streams no longer leak a reconnect timer, an oversized
+  fingerprint is rejected cleanly instead of erroring, and the client-side 404
+  beacon has an overall ceiling.
+- German and English both gained a missing permission label.
+
+## Tests and documentation
+
+Four pieces of test coverage were found not to test what they named. Two
+asserted that a phrase appeared in a function's source — and it also appears in
+a comment there, so deleting the guard left them green. One walked a hand-written
+list of three old database migrations, so it could not see a new one, which is
+where the mistake actually gets made; it now scans them all. And the address
+check in front of the mail-server "test connection" buttons — the strongest
+outbound-request primitive in the product — had no test at all: replacing it
+with an empty function broke nothing.
+
+All four were rewritten to fail when the thing they name is removed, and every
+fix in this release was checked the same way: revert the fix, confirm the test
+goes red, restore.
+
+Three comments describing mechanisms that do not exist were corrected — the
+most consequential being the upload-reaper setting, still documented as a cap
+on how long an upload may take. It has measured inactivity since v2.12.0, and
+the old reading is what killed three live transfers.
+
+---
+
 # file:Heron v2.13.0
 
 **The scan guard's brute-force half could not safely be switched on, and this

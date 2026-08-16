@@ -10,7 +10,15 @@
   adds the AV worker that flips to clean / infected.
 - `tus_upload_id` is the working-dir filename tusd assigned the upload (used
   during the in-flight period); cleared after post-finish move.
-- `sha256_hex` is computed in Phase 3a/3b best-effort and verified in P5.
+- `sha256_hex` is set by the DIRECT upload path only (`routers/uploads.py`,
+  digested from the bytes as they stream in) and is **never verified anywhere**.
+  It is NULL for every tus upload, i.e. for everything over
+  `MAX_DIRECT_UPLOAD_BYTES` (100 MB default) - which is why `FileRow.vue`'s
+  `v-if="file.sha256_hex"` sha badge silently never appears on a large file.
+  This line claimed it was "computed in Phase 3a/3b best-effort and verified in
+  P5"; both halves were false, and the digest that IS load-bearing is the
+  approval `content_fingerprint`, which covers size + state per file precisely
+  because this column cannot be relied on (2026-08-16).
 """
 from __future__ import annotations
 

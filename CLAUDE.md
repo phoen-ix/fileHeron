@@ -746,6 +746,23 @@ a residual nobody records gets re-discovered and re-fixed:
    signal ships OFF. Lockout (`users.locked_until`) is the per-account control
    for this; the IP guard is not, and widening it to try is how you 404 a
    customer's whole office.
+3. **A partial destination file if `finalize` itself dies mid-copy.** The
+   direct-upload path compensates (`run_after_rollback` at
+   `routers/uploads.py:248`, registered immediately before the commit), so this
+   is the narrower window inside `shutil.move`'s copy fallback on a cross-device
+   bind mount. Reclaimed by the orphan sweep; not worth a second write path.
+4. **`file.py`'s `was_infected` orphan is unreachable, not absent.**
+   `mark_deleted_for_expiry` deliberately returns a None locator for a
+   `was_infected` row so an unlink-by-`storage_path` cannot destroy quarantined
+   evidence (`quarantine_file` REWRITES `storage_path` to the quarantine
+   locator). The row would fall out of both purge filters if it ever got there -
+   it cannot today, because every expiry entry point filters
+   `Share.state == active` while quarantine revokes the parent share on marking.
+   Don't "fix" the None locator without re-reading that pair.
+5. **`files.sha256_hex` is direct-upload-only and verified nowhere** - see the
+   docstring in `models/file.py`. NULL for every tus upload, so the SPA's sha
+   badge never renders above 100 MB. The digest that IS load-bearing for
+   integrity is the approval `content_fingerprint`.
 
 > **Restore drills exist as CODE; scheduling them is a separate host step
 > (don't confuse the two).** `scripts/restore_drill_e2e.sh` restores the latest

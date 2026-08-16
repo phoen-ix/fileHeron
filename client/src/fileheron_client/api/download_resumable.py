@@ -474,11 +474,19 @@ def _run_segmented(
         _stop()
         # The only path that DELETES the partial, so it is the only one that
         # waits: on Windows a segment still holding the handle blocks the
-        # unlink. Bounded and normally instant, because stop_now above makes a
-        # straggler exit at its next chunk. unlink_with_retry (~1.55s) remains
-        # the backstop, so a timeout costs a best-effort delete, not a failed
-        # cancel.
-        futures_wait(list(futmap), timeout=_STOP_SETTLE_SEC)
+        # unlink. unlink_with_retry (~1.55s) remains the backstop, so a timeout
+        # costs a best-effort delete, not a failed cancel.
+        #
+        # Wait only on what is actually RUNNING. concurrent.futures.wait() does
+        # not count a CANCELLED future as done - measured: four cancelled
+        # futures with nothing running still sat in `not_done` and wait()
+        # burned its whole timeout. Passing the full map therefore made every
+        # Cancel cost the full _STOP_SETTLE_SEC, which is the opposite of this
+        # commit's point and of the sentence that used to be here claiming it
+        # was "normally instant".
+        futures_wait(
+            [f for f in futmap if not f.cancelled()], timeout=_STOP_SETTLE_SEC
+        )
         ckpt.discard(dest)
         raise
     except Exception:

@@ -134,3 +134,13 @@ def _fetch_segment(
             if attempt + 1 >= MAX_RETRIES:
                 raise
             time.sleep(BACKOFF_SECONDS[min(attempt, len(BACKOFF_SECONDS) - 1)])
+    # Falling out of the loop means every attempt hit the 401 branch, which
+    # `continue`s without writing anything. This function then returned None -
+    # indistinguishable from success - so the caller marked the segment
+    # complete and the archive was silently short by one span, with the
+    # pre-allocated zeros left in its place. Exactly the silent corruption the
+    # 206-only check above calls "the worst possible failure mode for a
+    # file-transfer tool", reached by the one path that skipped it.
+    raise OSError(
+        f"segment {start}-{end}: still unauthorised after {MAX_RETRIES} attempts"
+    )

@@ -1,3 +1,37 @@
+# Desktop client 1.4.3
+
+**Two faults found reviewing 1.4.2, one of them older than it.**
+
+A patch release. 1.4.2 made Cancel stop the transfer instead of waiting for it;
+this makes Cancel actually immediate, and fixes a much older bug that could
+leave a downloaded file quietly incomplete.
+
+Requires server **v2.6.1 or newer** (unchanged).
+
+---
+
+## A download could finish "successfully" while missing part of the file
+
+The worst kind of bug for a file-transfer tool, and it predates 1.4.2.
+
+A large file is fetched in several parts. If one part met an expired sign-in on
+every one of its three attempts, that part gave up without reporting anything —
+and the app treated silence as success. The finished file was the right size,
+because the space is reserved up front, but the missing span was left as zeros.
+Nothing said so, and resuming would not fetch it either, because that part had
+been recorded as done.
+
+It now fails the way any other unrecoverable part does, so the download reports
+an error you can retry instead of handing you a damaged file.
+
+## Cancel is now actually immediate
+
+1.4.2 stopped waiting for the remaining parts, but still paused for up to two
+seconds before removing the partial file — the wait was accidentally counting
+parts that had already been dropped, so it always ran to its full timeout. It
+now waits only for parts genuinely still running, which in practice means
+Cancel returns at once.
+
 # Desktop client 1.4.2
 
 **Cancel stops now, and a failed download stops with it.**

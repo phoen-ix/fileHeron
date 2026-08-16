@@ -241,3 +241,86 @@ def test_the_stop_signal_is_separate_from_the_callers_events():
     assert dr._EitherEvent(caller_pause, threading.Event()).is_set() is True
     # Absent caller event (the UI passed none) must not blow up.
     assert dr._EitherEvent(None, threading.Event()).is_set() is False
+
+
+# --- post-release review findings (v2.13.2) ---------------------------------
+
+
+def test_cancel_does_not_wait_on_futures_that_were_cancelled():
+    """concurrent.futures.wait() does NOT count a CANCELLED future as done.
+
+    Measured, because the intuition is the other way round and Future.done()
+    DOES return True for a cancelled future. Passing the whole future map to
+    wait() therefore made every Cancel burn the full _STOP_SETTLE_SEC with
+    nothing running - the opposite of what the cancel path is for."""
+    import time as _t
+    from concurrent.futures import ThreadPoolExecutor
+    from concurrent.futures import wait as _wait
+
+    pool = ThreadPoolExecutor(max_workers=1)
+    futs = [pool.submit(_t.sleep, 0.05)] + [pool.submit(_t.sleep, 0.0) for _ in range(4)]
+    pool.shutdown(wait=False, cancel_futures=True)
+    cancelled = [f for f in futs if f.cancelled()]
+    assert cancelled, "nothing got cancelled; this guard would be vacuous"
+
+    t0 = _t.monotonic()
+    _wait(futs, timeout=2.0)
+    with_cancelled = _t.monotonic() - t0
+
+    t0 = _t.monotonic()
+    _wait([f for f in futs if not f.cancelled()], timeout=2.0)
+    without_cancelled = _t.monotonic() - t0
+
+    assert with_cancelled > 1.0, (
+        "wait() no longer stalls on cancelled futures - if a Python release "
+        "changed this, the filter in _run_segmented is merely redundant, not "
+        "wrong; relax this test rather than the code"
+    )
+    assert without_cancelled < 0.5, (
+        f"filtering cancelled futures did not help ({without_cancelled:.2f}s)"
+    )
+
+
+def test_the_cancel_path_filters_cancelled_futures_before_waiting():
+    """Pins the call site itself, so the measurement above stays connected to
+    the code it justifies."""
+    import inspect
+
+    src = inspect.getsource(dr._run_segmented)
+    idx = src.index("futures_wait(")
+    call = src[idx : idx + 160]
+    assert "cancelled()" in call, (
+        "the cancel path waits on the full future map again, so every Cancel "
+        f"burns the full settle timeout: {call!r}"
+    )
+
+
+@respx.mock
+def test_a_segment_that_is_401_to_the_end_fails_instead_of_reporting_success(
+    tmp_path, monkeypatch
+):
+    """_fetch_segment's 401 branch `continue`s without writing. When every
+    attempt took it, the loop fell out and the function returned None - which
+    the caller reads as success, marks the segment complete, and leaves the
+    pre-allocated zeros in the file. A silently short archive is exactly the
+    corruption the 206-only check calls the worst possible failure mode, and
+    the one path that reached it skipped that check."""
+    from fileheron_client.api import download_segmented as ds
+
+    calls = {"n": 0}
+
+    def _always_401(request: httpx.Request) -> httpx.Response:
+        calls["n"] += 1
+        return httpx.Response(401, json={"code": "TOKEN_EXPIRED"})
+
+    respx.get(f"{SERVER}/api/files/fid/download").mock(side_effect=_always_401)
+    monkeypatch.setattr(
+        ApiClient, "refresh_bearer_header", lambda self: {"Authorization": "Bearer new"}
+    )
+
+    part = tmp_path / "out.bin.part"
+    part.write_bytes(b"\0" * 50)
+
+    with pytest.raises(OSError):
+        ds._fetch_segment(_api(), "/api/files/fid/download", {}, part, 0, 9, lambda n: None)
+    assert calls["n"] >= 1

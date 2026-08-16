@@ -1,74 +1,125 @@
-# file:Heron v2.12.1
+# file:Heron v2.13.0
 
-**Corrects a claim v2.12.0 made and did not deliver.** v2.12.0's notes said a
-failed backup or restore drill would e-mail whoever your error alerts go to. It
-would not have. The alerting was wired into the wrong section of the systemd
-unit files, and systemd silently ignored it.
+**The scan guard's brute-force half could not safely be switched on, and this
+release is why.** `signal_auth_failure` classified on the HTTP status alone, and
+`TOTP_REQUIRED` — the ordinary two-factor prompt — is a 401. Every normal login
+by every 2FA user was therefore counted as credential guessing, at a threshold
+of 3 tuned for scanner bait. It also ships a dedicated **Blocked sources** page.
 
-No migration, no host step for the application, no setting changes. The images
-are functionally identical to v2.12.0 — the fix is in two files that ship as
-source, so **it only reaches you when you re-copy them** (below).
+No migration. No host step. No setting changes on upgrade: `signal_auth_failure`
+still ships **off**, so this release is behaviour-neutral until you opt in.
 
 ---
 
-## A failed backup would still have told nobody
+## Turning on the brute-force signal would have blocked your own office
 
-`OnFailure=` is a `[Unit]` directive. In `scripts/ops/fileheron-backup.service`
-and `fileheron-restore-drill.service` it was placed at the end of `[Service]`,
-where systemd drops it with a warning nothing surfaces unless you happen to run
-`systemd-analyze verify`:
+Measured on a live instance while validating this release. Four sign-ins from
+one address — two successful two-factor logins and two mistyped passwords:
 
-```
-fileheron-backup.service: Unknown key 'OnFailure' in section [Service], ignoring.
-```
-
-The units looked correctly wired. `systemctl show fileheron-backup.service -p
-OnFailure` returned **empty**. So a failed nightly backup would have remained
-what it was before v2.12.0 — a `failed` unit and a journald line, with nothing
-watching either. Which is precisely the situation that release set out to fix.
-
-It was found by installing the units on a real host and reading systemd's own
-verdict rather than trusting the file, and confirmed the same way:
-
-| | before | after |
+| | old behaviour | v2.13.0 |
 |---|---|---|
-| `fileheron-backup.service` | `OnFailure=[]` | `OnFailure=[fileheron-alert-failure@…]` |
-| `fileheron-restore-drill.service` | `OnFailure=[]` | `OnFailure=[fileheron-alert-failure@…]` |
+| successful 2FA login | **counted** (`TOTP_REQUIRED` is a 401) | not counted |
+| mistyped password | counted | counted |
+| total offences | **4** | **2** |
 
-## If you installed the v2.12.0 units, re-copy them
+At the shipped threshold of 3, the fourth offence blocks — and the fourth was
+the two-factor prompt of a *successful* login. The address would have been
+404'd off the entire product at the moment it signed in correctly.
 
-The unit files are **copies**, not symlinks — updating fileHeron does not touch
-`/etc/systemd/system`, and the in-app updater never could. If you installed them
-from v2.12.0, alerting is currently inert on your host:
+Four things were wrong at once, and all four are fixed:
 
-```bash
-# check first - empty output means alerting is not wired
-systemctl show fileheron-backup.service -p OnFailure
+- **Only the codes that mean a submitted secret was wrong now count.** The
+  middleware sees a status, not the error envelope, so the code is published to
+  the request scope and matched against an allowlist. `TOTP_REQUIRED` is
+  excluded, as are `ACCOUNT_DISABLED` and `EMAIL_NOT_VERIFIED` — both raised
+  *after* the password verified, i.e. a confused user, not a guesser. An
+  unrecognised code does not count.
+- **Four of the six watched paths matched nothing.** `/api/webauthn/` and
+  `/api/oidc/` are not routes this app serves (they are under `/api/auth/`), and
+  forgot-password, reset-password and register-from-invite answer 200/404/410,
+  never 401. Real coverage was `/api/auth/login` alone. The list is now the four
+  live credential routes, including `/api/auth/2fa/complete`, and a test pins
+  every entry against the router table.
+- **Credential failures have their own threshold** (`auth_threshold`, default
+  15) and their own counter. Sharing one budget with scanner bait meant two
+  probes plus one password typo was a block.
+- **A source whose own successful logins explain its failures is exempt** —
+  across two different accounts, so a single attacker-held login cannot launder
+  a campaign from the same address.
 
-sudo cp scripts/ops/fileheron-backup.service /etc/systemd/system/
-sudo cp scripts/ops/fileheron-restore-drill.service /etc/systemd/system/
-sudo systemctl daemon-reload
-systemctl show fileheron-backup.service -p OnFailure   # now non-empty
-```
+## Blocked sources — a page for what the guard is doing
 
-Nothing else needs restarting, and the timers keep their schedule.
+**Admin → System → Blocked sources.** Previously a small table at the bottom of
+the scan-guard settings page.
 
-If you have not installed the units at all, there is nothing to do here — the
-files are simply correct now.
+- Every block with filters for released and expired history, reason, origin and
+  address — including "what is blocking *this* address", which finds the range
+  containing it, not just an exact match.
+- Block an address or range by hand; release; **Release + allow** in one action,
+  because releasing without exempting just hands the source back to be
+  re-blocked.
+- The **allowlist** moved here from the settings form, where it was a free-text
+  box. It is now edited one entry at a time under a row lock: as a whole-list
+  field on that form, saving the settings page silently erased entries added
+  anywhere else.
+- A **watchlist** of sources accruing offences that have not been blocked, so a
+  scan is visible before it becomes a block. It holds those addresses for at
+  most one counting window; turn it off with `scan_guard.watchlist` if you would
+  rather it never held them.
 
-> **Worth checking while you are there**, because a correctly wired alert still
-> needs somewhere to go: alerting sends through the app's own SMTP config and
-> its alert-recipient policy (**Admin → Settings → Error alerts**). With no
-> explicit recipients it falls back to your enabled admins. And by design it
-> cannot send if the backup failed *because* the stack is down — that case stays
-> visible as `systemctl --failed` only.
+## One deliberate refusal
 
----
+`PUT /api/admin/settings/advanced` **no longer accepts the nine `scan_guard.*`
+keys** and answers `400 SETTING_MANAGED_ELSEWHERE`; they are also gone from the
+Advanced page. That route wrote them while bypassing the scan-guard page's
+side effects, so changing the IPv6 prefix there left live network blocks no
+longer matching what the guard computes — their evidence stopped counting and an
+orphaned block kept refusing traffic after the visible one was released. Use
+**Admin → Settings → Scan guard**, which is now the only writer.
 
-## Everything else from v2.12.0 still applies
+Scripted callers setting those keys through the generic endpoint must move.
 
-v2.12.1 changes nothing else. If you are coming from v2.11.0 or earlier, read
-the [v2.12.0 notes](https://github.com/phoen-ix/fileHeron/releases/tag/v2.12.0)
-— that release carries the upload-reaper fix, the security wave, migration
-`202608150001`, and a **required host step** (`docker compose up -d tusd`)
-without which the upload fix does nothing.
+## Also fixed
+
+- **IPv4-mapped IPv6 is unwrapped at the door.** `::ffff:8.8.8.8` grouped as
+  `::/64` — one prefix covering the entire mapped IPv4 space — so on a
+  dual-stack deployment three such sources could have escalated a single block
+  over every IPv4 client, and an IPv4 allowlist entry could not have rescued
+  them.
+- **Releasing a block clears the counters that produced it.** They survived the
+  release, so the next offending request re-blocked the source within seconds
+  and the release looked like it had done nothing.
+- **A manual block no longer folds into an automatic one.** It kept the
+  automatic origin, discarded the admin's note and identity, wrote no audit row,
+  and could not shorten the block.
+- **Admin blocks and releases record the address they came from.** Allowlist
+  changes did; blocks and releases did not.
+- **`scripts/unblock_ip.py` matches by containment.** Naming your own address
+  now clears the range that caught you — it compared strings, so it failed at
+  the exact moment it exists for. Host-side releases are also audited now.
+- Escalation reads a released block as ended rather than waiting out its
+  original expiry, and the scan-guard settings are read in one query rather
+  than twenty every fifteen seconds.
+
+## Corrections to earlier claims
+
+Two statements in the docs were false and are now fixed:
+
+- **"Redis down ⇒ the guard fails open"** — it does not. The rate limiter
+  catches its own Redis errors and falls back to an in-process counter, so
+  probe-path and auth-failure detection keep counting *and blocking* per worker.
+  Only the API-404 signal genuinely fails open. The test that covered this
+  stubbed a call path that cannot occur.
+- The `min_distinct_paths` diversity gate and the authenticated-user exemption
+  were both effectively untested; the exemption's test passed whether or not the
+  code existed.
+
+## Upgrading
+
+Nothing to do beyond the usual update. No migration, no compose change, no host
+step, and every existing setting is preserved. Two new keys appear with
+defaults: `scan_guard.auth_threshold` (15) and `scan_guard.watchlist` (on).
+
+If you want the brute-force signal, put your own egress address on the allowlist
+**first** — the guard refuses ahead of routing, so a blocked admin cannot reach
+the page to undo it. `scripts/unblock_ip.py` on the host is the way back.

@@ -15,9 +15,8 @@ keep this to what would cause a wrong move if unknown.
 
 ## Status
 
-**UNRELEASED (on `feat/scan-guard-bruteforce-and-blocks-page`)** - the scan
-guard becomes usable as a brute-force guard, and grows an admin page. **No
-migration, no host step**, and behaviour-neutral on upgrade:
+**v2.13.0** - the scan guard becomes usable as a brute-force guard, and grows
+an admin page. **No migration, no host step**, and behaviour-neutral on upgrade:
 `scan_guard.signal_auth_failure` still ships OFF.
 
 The headline is that the auth signal **could not safely be switched on before
@@ -118,7 +117,7 @@ so a rollback past them needs the [[reference_rollback_migration_trap]]
 permissive/NULL value, so existing rows, in-flight sessions and
 approval-disabled deployments are unaffected by the upgrade itself.
 
-Backend **`v2.8.1`** (audit #2, a change-weighted re-sweep at v2.7.3 - see the
+Backend **`v2.13.0`** (previous notable sweep: v2.8.1, audit #2 - see the
 block below; .0 also carried the dependency/runtime sweep: Python 3.14, Node 24
 LTS, TypeScript 6, ESLint 10, Vite 8, Pinia 4, zero open dependency PRs).
 Desktop client **`client-v1.4.0`** - shipped + in production, published for
@@ -177,7 +176,7 @@ does - keep it current on release.)
 > per-tick error storm, and the default 1s interval would be one UPDATE per
 > second per upload (hence 30s).
 >
-> **Brute-force guard invariants (UNRELEASED) - read before touching the auth
+> **v2.13.0 brute-force guard invariants - read before touching the auth
 > signal.**
 > **A 401/403 counts only when the envelope `code` says a SUBMITTED SECRET WAS
 > WRONG** (`_COUNTABLE_AUTH_CODES`, an ALLOWLIST). The middleware sees only the
@@ -234,7 +233,7 @@ does - keep it current on release.)
 > set and an authenticated user cannot be exempted there. Bounded (`api_404`
 > ships off and needs 15 distinct paths) and pinned by its own test.
 >
-> **Blocked-sources page invariants (UNRELEASED).**
+> **v2.13.0 blocked-sources page invariants.**
 > **`scan_guard.allowlist` has ONE writer**: the allowlist endpoints, which
 > serialise on a row lock over the setting's own row (a no-op on SQLite; the
 > first-insert race is closed by the unique key → 409 `CONFLICT_RETRY`). It was

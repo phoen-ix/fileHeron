@@ -38,6 +38,93 @@ import sqlalchemy as sa
 VERSIONS = pathlib.Path(__file__).resolve().parents[1] / "alembic" / "versions"
 
 
+# --- P25: the generic nesting check, for revisions nobody has written yet ----
+
+
+def _calls_in(node) -> set[str]:
+    return {
+        n.func.id
+        for n in ast.walk(node)
+        if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
+    }
+
+
+def _create_guards(test) -> set[str]:
+    """Guards that mean "it is ABSENT, so make it" - `if not _has_table(...)`.
+
+    Only the NEGATED form is a create guard, and the distinction is the whole
+    precision of this check. `if _has_column(...): op.alter_column(...)` reruns
+    happily, because its body runs whenever the column exists; a positive check
+    is idempotent by construction. Treating both alike flags three correctly
+    guarded ops in 202605031600_email_plaintext."""
+    found: set[str] = set()
+    for n in ast.walk(test):
+        if isinstance(n, ast.UnaryOp) and isinstance(n.op, ast.Not):
+            found |= _calls_in(n.operand)
+    return found & {"_has_table", "_has_column"}
+
+
+_PROTECTING = {"_has_index", "_column_nullable"}
+_NESTABLE = {"create_index", "create_unique_constraint", "alter_column"}
+
+
+def _find_nested_ops(
+    node, *, creating: bool, protected: bool, out: list, where: str
+) -> None:
+    if isinstance(node, ast.If):
+        names = _calls_in(node.test)
+        for sub in node.body:
+            _find_nested_ops(
+                sub,
+                creating=creating or bool(_create_guards(node.test)),
+                protected=protected or bool(names & _PROTECTING),
+                out=out,
+                where=where,
+            )
+        for sub in node.orelse:
+            _find_nested_ops(
+                sub, creating=creating, protected=protected, out=out, where=where
+            )
+        return
+    if (
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr in _NESTABLE
+        and creating
+        and not protected
+    ):
+        out.append(f"{where}:{node.lineno}::{node.func.attr}")
+    for child in ast.iter_child_nodes(node):
+        _find_nested_ops(
+            child, creating=creating, protected=protected, out=out, where=where
+        )
+
+
+def test_no_revision_nests_an_index_or_not_null_inside_a_create_guard():
+    """Guard each op SEPARATELY, in every revision - including the next one.
+
+    A `create_index` nested inside the `if not _has_table(...)` that creates the
+    table is skipped FOREVER if the run crashes between them: the table now
+    exists, the guard is False, and the body never runs again. The coverage
+    above names by hand the three revisions that once got this wrong - it cannot
+    see a migration nobody has written yet, which is exactly where the mistake
+    gets made. CLAUDE.md's Conventions section claimed this file already failed
+    on that; it does now.
+
+    Green today: the scan finds no offender across every revision."""
+    offenders: list[str] = []
+    for f in sorted(VERSIONS.glob("*.py")):
+        tree = ast.parse(f.read_text(encoding="utf-8"))
+        _find_nested_ops(
+            tree, creating=False, protected=False, out=offenders, where=f.name
+        )
+
+    assert not offenders, (
+        "an op is nested inside a create guard, so a crash between the two "
+        f"skips it forever on the retry: {offenders}"
+    )
+
+
 # --- schema-11: one definition, not seven -----------------------------------
 
 

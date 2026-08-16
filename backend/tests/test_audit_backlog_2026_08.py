@@ -339,3 +339,74 @@ def test_the_share_appears_in_the_approver_queue(db, make_user):
     # Control: the owner never reviews their own.
     own_rows, own_total = share_svc.list_pending_approvals(db, user=owner)
     assert own_total == 0
+
+
+# --- Lead 32: assert_safe_host had no test at all --------------------------
+#
+# Its two call sites (the SMTP and IMAP test-connection host overrides) are the
+# strongest SSRF primitive in the product - they connect and hand the caller the
+# error text - and no-oping the whole function left the suite green. What
+# follows pins the policy AND the deliberate fail-open, which is the part an
+# unrelated tidy-up is most likely to "correct" into a raise, turning every
+# admin typo into an opaque 400.
+
+
+def _resolves_to(monkeypatch, addr: str) -> None:
+    import socket as _socket
+
+    monkeypatch.setattr(
+        "app.utils.net.socket.getaddrinfo",
+        lambda host, port, *a, **kw: [
+            (_socket.AF_INET, _socket.SOCK_STREAM, 6, "", (addr, port or 25))
+        ],
+        raising=True,
+    )
+
+
+@pytest.mark.parametrize("addr", ["127.0.0.1", "169.254.169.254", "0.0.0.0"])
+def test_assert_safe_host_refuses_the_always_blocked_addresses(monkeypatch, addr):
+    """Loopback, link-local (the cloud-metadata address) and unspecified are
+    refused whatever `allow_private` says."""
+    from app.middleware.errors import AppError
+    from app.utils.net import assert_safe_host
+
+    _resolves_to(monkeypatch, addr)
+    with pytest.raises(AppError) as exc:
+        assert_safe_host("mail.example", 25)
+    assert exc.value.code in ("URL_BLOCKED", "URL_NOT_ALLOWED")
+
+
+def test_assert_safe_host_allows_a_lan_mail_server_by_default(monkeypatch):
+    """`allow_private` defaults True because a mail server on the same LAN is
+    an ordinary deployment — and it must still be refusable explicitly."""
+    from app.middleware.errors import AppError
+    from app.utils.net import assert_safe_host
+
+    _resolves_to(monkeypatch, "10.0.0.5")
+    assert_safe_host("mail.corp.local", 25)  # default: permitted
+    with pytest.raises(AppError):
+        assert_safe_host("mail.corp.local", 25, allow_private=False)
+
+
+def test_assert_safe_host_fails_open_on_an_unresolvable_name(monkeypatch):
+    """Deliberate, and the opposite of `assert_public_http_url`. These endpoints
+    exist to report a connection error legibly; a name that does not resolve
+    cannot be an SSRF target, and raising here would turn every typo into an
+    opaque 400 instead of the hint the admin needs."""
+    import socket as _socket
+
+    from app.utils.net import assert_safe_host
+
+    def _boom(*a, **kw):
+        raise _socket.gaierror("Name or service not known")
+
+    monkeypatch.setattr("app.utils.net.socket.getaddrinfo", _boom, raising=True)
+    assert assert_safe_host("nope.invalid", 25) is None
+
+
+def test_assert_safe_host_refuses_an_empty_host():
+    from app.middleware.errors import AppError
+    from app.utils.net import assert_safe_host
+
+    with pytest.raises(AppError):
+        assert_safe_host("   ", 25)

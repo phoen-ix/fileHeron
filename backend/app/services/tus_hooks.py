@@ -164,10 +164,13 @@ def handle_pre_create(db: Session, body: dict[str, Any]) -> None:
     # twice while only ever being released once, locking the uploader out of
     # their own quota until the hourly reconcile repaired the counter.
     #
-    # Two independent guards, because each has a hole the other covers: a
-    # non-NULL tus_upload_id means an earlier pre-create already reserved, but
-    # only tusd v2 supplies Upload.ID here; the Redis marker does not depend on
-    # the tusd version, but needs Redis (audit 2026-07-30).
+    # The Redis marker inside reserve_bytes_once is what actually guards this.
+    # This condition reads like a second, independent guard and is not one:
+    # tusd supplies no Upload.ID on pre-create (measured - see the block below),
+    # and finalize clears the column, so `tus_upload_id` is None on every
+    # pre-create this code has ever seen. It is kept as a cheap short-circuit
+    # for a future tusd that does populate the field, not as a fallback for a
+    # Redis outage - there is none (audit 2026-07-30, corrected 2026-08-16).
     if file_row.tus_upload_id is None:
         quota_svc.reserve_bytes_once(
             db,

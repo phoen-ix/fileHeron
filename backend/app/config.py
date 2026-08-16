@@ -97,10 +97,17 @@ class Settings(BaseSettings):
     # Abandoned TUS uploads (no DB row, or row stuck in `uploading` state)
     # older than this get unlinked from /data/uploads.
     TUS_UPLOAD_ABANDONED_AFTER_HOURS: int = 24
-    # A `files` row stuck in `uploading` longer than this is treated as an
-    # abandoned/failed upload: cleanup_stale_uploads reaps the file and flips
-    # the now-empty share to `failed`. Short because legit uploads finish well
-    # under the ~1h TUS resume window.
+    # INACTIVITY, not total duration. A `files` row in `uploading` whose last
+    # progress tick (`COALESCE(last_progress_at, created_at)`) is older than
+    # this is treated as abandoned: cleanup_stale_uploads reaps the file and
+    # flips the now-empty share to `failed`.
+    #
+    # This read "stuck in `uploading` longer than this" until 2026-08-16, and
+    # that is exactly the misreading that killed three live transfers: on the
+    # old semantics the knob capped how long an upload was ALLOWED TO TAKE, so
+    # 3h reaped every transfer of the 30 GB this product advertises. Raising it
+    # is no longer the answer to a slow link - a live upload ticks every
+    # `-progress-hooks-interval` (30s) and never ages past this at all.
     UPLOAD_STALE_AFTER_HOURS: int = 3
 
     # --- Argon2id parameters -------------------------------------------------

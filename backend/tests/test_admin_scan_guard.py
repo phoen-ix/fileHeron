@@ -9,6 +9,35 @@ PW = "Pass12345678!"
 SCANNER = "45.148.10.67"
 
 
+@pytest.fixture(autouse=True)
+def _isolate_scan_guard_redis(monkeypatch):
+    """Keep every test in this file off the deployment's Redis.
+
+    `docker compose run` joins the compose network, so a bare `get_redis()` in
+    code under test reaches the LIVE instance - and `release()` now calls
+    `clear_counters`, which issues DELETE/ZREM against fixed key names derived
+    from the subject. The subjects here are real observed scanner addresses, so
+    an unstubbed run would delete live counters for them. Same class of hazard
+    as commit 24561bf (tests writing into production file storage).
+
+    Tests that need to observe Redis monkeypatch `get_redis` themselves; a
+    later patch in the test body wins over this one.
+    """
+
+    class _Inert:
+        def __getattr__(self, _name):
+            def _noop(*_a, **_kw):
+                return None
+            return _noop
+
+        def pipeline(self):
+            return self
+
+        def execute(self):
+            return [0]
+
+    monkeypatch.setattr("app.redis_client.get_redis", lambda: _Inert())
+
 def _payload(**over):
     body = {
         "enabled": True,
@@ -137,8 +166,12 @@ async def test_the_settings_put_no_longer_writes_the_allowlist(
     assert add.status_code == 200, add.text
     assert add.json()["entries"] == ["203.0.113.7/32"]
 
+    # A NON-EMPTY stale value, deliberately: sending "" would also pass against
+    # an implementation that merely skips falsy input, while a real stale
+    # snapshot from an open settings tab still overwrote the list.
     saved = await client.put(
-        "/api/admin/scan-guard", json=_payload(allowlist=""), headers=headers
+        "/api/admin/scan-guard",
+        json=_payload(allowlist="10.0.0.0/8,192.168.0.0/16"), headers=headers,
     )
     assert saved.status_code == 200, saved.text
 
@@ -392,9 +425,21 @@ async def test_status_filter_separates_live_released_and_expired(
 @pytest.mark.asyncio
 async def test_the_deprecated_active_flag_still_works(make_user, client, login_as, db):
     """Kept one release so the shipped SPA and any scripted caller do not break
-    the moment the backend updates."""
+    the moment the backend updates.
+
+    The two calls must return DIFFERENT sets, or this proves nothing: seed a
+    released row so `active=false` has something extra to find."""
+    from app.services import scan_guard as sg
+
     headers = await _admin_headers(make_user, login_as)
     _seed_blocks(db)
+    dead = sg.apply_block(
+        db, subject="45.148.11.9", reason="probe_path", snap=sg._defaults()
+    )
+    db.commit()
+    sg.release(db, block_id=dead.id, actor_id=None)
+    db.commit()
+
     live = await client.get(
         "/api/admin/scan-guard/blocks", params={"active": "true"}, headers=headers
     )
@@ -402,7 +447,7 @@ async def test_the_deprecated_active_flag_still_works(make_user, client, login_a
     every = await client.get(
         "/api/admin/scan-guard/blocks", params={"active": "false"}, headers=headers
     )
-    assert every.json()["total"] == 4
+    assert every.json()["total"] == 5
 
 
 # --- Manual blocking -------------------------------------------------------

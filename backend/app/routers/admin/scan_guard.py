@@ -28,7 +28,7 @@ from ...schemas.scan_guard import (
     WatchlistResponse,
 )
 from ...services import scan_guard as guard_svc
-from ...utils.client_ip import get_client_ip, is_blockable
+from ...utils.client_ip import get_client_ip, is_blockable, normalize_ip
 from ...utils.timeutil import utc_now
 
 router = APIRouter()
@@ -147,7 +147,10 @@ def create_block(
     db: Session = Depends(get_db),
     admin: User = Depends(get_current_admin),
 ) -> IpBlockRow:
-    subject = payload.subject.strip()
+    # Normalised first, so a mapped-IPv6 subject an admin copied out of an old
+    # log entry becomes the form every request IP is compared in. Stored raw, it
+    # would list as an active block and match nothing.
+    subject = normalize_ip(payload.subject.strip()) or payload.subject.strip()
     try:
         net = ipaddress.ip_network(subject, strict=False)
     except ValueError:

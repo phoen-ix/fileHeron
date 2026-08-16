@@ -197,11 +197,16 @@ does - keep it current on release.)
 > **Credential failures count in their OWN bucket at their OWN threshold**
 > (`scanguard_auth` / `scan_guard.auth_threshold`, default 15, floor 5). Pooling
 > is wrong both ways: at the scan threshold of 3, two bait probes plus one
-> password typo blocks an office; at 15, bait detection is gutted. 15 is
-> derived - lockout converts failures to 423 after 5 and the per-IP limiter to
-> 429 after 10, so a three-person office grinding to lockout is exactly 15.
-> `check_ip_allowed` allows while `count <= limit`, so that office lands ON the
-> limit and is served; **"fixing" that to `<` re-bans them.**
+> password typo blocks an office; at 15, bait detection is gutted.
+> `check_ip_allowed` allows while `count <= limit`, so a source lands ON the
+> limit and is served; **"fixing" that to `<` shifts everyone one attempt
+> earlier.** What actually brakes a source is the per-IP login limiter (429s are
+> uncountable), capping ANY source at ~10 countable failures per 15 min - so 15
+> means roughly half an hour of doing nothing but failing. Note the residual,
+> which config.py states in full: on a single-user instance a stale password
+> manager and a slow stuffer are indistinguishable by volume, because the
+> limiter caps both identically and the shared-egress exemption needs two
+> accounts.
 > **The shared-egress discriminator counts failures as the four countable
 > outcomes**, never `outcome != success`: `rate_limited`, `locked` and
 > `account_disabled` rows are produced in volume by the very office being
@@ -209,6 +214,11 @@ does - keep it current on release.)
 > must clear, and withholds the exemption. Successes must span **>=2 distinct
 > accounts**, or one attacker-owned login launders unlimited grinding from the
 > same address. Not tunable: a knob to disable it is a knob to ban an office.
+> **`login_attempts.ip` must be written in the SAME canonical form the guard
+> counts in.** `_request_ip` goes through `get_client_ip`, so the mapped-IPv6
+> unwrap applies on both sides of the shared-egress join; raw, the join found
+> zero rows on a dual-stack deployment and the office was blocked by the check
+> meant to exempt it.
 > **A release must clear the counters** (`clear_counters`). Otherwise the source
 > is still at threshold for the rest of the window and the next request
 > re-blocks it - the hair-trigger shape v2.11.0 fixed for network escalation,

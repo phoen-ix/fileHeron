@@ -374,13 +374,27 @@ class Settings(BaseSettings):
     SCAN_GUARD_THRESHOLD: int = 3            # offences before a block
     # Credential failures are counted separately, at a much higher bar, because
     # legitimate users produce them and legitimate users never touch bait paths.
-    # 15 is derived, not picked: the per-account lockout converts failures to 423
-    # (uncountable) after 5, and the per-IP login limiter converts them to 429
-    # (also uncountable) after 10 per 15 min - so the worst legitimate case, a
-    # three-person office all grinding to lockout with no successful login in the
-    # window, is exactly 3x5 = 15 countable failures. `check_ip_allowed` allows
-    # while count <= limit, so that office lands ON the limit and is served; the
-    # 16th failure blocks. Do NOT "fix" that comparison to `<` - it re-bans them.
+    #
+    # What actually brakes a source, measured rather than assumed: the per-IP
+    # login limiter answers 429 after RATE_LIMIT_LOGIN (10) attempts per 15 min,
+    # and a 429 is not countable. So NO source - honest or hostile - can exceed
+    # ~10 countable failures per 15-minute window, i.e. ~40 over the default
+    # 1-hour window. The per-account lockout narrows it further for a KNOWN
+    # email (5, then 423s, which are also uncountable) but not for a guessed
+    # one, and a served lockout starts a fresh count, so "5 per account" is per
+    # lockout cycle, not per hour.
+    #
+    # 15 therefore means: a source has to spend roughly half an hour doing
+    # nothing but failing before it is blocked. A three-person office all
+    # grinding to lockout at once lands on 15 and is served -
+    # `check_ip_allowed` allows while count <= limit, so the 16th blocks; do NOT
+    # "fix" that comparison to `<`, it re-bans exactly that office.
+    #
+    # The honest residual: on a single-user instance a stale password manager
+    # and a slow stuffer are indistinguishable by volume, because the limiter
+    # caps both at the same rate, and the shared-egress exemption needs
+    # successes from two different accounts. Such a source is blocked for
+    # block_minutes and self-heals; that is the trade this number makes.
     SCAN_GUARD_AUTH_THRESHOLD: int = 15      # credential failures before a block
     SCAN_GUARD_WINDOW_SEC: int = 3600        # ...within this window
     SCAN_GUARD_BLOCK_MINUTES: int = 60       # first block; doubles per strike

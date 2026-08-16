@@ -32,6 +32,7 @@ import { useDebouncedSearch } from '@/composables/useDebouncedSearch'
 import { usePaginatedList } from '@/composables/usePaginatedList'
 import { useSiteDateFormat } from '@/composables/useSiteDateFormat'
 import { useUiStore } from '@/stores/ui'
+import { parseServerDate } from '@/utils/datetime'
 
 const { t } = useI18n()
 const { describe } = useApiError()
@@ -63,8 +64,11 @@ const { items, total, page, pageSize, loading, errorMsg, load } =
   })
 
 function refilter() {
-  page.value = 1
-  void load()
+  // `page` has a watcher, so assigning 1 from any other page already reloads.
+  // Doing both fired two identical requests; harmless thanks to
+  // usePaginatedList's sequence token, but two round trips per keystroke.
+  if (page.value !== 1) page.value = 1
+  else void load()
 }
 useDebouncedSearch(search, refilter)
 watch([status, reason, source, networkOnly], refilter)
@@ -161,10 +165,26 @@ const blocking = ref(false)
 const effectiveMinutes = computed(() =>
   newMinutes.value === 'custom' ? customMinutes.value : newMinutes.value,
 )
+// The custom input clears to '' and accepts 0. Without this the admin gets the
+// danger confirm, says yes, and then sees a 422 - a refusal that arrives after
+// the decision rather than instead of it.
+const canBlock = computed(
+  () =>
+    !blocking.value &&
+    newSubject.value.trim().length > 0 &&
+    Number.isInteger(effectiveMinutes.value) &&
+    (effectiveMinutes.value as number) >= 1 &&
+    (effectiveMinutes.value as number) <= 43200,
+)
 
-/** How many addresses a CIDR covers, for the confirm dialog. Display only -
- *  the server is the authority on whether the subject is acceptable at all. */
-function addressCount(subject: string): number | null {
+/** How many addresses a CIDR covers, as text for the confirm dialog. Display
+ *  only - the server is the authority on whether the subject is acceptable.
+ *
+ *  Rendered as a power of two past the point where a decimal stops meaning
+ *  anything: a /64 is 2^64, and calling that "10^38" (as a single Infinity
+ *  bucket did) overstates it by nineteen orders of magnitude in the one dialog
+ *  whose entire job is to convey scale. */
+function addressCountLabel(subject: string): string | null {
   const [, bits] = subject.split('/')
   if (bits === undefined) return null
   const prefix = Number(bits)
@@ -172,7 +192,8 @@ function addressCount(subject: string): number | null {
   const width = subject.includes(':') ? 128 : 32
   if (prefix < 0 || prefix > width) return null
   const exp = width - prefix
-  return exp > 40 ? Infinity : 2 ** exp
+  if (exp === 0) return null
+  return exp > 40 ? `2^${exp}` : (2 ** exp).toLocaleString()
 }
 
 function durationLabel(minutes: number): string {
@@ -184,14 +205,14 @@ function durationLabel(minutes: number): string {
 
 async function onBlock() {
   const subject = newSubject.value.trim()
-  if (!subject || blocking.value) return
+  if (!canBlock.value) return
   const minutes = effectiveMinutes.value
-  const count = addressCount(subject)
+  const count = addressCountLabel(subject)
   const message =
-    count !== null && count > 1
+    count !== null
       ? t('admin_ip_blocks.confirm_block_network', {
           subject,
-          count: count === Infinity ? '10^38' : count.toLocaleString(),
+          count,
           duration: durationLabel(minutes),
         })
       : t('admin_ip_blocks.confirm_block', {
@@ -276,7 +297,15 @@ async function onReleaseAll() {
 }
 
 function isLive(row: IpBlockRow): boolean {
-  return row.released_at === null && new Date(row.expires_at).getTime() > Date.now()
+  // `parseServerDate`, not `new Date()`. The API sends naive UTC, which
+  // `new Date()` reads as browser-local: east of UTC a block still refusing
+  // traffic would show "Expired" and hide its own Release button for the last
+  // hours of its life, and west of UTC dead blocks would offer a Release that
+  // does nothing.
+  return (
+    row.released_at === null &&
+    parseServerDate(row.expires_at).getTime() > Date.now()
+  )
 }
 
 const hasLiveBlocks = computed(() => items.value.some(isLive))
@@ -338,7 +367,7 @@ onMounted(() => {
             :placeholder="t('admin_ip_blocks.note_placeholder')"
           />
         </label>
-        <button type="submit" class="fh-btn" :disabled="blocking || !newSubject.trim()">
+        <button type="submit" class="fh-btn" :disabled="!canBlock">
           {{ t('admin_ip_blocks.block_cta') }}
         </button>
       </form>

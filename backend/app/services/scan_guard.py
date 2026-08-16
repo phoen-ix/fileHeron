@@ -58,7 +58,7 @@ from sqlalchemy.orm import Session
 from ..database import SessionLocal
 from ..models.ip_block import IpBlock
 from ..utils.client_ip import is_blockable, normalize_ip
-from ..utils.timeutil import utc_now
+from ..utils.timeutil import utc_now, utc_now_aware
 from . import settings as settings_svc
 from . import settings_registry
 
@@ -583,21 +583,32 @@ def _watch_note(ip: str, signal: str, path: str, window_sec: int, snap: dict) ->
         from ..redis_client import get_redis
 
         redis = get_redis()
-        now = utc_now()
+        # Prune BEFORE counting, so the cap is applied to what is actually
+        # retained. Doing it after left `card` describing a set that included
+        # entries the prune had just dropped, which over-evicted live ones.
+        # It also means retention does not depend on an admin opening the page:
+        # on an instance nobody is watching, a steady trickle of offences would
+        # otherwise hold addresses indefinitely.
+        _watch_prune(redis, window_sec)
+        # A TRUE epoch: `utc_now()` is naive by house convention, and
+        # `.timestamp()` on a naive datetime reads it as LOCAL time. The reader
+        # converts back with `fromtimestamp(tz=UTC)`, so a non-UTC container
+        # would render every `last_seen` skewed by its offset - the same trap
+        # documented for the public-link unlock cookie.
         pipe = redis.pipeline()
         pipe.zincrby(_WATCH_COUNT_KEY, 1, ip)
-        pipe.zadd(_WATCH_SEEN_KEY, {ip: now.timestamp()})
+        pipe.zadd(_WATCH_SEEN_KEY, {ip: utc_now_aware().timestamp()})
         pipe.hset(
             _WATCH_META_KEY,
             ip,
             json.dumps({"sig": signal, "p": path[:_WATCH_PATH_MAX]}),
         )
-        # A floor, not the retention rule. EXPIRE is whole-key and any source's
-        # write slides it, so on a busy instance these keys effectively never
-        # expire - which is why per-member pruning by `_WATCH_SEEN_KEY` is what
-        # actually bounds retention, on every read.
+        # NX, like the distinct-path set: a plain EXPIRE is whole-key and every
+        # source's write would re-slide it, so on a busy instance these keys
+        # would never expire at all and the "held for at most one window"
+        # promise in `settings.Keys.SCAN_GUARD_WATCHLIST` would be false.
         for key in (_WATCH_COUNT_KEY, _WATCH_SEEN_KEY, _WATCH_META_KEY):
-            pipe.expire(key, window_sec)
+            pipe.expire(key, window_sec, nx=True)
         pipe.zcard(_WATCH_COUNT_KEY)
         card = int(pipe.execute()[-1])
         if card > _WATCH_MAX:
@@ -613,6 +624,18 @@ def _watch_note(ip: str, signal: str, path: str, window_sec: int, snap: dict) ->
                 ])
     except Exception:
         logger.warning("scan_guard: watchlist write failed", exc_info=True)
+
+
+def _watch_prune(redis, window_sec: int) -> None:
+    """Drop watch entries last seen outside the window.
+
+    This, not EXPIRE, is what bounds how long a plaintext address is retained:
+    EXPIRE is whole-key, so it can only ever remove ALL of them at once.
+    """
+    cutoff = (utc_now_aware() - timedelta(seconds=window_sec)).timestamp()
+    stale: Any = redis.zrangebyscore(_WATCH_SEEN_KEY, "-inf", f"({cutoff}")
+    if stale:
+        _watch_forget(*[m.decode() if isinstance(m, bytes) else m for m in stale])
 
 
 def _watch_forget(*ips: str) -> None:
@@ -907,6 +930,18 @@ def apply_block(
             # the automatic path may mutate; reachable only inside the cache TTL
             # under --workers N, but the invariant is stated in models/ip_block.
             return live
+        elif source == "manual":
+            # Manual over manual: the admin is REVISING their own decision, so
+            # the new expiry wins outright - including a shorter one. The
+            # extend branch below can only ever lengthen, which would silently
+            # ignore an admin shortening a block they now think was too long.
+            live.expires_at = expires
+            if note is not None:
+                live.note = note
+            db.flush()
+            _audit_block(db, live, minutes=mins, strikes=live.strikes,
+                         actor_id=actor_id, revised=True)
+            return live
         else:
             # Extend rather than insert, so the table stays one row per live
             # subject and the admin list reads as history, not duplicates.
@@ -935,21 +970,7 @@ def apply_block(
     db.flush()
 
     _maybe_notify_block(db, row, snap)
-
-    from ..models.audit_log import AuditEventType
-    from .audit import record_audit_event
-
-    record_audit_event(
-        db,
-        event_type=AuditEventType.ip_blocked,
-        actor_user_id=actor_id,
-        target_type="ip_block",
-        target_id=str(row.id),
-        metadata={
-            "subject": subject, "reason": reason, "minutes": mins,
-            "strikes": strikes, "is_network": is_network, "source": source,
-        },
-    )
+    _audit_block(db, row, minutes=mins, strikes=strikes, actor_id=actor_id)
 
     if not is_network:
         # It is a block now; it does not also belong on the pre-threshold list.
@@ -958,6 +979,31 @@ def apply_block(
     if not is_network and source == "auto" and snap.get("network_escalation"):
         _maybe_escalate_network(db, network=network, snap=snap, lookback=lookback)
     return row
+
+
+def _audit_block(
+    db: Session, row, *, minutes: int, strikes: int,
+    actor_id: int | None, revised: bool = False,
+) -> None:
+    """One definition, so a block created and a block revised by an admin are
+    recorded the same way. Revising used to write nothing at all."""
+    from ..models.audit_log import AuditEventType
+    from .audit import record_audit_event
+
+    metadata = {
+        "subject": row.subject, "reason": row.reason, "minutes": minutes,
+        "strikes": strikes, "is_network": row.is_network, "source": row.source,
+    }
+    if revised:
+        metadata["revised"] = True
+    record_audit_event(
+        db,
+        event_type=AuditEventType.ip_blocked,
+        actor_user_id=actor_id,
+        target_type="ip_block",
+        target_id=str(row.id),
+        metadata=metadata,
+    )
 
 
 def _maybe_notify_block(db: Session, row, snap: dict) -> None:
@@ -1226,11 +1272,20 @@ def _normalize_entry(entry: str) -> str:
     from ..middleware.errors import AppError
 
     try:
-        return str(ipaddress.ip_network(entry.strip(), strict=False))
+        net = ipaddress.ip_network(entry.strip(), strict=False)
     except ValueError:
         raise AppError(
             400, "ALLOWLIST_INVALID", f"Not an address or CIDR: {entry}"
         ) from None
+    # Unwrap an IPv4-mapped single address. Request IPs are normalised at the
+    # door, so a `::ffff:8.8.8.8` entry would list as valid, audit, and exempt
+    # nobody - `ip_address("8.8.8.8") in ip_network("::ffff:8.8.8.8/128")` is
+    # False, because containment is version-strict.
+    if net.num_addresses == 1:
+        mapped = getattr(net.network_address, "ipv4_mapped", None)
+        if mapped is not None:
+            net = ipaddress.ip_network(str(mapped), strict=False)
+    return str(net)
 
 
 def allowlist_entries(db: Session) -> dict:
@@ -1436,16 +1491,9 @@ def watchlist(db: Session, *, limit: int = 50) -> dict:
         from ..redis_client import get_redis
 
         redis = get_redis()
-        cutoff = (utc_now() - timedelta(seconds=int(snap["window_sec"]))).timestamp()
-        # Prune by last-seen BEFORE reading. This, not EXPIRE, is what bounds
-        # how long a plaintext address is retained: EXPIRE is whole-key and is
-        # re-slid by every other source's write, so one busy scanner would
-        # otherwise keep every address on this list alive indefinitely.
-        stale: Any = redis.zrangebyscore(_WATCH_SEEN_KEY, "-inf", f"({cutoff}")
-        if stale:
-            _watch_forget(*[
-                m.decode() if isinstance(m, bytes) else m for m in stale
-            ])
+        # Prune by last-seen before reading, so the page can never display an
+        # address the retention rule says should be gone.
+        _watch_prune(redis, int(snap["window_sec"]))
 
         rows: Any = redis.zrevrange(
             _WATCH_COUNT_KEY, 0, max(0, limit - 1), withscores=True
@@ -1496,9 +1544,14 @@ def watchlist(db: Session, *, limit: int = 50) -> dict:
 BLOCK_STATUSES = ("active", "released", "expired", "all")
 
 # Bound on the candidate set when `covers` forces the containment test into
-# Python. Silent truncation would read as "nothing else covers this address",
-# which is the one answer a locked-out admin must not be given wrongly - so the
-# caller is told when it bites rather than shown a short list.
+# Python (network containment is not a string comparison, so SQL cannot do it).
+#
+# Truncation here would read as "nothing else covers this address", which is the
+# one answer a locked-out admin must not be given wrongly. It is bounded rather
+# than merely hoped-for: `prune_history` drops rows past
+# `retention.ip_block_days`, so reaching 5000 needs that many blocks inside the
+# retention window. `list_blocks` logs when it bites, so the gap appears in the
+# operator's log rather than only in the response.
 _COVERS_SCAN_LIMIT = 5000
 
 
@@ -1516,7 +1569,10 @@ def blocks_covering(db: Session, ip: str) -> list[IpBlock]:
         .filter(
             (IpBlock.subject == str(addr)) | (IpBlock.is_network.is_(True))
         )
-        .order_by(IpBlock.created_at.desc())
+        # Same ordering as the covers branch of `list_blocks`, tiebreaker
+        # included: two differently-ordered 5000-row windows would intersect to
+        # something neither query intended.
+        .order_by(IpBlock.created_at.desc(), IpBlock.id.desc())
         .limit(_COVERS_SCAN_LIMIT)
         .all()
     )
@@ -1576,6 +1632,12 @@ def list_blocks(
     if covers:
         covering_ids = {row.id for row in blocks_covering(db, covers)}
         rows = query.order_by(*ordering).limit(_COVERS_SCAN_LIMIT).all()
+        if len(rows) == _COVERS_SCAN_LIMIT:
+            logger.warning(
+                "scan_guard: 'covers' search hit the %d-row scan limit; an older "
+                "covering block may not be listed",
+                _COVERS_SCAN_LIMIT,
+            )
         matched = [r for r in rows if r.id in covering_ids]
         total = len(matched)
         start = (page - 1) * page_size
@@ -1698,16 +1760,7 @@ def update_settings(
     from ..models.audit_log import AuditEventType
     from .audit import record_audit_event
 
-    record_audit_event(
-        db,
-        event_type=AuditEventType.scan_guard_settings_changed,
-        actor_user_id=getattr(actor, "id", None),
-        target_type="settings",
-        target_id="scan_guard",
-        # Keys only, never values - the house rule for settings audits.
-        metadata={"keys": sorted(set(changed))},
-        request=request,
-    )
+    released = 0
     if prefix_changed:
         # `ip_blocks.network` is a DENORMALISED CACHE of network_of(), and both
         # the escalation count and the "already blocked?" check compare it by
@@ -1719,7 +1772,12 @@ def update_settings(
         # inserted - releasing the visible one leaves the orphan still blocking.
         # Releasing live network blocks is the cheap, honest answer; per-address
         # blocks are unaffected because their subject is the address itself.
-        released = 0
+        #
+        # Through `release()`, so each freed block gets its own
+        # `ip_block_released` row. Stamping `released_at` by hand left a prefix
+        # change silently vanishing every live network block: the settings audit
+        # said only "network_prefix_v6 changed", and nothing anywhere recorded
+        # the blocks that went with it.
         for row in (
             db.query(IpBlock)
             .filter(
@@ -1729,12 +1787,27 @@ def update_settings(
             )
             .all()
         ):
-            row.released_at = utc_now()
-            row.released_by_id = getattr(actor, "id", None)
-            released += 1
+            if release(
+                db, block_id=row.id, actor_id=getattr(actor, "id", None),
+                via="v6_prefix_changed",
+            ) is not None:
+                released += 1
         if released:
-            db.flush()
             changed.append(f"released_network_blocks={released}")
+
+    # Recorded AFTER the release, so `changed` carries the breadcrumb. It was
+    # appended to a list the audit had already been handed a copy of - dead code
+    # that read as coverage.
+    record_audit_event(
+        db,
+        event_type=AuditEventType.scan_guard_settings_changed,
+        actor_user_id=getattr(actor, "id", None),
+        target_type="settings",
+        target_id="scan_guard",
+        # Keys only, never values - the house rule for settings audits.
+        metadata={"keys": sorted(set(changed))},
+        request=request,
+    )
 
     result = get_settings(db)
     # The writing process must see its own change immediately, or an admin who

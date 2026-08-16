@@ -30,6 +30,7 @@ from ..models.known_device import KnownDevice
 from ..models.login_attempt import LoginAttempt, LoginOutcome
 from ..models.password_reset_token import PasswordResetToken
 from ..models.user import Locale, User, UserRole
+from ..utils.client_ip import get_client_ip
 from ..utils.crypto import (
     argon2_hash,
     argon2_verify,
@@ -268,9 +269,20 @@ def _record_login_attempt(
 
 
 def _request_ip(request: Request | None) -> str | None:
-    if request is None or request.client is None:
+    """The caller's address, in the SAME canonical form the rest of the product
+    uses.
+
+    Through `get_client_ip`, not `request.client.host` directly, so IPv4-mapped
+    IPv6 is unwrapped here too. `login_attempts.ip` is not just a log: the scan
+    guard's shared-egress check joins it against the address the middleware
+    counted, which IS normalised. Leaving this raw meant that on a dual-stack
+    deployment the join found zero rows, so the office whose successful logins
+    should have exempted it got blocked instead - the exact false positive that
+    check exists to prevent, failing silently.
+    """
+    if request is None:
         return None
-    return request.client.host
+    return get_client_ip(request)
 
 
 def _record_login_device(db: Session, *, user: User, request: Request | None) -> bool:

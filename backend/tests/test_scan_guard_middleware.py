@@ -427,6 +427,44 @@ class _FakeRedis:
     def scard(self, key):
         return len(self.store.get(key, set()))
 
+    # --- watchlist structures. Without these, every `_watch_note` call in an
+    # end-to-end test died inside its own `except` and the note_offence ->
+    # _watch_note wiring was pinned by nothing.
+    def pipeline(self):
+        return self
+
+    def zincrby(self, key, amt, member):
+        bucket = self.store.setdefault(key, {})
+        bucket[member] = bucket.get(member, 0) + amt
+
+    def zadd(self, key, mapping):
+        self.store.setdefault(key, {}).update(mapping)
+
+    def hset(self, key, field, value):
+        self.store.setdefault(key, {})[field] = value
+
+    def zcard(self, key):
+        return len(self.store.get(key, {}))
+
+    def zrange(self, key, start, stop):
+        ordered = sorted(self.store.get(key, {}), key=lambda m: self.store[key][m])
+        return ordered[start:stop + 1]
+
+    def zrangebyscore(self, key, lo, hi):
+        cutoff = float(str(hi).lstrip("("))
+        return [m for m, sc in self.store.get(key, {}).items() if sc < cutoff]
+
+    def zrem(self, key, *members):
+        for m in members:
+            self.store.get(key, {}).pop(m, None)
+
+    def hdel(self, key, *fields):
+        for f in fields:
+            self.store.get(key, {}).pop(f, None)
+
+    def execute(self):
+        return [len(self.store.get("fh:scanguard:watch:count", {}))]
+
 
 @pytest.fixture
 def _real_ip_counter(monkeypatch):
@@ -737,3 +775,79 @@ async def test_releasing_a_block_does_not_leave_it_re_arming(
         .count()
     )
     assert live == 0, "the released source was re-blocked off a stale counter"
+
+
+@pytest.mark.asyncio
+async def test_an_offence_puts_the_source_on_the_watchlist_then_takes_it_off(
+    db, app_with_db, _real_ip_counter
+):
+    """The `note_offence -> _watch_note` wiring, end to end.
+
+    Worth its own test because `_watch_note` swallows everything: with a fake
+    that lacked the watch methods, every end-to-end write failed silently and
+    the whole feature could have been disconnected without a single red test."""
+    _enable_auth_guard(db)
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app_with_db, client=(SCANNER, 51234)),
+        base_url="http://test",
+    ) as ac:
+        # Under the threshold: watched, not blocked.
+        for _ in range(2):
+            await ac.post(
+                "/api/auth/login",
+                json={"email": "nobody@test.local", "password": "Guess!12345"},
+            )
+        await _settled()
+        watched = _real_ip_counter.store.get("fh:scanguard:watch:count", {})
+        assert watched.get(SCANNER) == 2
+        assert db.query(IpBlock).count() == 0
+
+        # Crossing it graduates the source off the watchlist and into the table.
+        for _ in range(AUTH_FLOOR):
+            await ac.post(
+                "/api/auth/login",
+                json={"email": "nobody@test.local", "password": "Guess!12345"},
+            )
+        await _settled()
+
+    assert db.query(IpBlock).filter(IpBlock.subject == SCANNER).count() == 1
+    assert SCANNER not in _real_ip_counter.store.get("fh:scanguard:watch:count", {})
+
+
+@pytest.mark.asyncio
+async def test_a_mapped_address_office_is_still_recognised_as_shared(
+    db, app_with_db, make_user, _real_ip_counter
+):
+    """The two sides of the shared-egress join must use the same address form.
+
+    The guard counts offences against the NORMALISED address
+    (`client_ip_from_scope`), so `login_attempts.ip` has to be written the same
+    way. It was not: `_request_ip` returned `request.client.host` raw, so on a
+    dual-stack deployment passing IPv4-mapped addresses the join found zero
+    rows, the office's own successful logins were invisible, and it was blocked
+    by the very check that exists to exempt it - silently."""
+    mapped = f"::ffff:{SCANNER}"
+    _enable_auth_guard(db)
+    make_user(email="a@office.local", role=UserRole.employee, password=PW)
+    make_user(email="b@office.local", role=UserRole.employee, password=PW)
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app_with_db, client=(mapped, 51234)),
+        base_url="http://test",
+    ) as ac:
+        for email in ("a@office.local", "b@office.local"):
+            ok = await ac.post(
+                "/api/auth/login", json={"email": email, "password": PW}
+            )
+            assert ok.status_code == 200, ok.text
+        for _ in range(AUTH_FLOOR + 1):
+            await ac.post(
+                "/api/auth/login",
+                json={"email": "a@office.local", "password": "WrongPass!123"},
+            )
+        await _settled()
+
+    assert db.query(IpBlock).count() == 0, (
+        "a mapped-address office was blocked despite its own successful logins"
+    )

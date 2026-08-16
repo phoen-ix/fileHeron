@@ -475,8 +475,11 @@ def test_the_settings_form_can_no_longer_write_the_allowlist(db, make_user):
         values={
             "enabled": True,
             "signal_probe_path": True,
-            # A stale client still sends this. It must not land.
-            "allowlist": "",
+            # A stale client still sends this, and a NON-EMPTY value at that -
+            # the snapshot an open settings tab was holding. An implementation
+            # that merely ignores falsy input would pass an empty-string test
+            # while still clobbering here.
+            "allowlist": "10.0.0.0/8,192.168.0.0/16",
         },
         actor=admin,
     )
@@ -803,6 +806,10 @@ class _WatchStore:
         ordered = sorted(self.z.get(key, {}), key=lambda m: self.z[key][m])
         return ordered[start:stop + 1]
 
+    def zrangebyscore(self, key, lo, hi):
+        cutoff = float(str(hi).lstrip("("))
+        return [m for m, score in self.z.get(key, {}).items() if score < cutoff]
+
     def zrem(self, key, *members):
         for m in members:
             self.z.get(key, {}).pop(m, None)
@@ -937,3 +944,98 @@ def test_yesterdays_successes_do_not_launder_todays_failures(db):
     _attempt(db, "b@office.local", LoginOutcome.success.value, age_sec=99_999)
     _attempt(db, "victim@test.local", LoginOutcome.bad_password.value, n=5)
     assert sg._shared_egress_suppresses(db, PUBLIC_IP, 3600) is False
+
+
+# --- IPv4-mapped IPv6 -------------------------------------------------------
+
+
+def test_a_mapped_address_is_unwrapped_before_anything_groups_it():
+    """`::ffff:8.8.8.8` is version 6 and globally routable, so without the
+    unwrap it is countable AND blockable - and `network_of` groups it as
+    `::/64`, one prefix covering the ENTIRE mapped IPv4 space. Three mapped
+    scanners would then escalate a single network block over every IPv4 client
+    at once, and a v4 allowlist entry could not rescue them because
+    `_network_contains_allowlisted` only compares same-version networks."""
+    from app.utils.client_ip import normalize_ip
+
+    assert normalize_ip("::ffff:8.8.8.8") == "8.8.8.8"
+    assert normalize_ip("8.8.8.8") == "8.8.8.8"
+    # The grouping is the part that was actually broken; `is_global` already
+    # delegated correctly, which is why this looked safe.
+    assert sg.network_of("::ffff:8.8.8.8") == "8.8.8.0/24"
+    assert sg.network_of("::ffff:8.8.8.8") == sg.network_of("8.8.8.8")
+    assert ipaddress.ip_address("::ffff:8.8.8.8").is_global is True
+
+
+def test_a_mapped_private_address_is_still_refused():
+    assert is_blockable("::ffff:10.0.0.1") is False
+    assert is_blockable("::ffff:127.0.0.1") is False
+    assert is_blockable("::ffff:8.8.8.8") is True
+
+
+def test_a_mapped_allowlist_entry_is_stored_in_the_form_that_matches(db, make_user):
+    """Stored raw, `::ffff:8.8.8.8` lists as a valid exemption and exempts
+    nobody: containment is version-strict, so the normalised request IP
+    `8.8.8.8` is not "in" that v6 network."""
+    from app.models.user import UserRole
+
+    admin = make_user(email="a@test.local", role=UserRole.admin)
+    sg.allowlist_add(db, entry="::ffff:8.8.8.8", actor=admin)
+    db.commit()
+    assert sg.allowlist_entries(db)["entries"] == ["8.8.8.8/32"]
+    assert sg.is_allowlisted("8.8.8.8") is True
+
+
+def test_escalation_evidence_restarts_when_a_network_block_is_released_early(db):
+    """Freshness reads COALESCE(released_at, expires_at), not expires_at alone.
+
+    An admin who blocks a range for 30 days and releases it the next day has
+    ENDED it. Reading the original expiry instead would keep escalation dead on
+    that prefix for the remaining 29 days - silently, since nothing reports a
+    detector that has stopped detecting."""
+    from datetime import timedelta
+
+    snap = _snap(network_escalation=True, network_threshold=2)
+    net = "45.148.10.0/24"
+
+    long_block = sg.apply_block(
+        db, subject=net, reason="manual", source="manual", is_network=True,
+        minutes=60 * 24 * 30, snap=snap,
+    )
+    db.commit()
+    sg.release(db, block_id=long_block.id, actor_id=None)
+    db.commit()
+
+    # Evidence gathered AFTER the release must count, so the prefix escalates
+    # again on its own merits.
+    for host in (7, 8):
+        sg.apply_block(db, subject=f"45.148.10.{host}", reason="probe_path", snap=snap)
+    db.commit()
+
+    live_nets = (
+        db.query(IpBlock)
+        .filter(
+            IpBlock.subject == net,
+            IpBlock.is_network.is_(True),
+            IpBlock.released_at.is_(None),
+            IpBlock.expires_at > utc_now(),
+        )
+        .count()
+    )
+    assert live_nets == 1, "a released network block froze escalation on its prefix"
+
+    # Control: with the block still LIVE (not released), the same evidence must
+    # not stack a second overlapping network row on top of it.
+    db.query(IpBlock).delete()
+    db.commit()
+    live = sg.apply_block(
+        db, subject=net, reason="manual", source="manual", is_network=True,
+        minutes=60, snap=snap,
+    )
+    db.commit()
+    for host in (11, 12):
+        sg.apply_block(db, subject=f"45.148.10.{host}", reason="probe_path", snap=snap)
+    db.commit()
+    assert db.query(IpBlock).filter(IpBlock.subject == net).count() == 1
+    assert live.released_at is None
+    assert timedelta(0) < live.expires_at - utc_now() <= timedelta(minutes=60)

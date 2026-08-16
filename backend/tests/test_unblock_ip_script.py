@@ -27,6 +27,35 @@ from app.utils.timeutil import utc_now
 SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "unblock_ip.py"
 
 
+@pytest.fixture(autouse=True)
+def _isolate_scan_guard_redis(monkeypatch):
+    """Keep every test in this file off the deployment's Redis.
+
+    `docker compose run` joins the compose network, so a bare `get_redis()` in
+    code under test reaches the LIVE instance - and `release()` now calls
+    `clear_counters`, which issues DELETE/ZREM against fixed key names derived
+    from the subject. The subjects here are real observed scanner addresses, so
+    an unstubbed run would delete live counters for them. Same class of hazard
+    as commit 24561bf (tests writing into production file storage).
+
+    Tests that need to observe Redis monkeypatch `get_redis` themselves; a
+    later patch in the test body wins over this one.
+    """
+
+    class _Inert:
+        def __getattr__(self, _name):
+            def _noop(*_a, **_kw):
+                return None
+            return _noop
+
+        def pipeline(self):
+            return self
+
+        def execute(self):
+            return [0]
+
+    monkeypatch.setattr("app.redis_client.get_redis", lambda: _Inert())
+
 def _run(monkeypatch, *argv: str) -> int:
     """Execute the script the way an operator does: `python scripts/unblock_ip.py`."""
     monkeypatch.setattr(sys, "argv", ["unblock_ip.py", *argv])

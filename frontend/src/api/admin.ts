@@ -1022,7 +1022,22 @@ export function updateScanGuardSettings(payload: UpdateScanGuardSettings) {
   return api.put<ScanGuardSettings>('/admin/scan-guard', payload)
 }
 
-export function listIpBlocks(params: { active?: boolean; page?: number; page_size?: number } = {}) {
+export type IpBlockStatus = 'active' | 'released' | 'expired' | 'all'
+
+export interface IpBlockListParams {
+  status?: IpBlockStatus
+  reason?: string
+  source?: 'auto' | 'manual'
+  is_network?: boolean
+  /** Substring match on the subject. */
+  q?: string
+  /** An address: matches its own row AND any range containing it. */
+  covers?: string
+  page?: number
+  page_size?: number
+}
+
+export function listIpBlocks(params: IpBlockListParams = {}) {
   return api.get<IpBlockListResponse>('/admin/scan-guard/blocks', { params })
 }
 
@@ -1034,6 +1049,39 @@ export function releaseIpBlock(id: number) {
   return api.delete(`/admin/scan-guard/blocks/${id}`)
 }
 
+export function releaseAllIpBlocks() {
+  return api.post<{ released: number }>('/admin/scan-guard/blocks/release-all')
+}
+
+/** Release AND allowlist in one request - the two halves share a transaction,
+ *  so a failure leaves the block in force rather than un-blocking a source the
+ *  guard would immediately re-block. */
+export function allowIpBlock(id: number) {
+  return api.post<AllowBlockResponse>(`/admin/scan-guard/blocks/${id}/allow`)
+}
+
+export function getScanGuardAllowlist() {
+  return api.get<AllowlistResponse>('/admin/scan-guard/allowlist')
+}
+
+export function addScanGuardAllowlistEntry(entry: string) {
+  return api.post<AllowlistResponse>('/admin/scan-guard/allowlist', { entry })
+}
+
+export function removeScanGuardAllowlistEntry(entry: string) {
+  // A query parameter, not a path segment: a CIDR carries a `/`, and proxies
+  // routinely normalise a percent-encoded one back into a separator.
+  return api.delete<AllowlistResponse>('/admin/scan-guard/allowlist', {
+    params: { entry },
+  })
+}
+
+export function getScanGuardWatchlist(limit = 50) {
+  return api.get<WatchlistResponse>('/admin/scan-guard/watchlist', {
+    params: { limit },
+  })
+}
+
 export interface ScanGuardSettings {
   enabled: boolean
   signal_probe_path: boolean
@@ -1041,11 +1089,16 @@ export interface ScanGuardSettings {
   signal_auth_failure: boolean
   escalation: boolean
   network_escalation: boolean
+  watchlist: boolean
   notify_mode: 'off' | 'every_block'
+  /** Read-only here. Written through the allowlist endpoints, which serialise
+   *  on a row lock - carrying the whole CSV on this form made it a second
+   *  writer that erased entries added elsewhere. */
   allowlist: string
   extra_paths: string
   ignore_paths: string
   threshold: number
+  auth_threshold: number
   window_sec: number
   block_minutes: number
   max_block_minutes: number
@@ -1058,10 +1111,11 @@ export interface ScanGuardSettings {
   active_network_blocks: number
 }
 
-/** The PUT body: everything the response carries except the live counts. */
+/** The PUT body: the policy fields only. The live counts are read-only, and
+ *  `allowlist` is state owned by its own endpoints. */
 export type UpdateScanGuardSettings = Omit<
   ScanGuardSettings,
-  'active_ip_blocks' | 'active_network_blocks'
+  'active_ip_blocks' | 'active_network_blocks' | 'allowlist'
 >
 
 export interface IpBlockRow {
@@ -1077,6 +1131,7 @@ export interface IpBlockRow {
   created_at: string
   expires_at: string
   released_at: string | null
+  released_by_id: number | null
   note: string | null
 }
 
@@ -1085,4 +1140,35 @@ export interface IpBlockListResponse {
   total: number
   page: number
   page_size: number
+}
+
+export interface AllowlistResponse {
+  entries: string[]
+  /** Stored but unparseable, so the guard ignores them. Surfaced rather than
+   *  hidden: an entry that protects nothing must not look like one that does. */
+  invalid: string[]
+}
+
+export interface AllowBlockResponse {
+  block: IpBlockRow
+  allowlist: string[]
+}
+
+export interface WatchRow {
+  ip: string
+  offences: number
+  last_signal: string | null
+  last_path: string | null
+  last_seen: string | null
+}
+
+export interface WatchlistResponse {
+  /** False when Redis could not answer. The page shows a notice and the
+   *  DB-backed block table still works. */
+  available: boolean
+  enabled: boolean
+  window_sec: number
+  threshold: number
+  auth_threshold: number
+  items: WatchRow[]
 }

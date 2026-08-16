@@ -283,3 +283,319 @@ async def test_the_settings_audit_records_keys_not_values(
     )
     assert "keys" in row.extra
     assert SCANNER not in str(row.extra), "an audit row must not carry the values"
+
+
+# --- List filters ----------------------------------------------------------
+
+
+def _seed_blocks(db):
+    """One of each shape, so a filter that does nothing shows up as a filter
+    that returns everything."""
+    from app.services import scan_guard as sg
+
+    sg.apply_block(db, subject="45.148.10.67", reason="probe_path", snap=sg._defaults())
+    sg.apply_block(db, subject="203.0.113.9", reason="auth_failure", snap=sg._defaults())
+    sg.apply_block(
+        db, subject="198.51.100.0/24", reason="network", is_network=True,
+        snap=sg._defaults(),
+    )
+    sg.apply_block(
+        db, subject="192.0.2.5", reason="manual", source="manual",
+        minutes=60, note="by hand", snap=sg._defaults(),
+    )
+    db.commit()
+
+
+@pytest.mark.asyncio
+async def test_block_filters_narrow_the_list(make_user, client, login_as, db):
+    headers = await _admin_headers(make_user, login_as)
+    _seed_blocks(db)
+
+    async def _subjects(**params):
+        resp = await client.get(
+            "/api/admin/scan-guard/blocks", params=params, headers=headers
+        )
+        assert resp.status_code == 200, resp.text
+        return {r["subject"] for r in resp.json()["items"]}
+
+    assert len(await _subjects()) == 4
+    assert await _subjects(reason="auth_failure") == {"203.0.113.9"}
+    assert await _subjects(source="manual") == {"192.0.2.5"}
+    assert await _subjects(is_network=True) == {"198.51.100.0/24"}
+    assert await _subjects(q="203.0.113") == {"203.0.113.9"}
+    # An address inside a blocked RANGE finds the range, which a substring
+    # search never would - this is what the locked-out admin needs.
+    assert await _subjects(covers="198.51.100.77") == {"198.51.100.0/24"}
+    assert await _subjects(covers="45.148.10.67") == {"45.148.10.67"}
+
+
+@pytest.mark.asyncio
+async def test_a_like_wildcard_in_the_search_is_not_a_wildcard(
+    make_user, client, login_as, db
+):
+    """`_` is a single-character wildcard in SQL LIKE. An admin typing it must
+    get a literal match, not everything."""
+    headers = await _admin_headers(make_user, login_as)
+    _seed_blocks(db)
+    resp = await client.get(
+        "/api/admin/scan-guard/blocks", params={"q": "_"}, headers=headers
+    )
+    assert resp.json()["items"] == []
+
+
+@pytest.mark.asyncio
+async def test_status_filter_separates_live_released_and_expired(
+    make_user, client, login_as, db
+):
+    from datetime import timedelta
+
+    from app.models.ip_block import IpBlock
+    from app.services import scan_guard as sg
+    from app.utils.timeutil import utc_now
+
+    headers = await _admin_headers(make_user, login_as)
+    live = sg.apply_block(
+        db, subject="45.148.10.67", reason="probe_path", snap=sg._defaults()
+    )
+    released = sg.apply_block(
+        db, subject="203.0.113.9", reason="probe_path", snap=sg._defaults()
+    )
+    db.commit()
+    sg.release(db, block_id=released.id, actor_id=None)
+    expired = IpBlock(
+        subject="192.0.2.5", network="192.0.2.0/24", is_network=False,
+        reason="probe_path", source="auto", hit_count=1, strikes=1,
+        created_at=utc_now() - timedelta(days=2),
+        expires_at=utc_now() - timedelta(days=1),
+    )
+    db.add(expired)
+    db.commit()
+
+    async def _subjects(status):
+        resp = await client.get(
+            "/api/admin/scan-guard/blocks", params={"status": status}, headers=headers
+        )
+        return {r["subject"] for r in resp.json()["items"]}
+
+    assert await _subjects("active") == {live.subject}
+    assert await _subjects("released") == {"203.0.113.9"}
+    assert await _subjects("expired") == {"192.0.2.5"}
+    assert len(await _subjects("all")) == 3
+
+    bad = await client.get(
+        "/api/admin/scan-guard/blocks", params={"status": "nonsense"}, headers=headers
+    )
+    assert bad.status_code == 400
+    assert bad.json()["code"] == "BLOCK_STATUS_INVALID"
+
+
+@pytest.mark.asyncio
+async def test_the_deprecated_active_flag_still_works(make_user, client, login_as, db):
+    """Kept one release so the shipped SPA and any scripted caller do not break
+    the moment the backend updates."""
+    headers = await _admin_headers(make_user, login_as)
+    _seed_blocks(db)
+    live = await client.get(
+        "/api/admin/scan-guard/blocks", params={"active": "true"}, headers=headers
+    )
+    assert live.json()["total"] == 4
+    every = await client.get(
+        "/api/admin/scan-guard/blocks", params={"active": "false"}, headers=headers
+    )
+    assert every.json()["total"] == 4
+
+
+# --- Manual blocking -------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_release_all_releases_each_row_with_its_own_trail(
+    make_user, client, login_as, db
+):
+    from app.models.audit_log import AuditLog
+
+    headers = await _admin_headers(make_user, login_as)
+    _seed_blocks(db)
+
+    resp = await client.post(
+        "/api/admin/scan-guard/blocks/release-all", headers=headers
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["released"] == 4
+
+    # A bulk UPDATE would have lifted four blocks and recorded none of them.
+    rows = (
+        db.query(AuditLog).filter(AuditLog.event_type == "ip_block_released").all()
+    )
+    assert len(rows) == 4
+    assert all(r.actor_user_id is not None for r in rows)
+
+
+# --- Watchlist -------------------------------------------------------------
+
+
+class _WatchRedis:
+    """Minimal Redis for the watch structures. Fixed key names mean a test that
+    reached the real client would write into the deployment's Redis."""
+
+    def __init__(self):
+        self.z = {}
+        self.h = {}
+        self.calls = 0
+
+    def _pipe(self):
+        return self
+
+    pipeline = _pipe
+
+    def zincrby(self, key, amt, member):
+        self.calls += 1
+        self.z.setdefault(key, {})[member] = self.z.setdefault(key, {}).get(member, 0) + amt
+
+    def zadd(self, key, mapping):
+        self.calls += 1
+        self.z.setdefault(key, {}).update(mapping)
+
+    def hset(self, key, field, value):
+        self.calls += 1
+        self.h.setdefault(key, {})[field] = value
+
+    def expire(self, key, seconds, nx=False):
+        self.calls += 1
+
+    def zcard(self, key):
+        self.calls += 1
+        return len(self.z.get(key, {}))
+
+    def execute(self):
+        return [len(self.z.get("fh:scanguard:watch:count", {}))]
+
+    def zrevrange(self, key, start, stop, withscores=False):
+        self.calls += 1
+        items = sorted(self.z.get(key, {}).items(), key=lambda kv: -kv[1])
+        sliced = items[start:stop + 1]
+        return sliced if withscores else [m for m, _ in sliced]
+
+    def zrangebyscore(self, key, lo, hi):
+        self.calls += 1
+        cutoff = float(str(hi).lstrip("("))
+        return [m for m, s in self.z.get(key, {}).items() if s < cutoff]
+
+    def hmget(self, key, fields):
+        self.calls += 1
+        store = self.h.get(key, {})
+        return [store.get(f) for f in fields]
+
+    def zmscore(self, key, members):
+        self.calls += 1
+        store = self.z.get(key, {})
+        return [store.get(m) for m in members]
+
+    def zrem(self, key, *members):
+        self.calls += 1
+        for m in members:
+            self.z.get(key, {}).pop(m, None)
+
+    def hdel(self, key, *fields):
+        self.calls += 1
+        for f in fields:
+            self.h.get(key, {}).pop(f, None)
+
+
+@pytest.mark.asyncio
+async def test_the_watchlist_reports_sources_before_they_are_blocked(
+    make_user, client, login_as, db, monkeypatch
+):
+    import json
+
+    from app.services import scan_guard as sg
+    from app.utils.timeutil import utc_now
+
+    headers = await _admin_headers(make_user, login_as)
+    fake = _WatchRedis()
+    monkeypatch.setattr("app.redis_client.get_redis", lambda: fake)
+    fake.z["fh:scanguard:watch:count"] = {"45.148.10.67": 7}
+    fake.z["fh:scanguard:watch:seen"] = {"45.148.10.67": utc_now().timestamp()}
+    fake.h["fh:scanguard:watch:meta"] = {
+        "45.148.10.67": json.dumps({"sig": "probe_path", "p": "/.env"})
+    }
+
+    resp = await client.get("/api/admin/scan-guard/watchlist", headers=headers)
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["available"] is True
+    assert body["enabled"] is True
+    assert body["items"][0]["ip"] == "45.148.10.67"
+    assert body["items"][0]["offences"] == 7
+    assert body["items"][0]["last_signal"] == "probe_path"
+    # Both thresholds, because an auth row must not be rendered against the
+    # scan threshold.
+    assert body["threshold"] == sg._defaults()["threshold"]
+    assert body["auth_threshold"] == sg._defaults()["auth_threshold"]
+
+
+@pytest.mark.asyncio
+async def test_a_stale_watch_entry_is_pruned_rather_than_shown(
+    make_user, client, login_as, db, monkeypatch
+):
+    """Per-member pruning is what actually bounds how long a plaintext address
+    is retained. EXPIRE is whole-key and any other source's write slides it, so
+    on a busy instance the keys effectively never expire on their own."""
+    import json
+
+    from app.utils.timeutil import utc_now
+
+    headers = await _admin_headers(make_user, login_as)
+    fake = _WatchRedis()
+    monkeypatch.setattr("app.redis_client.get_redis", lambda: fake)
+    stale = utc_now().timestamp() - 999_999
+    fake.z["fh:scanguard:watch:count"] = {"45.148.10.67": 3}
+    fake.z["fh:scanguard:watch:seen"] = {"45.148.10.67": stale}
+    fake.h["fh:scanguard:watch:meta"] = {
+        "45.148.10.67": json.dumps({"sig": "probe_path", "p": "/.env"})
+    }
+
+    resp = await client.get("/api/admin/scan-guard/watchlist", headers=headers)
+    assert resp.json()["items"] == []
+    # And it is gone from the store, not merely filtered out of the response.
+    assert fake.z["fh:scanguard:watch:count"] == {}
+    assert fake.h["fh:scanguard:watch:meta"] == {}
+
+
+@pytest.mark.asyncio
+async def test_redis_down_degrades_the_watchlist_instead_of_the_page(
+    make_user, client, login_as, monkeypatch
+):
+    headers = await _admin_headers(make_user, login_as)
+
+    def _boom():
+        raise RuntimeError("redis is down")
+
+    monkeypatch.setattr("app.redis_client.get_redis", _boom)
+    resp = await client.get("/api/admin/scan-guard/watchlist", headers=headers)
+    assert resp.status_code == 200, "a watchlist outage must not fail the request"
+    assert resp.json()["available"] is False
+    assert resp.json()["items"] == []
+
+
+@pytest.mark.asyncio
+async def test_turning_the_watchlist_off_touches_redis_at_all(
+    make_user, client, login_as, db, monkeypatch
+):
+    """Off means no plaintext addresses reach Redis - not "written and hidden"."""
+    from app.services import scan_guard as sg
+    from app.services import settings as settings_svc
+
+    headers = await _admin_headers(make_user, login_as)
+    settings_svc.set_value(
+        db, key=settings_svc.Keys.SCAN_GUARD_WATCHLIST, value="false", actor=None
+    )
+    db.commit()
+    sg._reset_cache()
+
+    fake = _WatchRedis()
+    monkeypatch.setattr("app.redis_client.get_redis", lambda: fake)
+    resp = await client.get("/api/admin/scan-guard/watchlist", headers=headers)
+    assert resp.json()["enabled"] is False
+    assert resp.json()["items"] == []
+    assert fake.calls == 0, "the watchlist was read from Redis while switched off"

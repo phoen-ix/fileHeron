@@ -25,7 +25,7 @@ from app.services import scan_guard as sg
 # real limiter, not a re-implementation of it: a test that re-derived the
 # `count <= limit` arithmetic could not disagree with the code it checks, which
 # is the anti-pattern this suite has been bitten by repeatedly.
-from app.services.rate_limit import check_ip_allowed as _REAL_CHECK_IP_ALLOWED
+from app.services.rate_limit import check_ip_allowed as _real_check_ip_allowed
 
 SCANNER = "45.148.10.67"
 PW = "Pass12345678!"
@@ -438,7 +438,7 @@ def _real_ip_counter(monkeypatch):
     # inside each function. Both have to point at the same fake.
     monkeypatch.setattr(rate_limit, "get_redis", lambda: fake)
     monkeypatch.setattr("app.redis_client.get_redis", lambda: fake)
-    monkeypatch.setattr(rate_limit, "check_ip_allowed", _REAL_CHECK_IP_ALLOWED)
+    monkeypatch.setattr(rate_limit, "check_ip_allowed", _real_check_ip_allowed)
     return fake
 
 

@@ -708,3 +708,149 @@ def test_notify_off_dispatches_nothing(db, make_user, monkeypatch):
     db.commit()
 
     assert calls == []
+
+
+# --- Manual vs automatic blocks --------------------------------------------
+
+
+def test_a_manual_block_replaces_a_live_automatic_one(db, make_user):
+    """It used to silently degrade into an extension of the automatic row.
+
+    The admin asked for a 60-minute manual block with a note; they got back the
+    existing 24-hour automatic row, with `source` still "auto", their note and
+    identity discarded, no audit row for what they did, and no way to SHORTEN
+    it - `expires_at` only ever moves outward."""
+    from app.models.user import UserRole
+
+    admin = make_user(email="a@test.local", role=UserRole.admin)
+    auto = sg.apply_block(
+        db, subject=PUBLIC_IP, reason="probe_path", snap=_snap(), minutes=1440
+    )
+    db.commit()
+
+    manual = sg.apply_block(
+        db, subject=PUBLIC_IP, reason="manual", source="manual", minutes=60,
+        note="investigating", actor_id=admin.id, snap=_snap(),
+    )
+    db.commit()
+
+    assert manual.id != auto.id, "the manual block folded into the automatic row"
+    assert manual.source == "manual"
+    assert manual.note == "investigating"
+    # The automatic row is released rather than left running beside it, so the
+    # shorter manual decision actually takes effect.
+    db.refresh(auto)
+    assert auto.released_at is not None
+    assert manual.expires_at < auto.expires_at
+
+
+def test_the_automatic_path_never_mutates_an_admins_block(db, make_user):
+    """The mirror rule, stated as an invariant in models/ip_block.py: an
+    admin's deliberate decision is not something the detector may edit."""
+    from app.models.user import UserRole
+
+    admin = make_user(email="a@test.local", role=UserRole.admin)
+    manual = sg.apply_block(
+        db, subject=PUBLIC_IP, reason="manual", source="manual", minutes=60,
+        note="mine", actor_id=admin.id, snap=_snap(),
+    )
+    db.commit()
+    before = (manual.expires_at, manual.strikes, manual.hit_count)
+
+    sg.apply_block(db, subject=PUBLIC_IP, reason="probe_path", snap=_snap())
+    db.commit()
+    db.refresh(manual)
+
+    assert (manual.expires_at, manual.strikes, manual.hit_count) == before
+    assert manual.source == "manual"
+    assert manual.note == "mine"
+
+
+# --- Watchlist -------------------------------------------------------------
+
+
+class _WatchStore:
+    """Fixed key names mean a test reaching the real client would write into the
+    deployment's Redis, so every watchlist test stubs `get_redis`."""
+
+    def __init__(self):
+        self.z: dict = {}
+        self.h: dict = {}
+
+    def pipeline(self):
+        return self
+
+    def zincrby(self, key, amt, member):
+        bucket = self.z.setdefault(key, {})
+        bucket[member] = bucket.get(member, 0) + amt
+
+    def zadd(self, key, mapping):
+        self.z.setdefault(key, {}).update(mapping)
+
+    def hset(self, key, field, value):
+        self.h.setdefault(key, {})[field] = value
+
+    def expire(self, key, seconds, nx=False):
+        pass
+
+    def zcard(self, key):
+        return len(self.z.get(key, {}))
+
+    def execute(self):
+        return [len(self.z.get("fh:scanguard:watch:count", {}))]
+
+    def zrange(self, key, start, stop):
+        ordered = sorted(self.z.get(key, {}), key=lambda m: self.z[key][m])
+        return ordered[start:stop + 1]
+
+    def zrem(self, key, *members):
+        for m in members:
+            self.z.get(key, {}).pop(m, None)
+
+    def hdel(self, key, *fields):
+        for f in fields:
+            self.h.get(key, {}).pop(f, None)
+
+    def delete(self, *keys):
+        pass
+
+
+def test_a_blocked_source_graduates_off_the_watchlist(db, monkeypatch):
+    """It is a block now; it does not also belong on the list of things that
+    might become one."""
+    store = _WatchStore()
+    monkeypatch.setattr("app.redis_client.get_redis", lambda: store)
+    store.z["fh:scanguard:watch:count"] = {PUBLIC_IP: 3}
+    store.z["fh:scanguard:watch:seen"] = {PUBLIC_IP: 1.0}
+    store.h["fh:scanguard:watch:meta"] = {PUBLIC_IP: "{}"}
+
+    sg.apply_block(db, subject=PUBLIC_IP, reason="probe_path", snap=_snap())
+    db.commit()
+
+    assert PUBLIC_IP not in store.z["fh:scanguard:watch:count"]
+    assert PUBLIC_IP not in store.h["fh:scanguard:watch:meta"]
+
+
+def test_the_watchlist_is_capped_and_evicts_the_quietest(db, monkeypatch):
+    """Bounded memory, and the eviction ORDER matters: the loudest sources are
+    the ones an admin is looking for and the ones about to be blocked."""
+    store = _WatchStore()
+    monkeypatch.setattr("app.redis_client.get_redis", lambda: store)
+    counts = store.z.setdefault("fh:scanguard:watch:count", {})
+    for i in range(sg._WATCH_MAX + 10):
+        counts[f"198.51.100.{i}"] = i + 1
+
+    sg._watch_note(PUBLIC_IP, "probe_path", "/.env", 3600, _snap(watchlist=True))
+
+    assert len(store.z["fh:scanguard:watch:count"]) <= sg._WATCH_MAX
+    assert f"198.51.100.{sg._WATCH_MAX + 9}" in store.z["fh:scanguard:watch:count"]
+    assert "198.51.100.0" not in store.z["fh:scanguard:watch:count"]
+
+
+def test_nothing_reaches_redis_when_the_watchlist_is_off(db, monkeypatch):
+    """Off means pre-threshold addresses never enter Redis at all - not
+    "written and then hidden from the page"."""
+    store = _WatchStore()
+    monkeypatch.setattr("app.redis_client.get_redis", lambda: store)
+    sg._watch_note(PUBLIC_IP, "probe_path", "/.env", 3600, _snap(watchlist=False))
+    assert store.z == {} and store.h == {}

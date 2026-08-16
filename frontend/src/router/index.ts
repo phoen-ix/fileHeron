@@ -352,6 +352,14 @@ const router = createRouter({
           meta: { density: 'operator', titleKey: 'admin_settings_scan_guard', requiresRole: 'admin' },
         },
         {
+          // The scan guard's POLICY lives on the page above; what it is
+          // currently doing - and undoing it - lives here.
+          path: 'ip-blocks',
+          name: 'admin-ip-blocks',
+          component: () => import('@/views/AdminIpBlocks.vue'),
+          meta: { density: 'operator', titleKey: 'admin_ip_blocks', requiresRole: 'admin' },
+        },
+        {
           path: 'settings/error-alerts',
           name: 'admin-settings-error-alerts',
           component: () => import('@/views/AdminSettingsErrorAlerts.vue'),

@@ -28,9 +28,50 @@ from pathlib import Path
 if __package__ in (None, ""):  # plain `python scripts/unblock_ip.py`
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+import ipaddress  # noqa: E402
+
 from app.database import SessionLocal  # noqa: E402
 from app.models.ip_block import IpBlock  # noqa: E402
+from app.services import scan_guard as guard_svc  # noqa: E402
 from app.utils.timeutil import utc_now  # noqa: E402
+
+
+def _live_matches(db, live, subject: str) -> list[IpBlock]:
+    """Live blocks affecting ``subject``, matched by CONTAINMENT, not by string.
+
+    The tool used to compare `IpBlock.subject == subject`, which fails in
+    exactly the situation it exists for: an admin locked out by a /24 network
+    escalation types their own address, is told "no live block for 1.2.3.4",
+    and stays locked out. It also missed pure notation differences -
+    `45.148.10.5/24` against a stored `45.148.10.0/24`, or any IPv6 written
+    with different compression or case.
+
+    Naming a CIDR still releases that CIDR exactly; naming an address releases
+    the address row AND every live network row containing it.
+    """
+    text = subject.strip()
+    try:
+        net = ipaddress.ip_network(text, strict=False)
+    except ValueError:
+        # Not parseable as either - fall back to the literal comparison so a
+        # malformed argument fails loudly rather than matching everything.
+        return live.filter(IpBlock.subject == text).all()
+
+    if net.num_addresses > 1:
+        canonical = str(net)
+        return [r for r in live.all() if _same_network(r.subject, canonical)]
+    # `blocks_covering` walks history as well, so intersect with the live set -
+    # releasing an already-expired row would print a reassuring line about
+    # something that was not blocking anyone.
+    covering = {r.id for r in guard_svc.blocks_covering(db, str(net.network_address))}
+    return [r for r in live.all() if r.id in covering]
+
+
+def _same_network(stored: str, canonical: str) -> bool:
+    try:
+        return str(ipaddress.ip_network(stored, strict=False)) == canonical
+    except ValueError:
+        return False
 
 
 def main() -> int:
@@ -57,22 +98,29 @@ def main() -> int:
         if not args.all and not args.subject:
             ap.error("give an address/CIDR, or --all, or --list")
 
-        rows = live.all() if args.all else live.filter(IpBlock.subject == args.subject).all()
+        rows = live.all() if args.all else _live_matches(db, live, args.subject)
         if not rows:
             print("nothing to release" if args.all else f"no live block for {args.subject}")
             return 1
-        now = utc_now()
+        released = 0
         for r in rows:
-            r.released_at = now
-            print(f"released {r.subject}")
+            # Through the service, not a bare UPDATE: it stamps released_by_id,
+            # writes the `ip_block_released` audit row marked `via: host-cli`,
+            # and clears the Redis counters that produced the block. Setting
+            # `released_at` by hand left a host-side release invisible in the
+            # audit log and re-blockable by the next request off a counter still
+            # sitting at the threshold.
+            if guard_svc.release(db, block_id=r.id, actor_id=None, via="host-cli"):
+                released += 1
+                print(f"released {r.subject}")
         db.commit()
         # The running API process caches the blocklist for up to _CACHE_TTL_SEC,
         # and this is a SEPARATE process - so say plainly when it takes effect
         # rather than letting someone think the tool failed.
         from app.services.scan_guard import _CACHE_TTL_SEC
 
-        print(f"{len(rows)} released; effective within {int(_CACHE_TTL_SEC)}s")
-        return 0
+        print(f"{released} released; effective within {int(_CACHE_TTL_SEC)}s")
+        return 0 if released else 1
     finally:
         db.close()
 

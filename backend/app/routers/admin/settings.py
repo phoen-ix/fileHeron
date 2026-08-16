@@ -1163,6 +1163,20 @@ def update_error_alert_settings(
 # Generic registry-driven "Advanced settings" - one GET/PUT for every
 # runtime-tunable knob in services/settings_registry.py. Only keys present
 # in the registry are ever exposed or accepted (secrets/infra stay env-only).
+#
+# Registry groups whose keys have a DEDICATED page that does more than store a
+# number, and which this generic surface therefore must not write.
+#
+# `scan_guard` is the case that forced the rule. Its own PUT refuses an
+# enabled-but-signal-less configuration, releases every live network block when
+# the IPv6 prefix changes, and resets the process cache. This route did none of
+# that, so changing `scan_guard.network_prefix_v6` here left the live /64 rows
+# no longer matching `network_of()` output: their accumulated escalation
+# evidence stopped counting, a later escalation inserted an overlapping /56, and
+# releasing the visible block left the orphaned /64 enforcing invisibly until it
+# expired. `ip_blocks.network` is a denormalised string cache, so it can only be
+# maintained by the writer that knows it exists.
+_MANAGED_ELSEWHERE_GROUPS = frozenset({"scan_guard"})
 # ---------------------------------------------------------------------------
 
 
@@ -1173,6 +1187,8 @@ def get_advanced_settings(
 ) -> AdvancedSettingsResponse:
     items: list[AdvancedSettingItem] = []
     for spec in settings_registry.TUNABLES:
+        if spec.group in _MANAGED_ELSEWHERE_GROUPS:
+            continue
         items.append(
             AdvancedSettingItem(
                 key=spec.key,
@@ -1204,6 +1220,13 @@ def update_advanced_settings(
         spec = settings_registry.BY_KEY.get(key)
         if spec is None:
             raise AppError(400, "UNKNOWN_SETTING", f"Unknown setting: {key}")
+        if spec.group in _MANAGED_ELSEWHERE_GROUPS:
+            raise AppError(
+                400,
+                "SETTING_MANAGED_ELSEWHERE",
+                f"{key} is managed on its own settings page, which applies the "
+                "side effects this generic route cannot.",
+            )
         if value is None:
             to_set[key] = None  # reset to env default
             continue

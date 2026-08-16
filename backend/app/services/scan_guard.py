@@ -38,7 +38,7 @@ import logging
 import threading
 import time
 from datetime import UTC, datetime, timedelta
-from typing import cast
+from typing import Any, cast
 
 from sqlalchemy import String, func
 from sqlalchemy import desc as sa_desc
@@ -592,7 +592,10 @@ def _watch_note(ip: str, signal: str, path: str, window_sec: int, snap: dict) ->
         if card > _WATCH_MAX:
             # Evict the quietest first: the loudest sources are the ones an
             # admin is looking for, and they are the ones about to be blocked.
-            overflow = redis.zrange(_WATCH_COUNT_KEY, 0, card - _WATCH_MAX - 1)
+            # `Any` because redis-py's stubs union the sync + async return
+            # types and this client is the sync one (redis_client.get_redis) -
+            # the same reason `_distinct_paths_seen` carries an ignore.
+            overflow: Any = redis.zrange(_WATCH_COUNT_KEY, 0, card - _WATCH_MAX - 1)
             if overflow:
                 _watch_forget(*[
                     m.decode() if isinstance(m, bytes) else m for m in overflow
@@ -1427,13 +1430,15 @@ def watchlist(db: Session, *, limit: int = 50) -> dict:
         # how long a plaintext address is retained: EXPIRE is whole-key and is
         # re-slid by every other source's write, so one busy scanner would
         # otherwise keep every address on this list alive indefinitely.
-        stale = redis.zrangebyscore(_WATCH_SEEN_KEY, "-inf", f"({cutoff}")
+        stale: Any = redis.zrangebyscore(_WATCH_SEEN_KEY, "-inf", f"({cutoff}")
         if stale:
             _watch_forget(*[
                 m.decode() if isinstance(m, bytes) else m for m in stale
             ])
 
-        rows = redis.zrevrange(_WATCH_COUNT_KEY, 0, max(0, limit - 1), withscores=True)
+        rows: Any = redis.zrevrange(
+            _WATCH_COUNT_KEY, 0, max(0, limit - 1), withscores=True
+        )
         members = [
             (m.decode() if isinstance(m, bytes) else m, int(score))
             for m, score in rows
@@ -1442,11 +1447,12 @@ def watchlist(db: Session, *, limit: int = 50) -> dict:
             out["available"] = True
             return out
         # HMGET raises on an empty field list, hence the guard above.
-        metas = redis.hmget(_WATCH_META_KEY, [m for m, _ in members])
+        metas: Any = redis.hmget(_WATCH_META_KEY, [m for m, _ in members])
+        scores: Any = redis.zmscore(_WATCH_SEEN_KEY, [m for m, _ in members])
         seen = dict(
             zip(
                 [m for m, _ in members],
-                redis.zmscore(_WATCH_SEEN_KEY, [m for m, _ in members]),
+                scores,
                 strict=False,
             )
         )

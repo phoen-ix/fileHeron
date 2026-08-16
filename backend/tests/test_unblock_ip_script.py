@@ -136,3 +136,50 @@ def test_it_also_runs_as_a_module(db, monkeypatch, capsys):
         runpy.run_module("scripts.unblock_ip", run_name="__main__")
     assert int(exc.value.code or 0) == 0
     assert "45.148.10.67" in capsys.readouterr().out
+
+
+def test_naming_your_own_address_clears_a_covering_network_block(
+    db, monkeypatch, capsys
+):
+    """The failure this tool existed for and could not handle.
+
+    A network escalation blocks 45.148.10.0/24; the admin inside it is locked
+    out, types their own address, and the tool compared `subject` as a STRING -
+    "no live block for 45.148.10.7", exit 1, still locked out. Matching is by
+    containment now."""
+    row = _block(db, "45.148.10.0/24", network=True)
+
+    rc = _run(monkeypatch, "45.148.10.7")
+    out = capsys.readouterr().out
+    assert rc == 0, out
+    assert "released 45.148.10.0/24" in out
+    db.refresh(row)
+    assert row.released_at is not None
+
+
+def test_a_release_from_the_host_is_recorded(db, monkeypatch, capsys):
+    """A host-side release used to leave no trace at all: no `released_by_id`,
+    no audit row. The one release performed by someone who could not reach the
+    admin UI was the one nobody could see afterwards."""
+    from app.models.audit_log import AuditLog
+
+    _block(db, "45.148.10.67")
+
+    assert _run(monkeypatch, "45.148.10.67") == 0
+    rows = (
+        db.query(AuditLog)
+        .filter(AuditLog.event_type == "ip_block_released")
+        .all()
+    )
+    assert len(rows) == 1
+    assert rows[0].extra.get("via") == "host-cli"
+    assert rows[0].extra.get("subject") == "45.148.10.67"
+
+
+def test_notation_differences_still_match(db, monkeypatch, capsys):
+    """`45.148.10.0/24` stored, `45.148.10.5/24` typed - the same network, and
+    a string comparison said otherwise."""
+    _block(db, "45.148.10.0/24", network=True)
+
+    assert _run(monkeypatch, "45.148.10.5/24") == 0
+    assert "released 45.148.10.0/24" in capsys.readouterr().out

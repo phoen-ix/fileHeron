@@ -271,7 +271,7 @@ def add_allowlist_entry(
     admin: User = Depends(get_current_admin),
 ) -> AllowlistResponse:
     try:
-        entries = guard_svc.allowlist_add(
+        guard_svc.allowlist_add(
             db, entry=payload.entry, actor=admin, request=request
         )
         db.commit()

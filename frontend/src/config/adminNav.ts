@@ -86,6 +86,8 @@ export const ADMIN_NAV: AdminNavCategory[] = [
       // Immediately after the error log: same traffic, but this is the page that
       // makes it stop arriving.
       { routeName: 'admin-settings-scan-guard', labelKey: 'admin.nav_item.scan_guard', matchNames: ['admin-settings-scan-guard'] },
+      // Right after the guard's settings: the policy, then what it is doing.
+      { routeName: 'admin-ip-blocks', labelKey: 'admin.nav.ip_blocks', matchNames: ['admin-ip-blocks'] },
       { routeName: 'admin-settings-webhooks', labelKey: 'admin.nav_item.webhooks', matchNames: ['admin-settings-webhooks'] },
       { routeName: 'admin-settings-general', labelKey: 'admin.nav_item.general', matchNames: ['admin-settings-general'] },
       { routeName: 'admin-settings-branding', labelKey: 'admin.nav_item.branding', matchNames: ['admin-settings-branding'] },

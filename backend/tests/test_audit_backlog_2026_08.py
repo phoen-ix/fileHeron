@@ -241,14 +241,17 @@ def test_multibyte_text_is_measured_in_bytes():
 # --- P10: the approver was locked out of the share they must decide --------
 
 
-def _approval_on(db, *, mode: str) -> None:
+def _approval_on(db, *, mode: str, content_review: bool = True) -> None:
     from app.services import settings as settings_svc
 
     k = settings_svc.Keys
     settings_svc.set_value(db, key=k.SHARE_APPROVAL_ENABLED, value="true", actor=None)
     settings_svc.set_value(db, key=k.SHARE_APPROVAL_APPROVER_MODE, value=mode, actor=None)
     settings_svc.set_value(
-        db, key=k.SHARE_APPROVAL_ALLOW_CONTENT_REVIEW, value="true", actor=None
+        db,
+        key=k.SHARE_APPROVAL_ALLOW_CONTENT_REVIEW,
+        value="true" if content_review else "false",
+        actor=None,
     )
     db.commit()
 
@@ -524,4 +527,161 @@ def test_the_budget_branches_consult_the_review_flag():
     assert guarded == 2, (
         "a budget decrement is no longer gated on `not is_review`, so a "
         "reviewing approver spends the recipients' download budget"
+    )
+
+
+# --- v2.13.3: the queue offered a share the approver was 403'd from ---------
+#
+# The second P10 consequence. The queue and the notification gate on
+# `can_approve`; `is_authorized_to_view` gated the active case on
+# `can_review_this_share`, which also requires `allow_content_review`. Turn
+# content review off and the approver is emailed a link to a page that refuses
+# them - while `decide_added_files` accepted their vote all along.
+#
+# Every cell below uses a NON-ADMIN approver. An admin passes
+# `is_authorized_to_download` outright and never reaches the branch, which is
+# why the whole family kept surviving.
+
+
+def _review_case(db, make_user, *, content_review: bool, suffix: str):
+    from app.models.user import UserRole
+
+    _approval_on(db, mode="employees_admins", content_review=content_review)
+    owner = make_user(email=f"own-{suffix}@t.local", role=UserRole.employee)
+    approver = make_user(email=f"appr-{suffix}@t.local", role=UserRole.employee)
+    share, f = _share_with_pending_file(db, owner)
+    return owner, approver, share, f
+
+
+def test_content_review_off_still_lets_the_approver_open_the_share(db, make_user):
+    """The regression: 403 before v2.13.3."""
+    from app.services import share as share_svc
+
+    _o, approver, share, _f = _review_case(db, make_user, content_review=False, suffix="v1")
+    assert share_svc.is_authorized_to_view(db, user=approver, share=share) is True
+
+
+def test_content_review_off_still_refuses_the_approver_the_bytes(db, make_user):
+    """The counterweight. Without it the test above is satisfied by deleting the
+    content-review gate outright, which is the opposite of the intent."""
+    from app.middleware.errors import AppError
+    from app.services import share as share_svc
+
+    _o, approver, share, f = _review_case(db, make_user, content_review=False, suffix="v2")
+    with pytest.raises(AppError) as exc:
+        share_svc.assert_share_file_access(db, user=approver, share=share, file=f)
+    assert exc.value.code == "FORBIDDEN"
+
+
+def test_the_view_grant_and_the_decision_right_are_one_rule(db, make_user):
+    """The drift pin. These diverged once; a mismatch in either direction is a
+    bug - offered-but-refused, or openable-but-undecidable."""
+    from app.services import share as share_svc
+    from app.services import share_approval as approval_svc
+
+    for i, cr in enumerate((True, False)):
+        _o, approver, share, _f = _review_case(
+            db, make_user, content_review=cr, suffix=f"v3{i}"
+        )
+        assert share_svc.is_authorized_to_view(
+            db, user=approver, share=share
+        ) is approval_svc.can_decide_added_files(db, approver, share)
+
+
+def test_the_two_predicates_split_exactly_on_content_review(db, make_user):
+    """One governs the page, the other the bytes. Pinning the split is what
+    stops a future tidy-up folding them together."""
+    from app.services import share_approval as approval_svc
+
+    _o, approver, share, _f = _review_case(db, make_user, content_review=False, suffix="v4")
+    assert approval_svc.can_decide_added_files(db, approver, share) is True
+    assert approval_svc.can_review_this_share(db, approver, share) is False
+
+
+def test_the_decide_predicate_refuses_the_shares_own_creator(db, make_user):
+    """Creator is an ADMIN on purpose: an ordinary employee fails `can_approve`
+    one check earlier and never exercises the self rule."""
+    from app.middleware.errors import AppError
+    from app.models.user import UserRole
+    from app.services import share as share_svc
+    from app.services import share_approval as approval_svc
+
+    _approval_on(db, mode="admins_only")
+    owner = make_user(email="own-v5@t.local", role=UserRole.admin)
+    share, _f = _share_with_pending_file(db, owner)
+
+    assert approval_svc.can_decide_added_files(db, owner, share) is False
+    with pytest.raises(AppError) as exc:
+        share_svc.decide_added_files(
+            db, user=owner, share=share, approve=True, expect_fingerprint="x"
+        )
+    assert exc.value.code == "SELF_APPROVAL"
+
+
+def test_the_decide_predicate_is_scoped_to_shares_awaiting_a_decision(db, make_user):
+    """It now carries the scoping that keeps an approver out of every active
+    outbound share in the instance."""
+    from datetime import timedelta
+
+    from app.models.share import Share, ShareKind, ShareState
+    from app.models.user import UserRole
+    from app.services import share as share_svc
+    from app.services import share_approval as approval_svc
+    from app.utils.timeutil import utc_now
+
+    _approval_on(db, mode="employees_admins", content_review=False)
+    owner = make_user(email="own-v6@t.local", role=UserRole.employee)
+    approver = make_user(email="appr-v6@t.local", role=UserRole.employee)
+    share = Share(
+        created_by_id=owner.id, kind=ShareKind.outbound, state=ShareState.active,
+        subject="nothing pending", expires_at=utc_now() + timedelta(days=1),
+    )
+    db.add(share)
+    db.commit()
+
+    assert approval_svc.can_decide_added_files(db, approver, share) is False
+    assert share_svc.is_authorized_to_view(db, user=approver, share=share) is False
+
+
+def test_the_budget_predicate_is_unchanged_by_the_alignment(db, make_user):
+    """`is_review_access` governs whether the RECIPIENTS' budget is charged and
+    stays keyed to the BYTES predicate. With content review off the branch is
+    unreachable anyway - the bytes 403 first - so an access that cannot happen
+    must not also be free."""
+    from app.services import share as share_svc
+
+    _o, approver, share, _f = _review_case(db, make_user, content_review=False, suffix="v7")
+    assert share_svc.is_review_access(db, user=approver, share=share) is False
+
+
+def test_the_nav_finds_a_queue_stranded_by_the_off_switch(db, make_user):
+    """`approval_was_required` is STORED and sticky. Turn the feature off after
+    a share was approved under it, and a later upload into that still-active
+    share is STILL marked `pending_review` - but `approver_user_ids` returns an
+    empty set (nobody notified) and `has_pending_shares` counted only
+    `pending_approval` (nav dark). The queue was quietly non-empty, the files
+    gated from recipients forever, and no route in the UI reached the decision
+    that would release them."""
+    from app.models.user import UserRole
+    from app.services import settings as settings_svc
+    from app.services import share as share_svc
+    from app.services import share_approval as approval_svc
+
+    _approval_on(db, mode="employees_admins")
+    owner = make_user(email="own-v8@t.local", role=UserRole.employee)
+    admin = make_user(email="adm-v8@t.local", role=UserRole.admin)
+    share, _f = _share_with_pending_file(db, owner)
+
+    # The operator switches four-eyes off; the appended file stays gated.
+    settings_svc.set_value(
+        db, key=settings_svc.Keys.SHARE_APPROVAL_ENABLED, value="false", actor=None
+    )
+    db.commit()
+
+    assert approval_svc.approver_user_ids(db) == set(), "premise: nobody is notified"
+    rows, total = share_svc.list_pending_approvals(db, user=admin)
+    assert total == 1, "premise: the queue is not empty"
+    assert approval_svc.has_pending_shares(db) is True, (
+        "the nav stayed dark over a non-empty queue, so the admin escape hatch "
+        "had no door"
     )

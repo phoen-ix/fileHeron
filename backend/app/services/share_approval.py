@@ -17,10 +17,12 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Callable
 
+from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
 
-from ..models.file import FileState
+from ..models.file import File, FileApprovalState, FileState
 from ..models.group_member import GroupMember
 from ..models.public_link import PublicLink
 from ..models.share import Share, ShareKind, ShareState
@@ -278,8 +280,15 @@ def can_review_added_files(db: Session, user: User) -> bool:
 
 
 def can_review_this_share(db: Session, user: User, share: Share) -> bool:
-    """True if ``user`` may open an ACTIVE share because it is carrying files
-    that need THEIR decision.
+    """True if ``user`` may fetch the BYTES of an ACTIVE share's files because
+    it is carrying files that need THEIR decision.
+
+    Content-review-dependent, and that is the whole difference between this and
+    :func:`can_decide_added_files`. This one answers "may they see the
+    content"; that one answers "may they open the share and cast the vote".
+    Until v2.13.3 this was also the gate on opening the share, so an approver
+    with content review off was refused the page they were emailed a link to.
+    Do not fold the two together.
 
     Scoped to shares that actually have something awaiting review, deliberately.
     The unscoped version - "an approver may open any active share" - is a much
@@ -287,6 +296,32 @@ def can_review_this_share(db: Session, user: User, share: Share) -> bool:
     a view of every active outbound share in the instance, forever, rather than
     only while a decision is outstanding."""
     if not can_review_added_files(db, user):
+        return False
+    return bool(files_awaiting_review(db, share))
+
+
+def can_decide_added_files(db: Session, user: User, share: Share) -> bool:
+    """True if ``user`` may decide on the files appended to this already-
+    approved share: an approver, not its creator, and something is actually
+    awaiting a decision.
+
+    The ACTIVE-share sibling of :func:`can_decide`, and the exact authorization
+    triple ``share.decide_added_files`` enforces - it lives here so the right to
+    OPEN the share and the right to DECIDE on it cannot drift apart again. They
+    had: the view check went through :func:`can_review_this_share`, which
+    requires ``allow_content_review``, while the decision endpoint never has. An
+    approver with content review off was emailed a link to a page that 403'd
+    them, and could still cast the vote blind over the API.
+
+    Deliberately independent of ``allow_content_review``. That toggle says
+    whether an approver may fetch the BYTES of a file awaiting review; it does
+    not say whether they may look at the share they are being asked to sign off
+    on. No `share.state` term and no `approval_was_required` fast path either:
+    `decide_added_files` has neither, and an extra conjunct on a gate that also
+    gates the DECISION is how files become permanently undecidable."""
+    if user.id == share.created_by_id:
+        return False
+    if not can_approve(db, user):
         return False
     return bool(files_awaiting_review(db, share))
 
@@ -323,20 +358,67 @@ def has_pending_shares(db: Session) -> bool:
     to surface the Approvals view at all: `can_approve` answers "may you
     decide", which is True for an admin even with the feature off, and that
     alone would put a permanent Approvals link in front of an instance that
-    never turned approval on."""
+    never turned approval on.
+
+    Mirrors `list_pending_approvals`' filter: an ACTIVE share carrying files
+    awaiting a post-approval decision is a queue item too. Counting only
+    `pending_approval` hid the Approvals nav from the one operator who needed
+    it - `approval_was_required` is a STORED, sticky fact, so switching the
+    feature off does not stop a later upload into that still-active share being
+    marked `pending_review`. Then nobody is notified (`approver_user_ids`
+    returns an empty set with the feature off), the nav is dark, and the queue
+    is quietly non-empty: the files are gated from recipients forever with no
+    route in the UI to the decision that would release them. The admin escape
+    hatch in `can_approve` exists for exactly that state; this makes its door
+    visible."""
+    awaiting = (
+        db.query(File.share_id)
+        .filter(
+            File.approval_state == FileApprovalState.pending_review,
+            File.state != FileState.deleted,
+        )
+        .distinct()
+    )
     return (
         db.query(Share.id)
-        .filter(Share.state == ShareState.pending_approval)
+        .filter(
+            or_(
+                Share.state == ShareState.pending_approval,
+                and_(
+                    Share.state == ShareState.active,
+                    Share.id.in_(awaiting.scalar_subquery()),
+                ),
+            )
+        )
         .first()
         is not None
     )
 
 
+def decider_for(db: Session, user: User) -> Callable[[Share], bool]:
+    """:func:`can_decide` bound to one user for the length of a request.
+
+    The approver policy does not vary by share, but resolving it costs four
+    settings reads plus a membership query and `settings.get` is an uncached
+    SELECT per key. A caller asking about a whole PAGE would otherwise pay that
+    once per row. The approvals queue is the worst case: every row there is
+    `pending_approval`, so the state short-circuit never fires, and it is the
+    one page where every viewer is by definition an approver."""
+    approver: list[bool] = []
+
+    def _decide(share: Share) -> bool:
+        if share.state != ShareState.pending_approval:
+            return False
+        if user.id == share.created_by_id:
+            return False
+        if not approver:
+            approver.append(can_approve(db, user))
+        return approver[0]
+
+    return _decide
+
+
 def can_decide(db: Session, user: User, share: Share) -> bool:
     """True if ``user`` may approve/reject *this* share now: an approver, the
     share is pending, and it isn't their own (no self-approval, ever)."""
-    return (
-        share.state == ShareState.pending_approval
-        and user.id != share.created_by_id
-        and can_approve(db, user)
-    )
+    return decider_for(db, user)(share)

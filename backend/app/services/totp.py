@@ -23,6 +23,7 @@ Flow:
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import datetime, timezone
 
@@ -230,41 +231,81 @@ def verify_at_login(db: Session, *, user: User, code: str) -> bool:
     return False
 
 
+def _unused_recovery_hashes(db: Session, user: User) -> list[tuple[int, str]]:
+    """(id, hash) pairs, deliberately NOT ORM rows: the matching runs in a
+    worker thread and touching a mapped object there could emit SQL on a
+    Session another thread owns."""
+    return [
+        (rc.id, rc.code_hash)
+        for rc in db.query(UserRecoveryCode).filter(
+            UserRecoveryCode.user_id == user.id,
+            UserRecoveryCode.used_at.is_(None),
+        )
+    ]
+
+
+def _match_recovery_hash(pairs: list[tuple[int, str]], code: str) -> int | None:
+    """Pure CPU, no DB, no ORM - safe to hand to a thread. Returns the matching
+    row id, or None."""
+    for rc_id, code_hash in pairs:
+        if argon2_verify(code_hash, code):
+            return rc_id
+    return None
+
+
+def _claim_recovery_code(db: Session, *, user: User, rc_id: int, request) -> bool:
+    # Atomic single-use claim: the conditional UPDATE + rowcount
+    # check is the gate, so two concurrent logins replaying the
+    # same recovery code can't both succeed (finding M6).
+    claimed = db.execute(
+        update(UserRecoveryCode)
+        .where(
+            UserRecoveryCode.id == rc_id,
+            UserRecoveryCode.used_at.is_(None),
+        )
+        .values(used_at=utc_now())
+    )
+    if claimed.rowcount == 0:
+        # Lost the race - another request already consumed it.
+        return False
+    db.flush()
+    record_audit_event(
+        db,
+        event_type=AuditEventType.recovery_code_used,
+        actor_user_id=user.id,
+        target_type="user_recovery_code",
+        target_id=rc_id,
+        request=request,
+    )
+    return True
+
+
 def consume_recovery_code(db: Session, *, user: User, code: str, request) -> bool:
     """Match `code` against any unused recovery code for `user`. On match,
-    marks used and audit-logs. Returns whether match was found."""
-    candidates = (
-        db.query(UserRecoveryCode)
-        .filter(UserRecoveryCode.user_id == user.id, UserRecoveryCode.used_at.is_(None))
-        .all()
+    marks used and audit-logs. Returns whether match was found.
+
+    Synchronous, for the two sync callers below. Anything on the event loop
+    must use `aconsume_recovery_code`."""
+    rc_id = _match_recovery_hash(_unused_recovery_hashes(db, user), code)
+    return _claim_recovery_code(db, user=user, rc_id=rc_id, request=request) if rc_id else False
+
+
+async def aconsume_recovery_code(db: Session, *, user: User, code: str, request) -> bool:
+    """`consume_recovery_code` with the Argon2 work off the event loop.
+
+    Ten codes are minted per user and a WRONG code verifies every one of them:
+    at the shipped parameters (64 MiB, t=3, p=2) that is roughly two seconds
+    with the whole process frozen, on an endpoint reachable before the second
+    factor. `services/auth.py` already documents this exact case - "recovery-code
+    login is worse: it loops over up to 10 unused codes" - and then wired the
+    thread into the password path only.
+
+    Only the matching is threaded. The claim stays on the caller's thread
+    because it owns the Session."""
+    rc_id = await asyncio.to_thread(
+        _match_recovery_hash, _unused_recovery_hashes(db, user), code
     )
-    for rc in candidates:
-        if argon2_verify(rc.code_hash, code):
-            # Atomic single-use claim: the conditional UPDATE + rowcount
-            # check is the gate, so two concurrent logins replaying the
-            # same recovery code can't both succeed (finding M6).
-            claimed = db.execute(
-                update(UserRecoveryCode)
-                .where(
-                    UserRecoveryCode.id == rc.id,
-                    UserRecoveryCode.used_at.is_(None),
-                )
-                .values(used_at=utc_now())
-            )
-            if claimed.rowcount == 0:
-                # Lost the race - another request already consumed it.
-                return False
-            db.flush()
-            record_audit_event(
-                db,
-                event_type=AuditEventType.recovery_code_used,
-                actor_user_id=user.id,
-                target_type="user_recovery_code",
-                target_id=rc.id,
-                request=request,
-            )
-            return True
-    return False
+    return _claim_recovery_code(db, user=user, rc_id=rc_id, request=request) if rc_id else False
 
 
 def disable(db: Session, *, user: User, password: str, code_or_recovery: str, request) -> None:

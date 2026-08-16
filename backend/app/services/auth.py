@@ -670,7 +670,9 @@ async def login_with_recovery(
         db.commit()
         raise AppError(409, "TOTP_NOT_ENABLED", "Two-factor auth is not enabled for this account.")
 
-    if not totp_svc.consume_recovery_code(db, user=user, code=recovery_code, request=request):
+    if not await totp_svc.aconsume_recovery_code(
+        db, user=user, code=recovery_code, request=request
+    ):
         rate_limit_svc.record_failure(db, user=user)
         _record_login_attempt(db, email_value=em_email, ip=ip, outcome=LoginOutcome.bad_recovery)
         record_audit_event(
@@ -841,7 +843,9 @@ def consume_email_verification(db: Session, *, plaintext_token: str, request: Re
 async def change_password(
     db: Session, *, user: User, current_password: str, new_password: str, request: Request | None
 ) -> None:
-    if not argon2_verify(user.password_hash, current_password):
+    # Off the loop, like every other verify in this module: 64 MiB of Argon2id
+    # on the event loop freezes the whole process for ~0.2 s.
+    if not await _averify(user.password_hash, current_password):
         raise AppError(401, "INVALID_CREDENTIALS", "Current password is incorrect.")
     await assert_password_not_breached(db, new_password)
 
@@ -900,7 +904,9 @@ async def complete_pending_second_factor(
         raise AppError(409, "TOTP_NOT_ENABLED", "Two-factor auth is not enabled.")
 
     if recovery_code:
-        ok = totp_svc.consume_recovery_code(db, user=user, code=recovery_code, request=request)
+        ok = await totp_svc.aconsume_recovery_code(
+            db, user=user, code=recovery_code, request=request
+        )
         outcome, reason = LoginOutcome.bad_recovery, "bad_recovery"
     elif totp_code:
         ok = totp_svc.verify_at_login(db, user=user, code=totp_code)

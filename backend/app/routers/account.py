@@ -346,7 +346,6 @@ async def change_email(
     must click it, and in verify_both the old one too)."""
     from ..services import email_change as email_change_svc
     from ..services import email_change_policy
-    from ..utils.crypto import argon2_verify
 
     if not email_change_policy.self_service_enabled(db):
         raise AppError(
@@ -360,7 +359,9 @@ async def change_email(
         settings_registry.effective(db, settings_registry.K.RATE_LIMIT_REGISTER),
     ):
         raise AppError(429, "RATE_LIMITED", "Too many attempts; try again shortly.")
-    if not argon2_verify(user.password_hash, payload.current_password):
+    # `_averify`, not `argon2_verify`: this is an `async def`, so a bare verify
+    # holds the event loop for the duration of a 64 MiB KDF.
+    if not await auth_svc._averify(user.password_hash, payload.current_password):
         raise AppError(401, "INVALID_CREDENTIALS", "Current password is incorrect.")
 
     outcome = email_change_svc.request_email_change(

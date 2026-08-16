@@ -1,7 +1,14 @@
 """Anonymous client telemetry.
 
-Two beacons, both anonymous, both opt-in behind the same 4xx-capture switch,
-both hard rate-limited per IP, both fire-and-forget.
+Two beacons, both anonymous, both fire-and-forget, both capped per IP AND
+globally.
+
+They do NOT ride the same switch, and the difference matters because the two
+defaults are opposite: the SPA 404 beacon is gated on `error_log.capture_4xx`
+(default OFF), the CSP sink on `error_log.enabled` (default ON) - see the block
+above `csp_report` for why. This header claimed they shared one switch, which is
+the kind of assumed symmetry that let the beacon go without a global cap while
+the sink beside it had one.
 
 The SPA reports a client-side 404 (a visit to a page path Vue Router couldn't
 match) so it lands in the error log alongside backend / edge 404s - the backend
@@ -81,6 +88,19 @@ def report_page_404(body: Page404Request, request: Request) -> Response:
         ip = request.client.host if request.client else ""
         if not rate_limit.check_ip_allowed("client_404", ip, limit=10, window_sec=60):
             return Response(status_code=204)
+        # Global ceiling as well as the per-IP one. The per-IP cap bounds one
+        # source at 10/min and nothing bounded the sum, so N sources wrote
+        # error_log rows and ARQ jobs without limit. `error_alert`'s hourly cap
+        # is not a substitute - it bounds outbound alert MAIL, not rows or jobs.
+        # Same shape and the same tunable as the CSP sink below and the 4xx
+        # pre-guard in middleware/errors.py.
+        if not rate_limit.check_ip_allowed(
+            "client_404_global",
+            "global",
+            limit=error_log.capture_rate_per_min_cached(),
+            window_sec=60,
+        ):
+            return Response(status_code=204)
         # Path only - drop the query string (may carry junk/tokens), collapse
         # any token segment, then truncate. The path is client-asserted, and
         # the SPA's own token routes are exactly the ones a user mistypes into
@@ -132,15 +152,18 @@ async def report_csp_violation(request: Request) -> Response:
         ip = request.client.host if request.client else ""
         if not rate_limit.check_ip_allowed("csp_report", ip, limit=20, window_sec=60):
             return Response(status_code=204)
-        # A GLOBAL ceiling as well as the per-IP one. This is the only
-        # error-capture entry point that had no aggregate cap, and it is on by
-        # default: on the s3 backend every preview is a 307 to a presigned
-        # bucket URL, which the shipped policy does not allow, so twenty people
-        # browsing shares produce hundreds of reports a minute - each an
-        # error_log row and an ARQ job. The one screen the "enforce once the
-        # reports come back empty" criterion is read from would be the first
-        # thing drowned (audit #2). Same shape and the same tunable as the 4xx
-        # pre-guard.
+        # A GLOBAL ceiling as well as the per-IP one. This said it was "the
+        # only error-capture entry point that had no aggregate cap" - true when
+        # written, and then not: the SPA 404 beacon above still matched that
+        # description for two releases, describing its own fix while its
+        # neighbour went uncapped. Both have one now. It matters most here
+        # because this sink is on by default: on the s3 backend every preview
+        # is a 307 to a presigned bucket URL, which the shipped policy does not
+        # allow, so twenty people browsing shares produce hundreds of reports a
+        # minute - each an error_log row and an ARQ job. The one screen the
+        # "enforce once the reports come back empty" criterion is read from
+        # would be the first thing drowned (audit #2). Same shape and the same
+        # tunable as the 4xx pre-guard.
         if not rate_limit.check_ip_allowed(
             "csp_report_global",
             "global",

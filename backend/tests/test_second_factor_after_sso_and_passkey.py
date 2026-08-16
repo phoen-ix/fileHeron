@@ -134,6 +134,10 @@ async def test_a_correct_code_completes_the_login(
     assert "fh_refresh" in done.headers.get("set-cookie", "")
 
 
+async def _always_matches(db, *, user, code, request=None) -> bool:
+    return True
+
+
 @pytest.mark.asyncio
 async def test_a_recovery_code_also_completes_the_login(
     db, client, monkeypatch, make_provider, make_user
@@ -152,7 +156,9 @@ async def test_a_recovery_code_also_completes_the_login(
     from app.services import totp as totp_svc
 
     monkeypatch.setattr(
-        totp_svc, "consume_recovery_code", lambda db, *, user, code, request=None: True
+        # The async variant: the recovery-code Argon2 loop runs off the event
+        # loop now, so the route calls `aconsume_recovery_code`.
+        totp_svc, "aconsume_recovery_code", _always_matches
     )
     done = await client.post(
         "/api/auth/2fa/complete",

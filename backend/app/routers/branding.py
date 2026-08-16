@@ -93,6 +93,14 @@ def get_legal(kind: str, db: Session = Depends(get_db)) -> LegalContentResponse:
         raise AppError(404, "UNKNOWN_LEGAL_KIND", "Unknown legal page.")
     enabled_key, en_key, de_key = keys
     enabled = settings_svc.get_bool(db, enabled_key, default=False)
+    if not enabled:
+        # `enabled` was computed and then not used as a gate: the body was
+        # served regardless, and the only thing honouring the flag was
+        # LegalPage.vue. So `curl /api/legal/imprint` returned an unpublished
+        # draft - which is exactly where a company address, a DPO name or a
+        # not-yet-agreed legal position lives. The admin editor reads
+        # /admin/settings/legal, not this route, so no preview breaks.
+        return LegalContentResponse(enabled=False, html_en="", html_de="")
     return LegalContentResponse(
         enabled=enabled,
         # Stored content is already sanitised on save; sanitise again on serve

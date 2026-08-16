@@ -47,9 +47,35 @@ def release(
     # object store: server-side copy between prefixes).
     backend = get_storage_backend()
     if file.storage_path and backend.exists(file.storage_path):
+        old_loc = file.storage_path
         new_loc = backend.generate_locator(file.id)
-        backend.move(file.storage_path, new_loc)
+        backend.move(old_loc, new_loc)
         file.storage_path = new_loc
+        # Put the bytes BACK if the transaction does not survive. The commit is
+        # the caller's (routers/admin/quarantine.py), and between here and it
+        # sit a quota reservation, an audit query and a share flip - all able to
+        # fail. On rollback the row keeps `old_loc` while the bytes sit at
+        # `new_loc`, so every retry finds nothing at `storage_path` and 409s
+        # QUARANTINE_BYTES_MISSING below: release becomes impossible from the
+        # UI, permanently. The blob is unreclaimable too - reclaim_orphaned_files
+        # walks File rows, so a locator no row names is invisible to it.
+        #
+        # `quarantine.py:70-75` fixed the mirror of this by committing first;
+        # that restructure reorders the quota and share work here, so this takes
+        # the compensating-move route instead (the shape inbound_mail.py uses).
+        from ..database import run_after_rollback
+
+        def _move_back() -> None:
+            try:
+                if backend.exists(new_loc):
+                    backend.move(new_loc, old_loc)
+            except Exception:
+                logger.warning(
+                    "quarantine release: could not restore %s after rollback",
+                    old_loc, exc_info=True,
+                )
+
+        run_after_rollback(db, _move_back)
     else:
         # Bytes already gone (manual cleanup, prior purge, etc.) - refuse
         # rather than silently flip state on a missing file. Admin should

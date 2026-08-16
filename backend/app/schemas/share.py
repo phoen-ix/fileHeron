@@ -220,14 +220,21 @@ class ApproveShareRequest(APIBaseModel):
     caller may omit is not an integrity check - and the party who benefits from
     omitting it is the one under review. Clients must read the digest from the
     share detail response and echo it back."""
-    content_fingerprint: str = Field(..., min_length=1, max_length=64)
+    # `pattern` is not cosmetic: without it a non-ASCII value reached
+    # `secrets.compare_digest`, which raises TypeError on non-ASCII str
+    # operands - a 500 from the one route whose entire job is to answer 409
+    # CONTENT_CHANGED. The value is a sha256 hexdigest slice, so hex-only
+    # costs nothing.
+    content_fingerprint: str = Field(..., min_length=1, max_length=64,
+                                     pattern=r"^[0-9a-fA-F]{1,64}$")
 
 
 class DecideAddedFilesRequest(APIBaseModel):
     """Body for `POST /api/shares/{id}/added-files/decide` - the decision on
     files appended to an already-approved share."""
     approve: bool
-    content_fingerprint: str = Field(..., min_length=1, max_length=64)
+    content_fingerprint: str = Field(..., min_length=1, max_length=64,
+                                     pattern=r"^[0-9a-fA-F]{1,64}$")
     reason: str | None = Field(default=None, max_length=1000)
 
 

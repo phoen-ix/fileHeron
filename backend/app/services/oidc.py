@@ -365,7 +365,11 @@ def _extract_email(
     verified.
     """
     email = claims.get("email")
-    verified = bool(claims.get("email_verified", False))
+    # An ALLOWLIST, not a cast. `bool("false")` is True, so an IdP that emits
+    # this claim as a JSON *string* - out of spec, but common in hand-rolled
+    # Keycloak mappers and Auth0 rules - asserted the verification it was
+    # actively denying, and the auto-link gate below believed it.
+    verified = claims.get("email_verified") in (True, "true", "True", 1, "1")
 
     if provider.preset == OIDCPreset.entra:
         if not email:

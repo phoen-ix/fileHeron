@@ -322,6 +322,13 @@ def apply_pending_update(
     # handed to the executor.
     try:
         _dispatch_update_started_to_admins(db, tag=pending["target_tag"], via=reason)
+        # `dispatch` is caller-commits: it writes the in-app Notification row
+        # and the queued mail_log row, and defers the SSE publish and the
+        # send-email job to `run_after_commit`. Neither caller commits after
+        # this - the drain worker closes its session (a rollback) and the admin
+        # route just returns - so every row was discarded and the deferred job
+        # never enqueued. The alert this block exists to send reached nobody.
+        db.commit()
     except Exception:
         logger.exception("pending update: admin ops alert failed (update proceeds)")
     logger.info("pending update applied: tag=%s via=%s", pending["target_tag"], reason)

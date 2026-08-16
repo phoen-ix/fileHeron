@@ -441,11 +441,26 @@ def cancel_email_change(
         return 1
 
     if user is not None:
-        rows = base.filter(EmailChangeToken.user_id == user.id).all()
+        # The same conditional UPDATE the token branch above uses, and for the
+        # same reason. This branch was a read-then-assign: SQLAlchemy emitted
+        # `UPDATE ... WHERE id = ?` with no state predicate, so a cancel whose
+        # SELECT landed just before `confirm_email_change` committed would stamp
+        # `cancelled_at` on an already-USED row and report success - telling
+        # someone their account was safe moments after `_apply_email_change`
+        # had moved `users.email` and revoked their sessions. Losing the race
+        # now returns 0.
         now = utc_now()
-        for r in rows:
-            r.cancelled_at = now
-        if rows:
+        result = db.execute(
+            update(EmailChangeToken)
+            .where(
+                EmailChangeToken.user_id == user.id,
+                EmailChangeToken.used_at.is_(None),
+                EmailChangeToken.cancelled_at.is_(None),
+            )
+            .values(cancelled_at=now)
+        )
+        count = result.rowcount
+        if count:
             db.flush()
             record_audit_event(
                 db,
@@ -453,10 +468,10 @@ def cancel_email_change(
                 actor_user_id=user.id,
                 target_type="user",
                 target_id=str(user.id),
-                metadata={"via": "user_revoke", "count": len(rows)},
+                metadata={"via": "user_revoke", "count": count},
                 request=request,
             )
-        return len(rows)
+        return count
 
     return 0
 

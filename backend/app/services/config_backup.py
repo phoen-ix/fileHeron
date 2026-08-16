@@ -1376,6 +1376,23 @@ def apply_backup(db: Session, *, parsed: ParsedBackup, actor: User, request=None
         sb = p["settings_branding"]
         db.query(EmailTemplateOverride).delete(synchronize_session=False)
         db.flush()
+        # The wipe below is unfiltered, and the reload then SKIPS the transient
+        # keys - so they were deleted and never came back. Both consumers
+        # default to False, which means an import silently ENDED a maintenance
+        # window and lifted the low-disk upload guard, with nothing beyond the
+        # generic `config_backup_imported` row to say so; the IMAP cursors reset
+        # to zero as well. Skipping them on the way in is right (see below);
+        # destroying the LIVE ones was collateral nobody intended.
+        #
+        # Preserve, don't spare the wipe: keeping the delete unfiltered means a
+        # backup-supplied value still cannot land, which is the protection the
+        # comment below describes.
+        preserved_transient = {
+            row.key: (row.value, row.is_encrypted)
+            for row in db.query(AppSetting).filter(
+                AppSetting.key.in_(_TRANSIENT_SETTING_KEYS)
+            )
+        }
         db.query(AppSetting).delete(synchronize_session=False)
         db.flush()
         # `_TRANSIENT_SETTING_KEYS` was applied on EXPORT only, so a backup
@@ -1434,6 +1451,14 @@ def apply_backup(db: Session, *, parsed: ParsedBackup, actor: User, request=None
                     key=key, value=val, is_encrypted=False,
                     updated_at=utc_now(), updated_by_id=actor.id,
                 ))
+        # Put this instance's own runtime state back. Nothing in the backup can
+        # reach these - they were filtered above - so this restores exactly what
+        # was live before the import, or nothing if it was never set.
+        for key, (value, is_encrypted) in preserved_transient.items():
+            db.add(AppSetting(
+                key=key, value=value, is_encrypted=is_encrypted,
+                updated_at=utc_now(), updated_by_id=actor.id,
+            ))
         db.flush()
         for o in sb.get("email_template_overrides", []):
             db.add(_build(

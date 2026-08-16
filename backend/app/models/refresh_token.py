@@ -3,9 +3,16 @@ hashed with SHA-256 (high entropy → no Argon2 needed). Rotation:
 
 - on `/api/auth/refresh`, the current token is marked revoked, a new one is
   issued, and `replaced_by_id` links the new to the old.
-- if a revoked token is presented, we treat it as theft → revoke the entire
-  family (all tokens descended via replaced_by) and audit-log a
-  `refresh_token_reused` event.
+- a revoked token is NOT automatically theft, and the discriminator is
+  `replaced_by_id`. NULL means the row was revoked deliberately (logout-others,
+  session-cap eviction, password change/reset, email change, admin revoke,
+  config restore) and the refresh fails softly with INVALID_REFRESH. Set means a
+  ROTATED link is being replayed - that is the theft signal, and it revokes
+  every one of the user's refresh tokens (not merely the chain descendants, as
+  this said) and audit-logs `refresh_token_reused`.
+- clients must not refresh concurrently on one cookie: two racers are either
+  soft-failed or, if the loser reads after the winner commits, taken for that
+  replay. Both SPA and desktop client serialise their refreshes for this reason.
 """
 from __future__ import annotations
 

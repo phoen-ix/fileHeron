@@ -11,8 +11,12 @@ Refresh-token rotation invariants the audit relies on:
 - Refresh row is hash-only in the DB; plaintext only exists in the
   cookie set by the router.
 - Conditional UPDATE in `rotate_refresh` is the atomic guard against
-  double-use (the second concurrent request sees rowcount=0 →
-  treats as reuse → family-revoke).
+  double-use. The second concurrent request sees rowcount=0 and is
+  SOFT-failed with INVALID_REFRESH - it is one client racing itself over a
+  shared cookie, not theft. (This said "treats as reuse → family-revoke"
+  until 376a851 changed it; the description outlived the behaviour.)
+  Genuine reuse - replaying a link whose `replaced_by_id` is already set -
+  is the branch that revokes the family.
 - Per-user session cap is enforced via `enforce_session_cap` at every
   call site that mints a fresh refresh - oldest evicted first.
 """
@@ -411,7 +415,8 @@ def rotate_refresh(
         raise AppError(401, "TOKEN_REUSE", "Refresh token reuse detected; all sessions revoked.")
 
     # Conditional UPDATE → atomic check-and-revoke. If two requests race, the
-    # second sees affected_rows=0 and we treat it as reuse.
+    # second sees affected_rows=0; see the branch below for what happens then -
+    # it is NOT treated as reuse, which is what this comment used to claim.
     now = utc_now()
     result = db.execute(
         update(RefreshToken)

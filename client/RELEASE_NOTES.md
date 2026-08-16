@@ -1,3 +1,41 @@
+# Desktop client 1.4.4
+
+**Signing in less often, and one wrong error message.**
+
+A patch release, all of it in how the app renews your sign-in during long
+transfers. Nothing about it is visible when everything is working; it matters on
+a slow or restarting server.
+
+Requires server **v2.6.1 or newer** (unchanged).
+
+---
+
+## A large download renewed your sign-in several times over
+
+A big file is fetched over several connections at once, all sharing one sign-in.
+When that sign-in came up for renewal mid-download — every fifteen minutes on a
+long transfer — each connection renewed it separately.
+
+The server allows exactly one of those, and treats the rest as suspicious. In
+the worst case it reads as a stolen credential and revokes every session you
+have, on every device, including your browser. On a long download that could
+happen at every renewal.
+
+The connections now share a single renewal.
+
+## "Couldn't reach the server" when the server was fine
+
+Resuming a download starts with a small probe request. If that probe met an
+expired sign-in in a particular way, the app could retry it with the very
+credential that had just been rejected, then report "Couldn't reach the server
+to resume this download" — a wrong explanation for an expired session, and one
+that repeats every time you try.
+
+The probe now reports what it actually sent, so the renewal happens properly and
+the download resumes.
+
+---
+
 # Desktop client 1.4.3
 
 **Two faults found reviewing 1.4.2, one of them older than it.**

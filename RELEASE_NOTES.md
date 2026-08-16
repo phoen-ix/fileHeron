@@ -1,3 +1,151 @@
+# file:Heron v2.13.4
+
+**A noisy error log, and the sign-outs that were hiding behind it.**
+
+A patch release. It began as a question about the error log filling with
+`TOKEN_EXPIRED` and ended in the session-refresh path, which turned out to sign
+people out in three situations where it should not have: when two clients
+refreshed at the same moment, when the server was merely restarting, and when
+someone mistyped a code during two-factor setup. No migration, no host step, no
+API change, no default moves. Desktop client changes ship alongside on their own
+tag.
+
+---
+
+## The error log was 78% one harmless event
+
+Turning on 4xx capture with `401` in the code list made the log fill with
+`TOKEN_EXPIRED`. Nothing was broken: access tokens last 15 minutes, the web
+interface only discovers that a token has expired by making a request that
+fails, and the notification bell reconnects every minute — so the bell is always
+the thing that finds out first. One entry per fifteen minutes per open tab,
+each one followed within the same second by a successful refresh and a
+successful retry. Invisible to the user, and forever.
+
+On the reference instance that was 32 of one day's 41 entries, on a four-user
+install, and it scales with tabs and hours. The entries the log exists to
+surface were being pushed out by an event that is not an error.
+
+`TOKEN_EXPIRED` is no longer recorded. This is deliberately narrow: it is
+suppressed by error code, not by status, so every other 401 — a failed sign-in,
+a route that refuses a valid session, a scanner probing for credentials — is
+still captured exactly as before. That distinction matters: the same 401 capture
+caught a real defect on this instance in ninety minutes.
+
+The trade, stated plainly: a genuine mass expiry, such as a host clock jumping,
+will no longer show up here. It remains visible in the proxy access log and in
+users being asked to sign in again.
+
+## Two tabs refreshing at once could sign you out everywhere
+
+The web interface holds one refresh cookie shared by every tab. Each tab keeps
+its own short-lived access token in memory, and refreshes only when one expires.
+Open a laptop after it has slept and every tab wakes at once, every token is
+already expired, and every tab tries to refresh with the same cookie.
+
+The server allows exactly one of them. What happened to the others depended on
+timing, and one of the two outcomes was bad:
+
+- the loser is told its token was already rotated, and that tab returns to the
+  sign-in page although the session is alive; or
+- the loser's request arrives just after the winner's succeeded, which looks
+  identical to somebody replaying a stolen token — so **every session on every
+  device is revoked**, and a security event is recorded saying the token was
+  reused.
+
+The second one signs you out of your phone and the desktop client because you
+opened a laptop lid.
+
+This is not fixable by making the server more forgiving. A replay arriving one
+millisecond after a legitimate rotation genuinely cannot be told apart from a
+stolen token, and any allowance wide enough to help would also help an attacker.
+So the fix is that clients no longer refresh concurrently: the web interface
+serialises its refreshes across tabs, and the desktop client across its
+threads. Reuse detection is unchanged and still as strict as it was.
+
+The desktop client was the more reliable trigger of the two. A large download
+runs several connections from one access token, so when it expired mid-transfer
+every connection tried to refresh at once — on every long download, every
+fifteen minutes. They now share a single refresh.
+
+## Being returned to the sign-in page when the session really is gone
+
+If a request failed, the session was refreshed successfully, and the retry
+failed again, the web interface did nothing at all — the page simply stopped
+working, with every subsequent request failing silently. That happens when a
+session is revoked or an account is disabled in the moment between the two. It
+now returns you to the sign-in page, which is what it always claimed to do.
+
+Fixing that exposed a second problem, fixed in the same release: entering a
+wrong code while setting up two-factor authentication is also reported as a
+failed request. Left alone, a typo during 2FA setup would have signed the user
+out. Every endpoint that rejects a wrong password or code — rather than an
+expired session — is now excluded from that path, and the rule is written down
+so the list is not guessed at next time.
+
+## Being signed out because the server was restarting
+
+The widest of the three, and the one most likely to have been noticed as "it
+logged me out for no reason". Your browser holds a short-lived key that it
+renews every fifteen minutes. If renewing it failed, you were signed out — and
+*every* kind of failure counted, including "the server did not answer".
+
+Updating file:Heron restarts the server for roughly ten to twenty-five seconds.
+Any tab whose key came up for renewal in that window was signed out, with a
+perfectly valid session, by the update itself.
+
+Now only an actual answer counts. If the server says the session is over, you
+are signed out, exactly as before. If the server cannot be reached — it is
+restarting, the network dropped, the request timed out — the session is left
+alone; whatever you clicked reports an error, and the next thing you do works
+normally once the server is back. The same distinction applies when you load the
+page fresh during a restart: the tab no longer stays stuck as signed-out until
+you reload it by hand.
+
+There is deliberately no retrying-in-the-background here. A restart lasts longer
+than any delay that would not freeze the interface, and the session recovers on
+its own within about a minute regardless of whether you do anything.
+
+## A mistyped two-factor code no longer signs you out
+
+If you sign in with single sign-on or a passkey and then mistype your
+authenticator code, that was treated the same as an expired session: the app
+quietly resent the same wrong code, then signed you out and sent you back
+through the whole sign-on round trip. It also counted the mistake twice against
+the lockout threshold, so you got half as many attempts as the setting says.
+
+The same shape had already been fixed once during two-factor *setup*. This is
+the second place it hid, so the rule is no longer a list someone maintains by
+hand: every endpoint that rejects a wrong password or code is now enumerated
+from the server automatically, and the build fails if one of them is not
+excluded from the retry path.
+
+## Fixes found reviewing the above
+
+Several of these only bite on a self-hosted install reached over plain HTTP,
+which is the default for a fresh setup.
+
+- A restart that answered with an unreadable page — a misconfigured proxy, or a
+  captive portal on a café network — was read as a *successful* renewal. The app
+  then sent every subsequent request with no credentials at all and signed you
+  out. It is now treated as "server unreachable", like any other failed renewal.
+- If your computer's clock stepped backwards — an automatic time correction, or
+  resuming a laptop or virtual machine — the coordination between browser tabs
+  could stall every tab for the length of the correction. A timestamp in the
+  future is now ignored rather than trusted.
+- With several tabs open and the server hung rather than down, tabs could queue
+  behind one another indefinitely, freezing navigation and leaving a newly
+  opened tab blank. That wait is now bounded.
+- A renewal that succeeded could be discarded if the tab-coordination step
+  failed immediately afterwards, failing a request whose retry would have
+  worked.
+- The desktop client could rotate your session twice where once was correct, and
+  a resumed download could report "couldn't reach the server" when the real
+  cause was an expired session — the exact misreport that was fixed for the
+  ordinary case earlier.
+
+---
+
 # file:Heron v2.13.3
 
 **Two more consequences of the same v2.13.1 change, both found by review.**

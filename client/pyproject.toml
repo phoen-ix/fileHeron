@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "fileheron-client"
-version = "1.4.3"
+version = "1.4.4"
 description = "Desktop GUI client for the file:Heron self-hosted file-sharing platform."
 requires-python = ">=3.12"
 license = { text = "MIT" }

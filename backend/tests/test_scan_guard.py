@@ -854,3 +854,86 @@ def test_nothing_reaches_redis_when_the_watchlist_is_off(db, monkeypatch):
     monkeypatch.setattr("app.redis_client.get_redis", lambda: store)
     sg._watch_note(PUBLIC_IP, "probe_path", "/.env", 3600, _snap(watchlist=False))
     assert store.z == {} and store.h == {}
+
+
+# --- Shared-egress discriminator (unit level) -------------------------------
+#
+# The behavioural tests in test_scan_guard_middleware.py drive this through the
+# real login route. These pin the query semantics directly, because three of the
+# four cases below are ones a reasonable implementation gets wrong.
+
+
+def _attempt(db, email, outcome, *, n=1, age_sec=0):
+    from datetime import timedelta
+
+    from app.models.login_attempt import LoginAttempt
+
+    for _ in range(n):
+        db.add(LoginAttempt(
+            email=email, ip=PUBLIC_IP,
+            attempted_at=utc_now() - timedelta(seconds=age_sec),
+            outcome=outcome,
+        ))
+    db.commit()
+
+
+def test_successes_from_one_account_do_not_excuse_a_stuffer(db):
+    """Anyone holding ONE valid login could otherwise script successes from
+    their own address and grind every other account for free - the exemption
+    becomes the attacker's off switch."""
+    from app.models.login_attempt import LoginOutcome
+
+    _attempt(db, "victim@test.local", LoginOutcome.bad_password.value, n=10)
+    assert sg._shared_egress_suppresses(db, PUBLIC_IP, 3600) is False
+
+    _attempt(db, "mine@test.local", LoginOutcome.success.value, n=2)
+    assert sg._shared_egress_suppresses(db, PUBLIC_IP, 3600) is False, (
+        "one account's successes excused a stuffer"
+    )
+
+    # A SECOND account succeeding is what says "several people share this
+    # address", and only then is the block withheld.
+    _attempt(db, "colleague@test.local", LoginOutcome.success.value)
+    assert sg._shared_egress_suppresses(db, PUBLIC_IP, 3600) is True
+
+
+def test_non_countable_outcomes_do_not_inflate_the_failure_count(db):
+    """Counting `outcome != success` errs in the dangerous direction.
+
+    `rate_limited`, `locked` and `account_disabled` rows are produced in VOLUME
+    by exactly the locked-out office this exemption protects, and every one of
+    them raises the bar the successes have to clear."""
+    from app.models.login_attempt import LoginOutcome
+
+    _attempt(db, "a@office.local", LoginOutcome.success.value)
+    _attempt(db, "b@office.local", LoginOutcome.success.value)
+    _attempt(db, "a@office.local", LoginOutcome.bad_password.value, n=5)
+    assert sg._shared_egress_suppresses(db, PUBLIC_IP, 3600) is True
+
+    _attempt(db, "a@office.local", LoginOutcome.rate_limited.value, n=100)
+    _attempt(db, "a@office.local", LoginOutcome.locked.value, n=100)
+    assert sg._shared_egress_suppresses(db, PUBLIC_IP, 3600) is True, (
+        "non-countable outcomes were counted as failures and withdrew the exemption"
+    )
+
+
+def test_anonymous_successes_are_not_two_accounts(db):
+    """`login_attempts.email` is nullable (the input did not parse). SQL's
+    COUNT(DISTINCT) skips NULLs, which is what we want - five unattributable
+    successes are not evidence that two people share the address."""
+    from app.models.login_attempt import LoginOutcome
+
+    _attempt(db, None, LoginOutcome.success.value, n=5)
+    _attempt(db, "victim@test.local", LoginOutcome.bad_password.value, n=5)
+    assert sg._shared_egress_suppresses(db, PUBLIC_IP, 3600) is False
+
+
+def test_yesterdays_successes_do_not_launder_todays_failures(db):
+    """Windowed to the same window as the offence counter - the escalation
+    freshness rule, applied one level down."""
+    from app.models.login_attempt import LoginOutcome
+
+    _attempt(db, "a@office.local", LoginOutcome.success.value, age_sec=99_999)
+    _attempt(db, "b@office.local", LoginOutcome.success.value, age_sec=99_999)
+    _attempt(db, "victim@test.local", LoginOutcome.bad_password.value, n=5)
+    assert sg._shared_egress_suppresses(db, PUBLIC_IP, 3600) is False

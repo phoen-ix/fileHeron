@@ -644,3 +644,50 @@ async def test_turning_the_watchlist_off_touches_redis_at_all(
     assert resp.json()["enabled"] is False
     assert resp.json()["items"] == []
     assert fake.calls == 0, "the watchlist was read from Redis while switched off"
+
+
+@pytest.mark.asyncio
+async def test_admin_block_and_release_record_where_they_came_from(
+    make_user, client, login_as, db
+):
+    """An admin denying service to someone is exactly what `audit_log.ip` is for.
+
+    Allowlist changes carried the originating address while blocks and releases
+    carried NULL, because neither `apply_block` nor `release` ever took a
+    request. Spotted on the live instance: `ip_allowlisted` had an address next
+    to it and `ip_blocked` did not.
+    """
+    from app.models.audit_log import AuditLog
+
+    headers = await _admin_headers(make_user, login_as)
+    created = await client.post(
+        "/api/admin/scan-guard/blocks",
+        json={"subject": "45.148.10.67", "minutes": 60}, headers=headers,
+    )
+    assert created.status_code == 201, created.text
+    resp = await client.delete(
+        f"/api/admin/scan-guard/blocks/{created.json()['id']}", headers=headers
+    )
+    assert resp.status_code == 204, resp.text
+
+    rows = {
+        a.event_type: a
+        for a in db.query(AuditLog)
+        .filter(AuditLog.event_type.in_(["ip_blocked", "ip_block_released"]))
+        .all()
+    }
+    for event in ("ip_blocked", "ip_block_released"):
+        assert rows[event].ip, f"{event} recorded no originating address"
+
+
+def test_the_automatic_path_records_no_origin(db):
+    """The mirror, and it is deliberate: a blank origin means the guard decided,
+    not a person. `note_offence` has no request to hand over."""
+    from app.models.audit_log import AuditLog
+    from app.services import scan_guard as sg
+
+    sg.apply_block(db, subject="45.148.10.67", reason="probe_path", snap=sg._defaults())
+    db.commit()
+    row = db.query(AuditLog).filter(AuditLog.event_type == "ip_blocked").one()
+    assert row.ip is None
+    assert row.actor_user_id is None

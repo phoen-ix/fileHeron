@@ -205,6 +205,7 @@ def create_block(
         minutes=payload.minutes,
         note=payload.note,
         actor_id=admin.id,
+        request=request,
     )
     db.commit()
     guard_svc._reset_cache()
@@ -214,10 +215,13 @@ def create_block(
 @router.delete("/scan-guard/blocks/{block_id}", status_code=status.HTTP_204_NO_CONTENT)
 def release_block(
     block_id: int,
+    request: Request,
     db: Session = Depends(get_db),
     admin: User = Depends(get_current_admin),
 ) -> None:
-    row = guard_svc.release(db, block_id=block_id, actor_id=admin.id)
+    row = guard_svc.release(
+        db, block_id=block_id, actor_id=admin.id, request=request
+    )
     if row is None:
         raise AppError(404, "IP_BLOCK_NOT_FOUND", "No such active block.")
     db.commit()
@@ -228,10 +232,11 @@ def release_block(
 
 @router.post("/scan-guard/blocks/release-all", response_model=ReleaseAllResponse)
 def release_all_blocks(
+    request: Request,
     db: Session = Depends(get_db),
     admin: User = Depends(get_current_admin),
 ) -> ReleaseAllResponse:
-    released = guard_svc.release_all(db, actor_id=admin.id)
+    released = guard_svc.release_all(db, actor_id=admin.id, request=request)
     db.commit()
     guard_svc._reset_cache()
     return ReleaseAllResponse(released=released)

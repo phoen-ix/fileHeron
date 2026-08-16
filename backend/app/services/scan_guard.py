@@ -882,8 +882,15 @@ def apply_block(
     minutes: int | None = None,
     note: str | None = None,
     actor_id: int | None = None,
+    request=None,
 ) -> IpBlock:
-    """Create or extend a block. Caller commits."""
+    """Create or extend a block. Caller commits.
+
+    `request` is present only for admin-initiated blocks: it is what puts the
+    originating address on the audit row. The automatic path has no request (it
+    runs from `note_offence` on its own session), and that absence is itself
+    informative - a blank origin means the guard decided, not a person.
+    """
     snap = snap or snapshot()
     now = utc_now()
     network = subject if is_network else network_of_snap(subject, snap)
@@ -940,7 +947,7 @@ def apply_block(
                 live.note = note
             db.flush()
             _audit_block(db, live, minutes=mins, strikes=live.strikes,
-                         actor_id=actor_id, revised=True)
+                         actor_id=actor_id, request=request, revised=True)
             return live
         else:
             # Extend rather than insert, so the table stays one row per live
@@ -970,7 +977,8 @@ def apply_block(
     db.flush()
 
     _maybe_notify_block(db, row, snap)
-    _audit_block(db, row, minutes=mins, strikes=strikes, actor_id=actor_id)
+    _audit_block(db, row, minutes=mins, strikes=strikes, actor_id=actor_id,
+                 request=request)
 
     if not is_network:
         # It is a block now; it does not also belong on the pre-threshold list.
@@ -983,7 +991,7 @@ def apply_block(
 
 def _audit_block(
     db: Session, row, *, minutes: int, strikes: int,
-    actor_id: int | None, revised: bool = False,
+    actor_id: int | None, request=None, revised: bool = False,
 ) -> None:
     """One definition, so a block created and a block revised by an admin are
     recorded the same way. Revising used to write nothing at all."""
@@ -1003,6 +1011,7 @@ def _audit_block(
         target_type="ip_block",
         target_id=str(row.id),
         metadata=metadata,
+        request=request,
     )
 
 
@@ -1191,6 +1200,7 @@ def release(
     block_id: int,
     actor_id: int | None,
     via: str | None = None,
+    request=None,
 ) -> IpBlock | None:
     """Admin release. Keeps the row as history. Caller commits.
 
@@ -1218,6 +1228,7 @@ def release(
         target_type="ip_block",
         target_id=str(row.id),
         metadata=metadata,
+        request=request,
     )
     # A release must also forget the counters that produced the block, or the
     # source is still at threshold and the next offending request re-blocks it
@@ -1227,7 +1238,7 @@ def release(
     return row
 
 
-def release_all(db: Session, *, actor_id: int | None) -> int:
+def release_all(db: Session, *, actor_id: int | None, request=None) -> int:
     """Release every live block. Caller commits.
 
     Loops `release` per row rather than issuing one bulk UPDATE, so each row
@@ -1242,7 +1253,8 @@ def release_all(db: Session, *, actor_id: int | None) -> int:
     )
     released = 0
     for row in live:
-        if release(db, block_id=row.id, actor_id=actor_id) is not None:
+        if release(db, block_id=row.id, actor_id=actor_id,
+                   request=request) is not None:
             released += 1
     return released
 
@@ -1454,7 +1466,9 @@ def release_and_allow(
     """
     from ..middleware.errors import AppError
 
-    row = release(db, block_id=block_id, actor_id=getattr(actor, "id", None))
+    row = release(
+        db, block_id=block_id, actor_id=getattr(actor, "id", None), request=request
+    )
     if row is None:
         raise AppError(404, "IP_BLOCK_NOT_FOUND", "No such active block.")
     entries = allowlist_add(db, entry=row.subject, actor=actor, request=request)

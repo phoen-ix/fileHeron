@@ -15,11 +15,50 @@ permissions:
   packages: write    # push to ghcr.io
 
 jobs:
+  # Everything that can be decided from a checkout alone, decided FIRST.
+  #
+  # The release-notes check used to be the opening step of the `release` job,
+  # which is `needs: [build, publish-latest]`. So a tag whose RELEASE_NOTES.md
+  # had not been rewritten spent the full CI + e2e + five-image build, pushed
+  # all five version-tagged images, moved `:latest` on every one of them, and
+  # only THEN failed - leaving the images public with no GitHub release
+  # attached. Release tags are immutable by repo ruleset, so the only recovery
+  # is another patch version. It costs a checkout and a grep; there is no
+  # reason for it to run last (audit 2026-07-30, P20).
+  #
+  # NO job-level `if:` here, and that is load-bearing. A `workflow_dispatch`
+  # run carries no tag and must still build `dev-<sha>` images - but a job
+  # that `needs:` a SKIPPED job is itself skipped, so gating this JOB on the
+  # tag would silently disable manual runs entirely. The tag condition goes on
+  # the STEP, which is exactly the shape client-release.yml already uses.
+  gate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # RELEASE_NOTES.md is fed to the release verbatim and is what admins read
+      # from the in-app Update banner. Nothing checked that it had been
+      # rewritten for THIS tag, so forgetting to update it publishes the
+      # previous release's changelog under the new version.
+      - name: RELEASE_NOTES.md must name this tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          set -euo pipefail
+          if ! head -5 RELEASE_NOTES.md | grep -qF "${GITHUB_REF_NAME}"; then
+            echo "::error::RELEASE_NOTES.md does not mention ${GITHUB_REF_NAME} in its first 5 lines."
+            echo "First line is: $(head -1 RELEASE_NOTES.md)"
+            echo "Rewrite RELEASE_NOTES.md for this release before tagging."
+            exit 1
+          fi
+          echo "RELEASE_NOTES.md names ${GITHUB_REF_NAME}"
+
   # Run the full CI suite against the tagged commit BEFORE building or
   # publishing anything. Reuses ci.yml directly, so the release gate and the
   # push/PR gate can never drift apart. A failure here stops the tag: no images
   # pushed to GHCR, no GitHub release created.
   ci:
+    needs: gate
     uses: ./.github/workflows/ci.yml
 
   # The unit gates cannot see the edge: router guards, silent refresh, the
@@ -27,10 +66,11 @@ jobs:
   # net for ordinary commits, but a TAG publishes images - so it has to pass
   # before anything is pushed to GHCR, not up to 24 hours afterwards (audit #2).
   e2e:
+    needs: gate
     uses: ./.github/workflows/e2e.yml
 
   build:
-    needs: [ci, e2e]
+    needs: [gate, ci, e2e]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -246,21 +286,9 @@ jobs:
       # Checkout so the release body can be read from the repo's RELEASE_NOTES.md.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      # RELEASE_NOTES.md is fed to the release verbatim and is what admins read
-      # from the in-app Update banner. Nothing checked that it had been rewritten
-      # for THIS tag, so forgetting to update it publishes the previous release's
-      # changelog under the new version - and the tag is immutable, so the only
-      # fix is shipping another patch release (audit 2026-07-30).
-      - name: RELEASE_NOTES.md must name this tag
-        run: |
-          set -euo pipefail
-          if ! head -5 RELEASE_NOTES.md | grep -qF "${GITHUB_REF_NAME}"; then
-            echo "::error::RELEASE_NOTES.md does not mention ${GITHUB_REF_NAME} in its first 5 lines."
-            echo "First line is: $(head -1 RELEASE_NOTES.md)"
-            echo "Rewrite RELEASE_NOTES.md for this release before tagging."
-            exit 1
-          fi
-          echo "RELEASE_NOTES.md names ${GITHUB_REF_NAME}"
+      # The notes check lives in the `gate` job now, before anything is built
+      # or pushed. Deliberately NOT repeated here: two copies of one rule is
+      # two places for it to drift.
       - uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3
         with:
           tag_name: ${{ github.ref_name }}

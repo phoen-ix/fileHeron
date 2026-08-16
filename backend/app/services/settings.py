@@ -276,7 +276,7 @@ class Keys:
     # observed ones, and a customer's mail-security gateway fetching /d/{token}
     # from many egress IPs in one /24 looks exactly like distributed guessing.
     SCAN_GUARD_NETWORK_ESCALATION = "scan_guard.network_escalation"    # bool (default FALSE)
-    SCAN_GUARD_NOTIFY_MODE = "scan_guard.notify_mode"      # off | digest | every_block
+    SCAN_GUARD_NOTIFY_MODE = "scan_guard.notify_mode"      # off | every_block
     SCAN_GUARD_ALLOWLIST = "scan_guard.allowlist"          # CSV of IPs/CIDRs, never blocked
     SCAN_GUARD_EXTRA_PATHS = "scan_guard.extra_paths"      # CSV of extra bait prefixes
     SCAN_GUARD_IGNORE_PATHS = "scan_guard.ignore_paths"    # CSV of prefixes never counted

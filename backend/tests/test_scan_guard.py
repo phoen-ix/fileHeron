@@ -505,3 +505,88 @@ def test_changing_the_v6_prefix_releases_live_network_blocks(db, make_user):
         .count()
     )
     assert live == 0, "a prefix change must not leave orphaned network blocks"
+
+
+# --- block notifications ---------------------------------------------------
+
+
+def _capture_dispatch(monkeypatch):
+    """Record every dispatch() the block path makes.
+
+    `_maybe_notify_block` imports dispatch inside the function, so patching the
+    module attribute is what the call actually resolves.
+    """
+    calls: list[dict] = []
+
+    def fake_dispatch(db, *, user, category, payload, link_url=None, email_to=None, **kw):
+        calls.append({"user": user, "payload": payload, "email_to": email_to})
+        return None
+
+    from app.services import notification as notification_svc
+
+    monkeypatch.setattr(notification_svc, "dispatch", fake_dispatch)
+    return calls
+
+
+def test_every_block_mails_the_admins(db, make_user, monkeypatch):
+    """`dispatch` only sends mail when the caller passes `email_to`; it does not
+    derive it from `user.email`. Omitting it left the admin's `ops_alert`
+    preference with nothing to act on, so a block notified no one by email
+    however the preference was set."""
+    from app.models.user import UserRole
+
+    admin = make_user(email="a@test.local", role=UserRole.admin)
+    calls = _capture_dispatch(monkeypatch)
+
+    row = sg.apply_block(
+        db, subject=PUBLIC_IP, reason="probe_path",
+        snap=_snap(notify_mode="every_block"),
+    )
+    db.commit()
+
+    assert [c["email_to"] for c in calls] == [admin.email]
+    payload = calls[0]["payload"]
+    # The template renders `detail`/`at`; without them the mail names the subject
+    # and drops why it was blocked and until when.
+    assert payload["detail"].startswith("probe_path, blocked until ")
+    assert payload["at"] == row.created_at.isoformat()
+    assert payload["subject"] == PUBLIC_IP
+
+
+def test_the_mail_ceiling_drops_the_email_but_keeps_the_notification(
+    db, make_user, monkeypatch
+):
+    """`max_new_blocks_per_min` is 60, so an uncapped `every_block` is up to 3600
+    mails/admin/hour during a distributed scan. The cap must cost the mail only -
+    the bell is the operator's actual view and must still receive every block."""
+    from app.models.user import UserRole
+    from app.services import rate_limit
+
+    make_user(email="a@test.local", role=UserRole.admin)
+    calls = _capture_dispatch(monkeypatch)
+    monkeypatch.setattr(
+        rate_limit, "check_ip_allowed", lambda *a, **kw: False
+    )
+
+    sg.apply_block(
+        db, subject=PUBLIC_IP, reason="probe_path",
+        snap=_snap(notify_mode="every_block"),
+    )
+    db.commit()
+
+    assert len(calls) == 1, "the in-app notification must still be dispatched"
+    assert calls[0]["email_to"] is None
+
+
+def test_notify_off_dispatches_nothing(db, make_user, monkeypatch):
+    from app.models.user import UserRole
+
+    make_user(email="a@test.local", role=UserRole.admin)
+    calls = _capture_dispatch(monkeypatch)
+
+    sg.apply_block(
+        db, subject=PUBLIC_IP, reason="probe_path", snap=_snap(notify_mode="off")
+    )
+    db.commit()
+
+    assert calls == []

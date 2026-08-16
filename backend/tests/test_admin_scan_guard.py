@@ -67,6 +67,37 @@ async def test_settings_round_trip(make_user, client, login_as):
 
 
 @pytest.mark.asyncio
+async def test_a_stored_digest_reads_as_off(db, make_user, client, login_as):
+    """An instance that stored `digest` before v2.11.0 removed the mode must not
+    fall through to a mode that no longer exists. It reads as `off` - which is
+    silent, so the coercion is also why an upgraded instance stops notifying
+    without saying so, and the admin sees `off` on the page rather than a value
+    the backend cannot honour."""
+    from app.services import scan_guard as sg
+    from app.services import settings as settings_svc
+
+    settings_svc.set_value(
+        db, key=settings_svc.Keys.SCAN_GUARD_NOTIFY_MODE, value="digest", actor=None
+    )
+    db.commit()
+
+    assert sg.get_settings(db)["notify_mode"] == "off"
+
+    headers = await _admin_headers(make_user, login_as)
+    body = (await client.get("/api/admin/scan-guard", headers=headers)).json()
+    assert body["notify_mode"] == "off"
+
+
+@pytest.mark.asyncio
+async def test_digest_is_refused_on_write(make_user, client, login_as):
+    headers = await _admin_headers(make_user, login_as)
+    resp = await client.put(
+        "/api/admin/scan-guard", json=_payload(notify_mode="digest"), headers=headers
+    )
+    assert resp.status_code in (400, 422), resp.text
+
+
+@pytest.mark.asyncio
 async def test_enabling_with_no_signals_is_refused(make_user, client, login_as):
     headers = await _admin_headers(make_user, login_as)
     resp = await client.put(

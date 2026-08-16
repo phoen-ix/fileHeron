@@ -73,6 +73,12 @@ SIGNAL_AUTH_FAILURE = "auth_failure"
 # a cron behind it.
 NOTIFY_MODES = ("off", "every_block")
 
+# Ceiling on block EMAILS per hour, across all admins. `max_new_blocks_per_min`
+# is 60, so an ungated `every_block` is up to 3600 mails/admin/hour during a
+# distributed scan - the exact mailstorm that made `ops_alert` default to
+# in_app. The in-app notification is never capped; only the mail is.
+_NOTIFY_EMAIL_PER_HOUR = 10
+
 # IPv6 escalation prefix bounds. /48 is deliberately unreachable - see network_of.
 V6_PREFIX_MIN = 56
 V6_PREFIX_MAX = 128
@@ -621,6 +627,7 @@ def _maybe_notify_block(db: Session, row, snap: dict) -> None:
     try:
         from ..models.notification import NotificationCategory
         from ..models.user import User, UserRole
+        from . import rate_limit
         from .notification import dispatch
 
         admins = (
@@ -628,13 +635,32 @@ def _maybe_notify_block(db: Session, row, snap: dict) -> None:
             .filter(User.role == UserRole.admin, User.is_disabled.is_(False))
             .all()
         )
+        # `detail` and `at` are the generic slots ops_alert.txt.j2 already
+        # renders; without them the mail would name the subject and drop why it
+        # was blocked and until when. The structured keys stay for the in-app row.
         payload = {
             "reason": "scan_guard_block",
             "subject": row.subject,
             "block_reason": row.reason,
             "is_network": row.is_network,
             "expires_at": row.expires_at.isoformat(),
+            "detail": (
+                f"{row.reason}{' (network)' if row.is_network else ''}"
+                f", blocked until {row.expires_at:%Y-%m-%d %H:%M} UTC"
+            ),
+            "at": row.created_at.isoformat(),
         }
+        # Mail is capped; the in-app notification never is. Losing a mail costs
+        # an admin one line of context, and the bell + /admin/settings/scan-guard
+        # still carry every block.
+        email_ok = rate_limit.check_ip_allowed(
+            "scanguard_notify", "global",
+            limit=_NOTIFY_EMAIL_PER_HOUR, window_sec=3600,
+        )
+        if not email_ok:
+            logger.warning(
+                "scan_guard: block-email ceiling reached; in-app only for %s", row.subject
+            )
         for admin in admins:
             dispatch(
                 db,
@@ -642,6 +668,7 @@ def _maybe_notify_block(db: Session, row, snap: dict) -> None:
                 category=NotificationCategory.ops_alert,
                 payload=payload,
                 link_url="/admin/settings/scan-guard",
+                email_to=admin.email if email_ok else None,
             )
     except Exception:
         logger.warning("scan_guard: block notification failed", exc_info=True)

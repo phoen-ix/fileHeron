@@ -28,7 +28,7 @@ from ..config import (
     set_secret,
 )
 from ..i18n import t
-from ._async import run_in_background
+from ._async import _enqueue, run_in_background
 
 # A TOTP code is exactly six digits; a recovery code is XXXX-XXXX (letters + a
 # hyphen). They never collide, so the code step routes on shape alone.
@@ -451,13 +451,15 @@ class LoginOverlay(ctk.CTkFrame):
 
     def _warn_token_not_stored(self) -> None:
         """Called from the sign-in WORKER thread, so it marshals back to the Tk
-        thread rather than touching a StringVar directly."""
-        try:
-            self._app_root.after(
-                0, lambda: self._show_error(t("login.warn_token_not_stored"))
-            )
-        except Exception:  # root already gone
-            pass
+        thread via the _async queue - NOT via ``root.after()``.
+
+        The docstring said "marshals back to the Tk thread" while the body did
+        the one thing _async.py exists to forbid. ``after()`` goes through
+        ``tk.call``, which takes Tcl's interpreter lock; this fires during
+        sign-in, when the main thread is parked in ``wait_window()`` holding
+        exactly that lock. That is the v0.4.0/v0.4.3 deadlock, verbatim, and
+        the last worker-thread ``after()`` left in the client."""
+        _enqueue(self._show_error, (t("login.warn_token_not_stored"),))
 
     def _show_error(self, msg: str) -> None:
         self.error_var.set(msg)

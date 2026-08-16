@@ -1,3 +1,50 @@
+# Desktop client 1.4.2
+
+**Cancel stops now, and a failed download stops with it.**
+
+Two faults in the same place: when a parallel download ended early - because
+you cancelled it, or because one part of it failed for good - the app kept
+downloading everything else first, and only then told you. Nothing was lost,
+but a Cancel could take as long as the transfer it was cancelling.
+
+Requires server **v2.6.1 or newer** (unchanged from 1.4.1).
+
+---
+
+## Cancel and Pause take effect immediately
+
+A large file is fetched in several parts at once. Stopping the transfer waited
+for every part still queued to be started and every part already running to
+finish, before the app acted on your click. On a slow connection that is the
+rest of the download - the one thing you had just said you did not want.
+
+The remaining parts are now dropped, and the ones already running are told to
+stop rather than discovered to have stopped.
+
+## A part that fails for good no longer downloads the rest first
+
+If one part of a download failed permanently, the app waited for the other
+parts to finish downloading their share of the file, then threw all of it away
+and reported the error it had been holding the whole time. On a multi-gigabyte
+file that is hours of transfer with a guaranteed-useless result.
+
+It now reports the failure straight away and stops the other parts. The partial
+file and its resume point are kept exactly as before, so **Resume** still picks
+up where it left off.
+
+## Resuming after an interrupted download re-fetches less
+
+Parts that had finished when a download was interrupted were sometimes not
+recorded as finished, so resuming downloaded them a second time. The bytes were
+always correct - this only cost time and bandwidth.
+
+## A sign-in warning that could freeze the app
+
+If signing in with an API token succeeded but the token could not be saved to
+your keyring, the notice explaining that was delivered in a way that can lock up
+the window on Windows. It now goes through the same path as every other message
+from a background task.
+
 # Desktop client 1.4.1
 
 **Long transfers no longer die when your sign-in gets old.**

@@ -22,6 +22,7 @@ from __future__ import annotations
 import logging
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import wait as futures_wait
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -41,6 +42,30 @@ from .files import DownloadCancelled, DownloadPaused
 logger = logging.getLogger("fileheron_client.api.download_resumable")
 
 ProgressCb = Optional[Callable[[int, int], None]]
+
+# How long a Cancel waits for in-flight segments to release the .part file
+# before deleting it. A ceiling for a socket stalled mid-chunk, not the expected
+# cost: the stop signal is already set, so a segment normally exits at its next
+# 1 MiB boundary and this returns immediately.
+_STOP_SETTLE_SEC = 2.0
+
+
+class _EitherEvent:
+    """Read-only OR of two stop signals, one of which may be absent.
+
+    ``_fetch_segment`` only ever calls ``.is_set()`` on the cancel/pause it is
+    handed, so this is all it takes to give the orchestrator its own private
+    stop signal without setting - and thereby misreporting - the caller's."""
+
+    __slots__ = ("_a", "_b")
+
+    def __init__(
+        self, a: Optional[threading.Event], b: threading.Event
+    ) -> None:
+        self._a, self._b = a, b
+
+    def is_set(self) -> bool:
+        return (self._a is not None and self._a.is_set()) or self._b.is_set()
 
 
 def _raise_if_stopped(
@@ -391,33 +416,79 @@ def _run_segmented(
 
     todo = [(i, s, e) for i, (s, e) in enumerate(segments) if i not in completed]
     _raise_if_stopped(cancel, pause)
+
+    # NOT `with ThreadPoolExecutor(...)`. Its __exit__ is shutdown(wait=True),
+    # which lets every queued segment run and blocks until every in-flight one
+    # finishes. On the hard-failure path that is the whole remaining transfer:
+    # one segment exhausts its retries, and the orchestrator then waits for the
+    # other three to download their full spans - on a 30 GB file, hours - only
+    # to throw the result away and raise the error it already had.
+    #
+    # It also made the two `.set()` calls below unreachable AS nudges: they ran
+    # after __exit__ had already drained the pool, so there was no straggler
+    # left to see the event. The comment said "nudge straggler segments to stop
+    # fast" and could not.
+    #
+    # `_stop_now` is that nudge, and it is a SEPARATE event rather than the
+    # caller's. `cancel`/`pause` are owned by the UI, which reads them back to
+    # decide what it is showing - setting one to make a worker exit would tell
+    # the user they had paused a download that actually failed. _fetch_segment
+    # only ever calls `.is_set()` on what it is given, so _EitherEvent is
+    # enough to add a second stop signal without touching the first.
+    stop_now = threading.Event()
+    seg_pause = _EitherEvent(pause, stop_now)
+
+    pool = ThreadPoolExecutor(max_workers=n)
+    futmap: dict = {}
+
+    def _stop() -> None:
+        # Order matters. Signal FIRST, so running segments see it at their next
+        # 1 MiB chunk, THEN drop whatever is still queued and return without
+        # waiting.
+        stop_now.set()
+        pool.shutdown(wait=False, cancel_futures=True)
+        # Sweep the segments that finished but whose future we never consumed:
+        # as_completed stops at the first raiser, so their bytes were already on
+        # disk and correct while the checkpoint recorded them as outstanding,
+        # and the resume re-downloaded every one of them.
+        for fut, idx in futmap.items():
+            if fut.done() and not fut.cancelled() and fut.exception() is None:
+                completed.add(idx)
+
     try:
-        with ThreadPoolExecutor(max_workers=n) as pool:
-            futmap = {
-                pool.submit(
-                    _fetch_segment, api, url, headers, part, s, e, _bump, cancel, pause
-                ): i
-                for (i, s, e) in todo
-            }
-            for fut in as_completed(futmap):
-                fut.result()  # re-raise the first failure / cancel / pause
-                completed.add(futmap[fut])
-                _persist()
+        futmap = {
+            pool.submit(
+                _fetch_segment, api, url, headers, part, s, e, _bump, cancel, seg_pause
+            ): i
+            for (i, s, e) in todo
+        }
+        for fut in as_completed(futmap):
+            fut.result()  # re-raise the first failure / cancel / pause
+            completed.add(futmap[fut])
+            _persist()
     except DownloadPaused:
-        if pause is not None:
-            pause.set()  # nudge straggler segments to stop fast
+        _stop()
         _persist()
         raise
     except DownloadCancelled:
-        if cancel is not None:
-            cancel.set()
+        _stop()
+        # The only path that DELETES the partial, so it is the only one that
+        # waits: on Windows a segment still holding the handle blocks the
+        # unlink. Bounded and normally instant, because stop_now above makes a
+        # straggler exit at its next chunk. unlink_with_retry (~1.55s) remains
+        # the backstop, so a timeout costs a best-effort delete, not a failed
+        # cancel.
+        futures_wait(list(futmap), timeout=_STOP_SETTLE_SEC)
         ckpt.discard(dest)
         raise
     except Exception:
         # Hard failure after retries - keep the partial + checkpoint so the
         # user can resume rather than restart from scratch.
+        _stop()
         _persist()
         raise
+    finally:
+        pool.shutdown(wait=False)
 
     _finalize(api, part, dest, total)
     ckpt.clear(dest)

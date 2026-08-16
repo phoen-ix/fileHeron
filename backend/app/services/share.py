@@ -611,6 +611,12 @@ def is_authorized_to_view(db: Session, *, user: User, share: Share) -> bool:
         return True
     if share.state in (ShareState.pending_approval, ShareState.rejected):
         return False
+    # An ACTIVE share carrying files that need this approver's decision. The
+    # approver is notified about it and must echo a `content_fingerprint` read
+    # off this very payload, but was refused here - so they could approve blind
+    # over the API and never see what they were approving.
+    if approval_svc.can_review_this_share(db, user, share):
+        return True
     return is_authorized_to_download(db, user=user, share=share)
 
 
@@ -629,7 +635,13 @@ def assert_share_file_access(
     from . import share_approval as approval_svc
     if approval_svc.can_review_pending(db, user, share):
         return
-    if not is_authorized_to_download(db, user=user, share=share):
+    # Same admission as `is_authorized_to_view`. `can_review_pending` is False
+    # here by construction (the share is active, not pending), so without this
+    # the download check below refused the approver and
+    # `assert_file_approved`'s `can_review_added_files` branch - written for
+    # exactly this case - was unreachable.
+    reviewing = approval_svc.can_review_this_share(db, user, share)
+    if not reviewing and not is_authorized_to_download(db, user=user, share=share):
         raise AppError(403, "FORBIDDEN", "You don't have access to this file.")
     assert_share_downloadable(share)
     if file is not None:
@@ -1198,11 +1210,32 @@ def list_pending_approvals(
     from . import share_approval as approval_svc
     if not approval_svc.can_approve(db, user):
         return [], 0
+    # Active shares with files awaiting a post-approval decision belong here
+    # too. `schemas/share.py` already says so ("the approvals view should offer
+    # this share even though its state is active"), but the filter was
+    # state-only, so the approver was notified about a share that appeared
+    # nowhere in their queue and 403'd when they followed the link.
+    from ..models.file import File, FileApprovalState, FileState
+
+    awaiting = (
+        db.query(File.share_id)
+        .filter(
+            File.approval_state == FileApprovalState.pending_review,
+            File.state != FileState.deleted,
+        )
+        .distinct()
+    )
     base = (
         db.query(Share)
         .options(joinedload(Share.files))
         .filter(
-            Share.state == ShareState.pending_approval,
+            or_(
+                Share.state == ShareState.pending_approval,
+                and_(
+                    Share.state == ShareState.active,
+                    Share.id.in_(awaiting.scalar_subquery()),
+                ),
+            ),
             Share.created_by_id != user.id,
         )
     )

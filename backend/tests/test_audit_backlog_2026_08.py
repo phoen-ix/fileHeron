@@ -191,3 +191,151 @@ async def test_the_404_beacon_has_a_global_ceiling(client, monkeypatch):
     assert resp.status_code == 204
     assert "client_404_global" in seen, "no global ceiling is consulted"
     assert enqueued == [], "the global ceiling did not shed the event"
+
+
+# --- P6: the inbound body cap counted characters, not bytes ----------------
+
+
+def test_a_small_html_mail_cannot_blow_the_packet_limit():
+    """nh3 escapes on the way out, so capping the INPUT cannot bound the row.
+
+    4 M bare ampersands is ~4 MB on the wire - nowhere near MAX_MESSAGE_BYTES -
+    and re-serialises to ~20 MB of `&amp;`, past MariaDB's 16 MB default
+    `max_allowed_packet`. The INSERT then fails, imap_poll swallows it, and the
+    UID highwater was already committed: the mail is permanently invisible to
+    fileHeron while sitting unread on the server."""
+    from email.message import EmailMessage
+
+    from app.services.inbound_parse import _MAX_BODY_TOTAL, parse
+
+    msg = EmailMessage()
+    msg["From"] = "sender@test.local"
+    msg["To"] = "inbox@test.local"
+    msg["Subject"] = "amplification"
+    msg.set_content("plain")
+    msg.add_alternative("&" * 900_000, subtype="html")
+
+    parsed = parse(msg.as_bytes())
+    total = len((parsed.body_html or "").encode()) + len((parsed.body_text or "").encode())
+    assert total <= _MAX_BODY_TOTAL, (
+        f"stored body is {total} bytes against a {_MAX_BODY_TOTAL}-byte budget"
+    )
+
+
+def test_multibyte_text_is_measured_in_bytes():
+    """`len()` on a str counts codepoints, so a limit named in bytes was four
+    times too generous for astral-plane text."""
+    from email.message import EmailMessage
+
+    from app.services.inbound_parse import _MAX_BODY_TOTAL, parse
+
+    msg = EmailMessage()
+    msg["From"] = "sender@test.local"
+    msg["Subject"] = "wide"
+    msg.set_content("😀" * 1_200_000)  # 4 bytes each
+
+    parsed = parse(msg.as_bytes())
+    assert len((parsed.body_text or "").encode()) <= _MAX_BODY_TOTAL
+
+
+# --- P10: the approver was locked out of the share they must decide --------
+
+
+def _approval_on(db, *, mode: str) -> None:
+    from app.services import settings as settings_svc
+
+    k = settings_svc.Keys
+    settings_svc.set_value(db, key=k.SHARE_APPROVAL_ENABLED, value="true", actor=None)
+    settings_svc.set_value(db, key=k.SHARE_APPROVAL_APPROVER_MODE, value=mode, actor=None)
+    settings_svc.set_value(
+        db, key=k.SHARE_APPROVAL_ALLOW_CONTENT_REVIEW, value="true", actor=None
+    )
+    db.commit()
+
+
+def _share_with_pending_file(db, owner):
+    """An ACTIVE share carrying one file that still needs a decision."""
+    from datetime import timedelta
+
+    from app.models.file import File, FileApprovalState, FileState
+    from app.models.share import Share, ShareKind, ShareState
+    from app.utils.timeutil import utc_now
+
+    share = Share(
+        created_by_id=owner.id, kind=ShareKind.outbound, state=ShareState.active,
+        subject="appendix", expires_at=utc_now() + timedelta(days=1),
+    )
+    db.add(share)
+    db.flush()
+    f = File(
+        share_id=share.id, uploaded_by_id=owner.id, original_filename="late.pdf",
+        size_bytes=10, state=FileState.clean,
+        approval_state=FileApprovalState.pending_review,
+    )
+    db.add(f)
+    db.commit()
+    return share, f
+
+
+def test_a_non_admin_approver_can_open_the_share_they_must_decide(db, make_user):
+    """Every existing approval test uses an ADMIN approver, and admin
+    short-circuits `is_authorized_to_download` — which is the check that was
+    refusing everyone else. That is why this survived.
+
+    With `approver_mode=employees_admins`, an employee approver was 403'd off
+    the detail page and the file bytes of a share they had just been notified
+    about, and whose `content_fingerprint` they must echo to decide. They could
+    approve blind over the API and never see what they were approving."""
+    from app.services import share as share_svc
+
+    _approval_on(db, mode="employees_admins")
+    owner = make_user(email="owner@test.local", role=UserRole.employee, password=PW)
+    approver = make_user(email="appr@test.local", role=UserRole.employee, password=PW)
+    share, f = _share_with_pending_file(db, owner)
+
+    assert share_svc.is_authorized_to_view(db, user=approver, share=share) is True
+    # And the bytes of the very file awaiting their decision.
+    share_svc.assert_share_file_access(db, user=approver, share=share, file=f)
+
+
+def test_that_access_is_scoped_to_shares_actually_awaiting_review(db, make_user):
+    """The control that keeps the fix from being a much larger grant: an
+    approver must NOT gain a view of every active outbound share, only of the
+    ones carrying a decision they owe."""
+    from datetime import timedelta
+
+    from app.models.share import Share, ShareKind, ShareState
+    from app.services import share as share_svc
+    from app.utils.timeutil import utc_now
+
+    _approval_on(db, mode="employees_admins")
+    owner = make_user(email="owner@test.local", role=UserRole.employee, password=PW)
+    approver = make_user(email="appr@test.local", role=UserRole.employee, password=PW)
+
+    ordinary = Share(
+        created_by_id=owner.id, kind=ShareKind.outbound, state=ShareState.active,
+        subject="nothing to review", expires_at=utc_now() + timedelta(days=1),
+    )
+    db.add(ordinary)
+    db.commit()
+
+    assert share_svc.is_authorized_to_view(db, user=approver, share=ordinary) is False
+
+
+def test_the_share_appears_in_the_approver_queue(db, make_user):
+    """It was filtered on `state == pending_approval`, so an active share with
+    appended files never showed up — while `schemas/share.py` promised the
+    approvals view would offer it."""
+    from app.services import share as share_svc
+
+    _approval_on(db, mode="employees_admins")
+    owner = make_user(email="owner@test.local", role=UserRole.employee, password=PW)
+    approver = make_user(email="appr@test.local", role=UserRole.employee, password=PW)
+    share, _f = _share_with_pending_file(db, owner)
+
+    rows, total = share_svc.list_pending_approvals(db, user=approver)
+    assert total == 1 and rows[0].id == share.id
+
+    # Control: the owner never reviews their own.
+    own_rows, own_total = share_svc.list_pending_approvals(db, user=owner)
+    assert own_total == 0

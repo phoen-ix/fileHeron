@@ -26,19 +26,41 @@ _MAX_BODY = 1_000_000  # 1 MB cap per body part (defensive)
 # sitting unread on the server with no record that it arrived (audit #2).
 _MAX_BODY_TOTAL = 4_000_000
 
+_TRUNCATED = "\n[fileHeron] message body truncated at the size limit."
+
+
+def _encoded_len(text: str) -> int:
+    """Bytes on the wire to MariaDB, which is what `max_allowed_packet` counts."""
+    return len(text.encode("utf-8"))
+
 
 def _join_capped(parts: list[str]) -> str | None:
-    """Join body parts, stopping at the total cap and saying so in the text."""
+    """Join body parts, stopping at the total cap and saying so in the text.
+
+    Counted in ENCODED BYTES, not characters. `len()` on a str counts
+    codepoints, so 4 M emoji is 16 MB and clears a limit named in bytes.
+    """
     out: list[str] = []
     used = 0
     for part in parts:
-        if used + len(part) > _MAX_BODY_TOTAL:
-            out.append(part[: max(0, _MAX_BODY_TOTAL - used)])
-            out.append("\n[fileHeron] message body truncated at the size limit.")
+        size = _encoded_len(part)
+        if used + size > _MAX_BODY_TOTAL:
+            out.append(_truncate_to_bytes(part, max(0, _MAX_BODY_TOTAL - used)))
+            out.append(_TRUNCATED)
             break
         out.append(part)
-        used += len(part)
+        used += size
     return "\n".join(out).strip() or None
+
+
+def _truncate_to_bytes(text: str, budget: int) -> str:
+    """Cut to at most `budget` encoded bytes without splitting a codepoint."""
+    if budget <= 0:
+        return ""
+    encoded = text.encode("utf-8")
+    if len(encoded) <= budget:
+        return text
+    return encoded[:budget].decode("utf-8", errors="ignore")
 
 
 @dataclass
@@ -140,6 +162,38 @@ def parse(raw: bytes) -> ParsedMessage:
     body_text = _join_capped(text_parts)
     raw_html = _join_capped(html_parts)
     body_html = email_svc._sanitize_html(raw_html) if raw_html else None
+
+    # Re-cap AFTER sanitising, and across BOTH bodies against one budget.
+    #
+    # Capping the input cannot bound the output: nh3 escapes, and `&` becomes
+    # `&amp;`, so 4 M bare ampersands - about 4 MB on the wire, nowhere near
+    # MAX_MESSAGE_BYTES - re-serialise to roughly 20 MB in `body_html` alone.
+    # That one column already exceeds MariaDB's 16 MB default
+    # `max_allowed_packet`, and the budget was previously spent once per body,
+    # so the pair could reach ~36 MB. The INSERT then fails, imap_poll's
+    # per-message handler swallows it, and the UID highwater was already
+    # committed - so the mail is permanently invisible to fileHeron while
+    # sitting unread on the server. Same failure this constant was introduced
+    # to prevent, reached from the other side.
+    marker = _encoded_len(_TRUNCATED)
+    if body_html is not None and _encoded_len(body_html) > _MAX_BODY_TOTAL:
+        # Truncate then re-sanitise: nh3 closes whatever tags the cut left
+        # dangling, so the stored HTML is still well-formed. Re-sanitising can
+        # itself grow the string (a cut through `&amp;` leaves `&am`, which is
+        # escaped again), so clamp once more afterwards without sanitising.
+        body_html = email_svc._sanitize_html(
+            _truncate_to_bytes(body_html, _MAX_BODY_TOTAL - marker) + _TRUNCATED
+        )
+        if _encoded_len(body_html) > _MAX_BODY_TOTAL:
+            body_html = _truncate_to_bytes(body_html, _MAX_BODY_TOTAL)
+    if body_text is not None:
+        remaining = _MAX_BODY_TOTAL - (_encoded_len(body_html) if body_html else 0)
+        if _encoded_len(body_text) > remaining:
+            body_text = (
+                _truncate_to_bytes(body_text, max(0, remaining - marker)) + _TRUNCATED
+                if remaining > marker
+                else ""
+            ) or None
 
     return ParsedMessage(
         sender_email=(addr or "").lower(),

@@ -277,6 +277,20 @@ def can_review_added_files(db: Session, user: User) -> bool:
     return can_approve(db, user)
 
 
+def can_review_this_share(db: Session, user: User, share: Share) -> bool:
+    """True if ``user`` may open an ACTIVE share because it is carrying files
+    that need THEIR decision.
+
+    Scoped to shares that actually have something awaiting review, deliberately.
+    The unscoped version - "an approver may open any active share" - is a much
+    larger grant than the workflow needs: it would hand every employee approver
+    a view of every active outbound share in the instance, forever, rather than
+    only while a decision is outstanding."""
+    if not can_review_added_files(db, user):
+        return False
+    return bool(files_awaiting_review(db, share))
+
+
 def files_awaiting_review(db: Session, share: Share) -> list[str]:
     """IDs of this share's files still waiting on a post-approval decision."""
     from ..models.file import File, FileApprovalState

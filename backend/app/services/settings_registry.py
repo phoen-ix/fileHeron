@@ -13,6 +13,7 @@ only ever expose/accept keys present in this registry.
 """
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 
 from sqlalchemy.orm import Session
@@ -110,6 +111,10 @@ TUNABLES: list[Tunable] = [
     # `max_block_minutes` is clamped to 30 days on purpose: there is deliberately
     # no permanent block at any level, so every mistake self-heals unattended.
     Tunable(K.SCAN_GUARD_THRESHOLD, "SCAN_GUARD_THRESHOLD", "int", "scan_guard", 1, 1000),
+    # Floor 5, not 1: below 5 a single user who forgot their password crosses
+    # before the per-account lockout can convert their failures to uncountable
+    # 423s. The registry refuses that foot-gun rather than documenting it.
+    Tunable(K.SCAN_GUARD_AUTH_THRESHOLD, "SCAN_GUARD_AUTH_THRESHOLD", "int", "scan_guard", 5, 500),
     Tunable(K.SCAN_GUARD_WINDOW_SEC, "SCAN_GUARD_WINDOW_SEC", "int", "scan_guard", 30, 86400),
     Tunable(K.SCAN_GUARD_BLOCK_MINUTES, "SCAN_GUARD_BLOCK_MINUTES", "int", "scan_guard", 1, 43200),
     Tunable(K.SCAN_GUARD_MAX_BLOCK_MINUTES, "SCAN_GUARD_MAX_BLOCK_MINUTES", "int", "scan_guard", 1, 43200),
@@ -135,17 +140,30 @@ def _clamp_int(value: int, spec: Tunable) -> int:
     return value
 
 
+def _resolve(raw: str | None, spec: Tunable):
+    """The one definition of "stored string -> effective value". Both the
+    DB-backed and the overlay-backed reader below go through it, so a group read
+    in one query and a per-key read can never answer differently."""
+    default = env_default(spec)
+    if spec.kind == "bool":
+        return settings_svc.parse_bool(raw, bool(default))
+    if spec.kind == "int":
+        return _clamp_int(settings_svc.parse_int(raw, int(default)), spec)
+    # str
+    return raw if raw not in (None, "") else str(default)
+
+
 def effective(db: Session, key: str):
     """Live effective value for `key`: kv override (clamped) or env default."""
     spec = BY_KEY[key]
-    default = env_default(spec)
-    if spec.kind == "bool":
-        return settings_svc.get_bool(db, key, default=bool(default))
-    if spec.kind == "int":
-        return _clamp_int(settings_svc.get_int(db, key, default=int(default)), spec)
-    # str
-    raw = settings_svc.get(db, key)
-    return raw if raw not in (None, "") else str(default)
+    return _resolve(settings_svc.get(db, key), spec)
+
+
+def effective_from(overlay: Mapping[str, str], key: str):
+    """`effective`, resolved against an already-fetched overlay dict (see
+    `settings.get_many`) instead of issuing a query per key."""
+    spec = BY_KEY[key]
+    return _resolve(overlay.get(key), spec)
 
 
 def coerce_for_store(spec: Tunable, value) -> str:

@@ -107,6 +107,11 @@ class AuditEventType(str, enum.Enum):
     # would make the guard the loudest thing in the audit log.
     ip_blocked = "ip_blocked"
     ip_block_released = "ip_block_released"
+    # The allowlist is the admin's escape hatch from a control that denies
+    # service, so adding to it is a security decision in its own right and
+    # carries the entry in its metadata - not just the settings key.
+    ip_allowlisted = "ip_allowlisted"
+    ip_allowlist_removed = "ip_allowlist_removed"
     scan_guard_settings_changed = "scan_guard_settings_changed"
     share_files_approved = "share_files_approved"
     share_files_rejected = "share_files_rejected"

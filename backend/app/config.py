@@ -372,6 +372,16 @@ class Settings(BaseSettings):
     # while the 62 addresses that appeared once and never returned never trip -
     # correctly, since there is nothing left to block by the time they would.
     SCAN_GUARD_THRESHOLD: int = 3            # offences before a block
+    # Credential failures are counted separately, at a much higher bar, because
+    # legitimate users produce them and legitimate users never touch bait paths.
+    # 15 is derived, not picked: the per-account lockout converts failures to 423
+    # (uncountable) after 5, and the per-IP login limiter converts them to 429
+    # (also uncountable) after 10 per 15 min - so the worst legitimate case, a
+    # three-person office all grinding to lockout with no successful login in the
+    # window, is exactly 3x5 = 15 countable failures. `check_ip_allowed` allows
+    # while count <= limit, so that office lands ON the limit and is served; the
+    # 16th failure blocks. Do NOT "fix" that comparison to `<` - it re-bans them.
+    SCAN_GUARD_AUTH_THRESHOLD: int = 15      # credential failures before a block
     SCAN_GUARD_WINDOW_SEC: int = 3600        # ...within this window
     SCAN_GUARD_BLOCK_MINUTES: int = 60       # first block; doubles per strike
     SCAN_GUARD_MAX_BLOCK_MINUTES: int = 1440  # ceiling; there is no "permanent"

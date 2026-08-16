@@ -269,7 +269,16 @@ class Keys:
     # 401/403 - login brute force. OFF by default: account lockout + the per-IP
     # login limiter already cover credential stuffing, and a NAT'd office shares
     # one address. Turning this on is what makes brute force auto-blockable.
+    # Counts only a 401/403 whose envelope `code` says a submitted secret was
+    # wrong (scan_guard._COUNTABLE_AUTH_CODES) - TOTP_REQUIRED is a 401 on the
+    # normal 2FA login and must never count.
     SCAN_GUARD_SIGNAL_AUTH_FAILURE = "scan_guard.signal_auth_failure"  # bool (default FALSE)
+    # Pre-threshold watchlist. Holds the PLAINTEXT address of sources currently
+    # accruing offences, in Redis, for at most one window - the enforcement
+    # counters are keyed on a hash and cannot be read back. Default ON (it is
+    # what makes the blocked-sources page show a scan before it becomes a block);
+    # turn it off to keep pre-threshold addresses out of Redis entirely.
+    SCAN_GUARD_WATCHLIST = "scan_guard.watchlist"                      # bool (default true)
     SCAN_GUARD_ESCALATION = "scan_guard.escalation"                    # bool (default true)
     # /24 (IPv6 /64) escalation. OFF by default: escalating the reference
     # instance's two hot networks would block 512 addresses to suppress 14
@@ -282,6 +291,10 @@ class Keys:
     SCAN_GUARD_IGNORE_PATHS = "scan_guard.ignore_paths"    # CSV of prefixes never counted
     # Registry tunables (int) - see config.Settings for defaults + reasoning.
     SCAN_GUARD_THRESHOLD = "scan_guard.threshold"
+    # Credential failures get their OWN threshold. The scan threshold (3) is
+    # right for bait paths, which legitimate users never touch, and catastrophic
+    # for auth failures, which they generate routinely.
+    SCAN_GUARD_AUTH_THRESHOLD = "scan_guard.auth_threshold"
     SCAN_GUARD_WINDOW_SEC = "scan_guard.window_sec"
     SCAN_GUARD_BLOCK_MINUTES = "scan_guard.block_minutes"
     SCAN_GUARD_MAX_BLOCK_MINUTES = "scan_guard.max_block_minutes"
@@ -378,12 +391,39 @@ def audit_settings_change(
 
 
 
-def get_bool(db: Session, key: str, default: bool = False) -> bool:
-    """Read a boolean kv setting. Accepts the canonical lowercase forms
-    'true'/'false' plus the truthy/falsy variants '1'/'0' that admins
-    sometimes type into curl. Returns `default` when the row is missing
-    or the value can't be parsed."""
-    raw = get(db, key)
+def get_many(db: Session, *, prefix: str) -> dict[str, str]:
+    """Every stored override whose key starts with `prefix`, in ONE query.
+
+    For readers that need a whole group at once. `scan_guard.get_settings` used
+    to issue ~20 separate SELECTs, and it runs from the block cache's 15-second
+    refresh, on the event loop - twenty round trips every fifteen seconds per
+    process, whether or not the feature was even enabled.
+    """
+    rows = (
+        db.query(AppSetting)
+        .filter(AppSetting.key.startswith(prefix))
+        .all()
+    )
+    out: dict[str, str] = {}
+    for row in rows:
+        if row.is_encrypted:
+            try:
+                decrypted = decrypt_setting(row.value)
+            except Exception:
+                logger.warning("settings.get_many: decryption failed for key=%s", row.key)
+                continue
+            if decrypted is not None:
+                out[row.key] = decrypted
+            continue
+        out[row.key] = row.value
+    return out
+
+
+def parse_bool(raw: str | None, default: bool) -> bool:
+    """Accepts the canonical lowercase 'true'/'false' plus the truthy/falsy
+    variants admins sometimes type into curl. `default` when missing or
+    unparseable. Shared with `settings_registry` so a dict-backed read and a
+    DB-backed read can never disagree about what a stored string means."""
     if raw is None:
         return default
     if raw.lower() in ("true", "1", "yes", "on"):
@@ -393,13 +433,23 @@ def get_bool(db: Session, key: str, default: bool = False) -> bool:
     return default
 
 
-def get_int(db: Session, key: str, default: int) -> int:
-    """Read an integer kv setting, falling back to `default` when the row
-    is missing or the stored value isn't a valid int. Mirrors get_bool."""
-    raw = get(db, key)
+def parse_int(raw: str | None, default: int) -> int:
+    """Integer form of `parse_bool`."""
     if raw is None:
         return default
     try:
         return int(str(raw).strip())
     except (TypeError, ValueError):
         return default
+
+
+def get_bool(db: Session, key: str, default: bool = False) -> bool:
+    """Read a boolean kv setting. Returns `default` when the row is missing
+    or the value can't be parsed."""
+    return parse_bool(get(db, key), default)
+
+
+def get_int(db: Session, key: str, default: int) -> int:
+    """Read an integer kv setting, falling back to `default` when the row
+    is missing or the stored value isn't a valid int. Mirrors get_bool."""
+    return parse_int(get(db, key), default)

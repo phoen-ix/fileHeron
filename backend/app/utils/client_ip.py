@@ -27,6 +27,41 @@ from collections.abc import Mapping
 from typing import Any
 
 
+def normalize_ip(ip: str | None) -> str | None:
+    """Canonical text form, with IPv4-mapped IPv6 unwrapped to its IPv4 form.
+
+    `::ffff:8.8.8.8` and `8.8.8.8` are the same host, and every consumer here
+    treats the text as an identity: rate-limit buckets hash it, `known_devices`
+    compares it, and the scan guard groups it into a network. Leaving both forms
+    in circulation splits every one of those.
+
+    For the guard it is worse than untidy. `is_global` is safe on its own -
+    measured, `ip_address("::ffff:10.0.0.1").is_global` is False, so Python
+    already delegates that decision to the embedded address. The grouping is
+    not: `ip_address("::ffff:8.8.8.8")` is version 6 and global, so it is
+    countable and blockable, and `network_of` then groups it as `::/64` - a
+    prefix that contains the ENTIRE mapped IPv4 space. Three mapped scanners
+    would escalate one network block over every IPv4 client at once, and an
+    operator's IPv4 allowlist entry could not rescue them, because
+    `_network_contains_allowlisted` only compares networks of the same version.
+
+    The shipped topology does not produce mapped addresses, but a self-hoster
+    running uvicorn dual-stack behind a proxy that passes them does - the same
+    "nginx on :443 directly" case this module's header warns about. Unwrapping
+    once, here, means no downstream consumer has to know.
+    """
+    if not ip:
+        return None
+    try:
+        addr = ipaddress.ip_address(ip)
+    except ValueError:
+        # Not an address at all (Starlette's TestClient sends "testclient").
+        # Pass it through: callers that care parse it themselves and fail closed.
+        return ip
+    mapped = getattr(addr, "ipv4_mapped", None)
+    return str(mapped) if mapped is not None else str(addr)
+
+
 def get_client_ip(request: Any) -> str | None:
     """The calling address, or None when there isn't one (ASGI scopes without a
     client: lifespan, some test transports)."""
@@ -34,7 +69,7 @@ def get_client_ip(request: Any) -> str | None:
     if client is None:
         return None
     host = getattr(client, "host", None)
-    return host or None
+    return normalize_ip(host) if host else None
 
 
 def client_ip_from_scope(scope: Mapping[str, Any]) -> str | None:
@@ -48,7 +83,7 @@ def client_ip_from_scope(scope: Mapping[str, Any]) -> str | None:
     if not client:
         return None
     host = client[0] if isinstance(client, (tuple, list)) else None
-    return host or None
+    return normalize_ip(host) if host else None
 
 
 def is_blockable(ip: str | None) -> bool:
@@ -70,6 +105,11 @@ def is_blockable(ip: str | None) -> bool:
     Refusing every non-global address neutralises that, plus the bridge gateway,
     tusd, the updater, the healthcheck, the e2e suite and CI, in one rule. It
     also removes "spoof `X-Forwarded-For: 10.0.0.1` and get the LAN banned".
+
+    Mapped IPv6 needs no unwrapping here: measured, `is_global` already reports
+    False for `::ffff:10.0.0.1` and True for `::ffff:8.8.8.8`, i.e. Python
+    delegates to the embedded address. It is `network_of` that mis-groups the
+    mapped form, which is why `normalize_ip` unwraps at the door instead.
     """
     if not ip:
         return False

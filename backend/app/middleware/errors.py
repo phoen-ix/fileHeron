@@ -205,6 +205,14 @@ def _maybe_enqueue_error_event(
 
 async def app_error_handler(request: Request, exc: Exception) -> JSONResponse:
     assert isinstance(exc, AppError)
+    # Publish the code to the ASGI scope for middleware that runs OUTSIDE the
+    # exception handlers and therefore only ever sees the status. The scan guard
+    # needs it: `TOTP_REQUIRED` is a 401 on the ordinary 2FA login, so a
+    # brute-force signal that classified on status alone would count every
+    # normal login by every 2FA user as a credential-guessing offence.
+    # `request.state` is backed by `scope["state"]`, which `RequestId` seeds
+    # before ScanGuard wraps the app. The response bytes are untouched.
+    request.state.error_code = exc.code
     body: dict[str, Any] = {"error": exc.message, "code": exc.code}
     if exc.details:
         body["details"] = exc.details

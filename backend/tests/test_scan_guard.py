@@ -103,11 +103,13 @@ def test_401_is_not_counted_unless_auth_failure_is_on():
     """The SPA's own refresh interceptor generates 401 storms, so counting them
     by default would block real users mid-session."""
     assert sg.classify(
-        status=401, path="/api/auth/login", authenticated=False, snap=_snap()
+        status=401, path="/api/auth/login", authenticated=False, snap=_snap(),
+        error_code="INVALID_CREDENTIALS",
     ) is None
     on = _snap(signal_auth_failure=True)
     assert sg.classify(
-        status=401, path="/api/auth/login", authenticated=False, snap=on
+        status=401, path="/api/auth/login", authenticated=False, snap=on,
+        error_code="INVALID_CREDENTIALS",
     ) == sg.SIGNAL_AUTH_FAILURE
 
 
@@ -120,14 +122,102 @@ def test_auth_failure_only_counts_credential_endpoints():
     repeated CREDENTIAL SUBMISSION, so only the routes that accept credentials
     may count."""
     on = _snap(signal_auth_failure=True)
-    for path in ("/api/auth/login", "/api/auth/forgot-password", "/api/webauthn/begin"):
+    for path in (
+        "/api/auth/login",
+        "/api/auth/login/recovery",
+        "/api/auth/2fa/complete",
+        "/api/auth/webauthn/begin",
+        "/api/auth/webauthn/complete",
+    ):
         assert sg.classify(
-            status=401, path=path, authenticated=False, snap=on
+            status=401, path=path, authenticated=False, snap=on,
+            error_code="INVALID_CREDENTIALS",
         ) == sg.SIGNAL_AUTH_FAILURE, path
-    for path in ("/api/shares", "/api/account/me", "/api/files/x/download"):
+    for path in (
+        "/api/shares",
+        "/api/account/me",
+        "/api/files/x/download",
+        # `/api/auth/refresh` 401s once per expired tab. It is the reason the
+        # prefixes are exact and `/api/auth/` is never used as a blanket.
+        "/api/auth/refresh",
+        # These three were IN the list for two releases and could never fire:
+        # they answer 200/404/410, never 401/403.
+        "/api/auth/forgot-password",
+        "/api/auth/reset-password",
+        "/api/auth/register-from-invite",
+    ):
         assert sg.classify(
-            status=401, path=path, authenticated=False, snap=on
+            status=401, path=path, authenticated=False, snap=on,
+            error_code="INVALID_CREDENTIALS",
         ) is None, path
+
+
+def test_totp_required_is_never_a_credential_offence():
+    """`TOTP_REQUIRED` is a 401 on /api/auth/login, raised on the FIRST step of
+    every login by every 2FA-enrolled user.
+
+    Classifying on status alone therefore counted ordinary logins as credential
+    guessing: a NAT'd office with 2FA on would block itself, at a threshold
+    tuned for scanner bait, by logging in four times in an hour."""
+    on = _snap(signal_auth_failure=True)
+    assert sg.classify(
+        status=401, path="/api/auth/login", authenticated=False, snap=on,
+        error_code="TOTP_REQUIRED",
+    ) is None
+    # Positive control in the same test: the identical request with a code that
+    # DOES mean a wrong secret still counts, so this cannot go vacuous.
+    assert sg.classify(
+        status=401, path="/api/auth/login", authenticated=False, snap=on,
+        error_code="INVALID_TOTP",
+    ) == sg.SIGNAL_AUTH_FAILURE
+
+
+def test_a_403_after_a_correct_password_is_not_brute_force():
+    """ACCOUNT_DISABLED / EMAIL_NOT_VERIFIED are raised AFTER the password
+    verified. The caller proved they hold the credential; they are a confused
+    legitimate user, not a guesser."""
+    on = _snap(signal_auth_failure=True)
+    for code in ("ACCOUNT_DISABLED", "EMAIL_NOT_VERIFIED"):
+        assert sg.classify(
+            status=403, path="/api/auth/login", authenticated=False, snap=on,
+            error_code=code,
+        ) is None, code
+    assert sg.classify(
+        status=403, path="/api/auth/login", authenticated=False, snap=on,
+        error_code="INVALID_CREDENTIALS",
+    ) == sg.SIGNAL_AUTH_FAILURE
+
+
+def test_an_unknown_or_missing_error_code_does_not_count():
+    """The code list is an ALLOWLIST. A new failure code on a credential route
+    must opt in rather than silently start banning people, and a request that
+    never reached the error handler carries no code at all."""
+    on = _snap(signal_auth_failure=True)
+    for code in (None, "SOME_FUTURE_CODE", ""):
+        assert sg.classify(
+            status=401, path="/api/auth/login", authenticated=False, snap=on,
+            error_code=code,
+        ) is None, code
+
+
+def test_every_credential_prefix_is_a_route_this_app_serves():
+    """The regression test P18 never had.
+
+    Four of the six original entries were inert: `/api/webauthn/` and
+    `/api/oidc/` matched no route at all (the mounts are `/api/auth/webauthn`
+    and `/api/auth/oidc`), and three more answered 200/404/410 rather than
+    401/403. Effective coverage was `/api/auth/login` alone, for two releases,
+    with a test asserting otherwise because it asserted on the same wrong string
+    the code held."""
+    from app.main import app
+
+    from ._route_helpers import iter_api_routes
+
+    paths = [r.path for r in iter_api_routes(app)]
+    for prefix in sg._CREDENTIAL_PREFIXES:
+        assert any(p.startswith(prefix) for p in paths), (
+            f"{prefix} matches no mounted route"
+        )
 
 
 def test_the_sse_streams_can_never_cause_a_block():
@@ -353,17 +443,45 @@ def test_enabling_with_no_signals_is_refused(db, make_user):
     assert exc.value.code == "SCAN_GUARD_NO_SIGNALS"
 
 
-def test_a_malformed_allowlist_is_refused_before_storing(db, make_user):
+def test_a_malformed_allowlist_entry_is_refused_before_storing(db, make_user):
     """Silently dropping a bad entry would quietly remove the admin's own escape
     hatch from a control that locks people out."""
     from app.models.user import UserRole
 
     admin = make_user(email="a@test.local", role=UserRole.admin)
     with pytest.raises(AppError) as exc:
-        sg.update_settings(
-            db, values={"allowlist": "203.0.113.0/24, nonsense"}, actor=admin
-        )
+        sg.allowlist_add(db, entry="nonsense", actor=admin)
     assert exc.value.code == "ALLOWLIST_INVALID"
+    assert sg.allowlist_entries(db)["entries"] == []
+
+
+def test_the_settings_form_can_no_longer_write_the_allowlist(db, make_user):
+    """The allowlist is state, owned by its own endpoints, and the settings PUT
+    must ignore it.
+
+    It used to be a free-text textarea on that form, i.e. a second writer
+    carrying a whole-CSV snapshot: an admin with the settings page open who
+    allowlisted an address from the blocks page and then saved the form would
+    silently delete it. Pinning the ignore here is what stops the field being
+    quietly reinstated."""
+    from app.models.user import UserRole
+
+    admin = make_user(email="a@test.local", role=UserRole.admin)
+    sg.allowlist_add(db, entry="203.0.113.7", actor=admin)
+    db.commit()
+
+    sg.update_settings(
+        db,
+        values={
+            "enabled": True,
+            "signal_probe_path": True,
+            # A stale client still sends this. It must not land.
+            "allowlist": "",
+        },
+        actor=admin,
+    )
+    db.commit()
+    assert sg.allowlist_entries(db)["entries"] == ["203.0.113.7/32"]
 
 
 def test_settings_round_trip_and_the_guard_ships_disabled(db, make_user):

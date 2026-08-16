@@ -25,6 +25,19 @@ are burned and letting it binary-search the threshold. The one residual
 distinguisher is timing (no routing work happens); it is sub-millisecond and not
 worth defending, so do not "fix" it with a sleep.
 
+**Counting is synchronous, and that is a deliberate non-fix.** `note_offence`
+does sync Redis I/O (and, at a threshold crossing, a DB write) from the response
+path, and `redis_client` sets `socket_timeout=2`, so a Redis *slowdown* can hold
+the event loop. That is real - but it is not specific to this module: every
+per-IP limiter in the product calls the same sync `rate_limit.check_ip_allowed`
+from an `async def` handler (`routers/auth.py`, `routers/notifications.py`,
+`routers/telemetry.py`). Moving only the guard off-loop was tried and reverted:
+`asyncio.to_thread` puts the guard's own `SessionLocal` on a second thread, which
+is fine against MariaDB's connection pool and corrupt against the test harness's
+single shared SQLite connection (measured: `sqlite3.InterfaceError` writing the
+audit row). Whether to take the whole application's Redis calls off the loop is
+one decision to make deliberately, not a change to smuggle in here.
+
 **Nothing here may raise.** Both halves are wrapped and default to serving the
 request.
 """
@@ -100,7 +113,11 @@ class ScanGuardMiddleware:
         path = _redact_path(scope.get("path") or "")
 
         signal = guard_svc.classify(
-            status=status, path=path, authenticated=authenticated, snap=snap
+            status=status,
+            path=path,
+            authenticated=authenticated,
+            error_code=state.get("error_code"),
+            snap=snap,
         )
         if signal is None:
             return

@@ -8,6 +8,7 @@ from __future__ import annotations
 import ipaddress
 
 from fastapi import APIRouter, Depends, Query, Request, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ...dependencies import get_current_admin, get_db
@@ -15,14 +16,19 @@ from ...middleware.errors import AppError
 from ...models.ip_block import IpBlock
 from ...models.user import User
 from ...schemas.scan_guard import (
+    AllowBlockResponse,
+    AllowlistAddRequest,
+    AllowlistResponse,
     CreateIpBlockRequest,
     IpBlockListResponse,
     IpBlockRow,
+    ReleaseAllResponse,
     ScanGuardSettingsResponse,
     UpdateScanGuardSettingsRequest,
+    WatchlistResponse,
 )
 from ...services import scan_guard as guard_svc
-from ...utils.client_ip import is_blockable
+from ...utils.client_ip import get_client_ip, is_blockable
 from ...utils.timeutil import utc_now
 
 router = APIRouter()
@@ -42,6 +48,7 @@ def _to_row(row: IpBlock) -> IpBlockRow:
         created_at=row.created_at,
         expires_at=row.expires_at,
         released_at=row.released_at,
+        released_by_id=row.released_by_id,
         note=row.note,
     )
 
@@ -82,14 +89,47 @@ def update_scan_guard(
 
 @router.get("/scan-guard/blocks", response_model=IpBlockListResponse)
 def list_blocks(
-    active: bool = Query(True),
+    status_filter: str | None = Query(None, alias="status"),
+    reason: str | None = Query(None, max_length=32),
+    source: str | None = Query(None, pattern="^(auto|manual)$"),
+    is_network: bool | None = Query(None),
+    q: str | None = Query(None, max_length=64),
+    covers: str | None = Query(None, max_length=64),
+    # Superseded by `status`, kept one release so the shipped SPA and any
+    # scripted caller keep working: active=true meant "live only", false meant
+    # "everything". `status` wins when both are sent.
+    active: bool | None = Query(None),
     page: int = Query(1, ge=1, le=1000),
     page_size: int = Query(50, ge=1, le=200),
     db: Session = Depends(get_db),
     _admin: User = Depends(get_current_admin),
 ) -> IpBlockListResponse:
+    if status_filter is None:
+        status_filter = "active" if active in (None, True) else "all"
+    if status_filter not in guard_svc.BLOCK_STATUSES:
+        raise AppError(
+            400,
+            "BLOCK_STATUS_INVALID",
+            f"status must be one of {', '.join(guard_svc.BLOCK_STATUSES)}.",
+        )
+    if covers:
+        try:
+            ipaddress.ip_address(covers.strip())
+        except ValueError:
+            raise AppError(
+                400, "SUBJECT_INVALID", "`covers` must be a single IP address."
+            ) from None
+
     rows, total = guard_svc.list_blocks(
-        db, active_only=active, page=page, page_size=page_size
+        db,
+        status=status_filter,
+        reason=reason,
+        source=source,
+        is_network=is_network,
+        q=q,
+        covers=covers,
+        page=page,
+        page_size=page_size,
     )
     return IpBlockListResponse(
         items=[_to_row(r) for r in rows], total=total, page=page, page_size=page_size
@@ -130,6 +170,28 @@ def create_block(
             "SUBJECT_NOT_BLOCKABLE",
             "Only globally routable networks can be blocked.",
         )
+    # Refuse a block that would lock the admin out of the page they are on.
+    # There is no self-service recovery: the guard refuses ahead of routing, so
+    # a blocked admin cannot reach the release endpoint, and the only way back
+    # is `scripts/unblock_ip.py` on the host. That asymmetry is why this is a
+    # refusal and not a confirmation - an admin who genuinely means it can block
+    # the range from a different network.
+    caller = get_client_ip(request)
+    if caller:
+        try:
+            if ipaddress.ip_address(caller) in net:
+                raise AppError(
+                    400,
+                    "SUBJECT_COVERS_SELF",
+                    "That block would include the address you are connecting "
+                    "from, and a blocked admin cannot reach this page to undo it.",
+                )
+        except ValueError:
+            # Not an address (Starlette's TestClient sends "testclient", and a
+            # scope can carry no client at all). Nothing to compare; the check
+            # is a safety net, not a gate, so an unparseable peer skips it
+            # rather than 500ing the endpoint.
+            pass
 
     row = guard_svc.apply_block(
         db,
@@ -159,3 +221,93 @@ def release_block(
     # So the admin's own release is effective immediately rather than after the
     # cache TTL - which matters most when they are unblocking themselves.
     guard_svc._reset_cache()
+
+
+@router.post("/scan-guard/blocks/release-all", response_model=ReleaseAllResponse)
+def release_all_blocks(
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin),
+) -> ReleaseAllResponse:
+    released = guard_svc.release_all(db, actor_id=admin.id)
+    db.commit()
+    guard_svc._reset_cache()
+    return ReleaseAllResponse(released=released)
+
+
+@router.post("/scan-guard/blocks/{block_id}/allow", response_model=AllowBlockResponse)
+def allow_block(
+    block_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin),
+) -> AllowBlockResponse:
+    """Release a block and allowlist its subject in one decision.
+
+    One transaction on purpose: releasing without allowlisting leaves a source
+    that the guard will simply block again, and the admin would have to notice
+    the second half failed.
+    """
+    row, entries = guard_svc.release_and_allow(
+        db, block_id=block_id, actor=admin, request=request
+    )
+    db.commit()
+    guard_svc._reset_cache()
+    return AllowBlockResponse(block=_to_row(row), allowlist=entries["entries"])
+
+
+@router.get("/scan-guard/allowlist", response_model=AllowlistResponse)
+def get_allowlist(
+    db: Session = Depends(get_db),
+    _admin: User = Depends(get_current_admin),
+) -> AllowlistResponse:
+    return AllowlistResponse(**guard_svc.allowlist_entries(db))
+
+
+@router.post("/scan-guard/allowlist", response_model=AllowlistResponse)
+def add_allowlist_entry(
+    payload: AllowlistAddRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin),
+) -> AllowlistResponse:
+    try:
+        entries = guard_svc.allowlist_add(
+            db, entry=payload.entry, actor=admin, request=request
+        )
+        db.commit()
+    except IntegrityError:
+        # Two admins added the first-ever entry at the same moment; there was no
+        # row yet, so there was nothing to lock and the unique key on
+        # `app_settings.key` decided it. One retry succeeds against the row the
+        # winner created.
+        db.rollback()
+        raise AppError(
+            409, "CONFLICT_RETRY", "The allowlist changed at the same time. Retry."
+        ) from None
+    guard_svc._reset_cache()
+    return AllowlistResponse(**guard_svc.allowlist_entries(db))
+
+
+@router.delete("/scan-guard/allowlist", response_model=AllowlistResponse)
+def remove_allowlist_entry(
+    request: Request,
+    # A query parameter, not a path segment: a CIDR contains `/`, and a path
+    # segment would need it percent-encoded, which proxies routinely normalise
+    # back into a segment separator.
+    entry: str = Query(..., min_length=3, max_length=64),
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin),
+) -> AllowlistResponse:
+    guard_svc.allowlist_remove(db, entry=entry, actor=admin, request=request)
+    db.commit()
+    guard_svc._reset_cache()
+    return AllowlistResponse(**guard_svc.allowlist_entries(db))
+
+
+@router.get("/scan-guard/watchlist", response_model=WatchlistResponse)
+def get_watchlist(
+    limit: int = Query(50, ge=1, le=200),
+    db: Session = Depends(get_db),
+    _admin: User = Depends(get_current_admin),
+) -> WatchlistResponse:
+    return WatchlistResponse(**guard_svc.watchlist(db, limit=limit))

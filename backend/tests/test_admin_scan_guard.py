@@ -110,14 +110,94 @@ async def test_enabling_with_no_signals_is_refused(make_user, client, login_as):
 
 
 @pytest.mark.asyncio
-async def test_a_bad_allowlist_is_refused(make_user, client, login_as):
+async def test_a_bad_allowlist_entry_is_refused(make_user, client, login_as):
     headers = await _admin_headers(make_user, login_as)
-    resp = await client.put(
-        "/api/admin/scan-guard", json=_payload(allowlist="10.0.0.0/8, junk"),
-        headers=headers,
+    resp = await client.post(
+        "/api/admin/scan-guard/allowlist", json={"entry": "junk"}, headers=headers
     )
-    assert resp.status_code == 400
+    assert resp.status_code == 400, resp.text
     assert resp.json()["code"] == "ALLOWLIST_INVALID"
+
+
+@pytest.mark.asyncio
+async def test_the_settings_put_no_longer_writes_the_allowlist(
+    make_user, client, login_as
+):
+    """The settings form is no longer a writer of the allowlist.
+
+    It used to carry the whole CSV, so an admin with the page open who
+    allowlisted an address elsewhere erased it on save. `APIBaseModel` allows
+    extra fields, so a stale SPA still sends the key - it must be ignored, not
+    422'd, and above all it must not wipe."""
+    headers = await _admin_headers(make_user, login_as)
+    add = await client.post(
+        "/api/admin/scan-guard/allowlist",
+        json={"entry": "203.0.113.7"}, headers=headers,
+    )
+    assert add.status_code == 200, add.text
+    assert add.json()["entries"] == ["203.0.113.7/32"]
+
+    saved = await client.put(
+        "/api/admin/scan-guard", json=_payload(allowlist=""), headers=headers
+    )
+    assert saved.status_code == 200, saved.text
+
+    still = await client.get("/api/admin/scan-guard/allowlist", headers=headers)
+    assert still.json()["entries"] == ["203.0.113.7/32"]
+
+
+@pytest.mark.asyncio
+async def test_allowlist_add_is_idempotent_and_removable(make_user, client, login_as):
+    headers = await _admin_headers(make_user, login_as)
+    for _ in range(2):
+        resp = await client.post(
+            "/api/admin/scan-guard/allowlist",
+            json={"entry": "198.51.100.0/24"}, headers=headers,
+        )
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["entries"] == ["198.51.100.0/24"]
+
+    # Removal accepts the canonical form the API reported back.
+    gone = await client.delete(
+        "/api/admin/scan-guard/allowlist",
+        params={"entry": "198.51.100.0/24"}, headers=headers,
+    )
+    assert gone.status_code == 200, gone.text
+    assert gone.json()["entries"] == []
+
+    missing = await client.delete(
+        "/api/admin/scan-guard/allowlist",
+        params={"entry": "198.51.100.0/24"}, headers=headers,
+    )
+    assert missing.status_code == 404
+    assert missing.json()["code"] == "ALLOWLIST_ENTRY_NOT_FOUND"
+
+
+@pytest.mark.asyncio
+async def test_unblock_and_allow_is_one_decision(make_user, client, login_as, db):
+    """Release + allowlist in one request. Releasing without allowlisting would
+    just hand the source back to the guard to re-block."""
+    from app.models.ip_block import IpBlock
+
+    headers = await _admin_headers(make_user, login_as)
+    created = await client.post(
+        "/api/admin/scan-guard/blocks",
+        json={"subject": "45.148.10.67", "minutes": 60}, headers=headers,
+    )
+    assert created.status_code == 201, created.text
+    block_id = created.json()["id"]
+
+    resp = await client.post(
+        f"/api/admin/scan-guard/blocks/{block_id}/allow", headers=headers
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["allowlist"] == ["45.148.10.67/32"]
+    assert resp.json()["block"]["released_at"] is not None
+
+    row = db.query(IpBlock).filter(IpBlock.id == block_id).one()
+    db.refresh(row)
+    assert row.released_at is not None
+    assert row.released_by_id is not None
 
 
 @pytest.mark.asyncio

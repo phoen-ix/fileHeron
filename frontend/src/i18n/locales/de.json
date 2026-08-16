@@ -2728,6 +2728,9 @@
     "watch_col_path": "Letzter Pfad",
     "watch_col_seen": "Zuletzt gesehen",
     "watch_of_threshold": "{count} von {threshold}",
-    "watch_block_cta": "Jetzt sperren"
+    "watch_block_cta": "Jetzt sperren",
+    "no_blocks_in_force": "Derzeit wird nichts abgewiesen.",
+    "hidden_by_filter": "{count} durch diesen Filter ausgeblendet.",
+    "show_all_cta": "Alle anzeigen"
   }
 }

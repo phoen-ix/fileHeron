@@ -22,6 +22,7 @@ import {
   releaseAllIpBlocks,
   releaseIpBlock,
   removeScanGuardAllowlistEntry,
+  type IpBlockListParams,
   type IpBlockRow,
   type IpBlockStatus,
   type WatchRow,
@@ -49,19 +50,57 @@ const search = ref('')
 const REASONS = ['probe_path', 'api_404', 'auth_failure', 'network', 'manual'] as const
 const STATUSES: IpBlockStatus[] = ['active', 'released', 'expired', 'all']
 
+/** How many rows the CURRENT filters would match if the status filter were
+ *  lifted. Only ever non-zero when the page came back empty, and only used to
+ *  offer a way out of it. */
+const historyTotal = ref(0)
+
 const { items, total, page, pageSize, loading, errorMsg, load } =
   usePaginatedList<IpBlockRow>(async ({ page: p, pageSize: ps }) => {
-    const { data } = await listIpBlocks({
-      status: status.value,
+    const filters = {
       reason: reason.value || undefined,
       source: (source.value || undefined) as 'auto' | 'manual' | undefined,
       is_network: networkOnly.value ? true : undefined,
       q: search.value.trim() || undefined,
+    }
+    const { data } = await listIpBlocks({
+      ...filters,
+      status: status.value,
       page: p,
       page_size: ps,
     })
+    historyTotal.value =
+      data.items.length === 0 && status.value !== 'all'
+        ? await countOutsideStatusFilter(filters)
+        : 0
     return { items: data.items, total: data.total }
   })
+
+/** The page defaults to "in force", which is the right first answer for a
+ *  page about enforcement - but on an instance whose blocks have all expired or
+ *  been released it renders a bare "no blocks match these filters" over a table
+ *  that does have history in it. That reads as data loss. Counting what the
+ *  filter is hiding is what lets the empty state offer a way through.
+ *
+ *  Failures are swallowed to 0 on purpose: `usePaginatedList` turns anything the
+ *  fetcher throws into `errorMsg`, so letting this propagate would replace a
+ *  merely-empty list with a red error box. A missing hint is the right way to
+ *  lose. */
+async function countOutsideStatusFilter(
+  filters: Omit<IpBlockListParams, 'status' | 'page' | 'page_size'>,
+): Promise<number> {
+  try {
+    const { data } = await listIpBlocks({
+      ...filters,
+      status: 'all',
+      page: 1,
+      page_size: 1,
+    })
+    return data.total
+  } catch {
+    return 0
+  }
+}
 
 function refilter() {
   // `page` has a watcher, so assigning 1 from any other page already reloads.
@@ -479,9 +518,26 @@ onMounted(() => {
       <div v-else-if="errorMsg" class="fh-notice" role="alert" data-tone="error">
         {{ errorMsg }}
       </div>
-      <p v-else-if="!items.length" class="fh-field-help">
-        {{ t('admin_ip_blocks.no_blocks') }}
-      </p>
+      <div v-else-if="!items.length" class="empty">
+        <p class="fh-field-help">
+          {{
+            status === 'active'
+              ? t('admin_ip_blocks.no_blocks_in_force')
+              : t('admin_ip_blocks.no_blocks')
+          }}
+          <template v-if="historyTotal > 0">
+            {{ t('admin_ip_blocks.hidden_by_filter', { count: historyTotal }) }}
+          </template>
+        </p>
+        <button
+          v-if="historyTotal > 0"
+          type="button"
+          class="fh-btn-text"
+          @click="status = 'all'"
+        >
+          {{ t('admin_ip_blocks.show_all_cta') }}
+        </button>
+      </div>
       <template v-else>
         <table class="fh-table">
           <thead>
@@ -705,5 +761,11 @@ onMounted(() => {
 .loading {
   color: var(--fh-subtle);
   padding: var(--fh-space-5) 0;
+}
+.empty {
+  display: flex;
+  align-items: baseline;
+  gap: var(--fh-space-2);
+  flex-wrap: wrap;
 }
 </style>

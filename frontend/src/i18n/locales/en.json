@@ -2728,6 +2728,9 @@
     "watch_col_path": "Last path",
     "watch_col_seen": "Last seen",
     "watch_of_threshold": "{count} of {threshold}",
-    "watch_block_cta": "Block now"
+    "watch_block_cta": "Block now",
+    "no_blocks_in_force": "Nothing is being refused right now.",
+    "hidden_by_filter": "{count} hidden by this filter.",
+    "show_all_cta": "Show all"
   }
 }

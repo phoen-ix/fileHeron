@@ -12,13 +12,19 @@ name: CodeQL
 on:
   push:
     branches: [main]
-    paths-ignore: &prose
+    # Written out twice rather than shared via a YAML anchor: an alias is legal
+    # YAML and `actionlint` rejects it ("must be sequence node but got alias
+    # node"), which is what infra-lint enforces.
+    paths-ignore:
       - '**/*.md'
       - 'LICENSE'
       - '.gitignore'
   pull_request:
     branches: [main]
-    paths-ignore: *prose
+    paths-ignore:
+      - '**/*.md'
+      - 'LICENSE'
+      - '.gitignore'
   schedule:
     - cron: '27 3 * * 1'  # weekly, Monday 03:27 UTC
 

@@ -36,7 +36,7 @@ router = APIRouter(
 
 def _items(db: Session, user: User) -> list[PreferenceItem]:
     return [
-        PreferenceItem(category=r.category, channel=r.channel, locked=r.locked)
+        PreferenceItem.from_row(r)
         for r in notification_prefs.list_preferences(db, user)
     ]
 
@@ -108,14 +108,17 @@ def one_click_unsubscribe(
 ) -> Response:
     """RFC 8058 one-click endpoint. The mail client POSTs
     `List-Unsubscribe=One-Click` here; we ignore the body and opt the recipient
-    out of `category`. Always returns 200 text so the client shows success."""
+    out of `category`. Always 200 - a 4xx here just shows the recipient a
+    confusing mail-client error - but the BODY says what actually happened."""
     user = _resolve(db, request, token)
     try:
         notification_prefs.unsubscribe_category(db, user, category)
         db.commit()
-    except AppError:
-        # A locked/unknown category can't be one-click-unsubscribed; the footer
-        # never emits a one-click URL for those, but be defensive and don't 4xx
-        # the mail client - it would just show a confusing error.
+    except AppError as e:
+        # A locked, operational or unknown category can't be one-click
+        # unsubscribed. The footer emits no one-click URL for those, but an
+        # email sent BEFORE that was true still carries one, so this is the
+        # guard that actually holds. Don't claim success we didn't deliver.
         db.rollback()
+        return Response(content=f"{e.message}\n", media_type="text/plain")
     return Response(content="Unsubscribed.\n", media_type="text/plain")

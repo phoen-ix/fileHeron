@@ -104,10 +104,15 @@ async function load() {
   }
 
   // ?off=<category>: apply the one-click unsubscribe and confirm with Undo.
+  // `one_click` is checked as well as `locked`: the operational alerts stay
+  // changeable on this page but must not be switched off by following a link
+  // from an email. Emails sent before that rule existed still carry an `?off=`
+  // for them, so this lands on the preferences view instead of silently
+  // disabling the alerting - the server refuses it either way.
   const off = route.query.off
   if (typeof off === 'string' && off) {
     const row = items.value.find((i) => i.category === off)
-    if (row && !row.locked && row.channel !== 'off') {
+    if (row && !row.locked && row.one_click && row.channel !== 'off') {
       await applyUnsubscribe(off)
     }
   }

@@ -156,6 +156,7 @@
     "JOB_NOT_FOUND": "Dieser Vorgang ist nicht mehr verfügbar.",
     "LAST_ADMIN": "Das ist der letzte Administrator - bitte zuerst einen weiteren ernennen.",
     "LOCKED_CATEGORY": "Diese Benachrichtigungskategorie kann nicht geändert werden.",
+    "NO_ONE_CLICK_UNSUBSCRIBE": "Diese Meldung berichtet, dass die Instanz selbst gestört ist, und lässt sich deshalb nicht per E-Mail abbestellen. In den Benachrichtigungseinstellungen unten kann sie weiterhin geändert werden.",
     "LOGO_NOT_FOUND": "Es wurde kein Logo hochgeladen.",
     "LOGO_TOO_LARGE": "Diese Logodatei ist zu groß.",
     "MAIL_LOG_NOT_FOUND": "E-Mail-Protokolleintrag nicht gefunden.",

@@ -156,6 +156,7 @@
     "JOB_NOT_FOUND": "That job is no longer available.",
     "LAST_ADMIN": "This is the last administrator - promote another one first.",
     "LOCKED_CATEGORY": "This notification category cannot be changed.",
+    "NO_ONE_CLICK_UNSUBSCRIBE": "This alert reports that the instance itself is broken, so it can't be switched off from an email. You can still change it in your notification preferences below.",
     "LOGO_NOT_FOUND": "No logo has been uploaded.",
     "LOGO_TOO_LARGE": "That logo file is too large.",
     "MAIL_LOG_NOT_FOUND": "Mail log entry not found.",

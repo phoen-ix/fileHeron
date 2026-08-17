@@ -17,7 +17,11 @@ keep this to what would cause a wrong move if unknown.
 
 **v2.13.5 started as "why does Check for updates say no backend release" and
 ended in the two things that tell an operator something is wrong.** No
-migration, no host step, no API break, no default moves, no client change.
+migration, no host step, no client change. **Two things DO move:** the default
+`updates.api_url` the settings route offers (now the list endpoint, see below),
+and `POST /api/notification-subscriptions/{token}/unsubscribe`, which now
+returns `400 NO_ONE_CLICK_UNSUBSCRIBE` for `ops_alert`/`server_error`.
+`PreferenceItem` also gains `one_click` - additive, defaulted, not a break.
 
 The answer to the question was again: nothing was wrong here. GitHub's releases
 LIST endpoint answered `200` with `[]` for about an hour on 2026-08-17 (mid a

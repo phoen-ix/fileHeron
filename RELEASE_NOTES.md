@@ -3,11 +3,12 @@
 **An update check that blamed you, and alerts one tap from silence.**
 
 A patch release. It began as "why does *Check for updates* say there is no
-backend release" — the answer was that GitHub was having a bad afternoon — and
-ended in three places where this product described a problem as something other
-than what it was, and two where it could quietly stop describing anything at
-all. No migration, no host step, no API change, no default moves, no
-desktop-client change.
+backend release" — for most instances the answer was that GitHub was having a
+bad afternoon — and ended in the messages, the records and the alerts this
+product uses to say that something is wrong. No migration, no host step, no
+desktop-client change. Two things do move, both described below: the address the
+Updates page offers for the update check, and one endpoint that now refuses two
+categories it used to accept.
 
 ---
 

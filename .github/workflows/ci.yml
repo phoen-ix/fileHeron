@@ -7,6 +7,17 @@ name: CI
 on:
   push:
     branches: [main]
+    # A prose-only push cannot break a test, and running the suite for one
+    # buys nothing but a queue slot and, when the runner or GitHub itself is
+    # having a bad day, a failure notification about a changelog edit. The
+    # filter is on PUSH only: a PR still gets the full suite whatever it
+    # touches, and `workflow_call` ignores path filters entirely, so the
+    # release gate in server-release.yml is unaffected and a tag build still
+    # runs every job below.
+    paths-ignore:
+      - '**/*.md'
+      - 'LICENSE'
+      - '.gitignore'
   pull_request: {}
   # Callable so server-release.yml can GATE a tag build on these exact jobs
   # rather than duplicating them. Before this, a release ran no tests at all:

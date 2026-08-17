@@ -4,11 +4,21 @@ name: CodeQL
 # public repos. Findings land in the repo's Security -> Code scanning tab; this
 # workflow does not block PRs by itself (gate it via branch protection if you
 # want that). Python + the SPA are both interpreted, so build-mode: none.
+# A push that changes only prose changes nothing this workflow can analyse, but
+# it still ran the full extraction and, on a bad day upstream, emailed a
+# failure for it: `7d8b5bc` touched RELEASE_NOTES.md and CLAUDE.md and started a
+# CodeQL analysis. Same filter shape e2e.yml already uses, and the weekly
+# schedule below still covers everything regardless of what changed.
 on:
   push:
     branches: [main]
+    paths-ignore: &prose
+      - '**/*.md'
+      - 'LICENSE'
+      - '.gitignore'
   pull_request:
     branches: [main]
+    paths-ignore: *prose
   schedule:
     - cron: '27 3 * * 1'  # weekly, Monday 03:27 UTC
 

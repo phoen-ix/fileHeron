@@ -1,3 +1,139 @@
+# file:Heron v2.13.5
+
+**An update check that blamed you, and alerts one tap from silence.**
+
+A patch release. It began as "why does *Check for updates* say there is no
+backend release" — the answer was that GitHub was having a bad afternoon — and
+ended in three places where this product described a problem as something other
+than what it was, and two where it could quietly stop describing anything at
+all. No migration, no host step, no API change, no default moves, no
+desktop-client change.
+
+---
+
+## "Check for updates" blamed your repository for someone else's outage
+
+On 17 August, GitHub's releases list began answering requests with an empty
+list: a perfectly successful response that simply contained nothing, while its
+own paging headers said there were eight pages of releases to be had. file:Heron
+reported this as `no backend release (vX.Y.Z) in GitHub response` — a sentence
+about *your* repository and *your* settings. Neither was involved. The newest
+release was sitting there, published, and the instance asking the question was
+already running it.
+
+Two quite different situations produced that one sentence, and they are fixed by
+different people doing different things:
+
+- **nothing came back at all** — the far end is having a problem, or the address
+  being asked is wrong; and
+- **releases came back, none of them a server release** — the filter, the fork
+  or how far back the search reaches is wrong.
+
+They now say so separately, and the second names how many releases it saw and
+which was newest, which is exactly what identifies the configuration mistake
+described in the next section.
+
+When the request does not complete at all, the reason is legible now too. A
+timeout says how long it waited instead of ending in a colon with nothing after
+it, which is what an administrator actually saw. An HTTP error leads with its
+status code, and a 403 says whether the cause is that this machine's
+unauthenticated request allowance with GitHub is spent — worth knowing, because
+that allowance is per network address and shared with everything else running on
+the same host.
+
+## Opening the update settings and pressing Save broke update checking for good
+
+The Updates settings page pre-fills its address field for you. The address it
+offered was left behind by a change in v1.1.8, which moved the update check to a
+different GitHub endpoint and did not revisit the settings page. So the field
+suggested an address the check cannot use: it returns the newest release of
+*any* kind, which for this project is nearly always a desktop-client release and
+almost never a server one.
+
+Nothing was wrong until someone opened that page and pressed Save. Saving stored
+the suggestion, and from then on every update check — scheduled and manual
+alike — failed with precisely the message above, permanently, on an instance
+where nothing was actually wrong. The suggestion was written down in three
+separate places; they now have one definition, and the build fails if they ever
+disagree again.
+
+**If your instance has this saved already, update checking has been failing ever
+since.** Open *Settings → Updates*: if the address ends in `/releases/latest`,
+replace it with
+
+    https://api.github.com/repos/phoen-ix/fileHeron/releases?per_page=30
+
+The field cannot be cleared to restore the default, so it has to be typed. The
+new message names the tag it is seeing, so the cause is now visible rather than
+implied. Pointing this at a fork's own `/releases/latest` is still supported —
+it is simply no longer what the page hands you unasked.
+
+## A scheduled task that had been failing showed as successful
+
+A scheduled task is recorded as failed when it stops with an error. The update
+check does not stop with an error: it catches the problem, records it and
+returns normally. So it was written down as a success on every single run, no
+matter how long it had been failing — green on the Scheduled tasks page, nothing
+in the audit log, nobody told.
+
+Two consecutive scheduled failures now mark the task as failed and raise it the
+same way any other failing task is raised. One failure stays quiet deliberately:
+the thing being contacted belongs to somebody else, and one bad minute is not
+news. Pressing *Check now* never counts toward it either — an administrator
+watching an outage presses that button repeatedly, and those presses are not
+evidence that anything is broken.
+
+The count is kept rather than the elapsed time, so it means "two scheduled
+attempts in a row", whatever cadence you have set the check to.
+
+## One tap in a mail client could switch off the alerts
+
+Operational alerts — a scheduled task failing, a backup failing, a disk filling
+up, a burst of server errors — were treated by the mail system as ordinary
+notifications somebody might not want. Every one of them therefore carried the
+headers that make Gmail and Outlook place an **Unsubscribe** button next to the
+sender, and the footer offered the same thing in a single click.
+
+One tap, on one alert that arrived at an inconvenient moment, and this instance
+stops telling anyone it is in trouble. Permanently, with nothing recorded
+anywhere, and on a small deployment where a single administrator may be the only
+person receiving them at all. Losing a share-expiry reminder costs a reminder;
+losing these costs the thing that would have told you the alerting had stopped.
+
+Both categories can still be switched off — deliberately, on your notification
+preferences page, where it is a decision rather than a reflex. What is gone is
+the one-tap route: no Unsubscribe button in the mail client, no unsubscribe link
+in the footer, and the equivalent links in mail already delivered no longer work
+either, because the refusal is enforced where the change is made rather than
+where the link is drawn. The one consequence for anyone automating against the
+API: the endpoint behind those links now refuses these two categories, where it
+previously performed the change.
+
+They were deliberately *not* made permanently on. That would also have made them
+read-only and forced everyone back to the standard channel — which on the
+reference instance would have switched off email for the one administrator who
+had gone in and deliberately switched it on.
+
+**This release does not turn anyone's notifications back on.** If someone has
+already opted out of these, they are still opted out; it is worth a glance at
+the preferences of whoever is supposed to be receiving them.
+
+## Fixes found reviewing the above
+
+- The header that offers one-click unsubscribe carried the wrong value — not the
+  one the specification fixes, which mail clients match exactly. So one-click
+  had most likely never functioned in any client, which is the only reason the
+  problem above had not already happened to somebody. Correcting it on its own
+  would have *armed* that problem rather than fixed it, so both changed
+  together.
+- Six comments in the source described behaviour that had not existed for
+  several releases. The largest was a table in the background worker listing
+  sixteen scheduled jobs and the minute each one ran at, none of which has
+  governed anything since v1.28.0, when schedules became editable in the admin
+  interface.
+
+---
+
 # file:Heron v2.13.4
 
 **A noisy error log, and the sign-outs that were hiding behind it.**

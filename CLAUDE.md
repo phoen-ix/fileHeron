@@ -15,6 +15,43 @@ keep this to what would cause a wrong move if unknown.
 
 ## Status
 
+**v2.13.5 started as "why does Check for updates say no backend release" and
+ended in the two things that tell an operator something is wrong.** No
+migration, no host step, no API break, no default moves, no client change.
+
+The answer to the question was again: nothing was wrong here. GitHub's releases
+LIST endpoint answered `200` with `[]` for about an hour on 2026-08-17 (mid a
+real GitHub incident) while its own `Link` header advertised eight pages. The
+instance was already running the newest release.
+
+**The finding that mattered was the same message reachable permanently.**
+`routers/admin/settings.py` kept a SECOND copy of the default updates URL, left
+on `/releases/latest` when v1.1.8 moved the check to the list endpoint - and the
+Updates form prefills its input from that GET, so opening the page and pressing
+Save pinned the check to the one endpoint that can never resolve a backend
+release. The locale placeholder was a third copy. **The recurring shape: a
+constant duplicated across a service, a router and a locale file, where only one
+of them was updated.** Now one definition, pinned by a test.
+
+**Two controls that could not report.** `track_cron` decides failure by "did it
+raise?", and `run_check` catches its own errors - so a permanently broken update
+check was recorded as a SUCCESSFUL cron run, indefinitely. It now signals via
+`cron_tracker.CRON_FAILED_KEY` and **must never do it by raising** - see the
+Notifications and release-check invariant blocks for why `max_tries` makes that
+a retry storm. And `ops_alert`/`server_error` were ordinary opt-out categories,
+so every "your instance is broken" email carried a one-tap Unsubscribe button;
+one tap ended the alerting permanently and silently. `NO_ONE_CLICK_CATEGORIES`
+closes the one-tap route without making the categories read-only, which
+`LOCKED_CATEGORIES` would have done - and that would have forced the one admin
+who deliberately enabled ops email back to the default, turning it off.
+
+**Upgrade note that has no code fix:** an admin already opted out of
+`ops_alert`/`server_error` STAYS opted out; this release switches nobody's
+notifications back on. An operator who already saved the bad `updates.api_url`
+must retype it - the field is `min_length=1`, so it cannot be cleared back to
+the default. Six false comments corrected, including `worker.py`'s table of
+sixteen per-job cron minutes, which has governed nothing since v1.28.0.
+
 **v2.13.4 started as "why is the error log full of TOKEN_EXPIRED" and ended in
 the refresh path.** No migration, no host step, no API change, no default moves.
 Desktop client changes ship alongside on their own tag.
@@ -234,7 +271,8 @@ permissive/NULL value, so existing rows, in-flight sessions and
 approval-disabled deployments are unaffected by the upgrade itself.
 
 Backend **`v2.13.4`** is the newest TAG - released 2026-08-16, and the reference
-host runs it. (Any release still needs the desktop-client half bumped in
+host runs it; **v2.13.5 is written but unreleased** (notes + code on `main`, no
+tag). (Any release still needs the desktop-client half bumped in
 `pyproject.toml` + `__init__.py` + `client/RELEASE_NOTES.md` in lockstep before
 its `client-v*` tag, which CI checks on every push.) Previous notable sweep:
 v2.8.1, audit #2 - see the block below; .0 also carried the dependency/runtime

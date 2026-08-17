@@ -5,6 +5,11 @@ Every cron wraps its body in `@track_cron("name")`. On entry: insert a
 or `failure`, the elapsed duration, the returned dict (truncated), and
 any exception message.
 
+A run fails in one of two ways: it RAISES (re-raised, so ARQ's `max_tries`
+applies), or it returns a dict carrying `CRON_FAILED_KEY` (not re-raised - see
+that constant). Both go through `_record_failure`; a job that neither raises
+nor sets the key is a success even if its result says otherwise.
+
 Failures additionally:
 - Record an `cron_failed` audit event with the error.
 - Dispatch an `ops_alert` to every non-disabled admin via the existing
@@ -48,6 +53,17 @@ _RESULT_SUMMARY_MAX_BYTES = 4096
 # Dedup window for admin notification on a single cron name's failures.
 # Redis key: fh:ops:alert:cron_failed:<job_name>. TTL = this many seconds.
 _DEDUP_TTL_SEC = 3600
+
+# Opt-in key a cron may set in its returned dict to say "this run FAILED"
+# without raising. Needed because a cron that catches its own errors and
+# reports them in the result was recorded as a SUCCESS - it could be broken
+# indefinitely while the Scheduled-tasks page stayed green (release_check was
+# exactly that). Raising instead is not equivalent: the failure path below
+# re-raises, and `WorkerSettings.max_tries` is 5, so a job that fails on a
+# transient upstream would be re-run five times per tick and would write five
+# audit rows and five `notify_admin_error` enqueues. A job that never sets this
+# key is unaffected.
+CRON_FAILED_KEY = "cron_failed"
 
 
 
@@ -138,6 +154,86 @@ def _maybe_alert_admins(db: Session, job_name: str, error_msg: str) -> None:
     webhook_svc.emit_after_commit(db, webhook_svc.OPS_ALERT_EVENT, emit_payload)
 
 
+def _record_failure(
+    job_name: str,
+    row: CronRun | None,
+    duration_ms: int,
+    *,
+    error_msg: str,
+    exception_type: str,
+    traceback_text: str | None = None,
+) -> None:
+    """Write the `failure` outcome for one cron run: the `cron_runs` row, the
+    `cron_failed` audit event, the in-app ops_alert, the email enqueue and the
+    admin-page SSE nudge.
+
+    Shared by the two ways a run can fail - an exception, and a job that
+    reports failure in its result via `CRON_FAILED_KEY`. Owns its own session
+    because the exception path cannot trust the caller's.
+    """
+    db = SessionLocal()
+    try:
+        if row is not None:
+            live = db.query(CronRun).filter(CronRun.id == row.id).one_or_none()
+            if live is not None:
+                live.status = CronRunStatus.failure
+                live.completed_at = utc_now()
+                live.duration_ms = duration_ms
+                live.error_msg = (traceback_text or error_msg)[:2000]
+        record_audit_event(
+            db,
+            event_type=AuditEventType.cron_failed,
+            actor_user_id=None,
+            target_type="cron",
+            target_id=job_name,
+            metadata={"error": error_msg[:500], "duration_ms": duration_ms},
+        )
+        _maybe_alert_admins(db, job_name, error_msg)
+        # Email layer (gated per-task by cron.<name>.alert_on_failure
+        # + the master error-alert switch, all checked in the worker).
+        # Independent of the in-app ops_alert above; best-effort.
+        try:
+            from . import job_queue
+            job_queue.enqueue(
+                "notify_admin_error",
+                event={
+                    "source": "worker",
+                    "exception_type": exception_type,
+                    "message": error_msg[:500],
+                    "job_name": job_name,
+                    "path": job_name,
+                    "method": "CRON",
+                    "status_code": 500,
+                    "code": "CRON_FAILED",
+                    "request_id": None,
+                    "user_id": None,
+                    "auth_via": None,
+                    "at": utc_now().isoformat(),
+                },
+            )
+        except Exception:
+            logger.warning(
+                "notify_admin_error enqueue failed for %s", job_name,
+                exc_info=True,
+            )
+        db.commit()
+        # Push to admin-system viewers so the table refreshes
+        # without waiting for the manual Refresh button.
+        sse_svc.publish_admin_sync({
+            "event": "cron_run",
+            "data": {
+                "job_name": job_name,
+                "status": "failure",
+                "duration_ms": duration_ms,
+            },
+        })
+    except Exception:
+        db.rollback()
+        logger.exception("cron_tracker: failure-path write failed for %s", job_name)
+    finally:
+        db.close()
+
+
 def track_cron(job_name: str) -> Callable[[Callable[..., Awaitable[Any]]], Callable[..., Awaitable[Any]]]:
     """Decorator. Wrap every ARQ cron entry point in
     ``@track_cron("name")`` so its run gets a row in ``cron_runs``."""
@@ -165,68 +261,29 @@ def track_cron(job_name: str) -> Callable[[Callable[..., Awaitable[Any]]], Calla
             except Exception as exc:
                 tb = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
                 duration_ms = int((time.monotonic() - t0) * 1000)
-                db2 = SessionLocal()
-                try:
-                    if row is not None:
-                        live = db2.query(CronRun).filter(CronRun.id == row.id).one_or_none()
-                        if live is not None:
-                            live.status = CronRunStatus.failure
-                            live.completed_at = utc_now()
-                            live.duration_ms = duration_ms
-                            live.error_msg = tb[:2000]
-                    record_audit_event(
-                        db2,
-                        event_type=AuditEventType.cron_failed,
-                        actor_user_id=None,
-                        target_type="cron",
-                        target_id=job_name,
-                        metadata={"error": str(exc)[:500], "duration_ms": duration_ms},
-                    )
-                    _maybe_alert_admins(db2, job_name, str(exc))
-                    # Email layer (gated per-task by cron.<name>.alert_on_failure
-                    # + the master error-alert switch, all checked in the worker).
-                    # Independent of the in-app ops_alert above; best-effort.
-                    try:
-                        from . import job_queue
-                        job_queue.enqueue(
-                            "notify_admin_error",
-                            event={
-                                "source": "worker",
-                                "exception_type": type(exc).__name__,
-                                "message": str(exc)[:500],
-                                "job_name": job_name,
-                                "path": job_name,
-                                "method": "CRON",
-                                "status_code": 500,
-                                "code": "CRON_FAILED",
-                                "request_id": None,
-                                "user_id": None,
-                                "auth_via": None,
-                                "at": utc_now().isoformat(),
-                            },
-                        )
-                    except Exception:
-                        logger.warning(
-                            "notify_admin_error enqueue failed for %s", job_name,
-                            exc_info=True,
-                        )
-                    db2.commit()
-                    # Push to admin-system viewers so the table refreshes
-                    # without waiting for the manual Refresh button.
-                    sse_svc.publish_admin_sync({
-                        "event": "cron_run",
-                        "data": {
-                            "job_name": job_name,
-                            "status": "failure",
-                            "duration_ms": duration_ms,
-                        },
-                    })
-                except Exception:
-                    db2.rollback()
-                    logger.exception("cron_tracker: failure-path write failed for %s", job_name)
-                finally:
-                    db2.close()
+                _record_failure(
+                    job_name,
+                    row,
+                    duration_ms,
+                    error_msg=str(exc),
+                    exception_type=type(exc).__name__,
+                    traceback_text=tb,
+                )
                 raise
+
+            # A job that handled its own error and said so in the result. Recorded
+            # as a failure, but NOT re-raised: `max_tries` would otherwise re-run
+            # it, and a job that already knows it failed has nothing to retry.
+            if isinstance(result, dict) and result.get(CRON_FAILED_KEY):
+                duration_ms = int((time.monotonic() - t0) * 1000)
+                _record_failure(
+                    job_name,
+                    row,
+                    duration_ms,
+                    error_msg=str(result.get("error") or "job reported failure"),
+                    exception_type="CronReportedFailure",
+                )
+                return result
 
             # Success path.
             duration_ms = int((time.monotonic() - t0) * 1000)

@@ -168,6 +168,59 @@ def test_the_endpoint_accepts_what_the_check_offers():
         UpdateApplyRequest(password="x", target_tag="v2.5.0-rc1")
 
 
+def test_all_three_tag_call_sites_anchor_the_same_way():
+    """RELEASE_TAG_RE carries no ``^``, so anchoring lives at the call site and
+    a site reaching for ``match`` quietly re-accepts suffixes. The third one
+    (`html_release_url_for_tag`) did, and minted changelog links for tags the
+    update endpoint refuses."""
+    from app.services import release_check
+
+    src = inspect.getsource(release_check)
+    assert "_BACKEND_TAG_RE.match(" not in src
+    assert "RELEASE_TAG_RE.match(" not in src
+
+
+def test_the_two_default_urls_are_one_object():
+    """The settings router used to keep its own copy of the default updates URL,
+    left pointing at `/releases/latest` when v1.1.8 moved the check to the list
+    endpoint. The SPA prefills its input from that GET, so opening the page and
+    pressing Save pinned the check to an endpoint that can never yield a backend
+    release - the same error message, permanently."""
+    from app.routers.admin import settings as admin_settings
+    from app.services.release_check import DEFAULT_UPDATES_API_URL
+
+    src = inspect.getsource(admin_settings.get_updates_settings)
+    assert "DEFAULT_UPDATES_API_URL" in src
+    assert not hasattr(admin_settings, "_DEFAULT_UPDATES_API_URL"), (
+        "a second default is a second meaning; there is one constant"
+    )
+    # And it must be the LIST endpoint: /releases/latest returns GitHub's newest
+    # release whatever its tag, which for this repo is a client-v* desktop tag.
+    assert "/releases?" in DEFAULT_UPDATES_API_URL
+    assert not DEFAULT_UPDATES_API_URL.endswith("/releases/latest")
+
+
+@pytest.mark.parametrize("locale", ["en", "de"])
+def test_the_url_placeholder_teaches_the_working_endpoint(locale):
+    """The locale files carried a THIRD copy of the wrong URL, so the field the
+    admin sees suggested the broken shape even once the fallback was fixed."""
+    import json
+    from pathlib import Path
+
+    from app.services.release_check import DEFAULT_UPDATES_API_URL
+
+    path = (
+        Path(__file__).resolve().parents[2]
+        / "frontend" / "src" / "i18n" / "locales" / f"{locale}.json"
+    )
+    # Asserted, not skipped: a test that quietly skips when it cannot find its
+    # subject pins nothing, and this one exists precisely because the copy it
+    # checks drifted unnoticed.
+    assert path.exists(), f"{path} not found - did the locale files move?"
+    data = json.loads(path.read_text(encoding="utf-8"))
+    assert data["admin_updates"]["url_placeholder"] == DEFAULT_UPDATES_API_URL
+
+
 # --- config-12 ---------------------------------------------------------------
 
 

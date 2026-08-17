@@ -2,26 +2,18 @@
 
 Run with: ``arq app.workers.worker.WorkerSettings``
 
-Cron jobs (configured here, not via a separate arq.scheduler package).
-Hourly, staggered so they don't pile up at minute 0:
-- expire_files: minute=0
-- share_expiring_24h_warning: minute=7
-- ops_check: minute=15            (sees the :00/:07 outcomes when scanning for failures)
-- disk_check: minute=19           (low-disk guard → storage.critical_low + admin alert)
-- cleanup_expired_tokens: minute=23
-- anomaly_check: minute=33        (heuristic mass-download / multi-network / stuffing scan)
-- quota_reconcile: minute=37
-- cleanup_stale_uploads: minute=41
-- cleanup_abandoned_uploads: minute=47
-- release_check: minute=53
-Daily housekeeping at 02:xx (well clear of business hours):
-- analytics_aggregate: 02:05  (storage snapshot for the admin analytics trend)
-- purge_old_quarantine: 02:13
-- cleanup_pending_invites: 02:15
-- cleanup_read_notifications: 02:29
-- prune_history: 02:43
-- reclaim_orphaned_files: 02:51
-Plus event-driven jobs (not cron): av_scan_file, send_email_job.
+Cron jobs are NOT scheduled here. Since v1.28.0 `cron_jobs` holds a single
+minute-ticking dispatcher and every job's cadence, enable flag and kind live in
+`services/cron_schedule.py::REGISTRY` (admin-editable at
+`/admin/scheduled-tasks`). This docstring used to carry a static table of
+per-job minute assignments - `release_check: minute=53` and fifteen more - none
+of which had governed anything for five releases; read `REGISTRY` for the real
+defaults.
+
+`functions` below is still the authoritative list of what the worker can run:
+the dispatcher enqueues from it, "Run now" enqueues from it, and the
+event-driven jobs (av_scan_file, send_email_job, webhook_deliver, …) are only
+ever enqueued directly.
 """
 from __future__ import annotations
 

@@ -903,7 +903,7 @@
     "intro": "Wo nach neuen fileHeron-Releases gesucht wird. Bei eigenen Forks auf das passende Releases-Endpoint zeigen. Nur Admins erhalten Update-Benachrichtigungen.",
     "schedule_moved": "Wie oft die Update-Prüfung läuft, findest du unter",
     "url_label": "Release-API-URL",
-    "url_placeholder": "https://api.github.com/repos/phoen-ix/fileHeron/releases/latest",
+    "url_placeholder": "https://api.github.com/repos/phoen-ix/fileHeron/releases?per_page=30",
     "url_help": "Standardmäßig auf das Upstream-Repo gesetzt. Forks können auf das eigene Releases-Endpoint zeigen - Antwort muss GitHub-kompatibel sein (tag_name, html_url, body, published_at).",
     "mode_label": "Prüf-Häufigkeit",
     "mode_auto": "Automatisch (alle 24 Stunden)",

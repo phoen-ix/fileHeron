@@ -97,6 +97,7 @@ from ...schemas.updates_settings import (
 from ...services import email as email_svc
 from ...services import email_change_policy, error_alert, mail_test_gate, richtext, settings_registry
 from ...services import public_link as public_link_svc
+from ...services import release_check as release_check_svc
 from ...services import settings as settings_svc
 from ...services import share_approval as share_approval_svc
 from ...services import site as site_svc
@@ -428,20 +429,23 @@ def get_motd_settings(
     )
 
 
-_DEFAULT_UPDATES_API_URL = (
-    "https://api.github.com/repos/phoen-ix/fileHeron/releases/latest"
-)
-
-
 @router.get("/settings/updates", response_model=UpdatesSettingsResponse)
 def get_updates_settings(
     db: Session = Depends(get_db),
     _admin: User = Depends(get_current_admin),
 ) -> UpdatesSettingsResponse:
-    """Admin-editable update-check settings: where to poll + how often."""
+    """Admin-editable update-check settings: where to poll + how often.
+
+    The fallback is `release_check.DEFAULT_UPDATES_API_URL` - the SAME constant
+    the check itself uses. This route used to hold its own copy, left pointing
+    at `/releases/latest` when v1.1.8 moved the check to the list endpoint; the
+    SPA prefills its input from this response, so opening the page and pressing
+    Save persisted an endpoint the check can never resolve a backend release
+    from. Never reintroduce a local default here.
+    """
     return UpdatesSettingsResponse(
         api_url=settings_svc.get(db, settings_svc.Keys.UPDATES_API_URL)
-        or _DEFAULT_UPDATES_API_URL,
+        or release_check_svc.DEFAULT_UPDATES_API_URL,
     )
 
 

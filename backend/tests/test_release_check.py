@@ -476,3 +476,240 @@ def test_html_release_url_for_tag_none_for_non_github_mirror(db):
     )
     db.commit()
     assert rc.html_release_url_for_tag(db, "v1.0.0") is None
+
+
+def test_html_release_url_for_tag_none_for_a_suffixed_tag(db):
+    """The three RELEASE_TAG_RE call sites must agree. This one used ``match``,
+    so it minted a changelog link for a tag the update endpoint refuses."""
+    assert rc.html_release_url_for_tag(db, "v1.2.3-rc1") is None
+
+
+# --- which failure was it? ---------------------------------------------------
+#
+# `_select_backend_release` returns None for two unrelated faults. Reporting
+# them with one message cost a real diagnosis on 2026-08-17: GitHub's list
+# endpoint answered 200 with `[]` and the product said "no backend release
+# (vX.Y.Z) in GitHub response", which reads as a claim about the repo's tags.
+
+
+@pytest.mark.asyncio
+async def test_an_empty_release_list_is_reported_as_an_upstream_fault(db, monkeypatch):
+    settings_svc.set_value(
+        db, key=rc.CacheKeys.LATEST_VERSION, value="v2.13.4", actor=None
+    )
+    db.commit()
+    monkeypatch.setattr(
+        rc.httpx, "AsyncClient", lambda **_kw: _StubClient(_StubResponse([]))
+    )
+
+    result = await rc.run_check(db, manual=True)
+    assert result["ok"] is False
+    assert "0 releases" in result["error"]
+    # Must NOT blame the repo's tags: that is the other fault.
+    assert "no backend release" not in result["error"]
+
+    cached = rc.read_cached(db)
+    assert cached["latest_version"] == "v2.13.4"
+    assert cached["last_success_at"] is None
+
+
+@pytest.mark.asyncio
+async def test_a_non_matching_response_names_the_count_and_newest_tag(db, monkeypatch):
+    """The `/releases/latest` override handing back a `client-v*` tag - the
+    permanent version of this failure. The message has to carry the evidence
+    that separates it from an upstream blip."""
+    settings_svc.set_value(
+        db,
+        key=settings_svc.Keys.UPDATES_API_URL,
+        value="https://api.github.com/repos/phoen-ix/fileHeron/releases/latest",
+        actor=None,
+    )
+    db.commit()
+    monkeypatch.setattr(
+        rc.httpx,
+        "AsyncClient",
+        lambda **_kw: _StubClient(_StubResponse({
+            "tag_name": "client-v1.4.4",
+            "html_url": "https://github.com/.../client-v1.4.4",
+            "body": "",
+            "published_at": "",
+        })),
+    )
+
+    result = await rc.run_check(db, manual=True)
+    assert result["ok"] is False
+    assert "no backend release" in result["error"]
+    assert "client-v1.4.4" in result["error"]
+    assert "1 release(s)" in result["error"]
+
+
+def test_a_payload_that_is_not_a_release_list_carries_no_candidates():
+    """`_candidates` is what lets the two faults be told apart, so the shapes
+    that must read as "nothing came back" are pinned here."""
+    assert rc._candidates([]) == []
+    assert rc._candidates(None) == []
+    assert rc._candidates(["not-a-dict", 7]) == []
+    assert rc._candidates({"tag_name": "v1.0.0"}) == [{"tag_name": "v1.0.0"}]
+    assert len(rc._candidates([{"a": 1}, "junk", {"b": 2}])) == 2
+
+
+# --- what went wrong upstream? -----------------------------------------------
+#
+# `f"{type(e).__name__}: {str(e)[:200]}"` was the whole message. httpx timeout
+# exceptions stringify EMPTY, so the admin page showed a bare "ReadTimeout: " -
+# seen in production 2026-08-17.
+
+
+@pytest.mark.parametrize(
+    "exc",
+    [
+        httpx.ReadTimeout(""),
+        httpx.ConnectTimeout(""),
+        httpx.PoolTimeout(""),
+    ],
+)
+def test_a_timeout_names_the_budget_instead_of_trailing_a_colon(exc):
+    msg = rc._describe_upstream_error(exc)
+    assert str(rc._HTTP_TIMEOUT_SEC) in msg
+    assert type(exc).__name__ in msg
+    assert not msg.rstrip().endswith(":")
+
+
+def test_every_upstream_error_message_says_something_after_the_colon():
+    """The actual defect was a message whose informative half was empty. Pinned
+    generically so a new branch cannot reintroduce it."""
+    cases = [
+        httpx.ReadTimeout(""),
+        httpx.ConnectError(""),
+        httpx.ConnectError("Name or service not known"),
+        httpx.HTTPStatusError("stub", request=None, response=None),  # type: ignore[arg-type]
+        ValueError(""),
+        RuntimeError("boom"),
+    ]
+    for exc in cases:
+        msg = rc._describe_upstream_error(exc)
+        assert msg, f"{type(exc).__name__} produced no message at all"
+        head, _, tail = msg.partition(":")
+        assert head.strip(), msg
+        if _:
+            assert tail.strip(), f"nothing after the colon for {type(exc).__name__}: {msg!r}"
+
+
+def test_a_403_says_whether_the_rate_limit_is_the_reason():
+    """403 is the one that decides between "wait" and "fix your config", and
+    GitHub answers the question in a header."""
+    limited = httpx.Response(
+        403, headers={"x-ratelimit-remaining": "0"}, request=httpx.Request("GET", "https://x/y")
+    )
+    msg = rc._describe_upstream_error(
+        httpx.HTTPStatusError("f", request=limited.request, response=limited)
+    )
+    assert "403" in msg and "rate limit exhausted" in msg
+
+    plain = httpx.Response(
+        403, headers={"x-ratelimit-remaining": "57"}, request=httpx.Request("GET", "https://x/y")
+    )
+    msg2 = rc._describe_upstream_error(
+        httpx.HTTPStatusError("f", request=plain.request, response=plain)
+    )
+    assert "403" in msg2 and "rate limit exhausted" not in msg2
+
+
+def test_a_404_points_at_the_setting_that_causes_it():
+    resp = httpx.Response(404, request=httpx.Request("GET", "https://x/y"))
+    msg = rc._describe_upstream_error(
+        httpx.HTTPStatusError("f", request=resp.request, response=resp)
+    )
+    assert "404" in msg and "updates.api_url" in msg
+
+
+def test_the_ssrf_guard_refusal_keeps_its_own_code():
+    """`assert_public_http_url` raises inside the try, so its AppError was
+    flattened to "AppError: ..." and the code - the actionable part - was lost."""
+    from app.middleware.errors import AppError
+
+    msg = rc._describe_upstream_error(
+        AppError(400, "URL_BLOCKED", "Host resolves to a non-routable address.")
+    )
+    assert msg.startswith("URL_BLOCKED:")
+    assert "non-routable" in msg
+
+
+@pytest.mark.asyncio
+async def test_a_timeout_reaches_the_cache_in_readable_form(db, monkeypatch):
+    """End to end: the string an admin actually sees on the version card."""
+    monkeypatch.setattr(
+        rc.httpx, "AsyncClient", lambda **_kw: _StubClient(httpx.ReadTimeout(""))
+    )
+    result = await rc.run_check(db, manual=True)
+    assert result["ok"] is False
+    assert result["error"] == rc.read_cached(db)["last_check_error"]
+    assert "did not respond within" in result["error"]
+    assert result["error"] != "ReadTimeout: "
+
+
+# --- can the cron go red? ----------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_a_scheduled_failure_counts_and_a_manual_one_does_not(db, monkeypatch):
+    """An operator watching an outage presses "Check now" repeatedly. Those
+    clicks are not evidence that the check is broken, and must not push it over
+    the threshold."""
+    monkeypatch.setattr(
+        rc.httpx,
+        "AsyncClient",
+        lambda **_kw: _StubClient(httpx.ConnectError("upstream down")),
+    )
+
+    await rc.run_check(db, manual=False)
+    assert settings_svc.get_int(db, rc.CacheKeys.CONSECUTIVE_FAILURES, 0) == 1
+
+    for _ in range(5):
+        await rc.run_check(db, manual=True)
+    assert settings_svc.get_int(db, rc.CacheKeys.CONSECUTIVE_FAILURES, 0) == 1
+
+    await rc.run_check(db, manual=False)
+    assert settings_svc.get_int(db, rc.CacheKeys.CONSECUTIVE_FAILURES, 0) == 2
+
+
+@pytest.mark.asyncio
+async def test_a_success_resets_the_failure_counter(db, monkeypatch):
+    settings_svc.set_value(
+        db, key=rc.CacheKeys.CONSECUTIVE_FAILURES, value="7", actor=None
+    )
+    db.commit()
+    monkeypatch.setattr(
+        rc.httpx,
+        "AsyncClient",
+        lambda **_kw: _StubClient(_StubResponse({
+            "tag_name": "v9.9.9",
+            "html_url": "https://example.com/r",
+            "body": "",
+            "published_at": "",
+        })),
+    )
+
+    result = await rc.run_check(db, manual=False)
+    assert result["ok"] is True
+    assert settings_svc.get_int(db, rc.CacheKeys.CONSECUTIVE_FAILURES, 0) == 0
+
+
+@pytest.mark.asyncio
+async def test_one_failing_tick_is_not_persistent_and_two_are(db, monkeypatch):
+    """The signal `track_cron` reads. One bad tick stays quiet; the second
+    reports failure. Asserted against the real threshold constant, because the
+    number is the invariant - re-deriving it here would pin nothing."""
+    monkeypatch.setattr(
+        rc.httpx,
+        "AsyncClient",
+        lambda **_kw: _StubClient(httpx.ConnectError("upstream down")),
+    )
+
+    for tick in range(1, rc._PERSISTENT_FAILURE_TICKS):
+        result = await rc.release_check.__wrapped__(None)
+        assert rc.CRON_FAILED_KEY not in result, f"tick {tick} should stay quiet"
+
+    result = await rc.release_check.__wrapped__(None)
+    assert result[rc.CRON_FAILED_KEY] is True
+    assert result["ok"] is False

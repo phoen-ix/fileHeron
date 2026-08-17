@@ -233,14 +233,14 @@ so a rollback past them needs the [[reference_rollback_migration_trap]]
 permissive/NULL value, so existing rows, in-flight sessions and
 approval-disabled deployments are unaffected by the upgrade itself.
 
-Backend **`v2.13.3`** is the newest TAG; **v2.13.4 is written but unreleased**
-(notes + code on `main`, no tag, not on the reference host - the desktop-client
-half also needs its version bumped in `pyproject.toml` + `__init__.py` +
-`client/RELEASE_NOTES.md` in lockstep before any `client-v*` tag, which CI
-checks on every push). Previous notable sweep: v2.8.1, audit #2 - see the
-block below; .0 also carried the dependency/runtime sweep: Python 3.14, Node 24
-LTS, TypeScript 6, ESLint 10, Vite 8, Pinia 4, zero open dependency PRs.
-Desktop client **`client-v1.4.3`** - shipped + in production, published for
+Backend **`v2.13.4`** is the newest TAG - released 2026-08-16, and the reference
+host runs it. (Any release still needs the desktop-client half bumped in
+`pyproject.toml` + `__init__.py` + `client/RELEASE_NOTES.md` in lockstep before
+its `client-v*` tag, which CI checks on every push.) Previous notable sweep:
+v2.8.1, audit #2 - see the block below; .0 also carried the dependency/runtime
+sweep: Python 3.14, Node 24 LTS, TypeScript 6, ESLint 10, Vite 8, Pinia 4, zero
+open dependency PRs.
+Desktop client **`client-v1.4.4`** - shipped + in production, published for
 public self-hosting. **v2.8.0 needs no host step and no migration**, but it DOES
 change one default: `imap.require_known_sender` is ON, so an instance that
 accepts inbound mail from addresses with no user account must turn it off at
@@ -1403,7 +1403,11 @@ accent `#b45309` on `#faf8f3`. Density via `[data-density="operator"]` (router m
 - **Signed download URL** - `<a href>` can't carry a bearer; `GET /api/files/{id}/download-url` issues a short-lived HMAC token consumed via `?dt=` (ungated `download_router` for `?dt=`, gated `router` for bearer). TTL admin-tunable `downloads.signed_url_ttl_sec` (default 900s) so a browser's native Resume revalidates the same URL; downloads support HTTP Range (`utils/http_range.py::is_partial_continuation` - range continuations don't double-count the budget / download_log). `verify()` reads `exp` from the token, so only mint reads the setting.
 - **`TEST_ACCOUNT_*`** used by `scripts/seed_dev.py` + `entrypoint.sh` - not dead.
 - **ClamAV slow first boot** - full `freshclam` mirror sync (~150 MB), then incremental.
-- **Self-update filter `^v\d+\.\d+\.\d+`** (`services/release_check.py`) counts only backend tags; without it GitHub's "latest" is usually a `client-v*` desktop tag.
+- **Self-update filter `RELEASE_TAG_RE`** (`services/release_check.py`) counts only backend tags; without it GitHub's "latest" is usually a `client-v*` desktop tag. The pattern is `r"v\d+\.\d+\.\d+"` with **no `^`** - anchoring is the `fullmatch` at each of the three call sites, so a site reaching for `.match` silently re-accepts `v1.2.3-rc1` (which `html_release_url_for_tag` did; this file and the module docstring both claimed a `^` for four releases). Pinned by `test_all_three_tag_call_sites_anchor_the_same_way`.
+- **`release_check.DEFAULT_UPDATES_API_URL` is the ONE default updates URL** and must stay the LIST endpoint. `routers/admin/settings.py` kept its own copy, left on `/releases/latest` when v1.1.8 moved the check to the list endpoint - and the Updates form prefills its input from that GET, so *opening the page and pressing Save* pinned `updates.api_url` to the one endpoint that can never yield a backend release (`/releases/latest` returns GitHub's newest release whatever its tag, i.e. a `client-v*` one here). The locale `admin_updates.url_placeholder` was a third copy. All three are pinned by `test_the_two_default_urls_are_one_object` + `test_the_url_placeholder_teaches_the_working_endpoint`. `/releases/latest` stays a supported *fork* override - don't reject it, just never hand it to anyone by default.
+- **A failed release check says WHICH of THREE failures it was.** "0 releases came back" (upstream fault or misdirected URL) and "releases came back, none tagged `vX.Y.Z`" (filter/fork/pagination) are different diagnoses and `_select_backend_release` returns `None` for both. On 2026-08-17 GitHub's list endpoint answered **200 with `[]`** for about an hour while its own `Link` header advertised eight pages, and the single old message blamed the operator's repo. `_candidates()` is what separates them; the no-match message carries the count and the newest tag seen.
+- **`_describe_upstream_error` exists because `f"{type(e).__name__}: {e}"` is not a message.** **httpx's timeout exceptions stringify to the EMPTY string** unless constructed with one, so the admin version card showed a bare `ReadTimeout: ` - a colon with nothing after it (seen in production the same day). The timeout branch names `_HTTP_TIMEOUT_SEC` instead; a status error leads with the code, and a 403 carrying `x-ratelimit-remaining: 0` says so, because that is the whole difference between "wait" and "fix `updates.api_url`". `HTTPStatusError.response` **can be None** (stubs build it that way) - never deref it blind. The SSRF guard's `AppError` is raised INSIDE the try, so it is reported as `<code>: <message>`; flattened to `AppError: ...` the `URL_BLOCKED` code was lost. Pinned generically by `test_every_upstream_error_message_says_something_after_the_colon`, not by a per-class list.
+- **`release_check` must never RAISE to report failure.** It signals via `cron_tracker.CRON_FAILED_KEY` in its returned dict, after `_PERSISTENT_FAILURE_TICKS` consecutive **scheduled** failures. `track_cron`'s failure path re-raises and `WorkerSettings.max_tries` is 5, so raising turns one bad tick into five upstream fetches (against a 60/hr-per-IP unauthenticated budget shared with everything else on the host) plus five `cron_failed` audit rows and five `notify_admin_error` enqueues - only the in-app ops_alert is deduped. Same retry-storm shape `job_timeout` had to be raised to close for av_scan. Manual "Check now" deliberately does NOT move the counter: an operator watching an outage clicks it repeatedly, and those clicks are not evidence.
 - **`index.html` must stay no-cache** - `docker/frontend/nginx.conf` serves `index.html` with `Cache-Control: no-cache` (v1.55.4) so a browser fetches the fresh hashed bundle names after an in-app Update; a cached stale index points at deleted bundle hashes → blank page. Hashed `assets/*` stay long-cached; only `index.html` is no-cache. Don't re-add caching for it.
 
 ## Desktop client

@@ -226,21 +226,22 @@ def _wrap_layout(
 
 
 def _is_unsubscribable(category: str | None) -> bool:
-    """True only for a real, non-locked notification category - the kind a user
-    may opt out of. Auth/transactional slugs (verify, invite, email_change_*,
-    smtp_test) aren't in the enum, and security categories are locked; both
-    return False, so those emails get the Manage link but no per-type
-    Unsubscribe."""
+    """True only for a category a recipient may opt out of IN ONE TAP, which is
+    what both the footer's Unsubscribe link and the `List-Unsubscribe` header
+    offer. Auth/transactional slugs (verify, invite, email_change_*, smtp_test)
+    aren't in the enum, security categories are locked, and the operational
+    alerts are one-click-exempt; all three return False, so those emails get the
+    Manage link but no per-type Unsubscribe."""
     if not category:
         return False
     from ..models.notification import NotificationCategory
-    from .notification_prefs import LOCKED_CATEGORIES
+    from .notification_prefs import LOCKED_CATEGORIES, NO_ONE_CLICK_CATEGORIES
 
     try:
         cat = NotificationCategory(category)
     except ValueError:
         return False
-    return cat not in LOCKED_CATEGORIES
+    return cat not in LOCKED_CATEGORIES and cat not in NO_ONE_CLICK_CATEGORIES
 
 
 def _resolve_recipient_user_id(

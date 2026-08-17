@@ -61,6 +61,47 @@ def _header_safe(value: str) -> str:
     return " ".join(collapsed.splitlines()).strip()
 
 
+# RFC 8058 s3.1 fixes this value and clients match it LITERALLY. It read
+# `List=One-Click` for as long as the header existed, which no client honours,
+# so one-click silently degraded to the mailto fallback (or to nothing) for
+# every opt-outable category. A constant, so a test can assert on the value the
+# code actually emits rather than on a copy of it.
+ONE_CLICK_POST_VALUE = "List-Unsubscribe=One-Click"
+
+
+def build_message(
+    cfg,
+    *,
+    to: str,
+    subject: str,
+    text_body: str,
+    html_body: str | None = None,
+    list_unsubscribe: str | None = None,
+) -> EmailMessage:
+    """Assemble the outgoing message. Split out of `send_email` so the headers
+    can be asserted on the built object instead of on the source text - the
+    send path itself needs SMTP and returns before building anything when SMTP
+    is unconfigured, so there was no seam to test through."""
+    msg = EmailMessage()
+    msg["From"] = cfg.from_header
+    msg["To"] = to
+    # Defence in depth on top of the display-name validation. EmailMessage
+    # raises ValueError on CR/LF in a header value, so an unsanitised value does
+    # not inject a header - it kills the send outright, and the sender of a
+    # notification is not the person who suffers. Collapse control characters
+    # here so no caller, present or future, can wedge outbound mail with one
+    # (audit 2026-07-30).
+    msg["Subject"] = _header_safe(subject)
+    if list_unsubscribe:
+        msg["List-Unsubscribe"] = list_unsubscribe
+        # Signals RFC 8058 one-click support to Gmail/Outlook.
+        msg["List-Unsubscribe-Post"] = ONE_CLICK_POST_VALUE
+    msg.set_content(text_body)
+    if html_body:
+        msg.add_alternative(html_body, subtype="html")
+    return msg
+
+
 async def send_email(
     *,
     cfg: SmtpConfig,
@@ -109,23 +150,14 @@ async def send_email(
         print("=" * 72 + "\n", flush=True)
         return
 
-    msg = EmailMessage()
-    msg["From"] = cfg.from_header
-    msg["To"] = to
-    # Defence in depth on top of the display-name validation. EmailMessage
-    # raises ValueError on CR/LF in a header value, so an unsanitised value does
-    # not inject a header - it kills the send outright, and the sender of a
-    # notification is not the person who suffers. Collapse control characters
-    # here so no caller, present or future, can wedge outbound mail with one
-    # (audit 2026-07-30).
-    msg["Subject"] = _header_safe(subject)
-    if list_unsubscribe:
-        msg["List-Unsubscribe"] = list_unsubscribe
-        # Signals RFC 8058 one-click support to Gmail/Outlook.
-        msg["List-Unsubscribe-Post"] = "List=One-Click"
-    msg.set_content(text_body)
-    if html_body:
-        msg.add_alternative(html_body, subtype="html")
+    msg = build_message(
+        cfg,
+        to=to,
+        subject=subject,
+        text_body=text_body,
+        html_body=html_body,
+        list_unsubscribe=list_unsubscribe,
+    )
 
     use_tls = cfg.tls_mode == "implicit"
     start_tls = cfg.tls_mode == "starttls"

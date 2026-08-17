@@ -67,7 +67,7 @@ def _to_item(n: Notification) -> NotificationItem:
 def _prefs_response(db: Session, user: User) -> PreferencesResponse:
     return PreferencesResponse(
         items=[
-            PreferenceItem(category=r.category, channel=r.channel, locked=r.locked)
+            PreferenceItem.from_row(r)
             for r in notification_prefs.list_preferences(db, user)
         ]
     )

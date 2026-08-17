@@ -45,12 +45,41 @@ LOCKED_CATEGORIES: frozenset[NotificationCategory] = frozenset(
     }
 )
 
+# Categories an admin may switch off DELIBERATELY on the preferences page, but
+# never with one tap from a mail client.
+#
+# These are the instance telling its operators that something is broken - a
+# failed cron, a failed backup, a 5xx storm, a full disk. They were ordinary
+# opt-out categories, so every alert shipped a `List-Unsubscribe` header with
+# `List-Unsubscribe-Post`, i.e. Gmail and Outlook rendered an Unsubscribe
+# button beside the sender. One tap on one noisy alert and the instance stops
+# telling anyone it is broken, permanently and with nothing surfaced anywhere -
+# on a deployment where a single admin may be the only one with the email
+# channel on. Losing a `share_expiring` notice costs a reminder; losing these
+# costs the thing that tells you the alerting itself has stopped.
+#
+# NOT `LOCKED_CATEGORIES`: locked means `effective_channel` ignores stored rows
+# and forces the default, which would silently DOWNGRADE an admin who had
+# deliberately chosen `both` - turning the ops email off in the name of
+# protecting it. The deliberate choice must keep working; only the one-tap path
+# closes.
+NO_ONE_CLICK_CATEGORIES: frozenset[NotificationCategory] = frozenset(
+    {
+        NotificationCategory.ops_alert,
+        NotificationCategory.server_error,
+    }
+)
+
 
 @dataclass(frozen=True)
 class PrefRow:
     category: NotificationCategory
     channel: NotificationChannel
     locked: bool
+    # False for the operational alerts: still switchable here, never by a
+    # one-tap unsubscribe from an email. Separate from `locked` because a
+    # locked row is also READ-ONLY, and these are not.
+    one_click: bool = True
 
 
 def _default_channel(category: NotificationCategory) -> NotificationChannel:
@@ -89,7 +118,14 @@ def list_preferences(db: Session, user: User) -> list[PrefRow]:
             continue
         locked = cat in LOCKED_CATEGORIES
         channel = _default_channel(cat) if locked else by_cat.get(cat, _default_channel(cat))
-        out.append(PrefRow(category=cat, channel=channel, locked=locked))
+        out.append(
+            PrefRow(
+                category=cat,
+                channel=channel,
+                locked=locked,
+                one_click=cat not in NO_ONE_CLICK_CATEGORIES,
+            )
+        )
     return out
 
 
@@ -147,6 +183,16 @@ def unsubscribe_category(db: Session, user: User, category_value: str) -> Notifi
         raise AppError(
             400, "LOCKED_CATEGORY",
             "This notification is required for account security and cannot be disabled.",
+        )
+    if category in NO_ONE_CLICK_CATEGORIES:
+        # Guarded HERE, not only at the point the footer is rendered: emails
+        # already delivered carry a live `?off=` link and a one-click URL for
+        # these, and those must stop working too.
+        raise AppError(
+            400, "NO_ONE_CLICK_UNSUBSCRIBE",
+            "This alert reports that the instance itself is broken, so it "
+            "cannot be switched off from an email. Change it in your "
+            "notification preferences.",
         )
 
     existing = (

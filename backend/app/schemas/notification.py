@@ -16,6 +16,25 @@ class PreferenceItem(APIBaseModel):
     channel: NotificationChannel
     # Security-critical categories the user can view but not disable.
     locked: bool = False
+    # False for operational alerts: changeable here, but never by a one-tap
+    # unsubscribe from an email. Distinct from `locked`, which is read-only.
+    one_click: bool = True
+
+    @classmethod
+    def from_row(cls, row) -> PreferenceItem:
+        """The ONE way to serialise a `notification_prefs.PrefRow`.
+
+        Two routes built this by hand - the token-authed manage page and the
+        signed-in account page - so a field added for one was silently absent
+        from the other, and both flags here decide whether an alert can be
+        switched off. `test_both_preference_routes_serialise_the_same_row`
+        pins them together."""
+        return cls(
+            category=row.category,
+            channel=row.channel,
+            locked=row.locked,
+            one_click=row.one_click,
+        )
 
 
 class PreferencesResponse(APIBaseModel):

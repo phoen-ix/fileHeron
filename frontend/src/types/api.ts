@@ -480,6 +480,9 @@ export interface PreferenceItem {
   category: NotificationCategory
   channel: NotificationChannel
   locked: boolean
+  /** False for operational alerts: changeable on this page, but never by a
+   *  one-tap unsubscribe from an email. Distinct from `locked` (read-only). */
+  one_click: boolean
 }
 
 export interface PreferencesResponse {

@@ -5,8 +5,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import en from '@/i18n/locales/en.json'
 
 const ITEMS = [
-  { category: 'share_created', channel: 'both', locked: false },
-  { category: 'login_alert', channel: 'email', locked: true },
+  { category: 'share_created', channel: 'both', locked: false, one_click: true },
+  { category: 'login_alert', channel: 'email', locked: true, one_click: false },
+  // Operational alert: changeable here, but never by following a link from an
+  // email - `one_click` is what the view keys on, separately from `locked`,
+  // because this row is NOT read-only.
+  { category: 'ops_alert', channel: 'both', locked: false, one_click: false },
 ]
 
 const fetchSubscriptions = vi.fn(async (_t: string) => ({
@@ -77,6 +81,35 @@ describe('ManageNotifications', () => {
     await w.findAll('button').find((b) => b.text() === 'Undo')!.trigger('click')
     await flushPromises()
     expect(updateSubscriptions).toHaveBeenCalledWith('tok123', { share_created: 'both' })
+  })
+
+  it('?off still works when the backend does not send one_click', async () => {
+    // A rolling update, or a cached bundle against an older backend. Reading
+    // the absent flag as "not allowed" would silently break unsubscribe for
+    // every category; the server is the authority and refuses what it must.
+    fetchSubscriptions.mockResolvedValueOnce({
+      data: {
+        display_name: 'Dana',
+        items: [{ category: 'share_created', channel: 'both', locked: false }],
+      },
+    } as never)
+    routeQuery = { off: 'share_created' }
+    const w = makeWrapper()
+    await flushPromises()
+    expect(unsubscribeCategory).toHaveBeenCalledWith('tok123', 'share_created')
+    expect(w.text()).toContain('unsubscribed')
+  })
+
+  it('?off does NOT auto-apply for an operational alert', async () => {
+    // ops_alert / server_error are the instance reporting that it is broken.
+    // Mail sent before that rule existed still carries `?off=ops_alert`, so
+    // landing on this page must show the preferences rather than silently
+    // ending the alerting. The row is not `locked` - it stays changeable here.
+    routeQuery = { off: 'ops_alert' }
+    const w = makeWrapper()
+    await flushPromises()
+    expect(unsubscribeCategory).not.toHaveBeenCalled()
+    expect(w.text()).not.toContain('unsubscribed')
   })
 
   it('changing a channel saves it', async () => {

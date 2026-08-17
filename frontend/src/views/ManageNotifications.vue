@@ -112,7 +112,12 @@ async function load() {
   const off = route.query.off
   if (typeof off === 'string' && off) {
     const row = items.value.find((i) => i.category === off)
-    if (row && !row.locked && row.one_click && row.channel !== 'off') {
+    // `!== false`, not a truthiness check: an absent flag means an older
+    // backend (rolling update, or a cached bundle), and treating that as
+    // "not allowed" would silently break the ?off= link for EVERY category.
+    // Absent -> permitted, matching the field's server-side default; the
+    // server refuses the operational ones regardless, and it is authoritative.
+    if (row && !row.locked && row.one_click !== false && row.channel !== 'off') {
       await applyUnsubscribe(off)
     }
   }

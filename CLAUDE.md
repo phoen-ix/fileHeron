@@ -274,9 +274,9 @@ so a rollback past them needs the [[reference_rollback_migration_trap]]
 permissive/NULL value, so existing rows, in-flight sessions and
 approval-disabled deployments are unaffected by the upgrade itself.
 
-Backend **`v2.13.4`** is the newest TAG - released 2026-08-16, and the reference
-host runs it; **v2.13.5 is written but unreleased** (notes + code on `main`, no
-tag). (Any release still needs the desktop-client half bumped in
+Backend **`v2.13.5`** is the newest TAG - released 2026-08-17. The reference
+host still runs v2.13.4 until the in-app Update is applied. (Any release still
+needs the desktop-client half bumped in
 `pyproject.toml` + `__init__.py` + `client/RELEASE_NOTES.md` in lockstep before
 its `client-v*` tag, which CI checks on every push.) Previous notable sweep:
 v2.8.1, audit #2 - see the block below; .0 also carried the dependency/runtime

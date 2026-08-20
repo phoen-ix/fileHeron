@@ -16,8 +16,14 @@ keep this to what would cause a wrong move if unknown.
 ## Status
 
 **v2.13.6 is the quality-gate sweep.** No migration, no host
-step, no client change, no default moves. Three things move on the wire, all additive or
-corrective; see "type drift" below.
+step, no client change, no default moves. Exactly ONE thing moves on the wire
+and it is additive: 43 routes gained a `response_model`, so previously-omitted
+optional fields now serialise - as `null`, or as the field's own default. Two
+booleans arrive as `false`, not `null`: `already_verified` on
+`/api/auth/resend-verification` and `ignored` on the tus hook. Nothing that was
+sent before is sent differently and nothing was removed - verified by matching
+every new model's fields against what its handler actually returns, across all
+43 routes and the seven service functions whose dicts they pass through.
 
 **mypy has NO exemptions any more.** It was wired into CI at audit #2 behind 47
 per-module `ignore_errors` overrides - which is not a baseline: `ignore_errors`

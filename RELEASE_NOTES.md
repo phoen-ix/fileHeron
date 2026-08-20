@@ -4,11 +4,15 @@
 the backend.**
 
 A patch release, and almost all of it is about the checks rather than the
-product. No migration, no host step, no
-change to any default, and no desktop-client release beside it. One thing moves
-on the wire and it is additive: a number of API responses now carry fields they
-previously left out, always as `null`. Nothing that was sent before is sent
-differently, and nothing has been removed.
+product. No migration, no host step, no change to any default, and no
+desktop-client release beside it. One thing moves on the wire and it is
+additive: 43 endpoints that had never declared their response shape now do, so
+a number of responses carry fields they previously left out — as `null`, or as
+the field's own default where it has one. Two are booleans and arrive as
+`false` rather than `null`: `already_verified` on
+`POST /api/auth/resend-verification`, and `ignored` on the internal tus hook.
+Nothing that was sent before is sent differently, and nothing has been
+removed.
 
 ---
 

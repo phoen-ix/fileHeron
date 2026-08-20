@@ -20,7 +20,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import nh3
-from jinja2 import Environment, FileSystemLoader, pass_context, select_autoescape
+from jinja2 import (
+    Environment,
+    FileSystemLoader,
+    TemplateNotFound,
+    pass_context,
+    select_autoescape,
+)
 from sqlalchemy.orm import Session
 
 from ..config import settings
@@ -114,7 +120,7 @@ def _render(
     fallback = f"en/{slug}.{kind}.j2"
     try:
         template = _env.get_template(candidate)
-    except Exception:
+    except TemplateNotFound:
         template = _env.get_template(fallback)
     return template.render(
         **ctx,
@@ -453,7 +459,17 @@ def render_email(
         text = _render(code, slug, "txt", ctx, app_url=app_url, site_timezone=site_timezone, app_name=app_name)
         try:
             html = _render(code, slug, "html", ctx, app_url=app_url, site_timezone=site_timezone, app_name=app_name)
+        except TemplateNotFound:
+            html = None
         except Exception:
+            # A shipped template that raises must not kill the send - but it must
+            # not be SILENT either. This swallow had no log line at all, which is
+            # how release_available.html.j2 shipped text-only in both locales for
+            # its entire life: it named a block the layout does not define, raised
+            # UndefinedError here, and nothing anywhere recorded it.
+            logger.exception(
+                "html render failed for %s/%s - shipping text-only", code, slug
+            )
             html = None
 
     if manage_url:
@@ -692,7 +708,10 @@ async def test_send(
     text = _render(locale_code, "smtp_test", "txt", ctx, site_timezone=tz)
     try:
         html = _render(locale_code, "smtp_test", "html", ctx, site_timezone=tz)
+    except TemplateNotFound:
+        html = None
     except Exception:
+        logger.exception("html render failed for smtp_test - shipping text-only")
         html = None
     try:
         await send_email(

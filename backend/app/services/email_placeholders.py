@@ -363,6 +363,13 @@ def sample_ctx(slug: str, *, app_url: str) -> dict:
         "expires_at": soon,
         "at": soon,
         "filename": "designs.zip",
+        # `signature` + `uploader_name` are file_quarantined's [THREAT]/[UPLOADER].
+        # They were absent, and _format_value returns "" for a missing key - so the
+        # admin preview and test-send of that template rendered both as blanks.
+        "signature": "Eicar-Test-Signature",
+        "uploader_name": "Grace Hopper",
+        # smtp_test is the one template whose body prints `now`.
+        "now": soon,
         "size_bytes": 1048576,
         "downloads_remaining": 4,
         "provider_name": "Microsoft Entra ID",
@@ -374,6 +381,13 @@ def sample_ctx(slug: str, *, app_url: str) -> dict:
         "count": 1,
         "cap": 10,
         "new_email": "grace.hopper@example.com",
+        # Branch selectors the email_change_* templates switch on. They were absent,
+        # so every one resolved to Undefined -> falsy, and the preview could only
+        # ever show one side of each branch. False is what Undefined already meant,
+        # so naming them changes no rendering - it just makes the context honest.
+        "by_admin": False,
+        "applied": False,
+        "oidc_reset": False,
         "locked_until": "2026-06-06T15:30:00",
         "version": "1.25.0",
         "running_version": "1.24.0",

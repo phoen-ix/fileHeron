@@ -15,6 +15,101 @@ keep this to what would cause a wrong move if unknown.
 
 ## Status
 
+**Unreleased: the quality-gate sweep.** No migration, no host
+step, no client change. Three things move on the wire, all additive or
+corrective; see "type drift" below.
+
+**mypy has NO exemptions any more.** It was wired into CI at audit #2 behind 47
+per-module `ignore_errors` overrides - which is not a baseline: `ignore_errors`
+is WHOLE-MODULE, so nothing in those 47 files was checked and **37.4% of `app/`
+by line** (18,719 of 50,074) was invisible, including every auth, session,
+quota, rate-limit, TOTP, WebAuthn and storage module. The recorded "130 errors"
+was prose in three places and matched nothing measurable; re-measuring found
+**137**, under **mypy 2.x** - the spec floated at `>=1.10` and crossed a major
+version unnoticed, precisely because the errors it would have surfaced were
+inside exempt modules. All 137 are fixed, every override is deleted, mypy is
+**pinned** like ruff, `check_untyped_defs` is on (measured: zero extra errors),
+scope now includes `backend/scripts`, and
+`tests/test_mypy_has_no_exemptions.py` is the ratchet. It is also **visible**
+now: `make typecheck`, and a row in CONTRIBUTING's gate table - it had none, so
+the documented local gate was ruff-only.
+
+**Two real defects fell out of that, both of the "control that cannot fire"
+shape this file keeps recording:**
+- `MigrationContext.from_connection` **does not exist** (alembic 1.19.1). It
+  raised `AttributeError`, the bare `except Exception` swallowed it, and
+  `_current_alembic_revision` therefore returned None on every call - so every
+  config backup ever written recorded `"alembic_revision": null` and
+  `_version_warning`, which needs BOTH revisions, could never warn about schema
+  drift on import. `configure()` is the real constructor.
+- `base64.binascii` is an undocumented re-export, not an API. `import binascii`.
+
+**The frontend/backend type contract is pinned now, and it had drifted eight
+times.** `frontend/src/types/api.ts` (143 interfaces) plus
+`frontend/src/api/*.ts` (57 more) is the largest hand-maintained cross-language
+artefact in the repo and was **the only significant one with no pin at all**.
+The worst: `NotificationCategory` was missing `server_error` for **289 commits
+and 59 releases** - a category the backend dispatches and returns a preferences
+row for. The repo had already caught that same drift in a *different*
+hand-written mirror four days earlier
+(`frontend/tests/i18n/notif-categories.test.ts`, whose comment reads *"'Keep
+this list in sync with the enum' is the defect, not the instruction"*) and did
+not notice the second copy. Every drift was FIELD-level inside a
+correctly-named interface, which is exactly what `vue-tsc -b` cannot see.
+`backend/tests/test_frontend_api_types.py` now reads both sides.
+**Codegen was considered and rejected**: 47 routes answered `-> dict`, the
+error envelope is assembled inside exception handlers where FastAPI's generator
+cannot see it, generation would widen twelve deliberately-narrowed unions back
+to `string`, and 148 symbols are imported by name across 69 files. A test that
+reads both sides is the idiom this repo already uses eleven times.
+
+**`response_model=` is now on every JSON-shaped route** (203 of 250; the other
+47 return `Response`/`StreamingResponse`/`RedirectResponse`). It was 160.
+`routers/admin/system.py` was 13 routes with **zero**, and it alone backs nine
+frontend interfaces. **`response_model` FILTERS the response** - a model that
+forgets a key silently deletes it from the wire, so each was written from the
+handler's actual return value. One route needed
+`response_model_exclude_none=True`: `/api/auth/webauthn/complete`, where the
+half-authenticated reply must not carry an `access_token` key **at all** (the
+absence is the contract, and a test pins it).
+
+**`routers/admin/settings.py` is a package now** - 1,581 lines to 15 modules of
+65-263. Pure move: the route table is byte-identical before and after. It was
+the same shape `routers/admin.py` had at 1,862 lines before `a244f67` split it
+this way, and `settings.py` was BORN in that split at 584 lines. Its 16
+clusters shared nothing but the `router` object - not one private helper
+crossed a section boundary. `settings/__init__.py` only includes routers, so
+`test_callback_and_link_integrity`'s `hasattr(..., "_DEFAULT_UPDATES_API_URL")`
+now targets the SUB-module `settings.home_motd_updates`: against the package it
+would be trivially False and would pin nothing.
+
+**Deliberately NOT split, don't re-propose:**
+- **`services/scan_guard.py` (1,830).** Six module-level globals behind two
+  `global` statements form a closed cache unit, and
+  `tests/test_scan_guard_middleware.py` does
+  `monkeypatch.setattr(sg, "_distinct_paths_seen", ...)` twice - `note_offence`
+  resolves that name from its OWN module globals, so a package split leaves
+  both tests passing while testing unpatched behaviour. 34% of the file is
+  documented invariants, and it is the one of the four mypy already checked.
+- **`services/share.py` (1,806).** `_user_group_ids` is a hub across four
+  clusters and is imported BY NAME from `routers/account.py`; cluster C's
+  notification helpers fan into three other clusters; 42 function-local imports
+  already mark cycle pressure; and `test_share_recipient_privacy.py` AST-scans
+  a hardcoded path for the `RosterVisibility` rule.
+- **`services/config_backup.py::apply_backup` (454 lines).** Extraction was
+  attempted and abandoned deliberately: the function **commits twice
+  mid-flight** (after the share invalidation, and again after the identity
+  purge), and both commits are ordered against irreversible byte-unlinking with
+  the reasoning inline. Every phase also both consumes and produces shared
+  state (`user_id_map`, `group_id_map`, `summary`, `warnings`,
+  `deferred_erasures`). Threading that through helpers relocates the coupling
+  and makes the transaction boundaries LESS visible - the exact class of error
+  this file warns about elsewhere ("never reintroduce a purge inside the
+  transaction"). The eight numbered phases read top-to-bottom in order, which is
+  the clearest form for a sequential migration. What DID change: the test that
+  pins the commit-before-purge ordering used `str.index`, which raised
+  `ValueError` rather than failing, and had no vacuity guard.
+
 **v2.13.5 started as "why does Check for updates say no backend release" and
 ended in the two things that tell an operator something is wrong.** No
 migration, no host step, no client change. **Two things DO move:** the default
@@ -29,7 +124,8 @@ real GitHub incident) while its own `Link` header advertised eight pages. The
 instance was already running the newest release.
 
 **The finding that mattered was the same message reachable permanently.**
-`routers/admin/settings.py` kept a SECOND copy of the default updates URL, left
+`routers/admin/settings.py` (now `settings/home_motd_updates.py`) kept a
+SECOND copy of the default updates URL, left
 on `/releases/latest` when v1.1.8 moved the check to the list endpoint - and the
 Updates form prefills its input from that GET, so opening the page and pressing
 Save pinned the check to the one endpoint that can never resolve a backend
@@ -1455,7 +1551,7 @@ accent `#b45309` on `#faf8f3`. Density via `[data-density="operator"]` (router m
 - **`TEST_ACCOUNT_*`** used by `scripts/seed_dev.py` + `entrypoint.sh` - not dead.
 - **ClamAV slow first boot** - full `freshclam` mirror sync (~150 MB), then incremental.
 - **Self-update filter `RELEASE_TAG_RE`** (`services/release_check.py`) counts only backend tags; without it GitHub's "latest" is usually a `client-v*` desktop tag. The pattern is `r"v\d+\.\d+\.\d+"` with **no `^`** - anchoring is the `fullmatch` at each of the three call sites, so a site reaching for `.match` silently re-accepts `v1.2.3-rc1` (which `html_release_url_for_tag` did; this file and the module docstring both claimed a `^` for four releases). Pinned by `test_all_three_tag_call_sites_anchor_the_same_way`.
-- **`release_check.DEFAULT_UPDATES_API_URL` is the ONE default updates URL** and must stay the LIST endpoint. `routers/admin/settings.py` kept its own copy, left on `/releases/latest` when v1.1.8 moved the check to the list endpoint - and the Updates form prefills its input from that GET, so *opening the page and pressing Save* pinned `updates.api_url` to the one endpoint that can never yield a backend release (`/releases/latest` returns GitHub's newest release whatever its tag, i.e. a `client-v*` one here). The locale `admin_updates.url_placeholder` was a third copy. All three are pinned by `test_the_two_default_urls_are_one_object` + `test_the_url_placeholder_teaches_the_working_endpoint`. `/releases/latest` stays a supported *fork* override - don't reject it, just never hand it to anyone by default.
+- **`release_check.DEFAULT_UPDATES_API_URL` is the ONE default updates URL** and must stay the LIST endpoint. `routers/admin/settings.py` (now the `settings/` package - `home_motd_updates.py`) kept its own copy, left on `/releases/latest` when v1.1.8 moved the check to the list endpoint - and the Updates form prefills its input from that GET, so *opening the page and pressing Save* pinned `updates.api_url` to the one endpoint that can never yield a backend release (`/releases/latest` returns GitHub's newest release whatever its tag, i.e. a `client-v*` one here). The locale `admin_updates.url_placeholder` was a third copy. All three are pinned by `test_the_two_default_urls_are_one_object` + `test_the_url_placeholder_teaches_the_working_endpoint`. `/releases/latest` stays a supported *fork* override - don't reject it, just never hand it to anyone by default.
 - **A failed release check says WHICH of THREE failures it was.** "0 releases came back" (upstream fault or misdirected URL) and "releases came back, none tagged `vX.Y.Z`" (filter/fork/pagination) are different diagnoses and `_select_backend_release` returns `None` for both. On 2026-08-17 GitHub's list endpoint answered **200 with `[]`** for about an hour while its own `Link` header advertised eight pages, and the single old message blamed the operator's repo. `_candidates()` is what separates them; the no-match message carries the count and the newest tag seen.
 - **`_describe_upstream_error` exists because `f"{type(e).__name__}: {e}"` is not a message.** **httpx's timeout exceptions stringify to the EMPTY string** unless constructed with one, so the admin version card showed a bare `ReadTimeout: ` - a colon with nothing after it (seen in production the same day). The timeout branch names `_HTTP_TIMEOUT_SEC` instead; a status error leads with the code, and a 403 carrying `x-ratelimit-remaining: 0` says so, because that is the whole difference between "wait" and "fix `updates.api_url`". `HTTPStatusError.response` **can be None** (stubs build it that way) - never deref it blind. The SSRF guard's `AppError` is raised INSIDE the try, so it is reported as `<code>: <message>`; flattened to `AppError: ...` the `URL_BLOCKED` code was lost. Pinned generically by `test_every_upstream_error_message_says_something_after_the_colon`, not by a per-class list.
 - **`release_check` must never RAISE to report failure.** It signals via `cron_tracker.CRON_FAILED_KEY` in its returned dict, after `_PERSISTENT_FAILURE_TICKS` consecutive **scheduled** failures. `track_cron`'s failure path re-raises and `WorkerSettings.max_tries` is 5, so raising turns one bad tick into five upstream fetches (against a 60/hr-per-IP unauthenticated budget shared with everything else on the host) plus five `cron_failed` audit rows and five `notify_admin_error` enqueues - only the in-app ops_alert is deduped. Same retry-storm shape `job_timeout` had to be raised to close for av_scan. Manual "Check now" deliberately does NOT move the counter: an operator watching an outage clicks it repeatedly, and those clicks are not evidence.

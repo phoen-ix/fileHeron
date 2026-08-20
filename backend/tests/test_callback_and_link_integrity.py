@@ -186,12 +186,15 @@ def test_the_two_default_urls_are_one_object():
     endpoint. The SPA prefills its input from that GET, so opening the page and
     pressing Save pinned the check to an endpoint that can never yield a backend
     release - the same error message, permanently."""
-    from app.routers.admin import settings as admin_settings
+    # Points at the SUB-MODULE, not the `settings` package: the package's
+    # __init__ only includes routers, so `hasattr(package, "_DEFAULT_...")`
+    # would be trivially False and the negative assertion would pin nothing.
+    from app.routers.admin.settings import home_motd_updates as admin_updates
     from app.services.release_check import DEFAULT_UPDATES_API_URL
 
-    src = inspect.getsource(admin_settings.get_updates_settings)
+    src = inspect.getsource(admin_updates.get_updates_settings)
     assert "DEFAULT_UPDATES_API_URL" in src
-    assert not hasattr(admin_settings, "_DEFAULT_UPDATES_API_URL"), (
+    assert not hasattr(admin_updates, "_DEFAULT_UPDATES_API_URL"), (
         "a second default is a second meaning; there is one constant"
     )
     # And it must be the LIST endpoint: /releases/latest returns GitHub's newest

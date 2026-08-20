@@ -1,26 +1,27 @@
 {% extends "layout.html.j2" %}
+{% import "_components.html.j2" as ui %}
 {% block subject %}{{ app_name }} {% if status_code and status_code < 500 %}Client-Fehler{% else %}Serverfehler{% endif %} ({{ code }}){% endblock %}
 {% block content %}
-  <p style="margin:0 0 12px 0;color:#6b7280;font-family:Georgia,serif;font-style:italic;">Betrieb</p>
-  <h1 style="font-family:Georgia,'Times New Roman',serif;font-weight:normal;font-size:26px;line-height:1.2;margin:0 0 16px 0;">
-    {% if source == "worker" %}Eine geplante Aufgabe ist fehlgeschlagen{% elif status_code and status_code < 500 %}Ein Client-Fehler ist aufgetreten{% else %}Ein Serverfehler ist aufgetreten{% endif %}
-  </h1>
-  <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 16px 0;width:100%;font-family:'JetBrains Mono',Menlo,Consolas,monospace;font-size:13px;">
-    {% if source == "worker" %}
-    <tr><td style="padding:4px 0;color:#6b7280;width:120px;">Aufgabe</td><td style="padding:4px 0;color:#1a1d24;">{{ job_name }}</td></tr>
-    {% else %}
-    <tr><td style="padding:4px 0;color:#6b7280;width:120px;">Anfrage</td><td style="padding:4px 0;color:#1a1d24;">{{ method }} {{ path }}</td></tr>
-    {% endif %}
-    <tr><td style="padding:4px 0;color:#6b7280;">Status</td><td style="padding:4px 0;color:#1a1d24;">{{ status_code }} {{ code }}</td></tr>
-    <tr><td style="padding:4px 0;color:#6b7280;">Fehler</td><td style="padding:4px 0;color:#1a1d24;">{{ exception_type }}{% if message %} - {{ message }}{% endif %}</td></tr>
-    <tr><td style="padding:4px 0;color:#6b7280;">Zeit</td><td style="padding:4px 0;color:#1a1d24;">{{ at|dt_locale(locale) }}</td></tr>
-    {% if ip %}<tr><td style="padding:4px 0;color:#6b7280;">Von IP</td><td style="padding:4px 0;color:#1a1d24;">{{ ip }}</td></tr>{% endif %}
-    {% if request_id %}<tr><td style="padding:4px 0;color:#6b7280;">Request-ID</td><td style="padding:4px 0;color:#1a1d24;">{{ request_id }}</td></tr>{% endif %}
-    {% if user_id %}<tr><td style="padding:4px 0;color:#6b7280;">Benutzer</td><td style="padding:4px 0;color:#1a1d24;">#{{ user_id }}{% if auth_via %} (via {{ auth_via }}){% endif %}</td></tr>{% endif %}
-    <tr><td style="padding:4px 0;color:#6b7280;">Vorkommen</td><td style="padding:4px 0;color:#1a1d24;">{{ occurrence_count }}</td></tr>
-  </table>
-  {% if suppressed_count and suppressed_since %}
-  <p style="margin:0 0 16px 0;color:#6b7280;font-size:13px;">{{ suppressed_count }} frühere(s) Vorkommen unterdrückt seit {{ suppressed_since|dt_locale(locale) }}.</p>
+  {{ ui.eyebrow("Betrieb") }}
+  {% if source == "worker" %}
+    {{ ui.headline("Eine geplante Aufgabe ist fehlgeschlagen") }}
+  {% elif status_code and status_code < 500 %}
+    {{ ui.headline("Ein Client-Fehler ist aufgetreten") }}
+  {% else %}
+    {{ ui.headline("Ein Serverfehler ist aufgetreten") }}
   {% endif %}
-  <p style="margin:0;color:#6b7280;font-size:13px;">Diese Benachrichtigungen verwaltest du unter <strong>/admin/settings/error-alerts</strong>.</p>
+  {% call ui.specs() %}
+    {% if source == "worker" %}{{ ui.spec("Aufgabe", job_name) }}{% else %}{{ ui.spec("Anfrage", method ~ " " ~ path) }}{% endif %}
+    {{ ui.spec("Status", status_code ~ " " ~ code) }}
+    {{ ui.spec("Fehler", exception_type ~ (" - " ~ message if message else "")) }}
+    {{ ui.spec("Zeit", at|dt_locale(locale)) }}
+    {% if ip %}{{ ui.spec("Von IP", ip) }}{% endif %}
+    {% if request_id %}{{ ui.spec("Request-ID", request_id) }}{% endif %}
+    {% if user_id %}{{ ui.spec("Benutzer", "#" ~ user_id ~ (" (via " ~ auth_via ~ ")" if auth_via else "")) }}{% endif %}
+    {{ ui.spec("Vorkommen", occurrence_count) }}
+  {% endcall %}
+  {% if suppressed_count and suppressed_since %}
+    {% call ui.note() %}{{ suppressed_count }} frühere(s) Vorkommen unterdrückt seit {{ suppressed_since|dt_locale(locale) }}.{% endcall %}
+  {% endif %}
+  {% call ui.note(gap=0) %}Diese Benachrichtigungen verwaltest du unter <strong>/admin/settings/error-alerts</strong>.{% endcall %}
 {% endblock %}

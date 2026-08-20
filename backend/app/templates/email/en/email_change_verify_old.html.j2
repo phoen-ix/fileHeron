@@ -1,0 +1,15 @@
+{% extends "layout.html.j2" %}
+{% import "_components.html.j2" as ui %}
+{% block subject %}Approve your {{ app_name }} email change{% endblock %}
+{% block content %}
+  {{ ui.eyebrow("Email change") }}
+  {{ ui.headline("Approve your email change") }}
+  {{ ui.para("Hi " ~ display_name ~ ",") }}
+  {% call ui.para() %}{% if by_admin %}An administrator requested a change of the email address on your {{ app_name }} account{% else %}A change of the email address on your {{ app_name }} account was requested{% endif %} from this address.{% endcall %}
+  {% call ui.specs() %}
+    {{ ui.spec("new address", new_email) }}
+  {% endcall %}
+  {% call ui.para() %}For security, this change needs confirmation from <strong>both</strong> your old and new addresses. Approve it from this (old) address:{% endcall %}
+  {{ ui.button(confirm_url, "Approve the change", gap=24) }}
+  {% call ui.note(gap=0) %}The change only takes effect once both addresses have confirmed, and this link expires in 24 hours. If you did <strong>not</strong> request it, {{ ui.link(cancel_url, "cancel it immediately") }}.{% endcall %}
+{% endblock %}

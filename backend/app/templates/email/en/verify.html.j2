@@ -1,0 +1,11 @@
+{% extends "layout.html.j2" %}
+{% import "_components.html.j2" as ui %}
+{% block subject %}Verify your email{% endblock %}
+{% block content %}
+  {{ ui.eyebrow("Welcome") }}
+  {{ ui.headline("Confirm your email address", size="lg") }}
+  {{ ui.para("Hi " ~ display_name ~ ",") }}
+  {{ ui.para("Welcome to " ~ app_name ~ ". Confirm this address to finish setting up your account.", gap=24) }}
+  {{ ui.button(verify_url, "Confirm my email", gap=24) }}
+  {{ ui.note("This link expires in 24 hours. If you didn't request this, you can ignore this email.", gap=0) }}
+{% endblock %}

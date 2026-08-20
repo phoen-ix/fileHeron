@@ -1,0 +1,22 @@
+{% extends "layout.html.j2" %}
+{% import "_components.html.j2" as ui %}
+{% block subject %}{{ app_name }} - Betriebswarnung{% endblock %}
+{% block content %}
+  {{ ui.eyebrow("Betrieb") }}
+  {{ ui.headline("Eine Betriebswarnung") }}
+  {#- Acht Dispatcher liefern jeweils eine ANDERE Teilmenge dieser Schlüssel,
+      daher ist jede Zeile einzeln abgesichert - dieselbe Form wie
+      server_error.html.j2. -#}
+  {% call ui.specs() %}
+    {% if reason %}{{ ui.spec("Grund", reason) }}{% endif %}
+    {% if job_name %}{{ ui.spec("Aufgabe", job_name) }}{% endif %}
+    {% if type %}{{ ui.spec("Typ", type) }}{% endif %}
+    {% if subject %}{{ ui.spec("Betreff", subject) }}{% endif %}
+    {% if count %}{{ ui.spec("Anzahl", count) }}{% endif %}
+    {% if error %}{{ ui.spec("Fehler", error, wrap=true) }}{% endif %}
+    {% if detail %}{{ ui.spec("Detail", detail, wrap=true) }}{% endif %}
+    {% if at %}{{ ui.spec("Zeitpunkt", at|dt_locale(locale)) }}{% endif %}
+  {% endcall %}
+  {{ ui.button(app_url ~ "/admin/system", "Admin-Bereich öffnen", gap=16) }}
+  {% call ui.note(gap=0) %}Je nach Warnung stehen die Details im Audit-Log oder auf der betreffenden Seite statt unter {{ ui.mono("/admin/system") }}.{% endcall %}
+{% endblock %}

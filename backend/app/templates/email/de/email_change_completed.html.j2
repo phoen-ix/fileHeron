@@ -1,0 +1,15 @@
+{% extends "layout.html.j2" %}
+{% import "_components.html.j2" as ui %}
+{% block subject %}Deine {{ app_name }}-Anmelde-E-Mail wurde geändert{% endblock %}
+{% block content %}
+  {{ ui.eyebrow("E-Mail-Änderung") }}
+  {{ ui.headline("Deine Anmelde-E-Mail wurde geändert") }}
+  {{ ui.para("Hallo " ~ display_name ~ ",") }}
+  {% call ui.specs() %}
+    {{ ui.spec("Anmelde-E-Mail", new_email) }}
+  {% endcall %}
+  {% if oidc_reset %}
+    {{ ui.para("Da dein Konto mit einem Single-Sign-On-Anbieter (SSO) verknüpft war, wurde diese Verknüpfung im Zuge dieser Änderung zurückgesetzt. In einer separaten E-Mail wurde ein Link zum Setzen eines Passworts gesendet, damit du dich mit einem Passwort anmelden kannst. SSO kannst du danach in deinen Kontoeinstellungen erneut verknüpfen.") }}
+  {% endif %}
+  {{ ui.button(login_url, "Anmelden") }}
+{% endblock %}

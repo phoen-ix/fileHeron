@@ -1,0 +1,21 @@
+{% extends "layout.html.j2" %}
+{% import "_components.html.j2" as ui %}
+{% block subject %}Your account was just locked{% endblock %}
+{% block content %}
+  {{ ui.eyebrow("Account locked", tone="danger") }}
+  {{ ui.headline("Your account was just locked") }}
+  {{ ui.para("Hi " ~ display_name ~ ",") }}
+  {{ ui.para("There were too many failed sign-in attempts on your " ~ app_name ~ " account.") }}
+  {% call ui.specs() %}
+    {{ ui.spec("locked until", locked_until|dt_locale(locale)) }}
+    {{ ui.spec("sign-in source", ip_hint|default("unknown")) }}
+  {% endcall %}
+  {{ ui.para("If this was you - a forgotten password, say - wait for the lock to expire, or set a new one now.") }}
+  {{ ui.button(reset_url, "Reset my password", gap=24) }}
+  {{ ui.para("If this wasn't you, someone is trying to guess your password. The lock has stopped them for now, but consider:") }}
+  {% call ui.bullets() %}
+    {{ ui.bullet("Resetting your password to something unique you don't use anywhere else.") }}
+    {{ ui.bullet("Enabling two-factor authentication if you haven't already.") }}
+  {% endcall %}
+  {{ ui.note("We won't send another email like this for the next 6 hours, even if more failed attempts happen.", gap=0) }}
+{% endblock %}

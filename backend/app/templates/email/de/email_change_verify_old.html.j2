@@ -1,0 +1,15 @@
+{% extends "layout.html.j2" %}
+{% import "_components.html.j2" as ui %}
+{% block subject %}Bestätige deine {{ app_name }}-E-Mail-Änderung{% endblock %}
+{% block content %}
+  {{ ui.eyebrow("E-Mail-Änderung") }}
+  {{ ui.headline("Bestätige deine E-Mail-Änderung") }}
+  {{ ui.para("Hallo " ~ display_name ~ ",") }}
+  {% call ui.para() %}{% if by_admin %}Ein Administrator hat eine Änderung der E-Mail-Adresse deines {{ app_name }}-Kontos{% else %}Eine Änderung der E-Mail-Adresse deines {{ app_name }}-Kontos wurde{% endif %} von dieser Adresse angefordert.{% endcall %}
+  {% call ui.specs() %}
+    {{ ui.spec("neue Adresse", new_email) }}
+  {% endcall %}
+  {% call ui.para() %}Aus Sicherheitsgründen muss diese Änderung von <strong>beiden</strong> Adressen bestätigt werden - der alten und der neuen. Bestätige sie von dieser (alten) Adresse:{% endcall %}
+  {{ ui.button(confirm_url, "Änderung bestätigen", gap=24) }}
+  {% call ui.note(gap=0) %}Die Änderung wird erst wirksam, wenn beide Adressen bestätigt haben; der Link ist 24 Stunden gültig. Falls du das <strong>nicht</strong> angefordert hast, {{ ui.link(cancel_url, "brich es sofort ab") }}.{% endcall %}
+{% endblock %}

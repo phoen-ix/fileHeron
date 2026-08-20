@@ -1,20 +1,10 @@
 {% extends "layout.html.j2" %}
+{% import "_components.html.j2" as ui %}
 {% block subject %}Your share expires in 24 hours{% endblock %}
 {% block content %}
-  <p style="margin:0 0 12px 0;color:#6b7280;font-family:Georgia,serif;font-style:italic;">Reminder</p>
-  <h1 style="font-family:Georgia,'Times New Roman',serif;font-weight:normal;font-size:26px;line-height:1.2;margin:0 0 16px 0;color:#1a1d24;">
-    Your share expires in 24 hours
-  </h1>
-  <p style="margin:0 0 16px 0;">
-    The share <strong>{{ subject|default("(no subject)") }}</strong> expires
-    <strong>{{ expires_at|dt_locale(locale) }}</strong>.
-  </p>
-  <p style="margin:0 0 24px 0;color:#6b7280;font-size:14px;">
-    After that, the files are hard-deleted from {{ app_name }}.
-  </p>
-  <p style="margin:0;">
-    <a href="{{ share_url }}" style="display:inline-block;background:#1a1d24;color:#faf8f3;text-decoration:none;padding:12px 24px;font-weight:500;">
-      Open the share →
-    </a>
-  </p>
+  {{ ui.eyebrow("Reminder") }}
+  {{ ui.headline("Your share expires in 24 hours") }}
+  {% call ui.para() %}The share <strong>{{ subject|default("(no subject)") }}</strong> expires <strong>{{ expires_at|dt_locale(locale) }}</strong>.{% endcall %}
+  {% call ui.note(gap=24) %}After that, the files are hard-deleted from {{ app_name }}.{% endcall %}
+  {{ ui.button(share_url, "Open the share") }}
 {% endblock %}

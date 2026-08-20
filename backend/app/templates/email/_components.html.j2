@@ -1,0 +1,94 @@
+{# The email design system, factored out of the copies it had grown into: the CTA
+   button style string alone appeared 22 times, the mono spec table 8 times, the
+   italic eyebrow ~28. The vocabulary was already consistent - it just could not be
+   changed in one place, so "polished" and "plain" drifted per file.
+
+   Import root-relative; the loader root is templates/email, so this resolves from
+   inside en/ and de/ alike, and the file must stay at the root or de/ templates
+   would import an English-relative path:
+
+       {% import "_components.html.j2" as ui %}
+
+   Imported WITHOUT context, deliberately. `dt_locale` is a @pass_context filter that
+   reads `site_timezone` off the render context; inside a context-less import that
+   context is EMPTY, so a macro calling the filter itself would silently format every
+   timestamp in UTC on a non-UTC instance - no error, just wrong times. Hence no macro
+   here calls it: format at the call site, `ui.spec("when", at|dt_locale(locale))`,
+   where the filter runs in the caller's context.
+
+   The `.html.j2` suffix is load-bearing. It is what puts this file inside
+   `select_autoescape(enabled_extensions=("html.j2",))` (services/email.py), so a
+   value passed into a macro is escaped exactly as an inline {{ }} would escape it.
+   Renaming this file to `_components.j2` would silently turn escaping OFF inside
+   every macro body. Pass user-controlled text as an ARGUMENT or through {% call %};
+   never build markup with ~ and hand it in pre-rendered.
+
+   Every content macro accepts BOTH a plain-text argument and an optional {% call %}
+   body. A `{{ caller() }}`-only macro raises "No caller defined" when invoked the
+   other way, and render_email turns that into a silently text-only email - the exact
+   failure that kept release_available.html.j2 dead for its whole life.
+
+   Everything is inline-styled and table-based on purpose - mail clients drop
+   <style> blocks and classes. #}
+
+{% macro eyebrow(label, tone='muted') -%}
+<p style="margin:0 0 12px 0;color:{% if tone == 'danger' %}#991b1b{% else %}#6b7280{% endif %};font-family:Georgia,serif;font-style:italic;">{{ label }}</p>
+{%- endmacro %}
+
+{# size='lg' is the 28px front-door treatment (a share landing in a stranger's
+   inbox); 'md' is the 26px notice treatment. Both already shipped - this is the one
+   place that decides which. #}
+{% macro headline(text='', size='md', caller=none) -%}
+<h1 style="font-family:Georgia,'Times New Roman',serif;font-weight:normal;{% if size == 'lg' %}font-size:28px;line-height:1.15;letter-spacing:-0.01em;{% else %}font-size:26px;line-height:1.2;{% endif %}margin:0 0 16px 0;color:#1a1d24;">{% if caller %}{{ caller() }}{% else %}{{ text }}{% endif %}</h1>
+{%- endmacro %}
+
+{# `margin:0{% if gap %}...` rather than `margin:0 0 {{ gap }}px 0` so gap=0 emits
+   the plain `margin:0;` the hand-written templates always used for a last element. #}
+{% macro para(text='', gap=16, caller=none) -%}
+<p style="margin:0{% if gap %} 0 {{ gap }}px 0{% endif %};">{% if caller %}{{ caller() }}{% else %}{{ text }}{% endif %}</p>
+{%- endmacro %}
+
+{% macro note(text='', gap=16, caller=none) -%}
+<p style="margin:0{% if gap %} 0 {{ gap }}px 0{% endif %};color:#6b7280;font-size:14px;">{% if caller %}{{ caller() }}{% else %}{{ text }}{% endif %}</p>
+{%- endmacro %}
+
+{# Key/value fact table. `wrap` is for values with no break opportunity - a raw
+   user-agent string will otherwise widen the table past the 600px card. #}
+{% macro specs(gap=16, caller=none) -%}
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0{% if gap %} 0 {{ gap }}px 0{% endif %};width:100%;font-family:'JetBrains Mono',Menlo,Consolas,monospace;font-size:13px;">{% if caller %}{{ caller() }}{% endif %}</table>
+{%- endmacro %}
+
+{% macro spec(label, value='', wrap=false, caller=none) -%}
+<tr><td style="padding:4px 0;color:#6b7280;width:120px;{% if wrap %}vertical-align:top;{% endif %}">{{ label }}</td><td style="padding:4px 0;color:#1a1d24;{% if wrap %}word-break:break-all;{% endif %}">{% if caller %}{{ caller() }}{% else %}{{ value }}{% endif %}</td></tr>
+{%- endmacro %}
+
+{# Quoted sender message / rejection reason. white-space:pre-wrap keeps the author's
+   own line breaks without letting a long line escape the card. #}
+{% macro quote(text='', gap=16, caller=none) -%}
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="border-left:2px solid #e5e1d8;background:#faf8f3;margin:0{% if gap %} 0 {{ gap }}px 0{% endif %};width:100%;"><tr><td style="padding:12px 16px;color:#1a1d24;white-space:pre-wrap;">{% if caller %}{{ caller() }}{% else %}{{ text }}{% endif %}</td></tr></table>
+{%- endmacro %}
+
+{% macro bullets(gap=16, caller=none) -%}
+<ul style="margin:0{% if gap %} 0 {{ gap }}px 0{% endif %};padding-left:20px;color:#1a1d24;">{% if caller %}{{ caller() }}{% endif %}</ul>
+{%- endmacro %}
+
+{% macro bullet(text='', caller=none) -%}
+<li style="margin:0 0 6px 0;">{% if caller %}{{ caller() }}{% else %}{{ text }}{% endif %}</li>
+{%- endmacro %}
+
+{% macro mono(text) -%}
+<code style="font-family:'JetBrains Mono',Menlo,Consolas,monospace;font-size:13px;background:#faf8f3;padding:1px 4px;">{{ text }}</code>
+{%- endmacro %}
+
+{# The arrow is the macro's, not the caller's: callers pass "Open the share" and the
+   glyph is appended here, so the label stays a plain translatable string. #}
+{% macro button(href, label, gap=0) -%}
+<p style="margin:0{% if gap %} 0 {{ gap }}px 0{% endif %};"><a href="{{ href }}" style="display:inline-block;background:#1a1d24;color:#faf8f3;text-decoration:none;padding:12px 24px;font-weight:500;">{{ label }} &#8594;</a></p>
+{%- endmacro %}
+
+{# Secondary action inside running text (cancel an email change, release notes).
+   Deliberately NOT a second button: one ink CTA per mail, everything else is a link,
+   so a destructive action never competes with the primary one. #}
+{% macro link(href, label) -%}
+<a href="{{ href }}" style="color:#1a1d24;text-decoration:underline;">{{ label }}</a>
+{%- endmacro %}

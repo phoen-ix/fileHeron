@@ -1,0 +1,11 @@
+{% extends "layout.html.j2" %}
+{% import "_components.html.j2" as ui %}
+{% block subject %}Du wurdest zu {{ app_name }} eingeladen{% endblock %}
+{% block content %}
+  {{ ui.eyebrow("Einladung") }}
+  {{ ui.headline(inviter_display_name ~ " hat dich zu " ~ app_name ~ " eingeladen", size="lg") }}
+  {{ ui.para("Hallo " ~ display_name_hint ~ ",") }}
+  {{ ui.para("Um die Einladung anzunehmen, vergib ein Passwort und schließe deinen Account ab.", gap=24) }}
+  {{ ui.button(register_url, "Einladung annehmen", gap=24) }}
+  {{ ui.note("Die Einladung ist 24 Stunden gültig. Wenn du das nicht erwartet hast, ignoriere diese E-Mail.", gap=0) }}
+{% endblock %}

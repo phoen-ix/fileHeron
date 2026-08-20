@@ -1,16 +1,10 @@
 {% extends "layout.html.j2" %}
+{% import "_components.html.j2" as ui %}
 {% block subject %}Deine Freigabe wurde genehmigt{% endblock %}
 {% block content %}
-  <p style="margin:0 0 12px 0;color:#6b7280;font-family:Georgia,serif;font-style:italic;">Genehmigt</p>
-  <h1 style="font-family:Georgia,'Times New Roman',serif;font-weight:normal;font-size:28px;line-height:1.15;letter-spacing:-0.01em;margin:0 0 16px 0;color:#1a1d24;">
-    {% if subject %}{{ subject }}{% else %}Deine Freigabe ist aktiv{% endif %}
-  </h1>
-  <p style="margin:0 0 24px 0;">
-    Deine Freigabe wurde genehmigt und steht den Empfängern nun zur Verfügung.
-  </p>
-  <p style="margin:0;">
-    <a href="{{ share_url }}" style="display:inline-block;background:#1a1d24;color:#faf8f3;text-decoration:none;padding:12px 24px;font-weight:500;">
-      Freigabe öffnen →
-    </a>
-  </p>
+  {% set title = subject if subject else "Deine Freigabe ist aktiv" %}
+  {{ ui.eyebrow("Genehmigt") }}
+  {{ ui.headline(title, size="lg") }}
+  {% call ui.para(gap=24) %}Deine Freigabe wurde genehmigt und steht den Empfängern nun zur Verfügung.{% endcall %}
+  {{ ui.button(share_url, "Freigabe öffnen") }}
 {% endblock %}

@@ -1,15 +1,12 @@
 {% extends "layout.html.j2" %}
+{% import "_components.html.j2" as ui %}
 {% block subject %}A file you uploaded was quarantined{% endblock %}
 {% block content %}
-  <p style="margin:0 0 12px 0;color:#991b1b;font-family:Georgia,serif;font-style:italic;">Antivirus alert</p>
-  <h1 style="font-family:Georgia,'Times New Roman',serif;font-weight:normal;font-size:26px;line-height:1.2;margin:0 0 16px 0;">
-    A file was quarantined
-  </h1>
-  <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 16px 0;width:100%;font-family:'JetBrains Mono',Menlo,Consolas,monospace;font-size:13px;">
-    <tr><td style="padding:4px 0;color:#6b7280;">file</td><td style="padding:4px 0;color:#1a1d24;">{{ filename }}</td></tr>
-    <tr><td style="padding:4px 0;color:#6b7280;">signature</td><td style="padding:4px 0;color:#1a1d24;">{{ signature|default("unknown") }}</td></tr>
-  </table>
-  <p style="margin:0 0 16px 0;color:#1a1d24;">
-    The share has been revoked; recipients can no longer download it. If you believe this is a false positive, contact an admin.
-  </p>
+  {{ ui.eyebrow("Antivirus alert", tone="danger") }}
+  {{ ui.headline("A file was quarantined") }}
+  {% call ui.specs() %}
+    {{ ui.spec("file", filename) }}
+    {{ ui.spec("signature", signature|default("unknown")) }}
+  {% endcall %}
+  {% call ui.para(gap=0) %}The share has been revoked; recipients can no longer download it. If you believe this is a false positive, contact an admin.{% endcall %}
 {% endblock %}

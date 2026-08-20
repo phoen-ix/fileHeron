@@ -1,0 +1,13 @@
+{% extends "layout.html.j2" %}
+{% import "_components.html.j2" as ui %}
+{% block subject %}{{ app_name }} - new inbound message{% endblock %}
+{% block content %}
+  {{ ui.eyebrow("Inbox") }}
+  {{ ui.headline("A new inbound message") }}
+  {% call ui.specs() %}
+    {{ ui.spec("from", sender) }}
+    {{ ui.spec("subject", subject) }}
+    {{ ui.spec("class", classification) }}
+  {% endcall %}
+  {{ ui.button(app_url ~ "/admin/inbox", "Open the admin inbox") }}
+{% endblock %}

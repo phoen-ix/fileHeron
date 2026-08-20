@@ -1,19 +1,12 @@
 {% extends "layout.html.j2" %}
+{% import "_components.html.j2" as ui %}
 {% block subject %}SMTP-Test von {{ app_name }}{% endblock %}
 {% block content %}
-  <p style="margin:0 0 12px 0;color:#6b7280;font-family:Georgia,serif;font-style:italic;">Verbindungstest</p>
-  <h1 style="font-family:Georgia,'Times New Roman',serif;font-weight:normal;font-size:28px;line-height:1.15;letter-spacing:-0.01em;margin:0 0 16px 0;color:#1a1d24;">
-    SMTP-Konfiguration funktioniert
-  </h1>
-  <p style="margin:0 0 16px 0;">
-    Wenn du das liest, funktionieren die aktuell unter
-    <code>/admin/settings/email</code> gespeicherten SMTP-Werte für den
-    ausgehenden E-Mail-Versand.
-  </p>
-  <p style="margin:0 0 8px 0;color:#6b7280;font-size:14px;">
-    Gesendet am <strong>{{ now|dt_locale(locale) }}</strong>
-  </p>
-  <p style="margin:0;color:#6b7280;font-size:14px;">
-    Diese Nachricht kannst du ignorieren - sie ist ein reiner Verbindungstest.
-  </p>
+  {{ ui.eyebrow("Verbindungstest") }}
+  {{ ui.headline("SMTP-Konfiguration funktioniert", size="lg") }}
+  {% call ui.para() %}Wenn du das liest, funktionieren die aktuell unter {{ ui.mono("/admin/settings/email") }} gespeicherten SMTP-Werte für den ausgehenden E-Mail-Versand.{% endcall %}
+  {% call ui.specs() %}
+    {{ ui.spec("gesendet am", now|dt_locale(locale)) }}
+  {% endcall %}
+  {% call ui.note(gap=0) %}Diese Nachricht kannst du ignorieren - sie ist ein reiner Verbindungstest.{% endcall %}
 {% endblock %}

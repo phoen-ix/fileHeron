@@ -1,0 +1,11 @@
+{% extends "layout.html.j2" %}
+{% import "_components.html.j2" as ui %}
+{% block subject %}You have been invited to {{ app_name }}{% endblock %}
+{% block content %}
+  {{ ui.eyebrow("Invitation") }}
+  {{ ui.headline(inviter_display_name ~ " invited you to " ~ app_name, size="lg") }}
+  {{ ui.para("Hello " ~ display_name_hint ~ ",") }}
+  {{ ui.para("To accept, set a password and finish your account.", gap=24) }}
+  {{ ui.button(register_url, "Accept the invite", gap=24) }}
+  {{ ui.note("This invite expires in 24 hours. If you weren't expecting it, you can ignore this email.", gap=0) }}
+{% endblock %}

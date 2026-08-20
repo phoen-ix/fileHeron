@@ -1,0 +1,13 @@
+{% extends "layout.html.j2" %}
+{% import "_components.html.j2" as ui %}
+{% block subject %}{{ app_name }} - neue eingehende Nachricht{% endblock %}
+{% block content %}
+  {{ ui.eyebrow("Posteingang") }}
+  {{ ui.headline("Neue eingehende Nachricht") }}
+  {% call ui.specs() %}
+    {{ ui.spec("von", sender) }}
+    {{ ui.spec("Betreff", subject) }}
+    {{ ui.spec("Klassifikation", classification) }}
+  {% endcall %}
+  {{ ui.button(app_url ~ "/admin/inbox", "Posteingang öffnen") }}
+{% endblock %}

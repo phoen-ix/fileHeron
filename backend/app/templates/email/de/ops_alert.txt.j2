@@ -6,7 +6,7 @@
 {% endif %}{% if count %}Anzahl:       {{ count }}
 {% endif %}{% if error %}Fehler:       {{ error }}
 {% endif %}{% if detail %}Detail:       {{ detail }}
-{% endif %}{% if at %}Zeitpunkt:    {{ at }}
+{% endif %}{% if at %}Zeitpunkt:    {{ at|dt_locale(locale) }}
 {% endif %}
 Im Admin-Bereich ansehen (System, Audit-Log oder die betreffende Seite).
 

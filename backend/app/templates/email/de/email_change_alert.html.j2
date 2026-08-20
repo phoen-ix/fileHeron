@@ -1,0 +1,27 @@
+{% extends "layout.html.j2" %}
+{% import "_components.html.j2" as ui %}
+{% block subject %}Deine {{ app_name }}-E-Mail-Adresse wird geändert{% endblock %}
+{% block content %}
+  {{ ui.eyebrow("Sicherheitshinweis", tone="danger") }}
+  {% if applied %}
+    {{ ui.headline("Deine E-Mail-Adresse wurde geändert") }}
+    {{ ui.para("Hallo " ~ display_name ~ ",") }}
+    {% call ui.para() %}Die E-Mail-Adresse deines {{ app_name }}-Kontos wurde {% if by_admin %}von einem Administrator {% endif %}geändert auf:{% endcall %}
+    {% call ui.specs() %}
+      {{ ui.spec("neue Adresse", new_email) }}
+    {% endcall %}
+    {{ ui.para("Dein Konto meldet sich ab sofort mit dieser Adresse an, und alle angemeldeten Sitzungen wurden beendet. Eine Bestätigung von der neuen Adresse war nicht erforderlich.") }}
+    {{ ui.note("Diese Nachricht ist ein Sicherheitsnachweis an deine bisherige Adresse.") }}
+    {% call ui.para() %}Falls du diese Änderung <strong>nicht</strong> veranlasst hast, kontaktiere sofort deinen Administrator und setze dein Passwort zurück.{% endcall %}
+    {{ ui.button(reset_url, "Passwort zurücksetzen") }}
+  {% else %}
+    {{ ui.headline("Deine E-Mail-Adresse wird geändert") }}
+    {{ ui.para("Hallo " ~ display_name ~ ",") }}
+    {% call ui.para() %}Es wurde gerade angefordert, die E-Mail-Adresse deines {{ app_name }}-Kontos zu ändern{% if by_admin %} (durch einen Administrator){% endif %}.{% endcall %}
+    {% call ui.specs() %}
+      {{ ui.spec("angefragte Adresse", new_email) }}
+    {% endcall %}
+    {% call ui.para() %}Deine aktuelle Adresse funktioniert weiter, und die Änderung wird <strong>nicht</strong> wirksam, solange sie nicht von der neuen Adresse bestätigt wird.{% endcall %}
+    {% if cancel_url %}{{ ui.button(cancel_url, "Änderung abbrechen") }}{% endif %}
+  {% endif %}
+{% endblock %}

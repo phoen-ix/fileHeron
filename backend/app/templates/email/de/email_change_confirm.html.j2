@@ -1,0 +1,14 @@
+{% extends "layout.html.j2" %}
+{% import "_components.html.j2" as ui %}
+{% block subject %}Bestätige deine neue {{ app_name }}-E-Mail-Adresse{% endblock %}
+{% block content %}
+  {{ ui.eyebrow("E-Mail-Änderung") }}
+  {{ ui.headline("Bestätige deine neue E-Mail-Adresse") }}
+  {{ ui.para("Hallo " ~ display_name ~ ",") }}
+  {% call ui.para() %}{% if by_admin %}Ein Administrator hat eine Änderung der E-Mail-Adresse deines {{ app_name }}-Kontos auf diese Adresse angefordert.{% else %}Du hast angefordert, die E-Mail-Adresse deines {{ app_name }}-Kontos auf diese Adresse zu ändern.{% endif %}{% endcall %}
+  {% call ui.specs() %}
+    {{ ui.spec("neue Adresse", new_email) }}
+  {% endcall %}
+  {{ ui.button(confirm_url, "Adresse bestätigen", gap=24) }}
+  {{ ui.note("Der Link ist 24 Stunden gültig und kann nur einmal verwendet werden. Deine aktuelle E-Mail-Adresse funktioniert weiter, bis du bestätigst - es ändert sich nichts, solange dieser Link nicht angeklickt wird.", gap=0) }}
+{% endblock %}

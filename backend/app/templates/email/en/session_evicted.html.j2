@@ -1,22 +1,11 @@
 {% extends "layout.html.j2" %}
+{% import "_components.html.j2" as ui %}
 {% block subject %}A session was signed out{% endblock %}
 {% block content %}
-  <p style="margin:0 0 12px 0;color:#6b7280;font-family:Georgia,serif;font-style:italic;">Security</p>
-  <h1 style="font-family:Georgia,'Times New Roman',serif;font-weight:normal;font-size:26px;line-height:1.2;margin:0 0 16px 0;">
-    A session was signed out
-  </h1>
-  <p style="margin:0 0 16px 0;">Hi {{ display_name|default("there") }},</p>
-  <p style="margin:0 0 16px 0;">
-    {% if count and count > 1 %}{{ count }} older sessions were{% else %}An older session was{% endif %}
-    signed out of your {{ app_name }} account because you reached your {{ cap }}-session limit.
-  </p>
-  <p style="margin:0 0 16px 0;color:#1a1d24;">
-    This is routine when you're signed in on more than {{ cap }} devices - the least-recently-active session
-    is signed out to make room. If this wasn't you, change your password and review your active sessions.
-  </p>
-  <p style="margin:0;">
-    <a href="{{ app_url }}/account" style="display:inline-block;background:#1a1d24;color:#faf8f3;text-decoration:none;padding:12px 24px;font-weight:500;">
-      Review my account →
-    </a>
-  </p>
+  {{ ui.eyebrow("Security") }}
+  {{ ui.headline("A session was signed out") }}
+  {% call ui.para() %}Hi {{ display_name|default("there") }},{% endcall %}
+  {% call ui.para() %}{% if count and count > 1 %}{{ count }} older sessions were{% else %}An older session was{% endif %} signed out of your {{ app_name }} account because you reached your {{ cap }}-session limit.{% endcall %}
+  {% call ui.para() %}This is routine when you're signed in on more than {{ cap }} devices - the least-recently-active session is signed out to make room. If this wasn't you, change your password and review your active sessions.{% endcall %}
+  {{ ui.button(app_url ~ "/account", "Review my account") }}
 {% endblock %}

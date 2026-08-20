@@ -1,13 +1,21 @@
 {# Shared HTML layout - table-based for client compatibility, restrained
    editorial styling that matches the SPA design tokens. Subclasses
-   override the `content` block. #}
+   override the `content` block; the shared vocabulary they compose from is
+   `_components.html.j2`.
+
+   `subject` is DEFINED here with a default on purpose. It used to be called as
+   `{{ self.subject() }}` while no block by that name existed, so a child that
+   forgot to declare one raised UndefinedError from inside <title> - which is
+   exactly how release_available.html.j2 came to render nothing at all for its
+   whole life, swallowed by render_email's except. A child that forgets the block
+   now gets a plain title instead of a dead template. #}
 <!doctype html>
 <html lang="{{ locale|default('en') }}">
   <head>
     <meta charset="utf-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width,initial-scale=1">
-    <title>{{ self.subject() }}</title>
+    <title>{% block subject %}{{ app_name }}{% endblock %}</title>
   </head>
   <body style="margin:0;padding:0;background:#faf8f3;font-family:Helvetica,Arial,sans-serif;color:#1a1d24;">
     <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" bgcolor="#faf8f3">
@@ -17,7 +25,11 @@
             <tr>
               <td style="padding:24px 32px 8px 32px;border-bottom:1px solid #e5e1d8;">
                 {% if brand_logo_url %}<img src="{{ brand_logo_url }}" alt="{{ app_name }}" height="28" style="height:28px;width:auto;vertical-align:middle;margin-right:10px;border:0;">{% endif %}<span style="font-family:Georgia,'Times New Roman',serif;font-style:italic;font-size:22px;color:#1a1d24;vertical-align:middle;">
-                  file:<span style="color:#b45309;">Heron</span>
+                  {#- The two-tone wordmark is the product's own brand and only belongs to
+                      it. It used to be hardcoded, so a rebranded self-host showed
+                      "file:Heron" in the header while every subject line said the
+                      operator's own name. Stock value -> wordmark; anything else -> that name. -#}
+                  {% if app_name in ('fileHeron', 'file:Heron', '') %}file:<span style="color:#b45309;">Heron</span>{% else %}{{ app_name }}{% endif %}
                 </span>
               </td>
             </tr>
@@ -31,7 +43,13 @@
                 {% block footer %}
                   {% if locale|default('en') == 'de' %}
                     Diese E-Mail wurde von <strong>{{ app_name }}</strong> versandt.
-                    Empfangsdatum: {{ now|dt_locale(locale) if now is defined else '' }}.
+                    {#- `now` is in the context for smtp_test only, and the label used to sit
+                        OUTSIDE any guard - so every other German email shipped a dangling
+                        "Empfangsdatum: ." Guard on TRUTHINESS, not `is defined`:
+                        _wrap_layout passes `now=ctx.get("now")` unconditionally, so on the
+                        admin-override path the name is defined and None, and `is defined`
+                        lets the empty label through again. -#}
+                    {% if now %}Empfangsdatum: {{ now|dt_locale(locale) }}.{% endif %}
                   {% else %}
                     Sent by <strong>{{ app_name }}</strong>.
                   {% endif %}

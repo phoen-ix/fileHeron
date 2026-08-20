@@ -1,0 +1,23 @@
+{% extends "layout.html.j2" %}
+{% import "_components.html.j2" as ui %}
+{% block subject %}{{ app_name }} - operations alert{% endblock %}
+{% block content %}
+  {{ ui.eyebrow("Operations") }}
+  {{ ui.headline("An operations alert") }}
+  {#- Eight dispatchers (cron_tracker, ops_check, anomaly_check, disk_check,
+      reclaim_orphaned_files, scan_guard, maintenance, routers/admin/system) each
+      pass a DIFFERENT subset of these keys, so every row is guarded - the same
+      shape server_error.html.j2 uses. -#}
+  {% call ui.specs() %}
+    {% if reason %}{{ ui.spec("reason", reason) }}{% endif %}
+    {% if job_name %}{{ ui.spec("task", job_name) }}{% endif %}
+    {% if type %}{{ ui.spec("type", type) }}{% endif %}
+    {% if subject %}{{ ui.spec("subject", subject) }}{% endif %}
+    {% if count %}{{ ui.spec("count", count) }}{% endif %}
+    {% if error %}{{ ui.spec("error", error, wrap=true) }}{% endif %}
+    {% if detail %}{{ ui.spec("detail", detail, wrap=true) }}{% endif %}
+    {% if at %}{{ ui.spec("when", at|dt_locale(locale)) }}{% endif %}
+  {% endcall %}
+  {{ ui.button(app_url ~ "/admin/system", "Open the admin area", gap=16) }}
+  {% call ui.note(gap=0) %}Depending on the alert, the detail may be in the audit log or on the relevant page rather than under {{ ui.mono("/admin/system") }}.{% endcall %}
+{% endblock %}

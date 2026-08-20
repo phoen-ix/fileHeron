@@ -1,26 +1,27 @@
 {% extends "layout.html.j2" %}
+{% import "_components.html.j2" as ui %}
 {% block subject %}{{ app_name }} {% if status_code and status_code < 500 %}client{% else %}server{% endif %} error ({{ code }}){% endblock %}
 {% block content %}
-  <p style="margin:0 0 12px 0;color:#6b7280;font-family:Georgia,serif;font-style:italic;">Operations</p>
-  <h1 style="font-family:Georgia,'Times New Roman',serif;font-weight:normal;font-size:26px;line-height:1.2;margin:0 0 16px 0;">
-    {% if source == "worker" %}A scheduled task failed{% elif status_code and status_code < 500 %}A client error occurred{% else %}A server error occurred{% endif %}
-  </h1>
-  <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 16px 0;width:100%;font-family:'JetBrains Mono',Menlo,Consolas,monospace;font-size:13px;">
-    {% if source == "worker" %}
-    <tr><td style="padding:4px 0;color:#6b7280;width:120px;">task</td><td style="padding:4px 0;color:#1a1d24;">{{ job_name }}</td></tr>
-    {% else %}
-    <tr><td style="padding:4px 0;color:#6b7280;width:120px;">request</td><td style="padding:4px 0;color:#1a1d24;">{{ method }} {{ path }}</td></tr>
-    {% endif %}
-    <tr><td style="padding:4px 0;color:#6b7280;">status</td><td style="padding:4px 0;color:#1a1d24;">{{ status_code }} {{ code }}</td></tr>
-    <tr><td style="padding:4px 0;color:#6b7280;">error</td><td style="padding:4px 0;color:#1a1d24;">{{ exception_type }}{% if message %} - {{ message }}{% endif %}</td></tr>
-    <tr><td style="padding:4px 0;color:#6b7280;">when</td><td style="padding:4px 0;color:#1a1d24;">{{ at|dt_locale(locale) }}</td></tr>
-    {% if ip %}<tr><td style="padding:4px 0;color:#6b7280;">from ip</td><td style="padding:4px 0;color:#1a1d24;">{{ ip }}</td></tr>{% endif %}
-    {% if request_id %}<tr><td style="padding:4px 0;color:#6b7280;">request id</td><td style="padding:4px 0;color:#1a1d24;">{{ request_id }}</td></tr>{% endif %}
-    {% if user_id %}<tr><td style="padding:4px 0;color:#6b7280;">user</td><td style="padding:4px 0;color:#1a1d24;">#{{ user_id }}{% if auth_via %} (via {{ auth_via }}){% endif %}</td></tr>{% endif %}
-    <tr><td style="padding:4px 0;color:#6b7280;">occurrences</td><td style="padding:4px 0;color:#1a1d24;">{{ occurrence_count }}</td></tr>
-  </table>
-  {% if suppressed_count and suppressed_since %}
-  <p style="margin:0 0 16px 0;color:#6b7280;font-size:13px;">{{ suppressed_count }} earlier occurrence(s) suppressed since {{ suppressed_since|dt_locale(locale) }}.</p>
+  {{ ui.eyebrow("Operations") }}
+  {% if source == "worker" %}
+    {{ ui.headline("A scheduled task failed") }}
+  {% elif status_code and status_code < 500 %}
+    {{ ui.headline("A client error occurred") }}
+  {% else %}
+    {{ ui.headline("A server error occurred") }}
   {% endif %}
-  <p style="margin:0;color:#6b7280;font-size:13px;">Manage these alerts under <strong>/admin/settings/error-alerts</strong>.</p>
+  {% call ui.specs() %}
+    {% if source == "worker" %}{{ ui.spec("task", job_name) }}{% else %}{{ ui.spec("request", method ~ " " ~ path) }}{% endif %}
+    {{ ui.spec("status", status_code ~ " " ~ code) }}
+    {{ ui.spec("error", exception_type ~ (" - " ~ message if message else "")) }}
+    {{ ui.spec("when", at|dt_locale(locale)) }}
+    {% if ip %}{{ ui.spec("from ip", ip) }}{% endif %}
+    {% if request_id %}{{ ui.spec("request id", request_id) }}{% endif %}
+    {% if user_id %}{{ ui.spec("user", "#" ~ user_id ~ (" (via " ~ auth_via ~ ")" if auth_via else "")) }}{% endif %}
+    {{ ui.spec("occurrences", occurrence_count) }}
+  {% endcall %}
+  {% if suppressed_count and suppressed_since %}
+    {% call ui.note() %}{{ suppressed_count }} earlier occurrence(s) suppressed since {{ suppressed_since|dt_locale(locale) }}.{% endcall %}
+  {% endif %}
+  {% call ui.note(gap=0) %}Manage these alerts under <strong>/admin/settings/error-alerts</strong>.{% endcall %}
 {% endblock %}

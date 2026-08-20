@@ -1,13 +1,14 @@
 {% extends "layout.html.j2" %}
-{% block body %}
-<p>Hallo {{ recipient_name|default("zusammen") }},</p>
-
-<p>Eine neue <strong>{{ app_name }}</strong>-Version ist verfügbar: <strong>{{ version }}</strong><br>
-(aktuell läuft {{ running_version }}).</p>
-
-{% if release_url %}<p><a href="{{ release_url }}">Release-Notes auf GitHub ansehen</a></p>{% endif %}
-
-<p>Du kannst das Update unter <strong>/admin/system</strong> auf deiner Instanz anwenden.</p>
-
-<p>- {{ app_name }}</p>
+{% import "_components.html.j2" as ui %}
+{% block subject %}{{ app_name }} {{ version }} ist verfügbar{% endblock %}
+{% block content %}
+  {{ ui.eyebrow("Aktualisierung") }}
+  {{ ui.headline(app_name ~ " " ~ version ~ " ist verfügbar", size="lg") }}
+  {% call ui.para() %}Hallo {{ recipient_name|default("zusammen") }},{% endcall %}
+  {% call ui.specs() %}
+    {{ ui.spec("neue Version", version) }}
+    {{ ui.spec("aktuell installiert", running_version) }}
+  {% endcall %}
+  {% call ui.para() %}Du kannst das Update unter <strong>/admin/system</strong> auf deiner Instanz einspielen.{% endcall %}
+  {% if release_url %}{{ ui.button(release_url, "Release Notes auf GitHub") }}{% endif %}
 {% endblock %}

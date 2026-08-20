@@ -1,27 +1,18 @@
 {% extends "layout.html.j2" %}
+{% import "_components.html.j2" as ui %}
 {% block subject %}Sign-in from a new device{% endblock %}
 {% block content %}
-  <p style="margin:0 0 12px 0;color:#6b7280;font-family:Georgia,serif;font-style:italic;">Security</p>
-  <h1 style="font-family:Georgia,'Times New Roman',serif;font-weight:normal;font-size:26px;line-height:1.2;margin:0 0 16px 0;">
-    A new sign-in
-  </h1>
-  <p style="margin:0 0 16px 0;">Hi {{ display_name|default("there") }},</p>
-  <p style="margin:0 0 16px 0;">
-    Someone just signed in to your {{ app_name }} account from a device we hadn't seen before.
-  </p>
-  <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 16px 0;width:100%;font-family:'JetBrains Mono',Menlo,Consolas,monospace;font-size:13px;">
-    <tr><td style="padding:4px 0;color:#6b7280;">when</td><td style="padding:4px 0;color:#1a1d24;">{{ at|dt_locale(locale) }}</td></tr>
-    <tr><td style="padding:4px 0;color:#6b7280;">method</td><td style="padding:4px 0;color:#1a1d24;">{{ via|default("password") }}</td></tr>
-    <tr><td style="padding:4px 0;color:#6b7280;">browser</td><td style="padding:4px 0;color:#1a1d24;">{{ ua_summary|default("unknown") }}</td></tr>
-    <tr><td style="padding:4px 0;color:#6b7280;">IP address</td><td style="padding:4px 0;color:#1a1d24;">{{ ip_address|default("unknown") }}</td></tr>
-    {% if user_agent %}<tr><td style="padding:4px 0;color:#6b7280;vertical-align:top;">user agent</td><td style="padding:4px 0;color:#1a1d24;word-break:break-all;">{{ user_agent }}</td></tr>{% endif %}
-  </table>
-  <p style="margin:0 0 16px 0;color:#1a1d24;">
-    If this was you, no action is needed. If not, change your password and review active sessions.
-  </p>
-  <p style="margin:0;">
-    <a href="{{ account_url }}" style="display:inline-block;background:#1a1d24;color:#faf8f3;text-decoration:none;padding:12px 24px;font-weight:500;">
-      Review my account →
-    </a>
-  </p>
+  {{ ui.eyebrow("Security") }}
+  {{ ui.headline("A new sign-in") }}
+  {% call ui.para() %}Hi {{ display_name|default("there") }},{% endcall %}
+  {% call ui.para() %}Someone just signed in to your {{ app_name }} account from a device we hadn't seen before.{% endcall %}
+  {% call ui.specs() %}
+    {{ ui.spec("when", at|dt_locale(locale)) }}
+    {{ ui.spec("method", via|default("password")) }}
+    {{ ui.spec("browser", ua_summary|default("unknown")) }}
+    {{ ui.spec("IP address", ip_address|default("unknown")) }}
+    {% if user_agent %}{{ ui.spec("user agent", user_agent, wrap=true) }}{% endif %}
+  {% endcall %}
+  {% call ui.para() %}If this was you, no action is needed. If not, change your password and review active sessions.{% endcall %}
+  {{ ui.button(account_url, "Review my account") }}
 {% endblock %}

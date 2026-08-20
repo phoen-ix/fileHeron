@@ -6,7 +6,7 @@
 {% endif %}{% if count %}Count:   {{ count }}
 {% endif %}{% if error %}Error:   {{ error }}
 {% endif %}{% if detail %}Detail:  {{ detail }}
-{% endif %}{% if at %}When:    {{ at }}
+{% endif %}{% if at %}When:    {{ at|dt_locale(locale) }}
 {% endif %}
 Review it in the admin area (System, Audit log, or the relevant page).
 

@@ -1,6 +1,6 @@
 Hallo {{ display_name }},
 
-Dein {{ app_name }}-Konto wurde gerade wegen zu vieler fehlgeschlagener Anmeldeversuche gesperrt. Die Sperre läuft automatisch um {{ locked_until }} (UTC) ab.
+Dein {{ app_name }}-Konto wurde gerade wegen zu vieler fehlgeschlagener Anmeldeversuche gesperrt. Die Sperre läuft automatisch um {{ locked_until|dt_locale(locale) }} ab.
 
 Falls du das warst (z.B. Passwort vergessen), warte einfach bis zum Ablauf der Sperre oder setze dein Passwort über diesen Link zurück:
 

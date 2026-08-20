@@ -1,0 +1,15 @@
+{% extends "layout.html.j2" %}
+{% import "_components.html.j2" as ui %}
+{% block subject %}Your {{ app_name }} sign-in email was changed{% endblock %}
+{% block content %}
+  {{ ui.eyebrow("Email change") }}
+  {{ ui.headline("Your sign-in email was changed") }}
+  {{ ui.para("Hi " ~ display_name ~ ",") }}
+  {% call ui.specs() %}
+    {{ ui.spec("sign-in email", new_email) }}
+  {% endcall %}
+  {% if oidc_reset %}
+    {{ ui.para("Because your account was linked to a single sign-on (SSO) provider, that link was reset as part of this change. A separate email with a set-password link was sent so you can sign in with a password. You can re-link SSO afterwards from your account settings.") }}
+  {% endif %}
+  {{ ui.button(login_url, "Sign in") }}
+{% endblock %}

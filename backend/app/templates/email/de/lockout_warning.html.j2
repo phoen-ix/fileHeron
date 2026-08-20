@@ -1,0 +1,21 @@
+{% extends "layout.html.j2" %}
+{% import "_components.html.j2" as ui %}
+{% block subject %}Dein Konto wurde gesperrt{% endblock %}
+{% block content %}
+  {{ ui.eyebrow("Konto gesperrt", tone="danger") }}
+  {{ ui.headline("Dein Konto wurde gesperrt") }}
+  {{ ui.para("Hallo " ~ display_name ~ ",") }}
+  {{ ui.para("Dein " ~ app_name ~ "-Konto wurde gerade wegen zu vieler fehlgeschlagener Anmeldeversuche gesperrt.") }}
+  {% call ui.specs() %}
+    {{ ui.spec("gesperrt bis", locked_until|dt_locale(locale)) }}
+    {{ ui.spec("Quelle", ip_hint|default("unbekannt")) }}
+  {% endcall %}
+  {{ ui.para("Falls du das warst (z.B. Passwort vergessen), warte einfach bis zum Ablauf der Sperre oder setze dein Passwort jetzt zurück.") }}
+  {{ ui.button(reset_url, "Passwort zurücksetzen", gap=24) }}
+  {{ ui.para("Falls du das nicht warst, versucht jemand dein Passwort zu erraten. Die Sperre hat den Versuch fürs Erste gestoppt, aber wir empfehlen:") }}
+  {% call ui.bullets() %}
+    {{ ui.bullet("Setze dein Passwort auf etwas Einzigartiges, das du nirgendwo sonst verwendest.") }}
+    {{ ui.bullet("Aktiviere die Zwei-Faktor-Authentifizierung, falls noch nicht aktiv.") }}
+  {% endcall %}
+  {{ ui.note("Wir senden in den nächsten 6 Stunden keine weitere E-Mail dieser Art, auch wenn weitere Fehlversuche auftreten.", gap=0) }}
+{% endblock %}

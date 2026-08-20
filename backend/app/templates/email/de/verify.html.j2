@@ -1,0 +1,11 @@
+{% extends "layout.html.j2" %}
+{% import "_components.html.j2" as ui %}
+{% block subject %}E-Mail bestätigen{% endblock %}
+{% block content %}
+  {{ ui.eyebrow("Willkommen") }}
+  {{ ui.headline("Bestätige deine E-Mail-Adresse", size="lg") }}
+  {{ ui.para("Hallo " ~ display_name ~ ",") }}
+  {{ ui.para("willkommen bei " ~ app_name ~ ". Bestätige diese Adresse, um dein Konto fertig einzurichten.", gap=24) }}
+  {{ ui.button(verify_url, "E-Mail bestätigen", gap=24) }}
+  {{ ui.note("Der Link ist 24 Stunden gültig. Wenn du das nicht angefordert hast, ignoriere diese E-Mail.", gap=0) }}
+{% endblock %}

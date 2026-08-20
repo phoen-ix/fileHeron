@@ -1,6 +1,6 @@
 Hi {{ display_name }},
 
-Your {{ app_name }} account was just locked because there were too many failed login attempts. The lock expires automatically at {{ locked_until }} (UTC).
+Your {{ app_name }} account was just locked because there were too many failed login attempts. The lock expires automatically at {{ locked_until|dt_locale(locale) }}.
 
 If this was you (e.g. a forgotten password), wait for the lock to expire or use the password reset link to set a new password:
 

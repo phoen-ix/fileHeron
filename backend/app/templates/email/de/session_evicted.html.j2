@@ -1,23 +1,11 @@
 {% extends "layout.html.j2" %}
+{% import "_components.html.j2" as ui %}
 {% block subject %}Eine Sitzung wurde abgemeldet{% endblock %}
 {% block content %}
-  <p style="margin:0 0 12px 0;color:#6b7280;font-family:Georgia,serif;font-style:italic;">Sicherheit</p>
-  <h1 style="font-family:Georgia,'Times New Roman',serif;font-weight:normal;font-size:26px;line-height:1.2;margin:0 0 16px 0;">
-    Eine Sitzung wurde abgemeldet
-  </h1>
-  <p style="margin:0 0 16px 0;">Hallo {{ display_name|default("there") }},</p>
-  <p style="margin:0 0 16px 0;">
-    {% if count and count > 1 %}{{ count }} ältere Sitzungen wurden{% else %}Eine ältere Sitzung wurde{% endif %}
-    von deinem {{ app_name }}-Konto abgemeldet, weil du dein Limit von {{ cap }} Sitzungen erreicht hast.
-  </p>
-  <p style="margin:0 0 16px 0;color:#1a1d24;">
-    Das ist normal, wenn du auf mehr als {{ cap }} Geräten angemeldet bleibst - die am längsten inaktive
-    Sitzung wird abgemeldet, um Platz zu schaffen. Falls du das nicht warst, ändere dein Passwort und
-    überprüfe deine aktiven Sitzungen.
-  </p>
-  <p style="margin:0;">
-    <a href="{{ app_url }}/account" style="display:inline-block;background:#1a1d24;color:#faf8f3;text-decoration:none;padding:12px 24px;font-weight:500;">
-      Konto überprüfen →
-    </a>
-  </p>
+  {{ ui.eyebrow("Sicherheit") }}
+  {{ ui.headline("Eine Sitzung wurde abgemeldet") }}
+  {% call ui.para() %}Hallo {{ display_name|default("zusammen") }},{% endcall %}
+  {% call ui.para() %}{% if count and count > 1 %}{{ count }} ältere Sitzungen wurden{% else %}Eine ältere Sitzung wurde{% endif %} von deinem {{ app_name }}-Konto abgemeldet, weil du dein Limit von {{ cap }} Sitzungen erreicht hast.{% endcall %}
+  {% call ui.para() %}Das ist normal, wenn du auf mehr als {{ cap }} Geräten angemeldet bleibst - die am längsten inaktive Sitzung wird abgemeldet, um Platz zu schaffen. Falls du das nicht warst, ändere dein Passwort und überprüfe deine aktiven Sitzungen.{% endcall %}
+  {{ ui.button(app_url ~ "/account", "Konto überprüfen") }}
 {% endblock %}

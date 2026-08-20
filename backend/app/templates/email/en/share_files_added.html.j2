@@ -1,16 +1,10 @@
 {% extends "layout.html.j2" %}
+{% import "_components.html.j2" as ui %}
 {% block subject %}{{ sender_name }} added files to a share{% endblock %}
 {% block content %}
-  <p style="margin:0 0 12px 0;color:#6b7280;font-family:Georgia,serif;font-style:italic;">New files added</p>
-  <h1 style="font-family:Georgia,'Times New Roman',serif;font-weight:normal;font-size:28px;line-height:1.15;letter-spacing:-0.01em;margin:0 0 16px 0;color:#1a1d24;">
-    {% if subject %}{{ subject }}{% else %}{{ sender_name }} added files{% endif %}
-  </h1>
-  <p style="margin:0 0 16px 0;">
-    <strong>{{ sender_name }}</strong> added {{ added_count }} new file{% if added_count != 1 %}s{% endif %} to a share with you.
-  </p>
-  <p style="margin:0;">
-    <a href="{{ share_url }}" style="display:inline-block;background:#1a1d24;color:#faf8f3;text-decoration:none;padding:12px 24px;font-weight:500;">
-      Open the share →
-    </a>
-  </p>
+  {% set title = subject if subject else sender_name ~ " added files" %}
+  {{ ui.eyebrow("New files added") }}
+  {{ ui.headline(title, size="lg") }}
+  {% call ui.para(gap=24) %}<strong>{{ sender_name }}</strong> added {{ added_count }} new file{% if added_count != 1 %}s{% endif %} to a share with you.{% endcall %}
+  {{ ui.button(share_url, "Open the share") }}
 {% endblock %}

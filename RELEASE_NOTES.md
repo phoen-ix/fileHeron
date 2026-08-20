@@ -1,3 +1,94 @@
+# file:Heron v2.13.6
+
+**A warning that could never appear, and a check that was skipping a third of
+the backend.**
+
+A patch release, and almost all of it is about the checks rather than the
+product. No migration, no host step, no
+change to any default, and no desktop-client release beside it. One thing moves
+on the wire and it is additive: a number of API responses now carry fields they
+previously left out, always as `null`. Nothing that was sent before is sent
+differently, and nothing has been removed.
+
+---
+
+## Importing a backup never warned you that it came from a different version
+
+Before a configuration import, file:Heron shows a dry-run preview: what will be
+replaced, how many shares will be invalidated, what cannot be restored. If the
+backup was taken on an instance running a different database schema, that
+preview is supposed to carry a warning above the summary, so you can stop and
+think before replacing your configuration with one that predates a migration.
+
+It has never appeared. Not on your instance, not on any instance, not once
+since the feature shipped.
+
+The check compares the schema revision recorded in the backup against the one
+this instance is on, and needs both to say anything. Recording it called a
+method that does not exist on the migration library's context object. That
+raised an error, a catch-all swallowed it, and the function returned "unknown"
+every single time — so every backup file ever written recorded its schema
+revision as `null`, and a comparison that needs two values never had one.
+
+Both halves are fixed: new backups record the revision, and the preview
+compares it.
+
+**Backups you already have still record `null`,** and nothing can retrofit
+that — the value was never captured. A backup taken from this release forward
+can produce the warning; one taken before it cannot, and will import silently
+as it always has. If you keep long-lived backups for disaster recovery, this is
+a reason to take a fresh one.
+
+## The type checker was examining two-thirds of the backend and reporting success
+
+file:Heron runs a static type check in CI. It passed on every commit. It was
+also skipping 37% of the backend — 18,719 lines — because 47 modules were
+exempted wholesale rather than by individual known problem, and the exemption
+switches the module off entirely rather than silencing its listed errors.
+
+The exempted set was not a random third. It was every authentication module,
+every session module, and the quota, rate-limiting, two-factor, passkey and
+storage code — that is, the files where a mistake costs the most. New code
+written into any of them was never checked at all.
+
+The list is empty now. All the errors behind it are fixed, the checker is
+pinned to an exact version like the linter beside it, and a test fails the
+build if an exemption is ever added back. The bug above is what that exemption
+list had been hiding.
+
+## The browser app and the API had drifted apart in eight places
+
+The web interface keeps its own hand-written description of every API response.
+Nothing compared the two, and they had diverged eight times — most of them
+harmless, all of them invisible to the compiler, because each was a wrong field
+inside a correctly-named shape rather than a missing one.
+
+The longest-standing: the notification category the instance uses to tell
+administrators it is throwing server errors had been missing from that list for
+289 commits. Nothing broke — the page renders what the API sends — but every
+piece of code that reasoned about "which categories exist" was reasoning from a
+list with a hole in it.
+
+A test now reads both sides and fails if they disagree. It found two of the
+eight itself. Alongside it, 43 API responses that had no declared shape at all
+now have one, which is what makes the comparison possible.
+
+## Corrections
+
+- The reference host was documented as running the previous release and
+  awaiting an update. It was already up to date.
+
+## Upgrading
+
+Nothing to do beyond the usual update. Every setting is preserved, no
+configuration changes shape, and no service needs restarting by hand.
+
+The one thing worth doing afterwards is taking a fresh configuration backup, if
+you keep them: only backups written from this release forward record the schema
+revision, and only those can produce the mismatch warning described above.
+
+---
+
 # file:Heron v2.13.5
 
 **An update check that blamed you, and alerts one tap from silence.**

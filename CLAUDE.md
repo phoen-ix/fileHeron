@@ -15,8 +15,8 @@ keep this to what would cause a wrong move if unknown.
 
 ## Status
 
-**Unreleased: the quality-gate sweep.** No migration, no host
-step, no client change. Three things move on the wire, all additive or
+**v2.13.6 is the quality-gate sweep.** No migration, no host
+step, no client change, no default moves. Three things move on the wire, all additive or
 corrective; see "type drift" below.
 
 **mypy has NO exemptions any more.** It was wired into CI at audit #2 behind 47
@@ -370,13 +370,12 @@ so a rollback past them needs the [[reference_rollback_migration_trap]]
 permissive/NULL value, so existing rows, in-flight sessions and
 approval-disabled deployments are unaffected by the upgrade itself.
 
-Backend **`v2.13.5`** is the newest TAG - released 2026-08-17, and the
-reference host IS running it (verified 2026-08-20: `FH_TAG=v2.13.5`, and the
-release check reports no update available). `main` is AHEAD of that tag by the
-unreleased sweep at the top of this file - which the in-app updater does NOT
-offer and never will, because it only ever sees TAGGED releases: pushing to
-`main` builds no image and cuts no release (`server-release.yml` fires on
-`v[0-9]+.[0-9]+.[0-9]+` only). (Any release still
+Backend **`v2.13.6`** is the newest TAG - released 2026-08-20, the
+quality-gate sweep at the top of this file. The reference host runs v2.13.5
+until the in-app Update is applied. Note what the updater can and cannot see:
+it only ever offers TAGGED releases, so pushing to `main` builds no image and
+cuts nothing (`server-release.yml` fires on `v[0-9]+.[0-9]+.[0-9]+` only) - a
+commit on `main` is not an available update. (Any release still
 needs the desktop-client half bumped in
 `pyproject.toml` + `__init__.py` + `client/RELEASE_NOTES.md` in lockstep before
 its `client-v*` tag, which CI checks on every push.) Previous notable sweep:

@@ -1,6 +1,7 @@
 """Email rendering - locale resolution + subject lookup + dt_locale filter."""
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timezone
 
 import pytest
@@ -108,18 +109,39 @@ def test_render_email_share_files_added_en_de():
         assert "https://example.com/share/abc" in html
 
 
-def test_render_email_no_html_falls_back_gracefully(tmp_path, monkeypatch):
-    # If the template lookup throws (e.g. missing html.j2), html should
-    # come back as None - text path remains required.
+def test_an_html_render_failure_degrades_to_text_and_says_so(monkeypatch, caplog):
+    """A failing HTML render must still produce a sendable text-only mail.
+
+    This used to be pinned via `verify`, which merely happened to ship no
+    `.html.j2` - so it asserted a gap in the templates rather than the
+    degradation contract it named. Every slug ships an HTML half now
+    (tests/test_email_template_matrix.py), so the branch is exercised directly.
+
+    The caplog half is the point: the branch is only defensible if it leaves a
+    trace. It had none, which is why release_available.html.j2 raised on every
+    send for its whole life and shipped text-only with nobody the wiser.
+    """
+    real = email_svc._render
+
+    def _boom(locale, slug, kind, ctx, **kw):
+        if kind == "html":
+            raise RuntimeError("template exploded")
+        return real(locale, slug, kind, ctx, **kw)
+
+    monkeypatch.setattr(email_svc, "_render", _boom)
     payload = {
         "display_name": "Bob",
-        "verify_url": "https://example.com/verify/x",
+        "verify_url": "https://example.com/verify-email/x",
     }
-    subject, text, html = email_svc.render_email("en", "verify", payload)
+    with caplog.at_level(logging.ERROR, logger="fileheron.email"):
+        subject, text, html = email_svc.render_email("en", "verify", payload)
+
     assert subject == "Verify your email"
     assert "verify" in text.lower()
-    # The verify template only exists as txt - no html companion.
     assert html is None
+    assert any(
+        "template exploded" in r.getMessage() or r.exc_info for r in caplog.records
+    ), "the html render failure left no trace anywhere"
 
 
 @pytest.mark.parametrize(

@@ -370,8 +370,13 @@ so a rollback past them needs the [[reference_rollback_migration_trap]]
 permissive/NULL value, so existing rows, in-flight sessions and
 approval-disabled deployments are unaffected by the upgrade itself.
 
-Backend **`v2.13.5`** is the newest TAG - released 2026-08-17. The reference
-host still runs v2.13.4 until the in-app Update is applied. (Any release still
+Backend **`v2.13.5`** is the newest TAG - released 2026-08-17, and the
+reference host IS running it (verified 2026-08-20: `FH_TAG=v2.13.5`, and the
+release check reports no update available). `main` is AHEAD of that tag by the
+unreleased sweep at the top of this file - which the in-app updater does NOT
+offer and never will, because it only ever sees TAGGED releases: pushing to
+`main` builds no image and cuts no release (`server-release.yml` fires on
+`v[0-9]+.[0-9]+.[0-9]+` only). (Any release still
 needs the desktop-client half bumped in
 `pyproject.toml` + `__init__.py` + `client/RELEASE_NOTES.md` in lockstep before
 its `client-v*` tag, which CI checks on every push.) Previous notable sweep:

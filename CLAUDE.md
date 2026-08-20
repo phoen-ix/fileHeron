@@ -15,6 +15,64 @@ keep this to what would cause a wrong move if unknown.
 
 ## Status
 
+**v2.14.0 gives every email an HTML half.** No migration, no host step, no API
+change, no default moves, no client change. What moves is the wire content of
+mail: **12 of 26 slugs had NO `.html.j2` at all** and shipped bare
+`text/plain` - `ops_alert`, `inbound_message`, `password_changed`,
+`reset_password`, `verify`, `invite`, `lockout_warning`, the four
+`email_change_*`, and `release_available`. The text part is untouched, so a
+text-only client sees exactly what it saw before; `build_message` already did
+`set_content(text)` + `add_alternative(html)`, so **no send-path code changed** -
+the templates simply started existing.
+
+**`release_available.html.j2` was DEAD in both locales for its whole life.** It
+declared `{% block body %}`, which the layout does not render, and no
+`{% block subject %}` while the layout called `{{ self.subject() }}` - so it
+raised `UndefinedError`, `render_email`'s bare `except` set `html = None`, and
+**nothing was logged anywhere**. The recurring shape again: a control that
+cannot report. Nothing enumerated the template tree, and of the 15 slugs that
+shipped HTML only TWO had any assertion on their HTML output.
+
+**Email-template invariants - read before touching these.**
+- **Every slug ships FOUR files**: `{en,de}` x `{txt,html}`.
+  `tests/test_email_template_matrix.py` is the ratchet - it takes the slug list
+  from `subjects.json` (never a hand-written list; this repo has been bitten
+  twice by "keep this in sync"), requires all four files BY FULL PATH, compiles
+  each in its own locale, renders every combination and fails on `html is None`.
+  It also asserts en and de render DIFFERENT html, which is what catches a
+  missing `de/` file hiding behind the en fallback.
+- **`_render`'s locale fallback must stay `except TemplateNotFound`.** It caught
+  bare `Exception`, so a SYNTAX ERROR in a `de/` template fell through to `en/`
+  and the recipient got a German text part beside an English HTML part, silently.
+  Measured, then fixed.
+- **The layout DEFINES `{% block subject %}` with a default.** It used to only
+  call `{{ self.subject() }}`, making the block mandatory in every child - the
+  trap `release_available` fell into. Do not remove the default.
+- **Guard the German footer date on TRUTHINESS, not `is defined`.**
+  `_wrap_layout` passes `now=ctx.get("now")` unconditionally, so on the
+  admin-override path the name is defined and None and `is defined` lets the
+  empty label through - which is how every German email shipped a dangling
+  `Empfangsdatum: .`
+- **`_components.html.j2` must keep its `.html.j2` suffix.** That is what puts it
+  inside `select_autoescape(enabled_extensions=("html.j2",))`; renaming it would
+  silently turn escaping OFF inside every macro body. It is imported WITHOUT
+  context on purpose: `dt_locale` is a `@pass_context` filter, so a macro calling
+  it would read an empty context and format every timestamp in UTC. Format at the
+  call site. Every content macro accepts both a plain argument and a `{% call %}`
+  body - a `caller()`-only macro raises "No caller defined", which
+  `render_email` would turn back into a silently text-only email.
+- **An auth token must stay in the canonical `href="…/reset-password/<token>"`
+  path form.** These slugs now put a live one-time token in `email_log.body_html`
+  for the first time. `mail_log.mask_bodies` masks BOTH bodies, but
+  `_AUTH_LINK_RE` only matches that shape, and a non-match returns the body
+  VERBATIM while `masked=True` still claims it was handled. Wrapping the link,
+  URL-encoding the path, or breaking it up for line-wrapping defeats masking
+  silently. Pinned per slug, with a negative control.
+- **Admin overrides stay plain by construction** - `richtext.sanitize_html`
+  strips every `style` attribute, so an override can never carry this styling;
+  `_default_body` seeds the editor from the `.txt.j2` deliberately. Don't
+  "fix" it by widening the sanitiser.
+
 **v2.13.6 is the quality-gate sweep.** No migration, no host
 step, no client change, no default moves. Exactly ONE thing moves on the wire
 and it is additive: 43 routes gained a `response_model`, so previously-omitted
@@ -376,8 +434,8 @@ so a rollback past them needs the [[reference_rollback_migration_trap]]
 permissive/NULL value, so existing rows, in-flight sessions and
 approval-disabled deployments are unaffected by the upgrade itself.
 
-Backend **`v2.13.6`** is the newest TAG - released 2026-08-20, the
-quality-gate sweep at the top of this file. The reference host runs v2.13.5
+Backend **`v2.14.0`** is the newest TAG - released 2026-08-20, the email
+template sweep at the top of this file. The reference host runs v2.13.5
 until the in-app Update is applied. Note what the updater can and cannot see:
 it only ever offers TAGGED releases, so pushing to `main` builds no image and
 cuts nothing (`server-release.yml` fires on `v[0-9]+.[0-9]+.[0-9]+` only) - a

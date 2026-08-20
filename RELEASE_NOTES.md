@@ -1,3 +1,90 @@
+# file:Heron v2.14.0
+
+**Every email the product sends now has an HTML half — and a plain-text one.**
+
+No migration, no host step, no API change, no default moves, no desktop-client
+release beside it. What moves is what lands in your recipients' inboxes.
+
+Twelve of the twenty-six emails file:Heron sends had **no HTML template at
+all**. They went out as bare `text/plain` and rendered as raw monospace prose:
+the operations alert, the server-error alert, the inbound-message notice — and,
+more visibly, **the first emails any new user ever receives**: verify your
+address, reset your password, you have been invited, and all four
+email-change messages. They now use the same restrained editorial layout the
+new-device sign-in alert has always used.
+
+**The plain-text part has not gone away, and never could.** Every message is
+`multipart/alternative` — a hand-written text part first, the HTML as an
+alternative — so a client that refuses HTML sees exactly what it saw before.
+That was already true for the fourteen emails that had HTML; it is now true for
+all twenty-six.
+
+---
+
+## The release-available email was dead code
+
+`release_available.html.j2` named a layout block that does not exist
+(`{% block body %}` where the layout renders `content`), and declared no
+`subject` block while the layout asked for one. Rendering it raised
+`UndefinedError` on every send. `render_email` caught that exception, set the
+HTML body to `None`, **logged nothing at all**, and sent the mail text-only.
+
+So the template was written, translated into German, shipped, and never once
+rendered — in either locale, for its entire life. Nothing failed. Nothing was
+logged. The email simply arrived plainer than intended, forever.
+
+Nothing in the test suite enumerated the template directory. Of the fifteen
+slugs that shipped an HTML template, exactly two had any assertion on their
+HTML output at all.
+
+`backend/tests/test_email_template_matrix.py` is the control that was missing:
+it takes the slug list from `subjects.json`, requires all four files per slug
+(`{en,de}` x `{txt,html}`), compiles each one in its own locale, renders every
+combination, and fails if any produces no HTML. It is driven by the shipped
+data, never a hand-written list — the two previous times this repo kept "a list
+you must remember to update", the list went stale.
+
+## Three faults it turned up on the way
+
+**A syntax error in a German template silently sent the English one.** The
+locale fallback caught every exception, not just a missing file — so a broken
+`de/` template fell through to `en/` and the recipient got a German text part
+beside an English HTML part, with nothing logged. The fallback is now
+`TemplateNotFound` only.
+
+**Every German email carried a dangling `Empfangsdatum: .`** — a label with no
+date. The footer printed it unconditionally while the value it names is only
+ever set for the SMTP connectivity test.
+
+**A rebranded instance still said `file:Heron` in the email header.** The
+wordmark was hardcoded, so an operator who set their own application name got
+their name in the subject line and the product's name in the header of every
+message. Stock installs are unchanged.
+
+## Smaller corrections in the same pass
+
+- The lockout email printed a raw ISO timestamp followed by a hardcoded
+  `(UTC)`, which was wrong on any instance with a site timezone set. It now
+  renders in the site timezone and names it.
+- The operations alert printed its timestamp as a raw ISO string.
+- The admin template preview rendered `[UPLOADER]` and `[THREAT]` as blanks for
+  the quarantine email, and could only ever show one side of each branch in the
+  email-change templates, because the sample context omitted those keys.
+- The German session-eviction email greeted the reader in English.
+- The inbound-message email pointed at a bare `/admin/inbox` path rather than a
+  link you can click.
+
+## Under the hood
+
+The layout vocabulary — eyebrow, serif headline, mono fact table, quote card,
+ink call-to-action — is now a set of Jinja macros in
+`backend/app/templates/email/_components.html.j2` instead of being copy-pasted
+per file. The call-to-action style string alone had twenty-two copies. The
+fourteen emails that already looked right are unchanged in substance; they just
+compose from the shared pieces now.
+
+---
+
 # file:Heron v2.13.6
 
 **A warning that could never appear, and a check that was skipping a third of

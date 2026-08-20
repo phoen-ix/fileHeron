@@ -30,6 +30,18 @@ from ...models.audit_log import AuditEventType, AuditLog
 from ...models.cron_run import CronRun, CronRunStatus
 from ...models.user import User, UserRole
 from ...redis_client import get_redis
+from ...schemas.system import (
+    CancelPendingUpdateResponse,
+    CheckUpdatesResult,
+    CronRunListResponse,
+    LiveChecksResponse,
+    RunCronNowResponse,
+    SystemStatusResponse,
+    TransferActivityResponse,
+    UpdateApplyResult,
+    UpdaterJob,
+    UpdaterStatus,
+)
 from ...services import cron_schedule
 from ...utils.timeutil import utc_now
 
@@ -96,7 +108,7 @@ def _cron_row_dict(row: CronRun | None) -> dict | None:
     }
 
 
-@router.get("/system/status")
+@router.get("/system/status", response_model=SystemStatusResponse)
 def system_status(
     db: Session = Depends(get_db),
     _admin: User = Depends(get_current_admin),
@@ -112,12 +124,13 @@ def system_status(
         )
         # Success / failure counts in the last 24h, for the at-a-glance number.
         cutoff = utc_now() - timedelta(hours=24)
-        counts = dict(
-            db.query(CronRun.status, func.count(CronRun.id))
+        counts = {
+            row[0]: row[1]
+            for row in db.query(CronRun.status, func.count(CronRun.id))
             .filter(CronRun.job_name == name, CronRun.started_at >= cutoff)
             .group_by(CronRun.status)
             .all()
-        )
+        }
         crons.append(
             {
                 "job_name": name,
@@ -253,7 +266,7 @@ async def system_stream(
     )
 
 
-@router.post("/system/check-updates")
+@router.post("/system/check-updates", response_model=CheckUpdatesResult)
 async def check_updates_now(
     db: Session = Depends(get_db),
     _admin: User = Depends(get_current_admin),
@@ -266,7 +279,7 @@ async def check_updates_now(
     return await release_check_svc.run_check(db, manual=True)
 
 
-@router.get("/system/cron-runs")
+@router.get("/system/cron-runs", response_model=CronRunListResponse)
 def cron_runs(
     job_name: str | None = Query(None, max_length=64),
     limit: int = Query(50, ge=1, le=200),
@@ -281,7 +294,7 @@ def cron_runs(
     return {"items": [_cron_row_dict(r) for r in rows], "limit": limit}
 
 
-@router.get("/system/live")
+@router.get("/system/live", response_model=LiveChecksResponse)
 def live_checks_now(
     db: Session = Depends(get_db),
     _admin: User = Depends(get_current_admin),
@@ -292,7 +305,7 @@ def live_checks_now(
     return {"live": _live_checks(db)}
 
 
-@router.post("/system/crons/{job_name}/run")
+@router.post("/system/crons/{job_name}/run", response_model=RunCronNowResponse)
 async def run_cron_now(
     job_name: str,
     request: Request,
@@ -403,7 +416,7 @@ def _dispatch_ops_to_admins(db: Session, payload: dict, link_url: str) -> None:
             pass
 
 
-@router.get("/system/update-status")
+@router.get("/system/update-status", response_model=UpdaterStatus)
 def update_status(_admin: User = Depends(get_current_admin)) -> dict:
     """Read-only: what's the updater's current state? Returns
     {current_tag, rollback_target, job_in_progress}. Frontend polls
@@ -412,7 +425,7 @@ def update_status(_admin: User = Depends(get_current_admin)) -> dict:
     return release_apply.get_version()
 
 
-@router.get("/system/update-jobs/{job_id}")
+@router.get("/system/update-jobs/{job_id}", response_model=UpdaterJob)
 def update_job(
     job_id: str, _admin: User = Depends(get_current_admin)
 ) -> dict:
@@ -422,7 +435,7 @@ def update_job(
     return release_apply.get_job(job_id)
 
 
-@router.post("/system/update")
+@router.post("/system/update", response_model=UpdateApplyResult)
 def apply_update(
     payload: UpdateApplyRequest,
     request: Request,
@@ -507,7 +520,7 @@ def apply_update(
     return result
 
 
-@router.post("/system/rollback")
+@router.post("/system/rollback", response_model=UpdateApplyResult)
 def apply_rollback(
     payload: UpdateApplyRequest,
     request: Request,
@@ -545,7 +558,7 @@ def apply_rollback(
     return result
 
 
-@router.get("/system/transfer-activity")
+@router.get("/system/transfer-activity", response_model=TransferActivityResponse)
 def transfer_activity(
     db: Session = Depends(get_db), _admin: User = Depends(get_current_admin)
 ) -> dict:
@@ -560,7 +573,7 @@ def transfer_activity(
     return snap
 
 
-@router.post("/system/update/now")
+@router.post("/system/update/now", response_model=UpdateApplyResult)
 def force_pending_update(
     payload: UpdateApplyRequest,
     request: Request,
@@ -580,7 +593,7 @@ def force_pending_update(
     return result
 
 
-@router.post("/system/update/cancel")
+@router.post("/system/update/cancel", response_model=CancelPendingUpdateResponse)
 def cancel_pending_update(
     request: Request,
     db: Session = Depends(get_db),

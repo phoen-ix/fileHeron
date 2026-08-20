@@ -51,13 +51,13 @@ def _record_failure(att_id: int) -> None:
 
 def _deferred_ids() -> set[int]:
     try:
-        from ..redis_client import get_redis
+        from ..redis_client import get_redis, sync
 
         r = get_redis()
         out: set[int] = set()
         for key in r.scan_iter(match=f"{_FAIL_KEY}*", count=500):
             name = key.decode() if isinstance(key, bytes) else str(key)
-            raw = r.get(name)
+            raw = sync(r.get(name))
             count = int(raw) if raw is not None else 0
             if count >= _FAIL_THRESHOLD:
                 out.add(int(name.rsplit(":", 1)[-1]))

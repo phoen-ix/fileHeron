@@ -361,6 +361,11 @@ export interface UpdateShareRequest {
   /** Send true to clear the expiry (share becomes never-expire, v1.1.4).
    *  Mutually exclusive with expires_at - sending both is a 400. */
   expires_at_clear?: boolean
+  /** Omit = no change; a positive integer replaces the per-share download
+   *  budget. Mutually exclusive with download_limit_clear. */
+  download_limit?: number | null
+  /** Send true to clear the limit (downloads become unlimited). */
+  download_limit_clear?: boolean
 }
 
 /* Admin public-link policy (post-Phase 10) */
@@ -411,9 +416,19 @@ export interface PublicLinkResponse {
   created_at: string
 }
 
-export interface CreatePublicLinkResponse extends PublicLinkResponse {
-  /** Always set on create - narrows the parent's nullable url. */
+/** Returned exactly once, on creation. Deliberately NOT an extension of
+ *  PublicLinkResponse: the backend model is standalone and carries neither
+ *  `locked_until` nor `revoked_at` (a brand-new link has neither). */
+export interface CreatePublicLinkResponse {
+  id: string
+  /** Always set on create, unlike the nullable url on PublicLinkResponse. */
   url: string
+  qr_svg?: string | null
+  download_limit: number | null
+  downloads_remaining: number | null
+  notify_on_download: boolean
+  has_password: boolean
+  created_at: string
 }
 
 export interface CreatePublicLinkRequest {
@@ -433,10 +448,6 @@ export interface PublicShareFile {
    * downloadable); this is what distinguishes "scanned and clean" from
    * "never scanned". Surface it, don't imply safety. */
   av_unscanned?: boolean
-  /** 'pending_review' when this file was added to a share that had ALREADY been
-   *  approved, so it waits for its own four-eyes decision before recipients can
-   *  fetch it. Only the owner and approvers ever see such a row. */
-  approval_state?: 'approved' | 'pending_review'
 }
 
 export interface PublicShareResponse {
@@ -473,6 +484,7 @@ export type NotificationCategory =
   | 'ops_alert'
   | 'release_available'
   | 'inbound_message'
+  | 'server_error'
 
 export type NotificationChannel = 'off' | 'email' | 'in_app' | 'both'
 
@@ -1238,8 +1250,6 @@ export interface TestSendEmailTemplateResponse {
 
 // Inbound mailbox / IMAP (v1.27.0)
 export interface ImapSettingsResponse {
-  require_known_sender?: boolean
-  tls_insecure?: boolean
   enabled: boolean
   use_smtp_credentials: boolean
   host: string
@@ -1251,6 +1261,10 @@ export interface ImapSettingsResponse {
   post_fetch_action: 'mark_read' | 'untouched' | 'move' | 'delete'
   move_folder: string
   notify_mode: 'off' | 'human' | 'all'
+  /** Refuse mail whose From matches no enabled user. Default true. */
+  require_known_sender: boolean
+  /** Do not verify the mail server's certificate. Default false. */
+  tls_insecure: boolean
   last_poll_at: string | null
   last_success_at: string | null
 }
@@ -1267,6 +1281,8 @@ export interface UpdateImapSettingsRequest {
   post_fetch_action: 'mark_read' | 'untouched' | 'move' | 'delete'
   move_folder: string
   notify_mode: 'off' | 'human' | 'all'
+  require_known_sender: boolean
+  tls_insecure: boolean
 }
 
 // Scheduled tasks / crons (v1.28.0)

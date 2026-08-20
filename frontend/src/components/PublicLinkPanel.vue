@@ -208,8 +208,12 @@ async function onCreate() {
       downloads_remaining: data.downloads_remaining,
       notify_on_download: data.notify_on_download,
       has_password: data.has_password,
-      locked_until: null as string | null,
-      revoked_at: null as string | null,
+      // The create response genuinely has neither - a link that was just made
+      // is not locked and not revoked. (CreatePublicLinkResponse used to claim
+      // it inherited both from PublicLinkResponse, which made this read like a
+      // workaround; the type was the thing that was wrong.)
+      locked_until: null,
+      revoked_at: null,
       created_at: data.created_at,
     }
     newPassword.value = ''

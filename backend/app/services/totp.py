@@ -46,6 +46,7 @@ from ..utils.crypto import (
     encrypt_totp_secret,
     generate_recovery_codes,
 )
+from ..utils.dbresult import updated_rows
 from ..utils.qr import render_qr_svg
 from ..utils.timeutil import utc_now
 from .audit import record_audit_event
@@ -113,19 +114,19 @@ def begin_setup(db: Session, *, user: User, request) -> dict:
     return {"secret_b32": secret, "otpauth_uri": otpauth_uri, "qr_svg": qr_svg}
 
 
-def _decrypt_or_503(user: User) -> str:
+def _decrypt_or_503(totp: UserTOTP) -> str:
     """Both TOTP paths decrypt the stored secret. An undecryptable secret -
     JWT_SECRET rotated without running scripts/rotate_jwt_secret.py - used to
     escape as a raw InvalidToken and 500 the login, which tells the user
     nothing and the operator less. Fail with a code that names the cause
     (audit 2026-07-30)."""
     try:
-        return decrypt_totp_secret(user.totp.secret_encrypted)
+        return decrypt_totp_secret(totp.secret_encrypted)
     except SecretUndecryptableError:
         logger.error(
             "totp: secret for user_id=%s could not be decrypted; "
             "JWT_SECRET was probably rotated without re-encrypting",
-            user.id,
+            totp.user_id,
         )
         raise AppError(
             503,
@@ -145,7 +146,7 @@ def confirm_enable(db: Session, *, user: User, code: str, request) -> list[str]:
     if user.totp.enabled_at is not None:
         raise AppError(409, "TOTP_ALREADY_ENABLED", "Two-factor auth is already on.")
 
-    secret = _decrypt_or_503(user)
+    secret = _decrypt_or_503(user.totp)
     if not pyotp.TOTP(secret).verify(code, valid_window=_TOTP_VALID_WINDOW):
         raise AppError(401, "INVALID_TOTP", "Code is incorrect or expired.")
 
@@ -200,7 +201,7 @@ def verify_at_login(db: Session, *, user: User, code: str) -> bool:
     """
     if user.totp is None or user.totp.enabled_at is None:
         return False
-    secret = _decrypt_or_503(user)
+    secret = _decrypt_or_503(user.totp)
     totp = pyotp.TOTP(secret)
     if not totp.verify(code, valid_window=_TOTP_VALID_WINDOW):
         return False
@@ -225,7 +226,7 @@ def verify_at_login(db: Session, *, user: User, code: str) -> bool:
         .values(last_used_counter=matched_step)
     )
     db.flush()
-    if result.rowcount == 1:
+    if updated_rows(result) == 1:
         db.refresh(user.totp)
         return True
     return False
@@ -265,7 +266,7 @@ def _claim_recovery_code(db: Session, *, user: User, rc_id: int, request) -> boo
         )
         .values(used_at=utc_now())
     )
-    if claimed.rowcount == 0:
+    if updated_rows(claimed) == 0:
         # Lost the race - another request already consumed it.
         return False
     db.flush()

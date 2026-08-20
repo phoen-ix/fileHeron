@@ -42,6 +42,7 @@ from ..config import settings
 from ..middleware.errors import AppError
 from ..models.user import User
 from ..models.user_webauthn_credential import UserWebAuthnCredential
+from ..utils.dbresult import updated_rows
 
 logger = logging.getLogger("fileheron.webauthn")
 
@@ -314,7 +315,7 @@ async def authenticate_complete(
         )
     )
     db.flush()
-    if result.rowcount != 1:
+    if updated_rows(result) != 1:
         logger.warning(
             "webauthn concurrent auth detected for user=%d cred=%d",
             user_id, record.id,

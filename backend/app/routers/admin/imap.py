@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 import logging
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, Query, Request, Response
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
@@ -19,6 +19,7 @@ from ...models.audit_log import AuditEventType
 from ...models.inbound_attachment import AttachmentAVState, InboundAttachment
 from ...models.inbound_message import InboundMessage, MessageStatus
 from ...models.user import User
+from ...schemas.admin import InboxUnreadCountResponse
 from ...schemas.imap_settings import (
     ImapFetchNowResponse,
     ImapSettingsResponse,
@@ -267,7 +268,7 @@ def list_inbox(
     )
 
 
-@router.get("/inbox/unread-count")
+@router.get("/inbox/unread-count", response_model=InboxUnreadCountResponse)
 def inbox_unread_count(
     db: Session = Depends(get_db), _admin: User = Depends(get_current_admin)
 ) -> dict:
@@ -379,7 +380,7 @@ def download_inbox_attachment(
     att_id: int,
     db: Session = Depends(get_db),
     _admin: User = Depends(get_current_admin),
-):
+) -> Response:
     att = (
         db.query(InboundAttachment)
         .filter(InboundAttachment.id == att_id, InboundAttachment.message_id == msg_id)

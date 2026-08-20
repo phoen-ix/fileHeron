@@ -12,7 +12,7 @@ from ...config import settings
 from ...dependencies import get_current_admin, get_db
 from ...middleware.errors import AppError
 from ...models.audit_log import AuditEventType
-from ...models.oidc_provider import OIDCProvider
+from ...models.oidc_provider import OIDCPreset, OIDCProvider
 from ...models.user import User
 from ...schemas.settings import (
     CreateOIDCProviderRequest,
@@ -66,7 +66,7 @@ def list_presets(
     for key, meta in oidc_admin_svc.PROVIDER_PRESETS.items():
         items.append(
             PresetMeta(
-                preset=key,
+                preset=OIDCPreset(key),
                 label=meta["label"],
                 issuer=meta.get("issuer"),
                 issuer_template=meta.get("issuer_template"),

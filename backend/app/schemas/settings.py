@@ -95,3 +95,47 @@ class PublicProviderItem(APIBaseModel):
     id: str
     name: str
     preset: OIDCPreset
+
+
+class PublicProvider(APIBaseModel):
+    id: str
+    name: str
+    preset: str
+
+
+class PublicBranding(APIBaseModel):
+    logo_url: str | None = None
+    link_url: str | None = None
+    show_header: bool
+    show_login: bool
+    show_public: bool
+
+
+class PublicLegal(APIBaseModel):
+    imprint_enabled: bool
+    privacy_enabled: bool
+
+
+class PublicMotd(APIBaseModel):
+    text: str
+
+
+class PublicMaintenance(APIBaseModel):
+    enabled: bool
+    message: str
+
+
+class PublicConfigResponse(APIBaseModel):
+    """The anonymous login surface's whole contract. `motd`/`maintenance` were
+    OMITTED when off; under a response_model they serialise as null instead,
+    which every consumer already treats the same way (both are falsy, and the
+    SPA type declares them optional)."""
+    app_name: str
+    default_locale: str
+    providers: list[PublicProvider]
+    site_timezone: str
+    max_direct_upload_bytes: int
+    branding: PublicBranding
+    legal: PublicLegal
+    motd: PublicMotd | None = None
+    maintenance: PublicMaintenance | None = None

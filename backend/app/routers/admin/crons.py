@@ -44,12 +44,13 @@ def _item(db: Session, name: str, tz: str, now) -> CronScheduleItem:
         .first()
     )
     cutoff = now - timedelta(hours=24)
-    counts = dict(
-        db.query(CronRun.status, func.count(CronRun.id))
+    counts = {
+        row[0]: row[1]
+        for row in db.query(CronRun.status, func.count(CronRun.id))
         .filter(CronRun.job_name == name, CronRun.started_at >= cutoff)
         .group_by(CronRun.status)
         .all()
-    )
+    }
 
     def _c(s: CronRunStatus) -> int:
         return int(counts.get(s, 0) or counts.get(s.value, 0) or 0)

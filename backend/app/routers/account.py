@@ -13,7 +13,11 @@ from ..models.api_token import ApiToken
 from ..models.user import User, UserRole
 from ..models.user_recovery_code import UserRecoveryCode
 from ..schemas.account import (
+    CancelEmailChangeResponse,
+    ChangeEmailResponse,
     ChangePasswordRequest,
+    ChangePasswordResponse,
+    CreateInviteResponse,
     InviteRequest,
     MeResponse,
     RequestEmailChangeRequest,
@@ -29,7 +33,9 @@ from ..schemas.api_token import (
     CreateApiTokenRequest,
     CreateApiTokenResponse,
     CurrentApiTokenResponse,
+    TokenStatus,
 )
+from ..schemas.common import OkResponse
 from ..schemas.two_factor import (
     RecoveryCodeRegenerateRequest,
     RecoveryCodesResponse,
@@ -262,7 +268,7 @@ def update_admin_nav_open(
     return _me_response(db, user)
 
 
-@router.post("/change-password", status_code=status.HTTP_200_OK)
+@router.post("/change-password", response_model=ChangePasswordResponse, status_code=status.HTTP_200_OK)
 async def change_password(
     payload: ChangePasswordRequest,
     request: Request,
@@ -333,7 +339,7 @@ async def change_password(
     return {"ok": True, "access_token": access, "expires_in_seconds": expires_in}
 
 
-@router.post("/email", status_code=status.HTTP_200_OK)
+@router.post("/email", response_model=ChangeEmailResponse, status_code=status.HTTP_200_OK)
 async def change_email(
     payload: RequestEmailChangeRequest,
     request: Request,
@@ -377,7 +383,7 @@ async def change_email(
     return {"ok": True, "applied": outcome.applied, "mode": outcome.mode}
 
 
-@router.delete("/email", status_code=status.HTTP_200_OK)
+@router.delete("/email", response_model=CancelEmailChangeResponse, status_code=status.HTTP_200_OK)
 def cancel_own_email_change(
     request: Request,
     user: User = Depends(get_current_user),
@@ -397,7 +403,7 @@ def cancel_own_email_change(
     return {"ok": True, "cancelled": count}
 
 
-@router.post("/invite", status_code=status.HTTP_201_CREATED)
+@router.post("/invite", response_model=CreateInviteResponse, status_code=status.HTTP_201_CREATED)
 async def create_invite(
     payload: InviteRequest,
     request: Request,
@@ -568,7 +574,7 @@ def totp_enable(
     return RecoveryCodesResponse(recovery_codes=codes)
 
 
-@setup_router.post("/2fa/disable", status_code=status.HTTP_200_OK)
+@setup_router.post("/2fa/disable", response_model=OkResponse, status_code=status.HTTP_200_OK)
 def totp_disable(
     payload: TotpDisableRequest,
     request: Request,
@@ -704,7 +710,7 @@ def get_current_api_token(
         raise AppError(404, "TOKEN_NOT_FOUND", "API token not found.")
     now = datetime.now(tz=timezone.utc).replace(tzinfo=None)
     if record.revoked_at is not None:
-        token_status = "revoked"
+        token_status: TokenStatus = "revoked"
     elif record.expires_at is not None and now > record.expires_at:
         token_status = "expired"
     elif record.disabled_at is not None:

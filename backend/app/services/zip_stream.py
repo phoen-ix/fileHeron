@@ -35,6 +35,7 @@ Three things make a resume safe rather than merely possible:
 from __future__ import annotations
 
 import logging
+from functools import partial
 from pathlib import Path
 
 from fastapi.responses import Response, StreamingResponse
@@ -62,10 +63,10 @@ class RedisCrcCache:
     allowed to fail the download."""
 
     def get(self, key: str) -> int | None:
-        from ..redis_client import get_redis
+        from ..redis_client import get_redis, sync
 
         try:
-            raw = get_redis().get(_CRC_KEY_PREFIX + key)
+            raw = sync(get_redis().get(_CRC_KEY_PREFIX + key))
         except Exception:
             logger.warning("zip crc cache unavailable", exc_info=True)
             return None
@@ -131,7 +132,13 @@ def build_zip_stream(
     taken: set[str] = set()
     for f in files:
         arcname = safe_arcname(f.original_filename or "file", taken)
-        lp = backend.local_path(f.storage_path)
+        locator = f.storage_path
+        if locator is None:
+            # A servable file always has bytes. Reaching here is a corrupt row,
+            # and it already failed - as a TypeError from backend.open(None),
+            # mid-stream, after the archive had started. Say what is wrong.
+            raise ValueError(f"file {f.id} is servable but has no storage locator")
+        lp = backend.local_path(locator)
         if lp is not None:
             zs.add_path(lp, arcname, cache_key=f.id)  # local disk → add by path
         else:
@@ -139,9 +146,8 @@ def build_zip_stream(
             # implementation called backend.open() here, during construction,
             # so a share with N members held N open object-store readers before
             # a single byte was sent.
-            path = f.storage_path
             zs.add_stream(
-                (lambda p=path: backend.open(p)),
+                partial(backend.open, locator),
                 arcname,
                 size=f.size_bytes,
                 cache_key=f.id,

@@ -21,6 +21,7 @@ from ..services import quota as quota_svc
 from ..services import share as share_svc
 from ..services import tus_signing as ts_svc
 from ..services.storage_backend import get_storage_backend
+from ..services.tus_signing import UploadEnvelope
 from ..utils.timeutil import utc_now
 
 router = APIRouter(prefix="/api/uploads", tags=["uploads"])
@@ -78,7 +79,7 @@ def init_upload(
     db.commit()
 
     envelope_exp = int(time.time()) + 3600  # 1h
-    envelope = {
+    envelope: UploadEnvelope = {
         "v": 1,
         "share_id": share.id,
         "file_id": file_row.id,

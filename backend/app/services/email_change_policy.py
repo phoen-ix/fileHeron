@@ -5,8 +5,11 @@ policy without importing the heavier service.
 """
 from __future__ import annotations
 
+from typing import cast
+
 from sqlalchemy.orm import Session
 
+from ..schemas.admin import EmailChangeOidcMode, EmailChangeVerificationMode
 from . import settings as settings_svc
 
 VERIFICATION_MODES = ("immediate", "verify_new", "verify_both")
@@ -16,11 +19,15 @@ OIDC_MODES = ("reset_setpw", "reset_only", "keep")
 DEFAULT_OIDC_MODE = "reset_setpw"
 
 
-def effective_verification_mode(db: Session) -> str:
+def effective_verification_mode(db: Session) -> EmailChangeVerificationMode:
     """How an email change is confirmed. Falls back to the default when the
     stored value is missing or unrecognised (defensive against hand-edits)."""
     raw = settings_svc.get(db, settings_svc.Keys.EMAIL_CHANGE_VERIFICATION_MODE)
-    return raw if raw in VERIFICATION_MODES else DEFAULT_VERIFICATION_MODE
+    # The membership test IS the validation; mypy cannot see through `in`.
+    return cast(
+        "EmailChangeVerificationMode",
+        raw if raw in VERIFICATION_MODES else DEFAULT_VERIFICATION_MODE,
+    )
 
 
 def self_service_enabled(db: Session) -> bool:
@@ -30,7 +37,7 @@ def self_service_enabled(db: Session) -> bool:
     )
 
 
-def effective_oidc_mode(db: Session) -> str:
+def effective_oidc_mode(db: Session) -> EmailChangeOidcMode:
     """What to do with an OIDC binding on email change."""
     raw = settings_svc.get(db, settings_svc.Keys.EMAIL_CHANGE_OIDC_MODE)
-    return raw if raw in OIDC_MODES else DEFAULT_OIDC_MODE
+    return cast("EmailChangeOidcMode", raw if raw in OIDC_MODES else DEFAULT_OIDC_MODE)

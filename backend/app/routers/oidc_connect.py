@@ -49,6 +49,7 @@ from ..dependencies import get_current_user, get_db
 from ..middleware.errors import AppError
 from ..models.oidc_provider import OIDCProvider
 from ..models.user import User
+from ..schemas.common import OkResponse
 from ..schemas.oidc_connect import (
     ConnectStartResponse,
     OIDCLinkItem,
@@ -265,7 +266,7 @@ def get_links(
     return OIDCLinkResponse(link=_link_item(provider, user.oidc_subject))
 
 
-@router.delete("/links")
+@router.delete("/links", response_model=OkResponse)
 def delete_link(
     request: Request,
     user: User = Depends(get_current_user),

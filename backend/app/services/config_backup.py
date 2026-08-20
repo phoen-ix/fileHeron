@@ -42,6 +42,7 @@ import logging
 import os
 import tempfile
 import uuid
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -296,7 +297,12 @@ def _current_alembic_revision(db: Session) -> str | None:
     try:
         from alembic.runtime.migration import MigrationContext
 
-        return MigrationContext.from_connection(db.connection()).get_current_revision()
+        # `configure` is alembic's constructor. `from_connection` does not
+        # exist - it raised AttributeError, which the except below swallowed,
+        # so this returned None on every call and `_version_warning` (which
+        # needs BOTH revisions) could never produce a warning. Every backup
+        # written before this recorded "alembic_revision": null.
+        return MigrationContext.configure(db.connection()).get_current_revision()
     except Exception:
         return None
 
@@ -492,7 +498,7 @@ def export_logs(db: Session, *, warnings: list[str]) -> dict:
 def build_backup(
     db: Session,
     *,
-    categories: list[str],
+    categories: Sequence[str],
     secret_mode: str,
     passphrase: str | None,
     include_env: bool,
@@ -891,7 +897,7 @@ def _reinsert_preserved_audit(db, rows: list[dict]) -> None:
         key = (
             d.get("event_type"),
             d.get("target_id"),
-            created.isoformat() if hasattr(created, "isoformat") else str(created),
+            created.isoformat() if isinstance(created, datetime) else str(created),
         )
         if key in present:
             continue

@@ -147,13 +147,33 @@ def test_the_routers_purge_only_after_committing():
 
 
 def test_config_restore_purges_after_its_own_committed_pass():
+    """Byte deletion must follow the commit that marks the shares invalid.
+
+    A rollback brings back neither the rows nor the bytes, so unlinking first
+    would leave shares still marked active over files that are gone.
+
+    This reads `apply_backup`'s SOURCE because the alternative is running a
+    destructive import to observe the ordering. `str.index` was used before and
+    raised ValueError - an error, not a failing assertion - the moment any of
+    the three moved, so a refactor got a stack trace instead of a verdict.
+    """
     from app.services import config_backup
 
     src = inspect.getsource(config_backup.apply_backup)
-    inv = src.index("invalidate_all_active_shares")
-    commit = src.index("db.commit()", inv)
-    purge = src.index("purge_expired_bytes", inv)
-    assert commit < purge
+    inv = src.find("invalidate_all_active_shares")
+    assert inv != -1, (
+        "apply_backup no longer mentions invalidate_all_active_shares - this "
+        "test has stopped pinning anything. If the phase moved into a helper, "
+        "point the scan at that helper rather than deleting the check."
+    )
+    commit = src.find("db.commit()", inv)
+    purge = src.find("purge_expired_bytes", inv)
+    assert commit != -1, "no db.commit() after the share invalidation"
+    assert purge != -1, "no purge_expired_bytes after the share invalidation"
+    assert inv < commit < purge, (
+        "order must be invalidate -> commit -> purge; found "
+        f"invalidate@{inv}, commit@{commit}, purge@{purge}"
+    )
 
 
 # --- download-5 --------------------------------------------------------------

@@ -32,6 +32,7 @@ from ..models.audit_log import AuditEventType
 from ..models.email_change_token import EmailChangeToken
 from ..models.user import Locale, User
 from ..utils.crypto import normalize_email, random_token, sha256_hex
+from ..utils.dbresult import updated_rows
 from ..utils.timeutil import utc_now
 from . import email_change_policy
 from . import oidc as oidc_svc
@@ -124,7 +125,7 @@ def _supersede_pending(db: Session, *, user_id: int) -> int:
         .values(cancelled_at=utc_now())
     )
     db.flush()
-    return int(result.rowcount or 0)
+    return int(updated_rows(result) or 0)
 
 
 def _apply_email_change(
@@ -332,7 +333,7 @@ def confirm_email_change(
         )
         .values({col: utc_now()})
     )
-    if claimed.rowcount == 0:
+    if updated_rows(claimed) == 0:
         raise AppError(410, "EMAIL_CHANGE_TOKEN_USED", "This link has already been used.")
     db.flush()
     db.refresh(record)
@@ -422,7 +423,7 @@ def cancel_email_change(
             )
             .values(cancelled_at=now)
         )
-        if result.rowcount == 0:
+        if updated_rows(result) == 0:
             raise AppError(
                 409,
                 "EMAIL_CHANGE_ALREADY_SETTLED",
@@ -459,7 +460,7 @@ def cancel_email_change(
             )
             .values(cancelled_at=now)
         )
-        count = result.rowcount
+        count = updated_rows(result)
         if count:
             db.flush()
             record_audit_event(
@@ -513,14 +514,21 @@ async def dispatch_request_emails(db: Session, outcome: RequestOutcome) -> None:
     tz = site_svc.get_site_timezone(db)
     loc = outcome.locale
     name = outcome.display_name
+    # Bound to locals before the lambdas: narrowing an `outcome.<field>` does
+    # not survive into a closure, because the attribute could be rebound
+    # between the guard and the call.
+    set_pw_token = outcome.set_password_token
+    new_token = outcome.new_token
+    old_token = outcome.old_token
+    cancel_token = outcome.cancel_token
     if outcome.applied:
         sends = []
-        if outcome.set_password_token:
+        if set_pw_token:
             sends.append((
                 "set-password",
                 lambda: email_svc.send_password_reset_email(
                     to=outcome.new_email, locale=loc, display_name=name,
-                    token=outcome.set_password_token, app_url=base,
+                    token=set_pw_token, app_url=base,
                     site_timezone=tz, db=db,
                 ),
             ))
@@ -552,32 +560,43 @@ async def dispatch_request_emails(db: Session, outcome: RequestOutcome) -> None:
                 "verify-old",
                 lambda: email_svc.send_email_change_verify_old(
                     to=outcome.old_email, locale=loc, display_name=name,
-                    confirm_token=outcome.old_token, cancel_token=outcome.cancel_token,
+                    confirm_token=old_token, cancel_token=cancel_token,
                     new_email=outcome.new_email, by_admin=outcome.by_admin,
                     app_url=base, site_timezone=tz, db=db,
                 ),
             )
-            if outcome.mode == "verify_both" and outcome.old_token
+            if outcome.mode == "verify_both" and old_token and cancel_token
             else (
                 "old-address alert",
                 lambda: email_svc.send_email_change_alert(
                     to=outcome.old_email, locale=loc, display_name=name,
-                    new_email=outcome.new_email, cancel_token=outcome.cancel_token,
+                    new_email=outcome.new_email, cancel_token=cancel_token,
                     by_admin=outcome.by_admin, applied=False,
                     app_url=base, site_timezone=tz, db=db,
                 user_id=outcome.user_id,
                 ),
             )
         )
-        await _send_each(
-            (
+        pending_sends = []
+        if new_token is not None:
+            pending_sends.append((
                 "confirm",
                 lambda: email_svc.send_email_change_confirm(
                     to=outcome.new_email, locale=loc, display_name=name,
-                    token=outcome.new_token, new_email=outcome.new_email,
+                    token=new_token, new_email=outcome.new_email,
                     by_admin=outcome.by_admin, app_url=base, site_timezone=tz, db=db,
                 ),
-            ),
+            ))
+        else:
+            # A pending outcome always carries this token. If it ever does not,
+            # the send used to fail inside _send_each and be logged there; say
+            # so here instead, and still deliver the old-address mail.
+            logger.error(
+                "email_change: pending outcome has no new-address token; "
+                "confirm mail not sent (user_id=%s)", outcome.user_id
+            )
+        await _send_each(
+            *pending_sends,
             old_send,
         )
 
@@ -590,21 +609,36 @@ async def dispatch_confirm_emails(db: Session, outcome: ConfirmOutcome) -> None:
 
     base = site_svc.get_site_url(db)
     tz = site_svc.get_site_timezone(db)
+    # `applied` implies the whole applied payload is present, but the dataclass
+    # cannot say so (its fields are shared with the not-yet-applied case). Read
+    # them once, here, rather than inside the closures where nothing narrows.
+    to_addr = outcome.new_email
+    loc = outcome.locale
+    name = outcome.display_name
+    set_pw_token = outcome.set_password_token
+    if to_addr is None or loc is None or name is None:
+        # Previously each send raised inside _send_each and was logged there as
+        # a dispatch failure. Same outcome, named at the cause.
+        logger.error(
+            "email_change: applied outcome is missing address/locale/name; "
+            "no confirmation mail sent (user_id=%s)", outcome.user_id
+        )
+        return
     sends = []
-    if outcome.set_password_token:
+    if set_pw_token:
         sends.append((
             "set-password",
             lambda: email_svc.send_password_reset_email(
-                to=outcome.new_email, locale=outcome.locale,
-                display_name=outcome.display_name, token=outcome.set_password_token,
+                to=to_addr, locale=loc,
+                display_name=name, token=set_pw_token,
                 app_url=base, site_timezone=tz, db=db,
             ),
         ))
     sends.append((
         "completion notice",
         lambda: email_svc.send_email_change_completed(
-            to=outcome.new_email, locale=outcome.locale,
-            display_name=outcome.display_name, new_email=outcome.new_email,
+            to=to_addr, locale=loc,
+            display_name=name, new_email=to_addr,
             oidc_reset=outcome.oidc_reset, app_url=base, site_timezone=tz, db=db,
                 user_id=outcome.user_id,
         ),

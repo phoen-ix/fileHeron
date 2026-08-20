@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from ..config import settings
 from ..database import SessionLocal
 from ..dependencies import get_db
+from ..schemas.settings import PublicConfigResponse
 from ..services import oidc_admin as oidc_admin_svc
 from ..version import GIT_SHA, VERSION
 
@@ -198,7 +199,7 @@ def health_check(request: Request) -> JSONResponse:
     return JSONResponse(status_code=200, content=body)
 
 
-@router.get("/api/config-public")
+@router.get("/api/config-public", response_model=PublicConfigResponse)
 def public_config(db: Session = Depends(get_db)) -> dict:
     """Public, no auth. Returns enough for the login surface to render.
     Phase 10: returns one entry per **enabled and usable** OIDC provider

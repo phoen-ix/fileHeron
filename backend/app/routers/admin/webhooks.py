@@ -14,6 +14,7 @@ from ...middleware.errors import AppError
 from ...models.audit_log import AuditEventType
 from ...models.user import User
 from ...models.webhook import Webhook, WebhookDelivery
+from ...schemas.admin import QueuedResponse, WebhookEventsResponse
 from ...schemas.webhook import (
     CreateWebhookRequest,
     UpdateWebhookRequest,
@@ -50,13 +51,13 @@ def _get_or_404(db: Session, webhook_id: int) -> Webhook:
     return wh
 
 
-@router.get("/webhooks/events")
+@router.get("/webhooks/events", response_model=WebhookEventsResponse)
 def list_webhook_events(_admin: User = Depends(get_current_admin)) -> dict:
     """The events an admin may subscribe to (drives the create-form checkboxes)."""
     return {"events": webhook_svc.WEBHOOK_EVENTS}
 
 
-@router.get("/webhooks")
+@router.get("/webhooks", response_model=list[WebhookResponse])
 def list_webhooks(
     db: Session = Depends(get_db), _admin: User = Depends(get_current_admin)
 ) -> list[WebhookResponse]:
@@ -164,7 +165,7 @@ def delete_webhook(
     db.commit()
 
 
-@router.post("/webhooks/{webhook_id}/test")
+@router.post("/webhooks/{webhook_id}/test", response_model=QueuedResponse)
 def test_webhook(
     webhook_id: int,
     db: Session = Depends(get_db),
@@ -180,7 +181,7 @@ def test_webhook(
     return {"queued": True}
 
 
-@router.get("/webhooks/{webhook_id}/deliveries")
+@router.get("/webhooks/{webhook_id}/deliveries", response_model=list[WebhookDeliveryResponse])
 def list_deliveries(
     webhook_id: int,
     limit: int = Query(50, ge=1, le=200),
@@ -210,7 +211,7 @@ def list_deliveries(
     ]
 
 
-@router.post("/webhook-deliveries/{delivery_id}/retry")
+@router.post("/webhook-deliveries/{delivery_id}/retry", response_model=QueuedResponse)
 def retry_delivery(
     delivery_id: int,
     db: Session = Depends(get_db),

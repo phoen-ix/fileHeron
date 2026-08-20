@@ -133,3 +133,34 @@ class InviteRequest(APIBaseModel):
     display_name_hint: str = Field(..., min_length=1, max_length=120)
     target_role: UserRole = UserRole.client
     initial_group_ids: list[int] = Field(default_factory=list)
+
+
+class ChangePasswordResponse(APIBaseModel):
+    """The session is re-minted in the same request (see jwt_session's
+    revoke-then-remint note), so the new access token comes back here."""
+    ok: bool = True
+    access_token: str
+    expires_in_seconds: int
+
+
+class ChangeEmailResponse(APIBaseModel):
+    ok: bool = True
+    applied: bool
+    mode: str
+
+
+class CancelEmailChangeResponse(APIBaseModel):
+    ok: bool = True
+    cancelled: int
+
+
+class CreateInviteResponse(APIBaseModel):
+    ok: bool = True
+    email: str
+    expires_at: str
+
+
+class StreamTokenResponse(APIBaseModel):
+    """Signed `?token=` for EventSource, which cannot send an Authorization
+    header. See services/sse_token."""
+    token: str

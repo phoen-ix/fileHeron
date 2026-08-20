@@ -30,7 +30,7 @@ from collections.abc import Callable, Iterable
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
-from sqlalchemy import and_, func, or_, update
+from sqlalchemy import and_, false, func, or_, update
 from sqlalchemy.orm import Session, joinedload
 
 from ..middleware.errors import AppError
@@ -41,6 +41,7 @@ from ..models.group_member import GroupMember
 from ..models.share import Share, ShareKind, ShareState
 from ..models.share_recipient import ShareRecipient
 from ..models.user import User, UserRole
+from ..utils.dbresult import updated_rows
 from ..utils.timeutil import utc_now
 from .audit import record_audit_event
 
@@ -272,13 +273,14 @@ def _dispatch_share_created(
         return
     base_url = site_svc.get_site_url(db)
     sender = share.created_by or db.query(User).get(share.created_by_id)
+    share_url = f"{base_url}/share/{share.id}"
     payload_base = {
         "sender_name": sender.display_name if sender else "",
         "subject": share.subject,
         "message": share.message,
         "expires_at": share.expires_at,
         "file_count": sum(1 for f in share.files if f.state != FileState.deleted),
-        "share_url": f"{base_url}/share/{share.id}",
+        "share_url": share_url,
     }
     recipients = db.query(User).filter(User.id.in_(notify_user_ids)).all()
     for u in recipients:
@@ -289,7 +291,7 @@ def _dispatch_share_created(
             user=u,
             category=NotificationCategory.share_created,
             payload=payload,
-            link_url=payload["share_url"],
+            link_url=share_url,
             email_to=u.email,
         )
 
@@ -581,11 +583,13 @@ def announce_if_ready(db: Session, share_id: str, *, require_quiet: bool = False
             return False
 
     notify = bool(share.notify_on_activation)
-    claimed = db.execute(
-        update(Share)
-        .where(Share.id == share.id, Share.notify_on_activation.isnot(None))
-        .values(notify_on_activation=None)
-    ).rowcount
+    claimed = updated_rows(
+        db.execute(
+            update(Share)
+            .where(Share.id == share.id, Share.notify_on_activation.isnot(None))
+            .values(notify_on_activation=None)
+        )
+    )
     if not claimed:
         return False
     db.flush()
@@ -674,9 +678,11 @@ def is_authorized_to_download(db: Session, *, user: User, share: Share) -> bool:
         .filter(
             or_(
                 ShareRecipient.recipient_user_id == user.id,
-                ShareRecipient.recipient_group_id.in_(user_group_ids)
-                if user_group_ids
-                else False,
+                *(
+                    [ShareRecipient.recipient_group_id.in_(user_group_ids)]
+                    if user_group_ids
+                    else []
+                ),
             )
         )
         .first()
@@ -899,7 +905,7 @@ def list_shares_for_user(
         if via_group_id is not None:
             # Only allow filtering by groups the user is a member of.
             if via_group_id not in user_group_ids:
-                base = base.filter(False)
+                base = base.filter(false())
             else:
                 base = base.filter(
                     ShareRecipient.recipient_group_id == via_group_id
@@ -1048,7 +1054,7 @@ def approve_share(
             rejection_reason=None,
         )
     )
-    if result.rowcount == 0:
+    if updated_rows(result) == 0:
         raise AppError(409, "SHARE_NOT_PENDING", "This share isn't awaiting approval.")
     db.flush()
     db.refresh(share)
@@ -1112,7 +1118,7 @@ def reject_share(
             rejection_reason=reason,
         )
     )
-    if result.rowcount == 0:
+    if updated_rows(result) == 0:
         raise AppError(409, "SHARE_NOT_PENDING", "This share isn't awaiting approval.")
     db.flush()
     db.refresh(share)
@@ -1252,7 +1258,7 @@ def decide_added_files(
             )
             .values(approval_state=FileApprovalState.approved)
         )
-        if result.rowcount == 0:
+        if updated_rows(result) == 0:
             raise AppError(409, "NO_FILES_PENDING", "No files are awaiting review on this share.")
         db.flush()
         record_audit_event(
@@ -1320,7 +1326,7 @@ def resubmit_share(db: Session, *, user: User, share: Share, request=None) -> Sh
             rejection_reason=None,
         )
     )
-    if result.rowcount == 0:
+    if updated_rows(result) == 0:
         raise AppError(
             409, "SHARE_NOT_REJECTED", "Only a rejected share can be resubmitted."
         )
@@ -1408,7 +1414,7 @@ def try_decrement_share_counter(db: Session, *, share: Share) -> bool:
     )
     result = db.execute(stmt)
     db.flush()
-    if result.rowcount == 0:
+    if updated_rows(result) == 0:
         return False
     db.refresh(share)
     return True
@@ -1563,7 +1569,7 @@ def expire_share_now(
         .where(Share.id == share.id, Share.state == ShareState.active)
         .values(state=ShareState.expired, expires_at=now)
     )
-    if result.rowcount == 0:
+    if updated_rows(result) == 0:
         raise AppError(
             409, "SHARE_NOT_ACTIVE", "Only active shares can be expired."
         )
@@ -1728,11 +1734,12 @@ def _notify_recipients_files_added(
 
     if notify_user_ids:
         base_url = site_svc.get_site_url(db)
+        share_url = f"{base_url}/share/{share.id}"
         payload_base = {
             "sender_name": actor.display_name,
             "subject": share.subject,
             "added_count": added_count,
-            "share_url": f"{base_url}/share/{share.id}",
+            "share_url": share_url,
         }
         recipients = db.query(User).filter(User.id.in_(notify_user_ids)).all()
         for u in recipients:
@@ -1743,7 +1750,7 @@ def _notify_recipients_files_added(
                 user=u,
                 category=NotificationCategory.share_files_added,
                 payload=payload,
-                link_url=payload["share_url"],
+                link_url=share_url,
                 email_to=u.email,
             )
 

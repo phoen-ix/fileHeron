@@ -38,6 +38,7 @@ from ..utils.crypto import (
     random_token,
     sha256_hex,
 )
+from ..utils.dbresult import updated_rows
 from ..utils.geohash import ip_geohash5
 from ..utils.timeutil import utc_now
 from ..utils.ua_fingerprint import ua_fingerprint_hash
@@ -761,7 +762,7 @@ async def consume_password_reset(
         )
         .values(used_at=utc_now())
     )
-    if claimed.rowcount == 0:
+    if updated_rows(claimed) == 0:
         raise AppError(410, "RESET_TOKEN_USED", "Reset link has already been used.")
 
     user = db.query(User).filter(User.id == record.user_id).one()
@@ -823,7 +824,7 @@ def consume_email_verification(db: Session, *, plaintext_token: str, request: Re
         )
         .values(used_at=utc_now())
     )
-    if claimed.rowcount == 0:
+    if updated_rows(claimed) == 0:
         raise AppError(410, "VERIFY_TOKEN_USED", "Verification link has already been used.")
 
     user = db.query(User).filter(User.id == record.user_id).one()

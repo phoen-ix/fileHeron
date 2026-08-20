@@ -47,6 +47,7 @@ from ..utils.crypto import (
     random_token,
     sha256_hex,
 )
+from ..utils.dbresult import updated_rows
 from ..utils.timeutil import utc_now
 from . import notification as notif_svc
 from . import settings_registry
@@ -385,7 +386,7 @@ def decrement_counter(
     )
     result = db.execute(stmt)
     db.flush()
-    if result.rowcount == 0:
+    if updated_rows(result) == 0:
         return False, link.downloads_remaining
     db.refresh(link)
     return True, link.downloads_remaining

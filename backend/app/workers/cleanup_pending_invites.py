@@ -31,6 +31,7 @@ from ..models.audit_log import AuditEventType
 from ..models.invite_token import InviteToken
 from ..services.audit import record_audit_event
 from ..services.cron_tracker import track_cron
+from ..utils.dbresult import updated_rows
 from ..utils.timeutil import utc_now
 
 logger = logging.getLogger("fileheron.workers.cleanup_pending_invites")
@@ -55,7 +56,7 @@ async def cleanup_pending_invites(_ctx) -> dict:
                 InviteToken.created_at < cutoff,
             )
         )
-        purged = int(result.rowcount or 0)
+        purged = int(updated_rows(result) or 0)
         if purged:
             record_audit_event(
                 db,

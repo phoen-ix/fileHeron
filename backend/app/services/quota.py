@@ -28,7 +28,7 @@ from sqlalchemy.orm import Session
 from ..middleware.errors import AppError
 from ..models.file import File, FileState
 from ..models.user import User
-from ..redis_client import get_redis
+from ..redis_client import eval_script, get_redis, sync
 
 logger = logging.getLogger("fileheron.quota")
 
@@ -140,8 +140,8 @@ def reserve_bytes(
         if not redis.exists(_key(user.id)):
             _initialize_from_db(db, user.id, exclude_file_id=exclude_file_id)
 
-        status, new_total = redis.eval(
-            _RESERVE_LUA, 1, _key(user.id), additional_bytes, quota_limit
+        status, new_total = eval_script(
+            redis, _RESERVE_LUA, 1, _key(user.id), additional_bytes, quota_limit
         )
         status, new_total = int(status), int(new_total)
         if status == 1:
@@ -229,7 +229,7 @@ def release_bytes(*, user_id: int, bytes_to_free: int) -> None:
         return
     try:
         # Atomic decrement-and-floor - see _RELEASE_LUA.
-        get_redis().eval(_RELEASE_LUA, 1, _key(user_id), bytes_to_free)
+        eval_script(get_redis(), _RELEASE_LUA, 1, _key(user_id), bytes_to_free)
     except Exception:
         logger.warning("quota release failed (redis): user=%d bytes=%d", user_id, bytes_to_free)
 
@@ -240,7 +240,7 @@ def used_bytes(*, user_id: int) -> int:
     enforcement. For an accurate storage figure to display, use
     `storage_used_bytes` (DB-authoritative) instead."""
     try:
-        v = get_redis().get(_key(user_id))
+        v = sync(get_redis().get(_key(user_id)))
         return max(0, int(v)) if v else 0
     except Exception:
         return 0

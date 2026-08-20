@@ -8,6 +8,11 @@ the download endpoint.
 """
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .inbound_message import InboundMessage
+
 import enum
 
 from sqlalchemy import BigInteger, ForeignKey, Integer, String
@@ -42,6 +47,6 @@ class InboundAttachment(Base):
         nullable=False, default=AttachmentAVState.pending,
     )
 
-    message: Mapped[InboundMessage] = relationship(  # noqa: F821
+    message: Mapped[InboundMessage] = relationship(
         "InboundMessage", back_populates="attachments"
     )

@@ -100,7 +100,7 @@ def emit(db: Session, event_type: str, payload: dict) -> int:
         # loop and one ARQ connection pool per subscribed webhook, built and
         # torn down serially inside the originating request (audit 2026-07-30,
         # the same shape as dos-15 on the notification path).
-        jobs = [
+        jobs: list[tuple[str, tuple, dict]] = [
             ("webhook_deliver", (wh.id, event_type, payload), {})
             for wh in webhooks
             if _subscribed(wh, event_type)

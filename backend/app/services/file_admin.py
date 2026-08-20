@@ -12,6 +12,7 @@ from datetime import datetime
 
 from sqlalchemy import desc, func, select
 from sqlalchemy.orm import Session
+from sqlalchemy.sql.elements import ColumnElement
 
 from ..models.download_log import DownloadLog
 from ..models.file import File, FileState
@@ -93,7 +94,7 @@ def list_all_files(
         .subquery()
     )
 
-    filters = []
+    filters: list[ColumnElement[bool]] = []
 
     if q:
         # Escape LIKE wildcards so a literal % or _ matches itself.

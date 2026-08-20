@@ -12,12 +12,14 @@ from ...middleware.errors import AppError
 from ...models.audit_log import AuditEventType, AuditLog
 from ...models.user import User, UserRole
 from ...models.user_totp import UserTOTP
+from ...schemas.account import CancelEmailChangeResponse
 from ...schemas.admin import (
     AdminChangeEmailRequest,
     AdminChangeEmailResponse,
     AdminUserItem,
     AdminUserListResponse,
     CreateUserRequest,
+    ErasePreflightResponse,
     EraseUserRequest,
     EraseUserResponse,
     ForcePasswordResetResponse,
@@ -235,7 +237,7 @@ async def change_user_email(
     )
 
 
-@router.delete("/users/{user_id}/email", status_code=200)
+@router.delete("/users/{user_id}/email", response_model=CancelEmailChangeResponse, status_code=200)
 def cancel_user_email_change(
     user_id: int,
     request: Request,
@@ -254,7 +256,7 @@ def cancel_user_email_change(
     return {"ok": True, "cancelled": count}
 
 
-@router.get("/users/{user_id}/erase/preflight")
+@router.get("/users/{user_id}/erase/preflight", response_model=ErasePreflightResponse)
 def erase_preflight(
     user_id: int,
     db: Session = Depends(get_db),
@@ -272,7 +274,7 @@ def erasure_receipt_pdf(
     audit_id: int,
     db: Session = Depends(get_db),
     _admin: User = Depends(get_current_admin),
-):
+) -> Response:
     """Generate a verifiable PDF receipt of a past erasure. The admin
     UI offers a download button after a successful erasure, but any
     admin can re-pull a past one given the audit row id."""

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 from fastapi import APIRouter, Depends, Header, Request, status
 from fastapi.responses import Response
@@ -14,6 +15,7 @@ from ..models.download_log import DownloadLog, DownloadVia
 from ..models.file import File, FileState
 from ..models.share import Share, ShareState
 from ..models.user import User, UserRole
+from ..schemas.common import SignedUrlResponse
 from ..services import download_token as download_token_svc
 from ..services import file as file_svc
 from ..services import settings_registry as _sr
@@ -149,7 +151,7 @@ def _resolve_download_user(
     return user
 
 
-@router.get("/{file_id}/download-url")
+@router.get("/{file_id}/download-url", response_model=SignedUrlResponse)
 def get_download_url(
     file_id: str,
     user: User = Depends(require_scope("files:download")),
@@ -194,7 +196,7 @@ def get_download_url(
     return {"url": f"/api/files/{file_id}/download?dt={token}"}
 
 
-@router.get("/{file_id}/preview-url")
+@router.get("/{file_id}/preview-url", response_model=SignedUrlResponse)
 def get_preview_url(
     file_id: str,
     user: User = Depends(require_scope("files:download")),
@@ -445,7 +447,7 @@ def download_file(
                 via=via,
             )
         )
-        metadata = {"via": via.value, "share_id": file.share_id}
+        metadata: dict[str, Any] = {"via": via.value, "share_id": file.share_id}
         if is_review:
             metadata["review"] = True
         record_audit_event(
@@ -473,7 +475,7 @@ def download_file(
     )
 
 
-@router.get("/{share_id}/download-zip-url")
+@router.get("/{share_id}/download-zip-url", response_model=SignedUrlResponse)
 def get_share_zip_url(
     share_id: str,
     user: User = Depends(require_scope("files:download")),
@@ -565,7 +567,7 @@ def download_share_zip(
     # written. Adding a file to the share afterwards changed the ETag but not
     # that stale evidence, so the new member came out free too (audit #2).
     paid_key = f"user:{user.id}:zip:{share.id}:{etag}"
-    resuming = bool(byte_range) and byte_range[0] > 0
+    resuming = byte_range is not None and byte_range[0] > 0
     corroborated = resuming and (
         transfer_activity.was_download_paid(paid_key)
         # ...or the durable record of the same payment. The Redis mark is the

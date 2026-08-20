@@ -37,6 +37,7 @@ from sqlalchemy.orm import Session
 from ..config import settings
 from ..dependencies import get_db
 from ..middleware.errors import AppError
+from ..schemas.upload import TusHookResponse
 from ..services import tus_hooks as hooks_svc
 
 logger = logging.getLogger("fileheron.tus_hooks")
@@ -86,7 +87,7 @@ def _ip_allowed(client_ip: str | None) -> bool:
     return False
 
 
-@router.post("/api/internal/tus-hooks", status_code=200)
+@router.post("/api/internal/tus-hooks", response_model=TusHookResponse, status_code=200)
 def tus_hooks(
     request: Request,
     body: dict = Body(...),

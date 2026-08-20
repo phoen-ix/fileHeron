@@ -10,7 +10,7 @@ the logo and legal text are public by nature.
 """
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Response
 from sqlalchemy.orm import Session
 
 from ..dependencies import get_db
@@ -40,7 +40,7 @@ _LEGAL_KINDS = {
 
 
 @router.get("/api/branding/logo")
-def get_branding_logo(db: Session = Depends(get_db)):
+def get_branding_logo(db: Session = Depends(get_db)) -> Response:
     locator = settings_svc.get(db, settings_svc.Keys.BRANDING_LOGO_LOCATOR)
     if not locator:
         raise AppError(404, "LOGO_NOT_FOUND", "No logo configured.")
@@ -63,7 +63,7 @@ def get_branding_logo(db: Session = Depends(get_db)):
 
 
 @router.get("/api/branding/logo.png")
-def get_branding_logo_png(db: Session = Depends(get_db)):
+def get_branding_logo_png(db: Session = Depends(get_db)) -> Response:
     """Header-sized PNG rendition for the desktop client. Gated by the
     ``show_client`` toggle so the client only needs a 200/404 check - returns
     404 when the client surface is off or no logo (PNG) is stored."""

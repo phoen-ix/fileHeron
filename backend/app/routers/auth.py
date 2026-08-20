@@ -27,15 +27,18 @@ from ..schemas.auth import (
     CancelEmailChangeRequest,
     CompleteSecondFactorRequest,
     ConfirmEmailChangeRequest,
+    ConfirmEmailChangeResponse,
     ForgotPasswordRequest,
     LoginRecoveryRequest,
     LoginRequest,
     LoginResponse,
     RefreshResponse,
     RegisterFromInviteRequest,
+    ResendVerificationResponse,
     ResetPasswordRequest,
     VerifyEmailRequest,
 )
+from ..schemas.common import OkResponse, RevokedCountResponse
 from ..schemas.two_factor import SessionListResponse, SessionResponse
 from ..services import auth as auth_svc
 from ..services import email as email_svc
@@ -248,7 +251,7 @@ async def _send_password_reset_detached(
         db.close()
 
 
-@router.post("/forgot-password", status_code=status.HTTP_200_OK)
+@router.post("/forgot-password", response_model=OkResponse, status_code=status.HTTP_200_OK)
 async def forgot_password(
     payload: ForgotPasswordRequest,
     request: Request,
@@ -290,7 +293,7 @@ async def forgot_password(
     return {"ok": True}
 
 
-@router.post("/reset-password", status_code=status.HTTP_200_OK)
+@router.post("/reset-password", response_model=OkResponse, status_code=status.HTTP_200_OK)
 async def reset_password(
     payload: ResetPasswordRequest,
     request: Request,
@@ -311,7 +314,7 @@ async def reset_password(
     return {"ok": True}
 
 
-@router.post("/verify-email", status_code=status.HTTP_200_OK)
+@router.post("/verify-email", response_model=OkResponse, status_code=status.HTTP_200_OK)
 def verify_email(payload: VerifyEmailRequest, request: Request, db: Session = Depends(get_db)) -> dict:
     ip = request.client.host if request.client else ""
     if not rate_limit_svc.check_ip_allowed(
@@ -323,7 +326,7 @@ def verify_email(payload: VerifyEmailRequest, request: Request, db: Session = De
     return {"ok": True}
 
 
-@router.post("/confirm-email-change", status_code=status.HTTP_200_OK)
+@router.post("/confirm-email-change", response_model=ConfirmEmailChangeResponse, status_code=status.HTTP_200_OK)
 async def confirm_email_change(
     payload: ConfirmEmailChangeRequest,
     request: Request,
@@ -355,7 +358,7 @@ async def confirm_email_change(
     }
 
 
-@router.post("/cancel-email-change", status_code=status.HTTP_200_OK)
+@router.post("/cancel-email-change", response_model=OkResponse, status_code=status.HTTP_200_OK)
 def cancel_email_change(
     payload: CancelEmailChangeRequest,
     request: Request,
@@ -372,7 +375,7 @@ def cancel_email_change(
     return {"ok": True}
 
 
-@router.post("/resend-verification", status_code=status.HTTP_200_OK)
+@router.post("/resend-verification", response_model=ResendVerificationResponse, status_code=status.HTTP_200_OK)
 async def resend_verification(
     request: Request,
     user: User = Depends(get_current_user),
@@ -461,7 +464,7 @@ def revoke_session(
     db.commit()
 
 
-@router.post("/sessions/revoke-others")
+@router.post("/sessions/revoke-others", response_model=RevokedCountResponse)
 def revoke_other_sessions(
     request: Request,
     response: Response,

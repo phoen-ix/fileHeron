@@ -16,12 +16,13 @@ from sqlalchemy.orm import Session
 
 from ...dependencies import get_current_admin, get_db
 from ...models.user import User
+from ...schemas.analytics import AnalyticsResponse
 from ...services import analytics as analytics_svc
 
 router = APIRouter()
 
 
-@router.get("/analytics")
+@router.get("/analytics", response_model=AnalyticsResponse)
 def get_analytics(
     days: int = Query(30, ge=1, le=90),
     db: Session = Depends(get_db),

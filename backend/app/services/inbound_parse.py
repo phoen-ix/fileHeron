@@ -116,7 +116,8 @@ def parse(raw: bytes) -> ParsedMessage:
     name, addr = parseaddr(_decode(msg.get("From")))
     subject = _decode(msg.get("Subject")) or "(no subject)"
     try:
-        received = _naive_utc(parsedate_to_datetime(msg.get("Date"))) if msg.get("Date") else None
+        date_hdr = msg.get("Date")
+        received = _naive_utc(parsedate_to_datetime(date_hdr)) if date_hdr else None
     except Exception:
         # Deliberately broad. A crafted Date raises OverflowError ("signed
         # integer is greater than maximum") for an absurd year or offset, which
@@ -137,17 +138,19 @@ def parse(raw: bytes) -> ParsedMessage:
         disp = (part.get_content_disposition() or "").lower()
         filename = _decode(part.get_filename())
         if disp == "attachment" or filename:
-            payload = part.get_payload(decode=True) or b""
+            # decode=True yields bytes (or None); the other get_payload
+            # overloads return str or a Message, which the stub unions in.
+            att_payload = part.get_payload(decode=True)
             attachments.append(
                 ParsedAttachment(
                     filename=filename or "attachment",
                     content_type=ctype,
-                    content=payload,
+                    content=att_payload if isinstance(att_payload, bytes) else b"",
                 )
             )
             continue
         payload = part.get_payload(decode=True)
-        if payload is None:
+        if not isinstance(payload, bytes):
             continue
         charset = part.get_content_charset() or "utf-8"
         try:

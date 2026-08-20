@@ -11,6 +11,7 @@ from collections.abc import Generator
 
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
+from sqlalchemy.pool import QueuePool
 
 from .config import settings
 
@@ -109,7 +110,9 @@ def pool_stats() -> dict | None:
     these (e.g. SQLite's). Surfaced by /api/health and /api/metrics so a
     pool-exhaustion problem is visible before it manifests as latency."""
     pool = engine.pool
-    if not hasattr(pool, "size"):
+    # size()/overflow()/checkedout() are QueuePool's, not the Pool base class's -
+    # SQLite in the test harness uses StaticPool, which has none of them.
+    if not isinstance(pool, QueuePool):
         return None
     try:
         return {

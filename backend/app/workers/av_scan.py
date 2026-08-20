@@ -117,12 +117,15 @@ async def av_scan_file(_ctx, file_id: str) -> dict:
         if not file.storage_path:
             logger.warning("av_scan: file %s has no storage_path", file_id)
             return {"file_id": file_id, "state": "no_path"}
+        # Bound here, not read inside _scan(): narrowing does not survive into a
+        # nested function, because the attribute could be rebound before the call.
+        locator = file.storage_path
 
         # Local backend → path-scan (clamd reads the shared mount). Object store →
         # stream the bytes to clamd via INSTREAM (no shared path).
         from ..services.storage_backend import get_storage_backend
         backend = get_storage_backend()
-        local = backend.local_path(file.storage_path)
+        local = backend.local_path(locator)
 
         # Decide unscannable BEFORE scanning, against CLAMD_MAX_FILE_SIZE - the
         # ceiling clamd clamps ITSELF to, not the operator-tunable
@@ -165,7 +168,7 @@ async def av_scan_file(_ctx, file_id: str) -> dict:
         def _scan() -> av_scan_svc.ScanResult:
             if local is not None:
                 return av_scan_svc.scan_path(local)
-            with backend.open(file.storage_path) as fh:
+            with backend.open(locator) as fh:
                 return av_scan_svc.scan_stream(fh)
 
         try:

@@ -290,15 +290,26 @@ def test_every_roster_builder_goes_through_the_shared_projection():
             return True
         return False
 
+    builders = []
     offenders = []
     for node in ast.walk(tree):
         if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
         if not _builds_real_ref(node):
             continue
+        builders.append(node.name)
         body = ast.get_source_segment(text, node) or ""
         if "allows_user(" not in body or "allows_group(" not in body:
             offenders.append(node.name)
+
+    # Without this the walk passes by finding nothing: move the roster builders
+    # out of routers/shares.py and the scan examines zero nodes while staying
+    # green. That is the failure _route_helpers.py records (0 routes instead of
+    # ~234) and the one ci.yml records for `vue-tsc --noEmit` (0 files).
+    assert builders, (
+        "the roster-builder scan matched nothing - it has stopped working "
+        f"(looked in {src})"
+    )
 
     assert not offenders, (
         "these build recipient refs without the shared roster projection, so "

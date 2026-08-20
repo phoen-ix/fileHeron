@@ -21,6 +21,7 @@ from ...schemas.api_token import (
     AllowedUserItem,
     CreateApiTokenResponse,
     TokenPolicyResponse,
+    TokenStatus,
     UpdateTokenPolicyRequest,
 )
 from ...services import api_token as api_token_svc
@@ -31,7 +32,7 @@ from ...utils.timeutil import utc_now
 router = APIRouter()
 
 
-def _token_status(t: ApiToken) -> str:
+def _token_status(t: ApiToken) -> TokenStatus:
     if t.revoked_at is not None:
         return "revoked"
     if t.expires_at is not None and utc_now() > t.expires_at:

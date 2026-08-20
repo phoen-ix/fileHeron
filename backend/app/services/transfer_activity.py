@@ -24,7 +24,7 @@ import uuid
 
 from sqlalchemy.orm import Session
 
-from ..redis_client import get_redis
+from ..redis_client import get_redis, sync
 
 logger = logging.getLogger("fileheron.transfer_activity")
 
@@ -105,7 +105,7 @@ def active_downloads() -> int:
     try:
         r = get_redis()
         r.zremrangebyscore(_DOWNLOADS_KEY, 0, _now() - MAX_DOWNLOAD_AGE_SEC)
-        return int(r.zcard(_DOWNLOADS_KEY))
+        return int(sync(r.zcard(_DOWNLOADS_KEY)))
     except Exception:
         logger.warning("transfer_activity: active_downloads failed (redis); assuming 0")
         return 0

@@ -19,6 +19,7 @@ Counter decrement happens on the actual download request, atomically.
 from __future__ import annotations
 
 import base64
+import binascii
 import hashlib
 import hmac as hmac_mod
 import json
@@ -100,7 +101,7 @@ def _verify_unlock_cookie(value: str, link_id: str) -> bool:
         payload_b64, sig_b64 = value.split(".", 1)
         payload = _b64url_decode(payload_b64)
         sig = _b64url_decode(sig_b64)
-    except (ValueError, base64.binascii.Error):
+    except (ValueError, binascii.Error):
         return False
     expected = hmac_mod.new(
         settings.JWT_SECRET.encode("utf-8"), payload, hashlib.sha256
@@ -603,7 +604,7 @@ def public_download_zip(
     # identity, so an owner downloading their own archive silently authorised
     # unlimited anonymous ones. Different principals, one key.
     paid_key = f"link:{link.id}:zip:{etag}"
-    resuming = bool(byte_range) and byte_range[0] > 0
+    resuming = byte_range is not None and byte_range[0] > 0
     corroborated = resuming and transfer_activity.was_download_paid(paid_key)
 
     # Maintenance is refused HERE, after the archive identity is known, so a

@@ -41,3 +41,13 @@ class DirectUploadResponse(APIBaseModel):
     file_id: str
     size_bytes: int
     sha256_hex: str | None
+
+
+class TusHookResponse(APIBaseModel):
+    """The body `/api/internal/tus-hooks` answers with. tusd decides on the
+    STATUS code, not this - the body is for the operator reading logs. Two
+    shapes: a handled hook, and an ignored one (a hook name we do not act on).
+    """
+    ok: bool = True
+    name: str
+    ignored: bool = False

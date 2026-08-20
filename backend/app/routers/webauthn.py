@@ -25,6 +25,7 @@ from ..config import settings
 from ..dependencies import get_current_user, get_db
 from ..middleware.errors import AppError
 from ..models.user import User
+from ..schemas.auth import WebAuthnAuthCompleteResponse
 from ..schemas.webauthn import (
     WebAuthnAuthBeginRequest,
     WebAuthnAuthBeginResponse,
@@ -165,7 +166,16 @@ async def auth_begin(
     return WebAuthnAuthBeginResponse(session=session_key, options=options)
 
 
-@auth_router.post("/complete")
+# exclude_none: the two shapes are mutually exclusive and the ABSENCE is the
+# contract - a half-authenticated response must not carry an `access_token`
+# key at all, which is what test_a_passkey_login_also_challenges_totp pins.
+# Without it the model serialises `"access_token": null` into a reply whose
+# whole point is that no session was minted.
+@auth_router.post(
+    "/complete",
+    response_model=WebAuthnAuthCompleteResponse,
+    response_model_exclude_none=True,
+)
 async def auth_complete(
     payload: WebAuthnAuthCompleteRequest,
     request: Request,

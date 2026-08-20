@@ -8,11 +8,20 @@ returns the correct epoch - use `utc_now_aware()` there.
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from typing import overload
 
 
 def utc_now() -> datetime:
     """Naive UTC - the stored-timestamp convention across the app."""
     return datetime.now(tz=timezone.utc).replace(tzinfo=None)
+
+
+@overload
+def to_naive_utc(dt: datetime) -> datetime: ...
+
+
+@overload
+def to_naive_utc(dt: None) -> None: ...
 
 
 def to_naive_utc(dt: datetime | None) -> datetime | None:

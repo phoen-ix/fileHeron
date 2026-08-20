@@ -13,6 +13,11 @@ endpoint pulls them. Inbound HTML is sanitised (nh3) at ingest time.
 """
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .inbound_attachment import InboundAttachment
+
 import enum
 from datetime import datetime
 
@@ -92,6 +97,12 @@ class InboundMessage(Base):
     body_html: Mapped[str | None] = mapped_column(_Body, nullable=True, deferred=True)
     has_attachments: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
-    attachments: Mapped[list[InboundAttachment]] = relationship(  # noqa: F821
+    # Transient and in-memory only - deliberately NOT a column. `inbound_mail`
+    # sets it when a message was ingested with attachments missing, and
+    # `imap_poll` reads it to choose the post-fetch server action. Unannotated
+    # so SQLAlchemy's declarative mapper leaves it alone.
+    _fh_incomplete = False
+
+    attachments: Mapped[list[InboundAttachment]] = relationship(
         "InboundAttachment", back_populates="message", cascade="all, delete-orphan"
     )

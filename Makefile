@@ -10,13 +10,14 @@
 # resync their local ruff.
 RUFF_PIN := $(shell sed -n 's/.*"ruff==\([0-9.]*\)".*/\1/p' backend/pyproject.toml)
 
-.PHONY: help lint lint-backend lint-frontend lint-docker test test-backend \
+.PHONY: help lint lint-backend lint-frontend lint-docker typecheck test test-backend \
 	test-frontend up dev down build seed fmt
 
 help:
 	@echo "Targets:"
 	@echo "  lint / lint-backend / lint-frontend   CI lint gates (ruff + eslint)"
 	@echo "  lint-docker    backend ruff in an ephemeral python:3.12-slim (no local ruff needed)"
+	@echo "  typecheck      backend mypy, exactly as CI's infra-lint job runs it"
 	@echo "  test / test-backend / test-frontend   pytest (needs backend .[dev]) + vitest"
 	@echo "  build          frontend production build (vue-tsc type-check + vite)"
 	@echo "  dev            docker compose dev stack (auto-reload + HMR)"
@@ -24,7 +25,7 @@ help:
 	@echo "  seed           seed the dev test accounts into a running stack"
 	@echo "  fmt            autoformat the frontend (prettier)"
 
-lint: lint-backend lint-frontend
+lint: lint-backend lint-frontend typecheck
 
 test: test-backend test-frontend
 
@@ -50,6 +51,18 @@ down:
 
 seed:
 	docker compose exec backend python scripts/seed_dev.py
+
+# mypy runs in CI's infra-lint job, and used to be invisible here - it was
+# absent from this file and from CONTRIBUTING's gate table, so the documented
+# local gate was ruff-only and a type error first surfaced on a red main. Runs
+# in an ephemeral container matching the backend image, so it needs nothing
+# installed on the host and cannot drift from the pinned mypy in pyproject.
+# `app scripts` is the same scope CI uses.
+typecheck:
+	cd backend && docker run --rm -v "$$PWD":/w -w /w -e PYTHONDONTWRITEBYTECODE=1 \
+		python:3.14-slim sh -c \
+		'set -e; pip install -q --require-hashes -r requirements.lock; \
+		 pip install -q -e ".[dev]"; python -m mypy app scripts'
 
 # Frontend uses prettier; backend style is enforced by ruff (make lint).
 fmt:

@@ -60,8 +60,8 @@ function hydrate(s: ImapSettingsResponse) {
     post_fetch_action: s.post_fetch_action,
     move_folder: s.move_folder,
     notify_mode: s.notify_mode,
-    require_known_sender: s.require_known_sender ?? true,
-    tls_insecure: s.tls_insecure ?? false,
+    require_known_sender: s.require_known_sender,
+    tls_insecure: s.tls_insecure,
   }
   isPasswordSet.value = s.is_password_set
   lastPollAt.value = s.last_poll_at

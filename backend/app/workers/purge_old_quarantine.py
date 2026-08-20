@@ -80,8 +80,11 @@ async def purge_old_quarantine(_ctx) -> dict:
         from ..services.storage_backend import get_storage_backend
         backend = get_storage_backend()
         for f in rows:
+            loc = f.storage_path
+            if loc is None:  # the query filters these out; keeps the type honest
+                continue
             try:
-                backend.delete(f.storage_path)
+                backend.delete(loc)
                 f.storage_path = None
                 record_audit_event(
                     db,

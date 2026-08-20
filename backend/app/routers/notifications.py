@@ -21,6 +21,7 @@ from ..dependencies import get_current_user, get_db
 from ..middleware.errors import AppError
 from ..models.notification import Notification
 from ..models.user import User
+from ..schemas.account import StreamTokenResponse
 from ..schemas.notification import (
     MarkReadResponse,
     NotificationItem,
@@ -159,7 +160,7 @@ def delete_all(
 # ---- SSE stream ----------------------------------------------------------
 
 
-@router.get("/stream-token")
+@router.get("/stream-token", response_model=StreamTokenResponse)
 def get_stream_token(
     request: Request, user: User = Depends(get_current_user)
 ) -> dict:

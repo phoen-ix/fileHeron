@@ -12,6 +12,7 @@ import re
 import ssl
 from collections.abc import Iterator
 from contextlib import contextmanager
+from typing import cast
 
 from .imap_config import ImapConfig
 
@@ -114,7 +115,9 @@ class ImapSession:
         # First run (no highwater) -> "ALL" is the most portable; incremental
         # runs use a UID range. UID SEARCH returns UIDs either way.
         criterion = "ALL" if last_uid <= 0 else f"UID {last_uid + 1}:*"
-        typ, data = self._c.uid("SEARCH", None, criterion)
+        # `None` is the charset placeholder UID SEARCH takes; imaplib passes
+        # it through, but its stub types every arg as str.
+        typ, data = self._c.uid("SEARCH", cast("str", None), criterion)
         if typ != "OK" or not data or not data[0]:
             return []
         uids = [int(x) for x in data[0].split()]
@@ -269,6 +272,7 @@ def _tls_context(cfg: ImapConfig) -> ssl.SSLContext:
 @contextmanager
 def open_session(cfg: ImapConfig) -> Iterator[ImapSession]:
     ctx = _tls_context(cfg)
+    conn: imaplib.IMAP4
     if cfg.tls_mode == "implicit":
         conn = imaplib.IMAP4_SSL(
             cfg.host, cfg.port, ssl_context=ctx, timeout=_TIMEOUT

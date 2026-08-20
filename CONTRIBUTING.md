@@ -46,13 +46,16 @@ cd e2e && npm ci && npx playwright install --with-deps && npm test
 | Gate | Command |
 |---|---|
 | Backend lint (ruff, pinned) | `make lint-backend` (or `make lint-docker` if you don't have the pinned ruff) |
+| Backend types (mypy, pinned) | `make typecheck` |
 | Frontend lint (eslint) | `make lint-frontend` |
 | Backend tests | `make test-backend` |
 | Frontend type-check + tests | `make build` + `make test-frontend` |
 | Migrations up/down roundtrip | runs in CI against real MariaDB (`alembic-roundtrip` job) |
 | e2e | runs in CI on PRs (`playwright`) |
 
-`make lint && make test` covers the fast local gates. The full CI set
+`make lint && make test` covers the fast local gates (`make lint` includes
+`make typecheck`; mypy has **no exemptions** - see
+`backend/tests/test_mypy_has_no_exemptions.py`). The full CI set
 (`.github/workflows/ci.yml` + `e2e.yml`) runs on every PR.
 
 ## Conventions

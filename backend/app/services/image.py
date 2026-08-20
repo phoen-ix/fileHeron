@@ -41,12 +41,12 @@ def to_client_png(data: bytes, *, max_height: int = 48) -> bytes:
                 raise AppError(
                     400, "IMAGE_TOO_LARGE", "Logo image is too large to process."
                 )
-            img = img.convert("RGBA")  # forces a decode under the pixel cap
-            if img.height > max_height:
-                new_w = max(1, round(img.width * (max_height / img.height)))
-                img = img.resize((new_w, max_height), Image.LANCZOS)
+            rgba = img.convert("RGBA")  # forces a decode under the pixel cap
+            if rgba.height > max_height:
+                new_w = max(1, round(rgba.width * (max_height / rgba.height)))
+                rgba = rgba.resize((new_w, max_height), Image.Resampling.LANCZOS)
             out = io.BytesIO()
-            img.save(out, format="PNG", optimize=True)
+            rgba.save(out, format="PNG", optimize=True)
             return out.getvalue()
     except Image.DecompressionBombError as e:
         raise AppError(400, "IMAGE_TOO_LARGE", "Logo image is too large to process.") from e

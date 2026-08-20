@@ -16,6 +16,7 @@ from ...schemas.admin import (
     AdminInviteItem,
     AdminInviteListResponse,
     AdminUserItem,
+    InviteState,
     RegenerateInviteResponse,
     ResendInviteResponse,
 )
@@ -31,7 +32,7 @@ def _to_invite_item(invite, inviter_name: str | None) -> AdminInviteItem:
     # v1.1.5: admin delete is now a hard delete, so no row in the list
     # can be in the legacy 'revoked' tombstone state. Only pending and
     # expired remain.
-    state = "expired" if invite.expires_at <= now else "pending"
+    state: InviteState = "expired" if invite.expires_at <= now else "pending"
     return AdminInviteItem(
         id=invite.id,
         email=invite.email,

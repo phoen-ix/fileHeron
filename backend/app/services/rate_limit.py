@@ -23,7 +23,7 @@ from sqlalchemy.orm import Session
 
 from ..config import settings
 from ..models.user import User
-from ..redis_client import get_redis
+from ..redis_client import get_redis, sync
 from ..utils.crypto import sha256_hex
 from ..utils.timeutil import utc_now
 
@@ -93,7 +93,7 @@ def check_login_ip_allowed(
         redis = get_redis()
         key = _ip_key(ip)
         # Atomic INCR; set TTL on first hit.
-        count = redis.incr(key)
+        count = sync(redis.incr(key))
         if count == 1:
             redis.expire(key, eff_window)
         return count <= eff_limit
@@ -137,7 +137,7 @@ def check_ip_allowed(bucket: str, ip: str, limit: int, window_sec: int = _LOGIN_
     try:
         redis = get_redis()
         key = _bucket_key(bucket, ip)
-        count = redis.incr(key)
+        count = sync(redis.incr(key))
         if count == 1:
             redis.expire(key, window_sec)
         return count <= limit
@@ -180,7 +180,7 @@ def check_user_allowed(bucket: str, user_id: int, limit: int, window_sec: int = 
     try:
         redis = get_redis()
         key = _user_key(bucket, user_id)
-        count = redis.incr(key)
+        count = sync(redis.incr(key))
         if count == 1:
             redis.expire(key, window_sec)
         return count <= limit

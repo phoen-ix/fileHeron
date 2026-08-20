@@ -17,6 +17,8 @@ ever enqueued directly.
 """
 from __future__ import annotations
 
+from typing import Any, cast
+
 from arq.connections import RedisSettings
 from arq.cron import cron
 
@@ -87,7 +89,10 @@ class WorkerSettings:
         # dispatcher ticks every minute and enqueues jobs whose configured schedule
         # is due (services/cron_schedule.py + workers/cron_dispatch.py). The job
         # functions above stay enqueueable (dispatcher + on-demand "Run now").
-        cron(cron_dispatch, hour=None, minute=set(range(60)), run_at_startup=False),
+        # arq types cron()'s first argument as `str | WorkerCoroutine`; a plain
+        # `async def ... -> dict` job function does not match the protocol
+        # nominally, though it is exactly what arq calls.
+        cron(cast("Any", cron_dispatch), hour=None, minute=set(range(60)), run_at_startup=False),
     ]
     on_startup = startup
     # Use a dedicated queue so the worker doesn't accidentally pick up

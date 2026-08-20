@@ -41,7 +41,7 @@ from sqlalchemy.orm import Session
 from ..middleware.errors import AppError
 from ..models.notification import NotificationCategory
 from ..models.user import User, UserRole
-from ..redis_client import get_redis
+from ..redis_client import get_redis, sync
 from ..utils.crypto import sha256_hex
 from ..utils.timeutil import utc_now
 from . import error_log as error_log_svc
@@ -139,14 +139,14 @@ def _cooldown_peek(sig: str) -> _CooldownDecision:
     Redis error -> err toward sending; the cap still bounds the blast radius."""
     try:
         redis = get_redis()
-        total = redis.incr(_TOTAL_KEY.format(sig=sig))
+        total = sync(redis.incr(_TOTAL_KEY.format(sig=sig)))
         redis.expire(_TOTAL_KEY.format(sig=sig), _ACCOUNTING_TTL_SEC)
         if redis.get(_SENT_KEY.format(sig=sig)) is not None:
             # Already alerted for this signature inside the window. Count, don't email.
             return _CooldownDecision(False, int(total), 0, None, int(total))
-        reported_raw = redis.get(_REPORTED_KEY.format(sig=sig))
+        reported_raw = sync(redis.get(_REPORTED_KEY.format(sig=sig)))
         reported = int(reported_raw) if reported_raw else 0
-        last_iso = redis.get(_LASTSENT_KEY.format(sig=sig))
+        last_iso = sync(redis.get(_LASTSENT_KEY.format(sig=sig)))
         # Occurrences this email represents = everything since the last email.
         occurrence_count = max(1, int(total) - reported)
         suppressed_count = max(0, occurrence_count - 1)

@@ -86,6 +86,7 @@ class AdminChangeEmailResponse(APIBaseModel):
 
 # --- Email-change policy settings (admin-tunable) ---------------------------
 
+InviteState = Literal["pending", "expired"]
 EmailChangeVerificationMode = Literal["immediate", "verify_new", "verify_both"]
 EmailChangeOidcMode = Literal["reset_setpw", "reset_only", "keep"]
 
@@ -268,7 +269,7 @@ class AdminInviteItem(APIBaseModel):
     id: int
     email: str
     target_role: UserRole
-    state: Literal["pending", "expired"]
+    state: InviteState
     invited_by_id: int | None
     # Hydrated by the router via a single bulk lookup per page so the
     # SPA can show "Alice" instead of bare integer IDs. None when the
@@ -302,3 +303,30 @@ class RegenerateInviteResponse(APIBaseModel):
 class ResendInviteResponse(APIBaseModel):
     ok: bool
     expires_at: datetime
+
+
+class ErasePreflightResponse(APIBaseModel):
+    """Numbers the admin sees before pressing an irreversible button.
+    From `services/erasure.compute_erasure_summary`."""
+    user_id: int
+    display_name: str
+    email: str
+    role: str
+    is_already_erased: bool
+    files_to_delete: int
+    bytes_to_delete: int
+    shares_created: int
+    shares_received_to_anonymize: int
+
+
+class InboxUnreadCountResponse(APIBaseModel):
+    unread: int
+
+
+class QueuedResponse(APIBaseModel):
+    """Accepted-and-enqueued acknowledgement (webhook test / delivery retry)."""
+    queued: bool = True
+
+
+class WebhookEventsResponse(APIBaseModel):
+    events: list[str]

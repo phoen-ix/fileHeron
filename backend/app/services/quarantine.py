@@ -124,7 +124,7 @@ def quarantine_file(
     # move failure leaves storage_path at the original location (admin tooling
     # still finds the bytes there); the quota release reconciles hourly.
     moved = False
-    if src_loc is not None:
+    if src_loc is not None and dest_loc is not None:
         try:
             backend.move(src_loc, dest_loc)
             file.storage_path = dest_loc

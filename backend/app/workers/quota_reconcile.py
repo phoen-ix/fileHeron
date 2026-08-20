@@ -24,7 +24,7 @@ from sqlalchemy import func
 from ..database import SessionLocal
 from ..models.file import File, FileState
 from ..models.user import User
-from ..redis_client import get_redis
+from ..redis_client import eval_script, get_redis, sync
 from ..services.cron_tracker import track_cron
 from ..services.quota import _key
 
@@ -77,7 +77,7 @@ async def quota_reconcile(_ctx) -> dict:
             )
             db_sum = int(db_sum)
             try:
-                redis_val_raw = redis.get(_key(user_id))
+                redis_val_raw = sync(redis.get(_key(user_id)))
             except Exception:
                 continue
             redis_val = int(redis_val_raw) if redis_val_raw else 0
@@ -95,8 +95,8 @@ async def quota_reconcile(_ctx) -> dict:
                     # the counter since our read (audit L35).
                     had = "1" if redis_val_raw is not None else "0"
                     expected = redis_val_raw if redis_val_raw is not None else ""
-                    res = redis.eval(
-                        _RECONCILE_CAS_LUA, 1, _key(user_id), expected, db_sum, had
+                    res = eval_script(
+                        redis, _RECONCILE_CAS_LUA, 1, _key(user_id), expected, db_sum, had
                     )
                     if int(res) == 1:
                         fixed += 1

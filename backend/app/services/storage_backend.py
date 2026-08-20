@@ -20,7 +20,7 @@ import shutil
 from abc import ABC, abstractmethod
 from datetime import datetime
 from pathlib import Path
-from typing import BinaryIO
+from typing import BinaryIO, cast
 
 from fastapi.responses import FileResponse
 
@@ -181,7 +181,10 @@ class S3Backend(StorageBackend):
             pass
 
     def open(self, locator: str) -> BinaryIO:
-        return self._s3.get_object(Bucket=self._bucket, Key=locator)["Body"]
+        # botocore returns a StreamingBody: not nominally a BinaryIO, but it
+        # implements the read/close surface every consumer here uses (zip
+        # building and clamd INSTREAM both only read).
+        return cast("BinaryIO", self._s3.get_object(Bucket=self._bucket, Key=locator)["Body"])
 
     def local_path(self, locator: str) -> str | None:
         return None

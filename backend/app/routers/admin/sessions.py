@@ -19,6 +19,7 @@ from ...models.audit_log import AuditEventType
 from ...models.refresh_token import RefreshToken
 from ...models.user import User
 from ...schemas.admin import AdminSessionListResponse, AdminSessionRow
+from ...schemas.common import RevokedCountResponse
 from ...services.audit import record_audit_event
 from ...services.jwt_session import revoke_all_user_refresh_tokens
 from ...utils.timeutil import utc_now
@@ -115,7 +116,7 @@ def list_sessions(
     )
 
 
-@router.delete("/sessions/{session_id}")
+@router.delete("/sessions/{session_id}", response_model=RevokedCountResponse)
 def revoke_session(
     session_id: int,
     request: Request,
@@ -146,7 +147,7 @@ def revoke_session(
     return {"revoked": 1}
 
 
-@router.delete("/users/{user_id}/sessions")
+@router.delete("/users/{user_id}/sessions", response_model=RevokedCountResponse)
 def revoke_user_sessions(
     user_id: int,
     request: Request,

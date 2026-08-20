@@ -129,7 +129,7 @@ def _rotate_str(old: Fernet, new: Fernet, value: str | None) -> tuple[str | None
     if value is None or value == "":
         return value, "empty"
     raw, status = _rotate_bytes(old, new, value.encode("ascii"))
-    if status == "rotated":
+    if status == "rotated" and raw is not None:
         return raw.decode("ascii"), status
     return value, status
 
@@ -149,6 +149,7 @@ def rotate_table(db, label: str, rows, get_field, set_field, is_bytes: bool, old
     stats = RotationStats()
     for row in rows:
         v = get_field(row)
+        new_v: bytes | str | None
         if is_bytes:
             new_v, status = _rotate_bytes(old, new, v)
         else:

@@ -37,6 +37,7 @@ from ..models.audit_log import AuditEventType
 from ..models.refresh_token import RefreshToken
 from ..models.user import User
 from ..utils.crypto import random_token, refresh_token_hash
+from ..utils.dbresult import updated_rows
 from ..utils.timeutil import to_epoch, utc_now, utc_now_aware
 from .audit import record_audit_event
 
@@ -369,7 +370,7 @@ def revoke_all_user_refresh_tokens(db: Session, user_id: int) -> int:
         .values(revoked_at=now)
     )
     db.execute(update(User).where(User.id == user_id).values(sessions_invalidated_at=now))
-    return result.rowcount or 0
+    return updated_rows(result) or 0
 
 
 def rotate_refresh(
@@ -423,7 +424,7 @@ def rotate_refresh(
         .where(RefreshToken.id == record.id, RefreshToken.revoked_at.is_(None))
         .values(revoked_at=now)
     )
-    if (result.rowcount or 0) == 0:
+    if (updated_rows(result) or 0) == 0:
         # The token was valid when we read it but got revoked between the read and
         # this UPDATE - a concurrent legitimate operation (two browser tabs sharing
         # the cookie both rotating, or a deliberate revoke firing at the same

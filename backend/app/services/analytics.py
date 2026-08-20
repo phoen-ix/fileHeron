@@ -12,6 +12,7 @@ and MariaDB (prod); ``str(row[0])[:10]`` normalises the bucket key on both.
 from __future__ import annotations
 
 from datetime import date, datetime, time, timedelta, timezone
+from typing import Any
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import func
@@ -48,9 +49,10 @@ def snapshot_storage_today(db: Session) -> AnalyticsSnapshot:
         .scalar()
         or 0
     )
-    by_state = dict(
-        db.query(File.state, func.count(File.id)).group_by(File.state).all()
-    )
+    by_state = {
+        row[0]: row[1]
+        for row in db.query(File.state, func.count(File.id)).group_by(File.state).all()
+    }
 
     def _n(state: FileState) -> int:
         return int(by_state.get(state, 0) or 0)
@@ -212,7 +214,7 @@ def compute_analytics(db: Session, days: int = 30) -> dict:
     # Quota warnings - users over 90% of a set quota.
     quota_users = db.query(User).filter(User.quota_bytes.isnot(None)).all()
     used = quota_svc.storage_used_bytes_bulk(db, [u.id for u in quota_users])
-    quota_warnings = []
+    quota_warnings: list[dict[str, Any]] = []
     for u in quota_users:
         limit = u.quota_bytes or 0
         if limit <= 0:

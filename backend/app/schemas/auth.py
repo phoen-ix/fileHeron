@@ -75,3 +75,26 @@ class ConfirmEmailChangeRequest(APIBaseModel):
 class CancelEmailChangeRequest(APIBaseModel):
     """Old-address 'it wasn't me' kill switch for a pending email change."""
     token: str = Field(..., min_length=10, max_length=128)
+
+
+class ResendVerificationResponse(APIBaseModel):
+    """`already_verified` is only present on the short-circuit path; the model
+    makes it explicit rather than leaving the two shapes undeclared."""
+    ok: bool = True
+    already_verified: bool = False
+
+
+class ConfirmEmailChangeResponse(APIBaseModel):
+    ok: bool = True
+    applied: bool
+    pending_side: str | None = None
+    oidc_reset: bool = False
+    set_password_required: bool = False
+
+
+class WebAuthnAuthCompleteResponse(APIBaseModel):
+    """Two shapes: a real session, or the half-authenticated pending-2FA token
+    when the account has TOTP enrolled (v2.12.0)."""
+    access_token: str | None = None
+    expires_in_seconds: int | None = None
+    pending_2fa_token: str | None = None

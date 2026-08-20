@@ -91,10 +91,11 @@ async def share_expiring_24h_warning(_ctx) -> dict:
             target_user_ids: set[int] = {share.created_by_id}
             target_user_ids.update(recipients_by_share.get(share.id, []))
 
+            share_url = f"{site_url}/share/{share.id}"
             payload = {
                 "subject": share.subject,
                 "expires_at": share.expires_at,
-                "share_url": f"{site_url}/share/{share.id}",
+                "share_url": share_url,
             }
             for uid in target_user_ids:
                 user = users_by_id.get(uid)
@@ -108,7 +109,7 @@ async def share_expiring_24h_warning(_ctx) -> dict:
                         user=user,
                         category=NotificationCategory.share_expiring,
                         payload=payload_for_user,
-                        link_url=payload["share_url"],
+                        link_url=share_url,
                         email_to=user.email,
                     )
                     notified_users += 1

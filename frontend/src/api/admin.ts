@@ -161,7 +161,6 @@ export function updateAdvancedSettings(payload: UpdateAdvancedSettingsRequest) {
 
 export interface CheckUpdatesResult {
   ok: boolean
-  skipped?: string
   latest_version?: string
   admins_notified?: number
   url?: string

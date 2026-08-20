@@ -32,6 +32,7 @@ from ..models.login_attempt import LoginAttempt
 from ..models.public_link_attempt import PublicLinkAttempt
 from ..models.webhook import WebhookDelivery
 from ..services.cron_tracker import track_cron
+from ..utils.dbresult import updated_rows
 from ..utils.timeutil import utc_now
 
 logger = logging.getLogger("fileheron.workers.prune_history")
@@ -65,7 +66,7 @@ async def _prune_table(
                 break
             result = db.execute(delete(model).where(model.id.in_(ids)))
             db.commit()
-            total += result.rowcount or len(ids)
+            total += updated_rows(result) or len(ids)
             if len(ids) < _BATCH_SIZE:
                 break
         finally:

@@ -322,13 +322,26 @@ jobs:
       # mypy was installed by backend-tests and INVOKED BY NOTHING, and
       # [tool.mypy] in pyproject.toml was read by nothing, for as long as both
       # existed - so "mypy is set up" was true and "mypy runs" was not
-      # (audit #2). Introduced at a baseline that passes: 47 modules are exempt
-      # per-module in pyproject.toml with the count of what they owe.
+      # (audit #2). It then ran against 47 per-module `ignore_errors` exemptions
+      # covering 37% of app/ by line; that list is now EMPTY and
+      # tests/test_mypy_has_no_exemptions.py keeps it so.
+      #
+      # Install the LOCKED closure first, exactly as backend-tests does and for
+      # the same reason: resolving `.[dev]` fresh type-checks against whatever
+      # stubs PyPI served this morning, not the ones the image ships. pip output
+      # is no longer swallowed - a failed install used to surface only as
+      # "No module named mypy" from the next line.
+      #
+      # `scripts` is in scope too: it is the privileged operator tooling
+      # (rotate_jwt_secret, promote_user, unblock_ip) and ruff has always
+      # covered it.
       - name: mypy
         run: |
-          docker run --rm -v "$PWD/backend:/w" -w /w python:3.14-slim sh -c '
-            pip install -q -e ".[dev]" >/dev/null 2>&1
-            python -m mypy app
+          docker run --rm -v "$PWD/backend:/w" -w /w -e PYTHONDONTWRITEBYTECODE=1 python:3.14-slim sh -c '
+            set -e
+            pip install --require-hashes -r requirements.lock
+            pip install -e ".[dev]"
+            python -m mypy app scripts
           '
       - name: hadolint
         run: |

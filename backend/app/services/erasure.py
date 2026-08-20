@@ -104,7 +104,7 @@ def _erased_file_totals(db: Session, user_id: int) -> tuple[int, int]:
     seen: dict[str, int] = {}
     for r in rows:
         extra = r.extra or {}
-        if extra.get("reason") != "user_erased":
+        if extra.get("reason") != "user_erased" or r.target_id is None:
             continue
         # One row per file even if an earlier attempt somehow logged twice.
         seen[r.target_id] = int(extra.get("size_bytes") or 0)
@@ -547,7 +547,7 @@ def _erase_user_locked(
     scrubbed = 0
     seen_rows: set[int] = set()
     for addr in addresses:
-        rows = (
+        audit_rows = (
             db.query(AuditLog)
             .filter(
                 (AuditLog.target_id == addr)
@@ -555,7 +555,7 @@ def _erase_user_locked(
             )
             .all()
         )
-        for row in rows:
+        for row in audit_rows:
             if row.id in seen_rows:
                 continue
             seen_rows.add(row.id)
@@ -758,6 +758,7 @@ def generate_receipt_pdf(audit_event) -> bytes:
     from reportlab.lib.styles import getSampleStyleSheet
     from reportlab.lib.units import mm
     from reportlab.platypus import (
+        Flowable,
         Paragraph,
         SimpleDocTemplate,
         Spacer,
@@ -788,7 +789,7 @@ def generate_receipt_pdf(audit_event) -> bytes:
         else "?"
     )
 
-    body = []
+    body: list[Flowable] = []
     body.append(Paragraph("file:Heron - Right-to-erasure receipt", title_style))
     body.append(Spacer(1, 4 * mm))
     body.append(

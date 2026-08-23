@@ -1376,6 +1376,7 @@
     "title": "Benachrichtigungen",
     "intro": "Wähle für jedes Ereignis, wie du benachrichtigt werden möchtest. „Beides\" steht für E-Mail und Benachrichtigungsglocke.",
     "locked": "Erforderlich",
+    "channel_for": "Benachrichtigung über, für: {category}",
     "col": {
       "category": "Ereignis",
       "channel": "Benachrichtigung über"

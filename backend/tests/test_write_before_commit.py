@@ -122,6 +122,93 @@ def test_quota_uses_the_shared_definition():
     assert "FileState.ready_unscanned" not in src, "the list was re-declared inline"
 
 
+def test_no_module_re_declares_the_stored_state_list_inline():
+    """Generic, not scoped to `quota._used_bytes_query`.
+
+    Scoping it to one function is why two more copies survived: `metrics.py`
+    (the Prometheus storage gauge) and `quota_reconcile.py` (the authoritative
+    DB sum that CORRECTS the Redis enforcement counter) each spelled the list
+    out again. All three agreed on value, so nothing was wrong - until a sixth
+    FileState would have had the reconciler fighting the enforcer every hour.
+
+    Same lesson the roster projection and the migration-rerun scan record: a
+    rule applied to the places someone thought of is rebuilt from scratch by
+    the next person. Match the members, not a hand-list of files."""
+    import ast
+    import pathlib as _pl
+
+    members = {s.name for s in quota.STORED_STATES}
+    app_root = _pl.Path(quota.__file__).resolve().parent.parent
+
+    # (module, binding) pairs that legitimately spell the members out.
+    #
+    # `quota.py` is the canonical definition itself.
+    #
+    # `_USABLE_FILE_STATES` answers a DIFFERENT question - "does any file keep
+    # this share active" - and merely coincides with "does this file occupy
+    # storage" today. Forcing them to share one symbol would mean a future
+    # state that occupies storage without keeping a share active could not be
+    # expressed. The coincidence is the trap here, so the exemption is by NAME:
+    # a new inline copy under any other name still fails.
+    exempt = {
+        ("services/quota.py", "STORED_STATES"),
+        ("workers/cleanup_stale_uploads.py", "_USABLE_FILE_STATES"),
+    }
+
+    def _bound_name(tree, target):
+        for n in ast.walk(tree):
+            if isinstance(n, ast.Assign) and n.value is target:
+                t = n.targets[0]
+                return t.id if isinstance(t, ast.Name) else None
+        return None
+
+    offenders = []
+    for path in sorted(app_root.rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not isinstance(node, (ast.List, ast.Tuple, ast.Set)):
+                continue
+            names = set()
+            for el in node.elts:
+                if (
+                    isinstance(el, ast.Attribute)
+                    and isinstance(el.value, ast.Name)
+                    and el.value.id == "FileState"
+                ):
+                    names.add(el.attr)
+            if names != members:
+                continue
+            rel = str(path.relative_to(app_root))
+            if (rel, _bound_name(tree, node)) in exempt:
+                continue
+            offenders.append(f"{rel}:{node.lineno}")
+
+    assert not offenders, (
+        "these spell out the stored-state list inline instead of importing "
+        f"quota.STORED_STATES, so they will drift the moment it changes: "
+        f"{offenders}"
+    )
+
+
+def test_that_scan_can_actually_see_an_inline_copy():
+    """Anti-vacuity: the matcher must recognise the shape it is hunting for.
+    Without this, renaming `FileState` or reordering the members would leave
+    the scan above green while examining nothing."""
+    import ast
+
+    members = {s.name for s in quota.STORED_STATES}
+    literal = "[" + ", ".join(f"FileState.{m}" for m in sorted(members)) + "]"
+    node = ast.parse(literal, mode="eval").body
+    found = {
+        el.attr
+        for el in node.elts
+        if isinstance(el, ast.Attribute)
+        and isinstance(el.value, ast.Name)
+        and el.value.id == "FileState"
+    }
+    assert found == members, "the inline-copy matcher no longer matches one"
+
+
 # --- admin-11 / dos-7 -------------------------------------------------------
 
 

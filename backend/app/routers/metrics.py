@@ -30,6 +30,7 @@ from ..middleware.errors import AppError
 from ..models.file import File, FileState
 from ..models.share import Share, ShareState
 from ..models.user import User
+from ..services.quota import STORED_STATES
 from ..utils.crypto import constant_time_equals
 from ..utils.timeutil import utc_now
 
@@ -84,9 +85,7 @@ def _render(db: Session) -> str:
     storage_used = int(
         db.query(func.coalesce(func.sum(File.size_bytes), 0))
         .filter(
-            File.state.in_(
-                [FileState.uploading, FileState.ready_unscanned, FileState.clean]
-            )
+            File.state.in_(STORED_STATES)
         )
         .scalar()
         or 0

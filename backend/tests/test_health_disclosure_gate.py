@@ -92,7 +92,12 @@ async def test_an_anonymous_health_probe_gets_liveness_only(client, monkeypatch)
     # running_version FIRST: it is the field the module names as the reason
     # the gate exists (an anonymous caller learning the exact build to match
     # against advisories), and it was the one field this list omitted.
-    for leaked in ("running_version", "running_sha", "degraded", "db_latency_ms"):
+    #
+    # `db_latency_ms` used to be in this list and is NOT a key at any level -
+    # the handler nests it as body["db_pool"]["latency_ms"] - so that quarter of
+    # the loop asserted nothing, and `db_pool` itself, which carries the pool
+    # size / overflow / checked-out counts, was never asserted withheld at all.
+    for leaked in ("running_version", "running_sha", "degraded", "db_pool"):
         assert leaked not in body, f"{leaked} disclosed to an anonymous caller"
 
 
@@ -107,6 +112,47 @@ async def test_an_operator_probe_gets_the_diagnostics(client, monkeypatch):
     body = r.json()
     assert "running_version" in body
     assert "running_sha" in body
+
+
+@pytest.mark.asyncio
+async def test_the_pool_stats_are_withheld_from_an_anonymous_caller(
+    client, monkeypatch
+):
+    """The assertion above cannot fail on its own.
+
+    `pool_stats()` returns None for anything that is not a QueuePool
+    (`database.py`), and the test engine is a StaticPool - so `db_pool` is never
+    in the body during tests and "assert db_pool not in body" holds vacuously,
+    exactly as the removed `db_latency_ms` entry did. Stubbing the branch is
+    what makes the gate testable at all.
+
+    The counts matter: pool size, overflow and checked-out are a live read of
+    how much concurrency the instance is carrying."""
+    from app.routers import health
+
+    monkeypatch.setattr(
+        "app.database.pool_stats",
+        lambda: {"size": 5, "overflow": 2, "checked_out": 3},
+    )
+    monkeypatch.setattr(health, "_peer_is_operator", lambda _r: False)
+    body = (await client.get("/api/health")).json()
+    assert "db_pool" not in body, "pool statistics disclosed to an anonymous caller"
+
+
+@pytest.mark.asyncio
+async def test_an_operator_does_get_the_pool_stats(client, monkeypatch):
+    """The control for the stub: without it the test above passes because the
+    branch never ran, which is the defect it is written for."""
+    from app.routers import health
+
+    monkeypatch.setattr(
+        "app.database.pool_stats",
+        lambda: {"size": 5, "overflow": 2, "checked_out": 3},
+    )
+    monkeypatch.setattr(health, "_peer_is_operator", lambda _r: True)
+    body = (await client.get("/api/health")).json()
+    assert body["db_pool"]["size"] == 5
+    assert "latency_ms" in body["db_pool"]
 
 
 @pytest.mark.asyncio

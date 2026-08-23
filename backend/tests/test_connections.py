@@ -97,15 +97,21 @@ async def test_invite_source_persists_after_shared_group_loss(make_user, db):
     assert sources == {ConnectionSource.invite}
 
 
-@pytest.mark.asyncio
-async def test_list_employees_visible_to_client(make_user, db):
-    e1 = make_user(email="e1@test.local", role=UserRole.employee)
-    e2 = make_user(email="e2@test.local", role=UserRole.employee)
-    e_other = make_user(email="other@test.local", role=UserRole.employee)
-    client_user = make_user(email="cli@test.local", role=UserRole.client)
-    connection_svc.record_invite_connection(db, inviter=e1, invitee=client_user)
-    connection_svc.record_invite_connection(db, inviter=e2, invitee=client_user)
-    db.commit()
-    visible = connection_svc.list_employees_visible_to(db, viewer=client_user)
-    assert {u.id for u in visible} == {e1.id, e2.id}
-    assert e_other.id not in {u.id for u in visible}
+def test_the_module_no_longer_carries_the_orphaned_visibility_helpers():
+    """`list_clients_visible_to` and `list_employees_visible_to` were the
+    Python-side implementations of `/api/users/search`'s scoping. `4311514`
+    moved that scope, filter and limit into SQL and left both behind:
+    `list_clients_visible_to` then had ZERO callers anywhere in backend/,
+    frontend/ or client/, and `list_employees_visible_to` was reachable only
+    from a test of itself - 49 of the module's 238 lines unreachable from the
+    application, including an unguarded admin branch that returned every client
+    on the instance.
+
+    The live rule they used to express is covered on the SQL path by
+    `test_query_cost.py::test_a_client_still_sees_only_connected_employees`, so
+    deleting them lost no coverage. Pinned absent for the same reason
+    `test_richtext_sanitize.py` pins `render_markdown_safe` absent: a
+    live-looking entry point into a code path nothing uses is worse than no
+    entry point at all."""
+    assert not hasattr(connection_svc, "list_clients_visible_to")
+    assert not hasattr(connection_svc, "list_employees_visible_to")

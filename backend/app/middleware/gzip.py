@@ -16,6 +16,17 @@ GZipMiddleware. Gzip-ing a streamed ZIP is doubly wrong: it re-compresses an
 already-incompressible archive AND strips the Content-Length we computed for the
 progress bar. JSON responses - including the ``…/download-zip-url`` mint - keep
 compression.
+
+``/stream`` covers the two SSE endpoints (``/api/notifications/stream``, the
+notification bell, and ``/api/admin/system/stream``, the admin live status).
+Compressing a server-sent-event stream is how an event feed silently stops
+arriving: a deflate window accumulates small frames and emits nothing until it
+fills. Starlette 1.3.1 happens to exclude ``text/event-stream`` by content type
+already - so this was not broken - but that is a DEPENDENCY DEFAULT, invisible
+here and free to change on a bump, and this middleware exists precisely because
+the framework's own gzip policy is not the one this app wants. The routes also
+set ``X-Accel-Buffering: no`` and ``Cache-Control: no-transform``, which govern
+nginx and Traefik and say nothing about the ASGI stack in-process.
 """
 from __future__ import annotations
 
@@ -30,7 +41,7 @@ def _is_download(scope: Scope) -> bool:
     # cheap unauthenticated CPU-exhaustion primitive, and on any route it stalls
     # the loop for the duration (audit 2026-07-30).
     return scope["type"] == "http" and scope.get("path", "").endswith(
-        ("/download", "/download-zip", "/preview")
+        ("/download", "/download-zip", "/preview", "/stream")
     )
 
 

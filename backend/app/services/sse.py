@@ -239,8 +239,13 @@ def _catchup_frames(user_id: int, last_event_id: int) -> list[tuple[bytes, int]]
     from ..models.notification import Notification
 
     out: list[tuple[bytes, int]] = []
-    cdb = SessionLocal()
+    # SessionLocal() is INSIDE the try: it sat outside, so the one failure mode
+    # the docstring promises to absorb - "never raises into the stream" - was the
+    # one that propagated. A raise here does not merely skip the replay, it kills
+    # a live SSE connection.
+    cdb = None
     try:
+        cdb = SessionLocal()
         rows = (
             cdb.query(Notification)
             .filter(Notification.user_id == user_id, Notification.id > last_event_id)
@@ -265,7 +270,8 @@ def _catchup_frames(user_id: int, last_event_id: int) -> list[tuple[bytes, int]]
     except Exception:
         logger.warning("SSE: catch-up replay failed for user=%s", user_id, exc_info=True)
     finally:
-        cdb.close()
+        if cdb is not None:
+            cdb.close()
     return out
 
 

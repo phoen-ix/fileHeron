@@ -16,7 +16,11 @@ from __future__ import annotations
 import httpx
 import pytest
 from starlette.applications import Starlette
-from starlette.responses import JSONResponse, PlainTextResponse
+from starlette.responses import (
+    JSONResponse,
+    PlainTextResponse,
+    StreamingResponse,
+)
 from starlette.routing import Route
 
 from app.middleware.gzip import SelectiveGZipMiddleware
@@ -32,6 +36,15 @@ async def _download(_request):
     return PlainTextResponse(_BIG)
 
 
+async def _sse(_request):
+    """A real streaming SSE response: many small frames, no Content-Length."""
+    async def _frames():
+        for i in range(200):
+            yield f"id: {i}\ndata: {{\"n\": {i}}}\n\n".encode()
+
+    return StreamingResponse(_frames(), media_type="text/event-stream")
+
+
 def _app() -> Starlette:
     app = Starlette(
         routes=[
@@ -39,6 +52,8 @@ def _app() -> Starlette:
             Route("/api/files/abc/download", _download),
             Route("/api/files/abc/download-zip", _download),
             Route("/api/files/abc/preview", _download),
+            Route("/api/notifications/stream", _sse),
+            Route("/api/admin/system/stream", _sse),
         ]
     )
     app.add_middleware(SelectiveGZipMiddleware, minimum_size=1024)
@@ -77,3 +92,35 @@ async def test_byte_serving_responses_are_not_gzipped(path: str) -> None:
     resp = await _get(path)
     assert resp.status_code == 200
     assert resp.headers.get("content-encoding") != "gzip"
+
+
+@pytest.mark.parametrize(
+    "path", ["/api/notifications/stream", "/api/admin/system/stream"]
+)
+@pytest.mark.asyncio
+async def test_sse_streams_are_not_gzipped(path: str) -> None:
+    """Compressing an event stream is how a live feed silently stops arriving:
+    a deflate window accumulates small frames and emits nothing until it fills.
+
+    Starlette 1.3.1 already excludes `text/event-stream` by content type, so
+    this was not broken - but that is a DEPENDENCY DEFAULT, free to change on a
+    bump, and this middleware exists precisely because the framework's own gzip
+    policy is not the one this app wants. The routes' `X-Accel-Buffering: no`
+    and `Cache-Control: no-transform` govern nginx and Traefik, not the ASGI
+    stack in-process.
+    """
+    resp = await _get(path)
+    assert resp.status_code == 200
+    assert resp.headers.get("content-encoding") is None
+    assert resp.headers["content-type"].startswith("text/event-stream")
+
+
+@pytest.mark.asyncio
+async def test_the_exemption_is_ours_and_not_the_frameworks() -> None:
+    """Pin the rule in THIS module, so a Starlette bump that drops its
+    content-type exclusion cannot quietly start compressing the bell."""
+    from app.middleware.gzip import _is_download
+
+    assert _is_download({"type": "http", "path": "/api/notifications/stream"})
+    assert _is_download({"type": "http", "path": "/api/admin/system/stream"})
+    assert not _is_download({"type": "http", "path": "/api/notifications"})

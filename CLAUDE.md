@@ -676,8 +676,10 @@ approval-disabled deployments are unaffected by the upgrade itself.
 
 Backend **`v2.14.1`** is the newest TAG - released 2026-08-23, the fix wave at
 the top of this file. Before it, v2.14.0 - released 2026-08-20, the email
-template sweep. The reference host runs v2.13.5 until the in-app Update is
-applied. Note what the updater can and cannot see:
+template sweep. **The reference host runs v2.14.1** (updated 2026-08-23). Keep
+this current: it read "runs v2.13.5" while the host was actually on v2.14.0, and
+that line was carried forward unread through two releases - an operator deciding
+how far behind they were would have been wrong by two versions. Note what the updater can and cannot see:
 it only ever offers TAGGED releases, so pushing to `main` builds no image and
 cuts nothing (`server-release.yml` fires on `v[0-9]+.[0-9]+.[0-9]+` only) - a
 commit on `main` is not an available update. (Any release still
@@ -1345,6 +1347,35 @@ a residual nobody records gets re-discovered and re-fixed:
 > `OnFailure=` ships commented out in both units, so a failed backup is a
 > `failed` unit and a journald line and nothing else. Wire it before trusting
 > the schedule.
+
+> **Updating the reference host - two traps in the ops scripts (measured
+> 2026-08-23, both still present).**
+> **`scripts/deploy.sh` ignores `FH_TAG` from the environment.** It sources
+> `.env` at `:24-31` AFTER the caller's env, unconditionally, so
+> `FH_TAG=v2.14.1 scripts/deploy.sh` silently deploys whatever `.env` already
+> said. It also has a **source-build fallback** (`:53-57`): any non-zero `docker
+> pull` drops it into building the WORKING TREE and tagging the result with the
+> target tag - which would overwrite the genuine previous-version image that is
+> the only local rollback anchor. Edit `.env` first, or don't use it.
+> **`scripts/rollback.sh` preflights FIVE images and rolls back FOUR** (`:21` vs
+> `:22`). `fileheron-updater-executor` is never left on the host by a normal
+> update, so the preflight loop at `:61-73` hits `exit 2` and rolls back
+> NOTHING. It fails safe (the preflight precedes the `.env` sed at `:86`), but
+> "rollback is available" was false on this host until the image was pulled by
+> hand. Check with `docker images 'ghcr.io/phoen-ix/*'` before relying on it.
+> **A manual `docker compose up -d backend worker frontend updater-shim` also
+> recreates `db` and `redis`.** They are literal pins and their images do not
+> move, but the containers created by the updater-executor carry a different
+> config hash (its `env_file: - path: .env` is relative and it runs at
+> `working_dir=/workspace`), so compose recreates them. Harmless - data is on
+> bind mounts and redis reloads its AOF - but it lengthens the outage, because
+> the backend then waits on `db: service_healthy`. **Measured API outage for the
+> v2.14.0 -> v2.14.1 manual swap: 33s** (11s of 503, then 22s refused), against
+> the ~6s the in-app updater's own job log showed for v2.13.6 -> v2.14.0.
+> **`data/updater/rollback_target.json` is root-owned and is NOT updated by a
+> manual deploy**, so the SPA's Rollback button keeps pointing at the version
+> before last. Its schema is exactly `{"tag", "alembic_head"}`
+> (`updater-executor/run.py:293`).
 
 ## Quickstart
 

@@ -1,3 +1,155 @@
+# file:Heron v2.14.1
+
+**A documented command that reconfigured your live server, and three controls
+that could not go off.**
+
+A patch release, and like the last one it is mostly about the checks rather than
+the product. No migration, no host step, no API change, no default moves, no
+desktop-client release beside it. Two things move on the wire, both narrow and
+both described below: what a configuration import does after it finishes, and
+how the two anonymous telemetry endpoints treat an oversized request.
+
+---
+
+## The contributor guide's end-to-end command reconfigured your live server
+
+`CONTRIBUTING.md` told you to run the browser test suite like this:
+
+```
+docker compose -f docker-compose.yml -f docker-compose.e2e.yml up -d --build
+```
+
+That is missing `COMPOSE_PROJECT_NAME=fileheron_e2e`, which the compose file
+it names carries in its own header. Docker Compose defaults the project name to
+the directory, and for a checkout in `fileHeron/` that resolves to `fileheron`
+— **the live project**. So the command does not stand up an isolated test
+stack. It recreates your running containers with the test overrides: **antivirus
+scanning disabled**, the application in development mode, **secure cookies
+off**, and the login rate limit raised to 1000 attempts. Development mode also
+switches on the dev account seeding, which creates `user@e2e.local` with a
+password published in this repository.
+
+There was also no teardown line, so the natural next step — `docker compose
+down` — takes production with it.
+
+**If you have ever run that command from your live checkout:** bring the stack
+back up normally (`docker compose up -d`), which restores every one of those
+settings, then look in *Admin → Users* for `user@e2e.local` and delete it. It is
+an ordinary client account, not an administrator — the administrator bootstrap
+refuses to create a second admin on an instance that already has one, so
+`admin@e2e.local` is never created here.
+
+The part that does not undo itself is the antivirus. Anything uploaded while
+the stack was in that state was recorded as clean **without being scanned**, and
+that mark is permanent: there is no rescan action, because the automatic
+re-scan only revisits files whose scan never completed, and these have a
+completed result. If the window was more than a moment, treat files uploaded
+during it as unscanned.
+
+The guide now sets the project name, explains what happens without it, and
+gives the matching teardown. A test fails the build if it loses either again.
+
+## Importing a configuration could leave IP blocks enforcing invisibly
+
+Importing a configuration backup writes settings straight into the database. It
+does not go through the code path the settings pages use, and that path does
+more than write — it replays a set of side effects. Three of them were being
+skipped.
+
+**The scan guard's blocked networks.** Each block records the network it covers
+as text, computed from the IPv6 grouping prefix that was in force when it was
+written. Changing that prefix through the settings page releases the live
+network blocks for exactly this reason. An import did not, so a backup carrying
+a different prefix left blocks stamped under the old one — and because a block
+matches by address containment rather than by that text, the orphaned block
+went on refusing service while the *Blocked sources* page had nothing to show
+you. Now they are released properly, each with its own audit entry, and the
+import summary tells you how many and why.
+
+**A guard that cannot fire.** The settings page refuses to save a scan guard
+that is switched on with none of its three detection signals enabled, because
+that renders as "on" and can never do anything. A backup can contain precisely
+that combination. It is now switched off on import with a warning in the
+summary, rather than stored — you can see it is off and turn it on deliberately.
+
+**Single sign-on signing keys.** Provider identities survive an import
+unchanged, and the cache of each provider's signing keys is keyed on that
+identity alone for an hour. Reusing an identity for a different provider
+therefore validated sign-in tokens against the previous provider's keys until
+the cache expired. The cache is now cleared when providers are imported.
+
+All three run after the import has committed, so none of them can undo it; a
+failure is reported in the summary instead.
+
+## A restore could report a redis snapshot as loaded when it was not
+
+`scripts/restore.sh` reloads the redis snapshot from your backup. Version 2.13.1
+found three defects in that sequence and fixed them — in the weekly *drill*, and
+never in the restore script itself. The control got the fix; the thing an
+operator runs in an emergency did not.
+
+All three were still there. The script waited a fixed three seconds and then
+asked how many keys had loaded, which on a production-sized snapshot answers
+"still loading" — reported as an empty backup. It then discarded the reply when
+switching the append-only log back on, and `redis-cli` signals success at the
+process level even when the server refused. Finally it waited two more seconds
+and checked a status field that reads "ok" before any rewrite has run, so it
+could not detect the condition it named, while the wait itself was short enough
+to cut a real rewrite in half and leave a partial log.
+
+It now waits for the actual conditions and reads the actual replies. It also has
+a cleanup handler: the loader container holds your redis data directory, and any
+failure between starting it and shutting it down used to leave it running,
+mid-restore, with the real service never brought back up.
+
+The drill still *fails* where the restore script *warns*. That difference is
+deliberate — a human is watching a restore, whereas the drill exists to go red
+on its own.
+
+## The telemetry beacons buffered whatever you sent them
+
+The two anonymous endpoints that accept browser error reports existed to take a
+few hundred bytes of JSON, and inherited the 1 GB request limit that exists for
+direct file uploads. Both read the whole body before they could reject it — one
+explicitly, the other because request validation runs before any handler code,
+so no check inside the application could get there first. They are now capped at
+64 KB at the edge, which no real report approaches, and the size is checked
+before the body is read. The per-address rate limits were always in front of
+them, so this was a cost, not an opening.
+
+## Under the hood
+
+**A test suite that was leaking a gigabyte a day of disk.** Three test files
+need a real database and skip without one. In CI that database is disposable.
+Locally there was no supported way to get one at all — the files said only
+"point the connection settings at a throwaway" — so the throwaway was invented
+from scratch each time, and the invented one stranded a 167 MB volume per run.
+`make test-mariadb` is the supported path now; it cleans up after itself, and a
+test fails the build if any script or workflow in this repository starts a
+detached database container it does not remove properly. The release pipeline's
+own boot test was doing the same thing, harmlessly on disposable build machines
+and not harmlessly anywhere else.
+
+**A test file that had never run.** It was written, reviewed and committed,
+gated behind the same flag as the migration round-trip, and then named nowhere
+in the pipeline that supplies that flag — so it did not fail, it skipped, on
+every commit since it was added. It runs now, alongside a new one covering the
+database row locks, and the step that runs them says what to do when a third is
+added.
+
+## Upgrading
+
+Nothing to do beyond the usual update. Every setting is preserved, no
+configuration changes shape, and no service needs restarting by hand.
+
+Two things are worth doing afterwards. If you have ever run the end-to-end
+command from your live checkout, check for the seeded accounts described at the
+top. And if you keep configuration backups, note that the import fixes above
+apply to importing *any* backup, including ones you already have — nothing about
+your existing files needs to change.
+
+---
+
 # file:Heron v2.14.0
 
 **Every email the product sends now has an HTML half — and a plain-text one.**

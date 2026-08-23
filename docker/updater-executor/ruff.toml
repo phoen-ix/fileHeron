@@ -1,0 +1,16 @@
+# The updater-executor is the highest-privilege code in the repo (host docker
+# socket, host workspace, runs as root) and was linted by NOTHING: CI's ruff
+# runs with `working-directory: backend`, so `docker/` was never in scope. This
+# config puts it back in, on the SAME rule set the backend uses, so it cannot
+# drift.
+extend = "../../backend/pyproject.toml"
+
+[lint]
+# S603/S607 fire on every `subprocess.run`, and running processes is this
+# file's entire job - `docker compose`, `curl`, `alembic`. Every call site
+# passes an argument LIST and never `shell=True`, so there is no shell to
+# inject into; the executable names are resolved from the container's own PATH.
+# The real protection for what those commands are ASKED to do is input
+# validation at the call sites, not a blanket lint. The backend carries no
+# equivalent ignore because it makes no subprocess calls at all.
+extend-ignore = ["S603", "S607"]

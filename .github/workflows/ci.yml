@@ -311,10 +311,38 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # `docker/updater-shim/shim.sh` runs with the host docker socket mounted
+      # and was linted by nothing, along with the backend entrypoint and the
+      # mariadb init script - the glob only ever reached install.sh and
+      # scripts/. Same class as "mypy was installed and INVOKED BY NOTHING"
+      # below: the gate existed, its scope did not cover the risky code.
       - name: shellcheck
         run: |
           docker run --rm -v "$PWD:/mnt" -w /mnt koalaman/shellcheck-alpine:v0.10.0 \
-            shellcheck --severity=warning install.sh scripts/*.sh scripts/ops/*.sh
+            shellcheck --severity=warning install.sh scripts/*.sh scripts/ops/*.sh \
+            docker/updater-shim/shim.sh docker/backend/entrypoint.sh \
+            docker/mariadb/init.sh
+      # `docker/updater-executor/run.py` is 562 lines that run as root with the
+      # host docker socket AND the host workspace mounted, and it was in
+      # neither ruff's nor mypy's scope: both run with working-directory
+      # `backend`. It carries its own ruff.toml that `extend`s the backend
+      # config, so the rule set cannot drift; mypy reads the backend config
+      # directly here for the same reason. Stdlib-only, so no install needed.
+      - name: ruff + mypy (updater-executor, outside backend/)
+        run: |
+          RUFF_PIN=$(sed -n 's/.*"ruff==\([0-9.]*\)".*/\1/p' backend/pyproject.toml | head -1)
+          MYPY_PIN=$(sed -n 's/.*"mypy==\([0-9.]*\)".*/\1/p' backend/pyproject.toml | head -1)
+          docker run --rm -v "$PWD:/repo:ro" -w /repo python:3.14-slim sh -c "
+            set -e
+            pip install -q ruff==$RUFF_PIN mypy==$MYPY_PIN
+            ruff check --no-cache docker/
+            # --cache-dir: the mount is read-only, and mypy writes its cache
+            # relative to the working directory - without this it dies with an
+            # INTERNAL ERROR rather than a type error. ruff needs --no-cache for
+            # the same reason.
+            python -m mypy --cache-dir=/tmp/mypycache \
+              --config-file backend/pyproject.toml docker/updater-executor/run.py
+          "
       - name: actionlint
         run: |
           docker run --rm -v "$PWD:/repo" -w /repo \

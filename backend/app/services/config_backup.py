@@ -1093,6 +1093,126 @@ def _validate_backup_payload(p: dict, actor: User) -> None:
         ) from e
 
 
+def _reconcile_after_import(
+    db: Session,
+    *,
+    actor: User,
+    request,
+    summary: ImportSummary,
+    prefix_before_import: str | None,
+    imported_oidc: bool,
+) -> None:
+    """Replay the side effects the raw `AppSetting` writes skipped.
+
+    Best-effort and never raises: the import has already committed, including
+    the irreversible share invalidation, so a failure here must be reported
+    rather than allowed to unwind anything.
+    """
+    from ..models.ip_block import IpBlock
+    from ..utils.timeutil import utc_now
+    from . import scan_guard as scan_guard_svc
+
+    # 1. The scan-guard process cache holds the PRE-import snapshot for up to
+    #    _CACHE_TTL_SEC. Cheap, and everything below reads the new values.
+    try:
+        scan_guard_svc._reset_cache()
+    except Exception:
+        logger.exception("config import: scan-guard cache reset failed")
+
+    # 2. `ip_blocks.network` is a denormalised cache of `network_of()` compared
+    #    by STRING EQUALITY, and this table is not part of any backup category -
+    #    `config_backup` never exports, wipes or imports it. So an import that
+    #    changes the v6 prefix leaves live network blocks stamped under the old
+    #    one: escalation evidence stops matching, and because `is_blocked`
+    #    matches by CIDR CONTAINMENT the orphaned row keeps denying service
+    #    while the admin page shows nothing to release.
+    #
+    #    Through `release()`, exactly as `scan_guard.update_settings` does, so
+    #    each freed block still writes its own `ip_block_released` row - a
+    #    hand-stamped `released_at` made a prefix change silently swallow every
+    #    live network block.
+    try:
+        prefix_now = settings_svc.get(
+            db, settings_svc.Keys.SCAN_GUARD_NETWORK_PREFIX_V6
+        )
+        if prefix_before_import is not None and prefix_now != prefix_before_import:
+            released = 0
+            for row in (
+                db.query(IpBlock)
+                .filter(
+                    IpBlock.is_network.is_(True),
+                    IpBlock.released_at.is_(None),
+                    IpBlock.expires_at > utc_now(),
+                )
+                .all()
+            ):
+                if scan_guard_svc.release(
+                    db, block_id=row.id, actor_id=getattr(actor, "id", None),
+                    via="config_import_v6_prefix_changed", request=request,
+                ) is not None:
+                    released += 1
+            if released:
+                db.commit()
+                summary.counts["network_blocks_released"] = released
+                summary.warnings.append(
+                    f"the imported scan-guard IPv6 prefix differs from this "
+                    f"instance's, so {released} live network block(s) were "
+                    "released - their recorded network no longer matches"
+                )
+            scan_guard_svc._reset_cache()
+    except Exception:
+        db.rollback()
+        logger.exception("config import: network-block reconciliation failed")
+        summary.warnings.append(
+            "could not reconcile scan-guard network blocks against the imported "
+            "IPv6 prefix; check /admin/ip-blocks for blocks that no longer match"
+        )
+
+    # 3. `update_settings` REFUSES an enabled guard with no signals
+    #    (SCAN_GUARD_NO_SIGNALS) because it renders as "on" and can never fire -
+    #    manufactured assurance. A backup can carry exactly that combination.
+    #    Refusing the whole import is not available here (the destructive share
+    #    invalidation has already committed), so force it off and say so: an
+    #    admin then sees "off" and can fix it deliberately.
+    try:
+        if settings_svc.get_bool(db, settings_svc.Keys.SCAN_GUARD_ENABLED, False) and not any(
+            settings_svc.get_bool(db, k, False)
+            for k in (
+                settings_svc.Keys.SCAN_GUARD_SIGNAL_PROBE_PATH,
+                settings_svc.Keys.SCAN_GUARD_SIGNAL_API_404,
+                settings_svc.Keys.SCAN_GUARD_SIGNAL_AUTH_FAILURE,
+            )
+        ):
+            settings_svc.set_value(
+                db,
+                key=settings_svc.Keys.SCAN_GUARD_ENABLED,
+                value="false",
+                actor=actor,
+                request=request,
+            )
+            db.commit()
+            scan_guard_svc._reset_cache()
+            summary.warnings.append(
+                "the imported scan-guard config was enabled with no signals on, "
+                "which can never fire; it was turned OFF - re-enable it with at "
+                "least one signal at /admin/settings/scan-guard"
+            )
+    except Exception:
+        db.rollback()
+        logger.exception("config import: scan-guard signal reconciliation failed")
+
+    # 4. `jwks._cache` is keyed by PROVIDER ID alone with a 1h TTL, and the
+    #    OIDC import preserves ids verbatim. Without this, an id reused under a
+    #    different issuer verifies ID-token signatures against the PREVIOUS
+    #    provider's keys for up to an hour - on the signature path.
+    if imported_oidc:
+        try:
+            from . import oidc as oidc_svc
+            oidc_svc.reset_discovery_cache()
+        except Exception:
+            logger.exception("config import: OIDC cache reset failed")
+
+
 def apply_backup(db: Session, *, parsed: ParsedBackup, actor: User, request=None) -> ImportSummary:
     # Users whose FK-bound rows mean a plain delete cannot work: erased AFTER
     # the import commits, because erase_user owns its own transaction (see
@@ -1130,6 +1250,7 @@ def apply_backup(db: Session, *, parsed: ParsedBackup, actor: User, request=None
     summary.shares_to_invalidate = inv["expired_shares"]
     summary.files_deleted = inv["deleted_files"]
 
+    prefix_before_import: str | None = None
     user_id_map: dict[int, int] = {}
     group_id_map: dict[int, int] = {}
 
@@ -1141,6 +1262,17 @@ def apply_backup(db: Session, *, parsed: ParsedBackup, actor: User, request=None
         for d in ow.get("oidc_providers", []):
             d = dict(d)
             secret = _ingest_secret_str(d.pop("client_secret_encrypted", None))
+            # The id is deliberately NOT skipped, unlike `Webhook` below.
+            # `users.oidc_provider_id` carries the BACKUP's provider id and is
+            # matched against `existing_oidc_ids` in step 3, which is read after
+            # this loop - so minting fresh UUIDs here would make every backup
+            # user's provider id miss, `oidc_pid` fall to None, and every SSO
+            # binding be severed silently. Nothing references a webhook's id,
+            # which is why that one can skip.
+            #
+            # Preserving it is what makes `jwks._cache` (keyed by provider id
+            # alone, 1h TTL) a hazard, so the post-import reconciliation clears
+            # it - see _reconcile_after_import step 4.
             db.add(_build(OIDCProvider, d, overrides={
                 "client_secret_encrypted": secret or "",
                 "created_by_id": actor.id, "updated_by_id": actor.id,
@@ -1438,6 +1570,12 @@ def apply_backup(db: Session, *, parsed: ParsedBackup, actor: User, request=None
                 AppSetting.key.in_(_TRANSIENT_SETTING_KEYS)
             )
         }
+        # Read BEFORE the wipe: the post-import reconciliation compares it
+        # against what the backup restored, and after this line the old value is
+        # gone.
+        prefix_before_import = settings_svc.get(
+            db, settings_svc.Keys.SCAN_GUARD_NETWORK_PREFIX_V6
+        )
         db.query(AppSetting).delete(synchronize_session=False)
         db.flush()
         # `_TRANSIENT_SETTING_KEYS` was applied on EXPORT only, so a backup
@@ -1568,6 +1706,26 @@ def apply_backup(db: Session, *, parsed: ParsedBackup, actor: User, request=None
         request=request,
     )
     db.commit()
+
+    # Side effects the direct `db.add(AppSetting(...))` writes above skipped.
+    #
+    # `apply_backup` is a THIRD raw writer of app_settings, after the admin
+    # settings PUT and `/admin/settings/advanced` - and the advanced route was
+    # fixed by REFUSING to write `scan_guard.*` at all (`_MANAGED_ELSEWHERE_
+    # GROUPS`), which is not available here: an import must restore whatever the
+    # backup holds. So the side effects are replayed instead.
+    #
+    # Same placement and same reasoning as the deferred erasures below: outside
+    # the import transaction, so a failure leaves the imported configuration
+    # intact and is reported. Nothing here is inside the mid-flight commits.
+    _reconcile_after_import(
+        db,
+        actor=actor,
+        request=request,
+        summary=summary,
+        prefix_before_import=prefix_before_import,
+        imported_oidc="oidc_webhooks" in p,
+    )
 
     # Now, outside the import transaction. A failure here leaves the imported
     # configuration intact and is reported rather than silently discarding it.

@@ -27,9 +27,24 @@ from sqlalchemy.orm import Session
 
 from ..database import SessionLocal
 from ..models.error_log import ErrorLog
+from ..utils.columns import declared_width
 from ..utils.timeutil import to_naive_utc, utc_now
 from . import settings as settings_svc
 from . import settings_registry
+
+# Every bounded column on the row, keyed by name. `record` used to carry ten
+# LITERAL widths; they all happened to match, which is the state
+# `audit_log.target_id` was in right up until it did not (027fe08: clipped to
+# 255 against a String(64), so the clip did nothing). Deriving them means a
+# migration that narrows a column narrows the clip with it.
+_W = {
+    c.name: declared_width(c)
+    for c in ErrorLog.__table__.columns
+    if getattr(c.type, "length", None)
+}
+# `error_alert.signature()` produces the value for the `signature` column and
+# lives in another module; it reads this rather than repeating the number.
+SIGNATURE_MAX = _W["signature"]
 
 logger = logging.getLogger("fileheron.error_log")
 
@@ -179,27 +194,27 @@ def record(db: Session, event: dict[str, Any], *, signature: str) -> int | None:
         else:
             created = utc_now()
 
-        def _clip(v: Any, n: int) -> str | None:
+        def _clip(v: Any, col: str) -> str | None:
             if v is None:
                 return None
             s = str(v)
-            return s[:n] if s else None
+            return s[:_W[col]] if s else None
 
         row = ErrorLog(
             created_at=created,
-            source=_clip(event.get("source") or "http", 16),
+            source=_clip(event.get("source") or "http", "source"),
             status_code=int(event.get("status_code") or 0),
-            code=_clip(event.get("code") or "UNKNOWN", 64),
-            exception_type=_clip(event.get("exception_type"), 128),
-            message=_clip(event.get("message"), 500),
-            method=_clip(event.get("method"), 8),
-            path=_clip(event.get("path"), 512),
-            job_name=_clip(event.get("job_name"), 128),
-            ip=_clip(event.get("ip"), 45),
-            request_id=_clip(event.get("request_id"), 64),
+            code=_clip(event.get("code") or "UNKNOWN", "code"),
+            exception_type=_clip(event.get("exception_type"), "exception_type"),
+            message=_clip(event.get("message"), "message"),
+            method=_clip(event.get("method"), "method"),
+            path=_clip(event.get("path"), "path"),
+            job_name=_clip(event.get("job_name"), "job_name"),
+            ip=_clip(event.get("ip"), "ip"),
+            request_id=_clip(event.get("request_id"), "request_id"),
             user_id=event.get("user_id"),
-            auth_via=_clip(event.get("auth_via"), 16),
-            signature=signature,
+            auth_via=_clip(event.get("auth_via"), "auth_via"),
+            signature=signature[:_W['signature']],
             alerted=False,
         )
         db.add(row)

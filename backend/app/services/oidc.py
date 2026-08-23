@@ -48,10 +48,13 @@ from ..middleware.errors import AppError
 from ..models.audit_log import AuditEventType
 from ..models.oidc_provider import OIDCPreset, OIDCProvider
 from ..models.user import User, UserRole
+from ..utils.columns import declared_width
 from ..utils.crypto import normalize_email
 from ..utils.net import assert_public_http_url
 from .audit import record_audit_event
 from .oidc_admin import get_client_secret, is_provider_usable
+
+_OIDC_SUBJECT_MAX = declared_width(User.__table__.c.oidc_subject)
 
 # Algorithm allowlist: asymmetric only. Refusing `none` and `HS*` is
 # the textbook downgrade-attack defense - an attacker who tampers the
@@ -337,6 +340,17 @@ async def _verify_id_token(
     if expected_nonce is not None and claims.get("nonce") != expected_nonce:
         logger.warning("OIDC nonce mismatch provider=%s", provider.id)
         raise AppError(401, "OIDC_BAD_NONCE", "ID token nonce mismatch.")
+
+    # `sub` lands in users.oidc_subject, String(255), verbatim from the IdP.
+    # REFUSE rather than clip: two subjects sharing a 255-char prefix would
+    # collapse onto one account, and uq_users_provider_subject would then bind
+    # the wrong identity - a worse outcome than the DataError 500 that MariaDB
+    # would raise here anyway (and that SQLite hides). Checked here because this
+    # is the one path both handle_callback and handle_connect_callback take.
+    if len(str(claims.get("sub", ""))) > _OIDC_SUBJECT_MAX:
+        raise AppError(
+            401, "OIDC_BAD_ID_TOKEN", "ID token subject is too long."
+        )
 
     return claims
 

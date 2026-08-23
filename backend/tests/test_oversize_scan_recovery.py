@@ -54,7 +54,7 @@ def oversize_file(db, make_user, tmp_path):
     from app.utils.timeutil import utc_now
 
     f = File(
-        id="00000000-0000-0000-0000-0000000000big",
+        id="00000000-0000-0000-0000-000000000big",
         share_id=sh.id,
         original_filename="huge.bin",
         mime_type="application/octet-stream",

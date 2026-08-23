@@ -49,15 +49,16 @@ import logging
 import threading
 import time
 from datetime import UTC, datetime, timedelta
-from typing import Any, cast
+from typing import Any
 
-from sqlalchemy import String, func
 from sqlalchemy import desc as sa_desc
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from ..database import SessionLocal
 from ..models.ip_block import IpBlock
 from ..utils.client_ip import is_blockable, normalize_ip
+from ..utils.columns import declared_width
 from ..utils.timeutil import utc_now, utc_now_aware
 from . import settings as settings_svc
 from . import settings_registry
@@ -861,13 +862,9 @@ def _duration_minutes(strikes: int, snap: dict) -> int:
 # never ran. A scanner with long URLs therefore disabled the guard built to stop
 # it, silently. SQLite ignores VARCHAR widths, so no behavioural test can catch
 # this; test_gate_wiring_coverage asserts the clip structurally instead.
-# The cast is what lets mypy see `.length` on a TypeEngine[Any]; the None guard
-# is because `s[:None]` does not clip at all, so a column that lost its width
-# would silently reinstate the defect above.
-_last_path_type = cast(String, IpBlock.__table__.c.last_path.type)
-if _last_path_type.length is None:  # pragma: no cover - defends the invariant
-    raise RuntimeError("ip_blocks.last_path must declare a length to clip against")
-_LAST_PATH_MAX: int = _last_path_type.length
+# `declared_width` carries the cast mypy needs and the None guard that stops a
+# width-less column turning `s[:None]` into a silent no-op clip.
+_LAST_PATH_MAX: int = declared_width(IpBlock.__table__.c.last_path)
 
 
 def apply_block(

@@ -88,7 +88,7 @@ import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import create_engine, event
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.database import Base
@@ -96,6 +96,57 @@ from app.dependencies import get_db
 from app.main import app
 from app.models.user import Locale, User, UserRole
 from app.utils.crypto import argon2_hash, normalize_email
+
+# ---- VARCHAR width guard ---------------------------------------------------
+#
+# Production is MariaDB with STRICT_TRANS_TABLES; SQLite ignores VARCHAR widths
+# entirely. So an over-long write is a DataError 500 in production and silently
+# fine in every test here. That class has bitten four times - the inbound
+# columns (audit 2026-07-30, tests-13), `ip_blocks.last_path` and
+# `audit_log.target_id` (027fe08), and `login_attempts.email` - and each was
+# fixed pointwise with a hand-written clip. Nothing found the NEXT site.
+#
+# This listener makes the whole suite the ratchet: every test that already
+# exercises a write path now also asserts its String(n) columns fit. It reads
+# `state.dict` rather than `getattr`, so it never triggers a lazy load (the
+# email_log / inbound_message bodies are `deferred=True`; they are Text with no
+# length and are skipped anyway, but the read must not fire regardless).
+#
+# Enum columns subclass String and carry a length; their values fit by
+# construction, so they cost a comparison and never fail.
+
+
+def _string_width_violations(session) -> list[str]:
+    from sqlalchemy import String as _String
+    from sqlalchemy import inspect as _sa_inspect
+
+    out: list[str] = []
+    for obj in list(session.new) + list(session.dirty):
+        state = _sa_inspect(obj)
+        for attr in state.mapper.column_attrs:
+            col = attr.columns[0]
+            length = getattr(col.type, "length", None)
+            if not length or not isinstance(col.type, _String):
+                continue
+            value = state.dict.get(attr.key)
+            if isinstance(value, str) and len(value) > length:
+                out.append(
+                    f"{type(obj).__name__}.{attr.key} is {type(col.type).__name__}"
+                    f"({length}) but the pending value is {len(value)} chars: "
+                    f"{value[:60]!r}..."
+                )
+    return out
+
+
+@event.listens_for(Session, "before_flush")
+def _refuse_overlong_strings(session, _flush_context, _instances):  # noqa: ANN001
+    violations = _string_width_violations(session)
+    if violations:
+        raise AssertionError(
+            "a write would exceed its declared VARCHAR width - MariaDB raises "
+            "DataError here in production while SQLite accepts it:\n  "
+            + "\n  ".join(violations)
+        )
 
 
 @pytest.fixture

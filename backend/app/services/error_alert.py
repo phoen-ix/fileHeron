@@ -102,7 +102,13 @@ def signature(event: dict[str, Any]) -> str:
         path = event.get("job_name") or event.get("path") or ""
     else:
         path = _normalize_path(event.get("path"))
-    return sha256_hex(f"{source}|{exc_type}|{path}|{status}|{code}")[:16]
+    # Truncation length is the error_log.signature COLUMN width, not a local
+    # literal. Widening this for fewer collisions without widening the column
+    # would make every error_log insert raise DataError - swallowed by
+    # `record`'s bare except, so the error log would simply stop recording.
+    return sha256_hex(f"{source}|{exc_type}|{path}|{status}|{code}")[
+        : error_log_svc.SIGNATURE_MAX
+    ]
 
 
 # ---------------------------------------------------------------------------

@@ -50,6 +50,7 @@ from ..services import transfer_activity
 from ..services import zip_stream as zip_stream_svc
 from ..services.audit import record_audit_event
 from ..services.storage_backend import get_storage_backend
+from ..utils.columns import declared_width
 from ..utils.crypto import constant_time_equals
 from ..utils.http_range import (
     UnsatisfiableRangeError,
@@ -59,6 +60,11 @@ from ..utils.http_range import (
 )
 from ..utils.timeutil import to_epoch, utc_now
 from ..utils.ua_fingerprint import ua_fingerprint_hash
+
+# See routers/files.py: same column, same caller-controlled source. These are
+# the ANONYMOUS download paths, so the value is one an unauthenticated caller
+# can influence directly on an edge that appends to X-Forwarded-For.
+_DOWNLOAD_IP_MAX = declared_width(DownloadLog.__table__.c.ip)
 
 logger = logging.getLogger("fileheron.public")
 
@@ -353,7 +359,7 @@ def public_download(
         # here, so it cannot renew its own licence.
         transfer_activity.mark_download_paid(paid_key)
 
-        ip = request.client.host if request.client else None
+        ip = request.client.host[:_DOWNLOAD_IP_MAX] if request.client else None
         db.add(
             DownloadLog(
                 file_id=file.id,
@@ -630,7 +636,7 @@ def public_download_zip(
         # Only the payment path marks, so a free continuation cannot renew it.
         transfer_activity.mark_download_paid(paid_key)
 
-        ip = request.client.host if request.client else None
+        ip = request.client.host[:_DOWNLOAD_IP_MAX] if request.client else None
         ua = ua_fingerprint_hash(request.headers.get("user-agent", ""))
         for f in files:
             db.add(

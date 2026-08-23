@@ -36,10 +36,19 @@ from ..middleware.errors import AppError
 from ..models.audit_log import AuditEventType
 from ..models.refresh_token import RefreshToken
 from ..models.user import User
+from ..utils.columns import declared_width
 from ..utils.crypto import random_token, refresh_token_hash
 from ..utils.dbresult import updated_rows
 from ..utils.timeutil import to_epoch, utc_now, utc_now_aware
 from .audit import record_audit_event
+
+# Derived from the columns, not literals. `created_ua` was already clipped and
+# `created_ip` on the very next line was not - an asymmetry inside one
+# constructor call. The UA clip was the literal 255; deriving both means neither
+# can drift from its column (027fe08's lesson: a clip to the wrong width is the
+# same failure with a longer fuse).
+_CREATED_IP_MAX = declared_width(RefreshToken.__table__.c.created_ip)
+_CREATED_UA_MAX = declared_width(RefreshToken.__table__.c.created_ua)
 
 if TYPE_CHECKING:
     from ..config import Settings
@@ -221,7 +230,7 @@ def enforce_session_cap(
     # Need to evict (active_count - cap + 1) to make room for the new one.
     excess = active_count - cap + 1
     oldest = (
-        active_q.order_by(RefreshToken.created_at.asc()).limit(excess).all()
+        active_q.order_by(RefreshToken.created_at.asc(), RefreshToken.id.asc()).limit(excess).all()
     )
     for token in oldest:
         token.revoked_at = now
@@ -334,8 +343,16 @@ def create_refresh_token(db: Session, user: User, request: Request | None, setti
         user_id=user.id,
         token_hash=refresh_token_hash(plaintext),
         expires_at=now + timedelta(days=refresh_days),
-        created_ip=(request.client.host if request and request.client else None),
-        created_ua=(request.headers.get("user-agent", "")[:255] if request else None),
+        created_ip=(
+            request.client.host[:_CREATED_IP_MAX]
+            if request and request.client
+            else None
+        ),
+        created_ua=(
+            request.headers.get("user-agent", "")[:_CREATED_UA_MAX]
+            if request
+            else None
+        ),
     )
     db.add(record)
     db.flush()

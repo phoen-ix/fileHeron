@@ -24,6 +24,7 @@ from ..services import transfer_activity
 from ..services import zip_stream as zip_stream_svc
 from ..services.audit import record_audit_event
 from ..services.storage_backend import get_storage_backend
+from ..utils.columns import declared_width
 from ..utils.http_range import (
     UnsatisfiableRangeError,
     is_metadata_probe,
@@ -32,6 +33,12 @@ from ..utils.http_range import (
 )
 from ..utils.timeutil import to_epoch
 from ..utils.ua_fingerprint import ua_fingerprint_hash
+
+# Derived from the column: `request.client.host` is whatever uvicorn resolved
+# from the leftmost X-Forwarded-For, so on an edge that appends rather than
+# overwrites it is caller-controlled and an over-long value is a DataError the
+# SQLite harness cannot see.
+_DOWNLOAD_IP_MAX = declared_width(DownloadLog.__table__.c.ip)
 
 logger = logging.getLogger("fileheron.files")
 
@@ -441,7 +448,7 @@ def download_file(
                 file_id=file.id,
                 share_id=file.share_id,
                 accessed_by_user_id=user.id,
-                ip=(request.client.host if request.client else None),
+                ip=(request.client.host[:_DOWNLOAD_IP_MAX] if request.client else None),
                 ua_fingerprint_hash=ua_fingerprint_hash(request.headers.get("user-agent", "")),
                 bytes_served=file.size_bytes,
                 via=via,

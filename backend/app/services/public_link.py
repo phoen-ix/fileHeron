@@ -40,6 +40,7 @@ from ..models.public_link_attempt import (
 )
 from ..models.share import Share, ShareState
 from ..models.user import User, UserRole
+from ..utils.columns import declared_width
 from ..utils.crypto import (
     argon2_hash,
     argon2_verify,
@@ -53,6 +54,11 @@ from . import notification as notif_svc
 from . import settings_registry
 from . import site as site_svc
 from .audit import record_audit_event
+
+# Clipped at the WRITER, not at the router, so every caller is covered. This
+# column is String(64) where the other four ip columns are String(45) - the
+# exact reason a copy-pasted literal is dangerous and the width is derived.
+_ATTEMPT_IP_MAX = declared_width(PublicLinkAttempt.__table__.c.ip)
 
 logger = logging.getLogger("fileheron.public_link")
 
@@ -233,7 +239,9 @@ def _record_attempt(
 ) -> None:
     db.add(
         PublicLinkAttempt(
-            public_link_id=link.id, ip=ip, outcome=outcome
+            public_link_id=link.id,
+            ip=ip[:_ATTEMPT_IP_MAX] if ip else None,
+            outcome=outcome,
         )
     )
     db.flush()

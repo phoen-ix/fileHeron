@@ -31,6 +31,7 @@ from ..models.login_attempt import LoginAttempt, LoginOutcome
 from ..models.password_reset_token import PasswordResetToken
 from ..models.user import Locale, User, UserRole
 from ..utils.client_ip import get_client_ip
+from ..utils.columns import declared_width
 from ..utils.crypto import (
     argon2_hash,
     argon2_verify,
@@ -53,6 +54,13 @@ from .jwt_session import (
     resolve_user_from_access_token,
     revoke_all_user_refresh_tokens,
 )
+
+# Derived from the columns rather than the literal 254 this used to carry. The
+# comment at the write site explains why the EMAIL must be clipped; `ip` sat
+# unclipped on the next line, and it is the same anonymous-caller-controlled
+# value once an edge appends to X-Forwarded-For instead of overwriting it.
+_ATTEMPT_EMAIL_MAX = declared_width(LoginAttempt.__table__.c.email)
+_ATTEMPT_IP_MAX = declared_width(LoginAttempt.__table__.c.ip)
 
 logger = logging.getLogger("fileheron.auth")
 
@@ -261,8 +269,8 @@ def _record_login_attempt(
     # request it is recording.
     db.add(
         LoginAttempt(
-            email=email_value[:254] if email_value else None,
-            ip=ip,
+            email=email_value[:_ATTEMPT_EMAIL_MAX] if email_value else None,
+            ip=ip[:_ATTEMPT_IP_MAX] if ip else None,
             outcome=outcome.value,
         )
     )

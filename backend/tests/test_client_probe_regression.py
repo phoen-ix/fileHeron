@@ -53,7 +53,7 @@ def budgeted_share(db, make_user, tmp_path):
     path = tmp_path / "payload.bin"
     path.write_bytes(PAYLOAD)
     f = File(
-        id="00000000-0000-0000-0000-00000000probe",
+        id="00000000-0000-0000-0000-0000000probe",
         share_id=sh.id,
         original_filename="payload.bin",
         mime_type="application/octet-stream",

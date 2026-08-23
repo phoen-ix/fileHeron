@@ -257,3 +257,78 @@ def _describe(entry) -> str:
         _schema, table, col = entry[1], entry[2], entry[3]
         return f"{op}: {table}.{col.name} ({col.type})"
     return str(entry)
+
+
+@_SKIP
+def test_model_string_widths_match_the_migrated_schema():
+    """`test_models_match_the_migrated_schema` above cannot see this.
+
+    It is configured with `compare_type: False` ("MariaDB type reflection is
+    noisy") and only looks at `_STRUCTURAL_OPS` - add/remove table/column. So a
+    model that says String(512) against a migration that created VARCHAR(255)
+    is invisible to it, in both directions.
+
+    That matters more than it looks. Several write paths now derive their clip
+    width from the MODEL (`_LAST_PATH_MAX`, `_AUDIT_TARGET_ID_MAX`, the ip
+    clips, `error_log._W`) precisely so a literal cannot drift. If the model and
+    the production schema disagree, those clips are computed against the wrong
+    number and MariaDB raises DataError anyway - the exact failure they exist to
+    prevent, with the guard pointing the wrong way.
+
+    Enum columns are skipped: their length is derived from the member values,
+    not declared, so a reflected difference is noise rather than drift."""
+    from alembic.command import upgrade
+    from alembic.config import Config
+    from sqlalchemy import Enum as SAEnum
+    from sqlalchemy import String, create_engine
+    from sqlalchemy import inspect as sa_inspect
+
+    import app.models  # noqa: F401  - registers every model on Base.metadata
+    from app.config import settings
+    from app.database import Base
+
+    cfg = Config(str(Path(__file__).resolve().parent.parent / "alembic.ini"))
+    upgrade(cfg, "head")
+
+    engine = create_engine(settings.database_url)
+    try:
+        insp = sa_inspect(engine)
+        live_tables = set(insp.get_table_names())
+        mismatches: list[str] = []
+        compared = 0
+        for table in Base.metadata.sorted_tables:
+            if table.name in _IGNORED_TABLES or table.name not in live_tables:
+                continue
+            live_cols = {c["name"]: c for c in insp.get_columns(table.name)}
+            for col in table.columns:
+                declared = getattr(col.type, "length", None)
+                if not declared or isinstance(col.type, SAEnum):
+                    continue
+                if not isinstance(col.type, String):
+                    continue
+                live = live_cols.get(col.name)
+                if live is None:
+                    continue  # a MISSING column is the other test's finding
+                live_len = getattr(live["type"], "length", None)
+                if live_len is None:
+                    continue  # reflected as TEXT/LONGTEXT - unbounded, fine
+                compared += 1
+                if live_len != declared:
+                    mismatches.append(
+                        f"{table.name}.{col.name}: model String({declared}), "
+                        f"migrated schema {live['type']}"
+                    )
+    finally:
+        engine.dispose()
+
+    # Anti-vacuity: reflection returning nothing useful, or every column being
+    # skipped, would leave this green while checking nothing.
+    assert compared > 50, (
+        f"only {compared} bounded String columns were compared - the width "
+        "check has stopped examining the schema"
+    )
+    assert not mismatches, (
+        "the models and the migrated schema disagree on VARCHAR widths, so any "
+        "clip derived from the model is computed against the wrong number:\n  "
+        + "\n  ".join(mismatches)
+    )

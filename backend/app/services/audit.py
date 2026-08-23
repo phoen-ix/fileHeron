@@ -10,6 +10,18 @@ from fastapi import Request
 from sqlalchemy.orm import Session
 
 from ..models.audit_log import AuditEventType, AuditLog
+from ..utils.columns import declared_width
+
+# Widths derived from the columns, never literals: a clip to the WRONG width is
+# the same failure with a longer fuse (that is exactly what `target_id`'s
+# clip-to-255 against a String(64) was, 027fe08). `request.client.host` is the
+# address uvicorn resolved from the leftmost X-Forwarded-For, so on an edge that
+# appends rather than overwrites it is caller-controlled - and this function is
+# the single funnel for EVERY audited action, so an over-long value would fail
+# the write it is recording. `request_id` is minted internally and fits, but it
+# costs nothing to bound it the same way.
+_IP_MAX = declared_width(AuditLog.__table__.c.ip)
+_REQUEST_ID_MAX = declared_width(AuditLog.__table__.c.request_id)
 
 logger = logging.getLogger("fileheron.audit")
 
@@ -30,8 +42,10 @@ def record_audit_event(
     ip: str | None = None
     if request is not None:
         request_id = getattr(request.state, "request_id", None)
+        if isinstance(request_id, str):
+            request_id = request_id[:_REQUEST_ID_MAX]
         if request.client:
-            ip = request.client.host
+            ip = request.client.host[:_IP_MAX]
 
     row = AuditLog(
         actor_user_id=actor_user_id,

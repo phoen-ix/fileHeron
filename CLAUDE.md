@@ -15,6 +15,58 @@ keep this to what would cause a wrong move if unknown.
 
 ## Status
 
+**v2.14.1 is a fix wave over the audit sweep.** No migration, no host step, no
+API change, no default moves, no client release. Two things move: a config
+import now replays the side effects the raw `AppSetting` writes skipped
+(`_reconcile_after_import`, see the config-backup block), and `/api/telemetry/*`
+is capped at 64k at the edge with a `Content-Length` pre-check.
+
+**The finding with the widest blast radius is a DOCUMENTED COMMAND.**
+`CONTRIBUTING.md`'s e2e recipe omitted `COMPOSE_PROJECT_NAME=fileheron_e2e`,
+which `docker-compose.e2e.yml`'s own header carries. Compose defaults the
+project to the DIRECTORY, and a checkout at `fileHeron/` normalises to
+`fileheron` - **the live project** - so the documented command recreates the
+production containers with `AV_SKIP=true`, `ENVIRONMENT=development`,
+`COOKIE_SECURE=false` and `RATE_LIMIT_LOGIN=1000` - and `ENVIRONMENT=development`
+is what re-enables `entrypoint.sh`'s dev seeding, so `user@e2e.local` (password
+in the compose file) is created as a CLIENT. `admin@e2e.local` is NOT: Path 1 of
+`admin_bootstrap` refuses to auto-create when any admin exists, and Path 2 needs
+the user to already exist - measured, not assumed: the first draft of the
+v2.14.1 notes claimed a live admin account and was wrong. There was no teardown
+line either, so the obvious follow-up (`docker compose down`) takes production
+with it. The memory
+[[project-running-e2e-safely]] had recorded "always run it from a separate
+clone" for months; the repo's own docs handed out the dangerous form. Pinned by
+`tests/infra/test_ops_scripts.py`.
+
+**`restore.sh` never got v2.13.1's redis fixes.** That release found three
+defects in the redis reload and fixed them in `restore_drill_e2e.sh` ONLY - the
+control got the fix, the path an operator runs in an emergency did not. All
+three survived here: `sleep 3` then a single `DBSIZE` (which answers "LOADING"
+on a production-sized RDB, reported as an empty backup), `CONFIG SET appendonly
+yes > /dev/null` (redis-cli exits 0 on an error reply), and `sleep 2` + a
+`aof_last_bgrewrite_status` grep that reads `ok` before any rewrite has run.
+It also had **no trap at all**, so under `set -euo pipefail` any failure between
+starting the loader and shutting it down stranded a container holding
+`./data/redis` mid-restore. **Keep the severity difference**: the drill FAILS
+where restore.sh WARNS, deliberately and documented in the drill's own comments.
+`test_ops_scripts.py` pins the readiness shape in both, not the severity.
+
+**Never hand-roll a MariaDB container for the `RUN_ALEMBIC_ROUNDTRIP` files.**
+`make test-mariadb` (`scripts/run_mariadb_tests.sh`) is the supported path. The
+three files skip in the main suite; CI runs them as an Actions `service:`, and
+locally there was NO supported path - the docstrings said only "point `DB_*` at
+a throwaway", so it was re-invented per session as `docker run -d --name …
+mariadb:11` with no `--rm`, torn down with `docker rm -f` and no `-v`.
+`mariadb:11` declares `VOLUME /var/lib/mysql`, so each cycle stranded ~167 MB;
+the reference host was accumulating **~1 GB/day** before another session
+noticed. The script keeps `--rm` **and** a trap doing `docker rm -f -v` - each
+covers a case the other does not (`--rm` misses a killed container or a daemon
+restart; only `-v` takes the datadir). `server-release.yml`'s boot-smoke had the
+same shape plus a network it never removed. **`docker volume prune -a` is
+forbidden on this host** - it is shared with nextcloud and others, and `-a`
+takes unused NAMED volumes.
+
 **v2.14.0 gives every email an HTML half.** No migration, no host step, no API
 change, no default moves, no client change. What moves is the wire content of
 mail: **12 of 26 slugs had NO `.html.j2` at all** and shipped bare
@@ -316,49 +368,113 @@ at-least-once-unsafe (`notification.dispatch` defers its enqueue to
 `test_guard_thresholds.py`, not `test_image.py`); and `<a href="javascript:">`
 IS covered (`test_email_template_overrides.py`).
 
-**What that note still carried, recorded here because the file is now deleted**
-(it was gitignored, so this host was its only copy). Unlike the findings
-backlog at v2.13.1, this one did NOT close empty - these are open, and are
-listed so they are re-found deliberately rather than re-derived:
-1. **`backend/app/schemas/` (43 files) has no systematic test.** `APIBaseModel`
-   sets no `extra=`, so Pydantic's default `extra="ignore"` applies and unknown
-   request fields are silently DROPPED; only four models opt into `forbid`
-   (branding, quarantine x2, site settings). Nothing asserts extra-field
-   behaviour, `min_length`/`max_length`/`pattern` enforcement, or that any
-   request model rejects an unknown key. `test_frontend_api_types.py` checks
-   shape, not validation semantics.
-2. **Middleware ORDER is pinned by nothing.** SecurityHeaders → RequestId →
-   ScanGuard → SelectiveGZip is load-bearing (the scan guard's refusal must
-   inherit both header layers and must sit OUTSIDE ExceptionMiddleware so a
-   block writes no error_log row), and it lives only in comments. Reordering
-   `main.py` leaves the suite green.
-3. **The nine `with_for_update` sites are untested behaviourally.** SQLite
-   ignores row locks, and `erasure.py` carries an explicit dialect branch, so
-   the harness executes a DIFFERENT statement than production. Two are asserted
-   by source text only. Same for true concurrency generally: no test file uses
-   `threading` or `asyncio.gather`, StaticPool means one shared connection, and
-   e2e runs `workers: 1` - so no two DB transactions are ever open at once
-   anywhere in the suite. The tus pre-create + Redis-Lua reserve vs the DB
-   commit, and refresh rotation under parallel tabs, are unreachable this way.
-4. **The S3 leg is unpinned in three places**: `av_scan`'s INSTREAM branch (and
-   its twin in `rescan_inbound_attachments`), the branding logo (which loses its
-   `Cache-Control` on the 307, same inherent limit as preview), and both
-   `supports_disk_stats` consumers - the metrics gate and `disk_check`'s
-   object-store branch that CLEARS `storage.critical_low`.
-5. **`config_backup` still writes `app_settings` rows directly**, bypassing
-   `update_settings`' side effects - the scan_guard cache reset, the live
-   IPv6-prefix network-block release, the signal-less-config refusal. Int
-   tunables self-heal (`settings_registry._resolve` clamps on READ); the side
-   effects do not. Known residual, unchanged.
-6. **`services/share.py` (1,813 lines) has no dedicated unit-test file** - all
-   82 of its tests reach it through an HTTP route, so its 42 function-local
-   imports and four notification clusters are covered only incidentally.
-   `backend/scripts/{create_admin,rotate_jwt_secret,seed_dev}.py` have no tests
-   either (`unblock_ip` and `promote_user` do).
-7. **Not attempted at all**: memory/OOM and long-stream behaviour, real-browser
-   CSP/XSS rendering of sanitised HTML, and upgrade/rollback ordering against
-   real data. Also unpinned: that `FORWARDED_ALLOW_IPS` agrees across
-   `.env.example`, `docker-compose.dev.yml` and the Dockerfile.
+**What that note still carried - VERIFIED, then closed** (2026-08-23). The
+seven items below were first written from a cross-check of the gaps note against
+what landed, and were never themselves checked against the code. When they were,
+**three of the seven were largely false and the list contained eight wrong
+claims** - a record written to stop re-derivation that would itself have
+misled the next reader. Corrected and closed here, with the false ones kept
+explicitly so nobody re-files them.
+
+1. **`schemas/` - MOSTLY NOT REAL.** It is 42 files, not 43, and three of the
+   four sub-claims were false: `test_admin_scan_guard.py:151-180` posts a stale
+   unknown field and asserts it is ignored (naming `APIBaseModel` in its
+   docstring), 36 `422` assertions across 23 files cover
+   `min_length`/`max_length`/`pattern`, and two tests introspect `app.schemas`
+   directly. Worse, the framing contradicted this file: `extra="ignore"` is a
+   DELIBERATE back-compat decision recorded at the v2.13.0 blocked-sources
+   block, because clients are versioned separately and `forbid` on the shared
+   base would 422 every client one release behind. What was real was narrow and
+   is now closed by `tests/test_schema_boundary.py`: the four `forbid` models
+   reject an unknown key, the opt-out is declared, the base still ignores
+   extras, and `EmailLike`'s 254 bound is a 422 at the boundary rather than a
+   `DataError` at flush.
+2. **Middleware ORDER - NOT REAL as stated, now pinned anyway.** The
+   "must sit OUTSIDE ExceptionMiddleware" half worries about something the
+   framework makes impossible: `Starlette.build_middleware_stack` appends
+   `ExceptionMiddleware` after EVERY user middleware, so no ordering of
+   `add_middleware` can put anything inside it. The load-bearing half was
+   already pinned behaviourally - `test_scan_guard_middleware.py` requires the
+   blocked 404 to carry `x-request-id` and the security headers, and its BODY to
+   carry `request_id`, neither of which exists unless ScanGuard runs inside both
+   layers. Genuinely unpinned was `SelectiveGZip`'s slot, since
+   `test_selective_gzip.py` mounts gzip on a throwaway app.
+   `tests/test_middleware_order.py` now pins the list, the relationship, gzip's
+   position, and the Starlette fact itself.
+3. **The nine `with_for_update` sites - REAL, now covered, and my reasoning was
+   wrong.** SQLite does not "execute a DIFFERENT statement": SQLAlchemy's
+   `SQLiteCompiler.for_update_clause` returns `""`, compiling `FOR UPDATE` away
+   SILENTLY - which `rate_limit.py` and `routers/public.py` already prove by
+   calling it with no dialect guard on a green suite. So `erasure.py`'s dialect
+   branch is dead defence with a false comment, not a special case; production
+   emits the lock at nine sites and the harness at zero, uniformly.
+   `tests/test_mariadb_row_locks.py` closes the sharpest one against real
+   MariaDB. **It asserts the SQL the ORM emits, deliberately**: an earlier
+   version asserted that a second caller BLOCKS, which passes even with the lock
+   removed, because `record_failure`'s later UPDATE serialises anyway. The
+   defect is about locking on the READ. True concurrency generally (tus
+   pre-create vs the DB commit, refresh rotation under parallel tabs) remains
+   out of reach - still no `threading`/`asyncio.gather` anywhere, StaticPool,
+   `workers: 1`.
+4. **The S3 leg - REAL, two of three closed.** Only two files in the suite ever
+   select the S3 backend. `disk_check`'s object-store branch is closed by
+   `tests/test_disk_check_object_store.py` - it is the sole writer clearing
+   `storage.critical_low`, so a regression 507s every upload forever after a
+   local→S3 move. `av_scan`'s INSTREAM arm is closed by
+   `tests/test_av_scan_s3_instream.py`; note `test_av_scan_instream.py` looks
+   like coverage and is not, exercising `scan_stream` against a fake socket
+   without touching the worker or the branch. **Deliberately left**: the
+   branding logo's `Cache-Control` on the 307. That is a CACHING loss, not
+   "the same inherent limit as preview" - preview loses `nosniff`/CSP, while the
+   logo's content type is magic-byte sniffed and clamped, so there is no
+   security analogue.
+5. **`config_backup` - REAL and understated, now closed.** It was worse than
+   recorded: `config_backup.py` contained ZERO references to `IpBlock`, so an
+   import changing `scan_guard.network_prefix_v6` left live network blocks
+   stamped under the old prefix - and because `is_blocked` matches by CIDR
+   CONTAINMENT the orphan kept denying service while the admin page showed
+   nothing to release. A fourth effect nobody listed: `_build(OIDCProvider, ...)`
+   deliberately preserves the provider id (`users.oidc_provider_id` is matched
+   against it in step 3, so `skip={"id"}` would sever every SSO binding), and
+   `jwks._cache` is keyed by that id alone with a 1h TTL - so a reused id under
+   a different issuer verified ID-token signatures against the previous IdP's
+   keys. `_reconcile_after_import` runs after the final commit, beside the
+   deferred erasures and for the same reason.
+6. **`share.py` - NOT REAL as stated.** "All 82 of its tests reach it through an
+   HTTP route" was wrong: 25 files make 157 direct calls, there is a dedicated
+   `tests/_share_helpers.py`, and 18 of ~23 public functions are unit-tested
+   directly. Exactly ONE function was unreached -
+   `has_recent_archive_download`, the durable half of ZIP-resume evidence - now
+   covered by `tests/test_archive_resume_evidence.py`. The parenthetical
+   "(`unblock_ip` and `promote_user` do)" was also false: `promote_user` had NO
+   tests, and `test_unblock_ip_script.py`'s docstring cites it as the cautionary
+   tale of an advertised invocation that stayed broken for four releases.
+   `tests/test_promote_user_script.py` closes it - and note the in-process tests
+   there CANNOT see the sys.path shim (pytest runs from `backend/`, where `app`
+   is already imported); only the subprocess test from a foreign cwd can.
+   `create_admin`/`seed_dev` are covered by e2e via the entrypoint; STILL OPEN:
+   `rotate_jwt_secret.py`, whose hand-maintained five-table list has no pin
+   against the models and whose own comment records having missed one before.
+7. **"Never attempted" - LARGELY FALSE.** Upgrade/rollback against real data is
+   already covered by `test_alembic_roundtrip.py`, which seeds rows into the
+   tables data migrations touch precisely because it once ran against an empty
+   schema. OOM/long-stream is mostly bounds-asserted already
+   (`MAX_MESSAGE_BYTES`, `MAX_MESSAGE_PARTS`, `_MAX_BODY_TOTAL`); what was real
+   there was one specific inversion - the telemetry beacons buffered the body
+   before capping it - now fixed at the edge (`location /api/telemetry/`, 64k)
+   and in `/csp-report`. **Real-browser CSP/XSS was real and is now closed**:
+   the SPA shell gets `Content-Security-Policy-Report-Only` from nginx while the
+   ENFORCING policy only covers backend responses, so `v-html` in
+   `LegalPage.vue` is guarded by nh3 ALONE - and no e2e test loaded a legal page
+   until `e2e/tests/legal-page-xss.spec.ts`. `FORWARDED_ALLOW_IPS` agreement
+   across `.env.example`/`docker-compose.dev.yml`/Dockerfile is still unpinned.
+
+**One CI defect fell out of the same review, and it was self-inflicted.**
+`tests/test_mariadb_semantics.py` was added gated on `RUN_ALEMBIC_ROUNDTRIP`,
+but the roundtrip step named `tests/test_alembic_roundtrip.py` alone - so it
+skipped in the main suite and ran nowhere else. It had NEVER executed. Adding a
+real-database file now means editing that step's file list; `-rs` prints skip
+reasons so a file that stops running is visible in the log.
 
 **The VARCHAR-width class now has a real ratchet.** `tests/conftest.py`
 registers a `before_flush` listener that fails any write exceeding a
@@ -558,9 +674,10 @@ so a rollback past them needs the [[reference_rollback_migration_trap]]
 permissive/NULL value, so existing rows, in-flight sessions and
 approval-disabled deployments are unaffected by the upgrade itself.
 
-Backend **`v2.14.0`** is the newest TAG - released 2026-08-20, the email
-template sweep at the top of this file. The reference host runs v2.13.5
-until the in-app Update is applied. Note what the updater can and cannot see:
+Backend **`v2.14.1`** is the newest TAG - released 2026-08-23, the fix wave at
+the top of this file. Before it, v2.14.0 - released 2026-08-20, the email
+template sweep. The reference host runs v2.13.5 until the in-app Update is
+applied. Note what the updater can and cannot see:
 it only ever offers TAGGED releases, so pushing to `main` builds no image and
 cuts nothing (`server-release.yml` fires on `v[0-9]+.[0-9]+.[0-9]+` only) - a
 commit on `main` is not an available update. (Any release still

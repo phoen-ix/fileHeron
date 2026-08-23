@@ -125,7 +125,7 @@ def release(
                 AuditLog.target_type == "share",
                 AuditLog.target_id == share.id,
             )
-            .order_by(AuditLog.created_at.desc())
+            .order_by(AuditLog.created_at.desc(), AuditLog.id.desc())
             .first()
         )
         if (

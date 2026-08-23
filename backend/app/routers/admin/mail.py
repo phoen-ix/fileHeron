@@ -321,7 +321,7 @@ def export_mail_csv(
         status=status,
         from_ts=from_ts,
         to_ts=to_ts,
-    ).order_by(EmailLog.created_at.desc())
+    ).order_by(EmailLog.created_at.desc(), EmailLog.id.desc())
 
     def _rows() -> Iterator[bytes]:
         buf = io.StringIO()

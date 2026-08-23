@@ -427,7 +427,7 @@ def list_sessions(
             RefreshToken.revoked_at.is_(None),
             RefreshToken.expires_at > utc_now(),
         )
-        .order_by(RefreshToken.created_at.desc())
+        .order_by(RefreshToken.created_at.desc(), RefreshToken.id.desc())
         .all()
     )
     return SessionListResponse(

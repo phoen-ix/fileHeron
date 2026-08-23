@@ -109,7 +109,7 @@ def list_notifications(
         base = base.filter(Notification.read_at.is_(None))
     total = base.count()
     rows = (
-        base.order_by(Notification.created_at.desc())
+        base.order_by(Notification.created_at.desc(), Notification.id.desc())
         .offset((page - 1) * page_size)
         .limit(page_size)
         .all()

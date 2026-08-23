@@ -95,7 +95,7 @@ def _prune_old_runs(db: Session, job_name: str) -> None:
         db.execute(
             select(CronRun.started_at)
             .where(CronRun.job_name == job_name)
-            .order_by(CronRun.started_at.desc())
+            .order_by(CronRun.started_at.desc(), CronRun.id.desc())
             .limit(_KEEP_PER_JOB)
         )
         .scalars()

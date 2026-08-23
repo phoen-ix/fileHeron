@@ -257,7 +257,7 @@ def list_inbox(
         InboundMessage.status == MessageStatus.new
     ).count()
     rows = (
-        base.order_by(InboundMessage.created_at.desc())
+        base.order_by(InboundMessage.created_at.desc(), InboundMessage.id.desc())
         .offset((page - 1) * page_size)
         .limit(page_size)
         .all()

@@ -204,7 +204,7 @@ def export_audit_csv(
         target_id=target_id,
         from_ts=from_ts,
         to_ts=to_ts,
-    ).order_by(AuditLog.created_at.desc())
+    ).order_by(AuditLog.created_at.desc(), AuditLog.id.desc())
 
     def _rows() -> Iterator[bytes]:
         buf = io.StringIO()

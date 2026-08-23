@@ -223,7 +223,7 @@ def list_tokens(db: Session, *, owner: User) -> list[ApiToken]:
     return (
         db.query(ApiToken)
         .filter(ApiToken.owner_user_id == owner.id, ApiToken.revoked_at.is_(None))
-        .order_by(ApiToken.created_at.desc())
+        .order_by(ApiToken.created_at.desc(), ApiToken.id.desc())
         .all()
     )
 
@@ -430,7 +430,7 @@ def list_all_tokens(
 
     total = base.count()
     rows = (
-        base.order_by(ApiToken.created_at.desc())
+        base.order_by(ApiToken.created_at.desc(), ApiToken.id.desc())
         .offset((page - 1) * page_size)
         .limit(page_size)
         .all()

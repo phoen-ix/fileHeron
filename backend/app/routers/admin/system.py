@@ -119,7 +119,7 @@ def system_status(
         last = (
             db.query(CronRun)
             .filter(CronRun.job_name == name)
-            .order_by(CronRun.started_at.desc())
+            .order_by(CronRun.started_at.desc(), CronRun.id.desc())
             .first()
         )
         # Success / failure counts in the last 24h, for the at-a-glance number.
@@ -148,7 +148,7 @@ def system_status(
         for r in (
             db.query(CronRun)
             .filter(CronRun.status == CronRunStatus.failure)
-            .order_by(CronRun.started_at.desc())
+            .order_by(CronRun.started_at.desc(), CronRun.id.desc())
             .limit(10)
             .all()
         )
@@ -290,7 +290,7 @@ def cron_runs(
     q = db.query(CronRun)
     if job_name:
         q = q.filter(CronRun.job_name == job_name)
-    rows = q.order_by(CronRun.started_at.desc()).limit(limit).all()
+    rows = q.order_by(CronRun.started_at.desc(), CronRun.id.desc()).limit(limit).all()
     return {"items": [_cron_row_dict(r) for r in rows], "limit": limit}
 
 

@@ -1383,7 +1383,7 @@ def list_pending_approvals(
     )
     total = base.count()
     rows = (
-        base.order_by(Share.created_at.asc())
+        base.order_by(Share.created_at.asc(), Share.id.asc())
         .offset(max(0, (page - 1) * page_size))
         .limit(page_size)
         .all()

@@ -46,7 +46,7 @@ def list_users(
         )
     total = base.count()
     rows = (
-        base.order_by(User.created_at.desc())
+        base.order_by(User.created_at.desc(), User.id.desc())
         .offset((page - 1) * page_size)
         .limit(page_size)
         .all()

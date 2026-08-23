@@ -40,7 +40,7 @@ def _item(db: Session, name: str, tz: str, now) -> CronScheduleItem:
     last = (
         db.query(CronRun)
         .filter(CronRun.job_name == name)
-        .order_by(CronRun.started_at.desc())
+        .order_by(CronRun.started_at.desc(), CronRun.id.desc())
         .first()
     )
     cutoff = now - timedelta(hours=24)

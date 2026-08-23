@@ -129,7 +129,7 @@ def list_invites(
 
     total = base.count()
     items = (
-        base.order_by(InviteToken.created_at.desc())
+        base.order_by(InviteToken.created_at.desc(), InviteToken.id.desc())
         .offset(max(0, (page - 1)) * page_size)
         .limit(page_size)
         .all()

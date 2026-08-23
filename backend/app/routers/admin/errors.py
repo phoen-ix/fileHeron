@@ -114,7 +114,7 @@ def export_errors_csv(
     query = error_log_svc.filtered_query(
         db, code=code, status_code=status_code, source=source, ip=ip,
         from_ts=from_ts, to_ts=to_ts,
-    ).order_by(ErrorLog.created_at.desc())
+    ).order_by(ErrorLog.created_at.desc(), ErrorLog.id.desc())
 
     def _rows() -> Iterator[bytes]:
         buf = io.StringIO()

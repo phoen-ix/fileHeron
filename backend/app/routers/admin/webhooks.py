@@ -61,7 +61,7 @@ def list_webhook_events(_admin: User = Depends(get_current_admin)) -> dict:
 def list_webhooks(
     db: Session = Depends(get_db), _admin: User = Depends(get_current_admin)
 ) -> list[WebhookResponse]:
-    rows = db.query(Webhook).order_by(Webhook.created_at.desc()).all()
+    rows = db.query(Webhook).order_by(Webhook.created_at.desc(), Webhook.id.desc()).all()
     return [_to_response(w) for w in rows]
 
 
@@ -192,7 +192,7 @@ def list_deliveries(
     rows = (
         db.query(WebhookDelivery)
         .filter(WebhookDelivery.webhook_id == webhook_id)
-        .order_by(WebhookDelivery.created_at.desc())
+        .order_by(WebhookDelivery.created_at.desc(), WebhookDelivery.id.desc())
         .limit(limit)
         .all()
     )

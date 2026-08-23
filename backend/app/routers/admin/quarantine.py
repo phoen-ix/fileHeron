@@ -117,7 +117,7 @@ def av_status(
     last_reload_at = (
         db.query(AuditLog.created_at)
         .filter(AuditLog.event_type == AuditEventType.av_reload_triggered)
-        .order_by(AuditLog.created_at.desc())
+        .order_by(AuditLog.created_at.desc(), AuditLog.id.desc())
         .limit(1)
         .scalar()
     )

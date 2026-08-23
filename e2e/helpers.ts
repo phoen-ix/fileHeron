@@ -1,6 +1,6 @@
 import { execSync } from 'node:child_process'
 
-import { authenticator } from 'otplib'
+import { generateSync } from 'otplib'
 
 /* Shared helpers + the deterministic seeded accounts (docker-compose.e2e.yml). */
 
@@ -81,6 +81,26 @@ export async function createUser(
   return { email: opts.email, password: opts.password }
 }
 
+/** The current TOTP code for a base32 secret.
+ *
+ * The ONE place this suite touches otplib, so the library's shape lives in a
+ * single file. Codes must match what the backend accepts, and the backend
+ * verifies with **pyotp** (`services/totp.py`), a different library entirely -
+ * so this is a cross-language contract, not just a call. Verified equal to
+ * `pyotp.TOTP(secret).now()` for a 20-byte secret in the same 30s step.
+ *
+ * otplib 13 enforces MIN_SECRET_BYTES = 16 and throws SecretTooShortError
+ * below it - including for otplib's OWN documented example secret
+ * ('JBSWY3DPEHPK3PXP', 10 bytes). Real secrets are fine: the backend mints
+ * `pyotp.random_base32()` = 32 base32 chars = 20 bytes, and that one call at
+ * `services/totp.py:88` is the only mint site. A hand-written short secret in
+ * a future test would fail here for a reason the error message explains but
+ * nothing else would.
+ */
+export function totpCode(secret: string): string {
+  return generateSync({ secret })
+}
+
 /** Enroll TOTP for a user (setup -> enable with a computed code). Returns the
  * base32 secret so the caller can generate login codes. */
 export async function enroll2FA(email: string, password: string): Promise<string> {
@@ -90,7 +110,7 @@ export async function enroll2FA(email: string, password: string): Promise<string
   const secret = (await s.json()).secret_b32 as string
   const e = await apiFetch(token, '/api/account/2fa/enable', {
     method: 'POST',
-    body: JSON.stringify({ code: authenticator.generate(secret) }),
+    body: JSON.stringify({ code: totpCode(secret) }),
   })
   if (!e.ok) throw new Error(`[e2e] 2fa enable failed: ${e.status} ${await e.text()}`)
   return secret

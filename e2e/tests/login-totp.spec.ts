@@ -1,7 +1,13 @@
 import { expect, test } from '@playwright/test'
-import { authenticator } from 'otplib'
 
-import { ADMIN, apiLogin, createUser, enroll2FA, freshPassword } from '../helpers'
+import {
+  ADMIN,
+  apiLogin,
+  createUser,
+  enroll2FA,
+  freshPassword,
+  totpCode,
+} from '../helpers'
 
 /* Journey 2: a user with TOTP enabled must supply a code at login. Uses a fresh
  * dedicated account (enabling 2FA on a shared one would break other journeys'
@@ -24,7 +30,7 @@ test('login requires + accepts a TOTP code once 2FA is enabled', async ({ page }
   await expect(page.locator('#login-code')).toBeVisible()
   await expect(page).toHaveURL(/\/login(\?|$)/)
 
-  await page.fill('#login-code', authenticator.generate(secret))
+  await page.fill('#login-code', totpCode(secret))
   await page.click('button[type=submit]')
   await expect(page).not.toHaveURL(/\/login(\?|$)/)
 })

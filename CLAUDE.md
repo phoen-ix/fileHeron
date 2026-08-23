@@ -316,6 +316,50 @@ at-least-once-unsafe (`notification.dispatch` defers its enqueue to
 `test_guard_thresholds.py`, not `test_image.py`); and `<a href="javascript:">`
 IS covered (`test_email_template_overrides.py`).
 
+**What that note still carried, recorded here because the file is now deleted**
+(it was gitignored, so this host was its only copy). Unlike the findings
+backlog at v2.13.1, this one did NOT close empty - these are open, and are
+listed so they are re-found deliberately rather than re-derived:
+1. **`backend/app/schemas/` (43 files) has no systematic test.** `APIBaseModel`
+   sets no `extra=`, so Pydantic's default `extra="ignore"` applies and unknown
+   request fields are silently DROPPED; only four models opt into `forbid`
+   (branding, quarantine x2, site settings). Nothing asserts extra-field
+   behaviour, `min_length`/`max_length`/`pattern` enforcement, or that any
+   request model rejects an unknown key. `test_frontend_api_types.py` checks
+   shape, not validation semantics.
+2. **Middleware ORDER is pinned by nothing.** SecurityHeaders → RequestId →
+   ScanGuard → SelectiveGZip is load-bearing (the scan guard's refusal must
+   inherit both header layers and must sit OUTSIDE ExceptionMiddleware so a
+   block writes no error_log row), and it lives only in comments. Reordering
+   `main.py` leaves the suite green.
+3. **The nine `with_for_update` sites are untested behaviourally.** SQLite
+   ignores row locks, and `erasure.py` carries an explicit dialect branch, so
+   the harness executes a DIFFERENT statement than production. Two are asserted
+   by source text only. Same for true concurrency generally: no test file uses
+   `threading` or `asyncio.gather`, StaticPool means one shared connection, and
+   e2e runs `workers: 1` - so no two DB transactions are ever open at once
+   anywhere in the suite. The tus pre-create + Redis-Lua reserve vs the DB
+   commit, and refresh rotation under parallel tabs, are unreachable this way.
+4. **The S3 leg is unpinned in three places**: `av_scan`'s INSTREAM branch (and
+   its twin in `rescan_inbound_attachments`), the branding logo (which loses its
+   `Cache-Control` on the 307, same inherent limit as preview), and both
+   `supports_disk_stats` consumers - the metrics gate and `disk_check`'s
+   object-store branch that CLEARS `storage.critical_low`.
+5. **`config_backup` still writes `app_settings` rows directly**, bypassing
+   `update_settings`' side effects - the scan_guard cache reset, the live
+   IPv6-prefix network-block release, the signal-less-config refusal. Int
+   tunables self-heal (`settings_registry._resolve` clamps on READ); the side
+   effects do not. Known residual, unchanged.
+6. **`services/share.py` (1,813 lines) has no dedicated unit-test file** - all
+   82 of its tests reach it through an HTTP route, so its 42 function-local
+   imports and four notification clusters are covered only incidentally.
+   `backend/scripts/{create_admin,rotate_jwt_secret,seed_dev}.py` have no tests
+   either (`unblock_ip` and `promote_user` do).
+7. **Not attempted at all**: memory/OOM and long-stream behaviour, real-browser
+   CSP/XSS rendering of sanitised HTML, and upgrade/rollback ordering against
+   real data. Also unpinned: that `FORWARDED_ALLOW_IPS` agrees across
+   `.env.example`, `docker-compose.dev.yml` and the Dockerfile.
+
 **The VARCHAR-width class now has a real ratchet.** `tests/conftest.py`
 registers a `before_flush` listener that fails any write exceeding a
 `String(n)` column, so all ~2,700 existing tests became width tests for the

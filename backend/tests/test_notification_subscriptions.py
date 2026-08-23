@@ -162,3 +162,80 @@ async def test_disabled_user_token_401(make_user, client):
     t = tok.issue(user.id)
     resp = await client.get(f"/api/notification-subscriptions/{t}")
     assert resp.status_code == 401
+
+
+# --- revocation ------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_a_manage_link_stops_working_after_the_user_revokes_everything(
+    client, db, make_user
+):
+    """The manage token is a second bearer credential for the user: it reads
+    their display name and their whole preference matrix, and mutates it. It
+    ignored `users.sessions_invalidated_at` entirely, so a 180-day-old footer
+    link survived a password change, a reset, "sign out all other sessions", an
+    admin revoke-all and an API-token revocation. Only rotating JWT_SECRET
+    revoked it."""
+    from app.services import jwt_session
+    from app.services import unsubscribe_token as tok
+
+    user = make_user(email="revoked@test.local")
+    # Minted a minute ago, i.e. an email sent before the revocation - which is
+    # the real shape here, since these tokens live for 180 days. The comparison
+    # is `<` at SECOND granularity on purpose (change_password revokes and
+    # re-mints inside one request), so issuing and revoking in the same second
+    # would legitimately not trip it and the test would prove nothing.
+    iat = tok._now() - 60
+    exp = iat + tok.DEFAULT_TTL_SEC
+    sig = tok._sign(f"notif-mgmt|{user.id}|{iat}|{exp}".encode())
+    token = f"{user.id}.{iat}.{exp}.{sig}"
+    db.commit()
+
+    assert (await client.get(f"/api/notification-subscriptions/{token}")).status_code == 200
+
+    jwt_session.revoke_all_user_refresh_tokens(db, user.id)
+    db.commit()
+
+    r = await client.get(f"/api/notification-subscriptions/{token}")
+    assert r.status_code == 401, "the manage link outlived the revocation"
+    assert r.json()["code"] == "INVALID_MANAGE_TOKEN"
+
+
+@pytest.mark.asyncio
+async def test_a_link_minted_after_the_revocation_still_works(
+    client, db, make_user
+):
+    """The control. Comparing on `issued_at` and not merely "has this user ever
+    revoked" is what keeps a freshly-sent email working - the mark is per-user
+    and permanent, so a coarser check would break the next email forever."""
+    from app.services import jwt_session
+    from app.services import unsubscribe_token as tok
+
+    user = make_user(email="revoked2@test.local")
+    jwt_session.revoke_all_user_refresh_tokens(db, user.id)
+    db.commit()
+
+    r = await client.get(f"/api/notification-subscriptions/{tok.issue(user.id)}")
+    assert r.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_a_legacy_link_keeps_working_across_a_revocation(
+    client, db, make_user
+):
+    """Deliberate, and the reason legacy tokens are accepted at all: they are in
+    mail already delivered and carry no issue time to check. Pinned so the
+    back-compat is a decision rather than an accident - and so that dropping it
+    is a visible change, not a silent one."""
+    from app.services import jwt_session
+    from app.services import unsubscribe_token as tok
+
+    user = make_user(email="legacy@test.local")
+    exp = tok._now() + 3600
+    legacy = f"{user.id}.{exp}.{tok._sign(f'notif-mgmt|{user.id}|{exp}'.encode())}"
+    jwt_session.revoke_all_user_refresh_tokens(db, user.id)
+    db.commit()
+
+    r = await client.get(f"/api/notification-subscriptions/{legacy}")
+    assert r.status_code == 200

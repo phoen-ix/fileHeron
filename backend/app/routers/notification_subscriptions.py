@@ -26,7 +26,7 @@ from ..schemas.notification import (
     UnsubscribeResponse,
     UpdatePreferencesRequest,
 )
-from ..services import notification_prefs, rate_limit
+from ..services import jwt_session, notification_prefs, rate_limit
 from ..services import unsubscribe_token as token_svc
 
 router = APIRouter(
@@ -46,13 +46,27 @@ def _resolve(db: Session, request: Request, token: str) -> User:
     ip = request.client.host if request.client else "unknown"
     if not rate_limit.check_ip_allowed("notif_subs", ip, limit=60, window_sec=60):
         raise AppError(429, "RATE_LIMITED", "Too many requests; slow down.")
-    user_id = token_svc.verify(token)
+    user_id, issued_at = token_svc.verify_full(token)
     user = (
         db.query(User)
         .filter(User.id == user_id, User.is_disabled.is_(False))
         .one_or_none()
     )
     if user is None:
+        raise AppError(401, "INVALID_MANAGE_TOKEN", "Bad manage link.")
+    # This token is a second bearer credential for the user - it discloses their
+    # display name and their whole preference matrix, and mutates it - so it
+    # honours the same revocation mark every other signed stand-in for a session
+    # does. Without it a 180-day-old footer link survived a password change, a
+    # reset, "sign out all other sessions" and an admin revoke-all.
+    #
+    # `issued_at is None` means a legacy three-part token, which carries no
+    # issue time and therefore cannot be checked. Those are accepted on purpose
+    # (they are in mail already delivered) and drain within one TTL; treating
+    # them as issued at the epoch would instead revoke the entire population.
+    if issued_at is not None and jwt_session.was_issued_before_revocation(
+        user, issued_at
+    ):
         raise AppError(401, "INVALID_MANAGE_TOKEN", "Bad manage link.")
     return user
 

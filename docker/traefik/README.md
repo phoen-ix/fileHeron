@@ -50,10 +50,18 @@ proxies external HTTPS to those local ports.
      audit log. Traefik's default (overwrite with the connecting IP) is the
      safe behaviour - keep it.
    - Defense-in-depth: pin the backend's trust to the proxy rather than `*` -
-     set `FORWARDED_ALLOW_IPS=<traefik/docker-bridge CIDR>` and change the
-     backend CMD's `--forwarded-allow-ips=*` to that value, so uvicorn only
-     trusts `X-Forwarded-For` from the proxy peer even if the backend port is
-     ever reachable past Traefik.
+     set `FORWARDED_ALLOW_IPS=<traefik/docker-bridge CIDR>` in `.env`, so
+     uvicorn only trusts `X-Forwarded-For` from the proxy peer even if the
+     backend port is ever reachable past Traefik. **No CMD edit is needed** -
+     this said to change the backend CMD's `--forwarded-allow-ips=*` by hand,
+     but the Dockerfile has read `$FORWARDED_ALLOW_IPS` since it was written,
+     and `docker-compose.dev.yml` substitutes it too, so the variable alone is
+     the whole change. Editing the CMD instead makes the pin invisible to
+     anyone reading `.env`.
+   - Know the trade-off before pinning: the scan guard never counts or blocks a
+     non-globally-routable address, and the scanner-bait paths arrive via the
+     frontend **nginx** container - so a pin that excludes nginx silences the
+     probe_path signal entirely. Fail-safe, but not free.
    - Verify: `curl -H 'X-Forwarded-For: 1.2.3.4' https://<host>/api/auth/login ...`
      then confirm `login_attempts.ip` recorded YOUR real IP, not `1.2.3.4`.
 

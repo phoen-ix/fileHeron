@@ -87,6 +87,22 @@ updates:
       - dependency-name: node
         update-types: [version-update:semver-major]
 
+  # The e2e tree has its own package-lock and was watched by NOTHING - not
+  # dependabot, and not the dependency-audit job, which runs `npm audit` only
+  # against frontend/. Two devDependencies (@playwright/test, otplib) that never
+  # ship, so the exposure is CI-only; watched anyway because "nothing looks at
+  # this lockfile" is how the clamav pin sat four weeks behind a six-CVE
+  # release.
+  - package-ecosystem: npm
+    directory: /e2e
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels: [dependencies, ci]
+    groups:
+      e2e-minor-patch:
+        update-types: [minor, patch]
+
   - package-ecosystem: github-actions
     directory: /
     schedule:

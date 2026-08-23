@@ -34,6 +34,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # typosquat / compromised upstream, instead of resolving `>=` ranges fresh from
 # PyPI on every build (audit M12). `pip install .` here only ever pulled deps
 # anyway - the app source is COPYed below and run from WORKDIR.
+#
+# 70 of the 72 entries in the lock carry a `# via -c constraints.txt`
+# provenance line. That file is NOT in the repo and is not missing: `bcb6d23`
+# used a throwaway constraints file to pin everything already resolved while
+# dropping fastapi-cloud-cli, "so exactly five packages left and nothing else
+# moved". It was a one-off minimal-diff technique, not an input to the build.
+# Regenerate with the command above and those lines simply disappear; do NOT go
+# looking for the file or recreate it. The lock is verified against
+# pyproject.toml's ranges by tests/test_requirements_lock_sync.py and scanned by
+# CI's dependency-audit job, so nothing depends on reproducing that resolve.
 COPY backend/pyproject.toml backend/requirements.lock ./
 RUN --mount=type=cache,target=/root/.cache/pip pip install --require-hashes -r requirements.lock
 # Fail the build on a broken/conflicting dependency closure. Complements the

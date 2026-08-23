@@ -27,9 +27,19 @@ services:
       LOG_LEVEL: DEBUG
     # --proxy-headers + forwarded-allow-ips: see prod Dockerfile comment.
     # Dev backend is also bound to 127.0.0.1 only via compose ports, so
-    # trusting any source is safe.
+    # trusting any source is safe, and `*` stays the default here.
+    #
+    # It is SUBSTITUTED rather than hardcoded, though: the prod image reads
+    # $FORWARDED_ALLOW_IPS, so a hardcoded `*` here meant an operator who
+    # pinned the variable to their proxy CIDR - which CLAUDE.md and
+    # docker/traefik/README.md both tell them to do - got that pin in prod and
+    # silently not in dev. Which address resolves decides what the scan guard
+    # counts (utils/client_ip.is_blockable refuses non-global addresses), so
+    # the two environments disagreeing is exactly the divergence that hides a
+    # guard misconfiguration until production.
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000",
-              "--reload", "--proxy-headers", "--forwarded-allow-ips=*"]
+              "--reload", "--proxy-headers",
+              "--forwarded-allow-ips=${FORWARDED_ALLOW_IPS:-*}"]
 
   # Mirror the backend's source-mount + dev image for the ARQ worker so
   # code changes take effect on `compose restart worker` without a

@@ -298,6 +298,86 @@ the `sleep 2` before SHUTDOWN could cut that rewrite in half; and CONFIG SET's
 error reply went to /dev/null. Poll DBSIZE for an INTEGER, wait on
 `aof_enabled` + `aof_rewrite_in_progress`, and read the reply.
 
+**The 2026-08-15 audit's COVERAGE-GAP note is closed too** (2026-08-23).
+`.claude/audit-2026-08-15-gaps.md` was the sibling of the findings backlog: not
+defects, but which files no finder area owned, which cross-artefact seams no
+single finder could see, and which defect classes the harness is structurally
+blind to. It was never processed and this file never mentioned it.
+
+**Most of its file-ownership claims were already stale** - richtext, the
+updater, the scopes seam, the cron seam and the AppError-to-i18n seam are all
+tested and, in several cases, twice-audited. Its STRUCTURAL claims held, and
+working them produced the changes below. Four claims were verified FALSE and are
+recorded here so nobody re-derives them: `drain_pending_update` does not
+double-fire (it clears and COMMITS before handing off); `share_expiring` is not
+at-least-once-unsafe (`notification.dispatch` defers its enqueue to
+`run_after_commit`, so the marker and the email share a transaction);
+`image.py`'s decompression-bomb guard IS tested (in
+`test_guard_thresholds.py`, not `test_image.py`); and `<a href="javascript:">`
+IS covered (`test_email_template_overrides.py`).
+
+**The VARCHAR-width class now has a real ratchet.** `tests/conftest.py`
+registers a `before_flush` listener that fails any write exceeding a
+`String(n)` column, so all ~2,700 existing tests became width tests for the
+paths they already exercise - the class had recurred four times, each fixed
+pointwise with a hand-written literal, and nothing found the next site. Six live
+unclipped sites were fixed (`audit_log.ip`, the funnel for EVERY audited action;
+`refresh_tokens.created_ip`, written raw on the line below one that clipped
+`created_ua`; `login_attempts.ip`; `download_log.ip` at THREE sites, not the two
+the note found; `public_link_attempts.ip`). **`users.oidc_subject` REFUSES
+rather than clips** - truncating an IdP subject would collapse two distinct
+identities onto one account and `uq_users_provider_subject` would bind the wrong
+one. Every width now derives from its column via
+`utils/columns.py::declared_width`, which replaced nine hand-written copies of
+the same `cast` + None-guard block. `s[:None]` does not clip at all, which is
+why that guard exists.
+
+**The highest-privilege code is inside the static gates now.**
+`docker/updater-shim/shim.sh` (host docker socket), `docker/backend/entrypoint.sh`
+and `docker/mariadb/init.sh` were outside shellcheck; `docker/updater-executor/run.py`
+(root + docker socket + host workspace) was in neither ruff nor mypy, because
+both run with `working-directory: backend`. The shim's tag check was
+`grep -Eq '^v...$'` and **grep is line-oriented**, so `v1.2.3\nFOO=bar` passed -
+and the executor writes the tag into the host `.env` as `FH_TAG=<tag>`, where a
+newline is an extra env line every compose service reads. It now rejects by
+character set before checking shape, and `run.py` re-validates independently
+(the shim validates, then BLOCKS on `docker pull`, and the executor re-reads the
+file afterwards).
+
+**A config-backup import no longer resurrects an erased subject.**
+`apply_backup` matched users on EMAIL, and an erased row's email is the
+`erased-<id>@erased.invalid` tombstone - so a backup taken before the erasure
+INSERTed a fresh row with the subject's original email, display name and
+password hash, and step 5 purged the tombstone for not being in the backup. The
+receipt survived (`_preserved_audit_rows` keeps every `user_erased` row
+"whatever its age") pointing at a live, log-in-able account. Skipped and
+WARNED, not silently dropped; skipped users are deliberately left out of
+`user_id_map`, so their TOTP secret, recovery codes, WebAuthn credentials and
+preferences drop out with them.
+
+**The unsubscribe token honours revocation.** It is a second bearer credential -
+it reads a user's display name and whole preference matrix and mutates it - and
+carried no `iat`, so it survived a password change, a reset, "sign out all other
+sessions" and an admin revoke-all for up to 180 days. Reshaped to
+`<uid>.<iat>.<exp>.<sig>` like the SSE token. **Legacy three-part tokens are
+still accepted** and report `iat=None`, never 0: they are in mail already
+delivered, and reporting the epoch would make every one of them look older than
+any revocation mark and lock the whole population out.
+
+**Also:** `active_downloads()` reports None rather than 0 when Redis cannot
+answer (returning 0 made the drain conclude the stack was idle and fire a
+postponed update straight into live downloads - the deadline still bounds the
+wait); `send_email_job` declines a redelivery whose row already says `sent`;
+`services/connection.py` lost 49 lines of code no caller reached, including an
+unguarded admin branch; 21 `ORDER BY <timestamp>` sites gained an id tiebreaker
+(MariaDB stores whole seconds here, so session-cap eviction was picking an
+arbitrary device to sign out); `_catchup_frames` genuinely never raises now
+(`SessionLocal()` sat outside its try, so the one failure its docstring promised
+to absorb was the one that killed a live SSE stream); and the SPA's new
+`t()`-key scanner found `notif_prefs.channel_for` in neither locale - an
+aria-label added by the 2026-07-30 audit to fix a missing accessible name, which
+had been announcing its own key string ever since.
+
 **v2.13.1 closes the audit backlog.** 23 recorded items plus 2 found while
 verifying them; **no migration, no host step, no API change, no default moves.**
 Desktop client **1.4.2** ships alongside it on its own tag. The backlog file
@@ -971,8 +1051,10 @@ does - keep it current on release.)
 > settings PUT rejects it with `APPROVAL_POLICY_INERT` rather than storing a
 > control that silently does nothing. Approving a share echoes back
 > `content_fingerprint` (file set + attached link) and a stale one is refused
-> `409 CONTENT_CHANGED`; the field is optional so pre-existing API-token clients
-> keep working, which is a deliberate residual, not an oversight.
+> `409 CONTENT_CHANGED`. **It was optional in v2.4.0 and is MANDATORY since
+> v2.9.0** (`schemas/share.py`, `Field(..., min_length=1)`) - "a check the caller
+> may omit is not a check". This line still described the v2.4.0 residual, which
+> the v2.9.0 block above had already recorded as removed.
 > `config_backup._columns` must return **ORM attribute** names, not table column
 > names - `AuditLog.extra` maps to `metadata_json`, and getting this wrong made
 > the whole `logs` backup category raise on export. `apply_backup` preserves
@@ -1584,9 +1666,19 @@ and the gap a known limitation until v2.12.0; it was closed in v1.60.0.)
 - **Only the storage/file-state trend is persisted** (one nightly
   `analytics_snapshots` row - the only figure deletes destroy); every other panel
   is computed live. `snapshot_storage_today` is idempotent on `snapshot_date`.
-- `_STORED_STATES` **mirrors `quota._used_bytes_query`** - keep in lockstep or
-  storage totals diverge from quota. `top_uploaders`/`top_shares` exclude
-  GDPR-erased rows; `func.date()` bucketing for SQLite(tests)+MariaDB(prod).
+- `_STORED_STATES` is **`quota.STORED_STATES`, imported** (`analytics.py:34`) -
+  not a mirror to keep in lockstep, which is what this line said for four
+  releases after the import landed. `metrics.py` and `quota_reconcile.py` now
+  import it too; they each spelled the list out inline, and `quota_reconcile` is
+  the authoritative DB sum that CORRECTS the Redis counter, so a sixth state
+  would have had the reconciler fighting the enforcer hourly.
+  `test_write_before_commit.py` scans **every** module for an inline copy rather
+  than grepping the one function it used to. `cleanup_stale_uploads`'s
+  `_USABLE_FILE_STATES` is exempt BY NAME and must stay so: "does any file keep
+  this share active" only coincides with "does this file occupy storage" today,
+  and forcing one symbol would make a state that does one but not the other
+  inexpressible. `top_uploaders`/`top_shares` exclude GDPR-erased rows;
+  `func.date()` bucketing for SQLite(tests)+MariaDB(prod).
 
 ### Branding + legal pages (v1.20; rich text v1.50)
 

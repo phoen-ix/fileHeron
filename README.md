@@ -757,13 +757,27 @@ the manual `git pull && docker compose up -d` above. Each release's notes call o
 when a host step is required; a plain app release does not.
 
 **Scripted deploy / rollback (bootstrap + hotpatch).** `scripts/deploy.sh` pulls
-the GHCR images for `FH_TAG` (default `latest`), with a build-from-source fallback
-for first install or a hotpatch ahead of a release (local builds are not sticky -
-the next deploy tries GHCR again). `scripts/rollback.sh` with no args lists the
-rollable tags; with a `<tag>` it re-tags that image as `:latest` and rolls. Both
-work only against images `deploy.sh` has pulled/built. Prefer the in-app updater
-for routine upgrades - it maintains its own rollback state
-(`data/updater/rollback_target.json`) that a manual `FH_TAG` flip would leave stale.
+the GHCR images for `FH_TAG`, taken from the environment first and `.env` second
+(so `FH_TAG=v1.2.3 scripts/deploy.sh` works), defaulting to `latest`.
+
+If the pull fails it does **not** blindly build: with every image already present
+locally at that tag it proceeds with those and builds nothing, and for a published
+release tag (`vX.Y.Z`) it **fails with exit 3** rather than building - a local
+build is not that release, and tagging it as one would overwrite the very image a
+rollback needs. The build-from-source fallback remains for first install and for
+hotpatch tags, which is what it exists for; local builds are not sticky, so the
+next deploy tries GHCR again.
+
+`scripts/rollback.sh` with no args lists the rollable tags; with a `<tag>` it pins
+`FH_TAG=<tag>` in `.env` and rolls the four services onto it. (It used to re-tag
+the target as `:latest` instead, which left `.env` still naming the broken version
+so the next pull silently undid the rollback.) It requires the four service images
+locally; the `updater-executor` image is not required, since the in-app updater
+pulls that itself.
+
+Prefer the in-app updater for routine upgrades - it maintains its own rollback
+state (`data/updater/rollback_target.json`) that a manual `FH_TAG` flip leaves
+stale.
 
 ## Health checks & metrics
 

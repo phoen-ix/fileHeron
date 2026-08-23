@@ -1348,21 +1348,50 @@ a residual nobody records gets re-discovered and re-fixed:
 > `failed` unit and a journald line and nothing else. Wire it before trusting
 > the schedule.
 
-> **Updating the reference host - two traps in the ops scripts (measured
-> 2026-08-23, both still present).**
-> **`scripts/deploy.sh` ignores `FH_TAG` from the environment.** It sources
-> `.env` at `:24-31` AFTER the caller's env, unconditionally, so
-> `FH_TAG=v2.14.1 scripts/deploy.sh` silently deploys whatever `.env` already
-> said. It also has a **source-build fallback** (`:53-57`): any non-zero `docker
-> pull` drops it into building the WORKING TREE and tagging the result with the
-> target tag - which would overwrite the genuine previous-version image that is
-> the only local rollback anchor. Edit `.env` first, or don't use it.
-> **`scripts/rollback.sh` preflights FIVE images and rolls back FOUR** (`:21` vs
-> `:22`). `fileheron-updater-executor` is never left on the host by a normal
-> update, so the preflight loop at `:61-73` hits `exit 2` and rolls back
-> NOTHING. It fails safe (the preflight precedes the `.env` sed at `:86`), but
-> "rollback is available" was false on this host until the image was pulled by
-> hand. Check with `docker images 'ghcr.io/phoen-ix/*'` before relying on it.
+> **Updating the reference host - three traps, all FIXED 2026-08-23. Do not
+> reintroduce any of them; `tests/infra/test_deploy_scripts.py` is the ratchet.**
+> **`deploy.sh` sourced `.env` AFTER the caller's environment**, unconditionally,
+> so `FH_TAG=v2.15.0 scripts/deploy.sh` deployed whatever `.env` already said and
+> reported SUCCESS. That contradicted both the script's own header and docker
+> compose's precedence (shell env beats `.env`). The caller's value is captured
+> before the source and restored after.
+> **`deploy.sh`'s source-build fallback overwrote published images.** Any
+> non-zero `docker pull` built the WORKING TREE and tagged it
+> `ghcr.io/…/fileheron-<svc>:$FH_TAG` - so one flaky pull replaced a real
+> release with local code wearing its name AND destroyed the only local image a
+> rollback could return to. The gate is now **`is_published_tag`** - `vX.Y.Z`,
+> **`latest`** and `dev-*`: if every image is local it proceeds without
+> building, otherwise it **exits 3**. `latest` matters most and the first
+> version of this fix MISSED it: it is the shipped default
+> (`.env.example`/`install.sh`), it is CI-maintained by `publish-latest`, and it
+> is EXEMPT from the prune - so on a stock self-host it is the only local
+> rollback anchor there is. A guard covering `vX.Y.Z` but not `latest` protects
+> the configuration almost nobody runs.
+> **The short-circuit must NEVER apply to a non-published tag.** A `local-*`
+> tag can never be pulled, so `PULL_OK` is always false for it - short-circuiting
+> on "the images are already here" makes the fallback ONE-SHOT: run 1 builds,
+> run 2 silently ships run 1's binaries, and every edit afterwards never reaches
+> the stack while the tool prints "done". That was a regression the first fix
+> introduced, and it falsified the header in the same diff ("local builds don't
+> get sticky").
+> **`grep -v` in both scripts' image listings needs `|| true`.** It exits 1 when
+> it filters everything away, and under `set -o pipefail` that killed deploy.sh
+> AFTER a successful deploy (printing "healthy", then exit 1, no "done") and
+> made `rollback.sh` with no args - the first command run in an incident - die
+> on a repo with no local images. It also turned the documented `exit 2` into a
+> bare exit 1.
+> **`rollback.sh` preflighted FIVE images and rolled back FOUR.**
+> `fileheron-updater-executor` is never left on a host by a normal update (the
+> shim pulls it per run, `docker run --rm` takes the container), so the preflight
+> hit `exit 2` and rolled back NOTHING - the emergency path was unavailable
+> exactly when needed, and this was TRUE ON THE REFERENCE HOST until the image
+> was pulled by hand. It fails safe (preflight precedes the `.env` sed), so
+> nothing was corrupted; it simply did not work. The preflight now covers only
+> the four service images; the executor is advisory.
+> **Both scripts now DERIVE the image list from `SERVICES`** (`fileheron-<svc>`)
+> instead of keeping a second hand-written list - that drift is what caused the
+> five-versus-four mismatch, and the derivation is pinned against
+> `docker-compose.yml`.
 > **A manual `docker compose up -d backend worker frontend updater-shim` also
 > recreates `db` and `redis`.** They are literal pins and their images do not
 > move, but the containers created by the updater-executor carry a different

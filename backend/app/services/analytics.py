@@ -26,6 +26,7 @@ from ..models.share import Share
 from ..models.user import User
 from ..utils.timeutil import utc_now
 from . import quota as quota_svc
+from .erasure import ERASED_EMAIL_LIKE
 
 # Files that count as "stored" (in-flight + finalized, not deleted). IMPORTED
 # from quota rather than mirrored, so the two cannot drift: the storage totals
@@ -188,7 +189,7 @@ def compute_analytics(db: Session, days: int = 30) -> dict:
             .join(File, File.uploaded_by_id == User.id)
             .filter(
                 File.state.in_(_STORED_STATES),
-                ~User.email.like("erased-%@erased.invalid"),
+                ~User.email.like(ERASED_EMAIL_LIKE),
             )
             .group_by(User.id, User.display_name, User.email)
             .order_by(func.coalesce(func.sum(File.size_bytes), 0).desc())

@@ -48,9 +48,22 @@ from ..utils.timeutil import utc_now
 from . import file as file_svc
 from .audit import record_audit_event
 
+# The tombstone `erase_user` writes. ONE definition: this was open-coded three
+# ways - here (email suffix only), in `email_change.py` (suffix OR the display
+# name, i.e. a BROADER predicate), and in `analytics.py` as a raw SQL LIKE. The
+# broader form wins because every caller uses it in the fail-closed direction
+# ("refuse to act on an erased subject"), so widening can only refuse more.
+ERASED_EMAIL_DOMAIN = "@erased.invalid"
+ERASED_DISPLAY_NAME = "[erased]"
+# For query-side filters, which cannot call a Python predicate.
+ERASED_EMAIL_LIKE = "erased-%@erased.invalid"
 
-def _is_erased(user: User) -> bool:
-    return bool(user.email) and user.email.endswith("@erased.invalid")
+
+def is_erased(user: User) -> bool:
+    """Whether this row is an erasure tombstone rather than a live subject."""
+    return (user.email or "").endswith(ERASED_EMAIL_DOMAIN) or (
+        user.display_name == ERASED_DISPLAY_NAME
+    )
 
 logger = logging.getLogger("fileheron.erasure")
 
@@ -149,7 +162,7 @@ def erase_user(
         raise AppError(
             400, "CANNOT_ERASE_SELF", "An admin cannot erase their own account."
         )
-    # Serialise on the target row BEFORE the already-erased check. `_is_erased`
+    # Serialise on the target row BEFORE the already-erased check. `is_erased`
     # was an unsynchronised read, so a double-submitted erase (an impatient
     # click, or two admins acting on the same GDPR request) had both requests
     # pass the check, both walk the file loop, and both release the same quota -
@@ -167,7 +180,7 @@ def erase_user(
     if locked is None:
         raise AppError(404, "USER_NOT_FOUND", "User not found.")
     target = locked
-    if _is_erased(target):
+    if is_erased(target):
         raise AppError(409, "ALREADY_ERASED", "This user has already been erased.")
 
     # The row lock above does NOT hold for the run: the file loop below commits
@@ -737,7 +750,7 @@ def compute_erasure_summary(db: Session, *, target: User) -> dict:
         "display_name": target.display_name,
         "email": target.email,
         "role": target.role.value,
-        "is_already_erased": _is_erased(target),
+        "is_already_erased": is_erased(target),
         "files_to_delete": file_count,
         "bytes_to_delete": total_bytes,
         "shares_created": shares_created,

@@ -90,7 +90,7 @@ from . import settings as settings_svc
 from . import share as share_svc
 from .audit import record_audit_event
 from .connection import recompute_shared_group_connections_for_user
-from .erasure import erase_user
+from .erasure import erase_user, is_erased
 
 logger = logging.getLogger("fileheron.config_backup")
 
@@ -1160,11 +1160,34 @@ def apply_backup(db: Session, *, parsed: ParsedBackup, actor: User, request=None
 
     # 3. Identity upsert (users, then groups) with old->new ID remap.
     existing_oidc_ids = {r[0] for r in db.query(OIDCProvider.id).all()}
+    # Local subjects erased under Art.17. The upsert below matches on EMAIL, and
+    # an erased row's email is the `erased-<id>@erased.invalid` tombstone - so a
+    # backup taken BEFORE the erasure matched nothing, INSERTed a fresh row with
+    # the subject's original email, display name and password hash, and step 5
+    # then purged the tombstone for not being in the backup. The receipt
+    # survived (see _preserved_audit_rows, which keeps every `user_erased` row
+    # "whatever its age" precisely because "restoring a config backup is not a
+    # licence" to lose it) and pointed at a live, log-in-able account.
+    #
+    # Matched on the id embedded in the tombstone, which is the local user id
+    # and is what the backup's own `id` field carries for a backup of THIS
+    # instance - the case that actually occurs. A cross-instance restore whose
+    # ids happen to collide skips a user it need not have; refusing to
+    # resurrect is the safe direction, and the warning names who was skipped.
+    erased_local_ids = {u.id for u in db.query(User).all() if is_erased(u)}
     if has_users:
         backup_users = p["users"].get("users", [])
-        inserted = updated = 0
+        inserted = updated = skipped_erased = 0
         for d in backup_users:
             bid = d.get("id")
+            if bid in erased_local_ids:
+                skipped_erased += 1
+                # Deliberately NOT added to user_id_map: every downstream
+                # consumer does `user_id_map.get(...)` and skips a None, so the
+                # subject's TOTP secret, recovery codes, WebAuthn credentials,
+                # notification preferences, group memberships and connections
+                # all drop out with them rather than being restored orphaned.
+                continue
             email = normalize_email(d["email"])
             oidc_pid = d.get("oidc_provider_id")
             if oidc_pid and oidc_pid not in existing_oidc_ids:
@@ -1212,6 +1235,17 @@ def apply_backup(db: Session, *, parsed: ParsedBackup, actor: User, request=None
             db.flush()
         summary.counts["users_insert"] = inserted
         summary.counts["users_update"] = updated
+        if skipped_erased:
+            # Say it. A restore that silently comes back short is worse than one
+            # that reports what it declined to do - this is the same
+            # "drop what cannot be vouched for, and say so" rule the JSON-id
+            # remap above already follows.
+            summary.counts["users_skipped_erased"] = skipped_erased
+            warnings.append(
+                f"{skipped_erased} user(s) in this backup were erased on this "
+                "instance under the right to erasure; they were NOT recreated "
+                "and their tombstones were kept"
+            )
 
     if has_groups:
         for d in p["groups"].get("groups", []):
@@ -1331,6 +1365,11 @@ def apply_backup(db: Session, *, parsed: ParsedBackup, actor: User, request=None
         backup_emails = {normalize_email(u["email"]) for u in p["users"].get("users", [])}
         for u in list(db.query(User).all()):
             if u.email in backup_emails:
+                continue
+            if is_erased(u):
+                # The tombstone is the erasure. Purging it because a
+                # pre-erasure backup does not mention it would delete the only
+                # local evidence that the subject was erased at all.
                 continue
             if u.id == actor.id:
                 warnings.append(

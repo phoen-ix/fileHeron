@@ -257,8 +257,16 @@ def test_erase_takes_a_row_lock_before_the_already_erased_check():
     import inspect
 
     src = inspect.getsource(erasure.erase_user)
-    lock_at = src.index("with_for_update")
-    check_at = src.index("_is_erased(target)")
+    # `.find`, not `.index`: index raises ValueError when a marker moves or is
+    # renamed, which surfaces as an ERROR about a missing substring rather than
+    # a failure naming the invariant. CLAUDE.md records the same trap in the
+    # config-backup ordering test ("used `str.index`, which raised ValueError
+    # rather than failing, and had no vacuity guard") - and this one duly blew
+    # up the moment `_is_erased` became `is_erased`.
+    lock_at = src.find("with_for_update")
+    check_at = src.find("is_erased(target)")
+    assert lock_at != -1, "the row lock is gone from erase_user"
+    assert check_at != -1, "the already-erased check is gone from erase_user"
     assert lock_at < check_at, "the already-erased check still runs before the lock"
 
 

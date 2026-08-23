@@ -38,14 +38,12 @@ from . import email_change_policy
 from . import oidc as oidc_svc
 from . import user_management as um_svc
 from .audit import record_audit_event
+from .erasure import is_erased
 from .jwt_session import revoke_all_user_refresh_tokens
 
 logger = logging.getLogger("fileheron.email_change")
 
 EMAIL_CHANGE_TTL = timedelta(hours=24)
-
-_ERASED_DOMAIN = "@erased.invalid"
-
 
 @dataclass
 class RequestOutcome:
@@ -89,10 +87,6 @@ class ConfirmOutcome:
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-
-
-def _is_erased(user: User) -> bool:
-    return (user.email or "").endswith(_ERASED_DOMAIN) or user.display_name == "[erased]"
 
 
 def _assert_email_available(db: Session, em: str, *, exclude_user_id: int) -> None:
@@ -203,7 +197,7 @@ def request_email_change(
     em = normalize_email(new_email)
     if not em:
         raise AppError(400, "INVALID_EMAIL", "Email cannot be empty.")
-    if _is_erased(target):
+    if is_erased(target):
         raise AppError(409, "USER_ERASED", "Cannot change the email of an erased user.")
     if em == target.email:
         raise AppError(409, "EMAIL_UNCHANGED", "That is already this account's email.")

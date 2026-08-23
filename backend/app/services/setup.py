@@ -80,14 +80,20 @@ async def complete_setup(
         raise AppError(400, "WEAK_PASSWORD", "Password must be at least 12 characters.")
     if not display_name or not display_name.strip():
         raise AppError(400, "INVALID_DISPLAY_NAME", "Display name is required.")
-    await assert_password_not_breached(db, password)
-
     # Belt-and-braces: refuse if a user (any role) with this email already
     # exists - the unique constraint would catch it, but we want a clean
     # AppError envelope rather than IntegrityError → 500.
+    #
+    # BEFORE the HIBP call, not after. `assert_password_not_breached` makes an
+    # outbound HTTPS request to api.pwnedpasswords.com, and this route is
+    # anonymous, so ordering it first let a caller drive that request with an
+    # email that was going to be rejected anyway. Cheap local checks first is
+    # also just the right order.
     existing = db.query(User).filter(User.email == em).one_or_none()
     if existing is not None:
         raise AppError(409, "EMAIL_TAKEN", "A user with this email already exists.")
+
+    await assert_password_not_breached(db, password)
 
     user = User(
         email=em,

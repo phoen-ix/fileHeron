@@ -55,13 +55,21 @@ def main(argv: list[str]) -> int:
             "from": was.value,
             "to": "admin",
             "reason": "manual_cli",
+            "via": "host-cli",
         }
         if cleaned:
             metadata["connections_pruned"] = cleaned
         record_audit_event(
             db,
+            # actor_user_id=None, not the target's own id. There is no
+            # self-service role change in this product, so `actor == target`
+            # read as something that cannot happen through the API. NULL is what
+            # every other operator-side write uses to mean "no signed-in actor";
+            # `via: host-cli` in the metadata is what names the channel, matching
+            # scripts/unblock_ip.py, which passes the same marker through
+            # scan_guard.release.
             event_type=AuditEventType.role_changed,
-            actor_user_id=user.id,
+            actor_user_id=None,
             target_type="user",
             target_id=user.id,
             metadata=metadata,

@@ -13,8 +13,18 @@ Drives the postpone-update drain decision + the admin dialog. Two signals:
 - **Uploads**: the DB is the source - `files.state == uploading` (TUS). Direct
   uploads are synchronous and never linger in that state.
 
-All Redis access is best-effort: a Redis outage degrades to "no active downloads"
-rather than blocking an update (fail-open), mirroring `services/quota.py`.
+Redis access is best-effort, but "best-effort" is not one posture here - the two
+marks answer different questions and fail in opposite directions:
+
+- `was_download_recent` (serving mark, feeds the maintenance gate) fails **OPEN**:
+  refusing a genuine resume is the worse outcome.
+- `was_download_paid` (payment mark, feeds a download BUDGET) fails **CLOSED**:
+  unlimited free extraction is not recoverable.
+- `active_downloads` reports **None** ("cannot tell") rather than 0. It used to
+  return 0, and since uploads are DB-backed and unaffected by a Redis outage,
+  the drain then concluded the stack was idle and fired a postponed update
+  straight into live downloads. The deadline still bounds the wait, so an update
+  always eventually happens.
 """
 from __future__ import annotations
 
@@ -100,15 +110,38 @@ def download_finished(dl_id: str | None) -> None:
         logger.warning("transfer_activity: download_finished failed (redis)")
 
 
-def active_downloads() -> int:
-    """Count in-flight downloads, pruning definitely-done/leaked entries first."""
+def active_downloads() -> int | None:
+    """Count in-flight downloads, pruning definitely-done/leaked entries first.
+
+    Returns **None** when Redis cannot answer - "I cannot tell", which is not
+    the same as "there are none".
+
+    This used to return 0 on any Redis error, and the drain worker computes
+    `drained = active_uploads == 0 and active_downloads == 0`. Uploads are
+    DB-backed and keep working during a Redis outage, so on an instance with no
+    upload in flight the drain concluded "nothing is running" and fired a
+    postponed update IMMEDIATELY - restarting the backend mid-download, which is
+    the single thing the drain exists to prevent. The signal it depends on for
+    downloads is the only one Redis holds.
+
+    Failing closed cannot wedge an update: `drain_pending_update` fires anyway
+    once `updates.drain_max_wait_min` (30) has passed, and an admin can force it
+    with `/system/update/now`. So the property the old fail-open protected - an
+    update always eventually happens - still holds; what changes is that a
+    Redis outage now costs a wait rather than a cut transfer.
+
+    `snapshot()` still reports 0 for display, so the admin API shape is
+    unchanged; only the decision path distinguishes the two.
+    """
     try:
         r = get_redis()
         r.zremrangebyscore(_DOWNLOADS_KEY, 0, _now() - MAX_DOWNLOAD_AGE_SEC)
         return int(sync(r.zcard(_DOWNLOADS_KEY)))
     except Exception:
-        logger.warning("transfer_activity: active_downloads failed (redis); assuming 0")
-        return 0
+        logger.warning(
+            "transfer_activity: active_downloads failed (redis); reporting unknown"
+        )
+        return None
 
 
 def active_uploads(db: Session) -> int:
@@ -158,7 +191,10 @@ def active_uploads(db: Session) -> int:
 def snapshot(db: Session) -> dict:
     return {
         "active_uploads": active_uploads(db),
-        "active_downloads": active_downloads(),
+        # Display only: the admin panel shows a number, and `None` is not one.
+        # The DECISION path (drain_pending_update) reads active_downloads()
+        # directly so it can tell "none" from "cannot tell".
+        "active_downloads": active_downloads() or 0,
     }
 
 

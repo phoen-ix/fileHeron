@@ -78,6 +78,8 @@ async def _drain_pending_update_tracked(_ctx) -> dict:
             return {"pending": False}
 
         active_uploads = ta.active_uploads(db)
+        # None = Redis could not answer. `None == 0` is False, so an unknown
+        # count is NOT drained and this waits - bounded by the deadline below.
         active_downloads = ta.active_downloads()
         drained = active_uploads == 0 and active_downloads == 0
 
@@ -102,7 +104,7 @@ async def _drain_pending_update_tracked(_ctx) -> dict:
         reason = "drain" if drained else "deadline"
         result = maintenance_svc.apply_pending_update(db, reason=reason)
         logger.info(
-            "drain_pending_update: fired update via=%s (uploads=%d downloads=%d)",
+            "drain_pending_update: fired update via=%s (uploads=%d downloads=%s)",
             reason, active_uploads, active_downloads,
         )
         return {

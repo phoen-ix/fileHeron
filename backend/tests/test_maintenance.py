@@ -123,11 +123,29 @@ def test_download_counter_math(monkeypatch):
     assert ta.active_downloads() == 0
 
 
-def test_active_downloads_failopen(monkeypatch):
+def test_active_downloads_reports_unknown_when_redis_is_down(monkeypatch):
+    """None, not 0. This asserted `== 0` with the note "never blocks an update
+    on a redis outage" - but uploads are DB-backed and unaffected, so returning
+    0 made the drain conclude the stack was idle and fire a postponed update
+    straight into live downloads. That is the one thing the drain exists to
+    prevent, and it happened precisely when the instance was already degraded.
+
+    The property that comment protected still holds: the update always
+    eventually fires, via the deadline (see the drain test below)."""
     def _boom():
         raise RuntimeError("redis down")
     monkeypatch.setattr(ta, "get_redis", _boom)
-    assert ta.active_downloads() == 0  # never blocks an update on a redis outage
+    assert ta.active_downloads() is None
+
+
+def test_the_admin_snapshot_still_reports_a_number(monkeypatch, db):
+    """The admin panel shape is unchanged - `MaintenanceSettingsResponse`
+    declares `active_downloads: int`, and None is not one. Only the decision
+    path distinguishes "none" from "cannot tell"."""
+    def _boom():
+        raise RuntimeError("redis down")
+    monkeypatch.setattr(ta, "get_redis", _boom)
+    assert ta.snapshot(db)["active_downloads"] == 0
 
 
 def test_active_uploads_counts_uploading(db, make_user):
@@ -244,6 +262,61 @@ async def test_drain_worker_fires_past_deadline(db, monkeypatch):
     db.commit()
     monkeypatch.setattr(mod.ta, "active_uploads", lambda _db: 3)  # still busy
     monkeypatch.setattr(mod.ta, "active_downloads", lambda: 2)
+
+    out = await mod.drain_pending_update(None)
+    assert out["triggered"] is True
+    assert out["reason"] == "deadline"
+
+
+@pytest.mark.asyncio
+async def test_an_unknown_download_count_does_not_count_as_drained(db, monkeypatch):
+    """The regression this pair exists for.
+
+    `active_downloads()` returned 0 on a Redis outage, and `active_uploads` is
+    DB-backed and unaffected - so an instance with no upload in flight looked
+    fully idle and a postponed update fired IMMEDIATELY, into whatever downloads
+    were running. Restarting the backend mid-download is the one thing the drain
+    exists to prevent, and it happened exactly when the instance was already
+    degraded."""
+    from app.services import release_apply
+    from app.workers import drain_pending_update as mod
+
+    def _fail(**_kw):
+        raise AssertionError("the update fired while the download count was unknown")
+
+    monkeypatch.setattr(release_apply, "apply", _fail)
+    maintenance_svc.set_enabled(db, True, actor=None)
+    maintenance_svc.set_pending_update(
+        db, {"target_tag": "v9.9.9", "deadline_iso": "2999-01-01T00:00:00"}, actor=None
+    )
+    db.commit()
+    monkeypatch.setattr(mod.ta, "active_uploads", lambda _db: 0)
+    monkeypatch.setattr(mod.ta, "active_downloads", lambda: None)  # Redis down
+
+    out = await mod.drain_pending_update(None)
+    assert out["triggered"] is False
+    assert maintenance_svc.get_pending_update(db) is not None
+
+
+@pytest.mark.asyncio
+async def test_an_unknown_download_count_still_fires_at_the_deadline(db, monkeypatch):
+    """The other half, and why failing closed is safe: waiting is BOUNDED. A
+    Redis outage costs a wait of at most `updates.drain_max_wait_min`, not a
+    wedged update - which is the property the old fail-open was protecting."""
+    from app.services import release_apply
+    from app.workers import drain_pending_update as mod
+
+    monkeypatch.setattr(
+        release_apply, "apply",
+        lambda *, action, target_tag: {"job_id": "j"},
+    )
+    maintenance_svc.set_enabled(db, True, actor=None)
+    maintenance_svc.set_pending_update(
+        db, {"target_tag": "v9.9.9", "deadline_iso": "2000-01-01T00:00:00"}, actor=None
+    )
+    db.commit()
+    monkeypatch.setattr(mod.ta, "active_uploads", lambda _db: 0)
+    monkeypatch.setattr(mod.ta, "active_downloads", lambda: None)
 
     out = await mod.drain_pending_update(None)
     assert out["triggered"] is True

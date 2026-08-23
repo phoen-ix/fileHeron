@@ -401,3 +401,82 @@ async def test_prune_email_log(db):
 
     # 0 disables pruning.
     assert await _prune_table("email_log", 0, EmailLog.created_at, EmailLog) == 0
+
+
+# --- ARQ redelivery ---------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_a_redelivered_job_does_not_send_the_email_twice(db, monkeypatch):
+    """ARQ is at-least-once and `max_tries` is 5. `send_email_job` sends BEFORE
+    it records anything, so a redelivery of a job whose SMTP call already
+    succeeded sent the mail again - and the in-app updater restarts the worker
+    on every update, which is exactly what produces such a redelivery."""
+    from app.workers import send_email as mod
+
+    eid = mail_log.record_queued(
+        db, recipient_email="dup@test.local", recipient_user_id=None,
+        category="share_created", template_slug="share_created",
+        subject="s", text_body="b", html_body=None,
+    )
+    mail_log.finalize(db, email_log_id=eid, status=EmailStatus.sent, attempt=1)
+    db.commit()
+
+    sent: list[str] = []
+
+    async def _spy(**kw):
+        sent.append(kw["to"])
+
+    monkeypatch.setattr(mod, "send_email", _spy)
+    out = await mod.send_email_job(
+        {"job_try": 2}, to="dup@test.local", subject="s",
+        text_body="b", email_log_id=eid,
+    )
+    assert out["status"] == "already_sent"
+    assert sent == [], "the redelivered job sent the email again"
+
+
+@pytest.mark.asyncio
+async def test_a_queued_row_is_still_sent(db, monkeypatch):
+    """The control. Without it the guard above is satisfied by a job that never
+    sends anything at all."""
+    from app.workers import send_email as mod
+
+    eid = mail_log.record_queued(
+        db, recipient_email="fresh@test.local", recipient_user_id=None,
+        category="share_created", template_slug="share_created",
+        subject="s", text_body="b", html_body=None,
+    )
+    db.commit()
+
+    sent: list[str] = []
+
+    async def _spy(**kw):
+        sent.append(kw["to"])
+
+    monkeypatch.setattr(mod, "send_email", _spy)
+    out = await mod.send_email_job(
+        {"job_try": 1}, to="fresh@test.local", subject="s",
+        text_body="b", email_log_id=eid,
+    )
+    assert out["status"] == "sent"
+    assert sent == ["fresh@test.local"]
+
+
+@pytest.mark.asyncio
+async def test_a_job_with_no_log_row_is_unaffected(db, monkeypatch):
+    """Auth-flow mail sends `direct` with no email_log_id; the guard must not
+    turn that into a silent no-op."""
+    from app.workers import send_email as mod
+
+    sent: list[str] = []
+
+    async def _spy(**kw):
+        sent.append(kw["to"])
+
+    monkeypatch.setattr(mod, "send_email", _spy)
+    out = await mod.send_email_job(
+        {"job_try": 1}, to="direct@test.local", subject="s", text_body="b",
+    )
+    assert out["status"] == "sent"
+    assert sent == ["direct@test.local"]

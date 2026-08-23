@@ -26,7 +26,7 @@ from arq import Retry
 
 from ..database import SessionLocal
 from ..models.audit_log import AuditEventType
-from ..models.email_log import EmailStatus, EmailVia
+from ..models.email_log import EmailLog, EmailStatus, EmailVia
 from ..services import mail_log
 from ..services.audit import record_audit_event
 from ..services.email import resolve_smtp_config
@@ -148,6 +148,38 @@ def _finalize_log(
         log_db.close()
 
 
+def _already_sent(email_log_id: int | None) -> bool:
+    """Whether this job's mail-log row is already marked `sent`.
+
+    ARQ is at-least-once and `WorkerSettings.max_tries` is 5, so a job can be
+    redelivered after its work completed. This one SENDS AN EMAIL before it
+    records anything, so a redelivery re-sent it - and the in-app updater
+    restarts the worker on every update, which is exactly the window that
+    produces a redelivery of a job whose SMTP call already succeeded.
+
+    Best-effort and deliberately a READ, not a claim: expressing "in flight"
+    would need a new `EmailStatus` member and therefore a migration. This closes
+    the case where the row was finalized and the job was redelivered anyway.
+
+    The residual it CANNOT close: a crash strictly between the SMTP server
+    accepting the message and `_finalize_log` committing. Nothing short of a
+    transactional outbox closes that, and at-least-once delivery is inherent to
+    SMTP regardless - a duplicate email is the failure mode this ordering is
+    chosen for, over a mail that is silently never sent.
+    """
+    if email_log_id is None:
+        return False
+    db = SessionLocal()
+    try:
+        row = db.query(EmailLog).filter(EmailLog.id == email_log_id).one_or_none()
+        return row is not None and row.status == EmailStatus.sent
+    except Exception:
+        logger.exception("could not read email_log row %s; sending anyway", email_log_id)
+        return False
+    finally:
+        db.close()
+
+
 async def send_email_job(
     ctx,
     *,
@@ -168,6 +200,13 @@ async def send_email_job(
     ``list_unsubscribe`` (when set) becomes the RFC 8058 one-click
     unsubscribe header pair on the outgoing message.
     """
+    if _already_sent(email_log_id):
+        logger.info(
+            "send_email_job: email_log %s is already sent; skipping redelivery",
+            email_log_id,
+        )
+        return {"to": to, "subject": subject, "status": "already_sent"}
+
     db = SessionLocal()
     try:
         cfg = resolve_smtp_config(db)

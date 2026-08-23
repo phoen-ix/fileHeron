@@ -3,8 +3,11 @@
 Walks the whole chain up -> down -> up against the *configured* database
 (``settings.database_url``, which ``alembic/env.py`` binds). In CI this runs in a
 dedicated ``alembic-roundtrip`` job against a disposable MariaDB service (sets
-``RUN_ALEMBIC_ROUNDTRIP=1`` + ``DB_*``); locally, point ``DB_*`` at a throwaway
-MariaDB and set the flag.
+``RUN_ALEMBIC_ROUNDTRIP=1`` + ``DB_*``); locally, run ``make test-mariadb``,
+which stands one up in a throwaway container and removes it again. Do not
+hand-roll that container - the hand-rolled version stranded a ~167 MB anonymous
+volume per run for as long as this docstring said only "point ``DB_*`` at a
+throwaway".
 
 Skipped by default: it needs a real MySQL/MariaDB (the migrations use MySQL DDL
 the SQLite test harness can't run) and rewrites a whole schema. This is the only
@@ -20,7 +23,7 @@ import pytest
 
 _SKIP = pytest.mark.skipif(
     os.environ.get("RUN_ALEMBIC_ROUNDTRIP") != "1",
-    reason="needs a real MariaDB; set RUN_ALEMBIC_ROUNDTRIP=1 + DB_* to enable",
+    reason="needs a real MariaDB; run `make test-mariadb` (or set RUN_ALEMBIC_ROUNDTRIP=1 + DB_*)",
 )
 
 

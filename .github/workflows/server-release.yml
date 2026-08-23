@@ -221,9 +221,25 @@ jobs:
         run: |
           echo "=== app logs ==="; docker logs fhsmoke-app 2>&1 | tail -120 || true
           echo "=== db logs ===";  docker logs fhsmoke-db  2>&1 | tail -40  || true
+      # `-v` on the rm, and the network removed. mariadb:11 declares
+      # VOLUME /var/lib/mysql, so `docker rm -f` WITHOUT -v strands a ~167 MB
+      # anonymous volume per run, and `docker network create fhsmoke` above was
+      # never undone at all - it also carries no `|| true`, so on a runner that
+      # persists between jobs the second release would fail outright at
+      # "network already exists". Free on an ephemeral ubuntu-latest VM; the
+      # same leak that accumulated ~1 GB/day on the reference host anywhere
+      # else.
+      #
+      # Deliberately NO `--rm` on the two `docker run -d` above. The
+      # "Boot-smoke logs on failure" step reads `docker logs fhsmoke-app`, and
+      # --rm deletes a crashed container before that step can run - which would
+      # trade a leak that costs nothing here for the one diagnostic that
+      # matters when a release smoke fails.
       - name: Boot-smoke cleanup
         if: ${{ always() && matrix.boot_smoke == true }}
-        run: docker rm -f fhsmoke-app fhsmoke-db >/dev/null 2>&1 || true
+        run: |
+          docker rm -f -v fhsmoke-app fhsmoke-db >/dev/null 2>&1 || true
+          docker network rm fhsmoke >/dev/null 2>&1 || true
 
       # Publish the backend image only AFTER it booted cleanly.
       - name: Push backend image (post-smoke)

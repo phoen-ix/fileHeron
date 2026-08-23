@@ -11,7 +11,7 @@
 RUFF_PIN := $(shell sed -n 's/.*"ruff==\([0-9.]*\)".*/\1/p' backend/pyproject.toml)
 
 .PHONY: help lint lint-backend lint-frontend lint-docker typecheck test test-backend \
-	test-frontend up dev down build seed fmt
+	test-frontend test-mariadb up dev down build seed fmt
 
 help:
 	@echo "Targets:"
@@ -19,6 +19,7 @@ help:
 	@echo "  lint-docker    backend ruff in an ephemeral python:3.12-slim (no local ruff needed)"
 	@echo "  typecheck      backend mypy, exactly as CI's infra-lint job runs it"
 	@echo "  test / test-backend / test-frontend   pytest (needs backend .[dev]) + vitest"
+	@echo "  test-mariadb   the three real-MariaDB test files, in throwaway containers"
 	@echo "  build          frontend production build (vue-tsc type-check + vite)"
 	@echo "  dev            docker compose dev stack (auto-reload + HMR)"
 	@echo "  up / down      start / stop the compose stack"
@@ -36,6 +37,15 @@ test-backend:
 
 test-frontend:
 	cd frontend && npm run test
+
+# The three RUN_ALEMBIC_ROUNDTRIP files, which skip in `make test-backend`
+# because they need a real MariaDB. CI runs them as an Actions `service:`
+# container; this is the local equivalent, and it exists because there was no
+# supported local path at all - so every session hand-rolled
+# `docker run -d --name … mariadb:11`, without --rm, and stranded a ~167 MB
+# anonymous volume each time. The script cleans up after itself; see its header.
+test-mariadb:
+	scripts/run_mariadb_tests.sh
 
 build:
 	cd frontend && npm run build

@@ -34,7 +34,7 @@ import sqlalchemy as sa
 
 _SKIP = pytest.mark.skipif(
     os.environ.get("RUN_ALEMBIC_ROUNDTRIP") != "1",
-    reason="needs a real MariaDB; set RUN_ALEMBIC_ROUNDTRIP=1 + DB_* to enable",
+    reason="needs a real MariaDB; run `make test-mariadb` (or set RUN_ALEMBIC_ROUNDTRIP=1 + DB_*)",
 )
 
 

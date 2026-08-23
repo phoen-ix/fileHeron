@@ -36,9 +36,20 @@ npm run build               # vue-tsc type-check + vite build (the pre-ship gate
 
 ### End-to-end (Playwright, against a real compose stack)
 
+**`COMPOSE_PROJECT_NAME` is not optional here.** Compose defaults the project
+name to the directory, which for a checkout at `fileHeron/` is `fileheron` -
+i.e. the *live* project. Without it this command recreates your running stack
+with the e2e overrides: `AV_SKIP=true`, `ENVIRONMENT=development`,
+`COOKIE_SECURE=false`, a login rate limit of 1000, and two seeded accounts with
+published credentials. It is also what makes the teardown safe to run.
+
 ```bash
+export COMPOSE_PROJECT_NAME=fileheron_e2e
 docker compose -f docker-compose.yml -f docker-compose.e2e.yml up -d --build
 cd e2e && npm ci && npx playwright install --with-deps && npm test
+
+# tear the throwaway project down again (-v drops its volumes too)
+cd .. && docker compose -f docker-compose.yml -f docker-compose.e2e.yml down -v
 ```
 
 ## Before you push - the gates CI runs
@@ -50,7 +61,7 @@ cd e2e && npm ci && npx playwright install --with-deps && npm test
 | Frontend lint (eslint) | `make lint-frontend` |
 | Backend tests | `make test-backend` |
 | Frontend type-check + tests | `make build` + `make test-frontend` |
-| Migrations up/down roundtrip | runs in CI against real MariaDB (`alembic-roundtrip` job) |
+| Migrations up/down roundtrip + MariaDB semantics | `make test-mariadb` (throwaway MariaDB in Docker); also runs in CI (`alembic-roundtrip` job) |
 | e2e | runs in CI on PRs (`playwright`) |
 
 `make lint && make test` covers the fast local gates (`make lint` includes

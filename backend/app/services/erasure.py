@@ -170,10 +170,18 @@ def erase_user(
     # second request now blocks here and loses the race cleanly with 409
     # (audit 2026-07-30).
     q = db.query(User).filter(User.id == target.id)
-    # SQLite has no row locks and rejects FOR UPDATE, so the guard applies on
-    # the engine production runs (MariaDB) and degrades to a plain re-read in
-    # the test harness. The ordering - lock/re-read BEFORE the erased check -
-    # is what removes the race, and that is asserted separately.
+    # The dialect guard is DEAD DEFENCE and the comment that justified it was
+    # false: SQLite does not "reject" FOR UPDATE. SQLAlchemy's
+    # `SQLiteCompiler.for_update_clause` returns "", compiling it away silently -
+    # which the other eight lock sites already prove, since `rate_limit.py` and
+    # `routers/public.py` call `with_for_update` with no guard at all on a green
+    # SQLite suite. Kept only because removing it is a behaviour-neutral edit to
+    # the erasure path and not worth the diff; do not copy this shape.
+    #
+    # The real framing: production emits FOR UPDATE at nine sites and the
+    # harness at zero, uniformly. `tests/test_mariadb_row_locks.py` is where a
+    # lock is actually exercised. The ordering here - lock/re-read BEFORE the
+    # erased check - is what removes the race, and is asserted separately.
     if db.bind is not None and db.bind.dialect.name != "sqlite":
         q = q.with_for_update()
     locked = q.one_or_none()

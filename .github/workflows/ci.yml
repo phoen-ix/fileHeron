@@ -125,7 +125,16 @@ jobs:
           pip install --no-deps -e .
           pip install '.[dev]' --no-deps
           pip install pytest pytest-asyncio aiosqlite
-      - name: Alembic downgrade roundtrip (against MariaDB)
+      # Both real-MariaDB files, named explicitly. This step was scoped to
+      # test_alembic_roundtrip.py alone, so tests/test_mariadb_semantics.py -
+      # added in 1264117, gated on the same RUN_ALEMBIC_ROUNDTRIP flag - SKIPPED
+      # in the main suite and was named nowhere else. It had never executed in
+      # CI: a gate that exists and does not run, which is the exact class this
+      # file records elsewhere ("mypy was installed by backend-tests and INVOKED
+      # BY NOTHING"). Adding a third RUN_ALEMBIC_ROUNDTRIP file means editing
+      # this line; `-rs` prints the skip reasons, so a file that silently stops
+      # running is visible in the log.
+      - name: Alembic downgrade roundtrip + MariaDB semantics
         env:
           RUN_ALEMBIC_ROUNDTRIP: '1'
           DB_HOST: 127.0.0.1
@@ -137,7 +146,11 @@ jobs:
           TUS_HOOK_SECRET: ci-roundtrip-tus-secret-aaaaaaaaaaaaaaaaaaaa
           APP_URL: http://ci.local
           APP_NAME: fileHeron
-        run: pytest -q -p no:cacheprovider -rs tests/test_alembic_roundtrip.py
+        run: |
+          pytest -q -p no:cacheprovider -rs \
+            tests/test_alembic_roundtrip.py \
+            tests/test_mariadb_semantics.py \
+            tests/test_mariadb_row_locks.py
 
   # Runs the handful of tests that need a REAL Redis. The quota enforcement Lua
   # is the reason: the main suite's fake Redis re-implements it in Python, so the

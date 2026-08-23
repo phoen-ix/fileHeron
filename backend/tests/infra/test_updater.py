@@ -271,3 +271,73 @@ def test_the_status_endpoint_says_whether_a_rollback_is_safe():
     assert "rollback_alembic_head_known === false" in spa, (
         "the SPA offers the control without surfacing the risk"
     )
+
+
+# --- validation inside the privileged boundary ------------------------------
+#
+# The executor runs as root with the host docker socket AND the host workspace
+# mounted, and everything it acts on comes from /state, which the backend
+# container can write. Until now the ONLY validation anywhere was the shim's,
+# and it had two holes: `grep -Eq '^...$'` is line-oriented, and the shim
+# validates, flips the job to `claiming`, then blocks on `docker pull` while the
+# executor re-reads the file afterwards.
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "v1.2.3\nFOO=bar",   # the one that mattered: `write_current_tag`
+                             # interpolates the tag into the host .env as
+                             # `FH_TAG=<tag>`, so a newline is an extra env line
+        "v1.2.3\n",          # `$`-anchored regexes accept this; fullmatch does not
+        "\nv1.2.3",
+        "v1.2.3-rc1",        # RELEASE_TAG_RE's documented non-anchor trap
+        "client-v1.2.3",     # the desktop-client tag namespace
+        "v1.2.3@sha256:abcd",
+        "v1.2",
+        "latest",
+        "",
+        "../../etc/passwd",
+    ],
+)
+def test_the_executor_refuses_a_target_tag_that_is_not_a_release_tag(executor, value):
+    assert executor._is_valid_tag(value) is False
+
+
+@pytest.mark.parametrize("value", ["v1.2.3", "v10.20.30", "v0.0.0"])
+def test_the_executor_accepts_a_real_release_tag(executor, value):
+    assert executor._is_valid_tag(value) is True
+
+
+def test_a_non_string_target_tag_is_refused(executor):
+    """`json.load` yields whatever the file contains - a number, a list, null."""
+    for value in (123, ["v1.2.3"], {"tag": "v1.2.3"}, None, True):
+        assert executor._is_valid_tag(value) is False
+
+
+@pytest.mark.parametrize(
+    "value",
+    ["202608150001 (head)", "head", "202608150001;drop", "../x", "", "abc-def"],
+)
+def test_the_executor_refuses_a_rollback_head_that_is_not_a_revision(executor, value):
+    """`rb_head` is read back from a backend-writable file and handed to
+    `alembic stamp`."""
+    assert executor._is_valid_head(value) is False
+
+
+@pytest.mark.parametrize("value", ["202608150001", "abc123def", "0"])
+def test_the_executor_accepts_a_real_revision_id(executor, value):
+    assert executor._is_valid_head(value) is True
+
+
+def test_the_shim_rejects_a_tag_by_character_set_not_just_by_line():
+    """`grep` exits 0 if ANY line matches, so `grep -Eq '^v...$'` passed a
+    target_tag containing a newline. The `case` rejects every character outside
+    [0-9.v] before the shape check ever runs."""
+    src = SHIM.read_text(encoding="utf-8")
+    assert "*[!0-9.v]*) target_tag=\"\" ;;" in src, (
+        "the shim no longer rejects the tag by character set"
+    )
+    assert "grep -Eq '^v[0-9]+" not in src, (
+        "the line-oriented anchored grep is back"
+    )

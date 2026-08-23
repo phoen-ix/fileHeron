@@ -103,7 +103,23 @@ while true; do
             # select an image the vendor published; this keeps it to a release
             # tag rather than relying on `docker pull` happening to reject
             # whatever string arrives.
-            if ! printf '%s' "$target_tag" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            # Two steps, and the first one is the point: `grep` is
+            # LINE-oriented, so `grep -Eq '^...$'` exits 0 when ANY line
+            # matches. A target_tag of "v1.2.3\nFOO=bar" therefore PASSED this
+            # check - and the executor writes the tag into the host .env as
+            # `FH_TAG=<tag>`, where an embedded newline becomes an extra env
+            # line every compose service reads.
+            #
+            # The `case` rejects any character outside [0-9.v], which covers
+            # newlines, spaces and every shell metacharacter at once; the grep
+            # then confirms the SHAPE of what survived. The executor validates
+            # again on its own side (see _TAG_RE in run.py) - this check runs
+            # before a `docker pull` the executor's read happens after.
+            case "$target_tag" in
+                *[!0-9.v]*) target_tag="" ;;
+            esac
+            if [ -z "$target_tag" ] \
+               || ! printf '%s' "$target_tag" | grep -Eqx 'v[0-9]+\.[0-9]+\.[0-9]+'; then
                 log "ERROR pending job has a missing or malformed target_tag - marking failed"
                 tmp=$(shim_mktemp)
                 jq '. + {status: "failed", error: "invalid target_tag", finished_at: now | todate}' \

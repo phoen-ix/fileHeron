@@ -208,6 +208,32 @@ def _compose_env(tag: str) -> dict[str, str]:
 
 _REV_RE = re.compile(r"^([0-9a-f]+)")
 
+# Validate INSIDE the privileged boundary, not only at the API and not only in
+# the shim. This process runs as root with the host docker socket AND the host
+# workspace mounted, and everything it acts on comes from /state, which the
+# backend container can write. The shim checks `target_tag` before spawning us,
+# but (a) it checks with `grep -Eq '^...$'`, and grep is LINE-oriented, so a
+# value containing a newline passes, and (b) it validates, flips the job to
+# `claiming`, then BLOCKS on `docker pull` - and we re-read the file after that,
+# so the value we act on is not provably the value it checked.
+#
+# `fullmatch` on a `\A...\Z`-free pattern is the same anchoring the backend's
+# RELEASE_TAG_RE call sites use; `$` alone would accept a trailing newline,
+# which is exactly the shape that matters here.
+_TAG_RE = re.compile(r"v\d+\.\d+\.\d+")
+_HEAD_RE = re.compile(r"[0-9a-f]+")
+
+
+def _is_valid_tag(value: object) -> bool:
+    return isinstance(value, str) and _TAG_RE.fullmatch(value) is not None
+
+
+def _is_valid_head(value: object) -> bool:
+    """An alembic revision id. `_parse_alembic_revision` already constrains what
+    we WRITE to this shape; this constrains what we READ BACK, because the file
+    it comes from is writable by the backend container."""
+    return isinstance(value, str) and _HEAD_RE.fullmatch(value) is not None
+
 
 def _parse_alembic_revision(text: str) -> str | None:
     """First revision id on the first real line of `alembic current`
@@ -419,6 +445,14 @@ def main() -> int:
         log_line("ERROR no target_tag in state file")
         write_job_field(status="failed", error="no target_tag", finished_at=utcnow_iso())
         return 1
+    if not _is_valid_tag(target_tag):
+        # Never interpolate the value into the message: it lands in the state
+        # file the admin UI renders, and it is the untrusted thing here.
+        log_line(f"ERROR target_tag is not a release tag (len={len(str(target_tag))})")
+        write_job_field(
+            status="failed", error="invalid target_tag", finished_at=utcnow_iso()
+        )
+        return 1
 
     previous_tag = read_current_tag()
     # A floating tag is not a rollback anchor - see resolve_running_version.
@@ -466,6 +500,14 @@ def main() -> int:
     # here. stamp is non-destructive (see auto_rollback).
     if action == "rollback":
         rb_head = _read_rollback_file().get("alembic_head")
+        if rb_head and not _is_valid_head(rb_head):
+            log_line("ERROR recorded rollback head is not a revision id")
+            write_job_field(
+                status="failed",
+                error="rollback: invalid recorded alembic head",
+                finished_at=utcnow_iso(),
+            )
+            return 5
         if rb_head:
             log_line(f"rollback: stamping DB back to {rb_head} using current image ({previous_tag})")
             if run_capture(

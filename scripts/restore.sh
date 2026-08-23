@@ -94,26 +94,90 @@ docker run --rm -v "$ROOT/data/redis":/d alpine sh -c 'rm -rf /d/appendonlydir /
 docker cp "$BACKUP/redis.rdb" "$REDIS_CID:/data/dump.rdb"
 docker run --rm -v "$ROOT/data/redis":/d alpine chown 999:999 /d/dump.rdb
 
+# The loader below holds ./data/redis. v2.13.1 hardened this whole sequence in
+# scripts/restore_drill_e2e.sh and the fixes were never brought back here - to
+# the REAL restore path - so all three defects it found lived on in this file:
+# a `sleep` standing in for a readiness gate, a discarded CONFIG SET error
+# reply, and an AOF check that could not observe the rewrite it named. Ported
+# below. The severity difference is deliberate and stays: the drill FAILS where
+# this WARNS, because a human is watching a restore and an empty redis costs
+# rate-limit buckets and queued jobs, not data - whereas the drill's whole job
+# is to go red on its own.
+REDIS_LOADER=fileheron-redis-restore
+loader_down() {
+    docker exec "$REDIS_LOADER" redis-cli SHUTDOWN NOSAVE >/dev/null 2>&1 || true
+    docker rm -f -v "$REDIS_LOADER" >/dev/null 2>&1 || true
+}
+# `set -euo pipefail` is on, and every step between here and the shutdown can
+# fail. Without this trap that left a RUNNING container holding the redis data
+# directory, mid-restore, with `docker compose up -d redis` never reached.
+trap loader_down EXIT
+
 echo "[restore] loading redis snapshot with AOF disabled …"
-docker run -d --rm --name fileheron-redis-restore \
+docker rm -f -v "$REDIS_LOADER" >/dev/null 2>&1 || true
+docker run -d --rm --name "$REDIS_LOADER" \
     -v "$ROOT/data/redis":/data redis:7-alpine \
     redis-server --appendonly no > /dev/null
-sleep 3
-REDIS_KEYS="$(docker exec fileheron-redis-restore redis-cli DBSIZE | tr -d '\r')"
-echo "[restore] redis loaded ${REDIS_KEYS:-0} keys from the snapshot"
-if [ "${REDIS_KEYS:-0}" = "0" ]; then
-    echo "[restore] WARNING: the redis snapshot loaded 0 keys - check ${BACKUP}/redis.rdb" >&2
+
+# Wait for DBSIZE to return an INTEGER, not for the socket to answer. redis-cli
+# exits 0 even on an error reply, so a PING loop breaks as soon as the port is
+# open - while redis is still loading - and DBSIZE then returns "LOADING Redis
+# is loading the dataset in memory", which this script would report as an empty
+# snapshot. `sleep 3` was the same bet with worse odds: fine on a small RDB,
+# wrong on a production-sized one, i.e. wrong exactly when a restore matters.
+REDIS_KEYS=""
+for _ in $(seq 1 60); do
+    out="$(docker exec "$REDIS_LOADER" redis-cli DBSIZE 2>/dev/null | tr -d '\r' || true)"
+    case "$out" in
+        ''|*[!0-9]*) sleep 1; continue ;;
+    esac
+    REDIS_KEYS="$out"; break
+done
+
+# "never answered" and "answered zero" are different diagnoses; reporting them
+# identically is how a control teaches people to ignore it.
+if [ -z "$REDIS_KEYS" ]; then
+    echo "[restore] WARNING: redis never finished loading ${BACKUP}/redis.rdb within 60s" >&2
+else
+    echo "[restore] redis loaded ${REDIS_KEYS} keys from the snapshot"
+    if [ "$REDIS_KEYS" -eq 0 ]; then
+        echo "[restore] WARNING: the redis snapshot loaded 0 keys - check ${BACKUP}/redis.rdb" >&2
+    fi
 fi
+
 # Rebuild the AOF from what was just loaded, so the normal (AOF-on) service
 # start below reads the restored dataset instead of an empty log.
-docker exec fileheron-redis-restore redis-cli CONFIG SET appendonly yes > /dev/null
-sleep 2
-docker exec fileheron-redis-restore redis-cli INFO persistence \
-    | grep -q 'aof_last_bgrewrite_status:ok' \
-    || echo "[restore] WARNING: redis AOF rewrite did not report ok" >&2
-docker exec fileheron-redis-restore redis-cli SHUTDOWN NOSAVE > /dev/null 2>&1 || true
-sleep 2
-docker rm -f fileheron-redis-restore > /dev/null 2>&1 || true
+#
+# Read the reply: redis-cli exits 0 on an error reply and writes it to stdout,
+# so `> /dev/null` made "ERR Unable to turn on AOF" indistinguishable from OK.
+cfg="$(docker exec "$REDIS_LOADER" redis-cli CONFIG SET appendonly yes 2>&1 | tr -d '\r' || true)"
+if [ "$cfg" != "OK" ]; then
+    echo "[restore] WARNING: redis refused CONFIG SET appendonly yes: ${cfg:-<no reply>}" >&2
+fi
+
+# Wait for the rewrite to FINISH before shutting the loader down. This was
+# `sleep 2`, which can cut a running rewrite in half and leave a partial AOF -
+# the very failure the next check would then blame on the restart. And that
+# check read aof_last_bgrewrite_status, which is initialised to `ok` and only
+# moves to `err` once a rewrite has actually failed: it reported `ok` whether or
+# not any rewrite had ever run, so it could not detect the condition it named.
+# aof_enabled + aof_rewrite_in_progress are the fields that can.
+aof_ready=0
+for _ in $(seq 1 60); do
+    info="$(docker exec "$REDIS_LOADER" redis-cli INFO persistence 2>/dev/null | tr -d '\r' || true)"
+    if echo "$info" | grep -q '^aof_enabled:1$' \
+       && echo "$info" | grep -q '^aof_rewrite_in_progress:0$'; then
+        echo "$info" | grep -q '^aof_last_bgrewrite_status:ok$' \
+            || echo "[restore] WARNING: redis AOF rewrite reported an error" >&2
+        aof_ready=1; break
+    fi
+    sleep 1
+done
+[ "$aof_ready" = "1" ] \
+    || echo "[restore] WARNING: redis AOF rewrite did not finish within 60s" >&2
+
+loader_down
+trap - EXIT
 docker compose up -d redis
 
 echo "[restore] restoring database …"

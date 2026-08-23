@@ -64,3 +64,78 @@ async def test_beacon_rate_limited(db, client, monkeypatch):
     r = await client.post("/api/telemetry/page-404", json={"path": "/foobar"})
     assert r.status_code == 204
     assert calls == []
+
+
+# --- the body is capped BEFORE it is buffered --------------------------------
+
+
+@pytest.mark.asyncio
+async def test_an_oversized_csp_report_is_refused_without_reading_the_body(
+    client, monkeypatch
+):
+    """`await request.body()` materialises the whole body, so a length check
+    AFTER it has already paid the cost it exists to avoid - and nginx allows
+    1024m on /api/ for the direct-upload path. The edge now caps
+    /api/telemetry/ at 64k; this is the in-process half.
+
+    Asserted by proving the read never happens, not merely that the response is
+    204 - the handler answers 204 on every path, so a status assertion alone
+    would pass whatever it did."""
+    from starlette.requests import Request
+
+    from app.services import error_log
+
+    monkeypatch.setattr(error_log, "log_enabled_cached", lambda: True)
+
+    read = {"called": False}
+    real_body = Request.body
+
+    async def _spy(self):
+        read["called"] = True
+        return await real_body(self)
+
+    monkeypatch.setattr(Request, "body", _spy)
+
+    r = await client.post(
+        "/api/telemetry/csp-report",
+        content=b"x" * 9000,
+        headers={"content-type": "application/csp-report"},
+    )
+    assert r.status_code == 204
+    assert read["called"] is False, (
+        "the oversized body was buffered before being rejected"
+    )
+
+
+@pytest.mark.asyncio
+async def test_a_normal_sized_report_is_still_read(client, monkeypatch):
+    """The control. Without it the guard above is satisfied by a handler that
+    stopped reading bodies altogether, i.e. by the sink going dark."""
+    import json
+
+    from starlette.requests import Request
+
+    from app.services import error_log
+
+    monkeypatch.setattr(error_log, "log_enabled_cached", lambda: True)
+
+    read = {"called": False}
+    real_body = Request.body
+
+    async def _spy(self):
+        read["called"] = True
+        return await real_body(self)
+
+    monkeypatch.setattr(Request, "body", _spy)
+
+    payload = json.dumps(
+        {"csp-report": {"effective-directive": "script-src",
+                        "blocked-uri": "https://evil.test/x.js"}}
+    ).encode()
+    r = await client.post(
+        "/api/telemetry/csp-report",
+        content=payload,
+        headers={"content-type": "application/csp-report"},
+    )
+    assert r.status_code == 204
+    assert read["called"] is True, "a normal report was never read"

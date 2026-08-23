@@ -245,3 +245,34 @@ def test_no_comment_still_blames_a_removed_library(conf):
         assert "was removed" in window or "removed two releases" in window, (
             "Element Plus is cited as a live constraint; it was removed in v1.14"
         )
+
+
+# --- the anonymous telemetry beacons -----------------------------------------
+
+
+def test_the_telemetry_beacons_are_capped_far_below_the_upload_path(conf):
+    """`/api/telemetry/*` are the only unauthenticated POSTs on the API and
+    exist to accept a few hundred bytes of JSON, but inherited the 1024m cap
+    that exists for `/api/uploads/direct`.
+
+    Capping at the EDGE is what covers both of them: `/csp-report` reads the
+    body itself and can check Content-Length first, but `/page-404` takes a
+    Pydantic body model, so FastAPI buffers and validates before any handler
+    code - or dependency - runs."""
+    blocks = _location_blocks(conf)
+    assert "/api/telemetry/" in blocks, (
+        "the telemetry beacons fell back to the /api/ block's 1024m cap"
+    )
+    body = blocks["/api/telemetry/"]
+    m = re.search(r"client_max_body_size\s+(\d+)k;", body)
+    assert m, f"expected a kilobyte-scale cap, got: {body}"
+    assert int(m.group(1)) <= 256, f"{m.group(1)}k is not a beacon-sized cap"
+
+
+def test_the_telemetry_block_still_proxies_to_the_backend(conf):
+    """A longer prefix than /api/ wins in nginx, so this block must carry the
+    full proxy config - otherwise capping the body silently breaks the route."""
+    body = _location_blocks(conf)["/api/telemetry/"]
+    assert "proxy_pass" in body
+    assert "X-Forwarded-For" in body
+    assert "X-Real-IP" in body

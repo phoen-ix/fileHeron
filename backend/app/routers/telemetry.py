@@ -171,6 +171,26 @@ async def report_csp_violation(request: Request) -> Response:
             window_sec=60,
         ):
             return Response(status_code=204)
+        # Content-Length BEFORE the read. `await request.body()` materialises
+        # the whole body, so checking its length afterwards is a cap that has
+        # already paid the cost it exists to avoid - and nginx allows 1024m on
+        # /api/ for the direct-upload path. The edge now caps /api/telemetry/
+        # at 64k, which is the real bound (and the only one that can cover
+        # /page-404, whose Pydantic body model is buffered by FastAPI before
+        # any handler code runs); this is the in-process half, for a request
+        # that reaches the app another way.
+        #
+        # A missing or unparseable Content-Length falls through to the read,
+        # which the post-read check still bounds - chunked bodies carry no
+        # length, and refusing them outright would be a behaviour change for a
+        # beacon that is meant to be lossy.
+        declared = request.headers.get("content-length")
+        if declared is not None:
+            try:
+                if int(declared) > 8192:
+                    return Response(status_code=204)
+            except ValueError:
+                pass
         raw = await request.body()
         if len(raw) > 8192:
             return Response(status_code=204)

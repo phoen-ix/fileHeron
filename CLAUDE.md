@@ -1001,8 +1001,11 @@ does - keep it current on release.)
 > release would publish no frontend image), ESLint 10 needs `@eslint/js` +
 > `globals` + eslint-plugin-vue 10 declared, `node:25` is a non-LTS odd major,
 > and `@types/node` must track the RUNTIME or the build passes and the image
-> fails. All four are now `ignore`d in `.github/dependabot.yml` with the reason
-> attached. **There is deliberately no `frontend/.npmrc`** - `legacy-peer-deps`
+> fails. THREE of the four are `ignore`d in `.github/dependabot.yml` with the
+> reason attached - typescript and `@types/node` majors under npm/frontend, and
+> node majors under docker. **ESLint is not among them**, because ESLint 10 was
+> ADOPTED in that same sweep rather than deferred; this line said "all four" and
+> would send the next reader looking for an entry that never existed. **There is deliberately no `frontend/.npmrc`** - `legacy-peer-deps`
 > suppressed every peer conflict, not just the vue-router-5/pinia-2 one it was
 > added for; pinia 4 satisfies that peer and the flag is gone. Don't reintroduce
 > it to silence a conflict. CI's setup-python/setup-node now MATCH the images

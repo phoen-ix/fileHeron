@@ -79,7 +79,7 @@ dev = [
     # silently reddens a green main on the next release with zero code change, and
     # drifts from any local copy. Bump deliberately. Local gate must match:
     # `pip install --user --upgrade ruff==<this>` (or run ruff in an ephemeral python container).
-    "ruff==0.16.3",
+    "ruff==0.16.4",
     # Pinned for the same reason ruff is, and the reason was learned here the
     # hard way: this floated at >=1.10 while the exemption list below was
     # measured, and by the time anyone re-measured it the resolver was serving

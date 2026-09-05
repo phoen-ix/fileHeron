@@ -20,6 +20,7 @@ from ..models.group import Group
 from ..models.share import Share, ShareState
 from ..models.share_recipient import ShareRecipient
 from ..models.user import User
+from ..utils.like import LIKE_ESCAPE, contains
 
 VALID_SORT_COLUMNS = {
     "filename",
@@ -97,13 +98,11 @@ def list_all_files(
     filters: list[ColumnElement[bool]] = []
 
     if q:
-        # Escape LIKE wildcards so a literal % or _ matches itself.
-        esc = q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-        like = f"%{esc}%"
+        like = contains(q)
         filters.append(
-            File.original_filename.ilike(like, escape="\\")
-            | User.display_name.ilike(like, escape="\\")
-            | User.email.ilike(like, escape="\\")
+            File.original_filename.ilike(like, escape=LIKE_ESCAPE)
+            | User.display_name.ilike(like, escape=LIKE_ESCAPE)
+            | User.email.ilike(like, escape=LIKE_ESCAPE)
         )
 
     if state:

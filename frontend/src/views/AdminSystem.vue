@@ -335,6 +335,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   if (jobPollHandle) clearInterval(jobPollHandle)
+  if (reloadTimer) clearTimeout(reloadTimer)
   stopActivityPoll()
 })
 

@@ -19,7 +19,7 @@ import FileUploadArea from '@/components/FileUploadArea.vue'
 import RecipientPicker from '@/components/RecipientPicker.vue'
 import ShareUploadProgress from '@/components/ShareUploadProgress.vue'
 import { useApiError } from '@/composables/useApiError'
-import { useUpload } from '@/composables/useUpload'
+import { settledFileIds, useUpload } from '@/composables/useUpload'
 import { siteLocalIsoToUtcIso } from '@/utils/datetime'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
@@ -170,9 +170,7 @@ async function onSubmit() {
       try {
         await registerFilesAdded(shareId.value, {
           notify: notifyRecipients.value,
-          file_ids: upload.items.value
-            .filter((i) => i.state === 'done' && i.fileId)
-            .map((i) => i.fileId as string),
+          file_ids: settledFileIds(upload.items.value),
         })
       } catch {
         /* the announce sweep will pick it up within a minute */

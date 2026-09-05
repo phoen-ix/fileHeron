@@ -39,6 +39,11 @@ class AuditEventType(str, enum.Enum):
     # Reserved for later phases (registered here for Alembic stability)
     totp_enabled = "totp_enabled"                         # Phase 1b
     totp_disabled = "totp_disabled"                        # Phase 1b
+    # Passkeys had none of their own and were logged as totp_enabled /
+    # totp_disabled ("closest available") for their whole life, so the trail
+    # claimed TOTP was toggled whenever a passkey was added or removed.
+    webauthn_credential_added = "webauthn_credential_added"
+    webauthn_credential_removed = "webauthn_credential_removed"
     recovery_code_used = "recovery_code_used"              # Phase 1b
     account_locked = "account_locked"                      # Phase 1b
     rate_limited = "rate_limited"                          # Phase 1b

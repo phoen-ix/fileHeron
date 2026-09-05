@@ -299,6 +299,27 @@ async def _probe_issuer(issuer: str) -> TestConnectionResponse:
     except Exception as e:
         return TestConnectionResponse(ok=False, error=f"Bad discovery doc: {e}")
 
+    # The same check the login path applies (services/oidc.py::_discovery),
+    # with the same one-trailing-slash tolerance. This probe used to report
+    # `ok` whenever discovery LOADED and merely echo the document's issuer, so
+    # a provider saved with e.g. Keycloak's legacy `/auth/realms/x` path - whose
+    # discovery answers with the canonical issuer - tested green and then
+    # refused every sign-in with OIDC_ISSUER_MISMATCH.
+    doc_issuer = str(doc.get("issuer") or "")
+    if doc_issuer.rstrip("/") != issuer:
+        return TestConnectionResponse(
+            ok=False,
+            error=(
+                f"Discovery loaded, but the identity provider reports its issuer as "
+                f"{doc_issuer!r}, not {issuer!r}. Sign-in verifies tokens against the "
+                "configured issuer and would refuse them (OIDC_ISSUER_MISMATCH) - "
+                "use the issuer the provider reports."
+            ),
+            issuer=doc_issuer or None,
+            authorization_endpoint=doc.get("authorization_endpoint"),
+            token_endpoint=doc.get("token_endpoint"),
+        )
+
     return TestConnectionResponse(
         ok=True,
         issuer=doc.get("issuer"),

@@ -59,6 +59,7 @@ from ..database import SessionLocal
 from ..models.ip_block import IpBlock
 from ..utils.client_ip import is_blockable, normalize_ip
 from ..utils.columns import declared_width
+from ..utils.like import LIKE_ESCAPE, contains
 from ..utils.timeutil import utc_now, utc_now_aware
 from . import settings as settings_svc
 from . import settings_registry
@@ -1636,8 +1637,7 @@ def list_blocks(
     if q:
         # LIKE metacharacters in an admin-supplied search must not act as
         # wildcards, or `_` quietly matches anything.
-        escaped = q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-        query = query.filter(IpBlock.subject.like(f"%{escaped}%", escape="\\"))
+        query = query.filter(IpBlock.subject.like(contains(q), escape=LIKE_ESCAPE))
 
     ordering = (IpBlock.created_at.desc(), IpBlock.id.desc())
     if covers:

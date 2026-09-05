@@ -118,7 +118,7 @@ async def register_complete(
 
     record_audit_event(
         db,
-        event_type=AuditEventType.totp_enabled,  # closest available; webauthn-specific event added in P8 cleanup
+        event_type=AuditEventType.webauthn_credential_added,
         actor_user_id=user.id,
         target_type="webauthn_credential",
         target_id=record.id,
@@ -145,7 +145,7 @@ def delete_credential(
 
     record_audit_event(
         db,
-        event_type=AuditEventType.totp_disabled,  # closest available
+        event_type=AuditEventType.webauthn_credential_removed,
         actor_user_id=user.id,
         target_type="webauthn_credential",
         target_id=credential_db_id,

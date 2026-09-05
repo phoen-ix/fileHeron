@@ -42,6 +42,7 @@ from ..models.share import Share, ShareKind, ShareState
 from ..models.share_recipient import ShareRecipient
 from ..models.user import User, UserRole
 from ..utils.dbresult import updated_rows
+from ..utils.like import LIKE_ESCAPE, contains
 from ..utils.timeutil import utc_now
 from .audit import record_audit_event
 
@@ -923,10 +924,8 @@ def list_shares_for_user(
         raise AppError(400, "INVALID_BOX", "box must be 'outbox' or 'inbox'.")
 
     if q:
-        # Escape LIKE wildcards so a literal % or _ in the query matches itself
-        # rather than acting as "any chars" / "any char" (audit L4).
-        esc = q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-        base = base.filter(Share.subject.ilike(f"%{esc}%", escape="\\"))
+        # A literal % or _ in the query matches itself (audit L4).
+        base = base.filter(Share.subject.ilike(contains(q), escape=LIKE_ESCAPE))
 
     if states:
         valid = {s.value for s in ShareState}

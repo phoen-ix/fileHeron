@@ -34,6 +34,9 @@
       />
 
       <p v-if="savedAt" class="fh-field-help saved">{{ t('common.saved') }}</p>
+      <p v-if="saveError" class="fh-notice" data-tone="error" role="alert">
+        {{ t('manage_notifications.save_failed') }}
+      </p>
     </template>
   </div>
 </template>
@@ -66,6 +69,7 @@ const loading = ref(true)
 const saving = ref(false)
 const errorCode = ref<string | null>(null)
 const savedAt = ref<number | null>(null)
+const saveError = ref(false)
 
 const confirmedCategory = ref<string | null>(null)
 const previousChannel = ref<NotificationChannel | null>(null)
@@ -139,10 +143,21 @@ async function applyUnsubscribe(category: string) {
 
 async function onChange(category: NotificationCategory, channel: NotificationChannel) {
   saving.value = true
+  saveError.value = false
+  // The BROWSER has already moved the dropdown by the time this runs, so a
+  // refused save must put the row back and say so - the same defect the
+  // signed-in preferences table fixed (fe-correct-5), missed in this sibling:
+  // here it was an unhandled rejection and a select showing a preference the
+  // server does not have, on a page with no toast host to fall back on.
+  const row = items.value.find((i) => i.category === category)
+  const previous = row?.channel
   try {
     const { data } = await updateSubscriptions(token.value, { [category]: channel })
     items.value = data.items
     flashSaved()
+  } catch {
+    if (row && previous !== undefined) row.channel = previous
+    saveError.value = true
   } finally {
     saving.value = false
   }

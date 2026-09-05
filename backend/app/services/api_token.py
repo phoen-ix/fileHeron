@@ -26,6 +26,7 @@ from ..models.api_token import ApiToken
 from ..models.audit_log import AuditEventType
 from ..models.user import User
 from ..utils.crypto import constant_time_equals, sha256_hex
+from ..utils.like import LIKE_ESCAPE, contains
 from ..utils.timeutil import utc_now
 from .audit import record_audit_event
 
@@ -423,9 +424,10 @@ def list_all_tokens(
     elif status == "revoked":
         base = base.filter(ApiToken.revoked_at.is_not(None))
     if q:
-        like = f"%{q}%"
+        like = contains(q)
         base = base.filter(
-            (User.display_name.ilike(like)) | (User.email.ilike(like))
+            User.display_name.ilike(like, escape=LIKE_ESCAPE)
+            | User.email.ilike(like, escape=LIKE_ESCAPE)
         )
 
     total = base.count()

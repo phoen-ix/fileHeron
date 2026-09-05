@@ -114,7 +114,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { listRecipientTargetGroups } from '@/api/groups'
@@ -312,9 +312,12 @@ function selectCursor() {
   }
 }
 
+let blurTimer: ReturnType<typeof setTimeout> | null = null
+
 function onBlur() {
   // Delay so mousedown on a result row fires first.
-  setTimeout(() => {
+  if (blurTimer) clearTimeout(blurTimer)
+  blurTimer = setTimeout(() => {
     showResults.value = false
   }, 120)
 }
@@ -322,6 +325,11 @@ function onBlur() {
 onMounted(() => {
   void loadInitialGroups()
   void doSearch('')
+})
+
+onBeforeUnmount(() => {
+  if (searchTimer) clearTimeout(searchTimer)
+  if (blurTimer) clearTimeout(blurTimer)
 })
 </script>
 

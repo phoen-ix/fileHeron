@@ -180,10 +180,14 @@ async function onTest() {
       ...(confirmPassword.value ? { confirm_password: confirmPassword.value } : {}),
     })
     testResult.value = data
-    // Only clear on success - a wrong password should stay put so the admin can
-    // correct a typo rather than retype from scratch.
-    confirmPassword.value = ''
-    stepUpNeeded.value = false
+    // Only clear on success. A test that reached the server but failed there
+    // (`ok: false` - a wrong SMTP password, an unreachable host) comes back as
+    // a 200, and clearing here made the admin retype the step-up password to
+    // try again. A wrong step-up password is a thrown STEP_UP_REQUIRED below.
+    if (data.ok) {
+      confirmPassword.value = ''
+      stepUpNeeded.value = false
+    }
   } catch (err) {
     // Testing a server other than the saved one, while relying on the stored
     // password, is the only case that can send that password somewhere new. The

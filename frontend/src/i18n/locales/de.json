@@ -309,6 +309,7 @@
     "code_placeholder": "6-stelliger Code oder XXXX-XXXX",
     "use_passkey": "Stattdessen Passkey verwenden",
     "passkey_cancelled": "Passkey-Eingabe abgebrochen.",
+    "pending_expired": "Die Anmeldung hat zu lange gedauert und der zweite Schritt ist abgelaufen. Bitte melde dich erneut an.",
     "motd_aria": "Hinweis zur Website",
     "submit": "Weiter",
     "forgot": "Passwort vergessen",
@@ -1447,6 +1448,7 @@
     "intro_named": "Benachrichtigungseinstellungen für {name}. Änderungen werden sofort gespeichert.",
     "unsubscribed": "Du hast „{category}\"-E-Mails abbestellt.",
     "undo": "Rückgängig",
+    "save_failed": "Diese Änderung konnte nicht gespeichert werden. Deine bisherige Einstellung gilt weiterhin - bitte versuche es erneut.",
     "errors": {
       "generic": "Dieser Verwaltungslink ist ungültig oder abgelaufen. Melde dich an, um deine Benachrichtigungseinstellungen zu ändern.",
       "INVALID_MANAGE_TOKEN": "Dieser Verwaltungslink ist ungültig. Melde dich an, um deine Benachrichtigungseinstellungen zu ändern.",

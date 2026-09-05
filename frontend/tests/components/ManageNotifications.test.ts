@@ -121,6 +121,23 @@ describe('ManageNotifications', () => {
     expect(updateSubscriptions).toHaveBeenCalledWith('tok123', { share_created: 'off' })
   })
 
+  it('a refused save puts the row back and says so', async () => {
+    // The browser has already moved the dropdown when the request fails. This
+    // page had no catch at all: an unhandled rejection, a select showing a
+    // preference the server does not have, and no message - the defect the
+    // signed-in preferences table fixed (fe-correct-5), missed here.
+    updateSubscriptions.mockRejectedValueOnce({ response: { status: 500 } })
+    const w = makeWrapper()
+    await flushPromises()
+    const select = w.findAll('select')[0]
+    await select.setValue('off')
+    await flushPromises()
+
+    expect((select.element as HTMLSelectElement).value).toBe('both')
+    expect(w.text()).toContain('could not be saved')
+    expect((select.element as HTMLSelectElement).disabled).toBe(false)
+  })
+
   it('shows the invalid-link state on a bad token', async () => {
     fetchSubscriptions.mockRejectedValueOnce({ response: { data: { code: 'MANAGE_TOKEN_EXPIRED' } } })
     const w = makeWrapper()

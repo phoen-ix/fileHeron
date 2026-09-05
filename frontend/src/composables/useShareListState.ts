@@ -1,4 +1,4 @@
-import { computed, ref, watch } from 'vue'
+import { computed, onScopeDispose, ref, watch } from 'vue'
 import type { ComputedRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 
@@ -118,6 +118,13 @@ export function useShareListState(box: ComputedRef<'outbox' | 'inbox'>) {
       page.value = 1
       void load()
     }, 250)
+  })
+
+  // A keystroke followed by leaving the page must not fire a search or a
+  // reload against a list that no longer exists.
+  onScopeDispose(() => {
+    if (userSearchTimer) clearTimeout(userSearchTimer)
+    if (subjectSearchTimer) clearTimeout(subjectSearchTimer)
   })
 
   function pickUser(u: UserSearchItem) {

@@ -1,6 +1,8 @@
 """/api/shares/* - Phase 4 (multi-recipient + group recipients)."""
 from __future__ import annotations
 
+import logging
+
 from fastapi import APIRouter, Depends, Query, Request, status
 from sqlalchemy.orm import Session
 
@@ -43,6 +45,8 @@ from ..services import share_approval as share_approval_svc
 # staff/admins (staff->staff sends have no relationship requirement by design).
 _SHARE_CREATE_LIMIT = 60
 _SHARE_CREATE_WINDOW_SEC = 900  # 15 minutes
+
+logger = logging.getLogger("fileheron.shares_router")
 
 router = APIRouter(prefix="/api/shares", tags=["shares"])
 
@@ -809,11 +813,18 @@ def bulk_expire(
             failed.append(
                 BulkExpireFailure(id=sid, code=e.code, message=e.message)
             )
-        except Exception as e:
+        except Exception:
             db.rollback()
+            # The exception text is for the log, not the client: a DB/OS error
+            # string carries paths and SQL, and this went straight into the
+            # SPA's toast. The global 500 handler already keeps that out of the
+            # envelope; the per-item envelope here leaked it.
+            logger.exception("bulk_expire: unexpected failure for share=%s", sid)
             failed.append(
                 BulkExpireFailure(
-                    id=sid, code="INTERNAL_ERROR", message=str(e)[:200]
+                    id=sid,
+                    code="INTERNAL_ERROR",
+                    message="Unexpected error while expiring this share.",
                 )
             )
     return BulkExpireResponse(expired=expired, failed=failed)

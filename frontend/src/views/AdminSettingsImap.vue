@@ -112,8 +112,12 @@ async function onTest() {
       ...(confirmPassword.value ? { confirm_password: confirmPassword.value } : {}),
     })
     testResult.value = data
-    confirmPassword.value = ''
-    stepUpNeeded.value = false
+    // Only clear the step-up password once the test actually passed; a
+    // server-side failure (`ok: false`) is a 200 and the admin will retry.
+    if (data.ok) {
+      confirmPassword.value = ''
+      stepUpNeeded.value = false
+    }
   } catch (err) {
     // Testing a server other than the saved one, while relying on the stored
     // password, is the only case that can send that password somewhere new.

@@ -309,6 +309,7 @@
     "code_placeholder": "6-digit code or XXXX-XXXX",
     "use_passkey": "Use a passkey instead",
     "passkey_cancelled": "Passkey prompt cancelled.",
+    "pending_expired": "Your sign-in took too long and the second-factor step expired. Please sign in again.",
     "motd_aria": "Site announcement",
     "submit": "Continue",
     "forgot": "Forgot password",
@@ -1447,6 +1448,7 @@
     "intro_named": "Notification settings for {name}. Changes are saved instantly.",
     "unsubscribed": "You've been unsubscribed from \"{category}\" emails.",
     "undo": "Undo",
+    "save_failed": "That change could not be saved. Your previous setting is still in place - please try again.",
     "errors": {
       "generic": "This manage link is invalid or has expired. Sign in to change your notification settings.",
       "INVALID_MANAGE_TOKEN": "This manage link is invalid. Sign in to change your notification settings.",

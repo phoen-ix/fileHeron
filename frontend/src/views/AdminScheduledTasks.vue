@@ -118,7 +118,10 @@ onMounted(() => {
   // (audit #2).
   sse.start()
 })
-onBeforeUnmount(() => sse.stop())
+onBeforeUnmount(() => {
+  sse.stop()
+  if (reloadTimer) clearTimeout(reloadTimer)
+})
 </script>
 
 <template>

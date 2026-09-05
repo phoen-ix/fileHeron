@@ -51,6 +51,7 @@ from ..models.user import User, UserRole
 from ..utils.columns import declared_width
 from ..utils.crypto import normalize_email
 from ..utils.net import assert_public_http_url
+from . import rate_limit as rate_limit_svc
 from .audit import record_audit_event
 from .oidc_admin import get_client_secret, is_provider_usable
 
@@ -479,6 +480,13 @@ async def handle_callback(
     if by_sub is not None:
         if by_sub.is_disabled:
             raise AppError(403, "ACCOUNT_DISABLED", "Account is disabled.")
+        # The password, recovery and passkey paths all refuse a locked account;
+        # this one minted a session for it - harmless in effect (the lock is
+        # password-guessing damage control and SSO never touches the password)
+        # but it wrote last_login_at, a refresh token and a login audit row for
+        # an account the other doors were turning away.
+        if rate_limit_svc.is_account_locked(by_sub):
+            raise AppError(423, "ACCOUNT_LOCKED", "Account is temporarily locked.")
         return by_sub
 
     email, email_verified = _extract_email(claims, provider)
@@ -499,6 +507,8 @@ async def handle_callback(
         if local is not None and local.oidc_provider_id is None:
             if local.is_disabled:
                 raise AppError(403, "ACCOUNT_DISABLED", "Account is disabled.")
+            if rate_limit_svc.is_account_locked(local):
+                raise AppError(423, "ACCOUNT_LOCKED", "Account is temporarily locked.")
             if local.role == UserRole.admin:
                 # Never auto-link a privileged account on an UNauthenticated
                 # callback: if the IdP's email claim can be influenced (a realm

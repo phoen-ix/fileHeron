@@ -37,6 +37,7 @@ from ...services import imap_poll as imap_poll_svc
 from ...services import settings as settings_svc
 from ...services import storage_backend as storage_svc
 from ...services.audit import record_audit_event
+from ...utils.like import LIKE_ESCAPE, contains
 
 logger = logging.getLogger("fileheron.admin.imap")
 
@@ -243,15 +244,21 @@ def list_inbox(
 ) -> InboxListResponse:
     base = db.query(InboundMessage)
     if q:
-        like = f"%{q}%"
-        base = base.filter(or_(InboundMessage.subject.ilike(like),
-                               InboundMessage.sender_email.ilike(like)))
+        like = contains(q)
+        base = base.filter(
+            or_(
+                InboundMessage.subject.ilike(like, escape=LIKE_ESCAPE),
+                InboundMessage.sender_email.ilike(like, escape=LIKE_ESCAPE),
+            )
+        )
     if classification:
         base = base.filter(InboundMessage.classification == classification)
     if status:
         base = base.filter(InboundMessage.status == status)
     if sender_email:
-        base = base.filter(InboundMessage.sender_email.ilike(f"%{sender_email}%"))
+        base = base.filter(
+            InboundMessage.sender_email.ilike(contains(sender_email), escape=LIKE_ESCAPE)
+        )
     total = base.count()
     unread = db.query(InboundMessage).filter(
         InboundMessage.status == MessageStatus.new

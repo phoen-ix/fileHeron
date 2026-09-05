@@ -30,6 +30,7 @@ from ...schemas.admin import (
 )
 from ...services import job_queue
 from ...services.audit import record_audit_event
+from ...utils.like import LIKE_ESCAPE, contains
 from ...utils.timeutil import to_naive_utc
 
 router = APIRouter()
@@ -78,12 +79,17 @@ def _mail_query(
 ):
     query = db.query(EmailLog)
     if q:
-        like = f"%{q}%"
+        like = contains(q)
         query = query.filter(
-            or_(EmailLog.subject.ilike(like), EmailLog.recipient_email.ilike(like))
+            or_(
+                EmailLog.subject.ilike(like, escape=LIKE_ESCAPE),
+                EmailLog.recipient_email.ilike(like, escape=LIKE_ESCAPE),
+            )
         )
     if recipient_email:
-        query = query.filter(EmailLog.recipient_email.ilike(f"%{recipient_email}%"))
+        query = query.filter(
+            EmailLog.recipient_email.ilike(contains(recipient_email), escape=LIKE_ESCAPE)
+        )
     if recipient_user_id is not None:
         query = query.filter(EmailLog.recipient_user_id == recipient_user_id)
     if category:

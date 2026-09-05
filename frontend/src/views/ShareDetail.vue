@@ -24,7 +24,7 @@ import FileUploadArea from '@/components/FileUploadArea.vue'
 import PublicLinkPanel from '@/components/PublicLinkPanel.vue'
 import { useApiError } from '@/composables/useApiError'
 import { useSiteDateFormat } from '@/composables/useSiteDateFormat'
-import { useUpload } from '@/composables/useUpload'
+import { settledFileIds, useUpload } from '@/composables/useUpload'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
 import type { FileInShareResponse, ShareResponse } from '@/types/api'
@@ -252,9 +252,7 @@ async function onUploadAdded() {
       ui.pushToast(t('share_detail.add_files_has_errors'), 'error')
       return
     }
-    const fileIds = addUpload.items.value
-      .filter((i) => i.fileId && (i.state === 'done' || i.state === 'finalizing'))
-      .map((i) => i.fileId as string)
+    const fileIds = settledFileIds(addUpload.items.value)
     if (fileIds.length === 0) return
     const { data } = await registerFilesAdded(share.value.id, {
       notify: notifyOnAdd.value,

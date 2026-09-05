@@ -14,6 +14,7 @@ from ..middleware.errors import AppError
 from ..models.audit_log import AuditEventType
 from ..models.refresh_token import RefreshToken
 from ..models.user import User, UserRole
+from ..utils.like import LIKE_ESCAPE, contains
 from ..utils.timeutil import utc_now
 from .audit import record_audit_event
 
@@ -34,14 +35,14 @@ def list_users(
     if role is not None:
         base = base.filter(User.role == role)
     if q:
-        like = f"%{q.lower()}%"
+        like = contains(q.lower())
         # MariaDB's LIKE is case-insensitive on utf8 collations by default;
         # SQLite needs explicit `LOWER()` for portability across tests.
         from sqlalchemy import func, or_
         base = base.filter(
             or_(
-                func.lower(User.display_name).like(like),
-                func.lower(User.email).like(like),
+                func.lower(User.display_name).like(like, escape=LIKE_ESCAPE),
+                func.lower(User.email).like(like, escape=LIKE_ESCAPE),
             )
         )
     total = base.count()

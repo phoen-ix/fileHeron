@@ -71,6 +71,14 @@ watch(mode, async (m) => {
 // /api/ URL: no nav, no retry, and for OIDC_NO_ACCOUNT - the expected outcome
 // for anyone without an invite - no explanation either.
 onMounted(() => {
+  // The second-factor interstitial sends `?expired=1` when its five-minute
+  // pending token lapsed. This page never read it, so the user landed on a
+  // bare form with no idea why they were back here.
+  if (route.query.expired === '1') {
+    error.value = t('login.pending_expired')
+    void router.replace({ path: route.path, query: {} })
+    return
+  }
   const failed = route.query.oidc_error
   if (typeof failed !== 'string' || !failed) return
   const key = `errors.${failed}`

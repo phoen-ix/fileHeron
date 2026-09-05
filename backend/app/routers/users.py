@@ -26,6 +26,7 @@ from ..schemas.user import (
     UserSearchItem,
     UserSearchResponse,
 )
+from ..utils.like import LIKE_ESCAPE, contains
 
 router = APIRouter(prefix="/api/users", tags=["users"])
 
@@ -77,16 +78,11 @@ def search(
         query = query.filter(User.id.in_(connected_employees))
 
     if q.strip():
-        # Escape LIKE wildcards so a literal % or _ matches itself rather than
-        # acting as "any chars" / "any char".
-        esc = (
-            q.strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-        )
-        like = f"%{esc}%"
+        like = contains(q.strip())
         query = query.filter(
             or_(
-                User.display_name.ilike(like, escape="\\"),
-                User.email.ilike(like, escape="\\"),
+                User.display_name.ilike(like, escape=LIKE_ESCAPE),
+                User.email.ilike(like, escape=LIKE_ESCAPE),
             )
         )
 

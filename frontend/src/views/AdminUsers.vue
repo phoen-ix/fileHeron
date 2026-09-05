@@ -16,6 +16,7 @@ import {
 import Pager from '@/components/Pager.vue'
 import PasswordStrength from '@/components/PasswordStrength.vue'
 import { useApiError } from '@/composables/useApiError'
+import { useDebouncedSearch } from '@/composables/useDebouncedSearch'
 import { useInviteForm } from '@/composables/useInviteForm'
 import { useSiteDateFormat } from '@/composables/useSiteDateFormat'
 import { useUiStore } from '@/stores/ui'
@@ -40,8 +41,6 @@ const q = ref('')
 const role = ref<UserRole | ''>('')
 const loading = ref(true)
 const errorMsg = ref<string | null>(null)
-
-let searchTimer: ReturnType<typeof setTimeout> | null = null
 
 // Out-of-order guard. Typing in the filter fires a request per keystroke
 // (debounced, not serialised), and whichever response arrived LAST won - so a
@@ -72,12 +71,9 @@ async function load() {
   }
 }
 
-watch(q, () => {
-  if (searchTimer) clearTimeout(searchTimer)
-  searchTimer = setTimeout(() => {
-    page.value = 1
-    void load()
-  }, 220)
+useDebouncedSearch(q, () => {
+  page.value = 1
+  void load()
 })
 watch(role, () => {
   page.value = 1

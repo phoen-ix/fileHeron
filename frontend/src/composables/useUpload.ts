@@ -86,6 +86,20 @@ interface FileMeta {
 let uidCounter = 0
 const nextUid = () => `u${++uidCounter}_${Date.now().toString(36)}`
 
+/** The ids of the items whose bytes have landed, for the batch-complete call.
+ *
+ *  `finalizing` counts: the file is on tusd's disk and only the 800 ms
+ *  cosmetic timer above separates it from `done`. ShareCreate filtered on
+ *  `done` alone while its "all uploads done" check (and ShareDetail's add-files
+ *  panel) counted `finalizing`, so a share whose files all went through tus
+ *  reported the batch with `file_ids: []` - an audit row saying zero files were
+ *  added to a share that had just received all of them. */
+export function settledFileIds(items: readonly UploadItem[]): string[] {
+  return items
+    .filter((i) => i.fileId && (i.state === 'done' || i.state === 'finalizing'))
+    .map((i) => i.fileId as string)
+}
+
 export function useUpload(shareId: Ref<string | null>) {
   const site = useSiteStore()
   const items = ref<UploadItem[]>([])

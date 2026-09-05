@@ -22,6 +22,7 @@ from ...schemas.admin import AdminSessionListResponse, AdminSessionRow
 from ...schemas.common import RevokedCountResponse
 from ...services.audit import record_audit_event
 from ...services.jwt_session import revoke_all_user_refresh_tokens
+from ...utils.like import LIKE_ESCAPE, contains
 from ...utils.timeutil import utc_now
 
 router = APIRouter()
@@ -62,14 +63,17 @@ def list_sessions(
     if user_id is not None:
         base = base.filter(RefreshToken.user_id == user_id)
     if q:
-        like = f"%{q.strip()}%"
+        like = contains(q.strip())
         matching_user_ids = db.query(User.id).filter(
-            or_(User.email.ilike(like), User.display_name.ilike(like))
+            or_(
+                User.email.ilike(like, escape=LIKE_ESCAPE),
+                User.display_name.ilike(like, escape=LIKE_ESCAPE),
+            )
         )
         base = base.filter(
             or_(
                 RefreshToken.user_id.in_(matching_user_ids),
-                RefreshToken.created_ip.ilike(like),
+                RefreshToken.created_ip.ilike(like, escape=LIKE_ESCAPE),
             )
         )
 

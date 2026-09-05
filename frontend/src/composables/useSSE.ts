@@ -32,9 +32,9 @@
  */
 import { onBeforeUnmount, ref } from 'vue'
 
-export type SSEUrlFactory = (lastEventId: string | null) => string | Promise<string>
+type SSEUrlFactory = (lastEventId: string | null) => string | Promise<string>
 
-export interface UseSSEOptions {
+interface UseSSEOptions {
   url: string | SSEUrlFactory
   onMessage: (event: MessageEvent) => void
   onOpen?: () => void

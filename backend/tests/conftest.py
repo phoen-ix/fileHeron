@@ -292,7 +292,6 @@ def _disable_ip_rate_limit(monkeypatch):
     rationale, same fix."""
     from app.services import rate_limit
     monkeypatch.setattr(rate_limit, "check_login_ip_allowed", lambda *_a, **_kw: True)
-    monkeypatch.setattr(rate_limit, "reset_ip_window", lambda ip: None)
     monkeypatch.setattr(
         rate_limit, "check_ip_allowed", lambda *_a, **_kw: True
     )

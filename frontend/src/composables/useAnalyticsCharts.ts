@@ -3,7 +3,7 @@
  * --fh-* tokens, matching the "no UI framework" rule. All functions are pure
  * (geometry only) so they're trivially unit-testable. */
 
-export interface Bar {
+interface Bar {
   x: number
   y: number
   width: number

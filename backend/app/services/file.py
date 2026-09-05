@@ -11,7 +11,7 @@ distinct filesystems inside the container, hence the fallback.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta
+from datetime import timedelta
 from pathlib import Path
 
 from sqlalchemy.orm import Session
@@ -30,14 +30,6 @@ from .quota import release_bytes
 from .storage_backend import get_storage_backend
 
 logger = logging.getLogger("fileheron.file")
-
-
-
-
-def storage_path_for(file_id: str, when: datetime | None = None) -> Path:
-    """Deterministic local on-disk path for a finalized file. Thin wrapper over
-    the active backend's locator (local backend → the same path as always)."""
-    return Path(get_storage_backend().generate_locator(file_id, when))
 
 
 def downloadable_files(db: Session, share_id: str) -> list[File]:

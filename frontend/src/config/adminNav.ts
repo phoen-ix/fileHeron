@@ -17,7 +17,7 @@ export interface AdminNavItem {
   matchNames: string[]
 }
 
-export interface AdminNavCategory {
+interface AdminNavCategory {
   key: AdminNavCategoryKey
   labelKey: string
   items: AdminNavItem[]

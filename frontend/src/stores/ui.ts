@@ -7,7 +7,7 @@ interface ToastMsg {
   text: string
 }
 
-export interface ConfirmOptions {
+interface ConfirmOptions {
   message: string
   title?: string
   confirmLabel?: string

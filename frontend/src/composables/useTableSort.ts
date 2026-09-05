@@ -1,13 +1,13 @@
 import { ref } from 'vue'
 
-export type SortDir = 'asc' | 'desc'
+type SortDir = 'asc' | 'desc'
 
-export interface UseTableSortOptions {
+interface UseTableSortOptions {
   defaultBy: string
   defaultDir?: SortDir
 }
 
-export interface UseTableSortReturn {
+interface UseTableSortReturn {
   sortBy: ReturnType<typeof ref<string>>
   sortDir: ReturnType<typeof ref<SortDir>>
   toggle: (column: string) => void

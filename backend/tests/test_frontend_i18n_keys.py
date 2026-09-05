@@ -106,3 +106,125 @@ def test_every_static_key_exists(locale):
         f"these render as the raw key string in the {locale} UI:\n  "
         + "\n  ".join(missing)
     )
+
+
+# --- the other direction: every DEFINED key is reachable ----------------------
+#
+# The 2026-09-05 audit found 41 leaf keys in both locales that nothing rendered -
+# a settings-index page that no longer exists (`admin_settings.sections.*`), a
+# parallel toolbar vocabulary the rich-text editor never used, the pre-Pager
+# pager labels, a "check frequency" setting that moved to the cron scheduler.
+# Each one is a translation somebody maintained for nothing, and each is a
+# string a reader of the locale file believes the UI can show.
+#
+# A key counts as reachable when its literal appears anywhere in `src/` (inside
+# `t()`, or as a `labelKey` / `titleKey` / `messageKey` literal that a component
+# passes to `t()` later), or when it sits under a prefix the code builds
+# dynamically - ``t(`errors.${code}`)`` and friends. Those prefixes are declared
+# below, and each must still cover at least one key so the list cannot rot.
+
+# A quoted dotted identifier anywhere in the source, `t()` or not.
+_LITERAL = re.compile(r"""['"`]([a-z][a-z0-9_]*(?:\.[a-z0-9_]+)+)['"`]""")
+
+# Prefixes that code composes at runtime from an enum / id / code, and which
+# therefore never appear as a full literal. Confirm the producing expression
+# before adding to this list - it is what lets a key hide.
+DYNAMIC_PREFIXES = (
+    "errors.",                              # useApiError: `errors.${env.code}`
+    "page_title.",                          # router meta titleKey
+    "admin_advanced.keys.",                 # AdminSettingsAdvanced: per tunable
+    "admin_advanced.help.",
+    "admin_advanced.groups.",
+    "admin_email_templates.template.",      # per slug
+    "admin_email_templates.group.",
+    "admin_email_templates.locale.",
+    "notif_bell.cat.",                      # per NotificationCategory
+    "notif_bell.headline.",
+    "admin_webhooks.event.",                # per event id (dots -> underscores)
+    "api_tokens.scopes.",                   # utils/tokenScopes scopeLabelKey
+    "api_tokens.scope_group_",
+    "expiry.presets.",                      # ExpiryPicker presets
+    "admin_imap.action_",                   # per post-fetch action
+    "admin_imap.notify_",
+    "files.state.",                         # per FileState
+    "upload.state.",                        # per UploadState
+    "share_state.",                         # per ShareState
+    "share_kind.",                          # per ShareKind
+    "public_share.errors.",                 # per public-link error code
+    "admin_backup.cat.",                    # per backup category
+    "admin_backup.cat_help.",
+    "admin_backup.secret.",
+    "admin_backup.secret_help.",
+    "admin_ip_blocks.duration.",            # per preset minutes
+    "admin_ip_blocks.reason.",
+    "admin_ip_blocks.status.",
+    "admin_system.update.job.",             # per updater job state
+    "share_create.progress.log.",           # useUpload log kinds
+    "share_create.intro.",                  # per share kind
+    "share_detail.eyebrow.",
+    "share_list.empty.",                    # per box
+    "share_list.eyebrow.",
+    "share_list.title.",
+    "share_list.filter.party_any.",
+    "share_list.filter.party_group.",
+    "share_list.filter.party_user.",
+    "admin_error_log.source.",              # per error source
+    "admin_mail.status.",                   # per mail status
+    "admin_scheduled_tasks.group.",         # per cron group
+    "notif_prefs.channel.",                 # per channel
+    "password_strength.",                   # per strength label
+    "admin_inbox.tag_",                     # per classification
+    "admin_inbox.av_",                      # per attachment AV state
+    "admin_settings_email_change.mode.",    # per verification mode
+    "admin_settings_email_change.mode_help.",
+    "admin_settings_email_change.oidc.",
+    "admin_settings_email_change.oidc_help.",
+    "manage_notifications.errors.",         # per error code
+    "admin_branding.legal.",                # per legal doc / language
+    "admin_scan_guard.notify.",             # per notify mode
+    "admin_scan_guard.notify_help.",
+    "admin_users.invites.state.",           # per invite state
+    "legal.",                               # per legal page kind
+)
+
+
+def _leaf_keys(node: object, prefix: str = "") -> set[str]:
+    if not isinstance(node, dict):
+        return {prefix}
+    out: set[str] = set()
+    for k, v in node.items():
+        out |= _leaf_keys(v, f"{prefix}.{k}" if prefix else k)
+    return out
+
+
+def _mentioned() -> set[str]:
+    found: set[str] = set()
+    for path in _SRC.rglob("*"):
+        if path.suffix not in (".vue", ".ts") or path.name.endswith(".d.ts"):
+            continue
+        if path.is_relative_to(_LOCALES):
+            continue
+        found.update(m.group(1) for m in _LITERAL.finditer(path.read_text(encoding="utf-8")))
+    return found
+
+
+def test_every_defined_key_is_reachable():
+    messages = json.loads((_LOCALES / "en.json").read_text(encoding="utf-8"))
+    leaves = _leaf_keys(messages)
+    assert len(leaves) > 2000, "the locale walk matched almost nothing"
+    referenced = set(_used()) | _mentioned()
+
+    for prefix in DYNAMIC_PREFIXES:
+        assert any(k.startswith(prefix) for k in leaves), (
+            f"DYNAMIC_PREFIXES names {prefix!r}, which covers no key any more - drop it"
+        )
+
+    unused = sorted(
+        k for k in leaves
+        if k not in referenced and not k.startswith(DYNAMIC_PREFIXES)
+    )
+    assert not unused, (
+        "defined in en.json (and de.json) but nothing in src/ can render them - "
+        "delete them, or if a new dynamic lookup produces them, declare its "
+        "prefix in DYNAMIC_PREFIXES:\n  " + "\n  ".join(unused)
+    )

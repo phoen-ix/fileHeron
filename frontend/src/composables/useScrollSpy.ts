@@ -1,11 +1,11 @@
 import { onBeforeUnmount, onMounted, ref, watch, type Ref } from 'vue'
 
-export interface ScrollSpyOptions {
+interface ScrollSpyOptions {
   topOffsetPx?: number
   bottomOffsetVh?: number
 }
 
-export interface ScrollSpyHandle {
+interface ScrollSpyHandle {
   active: Ref<string>
   rebuild: () => void
   lockTo: (id: string, ms?: number) => void

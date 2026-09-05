@@ -23,7 +23,6 @@ from ..config import settings
 
 logger = logging.getLogger("fileheron.av_scan")
 
-CHUNK_SIZE = 1024 * 64  # clamd recommends 64 KiB chunks
 # Wall-clock ceiling on a single clamd request. 60 s was not enough for the
 # workload this product accepts: clamd reads at roughly 100-300 MB/s on a
 # shared bind mount, so anything past a few hundred MB reliably timed out,

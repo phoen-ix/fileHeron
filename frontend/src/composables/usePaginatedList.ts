@@ -12,7 +12,7 @@ import { ref, type Ref } from 'vue'
 
 import { useApiError } from '@/composables/useApiError'
 
-export interface PaginatedResult<T> {
+interface PaginatedResult<T> {
   items: T[]
   total: number
 }

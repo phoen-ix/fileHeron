@@ -529,7 +529,6 @@
   },
   "admin_system": {
     "eyebrow": "Admin / System",
-    "heading": "System health",
     "sub": "Live status, recent cron runs, and operational alerts.",
     "refresh": "Refresh",
     "refreshed_at": "Refreshed {when}",
@@ -616,30 +615,7 @@
     }
   },
   "admin_settings": {
-    "eyebrow": "Admin / Settings",
-    "intro": "Configure runtime settings without editing .env or restarting containers. Sensitive values are encrypted at rest.",
-    "section_titles": {
-      "general": "General",
-      "sso": "SSO / OIDC",
-      "api_tokens": "API token policy",
-      "public_links": "Public link policy",
-      "email": "Email / SMTP",
-      "twofa": "Two-factor enforcement",
-      "quarantine": "Quarantine alerts",
-      "email_change": "Email change",
-      "advanced": "Advanced"
-    },
-    "sections": {
-      "general": "Small toggles and miscellaneous app settings - start with the home page on/off.",
-      "sso": "Configure one or more OIDC identity providers (Microsoft Entra, Google, Authentik, Keycloak, …). Users connect their account to a provider for one-click sign-in.",
-      "api_tokens": "Decide who can mint programmatic API tokens - everyone, employees only, or admins only. Add specific users or groups to an allowlist on top.",
-      "public_links": "Decide who can create shareable public links to a share - everyone, employees only, or admins only. Add specific users or groups to an allowlist on top.",
-      "email": "Configure outbound SMTP - host, port, credentials, TLS mode, From address. Send a test email and see the actual error if something's wrong.",
-      "twofa": "Decide who must enable 2FA - pick any combination of roles (admin / employee / client) and groups. Affected users without TOTP get bounced into the setup flow on every page load until they enrol.",
-      "quarantine": "When ClamAV flags an upload, optionally fan out a notification (email + in-app bell) to every admin in addition to the uploader.",
-      "email_change": "Decide how email changes are verified, whether users may change their own email, and what happens to an SSO link when an email changes.",
-      "advanced": "Tune session, rate-limit, retention, upload and branding values that otherwise live in environment variables. Each falls back to its built-in default; changes apply live, no redeploy."
-    }
+    "eyebrow": "Admin / Settings"
   },
   "admin_settings_email_change": {
     "title": "Email change",
@@ -908,10 +884,6 @@
     "url_label": "Release API URL",
     "url_placeholder": "https://api.github.com/repos/phoen-ix/fileHeron/releases?per_page=30",
     "url_help": "Pre-filled with the upstream repo. Forks can point this at their own releases endpoint - must return a GitHub-compatible JSON shape (tag_name, html_url, body, published_at).",
-    "mode_label": "Check frequency",
-    "mode_auto": "Automatic (once every 24 hours)",
-    "mode_manual": "Manual only (never on its own)",
-    "mode_help": "Manual mode disables the cron entirely - you'll only ever see new releases when you press Check now in /admin/system.",
     "saved_toast": "Update settings saved."
   },
   "admin_email": {
@@ -980,10 +952,6 @@
     "mailbox": "Mailbox / folder",
     "behaviour": "Behaviour",
     "schedule_moved": "Polling cadence and enable/disable are on the",
-    "check_mode": "Fetching",
-    "mode_auto": "Automatic (on a schedule)",
-    "mode_manual": "Manual only",
-    "interval": "Interval (minutes)",
     "post_fetch": "After a message is fetched",
     "action_mark_read": "Mark as read (keep)",
     "action_mark_read_help": "Flag the message \\Seen on the server but keep it.",
@@ -1098,14 +1066,6 @@
     },
     "subject_label": "Subject",
     "body_label": "Message body",
-    "toolbar": {
-      "bold": "Bold",
-      "italic": "Italic",
-      "heading": "Heading",
-      "bullet_list": "Bulleted list",
-      "ordered_list": "Numbered list",
-      "insert_placeholder": "Insert placeholder…"
-    },
     "placeholders_heading": "Available placeholders",
     "placeholders_help": "Click a placeholder to insert it at the cursor. They're replaced with real values when the email is sent.",
     "required_tag": "required",
@@ -1745,11 +1705,7 @@
       "ip": "IP",
       "request": "Req"
     },
-    "actor_deleted": "(deleted)",
-    "pager": {
-      "older": "Older",
-      "newer": "Newer"
-    }
+    "actor_deleted": "(deleted)"
   },
   "account": {
     "title": "Account",
@@ -1829,7 +1785,6 @@
     "saved_codes_intro": "Each code works once. Use them if you lose access to your authenticator. Store them somewhere safe - we won't show them again.",
     "saved_codes_confirm": "I've saved them",
     "saved_codes_copy": "Copy all",
-    "saved_codes_copied": "Copied.",
     "active_title": "Two-factor is active.",
     "active_intro": "You'll need a code from your authenticator app on every sign-in.",
     "regenerate_cta": "Regenerate recovery codes",
@@ -2085,8 +2040,7 @@
       "download_limit_help": "Maximum number of successful downloads. Leave blank for unlimited.",
       "notify_label": "Notify me on every download",
       "result_eyebrow": "Public link (shown once)",
-      "result_warning": "Copy this URL now - it won't be shown again. Send it to the recipient via your usual channel.",
-      "continue": "Done - go to share"
+      "result_warning": "Copy this URL now - it won't be shown again. Send it to the recipient via your usual channel."
     },
     "progress": {
       "uploading_title": "Uploading…",
@@ -2155,7 +2109,6 @@
     "qr_label": "QR code",
     "qr_download": "Download as PNG",
     "url_legacy_hint": "URL not stored - this link was created before the viewable-URL feature shipped. Revoke and re-create to get a viewable URL.",
-    "url_lost": "The full URL was shown only when the link was created - keep it somewhere safe. Revoke and re-create if you've lost it.",
     "revoke": "Revoke link",
     "revoke_confirm": "Revoke this public link? Anyone with the URL will lose access immediately.",
     "revoked_toast": "Public link revoked.",
@@ -2647,7 +2600,6 @@
   "admin_ip_blocks": {
     "title": "Blocked sources",
     "intro": "Every address and range the scan guard is currently refusing, plus the sources it is watching. Blocks are always temporary — none is permanent, and released rows stay here as history until they age out.",
-    "summary_link": "Manage blocked sources →",
     "block_section": "Block a source",
     "block_help": "Blocks a single address or a whole CIDR range for a bounded time. Only globally routable addresses are accepted.",
     "subject_label": "Address or range",
@@ -2688,7 +2640,6 @@
     "col_path": "Last path",
     "col_created": "Blocked",
     "col_expires": "Expires",
-    "col_actions": "",
     "no_blocks": "No blocks match these filters.",
     "tag_network": "range",
     "reason": {

@@ -88,7 +88,6 @@ __all__ = [
 # Constants
 # ---------------------------------------------------------------------------
 
-INVITE_TTL = timedelta(hours=24)
 EMAIL_VERIFY_TTL = timedelta(hours=24)
 PASSWORD_RESET_TTL = timedelta(hours=1)
 

@@ -14,7 +14,7 @@ import type {
   UserSearchItem,
 } from '@/types/api'
 
-export type GroupBy =
+type GroupBy =
   | 'none'
   | 'recipient_user'
   | 'recipient_group'

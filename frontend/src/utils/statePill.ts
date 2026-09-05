@@ -1,6 +1,6 @@
 import type { ShareState } from '@/types/api'
 
-export type PillTone = 'active' | 'warn' | 'danger' | undefined
+type PillTone = 'active' | 'warn' | 'danger' | undefined
 
 /**
  * Map a share state to a design-system pill tone. Shared by the share lists +

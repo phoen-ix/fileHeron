@@ -12,15 +12,17 @@ Token format (compact, URL-safe):
 
 where sig = HMAC-SHA256(b"<file_id>|<user_id>|<exp_unix>", JWT_SECRET).
 
-Lives ~60 seconds - long enough to start a multi-GB download but
-short enough that a leaked URL doesn't keep working. The token
-authenticates the caller as the embedded user_id; once the request
-hits the download endpoint, the same authorization checks
-(`is_authorized_to_download`, file state) run as for a bearer
-request.
+The lifetime is the caller's choice, and every caller reads it from the
+admin-tunable `downloads.signed_url_ttl_sec` (default 900 s) - long enough
+for a browser's native Resume to revalidate the same URL, short enough that
+a leaked URL doesn't keep working. (This header said "~60 seconds" and the
+module carried a 60 s default nothing used, for as long as the setting has
+existed.) The token authenticates the caller as the embedded user_id; once
+the request hits the download endpoint, the same authorization checks
+(`is_authorized_to_download`, file state) run as for a bearer request.
 
 **Audit-trail attribution caveat**: a signed URL minted by Alice
-can be forwarded to Bob (within its 60-second window). Bob's IP
+can be forwarded to Bob (within its window). Bob's IP
 and user-agent will appear in the `download_log` row, but
 `accessed_by_user_id` will say Alice - because the token is the
 proof of identity, not the request. This is by design (the SPA
@@ -40,11 +42,6 @@ from ..config import settings
 from ..middleware.errors import AppError
 from ..utils.crypto import constant_time_equals
 
-# 60 seconds. Long enough to start the download (the FileResponse
-# stream then runs to completion regardless of token expiry - the
-# token only gates the initial GET).
-DEFAULT_TTL_SEC = 60
-
 
 def _now() -> int:
     return int(datetime.now(tz=timezone.utc).timestamp())
@@ -53,7 +50,7 @@ def _now() -> int:
 # Domain-separation prefix so a download-URL HMAC can never collide with another
 # HMAC that also keys on JWT_SECRET (SSE token, unsubscribe token, unlock cookie)
 # even if a payload structure ever lined up (audit Info-2). Bumping the version
-# suffix invalidates outstanding tokens, which is harmless at a ~60s TTL.
+# suffix invalidates outstanding tokens, which is harmless at a TTL of minutes.
 _DOMAIN = b"fh:download-url:v1\x00"
 
 
@@ -63,8 +60,10 @@ def _sign(payload: bytes) -> str:
     return base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
 
 
-def issue(file_id: str, user_id: int, ttl_sec: int = DEFAULT_TTL_SEC) -> str:
-    """Mint a signed download token for (file_id, user_id) with ttl."""
+def issue(file_id: str, user_id: int, ttl_sec: int) -> str:
+    """Mint a signed download token for (file_id, user_id) with ttl. The TTL
+    is required: the only source of it is the settings registry, and a
+    default here would be a second definition that drifts."""
     exp = _now() + ttl_sec
     payload = f"{file_id}|{user_id}|{exp}".encode()
     sig = _sign(payload)

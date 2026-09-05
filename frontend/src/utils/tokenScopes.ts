@@ -16,7 +16,7 @@ export const TOKEN_SCOPES = [
   'files:delete',
 ] as const
 
-export type TokenScope = (typeof TOKEN_SCOPES)[number]
+type TokenScope = (typeof TOKEN_SCOPES)[number]
 
 /** Display grouping for the create form (purely presentational). */
 export const TOKEN_SCOPE_GROUPS: { group: 'sharing' | 'files'; scopes: TokenScope[] }[] = [

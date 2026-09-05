@@ -107,10 +107,6 @@ def recipient_targets(
     return GroupListResponse(items=items)
 
 
-def _count_members(db: Session, group_id: int) -> int:
-    return db.query(GroupMember).filter(GroupMember.group_id == group_id).count()
-
-
 def _count_members_bulk(db: Session, group_ids: list[int]) -> dict[int, int]:
     """Member counts for a set of groups in one query (was a COUNT per group)."""
     if not group_ids:

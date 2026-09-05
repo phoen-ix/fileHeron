@@ -51,14 +51,6 @@ logger = logging.getLogger("fileheron.shares_router")
 router = APIRouter(prefix="/api/shares", tags=["shares"])
 
 
-def _visible_files(share) -> list:
-    """Files the share's *current owner / recipients* should see. Excludes
-    rows in ``state=deleted`` - the audit log + admin file history keep
-    the historical record; user-facing surfaces shouldn't echo back what
-    the user just deleted."""
-    return [f for f in share.files if f.state != FileState.deleted]
-
-
 def _effective_subject(share, files) -> str:
     """Subject if set, else first file's filename, else "" (frontend
     localises the empty case to "(no subject)").

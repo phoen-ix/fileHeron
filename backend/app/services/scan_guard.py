@@ -417,11 +417,6 @@ def snapshot() -> dict:
     return _snapshot
 
 
-def enabled_cached() -> bool:
-    _ensure_fresh()
-    return _enabled
-
-
 def is_allowlisted(ip: str) -> bool:
     _ensure_fresh()
     return ip_in_networks(ip, _allow_nets)
@@ -1090,7 +1085,8 @@ def _maybe_escalate_network(
     like a distributed scan.
     """
     # Allowlist comes from the SNAPSHOT the caller already holds, never from the
-    # module cache. `ip_in_networks_any_allowlisted` calls `_ensure_fresh()`,
+    # module cache. The cached accessors (`snapshot`, `is_allowlisted`,
+    # `is_blocked`) call `_ensure_fresh()`,
     # which opens its own SessionLocal - a nested session opened while this
     # caller has an uncommitted INSERT pending. In production those are separate
     # connections so it merely costs a round trip on a write path; under the test
@@ -1184,12 +1180,6 @@ def _network_contains_allowlisted(network: str, allow_nets: tuple) -> bool:
         return True  # unparseable: refuse to escalate
     return any(n.subnet_of(net) or net.subnet_of(n) for n in allow_nets
                if n.version == net.version)
-
-
-def ip_in_networks_any_allowlisted(network: str) -> bool:
-    """Cached-snapshot form, for callers outside a transaction."""
-    _ensure_fresh()
-    return _network_contains_allowlisted(network, _allow_nets)
 
 
 def release(

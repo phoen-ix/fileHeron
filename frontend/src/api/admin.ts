@@ -229,13 +229,6 @@ export function getSystemStatus() {
   return api.get<SystemStatusResponse>('/admin/system/status')
 }
 
-export function getCronRuns(params: { job_name?: string; limit?: number } = {}) {
-  return api.get<{ items: CronRunDTO[]; limit: number }>(
-    '/admin/system/cron-runs',
-    { params },
-  )
-}
-
 /** Enqueue a scheduled cron to run now on the worker. The status table
  * updates via the existing SSE 'cron_run' event when it finishes. */
 export function runCron(jobName: string) {
@@ -789,10 +782,6 @@ export function adminQuarantineRelease(fileId: string, payload: QuarantineAction
 
 export function adminQuarantinePurge(fileId: string) {
   return api.delete<void>(`/admin/files/${fileId}/quarantine`)
-}
-
-export function adminQuarantineDownloadUrl(fileId: string): string {
-  return `/api/admin/files/${fileId}/quarantine/download`
 }
 
 export function getQuarantineSettings() {

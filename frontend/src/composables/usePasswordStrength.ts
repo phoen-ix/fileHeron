@@ -5,9 +5,9 @@
 
 import { computed, type Ref } from 'vue'
 
-export type StrengthLabel = 'weak' | 'fair' | 'good' | 'strong'
+type StrengthLabel = 'weak' | 'fair' | 'good' | 'strong'
 
-export interface Strength {
+interface Strength {
   score: 0 | 1 | 2 | 3
   label: StrengthLabel
 }

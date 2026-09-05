@@ -529,7 +529,6 @@
   },
   "admin_system": {
     "eyebrow": "Admin / System",
-    "heading": "Systemzustand",
     "sub": "Live-Status, letzte Cron-Läufe und Betriebs-Alarme.",
     "refresh": "Aktualisieren",
     "refreshed_at": "Aktualisiert {when}",
@@ -616,30 +615,7 @@
     }
   },
   "admin_settings": {
-    "eyebrow": "Admin / Einstellungen",
-    "intro": "Laufzeit-Einstellungen ohne .env-Bearbeitung oder Container-Neustart konfigurieren. Sensible Werte werden verschlüsselt gespeichert.",
-    "section_titles": {
-      "general": "Allgemein",
-      "sso": "SSO / OIDC",
-      "api_tokens": "API-Token-Richtlinie",
-      "public_links": "Öffentliche-Links-Richtlinie",
-      "email": "E-Mail / SMTP",
-      "twofa": "Zwei-Faktor-Pflicht",
-      "quarantine": "Quarantäne-Alarme",
-      "email_change": "E-Mail-Änderung",
-      "advanced": "Erweitert"
-    },
-    "sections": {
-      "general": "Kleine Schalter und allgemeine App-Einstellungen - beginnt mit der Startseite an/aus.",
-      "sso": "Eine oder mehrere OIDC-Identity-Provider konfigurieren (Microsoft Entra, Google, Authentik, Keycloak, …). Benutzer verknüpfen ihr Konto mit einem Provider für Ein-Klick-Anmeldung.",
-      "api_tokens": "Festlegen, wer programmatische API-Tokens anlegen darf - alle, nur Mitarbeiter oder nur Admins. Eine Allowlist ergänzt die Basis-Richtlinie.",
-      "public_links": "Festlegen, wer öffentliche Links zu Freigaben anlegen darf - alle, nur Mitarbeiter oder nur Admins. Eine Allowlist ergänzt die Basis-Richtlinie.",
-      "email": "Ausgehenden SMTP konfigurieren - Host, Port, Zugangsdaten, TLS-Modus, Absender. Test-E-Mail senden und tatsächlichen Fehler sehen, falls etwas nicht stimmt.",
-      "twofa": "Festlegen, wer 2FA aktivieren muss - beliebige Kombination aus Rollen (Admin / Mitarbeiter / Client) und Gruppen. Betroffene Benutzer ohne TOTP werden bei jedem Seitenaufruf in den Einrichtungsfluss umgeleitet, bis sie sich registrieren.",
-      "quarantine": "Wenn ClamAV einen Upload als infiziert markiert, optional zusätzlich eine Benachrichtigung (E-Mail + In-App-Glocke) an alle Admins senden.",
-      "email_change": "Festlegen, wie E-Mail-Änderungen bestätigt werden, ob Benutzer ihre eigene E-Mail ändern dürfen und was mit einer SSO-Verknüpfung bei einer E-Mail-Änderung passiert.",
-      "advanced": "Werte für Sitzungen, Rate-Limits, Aufbewahrung, Uploads und Branding anpassen, die sonst in Umgebungsvariablen leben. Jeder Wert fällt auf seinen Standard zurück; Änderungen greifen sofort, ohne Neustart."
-    }
+    "eyebrow": "Admin / Einstellungen"
   },
   "admin_settings_email_change": {
     "title": "E-Mail-Änderung",
@@ -908,10 +884,6 @@
     "url_label": "Release-API-URL",
     "url_placeholder": "https://api.github.com/repos/phoen-ix/fileHeron/releases?per_page=30",
     "url_help": "Standardmäßig auf das Upstream-Repo gesetzt. Forks können auf das eigene Releases-Endpoint zeigen - Antwort muss GitHub-kompatibel sein (tag_name, html_url, body, published_at).",
-    "mode_label": "Prüf-Häufigkeit",
-    "mode_auto": "Automatisch (alle 24 Stunden)",
-    "mode_manual": "Nur manuell (keine automatische Prüfung)",
-    "mode_help": "Im manuellen Modus ist der Cron deaktiviert - neue Releases siehst du nur, wenn du in /admin/system auf „Jetzt prüfen\" klickst.",
     "saved_toast": "Update-Einstellungen gespeichert."
   },
   "admin_email": {
@@ -980,10 +952,6 @@
     "mailbox": "Postfach / Ordner",
     "behaviour": "Verhalten",
     "schedule_moved": "Abruf-Intervall und Aktivierung findest du unter",
-    "check_mode": "Abruf",
-    "mode_auto": "Automatisch (nach Zeitplan)",
-    "mode_manual": "Nur manuell",
-    "interval": "Intervall (Minuten)",
     "post_fetch": "Nach dem Abruf einer Nachricht",
     "action_mark_read": "Als gelesen markieren (behalten)",
     "action_mark_read_help": "Die Nachricht auf dem Server als \\Seen markieren, aber behalten.",
@@ -1098,14 +1066,6 @@
     },
     "subject_label": "Betreff",
     "body_label": "Nachrichtentext",
-    "toolbar": {
-      "bold": "Fett",
-      "italic": "Kursiv",
-      "heading": "Überschrift",
-      "bullet_list": "Aufzählung",
-      "ordered_list": "Nummerierte Liste",
-      "insert_placeholder": "Platzhalter einfügen…"
-    },
     "placeholders_heading": "Verfügbare Platzhalter",
     "placeholders_help": "Klicke einen Platzhalter an, um ihn an der Cursorposition einzufügen. Sie werden beim Versand durch die echten Werte ersetzt.",
     "required_tag": "erforderlich",
@@ -1745,11 +1705,7 @@
       "ip": "IP",
       "request": "Req"
     },
-    "actor_deleted": "(gelöscht)",
-    "pager": {
-      "older": "Älter",
-      "newer": "Neuer"
-    }
+    "actor_deleted": "(gelöscht)"
   },
   "account": {
     "title": "Konto",
@@ -1829,7 +1785,6 @@
     "saved_codes_intro": "Jeder Code funktioniert genau einmal. Sie helfen dir, falls du den Authenticator verlierst. Wir zeigen sie nicht erneut an.",
     "saved_codes_confirm": "Ich habe sie gespeichert",
     "saved_codes_copy": "Alle kopieren",
-    "saved_codes_copied": "Kopiert.",
     "active_title": "Zwei-Faktor ist aktiv.",
     "active_intro": "Bei jeder Anmeldung wird ein Code aus deiner App benötigt.",
     "regenerate_cta": "Wiederherstellungscodes neu erzeugen",
@@ -2085,8 +2040,7 @@
       "download_limit_help": "Maximale Anzahl erfolgreicher Downloads. Leer lassen für unbegrenzt.",
       "notify_label": "Bei jedem Download benachrichtigen",
       "result_eyebrow": "Öffentlicher Link (einmalige Anzeige)",
-      "result_warning": "URL jetzt kopieren - wird nicht erneut angezeigt. Über deinen üblichen Kanal an den Empfänger senden.",
-      "continue": "Fertig - zur Freigabe"
+      "result_warning": "URL jetzt kopieren - wird nicht erneut angezeigt. Über deinen üblichen Kanal an den Empfänger senden."
     },
     "progress": {
       "uploading_title": "Wird hochgeladen…",
@@ -2155,7 +2109,6 @@
     "qr_label": "QR-Code",
     "qr_download": "Als PNG herunterladen",
     "url_legacy_hint": "URL nicht gespeichert - dieser Link wurde vor dem Anzeige-Feature erstellt. Widerrufen und neu erstellen, um eine sichtbare URL zu erhalten.",
-    "url_lost": "Die vollständige URL wurde nur bei der Erstellung angezeigt - bewahre sie sicher auf. Falls verloren: widerrufen und neu erstellen.",
     "revoke": "Link widerrufen",
     "revoke_confirm": "Diesen öffentlichen Link widerrufen? Wer die URL hat, verliert sofort den Zugriff.",
     "revoked_toast": "Öffentlicher Link widerrufen.",
@@ -2647,7 +2600,6 @@
   "admin_ip_blocks": {
     "title": "Gesperrte Quellen",
     "intro": "Alle Adressen und Bereiche, die der Scan-Schutz derzeit abweist, sowie die beobachteten Quellen. Sperren sind immer befristet – keine ist dauerhaft, und aufgehobene Einträge bleiben als Verlauf stehen, bis sie verfallen.",
-    "summary_link": "Gesperrte Quellen verwalten →",
     "block_section": "Quelle sperren",
     "block_help": "Sperrt eine einzelne Adresse oder einen ganzen CIDR-Bereich für eine begrenzte Zeit. Es werden nur global routbare Adressen akzeptiert.",
     "subject_label": "Adresse oder Bereich",
@@ -2688,7 +2640,6 @@
     "col_path": "Letzter Pfad",
     "col_created": "Gesperrt",
     "col_expires": "Läuft ab",
-    "col_actions": "",
     "no_blocks": "Keine Sperren passen zu diesen Filtern.",
     "tag_network": "Bereich",
     "reason": {

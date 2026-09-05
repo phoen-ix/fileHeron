@@ -79,15 +79,12 @@
   --fh-space-4: 1.5rem; /* 24 */
   --fh-space-5: 2.5rem; /* 40 */
   --fh-space-6: 4rem; /* 64 */
-  --fh-space-7: 6rem; /* 96 */
 
   /* --- shape -------------------------------------------------------------- */
   --fh-radius-sm: 2px;
   --fh-radius-md: 4px;
-  --fh-radius-lg: 6px;
   --fh-border: 1px solid var(--fh-hairline);
   --fh-border-strong: 1px solid var(--fh-hairline-strong);
-  --fh-border-ink: 1px solid var(--fh-ink);
 
   /* --- motion (CSS-only) ------------------------------------------------- */
   --fh-easing: cubic-bezier(0.2, 0, 0, 1);

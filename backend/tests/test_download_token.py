@@ -23,7 +23,7 @@ def test_issue_then_verify_roundtrip():
 
 
 def test_verify_rejects_token_for_different_file():
-    token = download_token_svc.issue("file-abc", user_id=42)
+    token = download_token_svc.issue("file-abc", user_id=42, ttl_sec=60)
     with pytest.raises(AppError) as exc:
         download_token_svc.verify("file-OTHER", token)
     assert exc.value.code == "INVALID_DOWNLOAD_TOKEN"
@@ -43,7 +43,7 @@ def test_verify_rejects_garbage():
 
 
 def test_verify_rejects_tampered_signature():
-    token = download_token_svc.issue("file-abc", user_id=42)
+    token = download_token_svc.issue("file-abc", user_id=42, ttl_sec=60)
     user_part, exp_part, sig = token.split(".")
     # Flip a bit in the signature (still valid base64url).
     tampered = sig[:-1] + ("A" if sig[-1] != "A" else "B")
@@ -139,7 +139,7 @@ async def test_download_with_token_for_wrong_file_rejected(
         make_user, db, monkeypatch
     )
     other_token = download_token_svc.issue(
-        "00000000-0000-0000-0000-000000000bbb", user_id=sender.id
+        "00000000-0000-0000-0000-000000000bbb", user_id=sender.id, ttl_sec=60
     )
     resp = await client.get(
         f"/api/files/{file_row.id}/download?dt={other_token}",

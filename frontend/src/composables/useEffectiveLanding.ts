@@ -2,7 +2,7 @@ import type { MeResponse } from '@/types/api'
 
 /** Pickable landing route names (mirrors `services/account_prefs.py
  *  ALLOWED_LANDING_ROUTES`). Single source of truth for the SPA. */
-export const ALLOWED_LANDING_ROUTES = [
+const ALLOWED_LANDING_ROUTES = [
   'home',
   'outbox',
   'inbox',
@@ -10,11 +10,11 @@ export const ALLOWED_LANDING_ROUTES = [
   'account',
 ] as const
 
-export type LandingRouteName = (typeof ALLOWED_LANDING_ROUTES)[number]
+type LandingRouteName = (typeof ALLOWED_LANDING_ROUTES)[number]
 
 /** Map a route name to its URL path. Used to resolve the user's saved
  *  preference into something `router.push()` understands. */
-export const ROUTE_NAME_TO_PATH: Record<LandingRouteName, string> = {
+const ROUTE_NAME_TO_PATH: Record<LandingRouteName, string> = {
   home: '/',
   outbox: '/outbox',
   inbox: '/inbox',

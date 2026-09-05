@@ -104,16 +104,6 @@ def check_login_ip_allowed(
         return _local_allow(_ip_key(ip), eff_limit, eff_window)
 
 
-def reset_ip_window(ip: str) -> None:
-    """Clear the IP's counter (e.g. on successful login)."""
-    if not ip:
-        return
-    try:
-        get_redis().delete(_ip_key(ip))
-    except Exception:
-        pass
-
-
 # ---------------------------------------------------------------------------
 # Generic per-IP fixed window for non-login auth-adjacent endpoints
 # (register-from-invite, forgot-password, verify-email).

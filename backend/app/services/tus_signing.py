@@ -100,28 +100,6 @@ def verify_envelope(
 # ---------------------------------------------------------------------------
 
 
-def parse_upload_metadata(header: str) -> dict[str, str]:
-    """Returns map of {key: utf8_value}. Skips malformed entries."""
-    out: dict[str, str] = {}
-    if not header:
-        return out
-    for entry in header.split(","):
-        entry = entry.strip()
-        if not entry:
-            continue
-        parts = entry.split(" ", 1)
-        if len(parts) != 2:
-            # tusd allows valueless keys; we skip them.
-            continue
-        key, b64 = parts
-        try:
-            value = base64.b64decode(b64).decode("utf-8")
-        except Exception:
-            continue
-        out[key.strip()] = value
-    return out
-
-
 def build_upload_metadata_header(payload_b64: str, sig_hex: str, filename: str) -> str:
     """Convenience for clients that don't want to assemble the header
     themselves. Returns the value to set as Upload-Metadata."""

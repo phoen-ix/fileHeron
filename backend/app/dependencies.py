@@ -91,17 +91,8 @@ def get_current_admin(user: User = Depends(get_current_user)) -> User:
     return user
 
 
-def require_role(*allowed: UserRole):
-    def _dep(user: User = Depends(get_current_user)) -> User:
-        if user.role not in allowed:
-            raise AppError(403, "FORBIDDEN", "Insufficient privileges.")
-        return user
-
-    return _dep
-
-
 def require_scope(scope: str):
-    """Gate a token-reachable route on an API-token scope (mirrors require_role).
+    """Gate a token-reachable route on an API-token scope (mirrors get_current_admin).
 
     Depends on get_actor, so it returns the same User the handler consumes -
     swap ``Depends(get_actor)`` for ``Depends(require_scope("..."))`` on a route

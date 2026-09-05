@@ -1,12 +1,31 @@
 """HMAC envelope signing for TUS Upload-Metadata."""
 from __future__ import annotations
 
+import base64
 import time
 
 import pytest
 
 from app.middleware.errors import AppError
 from app.services import tus_signing as ts
+
+
+def _parse_upload_metadata(header: str) -> dict[str, str]:
+    """The inverse of `build_upload_metadata_header`, as tusd reads it:
+    `key1 base64,key2 base64`, malformed entries skipped. Lives here because
+    only these tests ever parsed the header - production receives tusd's
+    already-decoded map in the hook payload."""
+    out: dict[str, str] = {}
+    for entry in header.split(","):
+        parts = entry.strip().split(" ", 1)
+        if len(parts) != 2:
+            continue
+        key, b64 = parts
+        try:
+            out[key.strip()] = base64.b64decode(b64).decode("utf-8")
+        except Exception:
+            continue
+    return out
 
 
 def _good_envelope(**overrides):
@@ -67,7 +86,7 @@ async def test_parse_upload_metadata_round_trip():
     env = _good_envelope()
     payload_b64, sig = ts.sign_envelope(env)
     header = ts.build_upload_metadata_header(payload_b64=payload_b64, sig_hex=sig, filename="hi.txt")
-    parsed = ts.parse_upload_metadata(header)
+    parsed = _parse_upload_metadata(header)
     assert parsed["filename"] == "hi.txt"
     assert parsed["fh_payload"] == payload_b64
     assert parsed["fh_sig"] == sig
@@ -75,7 +94,7 @@ async def test_parse_upload_metadata_round_trip():
 
 @pytest.mark.asyncio
 async def test_parse_upload_metadata_skips_bad_entries():
-    parsed = ts.parse_upload_metadata("filename aGVsbG8=,bare,broken !!!")
+    parsed = _parse_upload_metadata("filename aGVsbG8=,bare,broken !!!")
     assert "filename" in parsed
     assert parsed["filename"] == "hello"
     # Malformed entries silently ignored.

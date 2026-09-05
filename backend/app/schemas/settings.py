@@ -91,12 +91,6 @@ class PresetsResponse(APIBaseModel):
 # ---------------------------------------------------------------------------
 
 
-class PublicProviderItem(APIBaseModel):
-    id: str
-    name: str
-    preset: OIDCPreset
-
-
 class PublicProvider(APIBaseModel):
     id: str
     name: str

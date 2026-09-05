@@ -1,3 +1,111 @@
+# file:Heron v2.15.0
+
+**A full audit of the web app and the desktop client: a passkey sign-in that
+could never finish, a Delete button that destroyed quarantine evidence, and a
+restart that could still sign you out.**
+
+Every file of the backend and the web app was read for bugs, dead code and
+hardening, and every fix landed with a test that fails without it. No
+migration, no host step, no default moves. Two things change on the wire, both
+deliberate and both described below: adding a passkey now asks for your
+password first, and deleting a quarantined file is refused. Desktop client
+**1.4.5** ships alongside on its own tag with the client half of the audit.
+
+---
+
+## Signing in with a passkey could never complete on a two-factor account
+
+Since v2.12.0 the server answers a passkey sign-in on an account with
+two-factor authentication by asking for the second factor. The web app never
+learned to read that answer: it looked for a session, found none, and reported
+an error. The "Use passkey" button is shown exactly to those users, so for them
+it failed every time, and no test on either side covered it.
+
+A passkey assertion that the authenticator verified you for - a PIN or a
+fingerprint - now counts as the second factor and signs you straight in. One
+that did not takes you to the code step, where a one-time code or a recovery
+code completes the sign-in. Because a passkey can now stand in for your
+authenticator app, **adding a passkey asks for your password first**, the same
+step-up that turning two-factor off requires.
+
+*For scripted clients:* `POST /api/account/webauthn/register/begin` now needs
+`password` in its body. Passkeys are a browser feature; the desktop client does
+not use them.
+
+## Deleting a file could destroy quarantine evidence
+
+When the virus scanner flags a file, the stored copy *is* the quarantine copy.
+The Delete button on a share page, on the admin file history and on a user's
+file list reached the same helper as an ordinary delete, so an administrator
+pressing it unlinked the quarantined bytes under a plain "file deleted" audit
+row - bypassing the Quarantine page and the purge receipt it writes.
+
+Deleting a quarantined file now answers `409 FILE_QUARANTINED`, and the admin
+pages show a link to Quarantine in place of the button. Right-to-erasure and a
+configuration import still purge quarantined bytes, deliberately, under their
+own receipts.
+
+## A restarting server could still sign the web app out
+
+v2.13.4 stopped a failed session renewal from signing you out during a
+restart. The request right after the renewal - loading your profile - had the
+same hole: a 502 there was treated as "not signed in" and remembered for the
+life of the tab, so the in-app updater's own restart could still leave you on
+the login page. Only a genuine 401 or 403 is a verdict now; anything else is
+retried on the next navigation.
+
+## Also fixed in the web app
+
+- Extending a share's expiry after the 24-hour warning had gone out never
+  re-armed the warning, so the new expiry passed silently.
+- Cancelling the "Create API token" dialog re-seeded the form with the old
+  defaults - no expiry, all permissions - instead of the 90-day, limited ones.
+- Adding or removing a passkey was recorded in the audit log as turning the
+  authenticator app on or off. Two passkey events exist now.
+- "Test connection" on an SSO provider reported success for an issuer URL that
+  every sign-in would then refuse. It now compares the issuer the provider
+  announces with the one configured, with the same tolerance sign-in uses.
+- A sign-in through SSO minted a session for an account that was locked after
+  too many password failures.
+- Expiring several shares at once could put raw database or filesystem error
+  text into the notification shown to the user. It is logged instead.
+- `%` and `_` in three admin searches (mail log, inbox, sessions) matched
+  everything instead of themselves.
+- A very long forwarded client address on the ZIP download route failed the
+  download instead of being clipped like every other route.
+- On the notification page reached from an email link, a save that failed was
+  neither shown nor rolled back. A share created only from large uploads
+  recorded "0 files added" in its audit row. The login page ignored the
+  "your sign-in step expired" it was sent to. A dozen search and reload timers
+  outlived the page they belonged to.
+- The sessions panel now states the window a revoked session's access token
+  stays valid for (15 minutes by default), on the account page and the admin
+  user page.
+
+## Housekeeping
+
+Dead code is gone on both sides: twelve unused backend symbols, two unused API
+wrappers, nineteen over-exported symbols, three unused design tokens and
+forty-one locale keys nothing rendered. A new test fails on any locale key that
+nothing can reach, alongside the one that already failed on a missing key.
+
+Hardening, none of it visible: one grouped query in the hourly quota
+reconciliation instead of one per user; a time limit on the cached SSO
+discovery document, so a provider that moves an endpoint is picked up within an
+hour instead of at the next restart; timeouts on the three Redis clients that
+had none; every client address written the same way, so an IPv6-mapped address
+is one address in the forensics and the rate limiter alike; the share list
+loads once instead of six times when switching between inbox and outbox.
+
+## Upgrade notes
+
+No migration and no host step: update from *Admin → System*. An API-token
+client that adds passkeys must send the password (see above); one that deletes
+files must expect `409 FILE_QUARANTINED` for a quarantined file. Nothing else
+that was accepted before is refused now.
+
+The desktop client's notes are in `client/RELEASE_NOTES.md` under 1.4.5.
+
 # file:Heron v2.14.1
 
 **A documented command that reconfigured your live server, and three controls

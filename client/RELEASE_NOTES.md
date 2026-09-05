@@ -1,3 +1,69 @@
+# Desktop client 1.4.5
+
+**Uploads that respect your server's limit, sign-ins that renew during a long
+batch, and partial downloads that survive signing out.**
+
+The client half of the 2026-09 audit: every module read, every fix pinned by a
+test. Nothing changes in how you use the app; several things stop failing.
+
+Requires server **v2.6.1 or newer** (unchanged). Against server v2.15.0 the new
+"this file is in quarantine" refusal is shown in your language.
+
+---
+
+## Mid-size uploads failed on servers with a lowered upload limit
+
+The app decided between a one-shot upload and a resumable one at a fixed 100
+MB, while the server publishes the limit it actually enforces - and an
+administrator can lower it. On such a server every file between the two limits
+was sent the wrong way and refused, repeatably, while both smaller and larger
+files worked. The app now reads the server's limit at sign-in, exactly as the
+web app does.
+
+## Uploads are queued, and a queued upload renews your sign-in
+
+Every file in a batch used to start at once - forty files, forty simultaneous
+uploads competing for one connection, every progress bar crawling. At most four
+now upload at a time; the rest show *Pending* until a slot frees.
+
+That made a latent gap real: a one-shot upload never renewed an expired sign-in
+the way every other request does, so a file that started after the fifteen-
+minute mark would have failed with "session expired". It renews now.
+
+## A revoked API token left a dead screen
+
+If the token this app signed in with was revoked or expired on the server, the
+app stayed open with every panel reporting an error, and only Settings → Sign
+out got you back to the login screen. It now returns to the login screen with
+the server's reason, and a token that is refused at sign-in shows that reason
+instead of a spinner that never stops.
+
+## Interrupted downloads lost their Resume button until the next launch
+
+When your sign-in expired in the middle of a download, the partial file stayed
+on disk but the share page offered a plain *Download* again until you restarted
+the app. Signing out, or being returned to the login screen, now pauses every
+running download, keeps the partial, and offers *Resume* on your next visit.
+"Save all" fetches two files at a time (each still over several connections)
+instead of all of them at once.
+
+## Smaller fixes
+
+- Changing the language in Settings froze the window for the length of a
+  server round-trip - the full timeout when the server was unreachable.
+- The New share form offered a public link to accounts whose administrator has
+  excluded them from creating one; they learned of it only after filling in the
+  whole form. The section is hidden for them now.
+- Ticking "Never" for the expiry greyed the date and left the time editable.
+- A public-link download limit of 0 or less silently meant "unlimited"; it is
+  refused like the share limit is.
+- A resumable upload that failed for good waited its longest retry interval
+  before saying so.
+- A sign-in renewed during a request kept that request's own timeout on the
+  retry; an unusual error reply from a proxy no longer breaks the error report
+  itself; a hand-edited `config.json` with the wrong type in a field can no
+  longer break downloads.
+
 # Desktop client 1.4.4
 
 **Signing in less often, and one wrong error message.**

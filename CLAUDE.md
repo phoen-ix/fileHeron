@@ -15,6 +15,15 @@ keep this to what would cause a wrong move if unknown.
 
 ## Status
 
+**v2.15.0 is the 2026-09 audit wave (web app + desktop client).** No migration,
+no host step, no default moves. Two things move on the wire, both deliberate:
+`POST /api/account/webauthn/register/begin` requires the caller's `password`
+(a UV-verified passkey now stands in for TOTP, so adding one is step-up gated),
+and deleting an infected file answers `409 FILE_QUARANTINED` (act on it via
+`/admin/quarantine`). Desktop client **1.4.5** ships alongside on its own tag.
+The invariants live in the Auth, Antivirus and Desktop client sections;
+`RELEASE_NOTES.md` has the admin-facing list.
+
 **v2.14.1 is a fix wave over the audit sweep.** No migration, no host step, no
 API change, no default moves, no client release. Two things move: a config
 import now replays the side effects the raw `AppSetting` writes skipped
@@ -674,9 +683,10 @@ so a rollback past them needs the [[reference_rollback_migration_trap]]
 permissive/NULL value, so existing rows, in-flight sessions and
 approval-disabled deployments are unaffected by the upgrade itself.
 
-Backend **`v2.14.1`** is the newest TAG - released 2026-08-23, the fix wave at
-the top of this file. Before it, v2.14.0 - released 2026-08-20, the email
-template sweep. **The reference host runs v2.14.1** (updated 2026-08-23). Keep
+Backend **`v2.15.0`** is the newest TAG - released 2026-09-06, the audit wave at
+the top of this file. Before it, v2.14.1 - released 2026-08-23, the fix wave over
+the audit sweep. **The reference host runs v2.14.1** (updated 2026-08-23; v2.15.0
+was released but not yet applied there). Keep
 this current: it read "runs v2.13.5" while the host was actually on v2.14.0, and
 that line was carried forward unread through two releases - an operator deciding
 how far behind they were would have been wrong by two versions. Note what the updater can and cannot see:
@@ -689,7 +699,7 @@ its `client-v*` tag, which CI checks on every push.) Previous notable sweep:
 v2.8.1, audit #2 - see the block below; .0 also carried the dependency/runtime
 sweep: Python 3.14, Node 24 LTS, TypeScript 6, ESLint 10, Vite 8, Pinia 4, zero
 open dependency PRs.
-Desktop client **`client-v1.4.4`** - shipped + in production, published for
+Desktop client **`client-v1.4.5`** - released 2026-09-06 beside v2.15.0, published for
 public self-hosting. **v2.8.0 needs no host step and no migration**, but it DOES
 change one default: `imap.require_known_sender` is ON, so an instance that
 accepts inbound mail from addresses with no user account must turn it off at

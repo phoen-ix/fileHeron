@@ -29,14 +29,14 @@ import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
 import type { FileInShareResponse, ShareResponse } from '@/types/api'
 import { formatBytes } from '@/utils/bytes'
-import { formatExpiryInSiteTime, siteLocalIsoToUtcIso } from '@/utils/datetime'
+import { siteLocalIsoToUtcIso } from '@/utils/datetime'
 import { shareStatePill } from '@/utils/statePill'
 
 const route = useRoute()
 const auth = useAuthStore()
 const ui = useUiStore()
-const { t, locale } = useI18n()
-const { formatDate } = useSiteDateFormat()
+const { t } = useI18n()
+const { formatDate, formatExpiry } = useSiteDateFormat()
 const { describe } = useApiError()
 
 const share = ref<ShareResponse | null>(null)
@@ -381,10 +381,6 @@ async function onFileDeleted(_fileId: string) {
   // with audit reason `last_file_deleted`). A naive local filter would
   // hide the file row but leave the stale "active" badge.
   await load()
-}
-
-function formatExpiry(iso: string | null): string {
-  return formatExpiryInSiteTime(iso, locale.value, t('expiry.never_label'))
 }
 
 // In-browser preview. Mint an inline `?dt=` URL on open; preview never

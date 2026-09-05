@@ -258,13 +258,14 @@ def _resolve_recipient_user_id(
     if not recipient_email:
         return None
     from ..models.user import User
+    from ..utils.crypto import normalize_email
 
     own = db is None
     sess = db or SessionLocal()
     try:
         return (
             sess.query(User.id)
-            .filter(User.email == recipient_email.lower().strip())
+            .filter(User.email == normalize_email(recipient_email))
             .scalar()
         )
     except Exception:

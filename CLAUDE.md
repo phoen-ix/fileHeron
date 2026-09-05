@@ -1496,6 +1496,27 @@ sendfile()`; no X-Accel-Redirect.
 - **The exchange accepts recovery codes, not only TOTP.** Without that, a user who loses their authenticator and signs in through SSO has no route back into their own account short of an operator on the host.
 - **`rate_limit.record_success` must not run until the second factor passes.** It clears `failed_login_count` and `locked_until`, and the OIDC callback called it at the first factor - so a failing second factor arrived with a freshly reset lockout counter. Pinned by a test.
 
+- **Revoking ONE session leaves its access token valid for the rest of its
+  TTL** (15 min default, admin-raisable to 1440). The only immediate mark is
+  the per-user `sessions_invalidated_at`, and it is per-user by design -
+  stamping it for a single session would close every other tab. A per-token
+  denylist was considered in the 2026-09 audit and not built: it needs a Redis
+  lookup on every authenticated request, which is exactly the hot-path I/O the
+  scan-guard block refuses. The sessions help text on the account page and on
+  the admin user page states the window; keep both true if a denylist ever
+  lands.
+- **Email verification is unreachable by construction, and deliberately left
+  so** (2026-09 audit). Every creator writes `email_verified=True` (admin
+  bootstrap, setup, invites, user management, config-backup import,
+  `promote_user`, `seed_dev`); only the model default is False.
+  `POST /api/auth/resend-verification` needs a signed-in user while the first
+  factor refuses unverified users with `EMAIL_NOT_VERIFIED`, so even a
+  hand-made unverified row cannot request a mail. Removing the surface spans
+  the column, the `verify` template (four files), two SPA routes and seven
+  pinned tests; making it real needs an anonymous resend route plus a policy
+  toggle that creates invitees unverified. Both were judged out of scope for a
+  dead-code item. Do not "fix" the model default to True, and do not extend the
+  flow without the anonymous resend route.
 ## Uploads
 
 ```

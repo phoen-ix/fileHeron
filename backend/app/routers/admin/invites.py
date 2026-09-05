@@ -1,8 +1,6 @@
 """/api/admin/invites - list + revoke + regenerate + resend + activate."""
 from __future__ import annotations
 
-from datetime import datetime, timezone
-
 from fastapi import APIRouter, Depends, Query, Request, status
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
@@ -22,13 +20,14 @@ from ...schemas.admin import (
 )
 from ...services import invite as invite_svc
 from ...services import site as site_svc
+from ...utils.timeutil import utc_now
 from .users import _to_user_item
 
 router = APIRouter()
 
 
 def _to_invite_item(invite, inviter_name: str | None) -> AdminInviteItem:
-    now = datetime.now(tz=timezone.utc).replace(tzinfo=None)
+    now = utc_now()
     # v1.1.5: admin delete is now a hard delete, so no row in the list
     # can be in the legacy 'revoked' tombstone state. Only pending and
     # expired remain.

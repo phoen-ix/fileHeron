@@ -12,6 +12,7 @@ import { useUiStore } from '@/stores/ui'
 import type { AdminMailRow } from '@/types/api'
 import { siteLocalIsoToUtcIso } from '@/utils/datetime'
 import { downloadBlob } from '@/utils/downloadBlob'
+import { mailStatusPill } from '@/utils/statePill'
 
 const { t } = useI18n()
 const { formatDate } = useSiteDateFormat()
@@ -36,13 +37,7 @@ const loading = ref(true)
 const errorMsg = ref<string | null>(null)
 
 const statusOptions = ['', 'queued', 'sent', 'failed', 'error']
-
-function statusTone(s: string): 'active' | 'warn' | 'danger' | undefined {
-  if (s === 'sent') return 'active'
-  if (s === 'queued') return 'warn'
-  if (s === 'failed' || s === 'error') return 'danger'
-  return undefined
-}
+const statusTone = mailStatusPill
 
 const filterParams = computed(() => {
   const p: Record<string, string> = {}

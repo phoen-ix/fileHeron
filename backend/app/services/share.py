@@ -273,7 +273,7 @@ def _dispatch_share_created(
     if not notify_user_ids:
         return
     base_url = site_svc.get_site_url(db)
-    sender = share.created_by or db.query(User).get(share.created_by_id)
+    sender = share.created_by or db.get(User, share.created_by_id)
     share_url = f"{base_url}/share/{share.id}"
     payload_base = {
         "sender_name": sender.display_name if sender else "",
@@ -310,7 +310,7 @@ def _notify_approvers_pending(db: Session, share: Share) -> None:
     if not approver_ids:
         return
     base_url = site_svc.get_site_url(db)
-    sender = share.created_by or db.query(User).get(share.created_by_id)
+    sender = share.created_by or db.get(User, share.created_by_id)
     payload_base = {
         "sender_name": sender.display_name if sender else "",
         "subject": share.subject,
@@ -337,7 +337,7 @@ def _notify_share_decision(
     from . import notification as notif_svc
     from . import site as site_svc
 
-    creator = share.created_by or db.query(User).get(share.created_by_id)
+    creator = share.created_by or db.get(User, share.created_by_id)
     if creator is None:
         return
     base_url = site_svc.get_site_url(db)
@@ -1145,7 +1145,7 @@ def _dispatch_files_added_after_approval(
     were not downloadable yet."""
     if share.state != ShareState.active:
         return
-    owner = share.created_by or db.query(User).get(share.created_by_id)
+    owner = share.created_by or db.get(User, share.created_by_id)
     if owner is None:
         return
     notify = share.notify_on_activation if share.notify_on_activation is not None else True

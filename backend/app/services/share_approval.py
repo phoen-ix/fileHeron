@@ -204,7 +204,7 @@ def is_approval_required(db: Session, share: Share) -> bool:
     if scope == "outbound_to_clients" and not _has_client_recipient(db, share):
         return False
     if exempt_approvers(db):
-        creator = share.created_by or db.query(User).get(share.created_by_id)
+        creator = share.created_by or db.get(User, share.created_by_id)
         if creator is not None and can_approve(db, creator):
             return False
     return True

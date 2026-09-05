@@ -520,6 +520,7 @@ v-if="pwError" class="fh-notice" role="alert"
     <!-- Sessions -->
     <section id="sessions" class="account-section">
       <h2 class="account-h2">{{ $t('account.section_sessions') }}</h2>
+      <p class="fh-field-help">{{ $t('account.sessions_help') }}</p>
       <ul class="sessions">
         <SessionRow
           v-for="s in sessions"

@@ -426,7 +426,9 @@ api.interceptors.response.use(
       // expired session, which is precisely what should be refreshed and
       // replayed. Excluding all of it would sign people out instead.
       url.includes('/account/change-password') ||
-      url.includes('/account/email') ||
+      // POST only: DELETE /account/email (cancel a pending change) takes no
+      // secret and 401s only for an expired session, which must be replayed.
+      (original.method?.toUpperCase() === 'POST' && url.includes('/account/email')) ||
       url.includes('/account/2fa/enable') ||
       url.includes('/account/2fa/disable') ||
       url.includes('/account/2fa/recovery-codes/regenerate')

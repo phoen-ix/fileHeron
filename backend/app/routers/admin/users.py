@@ -1,7 +1,7 @@
 """/api/admin/users + /api/admin/erasure-receipts."""
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 
 from fastapi import APIRouter, Depends, Query, Request, status
 from fastapi.responses import Response
@@ -29,6 +29,7 @@ from ...services import email_change as email_change_svc
 from ...services import erasure as erasure_svc
 from ...services import step_up
 from ...services import user_management as um_svc
+from ...utils.timeutil import utc_now
 
 router = APIRouter()
 
@@ -189,8 +190,7 @@ def force_password_reset(
     db.commit()
     return ForcePasswordResetResponse(
         plaintext_token=plaintext,
-        expires_at=datetime.now(tz=timezone.utc).replace(tzinfo=None)
-        + timedelta(hours=1),
+        expires_at=utc_now() + timedelta(hours=1),
     )
 
 

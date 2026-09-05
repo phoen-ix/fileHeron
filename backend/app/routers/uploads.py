@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from ..config import settings
 from ..dependencies import get_db, require_scope
 from ..middleware.errors import AppError
+from ..models.file import FileState
 from ..models.share import ShareState
 from ..models.user import User
 from ..schemas.upload import DirectUploadResponse, UploadInitRequest, UploadInitResponse
@@ -225,7 +226,7 @@ async def direct_upload(
             os.unlink(tmp_path)
 
     file_row.storage_path = locator
-    file_row.state = file_row.state.__class__.ready_unscanned
+    file_row.state = FileState.ready_unscanned
     file_row.sha256_hex = sha.hexdigest()
     file_row.finalized_at = when
     # The bytes are already on the storage backend and cannot roll back with the

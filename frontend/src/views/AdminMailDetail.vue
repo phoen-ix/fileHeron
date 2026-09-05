@@ -8,6 +8,7 @@ import { useApiError } from '@/composables/useApiError'
 import { useSiteDateFormat } from '@/composables/useSiteDateFormat'
 import { useUiStore } from '@/stores/ui'
 import type { AdminMailDetail } from '@/types/api'
+import { mailStatusPill } from '@/utils/statePill'
 
 const { t } = useI18n()
 const { formatDate } = useSiteDateFormat()
@@ -20,13 +21,7 @@ const row = ref<AdminMailDetail | null>(null)
 const loading = ref(true)
 const errorMsg = ref<string | null>(null)
 const resending = ref(false)
-
-function statusTone(s: string): 'active' | 'warn' | 'danger' | undefined {
-  if (s === 'sent') return 'active'
-  if (s === 'queued') return 'warn'
-  if (s === 'failed' || s === 'error') return 'danger'
-  return undefined
-}
+const statusTone = mailStatusPill
 
 async function load() {
   loading.value = true

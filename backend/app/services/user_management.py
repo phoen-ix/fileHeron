@@ -209,7 +209,7 @@ def force_password_reset(
     mode the email-with-logs-fallback also surfaces it).
 
     Caller commits."""
-    from datetime import datetime, timedelta, timezone
+    from datetime import timedelta
 
     from ..models.password_reset_token import PasswordResetToken
     from ..utils.crypto import random_token, sha256_hex
@@ -218,8 +218,7 @@ def force_password_reset(
     record = PasswordResetToken(
         user_id=target.id,
         token_hash=sha256_hex(plaintext),
-        expires_at=datetime.now(tz=timezone.utc).replace(tzinfo=None)
-        + timedelta(hours=1),
+        expires_at=utc_now() + timedelta(hours=1),
     )
     db.add(record)
     db.flush()

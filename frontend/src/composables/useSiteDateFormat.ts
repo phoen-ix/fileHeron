@@ -7,10 +7,14 @@
  */
 import { useI18n } from 'vue-i18n'
 
-import { formatDateInSiteTime, formatInSiteTime } from '@/utils/datetime'
+import {
+  formatDateInSiteTime,
+  formatExpiryInSiteTime,
+  formatInSiteTime,
+} from '@/utils/datetime'
 
 export function useSiteDateFormat() {
-  const { locale } = useI18n()
+  const { locale, t } = useI18n()
   return {
     /** Date + time (+ site-tz token) in the admin-set timezone. */
     formatDate: (iso: string | null | undefined, opts?: Intl.DateTimeFormatOptions) =>
@@ -18,5 +22,9 @@ export function useSiteDateFormat() {
     /** Date-only variant for table cells that don't need a clock. */
     formatDateOnly: (iso: string | null | undefined, opts?: Intl.DateTimeFormatOptions) =>
       formatDateInSiteTime(iso, locale.value, opts),
+    /** Share expiry: `null` renders the localized "Never" instead of a dash.
+     *  Three views carried the same one-line wrapper. */
+    formatExpiry: (iso: string | null | undefined, opts?: Intl.DateTimeFormatOptions) =>
+      formatExpiryInSiteTime(iso, locale.value, t('expiry.never_label'), opts),
   }
 }

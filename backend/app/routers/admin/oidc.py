@@ -1,8 +1,6 @@
 """/api/admin/settings/sso - OIDC provider CRUD + discovery probes."""
 from __future__ import annotations
 
-from datetime import datetime, timezone
-
 import httpx
 from fastapi import APIRouter, Depends, Request, status
 from fastapi.responses import Response
@@ -30,6 +28,7 @@ from ...services import oidc_admin as oidc_admin_svc
 from ...services.audit import record_audit_event
 from ...utils.crypto import encrypt_setting
 from ...utils.net import assert_public_http_url
+from ...utils.timeutil import utc_now
 
 router = APIRouter()
 
@@ -102,7 +101,7 @@ def create_provider(
     db: Session = Depends(get_db),
     admin: User = Depends(get_current_admin),
 ) -> OIDCProviderItem:
-    now = datetime.now(tz=timezone.utc).replace(tzinfo=None)
+    now = utc_now()
     p = OIDCProvider(
         name=payload.name,
         preset=payload.preset,
@@ -185,7 +184,7 @@ def update_provider(
             changed.append("client_secret")
 
     if changed:
-        p.updated_at = datetime.now(tz=timezone.utc).replace(tzinfo=None)
+        p.updated_at = utc_now()
         p.updated_by_id = admin.id
         record_audit_event(
             db,

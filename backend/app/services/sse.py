@@ -94,8 +94,14 @@ _ADMIN_CHANNEL = "fh:sse:admin-system"
 
 
 def _redis() -> aioredis.Redis:
+    # Only the CONNECT is bounded: the same client backs the pubsub streams,
+    # whose reads legitimately block for the whole 60 s connection cycle, so a
+    # socket read timeout here would tear every SSE stream down.
     return aioredis.Redis(
-        host=settings.REDIS_HOST, port=settings.REDIS_PORT, decode_responses=True
+        host=settings.REDIS_HOST,
+        port=settings.REDIS_PORT,
+        decode_responses=True,
+        socket_connect_timeout=2,
     )
 
 

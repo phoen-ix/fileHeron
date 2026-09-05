@@ -36,6 +36,7 @@ from ..middleware.errors import AppError
 from ..models.audit_log import AuditEventType
 from ..models.refresh_token import RefreshToken
 from ..models.user import User
+from ..utils.client_ip import get_client_ip
 from ..utils.columns import declared_width
 from ..utils.crypto import random_token, refresh_token_hash
 from ..utils.dbresult import updated_rows
@@ -343,9 +344,11 @@ def create_refresh_token(db: Session, user: User, request: Request | None, setti
         user_id=user.id,
         token_hash=refresh_token_hash(plaintext),
         expires_at=now + timedelta(days=refresh_days),
+        # Canonical form (mapped IPv6 unwrapped) like login_attempts.ip, so the
+        # session list and the login forensics show one address for one host.
         created_ip=(
-            request.client.host[:_CREATED_IP_MAX]
-            if request and request.client
+            (get_client_ip(request) or "")[:_CREATED_IP_MAX] or None
+            if request
             else None
         ),
         created_ua=(

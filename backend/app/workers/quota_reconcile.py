@@ -61,19 +61,21 @@ async def quota_reconcile(_ctx) -> dict:
             logger.warning("quota_reconcile: redis unreachable, skipping")
             return {"checked": 0, "fixed": 0}
 
+        # One grouped SUM for every uploader, instead of one query per user -
+        # the loop below ran N+1 statements against the files table hourly.
+        sums: dict[int, int] = {
+            int(uid): int(total or 0)
+            for uid, total in (
+                db.query(File.uploaded_by_id, func.coalesce(func.sum(File.size_bytes), 0))
+                .filter(File.state.in_(STORED_STATES))
+                .group_by(File.uploaded_by_id)
+                .all()
+            )
+        }
         users = db.query(User.id).all()
         for (user_id,) in users:
             checked += 1
-            db_sum = (
-                db.query(func.coalesce(func.sum(File.size_bytes), 0))
-                .filter(
-                    File.uploaded_by_id == user_id,
-                    File.state.in_(STORED_STATES),
-                )
-                .scalar()
-                or 0
-            )
-            db_sum = int(db_sum)
+            db_sum = sums.get(user_id, 0)
             try:
                 redis_val_raw = sync(redis.get(_key(user_id)))
             except Exception:

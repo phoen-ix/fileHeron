@@ -22,10 +22,10 @@ import os
 import tempfile
 import uuid
 from contextlib import contextmanager
-from datetime import datetime, timezone
 from pathlib import Path
 
 from ..middleware.errors import AppError
+from ..utils.timeutil import utc_now
 
 logger = logging.getLogger("fileheron.release_apply")
 
@@ -35,7 +35,7 @@ ROLLBACK_FILE = STATE_DIR / "rollback_target.json"
 
 
 def _utcnow_iso() -> str:
-    return datetime.now(tz=timezone.utc).replace(tzinfo=None).isoformat()
+    return utc_now().isoformat()
 
 
 def _read_state() -> dict | None:

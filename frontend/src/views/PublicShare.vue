@@ -17,14 +17,14 @@ import {
 import BrandLogo from '@/components/BrandLogo.vue'
 import BrandMark from '@/components/BrandMark.vue'
 import FilePreviewModal from '@/components/FilePreviewModal.vue'
+import { useSiteDateFormat } from '@/composables/useSiteDateFormat'
 import { useSiteStore } from '@/stores/site'
 import type { PublicShareFile, PublicShareResponse } from '@/types/api'
 import { formatBytes } from '@/utils/bytes'
-import { formatExpiryInSiteTime } from '@/utils/datetime'
 import { previewKind } from '@/utils/preview'
 
 const route = useRoute()
-const { t, locale } = useI18n()
+const { t } = useI18n()
 const site = useSiteStore()
 
 const showBrand = computed(() => site.branding.show_public)
@@ -81,9 +81,7 @@ async function onUnlock() {
   }
 }
 
-function formatExpiry(iso: string | null): string {
-  return formatExpiryInSiteTime(iso, locale.value, t('expiry.never_label'))
-}
+const { formatExpiry } = useSiteDateFormat()
 
 function fileEnabled(state: string): boolean {
   // `ready_unscanned` is NOT downloadable: the backend answers 425

@@ -37,6 +37,7 @@ from __future__ import annotations
 import json
 import logging
 import secrets
+import time
 from typing import Any
 
 import httpx
@@ -73,7 +74,12 @@ logger = logging.getLogger("fileheron.oidc")
 # Hard byte cap streamed off the wire so a malicious/compromised IdP discovery
 # endpoint can't OOM the worker (mirrors _JWKS_MAX_BYTES in jwks.py).
 _DISCOVERY_MAX_BYTES = 1 * 1024 * 1024
-_DISCOVERY_CACHE: dict[str, dict[str, Any]] = {}
+# (fetched_at monotonic, document). Entries expire: the cache had no TTL, so an
+# IdP that moved its token or JWKS endpoint kept being called at the old
+# address until the process restarted - jwks._cache already ages out hourly,
+# and the discovery document it comes from should not outlive it.
+_DISCOVERY_TTL_SEC = 3600
+_DISCOVERY_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
 
 
 def _cache_key(provider: OIDCProvider) -> str:
@@ -84,8 +90,9 @@ async def _discovery(provider: OIDCProvider) -> dict[str, Any]:
     if not is_provider_usable(provider):
         raise AppError(503, "OIDC_DISABLED", "OIDC sign-in is not configured.")
     key = _cache_key(provider)
-    if key in _DISCOVERY_CACHE:
-        return _DISCOVERY_CACHE[key]
+    cached = _DISCOVERY_CACHE.get(key)
+    if cached is not None and time.monotonic() - cached[0] < _DISCOVERY_TTL_SEC:
+        return cached[1]
     issuer = provider.issuer_url.rstrip("/")
     url = f"{issuer}/.well-known/openid-configuration"
     # SSRF guard: block loopback / link-local (metadata) / multicast etc.
@@ -139,7 +146,7 @@ async def _discovery(provider: OIDCProvider) -> dict[str, Any]:
             provider.id, doc_issuer, issuer,
         )
         raise AppError(502, "OIDC_ISSUER_MISMATCH", "Identity provider discovery issuer mismatch.")
-    _DISCOVERY_CACHE[key] = doc
+    _DISCOVERY_CACHE[key] = (time.monotonic(), doc)
     return doc
 
 

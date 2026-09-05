@@ -13,11 +13,12 @@ import { useSiteDateFormat } from '@/composables/useSiteDateFormat'
 import { useUiStore } from '@/stores/ui'
 import type { ShareListItem, ShareRecipientRef } from '@/types/api'
 import { formatBytes } from '@/utils/bytes'
-import { formatExpiryInSiteTime } from '@/utils/datetime'
 import { shareStatePill } from '@/utils/statePill'
 
-const { t, locale } = useI18n()
-const { formatDate } = useSiteDateFormat()
+const { t } = useI18n()
+// Full date + HH:MM + tz for the expiry column - a bare zone token with no
+// clock ("Jun 08, 2026, GMT+2") is meaningless.
+const { formatDate, formatExpiry } = useSiteDateFormat()
 const route = useRoute()
 const router = useRouter()
 const ui = useUiStore()
@@ -109,12 +110,6 @@ async function confirmBulkExpire() {
   }
 }
 
-
-function formatExpiry(iso: string | null): string {
-  // Full date + HH:MM + tz (formatInSiteTime defaults) - a bare zone token
-  // with no clock ("Jun 08, 2026, GMT+2") is meaningless.
-  return formatExpiryInSiteTime(iso, locale.value, t('expiry.never_label'))
-}
 
 function open(s: ShareListItem) {
   router.push({ name: 'share-detail', params: { id: s.id } })

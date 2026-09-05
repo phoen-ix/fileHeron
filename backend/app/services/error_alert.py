@@ -375,7 +375,10 @@ def handle_error_event(db: Session, event: dict[str, Any]) -> dict[str, Any]:
         try:
             db.rollback()
         except Exception:
-            pass
+            # The alerting path is the one place a silent swallow is worst:
+            # a rollback that itself fails means the session is wedged and
+            # the next step will fail too, with nothing in the log saying why.
+            logger.warning("error_alert: rollback after log failure failed", exc_info=True)
 
     # STEP 2 - ALERT (the throttled subset).
     try:
@@ -385,7 +388,7 @@ def handle_error_event(db: Session, event: dict[str, Any]) -> dict[str, Any]:
         try:
             db.rollback()
         except Exception:
-            pass
+            logger.warning("error_alert: rollback after alert failure failed", exc_info=True)
         result = {"status": "error"}
     result["logged"] = row_id is not None
     return result

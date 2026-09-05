@@ -50,6 +50,7 @@ from ..services import transfer_activity
 from ..services import zip_stream as zip_stream_svc
 from ..services.audit import record_audit_event
 from ..services.storage_backend import get_storage_backend
+from ..utils.client_ip import get_client_ip
 from ..utils.columns import declared_width
 from ..utils.crypto import constant_time_equals
 from ..utils.http_range import (
@@ -89,11 +90,11 @@ def _b64url_decode(s: str) -> bytes:
 
 
 def _make_unlock_cookie(link_id: str, expires_at: datetime) -> str:
-    # expires_at is naive UTC (the storage convention); .timestamp() on a naive
-    # datetime is interpreted in the process-local TZ, so stamp UTC explicitly to
-    # match _verify_unlock_cookie's aware-UTC comparison below.
+    # expires_at is naive UTC (the storage convention); `to_epoch` stamps UTC
+    # before `.timestamp()` so the value matches _verify_unlock_cookie's
+    # aware-UTC comparison below (a bare `.timestamp()` reads local time).
     payload = json.dumps(
-        {"link_id": link_id, "exp": int(expires_at.replace(tzinfo=timezone.utc).timestamp())},
+        {"link_id": link_id, "exp": int(to_epoch(expires_at))},
         separators=(",", ":"),
     ).encode("utf-8")
     sig = hmac_mod.new(
@@ -204,7 +205,7 @@ def unlock(
     if link.password_hash is None:
         return UnlockPublicLinkResponse(ok=True)
 
-    ip = request.client.host if request.client else None
+    ip = get_client_ip(request)
     # Serialize the check-and-record for this link: without the row lock a
     # concurrent burst of guesses could all read the attempt count below the
     # threshold and pass BEFORE any of them recorded its attempt (TOCTOU),
@@ -359,7 +360,7 @@ def public_download(
         # here, so it cannot renew its own licence.
         transfer_activity.mark_download_paid(paid_key)
 
-        ip = request.client.host[:_DOWNLOAD_IP_MAX] if request.client else None
+        ip = (get_client_ip(request) or "")[:_DOWNLOAD_IP_MAX] or None
         db.add(
             DownloadLog(
                 file_id=file.id,
@@ -636,7 +637,7 @@ def public_download_zip(
         # Only the payment path marks, so a free continuation cannot renew it.
         transfer_activity.mark_download_paid(paid_key)
 
-        ip = request.client.host[:_DOWNLOAD_IP_MAX] if request.client else None
+        ip = (get_client_ip(request) or "")[:_DOWNLOAD_IP_MAX] or None
         ua = ua_fingerprint_hash(request.headers.get("user-agent", ""))
         for f in files:
             db.add(

@@ -28,6 +28,7 @@ from pydantic import BaseModel, Field
 
 from ..middleware.errors import _redact_path
 from ..services import error_log, job_queue, rate_limit
+from ..utils.client_ip import get_client_ip
 from ..utils.timeutil import utc_now
 
 logger = logging.getLogger("fileheron.telemetry")
@@ -85,7 +86,7 @@ def report_page_404(body: Page404Request, request: Request) -> Response:
         # DB-free between 60s refreshes, so a flood-when-off costs ~nothing).
         if not error_log.capture_4xx_enabled_cached():
             return Response(status_code=204)
-        ip = request.client.host if request.client else ""
+        ip = get_client_ip(request) or ""
         if not rate_limit.check_ip_allowed("client_404", ip, limit=10, window_sec=60):
             return Response(status_code=204)
         # Global ceiling as well as the per-IP one. The per-IP cap bounds one
@@ -149,7 +150,7 @@ async def report_csp_violation(request: Request) -> Response:
         # what bounds the volume, not the capture flag.
         if not error_log.log_enabled_cached():
             return Response(status_code=204)
-        ip = request.client.host if request.client else ""
+        ip = get_client_ip(request) or ""
         if not rate_limit.check_ip_allowed("csp_report", ip, limit=20, window_sec=60):
             return Response(status_code=204)
         # A GLOBAL ceiling as well as the per-IP one. This said it was "the

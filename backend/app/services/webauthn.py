@@ -43,6 +43,7 @@ from ..middleware.errors import AppError
 from ..models.user import User
 from ..models.user_webauthn_credential import UserWebAuthnCredential
 from ..utils.dbresult import updated_rows
+from ..utils.timeutil import utc_now
 
 logger = logging.getLogger("fileheron.webauthn")
 
@@ -52,8 +53,14 @@ AUTH_KEY = "fh:webauthn:auth:"
 
 
 def _redis() -> aioredis.Redis:
+    # Bounded like the sync client (redis_client.py sets socket_timeout=2): a
+    # Redis stall must not hang a login ceremony for the TCP default.
     return aioredis.Redis(
-        host=settings.REDIS_HOST, port=settings.REDIS_PORT, decode_responses=True
+        host=settings.REDIS_HOST,
+        port=settings.REDIS_PORT,
+        decode_responses=True,
+        socket_timeout=2,
+        socket_connect_timeout=2,
     )
 
 
@@ -329,8 +336,7 @@ async def authenticate_complete(
     # Atomic conditional UPDATE: only commit the new sign_count if the
     # row hasn't moved since we read it. Otherwise another concurrent
     # auth (potentially a clone) raced us - fail closed.
-    from datetime import datetime, timezone
-    now = datetime.now(tz=timezone.utc).replace(tzinfo=None)
+    now = utc_now()
     result = db.execute(
         update(UserWebAuthnCredential)
         .where(

@@ -1,4 +1,4 @@
-import { computed, onScopeDispose, ref, watch } from 'vue'
+import { computed, nextTick, onScopeDispose, ref, watch } from 'vue'
 import type { ComputedRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 
@@ -114,6 +114,7 @@ export function useShareListState(box: ComputedRef<'outbox' | 'inbox'>) {
   let subjectSearchTimer: ReturnType<typeof setTimeout> | null = null
   watch(subjectQuery, () => {
     if (subjectSearchTimer) clearTimeout(subjectSearchTimer)
+    if (resetting) return
     subjectSearchTimer = setTimeout(() => {
       page.value = 1
       void load()
@@ -136,6 +137,12 @@ export function useShareListState(box: ComputedRef<'outbox' | 'inbox'>) {
     void load()
   }
 
+  // While the box switch below resets every filter at once, each filter's own
+  // watcher would fire its own load() - four or five requests for one
+  // navigation, all but the last discarded by the sequence guard. One flag,
+  // one reload.
+  let resetting = false
+
   function clearParty() {
     partyKind.value = 'any'
     partyUser.value = null
@@ -143,7 +150,7 @@ export function useShareListState(box: ComputedRef<'outbox' | 'inbox'>) {
     userQuery.value = ''
     userSuggestions.value = []
     page.value = 1
-    void load()
+    if (!resetting) void load()
   }
 
   function clearAllFilters() {
@@ -158,6 +165,7 @@ export function useShareListState(box: ComputedRef<'outbox' | 'inbox'>) {
   }
 
   watch(partyKind, async () => {
+    if (resetting) return
     partyUser.value = null
     partyGroup.value = null
     userQuery.value = ''
@@ -174,15 +182,18 @@ export function useShareListState(box: ComputedRef<'outbox' | 'inbox'>) {
   })
 
   watch(stateFilter, () => {
+    if (resetting) return
     page.value = 1
     void load()
   })
 
   watch([sort.sortBy, sort.sortDir], () => {
+    if (resetting) return
     void load()
   })
 
   watch(page, () => {
+    if (resetting) return
     void load()
   })
 
@@ -237,14 +248,23 @@ export function useShareListState(box: ComputedRef<'outbox' | 'inbox'>) {
     }
   }
 
-  watch(box, () => {
-    page.value = 1
-    clearParty()
-    groupBy.value = 'none'
-    stateFilter.value = 'active'
-    subjectQuery.value = ''
-    sort.reset()
-    clearSelection()
+  watch(box, async () => {
+    resetting = true
+    try {
+      page.value = 1
+      clearParty()
+      groupBy.value = 'none'
+      stateFilter.value = 'active'
+      subjectQuery.value = ''
+      sort.reset()
+      clearSelection()
+      // Let the watchers above see the flag before it drops - Vue runs them
+      // in the next flush, not synchronously on assignment.
+      await nextTick()
+    } finally {
+      resetting = false
+    }
+    void load()
   })
 
   watch([page, stateFilter, partyKind, partyUser, partyGroup], () => {

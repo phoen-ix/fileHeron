@@ -33,8 +33,15 @@ HTTP_TIMEOUT_SEC = 4.0
 
 
 def _redis() -> aioredis.Redis:
+    # Bounded like the sync client (redis_client.py sets socket_timeout=2); the
+    # cache is best-effort and a stalled Redis must not hold up a password
+    # change for the TCP default.
     return aioredis.Redis(
-        host=settings.REDIS_HOST, port=settings.REDIS_PORT, decode_responses=True
+        host=settings.REDIS_HOST,
+        port=settings.REDIS_PORT,
+        decode_responses=True,
+        socket_timeout=2,
+        socket_connect_timeout=2,
     )
 
 

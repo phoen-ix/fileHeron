@@ -1,8 +1,6 @@
 """/api/account/* endpoints - self-service for the authenticated user."""
 from __future__ import annotations
 
-from datetime import datetime, timezone
-
 from fastapi import APIRouter, Depends, Request, Response, status
 from sqlalchemy.orm import Session
 
@@ -51,6 +49,7 @@ from ..services import invite as invite_svc
 from ..services import rate_limit as rate_limit_svc
 from ..services import settings_registry
 from ..services import totp as totp_svc
+from ..utils.timeutil import utc_now
 
 router = APIRouter(prefix="/api/account", tags=["account"])
 
@@ -708,7 +707,7 @@ def get_current_api_token(
     )
     if record is None:
         raise AppError(404, "TOKEN_NOT_FOUND", "API token not found.")
-    now = datetime.now(tz=timezone.utc).replace(tzinfo=None)
+    now = utc_now()
     if record.revoked_at is not None:
         token_status: TokenStatus = "revoked"
     elif record.expires_at is not None and now > record.expires_at:

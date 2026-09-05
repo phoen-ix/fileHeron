@@ -31,12 +31,29 @@ _log = logging.getLogger("fileheron_client.ui._async")
 # Set once by AppController. When a worker raises SessionExpiredError we route
 # it here (marshaled to the main thread) instead of the per-call on_failed, so
 # every panel bounces back to login without special-casing it individually.
-_session_expired_handler: Optional[Callable[[], None]] = None
+#
+# The handler answers whether it DID anything. It returns False when there is
+# no signed-in screen to tear down - a 401 during sign-in itself, e.g. a revoked
+# API token typed into the login overlay - and the failure then goes to the
+# call's own ``on_failed`` after all, so the overlay can show the server's
+# reason instead of spinning forever. A handler that returns None is treated as
+# having handled it (the pre-2026-09 contract).
+_session_expired_handler: Optional[Callable[[], Optional[bool]]] = None
 
 
-def set_session_expired_handler(fn: Optional[Callable[[], None]]) -> None:
+def set_session_expired_handler(fn: Optional[Callable[[], Optional[bool]]]) -> None:
     global _session_expired_handler
     _session_expired_handler = fn
+
+
+def _handle_session_expired(
+    exc: Exception, on_failed: Optional[Callable[[Exception], None]]
+) -> None:
+    """Main-thread half of _route_failure for a dead session."""
+    handler = _session_expired_handler
+    handled = handler() if handler is not None else False
+    if handled is False and on_failed is not None:
+        on_failed(exc)
 
 
 def _route_failure(
@@ -46,7 +63,7 @@ def _route_failure(
     session is intercepted and sent to the global handler; everything else
     goes to the call's own ``on_failed``."""
     if isinstance(exc, SessionExpiredError) and _session_expired_handler is not None:
-        _enqueue(_session_expired_handler, ())
+        _enqueue(_handle_session_expired, (exc, on_failed))
         return
     if on_failed is not None:
         _enqueue(on_failed, (exc,))

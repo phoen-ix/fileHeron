@@ -19,6 +19,7 @@ from ..i18n import t
 from ..models import MeResponse
 from .app import reassert_visible
 from .settings_dialog import SettingsOverlay
+from .share_detail_view import pause_all_in_flight
 from .share_list_panel import ShareListPanel
 from .upload_panel import UploadPanel
 from .widgets import Toast
@@ -223,6 +224,10 @@ class MainWindow:
         clean root. Destroying the tabview recursively destroys both share
         panels, the upload panel, any drilled-in detail view, and the
         wrapped segmented-button callback (all descendants of self.tabs)."""
+        # Downloads still running for this session keep their partials: pause
+        # them, so the registry offers Resume next time, rather than let the
+        # workers write on behind a screen that no longer exists.
+        pause_all_in_flight()
         # Settings overlay + toast parent to the root, not self.tabs, so they
         # survive a tabview destroy - tear them down explicitly.
         for w in (self._settings_overlay, self._toast):

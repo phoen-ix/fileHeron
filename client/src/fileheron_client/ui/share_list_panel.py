@@ -83,6 +83,11 @@ class ShareListPanel(ctk.CTkFrame):
         self._flash = flash
         self._items: list[ShareListItem] = []
         self._detail_view: Optional[ShareDetailView] = None
+        # Out-of-order guard: a tab switch fires refresh() while a slower
+        # search or filter request is still in flight, and whichever answer
+        # landed LAST used to win - so the table could show rows for a filter
+        # that was no longer selected. Same `seq` idiom the web app uses.
+        self._load_seq = 0
         self._build()
         # Initial load is kicked by main_window after deiconify so the
         # first paint happens after the window is visible.
@@ -247,6 +252,8 @@ class ShareListPanel(ctk.CTkFrame):
         sender_user_id: Optional[int] = party_id if self._box == "inbox" else None
         recipient_user_id: Optional[int] = party_id if self._box == "outbox" else None
         self.status_var.set(t("common.loading"))
+        self._load_seq += 1
+        mine = self._load_seq
 
         def _fetch():
             return api_pkg.list_shares(
@@ -263,6 +270,8 @@ class ShareListPanel(ctk.CTkFrame):
             )
 
         def _done(resp):
+            if mine != self._load_seq:
+                return  # superseded by a newer refresh()
             self._items = resp.items
             self.status_var.set(
                 t("share_list.status_count",
@@ -278,6 +287,8 @@ class ShareListPanel(ctk.CTkFrame):
                 self._render()
 
         def _failed(exc):
+            if mine != self._load_seq:
+                return
             msg = (exc.localized() if hasattr(exc, "localized") else str(exc))
             self.status_var.set(t("share_list.status_err", detail=msg))
 

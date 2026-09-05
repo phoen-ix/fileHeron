@@ -300,15 +300,29 @@ class SettingsOverlay(ctk.CTkFrame):
         applied = code or (self._me.locale or "en")
         set_locale(applied)
         self._status_var.set("")
-        try:
-            updated = api_pkg.patch_locale(self._api, applied)
+        api = self._api
+
+        # OFF the Tk thread, like sign-out: called inline, the PATCH froze the
+        # whole window for a round-trip - the full httpx timeout when the
+        # server was unreachable - and the structural guard that exists for
+        # exactly this only knew the two call names it was written for.
+        def _save():
+            return api_pkg.patch_locale(api, applied)
+
+        def _done(updated) -> None:
             self._me = updated
-        except Exception as exc:
-            self._status_var.set(
-                t("settings.language_save_failed",
-                  detail=(exc.localized() if hasattr(exc, "localized") else str(exc)),
-                  locale=applied)
-            )
+
+        def _failed(exc) -> None:
+            try:
+                self._status_var.set(
+                    t("settings.language_save_failed",
+                      detail=(exc.localized() if hasattr(exc, "localized") else str(exc)),
+                      locale=applied)
+                )
+            except Exception:
+                pass  # overlay already closed
+
+        run_in_background(self._app_root, _save, on_done=_done, on_failed=_failed)
 
     def _on_diag_toggled(self) -> None:
         self._cfg.enable_diagnostic_logging = bool(self._diag_switch.get())
@@ -364,7 +378,8 @@ class SettingsOverlay(ctk.CTkFrame):
             on_done=lambda _r: None,
             on_failed=lambda _e: None,
         )
-        clear_secret("refresh", self._api.server_url)
+        # Only an API token is ever persisted (config.py); a password session's
+        # refresh cookie lives in the httpx jar and dies with the client.
         clear_secret("api_token", self._api.server_url)
         # Remove this overlay first, then hand off to the controller (which
         # tears down the main window and shows a fresh login overlay).

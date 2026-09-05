@@ -60,7 +60,7 @@ cd client
 python3 -m venv .venv
 . .venv/bin/activate          # Windows: .venv\Scripts\activate
 pip install -e .[dev]
-pytest                        # 147 tests across 29 files (no GUI, no network)
+pytest                        # 259 tests across 34 files (no GUI, no network)
 python -m fileheron_client    # launches the GUI against the server URL the config dialog asks for
 ```
 

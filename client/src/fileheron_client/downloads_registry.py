@@ -141,6 +141,33 @@ def remove(file_id: str) -> None:
             _save_unlocked(reg)
 
 
+def effective_status(
+    entry: Optional[dict], *, in_flight: bool, partial_present: bool
+) -> Optional[str]:
+    """What the share view should treat a registry row as: ``PAUSED`` /
+    ``INTERRUPTED`` (offer Resume), or None (nothing to resume - and, if the
+    row exists, it is stale and should be removed).
+
+    An ``ACTIVE`` row normally belongs to a download this process is running.
+    One that is NOT in flight can only be a leftover: the session expired
+    mid-transfer (the worker raised into the global handler, so the
+    per-download failure path that would have marked it never ran), or the
+    view was torn down under it. With its partial still on disk that is an
+    interrupted download. It used to be shown as a plain Download button until
+    the next launch, when ``reconcile_on_startup`` finally promoted it - so the
+    Resume affordance was missing exactly in the session where the user had
+    just been bounced to the login screen.
+    """
+    if not entry:
+        return None
+    status = entry.get("status")
+    if status in RESUMABLE:
+        return status if partial_present else None
+    if status == ACTIVE and not in_flight and partial_present:
+        return INTERRUPTED
+    return None
+
+
 def reconcile_on_startup() -> None:
     """Promote any leftover ``active`` entry to ``interrupted`` at launch.
 

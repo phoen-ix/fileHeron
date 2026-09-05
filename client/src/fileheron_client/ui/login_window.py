@@ -18,11 +18,13 @@ from typing import Callable, Optional
 import customtkinter as ctk
 
 from .. import api as api_pkg
-from .._trace import trace
+from .._trace import trace, write_crash
 from ..api import ApiClient, ApiError
+from ..api.site import public_config
 from ..config import (
     ClientConfig,
     get_secret,
+    log_dir,
     normalize_server_url,
     save_config,
     set_secret,
@@ -337,7 +339,7 @@ class LoginOverlay(ctk.CTkFrame):
                         api, email=email, password=password, recovery_code=code,
                     )
                 me = api_pkg.me(api)
-                return api, me, "password", server, email
+                return api, me, "password", server, email, public_config(api)
 
             run_in_background(self._app_root, _attempt, on_done=self._done, on_failed=self._failed)
             return
@@ -359,7 +361,7 @@ class LoginOverlay(ctk.CTkFrame):
                     # Sign-in SUCCEEDED; only persistence failed. Say so, or the
                     # user is silently asked for the token again every launch.
                     self._warn_token_not_stored()
-                return api, me, "api_token", server, ""
+                return api, me, "api_token", server, "", public_config(api)
 
             run_in_background(self._app_root, _attempt, on_done=self._done, on_failed=self._failed)
             return
@@ -381,14 +383,16 @@ class LoginOverlay(ctk.CTkFrame):
             # _failed turns into the code step (the password isn't penalised).
             api_pkg.login(api, email=email, password=password, totp_code=None)
             me = api_pkg.me(api)
-            return api, me, "password", server, email
+            return api, me, "password", server, email, public_config(api)
 
         run_in_background(self._app_root, _attempt, on_done=self._done, on_failed=self._failed)
 
     def _done(self, result) -> None:
         trace("_done (on main thread)")
         self._stop_spinner()
-        api, me, used_kind, server, email = result
+        # The public config rides along from the worker so the controller can
+        # apply it without an HTTP call on the Tk thread.
+        api, me, used_kind, server, email, public_cfg = result
         self._cfg.server_url = server
         self._cfg.auth_kind = used_kind
         if used_kind == "password":
@@ -401,7 +405,7 @@ class LoginOverlay(ctk.CTkFrame):
         # overlay, so don't touch self after. If it raises (MainWindow
         # construction failed) the overlay stays up and we restore the button.
         try:
-            self._on_signed_in(api, me)
+            self._on_signed_in(api, me, public_cfg)
         except Exception as exc:
             trace(f"_on_signed_in RAISED: {exc!r}")
             import traceback
@@ -414,22 +418,10 @@ class LoginOverlay(ctk.CTkFrame):
         self._set_busy(False)
         # v0.4.6: write every caught sign-in failure to crash.log with a full
         # traceback - the surface message alone isn't enough to debug DLL-load
-        # / SSL-import / OS-level failures.
-        try:
-            import traceback
-            from datetime import datetime
-            from pathlib import Path
-
-            import platformdirs
-            log_path = (
-                Path(platformdirs.user_log_dir("fileHeron", appauthor=False)) / "crash.log"
-            )
-            log_path.parent.mkdir(parents=True, exist_ok=True)
-            with log_path.open("a", encoding="utf-8") as f:
-                f.write(f"\n--- {datetime.now().isoformat()} [signin] ---\n")
-                traceback.print_exception(type(exc), exc, exc.__traceback__, file=f)
-        except Exception:
-            pass  # logging must never crash the UI thread
+        # / SSL-import / OS-level failures. Same writer as the crash hooks in
+        # __main__ (it used to re-derive the log directory from a second copy
+        # of the app name).
+        write_crash(log_dir() / "crash.log", "signin", type(exc), exc, exc.__traceback__)
 
         if isinstance(exc, ApiError):
             if exc.code == "TOTP_REQUIRED":

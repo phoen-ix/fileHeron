@@ -15,11 +15,11 @@ broker the transitions:
 """
 from __future__ import annotations
 
-from typing import Optional
+from typing import Any, Optional
 
 from .._trace import trace
 from ..api import ApiClient
-from ..config import ClientConfig, clear_secret, save_config
+from ..config import ClientConfig, save_config
 from ..i18n import set_locale, t
 from ..models import MeResponse
 from ._async import set_session_expired_handler
@@ -93,7 +93,12 @@ class AppController:
         except Exception:
             pass
 
-    def _on_signed_in(self, api: ApiClient, me: MeResponse) -> None:
+    def _on_signed_in(
+        self,
+        api: ApiClient,
+        me: MeResponse,
+        public_cfg: dict[str, Any] | None = None,
+    ) -> None:
         trace(f"_on_signed_in (role={me.role}, locale={me.locale!r})")
         # v0.8.0: apply + cache the server-side locale so the main window
         # renders correctly and subsequent launches start in the right
@@ -115,13 +120,27 @@ class AppController:
         # local zone for both while the SPA used `site.timezone`, so a
         # travelling employee set an expiry six hours from the one the
         # recipient saw, with no zone label anywhere to reveal it (audit #2).
+        #
+        # The config is fetched by the sign-in WORKER (login_window) and handed
+        # in; fetching it here ran an HTTP round-trip on the Tk thread. The
+        # fallback fetch below exists only for a caller that predates that.
+        # It also carries the LIVE direct-upload ceiling: the client decided
+        # direct-vs-resumable from a build-time 100 MB, so an instance whose
+        # admin lowered `uploads.max_direct_bytes` rejected every mid-size
+        # upload with 413 while the web app, which reads the same field,
+        # streamed them fine (the SPA had this exact defect at audit #2).
         try:
-            from ..api.site import public_config
             from ..formatters import set_display_timezone
+            from .upload_worker import set_direct_upload_limit
 
-            set_display_timezone(public_config(api).get("site_timezone"))
+            if public_cfg is None:
+                from ..api.site import public_config
+
+                public_cfg = public_config(api)
+            set_display_timezone(public_cfg.get("site_timezone"))
+            set_direct_upload_limit(public_cfg.get("max_direct_upload_bytes"))
         except Exception as exc:
-            trace(f"site timezone wiring failed (non-fatal): {exc!r}")
+            trace(f"site config wiring failed (non-fatal): {exc!r}")
 
         # Build the main UI behind the overlay, THEN remove the overlay so the
         # root is never momentarily empty. If MainWindow construction raises,
@@ -147,20 +166,24 @@ class AppController:
         self._teardown_main()
         self._show_overlay()
 
-    def session_expired(self) -> None:
+    def session_expired(self) -> bool:
         """Invoked (on the main thread) when a worker hit a 401 that couldn't
         be refreshed. Idempotent - concurrent 401s coalesce because the first
-        call nulls ``self._main`` synchronously."""
+        call nulls ``self._main`` synchronously.
+
+        Returns whether there was a signed-in screen to tear down. False means
+        the 401 happened during sign-in itself (a revoked API token typed into
+        the overlay); ``_async`` then hands the error to the caller's own
+        ``on_failed`` so the overlay shows the server's reason. A stored API
+        token is deliberately NOT cleared here: the overlay prefills it and the
+        next attempt shows why it is refused, which is more useful than a
+        silently emptied field."""
         if self._main is None:
-            return
+            return False
         trace("session expired - bouncing to login overlay")
-        if self._api is not None:
-            try:
-                clear_secret("refresh", self._api.server_url)
-            except Exception:
-                pass
         self._teardown_main()
         self._show_overlay(info=t("login.session_expired"))
+        return True
 
     def _teardown_main(self) -> None:
         if self._main is not None:

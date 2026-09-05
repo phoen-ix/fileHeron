@@ -73,8 +73,6 @@ def upload_direct(
     client-4).
     """
     size = file_path.stat().st_size
-    headers = {"Authorization": f"Bearer {api.bearer}"} if api.bearer else {}
-    headers["Accept"] = "application/json"
     with file_path.open("rb") as raw:
         f = _ProgressReader(raw, size, on_progress) if on_progress else raw
         files = {
@@ -85,11 +83,19 @@ def upload_direct(
             )
         }
         data = {"share_id": share_id}
-        resp = api._http.post(
+        # Through request(), not the raw transport: request() is where a 401
+        # becomes refresh-and-replay. Posting straight to `_http` snapshotted
+        # the bearer once and had no recovery, so an upload that started after
+        # the access token expired (a batch queued behind larger files, or a
+        # dialog left open past 15 minutes) failed with TOKEN_EXPIRED where
+        # every other call would have refreshed silently. The replay re-reads
+        # the body: httpx seeks the file to 0 and _ProgressReader.seek rewinds
+        # the counter with it.
+        resp = api.request(
+            "POST",
             "/api/uploads/direct",
             data=data,
             files=files,
-            headers=headers,
         )
     # v0.5.2: backend returns 201 Created on success (uploads.py is a
     # creation endpoint, status_code=HTTP_201_CREATED). Treating only

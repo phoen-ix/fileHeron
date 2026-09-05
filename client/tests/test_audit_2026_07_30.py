@@ -154,7 +154,9 @@ def test_sign_out_does_not_block_the_tk_thread():
 def test_the_local_credentials_are_cleared_regardless_of_the_server():
     """A laptop that has left the office must still be able to sign out."""
     src = _sign_out_source()
-    clear_at = src.index('clear_secret("refresh"')
+    # The API token is the only secret ever persisted (config.py); the dead
+    # clear_secret("refresh") that used to sit beside it is gone.
+    clear_at = src.index('clear_secret("api_token"')
     bg_at = src.index("run_in_background")
     assert bg_at < clear_at
     # ...and no `.join()` / result wait between them.
@@ -162,21 +164,55 @@ def test_the_local_credentials_are_cleared_regardless_of_the_server():
 
 
 def test_no_other_blocking_api_call_remains_on_the_tk_thread():
-    """Every HTTP call in this overlay must go through the background helper."""
+    """Every HTTP call in this overlay must go through the background helper.
+
+    Generic over `api_pkg.<anything>(...)`, not a list of two names: the first
+    version knew only `logout` and `get_current_api_token`, so `patch_locale`
+    - called inline from the language picker, freezing the window for a full
+    round-trip - passed it for a year. A call counts as off-thread when it sits
+    inside a lambda or a function nested in a method (the shape every
+    `run_in_background` call site here has).
+    """
     source = (SRC / "ui" / "settings_dialog.py").read_text(encoding="utf-8")
     tree = ast.parse(source)
-    offenders = []
+    parents: dict[ast.AST, ast.AST] = {}
+    for node in ast.walk(tree):
+        for child in ast.iter_child_nodes(node):
+            parents[child] = node
+
+    def _scopes(node: ast.AST) -> list[ast.AST]:
+        out = []
+        cur = parents.get(node)
+        while cur is not None:
+            if isinstance(cur, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
+                out.append(cur)
+            cur = parents.get(cur)
+        return out
+
+    seen: set[str] = set()
+    on_thread: list[tuple[str, int]] = []
     for node in ast.walk(tree):
         if not isinstance(node, ast.Call):
             continue
         func = node.func
-        name = getattr(func, "attr", None)
-        if name in {"logout", "get_current_api_token"}:
-            offenders.append((name, node.lineno))
-    # Both are present, and both must sit inside a lambda / nested def handed
-    # to run_in_background - checked by the two assertions above plus this
-    # sanity floor.
-    assert offenders, "the calls vanished; this guard would be vacuous"
+        if not (
+            isinstance(func, ast.Attribute)
+            and isinstance(func.value, ast.Name)
+            and func.value.id == "api_pkg"
+        ):
+            continue
+        seen.add(func.attr)
+        scopes = _scopes(node)
+        # A lambda, or a def nested inside another def (the method).
+        nested = any(isinstance(s, ast.Lambda) for s in scopes) or len(
+            [s for s in scopes if isinstance(s, (ast.FunctionDef, ast.AsyncFunctionDef))]
+        ) >= 2
+        if not nested:
+            on_thread.append((func.attr, node.lineno))
+    assert {"logout", "get_current_api_token", "patch_locale"} <= seen, (
+        f"the calls vanished; this guard would be vacuous (saw {sorted(seen)})"
+    )
+    assert not on_thread, f"HTTP calls still run on the Tk main thread: {on_thread}"
 
 
 # --- client-5 ----------------------------------------------------------------

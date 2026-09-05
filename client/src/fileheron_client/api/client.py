@@ -67,6 +67,10 @@ def _envelope_from_response(resp: httpx.Response) -> ApiError:
         body = resp.json()
     except ValueError:
         body = {}
+    if not isinstance(body, dict):
+        # A proxy that answers JSON that is not an envelope (a bare list or
+        # string) must not turn the error report itself into an AttributeError.
+        body = {}
     return ApiError(
         status_code=resp.status_code,
         code=body.get("code", "HTTP_ERROR"),
@@ -232,6 +236,7 @@ class ApiClient:
                     data=data,
                     files=files,
                     retry_on_401=False,
+                    timeout=timeout,
                 )
             # Refresh was attempted (we had an access token, this isn't an
             # /api/auth call, not an API-token session) but didn't yield a
@@ -241,6 +246,27 @@ class ApiClient:
                 status_code=401,
                 code="SESSION_EXPIRED",
                 message="Your session expired. Please sign in again.",
+            )
+        if (
+            resp.status_code == 401
+            and retry_on_401
+            and self.api_token is not None
+            and not path.startswith("/api/auth/")
+        ):
+            # An API token cannot be refreshed, so a 401 on one is final: it was
+            # revoked, expired or disabled server-side. As a plain ApiError it
+            # left every panel printing inline errors on a screen that could
+            # never work again; as SessionExpiredError the global handler
+            # returns the user to the login overlay. The envelope's own code and
+            # message travel with it, so what a person reads is the server's
+            # reason (INVALID_TOKEN, ...), not a generic "session expired".
+            env = _envelope_from_response(resp)
+            raise SessionExpiredError(
+                status_code=401,
+                code=env.code,
+                message=env.message,
+                details=env.details,
+                request_id=env.request_id,
             )
         return resp
 

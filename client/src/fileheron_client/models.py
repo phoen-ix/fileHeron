@@ -146,7 +146,10 @@ class ShareResponse(_Base):
 class DirectUploadResponse(_Base):
     file_id: str
     size_bytes: int
-    sha256_hex: str
+    # `str | None` server-side. Declaring it required here would reject a
+    # successful upload's reply after the bytes had landed - an "upload
+    # failed" for a file the server already holds.
+    sha256_hex: Optional[str] = None
 
 
 class UploadInitResponse(_Base):

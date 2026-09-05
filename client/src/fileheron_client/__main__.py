@@ -38,7 +38,7 @@ from datetime import datetime
 from pathlib import Path
 
 from fileheron_client._trace import init as init_trace
-from fileheron_client._trace import report, trace
+from fileheron_client._trace import report, trace, write_crash
 from fileheron_client.config import load_config
 from fileheron_client.i18n import set_locale
 from fileheron_client.ui._async import init_async
@@ -57,12 +57,7 @@ def _install_crash_logging(log_path: Path) -> None:
     the post-mortem safety net, not verbose diagnostics."""
 
     def _write(prefix: str, exc_type, exc, tb) -> None:
-        try:
-            with log_path.open("a", encoding="utf-8") as f:
-                f.write(f"\n--- {datetime.now().isoformat()} [{prefix}] ---\n")
-                traceback.print_exception(exc_type, exc, tb, file=f)
-        except Exception:
-            pass
+        write_crash(log_path, prefix, exc_type, exc, tb)
 
     def _excepthook(exc_type, exc, tb):
         _write("main", exc_type, exc, tb)
@@ -237,12 +232,7 @@ def main(argv: list[str] | None = None) -> int:
     def _tk_report(exc_type, exc, tb):
         # Tk callback exception handler - always writes crash.log
         # regardless of the diagnostics flag.
-        try:
-            with crash_log.open("a", encoding="utf-8") as f:
-                f.write(f"\n--- {datetime.now().isoformat()} [tk] ---\n")
-                traceback.print_exception(exc_type, exc, tb, file=f)
-        except Exception:
-            pass
+        write_crash(crash_log, "tk", exc_type, exc, tb)
         traceback.print_exception(exc_type, exc, tb)
     root.report_callback_exception = _tk_report
 

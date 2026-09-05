@@ -7,16 +7,43 @@ threading + UI marshalling lives in ``ui/_async.py``."""
 from __future__ import annotations
 
 import mimetypes
+import threading
 from pathlib import Path
-from typing import Callable
+from typing import Callable, Optional
 
 from .. import api as api_pkg
 from ..api import ApiClient
 from ..tus import upload_tus
 from ._async import run_with_progress
 
-# Match backend default unless overridden at runtime.
+# The backend's DEFAULT for `uploads.max_direct_bytes`. The live value comes
+# from /api/config-public at sign-in (set_direct_upload_limit): an admin can
+# lower it, and a client that kept deciding on this constant sent every file
+# between the two limits as a direct upload the server then refused with 413.
 DIRECT_LIMIT_BYTES = 100 * 1024 * 1024
+_direct_limit_bytes = DIRECT_LIMIT_BYTES
+
+# Files uploading at once, however many were picked. Every file in a batch used
+# to start immediately - one thread and one connection each - so a 40-file
+# share was 40 simultaneous uploads competing for one uplink, with every bar
+# crawling and the batch as a whole no faster. Queued files show "Pending"
+# until a slot frees.
+MAX_PARALLEL_UPLOADS = 4
+_UPLOAD_SLOTS = threading.BoundedSemaphore(MAX_PARALLEL_UPLOADS)
+
+
+def set_direct_upload_limit(value: Optional[int]) -> None:
+    """Adopt the instance's ceiling; anything unusable keeps the default."""
+    global _direct_limit_bytes
+    try:
+        n = int(value) if value is not None else 0
+    except (TypeError, ValueError):
+        n = 0
+    _direct_limit_bytes = n if n > 0 else DIRECT_LIMIT_BYTES
+
+
+def direct_upload_limit() -> int:
+    return _direct_limit_bytes
 
 # A private database rather than the module-level `mimetypes.guess_type`.
 #
@@ -56,33 +83,34 @@ def start_upload(
     path_str = str(file_path)
 
     def _do(tick):
-        size = file_path.stat().st_size
-        mime = guess_mime(path_str)
-        if size <= DIRECT_LIMIT_BYTES:
-            resp = api_pkg.upload_direct(
+        with _UPLOAD_SLOTS:
+            size = file_path.stat().st_size
+            mime = guess_mime(path_str)
+            if size <= direct_upload_limit():
+                resp = api_pkg.upload_direct(
+                    api,
+                    share_id=share_id,
+                    file_path=file_path,
+                    mime_type=mime,
+                    on_progress=tick,
+                )
+                return resp.file_id
+            init = api_pkg.upload_init(
                 api,
                 share_id=share_id,
-                file_path=file_path,
+                filename=file_path.name,
+                size_bytes=size,
                 mime_type=mime,
+            )
+            upload_tus(
+                server_url=api.server_url,
+                tus_endpoint=init.tus_endpoint,
+                upload_metadata_header=init.upload_metadata_header,
+                file_path=file_path,
+                bearer=api.bearer,
                 on_progress=tick,
             )
-            return resp.file_id
-        init = api_pkg.upload_init(
-            api,
-            share_id=share_id,
-            filename=file_path.name,
-            size_bytes=size,
-            mime_type=mime,
-        )
-        upload_tus(
-            server_url=api.server_url,
-            tus_endpoint=init.tus_endpoint,
-            upload_metadata_header=init.upload_metadata_header,
-            file_path=file_path,
-            bearer=api.bearer,
-            on_progress=tick,
-        )
-        return init.file_id
+            return init.file_id
 
     def _on_tick(done, total):
         on_progress(path_str, done, total)

@@ -43,6 +43,31 @@ from .expiry_dialog import ExpiryDialog
 from .limit_dialog import LimitDialog
 from .widgets import PillLabel, alive, copy_to_clipboard_with_feedback, human_size
 
+# file_id -> the pause Event of a download THIS process is running. Read by
+# _init_row_actions (an ACTIVE registry row with no live worker is a leftover
+# to offer Resume for) and by pause_all_in_flight (sign-out / session expiry
+# keeps every partial instead of letting workers write on behind a screen that
+# no longer exists).
+_IN_FLIGHT: dict[str, threading.Event] = {}
+_IN_FLIGHT_LOCK = threading.Lock()
+
+# Files downloading at once, whatever "Save all" asked for; each still opens up
+# to `download_connections` streams. Every file used to start immediately - a
+# 20-file share at 4 connections was 80 parallel streams against one server,
+# with every bar crawling and the batch no faster overall. Queued rows show
+# "Starting…" until a slot frees.
+MAX_PARALLEL_FILES = 2
+_FILE_SLOTS = threading.BoundedSemaphore(MAX_PARALLEL_FILES)
+
+
+def pause_all_in_flight() -> None:
+    """Pause every download this process is running (keeps partials +
+    checkpoints, so the registry offers Resume next time)."""
+    with _IN_FLIGHT_LOCK:
+        events = list(_IN_FLIGHT.values())
+    for ev in events:
+        ev.set()
+
 
 class ShareDetailView(ctk.CTkFrame):
     """In-window share detail (v0.6.0+, was ``ShareDetailDialog``).
@@ -562,19 +587,29 @@ class ShareDetailView(ctk.CTkFrame):
         if row is None:
             return
         entry = dlreg.get(file_id) if row["downloadable"] else None
-        if entry and entry.get("status") in dlreg.RESUMABLE:
+        if entry:
             dest = Path(entry.get("dest", ""))
-            if dest.name and dlckpt.part_path(dest).exists() and dlckpt.read(dest):
+            partial_present = bool(
+                dest.name and dlckpt.part_path(dest).exists() and dlckpt.read(dest)
+            )
+            with _IN_FLIGHT_LOCK:
+                in_flight = file_id in _IN_FLIGHT
+            status = dlreg.effective_status(
+                entry, in_flight=in_flight, partial_present=partial_present
+            )
+            if status is not None:
                 row["dest"] = dest
                 done = int(entry.get("bytes_done", 0))
                 total = int(entry.get("total", 0))
                 row["last"] = (done, total)
                 self._set_actions_resumable(
-                    file_id, interrupted=entry.get("status") == dlreg.INTERRUPTED
+                    file_id, interrupted=status == dlreg.INTERRUPTED
                 )
                 return
-            # Stale registry entry (partial deleted externally) - clean it up.
-            dlreg.remove(file_id)
+            if not in_flight:
+                # Stale registry entry (partial deleted externally, or a
+                # finished download whose row outlived its view) - clean it up.
+                dlreg.remove(file_id)
         self._set_actions_idle(file_id)
 
     def _download_one(self, file_id: str, filename: str) -> None:
@@ -868,11 +903,22 @@ class ShareDetailView(ctk.CTkFrame):
             share_id=getattr(self, "_share_id", None),
         )
 
+        with _IN_FLIGHT_LOCK:
+            _IN_FLIGHT[file_id] = pause
+
         def _do(tick):
-            api_pkg.download_file_resumable(
-                self._api, file_id, dest=dest, connections=conns,
-                on_progress=tick, cancel=cancel, pause=pause,
-            )
+            try:
+                with _FILE_SLOTS:
+                    # A pause/cancel that arrived while queued is honoured at
+                    # entry (`_raise_if_stopped`), before any byte moves.
+                    api_pkg.download_file_resumable(
+                        self._api, file_id, dest=dest, connections=conns,
+                        on_progress=tick, cancel=cancel, pause=pause,
+                    )
+            finally:
+                with _IN_FLIGHT_LOCK:
+                    if _IN_FLIGHT.get(file_id) is pause:
+                        del _IN_FLIGHT[file_id]
             return str(dest)
 
         def _on_progress(done, total):
@@ -890,9 +936,11 @@ class ShareDetailView(ctk.CTkFrame):
             row["info_var"].set(f"{format_rate(rate)} · {format_eta(eta)}")
 
         def _done(path):
+            # Registry first, widgets second: the row must not outlive the
+            # finished file just because the view was torn down mid-transfer.
+            dlreg.remove(file_id)
             if not alive(self):
                 return
-            dlreg.remove(file_id)
             if row is not None and alive(row.get("action_cell")):
                 if alive(row["bar"]):
                     row["bar"].grid_remove()
@@ -907,15 +955,20 @@ class ShareDetailView(ctk.CTkFrame):
             self._toast(t("share_detail.downloaded_body", path=path), kind="success")
 
         def _failed(exc):
-            if not alive(self):
-                return
+            # The registry bookkeeping runs whether or not the view is still
+            # alive: a sign-out pauses in-flight downloads (pause_all_in_flight)
+            # AFTER tearing the screen down, and the row must still say
+            # "paused" or the next visit cannot offer Resume.
             done, total = row.get("last", (0, 0)) if row else (0, 0)
             if isinstance(exc, DownloadPaused):
                 dlreg.set_status(file_id, dlreg.PAUSED, bytes_done=done)
-                self._set_actions_resumable(file_id, interrupted=False)
+                if alive(self):
+                    self._set_actions_resumable(file_id, interrupted=False)
                 return
             if isinstance(exc, DownloadCancelled):
                 dlreg.remove(file_id)
+                if not alive(self):
+                    return
                 self._set_actions_idle(file_id)
                 self._toast(t("share_detail.dl_cancelled"), kind="info")
                 return
@@ -929,9 +982,13 @@ class ShareDetailView(ctk.CTkFrame):
             )
             if resumable:
                 dlreg.set_status(file_id, dlreg.INTERRUPTED, bytes_done=done)
-                self._set_actions_resumable(file_id, interrupted=True)
             else:
                 dlreg.remove(file_id)
+            if not alive(self):
+                return
+            if resumable:
+                self._set_actions_resumable(file_id, interrupted=True)
+            else:
                 self._set_actions_idle(file_id)
             msg = (exc.localized() if hasattr(exc, "localized") else str(exc))
             self._toast(

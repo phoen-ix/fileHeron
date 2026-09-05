@@ -29,6 +29,11 @@ import platformdirs
 
 APP_NAME = "fileHeron"
 KEYRING_SERVICE = "fileheron-client"
+# The same bounds api/download_segmented.MAX_CONNECTIONS enforces at the call
+# site; clamped here too so a hand-edited config.json cannot carry a value the
+# UI would otherwise display as-is.
+MIN_DOWNLOAD_CONNECTIONS = 1
+MAX_DOWNLOAD_CONNECTIONS = 8
 
 _log = logging.getLogger("fileheron_client.config")
 
@@ -80,17 +85,22 @@ def load_config() -> ClientConfig:
     except (OSError, json.JSONDecodeError):
         return ClientConfig()
     cfg = ClientConfig()
-    for k in (
-        "server_url",
-        "last_email",
-        "auth_kind",
-        "last_landing",
-        "enable_diagnostic_logging",
-        "locale",
-        "download_connections",
-    ):
-        if k in raw and raw[k] is not None:
-            setattr(cfg, k, raw[k])
+    if not isinstance(raw, dict):
+        return cfg
+    # Typed, not `setattr(cfg, k, raw[k])`: the file is hand-editable, and a
+    # string where an int belongs used to travel all the way into a download
+    # worker before failing as "invalid literal for int()" on the progress row.
+    for k in ("server_url", "last_email", "auth_kind", "last_landing", "locale"):
+        v = raw.get(k)
+        if isinstance(v, str):
+            setattr(cfg, k, v)
+    if isinstance(raw.get("enable_diagnostic_logging"), bool):
+        cfg.enable_diagnostic_logging = raw["enable_diagnostic_logging"]
+    try:
+        conns = int(raw.get("download_connections"))
+    except (TypeError, ValueError):
+        conns = cfg.download_connections
+    cfg.download_connections = max(MIN_DOWNLOAD_CONNECTIONS, min(conns, MAX_DOWNLOAD_CONNECTIONS))
     return cfg
 
 

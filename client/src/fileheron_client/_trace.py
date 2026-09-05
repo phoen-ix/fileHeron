@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import sys
 import threading
+import traceback
 from datetime import datetime
 from pathlib import Path
 
@@ -28,6 +29,22 @@ def trace(msg: str) -> None:
     try:
         with _TRACE_PATH.open("a", encoding="utf-8") as f:
             f.write(f"{datetime.now().isoformat()} [{threading.current_thread().name}] {msg}\n")
+    except Exception:
+        pass
+
+
+def write_crash(log_path: Path, prefix: str, exc_type, exc, tb) -> None:
+    """Append one timestamped traceback block to ``crash.log``.
+
+    The one writer behind the sys/threading/Tk excepthooks in ``__main__`` and
+    the sign-in failure path in the login overlay. Never raises: a logging
+    failure must not become the crash it was meant to record.
+    """
+    try:
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        with log_path.open("a", encoding="utf-8") as f:
+            f.write(f"\n--- {datetime.now().isoformat()} [{prefix}] ---\n")
+            traceback.print_exception(exc_type, exc, tb, file=f)
     except Exception:
         pass
 

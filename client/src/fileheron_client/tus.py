@@ -166,7 +166,11 @@ def _send_chunk_with_retry(
                 MAX_RETRIES,
                 e,
             )
-            time.sleep(BACKOFF_SECONDS[min(attempt, len(BACKOFF_SECONDS) - 1)])
+            # No backoff after the LAST attempt: there is nothing left to
+            # retry, and the sleep only delayed the error the user was about
+            # to see by the longest interval in the table.
+            if attempt + 1 < MAX_RETRIES:
+                time.sleep(BACKOFF_SECONDS[min(attempt, len(BACKOFF_SECONDS) - 1)])
             continue
 
         if resp.status_code == 204:
@@ -197,7 +201,8 @@ def _send_chunk_with_retry(
                     f"TUS offset drift: server says {actual_offset}, "
                     f"client expected {expected_offset}. Aborting upload."
                 )
-            time.sleep(BACKOFF_SECONDS[min(attempt, len(BACKOFF_SECONDS) - 1)])
+            if attempt + 1 < MAX_RETRIES:
+                time.sleep(BACKOFF_SECONDS[min(attempt, len(BACKOFF_SECONDS) - 1)])
             continue
 
         # Server-side hard failure - don't retry, surface the body.

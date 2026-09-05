@@ -3,7 +3,7 @@ from .auth import login, login_with_recovery, logout, me, refresh
 from .branding import branding_logo_png
 from .client import ApiClient, ApiError, SessionExpiredError
 from .download_resumable import download_file_resumable
-from .files import DownloadCancelled, DownloadPaused, download_file
+from .files import DownloadCancelled, DownloadPaused
 from .groups import list_recipient_groups
 from .shares import (
     create_share,
@@ -35,7 +35,6 @@ __all__ = [
     "patch_share_expiry",
     "patch_share_download_limit",
     "register_files_added",
-    "download_file",
     "download_file_resumable",
     "DownloadCancelled",
     "DownloadPaused",

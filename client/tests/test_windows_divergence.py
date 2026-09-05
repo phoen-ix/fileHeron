@@ -292,8 +292,14 @@ def test_every_completed_download_gets_marked():
     Counts CALL SITES, not one exact argument spelling. Pinning the literal
     `_finalize(api, part, dest)` meant that adding the final size check - a
     fourth argument - failed this test while the property it names (every
-    completion routes through the one marking helper) was untouched."""
-    assert "motw.tag_downloaded" in _code(SRC / "api" / "files.py")
+    completion routes through the one marking helper) was untouched.
+
+    The legacy single-stream ``files.download_file`` (which marked too) was
+    removed in the 2026-09 audit as dead code; the resumable orchestrator is
+    now the only path that completes a download."""
+    assert "motw" not in _code(SRC / "api" / "files.py"), (
+        "a download completion path came back to api/files.py; pin its mark here"
+    )
     resumable = _code(SRC / "api" / "download_resumable.py")
     assert "motw.tag_downloaded" in resumable
     assert len(re.findall(r"\b_finalize\(api, part, dest\b", resumable)) == 3

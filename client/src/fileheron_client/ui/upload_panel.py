@@ -38,11 +38,18 @@ class UploadPanel(ctk.CTkFrame):
         # Clients submit to the whole company - no recipient picker, kind=inbound.
         # Staff pick recipients and send outbound. Mirrors the web SPA.
         self._is_client = me.role == "client"
+        # Policy from /me, like the web app's ShareCreate: an account the
+        # public-link policy excludes used to be offered the checkbox anyway
+        # and learn of the refusal as 403 PUBLIC_LINK_NOT_ALLOWED after
+        # filling in the whole form.
+        self._public_link_allowed = getattr(me, "can_create_public_link", True) is not False
         self._flash = flash
         self._on_view_outbox = on_view_outbox
         self._files: list[Path] = []
         # Set while drilled into the upload-progress view (see _on_created).
         self._progress_view: Optional[UploadProgressView] = None
+        # None when the policy hides the section (see _build_public_link_section).
+        self._pl_enabled: Optional[ctk.BooleanVar] = None
         self._build()
 
     def _toast(self, text: str, kind: str = "info") -> None:
@@ -134,7 +141,8 @@ class UploadPanel(ctk.CTkFrame):
 
         # Public link - one compact inline row instead of a boxed
         # 4-row sub-form. Saves ~110 px of vertical space.
-        self._build_public_link_section(self._form_outer)
+        if self._public_link_allowed:
+            self._build_public_link_section(self._form_outer)
 
         # Files: label + scrollable list. Expands to fill leftover
         # space between the form above and the pinned action row.
@@ -189,10 +197,12 @@ class UploadPanel(ctk.CTkFrame):
         self._expiry_date.pack(side="left")
         ctk.CTkLabel(row, text="@", width=20).pack(side="left", padx=4)
         self._expiry_hour = ctk.StringVar(value=f"{default.hour:02d}")
-        ctk.CTkEntry(row, textvariable=self._expiry_hour, width=50).pack(side="left")
+        self._expiry_hour_entry = ctk.CTkEntry(row, textvariable=self._expiry_hour, width=50)
+        self._expiry_hour_entry.pack(side="left")
         ctk.CTkLabel(row, text=":", width=10).pack(side="left")
         self._expiry_min = ctk.StringVar(value=f"{default.minute:02d}")
-        ctk.CTkEntry(row, textvariable=self._expiry_min, width=50).pack(side="left")
+        self._expiry_min_entry = ctk.CTkEntry(row, textvariable=self._expiry_min, width=50)
+        self._expiry_min_entry.pack(side="left")
         ctk.CTkLabel(
             row, text=t("common.timezone_note", tz=timezone_label()),
             anchor="w", text_color="gray",
@@ -218,10 +228,13 @@ class UploadPanel(ctk.CTkFrame):
 
     def _on_never_toggled(self) -> None:
         state = "disabled" if self._never_var.get() else "normal"
-        try:
-            self._expiry_date.configure(state=state)
-        except Exception:
-            pass
+        # The clock fields too - "Never" greyed the date and left an editable
+        # time beside it, which read as if the time still counted.
+        for w in (self._expiry_date, self._expiry_hour_entry, self._expiry_min_entry):
+            try:
+                w.configure(state=state)
+            except Exception:
+                pass
 
     def _build_public_link_section(self, parent) -> None:
         # v0.5.1: bordered group with a collapsible fields-row.
@@ -322,8 +335,14 @@ class UploadPanel(ctk.CTkFrame):
             row = ctk.CTkFrame(self._file_list_frame, fg_color="transparent")
             row.pack(fill="x", padx=4, pady=2)
             ctk.CTkLabel(row, text=p.name, anchor="w").pack(side="left", fill="x", expand=True)
+            # A file removed or renamed between picking and rendering must not
+            # raise inside a Tk callback (which only crash.log would see).
+            try:
+                size_text = human_size(p.stat().st_size)
+            except OSError:
+                size_text = "?"
             ctk.CTkLabel(
-                row, text=f"[{human_size(p.stat().st_size)}]", anchor="e", text_color="gray",
+                row, text=f"[{size_text}]", anchor="e", text_color="gray",
             ).pack(side="left", padx=(8, 8))
             ctk.CTkButton(
                 row, text="✕", width=28, fg_color="gray",
@@ -372,20 +391,30 @@ class UploadPanel(ctk.CTkFrame):
             return None, False
         return n, True
 
-    def _collect_public_link(self) -> Optional[dict]:
-        if not self._pl_enabled.get():
-            return None
-        try:
-            limit_str = self._pl_limit.get().strip()
-            limit = int(limit_str) if limit_str else None
-        except ValueError:
-            self._toast(t("upload.err_invalid_pl_limit_body"), kind="error")
-            return None
+    def _collect_public_link(self) -> tuple[Optional[dict], bool]:
+        """Return ``(public_link_body, ok)``. ``None, True`` = no link wanted
+        (section hidden by policy, or the box unticked); ``None, False`` = the
+        limit field holds something that is not a positive integer, already
+        reported. Returning a bare None for both used to make a typo in the
+        limit silently create the share WITHOUT its public link, and a 0 or
+        negative limit silently meant unlimited."""
+        if self._pl_enabled is None or not self._pl_enabled.get():
+            return None, True
+        limit_str = self._pl_limit.get().strip()
+        limit: Optional[int] = None
+        if limit_str:
+            try:
+                limit = int(limit_str)
+                if limit <= 0:
+                    raise ValueError
+            except ValueError:
+                self._toast(t("upload.err_invalid_pl_limit_body"), kind="error")
+                return None, False
         return {
             "password": self._pl_password.get().strip() or None,
-            "download_limit": limit if (limit and limit > 0) else None,
+            "download_limit": limit,
             "notify_on_download": self._pl_notify.get(),
-        }
+        }, True
 
     # ---- submit + upload ----
 
@@ -393,7 +422,9 @@ class UploadPanel(ctk.CTkFrame):
         if not self._files:
             self._toast(t("upload.err_no_files_body"), kind="error")
             return
-        public_link = self._collect_public_link()
+        public_link, ok = self._collect_public_link()
+        if not ok:
+            return  # _collect_public_link already showed an error toast
         # Staff must address the share (recipients or a public link). Clients
         # always submit to the company, so they only need files.
         if (
@@ -481,8 +512,9 @@ class UploadPanel(ctk.CTkFrame):
             self.recipients.reset()
         self._files.clear()
         self._render_file_list()
-        self._pl_enabled.set(False)
-        self._on_public_link_toggled()
-        self._pl_password.set("")
-        self._pl_limit.set("")
-        self._pl_notify.set(False)
+        if self._pl_enabled is not None:
+            self._pl_enabled.set(False)
+            self._on_public_link_toggled()
+            self._pl_password.set("")
+            self._pl_limit.set("")
+            self._pl_notify.set(False)

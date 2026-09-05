@@ -84,6 +84,47 @@ async def test_authenticate_begin_requires_credentials(make_user, db):
     assert exc.value.code == "WEBAUTHN_NO_CREDENTIALS"
 
 
+class _FakeRedis:
+    """Enough of the async client for the challenge store: set + aclose."""
+
+    def __init__(self) -> None:
+        self.store: dict[str, str] = {}
+
+    async def set(self, key, value, ex=None):
+        self.store[key] = value
+
+    async def aclose(self):
+        return None
+
+
+@pytest.mark.asyncio
+async def test_authenticate_begin_user_verification_follows_the_flag(make_user, db, monkeypatch):
+    """`require_user_verification` is what the login route sets for a
+    TOTP-enrolled account, so the browser REQUIRES a PIN / biometric and the
+    assertion can count as the second factor. Everyone else keeps PREFERRED."""
+    user = make_user(email="u@test.local", role=UserRole.client)
+    db.add(
+        UserWebAuthnCredential(
+            user_id=user.id,
+            credential_id=b"cred-a",
+            public_key=b"pk-a",
+            sign_count=0,
+            transports="usb",
+            name="A's key",
+        )
+    )
+    db.commit()
+    monkeypatch.setattr(webauthn_svc, "_redis", lambda: _FakeRedis())
+
+    relaxed = await webauthn_svc.authenticate_begin(db, user=user, session_key="s1")
+    strict = await webauthn_svc.authenticate_begin(
+        db, user=user, session_key="s2", require_user_verification=True
+    )
+
+    assert relaxed["userVerification"] == "preferred"
+    assert strict["userVerification"] == "required"
+
+
 def test_sign_count_atomic_update_rejects_concurrent_overwrite(make_user, db):
     """Wave 1 P1-3 regression. The atomic UPDATE in
     authenticate_complete (`WHERE sign_count == record.sign_count`)

@@ -130,15 +130,17 @@ export function formatExpiryInSiteTime(
   return formatInSiteTime(iso, locale, opts)
 }
 
-/** 90 days out, in the site-local `YYYY-MM-DDTHH:mm` an ExpiryPicker binds to.
+/** 90 days out, in the site-tz wall-clock string an ExpiryPicker binds to.
  *
  *  Shared so the two token forms cannot drift: the self-service panel defaulted
  *  to 90 days + limited scopes while the ADMIN form — the one that mints a
  *  credential for somebody else, and the one a stolen admin session reaches for
- *  — still defaulted to never-expiring and unrestricted. */
+ *  — still defaulted to never-expiring and unrestricted.
+ *
+ *  Anchored to the SITE timezone like the picker's own presets (`siteNowPlusIso`).
+ *  It used the browser's wall clock, so for a viewer whose browser zone differs
+ *  from the site zone the default landed off by the offset and never matched
+ *  the "90 days" preset the picker highlights. */
 export function defaultTokenExpiryLocal(): string {
-  const d = new Date()
-  d.setDate(d.getDate() + 90)
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+  return siteNowPlusIso(90 * 24 * 60 * 60 * 1000)
 }

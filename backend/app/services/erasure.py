@@ -253,8 +253,11 @@ def _erase_user_locked(
         f_id = f.id
         tus_id = f.tus_upload_id
         try:
+            # Erasure must destroy quarantined bytes too - the subject's data
+            # goes regardless of what the AV made of it.
             file_svc.hard_delete(
-                db, file=f, reason="user_erased", actor_user_id=actor.id, request=request
+                db, file=f, reason="user_erased", actor_user_id=actor.id,
+                request=request, allow_quarantined=True,
             )
             # An `uploading` row has no storage_path yet, so hard_delete unlinks
             # nothing while the receipt still credits its full declared size.

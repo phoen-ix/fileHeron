@@ -630,7 +630,9 @@ def download_share_zip(
             if getattr(request.state, "auth_via", "") == "api_token"
             else DownloadVia.auth
         )
-        ip = request.client.host if request.client else None
+        # Clipped to the column like the single-file route: an over-long
+        # forwarded address was a DataError here - after the budget decrement.
+        ip = request.client.host[:_DOWNLOAD_IP_MAX] if request.client else None
         ua = ua_fingerprint_hash(request.headers.get("user-agent", ""))
         # One DownloadLog row per included file (file_id is NOT NULL) - keeps
         # per-file download attribution; the budget still moved only once above.

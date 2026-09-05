@@ -549,7 +549,18 @@ v-if="changeEmailError" class="fh-notice" role="alert"
               <span v-if="f.share_subject">{{ f.share_subject }}</span>
             </span>
           </div>
+          <!-- A quarantined file is released or purged from the Quarantine
+               page, where the decision is audited as such; the backend refuses
+               a plain delete with FILE_QUARANTINED. -->
+          <RouterLink
+            v-if="f.state === 'infected'"
+            class="fh-btn-text revoke-btn"
+            :to="{ name: 'admin-quarantine' }"
+          >
+            {{ t('admin_file_history.in_quarantine') }}
+          </RouterLink>
           <button
+            v-else
             type="button"
             class="fh-btn-text revoke-btn"
             :disabled="deletingFileId === f.file_id"

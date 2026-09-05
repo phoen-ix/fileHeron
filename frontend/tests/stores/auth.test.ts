@@ -25,6 +25,13 @@ vi.mock('@/api/client', async (importActual) => ({
 vi.mock('@/api/setup', () => ({
   getSetupStatus: vi.fn(async () => ({ data: { required: false } })),
 }))
+// The passkey ceremony itself needs a real authenticator; stub the two
+// browser-facing pieces and exercise what the store does with the answer.
+vi.mock('@/api/webauthn')
+vi.mock('@/composables/useWebAuthn', () => ({
+  isWebAuthnSupported: () => true,
+  performAuthentication: vi.fn(async () => ({ id: 'cred', rawId: 'cred' })),
+}))
 
 const fakeMe = {
   id: 1,
@@ -221,5 +228,96 @@ describe('useAuthStore', () => {
     const me = await auth.refreshMe()
     expect(me.display_name).toBe('Alice Smith')
     expect(auth.user?.display_name).toBe('Alice Smith')
+  })
+
+  it('a /me blip after a successful refresh is not cached as anonymous', async () => {
+    // The refresh minted a token, then /me hit the proxy's 503 during the
+    // in-app updater's restart. That is the same "no answer" as an
+    // `unavailable` refresh: memoising it stranded a valid session until a
+    // manual reload, with the router bouncing every navigation to /login.
+    vi.mocked(accountApi.getMe).mockRejectedValueOnce({ response: { status: 503 } })
+    const auth = useAuthStore()
+    await auth.bootstrap()
+    expect(auth.user).toBe(null)
+
+    vi.mocked(accountApi.getMe).mockResolvedValueOnce({ data: fakeMe } as never)
+    vi.useFakeTimers()
+    try {
+      vi.setSystemTime(Date.now() + 5_000) // past the re-probe cooldown
+      await auth.bootstrap()
+    } finally {
+      vi.useRealTimers()
+    }
+    expect(auth.user).toEqual(fakeMe)
+    expect(auth.isAuthenticated).toBe(true)
+  })
+
+  it('a /me verdict after a successful refresh IS cached', async () => {
+    vi.mocked(accountApi.getMe).mockRejectedValueOnce({ response: { status: 401 } })
+    const auth = useAuthStore()
+    await auth.bootstrap()
+    vi.useFakeTimers()
+    try {
+      vi.setSystemTime(Date.now() + 5_000)
+      await auth.bootstrap()
+    } finally {
+      vi.useRealTimers()
+    }
+    expect(vi.mocked(accountApi.getMe)).toHaveBeenCalledTimes(1)
+    expect(auth.user).toBe(null)
+  })
+
+  it('loginWithPasskey() hands a pending-2FA answer back instead of adopting an empty token', async () => {
+    // The backend answers `pending_2fa_token` (no access_token at all) when
+    // the assertion carried no user verification on a TOTP-enrolled account.
+    // This used to be fed to setAccessToken as `undefined` and then /me 401'd -
+    // for exactly the users the "Use passkey" button is shown to.
+    const webauthnApi = await import('@/api/webauthn')
+    const { setAccessToken } = await import('@/api/client')
+    vi.mocked(webauthnApi.authBegin).mockResolvedValueOnce({
+      data: { session: 'sess', options: { challenge: 'c', rpId: 'files.example' } },
+    } as never)
+    vi.mocked(webauthnApi.authComplete).mockResolvedValueOnce({
+      data: { pending_2fa_token: 'pend-123' },
+    } as never)
+    const auth = useAuthStore()
+
+    const result = await auth.loginWithPasskey('a@example.com', 'pw')
+
+    expect(result).toEqual({ status: 'pending_2fa', pendingToken: 'pend-123' })
+    expect(setAccessToken).not.toHaveBeenCalled()
+    expect(accountApi.getMe).not.toHaveBeenCalled()
+    expect(auth.isAuthenticated).toBe(false)
+  })
+
+  it('loginWithPasskey() adopts a real session', async () => {
+    const webauthnApi = await import('@/api/webauthn')
+    const { setAccessToken } = await import('@/api/client')
+    vi.mocked(webauthnApi.authBegin).mockResolvedValueOnce({
+      data: { session: 'sess', options: { challenge: 'c', rpId: 'files.example' } },
+    } as never)
+    vi.mocked(webauthnApi.authComplete).mockResolvedValueOnce({
+      data: { access_token: 'tok', expires_in_seconds: 900 },
+    } as never)
+    vi.mocked(accountApi.getMe).mockResolvedValueOnce({ data: fakeMe } as never)
+    const auth = useAuthStore()
+
+    const result = await auth.loginWithPasskey('a@example.com', 'pw')
+
+    expect(result).toEqual({ status: 'ok', me: fakeMe })
+    expect(setAccessToken).toHaveBeenCalledWith('tok')
+    expect(auth.user).toEqual(fakeMe)
+  })
+
+  it('loginWithPasskey() refuses a 200 that carries neither shape', async () => {
+    // A captive portal / SPA-fallback misconfiguration answering 200 text/html.
+    const webauthnApi = await import('@/api/webauthn')
+    vi.mocked(webauthnApi.authBegin).mockResolvedValueOnce({
+      data: { session: 'sess', options: { challenge: 'c', rpId: 'files.example' } },
+    } as never)
+    vi.mocked(webauthnApi.authComplete).mockResolvedValueOnce({ data: '<html>' } as never)
+    const auth = useAuthStore()
+    await expect(auth.loginWithPasskey('a@example.com', 'pw')).rejects.toThrow()
+    expect(auth.isAuthenticated).toBe(false)
   })
 })

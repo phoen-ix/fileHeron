@@ -221,8 +221,14 @@ def hard_delete(
     actor_user_id: int | None = None,
     request=None,
     purge: bool = True,
+    allow_quarantined: bool = False,
 ) -> str | None:
     """Hard-delete from disk + DB row marker.
+
+    Refuses an `infected` row with `409 FILE_QUARANTINED` unless
+    `allow_quarantined=True`: the row's locator is the quarantine copy, and
+    only right-to-erasure and the config-import identity purge may destroy it
+    outside `quarantine_admin.purge`.
 
     With `purge=False` the bytes are NOT unlinked; the locator is returned and
     the caller must unlink it AFTER committing. That is the ordering v2.5.0
@@ -261,6 +267,23 @@ def hard_delete(
     # files that already went through quarantine (services/quarantine.py
     # released the bytes when it moved the file into ./data/quarantine/).
     was_infected = file.state == FileState.infected
+
+    # An infected row's `storage_path` IS the quarantine copy - quarantine_file
+    # rewrites it to the quarantine locator. Every interactive delete (the
+    # share page, /admin/file-history, the user-detail file list) reached this
+    # helper and unlinked that copy under a plain `file_deleted` audit row,
+    # bypassing quarantine_admin.purge and its `file_quarantine_purged`
+    # receipt - the same evidence mark_deleted_for_expiry deliberately refuses
+    # to hand out (CLAUDE.md accepted residual #4). Only a caller that MUST
+    # destroy the bytes regardless - right-to-erasure and the config-import
+    # identity purge - may opt in.
+    if was_infected and not allow_quarantined:
+        raise AppError(
+            409,
+            "FILE_QUARANTINED",
+            "This file is in quarantine. Release or purge it from the "
+            "Quarantine page instead of deleting it here.",
+        )
 
     # Only release what was actually reserved. Quota is reserved at the tus
     # pre-create hook (tus_hooks.py) or by the direct-upload route - NOT by

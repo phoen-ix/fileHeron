@@ -250,8 +250,13 @@ async function onCreate() {
 function cancelCreate() {
   creating.value = false
   newName.value = ''
-  expiresAtLocal.value = null
-  scopeMode.value = 'full'
+  createPassword.value = ''
+  // Back to the least-privilege defaults the form opens with. This reset to
+  // "never expires" + "full access" - the pre-hardening defaults - so the
+  // SECOND time the form was opened it offered a permanent unrestricted
+  // credential by default, while the first time did not.
+  expiresAtLocal.value = DEFAULT_EXPIRY_LOCAL()
+  scopeMode.value = 'limited'
   selectedScopes.value = []
   errorMsg.value = null
 }

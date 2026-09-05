@@ -1,11 +1,13 @@
-"""DELETE /api/files/{id} on an infected file is admin-only.
+"""DELETE on an infected file is refused - for the uploader AND for an admin.
 
-ClamAV-flagged files belong to the admin's forensic surface - the
-uploader shouldn't be able to delete the row out from under
-/admin/quarantine. Also pins the no-double-release-of-quota fix in
-services/file.py::hard_delete: quarantine_file already released the
-bytes, so a subsequent admin-initiated hard_delete must NOT release
-again.
+ClamAV-flagged files belong to the admin's forensic surface: an infected row's
+`storage_path` IS the quarantine copy (quarantine_file rewrites it), and the
+only sanctioned way to destroy it is `quarantine_admin.purge`, which writes the
+`file_quarantine_purged` receipt. The interactive delete routes used to let an
+admin through to `hard_delete`, which unlinked the quarantine copy under a
+plain `file_deleted` row. Right-to-erasure keeps its opt-in
+(`allow_quarantined=True`), and that path must still NOT release quota a
+second time: quarantine_file already released the bytes.
 """
 from __future__ import annotations
 
@@ -80,9 +82,13 @@ async def test_owner_cannot_delete_infected_file(
 
 
 @pytest.mark.asyncio
-async def test_admin_can_delete_infected_file(
-    make_user, db, client, login_as, tmp_path
+@pytest.mark.parametrize("path", ["/api/files/{id}", "/api/admin/files/{id}"])
+async def test_admin_delete_of_infected_file_is_refused(
+    make_user, db, client, login_as, tmp_path, path
 ):
+    """Both interactive admin deletes - the share page's route and the file
+    history's - refuse a quarantined file and leave the quarantine copy where
+    it is. The Quarantine page is the only place it is released or purged."""
     sender = make_user(email="up@test.local", role=UserRole.employee)
     recipient = make_user(email="r@test.local", role=UserRole.client)
     make_user(
@@ -92,28 +98,50 @@ async def test_admin_can_delete_infected_file(
     token, _ = await login_as("admin@test.local", "Pass12345678!")
 
     resp = await client.delete(
-        f"/api/files/{file.id}",
+        path.format(id=file.id),
         headers={"Authorization": f"Bearer {token}"},
     )
-    assert resp.status_code == 204, resp.text
+    assert resp.status_code == 409, resp.text
+    assert resp.json()["code"] == "FILE_QUARANTINED"
+
     db.expire_all()
-    assert db.query(File).filter(File.id == file.id).one().state == FileState.deleted
+    f_after = db.query(File).filter(File.id == file.id).one()
+    assert f_after.state == FileState.infected
+    assert f_after.storage_path == str(tmp_path / "infected.bin")
+    assert (tmp_path / "infected.bin").exists(), "the quarantine copy must survive"
 
 
-@pytest.mark.asyncio
-async def test_admin_delete_infected_does_not_release_quota_again(
-    make_user, db, client, login_as, tmp_path, monkeypatch
+def test_hard_delete_refuses_quarantined_unless_opted_in(
+    make_user, db, tmp_path
 ):
-    """quarantine_file already released the bytes when it moved the
-    file to quarantine. hard_delete on a state=infected file must NOT
-    release again - otherwise the user's Redis counter drifts."""
+    """The guard lives in the helper, not only in the routes, so a future
+    caller cannot reach the quarantine copy by accident."""
+    from app.middleware.errors import AppError
     from app.services import file as file_svc
 
     sender = make_user(email="up@test.local", role=UserRole.employee)
     recipient = make_user(email="r@test.local", role=UserRole.client)
-    make_user(
-        email="admin@test.local", role=UserRole.admin, password="Pass12345678!"
-    )
+    share, file = _seed_infected_file(db, sender, recipient, tmp_path)
+
+    with pytest.raises(AppError) as exc:
+        file_svc.hard_delete(db, file=file, reason="anything")
+    assert exc.value.status_code == 409
+    assert exc.value.code == "FILE_QUARANTINED"
+    db.expire_all()
+    assert db.query(File).filter(File.id == file.id).one().state == FileState.infected
+
+
+def test_erasure_path_destroys_quarantined_bytes_without_releasing_quota_again(
+    make_user, db, tmp_path, monkeypatch
+):
+    """Right-to-erasure opts in (`allow_quarantined=True`) because the
+    subject's data must go whatever the AV made of it. quarantine_file already
+    released the bytes when it moved the file, so this must NOT release again -
+    otherwise the user's Redis counter drifts."""
+    from app.services import file as file_svc
+
+    sender = make_user(email="up@test.local", role=UserRole.employee)
+    recipient = make_user(email="r@test.local", role=UserRole.client)
     share, file = _seed_infected_file(db, sender, recipient, tmp_path)
 
     calls: list[tuple] = []
@@ -123,12 +151,14 @@ async def test_admin_delete_infected_does_not_release_quota_again(
         lambda *, user_id, bytes_to_free: calls.append((user_id, bytes_to_free)),
     )
 
-    token, _ = await login_as("admin@test.local", "Pass12345678!")
-    resp = await client.delete(
-        f"/api/files/{file.id}",
-        headers={"Authorization": f"Bearer {token}"},
+    file_svc.hard_delete(
+        db, file=file, reason="user_erased", allow_quarantined=True
     )
-    assert resp.status_code == 204
+    db.commit()
+
+    assert not (tmp_path / "infected.bin").exists()
+    db.expire_all()
+    assert db.query(File).filter(File.id == file.id).one().state == FileState.deleted
     assert calls == [], (
         "release_bytes was called from hard_delete on an already-quarantined "
         f"file; expected zero calls (quarantine_file did it), got {calls}"

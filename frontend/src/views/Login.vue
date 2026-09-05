@@ -138,7 +138,14 @@ async function tryPasskey() {
   error.value = null
   submitting.value = true
   try {
-    await auth.loginWithPasskey(email.value, password.value)
+    const result = await auth.loginWithPasskey(email.value, password.value)
+    if (result.status === 'pending_2fa') {
+      // The assertion carried no user verification, so the passkey does not
+      // count as the second factor: hand the pending token to the same
+      // interstitial the SSO flow uses. It strips the token from the URL.
+      await router.push({ name: 'login-2fa', query: { pending: result.pendingToken } })
+      return
+    }
     await router.push(redirectTo.value)
   } catch (e) {
     if (e instanceof DOMException && e.name === 'NotAllowedError') {

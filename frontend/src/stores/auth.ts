@@ -44,6 +44,13 @@ export const useAuthStore = defineStore('auth', () => {
 
   let onAuthLostCallback: (() => void) | null = null
 
+  /** Only a 401/403 is a credential verdict; every other failure is the
+   *  backend not answering. Same classification `refreshSession` applies. */
+  function isAuthVerdict(err: unknown): boolean {
+    const status = (err as { response?: { status?: number } } | null)?.response?.status
+    return status === 401 || status === 403
+  }
+
   /** Attempt a silent refresh + load /me on first paint. Idempotent - the
    *  first caller kicks off the request, all subsequent callers receive the
    *  same promise. */
@@ -72,8 +79,19 @@ export const useAuthStore = defineStore('auth', () => {
         // public /d/:token page is not bounced to /login.
         const outcome = await refreshSession()
         if (outcome === 'ok') {
-          const resp = await getMe()
-          user.value = resp.data
+          try {
+            const resp = await getMe()
+            user.value = resp.data
+          } catch (err) {
+            // The refresh just minted a token, so /me failing is one of two
+            // things. A 401/403 is a verdict on that token - stay anonymous.
+            // Anything else - the proxy's 502/503 while the in-app updater
+            // restarts the backend, a dropped connection, a timeout - is the
+            // same "no answer" as an `unavailable` refresh, and memoising it
+            // as anonymous stranded a valid session until a manual reload.
+            user.value = null
+            unreachable = !isAuthVerdict(err)
+          }
         } else {
           // `unavailable` still renders as anonymous - a cold load against an
           // unreachable backend has nothing better to offer, and the router
@@ -163,8 +181,22 @@ export const useAuthStore = defineStore('auth', () => {
   /** Passkey-as-second-factor login. Validates email + password,
    *  hands the user a WebAuthn challenge, then completes the
    *  ceremony to mint the same JWT + refresh-cookie as the
-   *  password-only path. */
-  async function loginWithPasskey(email: string, password: string) {
+   *  password-only path.
+   *
+   *  The backend only counts the passkey as the second factor when the
+   *  authenticator VERIFIED the user (PIN / biometric). A possession-only
+   *  assertion on a TOTP-enrolled account comes back as `pending_2fa_token`
+   *  with no session at all - this used to be fed to setAccessToken as
+   *  `undefined`, so the very users the "Use passkey" button is shown to
+   *  (it renders only after TOTP_REQUIRED) could never sign in with it. The
+   *  caller routes a pending result to the /login/2fa interstitial. */
+  async function loginWithPasskey(
+    email: string,
+    password: string,
+  ): Promise<
+    | { status: 'ok'; me: MeResponse }
+    | { status: 'pending_2fa'; pendingToken: string }
+  > {
     const begin = await webauthnApi.authBegin(email, password)
     const opts = begin.data.options as {
       challenge: string
@@ -181,10 +213,18 @@ export const useAuthStore = defineStore('auth', () => {
       timeout: opts.timeout,
     })
     const resp = await webauthnApi.authComplete(begin.data.session, credential)
+    if (resp.data.pending_2fa_token) {
+      return { status: 'pending_2fa', pendingToken: resp.data.pending_2fa_token }
+    }
+    if (!resp.data.access_token) {
+      // Neither shape - a captive portal or an SPA-fallback misconfiguration
+      // answering 200 with HTML. Refuse rather than adopt an empty token.
+      throw new Error('passkey login returned no session')
+    }
     setAccessToken(resp.data.access_token)
     const me = await getMe()
     user.value = me.data
-    return applyUserLocale(me.data)
+    return { status: 'ok', me: applyUserLocale(me.data) }
   }
 
   async function registerFromInvite(payload: {

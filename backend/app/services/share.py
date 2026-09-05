@@ -1205,7 +1205,7 @@ def decide_added_files(
     resubmit path for a single file, and leaving them `pending_review` forever
     would hold the uploader's quota against content an approver refused.
     """
-    from ..models.file import File, FileApprovalState
+    from ..models.file import File, FileApprovalState, FileState
     from . import share_approval as approval_svc
     from .file import hard_delete
 
@@ -1278,6 +1278,10 @@ def decide_added_files(
             .filter(
                 File.share_id == share.id,
                 File.approval_state == FileApprovalState.pending_review,
+                # A quarantined file stays where the AV put it: its locator is
+                # the quarantine copy, and hard_delete refuses to unlink that.
+                # The admin releases or purges it from /admin/quarantine.
+                File.state != FileState.infected,
             )
             .all()
         ):
@@ -1523,10 +1527,12 @@ def update_share_expiry(
             )
     old = share.expires_at
     share.expires_at = new_expires_at
-    # Clearing the expiry also resets the 24h-warning idempotency
-    # marker so that a future re-narrowing of the window can fire a
-    # fresh warning.
-    if new_expires_at is None:
+    # Any change to the expiry resets the 24h-warning idempotency marker. It
+    # used to reset only when the expiry was CLEARED, so a share that had
+    # already been warned about and was then extended by a month never got a
+    # warning for its new expiry - the worker filters on the marker being
+    # NULL, and nothing else ever cleared it.
+    if new_expires_at != old:
         share.expiring_notified_at = None
     db.flush()
     record_audit_event(

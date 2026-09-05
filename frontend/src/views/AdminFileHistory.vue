@@ -286,6 +286,16 @@ v-else-if="errorMsg" class="fh-notice" role="alert"
             >
               {{ reclaiming === it.file_id ? t('common.loading') : t('admin_file_history.reclaim') }}
             </button>
+            <!-- Quarantined bytes are released or purged on the Quarantine
+                 page, under their own audit event; the backend refuses a plain
+                 delete with FILE_QUARANTINED. -->
+            <RouterLink
+              v-else-if="it.state === 'infected'"
+              class="fh-btn-text reclaim-btn"
+              :to="{ name: 'admin-quarantine' }"
+            >
+              {{ t('admin_file_history.in_quarantine') }}
+            </RouterLink>
             <button
               v-else-if="it.state !== 'deleted'"
               type="button"

@@ -112,3 +112,45 @@ async def test_revoked_shares_skipped(make_user, db, monkeypatch):
     )
     r = await share_expiring_24h_warning(None)
     assert r["notified_shares"] == 0
+
+
+@pytest.mark.asyncio
+async def test_extending_the_expiry_rearms_the_warning(make_user, db, monkeypatch):
+    """The marker used to reset only when the expiry was CLEARED. A share
+    that had been warned about and was then extended kept its marker, so its
+    new expiry came and went without a warning - the worker filters on the
+    marker being NULL and nothing else ever cleared it."""
+    from app.services import share as share_svc
+
+    sender = make_user(email="hr@test.local", role=UserRole.admin)
+    recipient = make_user(email="cli@test.local", role=UserRole.client)
+    share = _make_share(db, sender, recipient.id, _now() + timedelta(hours=24, minutes=15))
+
+    monkeypatch.setattr(
+        "app.services.notification.dispatch",
+        lambda db, **kw: None,
+    )
+    monkeypatch.setattr(
+        "app.workers.share_expiring.SessionLocal", lambda: db
+    )
+    assert (await share_expiring_24h_warning(None))["notified_shares"] == 1
+
+    # The worker closes the session it was handed, which detaches `share`;
+    # re-attach it or the update below mutates an object nothing flushes.
+    share = db.query(Share).filter(Share.id == share.id).one()
+
+    # The owner extends by a month: the warning that fired was about a date
+    # that no longer exists.
+    share_svc.update_share_expiry(
+        db, user=sender, share=share, new_expires_at=_now() + timedelta(days=30)
+    )
+    db.commit()
+    db.expire_all()
+    assert db.query(Share).filter(Share.id == share.id).one().expiring_notified_at is None
+
+    # ...and when the NEW expiry comes within the window it is warned about.
+    share_svc.update_share_expiry(
+        db, user=sender, share=share, new_expires_at=_now() + timedelta(hours=24, minutes=15)
+    )
+    db.commit()
+    assert (await share_expiring_24h_warning(None))["notified_shares"] == 1

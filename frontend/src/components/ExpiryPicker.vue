@@ -87,9 +87,17 @@ const dt = ref<string | null>(
     ? siteNowPlusIso(7 * 24 * 60 * 60 * 1000)
     : props.modelValue,
 )
-const activePreset = ref<PresetId | null>(
-  props.modelValue === null ? 'never' : '7d',
-)
+/** Which preset button the initial value corresponds to, if any. This was a
+ *  hard-coded '7d' for every non-null value, so a picker seeded with the token
+ *  forms' 90-day default highlighted "7 days" next to a date three months out. */
+function presetFor(value: string | null | undefined): PresetId | null {
+  if (value === null) return 'never'
+  if (value === undefined) return '7d' // the default seeded into `dt` above
+  const ahead = siteLocalIsoToEpochMs(value) - Date.now()
+  const hit = presets.find((p) => p.ms !== null && Math.abs(ahead - p.ms) <= 60_000)
+  return hit?.id ?? null
+}
+const activePreset = ref<PresetId | null>(presetFor(props.modelValue))
 
 watch(dt, (v) => {
   emit('update:modelValue', v)

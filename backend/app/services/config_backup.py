@@ -963,7 +963,10 @@ def _purge_user(db, user, *, actor, request) -> str:
     )
     for f in doomed:
         try:
-            file_svc.hard_delete(db, file=f, reason="user_purged", actor_user_id=actor.id)
+            file_svc.hard_delete(
+                db, file=f, reason="user_purged", actor_user_id=actor.id,
+                allow_quarantined=True,
+            )
         except Exception:
             logger.exception("config import: purge byte-unlink failed for file=%s", f.id)
     sp = db.begin_nested()

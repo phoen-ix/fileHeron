@@ -26,6 +26,14 @@ class WebAuthnRegisterCompleteRequest(APIBaseModel):
     credential: dict[str, Any]
 
 
+class WebAuthnRegisterBeginRequest(APIBaseModel):
+    """Re-auth for adding a passkey. A UV-verified passkey satisfies the
+    account's second factor at login, so registering one must cost the same
+    as disabling TOTP does: the current password, not just a live session."""
+
+    password: str = Field(..., min_length=1, max_length=255)
+
+
 class WebAuthnRegisterBeginResponse(APIBaseModel):
     options: dict[str, Any]
 

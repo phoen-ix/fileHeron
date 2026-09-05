@@ -6,10 +6,12 @@ that way - silently, which is the worst version of this bug: the account page
 said two-factor was on.
 
 The audit found the OIDC half. The passkey half is the same defect one route
-over, and worse in one respect: `/webauthn/begin` asks for
-UserVerificationRequirement.PREFERRED and verification runs with
-require_user_verification=False, so the ceremony may have been a single
-possession factor.
+over, and worse in one respect: the ceremony may have been a single possession
+factor. The rule now: an assertion that carries USER VERIFICATION (the
+authenticator's UV flag - PIN / biometric) is the second factor and mints a
+session; one without it earns a pending token and the TOTP prompt. `/begin`
+asks the browser to REQUIRE verification when TOTP is on, but the flag on the
+assertion is what decides.
 
 `twofa_policy.is_2fa_required` is NOT the predicate - it returns False once the
 user HAS TOTP, because it answers "must they still set it up". `totp_svc.is_enabled`
@@ -208,9 +210,9 @@ async def test_a_wrong_code_is_refused_and_counted(
 
 @pytest.mark.asyncio
 async def test_a_passkey_login_also_challenges_totp(db, client, monkeypatch, make_user):
-    """The same gap one route over. A passkey is not automatically two factors:
-    /begin asks for UserVerificationRequirement.PREFERRED and verification runs
-    with require_user_verification=False."""
+    """The same gap one route over. A passkey assertion WITHOUT user
+    verification is possession alone, not two factors: the account with TOTP
+    enabled gets a pending token, never a session."""
     from app.services import webauthn as webauthn_svc
 
     u = make_user(email="pk@example.com", role=UserRole.client, password="Pass12345678!")
@@ -218,7 +220,7 @@ async def test_a_passkey_login_also_challenges_totp(db, client, monkeypatch, mak
     _enable_totp(db, u.id)
 
     async def _fake_complete(db_, *, session_key, credential_response):
-        return u
+        return webauthn_svc.PasskeyAuthResult(user=u, user_verified=False)
 
     monkeypatch.setattr(webauthn_svc, "authenticate_complete", _fake_complete)
 
@@ -232,3 +234,65 @@ async def test_a_passkey_login_also_challenges_totp(db, client, monkeypatch, mak
     assert body.get("pending_2fa_token"), body
     assert "access_token" not in body
     assert "fh_refresh" not in r.headers.get("set-cookie", "")
+
+
+@pytest.mark.asyncio
+async def test_a_user_verified_passkey_is_the_second_factor(db, client, monkeypatch, make_user):
+    """Password + a passkey whose authenticator verified the user (PIN /
+    biometric) is two factors. Until this the SPA offered "Use passkey" only to
+    TOTP users and the backend then handed every one of them a pending token
+    the SPA could not consume - the button could never sign anyone in."""
+    from app.services import webauthn as webauthn_svc
+
+    u = make_user(email="pkuv@example.com", role=UserRole.client, password="Pass12345678!")
+    db.commit()
+    _enable_totp(db, u.id)
+
+    async def _fake_complete(db_, *, session_key, credential_response):
+        return webauthn_svc.PasskeyAuthResult(user=u, user_verified=True)
+
+    monkeypatch.setattr(webauthn_svc, "authenticate_complete", _fake_complete)
+
+    r = await client.post(
+        "/api/auth/webauthn/complete",
+        json={"session": "sess", "credential": {"id": "x"}},
+    )
+
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body.get("access_token"), body
+    assert "pending_2fa_token" not in body
+    assert "fh_refresh" in r.headers.get("set-cookie", "")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("totp_on", [True, False])
+async def test_passkey_begin_demands_user_verification_only_when_totp_is_on(
+    db, client, monkeypatch, make_user, totp_on
+):
+    """/begin asks the browser to REQUIRE verification for a TOTP-enrolled
+    account, so an authenticator that cannot verify fails on the client instead
+    of producing a possession-only assertion that only earns a pending token."""
+    from app.services import webauthn as webauthn_svc
+
+    u = make_user(email="pkb@example.com", role=UserRole.client, password="Pass12345678!")
+    db.commit()
+    if totp_on:
+        _enable_totp(db, u.id)
+
+    seen: dict[str, object] = {}
+
+    async def _fake_begin(db_, *, user, session_key, require_user_verification=False):
+        seen["user_id"] = user.id
+        seen["require_uv"] = require_user_verification
+        return {"challenge": "c"}
+
+    monkeypatch.setattr(webauthn_svc, "authenticate_begin", _fake_begin)
+
+    r = await client.post(
+        "/api/auth/webauthn/begin",
+        json={"email": "pkb@example.com", "password": "Pass12345678!"},
+    )
+
+    assert r.status_code == 200, r.text
+    assert seen == {"user_id": u.id, "require_uv": totp_on}

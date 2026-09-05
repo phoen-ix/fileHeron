@@ -48,16 +48,29 @@ v-if="!supported" class="fh-notice" role="alert"
             :placeholder="t('webauthn.name_placeholder')"
           />
         </label>
+        <!-- Re-auth: a passkey that verifies its user counts as the second
+             factor at login, so adding one is gated on the password, the way
+             turning TOTP off is. -->
+        <label class="fh-field">
+          <span class="fh-field-label">{{ t('webauthn.password_label') }}</span>
+          <input
+            v-model="regPassword"
+            class="fh-field-input"
+            type="password"
+            autocomplete="current-password"
+          />
+          <span class="fh-field-help">{{ t('webauthn.password_help') }}</span>
+        </label>
         <div class="actions">
           <button
             type="button"
             class="fh-btn"
-            :disabled="busy || !newName"
+            :disabled="busy || !newName || !regPassword"
             @click="onRegister"
           >
             {{ busy ? t('common.loading') : t('webauthn.register') }}
           </button>
-          <button type="button" class="fh-btn-text" @click="adding = false">
+          <button type="button" class="fh-btn-text" @click="cancelAdd">
             {{ t('common.cancel') }}
           </button>
         </div>
@@ -102,6 +115,12 @@ const busy = ref(false)
 const errorMsg = ref<string | null>(null)
 const adding = ref(false)
 const newName = ref('')
+const regPassword = ref('')
+
+function cancelAdd() {
+  adding.value = false
+  regPassword.value = ''
+}
 
 async function load() {
   try {
@@ -116,7 +135,7 @@ async function onRegister() {
   errorMsg.value = null
   busy.value = true
   try {
-    const { data } = await registerBegin()
+    const { data } = await registerBegin(regPassword.value)
     // The server returns the options under {options: ...}; py_webauthn's
     // options_to_json shape uses the standard keys (challenge, rp, user, …).
     const opts = data.options as Record<string, unknown>
@@ -145,6 +164,7 @@ async function onRegister() {
     await registerComplete(newName.value, cred)
     adding.value = false
     newName.value = ''
+    regPassword.value = ''
     ui.pushToast(t('webauthn.added_toast'), 'success')
     await load()
   } catch (err: unknown) {

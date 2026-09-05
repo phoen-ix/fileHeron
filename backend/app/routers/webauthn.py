@@ -12,6 +12,13 @@ The login flow gates on a successful password check first - passkeys
 in this codebase are an *additional* factor (or a TOTP replacement),
 not a passwordless first-factor. That's a deliberate scope choice;
 true passwordless can be a follow-up.
+
+A passkey replaces TOTP only when the authenticator reports USER
+VERIFICATION (PIN / biometric): password + UV-verified passkey is two
+factors. A bare-touch assertion is possession alone, so an account with TOTP
+enabled gets a pending token from /complete and is asked for its code.
+Because a passkey can stand in for the second factor, registering one is
+gated on the current password (step-up), exactly like disabling TOTP.
 """
 from __future__ import annotations
 
@@ -32,6 +39,7 @@ from ..schemas.webauthn import (
     WebAuthnAuthCompleteRequest,
     WebAuthnCredentialItem,
     WebAuthnCredentialListResponse,
+    WebAuthnRegisterBeginRequest,
     WebAuthnRegisterBeginResponse,
     WebAuthnRegisterCompleteRequest,
 )
@@ -75,10 +83,19 @@ def list_credentials(
     "/register/begin", response_model=WebAuthnRegisterBeginResponse
 )
 async def register_begin(
+    payload: WebAuthnRegisterBeginRequest,
+    request: Request,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> WebAuthnRegisterBeginResponse:
+    # Step-up BEFORE the browser prompt: a wrong password must not cost the
+    # user a platform-authenticator dialog. Same gate as /2fa/disable and
+    # API-token minting - it throttles per user and audits a failure.
+    from ..services.step_up import verify_password_or_403
+
+    verify_password_or_403(db, user, payload.password, request=request)
     options = await webauthn_svc.register_begin(db, user=user)
+    db.commit()
     return WebAuthnRegisterBeginResponse(options=options)
 
 
@@ -159,8 +176,16 @@ async def auth_begin(
     )
 
     session_key = secrets.token_urlsafe(24)
+    # With TOTP enabled the assertion has to carry user verification to count
+    # as the second factor, so ask the browser to REQUIRE it: an authenticator
+    # that cannot verify the user fails the ceremony on the client instead of
+    # producing a possession-only assertion that would only earn a pending
+    # token and the TOTP prompt the user was already looking at.
     options = await webauthn_svc.authenticate_begin(
-        db, user=user, session_key=session_key
+        db,
+        user=user,
+        session_key=session_key,
+        require_user_verification=totp_svc.is_enabled(user),
     )
     db.commit()
     return WebAuthnAuthBeginResponse(session=session_key, options=options)
@@ -182,11 +207,12 @@ async def auth_complete(
     response: Response,
     db: Session = Depends(get_db),
 ) -> dict:
-    user = await webauthn_svc.authenticate_complete(
+    result = await webauthn_svc.authenticate_complete(
         db,
         session_key=payload.session,
         credential_response=payload.credential,
     )
+    user = result.user
 
     # The /begin gate verified account state, but that was a prior request -
     # re-check here so a passkey ceremony can't mint a session for an account
@@ -198,19 +224,20 @@ async def auth_complete(
     if not user.email_verified:
         raise AppError(403, "EMAIL_NOT_VERIFIED", "Please verify your email first.")
 
-    # A passkey is not automatically a second factor: /begin asks for
-    # UserVerificationRequirement.PREFERRED and verification runs with
-    # require_user_verification=False, so the ceremony may well have been a
-    # single possession factor. If the account has TOTP enabled, demand it -
-    # otherwise enabling 2FA silently did nothing for anyone who signs in with
-    # a passkey, exactly as it did nothing for SSO before this wave.
-    if totp_svc.is_enabled(user):
+    # A passkey is a second factor only when the authenticator VERIFIED the
+    # user (PIN / biometric - the UV flag on the assertion). /begin asks for
+    # REQUIRED when TOTP is on, but the flag is what is checked here: a
+    # possession-only assertion earns a pending token and the TOTP prompt -
+    # otherwise enabling 2FA would silently do nothing for anyone who signs in
+    # with a passkey, exactly as it did nothing for SSO before this wave.
+    if totp_svc.is_enabled(user) and not result.user_verified:
         # record_success deliberately withheld until the second factor passes:
         # it clears failed_login_count and locked_until.
         pending = jwt_session.create_pending_2fa_token(user.id, settings, via="webauthn")
         db.commit()
         # Shape mirrors the success return: the SPA branches on which key is
-        # present rather than on a status code.
+        # present rather than on a status code (stores/auth.ts::loginWithPasskey
+        # routes a pending token to the /login/2fa interstitial).
         return {"pending_2fa_token": pending}
 
     # Mint the same session + forensic trail the password flow produces.

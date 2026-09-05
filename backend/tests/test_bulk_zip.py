@@ -184,3 +184,41 @@ async def test_public_zip_counter_exhaustion(make_user, db, client, monkeypatch)
     r2 = await client.get(f"/api/public/{token}/download-zip")
     assert r2.status_code == 410
     assert r2.json()["code"] == "PUBLIC_LINK_EXHAUSTED"
+
+
+@pytest.mark.asyncio
+async def test_authed_zip_clips_download_log_ip_to_the_column(
+    make_user, db, client, login_as, monkeypatch, app_with_db
+):
+    """The archive route wrote `download_log.ip` raw while the single-file
+    route beside it clipped to `String(45)`. An over-long forwarded address was
+    a DataError under MariaDB strict mode - after the budget decrement, so the
+    download failed AND the share had paid for it. conftest's before_flush
+    ratchet fails this test on the unclipped write."""
+    from httpx import ASGITransport, AsyncClient
+
+    from app.models.download_log import DownloadLog
+    from app.routers.files import _DOWNLOAD_IP_MAX
+
+    _, _, share = _setup(
+        make_user, db, monkeypatch, files_spec=[("a.txt", b"a" * 10, FileState.clean)]
+    )
+    token, _ = await login_as("rec@test.local", "Pass12345678!")
+    mint = await client.get(
+        f"/api/files/{share.id}/download-zip-url",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert mint.status_code == 200, mint.text
+
+    long_host = "2001:db8:" + ":".join(["ffff"] * 6) + "%a-scope-id-past-the-column"
+    assert len(long_host) > _DOWNLOAD_IP_MAX
+    async with AsyncClient(
+        transport=ASGITransport(app=app_with_db, client=(long_host, 4321)),
+        base_url="http://test",
+    ) as far_client:
+        resp = await far_client.get(mint.json()["url"])
+    assert resp.status_code == 200, resp.text
+
+    rows = db.query(DownloadLog).filter(DownloadLog.share_id == share.id).all()
+    assert rows
+    assert {r.ip for r in rows} == {long_host[:_DOWNLOAD_IP_MAX]}

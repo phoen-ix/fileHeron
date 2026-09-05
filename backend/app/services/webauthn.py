@@ -18,7 +18,7 @@ from __future__ import annotations
 import base64
 import json
 import logging
-from typing import Any
+from typing import Any, NamedTuple
 
 import redis.asyncio as aioredis
 from sqlalchemy import update
@@ -189,8 +189,25 @@ async def register_complete(
 # --------------------------------------------------------------------------
 
 
+class PasskeyAuthResult(NamedTuple):
+    """What a verified login assertion established.
+
+    `user_verified` is the authenticator's UV flag: the person proved
+    presence AND unlocked the authenticator (PIN / biometric). Only such an
+    assertion may stand in for the account's second factor - a bare touch on
+    a security key is possession alone, and the router hands that a pending
+    token so TOTP is still demanded."""
+
+    user: User
+    user_verified: bool
+
+
 async def authenticate_begin(
-    db: Session, *, user: User, session_key: str
+    db: Session,
+    *,
+    user: User,
+    session_key: str,
+    require_user_verification: bool = False,
 ) -> dict[str, Any]:
     """Returns PublicKeyCredentialRequestOptions JSON. `session_key` is
     a per-flow id (e.g. JWT jti from a temporary auth session) so the
@@ -198,7 +215,13 @@ async def authenticate_begin(
 
     For the 2FA-after-password flow, we don't yet have a JWT - the
     caller can pass any cryptographically random session id and pass
-    it back on complete."""
+    it back on complete.
+
+    `require_user_verification` asks the browser for
+    `UserVerificationRequirement.REQUIRED`; the router sets it when the
+    account has TOTP enabled, so the ceremony either produces a UV-verified
+    assertion (which counts as the second factor) or fails on the client
+    before a pending token is ever minted."""
     creds = (
         db.query(UserWebAuthnCredential)
         .filter(UserWebAuthnCredential.user_id == user.id)
@@ -216,7 +239,11 @@ async def authenticate_begin(
     options = generate_authentication_options(
         rp_id=settings.WEBAUTHN_RP_ID,
         allow_credentials=allowed,
-        user_verification=UserVerificationRequirement.PREFERRED,
+        user_verification=(
+            UserVerificationRequirement.REQUIRED
+            if require_user_verification
+            else UserVerificationRequirement.PREFERRED
+        ),
     )
 
     r = _redis()
@@ -239,9 +266,10 @@ async def authenticate_complete(
     *,
     session_key: str,
     credential_response: dict[str, Any],
-) -> User:
+) -> PasskeyAuthResult:
     """Verifies the navigator.credentials.get() response. Returns the
-    authenticated user. Caller commits."""
+    authenticated user plus whether the authenticator reported user
+    verification. Caller commits."""
     r = _redis()
     try:
         # Single-use: see the register path above.
@@ -328,7 +356,7 @@ async def authenticate_complete(
     db.refresh(record)
 
     user = db.query(User).filter(User.id == user_id).one()
-    return user
+    return PasskeyAuthResult(user=user, user_verified=bool(verification.user_verified))
 
 
 def list_credentials_for(db: Session, user_id: int) -> list[UserWebAuthnCredential]:

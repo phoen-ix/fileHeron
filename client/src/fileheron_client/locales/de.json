@@ -333,6 +333,7 @@
     "FILE_DELETED": "Diese Datei wurde gelöscht.",
     "FILE_INFECTED": "Diese Datei wurde vom Virenscanner blockiert und kann nicht heruntergeladen werden.",
     "FILE_NOT_FOUND": "Diese Datei existiert nicht mehr.",
+    "FILE_QUARANTINED": "Diese Datei befindet sich in Quarantäne und kann nur von einem Administrator freigegeben oder endgültig gelöscht werden.",
     "FILE_NOT_INFECTED": "Diese Aktion ist nur für aktuell quarantänierte Dateien möglich.",
     "FILE_NOT_SCANNED": "Diese Datei war zu groß für die Virenprüfung und kann daher nicht im Browser angezeigt werden. Laden Sie sie herunter und prüfen Sie sie lokal.",
     "FILE_PENDING_APPROVAL": "Diese Datei wartet noch auf Freigabe und kann noch nicht heruntergeladen werden.",

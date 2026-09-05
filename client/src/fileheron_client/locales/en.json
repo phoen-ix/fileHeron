@@ -333,6 +333,7 @@
     "FILE_DELETED": "This file has been deleted.",
     "FILE_INFECTED": "This file was quarantined by antivirus and can’t be downloaded.",
     "FILE_NOT_FOUND": "That file no longer exists.",
+    "FILE_QUARANTINED": "This file is in quarantine and can only be released or purged by an administrator.",
     "FILE_NOT_INFECTED": "Only files currently in quarantine support this action.",
     "FILE_NOT_SCANNED": "This file was too large to scan for viruses, so it can't be previewed in the browser. Download it and check it locally.",
     "FILE_PENDING_APPROVAL": "This file is still awaiting approval and can't be downloaded yet.",

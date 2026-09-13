@@ -1,8 +1,9 @@
 # file:Heron v2.16.1
 
 **Follow-ups to the v2.16.0 log audit: scheduled tasks were quietly running
-slower than their own page claimed, an update could restart the database under a
-live server, and the audit log was hiding almost half of what it recorded.**
+slower than their own page claimed, an update could restart your database and
+take five times as long as it needed to, and the audit log was hiding almost half
+of what it recorded.**
 
 No migration, no host step, no defaults move. Everything here is a fix to
 behaviour that was already wrong rather than a change of intent.
@@ -38,19 +39,23 @@ five-minute inbound-mail poll every **5 minutes 48 seconds**, hourly tasks every
 which is far more than the scheduler's own jitter and far less than the
 one-minute minimum interval, so cadences settle on the value you configured.
 
-## An update could restart the database underneath a running server
+## An update could restart your database, and take five times as long
 
 Applying an update brings up the three application containers - but "bring up"
 also covers anything they depend on, so whenever the database or cache needed
-recreating, they were restarted **while the previous server was still handling
-requests**. That server then answered live traffic with errors until its
-replacement was ready.
+recreating, they were restarted as part of the update too. The server cannot
+start until a cold database reports itself healthy, and that wait is what
+stretches the outage: the health check runs every ten seconds and has to see the
+storage engine finish initialising first.
 
-Measured: one update took 30 seconds and served 11 application errors and 18
-gateway errors; an update that left the database alone took 6 seconds and served
-none. Updates now never touch the database or cache - they only swap the three
-application images, which is all a release changes. This applies to the update
-that installs it, not just the one after.
+Measured: one update was unreachable for **30 seconds**, against **6 seconds**
+for updates that left the database alone. Updates now never touch the database or
+cache - they only swap the three application images, which is all a release
+changes. This applies to the update that installs it, not just the one after.
+
+The errors returned during that window come from the reverse proxy rather than
+from file:Heron: while the container is being replaced there is no application
+there to answer at all, so nothing reaches your error log.
 
 If the database really is down when you update, the new server now fails its
 health check and the automatic rollback runs, which is the right outcome:

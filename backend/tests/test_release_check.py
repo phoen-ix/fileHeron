@@ -372,8 +372,9 @@ async def test_no_notification_when_target_equals_running(db, make_user, monkeyp
     make_user(email="adm@test.local", role=UserRole.admin)
 
     # v1.1.8: pin both the running version and the upstream tag to a
-    # v-prefixed value so the new backend-tag regex
-    # (``^v\d+\.\d+\.\d+``) accepts it. The test's placeholder
+    # v-prefixed value so the backend-tag regex accepts it. The pattern
+    # is ``v\d+\.\d+\.\d+`` with NO ``^`` - anchoring comes from the
+    # ``fullmatch`` at each call site. The test's placeholder
     # ``0.0.0-dev`` wouldn't match.
     monkeypatch.setattr(version_mod, "VERSION", "v1.1.7")
     monkeypatch.setattr(

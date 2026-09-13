@@ -736,7 +736,8 @@ drill cannot report green once backups have stopped arriving.
 ## Upgrades
 
 Prefer the **in-app self-update**: `/admin/system` polls GitHub (filtered to backend
-`^v\d+\.\d+\.\d+` tags) and surfaces an "Update available" banner with the changelog;
+`vX.Y.Z` tags, matched in full - so `v1.2.3-rc1` and the desktop client's
+`client-v*` tags are skipped) and surfaces an "Update available" banner with the changelog;
 **Update** drives the updater shim/executor and records the previous `FH_TAG` for
 one-click rollback. Manual path:
 
@@ -1047,7 +1048,7 @@ historical cadence.
 `cleanup_stale_uploads`, `cleanup_abandoned_uploads`, `cleanup_expired_tokens`,
 `ops_check` (cron + Redis health → `ops_alert`), `disk_check` (low-storage flag),
 `anomaly_check` (heuristic alerts), `rescan_inbound_attachments`,
-`release_check` (~daily; filters `^v\d+\.\d+\.\d+`).
+`release_check` (~daily; filters backend `vX.Y.Z` tags, matched in full).
 
 **Every 5 min:** `imap_poll` (self-gated on `imap.enabled`/mode/interval).
 **Every minute:** `drain_pending_update` (applies a postponed update once transfers drain).

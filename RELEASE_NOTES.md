@@ -1,3 +1,104 @@
+# file:Heron v2.16.0
+
+**Your server was failing quietly: background tasks that broke emailed nobody,
+the record of them breaking deleted itself on recovery, and every log line the
+app wrote carried no timestamp and no severity.**
+
+This release comes out of reading one instance's logs end to end rather than its
+code. Nothing had crashed and nothing had returned an error, which is exactly the
+problem - several of the controls that exist to tell you something is wrong were
+themselves broken, silently, in some cases since they were written. No migration
+and no host step. **Two defaults move, both described below:** failed scheduled
+tasks now email administrators, and links to the notification-preferences page
+expire after 30 days instead of 180.
+
+---
+
+## Failed scheduled tasks emailed nobody
+
+The error-alert settings page could say "alerting enabled, server errors on"
+while no background-task failure ever produced an email. Alerting for scheduled
+tasks was opt-in *per task*, defaulted off, and lived on a different page - so
+unless somebody had walked all twenty tasks and switched each one on, nothing was
+ever sent. On the instance this was found on, twenty-seven days of a broken
+inbound-mail poll produced ninety-seven recorded failures and no mail at all, and
+background tasks were the only thing on that server producing errors.
+
+**Failed scheduled tasks now email administrators by default.** Each task keeps
+its own switch on the Scheduled tasks page and that switch still wins in both
+directions, so a single noisy task can be silenced without turning the feature
+off. A new master toggle for background tasks sits beside the one for server
+errors. The existing limits are unchanged: one mail per task per hour, the
+cooldown, and the hourly cap all still apply.
+
+*If you would rather it stayed quiet:* turn "Failed background tasks" off at
+Settings → Error alerts before or after updating.
+
+## A task that recovered deleted the evidence it had ever failed
+
+The history behind the Scheduled tasks page keeps the most recent 200 runs of
+each task and trimmed itself only when a run succeeded. For a task that runs
+every minute, 200 runs is under four hours - so a task that failed for weeks and
+then recovered erased its own failure history within a day, and the page then
+showed it as having never failed. That is how the ninety-seven failures above
+disappeared before anyone looked.
+
+Failures are now kept when the history is trimmed and age out on the normal
+thirty-day schedule instead. Note the "last 24 hours" counters on that page are
+still taken from the retained rows, so for the most frequent tasks they cover
+less than a day.
+
+## Every log line the server wrote had no timestamp and no severity
+
+The application writes one JSON object per event to its container log. Both the
+time and the level - `error`, `warning`, `info` - were being written as empty on
+every line, in every release. You could not filter that log by severity, sort it
+by time, or point any log collector at it, and the container log is the only
+durable record of anything that never reaches the browsable Error log.
+
+Separately, every background-worker event was being written **twice**, once in
+each format, which is roughly half of a 26 MB log produced in three days by an
+idle server.
+
+Both are fixed. Log lines now carry a real timestamp and a real level, and
+appear once.
+
+## Links to the notification-preferences page now expire after 30 days
+
+The "manage notifications" link in the footer of every email is a credential: it
+opens your preferences without a password. It was valid for 180 days and, because
+it travels as part of a web address, it is written in full into the access log of
+every proxy it passes through. Six months is far longer than any email needs.
+
+**These links now expire after 30 days.** Links already sent keep the lifetime
+they were issued with. As before, changing your password, resetting it, or
+signing out of all sessions invalidates them immediately.
+
+## Also fixed
+
+- Background work could be dropped. Jobs queued from a web request - virus scans
+  and error notifications among them - were handed to the event loop without
+  keeping a reference, so the garbage collector could take one mid-flight. The
+  mechanism that was supposed to report that could not see it either, because it
+  only runs when a job finishes.
+- The weekly backup restore drill could fail against a healthy backup. It asked
+  the throwaway database whether it was ready, accepted the answer from the
+  temporary server that the database engine runs while initialising, and then
+  found it gone a moment later. It now waits for the real server. A drill that
+  fails this way means the drill is broken, not your backups - but it had been
+  red since the previous run, which is a week of unverified restores.
+- Scanner probes that arrived faster than the edge rate limit were answered with
+  a different error than the ones that did not, which told a scanner it had found
+  a rate limit and where the threshold was. They now get the same answer as any
+  other unknown address.
+- The admin IP-blocks page showed "1 hit" for every block no matter how many
+  requests it had actually refused, so there was no way to tell a block whose
+  scanner had moved on from one under sustained attack.
+- Inbound-mail connection failures named the wrong network. On a server
+  reachable over both IPv4 and IPv6, the reported error always came from
+  whichever was tried last, so a fault on one was reported as a fault on the
+  other. The error now names every address tried and which one failed.
+
 # file:Heron v2.15.0
 
 **A full audit of the web app and the desktop client: a passkey sign-in that

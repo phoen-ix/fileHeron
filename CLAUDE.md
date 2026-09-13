@@ -26,13 +26,14 @@ under the subsystem it governs, never under the release that found it.
 
 ## Current state
 
-Backend **`v2.15.0`** is the newest tag (2026-09-06). Desktop client
-**`client-v1.4.5`** ships beside it on its own tag. **The reference host runs
-v2.15.0**, applied 2026-09-10 15:42 (`FH_TAG=v2.15.0`; all four images on that
-tag). `data/updater/rollback_target.json` correctly holds the version BEFORE
-last, `v2.14.1`; do not read it as the running one. Two commits sit unpushed on
-`main` on that host (the 2026-09-13 log-audit fixes), so its `scripts/` are ahead
-of its images - see the note under §Ops about which half of a fix is live.
+Backend **`v2.16.0`** is the newest tag (2026-09-13). Desktop client
+**`client-v1.4.5`** ships beside it on its own tag and is UNCHANGED by v2.16.0.
+**The reference host runs v2.15.0**, applied 2026-09-10 15:42 - v2.16.0 is
+released but not applied there, so its two default moves are not live on it.
+`data/updater/rollback_target.json` holds the version BEFORE last; do not read it
+as the running one. Note the host's `scripts/` are already ahead of its images,
+because they run from the working tree - see the note under §Ops about which half
+of a fix is live.
 
 **Keep that line current on release.** It read "runs v2.13.5" while the host was
 on v2.14.0 and was carried forward unread through two releases, so an operator
@@ -73,6 +74,7 @@ record.
 | v2.10.0 | `202608080001` `ip_blocks` | - | scan guard ships OFF, so the upgrade is behaviour-neutral |
 | v2.12.0 | `202608150001` `files.last_progress_at` | **`docker compose up -d tusd`** - its command changed (`post-receive` enabled, `-progress-hooks-interval=30s`) | - |
 | v2.12.1 | - | **re-copy `scripts/ops/*`** - `OnFailure=` moved from `[Service]` (where systemd ignores it) to `[Unit]`; the host units are COPIES, so the fix reaches nothing until re-copied | - |
+| v2.16.0 | - | - | **TWO default moves.** `error_alert.source_worker` **ON**: failed scheduled tasks now email admins, where alerting was previously per-task and opt-in - an instance that wants silence must turn it off (the per-task `cron.<name>.alert_on_failure` still overrides either way). And `unsubscribe_token.DEFAULT_TTL_SEC` 180d → **30d**; tokens already minted keep their baked `exp` |
 
 **Six endpoints require the caller's own `password` in the body** (v2.9.0
 re-auth gates, still live - `verify_password_or_403` has seven call sites and

@@ -1,9 +1,9 @@
-{{ app_name }} detected {% if status_code and status_code < 500 %}a client error (HTTP {{ status_code }}){% else %}a server error{% endif %}.
+{{ app_name }} detected {% if source == "ops" %}an operations failure{% elif status_code and status_code < 500 %}a client error (HTTP {{ status_code }}){% else %}a server error{% endif %}.
 
-{% if source == "worker" %}A scheduled task failed: {{ job_name }}{% elif status_code and status_code < 500 %}A client error occurred: {{ method }} {{ path }}{% else %}A server error occurred: {{ method }} {{ path }}{% endif %}
+{% if source == "ops" %}An operations task failed: {{ job_name }}{% elif source == "worker" %}A scheduled task failed: {{ job_name }}{% elif status_code and status_code < 500 %}A client error occurred: {{ method }} {{ path }}{% else %}A server error occurred: {{ method }} {{ path }}{% endif %}
 
-Status:  {{ status_code }} {{ code }}
-Error:   {{ exception_type }}{% if message %} - {{ message }}{% endif %}
+{% if status_code %}Status:  {{ status_code }} {{ code }}{% else %}Code:    {{ code }}{% endif %}
+{% if exception_type %}Error:   {{ exception_type }}{% if message %} - {{ message }}{% endif %}{% elif message %}Detail:  {{ message }}{% endif %}
 When:    {{ at|dt_locale(locale) }}
 {% if ip %}From IP: {{ ip }}
 {% endif %}{% if request_id %}Request: {{ request_id }}

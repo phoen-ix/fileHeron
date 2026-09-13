@@ -4,6 +4,8 @@ One test per finding; each names what it would have cost.
 """
 from __future__ import annotations
 
+import re
+
 import pytest
 
 from app.models.user import UserRole
@@ -228,11 +230,16 @@ def test_the_executor_recreates_the_shim_after_the_job_is_terminal():
     src = (
         Path(__file__).resolve().parents[2] / "docker" / "updater-executor" / "run.py"
     ).read_text()
+    # Matched as a pattern, not as one literal arg sequence: this asserted
+    # `'"up", "-d", "updater-shim"'` verbatim and broke the moment `--no-deps`
+    # was added between them, which changed nothing about the ORDERING this test
+    # is named for. Tolerate extra flags and line breaks; keep the ordering pin.
+    shim_up = re.compile(r'"up",\s*"-d",[^\]]*"updater-shim"', re.S)
     tail = src.split('write_job_field(status="healthy"')[-1]
-    assert '"up", "-d", "updater-shim"' in tail, (
+    assert shim_up.search(tail), (
         "the shim is never recreated, so a shim fix cannot reach any instance"
     )
     head = src.split('write_job_field(status="healthy"')[0]
-    assert '"up", "-d", "updater-shim"' not in head, (
+    assert not shim_up.search(head), (
         "recreating the shim mid-job makes its replacement fail the job"
     )

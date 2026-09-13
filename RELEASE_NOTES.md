@@ -1,3 +1,81 @@
+# file:Heron v2.16.1
+
+**Follow-ups to the v2.16.0 log audit: scheduled tasks were quietly running
+slower than their own page claimed, an update could restart the database under a
+live server, and the audit log was hiding almost half of what it recorded.**
+
+No migration, no host step, no defaults move. Everything here is a fix to
+behaviour that was already wrong rather than a change of intent.
+
+---
+
+## The audit log was hiding almost half of what it recorded
+
+Opening an automatic block in the audit log showed the event, a target of
+`ip_block:17`, and two dashes - no indication of which address had been blocked.
+The address was never lost: it is recorded in the entry's details, and the CSV
+export has always included it. The on-screen table simply had no column for it,
+so 704 of 1,537 entries on the instance this was found on displayed nothing
+useful at all.
+
+Entries that carry details now have a **+** beside the timestamp that expands
+them in place. The IP column staying empty for these events is correct and
+unchanged: it records the address of the person who *did* something, and an
+automatic block, a failed scheduled task or an undeliverable email has no such
+person. What the event was *about* is in the details.
+
+## Scheduled tasks ran slower than the page said they did
+
+Every interval task was late, and the shorter the interval the worse the error.
+The dispatcher wakes once a minute and records its own wake time as the task's
+last run, so the gap it measures next time is one minute give or take a fraction
+of a second - and whenever that landed a hair under the configured interval, the
+task waited a further whole minute.
+
+Measured before the fix: a one-minute task ran every **91 seconds**, the
+five-minute inbound-mail poll every **5 minutes 48 seconds**, hourly tasks every
+**60 minutes 41 seconds**. A task is now allowed to be up to five seconds early,
+which is far more than the scheduler's own jitter and far less than the
+one-minute minimum interval, so cadences settle on the value you configured.
+
+## An update could restart the database underneath a running server
+
+Applying an update brings up the three application containers - but "bring up"
+also covers anything they depend on, so whenever the database or cache needed
+recreating, they were restarted **while the previous server was still handling
+requests**. That server then answered live traffic with errors until its
+replacement was ready.
+
+Measured: one update took 30 seconds and served 11 application errors and 18
+gateway errors; an update that left the database alone took 6 seconds and served
+none. Updates now never touch the database or cache - they only swap the three
+application images, which is all a release changes. This applies to the update
+that installs it, not just the one after.
+
+If the database really is down when you update, the new server now fails its
+health check and the automatic rollback runs, which is the right outcome:
+starting a database as a side effect of an image swap was never intended.
+
+## Failure alerts read "None"
+
+The email telling you a backup or a restore drill had failed opened with
+"A server error occurred: None None" and "Status: None", and left the occurrence
+count blank. The real content was further down and correct, but the first three
+lines of the mail that tells you your backups have stopped were noise. These
+alerts now describe themselves properly in both languages.
+
+## Also fixed
+
+- The server was never shut down gracefully. It ran one process removed from the
+  signal that stops it, so it was killed outright after the ten-second grace
+  period instead of closing down: in-flight requests were cut rather than
+  finished, and downloads in progress were not deregistered - which is what the
+  maintenance drain counts before deciding the system is idle enough to update.
+  A stop now completes in about a second, cleanly.
+- The inbound-mail settings held a "poll interval" value that nothing read. The
+  cadence has lived on the Scheduled tasks page since v1.28.0; changing the old
+  value did nothing.
+
 # file:Heron v2.16.0
 
 **Your server was failing quietly: background tasks that broke emailed nobody,

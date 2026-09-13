@@ -90,3 +90,30 @@ def test_the_shim_forwards_the_paths_it_already_knows():
     ).read_text()
     assert '-e "UPDATER_HOST_WORKSPACE=$HOST_WORKSPACE"' in shim
     assert '-e "UPDATER_HOST_STATE=$HOST_STATE"' in shim
+
+
+def test_every_compose_up_passes_no_deps():
+    """`docker compose up -d backend worker frontend` also brings up whatever
+    those services `depends_on`, so whenever compose decided db or redis needed
+    recreating the updater yanked the DATABASE out from under the still-running
+    old backend, which then answered live requests with its own 500 envelope
+    until its replacement came up.
+
+    Measured on the reference instance: the 2026-09-05 update ran
+    23:35:25 -> 23:35:55 - a 30s window carrying 11 app-served 500s and 18 proxy
+    502s - against 6s and zero 500s for an update that left db and redis alone.
+    `depends_on: service_healthy` does not help; it orders STARTUP and does not
+    stop a dependency being restarted beneath a running container. Maintenance
+    mode cannot cover it either: the flag lives in app_settings, so reading it
+    needs the database that is going away.
+
+    The `compose run` calls already passed --no-deps; the `up` calls did not.
+    """
+    src = _RUN_PY.read_text(encoding="utf-8")
+    ups = [line for line in src.splitlines() if '"up", "-d"' in line]
+    assert ups, "no `docker compose up` found in the executor"
+    for line in ups:
+        assert "--no-deps" in line, (
+            f"compose up without --no-deps recreates db/redis under a live "
+            f"backend: {line.strip()}"
+        )

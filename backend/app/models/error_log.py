@@ -11,7 +11,8 @@ alerts).
 Context only: client IP, exception type, masked-free message (<=500 chars),
 method/path, status/code, request_id, acting user id - never a traceback, request
 body, or query string (the path already drops the query string upstream). The IP
-is the real client IP (proxy-resolved) and is the key field for spotting scans.
+is proxy-resolved and is the key field for spotting scans; see the note on the
+column for the one case where it is a bridge address rather than a client.
 ``alerted`` records whether an email actually went out for this row. Bounded by the
 ``error_log`` retention window in ``workers/prune_history.py``.
 """
@@ -56,7 +57,23 @@ class ErrorLog(Base):
     path: Mapped[str | None] = mapped_column(String(512), nullable=True)
     job_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
 
-    # Real client IP (proxy-resolved). String(45) fits IPv6; mirrors login_attempts.
+    # The client address AS RESOLVED AT THE BACKEND (proxy-resolved). String(45)
+    # fits IPv6; mirrors login_attempts.
+    #
+    # Usually the real client IP, but NOT always, and the difference is visible
+    # in the admin viewer: a request that reaches the frontend nginx without an
+    # X-Forwarded-For - i.e. straight to the loopback-published port rather than
+    # through Traefik - has no forwarded address to recover, so what lands here
+    # is nginx's own peer, the docker bridge gateway. Measured: 13 such rows on
+    # the reference instance (12 scanner-bait 404s from a host-local curl, plus
+    # one AUTH_REQUIRED), against 2,239 total.
+    #
+    # This is not a defect and must not be "fixed" by blanking it: the value is
+    # what the backend actually saw, and both published ports bind 127.0.0.1 so
+    # such rows can only be host-local by construction. Nor does it cause
+    # mis-blocking - `utils/client_ip.is_blockable` refuses every non-global
+    # address, deliberately, because a wide block containing the bridge would
+    # take the SPA, tusd, the healthcheck and the updater down with it.
     ip: Mapped[str | None] = mapped_column(String(45), nullable=True)
     request_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     # No FK: forensic, must survive user deletion / erasure.

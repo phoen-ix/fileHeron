@@ -95,3 +95,33 @@ def test_interval_clamped_to_min(db):
     db.commit()
     # imap_poll min is 1.
     assert cs.effective(db, "imap_poll").interval_minutes == 1
+
+
+def test_a_job_a_hair_short_of_its_interval_is_still_due():
+    """`cron_dispatch` ticks once a minute, takes `now` ONCE per tick and stores
+    that same value as last_run_at - so the elapsed time it measures next tick is
+    the tick SPACING, and whenever that lands marginally under the interval the
+    job waits a whole further tick.
+
+    Measured on the reference instance before `_DUE_SLACK` existed: a 1-minute
+    job ran every 91.4s (+52%), drain_pending_update every 82.0s, the 5-minute
+    IMAP poll every 347.9s (+16%) and hourly jobs every 3641s. Every interval
+    job was slower than the cadence its own admin page advertised.
+    """
+    now = datetime(2026, 6, 6, 12, 0, 0)
+    r = _res(kind=cs.KIND_INTERVAL, interval_minutes=1)
+    # The realistic case: one tick apart, a few hundred ms short of 60s.
+    assert cs.is_due(r, now - timedelta(seconds=59, milliseconds=800), now, "UTC") is True
+    # An hourly job one second short of the hour, same shape.
+    r60 = _res(kind=cs.KIND_INTERVAL, interval_minutes=60)
+    assert cs.is_due(r60, now - timedelta(minutes=59, seconds=59), now, "UTC") is True
+
+
+def test_the_slack_cannot_halve_the_shortest_cadence():
+    """The slack must stay far below the 1-minute floor on interval_minutes.
+    Scaling it to a fraction of the dispatcher tick (30s) would let a 1-minute
+    job fire at 30s elapsed - steadying the cadence by destroying it."""
+    now = datetime(2026, 6, 6, 12, 0, 0)
+    r = _res(kind=cs.KIND_INTERVAL, interval_minutes=1)
+    assert cs.is_due(r, now - timedelta(seconds=30), now, "UTC") is False
+    assert cs._DUE_SLACK.total_seconds() < 15

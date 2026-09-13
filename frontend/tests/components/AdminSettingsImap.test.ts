@@ -18,7 +18,6 @@ const SETTINGS = {
   post_fetch_action: 'mark_read',
   move_folder: 'fileHeron/Processed',
   notify_mode: 'off',
-  poll_interval_minutes: 5,
   last_poll_at: null,
   last_success_at: null,
 }

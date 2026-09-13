@@ -39,6 +39,22 @@ HEALTH_TIMEOUT_SEC = int(os.environ.get("EXECUTOR_HEALTH_TIMEOUT_SEC", "90"))
 # replacement's startup sweep mark this very job failed. It is recreated at the
 # end instead, after the terminal status is written; see the note in main().
 SERVICES = ["backend", "worker", "frontend"]
+# Every `compose up` below passes --no-deps, and that is load-bearing. `up`
+# without it brings up a service's depends_on too, so whenever compose decided
+# db or redis needed recreating it yanked the DATABASE out from under the
+# still-running old backend - which then answered live requests with its own 500
+# envelope until its replacement came up. Measured on the reference instance:
+# the 2026-09-05 update took 23:35:25 -> 23:35:55, a 30s window carrying 11
+# app-served 500s and 18 proxy 502s, against 6s and zero 500s for an update that
+# left db and redis alone. `depends_on: service_healthy` does not help: it orders
+# STARTUP, it does not stop a dependency being restarted beneath a running
+# container. Maintenance mode cannot cover it either - the flag lives in
+# app_settings, so reading it needs the database that is the thing going away.
+#
+# An update only ever swaps these three images; it has no business recreating the
+# data layer. If db or redis are genuinely down, --no-deps lets the health check
+# fail and the auto-rollback fire, which is the correct outcome - starting a
+# database as a side effect of an image swap is not.
 # Images we pull. Includes the updater images so subsequent updates
 # don't have to re-pull them on a slow link.
 IMAGES_TO_PULL = SERVICES + ["updater-shim", "updater-executor"]
@@ -407,7 +423,7 @@ def auto_rollback(previous_tag: str, previous_head: str | None, target_tag: str,
     # (ii) Restore the previous tag, then (iii) bring prod back up on it.
     write_current_tag(previous_tag)
     if run_capture(
-        ["docker", "compose", "-f", str(COMPOSE_FILE), "up", "-d"] + SERVICES,
+        ["docker", "compose", "-f", str(COMPOSE_FILE), "up", "-d", "--no-deps"] + SERVICES,
         env=_compose_env(previous_tag),
     ) != 0:
         write_job_field(
@@ -548,7 +564,7 @@ def main() -> int:
     # it auto-creates shadow data dirs at /workspace/data/* and forks the
     # data layer).
     if run_capture(
-        ["docker", "compose", "-f", str(COMPOSE_FILE), "up", "-d"] + SERVICES,
+        ["docker", "compose", "-f", str(COMPOSE_FILE), "up", "-d", "--no-deps"] + SERVICES,
         env=_compose_env(target_tag),
     ) != 0:
         # An UPDATE that won't even start self-heals to the previous tag; a
@@ -586,7 +602,8 @@ def main() -> int:
     # here is logged, never fatal - the update itself has already succeeded.
     try:
         rc = run_capture(
-            ["docker", "compose", "-f", str(COMPOSE_FILE), "up", "-d", "updater-shim"],
+            ["docker", "compose", "-f", str(COMPOSE_FILE), "up", "-d", "--no-deps",
+             "updater-shim"],
             env=_compose_env(target_tag),
         )
         log_line(

@@ -1,9 +1,11 @@
 {% extends "layout.html.j2" %}
 {% import "_components.html.j2" as ui %}
-{% block subject %}{{ app_name }} {% if status_code and status_code < 500 %}client{% else %}server{% endif %} error ({{ code }}){% endblock %}
+{% block subject %}{{ app_name }} {% if source == "ops" %}operations failure{% elif status_code and status_code < 500 %}client error{% else %}server error{% endif %} ({{ code }}){% endblock %}
 {% block content %}
   {{ ui.eyebrow("Operations") }}
-  {% if source == "worker" %}
+  {% if source == "ops" %}
+    {{ ui.headline("An operations task failed") }}
+  {% elif source == "worker" %}
     {{ ui.headline("A scheduled task failed") }}
   {% elif status_code and status_code < 500 %}
     {{ ui.headline("A client error occurred") }}
@@ -11,9 +13,9 @@
     {{ ui.headline("A server error occurred") }}
   {% endif %}
   {% call ui.specs() %}
-    {% if source == "worker" %}{{ ui.spec("task", job_name) }}{% else %}{{ ui.spec("request", method ~ " " ~ path) }}{% endif %}
-    {{ ui.spec("status", status_code ~ " " ~ code) }}
-    {{ ui.spec("error", exception_type ~ (" - " ~ message if message else "")) }}
+    {% if source in ("worker", "ops") %}{{ ui.spec("task", job_name) }}{% else %}{{ ui.spec("request", method ~ " " ~ path) }}{% endif %}
+    {% if status_code %}{{ ui.spec("status", status_code ~ " " ~ code) }}{% else %}{{ ui.spec("code", code) }}{% endif %}
+    {% if exception_type %}{{ ui.spec("error", exception_type ~ (" - " ~ message if message else "")) }}{% elif message %}{{ ui.spec("detail", message) }}{% endif %}
     {{ ui.spec("when", at|dt_locale(locale)) }}
     {% if ip %}{{ ui.spec("from ip", ip) }}{% endif %}
     {% if request_id %}{{ ui.spec("request id", request_id) }}{% endif %}

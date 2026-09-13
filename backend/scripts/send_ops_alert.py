@@ -66,7 +66,10 @@ def main(argv: list[str]) -> int:
         "status_code": None,
         "code": args.code,
         "at": utc_now().isoformat(),
-        "occurrences": 1,
+        # `occurrence_count`, NOT `occurrences`: the shared server_error template
+        # reads the former (error_alert._build_payload supplies it), so the wrong
+        # key rendered "Occurrences since last alert:" with nothing after it.
+        "occurrence_count": 1,
     }
 
     db = SessionLocal()

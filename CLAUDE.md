@@ -26,12 +26,13 @@ under the subsystem it governs, never under the release that found it.
 
 ## Current state
 
-Backend **`v2.16.0`** is the newest tag (2026-09-13). Desktop client
-**`client-v1.4.5`** ships beside it on its own tag and is UNCHANGED by v2.16.0.
+Backend **`v2.16.1`** is the newest tag (2026-09-13). Desktop client
+**`client-v1.4.5`** ships beside it on its own tag and is UNCHANGED by both.
 **The reference host runs v2.16.0**, applied 2026-09-13 17:42 via the in-app
-updater about four minutes after the release published - so both of that
-release's default moves ARE live there: cron failures now email admins, and new
-unsubscribe tokens last 30 days. Only backend/worker/frontend/updater-shim were
+updater about four minutes after that release published - so v2.16.0's two
+default moves ARE live there (cron failures now email admins, and new
+unsubscribe tokens last 30 days), while v2.16.1 is released and not yet applied.
+v2.16.1 moves no defaults. Only backend/worker/frontend/updater-shim were
 swapped (db, redis, tusd and clamav kept their uptime), which is the updater
 behaving exactly as documented below.
 `data/updater/rollback_target.json` holds the version BEFORE last; do not read it
@@ -78,6 +79,7 @@ record.
 | v2.10.0 | `202608080001` `ip_blocks` | - | scan guard ships OFF, so the upgrade is behaviour-neutral |
 | v2.12.0 | `202608150001` `files.last_progress_at` | **`docker compose up -d tusd`** - its command changed (`post-receive` enabled, `-progress-hooks-interval=30s`) | - |
 | v2.12.1 | - | **re-copy `scripts/ops/*`** - `OnFailure=` moved from `[Service]` (where systemd ignores it) to `[Unit]`; the host units are COPIES, so the fix reaches nothing until re-copied | - |
+| v2.16.1 | - | - | - (the `--no-deps` fix rides `updater-executor:<target_tag>`, which the shim pulls per run, so it applies to the update that INSTALLS it, not the one after) |
 | v2.16.0 | - | - | **TWO default moves.** `error_alert.source_worker` **ON**: failed scheduled tasks now email admins, where alerting was previously per-task and opt-in - an instance that wants silence must turn it off (the per-task `cron.<name>.alert_on_failure` still overrides either way). And `unsubscribe_token.DEFAULT_TTL_SEC` 180d → **30d**; tokens already minted keep their baked `exp` |
 
 **Six endpoints require the caller's own `password` in the body** (v2.9.0
@@ -388,6 +390,7 @@ Body is **HTML** (`body_html`); legacy `body_markdown` stays NOT NULL written
 `services/email_placeholders.py`.
 
 - **Every slug ships FOUR files**: `{en,de}` × `{txt,html}`. `tests/test_email_template_matrix.py` is the ratchet - it takes the slug list from `subjects.json`, **never a hand-written list** (this repo has been bitten twice by "keep this in sync"), requires all four files BY FULL PATH, compiles each in its own locale, renders every combination and fails on `html is None`. It also asserts en and de render DIFFERENT html, which is what catches a missing `de/` file hiding behind the en fallback.
+- **`server_error` is SHARED with `scripts/send_ops_alert.py`, which passes `source="ops"` and no method, path, status or exception type.** Without an `ops` branch the template rendered four literal `None`s ("A server error occurred: None None / Status: None / Error: None") on the mail that tells an operator their backups have stopped. The script must also spell the count `occurrence_count`, the key the template reads - it wrote `occurrences`, so the occurrence line rendered blank. Both halves are pinned by `tests/test_ops_alert_rendering.py`, including a control that the ordinary HTTP path still renders its request line.
 - **`_render`'s locale fallback must stay `except TemplateNotFound`.** It caught bare `Exception`, so a SYNTAX ERROR in a `de/` template fell through to `en/` and the recipient got a German text part beside an English HTML part, silently.
 - **The layout DEFINES `{% block subject %}` with a default.** It used to only call `{{ self.subject() }}`, making the block mandatory in every child - the trap that left `release_available.html.j2` dead in both locales for its whole life, raising `UndefinedError` into `render_email`'s bare `except` with nothing logged anywhere. Do not remove the default.
 - **Guard the German footer date on TRUTHINESS, not `is defined`.** `_wrap_layout` passes `now=ctx.get("now")` unconditionally, so on the admin-override path the name is defined and None and `is defined` lets the empty label through - which is how every German email shipped a dangling `Empfangsdatum: .`
@@ -440,7 +443,7 @@ settings `/admin/settings/error-alerts`. → README §Error log & alerts.
 - **Edge scanner detection.** `docker/frontend/nginx.conf` routes scanner-bait paths (a curated script/config/vcs **extension** denylist + dotfiles except `/.well-known/`) to the backend → 404 → logged. This is the **only** way edge scans surface: the SPA fallback 200s unknown *page* paths and scanners don't run the SPA JS. nginx.conf is baked into the frontend image → ships via in-app Update (no host step). Per-IP `limit_req zone=probe`.
 - **SPA 404 beacon.** `POST /api/telemetry/page-404` lets the SPA report client-side 404s so they land alongside edge/backend ones. Anonymous + opt-in (no-op unless 4xx capture is on), 10/60s per-IP, query string stripped, rows are `source="spa"`, logged never emailed. Client-asserted (spoofable) by design - bounded by the gate + rate limit. **`/api/telemetry/*` is capped at 64k at the edge** with a `Content-Length` pre-check, because the beacons buffered the body before capping it.
 - **The CSP is Report-Only, with a sink at `/api/telemetry/csp-report`;** enforcing it is a deliberate later step, after the reports come back empty. **CSP reports ride `error_log.enabled` (default ON), never `error_log.capture_4xx` (default OFF)** - gating them on the 4xx switch made the policy's own exit criterion satisfiable by a policy never exercised. **The SPA shell only gets the Report-Only policy** (from nginx); the ENFORCING policy covers backend responses only, so `v-html` in `LegalPage.vue` is guarded by nh3 **alone**, and `e2e/tests/legal-page-xss.spec.ts` is the only test that loads a legal page in a real browser.
-- **`error_log` table:** `ip` (real client IP), no FK on `user_id` (forensic), `signature` for grouping, `alerted` flag. Pruned by `prune_history` + `error_log.retention_days`. The server_error email is admin-only `NotificationCategory.server_error`.
+- **`error_log` table:** `ip` (the address as resolved AT THE BACKEND - usually the real client, but a request reaching nginx without an `X-Forwarded-For`, i.e. straight to the loopback-published port rather than through Traefik, lands nginx's own peer, the docker bridge gateway; 13 such rows of 2,239 on the reference instance, all host-local by construction since both published ports bind 127.0.0.1. Not a defect and not to be blanked - and it causes no mis-blocking, because `is_blockable` refuses every non-global address), no FK on `user_id` (forensic), `signature` for grouping, `alerted` flag. Pruned by `prune_history` + `error_log.retention_days`. The server_error email is admin-only `NotificationCategory.server_error`.
 
 ## Scan guard + IP blocks
 
@@ -582,6 +585,7 @@ drain. Gate `services/maintenance.py`, counters `services/transfer_activity.py`.
 optional restic; `scripts/restore.sh` sha256-verifies + prompts a literal `restore`).
 The invariants that keep them true:
 
+- **Every `docker compose up` in `updater-executor/run.py` passes `--no-deps`.** `up` also brings up a service's `depends_on`, so whenever compose decided db or redis needed recreating, an update yanked the DATABASE out from under the still-running old backend, which then answered live traffic with its own 500 envelope until its replacement came up. Measured: 2026-09-05 ran 23:35:25→23:35:55, a 30s window with 11 app-served 500s and 18 proxy 502s, against 6s and zero 500s for an update that left them alone. `depends_on: service_healthy` does NOT help (it orders startup, not a restart beneath a live container) and maintenance mode cannot either (the flag lives in `app_settings`, so reading it needs the database that is going away). The `compose run` calls already had the flag; only `up` did not. The fix rides `updater-executor:<target_tag>`, which the shim pulls per run, so it applies to the update that INSTALLS it.
 - **Which half of a fix is live on a host depends on where it ships.** `scripts/`
   and `scripts/ops/*` run from the WORKING TREE (systemd's `ExecStart` points at
   `/opt/fileHeron/scripts/...`), so a commit to them takes effect on the next
@@ -651,6 +655,7 @@ admin-tunable via `services/cron_schedule.py::REGISTRY` + the minute
 
 - **`release_check` is DAILY** (1440-minute interval in `REGISTRY`), not hourly - it was listed as hourly here, which is what an operator would have believed when deciding how quickly an update surfaces. Filter `RELEASE_TAG_RE`, exact match, drafts and prereleases skipped.
 - **Cadence/enable/kind (`interval`|`daily`; daily uses the site timezone) are runtime-editable** via `cron.<name>.*` kv; defaults reproduce the historical cadence, so an upgrade is behaviour-neutral until edited. `REGISTRY` doubles as the **Run-now allowlist**.
+- **`is_due` allows a job to be `_DUE_SLACK` (5s) EARLY, and that is what keeps cadences honest.** `cron_dispatch` ticks once a minute, takes `now` ONCE per tick and stores that same value as `last_run_at`, so the elapsed time it measures next tick is the tick SPACING - and whenever that landed a hair under the interval the job waited a whole further tick. Measured before the slack: a 1-minute job every 91.4s (+52%), `drain_pending_update` 82.0s, the 5-minute IMAP poll 347.9s (+16%), hourly jobs 3641s. **Do not scale the slack to a fraction of the tick**: half a tick (30s) would let a 1-minute job fire at 30s elapsed, halving the shortest cadence instead of steadying it.
 - **`cron_tracker._prune_old_runs` deletes SUCCESSES only past the per-job cap.** It runs on the success path alone, and `_KEEP_PER_JOB` is a flat 200 rows regardless of cadence (~3.3h for a 1-minute cron), so an unfiltered cap meant a job erased the evidence it was ever broken as soon as it recovered: `imap_poll`'s 97 failures from 2026-08 were gone within a day and the Scheduled-tasks page showed it as having never failed. Failures still age out via `_PRUNE_AFTER_DAYS` (30), so this stays bounded. **The admin "last 24h" counters are still structurally incomplete for the most frequent jobs** - 200 rows is under four hours of a 1-minute cron.
 - **`mark_ran` persists BEFORE enqueue** - a failed commit retries next minute rather than enqueue-without-record. First sight seeds the clock (no thundering start after boot); `cron_dispatch` is deliberately NOT `@track_cron` (1440×/day would flood `cron_runs`).
 - **`send_email_job`** resolves SMTP per job, retries transient, permanent 5xx → audit `email_undeliverable` + admin alert.

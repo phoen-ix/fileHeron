@@ -181,13 +181,33 @@ def _zone(tz_name: str) -> ZoneInfo:
         return ZoneInfo("UTC")
 
 
+# How much early a job may be and still count as due.
+#
+# `cron_dispatch` ticks once a minute, takes `now` ONCE per tick, and stores that
+# same value as `last_run_at`. So the elapsed time measured at the next tick is
+# the tick spacing, which is a minute give or take the scheduler's own jitter -
+# and whenever it lands marginally UNDER the interval the job is not due and
+# waits a whole further tick. Measured on the reference instance before this
+# slack existed: a 1-minute job ran every 91.4s (+52%), `drain_pending_update`
+# every 82.0s, the 5-minute IMAP poll every 347.9s (+16%), hourly jobs every
+# 3641s. Every interval job ran slower than its admin-facing cadence claimed,
+# worst where the interval was shortest.
+#
+# 5s is chosen to be larger than any plausible tick jitter and far smaller than
+# the 1-minute floor on `interval_minutes`, so the worst case is a job firing 8%
+# early on the shortest possible interval rather than 52% late. Do NOT scale this
+# to a fraction of the tick: half a tick (30s) would let a 1-minute job fire at
+# 30s elapsed, which halves the shortest cadence instead of steadying it.
+_DUE_SLACK = timedelta(seconds=5)
+
+
 def is_due(res: ResolvedSchedule, last_run_at: datetime | None, now_utc: datetime, tz_name: str) -> bool:
     """Pure due-ness check. ``last_run_at`` / ``now_utc`` are naive UTC. A None
     last_run_at means 'never seeded' -> not due (the dispatcher seeds first)."""
     if not res.enabled or last_run_at is None:
         return False
     if res.kind == KIND_INTERVAL:
-        return (now_utc - last_run_at) >= timedelta(minutes=res.interval_minutes)
+        return (now_utc - last_run_at) >= timedelta(minutes=res.interval_minutes) - _DUE_SLACK
     # daily: due once we've passed today's HH:MM (site tz) and haven't run since.
     tz = _zone(tz_name)
     now_local = now_utc.replace(tzinfo=timezone.utc).astimezone(tz)

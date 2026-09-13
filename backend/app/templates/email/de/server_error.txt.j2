@@ -1,9 +1,9 @@
-{{ app_name }} hat {% if status_code and status_code < 500 %}einen Client-Fehler (HTTP {{ status_code }}){% else %}einen Serverfehler{% endif %} erkannt.
+{{ app_name }} hat {% if source == "ops" %}einen Betriebsfehler{% elif status_code and status_code < 500 %}einen Client-Fehler (HTTP {{ status_code }}){% else %}einen Serverfehler{% endif %} erkannt.
 
-{% if source == "worker" %}Eine geplante Aufgabe ist fehlgeschlagen: {{ job_name }}{% elif status_code and status_code < 500 %}Ein Client-Fehler ist aufgetreten: {{ method }} {{ path }}{% else %}Ein Serverfehler ist aufgetreten: {{ method }} {{ path }}{% endif %}
+{% if source == "ops" %}Eine Betriebsaufgabe ist fehlgeschlagen: {{ job_name }}{% elif source == "worker" %}Eine geplante Aufgabe ist fehlgeschlagen: {{ job_name }}{% elif status_code and status_code < 500 %}Ein Client-Fehler ist aufgetreten: {{ method }} {{ path }}{% else %}Ein Serverfehler ist aufgetreten: {{ method }} {{ path }}{% endif %}
 
-Status:   {{ status_code }} {{ code }}
-Fehler:   {{ exception_type }}{% if message %} - {{ message }}{% endif %}
+{% if status_code %}Status:   {{ status_code }} {{ code }}{% else %}Code:     {{ code }}{% endif %}
+{% if exception_type %}Fehler:   {{ exception_type }}{% if message %} - {{ message }}{% endif %}{% elif message %}Detail:   {{ message }}{% endif %}
 Zeit:     {{ at|dt_locale(locale) }}
 {% if ip %}Von IP:   {{ ip }}
 {% endif %}{% if request_id %}Request:  {{ request_id }}

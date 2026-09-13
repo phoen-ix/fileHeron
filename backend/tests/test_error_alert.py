@@ -103,7 +103,18 @@ def test_http_source_toggle_off(db, fake_redis):
     assert error_alert.handle_error_event(db, _http_event())["status"] == "source_disabled"
 
 
-def test_worker_source_gated_by_per_cron_flag(db, make_user, fake_redis):
+def test_worker_source_defaults_on_with_a_per_task_override(db, make_user, fake_redis):
+    """The per-task `cron.<name>.alert_on_failure` flag used to be the ONLY
+    control and it defaulted OFF, so an instance where nobody had walked the ~20
+    tasks alerted on no worker failure at all while /admin/settings/error-alerts
+    read "enabled": 97 cron failures over 27 days and 0 emails on the reference
+    host, with worker-source 5xx making up 100% of its real 5xx volume.
+
+    `error_alert.source_worker` now supplies the default (ON). This test
+    previously pinned the opposite default deliberately; it is rewritten rather
+    than deleted so the override - which is what made the old default tolerable -
+    stays pinned in BOTH directions.
+    """
     make_user(email="a@test.local", role=UserRole.admin)
     _enable(db)
     ev = {
@@ -112,12 +123,21 @@ def test_worker_source_gated_by_per_cron_flag(db, make_user, fake_redis):
         "status_code": 500, "code": "CRON_FAILED", "request_id": None,
         "user_id": None, "auth_via": None, "at": utc_now().isoformat(),
     }
-    # Per-task flag off -> no email.
-    assert error_alert.handle_error_event(db, ev)["status"] == "source_disabled"
-    # Flip the per-cron flag on -> sends.
-    settings_svc.set_value(db, key="cron.expire_files.alert_on_failure", value="true", actor=None)
-    db.commit()
+    # Nobody has opted this task in -> it alerts anyway.
     assert error_alert.handle_error_event(db, ev)["status"] == "sent"
+
+    # The per-task flag still WINS: it can silence one noisy task on its own.
+    # (The source gate is checked before the cooldown, so this cannot be a
+    # cooldown result masquerading as a source decision.)
+    settings_svc.set_value(db, key="cron.expire_files.alert_on_failure", value="false", actor=None)
+    db.commit()
+    assert error_alert.handle_error_event(db, ev)["status"] == "source_disabled"
+
+    # And the global toggle silences every task nobody has touched.
+    settings_svc.set_value(db, key="error_alert.source_worker", value="false", actor=None)
+    db.commit()
+    untouched = {**ev, "job_name": "disk_check", "path": "disk_check"}
+    assert error_alert.handle_error_event(db, untouched)["status"] == "source_disabled"
 
 
 # --- cooldown / dedup ------------------------------------------------------

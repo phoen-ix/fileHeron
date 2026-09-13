@@ -183,5 +183,10 @@ async def test_cron_alert_on_failure_round_trip(make_user, client, login_as):
     assert data["error_alerts_enabled"] is True
     item = next(i for i in data["items"] if i["name"] == "expire_files")
     assert item["alert_on_failure"] is True
+    # A task nobody has touched now follows the global `error_alert.source_worker`
+    # default, which is ON - this asserted False while that default was a
+    # hardcoded False in cron_schedule.effective(). The page and the alerter must
+    # agree: rendering every task "off" on a page whose failures do alert is the
+    # misreport this whole change exists to remove.
     other = next(i for i in data["items"] if i["name"] != "expire_files")
-    assert other["alert_on_failure"] is False
+    assert other["alert_on_failure"] is True

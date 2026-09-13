@@ -52,7 +52,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from sqlalchemy import desc as sa_desc
-from sqlalchemy import func
+from sqlalchemy import func, update
 from sqlalchemy.orm import Session
 
 from ..database import SessionLocal
@@ -191,6 +191,17 @@ _snapshot: dict = {}
 _blocked_ips: frozenset[str] = frozenset()
 _blocked_nets: tuple = ()
 _allow_nets: tuple = ()
+# Serving-side hit counts, accumulated in-process and flushed on the existing
+# cache-refresh cycle. `ip_blocks.hit_count` was written once at insert and then
+# only ever touched by `_block()`'s extend branch, which is reachable only when a
+# NEW block decision is taken for a subject that already has a live block - never
+# by the middleware, which returns straight from `is_blocked`. Every one of the
+# 27 rows on the reference instance therefore read exactly 1, so an operator
+# could not tell a block whose scanner moved on from one under sustained attack,
+# which is the field's only purpose. Counting here rather than per-request keeps
+# the hot path at ZERO I/O (see the module docstring); the flush rides the
+# refresh that already opens a session every _CACHE_TTL_SEC.
+_pending_hits: dict[str, int] = {}
 
 
 # ---------------------------------------------------------------------------
@@ -353,6 +364,44 @@ def get_settings(db: Session) -> dict:
     }
 
 
+def _flush_block_hits(db: Session) -> None:
+    """Persist accumulated serving-side hits. Best-effort by design: this is an
+    advisory counter, and it must never be able to disturb the block cache - the
+    caller runs it outside the refresh's own try/except, which fails OPEN."""
+    global _pending_hits
+    if not _pending_hits:
+        return
+    pending, _pending_hits = _pending_hits, {}
+    for subject, n in pending.items():
+        db.execute(
+            update(IpBlock)
+            .where(IpBlock.subject == subject, IpBlock.released_at.is_(None))
+            .values(hit_count=IpBlock.hit_count + n)
+        )
+    db.commit()
+
+
+def note_block_hit(ip: str | None) -> None:
+    """Record that a live block just refused a request. Zero I/O: one dict bump
+    against the already-loaded cache. Called from the middleware's refusal
+    branch, NOT from `is_blocked` - `note_offence` also calls `is_blocked` to
+    skip counting a source already decided, and that is not a served refusal."""
+    if not ip:
+        return
+    if ip in _blocked_ips:
+        _pending_hits[ip] = _pending_hits.get(ip, 0) + 1
+        return
+    try:
+        addr = ipaddress.ip_address(ip)
+    except ValueError:
+        return
+    for n in _blocked_nets:
+        if addr in n:
+            key = str(n)
+            _pending_hits[key] = _pending_hits.get(key, 0) + 1
+            return
+
+
 def _refresh_cache() -> None:
     global _enabled, _snapshot, _blocked_ips, _blocked_nets, _allow_nets, _cache_expires
     snap = _defaults()
@@ -383,6 +432,14 @@ def _refresh_cache() -> None:
         snap = _defaults()
         ips, nets = set(), []
     finally:
+        # Outside the block above on purpose: a failed flush must not reach the
+        # fail-open handler and reset the snapshot, i.e. un-block everyone
+        # because an advisory counter could not be written.
+        try:
+            _flush_block_hits(db)
+        except Exception:
+            db.rollback()
+            logger.warning("scan_guard: hit-count flush failed", exc_info=True)
         db.close()
     # Pre-split the admin free-text path lists once per refresh, so `classify`
     # stays pure string comparisons on the hot path.

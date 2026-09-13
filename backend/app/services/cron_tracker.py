@@ -105,7 +105,20 @@ def _prune_old_runs(db: Session, job_name: str) -> None:
         threshold = rows_to_keep[-1]
         db.execute(
             delete(CronRun)
-            .where(CronRun.job_name == job_name, CronRun.started_at < threshold)
+            .where(
+                CronRun.job_name == job_name,
+                CronRun.started_at < threshold,
+                # Only SUCCESSES age out on the cap. This prune runs on the
+                # success path ONLY, so without this filter a job deletes the
+                # evidence that it was ever broken as soon as it recovers - and
+                # the cap is a flat 200 rows regardless of cadence, i.e. ~3.3h
+                # for a 1-minute cron. imap_poll's 97 failures from 2026-08 were
+                # gone within a day of the first successful poll, and the admin
+                # Scheduled-tasks page then showed it as having never failed.
+                # Failures still age out via the _PRUNE_AFTER_DAYS cutoff above,
+                # so this cannot grow without bound.
+                CronRun.status == CronRunStatus.success,
+            )
         )
 
 

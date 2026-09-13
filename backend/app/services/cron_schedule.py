@@ -131,7 +131,15 @@ def effective(db: Session, name: str) -> ResolvedSchedule:
         spec, settings_svc.get_int(db, _key(name, "interval_minutes"), default=spec.default_interval_min)
     )
     daily_time = settings_svc.get(db, _key(name, "daily_time")) or spec.default_daily_time
-    alert_on_failure = settings_svc.get_bool(db, _key(name, "alert_on_failure"), default=False)
+    # Same default the alerter applies (error_alert._alert_source_enabled), so the
+    # toggle on the Scheduled tasks page shows what will actually happen. Hardcoding
+    # False here while the alerter defaulted to the global key would render every
+    # task "off" on a page whose failures do alert.
+    alert_on_failure = settings_svc.get_bool(
+        db,
+        _key(name, "alert_on_failure"),
+        default=settings_svc.get_bool(db, settings_svc.Keys.ERROR_ALERT_SOURCE_WORKER, default=True),
+    )
     return ResolvedSchedule(
         name=name, group=spec.group, description=spec.description,
         enabled=enabled, kind=kind, interval_minutes=interval, daily_time=daily_time,

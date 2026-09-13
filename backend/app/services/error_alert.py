@@ -345,7 +345,13 @@ def _alert_source_enabled(db: Session, event: dict[str, Any]) -> bool:
     source = event.get("source")
     if source == "worker":
         job_name = event.get("job_name") or ""
-        return settings_svc.get_bool(db, f"cron.{job_name}.alert_on_failure", default=False)
+        # The per-task flag WINS when an admin has set it either way; the global
+        # source toggle only supplies the default for tasks nobody has touched.
+        # It used to default to a hardcoded False, which meant a stock instance
+        # alerted on no worker failure at all while the page said alerting was
+        # on - and worker 5xx were 100% of this instance's real 5xx volume.
+        default = settings_svc.get_bool(db, K.ERROR_ALERT_SOURCE_WORKER, default=True)
+        return settings_svc.get_bool(db, f"cron.{job_name}.alert_on_failure", default=default)
     if source == "http":
         status = int(event.get("status_code") or 0)
         if status >= 500:
@@ -449,6 +455,7 @@ def get_settings(db: Session) -> dict[str, Any]:
     return {
         "enabled": settings_svc.get_bool(db, K.ERROR_ALERT_ENABLED, default=False),
         "source_http_5xx": settings_svc.get_bool(db, K.ERROR_ALERT_SOURCE_HTTP_5XX, default=True),
+        "source_worker": settings_svc.get_bool(db, K.ERROR_ALERT_SOURCE_WORKER, default=True),
         "source_http_4xx": settings_svc.get_bool(db, K.ERROR_ALERT_SOURCE_HTTP_4XX, default=False),
         "recipients_mode": (
             settings_svc.get(db, K.ERROR_ALERT_RECIPIENTS_MODE) or "admins"
@@ -474,6 +481,8 @@ def update_settings(
     enabled: bool,
     source_http_5xx: bool,
     source_http_4xx: bool,
+    # None = not supplied; leave the stored value alone. See the schema comment.
+    source_worker: bool | None = None,
     recipients_mode: str,
     custom_recipients: list[str],
     cooldown_minutes: int,
@@ -506,6 +515,14 @@ def update_settings(
     ):
         settings_svc.set_value(
             db, key=key, value="true" if flag else "false", actor=actor, request=request,
+        )
+    if source_worker is not None:
+        # None = the caller never sent the field (a client older than it); leave
+        # whatever is stored rather than resetting it to a value they never chose.
+        settings_svc.set_value(
+            db, key=K.ERROR_ALERT_SOURCE_WORKER,
+            value="true" if source_worker else "false",
+            actor=actor, request=request,
         )
     settings_svc.set_value(
         db, key=K.ERROR_ALERT_RECIPIENTS_MODE, value=recipients_mode,

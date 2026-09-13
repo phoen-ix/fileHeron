@@ -9,6 +9,7 @@ from __future__ import annotations
 import imaplib
 import logging
 import re
+import socket
 import ssl
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -269,18 +270,52 @@ def _tls_context(cfg: ImapConfig) -> ssl.SSLContext:
     return ssl.create_default_context()
 
 
+def _connect_failure(cfg: ImapConfig, exc: OSError) -> OSError:
+    """Re-raise a connect error that says WHICH address failed.
+
+    `imaplib` connects via `socket.create_connection`, which walks every
+    `getaddrinfo` result and re-raises only the LAST one's exception. On a
+    dual-stack host that is whichever family sorts last, not necessarily the one
+    carrying the real fault: 77 of this instance's 97 poll failures recorded
+    "[Errno 101] Network is unreachable", the classic IPv6-no-route error, while
+    `mail.monumental.at` resolves IPv4 FIRST and IPv6 second - so the operator
+    was handed a diagnosis pointing at the leg that was not the problem.
+    Name every resolved address and say which one the errno belongs to.
+    """
+    try:
+        addrs = [
+            f"{f[4][0]} ({f[0].name})"
+            for f in socket.getaddrinfo(cfg.host, cfg.port, 0, socket.SOCK_STREAM)
+        ]
+    except OSError:
+        addrs = []
+    where = ", ".join(addrs) if addrs else "name did not resolve"
+    return OSError(
+        exc.errno,
+        f"{exc.strerror or exc} [connecting to {cfg.host}:{cfg.port}; "
+        f"tried in order: {where}; this error is from the LAST address tried]",
+    )
+
+
 @contextmanager
 def open_session(cfg: ImapConfig) -> Iterator[ImapSession]:
     ctx = _tls_context(cfg)
     conn: imaplib.IMAP4
-    if cfg.tls_mode == "implicit":
-        conn = imaplib.IMAP4_SSL(
-            cfg.host, cfg.port, ssl_context=ctx, timeout=_TIMEOUT
-        )
-    else:
-        conn = imaplib.IMAP4(cfg.host, cfg.port, timeout=_TIMEOUT)
-        if cfg.tls_mode == "starttls":
-            conn.starttls(ssl_context=ctx)
+    try:
+        if cfg.tls_mode == "implicit":
+            conn = imaplib.IMAP4_SSL(
+                cfg.host, cfg.port, ssl_context=ctx, timeout=_TIMEOUT
+            )
+        else:
+            conn = imaplib.IMAP4(cfg.host, cfg.port, timeout=_TIMEOUT)
+            if cfg.tls_mode == "starttls":
+                conn.starttls(ssl_context=ctx)
+    except ssl.SSLError:
+        # A TLS failure already names itself precisely (certificate, hostname,
+        # protocol); rewriting it as a generic connect error would lose that.
+        raise
+    except OSError as exc:
+        raise _connect_failure(cfg, exc) from exc
     try:
         conn.login(cfg.user, cfg.password)
         yield ImapSession(conn)

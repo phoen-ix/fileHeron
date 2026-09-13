@@ -18,6 +18,7 @@ const errorMsg = ref<string | null>(null)
 const enabled = ref(false)
 const sourceHttp5xx = ref(true)
 const sourceHttp4xx = ref(false)
+const sourceWorker = ref(true)
 const recipientsMode = ref<'admins' | 'custom'>('admins')
 const customRecipientsText = ref('')
 const cooldownMinutes = ref(15)
@@ -101,6 +102,7 @@ function apply(data: Awaited<ReturnType<typeof getErrorAlertSettings>>['data']) 
   enabled.value = data.enabled
   sourceHttp5xx.value = data.source_http_5xx
   sourceHttp4xx.value = data.source_http_4xx
+  sourceWorker.value = data.source_worker
   recipientsMode.value = data.recipients_mode
   customRecipientsText.value = data.custom_recipients.join('\n')
   cooldownMinutes.value = data.cooldown_minutes
@@ -133,6 +135,7 @@ async function onSave() {
       enabled: enabled.value,
       source_http_5xx: sourceHttp5xx.value,
       source_http_4xx: sourceHttp4xx.value,
+      source_worker: sourceWorker.value,
       recipients_mode: recipientsMode.value,
       custom_recipients: parsedRecipients.value,
       cooldown_minutes: cooldownMinutes.value,
@@ -228,6 +231,12 @@ onMounted(() => {
             <p class="fh-field-help">{{ t('admin_error_alerts.http_4xx_help') }}</p>
           </template>
           <p v-else class="fh-field-help cron-note">{{ t('admin_error_alerts.http_4xx_needs_capture') }}</p>
+
+          <label class="toggle">
+            <input v-model="sourceWorker" type="checkbox" />
+            <span>{{ t('admin_error_alerts.worker_label') }}</span>
+          </label>
+          <p class="fh-field-help">{{ t('admin_error_alerts.worker_help') }}</p>
 
           <p class="fh-field-help cron-note">{{ t('admin_error_alerts.cron_note') }}</p>
         </fieldset>

@@ -233,11 +233,17 @@ class Keys:
     UPDATES_DRAIN_MAX_WAIT_MIN = "updates.drain_max_wait_min"
     # Error alerting (email admins on server errors). Master switch + the HTTP-5xx
     # source toggle + recipient targeting are simple kv; the cooldown + hourly cap
-    # are registry tunables (see settings_registry). The cron/worker source is NOT
-    # here - it's a per-task `cron.<name>.alert_on_failure` flag on the Scheduled
-    # tasks page. See services/error_alert.py.
+    # are registry tunables (see settings_registry). The worker/cron source has
+    # BOTH a global default here and a per-task `cron.<name>.alert_on_failure`
+    # override on the Scheduled tasks page: the per-task flag used to be the only
+    # control and it defaults OFF, so on an instance where nobody had walked the
+    # ~20 tasks and switched each one on, the master switch read "enabled" while
+    # every worker failure went unreported - 97 cron failures over 27 days
+    # emailed nobody. See services/error_alert.py.
     ERROR_ALERT_ENABLED = "error_alert.enabled"                  # boolean master switch (default false)
     ERROR_ALERT_SOURCE_HTTP_5XX = "error_alert.source_http_5xx"  # boolean (default true)
+    # boolean (default true) - supplies the default for cron.<name>.alert_on_failure
+    ERROR_ALERT_SOURCE_WORKER = "error_alert.source_worker"
     ERROR_ALERT_SOURCE_HTTP_4XX = "error_alert.source_http_4xx"  # boolean (default false) - email captured 4xx too
     ERROR_ALERT_RECIPIENTS_MODE = "error_alert.recipients_mode"  # 'admins' | 'custom' (default 'admins')
     ERROR_ALERT_CUSTOM_RECIPIENTS = "error_alert.custom_recipients"  # CSV of email addresses

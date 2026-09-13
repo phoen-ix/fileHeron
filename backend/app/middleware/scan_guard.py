@@ -72,6 +72,11 @@ class ScanGuardMiddleware:
             logger.warning("scan_guard: block check failed; serving", exc_info=True)
             blocked = False
         if blocked:
+            # Advisory, and wrapped so it can never turn a refusal into a 500.
+            try:
+                guard_svc.note_block_hit(ip)
+            except Exception:
+                logger.warning("scan_guard: hit count failed", exc_info=True)
             state = scope.get("state") or {}
             body = {"error": "Not Found", "code": "NOT_FOUND"}
             request_id = state.get("request_id")

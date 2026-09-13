@@ -1328,6 +1328,8 @@ export interface ErrorAlertSettingsResponse {
   enabled: boolean
   source_http_5xx: boolean
   source_http_4xx: boolean
+  /** Default for every task's `cron.<name>.alert_on_failure`; the per-task flag wins. */
+  source_worker: boolean
   recipients_mode: 'admins' | 'custom'
   custom_recipients: string[]
   cooldown_minutes: number

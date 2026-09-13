@@ -47,11 +47,18 @@ from ..config import settings
 from ..middleware.errors import AppError
 from ..utils.crypto import constant_time_equals
 
-# 180 days. Manage links should outlive the email they ride in by a comfortable
-# margin so an old notification's link still works; every fresh email mints a
-# new one anyway. The action behind the token is low-risk (toggling the user's
-# own notification channels), so a long lifetime is acceptable.
-DEFAULT_TTL_SEC = 180 * 24 * 60 * 60
+# 30 days. Manage links should outlive the email they ride in so an old
+# notification's link still works, and every fresh email mints a new one anyway.
+# It was 180 days on the reasoning that the action behind the token is low-risk;
+# that undersold it. This token is a BEARER CREDENTIAL - it reads a user's
+# display name and whole preference matrix and mutates it - and it travels in a
+# URL PATH, so every hop logs it verbatim. A live one was found sitting in this
+# host's world-readable Traefik access log (`-rw-r--r--`, a box shared with six
+# unrelated apps) with five and a half months left to run. 30 days still
+# comfortably outlives any real email's useful life and cuts that exposure
+# window six-fold. Revocation is unchanged: the token carries an `iat` and dies
+# on a password change, reset, sign-out-all or admin revoke-all.
+DEFAULT_TTL_SEC = 30 * 24 * 60 * 60
 
 
 def _now() -> int:

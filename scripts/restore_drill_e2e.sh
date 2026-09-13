@@ -184,11 +184,25 @@ docker run --rm -v "$WORKSPACE/data":/d alpine chown -R 1000:1000 /d/files /d/qu
 log "starting throwaway db + redis ..."
 dc up -d db redis
 export MYSQL_PWD="$DB_ROOT_PASSWORD"
+# Readiness is mariadb's OWN healthcheck, never a bare SELECT. The workspace is
+# a FRESH datadir every run, so mariadb's entrypoint first runs a TEMPORARY
+# initialisation server that accepts connections and is then shut down before
+# the real one starts. The old gate broke out of its retry loop on the first
+# successful SELECT - which can be that temp server - and then re-tested once,
+# UNRETRIED, after it had gone: the 2026-09-13 drill failed two seconds in with
+# "throwaway db never came up" while the identical script passed on 2026-09-06,
+# because the race is timing-dependent. Same failure family as the redis
+# PING-loop defect (a probe that passes against a server that is not the one you
+# are about to use), and deliberately the same readiness shape as
+# scripts/run_mariadb_tests.sh - keep the two in step.
+db_ready=0
 for _ in $(seq 1 60); do
-    dc exec -T -e MYSQL_PWD db mariadb -uroot -e "SELECT 1" >/dev/null 2>&1 && break
+    if dc exec -T -e MYSQL_PWD db healthcheck.sh --connect --innodb_initialized >/dev/null 2>&1; then
+        db_ready=1; break
+    fi
     sleep 2
 done
-dc exec -T -e MYSQL_PWD db mariadb -uroot -e "SELECT 1" >/dev/null 2>&1 || fail "throwaway db never came up"
+[ "$db_ready" = "1" ] || fail "throwaway db never came up"
 
 log "restoring database ..."
 dc exec -T -e MYSQL_PWD db mariadb -uroot \

@@ -35,6 +35,21 @@ from ..config import settings
 
 logger = logging.getLogger("fileheron.job_queue")
 
+# Strong references for the fire-and-forget tasks scheduled below. asyncio keeps
+# only a WEAK reference to a task from `loop.create_task()`, so the GC can
+# collect one mid-flight - and since `_log_task_failure` fires only on
+# COMPLETION, a collected enqueue was unreportable by construction: the job
+# vanished and the sole trace was asyncio's own "Task was destroyed but it is
+# pending!" on stdout. `services/sse.py::_track_publish_task` already parks its
+# publish tasks for exactly this reason; this is the same fix, applied to the
+# path that carries av_scan_file and notify_admin_error.
+_pending_tasks: set[asyncio.Task] = set()
+
+
+def _track(task: asyncio.Task) -> None:
+    _pending_tasks.add(task)
+    task.add_done_callback(_pending_tasks.discard)
+
 
 async def aenqueue(name: str, *args: Any, **kwargs: Any) -> None:
     """Async-context enqueue. Always prefer this from ``async def``
@@ -124,6 +139,7 @@ def enqueue(name: str, *args: Any, **kwargs: Any) -> None:
         return
 
     task = loop.create_task(aenqueue(name, *args, **kwargs))
+    _track(task)
     task.add_done_callback(_log_task_failure(name, args, kwargs))
 
 
@@ -160,6 +176,7 @@ def enqueue_many(jobs: list[tuple[str, tuple, dict]]) -> None:
         return
 
     task = loop.create_task(aenqueue_many(jobs))
+    _track(task)
 
     def _on_done(t: asyncio.Task) -> None:
         if t.cancelled():

@@ -149,6 +149,35 @@ def test_restore_and_the_drill_agree_on_redis_readiness() -> None:
     )
 
 
+def test_the_drill_waits_for_mariadbs_own_healthcheck_not_a_bare_select() -> None:
+    """The drill builds a FRESH datadir every run, so mariadb's entrypoint first
+    runs a TEMPORARY initialisation server that accepts connections and is then
+    shut down before the real one starts.
+
+    A gate that breaks out of its retry loop on the first successful `SELECT 1`
+    can break against THAT server and find the socket gone one line later. That
+    is how the 2026-09-13 drill failed two seconds into a 120s budget with
+    "throwaway db never came up", while the identical script passed on
+    2026-09-06 - the race is timing-dependent, so one green run proves nothing.
+    Same failure family as the redis PING-loop defect above: a probe that passes
+    against a server that is not the one you are about to use.
+    `run_mariadb_tests.sh` already waits on `innodb_initialized` (pinned by
+    test_the_mariadb_runner_cleans_up_after_itself); this keeps the two in step.
+    """
+    drill = (_SCRIPTS / "restore_drill_e2e.sh").read_text()
+    assert "innodb_initialized" in drill, (
+        "the drill's db readiness must be mariadb's own healthcheck, not a bare SELECT"
+    )
+    assert not re.search(r'mariadb -uroot -e "SELECT 1" >/dev/null 2>&1 && break', drill), (
+        "the drill breaks out of its readiness loop on the first SELECT again - "
+        "that can be the init server, which is then shut down"
+    )
+    assert re.search(r'\[ "\$db_ready" = "1" \] \|\| fail', drill), (
+        "the drill must fail only once the retry budget is exhausted, never on a "
+        "single un-retried re-test after the loop"
+    )
+
+
 def test_contributing_e2e_recipe_cannot_recreate_the_live_stack() -> None:
     """Compose defaults its project name to the directory - i.e. `fileheron`.
 

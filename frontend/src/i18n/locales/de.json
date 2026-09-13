@@ -1705,7 +1705,8 @@
       "ip": "IP",
       "request": "Req"
     },
-    "actor_deleted": "(gelöscht)"
+    "actor_deleted": "(gelöscht)",
+    "details_toggle": "Details anzeigen"
   },
   "account": {
     "title": "Konto",

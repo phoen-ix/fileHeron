@@ -90,6 +90,20 @@ ENTRYPOINT ["/entrypoint.sh"]
 # to pin it to their proxy's address changed nothing at all - the setting they
 # were told to set had no reader (audit 2026-07-30). Shell form so the variable
 # expands; entrypoint.sh still execs this as the CMD.
+#
+# The leading `exec` is load-bearing. Docker wraps a shell-form CMD as
+# ["/bin/sh","-c", ...], and without it the shell STAYS as PID 1 with uvicorn as
+# its child - measured, PID 1 was `/bin/sh -c uvicorn ...` and uvicorn was PID
+# 22. A POSIX shell does not forward signals, so `docker stop` SIGTERM'd the
+# shell, uvicorn never heard it, and the whole container was SIGKILLed once the
+# 10s grace expired: FastAPI's lifespan shutdown and uvicorn's connection drain
+# never ran, in-flight requests were severed, and `serve_response`'s
+# `download_finished` BackgroundTask never fired - leaving stale entries in the
+# transfer_activity ZSET that the maintenance drain counts to decide whether the
+# stack is idle before a self-update. `exec` makes uvicorn PID 1 and keeps the
+# variable expansion. Do NOT "simplify" this to exec-form CMD: that loses the
+# expansion, and moving the flag into entrypoint.sh would append it to whatever
+# CMD is given, breaking `docker compose run backend python ...`.
 ENV FORWARDED_ALLOW_IPS="*"
-CMD uvicorn app.main:app --host 0.0.0.0 --port 8000 \
+CMD exec uvicorn app.main:app --host 0.0.0.0 --port 8000 \
     --proxy-headers --forwarded-allow-ips="$FORWARDED_ALLOW_IPS"

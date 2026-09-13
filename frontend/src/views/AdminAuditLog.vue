@@ -30,6 +30,37 @@ const toTs = ref('')
 const loading = ref(true)
 const errorMsg = ref<string | null>(null)
 
+// Row ids whose metadata is expanded. `audit_log.metadata_json` is where the
+// DETAIL of a system-originated event lives - `ip_blocked` carries the blocked
+// address as `subject`, and the `ip` column is NULL for those because it means
+// "the actor's address" and an automatic block has no actor. The API has always
+// returned it as `extra` and the CSV export has always included it; this table
+// rendered six columns and dropped it, so 704 of 1,537 rows on the reference
+// instance showed nothing but a dash.
+const expanded = ref<Set<number>>(new Set())
+
+function toggleExtra(id: number) {
+  const next = new Set(expanded.value)
+  if (!next.delete(id)) next.add(id)
+  expanded.value = next
+}
+
+function hasExtra(r: AdminAuditRow): boolean {
+  return !!r.extra && Object.keys(r.extra).length > 0
+}
+
+/** Metadata is attacker-influenced (`subject` is a remote address, and redacted
+ *  paths appear in other events), so every value is rendered as TEXT through
+ *  interpolation - never v-html. Non-strings are JSON so `false` and `0` stay
+ *  visible rather than collapsing to an empty cell. */
+function extraEntries(r: AdminAuditRow): [string, string][] {
+  if (!r.extra) return []
+  return Object.entries(r.extra).map(([k, v]) => [
+    k,
+    v === null || v === undefined ? '-' : typeof v === 'string' ? v : JSON.stringify(v),
+  ])
+}
+
 const filterParams = computed(() => {
   const p: Record<string, string> = {}
   if (eventType.value) p.event_type = eventType.value
@@ -66,6 +97,8 @@ async function load() {
     if (mine !== loadSeq) return
     items.value = data.items
     total.value = data.total
+    // Ids are page-scoped; keeping them would re-expand an unrelated row.
+    expanded.value = new Set()
   } catch (err) {
     if (mine !== loadSeq) return
     errorMsg.value = describe(err)
@@ -150,8 +183,20 @@ v-else-if="errorMsg" class="fh-notice" role="alert"
         </tr>
       </thead>
       <tbody>
-        <tr v-for="r in items" :key="r.id">
-          <td class="fh-mono nowrap">{{ formatDate(r.created_at, { second: '2-digit' }) }}</td>
+        <template v-for="r in items" :key="r.id">
+        <tr>
+          <td class="fh-mono nowrap">
+            <button
+              v-if="hasExtra(r)"
+              type="button"
+              class="disclose"
+              :aria-expanded="expanded.has(r.id)"
+              :aria-label="t('admin_audit.details_toggle')"
+              @click="toggleExtra(r.id)"
+            >{{ expanded.has(r.id) ? '−' : '+' }}</button>
+            <span v-else class="disclose-spacer" aria-hidden="true"></span>
+            {{ formatDate(r.created_at, { second: '2-digit' }) }}
+          </td>
           <td><span class="fh-mono ev">{{ r.event_type }}</span></td>
           <td class="actor-cell">
             <template v-if="r.actor_user_id !== null">
@@ -176,6 +221,17 @@ v-else-if="errorMsg" class="fh-notice" role="alert"
           <td class="fh-mono">{{ r.ip ?? '-' }}</td>
           <td class="fh-mono small">{{ r.request_id?.slice(0, 8) ?? '-' }}</td>
         </tr>
+        <tr v-if="expanded.has(r.id)" class="extra-row">
+          <td colspan="6">
+            <dl class="extra">
+              <template v-for="[k, v] in extraEntries(r)" :key="k">
+                <dt class="fh-mono">{{ k }}</dt>
+                <dd class="fh-mono">{{ v }}</dd>
+              </template>
+            </dl>
+          </td>
+        </tr>
+        </template>
       </tbody>
     </table>
 
@@ -207,6 +263,53 @@ v-else-if="errorMsg" class="fh-notice" role="alert"
   width: 100%;
   border-collapse: collapse;
   font-size: var(--fh-text-body-sm);
+}
+
+.disclose {
+  background: none;
+  border: var(--fh-border);
+  border-radius: 3px;
+  color: var(--fh-subtle);
+  cursor: pointer;
+  font-family: var(--fh-font-mono);
+  font-size: var(--fh-text-mono-sm);
+  line-height: 1;
+  padding: 1px 5px;
+  margin-right: var(--fh-space-2);
+}
+
+.disclose:hover {
+  color: var(--fh-ink);
+}
+
+/* Keeps the timestamps aligned on rows that carry no metadata. */
+.disclose-spacer {
+  display: inline-block;
+  width: calc(1ch + 10px + var(--fh-space-2));
+}
+
+.extra-row td {
+  padding-bottom: var(--fh-space-3);
+}
+
+/* Label/value pairs rather than a seventh column: the payloads vary in shape
+   (ip_blocked has six keys, a settings change has counts and key names only)
+   and a fixed column would wreck the table at phone width. */
+.extra {
+  display: grid;
+  grid-template-columns: minmax(7rem, max-content) 1fr;
+  gap: 2px var(--fh-space-3);
+  margin: 0;
+  font-size: var(--fh-text-mono-sm);
+}
+
+.extra dt {
+  color: var(--fh-subtle);
+}
+
+.extra dd {
+  margin: 0;
+  overflow-wrap: anywhere;
 }
 
 .audit-table th {

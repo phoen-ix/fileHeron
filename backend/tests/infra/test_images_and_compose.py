@@ -86,6 +86,37 @@ def test_the_backend_runtime_image_has_no_compiler():
         )
 
 
+def test_the_backend_cmd_execs_so_uvicorn_becomes_pid_1():
+    """Docker wraps a shell-form CMD as ["/bin/sh","-c", ...]. Without a leading
+    `exec` the shell STAYS PID 1 with uvicorn as its child - measured on the
+    reference host, PID 1 was `/bin/sh -c uvicorn ...` and uvicorn was PID 22.
+    A POSIX shell does not forward signals, so `docker stop` SIGTERM'd the shell,
+    uvicorn never heard it, and everything was SIGKILLed once the 10s grace ran
+    out: FastAPI's lifespan shutdown and uvicorn's connection drain never ran,
+    and `serve_response`'s `download_finished` BackgroundTask never fired,
+    leaving stale entries in the transfer_activity ZSET the maintenance drain
+    counts before a self-update. Measured: 10s to stop with NO shutdown line
+    logged at all, versus 1s and the full sequence once `exec` was added.
+
+    Shell form is required because $FORWARDED_ALLOW_IPS must expand (hardcoding
+    it was audit 2026-07-30: the documented hardening setting had no reader).
+    Docker's own linter emits JSONArgsRecommended on this line - that advice
+    would drop the expansion and reintroduce the signal bug, which is exactly
+    why this is pinned.
+    """
+    dockerfile = (ROOT / "docker" / "backend" / "Dockerfile").read_text(encoding="utf-8")
+    m = re.search(r"^CMD\s+(.+?)(?=\n[A-Z]|\Z)", dockerfile, re.M | re.S)
+    assert m, "no CMD in the backend Dockerfile"
+    body = m.group(1)
+    assert body.lstrip().startswith("exec "), (
+        "backend CMD must start with `exec`, or /bin/sh stays PID 1 and uvicorn "
+        "never receives SIGTERM"
+    )
+    assert "$FORWARDED_ALLOW_IPS" in body, (
+        "the forwarded-allow-ips flag must stay variable-driven"
+    )
+
+
 def test_the_healthcheck_dependency_is_still_installed():
     """Control: curl backs the compose HEALTHCHECK. Removing it would make every
     backend container report unhealthy."""

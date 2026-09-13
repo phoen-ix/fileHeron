@@ -28,12 +28,16 @@ under the subsystem it governs, never under the release that found it.
 
 Backend **`v2.16.0`** is the newest tag (2026-09-13). Desktop client
 **`client-v1.4.5`** ships beside it on its own tag and is UNCHANGED by v2.16.0.
-**The reference host runs v2.15.0**, applied 2026-09-10 15:42 - v2.16.0 is
-released but not applied there, so its two default moves are not live on it.
+**The reference host runs v2.16.0**, applied 2026-09-13 17:42 via the in-app
+updater about four minutes after the release published - so both of that
+release's default moves ARE live there: cron failures now email admins, and new
+unsubscribe tokens last 30 days. Only backend/worker/frontend/updater-shim were
+swapped (db, redis, tusd and clamav kept their uptime), which is the updater
+behaving exactly as documented below.
 `data/updater/rollback_target.json` holds the version BEFORE last; do not read it
-as the running one. Note the host's `scripts/` are already ahead of its images,
-because they run from the working tree - see the note under §Ops about which half
-of a fix is live.
+as the running one. Images and working tree agree at v2.16.0 right now, but they
+can diverge without any deploy - see the note under §Ops about which half of a
+fix is live.
 
 **Keep that line current on release.** It read "runs v2.13.5" while the host was
 on v2.14.0 and was carried forward unread through two releases, so an operator

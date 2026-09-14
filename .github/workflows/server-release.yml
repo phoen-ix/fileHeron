@@ -305,7 +305,7 @@ jobs:
       # The notes check lives in the `gate` job now, before anything is built
       # or pushed. Deliberately NOT repeated here: two copies of one rule is
       # two places for it to drift.
-      - uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3
+      - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3
         with:
           tag_name: ${{ github.ref_name }}
           name: 'Server ${{ github.ref_name }}'

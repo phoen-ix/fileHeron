@@ -147,3 +147,35 @@ async def test_scan_guard_tunables_are_not_writable_here(client, login_as, make_
         headers=h,
     )
     assert ok.status_code == 200, ok.text
+
+
+@pytest.mark.asyncio
+async def test_error_log_keys_reset_the_capture_cache(client, login_as, make_user, monkeypatch):
+    """`error_log.scan_capture_per_min` is process-cached (~60s) by
+    services/error_log. The Errors page's own PUT resets that cache; this
+    writer did not, so a change made here lagged a minute while the page said
+    it was saved. Same reset, same trigger."""
+    from app.services import error_log as error_log_svc
+
+    calls: list[int] = []
+    monkeypatch.setattr(error_log_svc, "_reset_cache", lambda: calls.append(1))
+    make_user(email="adm3@test.local", role=UserRole.admin, password="Pass12345678!")
+    token, _ = await login_as("adm3@test.local", "Pass12345678!")
+    h = {"Authorization": f"Bearer {token}"}
+
+    r = await client.put(
+        "/api/admin/settings/advanced",
+        json={"updates": {"error_log.scan_capture_per_min": 120}},
+        headers=h,
+    )
+    assert r.status_code == 200, r.text
+    assert calls, "writing an error_log.* key must reset the error-log capture cache"
+
+    calls.clear()
+    r = await client.put(
+        "/api/admin/settings/advanced",
+        json={"updates": {"retention.invite_days": 12}},
+        headers=h,
+    )
+    assert r.status_code == 200, r.text
+    assert not calls, "an unrelated key must not touch the cache"

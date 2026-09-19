@@ -1,24 +1,24 @@
-"""Every Advanced tunable the page shows has a search-index entry, and nothing else does.
+"""Every registry tunable a page renders has a search-index entry pointing at
+THAT page, and nothing else does.
 
 The admin Overview's "find a setting" box is backed by a hand-written registry,
 `frontend/src/config/adminSearchIndex.ts`. Page and tab titles come from the
-sidebar taxonomy for free; the registry covers what is INSIDE the pages. For
-the Advanced page that is one entry per tunable, hashed to the control's
+sidebar taxonomy for free; the registry covers what is INSIDE the pages. For a
+registry tunable that is one entry hashed to the control's
 `id="tunable-<key>"`, so an admin who types "lockout" or "hibp" lands on the
-input rather than at the top of a page with forty of them.
+input rather than at the top of a page.
 
-That list has to be maintained by hand on the frontend side, while the set of
-tunables it mirrors lives in `settings_registry.TUNABLES` minus the groups
-`routers/admin/settings/advanced.py` hides because they have a dedicated page
-(`_MANAGED_ELSEWHERE_GROUPS`). Nothing in vitest can see either. So a tunable
-added to the registry without a search entry is UNFINDABLE - the page renders
-it, the search never does - and a tunable removed from the registry (or moved
-to a dedicated page) leaves a search hit that scrolls to an id that no longer
-exists. Both drift silently; this test reads both sides.
-
-Anchoring on the `hash` rather than the `labelKey` is deliberate: the hash is
-what the page renders and what the click scrolls to, and three tunables have
-no `admin_advanced.keys.*` label today (the vitest carries that allowlist).
+Since the tunables left the Advanced page for the page of their task, WHICH
+page renders a key is decided by `frontend/src/config/adminTunablePlacement.ts`
+(`components/admin/TunableFields.vue` filters the one registry endpoint by it).
+So there are three sides that can drift, and vitest can see only one of them:
+`settings_registry.TUNABLES` (minus the groups `routers/admin/settings/
+advanced.py` refuses because they have a dedicated writer), the placement map,
+and the search index. A tunable added to the registry without a search entry
+is UNFINDABLE; a tunable moved to another page leaves a hit that scrolls to an
+id on the wrong page; a key the placement map hands to a page's own form
+(`null`) must not carry a `#tunable-` hash at all, because no TunableFields
+renders that id. This test reads all three.
 """
 from __future__ import annotations
 
@@ -39,63 +39,88 @@ pytestmark = pytest.mark.skipif(
     REPO is None, reason="frontend/ is not present in this checkout"
 )
 
-# `hash: '#tunable-<key>'` - keys are dotted lowercase identifiers
-# (`rate_limit.lockout_threshold`), so the class is deliberately narrow: a
-# typo like `#tunable-rate-limit.x` is a MISSING key in the diff, not a match.
-_TUNABLE_HASH = re.compile(r"""hash:\s*(['"])#tunable-([a-z0-9_.]+)\1""")
+_ROW = re.compile(
+    r"""routeName:\s*'([a-z-]+)'.*?hash:\s*'#tunable-([a-z0-9_.]+)'"""
+)
 
 
-def _index_source() -> str:
+def _read(rel: str) -> str:
     assert REPO is not None
-    path = REPO / "frontend" / "src" / "config" / "adminSearchIndex.ts"
-    assert path.is_file(), f"search registry missing at {path}"
+    path = REPO / "frontend" / "src" / "config" / rel
+    assert path.is_file(), f"missing {path}"
     return path.read_text(encoding="utf-8")
 
 
-def _expected_keys() -> set[str]:
-    return {
-        t.key
-        for t in settings_registry.TUNABLES
-        if t.group not in advanced._MANAGED_ELSEWHERE_GROUPS
+def _placement() -> tuple[dict[str, str], dict[str, str | None], str]:
+    src = _read("adminTunablePlacement.ts")
+    adv = re.search(r"ADVANCED_ROUTE = '([a-z-]+)'", src)
+    assert adv, "ADVANCED_ROUTE not found"
+    g_block = src[src.index("GROUP_PLACEMENT"):src.index("KEY_PLACEMENT")]
+    # A group may name its route as a literal or as the ADVANCED_ROUTE constant.
+    groups = {
+        g: (adv.group(1) if r == "ADVANCED_ROUTE" else r.strip("'"))
+        for g, r in re.findall(r"^\s+([a-z_]+): ('[a-z-]+'|ADVANCED_ROUTE),", g_block, re.M)
     }
+    k_block = src[src.index("KEY_PLACEMENT"):src.index("export function placementFor")]
+    keys: dict[str, str | None] = {}
+    for key, route in re.findall(r"^\s+'([a-z0-9_.]+)': (null|'[a-z-]+'),", k_block, re.M):
+        keys[key] = None if route == "null" else route.strip("'")
+    assert len(groups) >= 10 and len(keys) >= 3, (groups, keys)  # the regexes matched
+    return groups, keys, adv.group(1)
 
 
-def test_every_advanced_tunable_has_exactly_one_search_entry() -> None:
-    hashes = _TUNABLE_HASH.findall(_index_source())
-    indexed = [key for _quote, key in hashes]
+def _placement_for(key: str, group: str) -> str | None:
+    groups, keys, fallback = _placement()
+    if key in keys:
+        return keys[key]
+    return groups.get(group, fallback)
 
-    # Vacuity guards, both sides: an empty registry would make the equality
-    # below pass trivially, and a regex that matched nothing would report every
-    # tunable as missing while looking like a coverage failure.
-    expected = _expected_keys()
-    assert expected, "settings_registry.TUNABLES has no Advanced-page tunables"
-    assert indexed, "no `hash: '#tunable-<key>'` entries parsed from adminSearchIndex.ts"
 
-    duplicates = sorted({k for k in indexed if indexed.count(k) > 1})
-    assert not duplicates, f"tunable indexed more than once: {duplicates}"
+def _served() -> list[settings_registry.Tunable]:
+    return [
+        t for t in settings_registry.TUNABLES
+        if t.group not in advanced._MANAGED_ELSEWHERE_GROUPS
+    ]
 
-    got = set(indexed)
-    missing = sorted(expected - got)
-    extra = sorted(got - expected)
-    assert got == expected, (
-        "adminSearchIndex.ts disagrees with settings_registry.TUNABLES "
-        f"(minus {sorted(advanced._MANAGED_ELSEWHERE_GROUPS)}): "
-        f"missing (unfindable) = {missing}; extra (dead anchors) = {extra}"
+
+def _indexed_rows() -> dict[str, str]:
+    rows = {key: route for route, key in _ROW.findall(_read("adminSearchIndex.ts"))}
+    assert rows, "no `#tunable-` rows parsed from the search index - the regex rotted"
+    return rows
+
+
+def test_every_rendered_tunable_is_indexed_on_the_page_that_renders_it():
+    rows = _indexed_rows()
+    expected = {t.key: _placement_for(t.key, t.group) for t in _served()}
+    rendered = {k: r for k, r in expected.items() if r is not None}
+    missing = sorted(set(rendered) - set(rows))
+    extra = sorted(set(rows) - set(rendered))
+    assert not missing and not extra, (
+        f"missing (unfindable): {missing}; extra (dead anchors): {extra}"
     )
+    wrong = {k: (rows[k], rendered[k]) for k in rendered if rows[k] != rendered[k]}
+    assert not wrong, f"index points at the wrong page (indexed, renders): {wrong}"
 
 
-def test_managed_elsewhere_tunables_are_not_indexed_under_advanced() -> None:
-    """The scan-guard tunables have their own tab and are not rendered on
-    Advanced, so a `#tunable-scan_guard.*` entry would scroll to nothing. The
-    equality test above already fails on such an entry; this one names the
-    rule so a future reader sees WHY the key is absent rather than adding it
-    back for completeness."""
+def test_keys_owned_by_a_page_form_carry_no_tunable_anchor():
+    """`null` placement = the page's own form renders the control under its
+    own label (the Errors page's Anti-flood and retention fields), so a
+    `#tunable-<key>` hash would scroll to an id nothing renders."""
+    rows = _indexed_rows()
+    owned = [t.key for t in _served() if _placement_for(t.key, t.group) is None]
+    assert owned, "expected at least the Errors page's three form-owned keys"
+    leaked = [k for k in owned if k in rows]
+    assert leaked == [], leaked
+
+
+def test_managed_elsewhere_groups_are_not_indexed_under_a_tunable_anchor():
+    """The scan guard's keys are written by its own PUT and rendered by its own
+    page under its own labels; a `#tunable-scan_guard.*` row would name an id
+    that page never renders."""
+    rows = _indexed_rows()
     hidden = {
-        t.key
-        for t in settings_registry.TUNABLES
+        t.key for t in settings_registry.TUNABLES
         if t.group in advanced._MANAGED_ELSEWHERE_GROUPS
     }
     assert hidden, "expected at least one managed-elsewhere tunable (scan_guard)"
-    indexed = {key for _q, key in _TUNABLE_HASH.findall(_index_source())}
-    leaked = sorted(hidden & indexed)
-    assert not leaked, f"managed-elsewhere tunables indexed under Advanced: {leaked}"
+    assert not hidden & set(rows), sorted(hidden & set(rows))

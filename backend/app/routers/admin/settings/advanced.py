@@ -126,5 +126,12 @@ def update_advanced_settings(
                 db, new_days=refresh_ttl_new, actor=admin, request=request
             )
 
+    # `error_log.scan_capture_per_min` is process-cached (~60s) by
+    # services/error_log; the Errors page's own PUT resets that cache and this
+    # writer did not, so a change here lagged a minute. Same reset, same trigger.
+    if any(key.startswith("error_log.") for key in to_set):
+        from ....services import error_log as error_log_svc
+        error_log_svc._reset_cache()
+
     db.commit()
     return get_advanced_settings(db=db, _admin=admin)

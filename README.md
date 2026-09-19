@@ -447,18 +447,21 @@ always pass.
 | Inbound mail (IMAP) | `/admin/settings/imap` | Poll a mailbox into the admin **Inbox** (`/admin/inbox`); labels REPLY / BOUNCE / AUTO; attachments are ClamAV-scanned; reuses SMTP creds by default. Off by default. |
 | Email templates | `/admin/settings/email-templates` | Per-(template, language) subject/body overrides in a **ProseMirror HTML** editor; placeholders, live preview, test-send, reset-to-default. Auth-link templates can't drop their required link. |
 | Share approval | `/admin/settings/share-approval` | The four-eyes workflow (who approves, which shares, content review, self-approval). |
-| Email-change policy | `/admin/settings/email-change` | Whether users may change their own sign-in email and the verification mode (`immediate` / `verify_new` / `verify_both`) + what happens to an OIDC binding on change. |
+| Email-change policy | `/admin/settings/email-change` (the *Email change* tab of **Sign-in policies**) | Whether users may change their own sign-in email and the verification mode (`immediate` / `verify_new` / `verify_both`) + what happens to an OIDC binding on change. |
 | Branding & legal | `/admin/settings/branding` | Logo (magic-byte-validated; per-surface toggles), optional logo link, and the imprint/privacy pages (per-language ProseMirror, nh3-sanitised). |
 | Site | `/admin/settings/general` | Site URL (overrides `APP_URL` for links) + IANA timezone (drives 24-h timestamps). A section of **General**, not its own route. |
-| Quarantine / Home / MOTD / Share defaults / File preview | `/admin/settings/quarantine`, `/admin/settings/home-page`, and sections of `/admin/settings/general` | Single-knob toggles. MOTD and share defaults are sections of **General**, not routes of their own. |
-| Self-update | `/admin/settings/general` | Releases API URL (forks repoint it). A section of **General**; the poll cadence lives on [Scheduled tasks](#scheduled-tasks-adminscheduled-tasks), not here. |
+| Quarantine alerts / Home / MOTD | the Quarantine page's *Alerts & scanner* tab (`/admin/settings/quarantine`), and sections of `/admin/settings/general` | Single-knob toggles. Home page and MOTD are sections of **General**. |
+| Sign-in policies | `/admin/settings/sign-in` | Account lockout, per-address sign-in/registration limits, the HIBP breach check; *Email change* is its second tab. |
+| Files & transfers | `/admin/settings/transfers` | Share defaults, the direct-upload size cap, signed-URL lifetime + resume credit, in-browser preview. |
+| Anomaly detection | `/admin/settings/anomaly` | The four heuristic thresholds; advisory only. |
+| Self-update | `/admin/system` | Releases API URL (forks repoint it) + the postponed-update drain wait, on **Status & updates**; the poll cadence lives on [Scheduled tasks](#scheduled-tasks-adminscheduled-tasks), not here. |
 | Maintenance mode | `/admin/settings/maintenance` | Pause **new** transfers (in-progress + resumable ones finish); standalone or via drain-before-update. |
 | Configuration backup | `/admin/settings/backup` | Export/import settings/branding/OIDC/webhooks/groups/users (+ optional logs) to one `*.fhbackup.json`; three secret modes (passphrase / ciphertext / exclude). Files excluded; import invalidates active shares + revokes sessions. |
-| Advanced | `/admin/settings/advanced` | The **registry overlay**: ~40 env-default knobs (session cap, token TTLs, rate-limit + lockout, public-link lockout, all retention windows, upload cap, signed-URL TTL, storage thresholds, **anomaly-detection** thresholds, error-alert cooldown/cap, HIBP, app name) editable **live, clamped to safe bounds**. |
+| Data retention & storage | `/admin/settings/advanced` | What remains of the **registry overlay** on this page: every retention window and the low-disk thresholds, editable **live, clamped to safe bounds**. The other registry groups render on the page of their task through the same endpoint (`frontend/src/config/adminTunablePlacement.ts`): session lifetimes on **Sessions › Policy** (`/admin/settings/sessions`), lockout + sign-in limits + HIBP on **Sign-in policies**, the public-link brute-force limits on **Public links**, the upload cap and download tunables on **Files & transfers**, anomaly thresholds on **Anomaly detection**, the alert throttle on **Errors & alerts**, the drain wait on **Status & updates**, the app name on **Branding & legal**. |
 
 **Anomaly detection** is heuristic and **alert-only** (it never blocks): an hourly cron
 flags mass-download, multi-network access, and login-failure spikes against the
-thresholds on the Advanced page, dispatching an `ops_alert`.
+thresholds on `/admin/settings/anomaly`, dispatching an `ops_alert`.
 
 ## Audit events
 

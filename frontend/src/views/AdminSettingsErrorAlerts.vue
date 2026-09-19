@@ -3,6 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { getErrorAlertSettings, updateErrorAlertSettings } from '@/api/admin'
+import TunableFields from '@/components/admin/TunableFields.vue'
 import { useApiError } from '@/composables/useApiError'
 import { useUiStore } from '@/stores/ui'
 
@@ -286,10 +287,24 @@ v-if="errorMsg" class="fh-notice" role="alert"
         </button>
       </div>
     </form>
+
+    <hr class="fh-rule" />
+
+    <section class="scan-capture">
+      <h2 class="section-h2">{{ t('admin_error_alerts.scan_capture_section') }}</h2>
+      <TunableFields route="admin-settings-error-alerts" :headings="false" />
+    </section>
   </div>
 </template>
 
 <style scoped>
+.section-h2 {
+  font-family: var(--fh-font-display);
+  font-size: 1.25rem;
+  font-weight: 400;
+  margin: 0 0 var(--fh-space-2);
+}
+
 .policy-page {
   max-width: none;
 }

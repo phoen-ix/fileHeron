@@ -75,7 +75,15 @@ export const ADMIN_NAV: AdminNavCategory[] = [
     items: [
       { routeName: 'admin-users', labelKey: 'admin.nav.users', matchNames: ['admin-users', 'admin-user-detail'] },
       { routeName: 'admin-groups', labelKey: 'admin.nav.groups', matchNames: ['admin-groups', 'admin-group-detail'] },
-      { routeName: 'admin-sessions', labelKey: 'admin.nav.sessions', matchNames: ['admin-sessions'] },
+      {
+        routeName: 'admin-sessions',
+        labelKey: 'admin.nav.sessions',
+        matchNames: ['admin-sessions', 'admin-settings-sessions'],
+        tabs: [
+          { routeName: 'admin-sessions', labelKey: 'admin.nav_tab.active' },
+          { routeName: 'admin-settings-sessions', labelKey: 'admin.nav_tab.policy' },
+        ],
+      },
       {
         routeName: 'admin-api-tokens',
         labelKey: 'admin.nav.api_tokens',
@@ -91,7 +99,18 @@ export const ADMIN_NAV: AdminNavCategory[] = [
         matchNames: ['admin-settings-sso', 'admin-settings-sso-new', 'admin-settings-sso-edit'],
       },
       { routeName: 'admin-settings-twofa', labelKey: 'admin.nav.twofa', matchNames: ['admin-settings-twofa'] },
-      { routeName: 'admin-settings-email-change', labelKey: 'admin.nav.email_change', matchNames: ['admin-settings-email-change'] },
+      // "Rate limits" was a three-field page with a jargon name; the task is
+      // "stop password guessing", so lockout, per-address limits and HIBP sit
+      // together, beside the other sign-in identifier policy (email change).
+      {
+        routeName: 'admin-settings-sign-in',
+        labelKey: 'admin.nav.sign_in',
+        matchNames: ['admin-settings-sign-in', 'admin-settings-email-change'],
+        tabs: [
+          { routeName: 'admin-settings-sign-in', labelKey: 'admin.nav_tab.passwords' },
+          { routeName: 'admin-settings-email-change', labelKey: 'admin.nav_tab.email_change' },
+        ],
+      },
     ],
   },
   {
@@ -110,6 +129,7 @@ export const ADMIN_NAV: AdminNavCategory[] = [
       },
       { routeName: 'admin-settings-share-approval', labelKey: 'admin.nav.share_approval', matchNames: ['admin-settings-share-approval'] },
       { routeName: 'admin-settings-public-links', labelKey: 'admin.nav.public_links', matchNames: ['admin-settings-public-links'] },
+      { routeName: 'admin-settings-transfers', labelKey: 'admin.nav.transfers', matchNames: ['admin-settings-transfers'] },
       { routeName: 'admin-analytics', labelKey: 'admin.nav.analytics', matchNames: ['admin-analytics'] },
     ],
   },
@@ -142,6 +162,7 @@ export const ADMIN_NAV: AdminNavCategory[] = [
           { routeName: 'admin-settings-scan-guard', labelKey: 'admin.nav_tab.scan_guard' },
         ],
       },
+      { routeName: 'admin-settings-anomaly', labelKey: 'admin.nav.anomaly', matchNames: ['admin-settings-anomaly'] },
       { routeName: 'admin-audit', labelKey: 'admin.nav.audit', matchNames: ['admin-audit'] },
     ],
   },

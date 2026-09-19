@@ -108,8 +108,14 @@ def test_every_referenced_design_token_exists():
     assert missing == set()
 
 
+# The registry-tunable rows moved out of AdminSettingsAdvanced.vue into the
+# shared components/admin/TunableFields.vue, which every page that renders a
+# registry group now uses - so this is where the label/id pairing lives.
+_TUNABLE_FIELDS = FRONTEND / "components" / "admin" / "TunableFields.vue"
+
+
 def test_every_advanced_tunable_has_an_accessible_name():
-    src = (FRONTEND / "views" / "AdminSettingsAdvanced.vue").read_text()
+    src = _TUNABLE_FIELDS.read_text()
     assert re.search(r"<label class=\"field-label\" :for=\"`tunable-\$\{it\.key\}`\"", src)
     controls = re.findall(r"<input\b.*?/>", src, re.S)
     assert len(controls) >= 3
@@ -118,7 +124,7 @@ def test_every_advanced_tunable_has_an_accessible_name():
 
 
 def test_no_control_is_wrapped_in_an_empty_label():
-    src = (FRONTEND / "views" / "AdminSettingsAdvanced.vue").read_text()
+    src = _TUNABLE_FIELDS.read_text()
     assert not re.search(r"<label[^>]*class=\"switch\"", src)
 
 

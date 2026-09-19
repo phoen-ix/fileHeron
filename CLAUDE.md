@@ -543,11 +543,24 @@ other=replace. Settings-change audits record counts/keys only (never values).
 
 Policy-gate pattern (mode ∈ everyone/employees_admins/admins_only + additive
 user/group allowlists; admin always passes): `api_token.*`, `public_link.*`,
-`share_approval.*`. **Advanced** (`/advanced`) =
-`services/settings_registry.py::TUNABLES` - each overlays a `config.Settings` env
-default, clamped, read live via `effective(db,key)` (no boot cache); the UI
-groups by `Tunable.group`. Groups in `_MANAGED_ELSEWHERE_GROUPS` are excluded
-because that route bypasses the side effects `update_settings` applies.
+`share_approval.*`. **The registry** (`services/settings_registry.py::TUNABLES`) - each entry overlays a
+`config.Settings` env default, clamped, read live via `effective(db,key)` (no boot
+cache). **One writer**: `PUT /api/admin/settings/advanced`. **Many surfaces**: the
+frontend's `config/adminTunablePlacement.ts` says which admin PAGE renders each group
+(sessions → Sessions › Policy, rate limits + HIBP → Sign-in policies, the public-link
+brute-force triple → Public links, uploads/downloads → Files & transfers, anomaly →
+its own page, error_alert → Errors & alerts, updates → Status & updates, branding →
+Branding & legal; retention + storage stay on `/admin/settings/advanced`, now named
+"Data retention & storage"), and `components/admin/TunableFields.vue` filters the
+endpoint's items by it, so a key renders on exactly one page. `null` placement = the
+page's own form owns the key (the Errors page's anti-flood + retention fields).
+Pinned three ways: `adminTunablePlacement.test.ts` (routes exist),
+`test_admin_search_index_pin.py` (the search index points every rendered tunable at the
+page that renders it, and form-owned keys carry no anchor), and the placement fallback
+sends an unknown group to the Advanced page so a new tunable is never invisible. Groups
+in `_MANAGED_ELSEWHERE_GROUPS` are excluded from the endpoint because that route
+bypasses the side effects `update_settings` applies; the one cache the route DID skip
+(`error_log.scan_capture_per_min`, ~60s) is reset by it since v2.17.
 
 ## Config backup
 
@@ -741,7 +754,7 @@ admin and never blocks.** There is no wiring from a Finding to the scan guard,
 and there never was; `scan_guard.signal_auth_failure` is a middleware
 classification over credential-endpoint 401/403s and cannot see a Finding.
 
-- GeoIP-free: `multi_network` approximates impossible-travel with `utils/geohash.ip_geohash5` - an IP-prefix hash, **NOT geography**.
+- Admin page `/admin/settings/anomaly` (Security & audit) renders the four thresholds through the registry writer. GeoIP-free: `multi_network` approximates impossible-travel with `utils/geohash.ip_geohash5` - an IP-prefix hash, **NOT geography**.
 - **`login_stuffing` needs >threshold failures across ≥3 distinct emails from one IP, and excludes a source that ALSO logged in successfully in the window** - a stuffer never gets in while a NAT'd office does it constantly. Thresholds env-tunable (`ANOMALY_*`); feeds webhooks.
 - **Detector lookback windows SCALE with the cron cadence** - `anomaly_check` adds `_WINDOW_OVERLAP_MIN` to the effective cadence and the module constants are FLOORS, so consecutive scans leave no gap.
 

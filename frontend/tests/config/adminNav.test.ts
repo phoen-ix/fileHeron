@@ -46,12 +46,12 @@ describe('ADMIN_NAV taxonomy', () => {
     expect(ADMIN_CATEGORY_KEYS).toEqual(['people', 'sharing', 'email', 'security', 'site', 'system'])
   })
 
-  it('places 28 items distributed 7 / 5 / 6 / 2 / 2 / 6, none over seven', () => {
+  it('places 30 items distributed 7 / 6 / 6 / 3 / 2 / 6, none over seven', () => {
     // The previous taxonomy had 14 of 32 links under "System" - one appended
     // entry per release. Seven is the ceiling; a new page goes into the
     // category of its task, and a policy + its state page become tabs.
-    expect(ADMIN_NAV.map((c) => c.items.length)).toEqual([7, 5, 6, 2, 2, 6])
-    expect(allItems()).toHaveLength(28)
+    expect(ADMIN_NAV.map((c) => c.items.length)).toEqual([7, 6, 6, 3, 2, 6])
+    expect(allItems()).toHaveLength(30)
     for (const cat of ADMIN_NAV) expect(cat.items.length).toBeLessThanOrEqual(7)
   })
 
@@ -104,9 +104,16 @@ describe('ADMIN_NAV taxonomy', () => {
 describe('tabs', () => {
   const tabbed = allItems().filter((i) => i.tabs)
 
-  it('exist on the four merged policy/state pairs', () => {
+  it('exist on the merged policy/state pairs', () => {
     expect(tabbed.map((i) => i.routeName).sort()).toEqual(
-      ['admin-api-tokens', 'admin-error-log', 'admin-ip-blocks', 'admin-quarantine'].sort(),
+      [
+        'admin-api-tokens',
+        'admin-error-log',
+        'admin-ip-blocks',
+        'admin-quarantine',
+        'admin-sessions',
+        'admin-settings-sign-in',
+      ].sort(),
     )
   })
 

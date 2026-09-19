@@ -22,6 +22,8 @@ import {
 } from '@/api/admin'
 import { getStreamToken } from '@/api/notifications'
 import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
+import TunableFields from '@/components/admin/TunableFields.vue'
+import UpdatesSection from '@/components/admin/UpdatesSection.vue'
 import { useApiError } from '@/composables/useApiError'
 import { useSSE } from '@/composables/useSSE'
 import { useUiStore } from '@/stores/ui'
@@ -707,6 +709,15 @@ const headlineFailures = computed(() => {
         </table>
       </section>
     </template>
+
+    <!-- Where updates come from + how long a postponed one waits for transfers
+         to drain. Moved here from General (the release URL) and the old
+         Advanced page (the drain wait) so the whole update story is one page. -->
+    <section class="card">
+      <h2>{{ t('admin_updates.title') }}</h2>
+      <UpdatesSection />
+      <TunableFields route="admin-system" :headings="false" />
+    </section>
   </section>
 </template>
 

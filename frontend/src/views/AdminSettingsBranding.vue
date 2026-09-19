@@ -13,6 +13,7 @@ import {
   type LegalSettingsResponse,
 } from '@/api/admin'
 import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
+import TunableFields from '@/components/admin/TunableFields.vue'
 import RichTextEditor from '@/components/RichTextEditor.vue'
 import { useApiError } from '@/composables/useApiError'
 import { SUPPORTED_LOCALES, type SupportedLocale } from '@/i18n'
@@ -225,6 +226,13 @@ v-else-if="errorMsg" class="fh-notice" role="alert"
             {{ savingBranding ? t('common.loading') : t('common.save') }}
           </button>
         </div>
+      </section>
+
+      <hr class="fh-rule" />
+
+      <section class="settings-section">
+        <h2 class="settings-h2">{{ t('admin_branding.name_title') }}</h2>
+        <TunableFields route="admin-settings-branding" :headings="false" />
       </section>
 
       <hr class="fh-rule" />

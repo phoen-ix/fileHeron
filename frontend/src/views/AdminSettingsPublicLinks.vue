@@ -6,6 +6,7 @@ import { getPublicLinkPolicy, updatePublicLinkPolicy } from '@/api/admin'
 import { listGroups } from '@/api/groups'
 import { searchUsers } from '@/api/users'
 import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
+import TunableFields from '@/components/admin/TunableFields.vue'
 import { useApiError } from '@/composables/useApiError'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
@@ -248,10 +249,25 @@ v-if="errorMsg" class="fh-notice" role="alert"
         </button>
       </div>
     </form>
+
+    <hr class="fh-rule" />
+
+    <section class="brute-force">
+      <h2 class="section-h2">{{ t('admin_public_link_policy.brute_force_title') }}</h2>
+      <p class="fh-field-help">{{ t('admin_public_link_policy.brute_force_help') }}</p>
+      <TunableFields route="admin-settings-public-links" :headings="false" />
+    </section>
   </div>
 </template>
 
 <style scoped>
+.section-h2 {
+  font-family: var(--fh-font-display);
+  font-size: 1.25rem;
+  font-weight: 400;
+  margin: 0 0 var(--fh-space-2);
+}
+
 .policy-page {
   max-width: none;
 }

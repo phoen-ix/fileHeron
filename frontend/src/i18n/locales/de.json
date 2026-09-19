@@ -397,7 +397,6 @@
       "email": "Ausgehende E-Mail (SMTP)",
       "email_templates": "E-Mail-Vorlagen",
       "imap": "Eingehende E-Mail (IMAP)",
-      "email_change": "E-Mail-Änderung",
       "analytics": "Analysen",
       "audit": "Audit-Protokoll",
       "system": "Status & Updates",
@@ -406,10 +405,13 @@
       "webhooks": "Webhooks",
       "general": "Allgemein",
       "branding": "Branding & Rechtliches",
-      "advanced": "Erweitert",
+      "advanced": "Aufbewahrung & Speicher",
       "maintenance": "Wartungsmodus",
       "backup": "Sicherung & Wiederherstellung",
-      "errors": "Fehler & Alarme"
+      "errors": "Fehler & Alarme",
+      "sign_in": "Anmelderichtlinien",
+      "transfers": "Dateien & Übertragung",
+      "anomaly": "Anomalie-Erkennung"
     },
     "nav_cat": {
       "people": "Personen & Zugriff",
@@ -430,7 +432,10 @@
       "blocks": "Sperren & Allowlist",
       "scan_guard": "Auto-Sperrregeln (Scan-Schutz)",
       "log": "Protokoll",
-      "alerts": "Alarme"
+      "alerts": "Alarme",
+      "active": "Aktiv",
+      "passwords": "Passwörter & Brute-Force",
+      "email_change": "E-Mail-Änderung"
     },
     "tabs_label": "Seiten-Tabs"
   },
@@ -649,7 +654,7 @@
     "saved_toast": "E-Mail-Änderungs-Richtlinie gespeichert."
   },
   "admin_advanced": {
-    "intro": "Zur Laufzeit anpassbare Werte. Jeder zeigt seinen eingebauten Standard als Platzhalter; ein Feld auf dem Standard lassen (oder Zurücksetzen) fällt darauf zurück. Änderungen greifen sofort - kein Neustart. Geheimnisse und Infrastruktur bleiben in Umgebungsvariablen.",
+    "intro": "Wie lange Protokolle und Reste aufbewahrt werden und ab wann die Instanz Uploads mangels Speicherplatz ablehnt. Jede andere Einstellung steht auf der Seite ihrer Aufgabe.",
     "saved_toast": "Erweiterte Einstellungen gespeichert.",
     "reset": "Zurücksetzen",
     "reset_title": "Auf Standard zurücksetzen ({default})",
@@ -799,10 +804,11 @@
         "lockout_sec": "Wie lange ein öffentlicher Link (für alle IPs) nach zu vielen falschen Passwörtern gesperrt bleibt. (30-86400 Sek., Standard 900.)"
       }
     },
-    "reset_aria": "{name} auf Standardwert zurücksetzen ({default})"
+    "reset_aria": "{name} auf Standardwert zurücksetzen ({default})",
+    "none_here": "Auf dieser Seite gibt es nichts einzustellen."
   },
   "admin_general": {
-    "intro": "Kleine Schalter und allgemeine App-Einstellungen. Neue minor-Einstellungen werden hier hinzugefügt.",
+    "intro": "Die Identität der Site: öffentliche URL und Zeitzone, Startseite und Login-Banner.",
     "quicknav": {
       "aria": "Abschnittsnavigation"
     }
@@ -1131,7 +1137,9 @@
     "users_placeholder": "Suche nach Name oder E-Mail …",
     "groups_label": "Gruppen-Mitgliedschaften",
     "groups_inbox": "Firmen-Postfach",
-    "saved_toast": "Öffentliche-Links-Richtlinie gespeichert."
+    "saved_toast": "Öffentliche-Links-Richtlinie gespeichert.",
+    "brute_force_title": "Passwort-Brute-Force",
+    "brute_force_help": "Ein Link wird für alle Adressen gesperrt, sobald so viele falsche Passwörter im Zeitfenster von mindestens drei verschiedenen Adressen eintreffen; eine einzelne Adresse bekommt nur das Limit pro Adresse."
   },
   "admin_api_tokens": {
     "create_cta": "Token für Benutzer anlegen",
@@ -1380,7 +1388,8 @@
       "lang_en": "Englisch",
       "lang_de": "Deutsch",
       "language_tab_group": "Sprache"
-    }
+    },
+    "name_title": "Anwendungsname"
   },
   "footer": {
     "aria": "Rechtliches",
@@ -2391,7 +2400,8 @@
     "err_bad_email": "Keine gültige E-Mail-Adresse: {list}",
     "err_4xx_empty": "Gib mindestens einen 4xx-Statuscode zum Erfassen an oder deaktiviere die 4xx-Erfassung.",
     "err_4xx_bad": "Kein gültiger 4xx-Statuscode: {list}",
-    "err_retention_range": "Die Aufbewahrung muss zwischen 0 und 3650 Tagen liegen."
+    "err_retention_range": "Die Aufbewahrung muss zwischen 0 und 3650 Tagen liegen.",
+    "scan_capture_section": "Erfassungsrate für Scans"
   },
   "admin_error_log": {
     "intro": "Jeder erfasste Serverfehler (HTTP-5xx), aktivierte Client-Fehler (4xx) und jede fehlgeschlagene geplante Aufgabe. Filtere nach Code, Status, Quelle oder Zeit; klicke eine Zeile für Details. \"Versendet\" markiert Zeilen, die auch einen Alarm ausgelöst haben.",
@@ -2494,9 +2504,9 @@
     "admin_settings_branding": "Branding & Rechtliches",
     "admin_settings_twofa": "2FA-Pflicht",
     "admin_settings_quarantine": "Quarantäne · Alarme & Scanner",
-    "admin_settings_email_change": "E-Mail-Änderung",
+    "admin_settings_email_change": "Anmelderichtlinien · E-Mail-Änderung",
     "admin_settings_error_alerts": "Fehler & Alarme · Alarme",
-    "admin_settings_advanced": "Erweitert",
+    "admin_settings_advanced": "Aufbewahrung & Speicher",
     "admin_settings_backup": "Sicherung & Wiederherstellung",
     "admin_settings_maintenance": "Wartungsmodus",
     "admin_system": "Status & Updates",
@@ -2508,7 +2518,11 @@
     "not_found": "Nicht gefunden",
     "admin_settings_scan_guard": "Gesperrte Quellen · Auto-Sperrregeln",
     "admin_ip_blocks": "Gesperrte Quellen",
-    "admin_overview": "Übersicht"
+    "admin_overview": "Übersicht",
+    "admin_settings_sessions": "Sitzungen · Richtlinie",
+    "admin_settings_sign_in": "Anmelderichtlinien",
+    "admin_settings_transfers": "Dateien & Übertragung",
+    "admin_settings_anomaly": "Anomalie-Erkennung"
   },
   "not_found": {
     "eyebrow": "404 · nicht gefunden",
@@ -2693,5 +2707,20 @@
     "check_av": "Antivirus",
     "unavailable": "nicht verfügbar",
     "pages_heading": "Alle Seiten"
+  },
+  "admin_sessions_policy": {
+    "intro": "Wie lange eine Anmeldung gültig bleibt und wie viele Geräte ein Konto halten darf. Änderungen gelten für neue Anmeldungen; eine kürzere Refresh-Lebensdauer kappt auch bestehende Sitzungen."
+  },
+  "admin_sign_in": {
+    "intro": "Was Passwortraten stoppt: die Kontosperre, die Limits pro Adresse für Anmelde- und Registrierungsrouten und die Leak-Prüfung neuer Passwörter.",
+    "scope_note": "Diese Einstellungen schützen Konten. Eine Quelle ganz zu sperren ist Sache des Scan-Schutzes unter Sicherheit & Audit › Gesperrte Quellen; die Passwortlimits für öffentliche Links stehen unter Öffentliche Links."
+  },
+  "admin_transfers": {
+    "intro": "Voreinstellungen für neue Freigaben, das Größenlimit für direkte (nicht fortsetzbare) Uploads, die Lebensdauer von Download-Links und die Vorschau im Browser."
+  },
+  "admin_anomaly": {
+    "intro": "Eine stündliche Prüfung meldet Massen-Downloads, Zugriffe aus vielen Netzwerken und Häufungen fehlgeschlagener Anmeldungen anhand dieser Schwellen.",
+    "advisory": "Nur beratend: ein Fund benachrichtigt einen Admin (und löst einen Webhook aus), blockiert aber niemanden.",
+    "cadence_note": "Die Prüfung läuft nach dem Zeitplan unter"
   }
 }

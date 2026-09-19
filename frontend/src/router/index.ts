@@ -256,9 +256,22 @@ const router = createRouter({
         },
         {
           path: 'sessions',
-          name: 'admin-sessions',
-          component: () => import('@/views/AdminSessions.vue'),
+          component: () => import('@/views/AdminTabShell.vue'),
           meta: { density: 'operator', titleKey: 'admin_sessions', requiresRole: 'admin' },
+          children: [
+            {
+              path: '',
+              name: 'admin-sessions',
+              component: () => import('@/views/AdminSessions.vue'),
+              meta: { density: 'operator', titleKey: 'admin_sessions', requiresRole: 'admin' },
+            },
+            {
+              path: '/admin/settings/sessions',
+              name: 'admin-settings-sessions',
+              component: () => import('@/views/AdminSettingsSessions.vue'),
+              meta: { density: 'operator', titleKey: 'admin_settings_sessions', requiresRole: 'admin' },
+            },
+          ],
         },
         {
           path: 'quarantine',
@@ -331,6 +344,18 @@ const router = createRouter({
           meta: { density: 'operator', titleKey: 'admin_settings_public_links', requiresRole: 'admin' },
         },
         {
+          path: 'settings/transfers',
+          name: 'admin-settings-transfers',
+          component: () => import('@/views/AdminSettingsTransfers.vue'),
+          meta: { density: 'operator', titleKey: 'admin_settings_transfers', requiresRole: 'admin' },
+        },
+        {
+          path: 'settings/anomaly',
+          name: 'admin-settings-anomaly',
+          component: () => import('@/views/AdminSettingsAnomaly.vue'),
+          meta: { density: 'operator', titleKey: 'admin_settings_anomaly', requiresRole: 'admin' },
+        },
+        {
           path: 'settings/share-approval',
           name: 'admin-settings-share-approval',
           component: () => import('@/views/AdminSettingsShareApproval.vue'),
@@ -380,10 +405,23 @@ const router = createRouter({
           meta: { density: 'operator', titleKey: 'admin_settings_twofa', requiresRole: 'admin' },
         },
         {
-          path: 'settings/email-change',
-          name: 'admin-settings-email-change',
-          component: () => import('@/views/AdminSettingsEmailChange.vue'),
-          meta: { density: 'operator', titleKey: 'admin_settings_email_change', requiresRole: 'admin' },
+          path: 'settings/sign-in',
+          component: () => import('@/views/AdminTabShell.vue'),
+          meta: { density: 'operator', titleKey: 'admin_settings_sign_in', requiresRole: 'admin' },
+          children: [
+            {
+              path: '',
+              name: 'admin-settings-sign-in',
+              component: () => import('@/views/AdminSettingsSignIn.vue'),
+              meta: { density: 'operator', titleKey: 'admin_settings_sign_in', requiresRole: 'admin' },
+            },
+            {
+              path: '/admin/settings/email-change',
+              name: 'admin-settings-email-change',
+              component: () => import('@/views/AdminSettingsEmailChange.vue'),
+              meta: { density: 'operator', titleKey: 'admin_settings_email_change', requiresRole: 'admin' },
+            },
+          ],
         },
         {
           // The STATE page is the item and the scan guard's POLICY is its second tab:

@@ -5,12 +5,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import en from '@/i18n/locales/en.json'
 
-// rate_limit.login is OVERRIDDEN (effective 7, default 10) so we can test
-// both "set a new value" and "reset to default → send null".
+// retention.invite_days is OVERRIDDEN (effective 7, default 10) so we can test
+// both "set a new value" and "reset to default → send null". Only the retention
+// and storage groups render on this page now (config/adminTunablePlacement.ts).
 const ITEMS = [
   {
-    key: 'rate_limit.login',
-    group: 'rate_limits',
+    key: 'retention.invite_days',
+    group: 'retention',
     kind: 'int',
     value: 7,
     default: 10,
@@ -19,11 +20,11 @@ const ITEMS = [
     max: 1000,
   },
   {
-    key: 'security.hibp_enabled',
-    group: 'security',
-    kind: 'bool',
-    value: true,
-    default: true,
+    key: 'storage.low_threshold_percent',
+    group: 'storage',
+    kind: 'int',
+    value: 10,
+    default: 10,
     is_overridden: false,
     min: null,
     max: null,
@@ -51,8 +52,8 @@ describe('AdminSettingsAdvanced', () => {
   it('renders grouped fields with labels + the default as placeholder', async () => {
     const w = makeWrapper()
     await flushPromises()
-    expect(w.text()).toContain('Rate limits & lockout')
-    expect(w.text()).toContain('Login attempts allowed per window')
+    expect(w.text()).toContain('Data retention')
+    expect(w.text()).toContain('Pending invites (days)')
     const num = w.find('input[type="number"]')
     expect((num.element as HTMLInputElement).placeholder).toBe('10')
   })
@@ -63,7 +64,7 @@ describe('AdminSettingsAdvanced', () => {
     await w.find('input[type="number"]').setValue('5')
     await w.find('form').trigger('submit')
     await flushPromises()
-    expect(updateSpy).toHaveBeenCalledWith({ updates: { 'rate_limit.login': 5 } })
+    expect(updateSpy).toHaveBeenCalledWith({ updates: { 'retention.invite_days': 5 } })
   })
 
   it('resetting an overridden value sends null', async () => {
@@ -72,6 +73,6 @@ describe('AdminSettingsAdvanced', () => {
     await w.find('.reset-btn').trigger('click') // back to default 10
     await w.find('form').trigger('submit')
     await flushPromises()
-    expect(updateSpy).toHaveBeenCalledWith({ updates: { 'rate_limit.login': null } })
+    expect(updateSpy).toHaveBeenCalledWith({ updates: { 'retention.invite_days': null } })
   })
 })

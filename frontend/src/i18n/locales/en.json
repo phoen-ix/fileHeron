@@ -397,7 +397,6 @@
       "email": "Outgoing mail (SMTP)",
       "email_templates": "Email templates",
       "imap": "Inbound mail (IMAP)",
-      "email_change": "Email change",
       "analytics": "Analytics",
       "audit": "Audit log",
       "system": "Status & updates",
@@ -406,10 +405,13 @@
       "webhooks": "Webhooks",
       "general": "General",
       "branding": "Branding & legal",
-      "advanced": "Advanced",
+      "advanced": "Data retention & storage",
       "maintenance": "Maintenance mode",
       "backup": "Backup & restore",
-      "errors": "Errors & alerts"
+      "errors": "Errors & alerts",
+      "sign_in": "Sign-in policies",
+      "transfers": "Files & transfers",
+      "anomaly": "Anomaly detection"
     },
     "nav_cat": {
       "people": "People & access",
@@ -430,7 +432,10 @@
       "blocks": "Blocks & allowlist",
       "scan_guard": "Auto-block rules (Scan guard)",
       "log": "Log",
-      "alerts": "Alerts"
+      "alerts": "Alerts",
+      "active": "Active",
+      "passwords": "Passwords & brute force",
+      "email_change": "Email change"
     },
     "tabs_label": "Page tabs"
   },
@@ -649,7 +654,7 @@
     "saved_toast": "Email-change policy saved."
   },
   "admin_advanced": {
-    "intro": "Runtime-tunable knobs. Each shows its built-in default as the placeholder; leave a field at the default (or hit Reset) to fall back to it. Changes apply live - no redeploy. Secrets and infrastructure stay in environment variables.",
+    "intro": "How long logs and leftovers are kept, and when the instance starts refusing uploads for lack of disk. Every other tunable lives on the page of its task.",
     "saved_toast": "Advanced settings saved.",
     "reset": "Reset",
     "reset_title": "Reset to default ({default})",
@@ -799,10 +804,11 @@
         "lockout_sec": "How long a public link stays locked (all IPs) after too many wrong passwords. (30-86400 sec, default 900.)"
       }
     },
-    "reset_aria": "Reset {name} to its default ({default})"
+    "reset_aria": "Reset {name} to its default ({default})",
+    "none_here": "Nothing to tune on this page."
   },
   "admin_general": {
-    "intro": "Small toggles and miscellaneous app settings. New minor settings land here as they're introduced.",
+    "intro": "The site's identity: its public URL and timezone, the home page and the login banner.",
     "quicknav": {
       "aria": "Section navigation"
     }
@@ -1131,7 +1137,9 @@
     "users_placeholder": "Search by name or email…",
     "groups_label": "Group memberships",
     "groups_inbox": "company inbox",
-    "saved_toast": "Public link policy saved."
+    "saved_toast": "Public link policy saved.",
+    "brute_force_title": "Password brute force",
+    "brute_force_help": "A link is locked for every address once this many wrong passwords arrive in the window from at least three distinct addresses; a single address only gets the per-address limit."
   },
   "admin_api_tokens": {
     "create_cta": "Generate token for user",
@@ -1380,7 +1388,8 @@
       "lang_en": "English",
       "lang_de": "German",
       "language_tab_group": "Language"
-    }
+    },
+    "name_title": "Application name"
   },
   "footer": {
     "aria": "Legal",
@@ -2391,7 +2400,8 @@
     "err_bad_email": "Not a valid email address: {list}",
     "err_4xx_empty": "Enter at least one 4xx status code to capture, or turn off 4xx capture.",
     "err_4xx_bad": "Not a valid 4xx status code: {list}",
-    "err_retention_range": "Retention must be between 0 and 3650 days."
+    "err_retention_range": "Retention must be between 0 and 3650 days.",
+    "scan_capture_section": "Scan capture rate"
   },
   "admin_error_log": {
     "intro": "Every captured server error (HTTP 5xx), opted-in client error (4xx), and failed scheduled task. Filter by code, status, source, or time; click a row for full detail. \"Emailed\" marks rows that also triggered an alert.",
@@ -2494,9 +2504,9 @@
     "admin_settings_branding": "Branding & legal",
     "admin_settings_twofa": "2FA enforcement",
     "admin_settings_quarantine": "Quarantine · Alerts & scanner",
-    "admin_settings_email_change": "Email change",
+    "admin_settings_email_change": "Sign-in policies · Email change",
     "admin_settings_error_alerts": "Errors & alerts · Alerts",
-    "admin_settings_advanced": "Advanced",
+    "admin_settings_advanced": "Data retention & storage",
     "admin_settings_backup": "Backup & restore",
     "admin_settings_maintenance": "Maintenance mode",
     "admin_system": "Status & updates",
@@ -2508,7 +2518,11 @@
     "not_found": "Not found",
     "admin_settings_scan_guard": "Blocked sources · Auto-block rules",
     "admin_ip_blocks": "Blocked sources",
-    "admin_overview": "Overview"
+    "admin_overview": "Overview",
+    "admin_settings_sessions": "Sessions · Policy",
+    "admin_settings_sign_in": "Sign-in policies",
+    "admin_settings_transfers": "Files & transfers",
+    "admin_settings_anomaly": "Anomaly detection"
   },
   "not_found": {
     "eyebrow": "404 · not found",
@@ -2693,5 +2707,20 @@
     "check_av": "Antivirus",
     "unavailable": "unavailable",
     "pages_heading": "All pages"
+  },
+  "admin_sessions_policy": {
+    "intro": "How long a sign-in stays valid and how many devices one account may hold. Changes apply to new sign-ins; shortening the refresh lifetime also clamps existing sessions."
+  },
+  "admin_sign_in": {
+    "intro": "What stops password guessing: the per-account lockout, the per-address limits on the sign-in and registration routes, and the breach check on new passwords.",
+    "scope_note": "These protect accounts. Blocking a source outright is the scan guard, under Security & audit › Blocked sources; the public-link password limits are on Public links."
+  },
+  "admin_transfers": {
+    "intro": "Defaults for new shares, the size cap for direct (non-resumable) uploads, download link lifetimes and the in-browser preview."
+  },
+  "admin_anomaly": {
+    "intro": "An hourly check flags mass downloads, access from many networks and bursts of failed sign-ins against these thresholds.",
+    "advisory": "Advisory only: a finding alerts an admin (and fires a webhook) and never blocks anyone.",
+    "cadence_note": "The check runs on the schedule set under"
   }
 }

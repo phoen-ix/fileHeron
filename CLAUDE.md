@@ -30,8 +30,8 @@ Backend **`v2.17.1`** is the newest tag (2026-09-20). Desktop client
 **`client-v1.4.5`** ships beside it on its own tag and is UNCHANGED by v2.16.x
 and v2.17.x. **`v2.17.0` exists as a tag with NO images**: its release run stopped
 at the dependency audit (three anyio CVEs), and release tags are immutable, so the
-same commits shipped as v2.17.1 plus the anyio bump. **The reference host runs v2.16.1** (backend container started after 2026-09-13 UTC,
-via the in-app updater) - so v2.16.0's two default moves ARE live there (cron
+same commits shipped as v2.17.1 plus the anyio bump. **The reference host runs v2.16.1** (applied 2026-09-13 19:10 UTC via the in-app
+updater, six minutes after v2.16.1 published) - so v2.16.0's two default moves ARE live there (cron
 failures now email admins, and new unsubscribe tokens last 30 days). v2.17.1 is
 released and not yet applied; it moves no default (admin navigation restructure,
 §Admin). Only backend/worker/frontend/updater-shim were

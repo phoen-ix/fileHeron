@@ -5,7 +5,6 @@ import { useI18n } from 'vue-i18n'
 import { getTokenPolicy, updateTokenPolicy } from '@/api/admin'
 import { listGroups } from '@/api/groups'
 import { searchUsers } from '@/api/users'
-import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
 import { useApiError } from '@/composables/useApiError'
 import { useUiStore } from '@/stores/ui'
 import type {
@@ -138,8 +137,6 @@ onMounted(load)
 
 <template>
   <div class="policy-page" data-density="operator">
-    <AdminPageHeader />
-
     <p class="fh-field-help intro">{{ t('admin_token_policy.intro') }}</p>
 
     <div v-if="loading" class="loading">{{ t('common.loading') }}</div>

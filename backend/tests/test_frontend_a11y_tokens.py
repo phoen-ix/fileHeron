@@ -186,13 +186,38 @@ def test_every_page_view_renders_a_page_heading():
             return True
         return "<AdminPageHeader" in template and "hide-title" not in template
 
+    # A view mounted as a TAB of views/AdminTabShell.vue renders under the
+    # shell's heading, so it carries none of its own. Which views those are is
+    # read from the router, not listed here: the set changes whenever a page
+    # gains tabs, and a hand-written list is the "keep in sync" defect.
+    tab_panels = _tab_panel_views()
+    assert tab_panels, "no tab shells found in the router - the scan rotted"
+
     missing = [
         p.name
         for p in sorted(views.rglob("*.vue"))
         if not _has_heading(p.read_text().partition("<template>")[2])
         and p.name not in {"AdminLayout.vue", "HomePlaceholder.vue", "NotFound.vue"}
+        and p.name not in tab_panels
     ]
     assert missing == [], f"views with no page heading: {missing}"
+
+
+def _tab_panel_views() -> set[str]:
+    """Every `@/views/X.vue` mounted inside the `children: [...]` of a route
+    whose component is AdminTabShell.vue."""
+    src = (FRONTEND / "router" / "index.ts").read_text()
+    out: set[str] = set()
+    pos = 0
+    while (hit := src.find("AdminTabShell.vue", pos)) != -1:
+        start = src.index("children: [", hit) + len("children: [")
+        depth, i = 1, start
+        while depth and i < len(src):
+            depth += {"[": 1, "]": -1}.get(src[i], 0)
+            i += 1
+        out.update(re.findall(r"@/views/([A-Za-z0-9]+\.vue)", src[start:i]))
+        pos = i
+    return out
 
 
 def test_error_notices_are_live_regions():

@@ -9,6 +9,13 @@
              (accordion mode keeps that to one). Same collapse state machine. -->
         <template v-if="narrow">
           <div class="nav-strip nav-strip-cats">
+            <RouterLink
+              :to="{ name: ADMIN_OVERVIEW.routeName }"
+              class="nav-chip"
+              :aria-current="isItemActive(ADMIN_OVERVIEW, route.name) ? 'page' : undefined"
+            >
+              {{ t(ADMIN_OVERVIEW.labelKey) }}
+            </RouterLink>
             <button
               v-for="cat in ADMIN_NAV"
               :key="cat.key"
@@ -31,13 +38,22 @@
             >
               {{ t(item.labelKey) }}
               <span
-                v-if="item.routeName === 'admin-inbox' && inboxUnread > 0"
+                v-if="item.badge === 'inbox_unread' && inboxUnread > 0"
                 class="nav-badge"
                 >{{ inboxUnread }}</span
               >
             </RouterLink>
           </div>
         </template>
+        <RouterLink
+          v-if="!narrow"
+          :to="{ name: ADMIN_OVERVIEW.routeName }"
+          class="nav-link nav-link-top"
+          :class="{ 'is-active': isItemActive(ADMIN_OVERVIEW, route.name) }"
+          :aria-current="isItemActive(ADMIN_OVERVIEW, route.name) ? 'page' : undefined"
+        >
+          {{ t(ADMIN_OVERVIEW.labelKey) }}
+        </RouterLink>
         <div v-for="cat in ADMIN_NAV" v-else :key="cat.key" class="nav-cat">
           <button
             type="button"
@@ -87,7 +103,7 @@
               >
                 {{ t(item.labelKey) }}
                 <span
-                  v-if="item.routeName === 'admin-inbox' && inboxUnread > 0"
+                  v-if="item.badge === 'inbox_unread' && inboxUnread > 0"
                   class="nav-badge"
                   >{{ inboxUnread }}</span
                 >
@@ -110,7 +126,7 @@ import { useRoute } from 'vue-router'
 
 import { getInboxUnreadCount } from '@/api/admin'
 import { useAdminNavCollapse } from '@/composables/useAdminNavCollapse'
-import { ADMIN_NAV, type AdminNavItem, isItemActive } from '@/config/adminNav'
+import { ADMIN_NAV, ADMIN_OVERVIEW, type AdminNavItem, isItemActive } from '@/config/adminNav'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -266,6 +282,11 @@ onMounted(async () => {
     color var(--fh-duration-fast) var(--fh-easing),
     border-color var(--fh-duration-fast) var(--fh-easing),
     background var(--fh-duration-fast) var(--fh-easing);
+}
+
+.nav-link-top {
+  padding-left: var(--fh-space-3);
+  margin-bottom: var(--fh-space-1);
 }
 
 .nav-link:hover {

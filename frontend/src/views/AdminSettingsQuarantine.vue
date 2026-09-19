@@ -8,7 +8,6 @@ import {
   reloadAvSignatures,
   updateQuarantineSettings,
 } from '@/api/admin'
-import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
 import { useApiError } from '@/composables/useApiError'
 import { useUiStore } from '@/stores/ui'
 import type { AvStatusResponse } from '@/types/api'
@@ -106,8 +105,6 @@ onMounted(() => {
 
 <template>
   <div class="policy-page" data-density="operator">
-    <AdminPageHeader />
-
     <p class="fh-field-help intro">{{ t('admin_settings_quarantine.intro') }}</p>
 
     <div v-if="loading" class="loading">{{ t('common.loading') }}</div>

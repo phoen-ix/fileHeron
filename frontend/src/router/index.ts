@@ -28,6 +28,13 @@ declare module 'vue-router' {
 
 const router = createRouter({
   history: createWebHistory(),
+  // Hash links from the Overview's setting search (`…/general#motd`,
+  // `…/advanced#tunable-<key>`) land on the section, clear of the sticky app
+  // header. Nothing else scrolls: hash-less navigations keep today's behaviour.
+  scrollBehavior(to) {
+    if (to.hash) return { el: to.hash, top: 80 }
+    return undefined
+  },
   routes: [
     /* public --------------------------------------------------------------- */
     {
@@ -148,7 +155,9 @@ const router = createRouter({
       children: [
         {
           path: '',
-          redirect: { name: 'admin-users' },
+          name: 'admin-overview',
+          component: () => import('@/views/AdminOverview.vue'),
+          meta: { density: 'operator', titleKey: 'admin_overview', requiresRole: 'admin' },
         },
         {
           path: 'users',
@@ -205,10 +214,27 @@ const router = createRouter({
           meta: { density: 'operator', titleKey: 'admin_mail_detail', requiresRole: 'admin' },
         },
         {
+          // Tab shell (views/AdminTabShell.vue renders the header + tablist). The
+          // second tab keeps its historical path as an ABSOLUTE child path - a
+          // leading "/" is absolute in vue-router 4 - so every stored link, email
+          // and README URL resolves with no redirect and no route-name change.
           path: 'error-log',
-          name: 'admin-error-log',
-          component: () => import('@/views/AdminErrorLog.vue'),
+          component: () => import('@/views/AdminTabShell.vue'),
           meta: { density: 'operator', titleKey: 'admin_error_log', requiresRole: 'admin' },
+          children: [
+            {
+              path: '',
+              name: 'admin-error-log',
+              component: () => import('@/views/AdminErrorLog.vue'),
+              meta: { density: 'operator', titleKey: 'admin_error_log', requiresRole: 'admin' },
+            },
+            {
+              path: '/admin/settings/error-alerts',
+              name: 'admin-settings-error-alerts',
+              component: () => import('@/views/AdminSettingsErrorAlerts.vue'),
+              meta: { density: 'operator', titleKey: 'admin_settings_error_alerts', requiresRole: 'admin' },
+            },
+          ],
         },
         {
           path: 'inbox',
@@ -236,15 +262,41 @@ const router = createRouter({
         },
         {
           path: 'quarantine',
-          name: 'admin-quarantine',
-          component: () => import('@/views/AdminQuarantine.vue'),
+          component: () => import('@/views/AdminTabShell.vue'),
           meta: { density: 'operator', titleKey: 'admin_quarantine', requiresRole: 'admin' },
+          children: [
+            {
+              path: '',
+              name: 'admin-quarantine',
+              component: () => import('@/views/AdminQuarantine.vue'),
+              meta: { density: 'operator', titleKey: 'admin_quarantine', requiresRole: 'admin' },
+            },
+            {
+              path: '/admin/settings/quarantine',
+              name: 'admin-settings-quarantine',
+              component: () => import('@/views/AdminSettingsQuarantine.vue'),
+              meta: { density: 'operator', titleKey: 'admin_settings_quarantine', requiresRole: 'admin' },
+            },
+          ],
         },
         {
           path: 'api-tokens',
-          name: 'admin-api-tokens',
-          component: () => import('@/views/AdminApiTokens.vue'),
+          component: () => import('@/views/AdminTabShell.vue'),
           meta: { density: 'operator', titleKey: 'admin_api_tokens', requiresRole: 'admin' },
+          children: [
+            {
+              path: '',
+              name: 'admin-api-tokens',
+              component: () => import('@/views/AdminApiTokens.vue'),
+              meta: { density: 'operator', titleKey: 'admin_api_tokens', requiresRole: 'admin' },
+            },
+            {
+              path: '/admin/settings/api-tokens',
+              name: 'admin-settings-api-tokens',
+              component: () => import('@/views/AdminSettingsApiTokens.vue'),
+              meta: { density: 'operator', titleKey: 'admin_settings_api_tokens', requiresRole: 'admin' },
+            },
+          ],
         },
         {
           // The dedicated Settings hub page was flattened into the sidebar -
@@ -271,12 +323,6 @@ const router = createRouter({
           name: 'admin-settings-sso-edit',
           component: () => import('@/views/AdminSettingsSSOEdit.vue'),
           meta: { density: 'operator', titleKey: 'admin_settings_sso_edit', requiresRole: 'admin' },
-        },
-        {
-          path: 'settings/api-tokens',
-          name: 'admin-settings-api-tokens',
-          component: () => import('@/views/AdminSettingsApiTokens.vue'),
-          meta: { density: 'operator', titleKey: 'admin_settings_api_tokens', requiresRole: 'admin' },
         },
         {
           path: 'settings/public-links',
@@ -334,36 +380,31 @@ const router = createRouter({
           meta: { density: 'operator', titleKey: 'admin_settings_twofa', requiresRole: 'admin' },
         },
         {
-          path: 'settings/quarantine',
-          name: 'admin-settings-quarantine',
-          component: () => import('@/views/AdminSettingsQuarantine.vue'),
-          meta: { density: 'operator', titleKey: 'admin_settings_quarantine', requiresRole: 'admin' },
-        },
-        {
           path: 'settings/email-change',
           name: 'admin-settings-email-change',
           component: () => import('@/views/AdminSettingsEmailChange.vue'),
           meta: { density: 'operator', titleKey: 'admin_settings_email_change', requiresRole: 'admin' },
         },
         {
-          path: 'settings/scan-guard',
-          name: 'admin-settings-scan-guard',
-          component: () => import('@/views/AdminSettingsScanGuard.vue'),
-          meta: { density: 'operator', titleKey: 'admin_settings_scan_guard', requiresRole: 'admin' },
-        },
-        {
-          // The scan guard's POLICY lives on the page above; what it is
-          // currently doing - and undoing it - lives here.
+          // The STATE page is the item and the scan guard's POLICY is its second tab:
+          // in an incident the operator's noun is "block", and the guard ships off.
           path: 'ip-blocks',
-          name: 'admin-ip-blocks',
-          component: () => import('@/views/AdminIpBlocks.vue'),
+          component: () => import('@/views/AdminTabShell.vue'),
           meta: { density: 'operator', titleKey: 'admin_ip_blocks', requiresRole: 'admin' },
-        },
-        {
-          path: 'settings/error-alerts',
-          name: 'admin-settings-error-alerts',
-          component: () => import('@/views/AdminSettingsErrorAlerts.vue'),
-          meta: { density: 'operator', titleKey: 'admin_settings_error_alerts', requiresRole: 'admin' },
+          children: [
+            {
+              path: '',
+              name: 'admin-ip-blocks',
+              component: () => import('@/views/AdminIpBlocks.vue'),
+              meta: { density: 'operator', titleKey: 'admin_ip_blocks', requiresRole: 'admin' },
+            },
+            {
+              path: '/admin/settings/scan-guard',
+              name: 'admin-settings-scan-guard',
+              component: () => import('@/views/AdminSettingsScanGuard.vue'),
+              meta: { density: 'operator', titleKey: 'admin_settings_scan_guard', requiresRole: 'admin' },
+            },
+          ],
         },
         {
           path: 'settings/advanced',

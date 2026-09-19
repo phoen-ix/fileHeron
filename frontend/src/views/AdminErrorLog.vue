@@ -3,7 +3,6 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { exportErrorCsv, listErrorLog } from '@/api/admin'
-import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
 import Pager from '@/components/Pager.vue'
 import { useApiError } from '@/composables/useApiError'
 import { useDebouncedSearch } from '@/composables/useDebouncedSearch'
@@ -120,16 +119,12 @@ onMounted(load)
 
 <template>
   <div class="fh-page" data-density="operator">
-    <AdminPageHeader>
+    <div class="fh-tab-toolbar">
       <p class="fh-field-help intro">{{ t('admin_error_log.intro') }}</p>
-      <template #actions>
-        <button type="button" class="fh-btn fh-btn-ghost" :disabled="exporting" @click="onExportCsv">
-          {{ t('admin_error_log.export_csv') }}
-        </button>
-      </template>
-    </AdminPageHeader>
-
-    <hr class="fh-rule" />
+      <button type="button" class="fh-btn fh-btn-ghost" :disabled="exporting" @click="onExportCsv">
+        {{ t('admin_error_log.export_csv') }}
+      </button>
+    </div>
 
     <div class="filters">
       <input

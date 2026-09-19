@@ -459,3 +459,19 @@ hr {
   white-space: nowrap;
   border: 0;
 }
+
+/* Toolbar row for a TAB view whose page header (and its #actions slot) lives
+   in the shell (views/AdminTabShell.vue): right-aligned controls above the
+   tab's own content. */
+.fh-tab-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--fh-space-2);
+  margin-bottom: var(--fh-space-3);
+}
+
+.fh-tab-toolbar > p {
+  margin: 0 auto 0 0;
+}

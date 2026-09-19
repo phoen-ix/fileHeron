@@ -44,7 +44,7 @@ import { computed, useSlots } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { type RouteLocationRaw, useRoute } from 'vue-router'
 
-import { ADMIN_NAV, type AdminNavItem } from '@/config/adminNav'
+import { ADMIN_OVERVIEW, findNavItem } from '@/config/adminNav'
 
 const props = defineProps<{
   /** Detail-page title (an entity name). Marks the nav item crumb as a link. */
@@ -65,15 +65,7 @@ interface Crumb {
   to?: RouteLocationRaw
 }
 
-const match = computed<{ item: AdminNavItem; categoryLabelKey: string } | null>(() => {
-  const name = route?.name
-  if (typeof name !== 'string') return null
-  for (const cat of ADMIN_NAV) {
-    const item = cat.items.find((i) => i.matchNames.includes(name))
-    if (item) return { item, categoryLabelKey: cat.labelKey }
-  }
-  return null
-})
+const match = computed(() => findNavItem(route?.name))
 
 const itemLabel = computed(() => (match.value ? t(match.value.item.labelKey) : ''))
 const isDetail = computed(
@@ -84,17 +76,18 @@ const heading = computed(() => props.title ?? itemLabel.value)
 const crumbs = computed<Crumb[]>(() => {
   const m = match.value
   if (!m) return []
-  const out: Crumb[] = [
-    { label: t('admin.eyebrow'), to: '/admin' },
-    { label: t(m.categoryLabelKey) },
-  ]
-  // On a detail page the item crumb links back to the list; on the page itself
-  // it is the current leaf.
+  if (m.item === ADMIN_OVERVIEW) return [{ label: t('admin.eyebrow') }]
+  const out: Crumb[] = [{ label: t('admin.eyebrow'), to: { name: ADMIN_OVERVIEW.routeName } }]
+  if (m.category) out.push({ label: t(m.category.labelKey) })
+  // The item crumb is the leaf on its own page; on a detail page or a tab it
+  // links back to the item's landing route and the tab (if any) is the leaf.
+  const itemIsLeaf = !isDetail.value && !m.tab
   out.push(
-    isDetail.value
-      ? { label: t(m.item.labelKey), to: { name: m.item.routeName } }
-      : { label: t(m.item.labelKey) },
+    itemIsLeaf
+      ? { label: t(m.item.labelKey) }
+      : { label: t(m.item.labelKey), to: { name: m.item.routeName } },
   )
+  if (m.tab) out.push({ label: t(m.tab.labelKey) })
   return out
 })
 </script>

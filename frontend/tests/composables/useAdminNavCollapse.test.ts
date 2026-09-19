@@ -115,13 +115,13 @@ afterEach(() => {
 describe('initial open-set', () => {
   it('accordion + null persisted opens nothing (no active category)', async () => {
     const { api } = await setup({ admin_nav_collapse_mode: 'accordion' }, 'root')
-    expect(api.isOpen('access')).toBe(false)
+    expect(api.isOpen('people')).toBe(false)
     expect(api.isOpen('system')).toBe(false)
   })
 
   it('expanded + null persisted opens every category', async () => {
     const { api } = await setup({ admin_nav_collapse_mode: 'expanded' }, 'root')
-    for (const c of ['access', 'sharing', 'messaging', 'system'] as const) {
+    for (const c of ['people', 'sharing', 'email', 'security', 'site', 'system'] as const) {
       expect(api.isOpen(c)).toBe(true)
     }
   })
@@ -132,41 +132,41 @@ describe('initial open-set', () => {
       'root',
     )
     expect(api.isOpen('sharing')).toBe(true)
-    expect(api.isOpen('access')).toBe(false)
+    expect(api.isOpen('people')).toBe(false)
   })
 })
 
 describe('navigation auto-expand', () => {
   it('accordion opens only the active route category', async () => {
     const { api } = await setup({ admin_nav_collapse_mode: 'accordion' }, 'admin-mail-log')
-    expect(api.isOpen('messaging')).toBe(true)
-    expect(api.isOpen('access')).toBe(false)
+    expect(api.isOpen('email')).toBe(true)
+    expect(api.isOpen('people')).toBe(false)
   })
 
   it('manual keeps prior categories open when navigating', async () => {
     const { api } = await setup(
-      { admin_nav_collapse_mode: 'manual', admin_nav_open_categories: ['access'] },
+      { admin_nav_collapse_mode: 'manual', admin_nav_open_categories: ['people'] },
       'admin-mail-log',
     )
-    expect(api.isOpen('access')).toBe(true)
-    expect(api.isOpen('messaging')).toBe(true)
+    expect(api.isOpen('people')).toBe(true)
+    expect(api.isOpen('email')).toBe(true)
   })
 
   it('maps a detail route to its parent category', async () => {
     const { api } = await setup({ admin_nav_collapse_mode: 'accordion' }, 'admin-user-detail')
-    expect(api.isOpen('access')).toBe(true)
+    expect(api.isOpen('people')).toBe(true)
   })
 })
 
 describe('toggle', () => {
   it('accordion keeps at most one open and persists', async () => {
     const { api } = await setup({ admin_nav_collapse_mode: 'accordion' }, 'root')
-    await api.toggle('access')
-    expect(api.isOpen('access')).toBe(true)
+    await api.toggle('people')
+    expect(api.isOpen('people')).toBe(true)
 
     await api.toggle('sharing')
     expect(api.isOpen('sharing')).toBe(true)
-    expect(api.isOpen('access')).toBe(false)
+    expect(api.isOpen('people')).toBe(false)
 
     await api.toggle('sharing')
     expect(api.isOpen('sharing')).toBe(false)
@@ -176,13 +176,13 @@ describe('toggle', () => {
 
   it('manual toggles categories independently', async () => {
     const { api } = await setup({ admin_nav_collapse_mode: 'manual' }, 'root')
-    await api.toggle('access')
+    await api.toggle('people')
     await api.toggle('sharing')
-    expect(api.isOpen('access')).toBe(true)
+    expect(api.isOpen('people')).toBe(true)
     expect(api.isOpen('sharing')).toBe(true)
 
-    await api.toggle('access')
-    expect(api.isOpen('access')).toBe(false)
+    await api.toggle('people')
+    expect(api.isOpen('people')).toBe(false)
     expect(api.isOpen('sharing')).toBe(true)
     // Persisted in canonical order.
     expect(accountApi.updateAdminNavOpenCategories).toHaveBeenLastCalledWith(['sharing'])
@@ -197,8 +197,8 @@ describe('toggle', () => {
       new Error('boom'),
     )
 
-    await api.toggle('access')
-    expect(api.isOpen('access')).toBe(false) // reverted
+    await api.toggle('people')
+    expect(api.isOpen('people')).toBe(false) // reverted
     expect(toast).toHaveBeenCalledWith(expect.any(String), 'error')
   })
 })

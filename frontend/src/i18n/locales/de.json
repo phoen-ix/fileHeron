@@ -381,16 +381,15 @@
     "eyebrow": "Admin",
     "nav_label": "Admin-Navigation",
     "nav": {
+      "overview": "Übersicht",
       "users": "Benutzer",
       "groups": "Gruppen",
       "sessions": "Sitzungen",
       "twofa": "2FA-Pflicht",
       "api_tokens": "API-Tokens",
-      "api_token_policy": "API-Token-Richtlinie",
       "sso": "SSO-Anbieter",
       "file_history": "Dateiverlauf",
       "quarantine": "Quarantäne",
-      "quarantine_alerts": "Quarantäne-Alarme",
       "public_links": "Öffentliche Links",
       "share_approval": "Freigabe-Genehmigung",
       "inbox": "Posteingang",
@@ -403,26 +402,37 @@
       "audit": "Audit-Protokoll",
       "system": "Status & Updates",
       "scheduled_tasks": "Geplante Aufgaben",
-      "error_alerts": "Fehler-Alarme",
-      "error_log": "Fehlerprotokoll",
-      "scan_guard": "Scan-Schutz",
       "ip_blocks": "Gesperrte Quellen",
       "webhooks": "Webhooks",
       "general": "Allgemein",
       "branding": "Branding & Rechtliches",
       "advanced": "Erweitert",
       "maintenance": "Wartungsmodus",
-      "backup": "Sicherung & Wiederherstellung"
+      "backup": "Sicherung & Wiederherstellung",
+      "errors": "Fehler & Alarme"
     },
     "nav_cat": {
-      "access": "Zugriff",
-      "sharing": "Freigabe",
-      "messaging": "Nachrichten",
+      "people": "Personen & Zugriff",
+      "sharing": "Freigaben & Dateien",
+      "email": "E-Mail & Benachrichtigungen",
+      "security": "Sicherheit & Audit",
+      "site": "Website & Darstellung",
       "system": "System"
     },
     "nav_save_failed": "Seitenleisten-Status konnte nicht gespeichert werden.",
     "breadcrumb_label": "Pfadnavigation",
-    "back_to": "Zurück zu {page}"
+    "back_to": "Zurück zu {page}",
+    "nav_tab": {
+      "tokens": "Tokens",
+      "policy": "Richtlinie",
+      "files": "Dateien",
+      "alerts_scanner": "Alarme & Scanner",
+      "blocks": "Sperren & Allowlist",
+      "scan_guard": "Auto-Sperrregeln (Scan-Schutz)",
+      "log": "Protokoll",
+      "alerts": "Alarme"
+    },
+    "tabs_label": "Seiten-Tabs"
   },
   "admin_maintenance": {
     "intro": "Wenn aktiv, werden neue Uploads und Downloads pausiert (laufende werden beendet); der Rest der App bleibt nutzbar. Der Ablauf 'Update verschieben' aktiviert dies automatisch.",
@@ -688,13 +698,16 @@
         "email_log_days": "Mail-Log (Tage, 0 = unbegrenzt)",
         "inbound_message_days": "Eingehende Nachrichten (Tage, 0 = unbegrenzt)",
         "webhook_delivery_days": "Webhook-Zustellungen (Tage, 0 = unbegrenzt)",
-        "upload_stale_hours": "Hängende laufende Uploads (Stunden)"
+        "upload_stale_hours": "Hängende laufende Uploads (Stunden)",
+        "public_link_attempt_days": "Passwortversuche für öffentliche Links (Tage)",
+        "ip_block_days": "Abgelaufene IP-Sperren (Tage)"
       },
       "uploads": {
         "max_direct_bytes": "Größenlimit für Direkt-Upload (Bytes)"
       },
       "downloads": {
-        "signed_url_ttl_sec": "Gültigkeitsdauer der signierten Download-URL (Sekunden)"
+        "signed_url_ttl_sec": "Gültigkeitsdauer der signierten Download-URL (Sekunden)",
+        "resume_credit_hours": "Fortsetzungs-Guthaben für Downloads (Stunden)"
       },
       "security": {
         "hibp_enabled": "Passwörter gegen Have I Been Pwned prüfen"
@@ -729,7 +742,8 @@
         "max_direct_bytes": "Größere Dateien müssen den fortsetzbaren (TUS-)Upload-Pfad nutzen."
       },
       "downloads": {
-        "signed_url_ttl_sec": "Wie lange der einmalige Download-Link, den der Browser nutzt, gültig bleibt. Länger ermöglicht das Fortsetzen eines unterbrochenen Browser-Downloads (er fordert denselben Link erneut an); kürzer verkleinert das Zeitfenster, falls dieser Link je in einem Proxy-Log landet. Der Desktop-Client nutzt einen Bearer-Token und ist nicht betroffen."
+        "signed_url_ttl_sec": "Wie lange der einmalige Download-Link, den der Browser nutzt, gültig bleibt. Länger ermöglicht das Fortsetzen eines unterbrochenen Browser-Downloads (er fordert denselben Link erneut an); kürzer verkleinert das Zeitfenster, falls dieser Link je in einem Proxy-Log landet. Der Desktop-Client nutzt einen Bearer-Token und ist nicht betroffen.",
+        "resume_credit_hours": "Ein gezählter Download kann innerhalb dieses Fensters fortgesetzt werden, ohne erneut gezählt zu werden."
       },
       "rate_limit": {
         "lockout_duration_min": "Wie lange ein Konto nach zu vielen Fehlversuchen gesperrt bleibt.",
@@ -759,7 +773,9 @@
         "quarantine_purge_days": "Wie lange Bytes quarantänisierter infizierter Dateien auf der Platte bleiben, bevor sie gelöscht werden. 0 = behalten. (0-3650 Tage, Standard 90.)",
         "orphan_reclaim_days": "Schonfrist, bevor Bytes lange widerrufener/gelöschter Freigaben freigegeben werden. 0 = Auto-Freigabe aus. (0-3650 Tage, Standard 7.)",
         "tus_abandoned_hours": "Wie lange eine abgebrochene fortsetzbare Upload-Temp-Datei liegen bleibt, bevor sie gelöscht wird. (1-8760 Stunden, Standard 24.)",
-        "upload_stale_hours": "Wie lange eine mitten im Upload hängende Datei liegen darf, bevor sie entfernt und ihre leere Freigabe als fehlgeschlagen markiert wird. (1-720 Stunden, Standard 3.)"
+        "upload_stale_hours": "Wie lange eine mitten im Upload hängende Datei liegen darf, bevor sie entfernt und ihre leere Freigabe als fehlgeschlagen markiert wird. (1-720 Stunden, Standard 3.)",
+        "public_link_attempt_days": "Wie lange fehlgeschlagene Passwortversuche auf öffentliche Links für die Brute-Force-Sperre aufbewahrt werden.",
+        "ip_block_days": "Wie lange aufgehobene und abgelaufene Sperren in der Historie der gesperrten Quellen bleiben."
       },
       "security": {
         "hibp_enabled": "Neue Passwörter gegen die Have-I-Been-Pwned-Datenbank prüfen (k-Anonymität, kein Passwort verlässt den Server). Fällt bei Nichterreichbarkeit offen aus."
@@ -2458,7 +2474,7 @@
     "admin_settings_webhooks": "Webhooks",
     "admin_mail_log": "E-Mail-Protokoll",
     "admin_mail_detail": "E-Mail",
-    "admin_error_log": "Fehlerprotokoll",
+    "admin_error_log": "Fehler & Alarme · Protokoll",
     "admin_inbox": "Posteingang",
     "admin_inbox_detail": "Nachricht",
     "admin_file_history": "Dateiverlauf",
@@ -2468,7 +2484,7 @@
     "admin_settings_sso": "SSO-Anbieter",
     "admin_settings_sso_new": "Neuer SSO-Provider",
     "admin_settings_sso_edit": "SSO-Provider bearbeiten",
-    "admin_settings_api_tokens": "API-Token-Richtlinie",
+    "admin_settings_api_tokens": "API-Tokens · Richtlinie",
     "admin_settings_public_links": "Öffentliche Links",
     "admin_settings_share_approval": "Freigabe-Genehmigung",
     "admin_settings_email": "Ausgehende E-Mail (SMTP)",
@@ -2477,9 +2493,9 @@
     "admin_settings_general": "Allgemein",
     "admin_settings_branding": "Branding & Rechtliches",
     "admin_settings_twofa": "2FA-Pflicht",
-    "admin_settings_quarantine": "Quarantäne-Alarme",
+    "admin_settings_quarantine": "Quarantäne · Alarme & Scanner",
     "admin_settings_email_change": "E-Mail-Änderung",
-    "admin_settings_error_alerts": "Fehler-Alarme",
+    "admin_settings_error_alerts": "Fehler & Alarme · Alarme",
     "admin_settings_advanced": "Erweitert",
     "admin_settings_backup": "Sicherung & Wiederherstellung",
     "admin_settings_maintenance": "Wartungsmodus",
@@ -2490,8 +2506,9 @@
     "imprint": "Impressum",
     "privacy": "Datenschutz",
     "not_found": "Nicht gefunden",
-    "admin_settings_scan_guard": "Scan-Schutz",
-    "admin_ip_blocks": "Gesperrte Quellen"
+    "admin_settings_scan_guard": "Gesperrte Quellen · Auto-Sperrregeln",
+    "admin_ip_blocks": "Gesperrte Quellen",
+    "admin_overview": "Übersicht"
   },
   "not_found": {
     "eyebrow": "404 · nicht gefunden",
@@ -2654,5 +2671,27 @@
     "no_blocks_in_force": "Derzeit wird nichts abgewiesen.",
     "hidden_by_filter": "{count} durch diesen Filter ausgeblendet.",
     "show_all_cta": "Alle anzeigen"
+  },
+  "admin_overview": {
+    "intro": "Was Aufmerksamkeit braucht, eine Suche über jede Einstellung und alle Admin-Seiten an einem Ort.",
+    "search_label": "Einstellung finden",
+    "search_placeholder": "Einstellung finden … z. B. Abklingzeit, Zeitzone, HIBP",
+    "search_empty": "Keine Treffer.",
+    "search_results": "Suchergebnisse",
+    "attention_heading": "Braucht Aufmerksamkeit",
+    "tile_unread_inbox": "Ungelesene Posteingangs-Nachrichten",
+    "tile_quarantined": "Dateien in Quarantäne",
+    "tile_live_blocks": "Aktive Sperren",
+    "tile_failed_tasks": "Fehlgeschlagene Aufgaben (24h)",
+    "tile_pending_approvals": "Ausstehende Genehmigungen",
+    "health_heading": "Status",
+    "running": "Läuft {v}",
+    "update_available": "Update verfügbar: {v}",
+    "up_to_date": "Aktuell",
+    "check_db": "Datenbank",
+    "check_redis": "Redis",
+    "check_av": "Antivirus",
+    "unavailable": "nicht verfügbar",
+    "pages_heading": "Alle Seiten"
   }
 }

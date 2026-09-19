@@ -381,16 +381,15 @@
     "eyebrow": "Admin",
     "nav_label": "Admin navigation",
     "nav": {
+      "overview": "Overview",
       "users": "Users",
       "groups": "Groups",
       "sessions": "Sessions",
       "twofa": "2FA enforcement",
       "api_tokens": "API tokens",
-      "api_token_policy": "API token policy",
       "sso": "SSO providers",
       "file_history": "File history",
       "quarantine": "Quarantine",
-      "quarantine_alerts": "Quarantine alerts",
       "public_links": "Public links",
       "share_approval": "Share approval",
       "inbox": "Inbox",
@@ -403,26 +402,37 @@
       "audit": "Audit log",
       "system": "Status & updates",
       "scheduled_tasks": "Scheduled tasks",
-      "error_alerts": "Error alerts",
-      "error_log": "Error log",
-      "scan_guard": "Scan guard",
       "ip_blocks": "Blocked sources",
       "webhooks": "Webhooks",
       "general": "General",
       "branding": "Branding & legal",
       "advanced": "Advanced",
       "maintenance": "Maintenance mode",
-      "backup": "Backup & restore"
+      "backup": "Backup & restore",
+      "errors": "Errors & alerts"
     },
     "nav_cat": {
-      "access": "Access",
-      "sharing": "Sharing",
-      "messaging": "Messaging",
+      "people": "People & access",
+      "sharing": "Sharing & files",
+      "email": "Email & notifications",
+      "security": "Security & audit",
+      "site": "Site & appearance",
       "system": "System"
     },
     "nav_save_failed": "Couldn't save sidebar state.",
     "breadcrumb_label": "Breadcrumb",
-    "back_to": "Back to {page}"
+    "back_to": "Back to {page}",
+    "nav_tab": {
+      "tokens": "Tokens",
+      "policy": "Policy",
+      "files": "Files",
+      "alerts_scanner": "Alerts & scanner",
+      "blocks": "Blocks & allowlist",
+      "scan_guard": "Auto-block rules (Scan guard)",
+      "log": "Log",
+      "alerts": "Alerts"
+    },
+    "tabs_label": "Page tabs"
   },
   "admin_maintenance": {
     "intro": "When on, new uploads and downloads are paused (existing ones finish); the rest of the app stays usable. The 'postpone update' flow turns this on automatically.",
@@ -688,13 +698,16 @@
         "email_log_days": "Mail log (days, 0 = keep forever)",
         "inbound_message_days": "Inbound messages (days, 0 = keep forever)",
         "webhook_delivery_days": "Webhook deliveries (days, 0 = keep forever)",
-        "upload_stale_hours": "Stale in-progress uploads (hours)"
+        "upload_stale_hours": "Stale in-progress uploads (hours)",
+        "public_link_attempt_days": "Public-link password attempts (days)",
+        "ip_block_days": "Expired IP blocks (days)"
       },
       "uploads": {
         "max_direct_bytes": "Direct-upload size cap (bytes)"
       },
       "downloads": {
-        "signed_url_ttl_sec": "Signed download-URL lifetime (seconds)"
+        "signed_url_ttl_sec": "Signed download-URL lifetime (seconds)",
+        "resume_credit_hours": "Download resume credit (hours)"
       },
       "security": {
         "hibp_enabled": "Check passwords against Have I Been Pwned"
@@ -729,7 +742,8 @@
         "max_direct_bytes": "Files larger than this must use the resumable (TUS) upload path."
       },
       "downloads": {
-        "signed_url_ttl_sec": "How long the one-time download link the browser uses stays valid. Longer lets a browser resume an interrupted download (it re-requests the same link); shorter shrinks the window if that link ever lands in a proxy log. The desktop client uses a bearer token and is unaffected."
+        "signed_url_ttl_sec": "How long the one-time download link the browser uses stays valid. Longer lets a browser resume an interrupted download (it re-requests the same link); shorter shrinks the window if that link ever lands in a proxy log. The desktop client uses a bearer token and is unaffected.",
+        "resume_credit_hours": "A counted download may be resumed within this window without being counted again."
       },
       "rate_limit": {
         "lockout_duration_min": "How long an account stays locked after too many failed logins.",
@@ -759,7 +773,9 @@
         "quarantine_purge_days": "How long quarantined infected file bytes are kept on disk before purging. 0 keeps them. (0-3650 days, default 90.)",
         "orphan_reclaim_days": "Grace period before bytes from long-revoked/deleted shares are reclaimed. 0 disables auto-reclaim. (0-3650 days, default 7.)",
         "tus_abandoned_hours": "How long an abandoned resumable-upload temp file lingers before the sweeper deletes it. (1-8760 hours, default 24.)",
-        "upload_stale_hours": "How long a file stuck mid-upload may sit before it is reaped and its empty share failed. (1-720 hours, default 3.)"
+        "upload_stale_hours": "How long a file stuck mid-upload may sit before it is reaped and its empty share failed. (1-720 hours, default 3.)",
+        "public_link_attempt_days": "How long failed password attempts on public links are kept for the brute-force lock.",
+        "ip_block_days": "How long released and expired blocks stay in the Blocked sources history."
       },
       "security": {
         "hibp_enabled": "Check new passwords against the Have I Been Pwned breach corpus (k-anonymity, no password leaves the server). Fails open if the service is unreachable."
@@ -2458,7 +2474,7 @@
     "admin_settings_webhooks": "Webhooks",
     "admin_mail_log": "Mail log",
     "admin_mail_detail": "Mail",
-    "admin_error_log": "Error log",
+    "admin_error_log": "Errors & alerts · Log",
     "admin_inbox": "Inbox",
     "admin_inbox_detail": "Message",
     "admin_file_history": "File history",
@@ -2468,7 +2484,7 @@
     "admin_settings_sso": "SSO providers",
     "admin_settings_sso_new": "New SSO provider",
     "admin_settings_sso_edit": "Edit SSO provider",
-    "admin_settings_api_tokens": "API token policy",
+    "admin_settings_api_tokens": "API tokens · Policy",
     "admin_settings_public_links": "Public links",
     "admin_settings_share_approval": "Share approval",
     "admin_settings_email": "Outgoing mail (SMTP)",
@@ -2477,9 +2493,9 @@
     "admin_settings_general": "General",
     "admin_settings_branding": "Branding & legal",
     "admin_settings_twofa": "2FA enforcement",
-    "admin_settings_quarantine": "Quarantine alerts",
+    "admin_settings_quarantine": "Quarantine · Alerts & scanner",
     "admin_settings_email_change": "Email change",
-    "admin_settings_error_alerts": "Error alerts",
+    "admin_settings_error_alerts": "Errors & alerts · Alerts",
     "admin_settings_advanced": "Advanced",
     "admin_settings_backup": "Backup & restore",
     "admin_settings_maintenance": "Maintenance mode",
@@ -2490,8 +2506,9 @@
     "imprint": "Imprint",
     "privacy": "Privacy",
     "not_found": "Not found",
-    "admin_settings_scan_guard": "Scan guard",
-    "admin_ip_blocks": "Blocked sources"
+    "admin_settings_scan_guard": "Blocked sources · Auto-block rules",
+    "admin_ip_blocks": "Blocked sources",
+    "admin_overview": "Overview"
   },
   "not_found": {
     "eyebrow": "404 · not found",
@@ -2654,5 +2671,27 @@
     "no_blocks_in_force": "Nothing is being refused right now.",
     "hidden_by_filter": "{count} hidden by this filter.",
     "show_all_cta": "Show all"
+  },
+  "admin_overview": {
+    "intro": "What needs attention, a search over every setting, and every admin page in one place.",
+    "search_label": "Find a setting",
+    "search_placeholder": "Find a setting… e.g. cooldown, timezone, HIBP",
+    "search_empty": "Nothing matches.",
+    "search_results": "Search results",
+    "attention_heading": "Needs attention",
+    "tile_unread_inbox": "Unread inbox messages",
+    "tile_quarantined": "Quarantined files",
+    "tile_live_blocks": "Live blocks",
+    "tile_failed_tasks": "Failed tasks (24h)",
+    "tile_pending_approvals": "Pending approvals",
+    "health_heading": "Status",
+    "running": "Running {v}",
+    "update_available": "Update available: {v}",
+    "up_to_date": "Up to date",
+    "check_db": "Database",
+    "check_redis": "Redis",
+    "check_av": "Antivirus",
+    "unavailable": "unavailable",
+    "pages_heading": "All pages"
   }
 }

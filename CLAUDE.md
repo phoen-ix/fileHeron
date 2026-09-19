@@ -431,8 +431,8 @@ time. All behaviour admin-tunable via `email_change.*` kv.
 
 ## Error log + alerts + CSP
 
-Browsable server-error log + (separately) email alerts. Admin `/admin/error-log`,
-settings `/admin/settings/error-alerts`. → README §Error log & alerts.
+Browsable server-error log + (separately) email alerts. Admin page "Errors & alerts" (System):
+tabs `/admin/error-log` (Log) and `/admin/settings/error-alerts` (Alerts). → README §Error log & alerts.
 
 - **Log ≠ alert (decoupled).** The `notify_admin_error` ARQ job → `error_alert.handle_error_event` **LOGS first** (`services/error_log.py::record`) then runs the alert saferails. `error_log.enabled` (default **true**, 5xx + cron failures) is independent of `error_alert.enabled` (default **false**, emails). Cooldown/hourly-cap/dedup-signature govern **emails only**. Don't re-couple them.
 - **Worker-source alerting has a GLOBAL default (`error_alert.source_worker`, true) plus the per-task `cron.<name>.alert_on_failure` override, and the per-task flag wins either way.** The per-task flag used to be the only control and defaults OFF, so on an instance where nobody had walked the ~20 tasks the settings page read "alerting enabled" while every worker failure went unreported - 97 `CRON_FAILED` rows over 27 days, `alerted=0` on all 2,239 `error_log` rows, and worker-source 5xx were 100% of that instance's real 5xx volume. `cron_schedule.effective` reads the SAME default so the Scheduled-tasks page cannot render every task "off" on a page whose failures do alert. **`source_worker` is optional on the PUT (`None` = leave unchanged)**: a newly-required field 422s any client one release behind, the same reasoning `APIBaseModel` keeps `extra="ignore"` for.
@@ -447,8 +447,11 @@ settings `/admin/settings/error-alerts`. → README §Error log & alerts.
 
 ## Scan guard + IP blocks
 
-Auto-detect and temporarily block scanning sources. Admin: `/admin/settings/scan-guard`
-(POLICY) and `/admin/ip-blocks` (STATE - blocks, allowlist, watchlist).
+Auto-detect and temporarily block scanning sources. Admin page "Blocked sources"
+(Security & audit): tabs `/admin/ip-blocks` (STATE - blocks, allowlist, watchlist) and
+`/admin/settings/scan-guard` (POLICY, labelled "Auto-block rules (Scan guard)"). The state
+page is the item and the guard is its tab, deliberately: the guard ships OFF and the blocks
+page is the one an operator opens in an incident.
 → README §Scan guard for the operator view.
 
 **It is the only control in this product that DENIES service, so it ships OFF**
@@ -522,6 +525,7 @@ switched on before v2.13.0.
 → README §Admin guide for pages and endpoints. `/admin` = `AdminLayout.vue`
 (sidebar + nested routes), `requireAdmin` meta + `get_current_admin` dependency.
 
+- **The sidebar is `config/adminNav.ts`, six task-based categories + an Overview** (`people · sharing · email · security · site · system`; keys mirrored by `services/account_prefs.ADMIN_NAV_CATEGORIES_ORDER` and pinned by `tests/test_admin_nav_categories_pin.py`, which reads both files). No category may exceed seven items, and a new page goes in the category of its TASK - the previous four categories grew one appended entry per release until System held 14 of 32. **A policy and the state it produces are TABS on one item** (`AdminNavItem.tabs`, rendered by `views/AdminTabShell.vue` + `components/admin/AdminTabs.vue`): the router mounts the shell at the item's path with the tab leaves as children, the second tab's historical path as an ABSOLUTE child path (`/admin/settings/scan-guard` under `ip-blocks`) so no URL, route name, email link or persisted `notifications.link_url` changed. **Every tab leaf must be in the item's `matchNames`** - `route.name` is always the LEAF, so a missing one gives a page whose sidebar highlights nothing; `adminNav.test.ts` pins router names ⊆ `ADMIN_ROUTE_NAMES`. Persisted `admin_nav_open_categories` holding old keys need no migration (`seed()` drops unknown keys; GET never re-validates). `/admin` is `AdminOverview.vue`: attention tiles, the setting search over `config/adminSearchIndex.ts` (a STATIC registry - codegen was rejected for the same reasons as the types mirror - pinned by `adminSearchIndex.test.ts` and `test_admin_search_index_pin.py`), and category cards rendered from `ADMIN_NAV`. **The search box is not `input[type=search]`** and its placeholder avoids the word "search": `useKeyboardShortcuts`' `/` focuses the first such input in DOM order.
 - **Every admin view's heading is `components/admin/AdminPageHeader.vue`**: clickable crumb (Admin › category › page) + the `<h1>`, both resolved from the SAME `admin.nav.*` key the sidebar uses, so a nav label and its page title cannot drift (they drifted on six pages while 37 views hand-built "Admin / Settings / X" in five flavours). `page_title.admin_*` carries the same string for the browser tab. Detail pages pass `:title`/`#title` + `:back-to`; `hide-title` keeps a view's own `<h1>`, and `tests/test_frontend_a11y_tokens.py` accepts the component as the heading only without it. Router-less view tests stub it with a slot-rendering stub, not `true` - controls moved into `#actions` vanish otherwise.
 
 - **Right-to-erasure** (`services/erasure.py::erase_user`, irreversible): hard-delete the target's files; delete TOTP/recovery/refresh/API tokens; anonymize the row (`email→erased-<id>@erased.invalid`, `display_name→[erased]`, `password_hash→""`, `is_disabled`, `oidc_subject=NULL`); audit `user_erased`. Pre-flight counts + verifiable PDF receipt (reportlab). Self-erasure refused. Erasure holds a Redis run lock, because its per-file commit releases the row lock. `prune_history` never deletes `user_erased`.

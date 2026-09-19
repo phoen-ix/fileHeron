@@ -342,8 +342,13 @@ covers your role/group, navigation forwards you to `/account/2fa` until you enro
 
 # Admin guide
 
-Audience: users with the **admin** role. Everything lives under `/admin` (sidebar nav,
-grouped Access / Sharing / Messaging / System).
+Audience: users with the **admin** role. Everything lives under `/admin`. The landing page
+is an **Overview** (what needs attention, a search over every setting, all pages as cards);
+the sidebar groups the pages by task: **People & access** · **Sharing & files** ·
+**Email & notifications** · **Security & audit** · **Site & appearance** · **System**.
+A policy and the state it produces share one page as tabs (Quarantine: Files | Alerts &
+scanner; API tokens: Tokens | Policy; Blocked sources: Blocks & allowlist | Auto-block rules
+(Scan guard); Errors & alerts: Log | Alerts); every tab keeps its historical URL.
 
 ## User management
 

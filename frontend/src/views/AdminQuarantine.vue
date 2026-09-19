@@ -8,7 +8,6 @@ import {
   adminQuarantinePurge,
   adminQuarantineRelease,
 } from '@/api/admin'
-import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
 import Pager from '@/components/Pager.vue'
 import { useApiError } from '@/composables/useApiError'
 import { useDebouncedSearch } from '@/composables/useDebouncedSearch'
@@ -122,15 +121,11 @@ onMounted(load)
 
 <template>
   <div class="fh-page" data-density="operator">
-    <AdminPageHeader>
-      <template #actions>
-        <span class="fh-mono total-count">
-          {{ t('admin_quarantine.total_count', { n: total }) }}
-        </span>
-      </template>
-    </AdminPageHeader>
-
-    <hr class="fh-rule" />
+    <div class="fh-tab-toolbar">
+      <span class="fh-mono total-count">
+        {{ t('admin_quarantine.total_count', { n: total }) }}
+      </span>
+    </div>
 
     <p class="fh-field-help intro">{{ t('admin_quarantine.intro') }}</p>
 

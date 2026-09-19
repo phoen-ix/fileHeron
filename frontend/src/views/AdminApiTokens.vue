@@ -10,7 +10,6 @@ import {
   adminRevokeApiToken,
 } from '@/api/admin'
 import { searchUsers } from '@/api/users'
-import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
 import ExpiryPicker from '@/components/ExpiryPicker.vue'
 import Pager from '@/components/Pager.vue'
 import { useApiError } from '@/composables/useApiError'
@@ -231,18 +230,16 @@ onMounted(load)
 
 <template>
   <div class="fh-page" data-density="operator">
-    <AdminPageHeader>
-      <template #actions>
-        <button
-          v-if="!showCreateForm"
-          type="button"
-          class="fh-btn"
-          @click="showCreateForm = true"
-        >
-          {{ t('admin_api_tokens.create_cta') }} <span aria-hidden="true">→</span>
-        </button>
-      </template>
-    </AdminPageHeader>
+    <div class="fh-tab-toolbar">
+      <button
+        v-if="!showCreateForm"
+        type="button"
+        class="fh-btn"
+        @click="showCreateForm = true"
+      >
+        {{ t('admin_api_tokens.create_cta') }} <span aria-hidden="true">→</span>
+      </button>
+    </div>
 
     <hr class="fh-rule" />
 

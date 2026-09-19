@@ -101,7 +101,7 @@ async function doLogout() {
           <div v-if="menuOpen" class="user-pop" role="menu">
             <RouterLink
               v-if="auth.user?.role === 'admin'"
-              :to="{ name: 'admin-users' }"
+              :to="{ name: 'admin-overview' }"
               class="user-pop-item"
               role="menuitem"
               @click="menuOpen = false"

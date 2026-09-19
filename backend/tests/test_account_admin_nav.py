@@ -58,13 +58,13 @@ async def test_set_open_categories(make_user, db, client, login_as):
     token, _ = await login_as("admin@test.local", _PW)
     resp = await client.patch(
         "/api/account/admin-nav-open",
-        json={"open": ["access", "system"]},
+        json={"open": ["people", "system"]},
         headers={"Authorization": f"Bearer {token}"},
     )
     assert resp.status_code == 200, resp.text
-    assert resp.json()["admin_nav_open_categories"] == ["access", "system"]
+    assert resp.json()["admin_nav_open_categories"] == ["people", "system"]
     db.refresh(user)
-    assert user.admin_nav_open_categories == ["access", "system"]
+    assert user.admin_nav_open_categories == ["people", "system"]
 
 
 @pytest.mark.asyncio
@@ -72,12 +72,12 @@ async def test_open_categories_deduped_and_ordered(make_user, client, login_as):
     token = await _admin_token(make_user, login_as)
     resp = await client.patch(
         "/api/account/admin-nav-open",
-        json={"open": ["system", "access", "access"]},
+        json={"open": ["system", "people", "people"]},
         headers={"Authorization": f"Bearer {token}"},
     )
     assert resp.status_code == 200, resp.text
-    # Canonical order (access before system), de-duped.
-    assert resp.json()["admin_nav_open_categories"] == ["access", "system"]
+    # Canonical order (people before system), de-duped.
+    assert resp.json()["admin_nav_open_categories"] == ["people", "system"]
 
 
 @pytest.mark.asyncio
@@ -85,7 +85,7 @@ async def test_rejects_invalid_category_key(make_user, client, login_as):
     token = await _admin_token(make_user, login_as)
     resp = await client.patch(
         "/api/account/admin-nav-open",
-        json={"open": ["access", "bogus"]},
+        json={"open": ["people", "bogus"]},
         headers={"Authorization": f"Bearer {token}"},
     )
     assert resp.status_code == 400
@@ -124,7 +124,7 @@ async def test_mode_change_resets_open_set(make_user, db, client, login_as):
 
     await client.patch(
         "/api/account/admin-nav-open",
-        json={"open": ["access", "system"]},
+        json={"open": ["people", "system"]},
         headers={"Authorization": f"Bearer {token}"},
     )
     resp = await client.patch(
@@ -158,7 +158,7 @@ async def test_requires_admin(make_user, client, login_as):
     token, _ = await login_as("client@test.local", _PW)
     for path, body in (
         ("/api/account/admin-nav-mode", {"mode": "manual"}),
-        ("/api/account/admin-nav-open", {"open": ["access"]}),
+        ("/api/account/admin-nav-open", {"open": ["people"]}),
     ):
         resp = await client.patch(
             path, json=body, headers={"Authorization": f"Bearer {token}"}

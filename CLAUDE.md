@@ -30,16 +30,15 @@ Backend **`v2.17.1`** is the newest tag (2026-09-20). Desktop client
 **`client-v1.4.5`** ships beside it on its own tag and is UNCHANGED by v2.16.x
 and v2.17.x. **`v2.17.0` exists as a tag with NO images**: its release run stopped
 at the dependency audit (three anyio CVEs), and release tags are immutable, so the
-same commits shipped as v2.17.1 plus the anyio bump. **The reference host runs v2.16.0**, applied 2026-09-13 17:42 via
-the in-app updater about four minutes after that release published - so
-v2.16.0's two default moves ARE live there (cron failures now email admins, and
-new unsubscribe tokens last 30 days), while v2.16.1 and v2.17.1 are released and
-not yet applied. Neither moves a default: v2.16.1 is fixes, v2.17.1 is the admin
-navigation restructure (§Admin). Only backend/worker/frontend/updater-shim were
+same commits shipped as v2.17.1 plus the anyio bump. **The reference host runs v2.16.1** (backend container started after 2026-09-13 UTC,
+via the in-app updater) - so v2.16.0's two default moves ARE live there (cron
+failures now email admins, and new unsubscribe tokens last 30 days). v2.17.1 is
+released and not yet applied; it moves no default (admin navigation restructure,
+§Admin). Only backend/worker/frontend/updater-shim were
 swapped (db, redis, tusd and clamav kept their uptime), which is the updater
 behaving exactly as documented below.
 `data/updater/rollback_target.json` holds the version BEFORE last; do not read it
-as the running one. Images and working tree agree at v2.16.0 right now, but they
+as the running one. Images and working tree agree at v2.16.1 right now, but they
 can diverge without any deploy - see the note under §Ops about which half of a
 fix is live.
 

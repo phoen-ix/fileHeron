@@ -26,13 +26,15 @@ under the subsystem it governs, never under the release that found it.
 
 ## Current state
 
-Backend **`v2.17.0`** is the newest tag (2026-09-20). Desktop client
+Backend **`v2.17.1`** is the newest tag (2026-09-20). Desktop client
 **`client-v1.4.5`** ships beside it on its own tag and is UNCHANGED by v2.16.x
-and v2.17.0. **The reference host runs v2.16.0**, applied 2026-09-13 17:42 via
+and v2.17.x. **`v2.17.0` exists as a tag with NO images**: its release run stopped
+at the dependency audit (three anyio CVEs), and release tags are immutable, so the
+same commits shipped as v2.17.1 plus the anyio bump. **The reference host runs v2.16.0**, applied 2026-09-13 17:42 via
 the in-app updater about four minutes after that release published - so
 v2.16.0's two default moves ARE live there (cron failures now email admins, and
-new unsubscribe tokens last 30 days), while v2.16.1 and v2.17.0 are released and
-not yet applied. Neither moves a default: v2.16.1 is fixes, v2.17.0 is the admin
+new unsubscribe tokens last 30 days), while v2.16.1 and v2.17.1 are released and
+not yet applied. Neither moves a default: v2.16.1 is fixes, v2.17.1 is the admin
 navigation restructure (§Admin). Only backend/worker/frontend/updater-shim were
 swapped (db, redis, tusd and clamav kept their uptime), which is the updater
 behaving exactly as documented below.
@@ -81,7 +83,7 @@ record.
 | v2.12.0 | `202608150001` `files.last_progress_at` | **`docker compose up -d tusd`** - its command changed (`post-receive` enabled, `-progress-hooks-interval=30s`) | - |
 | v2.12.1 | - | **re-copy `scripts/ops/*`** - `OnFailure=` moved from `[Service]` (where systemd ignores it) to `[Unit]`; the host units are COPIES, so the fix reaches nothing until re-copied | - |
 | v2.16.1 | - | - | - (the `--no-deps` fix rides `updater-executor:<target_tag>`, which the shim pulls per run, so it applies to the update that INSTALLS it, not the one after) |
-| v2.17.0 | - | - | - (admin nav restructure, no URL changed; `PATCH /api/account/admin-nav-open` now accepts only the six new category keys, and the SPA is its only caller) |
+| v2.17.1 | - | - | - (admin nav restructure, no URL changed; `PATCH /api/account/admin-nav-open` now accepts only the six new category keys, and the SPA is its only caller; anyio 4.14.1 → 4.14.2. v2.17.0 is a tag without images - its run failed `dependency-audit` before building anything) |
 | v2.16.0 | - | - | **TWO default moves.** `error_alert.source_worker` **ON**: failed scheduled tasks now email admins, where alerting was previously per-task and opt-in - an instance that wants silence must turn it off (the per-task `cron.<name>.alert_on_failure` still overrides either way). And `unsubscribe_token.DEFAULT_TTL_SEC` 180d → **30d**; tokens already minted keep their baked `exp` |
 
 **Six endpoints require the caller's own `password` in the body** (v2.9.0

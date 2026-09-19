@@ -1,4 +1,8 @@
-# file:Heron v2.17.0
+# file:Heron v2.17.1
+
+*v2.17.0 was tagged but never published: its release run stopped at the dependency
+audit on three fresh CVEs in `anyio` 4.14.1, so no v2.17.0 images exist. This release
+is that work plus `anyio` 4.14.2.*
 
 **The admin area has a new map. Six task-based sections replace the four that had
 grown one entry per release, every page has a clickable breadcrumb and one name,
@@ -8,7 +12,8 @@ tune. Not one URL changed.**
 
 No migration, no host step, no defaults move. Every bookmark, email link and
 notification link keeps working; what moved is where things appear, not where they
-are.
+are. The only dependency change is `anyio` 4.14.1 → 4.14.2 (CVE-2026-63374,
+CVE-2026-64847, CVE-2026-63349).
 
 ---
 

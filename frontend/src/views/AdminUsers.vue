@@ -13,6 +13,7 @@ import {
   resendInvite,
   revokeInvite,
 } from '@/api/admin'
+import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
 import Pager from '@/components/Pager.vue'
 import PasswordStrength from '@/components/PasswordStrength.vue'
 import { useApiError } from '@/composables/useApiError'
@@ -251,19 +252,18 @@ onMounted(() => {
 
 <template>
   <div class="fh-page" data-density="operator">
-    <div class="header-row">
-      <div>
-        <h1 class="fh-eyebrow">{{ t('admin_users.eyebrow') }}</h1>
-      </div>
-      <button
-        v-if="!showInviteForm"
-        type="button"
-        class="fh-btn"
-        @click="openInviteForm"
-      >
-        {{ t('admin_users.invite_button') }} <span aria-hidden="true">→</span>
-      </button>
-    </div>
+    <AdminPageHeader>
+      <template #actions>
+        <button
+          v-if="!showInviteForm"
+          type="button"
+          class="fh-btn"
+          @click="openInviteForm"
+        >
+          {{ t('admin_users.invite_button') }} <span aria-hidden="true">→</span>
+        </button>
+      </template>
+    </AdminPageHeader>
 
     <hr class="fh-rule" />
 
@@ -645,13 +645,6 @@ v-if="activateError" class="fh-notice" role="alert"
 </template>
 
 <style scoped>
-.header-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
-  gap: var(--fh-space-4);
-}
-
 .filters {
   display: flex;
   gap: var(--fh-space-3);

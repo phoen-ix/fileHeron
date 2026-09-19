@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
 import { createGroup, listGroups } from '@/api/groups'
+import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
 import { useApiError } from '@/composables/useApiError'
 import { useSiteDateFormat } from '@/composables/useSiteDateFormat'
 import { useUiStore } from '@/stores/ui'
@@ -81,14 +82,13 @@ onMounted(load)
 
 <template>
   <div class="fh-page" data-density="operator">
-    <div class="header-row">
-      <div>
-        <h1 class="fh-eyebrow">{{ t('admin_groups.eyebrow') }}</h1>
-      </div>
-      <button v-if="!showForm" type="button" class="fh-btn" @click="showForm = true">
-        {{ t('admin_groups.new_group') }} <span aria-hidden="true">→</span>
-      </button>
-    </div>
+    <AdminPageHeader>
+      <template #actions>
+        <button v-if="!showForm" type="button" class="fh-btn" @click="showForm = true">
+          {{ t('admin_groups.new_group') }} <span aria-hidden="true">→</span>
+        </button>
+      </template>
+    </AdminPageHeader>
 
     <hr class="fh-rule" />
 
@@ -180,13 +180,6 @@ v-else-if="errorMsg" class="fh-notice" role="alert"
 </template>
 
 <style scoped>
-.header-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
-  gap: var(--fh-space-4);
-}
-
 .create-form {
   background: var(--fh-paper-raised);
   border: var(--fh-border);

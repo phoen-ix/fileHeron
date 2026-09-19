@@ -3,6 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { exportAnalyticsCsv, getAnalytics } from '@/api/admin'
+import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
 import { useApiError } from '@/composables/useApiError'
 import { linePoints, scaleBars } from '@/composables/useAnalyticsCharts'
 import { useUiStore } from '@/stores/ui'
@@ -86,34 +87,32 @@ async function onExport() {
 
 <template>
   <div class="fh-page" data-density="operator">
-    <div class="header-row">
-      <div>
-        <span class="fh-eyebrow">{{ t('admin_analytics.eyebrow') }}</span>
-        <h1 class="fh-h1">{{ t('admin_analytics.title') }}</h1>
-      </div>
-      <div class="header-actions">
-        <div class="range-toggle" role="group" :aria-label="t('admin_analytics.range_label')">
+    <AdminPageHeader>
+      <template #actions>
+        <div class="header-actions">
+          <div class="range-toggle" role="group" :aria-label="t('admin_analytics.range_label')">
+            <button
+              v-for="r in RANGES"
+              :key="r"
+              type="button"
+              class="range-btn"
+              :class="{ active: days === r }"
+              @click="days = r"
+            >
+              {{ t('admin_analytics.range_days', { n: r }) }}
+            </button>
+          </div>
           <button
-            v-for="r in RANGES"
-            :key="r"
             type="button"
-            class="range-btn"
-            :class="{ active: days === r }"
-            @click="days = r"
+            class="fh-btn fh-btn-ghost"
+            :disabled="downloading || !data"
+            @click="onExport"
           >
-            {{ t('admin_analytics.range_days', { n: r }) }}
+            {{ t('admin_analytics.export_csv') }}
           </button>
         </div>
-        <button
-          type="button"
-          class="fh-btn fh-btn-ghost"
-          :disabled="downloading || !data"
-          @click="onExport"
-        >
-          {{ t('admin_analytics.export_csv') }}
-        </button>
-      </div>
-    </div>
+      </template>
+    </AdminPageHeader>
 
     <hr class="fh-rule" />
 
@@ -241,13 +240,6 @@ v-else-if="errorMsg" class="fh-notice" role="alert"
 </template>
 
 <style scoped>
-.header-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
-  gap: var(--fh-space-3);
-  flex-wrap: wrap;
-}
 .header-actions {
   display: flex;
   align-items: center;

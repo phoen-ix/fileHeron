@@ -3,6 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { exportErrorCsv, listErrorLog } from '@/api/admin'
+import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
 import Pager from '@/components/Pager.vue'
 import { useApiError } from '@/composables/useApiError'
 import { useDebouncedSearch } from '@/composables/useDebouncedSearch'
@@ -119,15 +120,14 @@ onMounted(load)
 
 <template>
   <div class="fh-page" data-density="operator">
-    <div class="header-row">
-      <div>
-        <h1 class="fh-eyebrow">{{ t('admin_error_log.eyebrow') }}</h1>
-        <p class="fh-field-help intro">{{ t('admin_error_log.intro') }}</p>
-      </div>
-      <button type="button" class="fh-btn fh-btn-ghost" :disabled="exporting" @click="onExportCsv">
-        {{ t('admin_error_log.export_csv') }}
-      </button>
-    </div>
+    <AdminPageHeader>
+      <p class="fh-field-help intro">{{ t('admin_error_log.intro') }}</p>
+      <template #actions>
+        <button type="button" class="fh-btn fh-btn-ghost" :disabled="exporting" @click="onExportCsv">
+          {{ t('admin_error_log.export_csv') }}
+        </button>
+      </template>
+    </AdminPageHeader>
 
     <hr class="fh-rule" />
 
@@ -230,13 +230,6 @@ v-else-if="errorMsg" class="fh-notice" role="alert"
 </template>
 
 <style scoped>
-.header-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: var(--fh-space-4);
-}
-
 .intro {
   margin: var(--fh-space-2) 0 0;
   max-width: 60ch;

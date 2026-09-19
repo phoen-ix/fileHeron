@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 import { getPublicLinkPolicy, updatePublicLinkPolicy } from '@/api/admin'
 import { listGroups } from '@/api/groups'
 import { searchUsers } from '@/api/users'
+import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
 import { useApiError } from '@/composables/useApiError'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
@@ -158,9 +159,7 @@ onMounted(load)
 
 <template>
   <div class="policy-page" data-density="operator">
-    <h1 class="fh-eyebrow">
-      {{ t('admin_settings.eyebrow') }} / {{ t('admin_public_link_policy.title') }}
-    </h1>
+    <AdminPageHeader />
 
     <p class="fh-field-help intro">{{ t('admin_public_link_policy.intro') }}</p>
 

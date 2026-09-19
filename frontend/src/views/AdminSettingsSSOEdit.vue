@@ -16,6 +16,7 @@ import {
   type PresetMeta,
   type TestConnectionResponse,
 } from '@/api/settings'
+import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
 import { useApiError } from '@/composables/useApiError'
 import { useUiStore } from '@/stores/ui'
 
@@ -233,9 +234,10 @@ onMounted(init)
 
 <template>
   <div class="sso-edit" data-density="operator">
-    <h1 class="fh-eyebrow">
-      {{ t('admin_settings.eyebrow') }} / {{ t('admin_sso_list.title') }} / {{ isEdit ? t('admin_sso_edit.heading_edit') : t('admin_sso_edit.heading_new') }}
-    </h1>
+    <AdminPageHeader
+      :title="isEdit ? t('admin_sso_edit.heading_edit') : t('admin_sso_edit.heading_new')"
+      :back-to="{ name: 'admin-settings-sso' }"
+    />
 
     <div v-if="loading" class="loading">{{ t('common.loading') }}</div>
 

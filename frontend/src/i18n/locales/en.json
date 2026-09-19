@@ -383,19 +383,36 @@
     "nav": {
       "users": "Users",
       "groups": "Groups",
-      "analytics": "Analytics",
-      "audit": "Audit log",
-      "error_log": "Error log",
+      "sessions": "Sessions",
+      "twofa": "2FA enforcement",
+      "api_tokens": "API tokens",
+      "api_token_policy": "API token policy",
+      "sso": "SSO providers",
+      "file_history": "File history",
+      "quarantine": "Quarantine",
+      "quarantine_alerts": "Quarantine alerts",
+      "public_links": "Public links",
+      "share_approval": "Share approval",
       "inbox": "Inbox",
       "mail_log": "Mail log",
-      "file_history": "File history",
-      "sessions": "Sessions",
-      "quarantine": "Quarantine",
-      "api_tokens": "API tokens",
-      "system": "System",
+      "email": "Outgoing mail (SMTP)",
+      "email_templates": "Email templates",
+      "imap": "Inbound mail (IMAP)",
+      "email_change": "Email change",
+      "analytics": "Analytics",
+      "audit": "Audit log",
+      "system": "Status & updates",
       "scheduled_tasks": "Scheduled tasks",
-      "save_failed": "Couldn't save sidebar state.",
-      "ip_blocks": "Blocked sources"
+      "error_alerts": "Error alerts",
+      "error_log": "Error log",
+      "scan_guard": "Scan guard",
+      "ip_blocks": "Blocked sources",
+      "webhooks": "Webhooks",
+      "general": "General",
+      "branding": "Branding & legal",
+      "advanced": "Advanced",
+      "maintenance": "Maintenance mode",
+      "backup": "Backup & restore"
     },
     "nav_cat": {
       "access": "Access",
@@ -403,29 +420,11 @@
       "messaging": "Messaging",
       "system": "System"
     },
-    "nav_item": {
-      "general": "General",
-      "branding": "Branding & legal",
-      "sso": "SSO / OIDC",
-      "twofa": "2FA enforcement",
-      "api_token_policy": "Token policy",
-      "public_links": "Public links",
-      "share_approval": "Share approval",
-      "email": "Email / SMTP",
-      "email_templates": "Email templates",
-      "imap": "Inbound mail (IMAP)",
-      "quarantine_alerts": "Quarantine alerts",
-      "error_alerts": "Error alerts",
-      "email_change": "Email change",
-      "webhooks": "Webhooks",
-      "advanced": "Advanced",
-      "maintenance": "Maintenance mode",
-      "backup": "Backup & restore",
-      "scan_guard": "Scan guard"
-    }
+    "nav_save_failed": "Couldn't save sidebar state.",
+    "breadcrumb_label": "Breadcrumb",
+    "back_to": "Back to {page}"
   },
   "admin_maintenance": {
-    "title": "Maintenance mode",
     "intro": "When on, new uploads and downloads are paused (existing ones finish); the rest of the app stays usable. The 'postpone update' flow turns this on automatically.",
     "toggle_label": "Enable maintenance mode",
     "toggle_help": "Blocks new file transfers with a 503 while letting in-progress ones complete.",
@@ -442,7 +441,6 @@
     "admin_password_help": "Re-entered because this file can contain password hashes, two-factor seeds and server secrets.",
     "admin_password_label": "Confirm your password",
     "admin_password_ph": "Your account password",
-    "title": "Backup & restore",
     "intro": "Export this instance's configuration to rebuild it after a crash, or import a backup to restore it. Shared files are not included - importing a backup invalidates every active share.",
     "export_title": "Export configuration",
     "export_help": "Choose what to include and how to handle secrets, then download a single backup file.",
@@ -506,7 +504,6 @@
     "sum_webhook_urls": "Installs webhooks pointing at"
   },
   "admin_scheduled_tasks": {
-    "title": "Scheduled tasks",
     "intro": "Set how often each background job runs, pin a daily time, or disable it. Daily times use the site timezone ({tz}).",
     "group": {
       "shares": "Shares & files",
@@ -528,7 +525,6 @@
     "alert_on_failure": "Email admins on failure"
   },
   "admin_system": {
-    "eyebrow": "Admin / System",
     "sub": "Live status, recent cron runs, and operational alerts.",
     "refresh": "Refresh",
     "refreshed_at": "Refreshed {when}",
@@ -614,11 +610,7 @@
       "error": "Error"
     }
   },
-  "admin_settings": {
-    "eyebrow": "Admin / Settings"
-  },
   "admin_settings_email_change": {
-    "title": "Email change",
     "intro": "Email is the sign-in identifier. Choose how a change is verified, whether users can change their own address, and what happens to a single sign-on (SSO) link when the address changes.",
     "mode_label": "Verification",
     "mode": {
@@ -647,7 +639,6 @@
     "saved_toast": "Email-change policy saved."
   },
   "admin_advanced": {
-    "eyebrow": "Settings",
     "intro": "Runtime-tunable knobs. Each shows its built-in default as the placeholder; leave a field at the default (or hit Reset) to fall back to it. Changes apply live - no redeploy. Secrets and infrastructure stay in environment variables.",
     "saved_toast": "Advanced settings saved.",
     "reset": "Reset",
@@ -795,14 +786,12 @@
     "reset_aria": "Reset {name} to its default ({default})"
   },
   "admin_general": {
-    "title": "General",
     "intro": "Small toggles and miscellaneous app settings. New minor settings land here as they're introduced.",
     "quicknav": {
       "aria": "Section navigation"
     }
   },
   "admin_twofa_policy": {
-    "title": "Two-factor enforcement",
     "intro": "Choose the roles and groups whose members must enable a TOTP authenticator. Affected users without 2FA are blocked from every page other than the setup wizard until they enrol.",
     "kv_inheritance_note": "No saved policy yet - currently inheriting from the REQUIRE_2FA environment variable. Saving here takes over.",
     "roles_heading": "Required roles",
@@ -887,7 +876,6 @@
     "saved_toast": "Update settings saved."
   },
   "admin_email": {
-    "title": "Email / SMTP",
     "intro": "Outgoing notifications, invites, password resets and shares all flow through this SMTP server. Saving here takes effect immediately - no restart. The password is encrypted at rest.",
     "status_configured": "SMTP configured",
     "status_logs_fallback": "Logs fallback (no host set)",
@@ -930,7 +918,6 @@
     "step_up_label": "Your password"
   },
   "admin_imap": {
-    "title": "Inbound mail (IMAP)",
     "intro": "Fetch messages from the configured mailbox so replies, bounces and auto-replies show up in the in-app Inbox. Off by default.",
     "enable_label": "Enable inbound mail fetching",
     "enable_help": "When off, nothing is fetched and the Inbox stays empty.",
@@ -985,8 +972,6 @@
     "step_up_label": "Your password"
   },
   "admin_inbox": {
-    "eyebrow": "Messaging",
-    "title": "Inbox",
     "intro": "Messages fetched from the configured mailbox - replies, bounces and auto-replies.",
     "fetch_now": "Fetch now",
     "fetch_done": "Fetched {n} new message(s)",
@@ -1009,7 +994,6 @@
     "col_received": "Received",
     "has_attachments": "Has attachments",
     "empty": "No messages.",
-    "back": "Back to inbox",
     "from": "From",
     "to": "To",
     "received": "Received",
@@ -1028,7 +1012,6 @@
     "open_message": "Open message: {subject}"
   },
   "admin_email_templates": {
-    "title": "Email templates",
     "intro": "Customise the wording of any email file:Heron sends, per language. Built-in defaults are used until you save a custom version; use placeholders like [RECIPIENT] for dynamic values.",
     "list_heading": "Templates",
     "group": {
@@ -1112,12 +1095,10 @@
       "outbound_to_clients": "Outbound to clients only"
     },
     "scope_label": "Which shares need approval",
-    "title": "Share approval",
     "users_label": "Users",
     "users_placeholder": "Search users by name or email…"
   },
   "admin_public_link_policy": {
-    "title": "Public link policy",
     "intro": "Public links let recipients without a fileHeron account download a share via a token URL. Pick who's allowed to create them. Admins can always create links regardless of mode.",
     "mode_label": "Base policy",
     "mode": {
@@ -1137,7 +1118,6 @@
     "saved_toast": "Public link policy saved."
   },
   "admin_api_tokens": {
-    "eyebrow": "Admin / API tokens",
     "create_cta": "Generate token for user",
     "create_heading": "Generate a token on behalf of a user",
     "create_help": "The plaintext appears once on this page. Copy it and forward to the user via a secure channel (password manager / encrypted DM).",
@@ -1182,7 +1162,6 @@
     "plaintext_owner": "This token belongs to {name}."
   },
   "admin_token_policy": {
-    "title": "API token policy",
     "intro": "API tokens grant programmatic access - pick who's allowed to create them. Admins can always create tokens regardless of the mode (operator escape hatch).",
     "mode_label": "Base policy",
     "mode": {
@@ -1202,7 +1181,6 @@
     "saved_toast": "API token policy saved."
   },
   "admin_sso_list": {
-    "title": "SSO",
     "intro": "Run multiple OIDC identity providers concurrently. Users can connect their fileHeron account to one of them; new users sign in once with their password and click Connect.",
     "add_button": "Add provider",
     "empty_title": "No providers configured yet.",
@@ -1353,7 +1331,6 @@
     }
   },
   "admin_branding": {
-    "title": "Branding & legal",
     "intro": "Upload a logo, choose where it appears, and maintain your imprint and privacy pages.",
     "logo": {
       "title": "Logo",
@@ -1417,7 +1394,6 @@
     }
   },
   "admin_users": {
-    "eyebrow": "Admin / Users",
     "search_placeholder": "Search by name or email…",
     "role_all": "All roles",
     "col": {
@@ -1514,7 +1490,6 @@
   "admin_user_detail": {
     "erase_password_label": "Confirm your password",
     "erase_password_placeholder": "Your account password",
-    "eyebrow": "Admin / Users",
     "profile": "Profile",
     "role": "Role",
     "quota": "Quota (bytes)",
@@ -1570,7 +1545,6 @@
     "change_email_old_link_help": "In verify-both mode BOTH links must be opened. The change does not apply until the old address is confirmed too."
   },
   "admin_mail": {
-    "eyebrow": "Admin / Mail log",
     "intro": "Every email file:Heron sends is recorded here with its delivery outcome. One-time auth links (password reset, invite, verify) are redacted at rest.",
     "export_csv": "Export CSV",
     "empty": "No emails match these filters.",
@@ -1598,7 +1572,6 @@
       "error": "Error"
     },
     "detail": {
-      "back": "Back to Mail log",
       "resend": "Resend",
       "resend_disabled": "This email can't be resent - its one-time auth link was redacted at rest (or it was a test/dev entry).",
       "resend_ok": "Email re-queued for delivery.",
@@ -1615,8 +1588,6 @@
     }
   },
   "admin_webhooks": {
-    "eyebrow": "Admin / Webhooks",
-    "title": "Webhooks",
     "intro": "Send a signed HTTP POST to an external URL when chosen events happen (a share is created, a file is downloaded, a quarantine, an ops alert). Point one at a Slack/Teams incoming-webhook URL, an automation tool, or your own collector.",
     "add": "Add a webhook",
     "name": "Name",
@@ -1663,8 +1634,6 @@
     }
   },
   "admin_analytics": {
-    "eyebrow": "Admin / Analytics",
-    "title": "Analytics",
     "range_label": "Time range",
     "range_days": "{n} days",
     "export_csv": "Export CSV",
@@ -1688,7 +1657,6 @@
     "no_data": "No data"
   },
   "admin_audit": {
-    "eyebrow": "Admin / Audit log",
     "export_csv": "Export CSV",
     "filter": {
       "event_type": "event_type (e.g. login_success)",
@@ -2157,7 +2125,6 @@
     }
   },
   "admin_groups": {
-    "eyebrow": "Admin / Groups",
     "new_group": "New group",
     "create_heading": "Create group",
     "name_label": "Name",
@@ -2178,7 +2145,6 @@
     "empty_subtitle": "Create one to organize recipients."
   },
   "admin_group_detail": {
-    "eyebrow": "Admin / Groups",
     "members_heading": "Members ({n})",
     "edit": "Edit",
     "saved_toast": "Saved.",
@@ -2275,7 +2241,6 @@
     }
   },
   "admin_sessions": {
-    "eyebrow": "Admin / Sessions",
     "intro": "Every signed-in session across all users. A session rotates on use, so “Last active” reflects the most recent activity - sort by it ascending to spot stale or forgotten devices.",
     "total_count": "{n} sessions",
     "search_placeholder": "Search user name, email or IP…",
@@ -2302,7 +2267,6 @@
     }
   },
   "admin_file_history": {
-    "eyebrow": "Admin / File history",
     "intro": "Every file ever uploaded - including expired and deleted - joined with parent share metadata, uploader, and download stats.",
     "total_count": "{n} files",
     "search_placeholder": "Search filename, uploader name or email…",
@@ -2333,7 +2297,6 @@
     }
   },
   "admin_quarantine": {
-    "eyebrow": "Admin / Quarantine",
     "intro": "Files ClamAV flagged as infected. The bytes are kept on disk under ./data/quarantine/ so you can download them for forensic review, release them back to the owner if you're confident the verdict was a false positive, or purge them once you're done.",
     "total_count": "{n} infected files",
     "empty": "Nothing in quarantine. Either nothing has been flagged or everything was already released or purged.",
@@ -2368,14 +2331,12 @@
     }
   },
   "admin_settings_quarantine": {
-    "title": "Quarantine alerts",
     "intro": "When ClamAV detects an infected upload, the uploader is always notified. This toggle additionally fans out a notification (email + in-app bell) to every admin.",
     "toggle_label": "Notify all admins when a virus is detected",
     "toggle_help": "Each admin gets an email + an in-app bell ring per detection. An admin can mute themselves from /account → Notifications by switching the \"file_quarantined\" channel to \"off\" (default is \"both\" - email + in-app).",
     "saved_toast": "Quarantine alert setting saved."
   },
   "admin_error_alerts": {
-    "title": "Errors & alerts",
     "intro": "Keep a browsable log of server errors and, optionally, email admins about them. Logging and emailing are independent: the log records every captured error, while emails are deduplicated and capped so a looping error can't flood your inbox. Emails carry context only - no stack trace.",
     "log_section": "Error log",
     "log_enabled_label": "Record errors to the log",
@@ -2417,7 +2378,6 @@
     "err_retention_range": "Retention must be between 0 and 3650 days."
   },
   "admin_error_log": {
-    "eyebrow": "Admin / Error log",
     "intro": "Every captured server error (HTTP 5xx), opted-in client error (4xx), and failed scheduled task. Filter by code, status, source, or time; click a row for full detail. \"Emailed\" marks rows that also triggered an alert.",
     "export_csv": "Export CSV",
     "empty": "No errors match these filters.",
@@ -2505,25 +2465,25 @@
     "admin_sessions": "Sessions",
     "admin_quarantine": "Quarantine",
     "admin_api_tokens": "API tokens",
-    "admin_settings_sso": "SSO",
+    "admin_settings_sso": "SSO providers",
     "admin_settings_sso_new": "New SSO provider",
     "admin_settings_sso_edit": "Edit SSO provider",
     "admin_settings_api_tokens": "API token policy",
-    "admin_settings_public_links": "Public link policy",
+    "admin_settings_public_links": "Public links",
     "admin_settings_share_approval": "Share approval",
-    "admin_settings_email": "Email / SMTP",
+    "admin_settings_email": "Outgoing mail (SMTP)",
     "admin_settings_email_templates": "Email templates",
-    "admin_settings_imap": "Inbound mail",
-    "admin_settings_general": "General settings",
+    "admin_settings_imap": "Inbound mail (IMAP)",
+    "admin_settings_general": "General",
     "admin_settings_branding": "Branding & legal",
     "admin_settings_twofa": "2FA enforcement",
-    "admin_settings_quarantine": "Quarantine",
+    "admin_settings_quarantine": "Quarantine alerts",
     "admin_settings_email_change": "Email change",
     "admin_settings_error_alerts": "Error alerts",
     "admin_settings_advanced": "Advanced",
     "admin_settings_backup": "Backup & restore",
     "admin_settings_maintenance": "Maintenance mode",
-    "admin_system": "System",
+    "admin_system": "Status & updates",
     "admin_scheduled_tasks": "Scheduled tasks",
     "public_share": "Shared files",
     "manage_notifications": "Manage subscriptions",
@@ -2540,7 +2500,6 @@
     "home_cta": "Home"
   },
   "admin_scan_guard": {
-    "title": "Scan guard",
     "intro": "Automatically block sources that probe for secrets, config files and CMS paths. Ships disabled - nothing is ever blocked until you turn it on.",
     "master_section": "Protection",
     "enabled_label": "Enable the scan guard",
@@ -2602,7 +2561,6 @@
     "use_totp": "Use an authenticator code"
   },
   "admin_ip_blocks": {
-    "title": "Blocked sources",
     "intro": "Every address and range the scan guard is currently refusing, plus the sources it is watching. Blocks are always temporary — none is permanent, and released rows stay here as history until they age out.",
     "block_section": "Block a source",
     "block_help": "Blocks a single address or a whole CIDR range for a bounded time. Only globally routable addresses are accepted.",

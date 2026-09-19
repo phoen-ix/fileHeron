@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 
 import { adminDeleteFile, adminListFiles, adminReclaimFile } from '@/api/admin'
+import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
 import Pager from '@/components/Pager.vue'
 import { useApiError } from '@/composables/useApiError'
 import { useDebouncedSearch } from '@/composables/useDebouncedSearch'
@@ -110,12 +111,11 @@ onMounted(load)
 
 <template>
   <div class="fh-page" data-density="operator">
-    <div class="header-row">
-      <div>
-        <h1 class="fh-eyebrow">{{ t('admin_file_history.eyebrow') }}</h1>
-      </div>
-      <span class="fh-mono total-count">{{ t('admin_file_history.total_count', { n: total }) }}</span>
-    </div>
+    <AdminPageHeader>
+      <template #actions>
+        <span class="fh-mono total-count">{{ t('admin_file_history.total_count', { n: total }) }}</span>
+      </template>
+    </AdminPageHeader>
 
     <hr class="fh-rule" />
 
@@ -318,13 +318,6 @@ v-else-if="errorMsg" class="fh-notice" role="alert"
 </template>
 
 <style scoped>
-.header-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
-  gap: var(--fh-space-4);
-}
-
 .total-count {
   font-size: var(--fh-text-mono-sm);
   color: var(--fh-subtle);

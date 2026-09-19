@@ -7,6 +7,7 @@ import {
   updateAdvancedSettings,
   type AdvancedSettingItem,
 } from '@/api/admin'
+import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
 import { useApiError } from '@/composables/useApiError'
 import { useUiStore } from '@/stores/ui'
 
@@ -111,7 +112,7 @@ onMounted(load)
 
 <template>
   <div class="advanced-settings">
-    <h1 class="fh-eyebrow">{{ t('admin_advanced.eyebrow') }}</h1>
+    <AdminPageHeader />
     <p class="fh-field-help intro">{{ t('admin_advanced.intro') }}</p>
 
     <div v-if="loading" class="loading">{{ t('common.loading') }}</div>

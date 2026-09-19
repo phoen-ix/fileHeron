@@ -27,6 +27,7 @@ import {
   type IpBlockStatus,
   type WatchRow,
 } from '@/api/admin'
+import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
 import Pager from '@/components/Pager.vue'
 import { useApiError } from '@/composables/useApiError'
 import { useDebouncedSearch } from '@/composables/useDebouncedSearch'
@@ -358,7 +359,7 @@ onMounted(() => {
 
 <template>
   <div class="fh-page" data-density="operator">
-    <h1 class="fh-eyebrow">{{ t('admin_ip_blocks.title') }}</h1>
+    <AdminPageHeader />
     <p class="fh-field-help intro">{{ t('admin_ip_blocks.intro') }}</p>
     <hr class="fh-rule" />
 

@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
 import FilePreviewSection from '@/components/admin/FilePreviewSection.vue'
 import HomePageSection from '@/components/admin/HomePageSection.vue'
 import MotdSection from '@/components/admin/MotdSection.vue'
@@ -47,9 +48,7 @@ function jumpTo(id: string) {
 <template>
   <div class="general-layout" data-density="operator">
     <div class="general-prose">
-      <h1 class="fh-eyebrow">
-        {{ t('admin_settings.eyebrow') }} / {{ t('admin_general.title') }}
-      </h1>
+      <AdminPageHeader />
 
       <p class="fh-field-help intro">{{ t('admin_general.intro') }}</p>
 

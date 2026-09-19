@@ -18,6 +18,7 @@ import {
   listMailLog,
   updateUser,
 } from '@/api/admin'
+import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
 import { useApiError } from '@/composables/useApiError'
 import { downloadBlob } from '@/utils/downloadBlob'
 import { useSiteDateFormat } from '@/composables/useSiteDateFormat'
@@ -362,8 +363,11 @@ v-else-if="loadError" class="fh-notice" role="alert"
     </div>
 
     <template v-else-if="user">
-      <span class="fh-eyebrow">{{ t('admin_user_detail.eyebrow') }}</span>
-      <h1 class="fh-display-md">{{ user.display_name }}</h1>
+      <AdminPageHeader :back-to="{ name: 'admin-users' }">
+        <template #title>
+          <h1 class="fh-display-md">{{ user.display_name }}</h1>
+        </template>
+      </AdminPageHeader>
       <p class="meta-line">
         <span class="fh-mono">{{ user.email }}</span>
         <span class="fh-mono role">{{ user.role }}</span>

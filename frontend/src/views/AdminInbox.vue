@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 
 import { fetchInboxNow, listInbox } from '@/api/admin'
+import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
 import Pager from '@/components/Pager.vue'
 import { useApiError } from '@/composables/useApiError'
 import { useSiteDateFormat } from '@/composables/useSiteDateFormat'
@@ -106,15 +107,13 @@ onMounted(load)
 
 <template>
   <div class="inbox-page" data-density="operator">
-    <div class="page-head">
-      <div>
-        <span class="fh-eyebrow">{{ t('admin_inbox.eyebrow') }}</span>
-        <h1 class="page-title">{{ t('admin_inbox.title') }}</h1>
-      </div>
-      <button type="button" class="fh-btn" :disabled="fetching" @click="onFetchNow">
-        {{ t('admin_inbox.fetch_now') }}
-      </button>
-    </div>
+    <AdminPageHeader>
+      <template #actions>
+        <button type="button" class="fh-btn" :disabled="fetching" @click="onFetchNow">
+          {{ t('admin_inbox.fetch_now') }}
+        </button>
+      </template>
+    </AdminPageHeader>
     <p class="fh-field-help intro">{{ t('admin_inbox.intro') }}</p>
 
     <div class="filters">
@@ -197,18 +196,6 @@ v-if="errorMsg" class="fh-notice" role="alert"
 </template>
 
 <style scoped>
-.page-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--fh-space-3);
-}
-.page-title {
-  font-family: var(--fh-font-display);
-  font-weight: normal;
-  font-size: var(--fh-text-display-md);
-  margin: var(--fh-space-1) 0;
-}
 .intro {
   margin-bottom: var(--fh-space-4);
 }

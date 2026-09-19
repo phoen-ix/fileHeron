@@ -21,6 +21,7 @@ import {
   type UpdaterStatus,
 } from '@/api/admin'
 import { getStreamToken } from '@/api/notifications'
+import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
 import { useApiError } from '@/composables/useApiError'
 import { useSSE } from '@/composables/useSSE'
 import { useUiStore } from '@/stores/ui'
@@ -369,18 +370,19 @@ const headlineFailures = computed(() => {
 
 <template>
   <section class="system-page">
-    <header class="page-header">
-      <h1 class="fh-eyebrow">{{ t('admin_system.eyebrow') }}</h1>
+    <AdminPageHeader>
       <p class="page-sub">{{ t('admin_system.sub') }}</p>
-      <div class="actions">
-        <button class="btn-secondary" :disabled="loading" @click="load">
-          {{ loading ? t('common.loading') : t('admin_system.refresh') }}
-        </button>
-        <span v-if="refreshedAt" class="refreshed">
-          {{ t('admin_system.refreshed_at', { when: fmtTime(refreshedAt.toISOString()) }) }}
-        </span>
-      </div>
-    </header>
+      <template #actions>
+        <div class="actions">
+          <button class="btn-secondary" :disabled="loading" @click="load">
+            {{ loading ? t('common.loading') : t('admin_system.refresh') }}
+          </button>
+          <span v-if="refreshedAt" class="refreshed">
+            {{ t('admin_system.refreshed_at', { when: fmtTime(refreshedAt.toISOString()) }) }}
+          </span>
+        </div>
+      </template>
+    </AdminPageHeader>
 
     <p v-if="errorMsg" class="error">{{ errorMsg }}</p>
 
@@ -715,7 +717,6 @@ const headlineFailures = computed(() => {
   flex-direction: column;
   gap: var(--fh-space-5);
 }
-.page-header h1 { margin: 0 0 var(--fh-space-2); }
 .page-sub { color: var(--fh-subtle); margin: 0 0 var(--fh-space-3); }
 .actions { display: flex; align-items: center; gap: var(--fh-space-3); }
 .refreshed { color: var(--fh-subtle); font-size: var(--fh-text-body-sm); }

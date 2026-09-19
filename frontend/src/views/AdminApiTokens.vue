@@ -10,6 +10,7 @@ import {
   adminRevokeApiToken,
 } from '@/api/admin'
 import { searchUsers } from '@/api/users'
+import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
 import ExpiryPicker from '@/components/ExpiryPicker.vue'
 import Pager from '@/components/Pager.vue'
 import { useApiError } from '@/composables/useApiError'
@@ -230,19 +231,18 @@ onMounted(load)
 
 <template>
   <div class="fh-page" data-density="operator">
-    <div class="header-row">
-      <div>
-        <h1 class="fh-eyebrow">{{ t('admin_api_tokens.eyebrow') }}</h1>
-      </div>
-      <button
-        v-if="!showCreateForm"
-        type="button"
-        class="fh-btn"
-        @click="showCreateForm = true"
-      >
-        {{ t('admin_api_tokens.create_cta') }} <span aria-hidden="true">→</span>
-      </button>
-    </div>
+    <AdminPageHeader>
+      <template #actions>
+        <button
+          v-if="!showCreateForm"
+          type="button"
+          class="fh-btn"
+          @click="showCreateForm = true"
+        >
+          {{ t('admin_api_tokens.create_cta') }} <span aria-hidden="true">→</span>
+        </button>
+      </template>
+    </AdminPageHeader>
 
     <hr class="fh-rule" />
 
@@ -477,13 +477,6 @@ v-else-if="errorMsg" class="fh-notice" role="alert"
 </template>
 
 <style scoped>
-.header-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
-  gap: var(--fh-space-4);
-}
-
 .create-form {
   display: flex;
   flex-direction: column;

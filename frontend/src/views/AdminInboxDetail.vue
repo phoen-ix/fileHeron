@@ -9,6 +9,7 @@ import {
   getInboxMessage,
   updateInboxStatus,
 } from '@/api/admin'
+import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
 import { useApiError } from '@/composables/useApiError'
 import { useSiteDateFormat } from '@/composables/useSiteDateFormat'
 import { useUiStore } from '@/stores/ui'
@@ -85,7 +86,7 @@ onMounted(load)
 
 <template>
   <div class="msg-page" data-density="operator">
-    <RouterLink :to="{ name: 'admin-inbox' }" class="fh-btn-text back">← {{ t('admin_inbox.back') }}</RouterLink>
+    <AdminPageHeader hide-title :back-to="{ name: 'admin-inbox' }" />
 
     <div
 v-if="errorMsg" class="fh-notice" role="alert"
@@ -144,10 +145,6 @@ v-if="errorMsg" class="fh-notice" role="alert"
 </template>
 
 <style scoped>
-.back {
-  display: inline-block;
-  margin-bottom: var(--fh-space-3);
-}
 .badge {
   font-family: var(--fh-font-mono);
   font-size: var(--fh-text-mono-sm);

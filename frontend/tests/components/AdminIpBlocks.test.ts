@@ -95,7 +95,7 @@ function makeWrapper() {
     fallbackLocale: 'en',
     messages: { en },
   })
-  return mount(AdminIpBlocks, { global: { plugins: [i18n], stubs: { Pager: true } } })
+  return mount(AdminIpBlocks, { global: { plugins: [i18n], stubs: { Pager: true, AdminPageHeader: { template: '<header><slot name="title" /><slot /><slot name="actions" /></header>' } } } })
 }
 
 /** Empty under the current filter, `historyCount` rows once status is lifted. */

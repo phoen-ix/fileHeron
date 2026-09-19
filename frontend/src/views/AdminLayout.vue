@@ -3,7 +3,42 @@
     <aside class="admin-sidebar">
       <span class="sidebar-eyebrow">{{ t('admin.eyebrow') }}</span>
       <nav class="sidebar-nav" :aria-label="t('admin.nav_label')">
-        <div v-for="cat in ADMIN_NAV" :key="cat.key" class="nav-cat">
+        <!-- ≤720px: the whole sidebar used to stack above every page, all four
+             category headers plus whatever was expanded. Now a horizontal strip
+             of category buttons and, beneath it, only the OPEN categories' links
+             (accordion mode keeps that to one). Same collapse state machine. -->
+        <template v-if="narrow">
+          <div class="nav-strip nav-strip-cats">
+            <button
+              v-for="cat in ADMIN_NAV"
+              :key="cat.key"
+              type="button"
+              class="nav-chip"
+              :aria-pressed="isOpen(cat.key)"
+              @click="toggle(cat.key)"
+            >
+              {{ t(cat.labelKey) }}
+            </button>
+          </div>
+          <div v-if="openItems.length" class="nav-strip nav-strip-items">
+            <RouterLink
+              v-for="item in openItems"
+              :key="item.routeName"
+              :to="{ name: item.routeName }"
+              class="nav-chip nav-chip-link"
+              :class="{ 'is-active': isItemActive(item, route.name) }"
+              :aria-current="isItemActive(item, route.name) ? 'page' : undefined"
+            >
+              {{ t(item.labelKey) }}
+              <span
+                v-if="item.routeName === 'admin-inbox' && inboxUnread > 0"
+                class="nav-badge"
+                >{{ inboxUnread }}</span
+              >
+            </RouterLink>
+          </div>
+        </template>
+        <div v-for="cat in ADMIN_NAV" v-else :key="cat.key" class="nav-cat">
           <button
             type="button"
             class="nav-cat-header"
@@ -69,17 +104,37 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 
 import { getInboxUnreadCount } from '@/api/admin'
 import { useAdminNavCollapse } from '@/composables/useAdminNavCollapse'
-import { ADMIN_NAV, isItemActive } from '@/config/adminNav'
+import { ADMIN_NAV, type AdminNavItem, isItemActive } from '@/config/adminNav'
 
 const { t } = useI18n()
 const route = useRoute()
 const { isOpen, toggle } = useAdminNavCollapse()
+
+// Mirrors the CSS breakpoint below and AppHeader's, where the top nav hides.
+const NARROW_QUERY = '(max-width: 720px)'
+const narrow = ref(false)
+let mq: MediaQueryList | null = null
+const onNarrowChange = (e: MediaQueryListEvent | MediaQueryList) => {
+  narrow.value = e.matches
+}
+onMounted(() => {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return
+  mq = window.matchMedia(NARROW_QUERY)
+  onNarrowChange(mq)
+  mq.addEventListener('change', onNarrowChange)
+})
+onBeforeUnmount(() => mq?.removeEventListener('change', onNarrowChange))
+
+/** Links shown under the strip: every open category's items, in nav order. */
+const openItems = computed<AdminNavItem[]>(() =>
+  ADMIN_NAV.filter((cat) => isOpen(cat.key)).flatMap((cat) => cat.items),
+)
 
 // Unread badge on the Inbox nav item (best-effort; silent on failure).
 const inboxUnread = ref(0)
@@ -235,14 +290,66 @@ onMounted(async () => {
   }
 }
 
+.nav-strip {
+  display: flex;
+  gap: var(--fh-space-1);
+  overflow-x: auto;
+  padding-bottom: var(--fh-space-1);
+  scrollbar-width: none;
+}
+
+.nav-strip::-webkit-scrollbar {
+  display: none;
+}
+
+.nav-chip {
+  flex: none;
+  font-family: var(--fh-font-mono);
+  font-size: var(--fh-text-mono-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--fh-subtle);
+  background: none;
+  border: 1px solid var(--fh-hairline-strong);
+  border-radius: var(--fh-radius-sm);
+  padding: 5px 10px;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.nav-chip[aria-pressed='true'] {
+  color: var(--fh-paper);
+  background: var(--fh-ink);
+  border-color: var(--fh-ink);
+}
+
+.nav-chip-link {
+  font-family: var(--fh-font-body);
+  font-size: var(--fh-text-body-sm);
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--fh-ink-soft);
+}
+
+.nav-chip-link.is-active {
+  color: var(--fh-ink);
+  border-color: var(--fh-accent);
+  background: var(--fh-paper-raised);
+}
+
 @media (max-width: 720px) {
   .admin-shell {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
   }
   .admin-sidebar {
+    min-width: 0;
     border-right: none;
     border-bottom: 1px solid var(--fh-hairline);
-    padding: var(--fh-space-3) 0;
+    padding: var(--fh-space-2) 0;
+  }
+  .sidebar-eyebrow {
+    margin-bottom: var(--fh-space-2);
   }
 }
 </style>

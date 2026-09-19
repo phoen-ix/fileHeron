@@ -12,6 +12,7 @@ import {
   testWebhook,
   updateWebhook,
 } from '@/api/admin'
+import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
 import { useApiError } from '@/composables/useApiError'
 import { useUiStore } from '@/stores/ui'
 import type { WebhookDeliveryItem, WebhookItem } from '@/types/api'
@@ -163,8 +164,7 @@ onMounted(load)
 
 <template>
   <div class="fh-page" data-density="operator">
-    <span class="fh-eyebrow">{{ t('admin_webhooks.eyebrow') }}</span>
-    <h1 class="fh-h1">{{ t('admin_webhooks.title') }}</h1>
+    <AdminPageHeader />
     <p class="fh-field-help intro">{{ t('admin_webhooks.intro') }}</p>
 
     <hr class="fh-rule" />

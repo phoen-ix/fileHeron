@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 
 import { getCrons, runCron, updateCronSchedule } from '@/api/admin'
 import { getStreamToken } from '@/api/notifications'
+import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
 import { useApiError } from '@/composables/useApiError'
 import { useSSE } from '@/composables/useSSE'
 import { useSiteDateFormat } from '@/composables/useSiteDateFormat'
@@ -126,7 +127,7 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="cron-page" data-density="operator">
-    <h1 class="fh-eyebrow">{{ t('admin.eyebrow') }} / {{ t('admin_scheduled_tasks.title') }}</h1>
+    <AdminPageHeader />
     <p class="fh-field-help intro">{{ t('admin_scheduled_tasks.intro', { tz: siteTz }) }}</p>
 
     <div

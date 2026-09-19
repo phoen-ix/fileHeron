@@ -107,7 +107,7 @@ export function useAdminNavCollapse() {
       await auth.refreshMe()
     } catch (e) {
       openSet.value = previous
-      ui.pushToast(t('admin.nav.save_failed') + ' ' + describe(e), 'error')
+      ui.pushToast(t('admin.nav_save_failed') + ' ' + describe(e), 'error')
     }
   }
 

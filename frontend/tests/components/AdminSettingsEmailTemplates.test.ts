@@ -90,7 +90,7 @@ function makeWrapper() {
   setActivePinia(createPinia())
   const i18n = createI18n({ legacy: false, locale: 'en', fallbackLocale: 'en', messages: { en } })
   return mount(AdminSettingsEmailTemplates, {
-    global: { plugins: [i18n], stubs: { RichTextEditor: RichTextEditorStub } },
+    global: { plugins: [i18n], stubs: { RichTextEditor: RichTextEditorStub, AdminPageHeader: { template: '<header><slot name="title" /><slot /><slot name="actions" /></header>' } } },
   })
 }
 

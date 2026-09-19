@@ -11,6 +11,7 @@ import {
   testSendEmailTemplate,
   updateEmailTemplate,
 } from '@/api/admin'
+import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
 import { useApiError } from '@/composables/useApiError'
 import { useUiStore } from '@/stores/ui'
 import type {
@@ -234,9 +235,7 @@ onBeforeRouteLeave(async () => {
 
 <template>
   <div class="tpl-page" data-density="operator">
-    <h1 class="fh-eyebrow">
-      {{ t('admin_settings.eyebrow') }} / {{ t('admin_email_templates.title') }}
-    </h1>
+    <AdminPageHeader />
     <p class="fh-field-help intro">{{ t('admin_email_templates.intro') }}</p>
 
     <div v-if="loading" class="loading">{{ t('common.loading') }}</div>

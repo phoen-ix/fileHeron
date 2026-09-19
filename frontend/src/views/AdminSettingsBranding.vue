@@ -12,6 +12,7 @@ import {
   type BrandingSettingsResponse,
   type LegalSettingsResponse,
 } from '@/api/admin'
+import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
 import RichTextEditor from '@/components/RichTextEditor.vue'
 import { useApiError } from '@/composables/useApiError'
 import { SUPPORTED_LOCALES, type SupportedLocale } from '@/i18n'
@@ -155,9 +156,7 @@ onMounted(load)
 
 <template>
   <div class="branding-page" data-density="operator">
-    <h1 class="fh-eyebrow">
-      {{ t('admin_settings.eyebrow') }} / {{ t('admin_branding.title') }}
-    </h1>
+    <AdminPageHeader />
     <p class="fh-field-help intro">{{ t('admin_branding.intro') }}</p>
 
     <div v-if="loading" class="loading">{{ t('common.loading') }}</div>

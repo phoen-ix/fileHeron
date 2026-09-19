@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 
 import { getMailLogDetail, resendMailLog } from '@/api/admin'
+import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
 import { useApiError } from '@/composables/useApiError'
 import { useSiteDateFormat } from '@/composables/useSiteDateFormat'
 import { useUiStore } from '@/stores/ui'
@@ -72,9 +73,7 @@ onMounted(load)
 
 <template>
   <div class="fh-page" data-density="operator">
-    <RouterLink :to="{ name: 'admin-mail-log' }" class="back-link">
-      ← {{ t('admin_mail.detail.back') }}
-    </RouterLink>
+    <AdminPageHeader hide-title :back-to="{ name: 'admin-mail-log' }" />
 
     <div v-if="loading" class="loading">{{ t('common.loading') }}</div>
     <div
@@ -173,18 +172,6 @@ v-else-if="errorMsg" class="fh-notice" role="alert"
   border: 1px solid var(--fh-border);
   background: #fff;
 }
-.back-link {
-  display: inline-block;
-  margin-bottom: var(--fh-space-3);
-  color: var(--fh-subtle);
-  text-decoration: none;
-  font-size: var(--fh-text-body-sm);
-}
-
-.back-link:hover {
-  color: var(--fh-accent);
-}
-
 .loading {
   color: var(--fh-subtle);
   padding: var(--fh-space-5) 0;

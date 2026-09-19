@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
 import { listProviders, type OIDCProviderItem } from '@/api/settings'
+import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
 import { useApiError } from '@/composables/useApiError'
 
 const { t } = useI18n()
@@ -40,14 +41,13 @@ onMounted(load)
 
 <template>
   <div class="sso-list" data-density="operator">
-    <div class="header-row">
-      <div>
-        <h1 class="fh-eyebrow">{{ t('admin_settings.eyebrow') }} / {{ t('admin_sso_list.title') }}</h1>
-      </div>
-      <button type="button" class="fh-btn" @click="newProvider">
-        + {{ t('admin_sso_list.add_button') }}
-      </button>
-    </div>
+    <AdminPageHeader>
+      <template #actions>
+        <button type="button" class="fh-btn" @click="newProvider">
+          + {{ t('admin_sso_list.add_button') }}
+        </button>
+      </template>
+    </AdminPageHeader>
 
     <p class="fh-field-help intro">{{ t('admin_sso_list.intro') }}</p>
 
@@ -116,13 +116,6 @@ v-else-if="errorMsg" class="fh-notice" role="alert"
 <style scoped>
 .sso-list {
   max-width: none;
-}
-
-.header-row {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--fh-space-3);
 }
 
 .intro {

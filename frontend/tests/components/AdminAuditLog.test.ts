@@ -80,7 +80,7 @@ function makeWrapper() {
     messages: { en },
   })
   return mount(AdminAuditLog, {
-    global: { plugins: [i18n], stubs: { Pager: true, RouterLink: true } },
+    global: { plugins: [i18n], stubs: { Pager: true, RouterLink: true, AdminPageHeader: { template: '<header><slot name="title" /><slot /><slot name="actions" /></header>' } } },
   })
 }
 

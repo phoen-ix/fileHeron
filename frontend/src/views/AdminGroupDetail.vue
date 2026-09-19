@@ -12,6 +12,7 @@ import {
   updateGroup,
 } from '@/api/groups'
 import { searchUsers } from '@/api/users'
+import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
 import { useApiError } from '@/composables/useApiError'
 import { useSiteDateFormat } from '@/composables/useSiteDateFormat'
 import { useUiStore } from '@/stores/ui'
@@ -144,14 +145,16 @@ v-else-if="errorMsg" class="fh-notice" role="alert"
         data-tone="error">{{ errorMsg }}</div>
 
     <template v-else-if="group">
-      <span class="fh-eyebrow">{{ t('admin_group_detail.eyebrow') }}</span>
-
-      <div class="title-row">
-        <h1 class="fh-display-md">{{ group.name }}</h1>
-        <span v-if="group.is_company_inbox" class="fh-pill" data-state="warn">
-          {{ t('recipient.inbox_flag') }}
-        </span>
-      </div>
+      <AdminPageHeader :back-to="{ name: 'admin-groups' }">
+        <template #title>
+          <div class="title-row">
+            <h1 class="fh-display-md">{{ group.name }}</h1>
+            <span v-if="group.is_company_inbox" class="fh-pill" data-state="warn">
+              {{ t('recipient.inbox_flag') }}
+            </span>
+          </div>
+        </template>
+      </AdminPageHeader>
 
       <p v-if="group.description" class="description">{{ group.description }}</p>
 

@@ -43,7 +43,7 @@ import AdminSettingsEmail from '@/views/AdminSettingsEmail.vue'
 function makeWrapper() {
   setActivePinia(createPinia())
   const i18n = createI18n({ legacy: false, locale: 'en', fallbackLocale: 'en', messages: { en } })
-  return mount(AdminSettingsEmail, { global: { plugins: [i18n] } })
+  return mount(AdminSettingsEmail, { global: { plugins: [i18n], stubs: { AdminPageHeader: { template: '<header><slot name="title" /><slot /><slot name="actions" /></header>' } } } })
 }
 
 type Wrapper = ReturnType<typeof makeWrapper>

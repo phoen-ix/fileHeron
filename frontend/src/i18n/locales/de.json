@@ -383,19 +383,36 @@
     "nav": {
       "users": "Benutzer",
       "groups": "Gruppen",
-      "analytics": "Analysen",
-      "audit": "Audit-Protokoll",
-      "error_log": "Fehlerprotokoll",
+      "sessions": "Sitzungen",
+      "twofa": "2FA-Pflicht",
+      "api_tokens": "API-Tokens",
+      "api_token_policy": "API-Token-Richtlinie",
+      "sso": "SSO-Anbieter",
+      "file_history": "Dateiverlauf",
+      "quarantine": "Quarantäne",
+      "quarantine_alerts": "Quarantäne-Alarme",
+      "public_links": "Öffentliche Links",
+      "share_approval": "Freigabe-Genehmigung",
       "inbox": "Posteingang",
       "mail_log": "E-Mail-Protokoll",
-      "file_history": "Dateiverlauf",
-      "sessions": "Sitzungen",
-      "quarantine": "Quarantäne",
-      "api_tokens": "API-Tokens",
-      "system": "System",
+      "email": "Ausgehende E-Mail (SMTP)",
+      "email_templates": "E-Mail-Vorlagen",
+      "imap": "Eingehende E-Mail (IMAP)",
+      "email_change": "E-Mail-Änderung",
+      "analytics": "Analysen",
+      "audit": "Audit-Protokoll",
+      "system": "Status & Updates",
       "scheduled_tasks": "Geplante Aufgaben",
-      "save_failed": "Seitenleisten-Status konnte nicht gespeichert werden.",
-      "ip_blocks": "Gesperrte Quellen"
+      "error_alerts": "Fehler-Alarme",
+      "error_log": "Fehlerprotokoll",
+      "scan_guard": "Scan-Schutz",
+      "ip_blocks": "Gesperrte Quellen",
+      "webhooks": "Webhooks",
+      "general": "Allgemein",
+      "branding": "Branding & Rechtliches",
+      "advanced": "Erweitert",
+      "maintenance": "Wartungsmodus",
+      "backup": "Sicherung & Wiederherstellung"
     },
     "nav_cat": {
       "access": "Zugriff",
@@ -403,29 +420,11 @@
       "messaging": "Nachrichten",
       "system": "System"
     },
-    "nav_item": {
-      "general": "Allgemein",
-      "branding": "Branding & Rechtliches",
-      "sso": "SSO / OIDC",
-      "twofa": "2FA-Pflicht",
-      "api_token_policy": "Token-Richtlinie",
-      "public_links": "Öffentliche Links",
-      "share_approval": "Freigabe-Genehmigung",
-      "email": "E-Mail / SMTP",
-      "email_templates": "E-Mail-Vorlagen",
-      "imap": "Posteingang (IMAP)",
-      "quarantine_alerts": "Quarantäne-Alarme",
-      "error_alerts": "Fehler-Alarme",
-      "email_change": "E-Mail-Änderung",
-      "webhooks": "Webhooks",
-      "advanced": "Erweitert",
-      "maintenance": "Wartungsmodus",
-      "backup": "Sicherung & Wiederherstellung",
-      "scan_guard": "Scan-Schutz"
-    }
+    "nav_save_failed": "Seitenleisten-Status konnte nicht gespeichert werden.",
+    "breadcrumb_label": "Pfadnavigation",
+    "back_to": "Zurück zu {page}"
   },
   "admin_maintenance": {
-    "title": "Wartungsmodus",
     "intro": "Wenn aktiv, werden neue Uploads und Downloads pausiert (laufende werden beendet); der Rest der App bleibt nutzbar. Der Ablauf 'Update verschieben' aktiviert dies automatisch.",
     "toggle_label": "Wartungsmodus aktivieren",
     "toggle_help": "Blockiert neue Dateiübertragungen mit 503, lässt laufende aber zu Ende laufen.",
@@ -442,7 +441,6 @@
     "admin_password_help": "Erneut erforderlich, weil diese Datei Passwort-Hashes, Zwei-Faktor-Schlüssel und Server-Geheimnisse enthalten kann.",
     "admin_password_label": "Passwort bestätigen",
     "admin_password_ph": "Ihr Kontopasswort",
-    "title": "Sicherung & Wiederherstellung",
     "intro": "Exportiere die Konfiguration dieser Instanz, um sie nach einem Ausfall wieder aufzubauen, oder importiere eine Sicherung. Geteilte Dateien sind nicht enthalten - ein Import macht jede aktive Freigabe ungültig.",
     "export_title": "Konfiguration exportieren",
     "export_help": "Wähle aus, was enthalten sein soll und wie mit Geheimnissen umgegangen wird, und lade dann eine einzelne Sicherungsdatei herunter.",
@@ -506,7 +504,6 @@
     "sum_webhook_urls": "Legt Webhooks an, die zeigen auf"
   },
   "admin_scheduled_tasks": {
-    "title": "Geplante Aufgaben",
     "intro": "Lege fest, wie oft jeder Hintergrundjob läuft, fixiere eine tägliche Uhrzeit oder deaktiviere ihn. Tägliche Zeiten verwenden die Seiten-Zeitzone ({tz}).",
     "group": {
       "shares": "Freigaben & Dateien",
@@ -528,7 +525,6 @@
     "alert_on_failure": "Admins bei Fehler benachrichtigen"
   },
   "admin_system": {
-    "eyebrow": "Admin / System",
     "sub": "Live-Status, letzte Cron-Läufe und Betriebs-Alarme.",
     "refresh": "Aktualisieren",
     "refreshed_at": "Aktualisiert {when}",
@@ -614,11 +610,7 @@
       "error": "Fehler"
     }
   },
-  "admin_settings": {
-    "eyebrow": "Admin / Einstellungen"
-  },
   "admin_settings_email_change": {
-    "title": "E-Mail-Änderung",
     "intro": "Die E-Mail ist die Anmelde-Kennung. Lege fest, wie eine Änderung bestätigt wird, ob Benutzer ihre eigene Adresse ändern können und was mit einer Single-Sign-On-Verknüpfung (SSO) bei einer Adressänderung passiert.",
     "mode_label": "Bestätigung",
     "mode": {
@@ -647,7 +639,6 @@
     "saved_toast": "E-Mail-Änderungs-Richtlinie gespeichert."
   },
   "admin_advanced": {
-    "eyebrow": "Einstellungen",
     "intro": "Zur Laufzeit anpassbare Werte. Jeder zeigt seinen eingebauten Standard als Platzhalter; ein Feld auf dem Standard lassen (oder Zurücksetzen) fällt darauf zurück. Änderungen greifen sofort - kein Neustart. Geheimnisse und Infrastruktur bleiben in Umgebungsvariablen.",
     "saved_toast": "Erweiterte Einstellungen gespeichert.",
     "reset": "Zurücksetzen",
@@ -795,14 +786,12 @@
     "reset_aria": "{name} auf Standardwert zurücksetzen ({default})"
   },
   "admin_general": {
-    "title": "Allgemein",
     "intro": "Kleine Schalter und allgemeine App-Einstellungen. Neue minor-Einstellungen werden hier hinzugefügt.",
     "quicknav": {
       "aria": "Abschnittsnavigation"
     }
   },
   "admin_twofa_policy": {
-    "title": "Zwei-Faktor-Pflicht",
     "intro": "Wähle die Rollen und Gruppen, deren Mitglieder einen TOTP-Authenticator aktivieren müssen. Betroffene Benutzer ohne 2FA werden von jeder Seite außer dem Einrichtungs-Assistenten ausgeschlossen, bis sie sich registrieren.",
     "kv_inheritance_note": "Noch keine Richtlinie gespeichert - aktuell wird die REQUIRE_2FA-Umgebungsvariable geerbt. Speichern hier übernimmt.",
     "roles_heading": "Pflichtige Rollen",
@@ -887,7 +876,6 @@
     "saved_toast": "Update-Einstellungen gespeichert."
   },
   "admin_email": {
-    "title": "E-Mail / SMTP",
     "intro": "Benachrichtigungen, Einladungen, Passwort-Zurücksetzungen und Freigaben werden über diesen SMTP-Server verschickt. Speichern wirkt sofort - kein Neustart. Das Passwort wird verschlüsselt gespeichert.",
     "status_configured": "SMTP konfiguriert",
     "status_logs_fallback": "Logs-Fallback (kein Host gesetzt)",
@@ -930,7 +918,6 @@
     "step_up_label": "Ihr Passwort"
   },
   "admin_imap": {
-    "title": "Posteingang (IMAP)",
     "intro": "Nachrichten aus dem konfigurierten Postfach abrufen, damit Antworten, Unzustellbarkeitsmeldungen und automatische Antworten im In-App-Posteingang erscheinen. Standardmäßig aus.",
     "enable_label": "Eingehende Mail abrufen aktivieren",
     "enable_help": "Wenn aus, wird nichts abgerufen und der Posteingang bleibt leer.",
@@ -985,8 +972,6 @@
     "step_up_label": "Ihr Passwort"
   },
   "admin_inbox": {
-    "eyebrow": "Nachrichten",
-    "title": "Posteingang",
     "intro": "Aus dem konfigurierten Postfach abgerufene Nachrichten - Antworten, Unzustellbarkeitsmeldungen und automatische Antworten.",
     "fetch_now": "Jetzt abrufen",
     "fetch_done": "{n} neue Nachricht(en) abgerufen",
@@ -1009,7 +994,6 @@
     "col_received": "Empfangen",
     "has_attachments": "Hat Anhänge",
     "empty": "Keine Nachrichten.",
-    "back": "Zurück zum Posteingang",
     "from": "Von",
     "to": "An",
     "received": "Empfangen",
@@ -1028,7 +1012,6 @@
     "open_message": "Nachricht öffnen: {subject}"
   },
   "admin_email_templates": {
-    "title": "E-Mail-Vorlagen",
     "intro": "Passe den Wortlaut jeder von file:Heron versendeten E-Mail an, je Sprache. Bis zum Speichern einer eigenen Version werden die eingebauten Standardtexte verwendet; nutze Platzhalter wie [RECIPIENT] für dynamische Werte.",
     "list_heading": "Vorlagen",
     "group": {
@@ -1112,12 +1095,10 @@
       "outbound_to_clients": "Nur ausgehend an Clients"
     },
     "scope_label": "Welche Freigaben brauchen Genehmigung",
-    "title": "Freigabe-Genehmigung",
     "users_label": "Benutzer",
     "users_placeholder": "Benutzer nach Name oder E-Mail suchen…"
   },
   "admin_public_link_policy": {
-    "title": "Öffentliche-Links-Richtlinie",
     "intro": "Öffentliche Links erlauben Empfängern ohne fileHeron-Konto, eine Freigabe per Token-URL herunterzuladen. Lege fest, wer sie anlegen darf. Admins können unabhängig vom Modus immer Links erstellen.",
     "mode_label": "Basis-Richtlinie",
     "mode": {
@@ -1137,7 +1118,6 @@
     "saved_toast": "Öffentliche-Links-Richtlinie gespeichert."
   },
   "admin_api_tokens": {
-    "eyebrow": "Admin / API-Tokens",
     "create_cta": "Token für Benutzer anlegen",
     "create_heading": "Token im Auftrag eines Benutzers anlegen",
     "create_help": "Der Klartext wird nur einmalig auf dieser Seite angezeigt. Über einen sicheren Kanal an den Benutzer weitergeben (Passwortmanager / verschlüsselter Chat).",
@@ -1182,7 +1162,6 @@
     "plaintext_owner": "Dieses Token gehört zu {name}."
   },
   "admin_token_policy": {
-    "title": "API-Token-Richtlinie",
     "intro": "API-Tokens gewähren programmatischen Zugriff - lege fest, wer sie anlegen darf. Admins können unabhängig vom Modus immer Tokens erstellen (Operator-Notausgang).",
     "mode_label": "Basis-Richtlinie",
     "mode": {
@@ -1202,7 +1181,6 @@
     "saved_toast": "API-Token-Richtlinie gespeichert."
   },
   "admin_sso_list": {
-    "title": "SSO",
     "intro": "Mehrere OIDC-Provider parallel betreiben. Benutzer verknüpfen ihr fileHeron-Konto mit einem davon; neue Benutzer melden sich einmal mit Passwort an und klicken auf Verbinden.",
     "add_button": "Provider hinzufügen",
     "empty_title": "Noch keine Provider konfiguriert.",
@@ -1353,7 +1331,6 @@
     }
   },
   "admin_branding": {
-    "title": "Branding & Rechtliches",
     "intro": "Lade ein Logo hoch, lege fest, wo es erscheint, und pflege Impressum und Datenschutzerklärung.",
     "logo": {
       "title": "Logo",
@@ -1417,7 +1394,6 @@
     }
   },
   "admin_users": {
-    "eyebrow": "Admin / Benutzer",
     "search_placeholder": "Nach Name oder E-Mail suchen …",
     "role_all": "Alle Rollen",
     "col": {
@@ -1514,7 +1490,6 @@
   "admin_user_detail": {
     "erase_password_label": "Passwort bestätigen",
     "erase_password_placeholder": "Ihr Kontopasswort",
-    "eyebrow": "Admin / Benutzer",
     "profile": "Profil",
     "role": "Rolle",
     "quota": "Kontingent (Bytes)",
@@ -1570,7 +1545,6 @@
     "change_email_old_link_help": "Im Modus \"beide bestätigen\" müssen BEIDE Links geöffnet werden. Die Änderung wird erst wirksam, wenn auch die alte Adresse bestätigt ist."
   },
   "admin_mail": {
-    "eyebrow": "Admin / E-Mail-Protokoll",
     "intro": "Jede von file:Heron gesendete E-Mail wird hier mit ihrem Zustellergebnis erfasst. Einmal-Auth-Links (Passwort-Reset, Einladung, Verifizierung) werden gespeichert geschwärzt.",
     "export_csv": "CSV exportieren",
     "empty": "Keine E-Mails passen zu diesen Filtern.",
@@ -1598,7 +1572,6 @@
       "error": "Fehler"
     },
     "detail": {
-      "back": "Zurück zum E-Mail-Protokoll",
       "resend": "Erneut senden",
       "resend_disabled": "Diese E-Mail kann nicht erneut gesendet werden - ihr Einmal-Auth-Link wurde gespeichert geschwärzt (oder es war ein Test-/Dev-Eintrag).",
       "resend_ok": "E-Mail erneut zur Zustellung eingereiht.",
@@ -1615,8 +1588,6 @@
     }
   },
   "admin_webhooks": {
-    "eyebrow": "Admin / Webhooks",
-    "title": "Webhooks",
     "intro": "Sende einen signierten HTTP-POST an eine externe URL, wenn ausgewählte Ereignisse eintreten (Freigabe erstellt, Datei heruntergeladen, Quarantäne, Ops-Alarm). Richte ihn auf eine Slack/Teams-Incoming-Webhook-URL, ein Automatisierungstool oder deinen eigenen Collector.",
     "add": "Webhook hinzufügen",
     "name": "Name",
@@ -1663,8 +1634,6 @@
     }
   },
   "admin_analytics": {
-    "eyebrow": "Admin / Analysen",
-    "title": "Analysen",
     "range_label": "Zeitraum",
     "range_days": "{n} Tage",
     "export_csv": "CSV exportieren",
@@ -1688,7 +1657,6 @@
     "no_data": "Keine Daten"
   },
   "admin_audit": {
-    "eyebrow": "Admin / Audit-Protokoll",
     "export_csv": "CSV exportieren",
     "filter": {
       "event_type": "event_type (z. B. login_success)",
@@ -2157,7 +2125,6 @@
     }
   },
   "admin_groups": {
-    "eyebrow": "Admin / Gruppen",
     "new_group": "Neue Gruppe",
     "create_heading": "Gruppe erstellen",
     "name_label": "Name",
@@ -2178,7 +2145,6 @@
     "empty_subtitle": "Erstelle eine, um Empfänger zu organisieren."
   },
   "admin_group_detail": {
-    "eyebrow": "Admin / Gruppen",
     "members_heading": "Mitglieder ({n})",
     "edit": "Bearbeiten",
     "saved_toast": "Gespeichert.",
@@ -2275,7 +2241,6 @@
     }
   },
   "admin_sessions": {
-    "eyebrow": "Admin / Sitzungen",
     "intro": "Alle angemeldeten Sitzungen über alle Benutzer hinweg. Eine Sitzung rotiert bei Nutzung, daher zeigt „Zuletzt aktiv“ die jüngste Aktivität - aufsteigend sortieren, um veraltete oder vergessene Geräte zu finden.",
     "total_count": "{n} Sitzungen",
     "search_placeholder": "Nach Benutzername, E-Mail oder IP suchen…",
@@ -2302,7 +2267,6 @@
     }
   },
   "admin_file_history": {
-    "eyebrow": "Admin / Dateiverlauf",
     "intro": "Jede jemals hochgeladene Datei - auch abgelaufene und gelöschte - mit übergeordneter Freigabe, Hochlader und Download-Statistik.",
     "total_count": "{n} Dateien",
     "search_placeholder": "Suche nach Dateiname, Hochlader oder E-Mail …",
@@ -2333,7 +2297,6 @@
     }
   },
   "admin_quarantine": {
-    "eyebrow": "Admin / Quarantäne",
     "intro": "Dateien, die ClamAV als infiziert markiert hat. Die Bytes liegen weiterhin unter ./data/quarantine/ auf der Platte - du kannst sie für forensische Analyse herunterladen, an den Eigentümer freigeben (wenn der Befund ein False-Positive war) oder dauerhaft entfernen, sobald du fertig bist.",
     "total_count": "{n} infizierte Dateien",
     "empty": "Nichts in Quarantäne. Entweder wurde noch nichts markiert oder alles wurde bereits freigegeben oder gelöscht.",
@@ -2368,14 +2331,12 @@
     }
   },
   "admin_settings_quarantine": {
-    "title": "Quarantäne-Alarme",
     "intro": "Wenn ClamAV einen infizierten Upload erkennt, wird der Hochlader immer benachrichtigt. Dieser Schalter sendet zusätzlich eine Benachrichtigung (E-Mail + In-App-Glocke) an alle Admins.",
     "toggle_label": "Alle Admins benachrichtigen, wenn ein Virus erkannt wird",
     "toggle_help": "Jeder Admin erhält pro Erkennung eine E-Mail und einen Eintrag in der In-App-Glocke. Ein Admin kann sich unter /account → Benachrichtigungen stummschalten, indem er den Kanal für \"file_quarantined\" auf \"off\" stellt (Standard ist \"both\" - E-Mail + In-App).",
     "saved_toast": "Einstellung für Quarantäne-Alarme gespeichert."
   },
   "admin_error_alerts": {
-    "title": "Fehler & Alarme",
     "intro": "Führe ein durchsuchbares Protokoll der Serverfehler und benachrichtige bei Bedarf Admins per E-Mail. Protokollierung und Versand sind unabhängig: Das Protokoll erfasst jeden Fehler, während E-Mails zusammengefasst und begrenzt werden, damit ein wiederkehrender Fehler dein Postfach nicht flutet. Die E-Mails enthalten nur Kontext - keinen Stacktrace.",
     "log_section": "Fehlerprotokoll",
     "log_enabled_label": "Fehler protokollieren",
@@ -2417,7 +2378,6 @@
     "err_retention_range": "Die Aufbewahrung muss zwischen 0 und 3650 Tagen liegen."
   },
   "admin_error_log": {
-    "eyebrow": "Admin / Fehlerprotokoll",
     "intro": "Jeder erfasste Serverfehler (HTTP-5xx), aktivierte Client-Fehler (4xx) und jede fehlgeschlagene geplante Aufgabe. Filtere nach Code, Status, Quelle oder Zeit; klicke eine Zeile für Details. \"Versendet\" markiert Zeilen, die auch einen Alarm ausgelöst haben.",
     "export_csv": "CSV exportieren",
     "empty": "Keine Fehler passen zu diesen Filtern.",
@@ -2493,10 +2453,10 @@
     "admin_user_detail": "Benutzer",
     "admin_groups": "Gruppen",
     "admin_group_detail": "Gruppe",
-    "admin_audit": "Audit-Log",
-    "admin_analytics": "Auswertungen",
+    "admin_audit": "Audit-Protokoll",
+    "admin_analytics": "Analysen",
     "admin_settings_webhooks": "Webhooks",
-    "admin_mail_log": "E-Mail-Log",
+    "admin_mail_log": "E-Mail-Protokoll",
     "admin_mail_detail": "E-Mail",
     "admin_error_log": "Fehlerprotokoll",
     "admin_inbox": "Posteingang",
@@ -2505,25 +2465,25 @@
     "admin_sessions": "Sitzungen",
     "admin_quarantine": "Quarantäne",
     "admin_api_tokens": "API-Tokens",
-    "admin_settings_sso": "SSO",
+    "admin_settings_sso": "SSO-Anbieter",
     "admin_settings_sso_new": "Neuer SSO-Provider",
     "admin_settings_sso_edit": "SSO-Provider bearbeiten",
     "admin_settings_api_tokens": "API-Token-Richtlinie",
-    "admin_settings_public_links": "Richtlinie für öffentliche Links",
+    "admin_settings_public_links": "Öffentliche Links",
     "admin_settings_share_approval": "Freigabe-Genehmigung",
-    "admin_settings_email": "E-Mail / SMTP",
+    "admin_settings_email": "Ausgehende E-Mail (SMTP)",
     "admin_settings_email_templates": "E-Mail-Vorlagen",
-    "admin_settings_imap": "Eingehende E-Mail",
-    "admin_settings_general": "Allgemeine Einstellungen",
+    "admin_settings_imap": "Eingehende E-Mail (IMAP)",
+    "admin_settings_general": "Allgemein",
     "admin_settings_branding": "Branding & Rechtliches",
     "admin_settings_twofa": "2FA-Pflicht",
-    "admin_settings_quarantine": "Quarantäne",
+    "admin_settings_quarantine": "Quarantäne-Alarme",
     "admin_settings_email_change": "E-Mail-Änderung",
-    "admin_settings_error_alerts": "Fehler-Benachrichtigungen",
+    "admin_settings_error_alerts": "Fehler-Alarme",
     "admin_settings_advanced": "Erweitert",
     "admin_settings_backup": "Sicherung & Wiederherstellung",
     "admin_settings_maintenance": "Wartungsmodus",
-    "admin_system": "System",
+    "admin_system": "Status & Updates",
     "admin_scheduled_tasks": "Geplante Aufgaben",
     "public_share": "Geteilte Dateien",
     "manage_notifications": "Benachrichtigungen verwalten",
@@ -2540,7 +2500,6 @@
     "home_cta": "Startseite"
   },
   "admin_scan_guard": {
-    "title": "Scan-Schutz",
     "intro": "Blockiert automatisch Quellen, die nach Geheimnissen, Konfigurationsdateien und CMS-Pfaden suchen. Standardmäßig deaktiviert - es wird nichts blockiert, bis Sie ihn einschalten.",
     "master_section": "Schutz",
     "enabled_label": "Scan-Schutz aktivieren",
@@ -2602,7 +2561,6 @@
     "use_totp": "Authenticator-Code verwenden"
   },
   "admin_ip_blocks": {
-    "title": "Gesperrte Quellen",
     "intro": "Alle Adressen und Bereiche, die der Scan-Schutz derzeit abweist, sowie die beobachteten Quellen. Sperren sind immer befristet – keine ist dauerhaft, und aufgehobene Einträge bleiben als Verlauf stehen, bis sie verfallen.",
     "block_section": "Quelle sperren",
     "block_help": "Sperrt eine einzelne Adresse oder einen ganzen CIDR-Bereich für eine begrenzte Zeit. Es werden nur global routbare Adressen akzeptiert.",

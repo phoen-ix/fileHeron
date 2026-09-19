@@ -56,7 +56,7 @@ import AdminSettingsBranding from '@/views/AdminSettingsBranding.vue'
 function makeWrapper() {
   const i18n = createI18n({ legacy: false, locale: 'en', fallbackLocale: 'en', messages: { en } })
   return mount(AdminSettingsBranding, {
-    global: { plugins: [i18n], stubs: { RichTextEditor: RichTextEditorStub } },
+    global: { plugins: [i18n], stubs: { RichTextEditor: RichTextEditorStub, AdminPageHeader: { template: '<header><slot name="title" /><slot /><slot name="actions" /></header>' } } },
   })
 }
 

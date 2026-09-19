@@ -178,10 +178,18 @@ def test_every_page_view_renders_a_page_heading():
     screen-reader admin landing on /admin/error-log heard "no headings" and had
     nothing to distinguish it from /admin/mail-log."""
     views = FRONTEND / "views"
+    # `<AdminPageHeader>` renders the page <h1> for the admin views (one
+    # component, one title source - see components/admin/AdminPageHeader.vue);
+    # `hide-title` opts out, and such a view must then carry its own <h1>.
+    def _has_heading(template: str) -> bool:
+        if "<h1" in template:
+            return True
+        return "<AdminPageHeader" in template and "hide-title" not in template
+
     missing = [
         p.name
         for p in sorted(views.rglob("*.vue"))
-        if "<h1" not in p.read_text().partition("<template>")[2]
+        if not _has_heading(p.read_text().partition("<template>")[2])
         and p.name not in {"AdminLayout.vue", "HomePlaceholder.vue", "NotFound.vue"}
     ]
     assert missing == [], f"views with no page heading: {missing}"

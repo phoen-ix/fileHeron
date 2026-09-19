@@ -9,6 +9,7 @@ import {
   updateImapSettings,
 } from '@/api/admin'
 import { asEnvelope } from '@/api/client'
+import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
 import { useApiError } from '@/composables/useApiError'
 import { useUiStore } from '@/stores/ui'
 import type { ImapSettingsResponse, ImapTestResponse } from '@/types/api'
@@ -162,7 +163,7 @@ onMounted(load)
 
 <template>
   <div class="policy-page" data-density="operator">
-    <h1 class="fh-eyebrow">{{ t('admin_settings.eyebrow') }} / {{ t('admin_imap.title') }}</h1>
+    <AdminPageHeader />
     <p class="fh-field-help intro">{{ t('admin_imap.intro') }}</p>
 
     <div v-if="loading" class="loading">{{ t('common.loading') }}</div>

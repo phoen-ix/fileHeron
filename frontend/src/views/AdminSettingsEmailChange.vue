@@ -3,6 +3,7 @@ import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { getEmailChangePolicy, updateEmailChangePolicy } from '@/api/admin'
+import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
 import { useApiError } from '@/composables/useApiError'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
@@ -77,9 +78,7 @@ onMounted(load)
 
 <template>
   <div class="policy-page" data-density="operator">
-    <h1 class="fh-eyebrow">
-      {{ t('admin_settings.eyebrow') }} / {{ t('admin_settings_email_change.title') }}
-    </h1>
+    <AdminPageHeader />
 
     <p class="fh-field-help intro">{{ t('admin_settings_email_change.intro') }}</p>
 

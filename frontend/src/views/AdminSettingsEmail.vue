@@ -8,6 +8,7 @@ import {
   updateEmailSettings,
 } from '@/api/admin'
 import { asEnvelope } from '@/api/client'
+import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
 import { useApiError } from '@/composables/useApiError'
 import { useUiStore } from '@/stores/ui'
 import type {
@@ -214,9 +215,7 @@ onMounted(load)
 
 <template>
   <div class="email-page" data-density="operator">
-    <h1 class="fh-eyebrow">
-      {{ t('admin_settings.eyebrow') }} / {{ t('admin_email.title') }}
-    </h1>
+    <AdminPageHeader />
 
     <p class="fh-field-help intro">{{ t('admin_email.intro') }}</p>
 

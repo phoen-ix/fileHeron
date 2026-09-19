@@ -7,6 +7,7 @@ import {
   updateMaintenanceSettings,
   type MaintenanceSettingsResponse,
 } from '@/api/admin'
+import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
 import { useApiError } from '@/composables/useApiError'
 import { useSiteStore } from '@/stores/site'
 import { useUiStore } from '@/stores/ui'
@@ -66,9 +67,7 @@ onMounted(() => void load())
 
 <template>
   <div class="policy-page" data-density="operator">
-    <h1 class="fh-eyebrow">
-      {{ t('admin_settings.eyebrow') }} / {{ t('admin_maintenance.title') }}
-    </h1>
+    <AdminPageHeader />
     <p class="fh-field-help intro">{{ t('admin_maintenance.intro') }}</p>
 
     <div v-if="loading" class="loading">{{ t('common.loading') }}</div>

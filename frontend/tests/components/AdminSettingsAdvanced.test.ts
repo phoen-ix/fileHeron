@@ -42,7 +42,7 @@ import AdminSettingsAdvanced from '@/views/AdminSettingsAdvanced.vue'
 function makeWrapper() {
   setActivePinia(createPinia())
   const i18n = createI18n({ legacy: false, locale: 'en', fallbackLocale: 'en', messages: { en } })
-  return mount(AdminSettingsAdvanced, { global: { plugins: [i18n] } })
+  return mount(AdminSettingsAdvanced, { global: { plugins: [i18n], stubs: { AdminPageHeader: { template: '<header><slot name="title" /><slot /><slot name="actions" /></header>' } } } })
 }
 
 describe('AdminSettingsAdvanced', () => {

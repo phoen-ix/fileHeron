@@ -1,3 +1,20 @@
+# file:Heron v2.17.2
+
+**Hotfix for v2.17.1: the admin sidebar showed nothing but "Overview".** The six
+sections and their pages were missing from the sidebar on desktop; every page was
+still reachable from the Overview's cards and by URL, and on a phone the sidebar was
+complete. Nothing else changed. No migration, no host step, no defaults move.
+
+---
+
+## What went wrong
+
+A conditional added to the sidebar's Overview link took over the branch that renders
+the sections beneath it, so at desktop width the categories were never drawn. No test
+mounted the sidebar itself: the collapse logic was tested through a bare harness and
+the section list through its data file, but not the template that joins them. That
+test exists now and renders the sidebar at both widths.
+
 # file:Heron v2.17.1
 
 *v2.17.0 was tagged but never published: its release run stopped at the dependency

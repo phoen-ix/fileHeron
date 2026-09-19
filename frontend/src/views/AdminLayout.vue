@@ -45,16 +45,21 @@
             </RouterLink>
           </div>
         </template>
-        <RouterLink
-          v-if="!narrow"
-          :to="{ name: ADMIN_OVERVIEW.routeName }"
-          class="nav-link nav-link-top"
-          :class="{ 'is-active': isItemActive(ADMIN_OVERVIEW, route.name) }"
-          :aria-current="isItemActive(ADMIN_OVERVIEW, route.name) ? 'page' : undefined"
-        >
-          {{ t(ADMIN_OVERVIEW.labelKey) }}
-        </RouterLink>
-        <div v-for="cat in ADMIN_NAV" v-else :key="cat.key" class="nav-cat">
+        <!-- Desktop: the Overview link, then the collapsible categories. One
+             v-else for the whole branch - a v-if on the Overview link alone
+             once captured the categories' v-else and shipped a sidebar with
+             nothing but "Overview" (v2.17.1). tests/components/AdminLayout.test.ts
+             mounts both branches. -->
+        <template v-else>
+          <RouterLink
+            :to="{ name: ADMIN_OVERVIEW.routeName }"
+            class="nav-link nav-link-top"
+            :class="{ 'is-active': isItemActive(ADMIN_OVERVIEW, route.name) }"
+            :aria-current="isItemActive(ADMIN_OVERVIEW, route.name) ? 'page' : undefined"
+          >
+            {{ t(ADMIN_OVERVIEW.labelKey) }}
+          </RouterLink>
+          <div v-for="cat in ADMIN_NAV" :key="cat.key" class="nav-cat">
           <button
             type="button"
             class="nav-cat-header"
@@ -110,7 +115,8 @@
               </RouterLink>
             </div>
           </div>
-        </div>
+          </div>
+        </template>
       </nav>
     </aside>
     <div class="admin-content">

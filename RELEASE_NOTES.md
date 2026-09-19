@@ -1,3 +1,119 @@
+# file:Heron v2.17.0
+
+**The admin area has a new map. Six task-based sections replace the four that had
+grown one entry per release, every page has a clickable breadcrumb and one name,
+`/admin` opens an Overview with a search box that finds any setting, and the
+"Advanced" grab-bag is gone - its settings now live on the page of the thing they
+tune. Not one URL changed.**
+
+No migration, no host step, no defaults move. Every bookmark, email link and
+notification link keeps working; what moved is where things appear, not where they
+are.
+
+---
+
+## Why
+
+The admin sidebar had 32 links in four folders. Eighteen of them were settings
+pages, mixed in with logs and lists, and the "System" folder alone held fourteen
+entries - everything shipped in the last twenty releases had been appended there.
+Four pairs of neighbours differed by one word ("Quarantine" / "Quarantine alerts",
+"API tokens" / "Token policy", "Error log" / "Error alerts", "Scan guard" /
+"Blocked sources"), six settings pages had three or fewer fields, and "Advanced"
+held 42 knobs in eleven groups, three of them editable on a second page as well.
+
+## The new sidebar
+
+| Section | Pages |
+|---|---|
+| **People & access** | Users · Groups · Sessions [Active \| Policy] · API tokens [Tokens \| Policy] · SSO providers · 2FA enforcement · Sign-in policies [Passwords & brute force \| Email change] |
+| **Sharing & files** | File history · Quarantine [Files \| Alerts & scanner] · Share approval · Public links · Files & transfers · Analytics |
+| **Email & notifications** | Inbox · Mail log · Outgoing mail (SMTP) · Inbound mail (IMAP) · Email templates · Webhooks |
+| **Security & audit** | Blocked sources [Blocks & allowlist \| Auto-block rules (Scan guard)] · Anomaly detection · Audit log |
+| **Site & appearance** | General · Branding & legal |
+| **System** | Status & updates · Scheduled tasks · Errors & alerts [Log \| Alerts] · Maintenance mode · Backup & restore · Data retention & storage |
+
+A policy and the thing it controls are now **tabs on one page** instead of two
+neighbours: the quarantine list and its alert toggle, the token inventory and the
+token policy, the error log and the alert settings, the blocked sources and the
+scan guard's rules. Each tab keeps the URL it always had, so a link to
+`/admin/settings/scan-guard` still opens exactly that - as the second tab of
+Blocked sources.
+
+**Blocked sources is the page and the scan guard is a tab inside it**, not the
+other way round: in an incident the word in your head is "block", and the guard
+ships switched off.
+
+## The Overview
+
+`/admin` used to redirect to Users. It is now a landing page with three things:
+what needs attention right now (unread inbox mail, quarantined files, live blocks,
+failed tasks in the last day, and pending approvals if you are an approver), a
+**"Find a setting"** box that searches every page, tab, section and field - type
+"cooldown", "timezone" or "HIBP" and it takes you to the control - and every admin
+page as cards.
+
+## Where things went
+
+Every setting that left the Advanced page or the General page is on the page of
+its task. The old paths still open; this is the map for the day you look for
+something in the old place.
+
+| Setting | Was | Now |
+|---|---|---|
+| Access-token and refresh-token lifetime, sessions per user | Advanced › Sessions & authentication | Sessions › **Policy** |
+| Account lockout, per-address sign-in and registration limits | Advanced › Rate limits & lockout | Sign-in policies › **Passwords & brute force** |
+| Have I Been Pwned check | Advanced › Security | Sign-in policies › **Passwords & brute force** |
+| Public-link password attempts, window, lockout | Advanced › Rate limits & lockout | **Public links** |
+| Direct-upload size cap; signed-URL lifetime; resume credit | Advanced › Uploads / Downloads | **Files & transfers** |
+| Share defaults; file preview | General | **Files & transfers** |
+| Anomaly thresholds | Advanced › Anomaly detection | **Anomaly detection** (its own page) |
+| Release API URL | General › Updates | **Status & updates** |
+| Postponed-update drain wait | Advanced › Updates | **Status & updates** |
+| Application name | Advanced › Branding | **Branding & legal** |
+| Scan capture rate for the error log | Advanced › Errors & alerts | **Errors & alerts › Alerts** |
+| Retention windows, low-disk thresholds | Advanced | **Data retention & storage** (same URL) |
+
+Email change is the second tab of Sign-in policies. The alert cooldown, the hourly
+alert cap and the error-log retention were editable both on Errors & alerts and on
+Advanced; they are on Errors & alerts only now.
+
+## Smaller things that were wrong
+
+- **Three Advanced settings showed their internal key instead of a name** (the
+  public-link attempt retention, the block-history retention and the download
+  resume credit). They have labels and help text in both languages now.
+- **Changing the error-log scan capture rate took up to a minute to apply** when
+  done from Advanced, because that page did not reset the in-process cache the
+  Errors page resets. It does now.
+- **Six sidebar labels differed from the title of the page they opened**
+  ("Token policy" opened "API token policy", "SSO / OIDC" opened "SSO"). One name
+  per page now, in the sidebar, the page heading and the browser tab. Renamed:
+  "SSO / OIDC" → **SSO providers**, "Email / SMTP" → **Outgoing mail (SMTP)**,
+  "System" → **Status & updates**. In German, "Posteingang (IMAP)" sat directly
+  under "Posteingang"; it is **Eingehende E-Mail (IMAP)** now.
+- Two different pages shared the browser-tab title "Quarantine".
+- User, group and SSO-provider detail pages had no way back but the sidebar. They
+  have a back link and a breadcrumb.
+- On a phone the whole sidebar stacked above every page. It is a strip of section
+  chips now, showing only the open section's pages.
+
+## For API clients
+
+Nothing on the API changed except one detail of the sidebar preference:
+`PATCH /api/account/admin-nav-open` accepts the new section keys (`people`,
+`sharing`, `email`, `security`, `site`, `system`) and rejects the old four. Only
+the web app sends this. A stored preference holding old keys needs nothing: the
+app ignores unknown keys and rewrites the list on the next toggle.
+
+## What did not change
+
+Every URL. The names Users, Groups, Sessions, File history, Quarantine, Mail log,
+Audit log, Inbox, Webhooks, Scheduled tasks, Maintenance mode, Backup & restore.
+"Scan guard" as the feature's name. Share approval and Public links as separate
+pages. Approvals stays in the top bar - it is a role, not administration; the
+Overview only counts it. Scheduled tasks stays the one place a cadence is set.
+
 # file:Heron v2.16.1
 
 **Follow-ups to the v2.16.0 log audit: scheduled tasks were quietly running

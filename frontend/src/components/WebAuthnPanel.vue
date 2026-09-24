@@ -170,8 +170,16 @@ async function onRegister() {
   } catch (err: unknown) {
     if (err instanceof DOMException && err.name === 'NotAllowedError') {
       errorMsg.value = t('webauthn.cancelled')
+    } else if (err instanceof DOMException && err.name === 'InvalidStateError') {
+      // The browser refuses an authenticator already in excludeCredentials.
+      errorMsg.value = t('webauthn.already_registered')
+    } else if (err instanceof DOMException) {
+      // describe() only knows API envelopes, so every other browser-side
+      // WebAuthn failure read "Something went wrong"; its own message was the
+      // dead right-hand side of `describe(err) || ...`.
+      errorMsg.value = err.message || describe(err)
     } else {
-      errorMsg.value = describe(err) || (err as Error).message
+      errorMsg.value = describe(err)
     }
   } finally {
     busy.value = false

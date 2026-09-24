@@ -33,7 +33,7 @@ const { t, locale } = useI18n()
 const headerTitle = computed(() => {
   if (props.isActive) return t('share_create.progress.uploading_title')
   if (props.errorCount > 0)
-    return t('share_create.progress.partial_title', { n: props.errorCount })
+    return t('share_create.progress.partial_title', { n: props.errorCount }, props.errorCount)
   return t('share_create.progress.done_title')
 })
 

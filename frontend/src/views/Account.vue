@@ -149,12 +149,18 @@ async function changeLandingPage(value: string | null) {
   }
 }
 
+// A failed fetch used to leave `totpStatus` null, which the template renders
+// as "Two-factor auth is off" plus a setup prompt - telling a user who HAS 2FA
+// that they do not. Unknown is shown as unknown.
+const totpLoadFailed = ref(false)
+
 async function loadTotp() {
+  totpLoadFailed.value = false
   try {
     const r = await twoFaApi.getStatus()
     totpStatus.value = r.data
   } catch {
-    /* non-fatal */
+    totpLoadFailed.value = true
   }
 }
 
@@ -312,8 +318,9 @@ function jumpTo(id: string) {
       </div>
 
       <div class="fh-field">
-        <label class="fh-field-label">{{ $t('common.language') }}</label>
-        <div class="locale-pick">
+        <!-- A label with no control labels nothing; name the button group. -->
+        <span id="acct-language-label" class="fh-field-label">{{ $t('common.language') }}</span>
+        <div class="locale-pick" role="group" aria-labelledby="acct-language-label">
           <button
             type="button"
             class="locale-opt"
@@ -370,12 +377,13 @@ function jumpTo(id: string) {
     >
       <h2 class="account-h2">{{ $t('account.admin_nav.title') }}</h2>
       <div class="fh-field">
-        <label class="fh-field-label">{{ $t('account.admin_nav.label') }}</label>
-        <div class="locale-pick">
+        <span id="acct-admin-nav-label" class="fh-field-label">{{ $t('account.admin_nav.label') }}</span>
+        <div class="locale-pick" role="group" aria-labelledby="acct-admin-nav-label">
           <button
             type="button"
             class="locale-opt"
             :class="{ active: navMode === 'accordion' }"
+            :aria-pressed="navMode === 'accordion'"
             @click="changeNavMode('accordion')"
           >
             {{ $t('account.admin_nav.mode.accordion') }}
@@ -384,6 +392,7 @@ function jumpTo(id: string) {
             type="button"
             class="locale-opt"
             :class="{ active: navMode === 'manual' }"
+            :aria-pressed="navMode === 'manual'"
             @click="changeNavMode('manual')"
           >
             {{ $t('account.admin_nav.mode.manual') }}
@@ -392,6 +401,7 @@ function jumpTo(id: string) {
             type="button"
             class="locale-opt"
             :class="{ active: navMode === 'expanded' }"
+            :aria-pressed="navMode === 'expanded'"
             @click="changeNavMode('expanded')"
           >
             {{ $t('account.admin_nav.mode.expanded') }}
@@ -505,7 +515,11 @@ v-if="pwError" class="fh-notice" role="alert"
             {{ $t('account.twofa_manage_cta') }} <span aria-hidden="true">→</span>
           </RouterLink>
         </div>
-        <div v-else>
+        <div v-else-if="totpLoadFailed" class="fh-notice" role="alert" data-tone="error">
+          {{ $t('account.twofa_status_unavailable') }}
+          <button type="button" class="fh-btn-text" @click="loadTotp">{{ $t('common.retry') }}</button>
+        </div>
+        <div v-else-if="totpStatus">
           <p class="twofa-off">
             <span class="dot" />
             {{ $t('account.twofa_off') }}

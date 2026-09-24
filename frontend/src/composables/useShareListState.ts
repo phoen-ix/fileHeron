@@ -27,6 +27,9 @@ interface RenderGroup {
   items: ShareListItem[]
 }
 
+/** The state filter the list opens with and "Clear filters" returns to. */
+const DEFAULT_STATE_FILTER: ShareState = 'active'
+
 export function useShareListState(box: ComputedRef<'outbox' | 'inbox'>) {
   const { t } = useI18n()
   const { describe } = useApiError()
@@ -79,7 +82,7 @@ export function useShareListState(box: ComputedRef<'outbox' | 'inbox'>) {
 
   // Default to 'active' so the list opens with only usable shares; the
   // dropdown still has "All states" for opt-in.
-  const stateFilter = ref<ShareState | ''>('active')
+  const stateFilter = ref<ShareState | ''>(DEFAULT_STATE_FILTER)
   const partyKind = ref<'any' | 'user' | 'group'>('any')
   const partyUser = ref<UserSearchItem | null>(null)
   const partyGroup = ref<GroupResponse | null>(null)
@@ -169,8 +172,18 @@ export function useShareListState(box: ComputedRef<'outbox' | 'inbox'>) {
     if (!resetting) void load()
   }
 
+  // Whether anything differs from what the list opens with. The view tested
+  // `stateFilter` for truthiness, and the default 'active' is truthy, so
+  // "Clear filters" showed on every visit and clicking it only reloaded.
+  const filtersActive = computed(
+    () =>
+      partyKind.value !== 'any' ||
+      stateFilter.value !== DEFAULT_STATE_FILTER ||
+      subjectQuery.value !== '',
+  )
+
   function clearAllFilters() {
-    stateFilter.value = 'active'
+    stateFilter.value = DEFAULT_STATE_FILTER
     subjectQuery.value = ''
     clearParty()
   }
@@ -270,7 +283,7 @@ export function useShareListState(box: ComputedRef<'outbox' | 'inbox'>) {
       page.value = 1
       clearParty()
       groupBy.value = 'none'
-      stateFilter.value = 'active'
+      stateFilter.value = DEFAULT_STATE_FILTER
       subjectQuery.value = ''
       sort.reset()
       clearSelection()
@@ -380,6 +393,7 @@ export function useShareListState(box: ComputedRef<'outbox' | 'inbox'>) {
     // computed
     groupedItems,
     groupByOptions,
+    filtersActive,
     // methods
     pickUser,
     clearParty,

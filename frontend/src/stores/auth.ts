@@ -81,7 +81,9 @@ export const useAuthStore = defineStore('auth', () => {
         if (outcome === 'ok') {
           try {
             const resp = await getMe()
-            user.value = resp.data
+            // Only ADOPT: a login() that finished while this probe was in
+            // flight owns `user` now (see the early return above).
+            if (user.value === null) user.value = resp.data
           } catch (err) {
             // The refresh just minted a token, so /me failing is one of two
             // things. A 401/403 is a verdict on that token - stay anonymous.
@@ -89,7 +91,6 @@ export const useAuthStore = defineStore('auth', () => {
             // restarts the backend, a dropped connection, a timeout - is the
             // same "no answer" as an `unavailable` refresh, and memoising it
             // as anonymous stranded a valid session until a manual reload.
-            user.value = null
             unreachable = !isAuthVerdict(err)
           }
         } else {
@@ -99,12 +100,12 @@ export const useAuthStore = defineStore('auth', () => {
           // be CACHED as the answer: bootstrap runs once per page life, so
           // memoising a container-restart blip would leave the tab anonymous
           // until a manual reload. Dropping the memo lets the next navigation
-          // ask again.
+          // ask again. `user` is left as it is: null, unless a login()
+          // finished while this probe was in flight - which must not be undone.
           unreachable = outcome === 'unavailable'
-          user.value = null
         }
       } catch {
-        user.value = null
+        /* stays anonymous */
       }
       // Independently check whether the first-admin wizard is required.
       // Anonymous endpoint; fail-open (treat unreachable as "not required")

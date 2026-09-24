@@ -163,6 +163,30 @@ describe('useAuthStore', () => {
     expect(auth.user).toBe(null)
   })
 
+  it('an IN-FLIGHT bootstrap does not undo a login that finished meanwhile', async () => {
+    // The early return guards entry only. A re-probe still waiting on
+    // refreshSession when the user completes the login form used to land
+    // afterwards and null `user` - and the router guard awaiting that same
+    // promise bounced them to /login.
+    const { refreshSession } = await import('@/api/client')
+    const auth = useAuthStore()
+    let answer!: (v: 'unavailable') => void
+    vi.mocked(refreshSession).mockImplementationOnce(
+      () => new Promise((res) => (answer = res)) as never,
+    )
+    const probe = auth.bootstrap()
+
+    vi.mocked(authApi.login).mockResolvedValueOnce({
+      data: { access_token: 'tok', expires_in_seconds: 900 },
+    } as never)
+    vi.mocked(accountApi.getMe).mockResolvedValueOnce({ data: fakeMe } as never)
+    await auth.login('a@example.com', 'password!')
+
+    answer('unavailable')
+    await probe
+    expect(auth.user).toEqual(fakeMe)
+  })
+
   it('login() calls authApi.login then loads /me', async () => {
     vi.mocked(authApi.login).mockResolvedValueOnce({
       data: { access_token: 'tok', expires_in_seconds: 900 },

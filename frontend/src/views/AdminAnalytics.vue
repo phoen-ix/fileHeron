@@ -12,7 +12,7 @@ import { formatBytes } from '@/utils/bytes'
 import { downloadBlob } from '@/utils/downloadBlob'
 
 const { t } = useI18n()
-const { describe } = useApiError()
+const { describe, describeBlob } = useApiError()
 const ui = useUiStore()
 
 const data = ref<AnalyticsResponse | null>(null)
@@ -78,7 +78,8 @@ async function onExport() {
     const { data: blob } = await exportAnalyticsCsv(days.value)
     downloadBlob(blob as Blob, `analytics-${days.value}d.csv`)
   } catch (err) {
-    ui.pushToast(describe(err), 'error')
+    // A blob request's error body is a Blob too; describe() cannot read it.
+    ui.pushToast(await describeBlob(err), 'error')
   } finally {
     downloading.value = false
   }

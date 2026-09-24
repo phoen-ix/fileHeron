@@ -173,7 +173,7 @@ async function onSubmit() {
         'success',
       )
     } else {
-      ui.pushToast(t('share_create.toast_partial', { n: errorCount.value }), 'warn')
+      ui.pushToast(t('share_create.toast_partial', { n: errorCount.value }, errorCount.value), 'warn')
     }
   } catch (err) {
     // createShare failed before any swap - stay on the form with the error.

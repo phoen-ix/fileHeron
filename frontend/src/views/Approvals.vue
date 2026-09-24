@@ -72,7 +72,7 @@ v-else-if="errorMsg" class="fh-notice" role="alert"
           </RouterLink>
           <div class="sub fh-mono">
             <span v-if="s.sender">{{ t('approvals.from', { name: s.sender.display_name }) }} · </span>
-            {{ t('approvals.file_count', { n: s.file_count }) }}
+            {{ t('approvals.file_count', { n: s.file_count }, s.file_count) }}
             · {{ formatBytes(s.total_size_bytes) }}
             · {{ formatDate(s.created_at) }}
           </div>

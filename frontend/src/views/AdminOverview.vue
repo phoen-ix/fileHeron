@@ -124,7 +124,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { type RouteLocationRaw, useRouter } from 'vue-router'
 
@@ -232,6 +232,11 @@ interface Hit {
 const query = ref('')
 const open = ref(false)
 const active = ref(0)
+// Refining the query shrinks the list; an index left past its end highlighted
+// nothing and made Enter do nothing. Every new query starts at the top hit.
+watch(query, () => {
+  active.value = 0
+})
 
 function crumbFor(routeName: string): string {
   const m = findNavItem(routeName)

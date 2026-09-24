@@ -231,16 +231,21 @@ watch(query, (v) => {
   }, 180)
 })
 
+// A slower answer for "ann" must not overwrite the one for "annabelle".
+let searchSeq = 0
+
 async function doSearch(q: string) {
+  const seq = ++searchSeq
   loading.value = true
   try {
     const { data } = await searchUsers(q)
+    if (seq !== searchSeq) return
     allUserResults.value = data.items
     cursorIdx.value = 0
   } catch (err) {
-    errorMsg.value = describe(err)
+    if (seq === searchSeq) errorMsg.value = describe(err)
   } finally {
-    loading.value = false
+    if (seq === searchSeq) loading.value = false
   }
 }
 

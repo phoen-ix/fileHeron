@@ -259,12 +259,21 @@ def test_toggle_groups_expose_their_selected_state():
     """The header LanguageSwitcher does it right; its two duplicates and the
     expiry presets did not, so a blind user could not tell which option was
     active before or after activating one."""
+    # Per BUTTON, not per file: "some aria-pressed somewhere in Account.vue"
+    # stayed green while the admin-nav mode toggles on the same page had none.
     for rel in (
         "views/Account.vue",
         "views/RegisterFromInvite.vue",
         "components/ExpiryPicker.vue",
     ):
-        assert "aria-pressed" in (FRONTEND / rel).read_text(), rel
+        src = (FRONTEND / rel).read_text()
+        toggles = [
+            tag for tag in re.findall(r"<button\b[^>]*>", src, re.S)
+            if re.search(r":class=\"\{\s*active:", tag)
+        ]
+        assert toggles, f"{rel}: no toggle buttons found - the scan rotted"
+        missing = [t for t in toggles if "aria-pressed" not in t]
+        assert not missing, f"{rel}: toggle buttons without aria-pressed: {missing}"
 
 
 def test_the_recipient_picker_honours_the_combobox_contract():

@@ -276,7 +276,7 @@ async function onUploadAdded() {
     addRegistrar.clear()
     addUpload.reset()
     showAddFiles.value = false
-    ui.pushToast(t('share_detail.files_added_toast', { n: added }), 'success')
+    ui.pushToast(t('share_detail.files_added_toast', { n: added }, added), 'success')
   } catch (err) {
     ui.pushToast(describe(err), 'error')
   } finally {
@@ -623,7 +623,7 @@ class="fh-notice" role="alert"
            a decision of its own rather than a re-run of approve/reject. -->
       <div v-if="addedAwaitingReview > 0" class="approval-box">
         <p class="fh-notice" data-tone="warn">
-          {{ t('approvals.added_files_banner', { count: addedAwaitingReview }) }}
+          {{ t('approvals.added_files_banner', { count: addedAwaitingReview }, addedAwaitingReview) }}
         </p>
         <div v-if="canDecideAdded" class="approver-buttons">
           <button

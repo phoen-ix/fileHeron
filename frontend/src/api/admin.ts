@@ -410,6 +410,12 @@ export function erasureReceiptPdf(auditId: number) {
   return api.get(`/admin/erasure-receipts/${auditId}/pdf`, { responseType: 'blob' })
 }
 
+/** The highest `page` the audit, mail and error log routes accept
+ * (`Query(..., le=1000)` in routers/admin/{audit,mail,errors}.py; pinned by
+ * backend/tests/test_frontend_log_page_cap.py). The pager used to offer page
+ * 1001 and get a 422 back. */
+export const ADMIN_LOG_MAX_PAGE = 1000
+
 export function listAuditLog(params: {
   event_type?: string
   actor_user_id?: number

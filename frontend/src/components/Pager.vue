@@ -2,11 +2,20 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-const props = defineProps<{ page: number; total: number; pageSize: number }>()
+const props = defineProps<{
+  page: number
+  total: number
+  pageSize: number
+  /** The server's own page ceiling, when it has one below what `total` implies. */
+  maxPage?: number
+}>()
 const emit = defineEmits<{ 'update:page': [n: number] }>()
 const { t } = useI18n()
 
-const totalPages = computed(() => Math.max(1, Math.ceil(props.total / props.pageSize)))
+const totalPages = computed(() => {
+  const pages = Math.max(1, Math.ceil(props.total / props.pageSize))
+  return props.maxPage ? Math.min(pages, props.maxPage) : pages
+})
 </script>
 
 <template>

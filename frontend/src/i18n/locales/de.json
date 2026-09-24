@@ -986,7 +986,7 @@
     "test_fail": "Verbindung fehlgeschlagen",
     "folders": "Ordner",
     "saved_toast": "Posteingang-Einstellungen gespeichert",
-    "fetch_done": "Abgerufen - {n} neue Nachricht(en)",
+    "fetch_done": "Abgerufen - {n} neue Nachricht | Abgerufen - {n} neue Nachrichten",
     "fetch_empty": "Keine neue Mail - {mailbox} hat {total} Nachricht(en)",
     "fetch_skipped": "Übersprungen: {reason}",
     "fetch_failed": "Abruf fehlgeschlagen",
@@ -1001,7 +1001,7 @@
   "admin_inbox": {
     "intro": "Aus dem konfigurierten Postfach abgerufene Nachrichten - Antworten, Unzustellbarkeitsmeldungen und automatische Antworten.",
     "fetch_now": "Jetzt abrufen",
-    "fetch_done": "{n} neue Nachricht(en) abgerufen",
+    "fetch_done": "{n} neue Nachricht abgerufen | {n} neue Nachrichten abgerufen",
     "fetch_empty": "Keine neue Mail - {mailbox} hat {total} Nachricht(en)",
     "search_placeholder": "Betreff oder Absender suchen…",
     "class_all": "Alle Typen",
@@ -1282,6 +1282,7 @@
     "remove_confirm": "Diesen Passkey entfernen? Anmeldung damit ist anschließend nicht mehr möglich.",
     "removed_toast": "Passkey entfernt.",
     "cancelled": "Passkey-Registrierung wurde abgebrochen.",
+    "already_registered": "Dieser Authentifikator ist bereits für dein Konto registriert.",
     "created": "hinzugefügt {d}",
     "last_used": "zuletzt verwendet {d}",
     "never_used": "noch nicht verwendet"
@@ -1315,7 +1316,7 @@
       "server_error": "Serverfehler"
     },
     "headline": {
-      "share_created": "{sender_name} hat dir {file_count} Datei(en) gesendet.",
+      "share_created": "{sender_name} hat dir {file_count} Datei gesendet. | {sender_name} hat dir {file_count} Dateien gesendet.",
       "share_expiring": "Freigabe „{subject}\" läuft in 24 Stunden ab.",
       "public_link_downloaded": "Öffentlicher Link heruntergeladen: {filename}",
       "account_created": "{invitee_name} hat deine Einladung angenommen.",
@@ -1772,6 +1773,7 @@
     "change_password_help": "Nach dem Ändern musst du dich auf jedem Gerät neu anmelden.",
     "change_password_submit": "Passwort ändern",
     "twofa_off": "Zwei-Faktor-Auth ist aus.",
+    "twofa_status_unavailable": "Der Status der Zwei-Faktor-Authentifizierung konnte nicht geladen werden.",
     "twofa_on": "Zwei-Faktor-Auth ist aktiv.",
     "twofa_recovery_remaining": "{n} Wiederherstellungscode übrig | {n} Wiederherstellungscodes übrig",
     "twofa_setup_cta": "Zwei-Faktor einrichten",
@@ -1865,7 +1867,7 @@
     "in_days": "in {n} Tag | in {n} Tagen",
     "in_past": "bereits vorbei - bitte zukünftigen Zeitpunkt wählen",
     "never_label": "Nie",
-    "never_help": "Diese Freigabe läuft nicht automatisch ab. Manuell widerrufen, wenn nicht mehr benötigt."
+    "never_help": "Läuft nicht automatisch ab. Manuell widerrufen, wenn nicht mehr benötigt."
   },
   "file_preview": {
     "open": "Vorschau",
@@ -1877,11 +1879,9 @@
   },
   "files": {
     "state": {
-      "pending": "Ausstehend",
       "ready_unscanned": "Wird geprüft",
       "clean": "Sauber",
       "infected": "Infiziert",
-      "failed": "Fehlgeschlagen",
       "deleted": "Gelöscht",
       "uploading": "Wird hochgeladen"
     },
@@ -1979,7 +1979,7 @@
   "approvals": {
     "added_files_approve_cta": "Hinzugefügte Dateien freigeben",
     "added_files_approved_toast": "Hinzugefügte Dateien für Empfänger freigegeben.",
-    "added_files_banner": "{count} Datei(en) wurden nach der Genehmigung dieser Freigabe hinzugefügt und warten auf Prüfung. Empfänger können sie noch nicht herunterladen.",
+    "added_files_banner": "{count} Datei wurde nach der Genehmigung dieser Freigabe hinzugefügt und wartet auf Prüfung. Empfänger können sie noch nicht herunterladen. | {count} Dateien wurden nach der Genehmigung dieser Freigabe hinzugefügt und warten auf Prüfung. Empfänger können sie noch nicht herunterladen.",
     "added_files_reject_cta": "Hinzugefügte Dateien verwerfen",
     "added_files_rejected_toast": "Hinzugefügte Dateien verworfen.",
     "approve_cta": "Genehmigen",
@@ -1992,7 +1992,7 @@
     "discarded_toast": "Freigabe verworfen.",
     "empty": "Es wartet nichts auf deine Genehmigung.",
     "eyebrow": "Genehmigungen",
-    "file_count": "{n} Datei(en)",
+    "file_count": "{n} Datei | {n} Dateien",
     "from": "Von {name}",
     "intro": "Freigaben, die auf deine Genehmigung warten, bevor die Empfänger darauf zugreifen können.",
     "no_subject": "(kein Betreff)",
@@ -2042,7 +2042,7 @@
     "sending": "Wird gesendet…",
     "toast_done": "Freigabe erstellt.",
     "toast_pending": "Freigabe zur Genehmigung eingereicht.",
-    "toast_partial": "{n} Datei(en) konnten nicht hochgeladen werden. Unten erneut versuchen.",
+    "toast_partial": "{n} Datei konnte nicht hochgeladen werden. Unten erneut versuchen. | {n} Dateien konnten nicht hochgeladen werden. Unten erneut versuchen.",
     "public_link": {
       "toggle_label": "Auch einen öffentlichen Download-Link erstellen",
       "toggle_help": "Jeder mit dem Link kann herunterladen - kein fileHeron-Konto nötig. Optional mit Passwort und Download-Limit absichern.",
@@ -2059,7 +2059,7 @@
     "progress": {
       "uploading_title": "Wird hochgeladen…",
       "done_title": "Alle Dateien gesendet",
-      "partial_title": "{n} Datei(en) fehlgeschlagen",
+      "partial_title": "{n} Datei fehlgeschlagen | {n} Dateien fehlgeschlagen",
       "log_heading": "Aktivität",
       "view_share": "Freigabe ansehen",
       "create_another": "Weitere erstellen",
@@ -2104,7 +2104,7 @@
     "add_files_notify": "Empfänger über die neuen Dateien benachrichtigen",
     "add_files_cta": "Hochladen",
     "add_files_has_errors": "Einige Uploads sind fehlgeschlagen - wiederholen oder entfernen, dann erneut versuchen.",
-    "files_added_toast": "{n} Datei(en) zur Freigabe hinzugefügt."
+    "files_added_toast": "{n} Datei zur Freigabe hinzugefügt. | {n} Dateien zur Freigabe hinzugefügt."
   },
   "public_link": {
     "title": "Öffentlicher Link",
@@ -2274,11 +2274,11 @@
       "bar_aria": "Sammel-Aktionen",
       "confirm": {
         "title": "Ausgewählte Freigaben ablaufen lassen?",
-        "body": "{n} Freigabe(n) werden sofort beendet. Die Dateien dieser Freigaben werden endgültig von der Festplatte gelöscht. Das lässt sich nicht rückgängig machen.",
+        "body": "{n} Freigabe wird sofort beendet. Ihre Dateien werden endgültig von der Festplatte gelöscht. Das lässt sich nicht rückgängig machen. | {n} Freigaben werden sofort beendet. Die Dateien dieser Freigaben werden endgültig von der Festplatte gelöscht. Das lässt sich nicht rückgängig machen.",
         "action": "Jetzt ablaufen lassen"
       },
       "toast": {
-        "all_expired": "{n} Freigabe(n) beendet.",
+        "all_expired": "{n} Freigabe beendet. | {n} Freigaben beendet.",
         "partial": "{ok} beendet, {fail} fehlgeschlagen (wahrscheinlich bereits geänderter Status).",
         "all_failed": "Keine der ausgewählten Freigaben konnte beendet werden."
       }
@@ -2295,7 +2295,7 @@
     "revoke_confirm": "Diese Sitzung von {who} widerrufen? Das Gerät wird bei der nächsten Anfrage abgemeldet.",
     "revoke_all_confirm": "Alle aktiven Sitzungen von {who} widerrufen? Sie werden auf allen Geräten abgemeldet.",
     "revoked_toast": "Sitzung widerrufen.",
-    "revoked_all_toast": "{n} Sitzung(en) widerrufen.",
+    "revoked_all_toast": "{n} Sitzung widerrufen. | {n} Sitzungen widerrufen.",
     "deleted_user": "(gelöschter Benutzer)",
     "unknown_device": "unbekanntes Gerät",
     "state_revoked": "widerrufen",
@@ -2677,7 +2677,7 @@
     "allowed_toast": "{subject} freigegeben und in die Ausnahmeliste aufgenommen.",
     "release_all_cta": "Alle freigeben",
     "confirm_release_all": "Alle derzeit aktiven Sperren aufheben? Quellen, die weiter auffallen, werden erneut gesperrt.",
-    "released_all_toast": "{count} Sperre(n) aufgehoben.",
+    "released_all_toast": "{count} Sperre aufgehoben. | {count} Sperren aufgehoben.",
     "allowlist_section": "Diese nie sperren",
     "allowlist_help": "Adressen und Bereiche, die der Schutz nie zählt oder sperrt – Ihr eigener Büro-Ausgang, ein Monitoring-Dienst, das Mail-Gateway eines Kunden. Das ist Ihr Notausgang aus einer Sperre, die den Dienst verweigert: Halten Sie die Liste aktuell.",
     "allowlist_add_placeholder": "203.0.113.0/24",

@@ -18,7 +18,7 @@ import { formatBytes } from '@/utils/bytes'
 import type { InboxDetail } from '@/types/api'
 
 const { t } = useI18n()
-const { describe } = useApiError()
+const { describe, describeBlob } = useApiError()
 const { formatDate } = useSiteDateFormat()
 const ui = useUiStore()
 const route = useRoute()
@@ -77,7 +77,9 @@ async function download(attId: number, filename: string) {
     const { data } = await downloadInboxAttachment(id, attId)
     downloadBlob(data as Blob, filename)
   } catch (err) {
-    ui.pushToast(describe(err), 'warn')
+    // A blob request's error body is a Blob too; describe() cannot read it, so
+    // 409 ATTACHMENT_NOT_CLEAN read as "Something went wrong".
+    ui.pushToast(await describeBlob(err), 'warn')
   }
 }
 

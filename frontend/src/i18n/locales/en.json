@@ -986,7 +986,7 @@
     "test_fail": "Connection failed",
     "folders": "Folders",
     "saved_toast": "Inbound mail settings saved",
-    "fetch_done": "Fetched - {n} new message(s)",
+    "fetch_done": "Fetched - {n} new message | Fetched - {n} new messages",
     "fetch_empty": "No new mail - {mailbox} has {total} message(s)",
     "fetch_skipped": "Skipped: {reason}",
     "fetch_failed": "Fetch failed",
@@ -1001,7 +1001,7 @@
   "admin_inbox": {
     "intro": "Messages fetched from the configured mailbox - replies, bounces and auto-replies.",
     "fetch_now": "Fetch now",
-    "fetch_done": "Fetched {n} new message(s)",
+    "fetch_done": "Fetched {n} new message | Fetched {n} new messages",
     "fetch_empty": "No new mail - {mailbox} has {total} message(s)",
     "search_placeholder": "Search subject or sender…",
     "class_all": "All types",
@@ -1282,6 +1282,7 @@
     "remove_confirm": "Remove this passkey? You won't be able to use it to sign in anymore.",
     "removed_toast": "Passkey removed.",
     "cancelled": "Passkey registration was cancelled.",
+    "already_registered": "This authenticator is already registered to your account.",
     "created": "added {d}",
     "last_used": "last used {d}",
     "never_used": "never used"
@@ -1315,7 +1316,7 @@
       "server_error": "Server error"
     },
     "headline": {
-      "share_created": "{sender_name} sent you {file_count} file(s).",
+      "share_created": "{sender_name} sent you {file_count} file. | {sender_name} sent you {file_count} files.",
       "share_expiring": "Share \"{subject}\" expires in 24 hours.",
       "public_link_downloaded": "Public link downloaded: {filename}",
       "account_created": "{invitee_name} accepted your invite.",
@@ -1772,6 +1773,7 @@
     "change_password_help": "After changing, you'll need to sign in again on every device.",
     "change_password_submit": "Change password",
     "twofa_off": "Two-factor auth is off.",
+    "twofa_status_unavailable": "Two-factor status could not be loaded.",
     "twofa_on": "Two-factor auth is on.",
     "twofa_recovery_remaining": "{n} recovery code left | {n} recovery codes left",
     "twofa_setup_cta": "Set up two-factor auth",
@@ -1865,7 +1867,7 @@
     "in_days": "in {n} day | in {n} days",
     "in_past": "already past - pick a future time",
     "never_label": "Never",
-    "never_help": "This share will not expire automatically. Revoke it manually when you're done."
+    "never_help": "This will not expire automatically. Revoke it manually when it is no longer needed."
   },
   "file_preview": {
     "open": "Preview",
@@ -1877,11 +1879,9 @@
   },
   "files": {
     "state": {
-      "pending": "Pending",
       "ready_unscanned": "Scanning",
       "clean": "Clean",
       "infected": "Infected",
-      "failed": "Failed",
       "deleted": "Deleted",
       "uploading": "Uploading"
     },
@@ -1979,7 +1979,7 @@
   "approvals": {
     "added_files_approve_cta": "Release added files",
     "added_files_approved_toast": "Added files released to recipients.",
-    "added_files_banner": "{count} file(s) were added after this share was approved and are waiting for review. Recipients cannot download them yet.",
+    "added_files_banner": "{count} file was added after this share was approved and is waiting for review. Recipients cannot download it yet. | {count} files were added after this share was approved and are waiting for review. Recipients cannot download them yet.",
     "added_files_reject_cta": "Discard added files",
     "added_files_rejected_toast": "Added files discarded.",
     "approve_cta": "Approve",
@@ -1992,7 +1992,7 @@
     "discarded_toast": "Share discarded.",
     "empty": "Nothing is waiting for your approval.",
     "eyebrow": "Approvals",
-    "file_count": "{n} file(s)",
+    "file_count": "{n} file | {n} files",
     "from": "From {name}",
     "intro": "Shares waiting for your approval before their recipients can access them.",
     "no_subject": "(no subject)",
@@ -2042,7 +2042,7 @@
     "sending": "Sending…",
     "toast_done": "Share created.",
     "toast_pending": "Share submitted for approval.",
-    "toast_partial": "{n} file(s) failed to upload. Retry below.",
+    "toast_partial": "{n} file failed to upload. Retry below. | {n} files failed to upload. Retry below.",
     "public_link": {
       "toggle_label": "Also create a public download link",
       "toggle_help": "Anyone with the link can download - no fileHeron account needed. Optionally protect with a password and a download counter.",
@@ -2059,7 +2059,7 @@
     "progress": {
       "uploading_title": "Uploading…",
       "done_title": "All files sent",
-      "partial_title": "{n} file(s) failed",
+      "partial_title": "{n} file failed | {n} files failed",
       "log_heading": "Activity",
       "view_share": "View share",
       "create_another": "Create another",
@@ -2104,7 +2104,7 @@
     "add_files_notify": "Also notify recipients of the new files",
     "add_files_cta": "Upload",
     "add_files_has_errors": "Some uploads failed - retry or remove them, then try again.",
-    "files_added_toast": "Added {n} file(s) to the share."
+    "files_added_toast": "Added {n} file to the share. | Added {n} files to the share."
   },
   "public_link": {
     "title": "Public link",
@@ -2274,11 +2274,11 @@
       "bar_aria": "Bulk actions",
       "confirm": {
         "title": "Expire selected shares?",
-        "body": "{n} share(s) will be expired immediately. Files on those shares will be hard-deleted from disk. This cannot be undone.",
+        "body": "{n} share will be expired immediately. Its files will be hard-deleted from disk. This cannot be undone. | {n} shares will be expired immediately. Files on those shares will be hard-deleted from disk. This cannot be undone.",
         "action": "Expire now"
       },
       "toast": {
-        "all_expired": "{n} share(s) expired.",
+        "all_expired": "{n} share expired. | {n} shares expired.",
         "partial": "{ok} expired, {fail} failed (likely already changed state).",
         "all_failed": "Could not expire any of the selected shares."
       }
@@ -2295,7 +2295,7 @@
     "revoke_confirm": "Revoke this session for {who}? The device will be signed out on its next request.",
     "revoke_all_confirm": "Revoke every active session for {who}? They will be signed out on all devices.",
     "revoked_toast": "Session revoked.",
-    "revoked_all_toast": "Revoked {n} session(s).",
+    "revoked_all_toast": "Revoked {n} session. | Revoked {n} sessions.",
     "deleted_user": "(deleted user)",
     "unknown_device": "unknown device",
     "state_revoked": "revoked",
@@ -2677,7 +2677,7 @@
     "allowed_toast": "{subject} released and allowlisted.",
     "release_all_cta": "Release all",
     "confirm_release_all": "Release every block currently in force? Sources that keep offending will be blocked again.",
-    "released_all_toast": "{count} block(s) released.",
+    "released_all_toast": "{count} block released. | {count} blocks released.",
     "allowlist_section": "Never block these",
     "allowlist_help": "Addresses and ranges the guard will never count against or block — your own office egress, a monitoring service, a customer's mail gateway. This is your escape hatch from a control that denies service, so keep it current.",
     "allowlist_add_placeholder": "203.0.113.0/24",

@@ -62,6 +62,7 @@ const confirmError = ref<string | null>(null)
 const submitting = ref(false)
 const checking = ref(false)
 let jobPollHandle: ReturnType<typeof setInterval> | null = null
+let unmounted = false
 
 // --- Maintenance / drain-before-update ---
 const transferActivity = ref<TransferActivity | null>(null)
@@ -217,11 +218,20 @@ async function loadUpdaterStatus() {
 
 async function pollJob(jobId: string) {
   if (jobPollHandle) clearInterval(jobPollHandle)
+  jobPollHandle = null
+  // Terminal once, toast once. The first tick is awaited and the interval was
+  // armed AFTER it unconditionally - so a job already finished on the first
+  // look re-armed the poll and toasted again, and an unmount landing during
+  // that first request left a 2 s poll running with nothing to show it.
+  let finished = false
   const tick = async () => {
+    if (finished) return
     try {
       const { data } = await getUpdaterJob(jobId)
+      if (finished) return
       activeJob.value = data
       if (data.state === 'healthy' || data.state === 'failed' || data.state === 'rolled_back') {
+        finished = true
         if (jobPollHandle) clearInterval(jobPollHandle)
         jobPollHandle = null
         // Backend reports the new running_version after restart - refresh.
@@ -256,6 +266,7 @@ async function pollJob(jobId: string) {
     }
   }
   await tick()
+  if (finished || unmounted) return
   jobPollHandle = setInterval(tick, 2000)
 }
 
@@ -337,6 +348,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  unmounted = true
   if (jobPollHandle) clearInterval(jobPollHandle)
   if (reloadTimer) clearTimeout(reloadTimer)
   stopActivityPoll()

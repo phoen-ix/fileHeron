@@ -326,7 +326,7 @@ async function onReleaseAll() {
   try {
     const { data } = await releaseAllIpBlocks()
     ui.pushToast(
-      t('admin_ip_blocks.released_all_toast', { count: data.released }),
+      t('admin_ip_blocks.released_all_toast', { count: data.released }, data.released),
       'success',
     )
     await load()

@@ -39,6 +39,7 @@ const {
   loading,
   errorMsg,
   stateFilter,
+  filtersActive,
   partyKind,
   partyGroup,
   userQuery,
@@ -89,7 +90,7 @@ async function confirmBulkExpire() {
     const failedN = data.failed.length
     if (expiredN > 0 && failedN === 0) {
       ui.pushToast(
-        t('share_list.bulk.toast.all_expired', { n: expiredN }),
+        t('share_list.bulk.toast.all_expired', { n: expiredN }, expiredN),
         'success',
       )
     } else if (expiredN > 0 && failedN > 0) {
@@ -224,7 +225,7 @@ onMounted(load)
       </select>
 
       <button
-        v-if="partyKind !== 'any' || stateFilter || subjectQuery"
+        v-if="filtersActive"
         type="button"
         class="fh-btn-text"
         @click="clearAllFilters"
@@ -398,7 +399,7 @@ v-else-if="errorMsg" class="fh-notice" role="alert"
       <div class="fh-modal fh-modal--small" role="dialog" :aria-label="t('share_list.bulk.confirm.title')">
         <h2 class="modal-h2">{{ t('share_list.bulk.confirm.title') }}</h2>
         <p class="modal-body">
-          {{ t('share_list.bulk.confirm.body', { n: selectedCount }) }}
+          {{ t('share_list.bulk.confirm.body', { n: selectedCount }, selectedCount) }}
         </p>
         <div class="form-actions">
           <button

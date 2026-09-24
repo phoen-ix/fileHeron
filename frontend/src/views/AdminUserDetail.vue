@@ -200,7 +200,7 @@ async function onRevokeAllSessions() {
   revokingAll.value = true
   try {
     const { data } = await adminRevokeUserSessions(user.value.id)
-    ui.pushToast(t('admin_sessions.revoked_all_toast', { n: data.revoked }), 'success')
+    ui.pushToast(t('admin_sessions.revoked_all_toast', { n: data.revoked }, data.revoked), 'success')
     await loadSessions()
   } catch (err) {
     ui.pushToast(describe(err), 'error')

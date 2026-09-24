@@ -3,7 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 
-import { exportMailCsv, listMailLog } from '@/api/admin'
+import { ADMIN_LOG_MAX_PAGE, exportMailCsv, listMailLog } from '@/api/admin'
 import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
 import Pager from '@/components/Pager.vue'
 import { useApiError } from '@/composables/useApiError'
@@ -220,7 +220,7 @@ v-else-if="errorMsg" class="fh-notice" role="alert"
       </tbody>
     </table>
 
-    <Pager v-model:page="page" :total="total" :page-size="pageSize" />
+    <Pager v-model:page="page" :total="total" :page-size="pageSize" :max-page="ADMIN_LOG_MAX_PAGE" />
   </div>
 </template>
 

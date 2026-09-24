@@ -264,6 +264,14 @@ export function useUpload(shareId: Ref<string | null>) {
         },
       })
 
+      // The server says where tusd lives (TUS_PUBLIC_BASE); the plugin's
+      // '/uploads/' is only the default. @uppy/tus merges a file's own `tus`
+      // options over the plugin's, so a deployment that moved tusd is honoured
+      // instead of every resumable upload going to the wrong path.
+      if (data.tus_endpoint) {
+        uppy.setFileState(uppyId, { tus: { endpoint: data.tus_endpoint } } as never)
+      }
+
       item.state = 'uploading'
       pushLog(item, 'started')
       // Uppy upload returns when this batch completes; per-file

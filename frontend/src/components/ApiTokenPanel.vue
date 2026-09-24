@@ -173,8 +173,8 @@ import type { ApiTokenListItem, CreateApiTokenResponse } from '@/types/api'
 import { defaultTokenExpiryLocal, parseServerDate, siteLocalIsoToUtcIso } from '@/utils/datetime'
 import { TOKEN_SCOPE_GROUPS, scopeLabelKey } from '@/utils/tokenScopes'
 
-// Token-appropriate durations; default null → the picker shows "Never" so a
-// token stays unlimited unless the user opts into an expiry.
+// Token-appropriate durations. The form opens on DEFAULT_EXPIRY_LOCAL (90 days,
+// see below); "never" is offered but has to be picked.
 const TOKEN_PRESETS = ['7d', '30d', '90d', '1y', 'never'] as const
 
 /** Shared with AdminApiTokens.vue so the two forms cannot drift apart. */

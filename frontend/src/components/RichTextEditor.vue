@@ -251,6 +251,14 @@ watch(
   () => props.modelValue,
   (val) => {
     if (!view || val === lastValue) return
+    // A debounced emit of the PREVIOUS content must not land after the swap:
+    // on the email-template page one editor serves every template, and a
+    // keystroke inside the 150 ms window either skipped the discard prompt or
+    // wrote the old template's HTML into the newly selected one.
+    if (emitTimer) {
+      clearTimeout(emitTimer)
+      emitTimer = null
+    }
     lastValue = val
     view.updateState(EditorState.create({ doc: htmlToDoc(val), plugins }))
   },

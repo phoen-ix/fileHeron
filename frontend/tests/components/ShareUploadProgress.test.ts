@@ -110,6 +110,6 @@ describe('ShareUploadProgress', () => {
 
   it('shows the partial-failure header when settled with errors', () => {
     const w = makeWrapper({ isActive: false, errorCount: 2 })
-    expect(w.find('.progress-title').text()).toBe('2 file(s) failed')
+    expect(w.find('.progress-title').text()).toBe('2 files failed')
   })
 })

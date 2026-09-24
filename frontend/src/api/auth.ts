@@ -30,10 +30,6 @@ export function loginWithRecovery(payload: {
   return api.post<LoginResponse>('/auth/login/recovery', payload)
 }
 
-export function refresh() {
-  return api.post('/auth/refresh')
-}
-
 export function logout() {
   return api.post('/auth/logout')
 }

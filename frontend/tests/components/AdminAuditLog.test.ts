@@ -62,6 +62,7 @@ const listAuditLog = vi.fn(async (_p?: unknown) => ({
 const exportAuditCsv = vi.fn(async (_p?: unknown) => ({ data: new Blob() }))
 
 vi.mock('@/api/admin', () => ({
+  ADMIN_LOG_MAX_PAGE: 1000,
   listAuditLog: (p: unknown) => listAuditLog(p),
   exportAuditCsv: (p: unknown) => exportAuditCsv(p),
 }))

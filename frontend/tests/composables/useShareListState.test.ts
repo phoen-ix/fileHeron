@@ -138,3 +138,16 @@ describe('useShareListState user filter', () => {
     expect(state.userSuggestions.value.map((u) => u.display_name)).toEqual(['Annabelle'])
   })
 })
+
+describe('useShareListState filtersActive', () => {
+  it('is false on a fresh list, whose default state filter is "active"', () => {
+    // The view tested `stateFilter` for truthiness; 'active' is truthy, so
+    // "Clear filters" showed on every visit and clicking it only reloaded.
+    const { state } = setup()
+    expect(state.filtersActive.value).toBe(false)
+    state.stateFilter.value = 'expired'
+    expect(state.filtersActive.value).toBe(true)
+    state.clearAllFilters()
+    expect(state.filtersActive.value).toBe(false)
+  })
+})

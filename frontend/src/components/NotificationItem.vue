@@ -34,7 +34,13 @@ const headline = computed(() => {
     return t('notif_bell.headline.ops_alert.generic', payload as Record<string, unknown>)
   }
   const key = `notif_bell.headline.${props.item.category}`
-  if (te(key)) return t(key, payload as Record<string, unknown>)
+  // A payload that carries a file count picks the singular/plural form.
+  const count = (payload as Record<string, unknown>).file_count
+  if (te(key)) {
+    return typeof count === 'number'
+      ? t(key, payload as Record<string, unknown>, count)
+      : t(key, payload as Record<string, unknown>)
+  }
   return t('notif_bell.headline.generic')
 })
 

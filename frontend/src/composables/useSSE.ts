@@ -107,6 +107,10 @@ export function useSSE(opts: UseSSEOptions) {
       return
     }
     connecting = false
+    // stop() may have run while the token was being minted (a logout, an
+    // unmount); opening now would leak a stream nothing can close, delivering
+    // the previous user's events for up to 60 s.
+    if (stopped) return
     es = new EventSource(u, { withCredentials: true })
     es.onopen = () => {
       connected.value = true

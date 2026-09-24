@@ -139,7 +139,7 @@ async function onFetchNow() {
     if (data.ok && data.skipped) {
       ui.pushToast(t('admin_imap.fetch_skipped', { reason: data.skipped }), 'warn')
     } else if (data.ok && (data.ingested ?? 0) > 0) {
-      ui.pushToast(t('admin_imap.fetch_done', { n: data.ingested ?? 0 }), 'success')
+      ui.pushToast(t('admin_imap.fetch_done', { n: data.ingested ?? 0 }, data.ingested ?? 0), 'success')
     } else if (data.ok) {
       ui.pushToast(
         t('admin_imap.fetch_empty', { mailbox: data.mailbox ?? 'INBOX', total: data.total ?? 0 }),

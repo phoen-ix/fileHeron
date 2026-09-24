@@ -28,11 +28,12 @@ const DETAIL = {
 
 const getInboxMessage = vi.fn(async () => ({ data: DETAIL }))
 const updateInboxStatus = vi.fn(async () => ({ data: { ...DETAIL, status: 'read' } }))
+const downloadInboxAttachment = vi.fn()
 vi.mock('@/api/admin', () => ({
   getInboxMessage: () => getInboxMessage(),
   updateInboxStatus: () => updateInboxStatus(),
   deleteInboxMessage: vi.fn(),
-  downloadInboxAttachment: vi.fn(),
+  downloadInboxAttachment: (...a: unknown[]) => downloadInboxAttachment(...a),
 }))
 
 vi.mock('vue-router', () => ({
@@ -82,5 +83,29 @@ describe('AdminInboxDetail', () => {
     await flushPromises()
     expect(w.text()).toContain('a.pdf')
     expect(w.findAll('button').some((b) => b.text() === 'Download')).toBe(true)
+  })
+})
+
+
+describe('AdminInboxDetail attachment download', () => {
+  it("shows the server's reason from a Blob error body", async () => {
+    // responseType 'blob' turns the JSON error envelope into a Blob, which
+    // describe() cannot read - 409 ATTACHMENT_NOT_CLEAN read "Something went wrong".
+    const body = new Blob([JSON.stringify({ code: 'ATTACHMENT_NOT_CLEAN', error: 'x' })], {
+      type: 'application/json',
+    })
+    downloadInboxAttachment.mockRejectedValueOnce(
+      Object.assign(new Error('409'), { isAxiosError: true, response: { status: 409, data: body } }),
+    )
+    const w = makeWrapper()
+    await flushPromises()
+    const btn = w.findAll('button').find((b) => b.text().includes('a.pdf'))
+      ?? w.findAll('button').find((b) => b.text().toLowerCase().includes('download'))
+    expect(btn, 'no attachment download button').toBeTruthy()
+    await btn!.trigger('click')
+    await flushPromises()
+    await new Promise((r) => setTimeout(r, 0))
+    await flushPromises()
+    expect(pushToast).toHaveBeenCalledWith(en.errors.ATTACHMENT_NOT_CLEAN, 'warn')
   })
 })

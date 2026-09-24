@@ -107,6 +107,13 @@ def test_an_over_long_id_is_a_clean_400():
     assert exc.value.code == "TUSD_INVALID_UPLOAD_ID"
 
 
+def test_a_trailing_newline_is_not_part_of_an_id():
+    """`$` matches before a final newline, so `.match` accepted "abc\n"."""
+    with pytest.raises(AppError) as exc:
+        _check_tus_upload_id("0123456789abcdef\n")
+    assert exc.value.code == "TUSD_INVALID_UPLOAD_ID"
+
+
 def test_a_real_tusd_id_still_passes():
     """Control: tusd's own ids are 32 hex chars."""
     assert _check_tus_upload_id("0123456789abcdef0123456789abcdef") is not None

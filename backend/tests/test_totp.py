@@ -265,3 +265,40 @@ async def test_status_endpoint_reports_correctly(make_user, client):
     assert body["enabled"] is True
     assert body["enabled_at"] is not None
     assert body["recovery_codes_remaining"] == 10
+
+
+@pytest.mark.asyncio
+async def test_a_lockout_by_bad_recovery_codes_is_audited_and_mailed(make_user, client, db, monkeypatch):
+    """The password and TOTP paths write `account_locked` and send the lockout
+    warning when a failure locks the account; bad RECOVERY codes locked it with
+    neither, so the owner was shut out with no mail and no lock event."""
+    from app.models.audit_log import AuditEventType, AuditLog
+    from app.services import email as email_svc
+
+    user = make_user(email="alice@test.local", password="LongCorrectHorse123!")
+    await _enable_totp(client, "alice@test.local", "LongCorrectHorse123!")
+    sent: list[str] = []
+
+    async def _record(**kwargs):
+        sent.append(kwargs["to"])
+
+    monkeypatch.setattr(email_svc, "send_lockout_warning_email", _record)
+
+    for _ in range(5):  # LOCKOUT_THRESHOLD
+        r = await client.post(
+            "/api/auth/login/recovery",
+            json={"email": "alice@test.local", "password": "LongCorrectHorse123!",
+                  "recovery_code": "0000-0000"},
+        )
+        assert r.status_code == 401
+
+    locked = (
+        db.query(AuditLog)
+        .filter(
+            AuditLog.event_type == AuditEventType.account_locked.value,
+            AuditLog.target_id == str(user.id),
+        )
+        .count()
+    )
+    assert locked == 1
+    assert sent == ["alice@test.local"]

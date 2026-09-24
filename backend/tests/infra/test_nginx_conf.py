@@ -193,6 +193,12 @@ def test_the_api_body_cap_is_above_the_tunable_ceiling(conf):
     )
 
 
+def test_the_api_path_streams_rather_than_spooling_downloads(conf):
+    """Downloads through nginx's /api/ were buffered into temp files in the
+    frontend container; only an operator routing everything via :8080 hits it."""
+    assert "proxy_buffering off;" in _location_blocks(conf)["/api/"]
+
+
 def test_the_tus_path_stays_uncapped(conf):
     """Control: resumable uploads run to ~30 GB and must never be capped here."""
     assert "client_max_body_size 0;" in _location_blocks(conf)["/uploads/"]

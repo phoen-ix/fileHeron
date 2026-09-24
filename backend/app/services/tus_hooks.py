@@ -53,7 +53,9 @@ _TUS_UPLOAD_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 
 
 def _check_tus_upload_id(tus_upload_id: str | None) -> str:
-    if not tus_upload_id or not _TUS_UPLOAD_ID_RE.match(tus_upload_id):
+    # fullmatch: `$` also matches before a trailing newline, so `.match`
+    # accepted "abc\n" - one character outside the alphabet this checks.
+    if not tus_upload_id or not _TUS_UPLOAD_ID_RE.fullmatch(tus_upload_id):
         raise AppError(
             400, "TUSD_INVALID_UPLOAD_ID", "Malformed tusd upload ID."
         )

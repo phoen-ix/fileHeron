@@ -232,15 +232,12 @@ async def register_from_invite(
 
     Caller is responsible for committing.
     """
-    invite = (
-        db.query(InviteToken).filter(InviteToken.token_hash == sha256_hex(plaintext_token)).one_or_none()
-    )
-    if invite is None:
-        raise AppError(404, "INVITE_INVALID", "Invite is invalid.")
-    if invite.used_at is not None:
-        raise AppError(410, "INVITE_USED", "Invite has already been used.")
-    if invite.expires_at < utc_now():
-        raise AppError(410, "INVITE_EXPIRED", "Invite has expired.")
+    # One definition of "a usable invite". This used to repeat consume_invite's
+    # three checks inline, which left consume_invite with no production caller
+    # and its tests pinning a copy of the rule rather than the rule.
+    from .invite import consume_invite
+
+    invite = consume_invite(db, plaintext_token=plaintext_token)
     await assert_password_not_breached(db, password)
     return _create_user_from_invite(
         db,
@@ -404,6 +401,39 @@ async def _maybe_send_lockout_email(
         db=db,
     )
 
+
+
+async def _after_second_factor_failure(
+    db: Session,
+    *,
+    user: User,
+    request: Request | None,
+    just_locked: bool,
+    should_email: bool,
+    via: str,
+) -> None:
+    """The `account_locked` row and the lockout warning a failure that locks the
+    account owes the owner.
+
+    The password and TOTP paths wrote both; a lockout reached through bad
+    RECOVERY codes (on /login/recovery or the post-SSO exchange) discarded
+    record_failure's verdict and wrote neither - the owner was locked out with
+    no mail and the audit log had no lock event to explain it."""
+    if just_locked:
+        record_audit_event(
+            db,
+            event_type=AuditEventType.account_locked,
+            actor_user_id=user.id,
+            target_type="user",
+            target_id=user.id,
+            request=request,
+        )
+    if should_email:
+        try:
+            await _maybe_send_lockout_email(db=db, user=user, request=request)
+            rate_limit_svc.mark_lockout_email_sent(db, user=user)
+        except Exception:
+            logger.exception("lockout warning email failed for user=%d via %s", user.id, via)
 
 
 # Argon2id is deliberately expensive: at the configured cost (64 MiB, t=3) a
@@ -684,7 +714,7 @@ async def login_with_recovery(
     if not await totp_svc.aconsume_recovery_code(
         db, user=user, code=recovery_code, request=request
     ):
-        rate_limit_svc.record_failure(db, user=user)
+        just_locked, should_email = rate_limit_svc.record_failure(db, user=user)
         _record_login_attempt(db, email_value=em_email, ip=ip, outcome=LoginOutcome.bad_recovery)
         record_audit_event(
             db,
@@ -692,8 +722,12 @@ async def login_with_recovery(
             actor_user_id=user.id,
             target_type="user",
             target_id=user.id,
-            metadata={"reason": "bad_recovery"},
+            metadata={"reason": "bad_recovery", "just_locked": just_locked},
             request=request,
+        )
+        await _after_second_factor_failure(
+            db, user=user, request=request, just_locked=just_locked,
+            should_email=should_email, via="bad_recovery",
         )
         db.commit()
         raise AppError(401, "INVALID_RECOVERY", "Recovery code is invalid or already used.")
@@ -926,7 +960,7 @@ async def complete_pending_second_factor(
         raise AppError(401, "TOTP_REQUIRED", "Two-factor code required.")
 
     if not ok:
-        just_locked, _should_email = rate_limit_svc.record_failure(db, user=user)
+        just_locked, should_email = rate_limit_svc.record_failure(db, user=user)
         _record_login_attempt(db, email_value=user.email, ip=ip, outcome=outcome)
         record_audit_event(
             db,
@@ -937,15 +971,10 @@ async def complete_pending_second_factor(
             metadata={"reason": reason, "via": via, "just_locked": just_locked},
             request=request,
         )
-        if just_locked:
-            record_audit_event(
-                db,
-                event_type=AuditEventType.account_locked,
-                actor_user_id=user.id,
-                target_type="user",
-                target_id=user.id,
-                request=request,
-            )
+        await _after_second_factor_failure(
+            db, user=user, request=request, just_locked=just_locked,
+            should_email=should_email, via=reason,
+        )
         db.commit()
         raise AppError(
             401,

@@ -218,6 +218,7 @@ def _offsite_section(dest: Path) -> str:
 
 def _run_offsite(tmp_path: Path, env: dict[str, str], restic_exit: int | None):
     import os
+    import shutil
     import subprocess
 
     bindir = tmp_path / "bin"
@@ -229,8 +230,12 @@ def _run_offsite(tmp_path: Path, env: dict[str, str], restic_exit: int | None):
         stub = bindir / "restic"
         stub.write_text(f"#!/bin/sh\nexit {restic_exit}\n")
         stub.chmod(0o755)
-    return subprocess.run(
-        ["bash", "-c", _offsite_section(dest)],
+    # S603: argv is an absolute bash plus this repo's own script text - no
+    # untrusted input. Same shape as tests/infra/test_deploy_scripts.py.
+    bash = shutil.which("bash")
+    assert bash, "bash is required to exercise backup.sh"
+    return subprocess.run(  # noqa: S603
+        [bash, "-c", _offsite_section(dest)],
         env={"PATH": f"{bindir}:{os.environ.get('PATH', '/usr/bin:/bin')}", **env},
         capture_output=True, text=True, timeout=30,
     )

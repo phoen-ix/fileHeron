@@ -12,7 +12,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ..database import Base
 from ..utils.timeutil import utc_now
-from .user import UserRole
+from .user import EMAIL_COLUMN_TYPE, UserRole
 
 if TYPE_CHECKING:
     from .user import User
@@ -26,7 +26,7 @@ class InviteToken(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True, nullable=False)
     # Plaintext invitee email. Indexed so consume-by-email is fast.
-    email: Mapped[str] = mapped_column(String(254), index=True, nullable=False)
+    email: Mapped[str] = mapped_column(EMAIL_COLUMN_TYPE, index=True, nullable=False)
     target_role: Mapped[UserRole] = mapped_column(SAEnum(UserRole, native_enum=False, length=20), nullable=False)
 
     created_by_id: Mapped[int] = mapped_column(

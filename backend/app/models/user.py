@@ -37,6 +37,16 @@ if TYPE_CHECKING:
     from .user_totp import UserTOTP
 
 
+
+# An EXACT comparison on MariaDB. The database default, utf8mb4_unicode_ci, is
+# case- AND accent-insensitive, so `WHERE email = 'kevin@exämple.com'` found
+# `kevin@example.com` - and forgot-password then mailed that account's reset link
+# to the address the caller typed, a lookalike domain anyone can register.
+# normalize_email already lowercases on write, so binary equality is the
+# contract; the variant keeps SQLite (the test harness) on its default, which is
+# binary too. Migration 202609240001 applies it to existing databases.
+EMAIL_COLUMN_TYPE = String(254).with_variant(String(254, collation="utf8mb4_bin"), "mysql")
+
 class UserRole(str, enum.Enum):
     admin = "admin"
     employee = "employee"
@@ -74,8 +84,9 @@ class User(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
 
-    # Email - plaintext, always lowercased + stripped on write.
-    email: Mapped[str] = mapped_column(String(254), unique=True, index=True, nullable=False)
+    # Email - plaintext, always lowercased + stripped on write. Binary collation
+    # on MariaDB: see EMAIL_COLUMN_TYPE.
+    email: Mapped[str] = mapped_column(EMAIL_COLUMN_TYPE, unique=True, index=True, nullable=False)
 
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     display_name: Mapped[str] = mapped_column(String(120), nullable=False)

@@ -281,9 +281,13 @@ async def forgot_password(
         # entire purpose is not to be one, and this codebase already maintains
         # a _DUMMY_PASSWORD_HASH on the login path for precisely the same
         # reason (audit 2026-07-30).
+        # To the STORED address. `payload.email` is what the caller typed, and
+        # a lookup that matched it is not proof they are the same address: under
+        # the old accent-insensitive collation `kevin@exämple.com` found
+        # `kevin@example.com`, and the reset link went to the lookalike domain.
         background.add_task(
             _send_password_reset_detached,
-            to=payload.email,
+            to=user.email,
             locale=user.locale,
             display_name=user.display_name,
             token=plaintext,

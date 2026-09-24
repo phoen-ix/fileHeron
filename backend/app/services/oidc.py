@@ -511,6 +511,10 @@ async def handle_callback(
             .with_for_update()
             .one_or_none()
         )
+        # Exact, whatever the column collation says (see services/user_lookup):
+        # a verified `kevin@exämple.com` at an IdP is not `kevin@example.com`.
+        if local is not None and local.email != em_hash:
+            local = None
         if local is not None and local.oidc_provider_id is None:
             if local.is_disabled:
                 raise AppError(403, "ACCOUNT_DISABLED", "Account is disabled.")

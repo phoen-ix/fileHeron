@@ -8,9 +8,10 @@ tests assert and what the product does, and none of them are visible to a
 behavioural test on SQLite:
 
 * **Collation.** `utf8mb4_unicode_ci` is case-INSENSITIVE, accent-INSENSITIVE
-  and PAD SPACE. SQLite's `=` on TEXT is binary. So `josé@x.com` and
-  `jose@x.com` are two rows in the test suite and ONE row in production - the
-  second INSERT raises 1062.
+  and PAD SPACE. SQLite's `=` on TEXT is binary. The email columns now carry
+  `utf8mb4_bin` (migration 202609240001), because the insensitive match let
+  forgot-password mail a reset link to a lookalike address; every other VARCHAR
+  still compares insensitively.
 * **DATETIME precision.** MariaDB stores whole seconds here (and ROUNDS, so a
   value can land up to 0.5s in the future); SQLite keeps microseconds. Any
   `ORDER BY <timestamp>` without a tiebreaker is therefore total-ordered in the
@@ -69,31 +70,41 @@ def _insert_user(conn, email: str) -> None:
 
 
 @_SKIP
-def test_the_email_column_is_accent_insensitive_in_production(mariadb):
-    """`normalize_email` only strips and lowercases, so Python treats these as
-    two addresses. MariaDB does not, and the UNIQUE key is what enforces it.
+def test_the_email_columns_compare_exactly_in_production(mariadb):
+    """`jose@` and `josé@` are two addresses, and two mailboxes.
 
-    NOT folded in `normalize_email`: per RFC the local part is accent-distinct,
-    so folding would merge two genuinely different addresses in Python to paper
-    over the database doing it. The semantically correct fix is a binary
-    collation on this column - which is a migration, and a separate decision.
-    """
+    This pinned the OPPOSITE until 2026-09-24 - "accent-insensitive, and the
+    fix is a separate decision" - without noticing what the insensitive match
+    did: forgot-password found `victim@example.com` for a request naming
+    `victim@exämple.com` and mailed the reset link to the typed, lookalike
+    address. The binary collation is that decision; services/user_lookup.py
+    re-checks in Python so the application does not depend on it alone."""
+    with mariadb.connect() as conn:
+        collations = dict(
+            conn.execute(
+                sa.text(
+                    "SELECT table_name, collation_name FROM information_schema.columns "
+                    "WHERE table_schema = DATABASE() AND column_name = 'email' "
+                    "AND table_name IN ('users', 'invite_tokens')"
+                )
+            ).all()
+        )
+    assert collations == {"users": "utf8mb4_bin", "invite_tokens": "utf8mb4_bin"}
+
     with mariadb.begin() as conn:
         conn.execute(sa.text("DELETE FROM users WHERE email LIKE '%@collation.test'"))
         _insert_user(conn, "jose@collation.test")
 
     with mariadb.connect() as conn:
-        hit = conn.execute(
-            sa.text("SELECT COUNT(*) FROM users WHERE email = :e"),
-            {"e": "josé@collation.test"},
-        ).scalar()
-    assert hit == 1, (
-        "utf8mb4_unicode_ci is expected to be accent-insensitive here; if this "
-        "fails the column's collation changed and normalize_email's contract "
-        "changed with it"
-    )
+        for lookalike in ("josé@collation.test", "JOSE@collation.test"):
+            hit = conn.execute(
+                sa.text("SELECT COUNT(*) FROM users WHERE email = :e"),
+                {"e": lookalike},
+            ).scalar()
+            assert hit == 0, f"{lookalike!r} matched jose@collation.test"
 
-    with pytest.raises(sa.exc.IntegrityError), mariadb.begin() as conn:
+    # A distinct address is a distinct row, not a UNIQUE violation.
+    with mariadb.begin() as conn:
         _insert_user(conn, "josé@collation.test")
 
     with mariadb.begin() as conn:

@@ -140,6 +140,54 @@ def test_a_data_migration_runs_against_rows_that_exist():
         engine.dispose()
 
 
+@_SKIP
+def test_the_email_collation_migration_lowercases_before_it_goes_binary():
+    """202609240001 turns `users.email` binary. A row stored before
+    normalize_email existed, in mixed case, would then match no lookup at all -
+    the account unreachable by login and by reset. The revision lowercases
+    first; this is the row that proves the UPDATE runs, against the collation
+    the column had BEFORE (under which the UPDATE's own `<>` needs the explicit
+    binary COLLATE to see the difference)."""
+    import sqlalchemy as sa
+    from alembic.command import downgrade, upgrade
+    from alembic.config import Config
+
+    from app.config import settings
+
+    cfg = Config(str(Path(__file__).resolve().parent.parent / "alembic.ini"))
+    upgrade(cfg, "head")
+    engine = sa.create_engine(settings.database_url)
+    try:
+        downgrade(cfg, "202608150001")
+        with engine.begin() as conn:
+            conn.execute(
+                sa.text(
+                    "INSERT INTO users (email, password_hash, display_name, role, "
+                    "is_disabled, email_verified, locale, created_at) VALUES "
+                    "('Legacy.Case@Test.Invalid', 'x', 'Legacy', 'employee', 0, 1, "
+                    "'en', NOW())"
+                )
+            )
+        upgrade(cfg, "head")
+        with engine.connect() as conn:
+            stored = conn.execute(
+                sa.text("SELECT email FROM users WHERE display_name = 'Legacy'")
+            ).scalar()
+            collation = conn.execute(
+                sa.text(
+                    "SELECT collation_name FROM information_schema.columns "
+                    "WHERE table_schema = DATABASE() AND table_name = 'users' "
+                    "AND column_name = 'email'"
+                )
+            ).scalar()
+        assert collation == "utf8mb4_bin"
+        assert stored == "legacy.case@test.invalid"
+    finally:
+        with engine.begin() as conn:
+            conn.execute(sa.text("DELETE FROM users WHERE display_name = 'Legacy'"))
+        engine.dispose()
+
+
 # Columns/tables that legitimately differ between the models and the migrated
 # schema. Keep this list short and justified - every entry is a hole in the
 # check.

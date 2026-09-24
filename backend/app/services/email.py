@@ -257,17 +257,14 @@ def _resolve_recipient_user_id(
         return recipient_user_id
     if not recipient_email:
         return None
-    from ..models.user import User
-    from ..utils.crypto import normalize_email
+    # Exact: the footer embeds THIS user's manage-notifications token, so a
+    # collation match on a lookalike recipient would mail it to a stranger.
+    from .user_lookup import user_id_by_email
 
     own = db is None
     sess = db or SessionLocal()
     try:
-        return (
-            sess.query(User.id)
-            .filter(User.email == normalize_email(recipient_email))
-            .scalar()
-        )
+        return user_id_by_email(sess, recipient_email)
     except Exception:
         logger.exception("recipient lookup failed for footer")
         return None
@@ -560,8 +557,8 @@ async def _send_resolved(
 
     if category is not None:
         from ..models.email_log import EmailStatus, EmailVia
-        from ..models.user import User
         from . import mail_log
+        from .user_lookup import user_id_by_email
 
         if err is None:
             status = EmailStatus.sent
@@ -578,7 +575,7 @@ async def _send_resolved(
         try:
             ruid = recipient_user_id
             if ruid is None:
-                ruid = log_db.query(User.id).filter(User.email == to).scalar()
+                ruid = user_id_by_email(log_db, to)
             mail_log.record_direct(
                 log_db,
                 recipient_email=to,

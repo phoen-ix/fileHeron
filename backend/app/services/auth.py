@@ -54,6 +54,7 @@ from .jwt_session import (
     resolve_user_from_access_token,
     revoke_all_user_refresh_tokens,
 )
+from .user_lookup import user_by_email
 
 # Derived from the columns rather than the literal 254 this used to carry. The
 # comment at the write site explains why the EMAIL must be clipped; `ip` sat
@@ -379,11 +380,13 @@ async def _maybe_send_lockout_email(
     *,
     db: Session,
     user: User,
-    email_plaintext: str,
     request: Request | None,
 ) -> None:
     """Phase 1b lockout warning email. Imported lazily to avoid a circular
-    import (services.email → models.user → services.auth)."""
+    import (services.email → models.user → services.auth).
+
+    Sent to the STORED address, never to what the caller typed: the typed value
+    is attacker-controlled, and it used to be the recipient here."""
     from . import site as site_svc
     from .email import send_lockout_warning_email
 
@@ -391,7 +394,7 @@ async def _maybe_send_lockout_email(
     ip = _request_ip(request)
     ip_hint = f"~{ip_geohash5(ip)}" if ip else None
     await send_lockout_warning_email(
-        to=email_plaintext,
+        to=user.email,
         locale=user.locale,
         display_name=user.display_name,
         locked_until_iso=locked_until,
@@ -447,7 +450,7 @@ async def authenticate_first_factor(
         raise AppError(429, "RATE_LIMITED", "Too many login attempts. Try again later.")
 
     em_email = normalize_email(email)
-    user = db.query(User).filter(User.email == em_email).one_or_none()
+    user = user_by_email(db, em_email)
 
     # 2. Unknown email -> bad credentials. Spend one Argon2 verify against a
     # fixed dummy hash so the latency matches the wrong-password branch below
@@ -540,7 +543,7 @@ async def authenticate_first_factor(
         if should_email:
             try:
                 await _maybe_send_lockout_email(
-                    db=db, user=user, email_plaintext=email, request=request
+                    db=db, user=user, request=request
                 )
                 rate_limit_svc.mark_lockout_email_sent(db, user=user)
             except Exception:
@@ -630,7 +633,7 @@ async def login(
             if should_email:
                 try:
                     await _maybe_send_lockout_email(
-                        db=db, user=user, email_plaintext=email, request=request
+                        db=db, user=user, request=request
                     )
                     rate_limit_svc.mark_lockout_email_sent(db, user=user)
                 except Exception:
@@ -717,7 +720,7 @@ def begin_password_reset(
     to the client - the API endpoint always returns 200 regardless.
     """
     em_email = normalize_email(email)
-    user = db.query(User).filter(User.email == em_email).one_or_none()
+    user = user_by_email(db, em_email)
     if user is None or user.is_disabled:
         return None
 

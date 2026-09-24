@@ -21,7 +21,7 @@ from sqlalchemy.orm import Session
 from ..models.inbound_attachment import AttachmentAVState, InboundAttachment
 from ..models.inbound_message import InboundMessage, MessageClass
 from ..models.user import User, UserRole
-from . import av_scan, imap_config
+from . import av_scan, imap_config, user_lookup
 from . import storage_backend as storage_svc
 from .inbound_parse import ParsedAttachment, ParsedMessage
 
@@ -115,11 +115,7 @@ def sender_is_accepted(db: Session, raw_headers: bytes | None) -> bool:
         return True
     if not parsed.sender_email:
         return False
-    known = (
-        db.query(User.id)
-        .filter(User.email == parsed.sender_email, User.is_disabled.is_(False))
-        .scalar()
-    )
+    known = user_lookup.user_id_by_email(db, parsed.sender_email, enabled_only=True)
     if known is None:
         logger.info(
             "inbound: refusing mail from unknown sender %r before fetching the body "
@@ -267,10 +263,8 @@ def ingest(
 
     sender_user_id = None
     if parsed.sender_email:
-        sender_user_id = (
-            db.query(User.id)
-            .filter(User.email == parsed.sender_email, User.is_disabled.is_(False))
-            .scalar()
+        sender_user_id = user_lookup.user_id_by_email(
+            db, parsed.sender_email, enabled_only=True
         )
     if sender_user_id is None and imap_config.require_known_sender(db):
         # Refused BEFORE anything is stored, and the caller leaves the mail on

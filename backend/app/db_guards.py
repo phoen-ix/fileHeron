@@ -96,8 +96,25 @@ def column_nullable(bind, table: str, column: str) -> bool:
     return False
 
 
+def column_collation(bind, table: str, column: str) -> str | None:
+    """The column's collation on MariaDB, or None when the column is absent or
+    the dialect has no per-column collation to report (SQLite in the tests)."""
+    if bind.dialect.name != "mysql":
+        return None
+    row = bind.execute(
+        sa.text(
+            "SELECT collation_name FROM information_schema.columns "
+            "WHERE table_schema = DATABASE() AND table_name = :t "
+            "AND column_name = :c"
+        ),
+        {"t": table, "c": column},
+    ).fetchone()
+    return row[0] if row else None
+
+
 # Revisions import these under their historical private names.
 _has_table = has_table
 _has_column = has_column
 _has_index = has_index
 _column_nullable = column_nullable
+_column_collation = column_collation

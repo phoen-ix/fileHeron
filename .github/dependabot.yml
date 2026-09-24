@@ -1,8 +1,10 @@
 version: 2
 # Weekly dependency-update PRs, grouped so minor/patch bumps land together.
-# - pip: tracks backend/pyproject.toml ranges (regenerate requirements.lock via
-#   `uv pip compile --generate-hashes` when a PR lands - Dependabot can't update
-#   the uv lock itself).
+# - pip: tracks backend/pyproject.toml and client/pyproject.toml ranges.
+#   Dependabot can't update the uv locks itself: regenerate
+#   backend/requirements.lock and client/requirements-build.lock (recipe in
+#   that file's header) when such a PR lands - the release builds install
+#   only from the locks.
 # - npm: frontend tree (this is where the dev-only happy-dom/js-cookie advisories
 #   get their upgrade PRs; they don't block CI since they aren't shipped).
 # - github-actions: keeps the SHA-pinned action versions fresh.

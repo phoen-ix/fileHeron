@@ -7,12 +7,18 @@ on:
   # Allow manual runs for testing without a tag - they won't publish.
   workflow_dispatch: {}
 
+# Read-only by default. Only the `publish` job below can write, and it runs
+# nothing but first-party checkout/download and the release action: the build
+# job executes third-party install code, the test suite and PyInstaller, and it
+# used to do all of that holding a token that could write to the repository.
 permissions:
-  contents: write   # softprops/action-gh-release writes to releases
+  contents: read
 
 jobs:
   build-windows:
     runs-on: windows-latest
+    permissions:
+      contents: read
     defaults:
       run:
         shell: bash
@@ -77,12 +83,17 @@ jobs:
         with:
           python-version: '3.12'
           cache: 'pip'
-          cache-dependency-path: 'client/pyproject.toml'
+          cache-dependency-path: 'client/requirements-build.lock'
 
-      - name: Install client + build deps
+      # Hash-locked, like backend/requirements.lock. The .exe bundles whatever
+      # this installs, and `pip install -e "./client[build,dev]"` against
+      # floor-only ranges shipped whatever PyPI served on tag day. The package
+      # itself is installed separately with --no-deps: a local path cannot be
+      # hashed, and --require-hashes refuses to mix the two.
+      - name: Install client + build deps (hash-locked)
         run: |
-          python -m pip install --upgrade pip
-          pip install -e "./client[build,dev]"
+          pip install --require-hashes -r client/requirements-build.lock
+          pip install --no-deps -e ./client
 
       - name: Run unit tests
         working-directory: client
@@ -139,21 +150,45 @@ jobs:
           }
           Write-Host "selfcheck passed"
 
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: fileheron-client-windows
-          path: client/dist/fileheron-client.exe
-          if-no-files-found: error
-
       # The .exe is unsigned by design (build-and-self-sign is documented in
       # client/README.md); publish a SHA-256 so downloaders can verify integrity.
+      # Computed HERE, on the runner that built it, and carried to the publish
+      # job inside the same artifact.
       - name: Checksum the .exe
-        if: startsWith(github.ref, 'refs/tags/client-v')
         working-directory: client/dist
         run: sha256sum fileheron-client.exe | tee fileheron-client.exe.sha256
 
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: fileheron-client-windows
+          path: |
+            client/dist/fileheron-client.exe
+            client/dist/fileheron-client.exe.sha256
+          if-no-files-found: error
+
+  publish:
+    needs: build-windows
+    if: startsWith(github.ref, 'refs/tags/client-v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # softprops/action-gh-release writes the release
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: fileheron-client-windows
+          path: client/dist
+
+      - name: Compute release version
+        id: ver
+        run: echo "version=${GITHUB_REF_NAME#client-v}" >> "$GITHUB_OUTPUT"
+
+      - name: Verify the checksum survived the hand-off
+        working-directory: client/dist
+        run: sha256sum -c fileheron-client.exe.sha256
+
       - name: Publish release with .exe attached
-        if: startsWith(github.ref, 'refs/tags/client-v')
         uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3
         with:
           tag_name: ${{ github.ref_name }}

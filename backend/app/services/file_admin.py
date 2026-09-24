@@ -165,7 +165,9 @@ def list_all_files(
     }
     target = column_map[sort_col]
     order = target.asc() if direction == "asc" else target.desc()
-    base = base.order_by(order, desc(File.created_at))
+    # File.id last: without a unique key, OFFSET pages over tied rows (same
+    # second, same state, same size) overlap and skip on MariaDB.
+    base = base.order_by(order, desc(File.created_at), desc(File.id))
 
     rows = base.offset((page - 1) * page_size).limit(page_size).all()
 

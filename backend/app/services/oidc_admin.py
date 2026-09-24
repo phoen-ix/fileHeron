@@ -85,13 +85,13 @@ def list_enabled_providers(db: Session) -> list[OIDCProvider]:
     return (
         db.query(OIDCProvider)
         .filter(OIDCProvider.enabled.is_(True))
-        .order_by(OIDCProvider.name.asc())
+        .order_by(OIDCProvider.name.asc(), OIDCProvider.id.asc())
         .all()
     )
 
 
 def list_all_providers(db: Session) -> list[OIDCProvider]:
-    return db.query(OIDCProvider).order_by(OIDCProvider.name.asc()).all()
+    return db.query(OIDCProvider).order_by(OIDCProvider.name.asc(), OIDCProvider.id.asc()).all()
 
 
 def get_provider(db: Session, provider_id: str) -> OIDCProvider:

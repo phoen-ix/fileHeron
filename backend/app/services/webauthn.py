@@ -369,7 +369,7 @@ def list_credentials_for(db: Session, user_id: int) -> list[UserWebAuthnCredenti
     return (
         db.query(UserWebAuthnCredential)
         .filter(UserWebAuthnCredential.user_id == user_id)
-        .order_by(UserWebAuthnCredential.created_at)
+        .order_by(UserWebAuthnCredential.created_at, UserWebAuthnCredential.id)
         .all()
     )
 

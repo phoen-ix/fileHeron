@@ -949,11 +949,20 @@ def list_shares_for_user(
     }
     sort_target = column_map.get(sort_col, Share.created_at)
     order = sort_target.asc() if direction == "asc" else sort_target.desc()
+    # A unique tiebreaker, or OFFSET pages are not a partition: MariaDB may
+    # order ties differently per query (whole-second created_at; sorting by
+    # `state` ties nearly every row), so a row can appear on two pages and
+    # another on none.
+    tiebreak = Share.id.asc() if direction == "asc" else Share.id.desc()
     # NULL expires_at = "never". MariaDB sorts NULL first by default
     # (ASC) or last (DESC). For user-facing list display, "Never" should
     # consistently appear AFTER the dated rows regardless of direction -
     # so prepend an `IS NULL` ordering hint that pushes NULLs to the end.
-    base = base.order_by(Share.expires_at.is_(None).asc(), order) if sort_col == "expires_at" else base.order_by(order)
+    base = (
+        base.order_by(Share.expires_at.is_(None).asc(), order, tiebreak)
+        if sort_col == "expires_at"
+        else base.order_by(order, tiebreak)
+    )
 
     rows = (
         base.offset(max(0, (page - 1) * page_size)).limit(page_size).all()

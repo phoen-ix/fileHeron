@@ -192,7 +192,7 @@ def compute_analytics(db: Session, days: int = 30) -> dict:
                 ~User.email.like(ERASED_EMAIL_LIKE),
             )
             .group_by(User.id, User.display_name, User.email)
-            .order_by(func.coalesce(func.sum(File.size_bytes), 0).desc())
+            .order_by(func.coalesce(func.sum(File.size_bytes), 0).desc(), User.id)
             .limit(10)
             .all()
         )
@@ -206,7 +206,7 @@ def compute_analytics(db: Session, days: int = 30) -> dict:
             .join(DownloadLog, DownloadLog.share_id == Share.id)
             .filter(DownloadLog.accessed_at >= start_dt)
             .group_by(Share.id, Share.subject)
-            .order_by(func.count(DownloadLog.id).desc())
+            .order_by(func.count(DownloadLog.id).desc(), Share.id)
             .limit(10)
             .all()
         )

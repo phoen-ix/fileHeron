@@ -78,7 +78,7 @@ def recipient_targets(
 ) -> GroupListResponse:
     """Groups the caller can target in a share. Open to all roles."""
     if me.role == UserRole.admin:
-        groups = db.query(Group).order_by(Group.name).all()
+        groups = db.query(Group).order_by(Group.name, Group.id).all()
     elif me.role == UserRole.employee:
         member_group_ids = (
             db.query(GroupMember.group_id)
@@ -90,14 +90,14 @@ def recipient_targets(
         groups = (
             db.query(Group)
             .filter((Group.id.in_(ids)) | (Group.is_company_inbox.is_(True)))
-            .order_by(Group.name)
+            .order_by(Group.name, Group.id)
             .all()
         )
     elif me.role == UserRole.client:
         groups = (
             db.query(Group)
             .filter(Group.is_company_inbox.is_(True))
-            .order_by(Group.name)
+            .order_by(Group.name, Group.id)
             .all()
         )
     else:

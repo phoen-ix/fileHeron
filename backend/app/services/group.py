@@ -69,7 +69,7 @@ def get_or_404(db: Session, group_id: int) -> Group:
 
 
 def list_groups(db: Session) -> list[Group]:
-    return db.query(Group).order_by(Group.name).all()
+    return db.query(Group).order_by(Group.name, Group.id).all()
 
 
 def update_group(

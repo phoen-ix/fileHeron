@@ -86,7 +86,7 @@ def search(
             )
         )
 
-    rows = query.order_by(User.display_name).limit(SEARCH_LIMIT).all()
+    rows = query.order_by(User.display_name, User.id).limit(SEARCH_LIMIT).all()
     return UserSearchResponse(items=[_to_search_item(u) for u in rows])
 
 

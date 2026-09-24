@@ -407,6 +407,7 @@
     "NO_FILES_PENDING": "There are no files awaiting a decision on this share.",
     "NO_PENDING_UPDATE": "There is no update waiting.",
     "NO_RECIPIENTS": "Choose at least one recipient.",
+    "SERVER_UNAVAILABLE": "The server is not answering right now (it may be restarting). Try again in a moment.",
     "NO_ROLLBACK_TARGET": "There is no version to roll back to.",
     "PASSWORD_BREACHED": "This password has appeared in a known breach. Please choose another.",
     "PENDING_2FA_EXPIRED": "That took too long. Please sign in again.",

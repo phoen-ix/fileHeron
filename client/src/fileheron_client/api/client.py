@@ -161,9 +161,6 @@ class ApiClient:
     def set_access_token(self, token: Optional[str]) -> None:
         self.access_token = token
 
-    def set_api_token(self, token: Optional[str]) -> None:
-        self.api_token = token
-
     @property
     def bearer(self) -> Optional[str]:
         # API token wins when set - never used together.
@@ -303,8 +300,24 @@ class ApiClient:
                 "/api/auth/refresh",
                 headers={"Accept": "application/json"},
             )
-            if ref.status_code != 200:
+            if ref.status_code in (401, 403):
+                # A verdict: the refresh cookie is revoked, expired or its
+                # account disabled. The caller turns None into
+                # SessionExpiredError and the UI returns to the login overlay.
                 return None
+            if ref.status_code != 200:
+                # NOT a verdict: a 502/503/504 while the in-app updater restarts
+                # the backend, a 429, a proxy error page. Treating these as a
+                # dead session signed the user out and paused every transfer for
+                # a blip the next request would have survived - the defect the
+                # SPA fixed with its expired/unavailable split (api/client.ts
+                # RefreshOutcome). Only 401/403 end a session there too.
+                raise ApiError(
+                    status_code=ref.status_code,
+                    code="SERVER_UNAVAILABLE",
+                    message="The server did not answer the session refresh; try again shortly.",
+                    request_id=_envelope_from_response(ref).request_id,
+                )
             # Defensive parse (finding C3): a non-JSON 200 from a misconfigured
             # proxy must not raise here - the caller falls through to a clean
             # re-login prompt.

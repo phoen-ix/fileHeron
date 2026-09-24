@@ -274,3 +274,41 @@ def test_the_probe_passes_what_it_actually_presented():
     assert refresh.call_count == 1, "must actually rotate, not short-circuit on a stale seen"
     assert presented[0] == "Bearer current"
     assert presented[-1] == "Bearer rotated"
+
+
+# --- audit 2026-09-24: only a verdict ends a session --------------------------
+
+
+@respx.mock
+@pytest.mark.parametrize("status", [429, 502, 503, 504])
+def test_a_transient_refresh_failure_does_not_end_the_session(status):
+    """A 502/503/504 while the in-app updater restarts the backend, or a 429, is
+    not an answer about the credential. Treating it as one bounced the user to
+    the login overlay and paused every transfer - the defect the SPA fixed with
+    its expired/unavailable split. Only 401/403 are verdicts."""
+    from fileheron_client.api.client import ApiError
+
+    respx.post(f"{SERVER}/api/auth/refresh").mock(return_value=httpx.Response(status, text="Bad Gateway"))
+    respx.get(f"{SERVER}/api/shares").mock(
+        return_value=httpx.Response(401, json={"code": "TOKEN_EXPIRED"})
+    )
+    api = _session_api()
+    with pytest.raises(ApiError) as exc:
+        api.request("GET", "/api/shares")
+    assert not isinstance(exc.value, SessionExpiredError)
+    assert exc.value.code == "SERVER_UNAVAILABLE"
+    assert exc.value.status_code == status
+    assert api.access_token == "stale-token"  # nothing was thrown away
+
+
+@respx.mock
+@pytest.mark.parametrize("status", [401, 403])
+def test_a_refresh_verdict_still_ends_the_session(status):
+    respx.post(f"{SERVER}/api/auth/refresh").mock(
+        return_value=httpx.Response(status, json={"code": "INVALID_REFRESH"})
+    )
+    respx.get(f"{SERVER}/api/shares").mock(
+        return_value=httpx.Response(401, json={"code": "TOKEN_EXPIRED"})
+    )
+    with pytest.raises(SessionExpiredError):
+        _session_api().request("GET", "/api/shares")

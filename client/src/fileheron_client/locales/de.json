@@ -407,6 +407,7 @@
     "NO_FILES_PENDING": "Für diese Freigabe stehen keine Dateien zur Entscheidung an.",
     "NO_PENDING_UPDATE": "Es wartet kein Update.",
     "NO_RECIPIENTS": "Wählen Sie mindestens einen Empfänger.",
+    "SERVER_UNAVAILABLE": "Der Server antwortet gerade nicht (möglicherweise startet er neu). Bitte gleich noch einmal versuchen.",
     "NO_ROLLBACK_TARGET": "Es gibt keine Version, zu der zurückgekehrt werden kann.",
     "PASSWORD_BREACHED": "Dieses Passwort wurde in einem bekannten Datenleck gefunden. Bitte ein anderes wählen.",
     "PENDING_2FA_EXPIRED": "Das hat zu lange gedauert. Bitte melde dich erneut an.",

@@ -66,10 +66,6 @@ def set_locale(code: str) -> None:
         _fallback_table = _load(_DEFAULT_LOCALE)
 
 
-def get_locale() -> str:
-    return _active
-
-
 def _lookup(table: dict[str, Any], dotted: str) -> Any:
     """Walk a dotted key through a nested dict. Returns None on miss."""
     node: Any = table

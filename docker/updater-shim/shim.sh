@@ -24,8 +24,25 @@ POLL_INTERVAL_SEC="${SHIM_POLL_INTERVAL_SEC:-5}"
 # second ~90s health wait plus a stamp + compose up on top of the forward
 # attempt and any slow image pulls.
 STUCK_THRESHOLD_SEC="${SHIM_STUCK_THRESHOLD_SEC:-1200}"
+# Liveness for the compose healthcheck. The file holds an epoch the shim
+# promises to be alive until: a poll pass extends it by HEARTBEAT_GRACE_SEC,
+# and each step that legitimately blocks (the executor pull, the executor run)
+# extends it by STUCK_THRESHOLD_SEC first - so a long update never reads as a
+# hang, while a shim wedged anywhere else goes unhealthy within the grace. It
+# lives in the container's own /tmp, not in the /state dir the backend shares.
+HEARTBEAT_FILE="${SHIM_HEARTBEAT_FILE:-/tmp/shim-heartbeat}"
+HEARTBEAT_GRACE_SEC="${SHIM_HEARTBEAT_GRACE_SEC:-30}"
 
 mkdir -p "$STATE_DIR"
+
+# Never fatal: under `set -e` a failed write here would stop the very loop it
+# reports on. Atomic (same-directory rename) so the healthcheck never reads a
+# half-written number.
+heartbeat() {
+    local until=$(( $(date -u +%s) + ${1:-$HEARTBEAT_GRACE_SEC} ))
+    { printf '%s\n' "$until" > "$HEARTBEAT_FILE.tmp" && mv "$HEARTBEAT_FILE.tmp" "$HEARTBEAT_FILE"; } 2>/dev/null || true
+}
+heartbeat
 
 log() {
     printf '[shim %s] %s\n' "$(date -u +%Y-%m-%dT%H:%M:%S)" "$*"
@@ -82,6 +99,7 @@ fi
 
 while true; do
     sleep "$POLL_INTERVAL_SEC"
+    heartbeat
 
     [ -f "$STATE_FILE" ] || continue
 
@@ -141,6 +159,7 @@ while true; do
             # unreachable or the tag doesn't exist, fail the job here
             # before spawning anything.
             log "pulling $executor_image"
+            heartbeat "$STUCK_THRESHOLD_SEC"
             if ! docker pull "$executor_image"; then
                 log "pull failed; marking job failed"
                 tmp=$(shim_mktemp)
@@ -156,6 +175,7 @@ while true; do
             log "spawning executor for $target_tag"
             container_name="${COMPOSE_PROJECT}-executor-$(date +%s)"
             exit_code=0
+            heartbeat "$STUCK_THRESHOLD_SEC"
             # COMPOSE_HOST_ROOT is the critical bit: compose substitutes
             # this into the bind-mount sources so the daemon resolves
             # them against the HOST filesystem (the host's compose dir)

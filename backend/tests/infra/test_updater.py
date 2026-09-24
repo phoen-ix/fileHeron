@@ -408,3 +408,92 @@ def test_an_unresolved_floating_tag_accepts_any_version_but_the_failed_one(execu
     )
     assert executor.wait_for_backend_health(None, not_tag="v1.2.4") is True
     assert executor.wait_for_backend_health(None, not_tag="v1.2.3") is False
+
+
+# --- audit 2026-09-24 follow-up: the shim's own health -----------------------
+
+
+def _heartbeat_fn() -> str:
+    src = SHIM.read_text(encoding="utf-8")
+    m = re.search(r"^heartbeat\(\) \{.*?^\}", src, re.S | re.M)
+    assert m, "shim.sh no longer defines heartbeat()"
+    return m.group(0)
+
+
+def _compose_healthcheck() -> str:
+    import yaml
+
+    compose = yaml.safe_load((ROOT / "docker-compose.yml").read_text(encoding="utf-8"))
+    test = compose["services"]["updater-shim"]["healthcheck"]["test"]
+    assert test[0] == "CMD-SHELL"
+    return test[1].replace("$$", "$")  # compose's escape for a literal $
+
+
+def _run(argv: list[str], env: dict[str, str]):
+    import os
+    import subprocess
+
+    # S603: absolute shells running this repo's own script text.
+    return subprocess.run(  # noqa: S603
+        argv, env={"PATH": os.environ.get("PATH", "/usr/bin:/bin"), **env},
+        capture_output=True, text=True, timeout=30,
+    )
+
+
+def test_the_heartbeat_promises_a_grace_or_a_blocking_window(tmp_path):
+    import shutil
+    import time
+
+    bash = shutil.which("bash")
+    assert bash
+    hb = tmp_path / "hb"
+    script = (
+        "set -euo pipefail\n" + _heartbeat_fn()
+        + f"\nHEARTBEAT_FILE={hb}\nHEARTBEAT_GRACE_SEC=30\nheartbeat\n"
+    )
+    assert _run([bash, "-c", script], {}).returncode == 0
+    assert abs(int(hb.read_text()) - (time.time() + 30)) < 5
+    assert _run([bash, "-c", script + "heartbeat 1200\n"], {}).returncode == 0
+    assert abs(int(hb.read_text()) - (time.time() + 1200)) < 5
+    # Under set -e a failed write must not stop the loop it reports on.
+    broken = script.replace(f"HEARTBEAT_FILE={hb}", "HEARTBEAT_FILE=/nonexistent/dir/hb")
+    assert _run([bash, "-c", broken + "echo alive\n"], {}).stdout.strip() == "alive"
+
+
+def test_the_healthcheck_reads_what_the_shim_writes(tmp_path):
+    import shutil
+    import time
+
+    sh = shutil.which("sh")
+    assert sh
+    check = _compose_healthcheck()
+    # Same default path on both sides.
+    assert "/tmp/shim-heartbeat" in check
+    assert 'HEARTBEAT_FILE="${SHIM_HEARTBEAT_FILE:-/tmp/shim-heartbeat}"' in SHIM.read_text()
+
+    hb = tmp_path / "hb"
+    env = {"SHIM_HEARTBEAT_FILE": str(hb)}
+    hb.write_text(f"{int(time.time()) + 60}\n")
+    assert _run([sh, "-c", check], env).returncode == 0
+    hb.write_text(f"{int(time.time()) - 1}\n")
+    assert _run([sh, "-c", check], env).returncode != 0
+    hb.unlink()
+    assert _run([sh, "-c", check], env).returncode != 0
+
+
+def test_every_blocking_step_extends_the_heartbeat_first():
+    """The shim blocks for up to STUCK_THRESHOLD_SEC while pulling and running
+    the executor; without a longer promise first, every real update would turn
+    the container unhealthy half a minute in."""
+    lines = SHIM.read_text(encoding="utf-8").splitlines()
+
+    def preceded_by_long_heartbeat(marker: str) -> bool:
+        idx = next(i for i, line in enumerate(lines) if marker in line)
+        window = lines[max(0, idx - 15):idx]
+        return any('heartbeat "$STUCK_THRESHOLD_SEC"' in line for line in window)
+
+    assert preceded_by_long_heartbeat('if ! docker pull "$executor_image"')
+    assert preceded_by_long_heartbeat("docker run --rm \\")
+    loop = lines.index("while true; do")
+    assert lines[loop + 1].strip() == 'sleep "$POLL_INTERVAL_SEC"'
+    assert lines[loop + 2].strip() == "heartbeat"

@@ -435,6 +435,7 @@
     "SESSION_NOT_FOUND": "Diese Sitzung existiert nicht mehr.",
     "SESSION_REVOKED": "Diese Sitzung wurde beendet. Bitte melde dich erneut an.",
     "SETUP_ALREADY_COMPLETE": "Die Einrichtung wurde bereits abgeschlossen.",
+    "SETUP_TOKEN_INVALID": "Diesem Einrichtungslink fehlt das Token, oder es ist falsch.",
     "SHARE_DOWNLOAD_LIMIT_REACHED": "Diese Freigabe hat ihr Download-Limit erreicht.",
     "SHARE_EXPIRED": "Diese Freigabe ist abgelaufen.",
     "SHARE_EXPIRY_PASSED": "Das Ablaufdatum muss in der Zukunft liegen.",

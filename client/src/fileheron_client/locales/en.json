@@ -435,6 +435,7 @@
     "SESSION_NOT_FOUND": "That session no longer exists.",
     "SESSION_REVOKED": "This session was signed out. Please sign in again.",
     "SETUP_ALREADY_COMPLETE": "Setup has already been completed.",
+    "SETUP_TOKEN_INVALID": "This setup link is missing its token or the token is wrong.",
     "SHARE_DOWNLOAD_LIMIT_REACHED": "This share has reached its download limit.",
     "SHARE_EXPIRED": "That share has expired.",
     "SHARE_EXPIRY_PASSED": "The expiry date must be in the future.",

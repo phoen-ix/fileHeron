@@ -519,7 +519,7 @@
     "confirm_title": "Replace configuration?",
     "confirm_body": "This replaces configuration, purges unlisted users and groups, invalidates {shares} active share(s) and signs everyone out. This cannot be undone.",
     "confirm_cta": "Replace & import",
-    "sum_admins_installed": "Installs {n} administrator account(s)",
+    "sum_admins_installed": "Installs {n} administrator account | Installs {n} administrator accounts",
     "sum_oidc_issuers": "Installs SSO providers",
     "sum_webhook_urls": "Installs webhooks pointing at"
   },
@@ -1563,7 +1563,7 @@
     "erase_step2": "Final confirmation. Click once more to erase.",
     "erase_confirm_1": "I understand - continue",
     "erase_confirm_final": "Erase permanently",
-    "erased_toast": "User erased - {n} file(s), {bytes} bytes deleted.",
+    "erased_toast": "User erased - {n} file ({bytes}) deleted. | User erased - {n} files ({bytes}) deleted.",
     "already_erased": "User already erased",
     "sessions": "Active sessions",
     "sessions_help": "Devices currently signed in as this user, oldest activity first. Revoking a single device stops it from renewing, but its current access token stays valid until it expires (15 minutes by default); Revoke all signs the user out everywhere at once.",
@@ -1579,7 +1579,7 @@
     "emails_help": "The most recent emails file:Heron sent to this user.",
     "emails_view_all": "View in Mail log →",
     "emails_empty": "No emails sent to this user.",
-    "erase_preflight_files": "{n} file(s) will be permanently deleted ({bytes}).",
+    "erase_preflight_files": "{n} file will be permanently deleted ({bytes}). | {n} files will be permanently deleted ({bytes}).",
     "erase_preflight_shares": "{created} share(s) they created will be revoked; {received} received share(s) will be anonymised.",
     "change_email_old_link_eyebrow": "Confirmation link for the OLD address",
     "change_email_old_link_help": "In verify-both mode BOTH links must be opened. The change does not apply until the old address is confirmed too."

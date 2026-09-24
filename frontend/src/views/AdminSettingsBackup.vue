@@ -295,7 +295,7 @@ v-if="importError" class="fh-notice" role="alert"
             {{ t('admin_backup.sum_sessions') }}
           </li>
           <li v-if="preview.admins_installed?.length" class="danger">
-            {{ t('admin_backup.sum_admins_installed', { n: preview.admins_installed.length }) }}:
+            {{ t('admin_backup.sum_admins_installed', { n: preview.admins_installed.length }, preview.admins_installed.length) }}:
             {{ preview.admins_installed.join(', ') }}
           </li>
           <li v-if="preview.oidc_issuers?.length" class="danger">

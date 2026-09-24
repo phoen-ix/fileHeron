@@ -106,6 +106,10 @@ describe('counted messages use plural forms', () => {
     expect(
       en_.t('notif_bell.headline.share_created', { sender_name: 'Ada', file_count: 1 }, 1),
     ).toBe('Ada sent you 1 file.')
+    expect(
+      en_.t('admin_user_detail.erased_toast', { n: 1, bytes: '2 KB' }, 1),
+    ).toBe('User erased - 1 file (2 KB) deleted.')
+    expect(de_.t('admin_backup.sum_admins_installed', { n: 2 }, 2)).toBe('Legt 2 Administrator-Konten an')
   })
 
   // A ratchet, not a style note: a new "{n} thing(s)" string fails here. What
@@ -125,10 +129,6 @@ describe('counted messages use plural forms', () => {
       'admin_backup.confirm_body',
       'admin_imap.fetch_empty',
       'admin_inbox.fetch_empty',
-      // Admin-only single counts, not yet converted.
-      'admin_backup.sum_admins_installed',
-      'admin_user_detail.erased_toast',
-      'admin_user_detail.erase_preflight_files',
     ])
     const found: string[] = []
     const walk = (node: unknown, path: string[]) => {

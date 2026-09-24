@@ -319,10 +319,13 @@ async function onErase() {
     const { data } = await eraseUser(user.value.id, erasePassword.value)
     receiptAuditId.value = data.audit_id
     ui.pushToast(
-      t('admin_user_detail.erased_toast', {
-        n: data.deleted_files,
-        bytes: data.deleted_bytes,
-      }),
+      t(
+        'admin_user_detail.erased_toast',
+        // The raw byte count read "123456789 bytes deleted"; the pre-flight
+        // line above it already formats the same number.
+        { n: data.deleted_files, bytes: formatBytes(data.deleted_bytes) },
+        data.deleted_files,
+      ),
       'success',
     )
     // Offer the receipt BEFORE navigating away - it is the document the admin
@@ -622,10 +625,11 @@ v-if="changeEmailError" class="fh-notice" role="alert"
         <ul v-if="eraseStep >= 1 && preflight" class="fh-notice erase-preflight" data-tone="error">
           <li>
             {{
-              t('admin_user_detail.erase_preflight_files', {
-                n: preflight.files_to_delete,
-                bytes: formatBytes(preflight.bytes_to_delete),
-              })
+              t(
+                'admin_user_detail.erase_preflight_files',
+                { n: preflight.files_to_delete, bytes: formatBytes(preflight.bytes_to_delete) },
+                preflight.files_to_delete,
+              )
             }}
           </li>
           <li>

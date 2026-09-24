@@ -519,7 +519,7 @@
     "confirm_title": "Konfiguration ersetzen?",
     "confirm_body": "Dies ersetzt die Konfiguration, entfernt nicht aufgeführte Benutzer und Gruppen, macht {shares} aktive Freigabe(n) ungültig und meldet alle ab. Das kann nicht rückgängig gemacht werden.",
     "confirm_cta": "Ersetzen & importieren",
-    "sum_admins_installed": "Legt {n} Administrator-Konto/-Konten an",
+    "sum_admins_installed": "Legt {n} Administrator-Konto an | Legt {n} Administrator-Konten an",
     "sum_oidc_issuers": "Legt SSO-Provider an",
     "sum_webhook_urls": "Legt Webhooks an, die zeigen auf"
   },
@@ -1563,7 +1563,7 @@
     "erase_step2": "Endgültige Bestätigung. Erneut klicken, um zu löschen.",
     "erase_confirm_1": "Ich verstehe - fortfahren",
     "erase_confirm_final": "Endgültig löschen",
-    "erased_toast": "Benutzer gelöscht - {n} Datei(en), {bytes} Bytes entfernt.",
+    "erased_toast": "Benutzer gelöscht - {n} Datei ({bytes}) entfernt. | Benutzer gelöscht - {n} Dateien ({bytes}) entfernt.",
     "already_erased": "Benutzer bereits gelöscht",
     "sessions": "Aktive Sitzungen",
     "sessions_help": "Geräte, die derzeit als dieser Benutzer angemeldet sind, älteste Aktivität zuerst. Das Abmelden eines einzelnen Geräts verhindert dessen Verlängerung, sein aktuelles Zugriffstoken bleibt aber bis zum Ablauf gültig (standardmäßig 15 Minuten); „Alle abmelden“ meldet den Benutzer sofort überall ab.",
@@ -1579,7 +1579,7 @@
     "emails_help": "Die zuletzt von file:Heron an diese:n Nutzer:in gesendeten E-Mails.",
     "emails_view_all": "Im E-Mail-Protokoll ansehen →",
     "emails_empty": "Keine E-Mails an diese:n Nutzer:in gesendet.",
-    "erase_preflight_files": "{n} Datei(en) werden endgültig gelöscht ({bytes}).",
+    "erase_preflight_files": "{n} Datei wird endgültig gelöscht ({bytes}). | {n} Dateien werden endgültig gelöscht ({bytes}).",
     "erase_preflight_shares": "{created} von dieser Person erstellte Freigabe(n) werden widerrufen; {received} empfangene Freigabe(n) werden anonymisiert.",
     "change_email_old_link_eyebrow": "Bestätigungslink für die ALTE Adresse",
     "change_email_old_link_help": "Im Modus \"beide bestätigen\" müssen BEIDE Links geöffnet werden. Die Änderung wird erst wirksam, wenn auch die alte Adresse bestätigt ist."

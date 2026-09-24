@@ -1,3 +1,36 @@
+# Desktop client 1.4.6
+
+**A server restart no longer signs you out, and the app is built from pinned,
+hash-checked parts.**
+
+Requires server **v2.6.1 or newer** (unchanged).
+
+---
+
+## A brief server outage signed you out and paused your transfers
+
+When your sign-in needed renewing at the moment the server was unavailable -
+typically the few seconds an administrator's in-app update restarts it - the
+app treated the failed renewal as the end of your session: it closed the main
+window, paused every download and upload, and asked you to sign in again. Only
+a real "your session is over" answer from the server does that now. A server
+that is briefly unavailable shows "The server is not answering right now",
+and your transfers keep their progress so you can resume them.
+
+## Built from pinned, hash-checked dependencies
+
+The Windows program is now assembled from an exact, checksum-verified list of
+the libraries it contains, instead of whatever versions were newest on the day
+it was built. Nothing changes in how the app looks or behaves; what is inside
+it is now the same every time, and verifiable.
+
+## Also
+
+- A setup link without its token now shows a translated message.
+- Two unused internal functions were removed.
+
+---
+
 # Desktop client 1.4.5
 
 **Uploads that respect your server's limit, sign-ins that renew during a long

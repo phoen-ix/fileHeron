@@ -144,41 +144,9 @@ mv "$DEST" "$FINAL"
 trap - EXIT
 DEST="$FINAL"
 
-# 5. Optional restic push.
-if [ -n "${BACKUP_RESTIC_REPO:-}" ]; then
-    if [ -z "${BACKUP_RESTIC_PASSWORD:-}" ]; then
-        echo "[backup] BACKUP_RESTIC_REPO set but BACKUP_RESTIC_PASSWORD missing - skipping push" >&2
-    elif ! command -v restic >/dev/null 2>&1; then
-        echo "[backup] restic not installed on host - skipping push" >&2
-    else
-        echo "[backup] pushing to restic repo $BACKUP_RESTIC_REPO …"
-        # Stash the password in a 0600 temp file and pass it via
-        # restic's --password-file. Avoids `export RESTIC_PASSWORD`
-        # which would leave the secret in /proc/<pid>/environ for
-        # the duration of the restic call (readable by any process
-        # running as the same user).
-        PWD_FILE="$(mktemp)"
-        chmod 600 "$PWD_FILE"
-        # `trap` cleanup so we don't leak the file on error/exit.
-        trap 'rm -f "$PWD_FILE"' EXIT
-        printf '%s' "$BACKUP_RESTIC_PASSWORD" > "$PWD_FILE"
-        restic --repo "$BACKUP_RESTIC_REPO" --password-file "$PWD_FILE" \
-            snapshots > /dev/null 2>&1 || \
-            restic --repo "$BACKUP_RESTIC_REPO" --password-file "$PWD_FILE" init
-        # TWO tags, and the stable one is load-bearing. `fileheron-$STAMP` is
-        # unique per run, so it can only ever identify a snapshot - it cannot
-        # select the set. Retention in step 7 needs a tag that is the same on
-        # every snapshot we own, both to find ours and to leave anyone else's
-        # alone; see the comment there.
-        restic --repo "$BACKUP_RESTIC_REPO" --password-file "$PWD_FILE" \
-            backup --tag fileheron --tag "fileheron-$STAMP" "$DEST"
-        rm -f "$PWD_FILE"
-        trap - EXIT
-    fi
-fi
-
-# 6. Local retention - keep last 7 dated dirs. Restic remote (if
-# configured) holds older snapshots via its own keep-* policy below.
+# 5. Local retention - keep last 7 dated dirs. Restic remote (if
+# configured) holds older snapshots via its own keep-* policy below. Runs
+# BEFORE the push, so an offsite outage cannot stop it (see step 6).
 echo "[backup] pruning local backups (keep last 7) …"
 # Only COMPLETE backups (those with a manifest.txt) count toward the keep-7
 # window, and only they are eligible for deletion. Pruning purely by directory
@@ -202,11 +170,61 @@ done | sort -r | tail -n +8 | xargs -r rm -rf
 # Sweep abandoned stages from earlier interrupted runs.
 find "$ROOT/backups" -maxdepth 1 -type d -name '.partial-*' -mmin +180 -exec rm -rf {} + 2>/dev/null || true
 
+
+# 6. Optional restic push - the OFFSITE copy.
+#
+# Its outcome is recorded rather than left to `set -e`, for two reasons. A
+# configured repo whose push was SKIPPED (password missing, restic not
+# installed) printed a line on stderr and exited 0, so OnFailure= never fired
+# and the operator went on believing an offsite copy existed. And a push that
+# FAILED aborted the script before local retention, so every night of a restic
+# outage left one more full copy of data/ on the data disk. Retention now runs
+# first (step 5), and a configured offsite that did not complete fails the run
+# at the very end - after the local backup is safely in place.
+OFFSITE_OK=0
+if [ -z "${BACKUP_RESTIC_REPO:-}" ]; then
+    echo "[backup] NOTICE: BACKUP_RESTIC_REPO is not set - this backup is local-only," \
+         "on the same disk as the data it protects."
+    OFFSITE_OK=1
+elif [ -z "${BACKUP_RESTIC_PASSWORD:-}" ]; then
+    echo "[backup] ERROR: BACKUP_RESTIC_REPO is set but BACKUP_RESTIC_PASSWORD is missing - no offsite copy" >&2
+elif ! command -v restic >/dev/null 2>&1; then
+    echo "[backup] ERROR: BACKUP_RESTIC_REPO is set but restic is not installed on the host - no offsite copy" >&2
+else
+    echo "[backup] pushing to restic repo $BACKUP_RESTIC_REPO …"
+    # Stash the password in a 0600 temp file and pass it via
+    # restic's --password-file. Avoids `export RESTIC_PASSWORD`
+    # which would leave the secret in /proc/<pid>/environ for
+    # the duration of the restic call (readable by any process
+    # running as the same user).
+    PWD_FILE="$(mktemp)"
+    chmod 600 "$PWD_FILE"
+    # `trap` cleanup so we don't leak the file on error/exit.
+    trap 'rm -f "$PWD_FILE"' EXIT
+    printf '%s' "$BACKUP_RESTIC_PASSWORD" > "$PWD_FILE"
+    # TWO tags, and the stable one is load-bearing. `fileheron-$STAMP` is
+    # unique per run, so it can only ever identify a snapshot - it cannot
+    # select the set. Retention in step 7 needs a tag that is the same on
+    # every snapshot we own, both to find ours and to leave anyone else's
+    # alone; see the comment there.
+    if { restic --repo "$BACKUP_RESTIC_REPO" --password-file "$PWD_FILE" \
+            snapshots > /dev/null 2>&1 \
+         || restic --repo "$BACKUP_RESTIC_REPO" --password-file "$PWD_FILE" init; } \
+       && restic --repo "$BACKUP_RESTIC_REPO" --password-file "$PWD_FILE" \
+            backup --tag fileheron --tag "fileheron-$STAMP" "$DEST"; then
+        OFFSITE_OK=1
+    else
+        echo "[backup] ERROR: the restic push failed - no offsite copy of $DEST" >&2
+    fi
+    rm -f "$PWD_FILE"
+    trap - EXIT
+fi
+
 # 7. Restic forget + prune - drops snapshots beyond the retention
 # window so the remote repo doesn't grow without bound. Mirrors the
-# password-via-file pattern from step 5; reuses the same temp file
+# password-via-file pattern from step 6; reuses the same temp file
 # when restic is enabled.
-if [ -n "${BACKUP_RESTIC_REPO:-}" ] && [ -n "${BACKUP_RESTIC_PASSWORD:-}" ] && command -v restic >/dev/null 2>&1; then
+if [ -n "${BACKUP_RESTIC_REPO:-}" ] && [ "$OFFSITE_OK" = 1 ]; then
     PWD_FILE="$(mktemp)"
     chmod 600 "$PWD_FILE"
     trap 'rm -f "$PWD_FILE"' EXIT
@@ -245,3 +263,9 @@ fi
 echo "[backup] done - $DEST"
 echo "[backup] sizes:"
 du -h "$DEST"/* | sed 's/^/[backup]   /'
+if [ "$OFFSITE_OK" != 1 ]; then
+    # Exit non-zero so systemd marks the unit failed and OnFailure= alerts. The
+    # local backup above is complete; the offsite copy is what is missing.
+    echo "[backup] FAILED: BACKUP_RESTIC_REPO is configured but no offsite copy was written" >&2
+    exit 1
+fi

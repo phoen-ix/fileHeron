@@ -202,3 +202,77 @@ def test_contributing_e2e_recipe_cannot_recreate_the_live_stack() -> None:
         "CONTRIBUTING's e2e section gives no teardown, so the natural follow-up "
         "is a bare `docker compose down` against whatever project is default"
     )
+
+
+# --- audit 2026-09-24: an offsite copy that was configured and not written ----
+
+
+def _offsite_section(dest: Path) -> str:
+    """The real text of backup.sh's offsite push plus its closing verdict, run
+    under bash with a stub `restic` - behaviour, not a grep."""
+    src = (_ROOT / "scripts" / "backup.sh").read_text(encoding="utf-8")
+    push = src[src.index("# 6. Optional restic push"):src.index("# 7. Restic forget")]
+    verdict = src[src.index('echo "[backup] done - $DEST"'):]
+    return f"set -euo pipefail\nDEST={dest}\nSTAMP=stamp\n" + push + verdict
+
+
+def _run_offsite(tmp_path: Path, env: dict[str, str], restic_exit: int | None):
+    import os
+    import subprocess
+
+    bindir = tmp_path / "bin"
+    bindir.mkdir(parents=True)
+    dest = tmp_path / "backup"
+    dest.mkdir()
+    (dest / "manifest.txt").write_text("x")
+    if restic_exit is not None:
+        stub = bindir / "restic"
+        stub.write_text(f"#!/bin/sh\nexit {restic_exit}\n")
+        stub.chmod(0o755)
+    return subprocess.run(
+        ["bash", "-c", _offsite_section(dest)],
+        env={"PATH": f"{bindir}:{os.environ.get('PATH', '/usr/bin:/bin')}", **env},
+        capture_output=True, text=True, timeout=30,
+    )
+
+
+def test_an_unconfigured_offsite_is_announced_not_failed(tmp_path: Path) -> None:
+    r = _run_offsite(tmp_path, {}, restic_exit=None)
+    assert r.returncode == 0, r.stderr
+    assert "local-only" in r.stdout
+
+
+def test_a_configured_offsite_without_a_password_fails_the_run(tmp_path: Path) -> None:
+    """It used to print one stderr line and exit 0, so OnFailure= never fired."""
+    r = _run_offsite(tmp_path, {"BACKUP_RESTIC_REPO": "/tmp/repo"}, restic_exit=0)
+    assert r.returncode == 1
+    assert "no offsite copy" in r.stderr
+
+
+def test_a_configured_offsite_without_restic_fails_the_run(tmp_path: Path) -> None:
+    import shutil
+
+    if shutil.which("restic"):
+        pytest.skip("restic is installed here; the stub PATH cannot hide it")
+    r = _run_offsite(
+        tmp_path,
+        {"BACKUP_RESTIC_REPO": "/tmp/repo", "BACKUP_RESTIC_PASSWORD": "pw"},
+        restic_exit=None,
+    )
+    assert r.returncode == 1
+
+
+def test_a_failed_push_fails_the_run_and_a_good_one_passes(tmp_path: Path) -> None:
+    env = {"BACKUP_RESTIC_REPO": "/tmp/repo", "BACKUP_RESTIC_PASSWORD": "pw"}
+    bad = _run_offsite(tmp_path / "bad", env, restic_exit=1)
+    assert bad.returncode == 1
+    assert "push failed" in bad.stderr
+    good = _run_offsite(tmp_path / "good", env, restic_exit=0)
+    assert good.returncode == 0, good.stderr
+
+
+def test_local_retention_runs_before_the_push() -> None:
+    """A failed push used to abort the run before retention, so a restic outage
+    left one more full copy of data/ on the data disk every night."""
+    src = (_ROOT / "scripts" / "backup.sh").read_text(encoding="utf-8")
+    assert src.index("# 5. Local retention") < src.index("# 6. Optional restic push")

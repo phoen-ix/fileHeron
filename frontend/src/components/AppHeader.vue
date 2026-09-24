@@ -99,6 +99,42 @@ async function doLogout() {
             <span class="chev" aria-hidden="true">⌄</span>
           </button>
           <div v-if="menuOpen" class="user-pop" role="menu">
+            <!-- Below 720px the .app-nav above is hidden, and these were the
+                 only links left: a recipient on a phone had no way to reach
+                 their inbox. The same four destinations, narrow screens only. -->
+            <RouterLink
+              :to="{ name: 'outbox' }"
+              class="user-pop-item narrow-only"
+              role="menuitem"
+              @click="menuOpen = false"
+            >
+              {{ $t('header.outbox') }}
+            </RouterLink>
+            <RouterLink
+              :to="{ name: 'inbox' }"
+              class="user-pop-item narrow-only"
+              role="menuitem"
+              @click="menuOpen = false"
+            >
+              {{ $t('header.inbox') }}
+            </RouterLink>
+            <RouterLink
+              v-if="auth.user?.can_approve_shares"
+              :to="{ name: 'approvals' }"
+              class="user-pop-item narrow-only"
+              role="menuitem"
+              @click="menuOpen = false"
+            >
+              {{ $t('header.approvals') }}
+            </RouterLink>
+            <RouterLink
+              :to="{ name: 'share-create' }"
+              class="user-pop-item narrow-only"
+              role="menuitem"
+              @click="menuOpen = false"
+            >
+              {{ $t('header.new_share') }}
+            </RouterLink>
             <RouterLink
               v-if="auth.user?.role === 'admin'"
               :to="{ name: 'admin-overview' }"
@@ -191,6 +227,17 @@ async function doLogout() {
 @media (max-width: 720px) {
   .app-nav {
     display: none;
+  }
+}
+
+/* The header nav's links, repeated in the user menu for narrow screens.
+   Two classes, so this beats `.user-pop-item { display: block }` below. */
+.user-pop-item.narrow-only {
+  display: none;
+}
+@media (max-width: 720px) {
+  .user-pop-item.narrow-only {
+    display: block;
   }
 }
 

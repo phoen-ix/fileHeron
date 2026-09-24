@@ -25,6 +25,7 @@ import PublicLinkPanel from '@/components/PublicLinkPanel.vue'
 import { useApiError } from '@/composables/useApiError'
 import { useSiteDateFormat } from '@/composables/useSiteDateFormat'
 import { settledFileIds, useUpload } from '@/composables/useUpload'
+import { useUploadLeaveGuard } from '@/composables/useUploadLeaveGuard'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
 import type { FileInShareResponse, ShareResponse } from '@/types/api'
@@ -216,6 +217,7 @@ async function onDownloadZip() {
 
 // Add-files panel (owner + active only; uploads are owner-only server-side).
 const addUpload = useUpload(computed(() => share.value?.id ?? null))
+useUploadLeaveGuard(addUpload.isActive)
 const showAddFiles = ref(false)
 const addingBusy = ref(false)
 const notifyOnAdd = ref(auth.user?.share_notify_recipients_default ?? true)

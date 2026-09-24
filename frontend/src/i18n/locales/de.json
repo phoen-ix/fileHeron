@@ -1480,11 +1480,20 @@
         "expired": "abgelaufen"
       },
       "action": {
-        "copy_link": "Link kopieren",
+        "copy_link": "Neuer Link",
         "resend": "Per E-Mail erneut senden",
         "details": "Details",
         "activate": "Aktivieren",
         "delete": "Löschen"
+      },
+      "new_link": {
+        "confirm_title": "Neuen Einladungslink erstellen?",
+        "confirm_body": "Der bereits an {email} gesendete Link funktioniert danach nicht mehr. Sinnvoll, um den Link selbst weiterzugeben, etwa im Chat.",
+        "confirm_action": "Neuen Link erstellen",
+        "ready": "Neuer Einladungslink für {email}. Der zuvor gesendete Link funktioniert nicht mehr.",
+        "field_label": "Neuer Einladungslink",
+        "copy": "Kopieren",
+        "dismiss": "Fertig"
       },
       "toast": {
         "link_copied": "Einladungslink in die Zwischenablage kopiert.",
@@ -1819,6 +1828,11 @@
     "actions": {
       "retry": "Erneut versuchen",
       "remove": "Entfernen"
+    },
+    "leave": {
+      "title": "Uploads laufen noch",
+      "message": "Beim Verlassen dieser Seite werden die laufenden Uploads abgebrochen; nicht fertig übertragene Dateien werden verworfen.",
+      "confirm": "Verlassen und Uploads abbrechen"
     }
   },
   "recipient": {

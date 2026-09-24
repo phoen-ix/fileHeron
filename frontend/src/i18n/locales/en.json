@@ -1480,11 +1480,20 @@
         "expired": "expired"
       },
       "action": {
-        "copy_link": "Copy link",
+        "copy_link": "New link",
         "resend": "Resend by email",
         "details": "Details",
         "activate": "Activate",
         "delete": "Delete"
+      },
+      "new_link": {
+        "confirm_title": "Create a new invite link?",
+        "confirm_body": "The link already emailed to {email} stops working. Use this when you want to hand over the link yourself, for example in a chat.",
+        "confirm_action": "Create new link",
+        "ready": "New invite link for {email}. The previously emailed link no longer works.",
+        "field_label": "New invite link",
+        "copy": "Copy",
+        "dismiss": "Done"
       },
       "toast": {
         "link_copied": "Invite link copied to clipboard.",
@@ -1819,6 +1828,11 @@
     "actions": {
       "retry": "Retry",
       "remove": "Remove"
+    },
+    "leave": {
+      "title": "Uploads are still running",
+      "message": "Leaving this page cancels the uploads in progress, and the files that have not finished are discarded.",
+      "confirm": "Leave and cancel uploads"
     }
   },
   "recipient": {

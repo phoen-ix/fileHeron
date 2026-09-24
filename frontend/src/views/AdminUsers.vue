@@ -148,17 +148,42 @@ function deriveDisplayName(email: string): string {
     .replace(/\b\w/g, (c) => c.toUpperCase())
 }
 
+// A fresh link REPLACES the invite's token, so the link already emailed stops
+// working. This was a bare "Copy link" that rotated the token and then wrote the
+// clipboard: the emailed link died unannounced, and where the clipboard is
+// unavailable (plain-HTTP installs) or refuses after the await (Safari), nobody
+// was left holding a working link at all. Confirm first, then SHOW the link;
+// the clipboard is only a convenience.
+const freshInviteLink = ref<{ email: string; url: string } | null>(null)
+
 async function onCopyLink(inv: AdminInviteItem) {
+  const ok = await ui.confirm({
+    title: t('admin_users.invites.new_link.confirm_title'),
+    message: t('admin_users.invites.new_link.confirm_body', { email: inv.email }),
+    confirmLabel: t('admin_users.invites.new_link.confirm_action'),
+    danger: true,
+  })
+  if (!ok) return
   actionInProgressId.value = inv.id
   try {
     const { data } = await regenerateInvite(inv.id)
-    await navigator.clipboard.writeText(data.url)
-    ui.pushToast(t('admin_users.invites.toast.link_copied'), 'success')
+    freshInviteLink.value = { email: inv.email, url: data.url }
     void loadInvites()
+    await copyFreshInviteLink()
   } catch (err) {
     ui.pushToast(describe(err), 'error')
   } finally {
     actionInProgressId.value = null
+  }
+}
+
+async function copyFreshInviteLink() {
+  if (!freshInviteLink.value) return
+  try {
+    await navigator.clipboard.writeText(freshInviteLink.value.url)
+    ui.pushToast(t('admin_users.invites.toast.link_copied'), 'success')
+  } catch {
+    // The link is on screen; the notice says to copy it by hand.
   }
 }
 
@@ -371,6 +396,24 @@ v-if="inviteError" class="fh-notice" role="alert"
     <section v-if="invites.length > 0 || invitesLoading" class="invites-section">
       <h2 class="section-h2">{{ t('admin_users.invites.heading') }}</h2>
       <p class="fh-field-help section-help">{{ t('admin_users.invites.help') }}</p>
+      <div v-if="freshInviteLink" class="fh-notice fresh-link" data-tone="info" role="status">
+        <p>{{ t('admin_users.invites.new_link.ready', { email: freshInviteLink.email }) }}</p>
+        <input
+          class="fh-field-input fh-mono"
+          readonly
+          :value="freshInviteLink.url"
+          :aria-label="t('admin_users.invites.new_link.field_label')"
+          @focus="($event.target as HTMLInputElement).select()"
+        />
+        <div class="fresh-link-actions">
+          <button type="button" class="fh-btn-text" @click="copyFreshInviteLink">
+            {{ t('admin_users.invites.new_link.copy') }}
+          </button>
+          <button type="button" class="fh-btn-text" @click="freshInviteLink = null">
+            {{ t('admin_users.invites.new_link.dismiss') }}
+          </button>
+        </div>
+      </div>
       <div v-if="invitesLoading" class="loading">{{ t('common.loading') }}</div>
       <div
 v-else-if="invitesErrorMsg" class="fh-notice" role="alert"
@@ -898,5 +941,18 @@ v-if="activateError" class="fh-notice" role="alert"
 
 .details-list dd {
   margin: 0;
+}
+.fresh-link {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fh-space-2);
+  margin-bottom: var(--fh-space-3);
+}
+.fresh-link p {
+  margin: 0;
+}
+.fresh-link-actions {
+  display: flex;
+  gap: var(--fh-space-3);
 }
 </style>

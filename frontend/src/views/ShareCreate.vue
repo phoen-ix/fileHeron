@@ -20,6 +20,7 @@ import RecipientPicker from '@/components/RecipientPicker.vue'
 import ShareUploadProgress from '@/components/ShareUploadProgress.vue'
 import { useApiError } from '@/composables/useApiError'
 import { settledFileIds, useUpload } from '@/composables/useUpload'
+import { useUploadLeaveGuard } from '@/composables/useUploadLeaveGuard'
 import { siteLocalIsoToUtcIso } from '@/utils/datetime'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
@@ -64,6 +65,7 @@ const shareId = ref<string | null>(null)
 // v1.24.0: the created share landed in `pending_approval` (approval workflow).
 const createdPending = ref(false)
 const upload = useUpload(shareId)
+useUploadLeaveGuard(upload.isActive)
 const submitting = ref(false)
 const errorMsg = ref<string | null>(null)
 // 'compose' shows the form; 'progress' swaps in the dedicated upload screen

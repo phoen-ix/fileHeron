@@ -45,6 +45,16 @@ describe('useTableSort', () => {
     expect(s.sortDir.value).toBe('desc')
   })
 
+  // On the default column the "off" step reset to the default - the same state
+  // - so its header could never sort ascending (File history "Uploaded").
+  it('flips the default column instead of resetting it to itself', () => {
+    const s = useTableSort({ defaultBy: 'created_at', defaultDir: 'desc' })
+    s.toggle('created_at')
+    expect([s.sortBy.value, s.sortDir.value]).toEqual(['created_at', 'asc'])
+    s.toggle('created_at')
+    expect([s.sortBy.value, s.sortDir.value]).toEqual(['created_at', 'desc'])
+  })
+
   it('default direction defaults to desc', () => {
     const s = useTableSort({ defaultBy: 'created_at' })
     expect(s.sortDir.value).toBe('desc')

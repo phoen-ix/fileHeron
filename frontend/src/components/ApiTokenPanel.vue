@@ -146,6 +146,10 @@
         </div>
       </li>
     </ul>
+    <div v-else-if="loadFailed" class="fh-notice" role="alert" data-tone="error">
+      {{ loadFailed }}
+      <button type="button" class="fh-btn-text" @click="refresh">{{ t('common.retry') }}</button>
+    </div>
     <p v-else-if="!loading && !creating" class="fh-field-help empty">
       {{ t('api_tokens.empty') }}
     </p>
@@ -206,12 +210,20 @@ const errorMsg = ref<string | null>(null)
 const revoking = ref<number | null>(null)
 const copiedTimer = ref<number | null>(null)
 
+// A failed load used to leave the list empty and render "No API tokens yet" -
+// telling someone with live tokens they have none, which is the one thing a
+// token list must not get wrong.
+const loadFailed = ref<string | null>(null)
+
 async function refresh() {
   loading.value = true
+  loadFailed.value = null
   try {
     const { data } = await listTokens()
     tokens.value = data.items
     canCreate.value = data.can_create
+  } catch (err) {
+    loadFailed.value = describe(err)
   } finally {
     loading.value = false
   }
@@ -281,6 +293,10 @@ async function onRevoke(id: number) {
   try {
     await revokeToken(id)
     tokens.value = tokens.value.filter((t) => t.id !== id)
+  } catch (err) {
+    // There was no catch: a refused revoke left the token listed and said
+    // nothing, so it read as "still revoking" or as done.
+    ui.pushToast(describe(err), 'error')
   } finally {
     revoking.value = null
   }

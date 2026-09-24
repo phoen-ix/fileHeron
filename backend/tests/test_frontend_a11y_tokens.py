@@ -209,6 +209,21 @@ def test_every_page_view_renders_a_page_heading():
     assert missing == [], f"views with no page heading: {missing}"
 
 
+def test_no_tab_panel_renders_its_own_page_header():
+    """AdminTabShell renders the ONE header for a tabbed page; a leaf that adds
+    its own shows two breadcrumbs and two <h1>. AdminSessions and
+    AdminSettingsEmailChange did, after the v2.17 tab restructure - generic over
+    every tab leaf the router mounts, not a list of those two."""
+    views = FRONTEND / "views"
+    tab_panels = _tab_panel_views()
+    assert tab_panels, "no tab shells found in the router - the scan rotted"
+    offenders = sorted(
+        name for name in tab_panels
+        if "<AdminPageHeader" in (views / name).read_text().partition("<template>")[2]
+    )
+    assert offenders == [], f"tab leaves that render a second page header: {offenders}"
+
+
 def _tab_panel_views() -> set[str]:
     """Every `@/views/X.vue` mounted inside the `children: [...]` of a route
     whose component is AdminTabShell.vue."""

@@ -94,3 +94,47 @@ describe('useShareListState box switch', () => {
     expect(listSharesMock).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('useShareListState user filter', () => {
+  const alice = { user_id: 1, display_name: 'Alice', email: 'a@x.test', role: 'employee' }
+
+  it('does not reopen the suggestions after a pick', async () => {
+    const { searchUsers } = await import('@/api/users')
+    vi.mocked(searchUsers).mockResolvedValue({ data: { items: [alice] } } as never)
+    const { state } = setup()
+    state.pickUser(alice as never)
+    await settle()
+    expect(state.userSuggestions.value).toEqual([])
+    expect(vi.mocked(searchUsers)).not.toHaveBeenCalledWith('Alice')
+  })
+
+  it('drops a stale pick when the text changes', async () => {
+    const { searchUsers } = await import('@/api/users')
+    vi.mocked(searchUsers).mockResolvedValue({ data: { items: [] } } as never)
+    const { state } = setup()
+    state.pickUser(alice as never)
+    await settle()
+    state.userQuery.value = 'Bob'
+    await settle()
+    expect(state.partyUser.value).toBeNull()
+  })
+
+  it('keeps the answer to the newest query', async () => {
+    const { searchUsers } = await import('@/api/users')
+    const resolvers: Array<(v: unknown) => void> = []
+    vi.mocked(searchUsers).mockImplementation(
+      () => new Promise((res) => resolvers.push(res)) as never,
+    )
+    const { state } = setup()
+    state.userQuery.value = 'ann'
+    await new Promise((r) => setTimeout(r, 250))
+    state.userQuery.value = 'annabelle'
+    await new Promise((r) => setTimeout(r, 250))
+    // The newer search answers first, then the stale one arrives.
+    resolvers[1]({ data: { items: [{ ...alice, display_name: 'Annabelle' }] } })
+    await flushPromises()
+    resolvers[0]({ data: { items: [alice, { ...alice, user_id: 2, display_name: 'Anna' }] } })
+    await flushPromises()
+    expect(state.userSuggestions.value.map((u) => u.display_name)).toEqual(['Annabelle'])
+  })
+})

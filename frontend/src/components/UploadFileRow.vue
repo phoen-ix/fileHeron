@@ -82,8 +82,11 @@ const errorText = computed(() => {
   return props.item.error ?? t('errors.generic')
 })
 
+// Not 'done': a finished file is already on the share, so "Remove" here only
+// dropped the row and looked like it undid the upload. Deleting it is the file
+// list's job on the share itself.
 function canRemove(state: UploadState): boolean {
-  return state === 'queued' || state === 'error' || state === 'done'
+  return state === 'queued' || state === 'error'
 }
 
 function pillState(state: UploadState): 'active' | 'warn' | 'danger' | undefined {

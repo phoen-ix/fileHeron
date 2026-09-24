@@ -120,19 +120,22 @@
       </nav>
     </aside>
     <div class="admin-content">
-      <RouterView />
+      <RouterView v-slot="{ Component, route: r }">
+        <component :is="Component" :key="adminChildViewKey(r)" />
+      </RouterView>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 
 import { getInboxUnreadCount } from '@/api/admin'
 import { useAdminNavCollapse } from '@/composables/useAdminNavCollapse'
 import { ADMIN_NAV, ADMIN_OVERVIEW, type AdminNavItem, isItemActive } from '@/config/adminNav'
+import { adminChildViewKey } from '@/utils/viewKeys'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -160,14 +163,25 @@ const openItems = computed<AdminNavItem[]>(() =>
 
 // Unread badge on the Inbox nav item (best-effort; silent on failure).
 const inboxUnread = ref(0)
-onMounted(async () => {
+async function refreshInboxUnread() {
   try {
     const { data } = await getInboxUnreadCount()
     inboxUnread.value = data.unread
   } catch {
     inboxUnread.value = 0
   }
-})
+}
+onMounted(refreshInboxUnread)
+// The layout now stays mounted across admin pages (utils/viewKeys.ts), so the
+// mount-time fetch alone would go stale. The count only changes on the inbox
+// pages, so refresh when navigation enters or leaves them - not on every click.
+const isInboxRoute = (name: unknown) => String(name ?? '').startsWith('admin-inbox')
+watch(
+  () => route.name,
+  (to, from) => {
+    if (isInboxRoute(to) || isInboxRoute(from)) void refreshInboxUnread()
+  },
+)
 </script>
 
 <style scoped>

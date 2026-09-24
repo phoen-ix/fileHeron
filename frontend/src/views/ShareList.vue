@@ -277,16 +277,11 @@ v-else-if="errorMsg" class="fh-notice" role="alert"
                 {{ t('share_list.col.subject') }}
                 <span class="sort-ind">{{ sort.indicator('subject') }}</span>
               </th>
-              <th
-                v-if="box === 'inbox'"
-                role="button"
-                tabindex="0"
-                :aria-sort="sort.ariaSort('created_at')"
-                @click="sort.toggle('created_at')"
-                @keydown.enter="sort.toggle('created_at')"
-              >
+              <!-- Not sortable: the server has no sender order. This header
+                   toggled created_at while labelled "Sender", showing an arrow
+                   for an order it did not apply. -->
+              <th v-if="box === 'inbox'">
                 {{ t('share_list.col.sender') }}
-                <span class="sort-ind">{{ sort.indicator('created_at') }}</span>
               </th>
               <th v-if="box === 'outbox'">
                 {{ t('share_list.col.recipients') }}

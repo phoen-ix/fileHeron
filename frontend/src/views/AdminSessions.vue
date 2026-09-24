@@ -3,7 +3,6 @@ import { onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { adminListSessions, adminRevokeSession, adminRevokeUserSessions } from '@/api/admin'
-import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
 import Pager from '@/components/Pager.vue'
 import { useApiError } from '@/composables/useApiError'
 import { useDebouncedSearch } from '@/composables/useDebouncedSearch'
@@ -86,13 +85,11 @@ onMounted(load)
 
 <template>
   <div class="fh-page" data-density="operator">
-    <AdminPageHeader>
-      <template #actions>
-        <span class="fh-mono total-count">{{ t('admin_sessions.total_count', { n: total }) }}</span>
-      </template>
-    </AdminPageHeader>
-
-    <hr class="fh-rule" />
+    <!-- A tab of the Sessions page: AdminTabShell renders the one page
+         header. This leaf rendered a second one (two <h1>, two breadcrumbs). -->
+    <div class="fh-tab-toolbar">
+      <span class="fh-mono total-count">{{ t('admin_sessions.total_count', { n: total }) }}</span>
+    </div>
 
     <p class="fh-field-help intro">{{ t('admin_sessions.intro') }}</p>
 

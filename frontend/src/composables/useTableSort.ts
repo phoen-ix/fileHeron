@@ -32,6 +32,12 @@ export function useTableSort(opts: UseTableSortOptions): UseTableSortReturn {
       sortDir.value = 'asc'
       return
     }
+    // The default column has no "off" state to fall back to: resetting it to
+    // the default was a no-op, so its header could never sort ascending.
+    if (column === opts.defaultBy) {
+      sortDir.value = sortDir.value === 'asc' ? 'desc' : 'asc'
+      return
+    }
     if (sortDir.value === 'asc') {
       sortDir.value = 'desc'
       return

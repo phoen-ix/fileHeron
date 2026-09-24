@@ -52,6 +52,11 @@ onMounted(async () => {
   }
 })
 
+async function retryStatus() {
+  error.value = null
+  await refreshStatus()
+}
+
 async function refreshStatus() {
   try {
     const r = await twoFaApi.getStatus()
@@ -292,6 +297,11 @@ v-if="error" class="fh-notice" role="alert"
             required
           />
         </div>
+        <!-- regenerateCodes sets `error` on a wrong password/code; this
+             stage had nowhere to show it, so a 401 simply did nothing. -->
+        <div
+v-if="error" class="fh-notice" role="alert"
+          data-tone="error">{{ error }}</div>
         <button type="submit" class="fh-btn-ghost fh-btn" :disabled="submitting">
           {{ $t('twofa.regenerate_cta') }}
         </button>
@@ -348,7 +358,12 @@ v-if="error" class="fh-notice" role="alert"
       </form>
     </section>
 
-    <!-- Loading state -->
+    <!-- Loading state. A failed status fetch used to leave this spinning
+         forever with the reason in `error` and nothing rendering it. -->
+    <div v-else-if="error" class="fh-notice" role="alert" data-tone="error">
+      {{ error }}
+      <button type="button" class="fh-btn-text" @click="retryStatus">{{ $t('common.retry') }}</button>
+    </div>
     <p v-else class="fh-field-help">{{ $t('common.loading') }}</p>
   </div>
 </template>

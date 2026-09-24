@@ -17,16 +17,19 @@ export function uaShort(ua: string | null, fallback = ''): string {
             : /python|httpx/i.test(ua)
               ? 'Python'
               : 'Browser'
+  // Mobile first: Android user agents carry "Linux; Android" and iOS ones
+  // "like Mac OS X", so testing Linux/macOS first labelled every phone session
+  // "Linux" or "macOS" - in the very lists people read to decide what to revoke.
   const os = /Windows/.test(ua)
     ? 'Windows'
-    : /Mac OS X|Macintosh/.test(ua)
-      ? 'macOS'
-      : /Linux/.test(ua)
-        ? 'Linux'
-        : /Android/.test(ua)
-          ? 'Android'
-          : /iPhone|iPad/.test(ua)
-            ? 'iOS'
+    : /Android/.test(ua)
+      ? 'Android'
+      : /iPhone|iPad|iPod/.test(ua)
+        ? 'iOS'
+        : /Mac OS X|Macintosh/.test(ua)
+          ? 'macOS'
+          : /Linux/.test(ua)
+            ? 'Linux'
             : ''
   return os ? `${br} · ${os}` : br
 }

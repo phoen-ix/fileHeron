@@ -16,6 +16,7 @@
       </button>
     </div>
     <input
+      ref="inputEl"
       v-model="inputValue"
       :aria-label="t('expiry.custom_placeholder')"
       type="datetime-local"
@@ -23,6 +24,7 @@
       :placeholder="t('expiry.custom_placeholder')"
       :min="minAttr"
       :disabled="disabled || activePreset === 'never'"
+      @blur="restoreDisplayedValue"
     />
     <div class="hint">
       <span class="fh-mono">{{ hintText }}</span>
@@ -131,9 +133,24 @@ function applyPreset(preset: Preset) {
 const inputValue = computed<string>({
   get: () => (dt.value ? dt.value.slice(0, 16) : ''),
   set: (v: string) => {
-    dt.value = v ? `${v}:00` : null
+    // An empty value is NOT "never". A native datetime-local reports '' while a
+    // segment is cleared or half-typed (Backspace in Chrome, the clear button in
+    // Firefox/Safari), and mapping that to null silently turned a 90-day API
+    // token into a permanent one while the "90 days" preset stayed highlighted.
+    // Never is chosen with its own preset; an incomplete field keeps the last
+    // valid value.
+    if (v) dt.value = `${v}:00`
   },
 })
+
+const inputEl = ref<HTMLInputElement | null>(null)
+/** The ignored '' above leaves the DOM showing an empty field while the model
+ *  keeps its value; put the real value back when the user leaves the field. */
+function restoreDisplayedValue() {
+  if (inputEl.value && inputEl.value.value !== inputValue.value) {
+    inputEl.value.value = inputValue.value
+  }
+}
 
 // Prevent picking a past instant - the site-tz "now" at page load, to the
 // minute. Evaluated once (no reactive deps); a coarse floor is sufficient.

@@ -24,8 +24,9 @@ import FileUploadArea from '@/components/FileUploadArea.vue'
 import PublicLinkPanel from '@/components/PublicLinkPanel.vue'
 import { useApiError } from '@/composables/useApiError'
 import { useSiteDateFormat } from '@/composables/useSiteDateFormat'
-import { settledFileIds, useUpload } from '@/composables/useUpload'
+import { useUpload } from '@/composables/useUpload'
 import { useUploadLeaveGuard } from '@/composables/useUploadLeaveGuard'
+import { createSettledRegistrar } from '@/composables/settledRegistrar'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
 import type { FileInShareResponse, ShareResponse } from '@/types/api'
@@ -232,13 +233,29 @@ const addAllDone = computed(
     ),
 )
 
+// Files already registered with the server in this add-files round. A partial
+// failure used to return BEFORE registering anything, although the files that
+// did finish were already attached to the share: they stayed unannounced and
+// missing from the list until a reload, and "Cancel" looked like it undid them.
+// The finished ones are registered (and shown) now; the rest after a retry.
+const addRegistrar = createSettledRegistrar({
+  shareId: () => share.value?.id ?? null,
+  items: () => addUpload.items.value,
+  register: async (id, fileIds) => {
+    const { data } = await registerFilesAdded(id, { notify: notifyOnAdd.value, file_ids: fileIds })
+    share.value = data
+  },
+})
+
 function startAddFiles() {
+  addRegistrar.clear()
   addUpload.reset()
   notifyOnAdd.value = auth.user?.share_notify_recipients_default ?? true
   showAddFiles.value = true
 }
 
 function cancelAddFiles() {
+  addRegistrar.clear()
   addUpload.reset()
   showAddFiles.value = false
 }
@@ -250,20 +267,16 @@ async function onUploadAdded() {
     if (addUpload.items.value.some((i) => i.state === 'queued')) {
       await addUpload.start()
     }
+    await addRegistrar.flush()
     if (!addAllDone.value) {
       ui.pushToast(t('share_detail.add_files_has_errors'), 'error')
       return
     }
-    const fileIds = settledFileIds(addUpload.items.value)
-    if (fileIds.length === 0) return
-    const { data } = await registerFilesAdded(share.value.id, {
-      notify: notifyOnAdd.value,
-      file_ids: fileIds,
-    })
-    share.value = data
+    const added = addRegistrar.count
+    addRegistrar.clear()
     addUpload.reset()
     showAddFiles.value = false
-    ui.pushToast(t('share_detail.files_added_toast', { n: fileIds.length }), 'success')
+    ui.pushToast(t('share_detail.files_added_toast', { n: added }), 'success')
   } catch (err) {
     ui.pushToast(describe(err), 'error')
   } finally {

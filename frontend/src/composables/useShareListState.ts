@@ -95,18 +95,34 @@ export function useShareListState(box: ComputedRef<'outbox' | 'inbox'>) {
   const sort = useTableSort({ defaultBy: 'created_at', defaultDir: 'desc' })
 
   let userSearchTimer: ReturnType<typeof setTimeout> | null = null
+  let userSearchSeq = 0
   watch(userQuery, () => {
     if (userSearchTimer) clearTimeout(userSearchTimer)
+    // pickUser writes the picked name into the box; that must not search for
+    // it again - it re-opened the suggestion list right after every pick.
+    if (partyUser.value && partyUser.value.display_name === userQuery.value) return
+    // The text no longer names the picked user, so the filter is stale: the box
+    // said "Bob" while the list stayed filtered to Alice. Same rule
+    // AdminApiTokens.vue applies to its owner picker.
+    if (partyUser.value) {
+      partyUser.value = null
+      if (!resetting) {
+        page.value = 1
+        void load()
+      }
+    }
     if (!userQuery.value || userQuery.value.length < 2) {
       userSuggestions.value = []
       return
     }
+    // A slower answer for "ann" must not overwrite the one for "annabelle".
+    const seq = ++userSearchSeq
     userSearchTimer = setTimeout(async () => {
       try {
         const { data } = await searchUsers(userQuery.value)
-        userSuggestions.value = data.items
+        if (seq === userSearchSeq) userSuggestions.value = data.items
       } catch {
-        userSuggestions.value = []
+        if (seq === userSearchSeq) userSuggestions.value = []
       }
     }, 200)
   })

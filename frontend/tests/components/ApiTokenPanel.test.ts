@@ -12,10 +12,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import en from '@/i18n/locales/en.json'
 
 const listTokens = vi.fn(async () => ({ data: { items: [], can_create: true } }))
+const revokeToken = vi.fn(async (_id: number) => ({}))
 vi.mock('@/api/apiTokens', () => ({
   listTokens: () => listTokens(),
   createToken: vi.fn(),
-  revokeToken: vi.fn(),
+  revokeToken: (id: number) => revokeToken(id),
 }))
 
 import ApiTokenPanel from '@/components/ApiTokenPanel.vue'
@@ -77,5 +78,46 @@ describe('ApiTokenPanel create form', () => {
     expect(radio(w, 'limited').checked).toBe(true)
     expect(radio(w, 'full').checked).toBe(false)
     expect(activePreset(w)).toBe('90 days')
+  })
+})
+
+
+describe('ApiTokenPanel failures are shown, not swallowed', () => {
+  const envelope = (code: string, status: number) =>
+    Object.assign(new Error(code), { isAxiosError: true, response: { status, data: { code, error: code } } })
+
+  it('a failed load is an error, not "No API tokens yet"', async () => {
+    listTokens.mockRejectedValueOnce(envelope('SERVER_ERROR', 500))
+    const w = makeWrapper()
+    await flushPromises()
+    expect(w.find('[role="alert"]').exists()).toBe(true)
+    expect(w.text()).not.toContain(en.api_tokens.empty)
+  })
+
+  it('a refused revoke raises a toast and keeps the token listed', async () => {
+    listTokens.mockResolvedValueOnce({
+      data: {
+        items: [
+          {
+            id: 5, name: 'ci', prefix: 'fh_abcd1234', scopes: null, expires_at: null,
+            last_used_at: null, created_at: '2026-09-01T00:00:00', revoked_at: null,
+            disabled_at: null, owner_display_name: null,
+          },
+        ],
+        can_create: true,
+      },
+    } as never)
+    revokeToken.mockRejectedValueOnce(envelope('TOKEN_NOT_FOUND', 404))
+    const w = makeWrapper()
+    await flushPromises()
+    const { useUiStore } = await import('@/stores/ui')
+    const ui = useUiStore()
+    vi.spyOn(ui, 'confirm').mockResolvedValue(true)
+    const revoke = w.findAll('button').find((b) => b.text().trim() === en.api_tokens.revoke)
+    await revoke!.trigger('click')
+    await flushPromises()
+    expect(revokeToken).toHaveBeenCalledWith(5)
+    expect(ui.toasts.some((t) => t.tone === 'error')).toBe(true)
+    expect(w.text()).toContain('ci')
   })
 })

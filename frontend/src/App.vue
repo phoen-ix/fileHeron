@@ -13,6 +13,7 @@ import { useKeyboardShortcuts } from '@/composables/useKeyboardShortcuts'
 import { useAuthStore } from '@/stores/auth'
 import { useSiteStore } from '@/stores/site'
 import { setLocale } from '@/i18n'
+import { appViewKey } from '@/utils/viewKeys'
 
 const auth = useAuthStore()
 const site = useSiteStore()
@@ -69,7 +70,7 @@ watch(
   <main ref="mainEl" tabindex="-1" :data-density="density">
     <RouterView v-slot="{ Component, route: r }">
       <Transition name="fh-page" mode="out-in">
-        <component :is="Component" :key="r.path" />
+        <component :is="Component" :key="appViewKey(r)" />
       </Transition>
     </RouterView>
   </main>

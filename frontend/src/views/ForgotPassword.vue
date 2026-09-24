@@ -3,16 +3,27 @@ import { ref } from 'vue'
 
 import AuthCanvas from '@/components/AuthCanvas.vue'
 import { forgotPassword } from '@/api/auth'
+import { useApiError } from '@/composables/useApiError'
 
+const { describe } = useApiError()
 const email = ref('')
 const sent = ref(false)
 const submitting = ref(false)
+const errorMsg = ref<string | null>(null)
 
 async function onSubmit() {
   submitting.value = true
+  errorMsg.value = null
   try {
     await forgotPassword({ email: email.value })
     sent.value = true
+  } catch (e) {
+    // There was no catch: a 429 RATE_LIMITED, a 5xx or a dropped connection
+    // just re-enabled the button, so the user retried - deepening the rate
+    // limit - with an unhandled rejection and nothing on screen. (The endpoint
+    // answers 200 for unknown addresses, so this reveals nothing about which
+    // accounts exist.)
+    errorMsg.value = describe(e)
   } finally {
     submitting.value = false
   }
@@ -38,6 +49,7 @@ async function onSubmit() {
             required
           />
         </div>
+        <div v-if="errorMsg" class="fh-notice" role="alert" data-tone="error">{{ errorMsg }}</div>
         <div class="actions">
           <button type="submit" class="fh-btn" :disabled="submitting">
             {{ $t('forgot.submit') }} <span aria-hidden="true">→</span>

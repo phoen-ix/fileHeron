@@ -19,8 +19,9 @@ import FileUploadArea from '@/components/FileUploadArea.vue'
 import RecipientPicker from '@/components/RecipientPicker.vue'
 import ShareUploadProgress from '@/components/ShareUploadProgress.vue'
 import { useApiError } from '@/composables/useApiError'
-import { settledFileIds, useUpload } from '@/composables/useUpload'
+import { useUpload } from '@/composables/useUpload'
 import { useUploadLeaveGuard } from '@/composables/useUploadLeaveGuard'
+import { createSettledRegistrar } from '@/composables/settledRegistrar'
 import { siteLocalIsoToUtcIso } from '@/utils/datetime'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
@@ -163,21 +164,7 @@ async function onSubmit() {
     // one advance. Uploads keep running here because useUpload stays mounted.
     phase.value = 'progress'
     await upload.start()
-    // Tell the server the batch is over, so the recipient notification goes out
-    // now with the right count rather than waiting for the fallback sweep. The
-    // announcement is deferred until the files land - a share is empty at
-    // create time, which is why every notification used to say "0 files"
-    // (audit #2). Best-effort: the sweep covers a failure here.
-    if (shareId.value) {
-      try {
-        await registerFilesAdded(shareId.value, {
-          notify: notifyRecipients.value,
-          file_ids: settledFileIds(upload.items.value),
-        })
-      } catch {
-        /* the announce sweep will pick it up within a minute */
-      }
-    }
+    await registerSettled()
     if (allUploadsDone.value) {
       ui.pushToast(
         createdPending.value
@@ -193,6 +180,36 @@ async function onSubmit() {
     errorMsg.value = describe(err)
     submitting.value = false
   }
+}
+
+// Tell the server which files have landed, so the recipient notification goes
+// out now with the right count rather than waiting for the fallback sweep. The
+// announcement is deferred until the files land - a share is empty at create
+// time, which is why every notification used to say "0 files" (audit #2).
+//
+// Every settled file exactly once. This ran once, after the first batch, so a
+// file that failed and then succeeded on Retry was never registered: the
+// recipients had been told "2 files", heard nothing about the third, and the
+// audit row listed two. The first call is the announcement; a later one is the
+// server's "files added" follow-up (register_files_added).
+const registrar = createSettledRegistrar({
+  shareId: () => shareId.value,
+  items: () => upload.items.value,
+  register: (id, fileIds) =>
+    registerFilesAdded(id, { notify: notifyRecipients.value, file_ids: fileIds }),
+})
+async function registerSettled() {
+  try {
+    await registrar.flush()
+  } catch {
+    // Best-effort: the announce sweep covers the first batch, and anything
+    // left unsent is retried by the next flush.
+  }
+}
+
+async function onRetry(uid: string) {
+  await upload.retry(uid)
+  await registerSettled()
 }
 
 function onViewShare() {
@@ -235,7 +252,7 @@ function onCreateAnother() {
         :disabled="submitting"
         @add="upload.add"
         @remove="upload.remove"
-        @retry="upload.retry"
+        @retry="onRetry"
       />
 
       <hr class="fh-rule" />
@@ -404,7 +421,7 @@ v-if="errorMsg" class="fh-notice" role="alert"
       :is-active="upload.isActive.value"
       :all-done="allUploadsDone"
       :error-count="errorCount"
-      @retry="upload.retry"
+      @retry="onRetry"
       @view-share="onViewShare"
       @create-another="onCreateAnother"
     />

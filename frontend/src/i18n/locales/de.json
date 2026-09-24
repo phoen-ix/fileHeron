@@ -30,6 +30,8 @@
     "display_name_help": "Wird auf Freigaben und in E-Mails angezeigt. Kannst du später ändern.",
     "password_help": "Mindestens 12 Zeichen. Wähle etwas Sicheres.",
     "password_confirm": "Passwort bestätigen",
+    "token_label": "Einrichtungs-Token",
+    "token_help": "install.sh hat einen /setup-Link mit diesem Token ausgegeben; er steht auch als SETUP_TOKEN in der .env des Servers.",
     "submit": "Admin-Konto erstellen",
     "error": {
       "password_mismatch": "Passwörter stimmen nicht überein.",
@@ -228,6 +230,7 @@
     "SELF_SHARE": "Sie können keine Freigabe an sich selbst senden.",
     "SESSION_NOT_FOUND": "Diese Sitzung existiert nicht mehr.",
     "SESSION_REVOKED": "Diese Sitzung wurde widerrufen. Bitte melden Sie sich erneut an.",
+    "SETUP_TOKEN_INVALID": "Diesem Einrichtungslink fehlt das Token, oder es ist falsch. Bitte den von install.sh ausgegebenen /setup-Link verwenden oder SETUP_TOKEN aus der .env des Servers.",
     "SETUP_ALREADY_COMPLETE": "Die Einrichtung wurde bereits abgeschlossen.",
     "SHARE_DOWNLOAD_LIMIT_REACHED": "Diese Freigabe hat ihr Download-Limit erreicht.",
     "SHARE_EXPIRED": "Diese Freigabe ist abgelaufen.",

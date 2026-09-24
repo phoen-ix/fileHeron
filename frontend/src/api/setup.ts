@@ -2,12 +2,14 @@ import api from './client'
 
 export interface SetupStatusResponse {
   required: boolean
+  token_required: boolean
 }
 
 export interface CompleteSetupRequest {
   email: string
   password: string
   display_name: string
+  setup_token?: string | null
 }
 
 export interface CompleteSetupResponse {

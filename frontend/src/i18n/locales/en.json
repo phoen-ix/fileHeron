@@ -30,6 +30,8 @@
     "display_name_help": "Shown on shares and emails. You can change it later.",
     "password_help": "At least 12 characters. Pick something strong.",
     "password_confirm": "Confirm password",
+    "token_label": "Setup token",
+    "token_help": "install.sh printed a /setup link containing this token; it is also SETUP_TOKEN in the server's .env.",
     "submit": "Create admin account",
     "error": {
       "password_mismatch": "Passwords don't match.",
@@ -228,6 +230,7 @@
     "SELF_SHARE": "You cannot send a share to yourself.",
     "SESSION_NOT_FOUND": "That session no longer exists.",
     "SESSION_REVOKED": "This session was revoked. Please sign in again.",
+    "SETUP_TOKEN_INVALID": "This setup link is missing its token or the token is wrong. Use the /setup link install.sh printed, or SETUP_TOKEN from the server's .env.",
     "SETUP_ALREADY_COMPLETE": "Setup has already been completed.",
     "SHARE_DOWNLOAD_LIMIT_REACHED": "This share has reached its download limit.",
     "SHARE_EXPIRED": "That share has expired.",

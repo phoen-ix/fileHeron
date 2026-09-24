@@ -5,9 +5,9 @@
 # Usage:
 #   ./install.sh [--url=https://files.example.com] [--tag=v1.0.0] [--dir=/opt/fileHeron]
 #
-# After the script finishes, visit https://<your-url>/setup to create
-# your first admin account through the web wizard. No more shell after
-# install.
+# After the script finishes, visit the https://<your-url>/setup?token=... URL
+# it prints to create your first admin account through the web wizard. No more
+# shell after install.
 set -euo pipefail
 
 APP_URL=""
@@ -29,7 +29,8 @@ fileHeron installer
   --tag=TAG    GHCR image tag to deploy. Default: latest. Use v1.0.0 to pin.
   --dir=DIR    Install directory. Default: /opt/fileHeron.
 
-After install, visit https://<your-url>/setup for the admin bootstrap wizard.
+After install, visit the printed https://<your-url>/setup?token=... URL for the
+admin bootstrap wizard (the token is SETUP_TOKEN in .env).
 EOF
             exit 0
             ;;
@@ -169,6 +170,11 @@ gen_secret DB_PASSWORD
 gen_secret DB_ROOT_PASSWORD
 gen_secret JWT_SECRET
 gen_secret TUS_HOOK_SECRET
+# The /setup wizard is anonymous until the first admin exists, and the stack is
+# public the moment `compose up` finishes - so the wizard demands this token and
+# the URL printed at the end carries it. Harmless on an upgrade: an instance that
+# is already set up never asks for it.
+gen_secret SETUP_TOKEN
 
 # Pin the updater's host paths to where we ACTUALLY installed, since --dir= may
 # not be the default. These must be absolute host paths: the shim hands them to
@@ -273,9 +279,11 @@ cat <<EOF
   fileHeron is starting on tag=$FH_TAG.
 
   Once the backend is healthy (typically ~30s), visit:
-    $APP_URL/setup
+    $APP_URL/setup?token=$(grep -E '^SETUP_TOKEN=' .env | head -1 | cut -d= -f2-)
 
-  ...to create your first admin account through the web wizard.
+  ...to create your first admin account through the web wizard. The
+  token (SETUP_TOKEN in .env) keeps anyone else from claiming the
+  instance first; the wizard refuses without it.
 
   Operator commands:
     docker compose ps          # service status

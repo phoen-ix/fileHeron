@@ -26,7 +26,11 @@ router = APIRouter(prefix="/api/setup", tags=["setup"])
 def setup_status(db: Session = Depends(get_db)) -> SetupStatusResponse:
     """Anonymous. SPA hits this on app bootstrap to decide whether to
     redirect to /setup."""
-    return SetupStatusResponse(required=not setup_svc.is_setup_complete(db))
+    required = not setup_svc.is_setup_complete(db)
+    return SetupStatusResponse(
+        required=required,
+        token_required=required and setup_svc.setup_token_required(),
+    )
 
 
 @router.post("/admin", response_model=CompleteSetupResponse)
@@ -55,6 +59,7 @@ async def complete_setup(
         email=str(payload.email),
         password=payload.password,
         display_name=payload.display_name,
+        setup_token=payload.setup_token,
     )
     db.commit()
     return CompleteSetupResponse(user_id=user.id, email=user.email)

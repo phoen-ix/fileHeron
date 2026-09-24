@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session
 from ..middleware.errors import AppError
 from ..models.audit_log import AuditEventType
 from ..models.user import Locale, User, UserRole
-from ..utils.crypto import argon2_hash, normalize_email
+from ..utils.crypto import argon2_hash, constant_time_equals, normalize_email
 from ..utils.timeutil import utc_now
 from . import settings as settings_svc
 from .audit import record_audit_event
@@ -58,12 +58,36 @@ def is_setup_complete(db: Session) -> bool:
     )
 
 
+def setup_token_required() -> bool:
+    from ..config import settings
+
+    return bool(settings.SETUP_TOKEN)
+
+
+def _check_setup_token(presented: str | None) -> None:
+    """Refuse unless the caller holds SETUP_TOKEN, when one is configured.
+
+    Checked before anything else the anonymous route does - hashing, the
+    outbound HIBP call - so a stranger racing the operator costs nothing."""
+    from ..config import settings
+
+    expected = settings.SETUP_TOKEN
+    if expected and not constant_time_equals(presented or "", expected):
+        raise AppError(
+            403,
+            "SETUP_TOKEN_INVALID",
+            "This setup link is missing or wrong. Use the /setup?token=... URL "
+            "install.sh printed (SETUP_TOKEN in .env).",
+        )
+
+
 async def complete_setup(
     db: Session,
     *,
     email: str,
     password: str,
     display_name: str,
+    setup_token: str | None = None,
 ) -> User:
     """Create the first admin via the web wizard. Race-safe via the
     is_setup_complete check + the unique email constraint - second
@@ -72,6 +96,7 @@ async def complete_setup(
     Caller commits."""
     if is_setup_complete(db):
         raise AppError(409, "SETUP_ALREADY_COMPLETE", "An admin account already exists.")
+    _check_setup_token(setup_token)
 
     em = normalize_email(email)
     if not em:

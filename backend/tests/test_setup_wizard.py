@@ -173,3 +173,89 @@ async def test_a_taken_email_is_refused_before_the_breach_check(
         )
     assert exc.value.code in ("EMAIL_TAKEN", "SETUP_ALREADY_COMPLETE")
     assert not called, "the outbound breach check ran for an email we were rejecting"
+
+
+# --- audit 2026-09-24: the wizard was first-come-first-served ----------------
+
+_FIRST_ADMIN = {
+    "email": "first.admin@test.local",
+    "password": "AdminPassword123!",
+    "display_name": "First Admin",
+}
+
+
+@pytest.mark.asyncio
+async def test_a_configured_setup_token_is_required(client, db, monkeypatch):
+    """install.sh brings the stack up behind the public proxy and only THEN
+    tells the operator to visit /setup, so whoever got there first owned the
+    instance. With SETUP_TOKEN set the wizard wants it."""
+    from app.config import settings
+    from app.models.user import User
+
+    monkeypatch.setattr(settings, "SETUP_TOKEN", "s3cret-setup-token")
+
+    status = await client.get("/api/setup/status")
+    assert status.json() == {"required": True, "token_required": True}
+
+    for bad in (None, "", "wrong", "s3cret-setup-token "):
+        body = dict(_FIRST_ADMIN)
+        if bad is not None:
+            body["setup_token"] = bad
+        r = await client.post("/api/setup/admin", json=body)
+        assert r.status_code == 403, (bad, r.text)
+        assert r.json()["code"] == "SETUP_TOKEN_INVALID"
+    assert db.query(User).count() == 0
+
+    r = await client.post(
+        "/api/setup/admin", json={**_FIRST_ADMIN, "setup_token": "s3cret-setup-token"}
+    )
+    assert r.status_code == 200, r.text
+
+
+@pytest.mark.asyncio
+async def test_without_a_setup_token_the_wizard_is_unchanged(client, monkeypatch):
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "SETUP_TOKEN", "")
+    status = await client.get("/api/setup/status")
+    assert status.json() == {"required": True, "token_required": False}
+    r = await client.post("/api/setup/admin", json=_FIRST_ADMIN)
+    assert r.status_code == 200, r.text
+
+
+@pytest.mark.asyncio
+async def test_a_completed_setup_does_not_advertise_a_token(client, make_user, monkeypatch):
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "SETUP_TOKEN", "s3cret-setup-token")
+    make_user(email="adm@test.local", role=UserRole.admin)
+    status = await client.get("/api/setup/status")
+    assert status.json() == {"required": False, "token_required": False}
+
+
+def test_install_generates_the_setup_token_before_the_stack_comes_up(tmp_path):
+    """The token only helps if it exists before `docker compose up -d` makes the
+    wizard reachable, and if the operator is handed the URL that carries it.
+    Runs install.sh's own `gen_secret` against a scratch .env."""
+    import re
+    import shutil
+    import subprocess
+    from pathlib import Path
+
+    src = (Path(__file__).resolve().parents[2] / "install.sh").read_text(encoding="utf-8")
+    assert src.index("gen_secret SETUP_TOKEN") < src.index("docker compose up -d")
+    assert "/setup?token=$(grep -E '^SETUP_TOKEN=' .env" in src
+    example = (Path(__file__).resolve().parents[2] / ".env.example").read_text(encoding="utf-8")
+    assert re.search(r"^SETUP_TOKEN=$", example, re.M)
+
+    helpers = src[src.index("_secure_env_files() {"):src.index('echo "[install] generating any missing secrets"')]
+    (tmp_path / ".env").write_text("SETUP_TOKEN=\n")
+    bash = shutil.which("bash")
+    assert bash
+    # S603: an absolute bash running this repo's own script text.
+    subprocess.run(  # noqa: S603
+        [bash, "-c", helpers + "gen_secret SETUP_TOKEN\n"],
+        cwd=tmp_path, check=True, capture_output=True, text=True, timeout=30,
+    )
+    env = (tmp_path / ".env").read_text()
+    assert re.fullmatch(r"SETUP_TOKEN=[0-9a-f]{64}\n", env), env

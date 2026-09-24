@@ -517,8 +517,12 @@ production:
 | `JWT_SECRET` | JWT-HS256 + various HMACs | `openssl rand -hex 32` |
 | `TUS_HOOK_SECRET` | HMAC for tusd ↔ backend hooks | `openssl rand -hex 32` |
 
-Set `ADMIN_BOOTSTRAP_EMAIL` (and optionally `ADMIN_BOOTSTRAP_PASSWORD`) to bootstrap an
-admin on first run. Then:
+Then either set `ADMIN_BOOTSTRAP_EMAIL` (and optionally `ADMIN_BOOTSTRAP_PASSWORD`) to
+bootstrap an admin on first run, or use the `/setup` web wizard. The wizard is anonymous
+until the first admin exists, so set `SETUP_TOKEN` (`openssl rand -hex 32`) before the
+instance is reachable and open `/setup?token=<SETUP_TOKEN>`: without the token the wizard
+refuses, and nobody who finds the fresh instance first can claim it. `install.sh` does this
+for you and prints the URL. Then:
 
 ```bash
 docker compose up -d

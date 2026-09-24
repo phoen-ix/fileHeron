@@ -118,6 +118,12 @@ class Settings(BaseSettings):
     # --- Admin bootstrap -----------------------------------------------------
     ADMIN_BOOTSTRAP_EMAIL: str = ""
     ADMIN_BOOTSTRAP_PASSWORD: str = ""
+    # One-time secret the /setup wizard demands while no admin exists. The
+    # wizard is anonymous and the stack is public from the moment compose comes
+    # up, so without it whoever reached a fresh instance first became its admin.
+    # install.sh generates it and prints the /setup?token=... URL. Empty keeps
+    # the old open wizard (manual installs that set nothing).
+    SETUP_TOKEN: str = ""
 
     # --- Dev test account (consumed by scripts/seed_dev.py + entrypoint) ------
     TEST_ACCOUNT_EMAIL: str = ""

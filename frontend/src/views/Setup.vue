@@ -1,14 +1,15 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 
 import AuthCanvas from '@/components/AuthCanvas.vue'
-import { completeSetup } from '@/api/setup'
+import { completeSetup, getSetupStatus } from '@/api/setup'
 import { useApiError } from '@/composables/useApiError'
 import { useAuthStore } from '@/stores/auth'
 
 const { t } = useI18n()
+const route = useRoute()
 const router = useRouter()
 const { describe } = useApiError()
 const auth = useAuthStore()
@@ -19,6 +20,24 @@ const password = ref('')
 const passwordConfirm = ref('')
 const submitting = ref(false)
 const errorMsg = ref<string | null>(null)
+
+// install.sh prints /setup?token=...; the backend refuses the wizard without it
+// when SETUP_TOKEN is configured. Taken from the URL once and then dropped from
+// the address bar, so it does not linger in history. The field only appears
+// when the server wants a token the URL did not bring.
+const setupToken = ref(typeof route.query.token === 'string' ? route.query.token : '')
+const tokenFromUrl = setupToken.value !== ''
+const tokenRequired = ref(false)
+
+onMounted(async () => {
+  if (tokenFromUrl) void router.replace({ query: {} })
+  try {
+    const { data } = await getSetupStatus()
+    tokenRequired.value = data.token_required
+  } catch {
+    /* the submit reports any refusal */
+  }
+})
 
 async function onSubmit() {
   errorMsg.value = null
@@ -36,6 +55,7 @@ async function onSubmit() {
       email: email.value.trim(),
       password: password.value,
       display_name: displayName.value.trim(),
+      setup_token: setupToken.value.trim() || null,
     })
     // Auto-login the new admin so they go straight into the app.
     await auth.login(email.value.trim(), password.value)
@@ -102,6 +122,19 @@ async function onSubmit() {
           autocomplete="new-password"
           required
         />
+      </label>
+
+      <label v-if="tokenRequired && !tokenFromUrl" class="fh-field">
+        <span class="fh-field-label">{{ t('setup.token_label') }}</span>
+        <input
+          v-model="setupToken"
+          type="text"
+          class="fh-field-input fh-mono"
+          autocomplete="off"
+          spellcheck="false"
+          required
+        />
+        <span class="fh-field-help">{{ t('setup.token_help') }}</span>
       </label>
 
       <div

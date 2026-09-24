@@ -32,9 +32,11 @@ audit on three anyio CVEs; tags are immutable, so the same commits shipped as
 v2.17.1 plus the anyio bump). **v2.17.1 shipped a sidebar showing nothing but
 "Overview"** (a `v-if` on the Overview link captured the categories' `v-else`;
 no test mounted AdminLayout); v2.17.2 is that one-line fix plus
-`tests/components/AdminLayout.test.ts`. **The reference host runs v2.17.1**, so
-v2.16.0's two default moves are live there and the admin nav restructure runs
-with the broken sidebar until v2.17.2 is applied; v2.17.x moves no default.
+`tests/components/AdminLayout.test.ts`. **The reference host runs v2.17.2**
+(its running container's `FH_VERSION`, checked 2026-09-24), so v2.16.0's two
+default moves are live there; v2.17.x moves no default. **`main` is ahead of
+every tag**: the 2026-09-24 audit fixes (migration `202609240001`, see the table)
+and desktop client 1.4.6 are committed and untagged.
 `data/updater/rollback_target.json` holds the version BEFORE last, not the
 running one. Images and working tree can diverge without any deploy - see §Ops
 on which half of a fix is live.
@@ -77,13 +79,16 @@ record.
 | v2.16.0 | - | - | **TWO default moves.** `error_alert.source_worker` **ON**: failed scheduled tasks now email admins, where alerting was per-task and opt-in - an instance that wants silence must turn it off (the per-task `cron.<name>.alert_on_failure` still overrides either way). And `unsubscribe_token.DEFAULT_TTL_SEC` 180d → **30d**; tokens already minted keep their baked `exp` |
 | v2.16.1 | - | - | - (the `--no-deps` fix rides `updater-executor:<target_tag>`, which the shim pulls per run, so it applies to the update that INSTALLS it, not the one after) |
 | v2.17.1 / v2.17.2 | - | - | - (admin nav restructure, no URL changed; v2.17.2 = the sidebar hotfix; `PATCH /api/account/admin-nav-open` now accepts only the six new category keys, and the SPA is its only caller; anyio 4.14.1 → 4.14.2. v2.17.0 is a tag without images - its run failed `dependency-audit` before building anything) |
+| next (untagged, on `main`) | `202609240001` `users.email` + `invite_tokens.email` → `utf8mb4_bin` (MariaDB; lowercases first) | - (`SETUP_TOKEN` matters only to a not-yet-set-up instance; install.sh writes it) | `POST /api/admin/system/update` refuses a target older than the running version (`409 DOWNGRADE_REFUSED`). A rollback across the migration is safe: `stamp` leaves the binary collation, which older code only compares more strictly |
 
-**Six endpoints require the caller's own `password` in the body** (v2.9.0
-re-auth gates, still live - `verify_password_or_403` has seven call sites and
-README documents none of it): `/api/admin/backup/export`,
-`/api/admin/backup/import` (form field), `/api/admin/users/{id}/erase`,
-`/api/account/api-tokens`, `/api/admin/api-tokens`, and since v2.15.0
-`/api/account/webauthn/register/begin`. `POST /api/shares/{id}/approve`
+**Nine endpoints require the caller's own `password` in the body**: the v2.9.0
+re-auth gates `/api/admin/backup/export`, `/api/admin/backup/import` (form
+field), `/api/admin/users/{id}/erase`, `/api/account/api-tokens`,
+`/api/admin/api-tokens`, since v2.15.0 `/api/account/webauthn/register/begin`,
+and the self-update routes `/api/admin/system/update`, `/rollback` and
+`/update/now`. `verify_password_or_403` has eight direct call sites; the eighth
+is the mail test gate, which asks only conditionally (§The mail test-connection
+gate). README §Auth specifics lists them. `POST /api/shares/{id}/approve`
 separately requires a `content_fingerprint`.
 
 Per-release admin-facing notes for v2.13.0 and newer are in `RELEASE_NOTES.md`,
@@ -96,6 +101,7 @@ one `# file:Heron vX.Y.Z` section each, newest first; older releases live in
 
 - `SMTP_HOST` empty ⇒ all outgoing email is logged to backend stdout.
 - **Operator escape hatch:** `docker compose exec backend python scripts/promote_user.py <email>` promotes any existing user to admin without the API - for an admin who lost TOTP + recovery codes. Repo path `backend/scripts/`, in-container `scripts/`.
+- **`SETUP_TOKEN` gates the anonymous `/setup` wizard** while no admin exists: `install.sh` generates it before `compose up` and prints `/setup?token=...`, so nobody who finds a fresh public instance first can claim it. Empty = the old open wizard.
 - **`ADMIN_BOOTSTRAP_EMAIL` Path 2 is bounded by `setup.is_setup_complete`** - unbounded, it re-promoted and re-ENABLED that account on every boot, so a deliberate demotion reverted on restart.
 
 ## Tech stack (locked decisions)
@@ -138,6 +144,8 @@ comments unless WHY is non-obvious; JSON one-line-per-event logging; compose
 - **A fire-and-forget `loop.create_task()` needs a STRONG reference.** asyncio holds only a weak one, so the GC can collect a task mid-flight, and a done-callback fires only on completion, so a collected task is unreportable. Park the task in a module-level set and discard on done - `services/sse.py::_track_publish_task` had it, `services/job_queue.py`'s `enqueue`/`enqueue_many` (carrying `av_scan_file` and `notify_admin_error`) did not.
 - **`response_model` FILTERS the response.** A model that forgets a key silently deletes it from the wire, so write each one from the handler's **actual return value**, never from a schema. It is on every JSON-shaped route. `/api/auth/webauthn/complete` needs `response_model_exclude_none=True`: the half-authenticated reply must not carry an `access_token` key at all - the absence is the contract, pinned by a test.
 - **Every `ORDER BY <timestamp>` needs an id tiebreaker.** MariaDB stores whole seconds on these columns, so session-cap eviction was signing out an arbitrary device.
+- **Every OFFSET-paginated query ends its ORDER BY on a primary key.** MariaDB may order ties differently per page query, so pages overlap and skip rows; `/api/shares` (sort by `state` ties nearly every row) and `/admin/file-history` had none. Pinned generically by `tests/test_pagination_tiebreaker.py` over every `.offset(` - a real id sort key, not any `.id` inside a subquery.
+- **Email lookups are EXACT, and mail about an account goes to the STORED address.** `users.email` and `invite_tokens.email` are `utf8mb4_bin` (migration `202609240001`) and `services/user_lookup.py` re-checks in Python; under the old `utf8mb4_unicode_ci`, `kévin@exämple.com` matched `kevin@example.com` and forgot-password mailed the reset link to the TYPED lookalike address. Never `to=payload.email` for an existing account.
 - **When you widen an admission, grep every predicate that keys on the condition you relaxed.** P10 widened who may reach a share and the omission surfaced three times (download budget, approvals queue, `is_authorized_to_view`).
 - **A constant duplicated across a service, a router and a locale file is the defect** - only one copy ever gets updated (the default updates URL had three).
 - **"Keep this list in sync with the enum" is the defect, not the instruction.** Pin the relationship with a test that reads both sides. Where a rule says it is pinned *generically* (an AST scan, every module, not a per-class list), that generality IS the invariant; narrowing it to today's cases re-creates the defect.
@@ -150,8 +158,8 @@ comments unless WHY is non-obvious; JSON one-line-per-event logging; compose
 
 ## Auth
 
-**Login flows** all funnel through `services/auth.py::_create_refresh_token`
-(session-cap eviction): `POST /api/auth/login` (`TOTP_REQUIRED`/`INVALID_TOTP`
+**Login flows** all funnel through `services/jwt_session.py::create_refresh_token`
+→ `enforce_session_cap` (session-cap eviction): `POST /api/auth/login` (`TOTP_REQUIRED`/`INVALID_TOTP`
 when 2FA on), `/login/recovery`, `/webauthn/begin`+`/complete`, OIDC
 `/oidc/start|callback/{id}` (state cookie packs `state::provider_id`),
 `/register-from-invite`. **Session** = JWT access (15min, HS256) + refresh cookie
@@ -221,7 +229,7 @@ envelope, `files` row `state=uploading`) → tusd `POST /uploads/` with
 finalises into `./data/files/yyyy/mm/<uuid>.bin`, `state=ready_unscanned`,
 enqueue `av_scan_file`.
 
-- **HMAC envelope** signed under `TUS_HOOK_SECRET` - tusd can't mint it; backend re-HMACs every hook. `/api/internal/*` is also Traefik-denied + optional `TUS_HOOK_ALLOWED_IPS`. `tus_upload_id` regex `^[A-Za-z0-9_-]{1,128}$` (`tus_hooks.py::_check_tus_upload_id`).
+- **HMAC envelope** signed under `TUS_HOOK_SECRET` - tusd can't mint it; backend re-HMACs every hook. `/api/internal/*` is also Traefik-denied + optional `TUS_HOOK_ALLOWED_IPS`. `tus_upload_id` regex `^[A-Za-z0-9_-]{1,64}$` with `fullmatch` (`tus_hooks.py::_check_tus_upload_id`; `files.tus_upload_id` is String(64), and `.match` let a trailing `\n` through).
 - **Finalize uses `shutil.move`** (rename fast path, else copy2+unlink). **Don't switch back to `os.rename`** - bind mounts appear cross-device in containers and it raises `EXDEV`. The copy fallback is also why finalize must not run on the event loop.
 - **Direct upload** `POST /api/uploads/direct` (≤ `MAX_DIRECT_UPLOAD_BYTES`, default 100 MB) - single multipart, skips tusd. Browser (`composables/useUpload.ts`): <100 MB direct, ≥100 MB init + Uppy/`@uppy/tus`.
 - **Quota:** per-user `users.quota_bytes` (NULL = unlimited), reserved at pre-create via Redis Lua, released on revoke/quarantine/delete. Redis counter = fast **enforcement** (reconciled hourly, floors at 0); for **display** use `quota.storage_used_bytes[_bulk]` (DB SUM), never the counter. Quota is a fairness control, not a hard cap - on a Redis outage the upload is allowed through.
@@ -516,7 +524,8 @@ on before v2.13.0.
 (sidebar + nested routes), `requireAdmin` meta + `get_current_admin` dependency.
 
 - **The sidebar is `config/adminNav.ts`, six task-based categories + an Overview** (`people · sharing · email · security · site · system`; keys mirrored by `services/account_prefs.ADMIN_NAV_CATEGORIES_ORDER` and pinned by `tests/test_admin_nav_categories_pin.py`, which reads both files). No category may exceed seven items, and a new page goes in the category of its TASK - the previous four categories grew one appended entry per release until System held 14 of 32. **A policy and the state it produces are TABS on one item** (`AdminNavItem.tabs`, rendered by `views/AdminTabShell.vue` + `components/admin/AdminTabs.vue`): the router mounts the shell at the item's path with the tab leaves as children, the second tab's historical path as an ABSOLUTE child path (`/admin/settings/scan-guard` under `ip-blocks`) so no URL, route name, email link or persisted `notifications.link_url` changed. **Every tab leaf must be in the item's `matchNames`** - `route.name` is always the LEAF, so a missing one gives a page whose sidebar highlights nothing; `adminNav.test.ts` pins router names ⊆ `ADMIN_ROUTE_NAMES`. Persisted `admin_nav_open_categories` holding old keys need no migration (`seed()` drops unknown keys; GET never re-validates). `/admin` is `AdminOverview.vue`: attention tiles, the setting search over `config/adminSearchIndex.ts` (a STATIC registry - codegen was rejected for the same reasons as the types mirror - pinned by `adminSearchIndex.test.ts` and `test_admin_search_index_pin.py`), and category cards rendered from `ADMIN_NAV`. **The search box is not `input[type=search]`** and its placeholder avoids the word "search": `useKeyboardShortcuts`' `/` focuses the first such input in DOM order.
-- **Every admin view's heading is `components/admin/AdminPageHeader.vue`**: clickable crumb (Admin › category › page) + the `<h1>`, both resolved from the SAME `admin.nav.*` key the sidebar uses, so a nav label and its page title cannot drift (they drifted on six pages while 37 views hand-built the heading in five flavours). `page_title.admin_*` carries the same string for the browser tab. Detail pages pass `:title`/`#title` + `:back-to`; `hide-title` keeps a view's own `<h1>`, and `tests/test_frontend_a11y_tokens.py` accepts the component as the heading only without it. Router-less view tests stub it with a slot-rendering stub, not `true` - controls moved into `#actions` vanish otherwise.
+- **Every admin view's heading is `components/admin/AdminPageHeader.vue`**: clickable crumb (Admin › category › page) + the `<h1>`, both resolved from the SAME `admin.nav.*` key the sidebar uses, so a nav label and its page title cannot drift (they drifted on six pages while 37 views hand-built the heading in five flavours). `page_title.admin_*` carries the same string for the browser tab. Detail pages pass `:title`/`#title` + `:back-to`; `hide-title` keeps a view's own `<h1>`, and `tests/test_frontend_a11y_tokens.py` accepts the component as the heading only without it. Router-less view tests stub it with a slot-rendering stub, not `true` - controls moved into `#actions` vanish otherwise. **A tab leaf renders NO header of its own** - `AdminTabShell` owns it; two leaves did after v2.17 (two `<h1>`), pinned over every tab leaf by `test_no_tab_panel_renders_its_own_page_header`.
+- **App.vue keys admin routes on the LAYOUT, not the path** (`utils/viewKeys.ts`): keyed on `route.path`, every admin click remounted AdminLayout and a tab switch replaced the tab strip mid-keypress. AdminLayout keys its child on record + params, so a detail page still remounts per id; the inbox badge refreshes around the inbox pages since the layout no longer remounts.
 - **Right-to-erasure** (`services/erasure.py::erase_user`, irreversible): hard-delete the target's files; delete TOTP/recovery/refresh/API tokens; anonymize the row (`email→erased-<id>@erased.invalid`, `display_name→[erased]`, `password_hash→""`, `is_disabled`, `oidc_subject=NULL`); audit `user_erased`. Pre-flight counts + verifiable PDF receipt (reportlab). Self-erasure refused. Erasure holds a Redis run lock, because its per-file commit releases the row lock. `prune_history` never deletes `user_erased`.
 - **Self-service profile:** `PATCH /api/account/{locale,display-name,default-landing-page}`. `services/account_prefs.py` holds the ALLOWLIST (`ALLOWED_LANDING_ROUTES`) plus the admin-sidebar preference constants (`ADMIN_NAV_MODES`, `ADMIN_NAV_CATEGORIES` + `_ORDER`, mirrored by `frontend/src/config/adminNav.ts`); the resolution itself is frontend-side in `composables/useEffectiveLanding.ts`. **There is no `effective_landing_route` function** - don't grep for one.
 - **Invites:** `POST /api/account/invite` pre-flights `USER_EXISTS`/`INVITE_PENDING`/`GROUP_NOT_FOUND`; `initial_group_ids` auto-applied on consume.
@@ -580,6 +589,8 @@ drain. Gate `services/maintenance.py`, counters `services/transfer_activity.py`.
 
 ## Self-update + release check
 
+- **An update is an UPGRADE: availability is a semver comparison.** `release_check.is_newer` (dev builds keep the old "differs" reading) and `_select_backend_release` takes the HIGHEST eligible version - GitHub lists by creation date, so the old "first match" + `latest != VERSION` offered, and mailed every admin, a DOWNGRADE whenever the cache lagged a manual upgrade or a backport was published after a newer release. `POST /api/admin/system/update` refuses a lower target (`409 DOWNGRADE_REFUSED`); Rollback is the way back because only it restores the schema pointer.
+- **The executor's `auto_rollback` waits for the RESOLVED anchor, never `latest`.** A backend reports its baked `FH_VERSION`, so on an install still on `FH_TAG=latest` the self-heal restored the old image and then timed out waiting for "latest", writing "auto-rollback FAILED" about a stack that had recovered. Unresolved anchor = accept any version but the one that failed. The job `action` must be `update` or `rollback`.
 - **`release_check.DEFAULT_UPDATES_API_URL` is the ONE default updates URL and must stay the LIST endpoint.** `routers/admin/settings/home_motd_updates.py` kept its own copy, left on `/releases/latest` - and the Updates form prefills its input from that GET, so *opening the page and pressing Save* pinned `updates.api_url` to the one endpoint that can never yield a backend release (`/releases/latest` returns GitHub's newest release whatever its tag, i.e. a `client-v*` one here). The locale `admin_updates.url_placeholder` was a third copy. Pinned by `test_the_two_default_urls_are_one_object` + `test_the_url_placeholder_teaches_the_working_endpoint`. `/releases/latest` stays a supported *fork* override - don't reject it, just never hand it to anyone by default. An operator who already saved the bad URL must retype it; the field is `min_length=1` and cannot be cleared back to the default.
 - **`RELEASE_TAG_RE` is `r"v\d+\.\d+\.\d+"` with NO `^`.** Anchoring is the `fullmatch` at each of the three call sites, so a site reaching for `.match` silently re-accepts `v1.2.3-rc1` - which `html_release_url_for_tag` did. Pinned by `test_all_three_tag_call_sites_anchor_the_same_way`. (`tests/infra/test_deploy_scripts.py` names an anchored form, correctly - that is `deploy.sh`'s own `is_published_tag` guard, a different regex.) Without the filter, GitHub's "latest" is usually a `client-v*` desktop tag.
 - **A failed release check says WHICH of THREE failures it was.** "0 releases came back" (upstream fault or misdirected URL) and "releases came back, none tagged `vX.Y.Z`" (filter/fork/pagination) are different diagnoses and `_select_backend_release` returns `None` for both - GitHub's list endpoint has answered **200 with `[]`** for an hour while its own `Link` header advertised eight pages. `_candidates()` separates them; the no-match message carries the count and the newest tag seen.
@@ -617,6 +628,7 @@ these:
 
 ### Backups, restore, drills
 
+- **A configured offsite copy that was not written FAILS the run.** `backup.sh` used to print one stderr line and exit 0 when `BACKUP_RESTIC_REPO` was set but the password or `restic` was missing (OnFailure never fired), and a push that failed aborted before local retention, piling a full copy of `data/` onto the data disk nightly. Local retention (step 5) now runs before the push (step 6), the push outcome is recorded, and the verdict exits 1 at the very end; an unset repo prints a "local-only" notice and stays exit 0. Tested by running the script's own section under bash with a stub restic.
 - **`scripts/ops/*` schedules NOTHING by existing.** The units must be copied to `/etc/systemd/system/` AND `systemctl enable --now`'d - on the reference host they sat copied-but-disabled for two weeks with no backup ever taken and no `BACKUP_RESTIC_REPO` set, so there was no offsite copy either. *Installed is not enabled.* **The installed units are COPIES, not symlinks** - editing `scripts/ops/*` changes nothing on a host until they are re-copied and `systemctl daemon-reload` is run. `OnFailure=` belongs in `[Unit]`; systemd silently ignores it in `[Service]`.
 - **A restore of redis is not a `docker cp` of the RDB.** Redis 7 started with `--appendonly yes` IGNORES `dump.rdb` - with no AOF present it creates an empty one - so a drill that copied the snapshot in restored nothing and asserted nothing beyond the file's magic header. The working sequence: wipe `appendonlydir` + the stale rdb, copy the snapshot in, load it with **AOF OFF**, `CONFIG SET appendonly yes` to rebuild the AOF from the loaded dataset, then start the service normally. `DBSIZE` is checked twice - after the load AND after the AOF-on restart.
 - **Readiness is polled, not slept.** A `redis-cli PING` loop is not a readiness gate (redis-cli exits 0 on an error reply, so it passes while redis is still LOADING and a healthy production-sized backup gets reported as empty); poll `DBSIZE` for an INTEGER. `aof_last_bgrewrite_status` reads `ok` before any rewrite has run, so wait on `aof_enabled` + `aof_rewrite_in_progress` instead. `CONFIG SET`'s error reply must be read, not sent to `/dev/null`.
@@ -783,6 +795,8 @@ in `Logs\` beside it - platformdirs is non-roaming, so `%APPDATA%` is empty).
 Out of scope v1: OIDC, WebAuthn, admin shell, SSE. Direct ≤100 MB; TUS above
 (own `client/src/fileheron_client/tus.py`).
 
+- **Only 401/403 from `/api/auth/refresh` end a desktop session** - the SPA's `RefreshOutcome` split, which the client lacked: a 502/503/504 during the in-app updater's restart, or a 429, became SessionExpiredError, tore down the main window and paused every transfer. Anything else is `ApiError SERVER_UNAVAILABLE`.
+- **The .exe installs from `client/requirements-build.lock`** (hashed, universal, recipe in its header) and only the tag-gated `publish` job holds `contents: write`; `ci.yml` client-tests install the SAME lock on ubuntu + windows, so a lock that cannot install fails on a push, not on an immutable `client-v*` tag. Regenerate it after a Dependabot pip PR.
 - **Window architecture:** one visible `ctk.CTk` root; `ui/controller.py::AppController` overlays `LoginOverlay`, builds `MainWindow` on sign-in, re-shows the overlay on sign-out/expiry. Background work marshals to the Tk thread via `ui/_async.py`. **Respect the CTk traps** (titlebar-withdraw safety net; never shadow `tkinter.Misc` attrs; wrap-don't-replace the `CTkTabview` command) - see the `feedback_ctk_*` / `feedback_tk_*` memories.
 - **The direct-upload ceiling is the SERVER's, read from `/api/config-public` at sign-in** (`upload_worker.set_direct_upload_limit`). A build-time 100 MB refused every file between the two limits with 413 on an instance whose admin lowered `uploads.max_direct_bytes`, while the SPA streamed them. The public config is fetched by the sign-in WORKER and handed to `AppController._on_signed_in`; the controller's inline fetch is a fallback only, because an HTTP call on the Tk thread is the class `test_no_other_blocking_api_call_remains_on_the_tk_thread` exists to stop - it scans every `api_pkg.*` call now, having missed `patch_locale` for a year.
 - **`upload_direct` goes through `ApiClient.request()`, never `_http.post`.** `request()` is the only place a 401 becomes refresh-and-replay, and uploads are queued (`MAX_PARALLEL_UPLOADS`), so one that starts after the access token expired is an ordinary case. The replay re-reads the file: httpx seeks it to 0 and `_ProgressReader.seek` rewinds the counter with it.

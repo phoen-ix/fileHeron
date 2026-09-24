@@ -683,6 +683,12 @@ Every snapshot carries a stable `fileheron` tag plus a per-run `fileheron-<stamp
 one, and retention selects on the stable tag - so the sweep only ever touches
 fileHeron's own snapshots and a repo shared with another application is safe.
 
+Without `BACKUP_RESTIC_REPO` every run says so (`this backup is local-only, on the
+same disk as the data it protects`) and still exits 0. With it set, a run whose offsite
+copy was NOT written - password missing, `restic` not installed, or the push failed -
+exits **1** after the local backup and its retention are done, so the systemd unit's
+`OnFailure=` alert fires instead of a nightly silent gap.
+
 > **Upgrading to v2.12.0 with an existing restic repo:** snapshots written by
 > earlier versions carry only the per-run tag, so retention will skip them and
 > they will accumulate. Nothing was ever pruned before this release either, so
@@ -1026,8 +1032,11 @@ Array query params need `paramsSerializer: { indexes: null }` → `?state=active
 ## Auth specifics
 
 - Access JWT: HS256, 15 min, `{sub, iat, exp, jti, type:"access"}`. Refresh: 64 random bytes, SHA-256 in DB, 7 d, httpOnly cookie scoped `/api/auth`, `SameSite=Lax`, `Secure` in prod.
-- Rotation on every refresh; reuse of a rotated token revokes the **entire user family** (`refresh_token_reused`). `services/auth.py::_create_refresh_token` enforces the session cap across all login flows (password / recovery / OIDC / WebAuthn / register-from-invite).
+- Rotation on every refresh; reuse of a rotated token revokes the **entire user family** (`refresh_token_reused`). `services/jwt_session.py::create_refresh_token` → `enforce_session_cap` enforces the session cap across all login flows (password / recovery / OIDC / WebAuthn / register-from-invite).
 - **API-token scopes** are deny-by-default: every `get_actor` route carries `Depends(require_scope(...))`, enforced only for `auth_via == "api_token"` (JWT/session + NULL-scope pass through).
+- **Step-up re-authentication.** These routes also require the caller's own current password in the request body (`password`; a form field on the import), even with a valid session or API token: `POST /api/admin/backup/export`, `POST /api/admin/backup/import`, `POST /api/admin/users/{id}/erase`, `POST /api/account/api-tokens`, `POST /api/admin/api-tokens`, `POST /api/account/webauthn/register/begin`, and the self-update routes `POST /api/admin/system/update`, `/rollback` and `/update/now`. A wrong password answers **`403 INVALID_PASSWORD`** (never 401 - the caller IS authenticated), is rate-limited per user and audited as `step_up_failed`. SSO-only accounts have no password and cannot pass it; the CLI escape hatch is the recovery. The SMTP/IMAP test buttons ask for it only when a stored secret would travel to a host other than the saved one.
+- **Approving a share** (`POST /api/shares/{id}/approve`) requires a `content_fingerprint` - the digest of the files as the approver saw them; a stale one answers `409 CONTENT_CHANGED`.
+- **Self-update only moves forward.** `POST /api/admin/system/update` refuses a tag older than the running version (`409 DOWNGRADE_REFUSED`); go back with Rollback, which also restores the database schema pointer.
 
 ## Upload pipeline
 

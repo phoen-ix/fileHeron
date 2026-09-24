@@ -221,3 +221,35 @@ async def test_rollback_endpoint_uses_target_file(
     )
     assert row is not None
     assert row.actor_user_id == admin.id
+
+
+@pytest.mark.asyncio
+async def test_update_endpoint_refuses_a_downgrade(client, db, make_user, login_as, monkeypatch):
+    """Update only moves forward; Rollback is the way back (it restores the
+    schema pointer, an update does not). A re-apply of the running version is a
+    deliberate redeploy and stays allowed."""
+    from app import version as version_mod
+    from app.services import maintenance as maintenance_svc
+
+    make_user(email="adm-dg@test.local", role=UserRole.admin)
+    token, _cookies = await login_as("adm-dg@test.local", "TestPassword123!")
+    headers = {"Authorization": f"Bearer {token}"}
+    monkeypatch.setattr(version_mod, "VERSION", "v2.17.2")
+
+    for postpone in (False, True):
+        r = await client.post(
+            "/api/admin/system/update",
+            json={"password": "TestPassword123!", "target_tag": "v2.17.1", "postpone": postpone},
+            headers=headers,
+        )
+        assert r.status_code == 409, r.text
+        assert r.json()["code"] == "DOWNGRADE_REFUSED"
+    assert not release_apply.STATE_FILE.exists()
+    assert maintenance_svc.is_enabled(db) is False
+
+    r = await client.post(
+        "/api/admin/system/update",
+        json={"password": "TestPassword123!", "target_tag": "v2.17.2"},
+        headers=headers,
+    )
+    assert r.status_code == 200, r.text

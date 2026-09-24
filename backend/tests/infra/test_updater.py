@@ -341,3 +341,70 @@ def test_the_shim_rejects_a_tag_by_character_set_not_just_by_line():
     assert "grep -Eq '^v[0-9]+" not in src, (
         "the line-oriented anchored grep is back"
     )
+
+
+# --- audit 2026-09-24: action allowlist + auto-rollback from `latest` ---------
+
+
+def test_the_executor_refuses_an_unknown_action(executor):
+    """Anything but update/rollback used to run the update path with every
+    auto-rollback branch switched off (they all test `action == "update"`)."""
+    executor.STATE_FILE.write_text(
+        json.dumps({"id": "j", "target_tag": "v1.2.3", "action": "wipe", "status": "claiming"})
+    )
+    assert executor.main() == 1
+    state = json.loads(executor.STATE_FILE.read_text())
+    assert state["status"] == "failed"
+    assert state["error"] == "invalid action"
+
+
+class _Completed:
+    def __init__(self, stdout: str, returncode: int = 0):
+        self.stdout = stdout
+        self.stderr = ""
+        self.returncode = returncode
+
+
+def test_a_failed_update_from_latest_rolls_back_to_the_resolved_version(executor, monkeypatch):
+    """On an install still on the shipped `FH_TAG=latest`, the self-heal brought
+    the old image back and then waited for `running_version == "latest"` - which
+    is never what a backend reports (it reports its baked FH_VERSION) - so a
+    rollback that WORKED was written up as "auto-rollback FAILED ... did not
+    become healthy". It must wait for the version `latest` resolved to."""
+    executor.ENV_FILE.write_text("FH_TAG=latest\n")
+    executor.STATE_FILE.write_text(
+        json.dumps({"id": "j", "target_tag": "v1.2.4", "action": "update", "status": "claiming"})
+    )
+    monkeypatch.setattr(executor, "capture_alembic_head", lambda: None)
+    monkeypatch.setattr(executor, "resolve_running_version", lambda: "v1.2.3")
+    monkeypatch.setattr(executor.time, "sleep", lambda _s: None)
+    monkeypatch.setattr(executor, "HEALTH_TIMEOUT_SEC", 2)  # a regression fails fast
+
+    def fake_run_capture(cmd, env=None):
+        # pulls succeed; the forward `up` on v1.2.4 fails; the rollback `up` works
+        if "up" in cmd and env and env.get("FH_TAG") == "v1.2.4":
+            return 1
+        return 0
+
+    monkeypatch.setattr(executor, "run_capture", fake_run_capture)
+    # The restored stack reports the version `latest` stood for.
+    monkeypatch.setattr(
+        executor.subprocess, "run",
+        lambda *a, **k: _Completed(json.dumps({"running_version": "v1.2.3"})),
+    )
+
+    assert executor.main() == 0
+    state = json.loads(executor.STATE_FILE.read_text())
+    assert state["status"] == "rolled_back", state.get("error")
+    assert executor.read_current_tag() == "latest"
+
+
+def test_an_unresolved_floating_tag_accepts_any_version_but_the_failed_one(executor, monkeypatch):
+    monkeypatch.setattr(executor.time, "sleep", lambda _s: None)
+    monkeypatch.setattr(executor, "HEALTH_TIMEOUT_SEC", 1)
+    monkeypatch.setattr(
+        executor.subprocess, "run",
+        lambda *a, **k: _Completed(json.dumps({"running_version": "v1.2.3"})),
+    )
+    assert executor.wait_for_backend_health(None, not_tag="v1.2.4") is True
+    assert executor.wait_for_backend_health(None, not_tag="v1.2.3") is False

@@ -263,6 +263,7 @@
     "UNKNOWN_TEMPLATE": "Unknown email template.",
     "UNLOCK_REQUIRED": "Enter the password to continue.",
     "UPDATER_NOT_CONFIGURED": "The in-app updater is not configured on this instance.",
+    "DOWNGRADE_REFUSED": "That version is older than the one running. Use “Roll back” to return to a previous version.",
     "UPDATE_IN_PROGRESS": "An update is already running.",
     "UPDATE_PENDING": "An update is already waiting for transfers to finish.",
     "UPLOAD_FAILED": "The upload failed. Try again.",

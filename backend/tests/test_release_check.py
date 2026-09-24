@@ -424,8 +424,10 @@ async def test_system_status_flags_update_available(
     assert v["latest"] is None
     assert v["update_available"] is False
 
-    # Prime the cache with a release that differs from running, re-hit.
-    fake_latest = f"v999.{running}"
+    # Prime the cache with a release NEWER than anything running, re-hit. (This
+    # used f"v999.{running}", which is not a release tag at all - the cache only
+    # ever holds tags that passed RELEASE_TAG_RE.)
+    fake_latest = "v999.0.0"
     settings_svc.set_value(
         db, key=rc.CacheKeys.LATEST_VERSION, value=fake_latest, actor=None
     )
@@ -714,3 +716,73 @@ async def test_one_failing_tick_is_not_persistent_and_two_are(db, monkeypatch):
     result = await rc.release_check.__wrapped__(None)
     assert result[rc.CRON_FAILED_KEY] is True
     assert result["ok"] is False
+
+
+# --- audit 2026-09-24: an update is an UPGRADE -------------------------------
+
+
+def test_is_newer_orders_versions_not_strings():
+    assert rc.is_newer("v2.10.0", "v2.9.9")
+    assert not rc.is_newer("v2.17.1", "v2.17.2")
+    assert not rc.is_newer("v2.17.2", "v2.17.2")
+    # A dev build has no order: any release differs from it (the old reading).
+    assert rc.is_newer("v2.17.2", "0.0.0-dev")
+    assert not rc.is_newer("v2.18.0-rc1", "v2.0.0")
+    assert not rc.is_newer(None, "v2.0.0")
+
+
+@pytest.mark.asyncio
+async def test_the_highest_version_wins_not_the_first_listed(db, monkeypatch):
+    """GitHub lists releases by creation date. A backport published after a
+    newer release comes FIRST, and "the first match" offered it as the update."""
+    monkeypatch.setattr(
+        rc.httpx, "AsyncClient",
+        lambda **_kw: _StubClient(_StubResponse([  # type: ignore[arg-type]
+            {"tag_name": "v2.16.3", "html_url": "u1", "body": "", "published_at": ""},
+            {"tag_name": "client-v1.4.6", "html_url": "c", "body": "", "published_at": ""},
+            {"tag_name": "v2.17.2", "html_url": "u2", "body": "", "published_at": ""},
+            {"tag_name": "v2.18.0", "html_url": "u3", "body": "", "published_at": "",
+             "prerelease": True},
+        ]))
+    )
+    r = await rc.run_check(db, manual=True)
+    assert r["latest_version"] == "v2.17.2"
+
+
+@pytest.mark.asyncio
+async def test_no_notification_for_an_older_release(db, make_user, monkeypatch):
+    from app import version as version_mod
+    from app.models.user import UserRole
+
+    make_user(email="adm@test.local", role=UserRole.admin)
+    monkeypatch.setattr(version_mod, "VERSION", "v2.17.2")
+    monkeypatch.setattr(
+        rc.httpx, "AsyncClient",
+        lambda **_kw: _StubClient(_StubResponse(
+            {"tag_name": "v2.17.1", "html_url": "u", "body": "", "published_at": ""}
+        ))
+    )
+    r = await rc.run_check(db, manual=True)
+    assert r["admins_notified"] == 0
+
+
+@pytest.mark.asyncio
+async def test_a_lagging_cache_does_not_offer_a_downgrade(
+    client, db, make_user, login_as, monkeypatch
+):
+    """The host was upgraded (deploy.sh) before the daily check ran, so the
+    cache still names the version it replaced."""
+    from app import version as version_mod
+    from app.models.user import UserRole
+
+    make_user(email="admin@test.local", role=UserRole.admin)
+    token, _cookies = await login_as("admin@test.local", "TestPassword123!")
+    monkeypatch.setattr(version_mod, "VERSION", "v2.17.2")
+    settings_svc.set_value(db, key=rc.CacheKeys.LATEST_VERSION, value="v2.17.1", actor=None)
+    db.commit()
+
+    r = await client.get(
+        "/api/admin/system/status", headers={"Authorization": f"Bearer {token}"}
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["version"]["update_available"] is False

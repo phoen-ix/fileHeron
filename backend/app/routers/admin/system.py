@@ -169,7 +169,7 @@ def system_status(
 
     cached = release_check_svc.read_cached(db)
     latest = cached.get("latest_version")
-    update_available = bool(latest) and latest != VERSION
+    update_available = release_check_svc.is_newer(latest, VERSION)
 
     return {
         "live": _live_checks(db),
@@ -390,6 +390,28 @@ def _verify_password_or_403(db: Session, user: User, password: str, *, request: 
     verify_password_or_403(db, user, password, request=request)
 
 
+def _refuse_downgrade(target_tag: str) -> None:
+    """An UPDATE only ever moves forward.
+
+    The executor's update path does not stamp alembic, so an "update" to an
+    older tag across a migration boots an image that cannot find the schema's
+    revision - and without one it silently reinstalls old code. Going back is
+    what Rollback is for: it records and restores the schema pointer. The
+    banner that used to offer a downgrade is fixed in release_check.is_newer;
+    this is the endpoint-side floor for a stale page or a hand-made request.
+    A re-apply of the running version stays allowed (a deliberate redeploy)."""
+    from ...services.release_check import version_key
+    from ...version import VERSION
+
+    running, target = version_key(VERSION), version_key(target_tag)
+    if running is not None and target is not None and target < running:
+        raise AppError(
+            409,
+            "DOWNGRADE_REFUSED",
+            f"{target_tag} is older than the running {VERSION}; use Rollback to go back.",
+        )
+
+
 def _dispatch_ops_to_admins(db: Session, payload: dict, link_url: str) -> None:
     """Fan out an `ops_alert` notification to every non-disabled admin so
     every admin sees the in-app bell + email about a triggered update,
@@ -450,6 +472,7 @@ def apply_update(
     _verify_password_or_403(db, admin, payload.password, request=request)
     if not payload.target_tag:
         raise AppError(400, "INVALID_INPUT", "target_tag is required.")
+    _refuse_downgrade(payload.target_tag)
 
     if payload.postpone:
         from datetime import timedelta

@@ -237,6 +237,7 @@ _REV_RE = re.compile(r"^([0-9a-f]+)")
 # RELEASE_TAG_RE call sites use; `$` alone would accept a trailing newline,
 # which is exactly the shape that matters here.
 _TAG_RE = re.compile(r"v\d+\.\d+\.\d+")
+_ACTIONS = frozenset({"update", "rollback"})
 _HEAD_RE = re.compile(r"[0-9a-f]+")
 
 
@@ -359,9 +360,13 @@ def resolve_running_version() -> str | None:
     return None
 
 
-def wait_for_backend_health(expected_tag: str) -> bool:
+def wait_for_backend_health(expected_tag: str | None, *, not_tag: str | None = None) -> bool:
     """Poll backend /api/health until running_version == expected_tag
-    or timeout. Returns True on success."""
+    or timeout. Returns True on success.
+
+    `expected_tag=None` means "the version is unknown": accept any running
+    version other than `not_tag` - the auto-rollback case when the floating
+    `latest` could not be resolved to a real version."""
     deadline = time.time() + HEALTH_TIMEOUT_SEC
     while time.time() < deadline:
         try:
@@ -374,10 +379,13 @@ def wait_for_backend_health(expected_tag: str) -> bool:
             if result.returncode == 0 and result.stdout:
                 parsed = json.loads(result.stdout)
                 running = parsed.get("running_version")
-                if running == expected_tag:
+                if running == expected_tag or (
+                    expected_tag is None and running and running != not_tag
+                ):
                     log_line(f"backend reports running_version={running}")
                     return True
-                log_line(f"backend running_version={running} (want {expected_tag})")
+                want = expected_tag or f"anything but {not_tag}"
+                log_line(f"backend running_version={running} (want {want})")
         except Exception as e:
             log_line(f"health probe failed: {type(e).__name__}: {e}")
         time.sleep(3)
@@ -385,7 +393,14 @@ def wait_for_backend_health(expected_tag: str) -> bool:
     return False
 
 
-def auto_rollback(previous_tag: str, previous_head: str | None, target_tag: str, reason: str) -> int:
+def auto_rollback(
+    previous_tag: str,
+    previous_head: str | None,
+    target_tag: str,
+    reason: str,
+    *,
+    expected_version: str | None,
+) -> int:
     """Self-heal after a failed UPDATE: restore the previous (known-good)
     version with no backend/GUI dependency. Ordering is load-bearing:
     stamp the DB pointer back FIRST using the NEW image (its alembic tree
@@ -397,7 +412,14 @@ def auto_rollback(previous_tag: str, previous_head: str | None, target_tag: str,
 
     Returns 0 when prod is healthy again on previous_tag; non-zero if the
     rollback itself failed (operator must intervene). It NEVER reports
-    success while prod is on a known-broken tag."""
+    success while prod is on a known-broken tag.
+
+    `expected_version` is what the restored backend will REPORT, which is not
+    `previous_tag` when that is the floating `latest`: `running_version` is the
+    baked FH_VERSION, so waiting for "latest" timed out on every install still
+    on the shipped default and wrote "auto-rollback FAILED ... did not become
+    healthy" about a stack that had recovered. None = unresolved; accept any
+    version but the one that just failed."""
     log_line(f"AUTO-ROLLBACK: update to {target_tag} failed ({reason}); restoring {previous_tag}")
     write_job_field(status="rolling_back", rollback_reason=reason)
 
@@ -435,7 +457,7 @@ def auto_rollback(previous_tag: str, previous_head: str | None, target_tag: str,
         return 11
 
     # (iv) Re-verify health on the restored tag.
-    if not wait_for_backend_health(expected_tag=previous_tag):
+    if not wait_for_backend_health(expected_version, not_tag=target_tag):
         write_job_field(
             status="failed",
             error=f"auto-rollback FAILED: {previous_tag} did not become healthy "
@@ -457,6 +479,13 @@ def main() -> int:
     job = read_job()
     target_tag = job.get("target_tag")
     action = job.get("action", "update")
+    if action not in _ACTIONS:
+        # Anything else fell through to the update path with auto-rollback
+        # switched off (every recovery branch below tests `== "update"`). The
+        # job file is backend-writable, so it is validated here like the tag.
+        log_line("ERROR job action is neither update nor rollback")
+        write_job_field(status="failed", error="invalid action", finished_at=utcnow_iso())
+        return 1
     if not target_tag:
         log_line("ERROR no target_tag in state file")
         write_job_field(status="failed", error="no target_tag", finished_at=utcnow_iso())
@@ -485,6 +514,9 @@ def main() -> int:
                 "WARN running under a floating tag and the version could not be "
                 "resolved; a rollback would redeploy the same image"
             )
+    # What an auto-rollback should wait to see: the concrete version, or None
+    # when the floating tag could not be resolved (see auto_rollback).
+    restored_version = None if rollback_anchor in ("latest", "") else rollback_anchor
     # Capture the DB's current head from the still-running OLD backend, so a
     # rollback (auto or manual) can stamp the version pointer back across any
     # migration the new image applies.
@@ -554,7 +586,7 @@ def main() -> int:
     if previous_tag != target_tag:
         try:
             _write_rollback_file(rollback_anchor, previous_head)
-            log_line(f"rollback target recorded: {previous_tag} (head={previous_head})")
+            log_line(f"rollback target recorded: {rollback_anchor} (head={previous_head})")
         except Exception as e:
             log_line(f"WARN rollback-target write failed: {e}")
 
@@ -573,7 +605,8 @@ def main() -> int:
         # target's head, .env left at the requested target).
         if action == "update":
             return auto_rollback(previous_tag, previous_head, target_tag,
-                                 reason="docker compose up -d failed")
+                                 reason="docker compose up -d failed",
+                                 expected_version=restored_version)
         write_job_field(status="failed", error="rollback: docker compose up -d failed",
                         finished_at=utcnow_iso())
         return 3
@@ -581,7 +614,8 @@ def main() -> int:
     if not wait_for_backend_health(expected_tag=target_tag):
         if action == "update":
             return auto_rollback(previous_tag, previous_head, target_tag,
-                                 reason="backend health check timed out")
+                                 reason="backend health check timed out",
+                                 expected_version=restored_version)
         write_job_field(status="failed", error="rollback: backend health check timed out",
                         finished_at=utcnow_iso())
         return 4

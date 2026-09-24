@@ -263,6 +263,7 @@
     "UNKNOWN_TEMPLATE": "Unbekannte E-Mail-Vorlage.",
     "UNLOCK_REQUIRED": "Geben Sie das Passwort ein, um fortzufahren.",
     "UPDATER_NOT_CONFIGURED": "Der In-App-Updater ist auf dieser Instanz nicht eingerichtet.",
+    "DOWNGRADE_REFUSED": "Diese Version ist älter als die laufende. Um zu einer früheren Version zurückzukehren, „Zurückrollen“ verwenden.",
     "UPDATE_IN_PROGRESS": "Es läuft bereits ein Update.",
     "UPDATE_PENDING": "Ein Update wartet bereits darauf, dass laufende Übertragungen abgeschlossen werden.",
     "UPLOAD_FAILED": "Der Upload ist fehlgeschlagen. Bitte erneut versuchen.",

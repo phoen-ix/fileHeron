@@ -108,6 +108,35 @@ RELEASE_TAG_RE = re.compile(r"v\d+\.\d+\.\d+")
 _BACKEND_TAG_RE = RELEASE_TAG_RE
 
 
+def version_key(tag: str | None) -> tuple[int, int, int] | None:
+    """`vX.Y.Z` as a comparable tuple, or None for anything that is not a
+    release tag (the `0.0.0-dev` source-tree placeholder, a suffixed tag)."""
+    if not tag or not RELEASE_TAG_RE.fullmatch(tag):
+        return None
+    major, minor, patch = tag[1:].split(".")
+    return int(major), int(minor), int(patch)
+
+
+def is_newer(candidate: str | None, running: str | None) -> bool:
+    """Whether `candidate` is an UPGRADE over `running`.
+
+    This was `candidate != running` in both the admin banner and the
+    notification gate, which offered - and mailed every admin - a DOWNGRADE
+    whenever the cached tag lagged the running one (a host upgraded with
+    deploy.sh before the daily check) or GitHub listed an older release first
+    (it lists by creation date, so a backport published after a newer release
+    comes first). The Update button then applied it. A running build that is
+    not a release tag (a dev build) keeps the old reading: any release differs
+    from it, and there is no order to compare."""
+    cand = version_key(candidate)
+    if cand is None:
+        return False
+    run = version_key(running)
+    if run is None:
+        return candidate != running
+    return cand > run
+
+
 class CacheKeys:
     LATEST_VERSION = "release.latest_version"
     LATEST_PUBLISHED_AT = "release.latest_published_at"
@@ -235,22 +264,29 @@ def _candidates(payload) -> list[dict]:
 
 
 def _select_backend_release(payload) -> dict | None:
-    """Return the first release object whose ``tag_name`` is exactly a backend
-    release tag (``vX.Y.Z``) and which is neither a draft nor a prerelease,
-    or None.
+    """Return the HIGHEST-versioned release object whose ``tag_name`` is exactly
+    a backend release tag (``vX.Y.Z``) and which is neither a draft nor a
+    prerelease, or None.
 
-    The list path relies on GitHub returning releases newest-first.
+    Highest by version, not first in the list. GitHub orders the list by
+    creation date, so "the first match" is the newest VERSION only until
+    somebody publishes a backport - and then every newer instance would be told
+    to "update" to it.
     """
+    best: dict | None = None
+    best_key: tuple[int, int, int] | None = None
     for entry in _candidates(payload):
         tag = entry.get("tag_name")
-        if not isinstance(tag, str) or not RELEASE_TAG_RE.fullmatch(tag):
+        key = version_key(tag) if isinstance(tag, str) else None
+        if key is None:
             continue
         if entry.get("prerelease") or entry.get("draft"):
             # Never offer an unfinished release as THE update: the button
             # pulls images and restarts the stack.
             continue
-        return entry
-    return None
+        if best_key is None or key > best_key:
+            best, best_key = entry, key
+    return best
 
 
 def _write_cache(
@@ -319,11 +355,11 @@ def _maybe_notify_admins(db: Session, new_version: str, release_url: str | None)
     notifications dispatched (0 = dedup-suppressed). The check itself is
     cheap so we do it here rather than at every call-site.
 
-    Skipped when the new version equals the currently-running version -
-    no point notifying about your own release."""
+    Skipped unless the version is an UPGRADE over the running one - not only
+    when it equals it (see `is_newer`)."""
     from ..version import VERSION as RUNNING_VERSION
 
-    if new_version == RUNNING_VERSION:
+    if not is_newer(new_version, RUNNING_VERSION):
         return 0
     already = settings_svc.get(db, CacheKeys.NOTIFIED_VERSION)
     if already == new_version:

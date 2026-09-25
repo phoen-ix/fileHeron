@@ -22,6 +22,8 @@
 #
 # Usage:
 #   scripts/restore_drill_e2e.sh [<backup-dir>]   # defaults to the newest backup
+#   FH_TAG=vX.Y.Z scripts/restore_drill_e2e.sh    # drill a release's images
+#                                                 # before updating to it
 
 set -euo pipefail
 
@@ -130,10 +132,23 @@ fi
 [ "$artifact_fail" -eq 0 ] || fail "$artifact_fail artifact check(s) failed"
 
 # --- load secrets/config from .env (reused; the stack is isolated) ----------
+#
+# A caller-supplied FH_TAG MUST win over .env: `FH_TAG=vX.Y.Z` is how a release
+# is drilled BEFORE the host runs it, so its migrations meet real data first.
+# `set -a` + `.` assigns unconditionally, so the drill restored into whatever
+# .env pinned and reported PASS for a version it never started (2026-09-25:
+# asked for v2.18.0, validated v2.17.2's schema head). deploy.sh had the same
+# defect and carries the same fix. Unset = .env's tag, i.e. the version this
+# host runs, which is what the weekly timer should keep drilling.
+FH_TAG_FROM_CALLER="${FH_TAG-}"
+FH_TAG_CALLER_SET="${FH_TAG+set}"
 if [ -f .env ]; then set -a; . ./.env; set +a; fi
+if [ -n "${FH_TAG_CALLER_SET:-}" ]; then FH_TAG="$FH_TAG_FROM_CALLER"; fi
 : "${DB_NAME:=fileheron}"
 : "${DB_ROOT_PASSWORD:?DB_ROOT_PASSWORD must be set (.env or env)}"
 : "${FH_TAG:=latest}"
+export FH_TAG
+log "drilling images FH_TAG=$FH_TAG"
 
 # --- isolated environment for every compose call ----------------------------
 WORKSPACE="$(mktemp -d "${TMPDIR:-/tmp}/fh-drill.XXXXXX")"

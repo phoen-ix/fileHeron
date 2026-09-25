@@ -281,3 +281,65 @@ def test_local_retention_runs_before_the_push() -> None:
     left one more full copy of data/ on the data disk every night."""
     src = (_ROOT / "scripts" / "backup.sh").read_text(encoding="utf-8")
     assert src.index("# 5. Local retention") < src.index("# 6. Optional restic push")
+
+
+# --- 2026-09-25: the drill ignored a caller's FH_TAG ------------------------
+
+
+def _drill_env_section() -> str:
+    """The real text of the drill's .env loading, from its header comment up to
+    the isolated-environment block - run under bash, not grepped."""
+    src = (_ROOT / "scripts" / "restore_drill_e2e.sh").read_text(encoding="utf-8")
+    start = src.index("# --- load secrets/config from .env")
+    end = src.index("# --- isolated environment for every compose call")
+    return (
+        'set -euo pipefail\nlog() { echo "[drill] $*"; }\n'
+        + src[start:end]
+        + 'bash -c \'echo "CHILD_SEES=${FH_TAG-unset}"\'\n'
+    )
+
+
+def _run_drill_env(tmp_path: Path, dotenv: str, env: dict[str, str]):
+    import os
+    import shutil
+    import subprocess
+
+    (tmp_path / ".env").write_text(dotenv)
+    # S603: argv is an absolute bash plus this repo's own script text - no
+    # untrusted input. Same shape as the offsite tests above.
+    bash = shutil.which("bash")
+    assert bash, "bash is required to exercise restore_drill_e2e.sh"
+    r = subprocess.run(  # noqa: S603
+        [bash, "-c", _drill_env_section()],
+        cwd=tmp_path,
+        env={"PATH": os.environ.get("PATH", "/usr/bin:/bin"), **env},
+        capture_output=True, text=True, timeout=30,
+    )
+    assert r.returncode == 0, r.stderr
+    return r.stdout
+
+
+_DOTENV = "DB_ROOT_PASSWORD=x\nFH_TAG=v2.17.2\n"
+
+
+def test_the_drill_honours_a_caller_fh_tag_over_dotenv(tmp_path: Path) -> None:
+    """`FH_TAG=v2.18.0 scripts/restore_drill_e2e.sh` restored into v2.17.2 -
+    the tag .env pinned - and passed, validating a schema head the release under
+    test never had."""
+    out = _run_drill_env(tmp_path, _DOTENV, {"FH_TAG": "v2.18.0"})
+    assert "CHILD_SEES=v2.18.0" in out, out
+    assert "drilling images FH_TAG=v2.18.0" in out, out
+
+
+def test_the_drill_still_takes_dotenv_when_the_caller_says_nothing(tmp_path: Path) -> None:
+    """The weekly timer sets no FH_TAG: it must keep drilling the version this
+    host runs, which is .env's."""
+    out = _run_drill_env(tmp_path, _DOTENV, {})
+    assert "CHILD_SEES=v2.17.2" in out, out
+
+
+def test_the_drill_defaults_like_compose(tmp_path: Path) -> None:
+    """No tag anywhere, or an exported-but-empty one, resolves to `latest` -
+    what compose's `${FH_TAG:-latest}` would run."""
+    assert "CHILD_SEES=latest" in _run_drill_env(tmp_path, "DB_ROOT_PASSWORD=x\n", {})
+    assert "CHILD_SEES=latest" in _run_drill_env(tmp_path, _DOTENV, {"FH_TAG": ""})

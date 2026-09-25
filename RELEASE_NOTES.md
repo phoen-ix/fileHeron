@@ -1,3 +1,134 @@
+# file:Heron v2.18.0
+
+**Security release: a password-reset link could be mailed to a lookalike address.
+Also: the update banner never offers an older version, a fresh install's setup
+wizard needs a one-time token, and a backup that missed its configured offsite
+copy now fails.** Plus about thirty smaller fixes, most of them in the web app.
+
+**One migration** (`202609240001`, runs by itself on start). **No default moves.**
+**No host step** for the app itself; the two optional ones are under
+Host notes below. Desktop client **1.4.6** ships alongside, with its own
+notes.
+
+---
+
+## Password-reset links went to lookalike addresses
+
+The database compared email addresses ignoring case **and accents**, so
+`victim@exämple.com` matched the account `victim@example.com`. A password-reset
+request naming the lookalike found the real account and mailed its reset link
+to the address **as typed**, which was the lookalike. Anyone who registers such
+a domain could reset the password of any account without enrolled two-factor
+authentication, admin accounts included. The lockout warning, SSO account
+linking, the inbound-mail sender check and the unsubscribe footer relied on the
+same loose match.
+
+Fixed on two levels:
+
+- The migration switches `users.email` and `invite_tokens.email` to exact
+  (binary) comparison. It lowercases stored addresses first, so no existing
+  account becomes unreachable.
+- Every lookup of an address someone else typed is re-checked for an exact
+  match, and reset and lockout mail always goes to the address on the account.
+
+**Checking whether it was used on your instance:** Admin › Mail log lists
+every password-reset email with its recipient. A reset mail whose recipient
+differs from the account's address only in accents or lookalike characters
+is the sign.
+
+## Updates only move forward
+
+The banner showed the newest release by **publication date**, and any version
+that differed from the running one counted as an update. An older release
+could therefore be offered, emailed to every admin, and applied by the Update
+button. That happened when a backport was published after a newer release, or
+when the host had been upgraded by hand before the daily check ran. The banner
+and the email now appear only for a strictly newer version. `POST
+/api/admin/system/update` refuses an older target with **`409
+DOWNGRADE_REFUSED`**; **Roll back** remains the way to an earlier version.
+
+A failed update on an install that still runs the shipped `FH_TAG=latest` rolled
+itself back correctly but reported **"auto-rollback FAILED"**. It now reports
+the rollback as a rollback.
+
+## The setup wizard asks for a one-time token (new installs)
+
+`install.sh` starts the stack behind your proxy before you open `/setup`, and
+the wizard used to accept the first visitor as the first admin. `install.sh`
+now writes a random `SETUP_TOKEN` to `.env` and prints a
+`/setup?token=...` link. The wizard refuses the admin account without that
+token (`403 SETUP_TOKEN_INVALID`), and asks for it only if the link lost it.
+**Instances that are already set up never ask**, and a manual install that
+leaves `SETUP_TOKEN` empty keeps the open wizard.
+
+## A backup that missed its offsite copy now fails
+
+With `BACKUP_RESTIC_REPO` set but no password, or `restic` not installed,
+`scripts/backup.sh` printed one line and **exited 0**. The failure alert never
+fired, and the offsite copy you believed existed did not. That case now **exits
+1** after the local backup is complete. So does a restic push that fails, which
+previously also skipped local retention, leaving an extra full copy of `data/`
+on the disk every night of the outage. Without a repository configured, the
+script prints a one-line "local-only" notice and still succeeds.
+
+## Web app
+
+- **Admin › Users, pending invites: "Copy link" is now "New link".** It always
+  created a *new* invite link, which silently broke the one already emailed. On
+  plain-HTTP installs, where the browser has no clipboard access, nobody was
+  left with a working link. It now asks first, says the emailed link stops
+  working, and shows the new link in a field you can copy from.
+- **On phones, the user menu has Sent, Received, Approvals and New share.** The
+  header navigation is hidden below 720 px, so a recipient on a phone had no way
+  to reach their inbox.
+- **Leaving a page during an upload now asks first.** Navigating away discarded
+  resumable uploads on the server.
+- Files uploaded late (a Retry, or the successful part of a partly failed batch)
+  are now added to the share, announced and audited like the rest. Finished rows
+  no longer offer "Remove", which only hid the row.
+- Clearing an expiry date field no longer means "never expires", which could
+  create a permanent API token behind a highlighted "90 days".
+- Lists: the share list and File history no longer repeat or skip rows between
+  pages. The default sort column can be reversed. The inbox "Sender" column no
+  longer sorts by date.
+- The two-factor page shows errors instead of loading forever, and Account no
+  longer reads "2FA is off" when the status could not be loaded. The
+  forgot-password page reports rate limits and server errors.
+- API tokens: a failed revoke is reported, and a failed load no longer reads
+  "No API tokens yet".
+- `/admin/sessions` and Sign-in policies › Email change showed their page
+  heading twice. Session lists name Android and iPhone correctly (they read
+  "Linux" and "macOS").
+- The admin area no longer reloads its whole layout on every click.
+- Counts use proper singular/plural forms in English and German.
+- A duplicate passkey is named as such; other browser passkey errors show
+  their own message.
+- The web app uses the server's upload endpoint, so a non-default
+  `TUS_PUBLIC_BASE` is honoured.
+
+## Server
+
+- An account locked by wrong **recovery codes** is now audited and warned by
+  email, like one locked by wrong passwords or codes.
+- The nginx `/api/` route streams downloads instead of buffering them into
+  the frontend container. This matters only if you point clients at port 8080
+  instead of your reverse proxy.
+- The updater-shim now reports its own health. `docker compose ps` shows it as
+  unhealthy if it hangs, while a running update, which can take up to 20 minutes,
+  keeps it healthy. See the host notes.
+
+## Host notes
+
+- **Nothing is required.** The migration runs on start. The in-app Roll back
+  across it is safe: the columns stay exact, which older versions only compare
+  more strictly.
+- The **backup change** is in `scripts/`, which runs from your checkout. It
+  applies after a `git pull` on the host.
+- The **updater-shim health check** is defined in `docker-compose.yml`. It
+  appears once your checkout has the new file (`git pull`) and the shim is
+  recreated. The next in-app update does that at the end of its run, or you
+  can run `docker compose up -d updater-shim`.
+
 # file:Heron v2.17.2
 
 **Hotfix for v2.17.1: the admin sidebar showed nothing but "Overview".** The six

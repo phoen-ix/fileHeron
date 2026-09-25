@@ -769,10 +769,12 @@ only**; back up before upgrading. (Image downgrade after a forward migration nee
 `alembic stamp` from the newer image first.)
 
 **App vs. infra - which upgrades need the host step.** The in-app Update swaps only
-the app images it builds: **backend, worker, frontend**. Changes to the **database,
-Redis, ClamAV, tusd, or updater-shim images, `docker-compose.yml`,
-`docker/clamav/clamd.conf`, or your host Traefik config are NOT covered** - those need
-the manual `git pull && docker compose up -d` above. Each release's notes call out
+the app images it builds: **backend, worker, frontend** - and, at the end of a
+successful run, recreates the updater-shim on its new image, using the compose file
+of your checkout. Changes to the **database, Redis, ClamAV or tusd images,
+`docker-compose.yml` (the shim's own section included), `docker/clamav/clamd.conf`,
+or your host Traefik config are NOT covered** - those need the manual
+`git pull && docker compose up -d` above. Each release's notes call out
 when a host step is required; a plain app release does not.
 
 **Scripted deploy / rollback (bootstrap + hotpatch).** `scripts/deploy.sh` pulls

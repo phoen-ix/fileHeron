@@ -25,8 +25,8 @@ governs, never under the release that found it.
 
 ## Current state
 
-Backend **`v2.17.2`** is the newest tag (2026-09-20); desktop client
-**`client-v1.4.5`** ships on its own tag and is unchanged by v2.16.x/v2.17.x.
+Backend **`v2.18.0`** is the newest tag (2026-09-25); desktop client
+**`client-v1.4.6`** shipped beside it (refresh classification + hashed build lock).
 **`v2.17.0` is a tag with NO images** (its release run failed the dependency
 audit on three anyio CVEs; tags are immutable, so the same commits shipped as
 v2.17.1 plus the anyio bump). **v2.17.1 shipped a sidebar showing nothing but
@@ -34,9 +34,8 @@ v2.17.1 plus the anyio bump). **v2.17.1 shipped a sidebar showing nothing but
 no test mounted AdminLayout); v2.17.2 is that one-line fix plus
 `tests/components/AdminLayout.test.ts`. **The reference host runs v2.17.2**
 (its running container's `FH_VERSION`, checked 2026-09-24), so v2.16.0's two
-default moves are live there; v2.17.x moves no default. **`main` is ahead of
-every tag**: the 2026-09-24 audit fixes (migration `202609240001`, see the table)
-and desktop client 1.4.6 are committed and untagged.
+default moves are live there and v2.18.0's migration `202609240001` is not yet;
+v2.17.x and v2.18.0 move no default.
 `data/updater/rollback_target.json` holds the version BEFORE last, not the
 running one. Images and working tree can diverge without any deploy - see §Ops
 on which half of a fix is live.
@@ -52,8 +51,10 @@ an available update. A release also needs the desktop-client half bumped in
 its `client-v*` tag; CI checks that on every push.
 
 **The in-app updater swaps ONLY the backend/worker/frontend images** (plus the
-updater-shim). A compose change to any other service keeps running its old
-command until someone runs `docker compose up -d <svc>` on the host. v2.12.0's
+updater-shim, recreated from the HOST's compose file - so a change to its own
+compose section needs a `git pull` there first). A compose change to any other
+service keeps running its old command until someone runs
+`docker compose up -d <svc>` on the host. v2.12.0's
 row below is the dangerous shape: the migration lands, `last_progress_at` stays
 NULL forever, every reader falls back to `created_at`, and the upload reaper goes
 on killing long uploads while the release notes say it is fixed.
@@ -79,7 +80,7 @@ record.
 | v2.16.0 | - | - | **TWO default moves.** `error_alert.source_worker` **ON**: failed scheduled tasks now email admins, where alerting was per-task and opt-in - an instance that wants silence must turn it off (the per-task `cron.<name>.alert_on_failure` still overrides either way). And `unsubscribe_token.DEFAULT_TTL_SEC` 180d → **30d**; tokens already minted keep their baked `exp` |
 | v2.16.1 | - | - | - (the `--no-deps` fix rides `updater-executor:<target_tag>`, which the shim pulls per run, so it applies to the update that INSTALLS it, not the one after) |
 | v2.17.1 / v2.17.2 | - | - | - (admin nav restructure, no URL changed; v2.17.2 = the sidebar hotfix; `PATCH /api/account/admin-nav-open` now accepts only the six new category keys, and the SPA is its only caller; anyio 4.14.1 → 4.14.2. v2.17.0 is a tag without images - its run failed `dependency-audit` before building anything) |
-| next (untagged, on `main`) | `202609240001` `users.email` + `invite_tokens.email` → `utf8mb4_bin` (MariaDB; lowercases first) | - (`SETUP_TOKEN` matters only to a not-yet-set-up instance; install.sh writes it. The updater-shim healthcheck needs no step: the in-app update recreates the shim from this checkout's compose file) | `POST /api/admin/system/update` refuses a target older than the running version (`409 DOWNGRADE_REFUSED`). A rollback across the migration is safe: `stamp` leaves the binary collation, which older code only compares more strictly |
+| v2.18.0 | `202609240001` `users.email` + `invite_tokens.email` → `utf8mb4_bin` (MariaDB; lowercases first) | - (`SETUP_TOKEN` matters only to a not-yet-set-up instance; install.sh writes it. The updater-shim healthcheck is in `docker-compose.yml`: the executor recreates the shim on its new image but from the HOST's compose file, so it appears only where the checkout has been pulled - on the reference host, whose checkout is `main`, the next in-app update brings it) | `POST /api/admin/system/update` refuses a target older than the running version (`409 DOWNGRADE_REFUSED`). A rollback across the migration is safe: `stamp` leaves the binary collation, which older code only compares more strictly |
 
 **Nine endpoints require the caller's own `password` in the body**: the v2.9.0
 re-auth gates `/api/admin/backup/export`, `/api/admin/backup/import` (form

@@ -245,28 +245,30 @@ v-else-if="errorMsg" class="fh-notice" role="alert"
         <div v-if="openDeliveries === w.id" class="deliveries">
           <div v-if="deliveriesLoading" class="fh-field-help">{{ t('common.loading') }}</div>
           <p v-else-if="deliveries.length === 0" class="fh-field-help">{{ t('admin_webhooks.no_deliveries') }}</p>
-          <table v-else class="data-table">
-            <thead>
-              <tr>
-                <th>{{ t('admin_webhooks.col_event') }}</th>
-                <th>{{ t('admin_webhooks.col_status') }}</th>
-                <th class="num">{{ t('admin_webhooks.col_code') }}</th>
-                <th class="num">{{ t('admin_webhooks.col_attempts') }}</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="d in deliveries" :key="d.id">
-                <td :title="d.event_type">{{ eventLabel(d.event_type) }}</td>
-                <td><span class="fh-pill" :data-state="pillTone[d.status]">{{ d.status }}</span></td>
-                <td class="num fh-mono">{{ d.response_code ?? '-' }}</td>
-                <td class="num fh-mono">{{ d.attempts }}</td>
-                <td class="num">
-                  <button type="button" class="fh-btn-text" @click="onRetry(d)">{{ t('admin_webhooks.retry') }}</button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
+          <div v-else class="fh-table-scroll">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>{{ t('admin_webhooks.col_event') }}</th>
+                  <th>{{ t('admin_webhooks.col_status') }}</th>
+                  <th class="num">{{ t('admin_webhooks.col_code') }}</th>
+                  <th class="num">{{ t('admin_webhooks.col_attempts') }}</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="d in deliveries" :key="d.id">
+                  <td :title="d.event_type">{{ eventLabel(d.event_type) }}</td>
+                  <td><span class="fh-pill" :data-state="pillTone[d.status]">{{ d.status }}</span></td>
+                  <td class="num fh-mono">{{ d.response_code ?? '-' }}</td>
+                  <td class="num fh-mono">{{ d.attempts }}</td>
+                  <td class="num">
+                    <button type="button" class="fh-btn-text" @click="onRetry(d)">{{ t('admin_webhooks.retry') }}</button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </div>
       </li>
     </ul>

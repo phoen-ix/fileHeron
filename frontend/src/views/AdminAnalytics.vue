@@ -189,52 +189,58 @@ v-else-if="errorMsg" class="fh-notice" role="alert"
       <div class="grid-2">
         <section class="card">
           <h2 class="card-h2">{{ t('admin_analytics.top_uploaders') }}</h2>
-          <table class="data-table">
-            <thead>
-              <tr><th>{{ t('admin_analytics.col_user') }}</th><th class="num">{{ t('admin_analytics.col_stored') }}</th></tr>
-            </thead>
-            <tbody>
-              <tr v-for="u in data.top_uploaders" :key="u.user_id">
-                <td><span class="cell-name">{{ u.display_name }}</span><span class="cell-sub fh-mono">{{ u.email }}</span></td>
-                <td class="num fh-mono">{{ formatBytes(u.bytes) }}</td>
-              </tr>
-              <tr v-if="!data.top_uploaders.length"><td colspan="2" class="empty">{{ t('admin_analytics.no_data') }}</td></tr>
-            </tbody>
-          </table>
+          <div class="fh-table-scroll">
+            <table class="data-table">
+              <thead>
+                <tr><th>{{ t('admin_analytics.col_user') }}</th><th class="num">{{ t('admin_analytics.col_stored') }}</th></tr>
+              </thead>
+              <tbody>
+                <tr v-for="u in data.top_uploaders" :key="u.user_id">
+                  <td><span class="cell-name">{{ u.display_name }}</span><span class="cell-sub fh-mono">{{ u.email }}</span></td>
+                  <td class="num fh-mono">{{ formatBytes(u.bytes) }}</td>
+                </tr>
+                <tr v-if="!data.top_uploaders.length"><td colspan="2" class="empty">{{ t('admin_analytics.no_data') }}</td></tr>
+              </tbody>
+            </table>
+          </div>
         </section>
         <section class="card">
           <h2 class="card-h2">{{ t('admin_analytics.top_shares') }}</h2>
-          <table class="data-table">
-            <thead>
-              <tr><th>{{ t('admin_analytics.col_share') }}</th><th class="num">{{ t('admin_analytics.col_downloads') }}</th></tr>
-            </thead>
-            <tbody>
-              <tr v-for="s in data.top_shares" :key="s.share_id">
-                <td><span class="cell-name">{{ s.subject || t('admin_analytics.untitled') }}</span><span class="cell-sub fh-mono">{{ s.share_id.slice(0, 8) }}</span></td>
-                <td class="num fh-mono">{{ s.downloads }}</td>
-              </tr>
-              <tr v-if="!data.top_shares.length"><td colspan="2" class="empty">{{ t('admin_analytics.no_data') }}</td></tr>
-            </tbody>
-          </table>
+          <div class="fh-table-scroll">
+            <table class="data-table">
+              <thead>
+                <tr><th>{{ t('admin_analytics.col_share') }}</th><th class="num">{{ t('admin_analytics.col_downloads') }}</th></tr>
+              </thead>
+              <tbody>
+                <tr v-for="s in data.top_shares" :key="s.share_id">
+                  <td><span class="cell-name">{{ s.subject || t('admin_analytics.untitled') }}</span><span class="cell-sub fh-mono">{{ s.share_id.slice(0, 8) }}</span></td>
+                  <td class="num fh-mono">{{ s.downloads }}</td>
+                </tr>
+                <tr v-if="!data.top_shares.length"><td colspan="2" class="empty">{{ t('admin_analytics.no_data') }}</td></tr>
+              </tbody>
+            </table>
+          </div>
         </section>
       </div>
 
       <!-- Quota warnings -->
       <section v-if="data.quota_warnings.length" class="card">
         <h2 class="card-h2">{{ t('admin_analytics.quota_warnings') }}</h2>
-        <table class="data-table">
-          <thead>
-            <tr><th>{{ t('admin_analytics.col_user') }}</th><th class="num">{{ t('admin_analytics.col_usage') }}</th></tr>
-          </thead>
-          <tbody>
-            <tr v-for="q in data.quota_warnings" :key="q.user_id">
-              <td><span class="cell-name">{{ q.display_name }}</span><span class="cell-sub fh-mono">{{ q.email }}</span></td>
-              <td class="num fh-mono warn">
-                {{ q.pct }}% · {{ formatBytes(q.used_bytes) }} / {{ formatBytes(q.quota_bytes) }}
-              </td>
-            </tr>
-          </tbody>
-        </table>
+        <div class="fh-table-scroll">
+          <table class="data-table">
+            <thead>
+              <tr><th>{{ t('admin_analytics.col_user') }}</th><th class="num">{{ t('admin_analytics.col_usage') }}</th></tr>
+            </thead>
+            <tbody>
+              <tr v-for="q in data.quota_warnings" :key="q.user_id">
+                <td><span class="cell-name">{{ q.display_name }}</span><span class="cell-sub fh-mono">{{ q.email }}</span></td>
+                <td class="num fh-mono warn">
+                  {{ q.pct }}% · {{ formatBytes(q.used_bytes) }} / {{ formatBytes(q.quota_bytes) }}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </section>
     </template>
   </div>

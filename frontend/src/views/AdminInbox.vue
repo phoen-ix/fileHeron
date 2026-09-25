@@ -151,45 +151,47 @@ v-if="errorMsg" class="fh-notice" role="alert"
     <div v-if="loading" class="loading">{{ t('common.loading') }}</div>
     <p v-else-if="!items.length" class="empty">{{ t('admin_inbox.empty') }}</p>
 
-    <table v-else class="fh-table">
-      <thead>
-        <tr>
-          <th>{{ t('admin_inbox.col_type') }}</th>
-          <th>{{ t('admin_inbox.col_from') }}</th>
-          <th>{{ t('admin_inbox.col_subject') }}</th>
-          <th>{{ t('admin_inbox.col_received') }}</th>
-        </tr>
-      </thead>
-      <tbody>
-        <!-- A row whose only affordance is @click is unreachable without a
-             mouse: no tab stop, no key handler, and nothing telling a screen
-             reader it does anything. tabindex + role + the two activation keys
-             are the minimum that makes it a control (audit 2026-07-30). -->
-        <tr
-          v-for="m in items"
-          :key="m.id"
-          class="row"
-          :class="{ unread: m.status === 'new' }"
-          tabindex="0"
-          role="button"
-          :aria-label="t('admin_inbox.open_message', { subject: m.subject || m.sender_email })"
-          @click="open(m.id)"
-          @keydown.enter.prevent="open(m.id)"
-          @keydown.space.prevent="open(m.id)"
-        >
-          <td><span class="badge" :data-tone="classTone[m.classification]">{{ t(`admin_inbox.tag_${m.classification}`) }}</span></td>
-          <td>
-            <span class="from">{{ m.sender_name || m.sender_email }}</span>
-            <span v-if="m.sender_name" class="fh-mono addr">{{ m.sender_email }}</span>
-          </td>
-          <td>
-            {{ m.subject }}
-            <span v-if="m.has_attachments" class="clip" :title="t('admin_inbox.has_attachments')">📎</span>
-          </td>
-          <td class="fh-mono">{{ formatDate(m.received_at || m.created_at) }}</td>
-        </tr>
-      </tbody>
-    </table>
+    <div v-else class="fh-table-scroll">
+      <table class="fh-table">
+        <thead>
+          <tr>
+            <th>{{ t('admin_inbox.col_type') }}</th>
+            <th>{{ t('admin_inbox.col_from') }}</th>
+            <th>{{ t('admin_inbox.col_subject') }}</th>
+            <th>{{ t('admin_inbox.col_received') }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <!-- A row whose only affordance is @click is unreachable without a
+               mouse: no tab stop, no key handler, and nothing telling a screen
+               reader it does anything. tabindex + role + the two activation keys
+               are the minimum that makes it a control (audit 2026-07-30). -->
+          <tr
+            v-for="m in items"
+            :key="m.id"
+            class="row"
+            :class="{ unread: m.status === 'new' }"
+            tabindex="0"
+            role="button"
+            :aria-label="t('admin_inbox.open_message', { subject: m.subject || m.sender_email })"
+            @click="open(m.id)"
+            @keydown.enter.prevent="open(m.id)"
+            @keydown.space.prevent="open(m.id)"
+          >
+            <td><span class="badge" :data-tone="classTone[m.classification]">{{ t(`admin_inbox.tag_${m.classification}`) }}</span></td>
+            <td>
+              <span class="from">{{ m.sender_name || m.sender_email }}</span>
+              <span v-if="m.sender_name" class="fh-mono addr">{{ m.sender_email }}</span>
+            </td>
+            <td>
+              {{ m.subject }}
+              <span v-if="m.has_attachments" class="clip" :title="t('admin_inbox.has_attachments')">📎</span>
+            </td>
+            <td class="fh-mono">{{ formatDate(m.received_at || m.created_at) }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
 
     <Pager v-if="!loading && total > pageSize" :page="page" :total="total" :page-size="pageSize" @update:page="(n) => { page = n; load() }" />
   </div>
@@ -201,6 +203,7 @@ v-if="errorMsg" class="fh-notice" role="alert"
 }
 .filters {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--fh-space-2);
   margin-bottom: var(--fh-space-3);
 }

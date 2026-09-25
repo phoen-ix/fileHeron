@@ -63,53 +63,57 @@ v-else-if="errorMsg" class="fh-notice" role="alert"
       <p>{{ t('admin_sso_list.empty_body') }}</p>
     </div>
 
-    <table v-else class="provider-table">
-      <thead>
-        <tr>
-          <th>{{ t('admin_sso_list.col.name') }}</th>
-          <th>{{ t('admin_sso_list.col.preset') }}</th>
-          <th>{{ t('admin_sso_list.col.status') }}</th>
-          <th>{{ t('admin_sso_list.col.users') }}</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr
-          v-for="p in items"
-          :key="p.id"
-          tabindex="0"
-          @click="open(p)"
-          @keydown.enter="open(p)"
-        >
-          <td class="name-cell">
-            <strong>{{ p.name }}</strong>
-            <code class="fh-mono issuer">{{ p.issuer_url }}</code>
-          </td>
-          <td>
-            <span class="fh-pill" :data-state="p.preset">{{ p.preset }}</span>
-          </td>
-          <td>
-            <span
-              v-if="!p.client_secret_set"
-              class="fh-pill"
-              data-state="warning"
-            >
-              {{ t('admin_sso_list.status.no_secret') }}
-            </span>
-            <span
-              v-else-if="p.enabled"
-              class="fh-pill"
-              data-state="active"
-            >
-              {{ t('admin_sso_list.status.enabled') }}
-            </span>
-            <span v-else class="fh-pill">
-              {{ t('admin_sso_list.status.disabled') }}
-            </span>
-          </td>
-          <td class="user-count">{{ p.user_count }}</td>
-        </tr>
-      </tbody>
-    </table>
+    <div v-else class="fh-table-scroll">
+      <table class="provider-table">
+        <thead>
+          <tr>
+            <th>{{ t('admin_sso_list.col.name') }}</th>
+            <th>{{ t('admin_sso_list.col.preset') }}</th>
+            <th>{{ t('admin_sso_list.col.status') }}</th>
+            <th>{{ t('admin_sso_list.col.users') }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr
+            v-for="p in items"
+            :key="p.id"
+            tabindex="0"
+            @click="open(p)"
+            @keydown.enter="open(p)"
+          >
+            <td>
+              <div class="name-cell">
+                <strong>{{ p.name }}</strong>
+                <code class="fh-mono issuer">{{ p.issuer_url }}</code>
+              </div>
+            </td>
+            <td>
+              <span class="fh-pill" :data-state="p.preset">{{ p.preset }}</span>
+            </td>
+            <td>
+              <span
+                v-if="!p.client_secret_set"
+                class="fh-pill"
+                data-state="warning"
+              >
+                {{ t('admin_sso_list.status.no_secret') }}
+              </span>
+              <span
+                v-else-if="p.enabled"
+                class="fh-pill"
+                data-state="active"
+              >
+                {{ t('admin_sso_list.status.enabled') }}
+              </span>
+              <span v-else class="fh-pill">
+                {{ t('admin_sso_list.status.disabled') }}
+              </span>
+            </td>
+            <td class="user-count">{{ p.user_count }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
   </div>
 </template>
 

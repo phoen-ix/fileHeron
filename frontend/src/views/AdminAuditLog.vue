@@ -171,69 +171,71 @@ onMounted(load)
 v-else-if="errorMsg" class="fh-notice" role="alert"
         data-tone="error">{{ errorMsg }}</div>
 
-    <table v-else class="audit-table">
-      <thead>
-        <tr>
-          <th>{{ t('admin_audit.col.when') }}</th>
-          <th>{{ t('admin_audit.col.event') }}</th>
-          <th>{{ t('admin_audit.col.actor') }}</th>
-          <th>{{ t('admin_audit.col.target') }}</th>
-          <th>{{ t('admin_audit.col.ip') }}</th>
-          <th>{{ t('admin_audit.col.request') }}</th>
-        </tr>
-      </thead>
-      <tbody>
-        <template v-for="r in items" :key="r.id">
-        <tr>
-          <td class="fh-mono nowrap">
-            <button
-              v-if="hasExtra(r)"
-              type="button"
-              class="disclose"
-              :aria-expanded="expanded.has(r.id)"
-              :aria-label="t('admin_audit.details_toggle')"
-              @click="toggleExtra(r.id)"
-            >{{ expanded.has(r.id) ? '−' : '+' }}</button>
-            <span v-else class="disclose-spacer" aria-hidden="true"></span>
-            {{ formatDate(r.created_at, { second: '2-digit' }) }}
-          </td>
-          <td><span class="fh-mono ev">{{ r.event_type }}</span></td>
-          <td class="actor-cell">
-            <template v-if="r.actor_user_id !== null">
-              <RouterLink
-                :to="{ name: 'admin-user-detail', params: { id: r.actor_user_id } }"
-                class="actor-link"
-              >
-                <span v-if="r.actor_display_name" class="actor-name">{{ r.actor_display_name }}</span>
-                <span v-else class="actor-name">
-                  #{{ r.actor_user_id }}
-                  <span class="actor-deleted">{{ t('admin_audit.actor_deleted') }}</span>
-                </span>
-                <span v-if="r.actor_email" class="actor-hint fh-mono">{{ r.actor_email }}</span>
-              </RouterLink>
-            </template>
-            <span v-else class="fh-mono">-</span>
-          </td>
-          <td class="fh-mono">
-            <span v-if="r.target_type">{{ r.target_type }}:{{ r.target_id }}</span>
-            <span v-else>-</span>
-          </td>
-          <td class="fh-mono">{{ r.ip ?? '-' }}</td>
-          <td class="fh-mono small">{{ r.request_id?.slice(0, 8) ?? '-' }}</td>
-        </tr>
-        <tr v-if="expanded.has(r.id)" class="extra-row">
-          <td colspan="6">
-            <dl class="extra">
-              <template v-for="[k, v] in extraEntries(r)" :key="k">
-                <dt class="fh-mono">{{ k }}</dt>
-                <dd class="fh-mono">{{ v }}</dd>
+    <div v-else class="fh-table-scroll">
+      <table class="audit-table">
+        <thead>
+          <tr>
+            <th>{{ t('admin_audit.col.when') }}</th>
+            <th>{{ t('admin_audit.col.event') }}</th>
+            <th>{{ t('admin_audit.col.actor') }}</th>
+            <th>{{ t('admin_audit.col.target') }}</th>
+            <th>{{ t('admin_audit.col.ip') }}</th>
+            <th>{{ t('admin_audit.col.request') }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <template v-for="r in items" :key="r.id">
+          <tr>
+            <td class="fh-mono nowrap">
+              <button
+                v-if="hasExtra(r)"
+                type="button"
+                class="disclose"
+                :aria-expanded="expanded.has(r.id)"
+                :aria-label="t('admin_audit.details_toggle')"
+                @click="toggleExtra(r.id)"
+              >{{ expanded.has(r.id) ? '−' : '+' }}</button>
+              <span v-else class="disclose-spacer" aria-hidden="true"></span>
+              {{ formatDate(r.created_at, { second: '2-digit' }) }}
+            </td>
+            <td><span class="fh-mono ev">{{ r.event_type }}</span></td>
+            <td class="actor-cell">
+              <template v-if="r.actor_user_id !== null">
+                <RouterLink
+                  :to="{ name: 'admin-user-detail', params: { id: r.actor_user_id } }"
+                  class="actor-link"
+                >
+                  <span v-if="r.actor_display_name" class="actor-name">{{ r.actor_display_name }}</span>
+                  <span v-else class="actor-name">
+                    #{{ r.actor_user_id }}
+                    <span class="actor-deleted">{{ t('admin_audit.actor_deleted') }}</span>
+                  </span>
+                  <span v-if="r.actor_email" class="actor-hint fh-mono">{{ r.actor_email }}</span>
+                </RouterLink>
               </template>
-            </dl>
-          </td>
-        </tr>
-        </template>
-      </tbody>
-    </table>
+              <span v-else class="fh-mono">-</span>
+            </td>
+            <td class="fh-mono">
+              <span v-if="r.target_type">{{ r.target_type }}:{{ r.target_id }}</span>
+              <span v-else>-</span>
+            </td>
+            <td class="fh-mono">{{ r.ip ?? '-' }}</td>
+            <td class="fh-mono small">{{ r.request_id?.slice(0, 8) ?? '-' }}</td>
+          </tr>
+          <tr v-if="expanded.has(r.id)" class="extra-row">
+            <td colspan="6">
+              <dl class="extra">
+                <template v-for="[k, v] in extraEntries(r)" :key="k">
+                  <dt class="fh-mono">{{ k }}</dt>
+                  <dd class="fh-mono">{{ v }}</dd>
+                </template>
+              </dl>
+            </td>
+          </tr>
+          </template>
+        </tbody>
+      </table>
+    </div>
 
     <Pager v-model:page="page" :total="total" :page-size="pageSize" :max-page="ADMIN_LOG_MAX_PAGE" />
   </div>

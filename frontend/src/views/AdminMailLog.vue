@@ -178,47 +178,49 @@ v-else-if="errorMsg" class="fh-notice" role="alert"
         data-tone="error">{{ errorMsg }}</div>
     <div v-else-if="items.length === 0" class="loading">{{ t('admin_mail.empty') }}</div>
 
-    <table v-else class="mail-table">
-      <thead>
-        <tr>
-          <th>{{ t('admin_mail.col.when') }}</th>
-          <th>{{ t('admin_mail.col.recipient') }}</th>
-          <th>{{ t('admin_mail.col.category') }}</th>
-          <th>{{ t('admin_mail.col.subject') }}</th>
-          <th>{{ t('admin_mail.col.status') }}</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="r in items" :key="r.id">
-          <td class="fh-mono nowrap">{{ formatDate(r.created_at, { second: '2-digit' }) }}</td>
-          <td class="recipient-cell">
-            <RouterLink
-              v-if="r.recipient_user_id !== null"
-              :to="{ name: 'admin-user-detail', params: { id: r.recipient_user_id } }"
-              class="recipient-link"
-            >
-              <span class="recipient-name">{{ r.recipient_display_name ?? `#${r.recipient_user_id}` }}</span>
-              <span class="recipient-hint fh-mono">{{ r.recipient_email }}</span>
-            </RouterLink>
-            <span v-else class="fh-mono">{{ r.recipient_email }}</span>
-          </td>
-          <td class="fh-mono">{{ r.category ?? '-' }}</td>
-          <td>
-            <RouterLink
-              :to="{ name: 'admin-mail-detail', params: { id: r.id } }"
-              class="subject-link"
-            >
-              {{ r.subject }}
-            </RouterLink>
-            <span v-if="r.masked" class="fh-pill mini" data-state="warn">{{ t('admin_mail.masked') }}</span>
-          </td>
-          <td>
-            <span class="fh-pill" :data-state="statusTone(r.status)">{{ t(`admin_mail.status.${r.status}`) }}</span>
-            <span v-if="r.smtp_code" class="fh-mono code">{{ r.smtp_code }}</span>
-          </td>
-        </tr>
-      </tbody>
-    </table>
+    <div v-else class="fh-table-scroll">
+      <table class="mail-table">
+        <thead>
+          <tr>
+            <th>{{ t('admin_mail.col.when') }}</th>
+            <th>{{ t('admin_mail.col.recipient') }}</th>
+            <th>{{ t('admin_mail.col.category') }}</th>
+            <th>{{ t('admin_mail.col.subject') }}</th>
+            <th>{{ t('admin_mail.col.status') }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="r in items" :key="r.id">
+            <td class="fh-mono nowrap">{{ formatDate(r.created_at, { second: '2-digit' }) }}</td>
+            <td class="recipient-cell">
+              <RouterLink
+                v-if="r.recipient_user_id !== null"
+                :to="{ name: 'admin-user-detail', params: { id: r.recipient_user_id } }"
+                class="recipient-link"
+              >
+                <span class="recipient-name">{{ r.recipient_display_name ?? `#${r.recipient_user_id}` }}</span>
+                <span class="recipient-hint fh-mono">{{ r.recipient_email }}</span>
+              </RouterLink>
+              <span v-else class="fh-mono">{{ r.recipient_email }}</span>
+            </td>
+            <td class="fh-mono">{{ r.category ?? '-' }}</td>
+            <td>
+              <RouterLink
+                :to="{ name: 'admin-mail-detail', params: { id: r.id } }"
+                class="subject-link"
+              >
+                {{ r.subject }}
+              </RouterLink>
+              <span v-if="r.masked" class="fh-pill mini" data-state="warn">{{ t('admin_mail.masked') }}</span>
+            </td>
+            <td>
+              <span class="fh-pill" :data-state="statusTone(r.status)">{{ t(`admin_mail.status.${r.status}`) }}</span>
+              <span v-if="r.smtp_code" class="fh-mono code">{{ r.smtp_code }}</span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
 
     <Pager v-model:page="page" :total="total" :page-size="pageSize" :max-page="ADMIN_LOG_MAX_PAGE" />
   </div>

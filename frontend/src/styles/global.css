@@ -384,6 +384,14 @@ hr {
   border-color: rgba(153, 27, 27, 0.3);
 }
 
+/* Every <table> sits in one of these. Without it a table wider than a phone
+   widened the whole PAGE, so the header, filters and every notice scrolled
+   sideways with it; now only the table scrolls. Pinned over every view by
+   backend/tests/test_frontend_table_layout.py. */
+.fh-table-scroll {
+  overflow-x: auto;
+}
+
 /* Notice bars (info / error) */
 
 .fh-notice {

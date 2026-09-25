@@ -319,6 +319,7 @@ v-model="extraPaths" type="text" class="fh-input"
 }
 .num-field {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--fh-space-3);
   align-items: center;
   margin: var(--fh-space-2) 0;

@@ -168,57 +168,59 @@ v-else-if="errorMsg" class="fh-notice" role="alert"
         data-tone="error">{{ errorMsg }}</div>
     <div v-else-if="items.length === 0" class="loading">{{ t('admin_error_log.empty') }}</div>
 
-    <table v-else class="error-table">
-      <thead>
-        <tr>
-          <th>{{ t('admin_error_log.col.when') }}</th>
-          <th>{{ t('admin_error_log.col.ip') }}</th>
-          <th>{{ t('admin_error_log.col.status') }}</th>
-          <th>{{ t('admin_error_log.col.code') }}</th>
-          <th>{{ t('admin_error_log.col.where') }}</th>
-          <th>{{ t('admin_error_log.col.message') }}</th>
-        </tr>
-      </thead>
-      <tbody>
-        <template v-for="r in items" :key="r.id">
-          <!-- Keyboard path for a click-only row: see AdminInbox.vue. -->
-          <tr
-            class="row"
-            tabindex="0"
-            role="button"
-            :aria-expanded="expanded === r.id"
-            :aria-label="t('admin_error_log.toggle_row', { code: r.code })"
-            @click="toggle(r.id)"
-            @keydown.enter.prevent="toggle(r.id)"
-            @keydown.space.prevent="toggle(r.id)"
-          >
-            <td class="fh-mono nowrap">{{ formatDate(r.created_at, { second: '2-digit' }) }}</td>
-            <td class="fh-mono nowrap">{{ r.ip ?? '-' }}</td>
-            <td>
-              <span class="fh-pill" :data-state="statusTone(r.status_code)">{{ r.status_code }}</span>
-              <span v-if="r.alerted" class="fh-pill mini" data-state="active">{{ t('admin_error_log.emailed') }}</span>
-            </td>
-            <td class="fh-mono">{{ r.code }}</td>
-            <td class="fh-mono where">{{ r.source === 'worker' ? r.job_name : `${r.method ?? ''} ${r.path ?? ''}`.trim() }}</td>
-            <td class="msg">{{ r.message ?? '-' }}</td>
+    <div v-else class="fh-table-scroll">
+      <table class="error-table">
+        <thead>
+          <tr>
+            <th>{{ t('admin_error_log.col.when') }}</th>
+            <th>{{ t('admin_error_log.col.ip') }}</th>
+            <th>{{ t('admin_error_log.col.status') }}</th>
+            <th>{{ t('admin_error_log.col.code') }}</th>
+            <th>{{ t('admin_error_log.col.where') }}</th>
+            <th>{{ t('admin_error_log.col.message') }}</th>
           </tr>
-          <tr v-if="expanded === r.id" class="detail-row">
-            <td colspan="6">
-              <dl class="detail">
-                <dt>{{ t('admin_error_log.detail.exception') }}</dt><dd class="fh-mono">{{ r.exception_type ?? '-' }}</dd>
-                <dt>{{ t('admin_error_log.detail.source') }}</dt><dd class="fh-mono">{{ r.source }}</dd>
-                <dt>{{ t('admin_error_log.detail.ip') }}</dt><dd class="fh-mono">{{ r.ip ?? '-' }}</dd>
-                <dt>{{ t('admin_error_log.detail.request_id') }}</dt><dd class="fh-mono">{{ r.request_id ?? '-' }}</dd>
-                <dt>{{ t('admin_error_log.detail.user') }}</dt>
-                <dd class="fh-mono">{{ r.user_id !== null ? `#${r.user_id}${r.auth_via ? ` (${r.auth_via})` : ''}` : '-' }}</dd>
-                <dt>{{ t('admin_error_log.detail.signature') }}</dt><dd class="fh-mono">{{ r.signature }}</dd>
-                <dt>{{ t('admin_error_log.detail.message') }}</dt><dd class="msg-full">{{ r.message ?? '-' }}</dd>
-              </dl>
-            </td>
-          </tr>
-        </template>
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          <template v-for="r in items" :key="r.id">
+            <!-- Keyboard path for a click-only row: see AdminInbox.vue. -->
+            <tr
+              class="row"
+              tabindex="0"
+              role="button"
+              :aria-expanded="expanded === r.id"
+              :aria-label="t('admin_error_log.toggle_row', { code: r.code })"
+              @click="toggle(r.id)"
+              @keydown.enter.prevent="toggle(r.id)"
+              @keydown.space.prevent="toggle(r.id)"
+            >
+              <td class="fh-mono nowrap">{{ formatDate(r.created_at, { second: '2-digit' }) }}</td>
+              <td class="fh-mono nowrap">{{ r.ip ?? '-' }}</td>
+              <td>
+                <span class="fh-pill" :data-state="statusTone(r.status_code)">{{ r.status_code }}</span>
+                <span v-if="r.alerted" class="fh-pill mini" data-state="active">{{ t('admin_error_log.emailed') }}</span>
+              </td>
+              <td class="fh-mono">{{ r.code }}</td>
+              <td class="fh-mono where">{{ r.source === 'worker' ? r.job_name : `${r.method ?? ''} ${r.path ?? ''}`.trim() }}</td>
+              <td class="msg">{{ r.message ?? '-' }}</td>
+            </tr>
+            <tr v-if="expanded === r.id" class="detail-row">
+              <td colspan="6">
+                <dl class="detail">
+                  <dt>{{ t('admin_error_log.detail.exception') }}</dt><dd class="fh-mono">{{ r.exception_type ?? '-' }}</dd>
+                  <dt>{{ t('admin_error_log.detail.source') }}</dt><dd class="fh-mono">{{ r.source }}</dd>
+                  <dt>{{ t('admin_error_log.detail.ip') }}</dt><dd class="fh-mono">{{ r.ip ?? '-' }}</dd>
+                  <dt>{{ t('admin_error_log.detail.request_id') }}</dt><dd class="fh-mono">{{ r.request_id ?? '-' }}</dd>
+                  <dt>{{ t('admin_error_log.detail.user') }}</dt>
+                  <dd class="fh-mono">{{ r.user_id !== null ? `#${r.user_id}${r.auth_via ? ` (${r.auth_via})` : ''}` : '-' }}</dd>
+                  <dt>{{ t('admin_error_log.detail.signature') }}</dt><dd class="fh-mono">{{ r.signature }}</dd>
+                  <dt>{{ t('admin_error_log.detail.message') }}</dt><dd class="msg-full">{{ r.message ?? '-' }}</dd>
+                </dl>
+              </td>
+            </tr>
+          </template>
+        </tbody>
+      </table>
+    </div>
 
     <Pager v-model:page="page" :total="total" :page-size="pageSize" :max-page="ADMIN_LOG_MAX_PAGE" />
   </div>

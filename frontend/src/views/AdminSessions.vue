@@ -112,88 +112,92 @@ onMounted(load)
 v-else-if="errorMsg" class="fh-notice" role="alert"
         data-tone="error">{{ errorMsg }}</div>
 
-    <table v-else-if="items.length > 0" class="sessions-table">
-      <thead>
-        <tr>
-          <th>{{ t('admin_sessions.col.user') }}</th>
-          <th>{{ t('admin_sessions.col.device') }}</th>
-          <th>{{ t('admin_sessions.col.ip') }}</th>
-          <th
-            role="button"
-            tabindex="0"
-            :aria-sort="sort.ariaSort('created_at')"
-            @click="sort.toggle('created_at')"
-            @keydown.enter="sort.toggle('created_at')"
-          >
-            {{ t('admin_sessions.col.started') }}
-            <span class="sort-ind">{{ sort.indicator('created_at') }}</span>
-          </th>
-          <th
-            role="button"
-            tabindex="0"
-            :aria-sort="sort.ariaSort('last_used_at')"
-            @click="sort.toggle('last_used_at')"
-            @keydown.enter="sort.toggle('last_used_at')"
-          >
-            {{ t('admin_sessions.col.last_active') }}
-            <span class="sort-ind">{{ sort.indicator('last_used_at') }}</span>
-          </th>
-          <th
-            role="button"
-            tabindex="0"
-            :aria-sort="sort.ariaSort('expires_at')"
-            @click="sort.toggle('expires_at')"
-            @keydown.enter="sort.toggle('expires_at')"
-          >
-            {{ t('admin_sessions.col.expires') }}
-            <span class="sort-ind">{{ sort.indicator('expires_at') }}</span>
-          </th>
-          <th>{{ t('admin_sessions.col.actions') }}</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="s in items" :key="s.id" :class="{ inactive: !s.is_active }">
-          <td>
-            <RouterLink
-              class="row-name user-link"
-              :to="{ name: 'admin-user-detail', params: { id: s.user_id } }"
+    <div v-else-if="items.length > 0" class="fh-table-scroll">
+      <table class="sessions-table">
+        <thead>
+          <tr>
+            <th>{{ t('admin_sessions.col.user') }}</th>
+            <th>{{ t('admin_sessions.col.device') }}</th>
+            <th>{{ t('admin_sessions.col.ip') }}</th>
+            <th
+              role="button"
+              tabindex="0"
+              :aria-sort="sort.ariaSort('created_at')"
+              @click="sort.toggle('created_at')"
+              @keydown.enter="sort.toggle('created_at')"
             >
-              {{ s.user_display_name || `#${s.user_id}` }}
-            </RouterLink>
-            <div class="fh-mono row-hint">{{ s.user_email || t('admin_sessions.deleted_user') }}</div>
-          </td>
-          <td>
-            {{ uaShort(s.created_ua, t('admin_sessions.unknown_device')) }}
-            <span v-if="!s.is_active" class="fh-pill" data-state="danger">
-              {{ s.revoked_at ? t('admin_sessions.state_revoked') : t('admin_sessions.state_expired') }}
-            </span>
-          </td>
-          <td class="fh-mono">{{ s.created_ip || '-' }}</td>
-          <td class="fh-mono">{{ formatDate(s.created_at) }}</td>
-          <td class="fh-mono">{{ formatDate(s.last_used_at) }}</td>
-          <td class="fh-mono">{{ formatDate(s.expires_at) }}</td>
-          <td class="actions">
-            <button
-              v-if="s.is_active"
-              type="button"
-              class="fh-btn-text revoke-btn"
-              :disabled="revokingId === s.id"
-              @click="onRevoke(s)"
+              {{ t('admin_sessions.col.started') }}
+              <span class="sort-ind">{{ sort.indicator('created_at') }}</span>
+            </th>
+            <th
+              role="button"
+              tabindex="0"
+              :aria-sort="sort.ariaSort('last_used_at')"
+              @click="sort.toggle('last_used_at')"
+              @keydown.enter="sort.toggle('last_used_at')"
             >
-              {{ revokingId === s.id ? t('common.loading') : t('admin_sessions.revoke') }}
-            </button>
-            <button
-              type="button"
-              class="fh-btn-text revoke-btn"
-              :disabled="revokingUserId === s.user_id"
-              @click="onRevokeAll(s)"
+              {{ t('admin_sessions.col.last_active') }}
+              <span class="sort-ind">{{ sort.indicator('last_used_at') }}</span>
+            </th>
+            <th
+              role="button"
+              tabindex="0"
+              :aria-sort="sort.ariaSort('expires_at')"
+              @click="sort.toggle('expires_at')"
+              @keydown.enter="sort.toggle('expires_at')"
             >
-              {{ t('admin_sessions.revoke_all') }}
-            </button>
-          </td>
-        </tr>
-      </tbody>
-    </table>
+              {{ t('admin_sessions.col.expires') }}
+              <span class="sort-ind">{{ sort.indicator('expires_at') }}</span>
+            </th>
+            <th>{{ t('admin_sessions.col.actions') }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="s in items" :key="s.id" :class="{ inactive: !s.is_active }">
+            <td>
+              <RouterLink
+                class="row-name user-link"
+                :to="{ name: 'admin-user-detail', params: { id: s.user_id } }"
+              >
+                {{ s.user_display_name || `#${s.user_id}` }}
+              </RouterLink>
+              <div class="fh-mono row-hint">{{ s.user_email || t('admin_sessions.deleted_user') }}</div>
+            </td>
+            <td>
+              {{ uaShort(s.created_ua, t('admin_sessions.unknown_device')) }}
+              <span v-if="!s.is_active" class="fh-pill" data-state="danger">
+                {{ s.revoked_at ? t('admin_sessions.state_revoked') : t('admin_sessions.state_expired') }}
+              </span>
+            </td>
+            <td class="fh-mono">{{ s.created_ip || '-' }}</td>
+            <td class="fh-mono">{{ formatDate(s.created_at) }}</td>
+            <td class="fh-mono">{{ formatDate(s.last_used_at) }}</td>
+            <td class="fh-mono">{{ formatDate(s.expires_at) }}</td>
+            <td>
+              <div class="actions">
+                <button
+                  v-if="s.is_active"
+                  type="button"
+                  class="fh-btn-text revoke-btn"
+                  :disabled="revokingId === s.id"
+                  @click="onRevoke(s)"
+                >
+                  {{ revokingId === s.id ? t('common.loading') : t('admin_sessions.revoke') }}
+                </button>
+                <button
+                  type="button"
+                  class="fh-btn-text revoke-btn"
+                  :disabled="revokingUserId === s.user_id"
+                  @click="onRevokeAll(s)"
+                >
+                  {{ t('admin_sessions.revoke_all') }}
+                </button>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
 
     <p v-else class="fh-field-help empty">{{ t('admin_sessions.empty') }}</p>
 

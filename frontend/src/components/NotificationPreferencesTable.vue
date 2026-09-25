@@ -1,38 +1,40 @@
 <template>
-  <table class="prefs-table">
-    <thead>
-      <tr>
-        <th>{{ t('notif_prefs.col.category') }}</th>
-        <th>{{ t('notif_prefs.col.channel') }}</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr v-for="item in items" :key="item.category" :data-highlight="item.category === highlight || undefined">
-        <td class="cat-cell">
-          {{ catLabel(item.category) }}
-          <span v-if="item.locked" class="locked-note">{{ t('notif_prefs.locked') }}</span>
-        </td>
-        <td>
-          <!-- A bare <select
-        :aria-label="t('common.filter')"
-      > in a table cell has no accessible name: the
-               column header is not associated with it, so it announced only
-               its current value (audit 2026-07-30, fe-i18n-a11y-15). -->
-          <select
-            :value="item.channel"
-            class="channel-select"
-            :aria-label="t('notif_prefs.channel_for', { category: catLabel(item.category) })"
-            :disabled="saving || item.locked"
-            @change="onChange(item.category, ($event.target as HTMLSelectElement).value as NotificationChannel)"
-          >
-            <option v-for="c in channels" :key="c" :value="c">
-              {{ t(`notif_prefs.channel.${c}`) }}
-            </option>
-          </select>
-        </td>
-      </tr>
-    </tbody>
-  </table>
+  <div class="fh-table-scroll">
+    <table class="prefs-table">
+      <thead>
+        <tr>
+          <th>{{ t('notif_prefs.col.category') }}</th>
+          <th>{{ t('notif_prefs.col.channel') }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr v-for="item in items" :key="item.category" :data-highlight="item.category === highlight || undefined">
+          <td class="cat-cell">
+            {{ catLabel(item.category) }}
+            <span v-if="item.locked" class="locked-note">{{ t('notif_prefs.locked') }}</span>
+          </td>
+          <td>
+            <!-- A bare <select
+          :aria-label="t('common.filter')"
+        > in a table cell has no accessible name: the
+                 column header is not associated with it, so it announced only
+                 its current value (audit 2026-07-30, fe-i18n-a11y-15). -->
+            <select
+              :value="item.channel"
+              class="channel-select"
+              :aria-label="t('notif_prefs.channel_for', { category: catLabel(item.category) })"
+              :disabled="saving || item.locked"
+              @change="onChange(item.category, ($event.target as HTMLSelectElement).value as NotificationChannel)"
+            >
+              <option v-for="c in channels" :key="c" :value="c">
+                {{ t(`notif_prefs.channel.${c}`) }}
+              </option>
+            </select>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
 </template>
 
 <script setup lang="ts">

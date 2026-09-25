@@ -176,140 +176,142 @@ onMounted(load)
 v-else-if="errorMsg" class="fh-notice" role="alert"
         data-tone="error">{{ errorMsg }}</div>
 
-    <table v-else-if="items.length > 0" class="files-table">
-      <thead>
-        <tr>
-          <th
-            role="button"
-            tabindex="0"
-            :aria-sort="sort.ariaSort('filename')"
-            @click="sort.toggle('filename')"
-            @keydown.enter="sort.toggle('filename')"
-          >
-            {{ t('admin_file_history.col.filename') }}
-            <span class="sort-ind">{{ sort.indicator('filename') }}</span>
-          </th>
-          <th
-            role="button"
-            tabindex="0"
-            class="numeric"
-            :aria-sort="sort.ariaSort('size')"
-            @click="sort.toggle('size')"
-            @keydown.enter="sort.toggle('size')"
-          >
-            {{ t('admin_file_history.col.size') }}
-            <span class="sort-ind">{{ sort.indicator('size') }}</span>
-          </th>
-          <th
-            role="button"
-            tabindex="0"
-            :aria-sort="sort.ariaSort('state')"
-            @click="sort.toggle('state')"
-            @keydown.enter="sort.toggle('state')"
-          >
-            {{ t('admin_file_history.col.state') }}
-            <span class="sort-ind">{{ sort.indicator('state') }}</span>
-          </th>
-          <th>{{ t('admin_file_history.col.uploader') }}</th>
-          <th>{{ t('admin_file_history.col.share') }}</th>
-          <th
-            role="button"
-            tabindex="0"
-            :aria-sort="sort.ariaSort('uploaded_at')"
-            @click="sort.toggle('uploaded_at')"
-            @keydown.enter="sort.toggle('uploaded_at')"
-          >
-            {{ t('admin_file_history.col.uploaded') }}
-            <span class="sort-ind">{{ sort.indicator('uploaded_at') }}</span>
-          </th>
-          <th
-            role="button"
-            tabindex="0"
-            :aria-sort="sort.ariaSort('last_downloaded_at')"
-            @click="sort.toggle('last_downloaded_at')"
-            @keydown.enter="sort.toggle('last_downloaded_at')"
-          >
-            {{ t('admin_file_history.col.last_dl') }}
-            <span class="sort-ind">{{ sort.indicator('last_downloaded_at') }}</span>
-          </th>
-          <th
-            role="button"
-            tabindex="0"
-            class="numeric"
-            :aria-sort="sort.ariaSort('download_count')"
-            @click="sort.toggle('download_count')"
-            @keydown.enter="sort.toggle('download_count')"
-          >
-            {{ t('admin_file_history.col.dl_count') }}
-            <span class="sort-ind">{{ sort.indicator('download_count') }}</span>
-          </th>
-          <th>{{ t('admin_file_history.col.actions') }}</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="it in items" :key="it.file_id">
-          <td>
-            <div class="row-name">{{ it.filename }}</div>
-            <div class="fh-mono row-hint">{{ it.recipients_summary }}</div>
-          </td>
-          <td class="numeric fh-mono">{{ formatBytes(it.size_bytes) }}</td>
-          <td>
-            <span class="fh-pill" :data-state="pillForFileState(it.state)">
-              {{ it.state }}
-            </span>
-            <span v-if="it.is_orphaned" class="fh-pill orphan-badge" data-state="warn">
-              {{ t('admin_file_history.orphaned_badge') }}
-            </span>
-          </td>
-          <td>
-            <div class="row-name">{{ it.uploader.display_name }}</div>
-            <div class="fh-mono row-hint">{{ it.uploader.email }} · {{ it.uploader.role }}</div>
-          </td>
-          <td>
-            <div class="row-name">{{ it.share_subject || t('share_list.no_subject') }}</div>
-            <div class="fh-mono row-hint">
-              <span class="fh-pill" :data-state="shareStatePill(it.share_state)">
-                {{ t(`share_state.${it.share_state}`) }}
+    <div v-else-if="items.length > 0" class="fh-table-scroll">
+      <table class="files-table">
+        <thead>
+          <tr>
+            <th
+              role="button"
+              tabindex="0"
+              :aria-sort="sort.ariaSort('filename')"
+              @click="sort.toggle('filename')"
+              @keydown.enter="sort.toggle('filename')"
+            >
+              {{ t('admin_file_history.col.filename') }}
+              <span class="sort-ind">{{ sort.indicator('filename') }}</span>
+            </th>
+            <th
+              role="button"
+              tabindex="0"
+              class="numeric"
+              :aria-sort="sort.ariaSort('size')"
+              @click="sort.toggle('size')"
+              @keydown.enter="sort.toggle('size')"
+            >
+              {{ t('admin_file_history.col.size') }}
+              <span class="sort-ind">{{ sort.indicator('size') }}</span>
+            </th>
+            <th
+              role="button"
+              tabindex="0"
+              :aria-sort="sort.ariaSort('state')"
+              @click="sort.toggle('state')"
+              @keydown.enter="sort.toggle('state')"
+            >
+              {{ t('admin_file_history.col.state') }}
+              <span class="sort-ind">{{ sort.indicator('state') }}</span>
+            </th>
+            <th>{{ t('admin_file_history.col.uploader') }}</th>
+            <th>{{ t('admin_file_history.col.share') }}</th>
+            <th
+              role="button"
+              tabindex="0"
+              :aria-sort="sort.ariaSort('uploaded_at')"
+              @click="sort.toggle('uploaded_at')"
+              @keydown.enter="sort.toggle('uploaded_at')"
+            >
+              {{ t('admin_file_history.col.uploaded') }}
+              <span class="sort-ind">{{ sort.indicator('uploaded_at') }}</span>
+            </th>
+            <th
+              role="button"
+              tabindex="0"
+              :aria-sort="sort.ariaSort('last_downloaded_at')"
+              @click="sort.toggle('last_downloaded_at')"
+              @keydown.enter="sort.toggle('last_downloaded_at')"
+            >
+              {{ t('admin_file_history.col.last_dl') }}
+              <span class="sort-ind">{{ sort.indicator('last_downloaded_at') }}</span>
+            </th>
+            <th
+              role="button"
+              tabindex="0"
+              class="numeric"
+              :aria-sort="sort.ariaSort('download_count')"
+              @click="sort.toggle('download_count')"
+              @keydown.enter="sort.toggle('download_count')"
+            >
+              {{ t('admin_file_history.col.dl_count') }}
+              <span class="sort-ind">{{ sort.indicator('download_count') }}</span>
+            </th>
+            <th>{{ t('admin_file_history.col.actions') }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="it in items" :key="it.file_id">
+            <td>
+              <div class="row-name">{{ it.filename }}</div>
+              <div class="fh-mono row-hint">{{ it.recipients_summary }}</div>
+            </td>
+            <td class="numeric fh-mono">{{ formatBytes(it.size_bytes) }}</td>
+            <td>
+              <span class="fh-pill" :data-state="pillForFileState(it.state)">
+                {{ it.state }}
               </span>
-            </div>
-          </td>
-          <td class="fh-mono">{{ formatDate(it.uploaded_at) }}</td>
-          <td class="fh-mono">{{ formatDate(it.last_downloaded_at) }}</td>
-          <td class="numeric fh-mono">{{ it.download_count }}</td>
-          <td>
-            <button
-              v-if="it.is_orphaned"
-              type="button"
-              class="fh-btn-text reclaim-btn"
-              :disabled="reclaiming === it.file_id"
-              @click="onReclaim(it)"
-            >
-              {{ reclaiming === it.file_id ? t('common.loading') : t('admin_file_history.reclaim') }}
-            </button>
-            <!-- Quarantined bytes are released or purged on the Quarantine
-                 page, under their own audit event; the backend refuses a plain
-                 delete with FILE_QUARANTINED. -->
-            <RouterLink
-              v-else-if="it.state === 'infected'"
-              class="fh-btn-text reclaim-btn"
-              :to="{ name: 'admin-quarantine' }"
-            >
-              {{ t('admin_file_history.in_quarantine') }}
-            </RouterLink>
-            <button
-              v-else-if="it.state !== 'deleted'"
-              type="button"
-              class="fh-btn-text reclaim-btn"
-              :disabled="deleting === it.file_id"
-              @click="onDelete(it)"
-            >
-              {{ deleting === it.file_id ? t('common.loading') : t('admin_file_history.delete') }}
-            </button>
-            <span v-else class="row-hint">-</span>
-          </td>
-        </tr>
-      </tbody>
-    </table>
+              <span v-if="it.is_orphaned" class="fh-pill orphan-badge" data-state="warn">
+                {{ t('admin_file_history.orphaned_badge') }}
+              </span>
+            </td>
+            <td>
+              <div class="row-name">{{ it.uploader.display_name }}</div>
+              <div class="fh-mono row-hint">{{ it.uploader.email }} · {{ it.uploader.role }}</div>
+            </td>
+            <td>
+              <div class="row-name">{{ it.share_subject || t('share_list.no_subject') }}</div>
+              <div class="fh-mono row-hint">
+                <span class="fh-pill" :data-state="shareStatePill(it.share_state)">
+                  {{ t(`share_state.${it.share_state}`) }}
+                </span>
+              </div>
+            </td>
+            <td class="fh-mono">{{ formatDate(it.uploaded_at) }}</td>
+            <td class="fh-mono">{{ formatDate(it.last_downloaded_at) }}</td>
+            <td class="numeric fh-mono">{{ it.download_count }}</td>
+            <td>
+              <button
+                v-if="it.is_orphaned"
+                type="button"
+                class="fh-btn-text reclaim-btn"
+                :disabled="reclaiming === it.file_id"
+                @click="onReclaim(it)"
+              >
+                {{ reclaiming === it.file_id ? t('common.loading') : t('admin_file_history.reclaim') }}
+              </button>
+              <!-- Quarantined bytes are released or purged on the Quarantine
+                   page, under their own audit event; the backend refuses a plain
+                   delete with FILE_QUARANTINED. -->
+              <RouterLink
+                v-else-if="it.state === 'infected'"
+                class="fh-btn-text reclaim-btn"
+                :to="{ name: 'admin-quarantine' }"
+              >
+                {{ t('admin_file_history.in_quarantine') }}
+              </RouterLink>
+              <button
+                v-else-if="it.state !== 'deleted'"
+                type="button"
+                class="fh-btn-text reclaim-btn"
+                :disabled="deleting === it.file_id"
+                @click="onDelete(it)"
+              >
+                {{ deleting === it.file_id ? t('common.loading') : t('admin_file_history.delete') }}
+              </button>
+              <span v-else class="row-hint">-</span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
 
     <p v-else class="fh-field-help empty">{{ t('admin_file_history.empty') }}</p>
 

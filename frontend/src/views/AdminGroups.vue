@@ -139,38 +139,40 @@ v-if="formError" class="fh-notice" role="alert"
 v-else-if="errorMsg" class="fh-notice" role="alert"
         data-tone="error">{{ errorMsg }}</div>
 
-    <table v-else-if="items.length > 0" class="group-table">
-      <thead>
-        <tr>
-          <th>{{ t('admin_groups.col.name') }}</th>
-          <th>{{ t('admin_groups.col.kind') }}</th>
-          <th>{{ t('admin_groups.col.members') }}</th>
-          <th>{{ t('admin_groups.col.created') }}</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr
-          v-for="g in items"
-          :key="g.id"
-          tabindex="0"
-          @click="open(g)"
-          @keydown.enter="open(g)"
-        >
-          <td>
-            <div class="row-name">{{ g.name }}</div>
-            <div v-if="g.description" class="row-desc">{{ g.description }}</div>
-          </td>
-          <td>
-            <span v-if="g.is_company_inbox" class="fh-pill" data-state="warn">
-              {{ t('recipient.inbox_flag') }}
-            </span>
-            <span v-else class="fh-mono row-plain">{{ t('admin_groups.kind_normal') }}</span>
-          </td>
-          <td class="numeric fh-mono">{{ g.member_count }}</td>
-          <td class="fh-mono">{{ formatDate(g.created_at) }}</td>
-        </tr>
-      </tbody>
-    </table>
+    <div v-else-if="items.length > 0" class="fh-table-scroll">
+      <table class="group-table">
+        <thead>
+          <tr>
+            <th>{{ t('admin_groups.col.name') }}</th>
+            <th>{{ t('admin_groups.col.kind') }}</th>
+            <th>{{ t('admin_groups.col.members') }}</th>
+            <th>{{ t('admin_groups.col.created') }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr
+            v-for="g in items"
+            :key="g.id"
+            tabindex="0"
+            @click="open(g)"
+            @keydown.enter="open(g)"
+          >
+            <td>
+              <div class="row-name">{{ g.name }}</div>
+              <div v-if="g.description" class="row-desc">{{ g.description }}</div>
+            </td>
+            <td>
+              <span v-if="g.is_company_inbox" class="fh-pill" data-state="warn">
+                {{ t('recipient.inbox_flag') }}
+              </span>
+              <span v-else class="fh-mono row-plain">{{ t('admin_groups.kind_normal') }}</span>
+            </td>
+            <td class="numeric fh-mono">{{ g.member_count }}</td>
+            <td class="fh-mono">{{ formatDate(g.created_at) }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
 
     <div v-else class="empty-state">
       <p class="fh-display-md">{{ t('admin_groups.empty_title') }}</p>

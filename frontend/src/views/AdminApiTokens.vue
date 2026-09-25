@@ -391,78 +391,82 @@ v-if="createError" class="fh-notice" role="alert"
 v-else-if="errorMsg" class="fh-notice" role="alert"
         data-tone="error">{{ errorMsg }}</div>
 
-      <table v-else-if="items.length > 0" class="token-table">
-        <thead>
-          <tr>
-            <th>{{ t('admin_api_tokens.col.name') }}</th>
-            <th>{{ t('admin_api_tokens.col.owner') }}</th>
-            <th>{{ t('admin_api_tokens.col.status') }}</th>
-            <th>{{ t('admin_api_tokens.col.last_used') }}</th>
-            <th>{{ t('admin_api_tokens.col.created') }}</th>
-            <th>{{ t('admin_api_tokens.col.expiry') }}</th>
-            <th class="actions-col"></th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="item in items" :key="item.id">
-            <td>
-              <div class="row-name">{{ item.name }}</div>
-              <div class="fh-mono row-hint">…{{ item.last4 }}</div>
-              <div class="token-scopes-cell">
-                <span v-if="item.scopes === null" class="scope-chip full">
-                  {{ t('api_tokens.scope_full_badge') }}
+      <div v-else-if="items.length > 0" class="fh-table-scroll">
+        <table class="token-table">
+          <thead>
+            <tr>
+              <th>{{ t('admin_api_tokens.col.name') }}</th>
+              <th>{{ t('admin_api_tokens.col.owner') }}</th>
+              <th>{{ t('admin_api_tokens.col.status') }}</th>
+              <th>{{ t('admin_api_tokens.col.last_used') }}</th>
+              <th>{{ t('admin_api_tokens.col.created') }}</th>
+              <th>{{ t('admin_api_tokens.col.expiry') }}</th>
+              <th class="actions-col"></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="item in items" :key="item.id">
+              <td>
+                <div class="row-name">{{ item.name }}</div>
+                <div class="fh-mono row-hint">…{{ item.last4 }}</div>
+                <div class="token-scopes-cell">
+                  <span v-if="item.scopes === null" class="scope-chip full">
+                    {{ t('api_tokens.scope_full_badge') }}
+                  </span>
+                  <span v-for="s in item.scopes || []" v-else :key="s" class="scope-chip">
+                    {{ scopeLabel(s) }}
+                  </span>
+                </div>
+              </td>
+              <td>
+                <div class="row-name">{{ item.owner_display_name }}</div>
+                <div class="fh-mono row-hint">{{ item.owner_email }} · {{ item.owner_role }}</div>
+              </td>
+              <td>
+                <span class="fh-pill" :data-state="item.status">
+                  {{ t(`admin_api_tokens.status.${item.status}`) }}
                 </span>
-                <span v-for="s in item.scopes || []" v-else :key="s" class="scope-chip">
-                  {{ scopeLabel(s) }}
-                </span>
-              </div>
-            </td>
-            <td>
-              <div class="row-name">{{ item.owner_display_name }}</div>
-              <div class="fh-mono row-hint">{{ item.owner_email }} · {{ item.owner_role }}</div>
-            </td>
-            <td>
-              <span class="fh-pill" :data-state="item.status">
-                {{ t(`admin_api_tokens.status.${item.status}`) }}
-              </span>
-            </td>
-            <td class="fh-mono">{{ formatDate(item.last_used_at) }}</td>
-            <td class="fh-mono">{{ formatDate(item.created_at) }}</td>
-            <td class="fh-mono">
-              {{ item.expires_at ? formatDate(item.expires_at) : t('admin_api_tokens.never_expires') }}
-            </td>
-            <td class="actions">
-              <button
-                v-if="item.status === 'active'"
-                type="button"
-                class="fh-btn-text"
-                :disabled="busyTokenId === item.id"
-                @click="onDisable(item)"
-              >
-                {{ t('admin_api_tokens.action.disable') }}
-              </button>
-              <button
-                v-if="item.status === 'disabled'"
-                type="button"
-                class="fh-btn-text"
-                :disabled="busyTokenId === item.id"
-                @click="onReactivate(item)"
-              >
-                {{ t('admin_api_tokens.action.reactivate') }}
-              </button>
-              <button
-                v-if="item.status !== 'revoked'"
-                type="button"
-                class="fh-btn-text danger"
-                :disabled="busyTokenId === item.id"
-                @click="onRevoke(item)"
-              >
-                {{ t('admin_api_tokens.action.revoke') }}
-              </button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+              </td>
+              <td class="fh-mono">{{ formatDate(item.last_used_at) }}</td>
+              <td class="fh-mono">{{ formatDate(item.created_at) }}</td>
+              <td class="fh-mono">
+                {{ item.expires_at ? formatDate(item.expires_at) : t('admin_api_tokens.never_expires') }}
+              </td>
+              <td>
+                <div class="actions">
+                  <button
+                    v-if="item.status === 'active'"
+                    type="button"
+                    class="fh-btn-text"
+                    :disabled="busyTokenId === item.id"
+                    @click="onDisable(item)"
+                  >
+                    {{ t('admin_api_tokens.action.disable') }}
+                  </button>
+                  <button
+                    v-if="item.status === 'disabled'"
+                    type="button"
+                    class="fh-btn-text"
+                    :disabled="busyTokenId === item.id"
+                    @click="onReactivate(item)"
+                  >
+                    {{ t('admin_api_tokens.action.reactivate') }}
+                  </button>
+                  <button
+                    v-if="item.status !== 'revoked'"
+                    type="button"
+                    class="fh-btn-text danger"
+                    :disabled="busyTokenId === item.id"
+                    @click="onRevoke(item)"
+                  >
+                    {{ t('admin_api_tokens.action.revoke') }}
+                  </button>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
 
       <p v-else class="fh-field-help empty">
         {{ t('admin_api_tokens.empty') }}

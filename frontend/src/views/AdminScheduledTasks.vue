@@ -138,7 +138,7 @@ v-if="errorMsg" class="fh-notice" role="alert"
     <template v-else>
       <section v-for="grp in groups" :key="grp.key" class="group">
         <h2 class="form-h2">{{ t(`admin_scheduled_tasks.group.${grp.key}`) }}</h2>
-        <div class="table-wrap">
+        <div class="fh-table-scroll">
           <table class="cron-table">
             <colgroup>
               <col class="col-task" />
@@ -233,17 +233,11 @@ v-if="errorMsg" class="fh-notice" role="alert"
 .group + .group {
   margin-top: var(--fh-space-5);
 }
-.table-wrap {
-  /* Narrow-screen safety only: on wide screens the table is narrower than this
-     wrapper so nothing scrolls; below the table's natural width it scrolls here
-     instead of breaking the page. */
-  overflow-x: auto;
-}
 .cron-table {
   /* One shared, fixed column template across every group table so all sections
      fill the full width, end at the same right edge, and line up column-for-column.
      min-width keeps the nowrap timestamp columns from collapsing; below it the
-     .table-wrap scrolls. */
+     .fh-table-scroll wrapper scrolls. */
   width: 100%;
   min-width: 64rem;
   table-layout: fixed;

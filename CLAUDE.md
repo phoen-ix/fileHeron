@@ -777,6 +777,8 @@ warm-amber accent `#b45309` on `#faf8f3`. Density via `[data-density="operator"]
 (`Pager`, `ConfirmDialog`) + `src/composables/` + `src/utils/`;
 `BrandMark.vue linkable` prop (false when home off).
 
+- **Every `<table>` is the only child of a `.fh-table-scroll` wrapper, and no `<td>`/`<th>` class sets `display: flex|grid`** - without the wrapper one wide table widened the whole page on a phone, and a flex cell stops stretching to its row (its border floats mid-row). Put the flex on a `<div>` inside the cell. Pinned over every `.vue` by `backend/tests/test_frontend_table_layout.py` (in the backend suite because vitest serves CSS as an empty string).
+
 ## Operational gotchas (recently bitten)
 
 - **Real client IPs** - uvicorn needs `--proxy-headers --forwarded-allow-ips=*` (in `docker/backend/Dockerfile` prod CMD + `docker-compose.dev.yml` command); without them the audit log records the Docker bridge gateway. **X-Forwarded-For trust:** `--forwarded-allow-ips=*` makes uvicorn trust XFF from *any* immediate peer, so `request.client.host` is only as trustworthy as the proxy. **Traefik MUST overwrite, not append, client-supplied `X-Forwarded-For`** or the leftmost value is spoofable. Do **not** set Traefik `forwardedHeaders.trustedIPs`/`insecure` on the public entrypoint. **Pinning `--forwarded-allow-ips` to the proxy CIDR has a cost the traefik README does not mention** - see §Scan guard: it makes every nginx-forwarded request resolve to nginx's own address.

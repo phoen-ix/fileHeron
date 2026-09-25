@@ -144,46 +144,50 @@ onMounted(load)
 v-else-if="errorMsg" class="fh-notice" role="alert"
         data-tone="error">{{ errorMsg }}</div>
 
-    <table v-else-if="items.length > 0" class="files-table">
-      <thead>
-        <tr>
-          <th>{{ t('admin_quarantine.col.filename') }}</th>
-          <th class="numeric">{{ t('admin_quarantine.col.size') }}</th>
-          <th>{{ t('admin_quarantine.col.uploader') }}</th>
-          <th>{{ t('admin_quarantine.col.share') }}</th>
-          <th>{{ t('admin_quarantine.col.uploaded') }}</th>
-          <th>{{ t('admin_quarantine.col.actions') }}</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="it in items" :key="it.file_id">
-          <td>
-            <div class="row-name">{{ it.filename }}</div>
-            <div class="fh-mono row-hint">{{ it.recipients_summary }}</div>
-          </td>
-          <td class="numeric fh-mono">{{ formatBytes(it.size_bytes) }}</td>
-          <td>
-            <div class="row-name">{{ it.uploader.display_name }}</div>
-            <div class="fh-mono row-hint">{{ it.uploader.email }} · {{ it.uploader.role }}</div>
-          </td>
-          <td>
-            <div class="row-name">{{ it.share_subject || '-' }}</div>
-          </td>
-          <td class="fh-mono">{{ formatDate(it.uploaded_at) }}</td>
-          <td class="actions-cell">
-            <button type="button" class="fh-btn-text" @click="onDownload(it)">
-              {{ t('admin_quarantine.btn.download') }}
-            </button>
-            <button type="button" class="fh-btn-text" @click="openConfirm('release', it)">
-              {{ t('admin_quarantine.btn.release') }}
-            </button>
-            <button type="button" class="fh-btn-text danger" @click="openConfirm('purge', it)">
-              {{ t('admin_quarantine.btn.purge') }}
-            </button>
-          </td>
-        </tr>
-      </tbody>
-    </table>
+    <div v-else-if="items.length > 0" class="fh-table-scroll">
+      <table class="files-table">
+        <thead>
+          <tr>
+            <th>{{ t('admin_quarantine.col.filename') }}</th>
+            <th class="numeric">{{ t('admin_quarantine.col.size') }}</th>
+            <th>{{ t('admin_quarantine.col.uploader') }}</th>
+            <th>{{ t('admin_quarantine.col.share') }}</th>
+            <th>{{ t('admin_quarantine.col.uploaded') }}</th>
+            <th>{{ t('admin_quarantine.col.actions') }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="it in items" :key="it.file_id">
+            <td>
+              <div class="row-name">{{ it.filename }}</div>
+              <div class="fh-mono row-hint">{{ it.recipients_summary }}</div>
+            </td>
+            <td class="numeric fh-mono">{{ formatBytes(it.size_bytes) }}</td>
+            <td>
+              <div class="row-name">{{ it.uploader.display_name }}</div>
+              <div class="fh-mono row-hint">{{ it.uploader.email }} · {{ it.uploader.role }}</div>
+            </td>
+            <td>
+              <div class="row-name">{{ it.share_subject || '-' }}</div>
+            </td>
+            <td class="fh-mono">{{ formatDate(it.uploaded_at) }}</td>
+            <td>
+              <div class="actions-cell">
+                <button type="button" class="fh-btn-text" @click="onDownload(it)">
+                  {{ t('admin_quarantine.btn.download') }}
+                </button>
+                <button type="button" class="fh-btn-text" @click="openConfirm('release', it)">
+                  {{ t('admin_quarantine.btn.release') }}
+                </button>
+                <button type="button" class="fh-btn-text danger" @click="openConfirm('purge', it)">
+                  {{ t('admin_quarantine.btn.purge') }}
+                </button>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
 
     <p v-else class="fh-field-help empty">{{ t('admin_quarantine.empty') }}</p>
 

@@ -83,6 +83,11 @@ script prints a one-line "local-only" notice and still succeeds.
   to reach their inbox.
 - **Leaving a page during an upload now asks first.** Navigating away discarded
   resumable uploads on the server.
+- **On phones, pages no longer scroll sideways.** A wide table widened the whole
+  page, header and filters included; tables now scroll within their own box, and
+  the admin inbox filters and the scan-guard form wrap. Action buttons in admin
+  tables (Sessions, API tokens, Blocked sources, Quarantine, SSO providers) line
+  up with their row again.
 - Files uploaded late (a Retry, or the successful part of a partly failed batch)
   are now added to the share, announced and audited like the rest. Finished rows
   no longer offer "Remove", which only hid the row.

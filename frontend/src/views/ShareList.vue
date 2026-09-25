@@ -256,108 +256,110 @@ v-else-if="errorMsg" class="fh-notice" role="alert"
           {{ g.label }}
           <span class="group-count fh-mono">· {{ g.items.length }}</span>
         </h2>
-        <table class="share-table">
-          <thead>
-            <tr>
-              <th v-if="box === 'outbox'" class="select-col">
-                <input
-                  type="checkbox"
-                  :aria-label="t('share_list.bulk.select_all_aria')"
-                  :checked="g.items.some((i) => i.state === 'active') && g.items.filter((i) => i.state === 'active').every((i) => isSelected(i.id))"
-                  @change="(e) => setGroupSelection(g.items.filter((i) => i.state === 'active').map((i) => i.id), (e.target as HTMLInputElement).checked)"
-                  @click.stop
-                />
-              </th>
-              <th
-                role="button"
+        <div class="fh-table-scroll">
+          <table class="share-table">
+            <thead>
+              <tr>
+                <th v-if="box === 'outbox'" class="select-col">
+                  <input
+                    type="checkbox"
+                    :aria-label="t('share_list.bulk.select_all_aria')"
+                    :checked="g.items.some((i) => i.state === 'active') && g.items.filter((i) => i.state === 'active').every((i) => isSelected(i.id))"
+                    @change="(e) => setGroupSelection(g.items.filter((i) => i.state === 'active').map((i) => i.id), (e.target as HTMLInputElement).checked)"
+                    @click.stop
+                  />
+                </th>
+                <th
+                  role="button"
+                  tabindex="0"
+                  :aria-sort="sort.ariaSort('subject')"
+                  @click="sort.toggle('subject')"
+                  @keydown.enter="sort.toggle('subject')"
+                >
+                  {{ t('share_list.col.subject') }}
+                  <span class="sort-ind">{{ sort.indicator('subject') }}</span>
+                </th>
+                <!-- Not sortable: the server has no sender order. This header
+                     toggled created_at while labelled "Sender", showing an arrow
+                     for an order it did not apply. -->
+                <th v-if="box === 'inbox'">
+                  {{ t('share_list.col.sender') }}
+                </th>
+                <th v-if="box === 'outbox'">
+                  {{ t('share_list.col.recipients') }}
+                </th>
+                <th>{{ t('share_list.col.kind') }}</th>
+                <th
+                  role="button"
+                  tabindex="0"
+                  :aria-sort="sort.ariaSort('state')"
+                  @click="sort.toggle('state')"
+                  @keydown.enter="sort.toggle('state')"
+                >
+                  {{ t('share_list.col.state') }}
+                  <span class="sort-ind">{{ sort.indicator('state') }}</span>
+                </th>
+                <th>{{ t('share_list.col.files') }}</th>
+                <th>{{ t('share_list.col.size') }}</th>
+                <th
+                  role="button"
+                  tabindex="0"
+                  :aria-sort="sort.ariaSort('expires_at')"
+                  @click="sort.toggle('expires_at')"
+                  @keydown.enter="sort.toggle('expires_at')"
+                >
+                  {{ t('share_list.col.expires') }}
+                  <span class="sort-ind">{{ sort.indicator('expires_at') }}</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                v-for="item in g.items"
+                :key="`${g.key}-${item.id}`"
                 tabindex="0"
-                :aria-sort="sort.ariaSort('subject')"
-                @click="sort.toggle('subject')"
-                @keydown.enter="sort.toggle('subject')"
+                @click="open(item)"
+                @keydown.enter="open(item)"
               >
-                {{ t('share_list.col.subject') }}
-                <span class="sort-ind">{{ sort.indicator('subject') }}</span>
-              </th>
-              <!-- Not sortable: the server has no sender order. This header
-                   toggled created_at while labelled "Sender", showing an arrow
-                   for an order it did not apply. -->
-              <th v-if="box === 'inbox'">
-                {{ t('share_list.col.sender') }}
-              </th>
-              <th v-if="box === 'outbox'">
-                {{ t('share_list.col.recipients') }}
-              </th>
-              <th>{{ t('share_list.col.kind') }}</th>
-              <th
-                role="button"
-                tabindex="0"
-                :aria-sort="sort.ariaSort('state')"
-                @click="sort.toggle('state')"
-                @keydown.enter="sort.toggle('state')"
-              >
-                {{ t('share_list.col.state') }}
-                <span class="sort-ind">{{ sort.indicator('state') }}</span>
-              </th>
-              <th>{{ t('share_list.col.files') }}</th>
-              <th>{{ t('share_list.col.size') }}</th>
-              <th
-                role="button"
-                tabindex="0"
-                :aria-sort="sort.ariaSort('expires_at')"
-                @click="sort.toggle('expires_at')"
-                @keydown.enter="sort.toggle('expires_at')"
-              >
-                {{ t('share_list.col.expires') }}
-                <span class="sort-ind">{{ sort.indicator('expires_at') }}</span>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr
-              v-for="item in g.items"
-              :key="`${g.key}-${item.id}`"
-              tabindex="0"
-              @click="open(item)"
-              @keydown.enter="open(item)"
-            >
-              <td v-if="box === 'outbox'" class="select-col" @click.stop>
-                <input
-                  v-if="item.state === 'active'"
-                  type="checkbox"
-                  :checked="isSelected(item.id)"
-                  :aria-label="t('share_list.bulk.select_row_aria')"
-                  @change="toggleSelected(item.id)"
-                />
-              </td>
-              <td class="subject-cell">
-                <div class="subject">
-                  {{ item.effective_subject || t('share_list.no_subject') }}
-                </div>
-                <div class="created fh-mono">
-                  {{ t('share_list.created', { d: formatDate(item.created_at) }) }}
-                </div>
-              </td>
-              <td v-if="box === 'inbox'">
-                <span v-if="item.sender" class="row-name">{{ item.sender.display_name }}</span>
-                <span v-else class="fh-mono row-hint">-</span>
-              </td>
-              <td v-if="box === 'outbox'" class="recipients-cell">
-                {{ recipientSummary(item.recipients) }}
-              </td>
-              <td>
-                <span class="fh-mono kind">{{ t(`share_kind.${item.kind}`) }}</span>
-              </td>
-              <td>
-                <span class="fh-pill" :data-state="shareStatePill(item.state)">
-                  {{ t(`share_state.${item.state}`) }}
-                </span>
-              </td>
-              <td class="numeric">{{ item.file_count }}</td>
-              <td class="numeric fh-mono">{{ formatBytes(item.total_size_bytes) }}</td>
-              <td class="fh-mono">{{ formatExpiry(item.expires_at) }}</td>
-            </tr>
-          </tbody>
-        </table>
+                <td v-if="box === 'outbox'" class="select-col" @click.stop>
+                  <input
+                    v-if="item.state === 'active'"
+                    type="checkbox"
+                    :checked="isSelected(item.id)"
+                    :aria-label="t('share_list.bulk.select_row_aria')"
+                    @change="toggleSelected(item.id)"
+                  />
+                </td>
+                <td class="subject-cell">
+                  <div class="subject">
+                    {{ item.effective_subject || t('share_list.no_subject') }}
+                  </div>
+                  <div class="created fh-mono">
+                    {{ t('share_list.created', { d: formatDate(item.created_at) }) }}
+                  </div>
+                </td>
+                <td v-if="box === 'inbox'">
+                  <span v-if="item.sender" class="row-name">{{ item.sender.display_name }}</span>
+                  <span v-else class="fh-mono row-hint">-</span>
+                </td>
+                <td v-if="box === 'outbox'" class="recipients-cell">
+                  {{ recipientSummary(item.recipients) }}
+                </td>
+                <td>
+                  <span class="fh-mono kind">{{ t(`share_kind.${item.kind}`) }}</span>
+                </td>
+                <td>
+                  <span class="fh-pill" :data-state="shareStatePill(item.state)">
+                    {{ t(`share_state.${item.state}`) }}
+                  </span>
+                </td>
+                <td class="numeric">{{ item.file_count }}</td>
+                <td class="numeric fh-mono">{{ formatBytes(item.total_size_bytes) }}</td>
+                <td class="fh-mono">{{ formatExpiry(item.expires_at) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
 
       <Pager v-model:page="page" :total="total" :page-size="pageSize" />

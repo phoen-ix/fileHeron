@@ -418,78 +418,80 @@ v-if="inviteError" class="fh-notice" role="alert"
       <div
 v-else-if="invitesErrorMsg" class="fh-notice" role="alert"
         data-tone="error">{{ invitesErrorMsg }}</div>
-      <table v-else class="invites-table">
-        <thead>
-          <tr>
-            <th>{{ t('admin_users.invites.col.email') }}</th>
-            <th>{{ t('admin_users.invites.col.role') }}</th>
-            <th>{{ t('admin_users.invites.col.state') }}</th>
-            <th>{{ t('admin_users.invites.col.invited_by') }}</th>
-            <th>{{ t('admin_users.invites.col.sent') }}</th>
-            <th>{{ t('admin_users.invites.col.expires') }}</th>
-            <th class="actions-col">{{ t('admin_users.invites.col.actions') }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="inv in invites" :key="inviteRowKey(inv)">
-            <td class="fh-mono">{{ inv.email }}</td>
-            <td><span class="fh-mono role">{{ inv.target_role }}</span></td>
-            <td>
-              <span
-                class="fh-pill"
-                :data-state="inv.state === 'pending' ? 'warn' : 'danger'"
-              >
-                {{ t(`admin_users.invites.state.${inv.state}`) }}
-              </span>
-            </td>
-            <td>
-              <span v-if="inv.invited_by_display_name">{{ inv.invited_by_display_name }}</span>
-              <span v-else class="subtle fh-mono">{{ t('admin_users.invites.invited_by_unknown') }}</span>
-            </td>
-            <td class="fh-mono">{{ formatDate(inv.created_at) }}</td>
-            <td class="fh-mono">{{ formatDate(inv.expires_at) }}</td>
-            <td class="actions-col">
-              <button
-                type="button"
-                class="fh-btn-text inline-action"
-                :disabled="actionInProgressId === inv.id"
-                @click="onCopyLink(inv)"
-              >
-                {{ t('admin_users.invites.action.copy_link') }}
-              </button>
-              <button
-                type="button"
-                class="fh-btn-text inline-action"
-                :disabled="actionInProgressId === inv.id"
-                @click="onResend(inv)"
-              >
-                {{ t('admin_users.invites.action.resend') }}
-              </button>
-              <button
-                type="button"
-                class="fh-btn-text inline-action"
-                @click="openDetails(inv)"
-              >
-                {{ t('admin_users.invites.action.details') }}
-              </button>
-              <button
-                type="button"
-                class="fh-btn-text inline-action"
-                @click="openActivate(inv)"
-              >
-                {{ t('admin_users.invites.action.activate') }}
-              </button>
-              <button
-                type="button"
-                class="fh-btn-text inline-action danger"
-                @click="openRevoke(inv)"
-              >
-                {{ t('admin_users.invites.action.delete') }}
-              </button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+      <div v-else class="fh-table-scroll">
+        <table class="invites-table">
+          <thead>
+            <tr>
+              <th>{{ t('admin_users.invites.col.email') }}</th>
+              <th>{{ t('admin_users.invites.col.role') }}</th>
+              <th>{{ t('admin_users.invites.col.state') }}</th>
+              <th>{{ t('admin_users.invites.col.invited_by') }}</th>
+              <th>{{ t('admin_users.invites.col.sent') }}</th>
+              <th>{{ t('admin_users.invites.col.expires') }}</th>
+              <th class="actions-col">{{ t('admin_users.invites.col.actions') }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="inv in invites" :key="inviteRowKey(inv)">
+              <td class="fh-mono">{{ inv.email }}</td>
+              <td><span class="fh-mono role">{{ inv.target_role }}</span></td>
+              <td>
+                <span
+                  class="fh-pill"
+                  :data-state="inv.state === 'pending' ? 'warn' : 'danger'"
+                >
+                  {{ t(`admin_users.invites.state.${inv.state}`) }}
+                </span>
+              </td>
+              <td>
+                <span v-if="inv.invited_by_display_name">{{ inv.invited_by_display_name }}</span>
+                <span v-else class="subtle fh-mono">{{ t('admin_users.invites.invited_by_unknown') }}</span>
+              </td>
+              <td class="fh-mono">{{ formatDate(inv.created_at) }}</td>
+              <td class="fh-mono">{{ formatDate(inv.expires_at) }}</td>
+              <td class="actions-col">
+                <button
+                  type="button"
+                  class="fh-btn-text inline-action"
+                  :disabled="actionInProgressId === inv.id"
+                  @click="onCopyLink(inv)"
+                >
+                  {{ t('admin_users.invites.action.copy_link') }}
+                </button>
+                <button
+                  type="button"
+                  class="fh-btn-text inline-action"
+                  :disabled="actionInProgressId === inv.id"
+                  @click="onResend(inv)"
+                >
+                  {{ t('admin_users.invites.action.resend') }}
+                </button>
+                <button
+                  type="button"
+                  class="fh-btn-text inline-action"
+                  @click="openDetails(inv)"
+                >
+                  {{ t('admin_users.invites.action.details') }}
+                </button>
+                <button
+                  type="button"
+                  class="fh-btn-text inline-action"
+                  @click="openActivate(inv)"
+                >
+                  {{ t('admin_users.invites.action.activate') }}
+                </button>
+                <button
+                  type="button"
+                  class="fh-btn-text inline-action danger"
+                  @click="openRevoke(inv)"
+                >
+                  {{ t('admin_users.invites.action.delete') }}
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
       <hr class="fh-rule section-divider" />
     </section>
 
@@ -517,53 +519,55 @@ v-else-if="invitesErrorMsg" class="fh-notice" role="alert"
 v-else-if="errorMsg" class="fh-notice" role="alert"
         data-tone="error">{{ errorMsg }}</div>
 
-    <table v-else-if="items.length" class="user-table">
-      <thead>
-        <tr>
-          <th class="id-col">{{ t('admin_users.col.id') }}</th>
-          <th>{{ t('admin_users.col.name') }}</th>
-          <th>{{ t('admin_users.col.role') }}</th>
-          <th>{{ t('admin_users.col.status') }}</th>
-          <th>{{ t('admin_users.col.2fa') }}</th>
-          <th class="storage-col">{{ t('admin_users.col.storage') }}</th>
-          <th>{{ t('admin_users.col.created') }}</th>
-          <th>{{ t('admin_users.col.last_login') }}</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr
-          v-for="u in items"
-          :key="u.id"
-          tabindex="0"
-          @click="open(u)"
-          @keydown.enter="open(u)"
-        >
-          <td class="fh-mono id-col">{{ u.id }}</td>
-          <td>
-            <div class="row-name">{{ u.display_name }}</div>
-            <div class="row-hint fh-mono">{{ u.email }}</div>
-          </td>
-          <td><span class="fh-mono role">{{ u.role }}</span></td>
-          <td>
-            <span v-if="u.is_disabled" class="fh-pill" data-state="danger">{{ t('admin_users.status.disabled') }}</span>
-            <span v-else-if="u.requires_2fa" class="fh-pill" data-state="warn">{{ t('admin_users.status.needs_2fa') }}</span>
-            <span v-else class="fh-pill" data-state="active">{{ t('admin_users.status.active') }}</span>
-          </td>
-          <td>
-            <span v-if="u.has_2fa" class="fh-mono">on</span>
-            <span v-else class="fh-mono subtle">off</span>
-          </td>
-          <td class="fh-mono storage-col">
-            {{ formatBytes(u.storage_used_bytes) }}<span
-              v-if="u.quota_bytes"
-              class="subtle"
-            > / {{ formatBytes(u.quota_bytes) }}</span>
-          </td>
-          <td class="fh-mono">{{ formatDate(u.created_at) }}</td>
-          <td class="fh-mono">{{ formatDate(u.last_login_at) }}</td>
-        </tr>
-      </tbody>
-    </table>
+    <div v-else-if="items.length" class="fh-table-scroll">
+      <table class="user-table">
+        <thead>
+          <tr>
+            <th class="id-col">{{ t('admin_users.col.id') }}</th>
+            <th>{{ t('admin_users.col.name') }}</th>
+            <th>{{ t('admin_users.col.role') }}</th>
+            <th>{{ t('admin_users.col.status') }}</th>
+            <th>{{ t('admin_users.col.2fa') }}</th>
+            <th class="storage-col">{{ t('admin_users.col.storage') }}</th>
+            <th>{{ t('admin_users.col.created') }}</th>
+            <th>{{ t('admin_users.col.last_login') }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr
+            v-for="u in items"
+            :key="u.id"
+            tabindex="0"
+            @click="open(u)"
+            @keydown.enter="open(u)"
+          >
+            <td class="fh-mono id-col">{{ u.id }}</td>
+            <td>
+              <div class="row-name">{{ u.display_name }}</div>
+              <div class="row-hint fh-mono">{{ u.email }}</div>
+            </td>
+            <td><span class="fh-mono role">{{ u.role }}</span></td>
+            <td>
+              <span v-if="u.is_disabled" class="fh-pill" data-state="danger">{{ t('admin_users.status.disabled') }}</span>
+              <span v-else-if="u.requires_2fa" class="fh-pill" data-state="warn">{{ t('admin_users.status.needs_2fa') }}</span>
+              <span v-else class="fh-pill" data-state="active">{{ t('admin_users.status.active') }}</span>
+            </td>
+            <td>
+              <span v-if="u.has_2fa" class="fh-mono">on</span>
+              <span v-else class="fh-mono subtle">off</span>
+            </td>
+            <td class="fh-mono storage-col">
+              {{ formatBytes(u.storage_used_bytes) }}<span
+                v-if="u.quota_bytes"
+                class="subtle"
+              > / {{ formatBytes(u.quota_bytes) }}</span>
+            </td>
+            <td class="fh-mono">{{ formatDate(u.created_at) }}</td>
+            <td class="fh-mono">{{ formatDate(u.last_login_at) }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
 
     <p v-else class="empty-state fh-field-help">{{ t('admin_users.empty') }}</p>
 

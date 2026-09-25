@@ -701,24 +701,26 @@ const headlineFailures = computed(() => {
       <!-- recent failures -->
       <section v-if="status.recent_failures.length > 0" class="card">
         <h2>{{ t('admin_system.failures.heading') }}</h2>
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>{{ t('admin_system.failures.job') }}</th>
-              <th>{{ t('admin_system.failures.at') }}</th>
-              <th>{{ t('admin_system.failures.error') }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="r in status.recent_failures" :key="r.id">
-              <td><code>{{ r.job_name }}</code></td>
-              <td>{{ fmtTime(r.started_at) }}</td>
-              <td class="error-cell">
-                <pre>{{ r.error_msg }}</pre>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+        <div class="fh-table-scroll">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>{{ t('admin_system.failures.job') }}</th>
+                <th>{{ t('admin_system.failures.at') }}</th>
+                <th>{{ t('admin_system.failures.error') }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="r in status.recent_failures" :key="r.id">
+                <td><code>{{ r.job_name }}</code></td>
+                <td>{{ fmtTime(r.started_at) }}</td>
+                <td class="error-cell">
+                  <pre>{{ r.error_msg }}</pre>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </section>
     </template>
 

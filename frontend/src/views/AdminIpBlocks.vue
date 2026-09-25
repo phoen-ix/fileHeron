@@ -424,43 +424,47 @@ onMounted(() => {
       <p v-else-if="!watchRows.length" class="fh-field-help">
         {{ t('admin_ip_blocks.watch_empty') }}
       </p>
-      <table v-else class="fh-table">
-        <thead>
-          <tr>
-            <th>{{ t('admin_ip_blocks.watch_col_ip') }}</th>
-            <th>{{ t('admin_ip_blocks.watch_col_offences') }}</th>
-            <th>{{ t('admin_ip_blocks.watch_col_signal') }}</th>
-            <th>{{ t('admin_ip_blocks.watch_col_path') }}</th>
-            <th>{{ t('admin_ip_blocks.watch_col_seen') }}</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="row in watchRows" :key="row.ip">
-            <td class="fh-mono">{{ row.ip }}</td>
-            <td>
-              {{ t('admin_ip_blocks.watch_of_threshold', {
-                count: row.offences, threshold: thresholdFor(row),
-              }) }}
-            </td>
-            <td>
-              {{ row.last_signal ? t(`admin_ip_blocks.reason.${row.last_signal}`) : '—' }}
-            </td>
-            <td class="fh-mono path" :title="row.last_path || ''">
-              {{ row.last_path || '—' }}
-            </td>
-            <td>{{ row.last_seen ? formatDate(row.last_seen) : '—' }}</td>
-            <td class="row-actions">
-              <button type="button" class="fh-btn-text" @click="blockFromWatchlist(row.ip)">
-                {{ t('admin_ip_blocks.watch_block_cta') }}
-              </button>
-              <button type="button" class="fh-btn-text" @click="onAddAllow(row.ip)">
-                {{ t('admin_ip_blocks.allow_cta') }}
-              </button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+      <div v-else class="fh-table-scroll">
+        <table class="fh-table">
+          <thead>
+            <tr>
+              <th>{{ t('admin_ip_blocks.watch_col_ip') }}</th>
+              <th>{{ t('admin_ip_blocks.watch_col_offences') }}</th>
+              <th>{{ t('admin_ip_blocks.watch_col_signal') }}</th>
+              <th>{{ t('admin_ip_blocks.watch_col_path') }}</th>
+              <th>{{ t('admin_ip_blocks.watch_col_seen') }}</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="row in watchRows" :key="row.ip">
+              <td class="fh-mono">{{ row.ip }}</td>
+              <td>
+                {{ t('admin_ip_blocks.watch_of_threshold', {
+                  count: row.offences, threshold: thresholdFor(row),
+                }) }}
+              </td>
+              <td>
+                {{ row.last_signal ? t(`admin_ip_blocks.reason.${row.last_signal}`) : '—' }}
+              </td>
+              <td class="fh-mono path" :title="row.last_path || ''">
+                {{ row.last_path || '—' }}
+              </td>
+              <td>{{ row.last_seen ? formatDate(row.last_seen) : '—' }}</td>
+              <td>
+                <div class="row-actions">
+                  <button type="button" class="fh-btn-text" @click="blockFromWatchlist(row.ip)">
+                    {{ t('admin_ip_blocks.watch_block_cta') }}
+                  </button>
+                  <button type="button" class="fh-btn-text" @click="onAddAllow(row.ip)">
+                    {{ t('admin_ip_blocks.allow_cta') }}
+                  </button>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </section>
 
     <!-- Blocks -->
@@ -538,78 +542,82 @@ onMounted(() => {
         </button>
       </div>
       <template v-else>
-        <table class="fh-table">
-          <thead>
-            <tr>
-              <th>{{ t('admin_ip_blocks.col_subject') }}</th>
-              <th>{{ t('admin_ip_blocks.col_reason') }}</th>
-              <th>{{ t('admin_ip_blocks.col_source') }}</th>
-              <th>{{ t('admin_ip_blocks.col_hits') }}</th>
-              <th>{{ t('admin_ip_blocks.col_path') }}</th>
-              <th>{{ t('admin_ip_blocks.col_created') }}</th>
-              <th>{{ t('admin_ip_blocks.col_expires') }}</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="row in items" :key="row.id">
-              <td class="fh-mono">
-                {{ row.subject }}
-                <span v-if="row.is_network" class="tag">
-                  {{ t('admin_ip_blocks.tag_network') }}
-                </span>
-              </td>
-              <td>
-                {{ t(`admin_ip_blocks.reason.${row.reason}`) }}
-                <span v-if="row.strikes > 1">×{{ row.strikes }}</span>
-              </td>
-              <td>{{ t(`admin_ip_blocks.source.${row.source}`) }}</td>
-              <td>{{ row.hit_count }}</td>
-              <td class="fh-mono path" :title="row.last_path || ''">
-                {{ row.last_path || '—' }}
-              </td>
-              <td>{{ formatDate(row.created_at) }}</td>
-              <td>
-                <span v-if="row.released_at" class="fh-pill" data-state="active">
-                  {{ t('admin_ip_blocks.released') }}
-                </span>
-                <span v-else-if="!isLive(row)" class="fh-pill">
-                  {{ t('admin_ip_blocks.expired') }}
-                </span>
-                <template v-else>{{ formatDate(row.expires_at) }}</template>
-              </td>
-              <td class="row-actions">
-                <template v-if="isLive(row)">
-                  <button
-                    type="button"
-                    class="fh-btn-text"
-                    :disabled="busyId === row.id"
-                    @click="onRelease(row)"
-                  >
-                    {{ t('admin_ip_blocks.release_cta') }}
-                  </button>
-                  <button
-                    type="button"
-                    class="fh-btn-text"
-                    :disabled="busyId === row.id"
-                    @click="onReleaseAndAllow(row)"
-                  >
-                    {{ t('admin_ip_blocks.unblock_allow_cta') }}
-                  </button>
-                </template>
-                <button
-                  v-else
-                  type="button"
-                  class="fh-btn-text"
-                  :disabled="allowBusy"
-                  @click="onAddAllow(row.subject)"
-                >
-                  {{ t('admin_ip_blocks.allow_cta') }}
-                </button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+        <div class="fh-table-scroll">
+          <table class="fh-table">
+            <thead>
+              <tr>
+                <th>{{ t('admin_ip_blocks.col_subject') }}</th>
+                <th>{{ t('admin_ip_blocks.col_reason') }}</th>
+                <th>{{ t('admin_ip_blocks.col_source') }}</th>
+                <th>{{ t('admin_ip_blocks.col_hits') }}</th>
+                <th>{{ t('admin_ip_blocks.col_path') }}</th>
+                <th>{{ t('admin_ip_blocks.col_created') }}</th>
+                <th>{{ t('admin_ip_blocks.col_expires') }}</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="row in items" :key="row.id">
+                <td class="fh-mono">
+                  {{ row.subject }}
+                  <span v-if="row.is_network" class="tag">
+                    {{ t('admin_ip_blocks.tag_network') }}
+                  </span>
+                </td>
+                <td>
+                  {{ t(`admin_ip_blocks.reason.${row.reason}`) }}
+                  <span v-if="row.strikes > 1">×{{ row.strikes }}</span>
+                </td>
+                <td>{{ t(`admin_ip_blocks.source.${row.source}`) }}</td>
+                <td>{{ row.hit_count }}</td>
+                <td class="fh-mono path" :title="row.last_path || ''">
+                  {{ row.last_path || '—' }}
+                </td>
+                <td>{{ formatDate(row.created_at) }}</td>
+                <td>
+                  <span v-if="row.released_at" class="fh-pill" data-state="active">
+                    {{ t('admin_ip_blocks.released') }}
+                  </span>
+                  <span v-else-if="!isLive(row)" class="fh-pill">
+                    {{ t('admin_ip_blocks.expired') }}
+                  </span>
+                  <template v-else>{{ formatDate(row.expires_at) }}</template>
+                </td>
+                <td>
+                  <div class="row-actions">
+                    <template v-if="isLive(row)">
+                      <button
+                        type="button"
+                        class="fh-btn-text"
+                        :disabled="busyId === row.id"
+                        @click="onRelease(row)"
+                      >
+                        {{ t('admin_ip_blocks.release_cta') }}
+                      </button>
+                      <button
+                        type="button"
+                        class="fh-btn-text"
+                        :disabled="busyId === row.id"
+                        @click="onReleaseAndAllow(row)"
+                      >
+                        {{ t('admin_ip_blocks.unblock_allow_cta') }}
+                      </button>
+                    </template>
+                    <button
+                      v-else
+                      type="button"
+                      class="fh-btn-text"
+                      :disabled="allowBusy"
+                      @click="onAddAllow(row.subject)"
+                    >
+                      {{ t('admin_ip_blocks.allow_cta') }}
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
         <p class="fh-field-help">{{ t('admin_ip_blocks.release_help') }}</p>
         <Pager v-model:page="page" :total="total" :page-size="pageSize" />
       </template>

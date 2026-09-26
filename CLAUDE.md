@@ -25,8 +25,11 @@ governs, never under the release that found it.
 
 ## Current state
 
-Backend **`v2.18.0`** is the newest tag (2026-09-25); desktop client
-**`client-v1.4.6`** shipped beside it (refresh classification + hashed build lock).
+Backend **`v2.19.0`** is the newest tag (2026-09-26): the updater backs up
+DB+Redis and syncs infra, and this is the release that moves MariaDB 11 -> 12.3,
+Redis 7 -> 8.10 and ClamAV 1.5.4 through it. Desktop client **`client-v1.4.6`**
+(shipped beside v2.18.0; refresh classification + hashed build lock) is still
+current - v2.19.0 changes nothing under `client/`.
 **`v2.17.0` is a tag with NO images** (its release run failed the dependency
 audit on three anyio CVEs; tags are immutable, so the same commits shipped as
 v2.17.1 plus the anyio bump). **v2.17.1 shipped a sidebar showing nothing but
@@ -37,6 +40,7 @@ no test mounted AdminLayout); v2.17.2 is that one-line fix plus
 `utf8mb4_bin` on both email columns checked after it; rehearsed first with
 `FH_TAG=v2.18.0 scripts/restore_drill_e2e.sh` on that night's backup), so
 v2.16.0's two default moves are live there; v2.17.x and v2.18.0 move no default.
+Until it takes v2.19.0 it still runs MariaDB 11 and Redis 7.
 `data/updater/rollback_target.json` holds the version BEFORE last, not the
 running one. Images and working tree can diverge without any deploy - see §Ops
 on which half of a fix is live.
@@ -87,6 +91,7 @@ record.
 | v2.16.1 | - | - | - (the `--no-deps` fix rides `updater-executor:<target_tag>`, which the shim pulls per run, so it applies to the update that INSTALLS it, not the one after) |
 | v2.17.1 / v2.17.2 | - | - | - (admin nav restructure, no URL changed; v2.17.2 = the sidebar hotfix; `PATCH /api/account/admin-nav-open` now accepts only the six new category keys, and the SPA is its only caller; anyio 4.14.1 → 4.14.2. v2.17.0 is a tag without images - its run failed `dependency-audit` before building anything) |
 | v2.18.0 | `202609240001` `users.email` + `invite_tokens.email` → `utf8mb4_bin` (MariaDB; lowercases first) | - (`SETUP_TOKEN` matters only to a not-yet-set-up instance; install.sh writes it. The updater-shim healthcheck is in `docker-compose.yml`: the executor recreates the shim on its new image but from the HOST's compose file, so it appears only where the checkout has been pulled - on the reference host, whose checkout is `main`, the next in-app update brings it) | `POST /api/admin/system/update` refuses a target older than the running version (`409 DOWNGRADE_REFUSED`). A rollback across the migration is safe: `stamp` leaves the binary collation, which older code only compares more strictly |
+| v2.19.0 | - | - when the updater can sync infra (it fast-forwards the checkout, backs up, and recreates db/redis/clamav: MariaDB 11 -> 12.3 with `MARIADB_AUTO_UPGRADE`, Redis 7 -> 8.10, ClamAV 1.5.4); where it SKIPS (dirty/diverged checkout, override file, `COMPOSE_FILE`, no git) the log names `git fetch --tags && git merge --ff-only v2.19.0 && docker compose up -d --no-deps db redis clamav tusd`. The update TO v2.19.0 runs the new executor from the OLD SPA/backend (no checkbox, no options): the executor defaults do the backup. An old `data/redis/.gitkeep` may stay (uid 999, unlink warning; harmless) | **TWO default moves**, both updater: `updates.infra_sync` ON (an update recreates changed infra) and `updates.backup_on_db_change` ON (+ `updates.backup_default` ON: the Update dialog's box starts checked from the next update on). A MariaDB major cannot be rolled back in place - Rollback returns the app only |
 
 **Nine endpoints require the caller's own `password` in the body**: the v2.9.0
 re-auth gates `/api/admin/backup/export`, `/api/admin/backup/import` (form

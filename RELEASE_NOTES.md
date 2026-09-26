@@ -1,3 +1,105 @@
+# file:Heron v2.19.0
+
+**The in-app Update now upgrades the database, Redis, ClamAV and tusd itself,
+and backs up the database first.** This release is the first to use it:
+**MariaDB 11 → 12.3 LTS, Redis 7 → 8.10, ClamAV 1.5.4**, with no host step.
+
+**No migration. Two default moves**, both on the updater: an update now backs
+up the database before a database upgrade, and brings changed infra services to
+the release. Both are settings (below). No desktop client release.
+
+---
+
+## What this update does on your server
+
+Clicking **Update** runs these steps; nothing on the host changes before the
+backup has succeeded:
+
+1. Checks which infra services the release changes. For this release: the
+   database, Redis and ClamAV. tusd stays as it is.
+2. Pulls the new images.
+3. **Backs up MariaDB and Redis** to `backups/pre-update/<date>_<from>-to-<to>/`
+   in your checkout. It happens anyway here, because the release upgrades the
+   database. A failed backup stops the update with nothing changed. It needs
+   free disk space of about 1.2× the database plus 1 GiB.
+4. **Fast-forwards your checkout** (`/opt/fileHeron`) to the release with
+   `git merge --ff-only`, as the checkout's owner. `docker-compose.yml`,
+   `docker/` and `scripts/` then match the release.
+5. Recreates the database, Redis and ClamAV one at a time, each waiting for its
+   health check. **The app is down meanwhile**: backend and worker are stopped
+   while MariaDB upgrades its data files (`MARIADB_AUTO_UPGRADE`). That takes
+   about a minute on a typical instance.
+6. Starts the new app, as every update does.
+
+**A MariaDB major upgrade cannot be undone in place.** If the database or Redis
+does not come back healthy, the update stops, the old app is started again,
+and the job names the backup. README › *Restoring a pre-update backup* has the
+steps. A plain **Roll back** afterwards returns the app only; the database
+stays on 12.3.
+
+## When the infra step is skipped
+
+The app update still runs, and the job log shows a warning with this manual
+command:
+
+```bash
+git fetch --tags && git merge --ff-only v2.19.0 \
+  && docker compose up -d --no-deps db redis clamav tusd
+```
+
+It skips in these cases:
+
+- the checkout has local edits to files this release changes, or has diverged
+  from it;
+- a `docker-compose.override.yml` exists, or `.env` sets `COMPOSE_FILE`;
+- the install is not a git clone, or is a shallow one;
+- the release's compose file needs a variable your `.env` lacks.
+
+Keep site settings in `.env`, not in `docker-compose.yml`, so later releases can
+update it.
+
+## New settings (Admin › Status & updates)
+
+| setting | default |
+|---|---|
+| Back up the database before updating (pre-checked) | on |
+| Always back up when the release upgrades the database | on |
+| Pre-update backups to keep | 3 |
+| Delete pre-update backups older than (days) | 30 (the newest is always kept) |
+| Let updates upgrade db, Redis, ClamAV and tusd | on |
+
+The Update dialog gains a **"Back up database first"** checkbox, starting from
+the setting. **For this update you still see the old dialog**, without the box.
+The new updater backs up anyway because the database changes. Its progress
+shows in the dialog's log, including any warning. Pre-update backups are
+separate from the nightly `scripts/backup.sh`: they are not counted by its
+retention, not drilled and not pushed to restic.
+
+## Also in this release
+
+- `scripts/restore.sh` restores a pre-update backup (database + Redis) without
+  touching `data/files`. Before, a backup without the file archives wiped
+  `data/files` and then failed on the missing tarball. The script now checks
+  what a backup holds before asking anything.
+- **`.env` created from the shipped example:** `TEST_ACCOUNT_DISPLAY_NAME=Test
+  User` was unquoted. That line made `backup.sh`, `restore.sh`, `deploy.sh`,
+  `rollback.sh` and the restore drill stop at once with "User: command not
+  found". The example is fixed. **Check your `.env`**, and quote the value if the
+  line is there:
+  `TEST_ACCOUNT_DISPLAY_NAME="Test User"`.
+- The restore drill honours a caller's `FH_TAG` over `.env`; it used to drill
+  whatever version `.env` named.
+- The container base images are pinned to exact versions (Python 3.14.7,
+  Node 24.21.0, nginx 1.31.6, Alpine 3.24.2), so a rebuild gives the same image.
+
+## Host notes
+
+- **Nothing is required** when the updater can sync (see above). Your host
+  Traefik config is unaffected. `scripts/ops/` units have not changed.
+- During the fast-forward, git may warn `unable to unlink
+  'data/redis/.gitkeep': Permission denied`. That is harmless: the file is no
+  longer tracked, and Redis 8 needs that directory free of unknown files.
+
 # file:Heron v2.18.0
 
 **Security release: a password-reset link could be mailed to a lookalike address.

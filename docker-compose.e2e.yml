@@ -30,7 +30,10 @@ services:
     build:
       context: .
       dockerfile: docker/backend/Dockerfile
-    image: fileheron-backend:e2e
+    # Its own tag, as in the release (fileheron-worker from the same Dockerfile).
+    # Sharing fileheron-backend:e2e made compose >= 2.40 build both targets in
+    # parallel and fail the second export with "image already exists".
+    image: fileheron-worker:e2e
     environment:
       ENVIRONMENT: development
       AV_SKIP: "true"

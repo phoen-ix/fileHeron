@@ -1,3 +1,43 @@
+# file:Heron v2.19.1
+
+**Updates keep the app down for less time.** An update that upgrades the
+database or Redis now stops the app only while those two are recreated, and the
+backend stops within seconds instead of waiting on open browser connections.
+On the v2.19.0 update these two accounted for about 42 of the 70 seconds the app
+was down.
+
+**No migration, no default move, no host step.** No desktop client release.
+
+---
+
+## What changes
+
+- **ClamAV and tusd are recreated after the new version is up**, while it
+  serves requests. Neither is needed to answer a request and a failure of
+  either only adds a warning, so the app no longer waits on ClamAV's start -
+  22 seconds on the v2.19.0 update, minutes when ClamAV has to download its
+  signatures first. The Update dialog shows the step as "Upgrading ClamAV and
+  tusd…" and reports the update finished only after it. The database and Redis
+  are still recreated first, with the app stopped, exactly as before.
+- **The backend stops within 5 seconds.** It used to wait for every open
+  connection to close, and the notification bell and the admin status page
+  each hold one for up to 60 seconds, so any restart took whatever an open
+  browser tab had left. Requests still running after 5 seconds are cut off, as
+  Docker's kill did before. This shortens every backend restart, including the
+  swap every update does.
+
+## Upgrading
+
+Click **Update**. This release changes no infra service, so the update only
+swaps the app. It still stops the running v2.19.0 backend, which does not have
+the 5-second bound yet, so that one stop may take up to 10 seconds. Updates
+after this one get both improvements.
+
+If you run the backend with your own `command:` override, add
+`--timeout-graceful-shutdown 5` to it. The image's default command carries it.
+
+---
+
 # file:Heron v2.19.0
 
 **The in-app Update now upgrades the database, Redis, ClamAV and tusd itself,

@@ -57,8 +57,9 @@ Thumbs.db
 # Project data - bind mounts, never commit user files
 data/db/*
 !data/db/.gitkeep
-data/redis/*
-!data/redis/.gitkeep
+# No .gitkeep here: Redis 8 fixes /data ownership only when the dir holds
+# nothing but *.rdb and appendonlydir, so any tracked file leaves it root-owned.
+data/redis/
 data/uploads/*
 !data/uploads/.gitkeep
 data/files/*

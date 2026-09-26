@@ -37,13 +37,16 @@ audit on three anyio CVEs; tags are immutable, so the same commits shipped as
 v2.17.1 plus the anyio bump). **v2.17.1 shipped a sidebar showing nothing but
 "Overview"** (a `v-if` on the Overview link captured the categories' `v-else`;
 no test mounted AdminLayout); v2.17.2 is that one-line fix plus
-`tests/components/AdminLayout.test.ts`. **The reference host runs v2.19.0**
-(in-app update 2026-09-26 from v2.18.0, ~110 s job, API down ~70 s; infra synced
-with no warnings: checkout fast-forwarded, pre-update backup
-`backups/pre-update/2026-09-26_130234_v2.18.0-to-v2.19.0`, db/redis/clamav
-recreated on `mariadb:12.3.3` / `redis:8.10.2` / `clamav:1.5.4`, tusd untouched;
-`FH_VERSION` and alembic head `202609240001` checked after it), so the default
-moves of v2.16.0 and v2.19.0 are live there; v2.17.x and v2.18.0 move no default.
+`tests/components/AdminLayout.test.ts`. **The reference host runs v2.19.1**
+(in-app update 2026-09-26 15:36 from v2.19.0, 42 s to `healthy`, no warnings,
+not rehearsed: no infra change, pre-update backup
+`backups/pre-update/2026-09-26_153631_v2.19.0-to-v2.19.1`; API down ~17 s, of
+which 11 s was the old v2.19.0 backend's unbounded drain hitting Docker's 10 s
+grace - the next update stops a bounded one; backend `Cmd` carries
+`--timeout-graceful-shutdown 5`, `FH_VERSION` checked). The v2.19.0 update
+before it synced infra: db/redis/clamav on `mariadb:12.3.3` / `redis:8.10.2` /
+`clamav:1.5.4`, API down ~70 s. The default moves of v2.16.0 and v2.19.0 are
+live there; v2.17.x, v2.18.0 and v2.19.1 move no default.
 `data/updater/rollback_target.json` holds the version BEFORE last, not the
 running one. Images and working tree can diverge without any deploy - see §Ops
 on which half of a fix is live.

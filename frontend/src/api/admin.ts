@@ -128,6 +128,34 @@ export function updateUpdatesSettings(payload: UpdateUpdatesSettingsRequest) {
   return api.put<UpdatesSettingsResponse>('/admin/settings/updates', payload)
 }
 
+// --- Automatic updates ---------------------------------------------------
+// Turning them on (or changing them while on) needs the admin's password: an
+// automatic update skips the one every manual update asks for.
+
+export type AutoUpdateScope = 'patch' | 'minor' | 'any'
+
+export interface AutoUpdateSettingsResponse {
+  enabled: boolean
+  scope: AutoUpdateScope
+  min_age_hours: number
+  skipped_tag: string | null
+}
+
+export interface UpdateAutoUpdateSettingsRequest {
+  enabled?: boolean
+  scope?: AutoUpdateScope
+  min_age_hours?: number
+  password?: string
+}
+
+export function getAutoUpdateSettings() {
+  return api.get<AutoUpdateSettingsResponse>('/admin/settings/auto-update')
+}
+
+export function updateAutoUpdateSettings(payload: UpdateAutoUpdateSettingsRequest) {
+  return api.put<AutoUpdateSettingsResponse>('/admin/settings/auto-update', payload)
+}
+
 // --- Advanced (registry-driven) settings ---
 
 export type AdvancedSettingKind = 'int' | 'bool' | 'str'
@@ -255,6 +283,20 @@ export interface UpdaterStatus {
   backup_default?: boolean
   /** Admin setting: the updater backs up anyway when the release changes the database. */
   backup_on_db_change?: boolean
+  /** Automatic updates plus the `auto_update` task's schedule (Scheduled tasks). */
+  auto_update?: AutoUpdateStatus | null
+}
+
+export interface AutoUpdateStatus {
+  enabled: boolean
+  scope: AutoUpdateScope
+  min_age_hours: number
+  schedule_enabled: boolean
+  schedule_kind: 'interval' | 'daily'
+  daily_time: string
+  interval_minutes: number
+  /** A release whose automatic install failed; not retried automatically. */
+  skipped_tag: string | null
 }
 
 export interface UpdaterJob {
@@ -319,9 +361,12 @@ export function applyRollback(password: string) {
 export interface PendingUpdate {
   target_tag: string
   deadline_iso: string
-  requested_by_id: number
+  /** Null when the automatic updater scheduled it. */
+  requested_by_id: number | null
   /** The backup choice made when postponing; null on an older record. */
   backup?: boolean | null
+  /** Who scheduled it: an admin's Postpone, or the automatic updater. */
+  origin?: 'admin' | 'auto'
 }
 
 export interface TransferActivity {

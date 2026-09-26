@@ -608,7 +608,8 @@
         "force_now": "Update now",
         "force_title": "Apply update to {v} now?",
         "cancel": "Cancel update",
-        "cancelled": "Postponed update cancelled; maintenance mode off."
+        "cancelled": "Postponed update cancelled; maintenance mode off.",
+        "by_auto": "Scheduled by automatic updates."
       },
       "rollback_head_unknown": "The database revision from before that update was not recorded, so a rollback across a migration will need a manual `alembic stamp`.",
       "rollback_head_unknown_confirm": "The pre-update database revision was not recorded. If that release included a migration, the older version will not boot until an operator runs `alembic stamp` by hand (see README, Rollback). Continue only if you know the release carried no migration, or you can reach the host.",
@@ -626,6 +627,19 @@
         "restarting_app": "Restarting the app…",
         "verifying": "Waiting for the new version to report healthy…",
         "syncing_services": "Upgrading ClamAV and tusd…"
+      },
+      "auto": {
+        "off": "Automatic updates are off.",
+        "on_daily": "Automatic updates install {scope} {hours} h after publication, daily at {time}.",
+        "on_interval": "Automatic updates install {scope} {hours} h after publication, checked every {minutes} min.",
+        "on_paused": "Automatic updates are on for {scope}, but the auto_update task is switched off on Scheduled tasks, so nothing is installed.",
+        "skipped": "{tag} failed to install automatically and will not be retried automatically.",
+        "settings_link": "Settings",
+        "scope": {
+          "patch": "patch releases",
+          "minor": "patch and minor releases",
+          "any": "every newer release"
+        }
       }
     },
     "live": {
@@ -920,6 +934,25 @@
     "text_placeholder": "Scheduled maintenance Saturday 14:00 UTC - expect a 5-minute outage.",
     "text_help": "{remaining} characters remaining.",
     "saved_toast": "Login banner saved."
+  },
+  "admin_auto_update": {
+    "title": "Automatic updates",
+    "intro": "Install new releases without anyone clicking Update. Off by default. An automatic update works like a postponed one: new transfers pause, running ones finish (up to the drain wait above), the pre-update backup is taken if it is on, and the app restarts. Admins are notified when one is scheduled and when it ends.",
+    "enabled_label": "Install new releases automatically",
+    "scope_label": "Which releases",
+    "scope": {
+      "patch": "Patch releases only (e.g. v2.19.1 → v2.19.2)",
+      "minor": "Patch and minor releases (e.g. v2.19.x → v2.20.0)",
+      "any": "Every newer release, including new major versions"
+    },
+    "scope_help": "Patch releases carry fixes. Minor releases can also upgrade the database, Redis or ClamAV. Newer releases outside this choice are still announced; install those with Update.",
+    "min_age_label": "Wait after publication (hours)",
+    "min_age_help": "A release is installed at the first run at least this long after it was published, so a quick follow-up fix can come out first. 0 installs it at the next run.",
+    "schedule": "Runs as its own scheduled task, auto_update (daily at 03:30 unless you change it). Change its time or pause it on",
+    "password_label": "Your password",
+    "password_help": "Needed to turn automatic updates on, or to change them while they are on, because they install releases without asking for it.",
+    "skipped": "{tag} failed to install automatically and will not be retried automatically. Install it with Update, or wait for a newer release.",
+    "saved_toast": "Automatic update settings saved."
   },
   "admin_updates": {
     "title": "Updates",
@@ -1359,6 +1392,9 @@
         "cron_failed": "Cron {job_name} failed.",
         "update_triggered": "Update to {target_tag} started.",
         "rollback_triggered": "Rollback to {target_tag} started.",
+        "update_auto_scheduled": "Automatic update to {target_tag} scheduled.",
+        "update_completed": "Update to {target_tag} finished.",
+        "update_failed": "Update to {target_tag} failed.",
         "generic": "Operational alert."
       },
       "generic": "New activity",

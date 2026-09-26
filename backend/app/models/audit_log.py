@@ -192,6 +192,8 @@ class AuditEventType(str, enum.Enum):
     maintenance_disabled = "maintenance_disabled"
     update_postponed = "update_postponed"
     update_postpone_cancelled = "update_postpone_cancelled"
+    # Automatic updates: the daily cron scheduled a release (actor None).
+    update_auto_scheduled = "update_auto_scheduled"
 
 
 

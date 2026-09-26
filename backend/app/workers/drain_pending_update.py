@@ -38,13 +38,24 @@ async def drain_pending_update(_ctx) -> dict:
     (audit 2026-07-30)."""
     db = SessionLocal()
     try:
+        # How a handed-off update ended: one kv read when nothing was handed
+        # off, and never allowed to stop the drain below.
+        try:
+            reported = maintenance_svc.report_handoff_outcome(db)
+        except Exception:
+            db.rollback()
+            logger.exception("reporting the handed-off update's outcome failed")
+            reported = None
         if maintenance_svc.get_pending_update(db) is None:
             # No pending update, but maintenance may still be held shut by a
             # hand-off that never produced a new container (the executor died,
             # the pull failed). The new backend clears the gate on boot; this
             # is the other end of that, so a failed update cannot leave the
             # instance refusing transfers forever (flow-maintenance-5).
-            return {"pending": False, "lifted": _lift_if_stale(db)}
+            out: dict = {"pending": False, "lifted": _lift_if_stale(db)}
+            if reported:
+                out["reported"] = reported
+            return out
     finally:
         db.close()
     return await _drain_pending_update_tracked(_ctx)

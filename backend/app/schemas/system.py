@@ -97,6 +97,20 @@ class CheckUpdatesResult(APIBaseModel):
     error: str | None = None
 
 
+class AutoUpdateStatus(APIBaseModel):
+    """Automatic updates as the update card shows them: the setting, plus the
+    `auto_update` cron's schedule (editable on Scheduled tasks) and the release
+    it will not retry after a failed automatic install."""
+    enabled: bool
+    scope: str
+    min_age_hours: int
+    schedule_enabled: bool
+    schedule_kind: str
+    daily_time: str
+    interval_minutes: int
+    skipped_tag: str | None = None
+
+
 class UpdaterStatus(APIBaseModel):
     current_tag: str
     rollback_target: str | None = None
@@ -104,6 +118,7 @@ class UpdaterStatus(APIBaseModel):
     job_in_progress: str | None = None
     backup_default: bool = True
     backup_on_db_change: bool = True
+    auto_update: AutoUpdateStatus | None = None
 
 
 class UpdaterJob(APIBaseModel):
@@ -135,9 +150,13 @@ class UpdateApplyResult(APIBaseModel):
 class PendingUpdate(APIBaseModel):
     target_tag: str
     deadline_iso: str
-    requested_by_id: int
+    # None when the automatic updater scheduled it.
+    requested_by_id: int | None = None
     # None on a record postponed before the checkbox existed.
     backup: bool | None = None
+    # "admin" (Postpone) or "auto" (the automatic updater); records written
+    # before the field existed were all postponed by an admin.
+    origin: str = "admin"
 
 
 class TransferActivityResponse(APIBaseModel):

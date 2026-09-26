@@ -103,14 +103,15 @@ record.
 | v2.19.1 | - | - (a user `command:` override for the backend needs `--timeout-graceful-shutdown 5` added by hand; the update TO v2.19.1 still stops the unbounded v2.19.0 backend, up to Docker's 10s grace) | - |
 | v2.19.2 | - | - (the update TO v2.19.2 still stops the old, untrapped shim: 10s once, after `healthy`) | - |
 
-**Nine endpoints require the caller's own `password` in the body**: the v2.9.0
+**Ten endpoints require the caller's own `password` in the body**: the v2.9.0
 re-auth gates `/api/admin/backup/export`, `/api/admin/backup/import` (form
 field), `/api/admin/users/{id}/erase`, `/api/account/api-tokens`,
 `/api/admin/api-tokens`, since v2.15.0 `/api/account/webauthn/register/begin`,
-and the self-update routes `/api/admin/system/update`, `/rollback` and
-`/update/now`. `verify_password_or_403` has eight direct call sites; the eighth
-is the mail test gate, which asks only conditionally (§The mail test-connection
-gate). README §Auth specifics lists them. `POST /api/shares/{id}/approve`
+the self-update routes `/api/admin/system/update`, `/rollback` and
+`/update/now`, and `PUT /api/admin/settings/auto-update` (only when the result is
+ON and something changed - §Self-update). `verify_password_or_403` has nine direct
+call sites; two ask only conditionally, that one and the mail test gate (§The mail
+test-connection gate). README §Auth specifics lists them. `POST /api/shares/{id}/approve`
 separately requires a `content_fingerprint`.
 
 Per-release admin-facing notes for v2.13.0 and newer are in `RELEASE_NOTES.md`,
@@ -607,7 +608,8 @@ drain. Gate `services/maintenance.py`, counters `services/transfer_activity.py`.
 
 - **Flag** kv `maintenance.enabled` (+ `maintenance.message`). `refuse_if_maintenance(db, *, request, kind)` raises `503 MAINTENANCE_MODE`; for `kind="download"` it lets a `utils/http_range.py::is_partial_continuation` through so in-progress + resumable downloads complete - **the exemption requires `was_download_recent(file_id)`**, the serving mark (§Downloads). Wired into uploads (init/direct), tus pre-create, and every files/public download/zip/preview + url-minter. Surfaced via `/api/config-public` for a banner.
 - **Active transfers:** downloads = self-healing Redis ZSET (`download_started` on stream start, `download_finished` via `serve_response`/zip BackgroundTask on end, age-prune leaked entries) - **local backend only** (an S3 redirect streams bytes the backend never sees → relies on the cap). Uploads = the `files.state == uploading` definition in `services/upload_liveness.py`.
-- **Postpone:** `POST /api/admin/system/update {postpone:true}` sets maintenance + kv `maintenance.pending_update` (deadline = now + `updates.drain_max_wait_min`, default 30) WITHOUT calling `apply()`. Minute cron `workers/drain_pending_update.py` fires `maintenance.apply_pending_update` once drained OR past deadline; it does not double-fire (it clears and COMMITS before handing off). Admin force `/system/update/now` + `/system/update/cancel`.
+- **Postpone:** `POST /api/admin/system/update {postpone:true}` sets maintenance + kv `maintenance.pending_update` (deadline = now + `updates.drain_max_wait_min`, default 30) WITHOUT calling `apply()`. Minute cron `workers/drain_pending_update.py` fires `maintenance.apply_pending_update` once drained OR past deadline; it does not double-fire (it clears and COMMITS before handing off). Admin force `/system/update/now` + `/system/update/cancel`. The record's `requested_by_id` is `None` and `origin` is `"auto"` when the automatic updater wrote it; `maintenance.schedule_pending_update` is the ONE writer of the record, for both.
+- **A handed-off update's outcome is reported by the drain worker's cheap untracked shell** (`maintenance.report_handoff_outcome`, kv `maintenance.handoff_job` = `{job_id, target_tag, origin}` stored by `apply_pending_update`): once the job file shows a terminal state it writes `update_completed` / `update_failed` (declared since Phase 4, never written before) and alerts admins, once. A postponed or automatic update has nobody watching the dialog, and the next job overwrites the file, so without this a failure or an auto-rollback went unrecorded. A job the file no longer holds is dropped silently; a reporting error never stops the drain.
 
 ## Self-update + release check
 
@@ -619,6 +621,9 @@ drain. Gate `services/maintenance.py`, counters `services/transfer_activity.py`.
 - **`_describe_upstream_error` exists because `f"{type(e).__name__}: {e}"` is not a message.** **httpx's timeout exceptions stringify to the EMPTY string** unless constructed with one, so the admin version card showed a bare `ReadTimeout: `. The timeout branch names `_HTTP_TIMEOUT_SEC` instead; a status error leads with the code, and a 403 carrying `x-ratelimit-remaining: 0` says so, because that is the whole difference between "wait" and "fix `updates.api_url`". `HTTPStatusError.response` **can be None** - never deref it blind. The SSRF guard's `AppError` is raised INSIDE the try so it reports as `<code>: <message>`; flattened to `AppError: ...` the `URL_BLOCKED` code was lost. Pinned **generically** by `test_every_upstream_error_message_says_something_after_the_colon`, not by a per-class list.
 - **`release_check` must never RAISE to report failure.** It signals via `cron_tracker.CRON_FAILED_KEY` in its returned dict, after `_PERSISTENT_FAILURE_TICKS` consecutive **scheduled** failures. `track_cron`'s failure path re-raises and `WorkerSettings.max_tries` is 5, so raising turns one bad tick into five upstream fetches (against a 60/hr-per-IP unauthenticated budget shared with everything else on the host) plus five `cron_failed` audit rows and five `notify_admin_error` enqueues - only the in-app ops_alert is deduped. Manual "Check now" deliberately does NOT move the counter: an operator watching an outage clicks it repeatedly, and those clicks are not evidence.
 - **`track_cron` decides failure by "did it raise?"**, and `run_check` catches its own errors - which is how a permanently broken update check was recorded as a SUCCESSFUL cron run, indefinitely. Any cron that swallows its own errors needs the same `CRON_FAILED_KEY` treatment.
+- **Automatic updates (`services/auto_update.py`, off by default) never apply anything themselves.** The daily task `auto_update` (its own `REGISTRY` row, `KIND_DAILY` 03:30) calls `maintenance.schedule_pending_update(..., origin="auto")` and the drain path does the rest - same backup, alerts and outcome report as Postpone. It declines a dev build, anything not `is_newer`, outside `updates.auto_scope` (patch = same major.minor, minor = same major, any), published less than `updates.auto_min_age_hours` ago, a cache older than 48 h, the skipped tag, a job in flight, an existing pending record, and maintenance an operator turned on (the new container would lift it on boot).
+- **Turning automatic updates on is step-up gated, and that is why its keys are NOT registry tunables.** An automatic update skips the password every manual one asks for, so `PUT /api/admin/settings/auto-update` runs `verify_password_or_403` whenever the result is ON and anything changed (widening scope or shortening the wait while on counts); turning it off never asks. `/settings/advanced` has no step-up, so a registry key would reopen exactly that hole - `test_the_keys_are_not_registry_tunables` pins it. Config-backup import still writes them, but import is itself password-gated.
+- **A release whose automatic install did not end `healthy` goes into `updates.auto_skip_tag` and is never retried automatically** (a newer release, or a manual Update, still is). Without it a release that fails its health check would be re-installed and auto-rolled-back every night. The skip tag and `maintenance.handoff_job` are `_TRANSIENT_SETTING_KEYS`: they describe THIS instance's history.
 
 ## Ops: deploy, rollback, backups, drills
 

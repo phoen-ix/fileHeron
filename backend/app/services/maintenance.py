@@ -157,6 +157,138 @@ def set_pending_update(db: Session, record: dict | None, *, actor: User | None) 
     )
 
 
+def schedule_pending_update(
+    db: Session,
+    *,
+    target_tag: str,
+    backup: bool,
+    requested_by: User | None,
+    origin: str,
+    request=None,
+) -> str:
+    """Defer an update until transfers drain: maintenance on, plus the pending
+    record `drain_pending_update` fires once nothing is in flight or the wait
+    runs out. Shared by the admin's "Postpone" and the automatic updater
+    (`origin` "admin" / "auto"; `requested_by` None for the latter). Returns
+    the deadline. Caller commits."""
+    from datetime import timedelta
+
+    from . import settings_registry
+
+    wait_min = settings_registry.effective(db, settings_registry.K.UPDATES_DRAIN_MAX_WAIT_MIN)
+    deadline = (utc_now() + timedelta(minutes=int(wait_min))).isoformat()
+    set_enabled(db, True, actor=requested_by, request=request)
+    set_pending_update(
+        db,
+        {
+            "target_tag": target_tag,
+            "deadline_iso": deadline,
+            "requested_by_id": requested_by.id if requested_by else None,
+            "backup": backup,
+            "origin": origin,
+        },
+        actor=requested_by,
+    )
+    return deadline
+
+
+def get_handoff_job(db: Session) -> dict | None:
+    raw = settings_svc.get(db, settings_svc.Keys.MAINTENANCE_HANDOFF_JOB)
+    if not raw:
+        return None
+    try:
+        value = json.loads(raw)
+    except ValueError:
+        return None
+    return value if isinstance(value, dict) else None
+
+
+def set_handoff_job(db: Session, record: dict | None, *, actor: User | None = None) -> None:
+    settings_svc.set_value(
+        db,
+        key=settings_svc.Keys.MAINTENANCE_HANDOFF_JOB,
+        value=json.dumps(record) if record is not None else None,
+        actor=actor,
+    )
+
+
+_TERMINAL_JOB_STATES = ("healthy", "failed", "rolled_back")
+
+
+def report_handoff_outcome(db: Session) -> str | None:
+    """Report how a handed-off update ended, once. Returns the job's terminal
+    state when it reported one, else None.
+
+    A postponed or automatic update runs with nobody watching the Update
+    dialog, and the job file is overwritten by the next job - so a failure or
+    an automatic rollback went unrecorded and unannounced, and
+    `update_completed` / `update_failed` were declared but never written. The
+    drain worker calls this every minute; it is one kv read when nothing was
+    handed off. An automatic update that did not end healthy marks its tag so
+    the automatic updater does not try it again (a manual Update still can)."""
+    record = get_handoff_job(db)
+    if record is None:
+        return None
+    from .release_apply import get_job
+
+    job_id = str(record.get("job_id") or "")
+    tag = str(record.get("target_tag") or "")
+    origin = str(record.get("origin") or "admin")
+    try:
+        job = get_job(job_id)
+    except AppError:
+        # The job file has moved on (a newer job) or is gone: the outcome can no
+        # longer be read, and keeping the record would retry this forever.
+        logger.warning("handed-off update job %s is no longer readable; dropping its record", job_id)
+        set_handoff_job(db, None)
+        db.commit()
+        return None
+    state = job.get("state")
+    if state not in _TERMINAL_JOB_STATES:
+        return None
+    healthy = state == "healthy"
+    error = (job.get("error") or "")[:500] or None
+    record_audit_event(
+        db,
+        event_type=AuditEventType.update_completed if healthy else AuditEventType.update_failed,
+        actor_user_id=None,
+        target_type="update_job",
+        target_id=job_id,
+        metadata={"target_tag": tag, "origin": origin, "state": state, "error": error},
+    )
+    if not healthy and origin == "auto":
+        settings_svc.set_value(db, key=settings_svc.Keys.UPDATES_AUTO_SKIP_TAG, value=tag, actor=None)
+    set_handoff_job(db, None)
+    db.commit()
+    try:
+        notify_admins(
+            db,
+            payload={
+                "reason": "update_completed" if healthy else "update_failed",
+                "target_tag": tag,
+                "via": origin,
+                "error": error,
+                "detail": _outcome_detail(state, tag, origin),
+            },
+        )
+        db.commit()
+    except Exception:
+        logger.exception("update outcome: admin ops alert failed")
+    logger.info("handed-off update %s to %s ended %s (origin=%s)", job_id, tag, state, origin)
+    return state
+
+
+def _outcome_detail(state: str, tag: str, origin: str) -> str:
+    what = "The automatic update" if origin == "auto" else "The postponed update"
+    if state == "healthy":
+        return f"{what} to {tag} finished; the new version is running."
+    if state == "rolled_back":
+        return (f"{what} to {tag} failed and the previous version was restored automatically."
+                + (" It will not be retried automatically." if origin == "auto" else ""))
+    return (f"{what} to {tag} failed; check Status & updates."
+            + (" It will not be retried automatically." if origin == "auto" else ""))
+
+
 # How long a handed-off update may leave the gate shut before the drain worker
 # decides no new container is coming and lifts it. Generously above a normal
 # pull+restart; the failure it bounds is "the executor died", not "the pull is
@@ -324,13 +456,22 @@ def apply_pending_update(
             pending["target_tag"],
         )
         raise
+    origin = pending.get("origin") if pending.get("origin") in ("admin", "auto") else "admin"
+    # Nobody is watching this job: remember it so report_handoff_outcome can
+    # announce how it ended.
+    set_handoff_job(
+        db,
+        {"job_id": result["job_id"], "target_tag": pending["target_tag"], "origin": origin},
+        actor=actor,
+    )
     record_audit_event(
         db,
         event_type=AuditEventType.update_triggered,
         actor_user_id=actor.id if actor else None,
         target_type="update_job",
         target_id=result["job_id"],
-        metadata={"target_tag": pending["target_tag"], "via": reason, "backup": backup},
+        metadata={"target_tag": pending["target_tag"], "via": reason, "backup": backup,
+                  "origin": origin},
         request=request,
     )
     db.commit()
@@ -363,6 +504,12 @@ def _dispatch_update_started_to_admins(db: Session, *, tag: str, via: str) -> No
     router keeps its own copy for the click-through path; both hit the same
     NotificationCategory.ops_alert, so an admin sees one consistent event
     whichever way the update was triggered."""
+    notify_admins(db, payload={"reason": "update_triggered", "target_tag": tag, "via": via})
+
+
+def notify_admins(db: Session, *, payload: dict) -> None:
+    """An ops_alert to every enabled admin. Caller commits (dispatch is
+    caller-commits)."""
     from ..models.notification import NotificationCategory
     from ..models.user import UserRole
     from .notification import dispatch
@@ -378,7 +525,7 @@ def _dispatch_update_started_to_admins(db: Session, *, tag: str, via: str) -> No
                 db,
                 user=a,
                 category=NotificationCategory.ops_alert,
-                payload={"reason": "update_triggered", "target_tag": tag, "via": via},
+                payload=payload,
                 link_url="/admin/system",
                 email_to=a.email,
             )

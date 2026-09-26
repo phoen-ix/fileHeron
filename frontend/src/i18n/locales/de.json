@@ -608,7 +608,8 @@
         "force_now": "Jetzt aktualisieren",
         "force_title": "Update auf {v} jetzt anwenden?",
         "cancel": "Update abbrechen",
-        "cancelled": "Verschobenes Update abgebrochen; Wartungsmodus aus."
+        "cancelled": "Verschobenes Update abgebrochen; Wartungsmodus aus.",
+        "by_auto": "Von den automatischen Updates geplant."
       },
       "rollback_head_unknown": "Die Datenbank-Revision von vor diesem Update wurde nicht erfasst; ein Rollback über eine Migration hinweg erfordert daher ein manuelles `alembic stamp`.",
       "rollback_head_unknown_confirm": "Die Datenbank-Revision von vor dem Update wurde nicht erfasst. Falls dieses Release eine Migration enthielt, startet die ältere Version erst, nachdem jemand `alembic stamp` von Hand ausführt (siehe README, Rollback). Nur fortfahren, wenn das Release keine Migration enthielt oder Zugriff auf den Host besteht.",
@@ -626,6 +627,19 @@
         "restarting_app": "App wird neu gestartet …",
         "verifying": "Warte, bis die neue Version gesund meldet …",
         "syncing_services": "ClamAV und tusd werden aktualisiert …"
+      },
+      "auto": {
+        "off": "Automatische Updates sind aus.",
+        "on_daily": "Automatische Updates installieren {scope} {hours} h nach Veröffentlichung, täglich um {time}.",
+        "on_interval": "Automatische Updates installieren {scope} {hours} h nach Veröffentlichung, geprüft alle {minutes} Min.",
+        "on_paused": "Automatische Updates sind für {scope} an, aber die Aufgabe auto_update ist unter Geplante Aufgaben ausgeschaltet, daher wird nichts installiert.",
+        "skipped": "{tag} ließ sich nicht automatisch installieren und wird nicht erneut automatisch versucht.",
+        "settings_link": "Einstellungen",
+        "scope": {
+          "patch": "Patch-Releases",
+          "minor": "Patch- und Minor-Releases",
+          "any": "jedes neuere Release"
+        }
       }
     },
     "live": {
@@ -920,6 +934,25 @@
     "text_placeholder": "Geplante Wartung Samstag 14:00 UTC - ca. 5 Minuten Ausfall erwartet.",
     "text_help": "Noch {remaining} Zeichen frei.",
     "saved_toast": "Login-Banner gespeichert."
+  },
+  "admin_auto_update": {
+    "title": "Automatische Updates",
+    "intro": "Neue Releases installieren, ohne dass jemand auf Update klickt. Standardmäßig aus. Ein automatisches Update läuft wie ein verschobenes: Neue Übertragungen pausieren, laufende werden beendet (höchstens für die Wartezeit oben), die Sicherung vor dem Update wird angelegt, falls sie aktiv ist, und die App startet neu. Admins werden benachrichtigt, wenn eines geplant ist und wenn es endet.",
+    "enabled_label": "Neue Releases automatisch installieren",
+    "scope_label": "Welche Releases",
+    "scope": {
+      "patch": "Nur Patch-Releases (z. B. v2.19.1 → v2.19.2)",
+      "minor": "Patch- und Minor-Releases (z. B. v2.19.x → v2.20.0)",
+      "any": "Jedes neuere Release, auch neue Hauptversionen"
+    },
+    "scope_help": "Patch-Releases enthalten Fehlerbehebungen. Minor-Releases können auch Datenbank, Redis oder ClamAV aktualisieren. Neuere Releases außerhalb dieser Auswahl werden weiterhin angekündigt; diese installierst du mit Update.",
+    "min_age_label": "Wartezeit nach Veröffentlichung (Stunden)",
+    "min_age_help": "Ein Release wird beim ersten Lauf installiert, der mindestens so lange nach seiner Veröffentlichung liegt, damit eine schnelle Nachbesserung zuerst erscheinen kann. 0 installiert es beim nächsten Lauf.",
+    "schedule": "Läuft als eigene geplante Aufgabe, auto_update (täglich um 03:30, sofern du es nicht änderst). Zeit ändern oder pausieren unter",
+    "password_label": "Dein Passwort",
+    "password_help": "Nötig, um automatische Updates einzuschalten oder sie zu ändern, während sie an sind, weil sie Releases installieren, ohne danach zu fragen.",
+    "skipped": "{tag} ließ sich nicht automatisch installieren und wird nicht erneut automatisch versucht. Installiere es mit Update oder warte auf ein neueres Release.",
+    "saved_toast": "Einstellungen für automatische Updates gespeichert."
   },
   "admin_updates": {
     "title": "Updates",
@@ -1359,6 +1392,9 @@
         "cron_failed": "Cron-Job {job_name} fehlgeschlagen.",
         "update_triggered": "Update auf {target_tag} gestartet.",
         "rollback_triggered": "Rollback auf {target_tag} gestartet.",
+        "update_auto_scheduled": "Automatisches Update auf {target_tag} geplant.",
+        "update_completed": "Update auf {target_tag} abgeschlossen.",
+        "update_failed": "Update auf {target_tag} fehlgeschlagen.",
         "generic": "Betriebsalarm."
       },
       "generic": "Neue Aktivität",

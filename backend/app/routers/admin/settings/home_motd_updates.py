@@ -7,6 +7,8 @@ only inside its own section.
 """
 from __future__ import annotations
 
+from typing import cast
+
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 
@@ -23,9 +25,13 @@ from ....schemas.motd_settings import (
     UpdateMotdSettingsRequest,
 )
 from ....schemas.updates_settings import (
+    AutoUpdateScope,
+    AutoUpdateSettingsResponse,
+    UpdateAutoUpdateSettingsRequest,
     UpdatesSettingsResponse,
     UpdateUpdatesSettingsRequest,
 )
+from ....services import auto_update as auto_update_svc
 from ....services import release_check as release_check_svc
 from ....services import settings as settings_svc
 from ....services.audit import record_audit_event
@@ -111,6 +117,65 @@ def update_updates_settings(
     )
     db.commit()
     return UpdatesSettingsResponse(api_url=payload.api_url)
+
+
+def _auto_update_response(db: Session) -> AutoUpdateSettingsResponse:
+    s = auto_update_svc.get_settings(db)
+    return AutoUpdateSettingsResponse(
+        enabled=s.enabled,
+        scope=cast(AutoUpdateScope, s.scope),  # get_settings only yields SCOPES
+        min_age_hours=s.min_age_hours,
+        skipped_tag=auto_update_svc.skipped_tag(db),
+    )
+
+
+@router.get("/settings/auto-update", response_model=AutoUpdateSettingsResponse)
+def get_auto_update_settings(
+    db: Session = Depends(get_db),
+    _admin: User = Depends(get_current_admin),
+) -> AutoUpdateSettingsResponse:
+    return _auto_update_response(db)
+
+
+@router.put("/settings/auto-update", response_model=AutoUpdateSettingsResponse)
+def update_auto_update_settings(
+    payload: UpdateAutoUpdateSettingsRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin),
+) -> AutoUpdateSettingsResponse:
+    """Automatic updates install releases with nobody entering a password, so
+    turning them on - or changing scope or wait while they are on - is itself
+    step-up gated, like the Update button. Turning them off is not. These keys
+    are deliberately not registry tunables: /settings/advanced has no step-up."""
+    current = auto_update_svc.get_settings(db)
+    enabled = current.enabled if payload.enabled is None else payload.enabled
+    scope = current.scope if payload.scope is None else payload.scope
+    min_age = current.min_age_hours if payload.min_age_hours is None else payload.min_age_hours
+    changed = (enabled, scope, min_age) != (current.enabled, current.scope, current.min_age_hours)
+    if enabled and changed:
+        from ....services.step_up import verify_password_or_403
+
+        verify_password_or_403(db, admin, payload.password or "", request=request)
+    if changed:
+        keys = settings_svc.Keys
+        for key, value in (
+            (keys.UPDATES_AUTO_ENABLED, "true" if enabled else "false"),
+            (keys.UPDATES_AUTO_SCOPE, scope),
+            (keys.UPDATES_AUTO_MIN_AGE_HOURS, str(min_age)),
+        ):
+            settings_svc.set_value(db, key=key, value=value, actor=admin, request=request)
+        record_audit_event(
+            db,
+            event_type=AuditEventType.updates_settings_changed,
+            actor_user_id=admin.id,
+            target_type="settings",
+            target_id="auto_update",
+            metadata={"auto_update": {"enabled": enabled, "scope": scope, "min_age_hours": min_age}},
+            request=request,
+        )
+        db.commit()
+    return _auto_update_response(db)
 
 
 @router.put("/settings/motd", response_model=MotdSettingsResponse)

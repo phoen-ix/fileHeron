@@ -127,7 +127,7 @@ instead of being sent - handy for dev. Full operator walkthrough: [First install
 - **Notifications** via one dispatch funnel (email + in-app SSE bell), per-user per-category channel prefs, one-click unsubscribe (RFC 8058).
 - **Email + branding self-service** - per-language **ProseMirror rich-text** editor for every email template and the imprint/privacy pages; logo white-labelling; inbound **IMAP** mailbox (replies / bounces / auto-replies surfaced in-app).
 - **Observability** - admin **Analytics** dashboard, **Error log** (+ configurable error/scanner alerts), **Webhooks**, **anomaly detection** (heuristic, alert-only), Prometheus `/api/metrics`, audit log, mail log.
-- **Operations** - in-app **self-update** with one-click rollback, **maintenance mode + drain-before-update**, **config backup/restore**, a runtime **settings registry** (~40 knobs tunable live), admin-tunable **cron schedules**, dated backups + optional `restic`, and continuously-drilled restore.
+- **Operations** - in-app **self-update** with one-click rollback and optional **automatic updates** (off by default), **maintenance mode + drain-before-update**, **config backup/restore**, a runtime **settings registry** (~40 knobs tunable live), admin-tunable **cron schedules**, dated backups + optional `restic`, and continuously-drilled restore.
 - **i18n** EN + DE everywhere; **24-hour timestamps** in an admin-set IANA timezone across UI and email. Pluggable storage: local bind-mount (default) or any **S3-compatible** store.
 
 ---
@@ -454,7 +454,7 @@ always pass.
 | Sign-in policies | `/admin/settings/sign-in` | Account lockout, per-address sign-in/registration limits, the HIBP breach check; *Email change* is its second tab. |
 | Files & transfers | `/admin/settings/transfers` | Share defaults, the direct-upload size cap, signed-URL lifetime + resume credit, in-browser preview. |
 | Anomaly detection | `/admin/settings/anomaly` | The four heuristic thresholds; advisory only. |
-| Self-update | `/admin/system` | Releases API URL (forks repoint it) + the postponed-update drain wait, on **Status & updates**; the poll cadence lives on [Scheduled tasks](#scheduled-tasks-adminscheduled-tasks), not here. |
+| Self-update | `/admin/system` | Releases API URL (forks repoint it), the postponed-update drain wait and **automatic updates** (off by default; turning them on asks for your password), on **Status & updates**; the poll cadence lives on [Scheduled tasks](#scheduled-tasks-adminscheduled-tasks), not here. |
 | Maintenance mode | `/admin/settings/maintenance` | Pause **new** transfers (in-progress + resumable ones finish); standalone or via drain-before-update. |
 | Configuration backup | `/admin/settings/backup` | Export/import settings/branding/OIDC/webhooks/groups/users (+ optional logs) to one `*.fhbackup.json`; three secret modes (passphrase / ciphertext / exclude). Files excluded; import invalidates active shares + revokes sessions. |
 | Data retention & storage | `/admin/settings/advanced` | What remains of the **registry overlay** on this page: every retention window and the low-disk thresholds, editable **live, clamped to safe bounds**. The other registry groups render on the page of their task through the same endpoint (`frontend/src/config/adminTunablePlacement.ts`): session lifetimes on **Sessions › Policy** (`/admin/settings/sessions`), lockout + sign-in limits + HIBP on **Sign-in policies**, the public-link brute-force limits on **Public links**, the upload cap and download tunables on **Files & transfers**, anomaly thresholds on **Anomaly detection**, the alert throttle on **Errors & alerts**, the drain wait on **Status & updates**, the app name on **Branding & legal**. |
@@ -479,7 +479,7 @@ thresholds on `/admin/settings/anomaly`, dispatching an `ops_alert`.
 - **API tokens / OIDC:** `api_token_created` / `_revoked` / `_disabled` / `_reactivated` / `_admin_revoked` / `_admin_created`, `oidc_linked`, `oidc_unlinked`, `oidc_provider_created` / `_updated` / `_deleted`.
 - **Email / messaging:** `email_resent`, `email_undeliverable`, `email_template_changed`, `email_template_reset`, `smtp_config_changed`, `imap_config_changed`.
 - **Settings / policy:** `api_policy_changed`, `public_link_policy_changed`, `twofa_policy_changed`, `quarantine_policy_changed`, `share_defaults_policy_changed`, `share_approval_policy_changed`, `home_page_toggled`, `file_preview_toggled`, `motd_changed`, `branding_changed`, `legal_changed`, `site_url_changed`, `site_timezone_changed`, `updates_settings_changed`, `error_alert_settings_changed`, `webhook_created` / `_updated` / `_deleted`, `settings_changed`.
-- **Ops / self-update:** `cron_failed`, `cron_run_triggered`, `cron_schedule_changed`, `ops_alert_dispatched`, `anomaly_detected`, `config_backup_exported`, `config_backup_imported`, `maintenance_enabled`, `maintenance_disabled`, `update_triggered` / `_completed` / `_failed`, `update_postponed`, `update_postpone_cancelled`, `rollback_triggered` / `_completed` / `_failed`.
+- **Ops / self-update:** `cron_failed`, `cron_run_triggered`, `cron_schedule_changed`, `ops_alert_dispatched`, `anomaly_detected`, `config_backup_exported`, `config_backup_imported`, `maintenance_enabled`, `maintenance_disabled`, `update_triggered` / `_completed` / `_failed`, `update_postponed`, `update_postpone_cancelled`, `update_auto_scheduled`, `rollback_triggered` / `_completed` / `_failed`.
 
 </details>
 
@@ -823,6 +823,18 @@ one-click rollback. Manual path:
 git pull && docker compose pull && docker compose up -d --build
 ```
 
+**Automatic updates** are off by default. Turn them on under **Status & updates**; it
+asks for your password, because they install releases without anyone entering it.
+Choose which releases qualify (**patch only** - the default -, patch and minor, or any)
+and how long a release must have been public first (default **24 h**, so a quick
+follow-up fix can come out first). The task `auto_update` - its own row on Scheduled
+tasks, daily at 03:30 site time - then schedules an eligible release exactly like
+**Postpone**: new transfers pause, running ones finish (at most the drain wait), and the
+update below runs with the usual pre-update backup. Admins are alerted when one is
+scheduled and when it ends. A release whose automatic install fails or rolls back is not
+retried automatically; newer releases, and a manual **Update**, still are. Releases
+outside the chosen scope are announced as before.
+
 Alembic migrations run from the backend entrypoint on every boot - idempotent
 (`_has_table` / `_has_column` / `_has_index` guards), safe to re-run. **Roll-forward
 only**; back up before upgrading. (Image downgrade after a forward migration needs an
@@ -1059,6 +1071,7 @@ via `/admin/settings/advanced`.
 | `UPDATES_BACKUP_ON_DB_CHANGE` | `true` | Back up before updating whenever the release changes the database service, checkbox or not. ↻ |
 | `UPDATES_BACKUP_KEEP` / `UPDATES_BACKUP_MAX_AGE_DAYS` | `3` / `30` | Retention of `backups/pre-update/`, applied on each update (0 = no limit; the newest is always kept). ↻ |
 | `UPDATES_INFRA_SYNC` | `true` | Let an update fast-forward the checkout and recreate changed db/redis/clamav/tusd. ↻ |
+| `UPDATES_AUTO_ENABLED` / `UPDATES_AUTO_SCOPE` / `UPDATES_AUTO_MIN_AGE_HOURS` | `false` / `patch` / `24` | Automatic updates: on/off, which releases (`patch`, `minor`, `any`) and how long a release must be public first. Changed on Status & updates, which asks for the admin password. ↻ |
 | `BACKUP_RESTIC_REPO` / `BACKUP_RESTIC_PASSWORD` | empty | Optional offsite restic push - read by the host `scripts/backup.sh`, not by the app. |
 | `METRICS_BEARER_TOKEN` / `METRICS_ALLOWED_IPS` / `METRICS_CACHE_TTL_SEC` | empty/empty/`60` | `/api/metrics` auth + cache. |
 | `OIDC_ALLOW_INSECURE_HTTP` | `false` | Disables HTTPS enforcement for OIDC discovery, JWKS **and the client-secret-bearing token exchange**. Only for a self-hosted IdP on a trusted private network with no TLS. |
@@ -1142,7 +1155,7 @@ Array query params need `paramsSerializer: { indexes: null }` → `?state=active
 - Access JWT: HS256, 15 min, `{sub, iat, exp, jti, type:"access"}`. Refresh: 64 random bytes, SHA-256 in DB, 7 d, httpOnly cookie scoped `/api/auth`, `SameSite=Lax`, `Secure` in prod.
 - Rotation on every refresh; reuse of a rotated token revokes the **entire user family** (`refresh_token_reused`). `services/jwt_session.py::create_refresh_token` → `enforce_session_cap` enforces the session cap across all login flows (password / recovery / OIDC / WebAuthn / register-from-invite).
 - **API-token scopes** are deny-by-default: every `get_actor` route carries `Depends(require_scope(...))`, enforced only for `auth_via == "api_token"` (JWT/session + NULL-scope pass through).
-- **Step-up re-authentication.** These routes also require the caller's own current password in the request body (`password`; a form field on the import), even with a valid session or API token: `POST /api/admin/backup/export`, `POST /api/admin/backup/import`, `POST /api/admin/users/{id}/erase`, `POST /api/account/api-tokens`, `POST /api/admin/api-tokens`, `POST /api/account/webauthn/register/begin`, and the self-update routes `POST /api/admin/system/update`, `/rollback` and `/update/now`. A wrong password answers **`403 INVALID_PASSWORD`** (never 401 - the caller IS authenticated), is rate-limited per user and audited as `step_up_failed`. SSO-only accounts have no password and cannot pass it; the CLI escape hatch is the recovery. The SMTP/IMAP test buttons ask for it only when a stored secret would travel to a host other than the saved one.
+- **Step-up re-authentication.** These routes also require the caller's own current password in the request body (`password`; a form field on the import), even with a valid session or API token: `POST /api/admin/backup/export`, `POST /api/admin/backup/import`, `POST /api/admin/users/{id}/erase`, `POST /api/account/api-tokens`, `POST /api/admin/api-tokens`, `POST /api/account/webauthn/register/begin`, the self-update routes `POST /api/admin/system/update`, `/rollback` and `/update/now`, and `PUT /api/admin/settings/auto-update` when it turns automatic updates on or changes them while they are on (turning them off needs no password). A wrong password answers **`403 INVALID_PASSWORD`** (never 401 - the caller IS authenticated), is rate-limited per user and audited as `step_up_failed`. SSO-only accounts have no password and cannot pass it; the CLI escape hatch is the recovery. The SMTP/IMAP test buttons ask for it only when a stored secret would travel to a host other than the saved one.
 - **Approving a share** (`POST /api/shares/{id}/approve`) requires a `content_fingerprint` - the digest of the files as the approver saw them; a stale one answers `409 CONTENT_CHANGED`.
 - **Self-update only moves forward.** `POST /api/admin/system/update` refuses a tag older than the running version (`409 DOWNGRADE_REFUSED`); go back with Rollback, which also restores the database schema pointer.
 
@@ -1180,7 +1193,8 @@ historical cadence.
 `release_check` (~daily; filters backend `vX.Y.Z` tags, matched in full).
 
 **Every 5 min:** `imap_poll` (self-gated on `imap.enabled`/mode/interval).
-**Every minute:** `drain_pending_update` (applies a postponed update once transfers drain).
+**Every minute:** `drain_pending_update` (applies a postponed update once transfers drain, and reports how a handed-off update ended).
+**Daily 03:30:** `auto_update` (installs a newer release when automatic updates are on).
 
 **Daily ~02:xx:** `analytics_aggregate`, `purge_old_quarantine`, `cleanup_pending_invites`,
 `cleanup_read_notifications`, `prune_history`, `reclaim_orphaned_files`.

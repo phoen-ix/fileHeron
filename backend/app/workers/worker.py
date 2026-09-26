@@ -28,6 +28,7 @@ from ..utils.logger import configure_logging
 from .analytics_aggregate import analytics_aggregate
 from .announce_ready_shares import announce_ready_shares
 from .anomaly_check import anomaly_check
+from .auto_update import auto_update
 from .av_scan import av_scan_file
 from .cleanup_abandoned_uploads import cleanup_abandoned_uploads
 from .cleanup_expired_tokens import cleanup_expired_tokens
@@ -80,6 +81,7 @@ class WorkerSettings:
         imap_poll,
         rescan_inbound_attachments,
         drain_pending_update,
+        auto_update,
         announce_ready_shares,
         cron_dispatch,
         notify_admin_error,

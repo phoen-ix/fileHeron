@@ -204,6 +204,13 @@ class Settings(BaseSettings):
     UPDATES_BACKUP_KEEP: int = 3
     UPDATES_BACKUP_MAX_AGE_DAYS: int = 30
     UPDATES_INFRA_SYNC: bool = True
+    # Automatic updates, off by default. The daily `auto_update` cron installs a
+    # newer release by itself when it is within scope (patch = same minor,
+    # minor = same major, any) and has been public for MIN_AGE_HOURS. Changed on
+    # Status & updates through a password-gated route, never the registry.
+    UPDATES_AUTO_ENABLED: bool = False
+    UPDATES_AUTO_SCOPE: str = "patch"
+    UPDATES_AUTO_MIN_AGE_HOURS: int = 24
     # Where finalized files live + tusd's working dir + AV quarantine.
     # Must all be on the SAME filesystem (atomic os.rename across them).
     STORAGE_ROOT: str = "/data/files"

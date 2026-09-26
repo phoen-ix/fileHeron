@@ -98,6 +98,7 @@ async function makeWrapper() {
         RouterLink: true,
         TunableFields: true,
         UpdatesSection: true,
+        AutoUpdateSection: true,
         AdminPageHeader: {
           template: '<header><slot name="title" /><slot /><slot name="actions" /></header>',
         },
@@ -255,6 +256,85 @@ describe('AdminSystem update dialog - pre-update backup', () => {
     const w = await makeWrapper()
     expect(w.find('.job-banner').text()).not.toContain('admin_system.update.phase')
     expect(w.find('.job-phase').exists()).toBe(false)
+    w.unmount()
+  })
+})
+
+describe('AdminSystem - automatic updates on the update card', () => {
+  const auto = (over: Record<string, unknown> = {}) => ({
+    enabled: true,
+    scope: 'patch',
+    min_age_hours: 24,
+    schedule_enabled: true,
+    schedule_kind: 'daily',
+    daily_time: '03:30',
+    interval_minutes: 60,
+    skipped_tag: null,
+    ...over,
+  })
+  const line = (w: Awaited<ReturnType<typeof makeWrapper>>) =>
+    w.find('[data-testid="auto-update-line"]')
+
+  beforeEach(() => {
+    getUpdaterStatus.mockReset()
+    getTransferActivity.mockReset()
+    getTransferActivity.mockResolvedValue(activity())
+  })
+
+  it('says when it is off', async () => {
+    getUpdaterStatus.mockResolvedValue(updaterStatus({ auto_update: auto({ enabled: false }) }))
+    const w = await makeWrapper()
+    expect(line(w).text()).toContain('Automatic updates are off.')
+    w.unmount()
+  })
+
+  it('says what it installs, after how long, and when', async () => {
+    getUpdaterStatus.mockResolvedValue(updaterStatus({ auto_update: auto() }))
+    const w = await makeWrapper()
+    expect(line(w).text()).toContain(
+      'Automatic updates install patch releases 24 h after publication, daily at 03:30.',
+    )
+    w.unmount()
+  })
+
+  it('warns when the task is switched off on Scheduled tasks', async () => {
+    getUpdaterStatus.mockResolvedValue(
+      updaterStatus({ auto_update: auto({ schedule_enabled: false, scope: 'minor' }) }),
+    )
+    const w = await makeWrapper()
+    expect(line(w).text()).toContain('patch and minor releases')
+    expect(line(w).text()).toContain('nothing is installed')
+    w.unmount()
+  })
+
+  it('names a release it will not retry', async () => {
+    getUpdaterStatus.mockResolvedValue(
+      updaterStatus({ auto_update: auto({ skipped_tag: 'v1.0.1' }) }),
+    )
+    const w = await makeWrapper()
+    expect(line(w).text()).toContain('v1.0.1 failed to install automatically')
+    w.unmount()
+  })
+
+  it('an older backend without the block shows no line', async () => {
+    getUpdaterStatus.mockResolvedValue(updaterStatus())
+    const w = await makeWrapper()
+    expect(line(w).exists()).toBe(false)
+    w.unmount()
+  })
+
+  it('the pending banner says the automatic updater scheduled it', async () => {
+    getUpdaterStatus.mockResolvedValue(updaterStatus({ auto_update: auto() }))
+    getTransferActivity.mockResolvedValue(
+      activity({
+        target_tag: 'v1.1.0',
+        deadline_iso: '2026-09-27T04:00:00',
+        requested_by_id: null,
+        origin: 'auto',
+      }),
+    )
+    const w = await makeWrapper()
+    expect(w.find('.pending-banner').text()).toContain(en.admin_system.update.postpone.by_auto)
     w.unmount()
   })
 })

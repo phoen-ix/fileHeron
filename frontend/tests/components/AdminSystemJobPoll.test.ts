@@ -44,6 +44,7 @@ function makeWrapper() {
         RouterLink: true,
         TunableFields: true,
         UpdatesSection: true,
+        AutoUpdateSection: true,
         AdminPageHeader: { template: '<header><slot name="title" /><slot /><slot name="actions" /></header>' },
       },
     },

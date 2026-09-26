@@ -160,6 +160,8 @@ DYNAMIC_PREFIXES = (
     "admin_ip_blocks.status.",
     "admin_system.update.job.",             # per updater job state
     "admin_system.update.phase.",           # per updater job phase (AdminSystem phaseLabel)
+    "admin_system.update.auto.scope.",      # automatic-update scope on the update card (autoUpdateLine)
+    "admin_auto_update.scope.",             # scope <option>s in AutoUpdateSection
     "share_create.progress.log.",           # useUpload log kinds
     "share_create.intro.",                  # per share kind
     "share_detail.eyebrow.",

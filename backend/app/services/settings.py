@@ -240,6 +240,19 @@ class Keys:
     UPDATES_BACKUP_KEEP = "updates.backup_keep"
     UPDATES_BACKUP_MAX_AGE_DAYS = "updates.backup_max_age_days"
     UPDATES_INFRA_SYNC = "updates.infra_sync"
+    # Automatic updates (services/auto_update.py). Written ONLY by the
+    # password-gated PUT /api/admin/settings/auto-update - deliberately not
+    # registry tunables: /settings/advanced has no step-up, and turning this on
+    # removes the password every manual update asks for.
+    UPDATES_AUTO_ENABLED = "updates.auto_enabled"
+    UPDATES_AUTO_SCOPE = "updates.auto_scope"
+    UPDATES_AUTO_MIN_AGE_HOURS = "updates.auto_min_age_hours"
+    # Runtime state, kept out of config backup: a release whose automatic
+    # install failed or rolled back, so it is not retried automatically.
+    UPDATES_AUTO_SKIP_TAG = "updates.auto_skip_tag"
+    # The job a drain hand-off launched ({job_id, target_tag, origin}), so the
+    # drain worker can report its outcome once it is terminal.
+    MAINTENANCE_HANDOFF_JOB = "maintenance.handoff_job"
     # Error alerting (email admins on server errors). Master switch + the HTTP-5xx
     # source toggle + recipient targeting are simple kv; the cooldown + hourly cap
     # are registry tunables (see settings_registry). The worker/cron source has

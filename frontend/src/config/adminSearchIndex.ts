@@ -23,8 +23,8 @@
  *
  * Conventions: one entry per line, grouped by page with a comment per page;
  * keywords lowercase, EN and DE mixed freely; a `hash` only where the page
- * actually renders that id (General's `<section id>`s and Advanced's
- * `id="tunable-<key>"` controls - nowhere else today). */
+ * actually renders that id (General's `<section id>`s, Advanced's
+ * `id="tunable-<key>"` controls and Status & updates' `#auto-update`). */
 
 export interface AdminSearchEntry {
   /** Leaf route to navigate to. Must be in ADMIN_ROUTE_NAMES. */
@@ -278,6 +278,9 @@ export const ADMIN_SEARCH_INDEX: readonly AdminSearchEntry[] = [
   { routeName: 'admin-system', hash: '#tunable-updates.backup_keep', labelKey: 'admin_advanced.keys.updates.backup_keep', keywords: ['backup retention', 'keep backups', 'pre-update backups', 'prune backups'] },
   { routeName: 'admin-system', hash: '#tunable-updates.backup_max_age_days', labelKey: 'admin_advanced.keys.updates.backup_max_age_days', keywords: ['backup retention', 'backup age', 'delete old backups', 'pre-update backups'] },
   { routeName: 'admin-system', hash: '#tunable-updates.infra_sync', labelKey: 'admin_advanced.keys.updates.infra_sync', keywords: ['infra sync', 'mariadb', 'redis', 'clamav', 'tusd', 'host step', 'git pull'] },
+  { routeName: 'admin-system', hash: '#auto-update', labelKey: 'admin_auto_update.title', keywords: ['auto update', 'auto-update', 'automatic update', 'unattended update', 'automatische updates', 'install releases automatically', 'self-update'] },
+  { routeName: 'admin-system', hash: '#auto-update', labelKey: 'admin_auto_update.scope_label', keywords: ['patch releases', 'minor releases', 'update scope', 'which releases'] },
+  { routeName: 'admin-system', hash: '#auto-update', labelKey: 'admin_auto_update.min_age_label', keywords: ['update delay', 'soak', 'wait after release', 'wartezeit'] },
   { routeName: 'admin-settings-sign-in', hash: '#tunable-security.hibp_enabled', labelKey: 'admin_advanced.keys.security.hibp_enabled', keywords: ['hibp', 'pwned', 'breach', 'leaked password', 'have i been pwned', 'password check', 'kompromittiert'] },
   { routeName: 'admin-settings-branding', hash: '#tunable-branding.app_name', labelKey: 'admin_advanced.keys.branding.app_name', keywords: ['app name', 'brand name', 'product name', 'anwendungsname', 'title'] },
   { routeName: 'admin-settings-advanced', hash: '#tunable-storage.low_threshold_percent', labelKey: 'admin_advanced.keys.storage.low_threshold_percent', keywords: ['disk space', 'low disk', 'free space percent', 'speicherplatz', 'disk warning'] },

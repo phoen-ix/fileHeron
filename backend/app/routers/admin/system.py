@@ -459,6 +459,21 @@ def update_status(
     status["backup_on_db_change"] = bool(
         settings_registry.effective(db, settings_registry.K.UPDATES_BACKUP_ON_DB_CHANGE)
     )
+    from ...services import auto_update as auto_update_svc
+    from ...services import cron_schedule
+
+    auto = auto_update_svc.get_settings(db)
+    cron = cron_schedule.effective(db, auto_update_svc.CRON_NAME)
+    status["auto_update"] = {
+        "enabled": auto.enabled,
+        "scope": auto.scope,
+        "min_age_hours": auto.min_age_hours,
+        "schedule_enabled": cron.enabled,
+        "schedule_kind": cron.kind,
+        "daily_time": cron.daily_time,
+        "interval_minutes": cron.interval_minutes,
+        "skipped_tag": auto_update_svc.skipped_tag(db),
+    }
     return status
 
 
@@ -500,24 +515,14 @@ def apply_update(
     backup = _resolve_backup(db, payload.backup)
 
     if payload.postpone:
-        from datetime import timedelta
-
         from ...services import maintenance as maintenance_svc
-        from ...services import settings_registry
-        wait_min = settings_registry.effective(
-            db, settings_registry.K.UPDATES_DRAIN_MAX_WAIT_MIN
-        )
-        deadline = (utc_now() + timedelta(minutes=int(wait_min))).isoformat()
-        maintenance_svc.set_enabled(db, True, actor=admin, request=request)
-        maintenance_svc.set_pending_update(
+        deadline = maintenance_svc.schedule_pending_update(
             db,
-            {
-                "target_tag": payload.target_tag,
-                "deadline_iso": deadline,
-                "requested_by_id": admin.id,
-                "backup": backup,
-            },
-            actor=admin,
+            target_tag=payload.target_tag,
+            backup=backup,
+            requested_by=admin,
+            origin="admin",
+            request=request,
         )
         record_audit_event(
             db,

@@ -22,6 +22,7 @@
   } from '@/api/admin'
   import { getStreamToken } from '@/api/notifications'
   import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
+  import AutoUpdateSection from '@/components/admin/AutoUpdateSection.vue'
   import TunableFields from '@/components/admin/TunableFields.vue'
   import UpdatesSection from '@/components/admin/UpdatesSection.vue'
   import { useApiError } from '@/composables/useApiError'
@@ -347,6 +348,31 @@
 
   // Executors that back up and sync infra report a finer-grained phase; an
   // unknown one (a newer executor than this SPA) is simply not shown.
+  // One sentence on the update card: whether releases install themselves, and when.
+  const autoUpdateLine = computed(() => {
+    const a = updaterStatus.value?.auto_update
+    if (!a) return null
+    if (!a.enabled) return t('admin_system.update.auto.off')
+    const scope = t(`admin_system.update.auto.scope.${a.scope}`)
+    let line: string
+    if (!a.schedule_enabled) line = t('admin_system.update.auto.on_paused', { scope })
+    else if (a.schedule_kind === 'daily')
+      line = t('admin_system.update.auto.on_daily', {
+        scope,
+        hours: a.min_age_hours,
+        time: a.daily_time,
+      })
+    else
+      line = t('admin_system.update.auto.on_interval', {
+        scope,
+        hours: a.min_age_hours,
+        minutes: a.interval_minutes,
+      })
+    return a.skipped_tag
+      ? `${line} ${t('admin_system.update.auto.skipped', { tag: a.skipped_tag })}`
+      : line
+  })
+
   const phaseLabel = computed(() => {
     const phase = activeJob.value?.phase
     const key = `admin_system.update.phase.${phase}`
@@ -481,6 +507,13 @@
           </template>
         </dl>
 
+        <p v-if="autoUpdateLine" class="auto-line" data-testid="auto-update-line">
+          {{ autoUpdateLine }}
+          <RouterLink :to="{ name: 'admin-system', hash: '#auto-update' }">{{
+            t('admin_system.update.auto.settings_link')
+          }}</RouterLink>
+        </p>
+
         <div v-if="status.version.update_available" class="update-banner">
           <div class="banner-text">
             <strong>{{
@@ -520,6 +553,9 @@
             <strong>{{
               t('admin_system.update.postpone.pending_title', { v: pendingUpdate.target_tag })
             }}</strong>
+            <p v-if="pendingUpdate.origin === 'auto'" class="banner-sub">
+              {{ t('admin_system.update.postpone.by_auto') }}
+            </p>
             <p class="banner-sub">
               {{
                 t('admin_system.update.postpone.waiting', {
@@ -796,11 +832,17 @@
       <h2>{{ t('admin_updates.title') }}</h2>
       <UpdatesSection />
       <TunableFields route="admin-system" :headings="false" />
+      <AutoUpdateSection @saved="loadUpdaterStatus" />
     </section>
   </section>
 </template>
 
 <style scoped>
+  .auto-line {
+    margin: var(--fh-space-2) 0 0;
+    color: var(--fh-subtle);
+    font-size: var(--fh-text-body-sm);
+  }
   .system-page {
     padding: var(--fh-space-4) 0;
     display: flex;

@@ -25,8 +25,9 @@ governs, never under the release that found it.
 
 ## Current state
 
-Backend **`v2.20.0`** is the newest tag (2026-09-26): automatic updates, off by
-default (§Self-update). **`v2.19.1`/`v2.19.2`** (same day): an update keeps the
+Backend **`v2.20.1`** is the newest tag (2026-09-26): the admin search's two
+"Updates" results open Status & updates again. **`v2.20.0`** (same day):
+automatic updates, off by default (§Self-update). **`v2.19.1`/`v2.19.2`** (same day): an update keeps the
 app down only while db/redis are recreated (clamav/tusd follow the verified
 app), uvicorn's drain is bounded to 5s, and the updater-shim stops on SIGTERM.
 **`v2.19.0`** (same day) is the release whose
@@ -39,15 +40,14 @@ audit on three anyio CVEs; tags are immutable, so the same commits shipped as
 v2.17.1 plus the anyio bump). **v2.17.1 shipped a sidebar showing nothing but
 "Overview"** (a `v-if` on the Overview link captured the categories' `v-else`;
 no test mounted AdminLayout); v2.17.2 is that one-line fix plus
-`tests/components/AdminLayout.test.ts`. **The reference host runs v2.19.2**
-(in-app update 2026-09-26 16:07 from v2.19.1, 34 s to `healthy`, no warnings;
-the old backend - the first with the 5 s drain bound - stopped in 7.3 s against
-11.1 s on the update before, API down ~14 s; the shim recreate still took
-10.4 s because the shim being stopped was v2.19.1's, untrapped - the next
-update stops a trapped one). The v2.19.0 update before them synced infra:
+`tests/components/AdminLayout.test.ts`. **The reference host runs v2.20.0**
+(in-app update 2026-09-26 17:38 from v2.19.2, 37 s to `healthy`, no warnings;
+backend stop 7.0 s with the 5 s drain bound (11.1 s before it existed), API
+down ~14 s; the shim recreate took **0.32 s** - the first update to stop a
+shim that traps SIGTERM, against 10.4 s the update before). The v2.19.0 update earlier that day synced infra:
 db/redis/clamav on `mariadb:12.3.3` / `redis:8.10.2` / `clamav:1.5.4`, API
 down ~70 s. The default moves of v2.16.0 and v2.19.0 are
-live there; v2.17.x, v2.18.0 and v2.19.1/.2 move no default.
+live there; v2.17.x, v2.18.0, v2.19.1/.2 and v2.20.0 move no default.
 `data/updater/rollback_target.json` holds the version BEFORE last, not the
 running one. Images and working tree can diverge without any deploy - see §Ops
 on which half of a fix is live.
@@ -102,6 +102,7 @@ record.
 | v2.19.1 | - | - (a user `command:` override for the backend needs `--timeout-graceful-shutdown 5` added by hand; the update TO v2.19.1 still stops the unbounded v2.19.0 backend, up to Docker's 10s grace) | - |
 | v2.19.2 | - | - (the update TO v2.19.2 still stops the old, untrapped shim: 10s once, after `healthy`) | - |
 | v2.20.0 | - | - | - (automatic updates ship OFF. New `PUT /api/admin/settings/auto-update` is step-up gated when it turns them on or changes them while on; `pending_update.requested_by_id` may be `null`, with a new `origin`) |
+| v2.20.1 | - | - | - |
 
 **Ten endpoints require the caller's own `password` in the body**: the v2.9.0
 re-auth gates `/api/admin/backup/export`, `/api/admin/backup/import` (form

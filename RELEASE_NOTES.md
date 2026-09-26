@@ -1,3 +1,21 @@
+# file:Heron v2.20.1
+
+**The admin search finds the update settings again.** Searching the admin
+Overview for "updates" or "release API URL" opened the General page, which has
+not held those settings since they moved; both results now open **Status &
+updates** at the updates card.
+
+**No migration, no default move, no host step.** No desktop client release.
+
+---
+
+## Upgrading
+
+Click **Update**, or let automatic updates install it if you turned them on:
+it is a patch release.
+
+---
+
 # file:Heron v2.20.0
 
 **Automatic updates, off by default.** Turn them on under **Status & updates**

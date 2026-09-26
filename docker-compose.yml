@@ -1,6 +1,6 @@
 services:
   db:
-    image: mariadb:12.3
+    image: mariadb:12.3.3
     container_name: ${COMPOSE_PROJECT_NAME:-fileheron}-db
     restart: unless-stopped
     security_opt: ["no-new-privileges:true"]  # no setuid escalation (audit L23)
@@ -35,7 +35,7 @@ services:
         max-file: "3"
 
   redis:
-    image: redis:7-alpine
+    image: redis:8.10.2-alpine3.23
     container_name: ${COMPOSE_PROJECT_NAME:-fileheron}-redis
     restart: unless-stopped
     security_opt: ["no-new-privileges:true"]  # no setuid escalation (audit L23)

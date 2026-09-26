@@ -48,7 +48,7 @@ DB_ROOT_PASSWORD=root-not-a-secret
 
 # Pinned to what the backend image and CI actually use, so a green run here
 # means the same thing a green run there does.
-MARIADB_IMAGE=mariadb:12.3
+MARIADB_IMAGE=mariadb:12.3.3
 PYTHON_IMAGE=python:3.14-slim
 
 DEFAULT_FILES=(

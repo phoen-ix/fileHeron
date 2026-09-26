@@ -109,7 +109,7 @@ instead of being sent - handy for dev. Full operator walkthrough: [First install
 |---|---|
 | Backend | Python 3.14, FastAPI, SQLAlchemy 2.0, Alembic, Pydantic v2, ARQ |
 | Auth / crypto | argon2-cffi (Argon2id), PyJWT, py_webauthn, multi-provider OIDC code flow |
-| Data / cache | MariaDB 12.3, Redis 7-alpine (ARQ queue, rate limits, quota Lua, SSE pubsub) |
+| Data / cache | MariaDB 12.3, Redis 8 (ARQ queue, rate limits, quota Lua, SSE pubsub) |
 | Upload | tusd (Go) + Uppy (browser) + any TUS client (API) |
 | Frontend | Vue 3, Vite, Pinia, Vue Router, vue-i18n, axios, dayjs, vitest - **no UI framework** (native `<input type=datetime-local>`); rich text via MIT ProseMirror |
 | Antivirus | ClamAV (clamd) |

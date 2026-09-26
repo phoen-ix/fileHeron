@@ -183,7 +183,7 @@ jobs:
             -e MARIADB_DATABASE=fileheron \
             -e MARIADB_USER=fileheron_app \
             -e MARIADB_PASSWORD=ci-db-not-a-secret \
-            mariadb:12.3
+            mariadb:12.3.3
           echo "waiting for MariaDB to accept connections..."
           for i in $(seq 1 60); do
             if docker exec fhsmoke-db healthcheck.sh --connect --innodb_initialized 2>/dev/null; then
@@ -221,7 +221,7 @@ jobs:
         run: |
           echo "=== app logs ==="; docker logs fhsmoke-app 2>&1 | tail -120 || true
           echo "=== db logs ===";  docker logs fhsmoke-db  2>&1 | tail -40  || true
-      # `-v` on the rm, and the network removed. mariadb:12.3 declares
+      # `-v` on the rm, and the network removed. mariadb:12.3.3 declares
       # VOLUME /var/lib/mysql, so `docker rm -f` WITHOUT -v strands a ~167 MB
       # anonymous volume per run, and `docker network create fhsmoke` above was
       # never undone at all - it also carries no `|| true`, so on a runner that

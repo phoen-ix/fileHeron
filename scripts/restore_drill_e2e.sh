@@ -247,7 +247,7 @@ docker run --rm -v "$WORKSPACE/data/redis":/d alpine chown 999:999 /d/dump.rdb >
 
 docker rm -f "$REDIS_LOADER" >/dev/null 2>&1 || true
 docker run -d --rm --name "$REDIS_LOADER" \
-    -v "$WORKSPACE/data/redis":/data redis:7-alpine \
+    -v "$WORKSPACE/data/redis":/data redis:8.10.2-alpine3.23 \
     redis-server --appendonly no >/dev/null
 # Wait for DBSIZE to return an INTEGER, not for the socket to answer.
 #

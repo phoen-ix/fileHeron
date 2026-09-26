@@ -9,7 +9,7 @@
 # release-to-release; the shim's doesn't. Splitting lets the executor
 # evolve freely without chicken-and-egging the only container that
 # can recreate the others.
-FROM python:3.14-alpine
+FROM python:3.14.7-alpine3.24
 
 WORKDIR /app
 

@@ -109,7 +109,7 @@ one `# file:Heron vX.Y.Z` section each, newest first; older releases live in
 ## Tech stack (locked decisions)
 
 → README §Tech stack for the full enumeration (Python 3.14 · FastAPI ·
-SQLAlchemy 2.0 · Alembic · Pydantic v2 · MariaDB 12.3 · Redis 7 · tusd · Vue 3).
+SQLAlchemy 2.0 · Alembic · Pydantic v2 · MariaDB 12.3 · Redis 8 · tusd · Vue 3).
 Locked / non-obvious:
 
 - **Traefik on host** (not in compose) for TLS+ACME across multiple apps → downloads stream `browser → Traefik → FastAPI → FileResponse(path) → kernel sendfile()`, **no X-Accel-Redirect**.

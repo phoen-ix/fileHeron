@@ -77,7 +77,7 @@ echo "[restore] restoring redis snapshot …"
 # RDB. Copying the snapshot into /data was therefore a no-op that reported
 # success: the restored instance came back EMPTY, losing every rate-limit
 # bucket and every queued ARQ job, and nothing said so (audit 2026-07-30,
-# ops-4). Verified against redis:7-alpine, both with and without the AOF
+# ops-4). Verified against redis:7-alpine and 8.10, both with and without the AOF
 # directory present.
 #
 # The sequence that works, and the reason for each step:
@@ -116,7 +116,7 @@ trap loader_down EXIT
 echo "[restore] loading redis snapshot with AOF disabled …"
 docker rm -f -v "$REDIS_LOADER" >/dev/null 2>&1 || true
 docker run -d --rm --name "$REDIS_LOADER" \
-    -v "$ROOT/data/redis":/data redis:7-alpine \
+    -v "$ROOT/data/redis":/data redis:8.10.2-alpine3.23 \
     redis-server --appendonly no > /dev/null
 
 # Wait for DBSIZE to return an INTEGER, not for the socket to answer. redis-cli

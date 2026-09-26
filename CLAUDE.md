@@ -35,12 +35,13 @@ audit on three anyio CVEs; tags are immutable, so the same commits shipped as
 v2.17.1 plus the anyio bump). **v2.17.1 shipped a sidebar showing nothing but
 "Overview"** (a `v-if` on the Overview link captured the categories' `v-else`;
 no test mounted AdminLayout); v2.17.2 is that one-line fix plus
-`tests/components/AdminLayout.test.ts`. **The reference host runs v2.18.0**
-(in-app update 2026-09-25, 30 s; `FH_VERSION`, alembic head `202609240001` and
-`utf8mb4_bin` on both email columns checked after it; rehearsed first with
-`FH_TAG=v2.18.0 scripts/restore_drill_e2e.sh` on that night's backup), so
-v2.16.0's two default moves are live there; v2.17.x and v2.18.0 move no default.
-Until it takes v2.19.0 it still runs MariaDB 11 and Redis 7.
+`tests/components/AdminLayout.test.ts`. **The reference host runs v2.19.0**
+(in-app update 2026-09-26 from v2.18.0, ~110 s job, API down ~70 s; infra synced
+with no warnings: checkout fast-forwarded, pre-update backup
+`backups/pre-update/2026-09-26_130234_v2.18.0-to-v2.19.0`, db/redis/clamav
+recreated on `mariadb:12.3.3` / `redis:8.10.2` / `clamav:1.5.4`, tusd untouched;
+`FH_VERSION` and alembic head `202609240001` checked after it), so the default
+moves of v2.16.0 and v2.19.0 are live there; v2.17.x and v2.18.0 move no default.
 `data/updater/rollback_target.json` holds the version BEFORE last, not the
 running one. Images and working tree can diverge without any deploy - see §Ops
 on which half of a fix is live.

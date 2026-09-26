@@ -24,7 +24,8 @@
  * Conventions: one entry per line, grouped by page with a comment per page;
  * keywords lowercase, EN and DE mixed freely; a `hash` only where the page
  * actually renders that id (General's `<section id>`s, Advanced's
- * `id="tunable-<key>"` controls and Status & updates' `#auto-update`). */
+ * `id="tunable-<key>"` controls and Status & updates' `#updates` /
+ * `#auto-update`). */
 
 export interface AdminSearchEntry {
   /** Leaf route to navigate to. Must be in ADMIN_ROUTE_NAMES. */
@@ -52,8 +53,6 @@ export const ADMIN_SEARCH_INDEX: readonly AdminSearchEntry[] = [
   { routeName: 'admin-settings-general', hash: '#motd', labelKey: 'admin_motd.title', keywords: ['message of the day', 'banner', 'login notice', 'announcement', 'hinweis', 'maintenance notice'] },
   { routeName: 'admin-settings-general', hash: '#motd', labelKey: 'admin_motd.toggle_label', keywords: ['motd', 'banner', 'login page notice'] },
   { routeName: 'admin-settings-general', hash: '#motd', labelKey: 'admin_motd.text_label', keywords: ['motd', 'banner text', 'notice text', 'hinweistext'] },
-  { routeName: 'admin-settings-general', hash: '#updates', labelKey: 'admin_updates.title', keywords: ['release', 'version', 'github', 'self-update', 'aktualisierung', 'update check'] },
-  { routeName: 'admin-settings-general', hash: '#updates', labelKey: 'admin_updates.url_label', keywords: ['github', 'release api', 'fork', 'update source', 'releases endpoint'] },
 
   // --- Branding & legal (admin-settings-branding)
   { routeName: 'admin-settings-branding', labelKey: 'admin_branding.logo.title', keywords: ['login page logo', 'brand image', 'upload logo', 'bild', 'png', 'company logo'] },
@@ -236,6 +235,8 @@ export const ADMIN_SEARCH_INDEX: readonly AdminSearchEntry[] = [
   { routeName: 'admin-settings-branding', labelKey: 'admin_advanced.groups.branding', keywords: ['app name', 'brand name', 'product name', 'anwendungsname'] },
   { routeName: 'admin-settings-advanced', labelKey: 'admin_advanced.groups.storage', keywords: ['disk space', 'low disk', 'speicherplatz', 'free space', 'disk full', 'storage warning'] },
   { routeName: 'admin-settings-anomaly', labelKey: 'admin_advanced.groups.anomaly', keywords: ['anomaly', 'suspicious activity', 'mass download', 'impossible travel', 'anomalie'] },
+  { routeName: 'admin-system', hash: '#updates', labelKey: 'admin_updates.title', keywords: ['release', 'version', 'github', 'self-update', 'aktualisierung', 'update check'] },
+  { routeName: 'admin-system', hash: '#updates', labelKey: 'admin_updates.url_label', keywords: ['github', 'release api', 'fork', 'update source', 'releases endpoint'] },
   { routeName: 'admin-system', labelKey: 'admin_advanced.groups.updates', keywords: ['drain', 'postpone update', 'update wait', 'self-update'] },
   { routeName: 'admin-settings-error-alerts', labelKey: 'admin_advanced.groups.error_alert', keywords: ['cooldown', 'flood', 'error email cap', '4xx capture rate', 'alert throttle'] },
 

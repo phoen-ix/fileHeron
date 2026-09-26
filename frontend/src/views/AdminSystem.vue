@@ -828,7 +828,7 @@
     <!-- Where updates come from + how long a postponed one waits for transfers
          to drain. Moved here from General (the release URL) and the old
          Advanced page (the drain wait) so the whole update story is one page. -->
-    <section class="card">
+    <section id="updates" class="card">
       <h2>{{ t('admin_updates.title') }}</h2>
       <UpdatesSection />
       <TunableFields route="admin-system" :headings="false" />

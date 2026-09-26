@@ -24,10 +24,7 @@ export function createShare(payload: {
 
 /** v1.1.4: pass `clear: true` to remove the expiry (share becomes
  *  never-expire); otherwise pass a new datetime. */
-export function updateShareExpiry(
-  shareId: string,
-  opts: { expires_at?: string; clear?: boolean },
-) {
+export function updateShareExpiry(shareId: string, opts: { expires_at?: string; clear?: boolean }) {
   const body: Record<string, unknown> = {}
   if (opts.clear) body.expires_at_clear = true
   else if (opts.expires_at) body.expires_at = opts.expires_at
@@ -53,10 +50,7 @@ export function expireShareNow(shareId: string) {
 /** Owner's batch-complete signal after uploading more files into an active
  *  share: records the add + (if `notify`) re-notifies recipients. Returns the
  *  refreshed share so the file list updates from one response. */
-export function registerFilesAdded(
-  shareId: string,
-  opts: { notify: boolean; file_ids: string[] },
-) {
+export function registerFilesAdded(shareId: string, opts: { notify: boolean; file_ids: string[] }) {
   return api.post<ShareResponse>(`/shares/${shareId}/files-added`, {
     notify: opts.notify,
     file_ids: opts.file_ids,
@@ -96,9 +90,7 @@ export function getShare(shareId: string) {
 
 /* Share-approval workflow (v1.24.0). */
 
-export function listPendingApprovals(
-  params: { page?: number; page_size?: number } = {},
-) {
+export function listPendingApprovals(params: { page?: number; page_size?: number } = {}) {
   return api.get<ShareListResponse>('/shares/pending-approval', { params })
 }
 

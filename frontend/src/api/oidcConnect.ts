@@ -22,10 +22,7 @@ export function getOIDCLink() {
 }
 
 export function startConnect(providerId: string) {
-  return api.post<ConnectStartResponse>(
-    `/account/oidc/connect/start/${providerId}`,
-    {},
-  )
+  return api.post<ConnectStartResponse>(`/account/oidc/connect/start/${providerId}`, {})
 }
 
 export function disconnectOIDC() {

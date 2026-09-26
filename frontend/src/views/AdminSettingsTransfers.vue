@@ -33,41 +33,41 @@
 </template>
 
 <script setup lang="ts">
-import { useI18n } from 'vue-i18n'
+  import { useI18n } from 'vue-i18n'
 
-import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
-import FilePreviewSection from '@/components/admin/FilePreviewSection.vue'
-import ShareDefaultsSection from '@/components/admin/ShareDefaultsSection.vue'
-import TunableFields from '@/components/admin/TunableFields.vue'
+  import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
+  import FilePreviewSection from '@/components/admin/FilePreviewSection.vue'
+  import ShareDefaultsSection from '@/components/admin/ShareDefaultsSection.vue'
+  import TunableFields from '@/components/admin/TunableFields.vue'
 
-const { t } = useI18n()
+  const { t } = useI18n()
 </script>
 
 <style scoped>
-.transfers-page {
-  max-width: 44rem;
-}
+  .transfers-page {
+    max-width: 44rem;
+  }
 
-.intro {
-  margin: var(--fh-space-1) 0 0;
-  max-width: 64ch;
-}
+  .intro {
+    margin: var(--fh-space-1) 0 0;
+    max-width: 64ch;
+  }
 
-.settings-section {
-  scroll-margin-top: calc(var(--fh-app-header-height) + var(--fh-space-3));
-  margin-top: var(--fh-space-5);
-}
+  .settings-section {
+    scroll-margin-top: calc(var(--fh-app-header-height) + var(--fh-space-3));
+    margin-top: var(--fh-space-5);
+  }
 
-.settings-section:first-of-type {
-  margin-top: var(--fh-space-4);
-}
+  .settings-section:first-of-type {
+    margin-top: var(--fh-space-4);
+  }
 
-.settings-h2 {
-  font-family: var(--fh-font-display);
-  font-size: 1.5rem;
-  font-weight: 400;
-  letter-spacing: -0.01em;
-  margin: 0 0 var(--fh-space-3);
-  color: var(--fh-ink);
-}
+  .settings-h2 {
+    font-family: var(--fh-font-display);
+    font-size: 1.5rem;
+    font-weight: 400;
+    letter-spacing: -0.01em;
+    margin: 0 0 var(--fh-space-3);
+    color: var(--fh-ink);
+  }
 </style>

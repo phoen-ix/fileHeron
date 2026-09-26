@@ -1,24 +1,24 @@
 <script setup lang="ts">
-import { onMounted } from 'vue'
-import { useI18n } from 'vue-i18n'
-import { useRoute } from 'vue-router'
+  import { onMounted } from 'vue'
+  import { useI18n } from 'vue-i18n'
+  import { useRoute } from 'vue-router'
 
-import { reportPage404 } from '@/api/telemetry'
-import AuthCanvas from '@/components/AuthCanvas.vue'
+  import { reportPage404 } from '@/api/telemetry'
+  import AuthCanvas from '@/components/AuthCanvas.vue'
 
-const route = useRoute()
-// The 404 page was the only view in the app with hardcoded English copy, in a
-// DE/EN product - and it is the page a German user is most likely to reach by
-// accident (audit 2026-07-30, fe-correct-13).
-const { t } = useI18n()
+  const route = useRoute()
+  // The 404 page was the only view in the app with hardcoded English copy, in a
+  // DE/EN product - and it is the page a German user is most likely to reach by
+  // accident (audit 2026-07-30, fe-correct-13).
+  const { t } = useI18n()
 
-// Report the unmatched path so it lands in the admin error log (the backend never
-// sees it - nginx serves the SPA shell for unknown page paths). Best-effort: a
-// failed beacon must never break the 404 page.
-onMounted(() => {
-  // Best-effort, fully swallowed (including async rejection).
-  reportPage404(route.fullPath).catch(() => {})
-})
+  // Report the unmatched path so it lands in the admin error log (the backend never
+  // sees it - nginx serves the SPA shell for unknown page paths). Best-effort: a
+  // failed beacon must never break the 404 page.
+  onMounted(() => {
+    // Best-effort, fully swallowed (including async rejection).
+    reportPage404(route.fullPath).catch(() => {})
+  })
 </script>
 
 <template>

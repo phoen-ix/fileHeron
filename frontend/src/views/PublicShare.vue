@@ -1,155 +1,159 @@
 <script setup lang="ts">
-/* /d/:token - anonymous landing page for a public share. No auth, no
- * Pinia. Light editorial framing - this is what a recipient sees,
- * potentially someone less technical than the senders, so the feel
- * leans calm and unsurprising. */
-import { computed, onMounted, ref } from 'vue'
-import { useI18n } from 'vue-i18n'
-import { useRoute } from 'vue-router'
+  /* /d/:token - anonymous landing page for a public share. No auth, no
+   * Pinia. Light editorial framing - this is what a recipient sees,
+   * potentially someone less technical than the senders, so the feel
+   * leans calm and unsurprising. */
+  import { computed, onMounted, ref } from 'vue'
+  import { useI18n } from 'vue-i18n'
+  import { useRoute } from 'vue-router'
 
-import {
-  fetchPublicShare,
-  publicDownloadUrl,
-  publicPreviewUrl,
-  publicZipUrl,
-  unlockPublicShare,
-} from '@/api/publicLinks'
-import BrandLogo from '@/components/BrandLogo.vue'
-import BrandMark from '@/components/BrandMark.vue'
-import FilePreviewModal from '@/components/FilePreviewModal.vue'
-import { useSiteDateFormat } from '@/composables/useSiteDateFormat'
-import { useSiteStore } from '@/stores/site'
-import type { PublicShareFile, PublicShareResponse } from '@/types/api'
-import { formatBytes } from '@/utils/bytes'
-import { previewKind } from '@/utils/preview'
+  import {
+    fetchPublicShare,
+    publicDownloadUrl,
+    publicPreviewUrl,
+    publicZipUrl,
+    unlockPublicShare,
+  } from '@/api/publicLinks'
+  import BrandLogo from '@/components/BrandLogo.vue'
+  import BrandMark from '@/components/BrandMark.vue'
+  import FilePreviewModal from '@/components/FilePreviewModal.vue'
+  import { useSiteDateFormat } from '@/composables/useSiteDateFormat'
+  import { useSiteStore } from '@/stores/site'
+  import type { PublicShareFile, PublicShareResponse } from '@/types/api'
+  import { formatBytes } from '@/utils/bytes'
+  import { previewKind } from '@/utils/preview'
 
-const route = useRoute()
-const { t } = useI18n()
-const site = useSiteStore()
+  const route = useRoute()
+  const { t } = useI18n()
+  const site = useSiteStore()
 
-const showBrand = computed(() => site.branding.show_public)
-const showLogo = computed(() => showBrand.value && !!site.branding.logo_url)
+  const showBrand = computed(() => site.branding.show_public)
+  const showLogo = computed(() => showBrand.value && !!site.branding.logo_url)
 
-const share = ref<PublicShareResponse | null>(null)
-const loading = ref(true)
-const errorMsg = ref<string | null>(null)
-const errorCode = ref<string | null>(null)
+  const share = ref<PublicShareResponse | null>(null)
+  const loading = ref(true)
+  const errorMsg = ref<string | null>(null)
+  const errorCode = ref<string | null>(null)
 
-const password = ref('')
-const unlocking = ref(false)
-const unlockError = ref<string | null>(null)
+  const password = ref('')
+  const unlocking = ref(false)
+  const unlockError = ref<string | null>(null)
 
-const token = computed(() => String(route.params.token))
+  const token = computed(() => String(route.params.token))
 
-async function load() {
-  loading.value = true
-  errorMsg.value = null
-  errorCode.value = null
-  try {
-    const { data } = await fetchPublicShare(token.value)
-    share.value = data
-  } catch (err: unknown) {
-    interface AxiosLike { response?: { data?: { error?: string; code?: string } } }
-    const e = err as AxiosLike
-    errorCode.value = e.response?.data?.code ?? null
-    errorMsg.value =
-      e.response?.data?.error ?? t('public_share.errors.generic')
-  } finally {
-    loading.value = false
+  async function load() {
+    loading.value = true
+    errorMsg.value = null
+    errorCode.value = null
+    try {
+      const { data } = await fetchPublicShare(token.value)
+      share.value = data
+    } catch (err: unknown) {
+      interface AxiosLike {
+        response?: { data?: { error?: string; code?: string } }
+      }
+      const e = err as AxiosLike
+      errorCode.value = e.response?.data?.code ?? null
+      errorMsg.value = e.response?.data?.error ?? t('public_share.errors.generic')
+    } finally {
+      loading.value = false
+    }
   }
-}
 
-async function onUnlock() {
-  unlockError.value = null
-  unlocking.value = true
-  try {
-    await unlockPublicShare(token.value, password.value)
-    password.value = ''
+  async function onUnlock() {
+    unlockError.value = null
+    unlocking.value = true
+    try {
+      await unlockPublicShare(token.value, password.value)
+      password.value = ''
+      await load()
+    } catch (err: unknown) {
+      interface AxiosLike {
+        response?: { data?: { error?: string; code?: string } }
+      }
+      const e = err as AxiosLike
+      const code = e.response?.data?.code
+      // Translate by code (INVALID_PUBLIC_PASSWORD / PUBLIC_LINK_LOCKED /
+      // PUBLIC_LINK_EXHAUSTED) so the localized strings are actually used,
+      // falling back to the server text then the generic message.
+      unlockError.value = code
+        ? t(
+            `public_share.errors.${code}`,
+            e.response?.data?.error ?? t('public_share.errors.unlock_failed'),
+          )
+        : (e.response?.data?.error ?? t('public_share.errors.unlock_failed'))
+    } finally {
+      unlocking.value = false
+    }
+  }
+
+  const { formatExpiry } = useSiteDateFormat()
+
+  function fileEnabled(state: string): boolean {
+    // `ready_unscanned` is NOT downloadable: the backend answers 425
+    // SCAN_IN_PROGRESS for it, always. Offering an enabled link produced a
+    // download that could only fail, on the one page whose visitor has no
+    // account, no error log and no way to tell a transient failure from a
+    // permanent one - next to a pill that already says "scanning"
+    // (audit 2026-07-30, fe-correct-7 / flow-publiclink-6).
+    return state === 'clean'
+  }
+
+  // In-browser preview (gated on the global admin switch + a supported type +
+  // clean state). The cookie-scoped URL is built synchronously - no token mint.
+  const previewOpen = ref(false)
+  const previewFile = ref<PublicShareFile | null>(null)
+  const previewUrl = ref<string | null>(null)
+
+  function canPreview(f: PublicShareFile): boolean {
+    return (
+      !!share.value?.preview_enabled && f.state === 'clean' && previewKind(f.mime_type) !== null
+    )
+  }
+
+  function openPreview(f: PublicShareFile) {
+    previewFile.value = f
+    previewUrl.value = publicPreviewUrl(token.value, f.id)
+    previewOpen.value = true
+  }
+
+  function closePreview() {
+    previewOpen.value = false
+    previewFile.value = null
+    previewUrl.value = null
+  }
+
+  function onPreviewDownload() {
+    if (previewFile.value) {
+      window.location.href = publicDownloadUrl(token.value, previewFile.value.id)
+      void refreshAfterDownload()
+    }
+  }
+
+  /** Re-read the link after a download starts.
+   *
+   * A plain `<a href>` cannot report a failure: the browser shelf says "Failed"
+   * and the page is unchanged. So a link with `download_limit=1` over two files
+   * kept saying "1 download left" and kept offering the second file and the ZIP
+   * after the first click spent the budget, and clicking again produced a silent
+   * 410 with nothing on screen to explain it. Refreshing the metadata makes the
+   * page say what the server now believes - the remaining count, and the
+   * exhausted/expired banner from `load()`'s own error handling (audit #2). */
+  async function refreshAfterDownload() {
+    await new Promise((r) => window.setTimeout(r, 1200))
     await load()
-  } catch (err: unknown) {
-    interface AxiosLike { response?: { data?: { error?: string; code?: string } } }
-    const e = err as AxiosLike
-    const code = e.response?.data?.code
-    // Translate by code (INVALID_PUBLIC_PASSWORD / PUBLIC_LINK_LOCKED /
-    // PUBLIC_LINK_EXHAUSTED) so the localized strings are actually used,
-    // falling back to the server text then the generic message.
-    unlockError.value = code
-      ? t(`public_share.errors.${code}`, e.response?.data?.error ?? t('public_share.errors.unlock_failed'))
-      : (e.response?.data?.error ?? t('public_share.errors.unlock_failed'))
-  } finally {
-    unlocking.value = false
   }
-}
 
-const { formatExpiry } = useSiteDateFormat()
-
-function fileEnabled(state: string): boolean {
-  // `ready_unscanned` is NOT downloadable: the backend answers 425
-  // SCAN_IN_PROGRESS for it, always. Offering an enabled link produced a
-  // download that could only fail, on the one page whose visitor has no
-  // account, no error log and no way to tell a transient failure from a
-  // permanent one - next to a pill that already says "scanning"
-  // (audit 2026-07-30, fe-correct-7 / flow-publiclink-6).
-  return state === 'clean'
-}
-
-// In-browser preview (gated on the global admin switch + a supported type +
-// clean state). The cookie-scoped URL is built synchronously - no token mint.
-const previewOpen = ref(false)
-const previewFile = ref<PublicShareFile | null>(null)
-const previewUrl = ref<string | null>(null)
-
-function canPreview(f: PublicShareFile): boolean {
-  return (
-    !!share.value?.preview_enabled &&
-    f.state === 'clean' &&
-    previewKind(f.mime_type) !== null
+  // Bulk-ZIP includes only `clean` files; offer it when there's ≥1 and the
+  // link's download budget isn't spent.
+  const canDownloadZip = computed(
+    () =>
+      !!share.value &&
+      share.value.files.some((f) => f.state === 'clean') &&
+      (share.value.downloads_remaining === null || share.value.downloads_remaining > 0),
   )
-}
 
-function openPreview(f: PublicShareFile) {
-  previewFile.value = f
-  previewUrl.value = publicPreviewUrl(token.value, f.id)
-  previewOpen.value = true
-}
-
-function closePreview() {
-  previewOpen.value = false
-  previewFile.value = null
-  previewUrl.value = null
-}
-
-function onPreviewDownload() {
-  if (previewFile.value) {
-    window.location.href = publicDownloadUrl(token.value, previewFile.value.id)
-    void refreshAfterDownload()
-  }
-}
-
-/** Re-read the link after a download starts.
- *
- * A plain `<a href>` cannot report a failure: the browser shelf says "Failed"
- * and the page is unchanged. So a link with `download_limit=1` over two files
- * kept saying "1 download left" and kept offering the second file and the ZIP
- * after the first click spent the budget, and clicking again produced a silent
- * 410 with nothing on screen to explain it. Refreshing the metadata makes the
- * page say what the server now believes - the remaining count, and the
- * exhausted/expired banner from `load()`'s own error handling (audit #2). */
-async function refreshAfterDownload() {
-  await new Promise((r) => window.setTimeout(r, 1200))
-  await load()
-}
-
-// Bulk-ZIP includes only `clean` files; offer it when there's ≥1 and the
-// link's download budget isn't spent.
-const canDownloadZip = computed(
-  () =>
-    !!share.value &&
-    share.value.files.some((f) => f.state === 'clean') &&
-    (share.value.downloads_remaining === null || share.value.downloads_remaining > 0),
-)
-
-onMounted(load)
+  onMounted(load)
 </script>
 
 <template>
@@ -210,9 +214,9 @@ onMounted(load)
           />
         </label>
         <p class="fh-field-help">{{ t('public_share.password_help') }}</p>
-        <div
-v-if="unlockError" class="fh-notice" role="alert"
-        data-tone="error">{{ unlockError }}</div>
+        <div v-if="unlockError" class="fh-notice" role="alert" data-tone="error">
+          {{ unlockError }}
+        </div>
         <button class="fh-btn" :disabled="unlocking || !password">
           {{ unlocking ? t('common.loading') : t('public_share.unlock') }}
         </button>
@@ -222,11 +226,14 @@ v-if="unlockError" class="fh-notice" role="alert"
         <h2 class="files-h2">
           {{ t('public_share.files_heading', { n: share.files.length }) }}
         </h2>
-        <p
-          v-if="share.downloads_remaining !== null"
-          class="fh-field-help downloads-remaining"
-        >
-          {{ t('public_share.downloads_remaining', { n: share.downloads_remaining }, share.downloads_remaining) }}
+        <p v-if="share.downloads_remaining !== null" class="fh-field-help downloads-remaining">
+          {{
+            t(
+              'public_share.downloads_remaining',
+              { n: share.downloads_remaining },
+              share.downloads_remaining,
+            )
+          }}
         </p>
 
         <a
@@ -243,9 +250,7 @@ v-if="unlockError" class="fh-notice" role="alert"
           <li v-for="f in share.files" :key="f.id" class="file-row" :data-state="f.state">
             <div class="meta">
               <div class="filename" :title="f.original_filename">{{ f.original_filename }}</div>
-              <div class="sub fh-mono">
-                {{ formatBytes(f.size_bytes) }} · {{ f.mime_type }}
-              </div>
+              <div class="sub fh-mono">{{ formatBytes(f.size_bytes) }} · {{ f.mime_type }}</div>
             </div>
             <div class="state-cell">
               <span v-if="f.state === 'ready_unscanned'" class="fh-pill" data-state="warn">
@@ -304,108 +309,108 @@ v-if="unlockError" class="fh-notice" role="alert"
 </template>
 
 <style scoped>
-.public-share {
-  max-width: 720px;
-  padding-top: var(--fh-space-6);
-  padding-bottom: var(--fh-space-6);
-}
+  .public-share {
+    max-width: 720px;
+    padding-top: var(--fh-space-6);
+    padding-bottom: var(--fh-space-6);
+  }
 
-.public-brand {
-  display: flex;
-  align-items: center;
-  gap: var(--fh-space-2);
-  margin-bottom: var(--fh-space-5);
-}
+  .public-brand {
+    display: flex;
+    align-items: center;
+    gap: var(--fh-space-2);
+    margin-bottom: var(--fh-space-5);
+  }
 
-.loading {
-  color: var(--fh-subtle);
-  padding: var(--fh-space-5) 0;
-}
+  .loading {
+    color: var(--fh-subtle);
+    padding: var(--fh-space-5) 0;
+  }
 
-.error-state {
-  text-align: center;
-  padding: var(--fh-space-6) 0;
-}
+  .error-state {
+    text-align: center;
+    padding: var(--fh-space-6) 0;
+  }
 
-.expires-line {
-  display: inline-flex;
-  align-items: baseline;
-  gap: var(--fh-space-2);
-  color: var(--fh-subtle);
-}
+  .expires-line {
+    display: inline-flex;
+    align-items: baseline;
+    gap: var(--fh-space-2);
+    color: var(--fh-subtle);
+  }
 
-.message {
-  background: var(--fh-paper-raised);
-  border-left: 2px solid var(--fh-hairline-strong);
-  padding: var(--fh-space-3) var(--fh-space-4);
-  white-space: pre-wrap;
-  line-height: 1.6;
-  color: var(--fh-ink-soft);
-}
+  .message {
+    background: var(--fh-paper-raised);
+    border-left: 2px solid var(--fh-hairline-strong);
+    padding: var(--fh-space-3) var(--fh-space-4);
+    white-space: pre-wrap;
+    line-height: 1.6;
+    color: var(--fh-ink-soft);
+  }
 
-.unlock-form {
-  max-width: 420px;
-}
+  .unlock-form {
+    max-width: 420px;
+  }
 
-.files-section {
-  margin-top: var(--fh-space-3);
-}
+  .files-section {
+    margin-top: var(--fh-space-3);
+  }
 
-.files-h2 {
-  font-family: var(--fh-font-display);
-  font-size: 1.5rem;
-  font-weight: 400;
-  margin: var(--fh-space-3) 0;
-}
+  .files-h2 {
+    font-family: var(--fh-font-display);
+    font-size: 1.5rem;
+    font-weight: 400;
+    margin: var(--fh-space-3) 0;
+  }
 
-.downloads-remaining {
-  margin-bottom: var(--fh-space-3);
-}
+  .downloads-remaining {
+    margin-bottom: var(--fh-space-3);
+  }
 
-.files {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  border-top: var(--fh-border);
-}
+  .files {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    border-top: var(--fh-border);
+  }
 
-.file-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  gap: var(--fh-space-3);
-  align-items: center;
-  padding: var(--fh-space-3) 0;
-  border-bottom: var(--fh-border);
-}
-
-.meta {
-  min-width: 0;
-}
-
-.filename {
-  font-size: var(--fh-text-body-md);
-  color: var(--fh-ink);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.sub {
-  font-size: var(--fh-text-mono-sm);
-  color: var(--fh-subtle);
-  margin-top: 2px;
-}
-
-.action {
-  text-align: right;
-}
-
-@media (max-width: 720px) {
   .file-row {
-    grid-template-columns: 1fr;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    gap: var(--fh-space-3);
+    align-items: center;
+    padding: var(--fh-space-3) 0;
+    border-bottom: var(--fh-border);
   }
+
+  .meta {
+    min-width: 0;
+  }
+
+  .filename {
+    font-size: var(--fh-text-body-md);
+    color: var(--fh-ink);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .sub {
+    font-size: var(--fh-text-mono-sm);
+    color: var(--fh-subtle);
+    margin-top: 2px;
+  }
+
   .action {
-    text-align: left;
+    text-align: right;
   }
-}
+
+  @media (max-width: 720px) {
+    .file-row {
+      grid-template-columns: 1fr;
+    }
+    .action {
+      text-align: left;
+    }
+  }
 </style>

@@ -37,13 +37,7 @@ const DIRECT_UPLOAD_THRESHOLD =
 const TUS_CHUNK_BYTES = 8 * 1024 * 1024 // 8 MB chunks → balanced for big files + slow links
 const TUS_RETRY_DELAYS = [0, 1000, 3000, 5000, 10000] // ms
 
-export type UploadState =
-  | 'queued'
-  | 'preparing'
-  | 'uploading'
-  | 'finalizing'
-  | 'done'
-  | 'error'
+export type UploadState = 'queued' | 'preparing' | 'uploading' | 'finalizing' | 'done' | 'error'
 
 export interface UploadItem {
   uid: string
@@ -106,11 +100,7 @@ export function useUpload(shareId: Ref<string | null>) {
   const log = ref<LogEntry[]>([])
   let logCounter = 0
 
-  function pushLog(
-    item: UploadItem,
-    kind: LogEntry['kind'],
-    params?: Record<string, unknown>,
-  ) {
+  function pushLog(item: UploadItem, kind: LogEntry['kind'], params?: Record<string, unknown>) {
     log.value.push({
       id: `l${++logCounter}`,
       ts: Date.now(),
@@ -134,9 +124,7 @@ export function useUpload(shareId: Ref<string | null>) {
     // verifies.
     headers: (file: UppyFile<Meta, Body>): Record<string, string> => {
       const meta = file.meta as unknown as FileMeta | undefined
-      return meta?.uploadMetadataHeader
-        ? { 'Upload-Metadata': meta.uploadMetadataHeader }
-        : {}
+      return meta?.uploadMetadataHeader ? { 'Upload-Metadata': meta.uploadMetadataHeader } : {}
     },
   })
 
@@ -152,10 +140,7 @@ export function useUpload(shareId: Ref<string | null>) {
     if (!item) return
     item.bytesUploaded = progress.bytesUploaded ?? 0
     if (progress.bytesTotal) {
-      item.progress = Math.min(
-        99,
-        Math.round((progress.bytesUploaded / progress.bytesTotal) * 100),
-      )
+      item.progress = Math.min(99, Math.round((progress.bytesUploaded / progress.bytesTotal) * 100))
     }
     if (item.state === 'preparing') item.state = 'uploading'
   })
@@ -227,15 +212,11 @@ export function useUpload(shareId: Ref<string | null>) {
       if (item.file.size < directLimit) {
         // Direct path: one POST, server-managed progress estimation.
         pushLog(item, 'started')
-        const { data } = await directUpload(
-          shareId.value,
-          item.file,
-          (n) => {
-            item.progress = Math.min(99, n)
-            item.bytesUploaded = Math.round((item.file.size * n) / 100)
-            if (item.state === 'preparing') item.state = 'uploading'
-          },
-        )
+        const { data } = await directUpload(shareId.value, item.file, (n) => {
+          item.progress = Math.min(99, n)
+          item.bytesUploaded = Math.round((item.file.size * n) / 100)
+          if (item.state === 'preparing') item.state = 'uploading'
+        })
         item.fileId = data.file_id
         item.progress = 100
         item.bytesUploaded = item.file.size
@@ -290,8 +271,7 @@ export function useUpload(shareId: Ref<string | null>) {
       // status code NNN"; keep this composable i18n-free (views localize).
       const env = asEnvelope(err)
       const msg =
-        env?.error ??
-        (err instanceof Error ? err.message : typeof err === 'string' ? err : null)
+        env?.error ?? (err instanceof Error ? err.message : typeof err === 'string' ? err : null)
       item.state = 'error'
       item.error = msg
       item.errorCode = env?.code ?? 'UPLOAD_FAILED'
@@ -312,12 +292,10 @@ export function useUpload(shareId: Ref<string | null>) {
     const idx = items.value.findIndex((i) => i.uid === uid)
     if (idx === -1) return
     // If the file is mid-flight in Uppy, remove it there too.
-    const uppyFile = uppy
-      .getFiles()
-      .find((f: UppyFile<FileMeta, Record<string, never>>) => {
-        const meta = f.meta as FileMeta | undefined
-        return meta?.uid === uid
-      })
+    const uppyFile = uppy.getFiles().find((f: UppyFile<FileMeta, Record<string, never>>) => {
+      const meta = f.meta as FileMeta | undefined
+      return meta?.uid === uid
+    })
     if (uppyFile) {
       try {
         uppy.removeFile(uppyFile.id)
@@ -353,21 +331,15 @@ export function useUpload(shareId: Ref<string | null>) {
   }
 
   const isActive = computed(() =>
-    items.value.some((i) =>
-      ['preparing', 'uploading', 'finalizing'].includes(i.state),
-    ),
+    items.value.some((i) => ['preparing', 'uploading', 'finalizing'].includes(i.state)),
   )
 
   const allDone = computed(
     () => items.value.length > 0 && items.value.every((i) => i.state === 'done'),
   )
 
-  const totalBytes = computed(() =>
-    items.value.reduce((acc, i) => acc + i.file.size, 0),
-  )
-  const uploadedBytes = computed(() =>
-    items.value.reduce((acc, i) => acc + i.bytesUploaded, 0),
-  )
+  const totalBytes = computed(() => items.value.reduce((acc, i) => acc + i.file.size, 0))
+  const uploadedBytes = computed(() => items.value.reduce((acc, i) => acc + i.bytesUploaded, 0))
 
   onBeforeUnmount(() => {
     try {

@@ -1,113 +1,109 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
-import { useI18n } from 'vue-i18n'
-import { useRouter } from 'vue-router'
+  import { onMounted, ref } from 'vue'
+  import { useI18n } from 'vue-i18n'
+  import { useRouter } from 'vue-router'
 
-import { getTwofaPolicy, updateTwofaPolicy } from '@/api/admin'
-import { listGroups } from '@/api/groups'
-import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
-import { useApiError } from '@/composables/useApiError'
-import { useAuthStore } from '@/stores/auth'
-import { useUiStore } from '@/stores/ui'
-import type {
-  GroupResponse,
-  RequiredGroupRef,
-  TwofaPolicyResponse,
-} from '@/types/api'
+  import { getTwofaPolicy, updateTwofaPolicy } from '@/api/admin'
+  import { listGroups } from '@/api/groups'
+  import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
+  import { useApiError } from '@/composables/useApiError'
+  import { useAuthStore } from '@/stores/auth'
+  import { useUiStore } from '@/stores/ui'
+  import type { GroupResponse, RequiredGroupRef, TwofaPolicyResponse } from '@/types/api'
 
-const { t } = useI18n()
-const { describe } = useApiError()
-const ui = useUiStore()
-const auth = useAuthStore()
-const router = useRouter()
+  const { t } = useI18n()
+  const { describe } = useApiError()
+  const ui = useUiStore()
+  const auth = useAuthStore()
+  const router = useRouter()
 
-const loading = ref(true)
-const saving = ref(false)
-const errorMsg = ref<string | null>(null)
-const isKvOverridden = ref(false)
+  const loading = ref(true)
+  const saving = ref(false)
+  const errorMsg = ref<string | null>(null)
+  const isKvOverridden = ref(false)
 
-const requiredRoles = ref<Set<string>>(new Set())
-const requiredGroups = ref<RequiredGroupRef[]>([])
-const availableGroups = ref<GroupResponse[]>([])
+  const requiredRoles = ref<Set<string>>(new Set())
+  const requiredGroups = ref<RequiredGroupRef[]>([])
+  const availableGroups = ref<GroupResponse[]>([])
 
-const ROLE_KEYS = [
-  { value: 'admin', labelKey: 'admin_twofa_policy.role.admin' },
-  { value: 'employee', labelKey: 'admin_twofa_policy.role.employee' },
-  { value: 'client', labelKey: 'admin_twofa_policy.role.client' },
-]
+  const ROLE_KEYS = [
+    { value: 'admin', labelKey: 'admin_twofa_policy.role.admin' },
+    { value: 'employee', labelKey: 'admin_twofa_policy.role.employee' },
+    { value: 'client', labelKey: 'admin_twofa_policy.role.client' },
+  ]
 
-function toggleRole(value: string) {
-  const next = new Set(requiredRoles.value)
-  if (next.has(value)) next.delete(value)
-  else next.add(value)
-  requiredRoles.value = next
-}
-
-function toggleGroup(g: GroupResponse) {
-  const has = requiredGroups.value.some((x) => x.id === g.id)
-  if (has) {
-    requiredGroups.value = requiredGroups.value.filter((x) => x.id !== g.id)
-  } else {
-    requiredGroups.value = [
-      ...requiredGroups.value,
-      { id: g.id, name: g.name, is_company_inbox: g.is_company_inbox },
-    ]
+  function toggleRole(value: string) {
+    const next = new Set(requiredRoles.value)
+    if (next.has(value)) next.delete(value)
+    else next.add(value)
+    requiredRoles.value = next
   }
-}
 
-function applyResponse(data: TwofaPolicyResponse) {
-  requiredRoles.value = new Set(data.required_roles)
-  requiredGroups.value = data.required_groups
-  isKvOverridden.value = data.is_kv_overridden
-}
-
-async function load() {
-  loading.value = true
-  errorMsg.value = null
-  try {
-    const [{ data: policy }, { data: groups }] = await Promise.all([
-      getTwofaPolicy(),
-      listGroups(),
-    ])
-    applyResponse(policy)
-    availableGroups.value = groups.items
-  } catch (err) {
-    errorMsg.value = describe(err)
-  } finally {
-    loading.value = false
-  }
-}
-
-async function onSave() {
-  saving.value = true
-  errorMsg.value = null
-  try {
-    const { data } = await updateTwofaPolicy({
-      required_roles: [...requiredRoles.value],
-      required_group_ids: requiredGroups.value.map((g) => g.id),
-    })
-    applyResponse(data)
-    // Refresh /me so the running session sees the new requires_2fa
-    // value (relevant if the admin just tightened the policy on
-    // themselves or relaxed it).
-    await auth.refreshMe()
-    ui.pushToast(t('admin_twofa_policy.saved_toast'), 'success')
-    // Saving admin just made themselves required + isn't enrolled -
-    // jump straight into the QR enrolment wizard so they don't need
-    // to navigate manually (the route guard would catch them on the
-    // next nav anyway, but this avoids briefly seeing a now-gated
-    // admin page).
-    if (auth.user?.requires_2fa === true) {
-      await router.push({ name: 'account-2fa' })
+  function toggleGroup(g: GroupResponse) {
+    const has = requiredGroups.value.some((x) => x.id === g.id)
+    if (has) {
+      requiredGroups.value = requiredGroups.value.filter((x) => x.id !== g.id)
+    } else {
+      requiredGroups.value = [
+        ...requiredGroups.value,
+        { id: g.id, name: g.name, is_company_inbox: g.is_company_inbox },
+      ]
     }
-  } catch (err) {
-    errorMsg.value = describe(err)
-  } finally {
-    saving.value = false
   }
-}
 
-onMounted(load)
+  function applyResponse(data: TwofaPolicyResponse) {
+    requiredRoles.value = new Set(data.required_roles)
+    requiredGroups.value = data.required_groups
+    isKvOverridden.value = data.is_kv_overridden
+  }
+
+  async function load() {
+    loading.value = true
+    errorMsg.value = null
+    try {
+      const [{ data: policy }, { data: groups }] = await Promise.all([
+        getTwofaPolicy(),
+        listGroups(),
+      ])
+      applyResponse(policy)
+      availableGroups.value = groups.items
+    } catch (err) {
+      errorMsg.value = describe(err)
+    } finally {
+      loading.value = false
+    }
+  }
+
+  async function onSave() {
+    saving.value = true
+    errorMsg.value = null
+    try {
+      const { data } = await updateTwofaPolicy({
+        required_roles: [...requiredRoles.value],
+        required_group_ids: requiredGroups.value.map((g) => g.id),
+      })
+      applyResponse(data)
+      // Refresh /me so the running session sees the new requires_2fa
+      // value (relevant if the admin just tightened the policy on
+      // themselves or relaxed it).
+      await auth.refreshMe()
+      ui.pushToast(t('admin_twofa_policy.saved_toast'), 'success')
+      // Saving admin just made themselves required + isn't enrolled -
+      // jump straight into the QR enrolment wizard so they don't need
+      // to navigate manually (the route guard would catch them on the
+      // next nav anyway, but this avoids briefly seeing a now-gated
+      // admin page).
+      if (auth.user?.requires_2fa === true) {
+        await router.push({ name: 'account-2fa' })
+      }
+    } catch (err) {
+      errorMsg.value = describe(err)
+    } finally {
+      saving.value = false
+    }
+  }
+
+  onMounted(load)
 </script>
 
 <template>
@@ -138,10 +134,7 @@ onMounted(load)
         </label>
       </fieldset>
 
-      <fieldset
-        v-if="availableGroups.length > 0"
-        class="role-fieldset"
-      >
+      <fieldset v-if="availableGroups.length > 0" class="role-fieldset">
         <legend class="fh-field-label">
           {{ t('admin_twofa_policy.groups_heading') }}
         </legend>
@@ -172,9 +165,7 @@ onMounted(load)
         </ul>
       </section>
 
-      <div
-v-if="errorMsg" class="fh-notice" role="alert"
-        data-tone="error">{{ errorMsg }}</div>
+      <div v-if="errorMsg" class="fh-notice" role="alert" data-tone="error">{{ errorMsg }}</div>
 
       <div class="actions">
         <button type="submit" class="fh-btn" :disabled="saving">
@@ -186,77 +177,77 @@ v-if="errorMsg" class="fh-notice" role="alert"
 </template>
 
 <style scoped>
-.policy-page {
-  max-width: none;
-}
+  .policy-page {
+    max-width: none;
+  }
 
-.intro {
-  margin: var(--fh-space-2) 0 var(--fh-space-3);
-  max-width: 64ch;
-}
+  .intro {
+    margin: var(--fh-space-2) 0 var(--fh-space-3);
+    max-width: 64ch;
+  }
 
-.loading {
-  color: var(--fh-subtle);
-  padding: var(--fh-space-4) 0;
-}
+  .loading {
+    color: var(--fh-subtle);
+    padding: var(--fh-space-4) 0;
+  }
 
-.policy-form {
-  display: flex;
-  flex-direction: column;
-  gap: var(--fh-space-4);
-  margin-top: var(--fh-space-3);
-}
+  .policy-form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--fh-space-4);
+    margin-top: var(--fh-space-3);
+  }
 
-.role-fieldset {
-  border: 1px solid var(--fh-rule);
-  border-radius: var(--fh-radius-sm);
-  padding: var(--fh-space-3);
-  display: flex;
-  flex-direction: column;
-  gap: var(--fh-space-2);
-}
+  .role-fieldset {
+    border: 1px solid var(--fh-rule);
+    border-radius: var(--fh-radius-sm);
+    padding: var(--fh-space-3);
+    display: flex;
+    flex-direction: column;
+    gap: var(--fh-space-2);
+  }
 
-.role-check,
-.group-check {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--fh-space-2);
-  cursor: pointer;
-}
+  .role-check,
+  .group-check {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--fh-space-2);
+    cursor: pointer;
+  }
 
-.group-checks {
-  list-style: none;
-  margin: var(--fh-space-1) 0 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--fh-space-1);
-}
+  .group-checks {
+    list-style: none;
+    margin: var(--fh-space-1) 0 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--fh-space-1);
+  }
 
-.group-name {
-  font-family: var(--fh-font-mono);
-  font-size: var(--fh-text-mono-sm);
-}
+  .group-name {
+    font-family: var(--fh-font-mono);
+    font-size: var(--fh-text-mono-sm);
+  }
 
-.effects ul {
-  list-style: disc;
-  padding-left: var(--fh-space-4);
-  margin: var(--fh-space-2) 0 0;
-  color: var(--fh-subtle);
-  font-size: var(--fh-text-body-sm);
-  display: flex;
-  flex-direction: column;
-  gap: var(--fh-space-1);
-}
+  .effects ul {
+    list-style: disc;
+    padding-left: var(--fh-space-4);
+    margin: var(--fh-space-2) 0 0;
+    color: var(--fh-subtle);
+    font-size: var(--fh-text-body-sm);
+    display: flex;
+    flex-direction: column;
+    gap: var(--fh-space-1);
+  }
 
-.form-h2 {
-  font-family: var(--fh-font-display);
-  font-size: 1.25rem;
-  margin: 0;
-}
+  .form-h2 {
+    font-family: var(--fh-font-display);
+    font-size: 1.25rem;
+    margin: 0;
+  }
 
-.actions {
-  display: flex;
-  gap: var(--fh-space-3);
-}
+  .actions {
+    display: flex;
+    gap: var(--fh-space-3);
+  }
 </style>

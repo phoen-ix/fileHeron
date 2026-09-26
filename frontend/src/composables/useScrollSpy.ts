@@ -73,8 +73,7 @@ export function useScrollSpy(
   function onScroll() {
     if (lockedTo.value || cachedIds.length === 0) return
     const doc = document.documentElement
-    const atBottom =
-      window.scrollY + window.innerHeight >= doc.scrollHeight - 4
+    const atBottom = window.scrollY + window.innerHeight >= doc.scrollHeight - 4
     if (atBottom) active.value = cachedIds[cachedIds.length - 1]
     // Scrolling up from the bottom is handled by the observer:
     // sections re-enter the band and trigger normal updates.

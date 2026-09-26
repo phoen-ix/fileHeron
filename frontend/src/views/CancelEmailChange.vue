@@ -1,36 +1,40 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
-import { useRoute } from 'vue-router'
+  import { onMounted, ref } from 'vue'
+  import { useRoute } from 'vue-router'
 
-import AuthCanvas from '@/components/AuthCanvas.vue'
-import { cancelEmailChange } from '@/api/auth'
-import { useApiError } from '@/composables/useApiError'
+  import AuthCanvas from '@/components/AuthCanvas.vue'
+  import { cancelEmailChange } from '@/api/auth'
+  import { useApiError } from '@/composables/useApiError'
 
-const route = useRoute()
-const { describe } = useApiError()
+  const route = useRoute()
+  const { describe } = useApiError()
 
-type State = 'cancelling' | 'ok' | 'error'
-const state = ref<State>('cancelling')
-const error = ref<string | null>(null)
+  type State = 'cancelling' | 'ok' | 'error'
+  const state = ref<State>('cancelling')
+  const error = ref<string | null>(null)
 
-onMounted(async () => {
-  const token = String(route.params.token ?? '')
-  try {
-    await cancelEmailChange({ token })
-    state.value = 'ok'
-  } catch (e) {
-    state.value = 'error'
-    error.value = describe(e)
-  }
-})
+  onMounted(async () => {
+    const token = String(route.params.token ?? '')
+    try {
+      await cancelEmailChange({ token })
+      state.value = 'ok'
+    } catch (e) {
+      state.value = 'error'
+      error.value = describe(e)
+    }
+  })
 </script>
 
 <template>
   <AuthCanvas>
-    <span class="fh-eyebrow fh-rise" data-stagger="1">/ {{ $t('cancel_email_change.eyebrow') }}</span>
+    <span class="fh-eyebrow fh-rise" data-stagger="1"
+      >/ {{ $t('cancel_email_change.eyebrow') }}</span
+    >
 
     <template v-if="state === 'cancelling'">
-      <h1 class="fh-display fh-rise" data-stagger="2">{{ $t('cancel_email_change.cancelling') }}</h1>
+      <h1 class="fh-display fh-rise" data-stagger="2">
+        {{ $t('cancel_email_change.cancelling') }}
+      </h1>
     </template>
 
     <template v-else-if="state === 'ok'">

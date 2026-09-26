@@ -1,33 +1,33 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+  import { ref } from 'vue'
 
-import AuthCanvas from '@/components/AuthCanvas.vue'
-import { forgotPassword } from '@/api/auth'
-import { useApiError } from '@/composables/useApiError'
+  import AuthCanvas from '@/components/AuthCanvas.vue'
+  import { forgotPassword } from '@/api/auth'
+  import { useApiError } from '@/composables/useApiError'
 
-const { describe } = useApiError()
-const email = ref('')
-const sent = ref(false)
-const submitting = ref(false)
-const errorMsg = ref<string | null>(null)
+  const { describe } = useApiError()
+  const email = ref('')
+  const sent = ref(false)
+  const submitting = ref(false)
+  const errorMsg = ref<string | null>(null)
 
-async function onSubmit() {
-  submitting.value = true
-  errorMsg.value = null
-  try {
-    await forgotPassword({ email: email.value })
-    sent.value = true
-  } catch (e) {
-    // There was no catch: a 429 RATE_LIMITED, a 5xx or a dropped connection
-    // just re-enabled the button, so the user retried - deepening the rate
-    // limit - with an unhandled rejection and nothing on screen. (The endpoint
-    // answers 200 for unknown addresses, so this reveals nothing about which
-    // accounts exist.)
-    errorMsg.value = describe(e)
-  } finally {
-    submitting.value = false
+  async function onSubmit() {
+    submitting.value = true
+    errorMsg.value = null
+    try {
+      await forgotPassword({ email: email.value })
+      sent.value = true
+    } catch (e) {
+      // There was no catch: a 429 RATE_LIMITED, a 5xx or a dropped connection
+      // just re-enabled the button, so the user retried - deepening the rate
+      // limit - with an unhandled rejection and nothing on screen. (The endpoint
+      // answers 200 for unknown addresses, so this reveals nothing about which
+      // accounts exist.)
+      errorMsg.value = describe(e)
+    } finally {
+      submitting.value = false
+    }
   }
-}
 </script>
 
 <template>
@@ -73,25 +73,25 @@ async function onSubmit() {
 </template>
 
 <style scoped>
-.form {
-  margin-top: var(--fh-space-5);
-}
-.actions {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--fh-space-3);
-  margin-top: var(--fh-space-4);
-}
-.back {
-  font-family: var(--fh-font-mono);
-  font-size: var(--fh-text-mono-sm);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--fh-subtle);
-  text-decoration: none;
-}
-.back:hover {
-  color: var(--fh-accent);
-}
+  .form {
+    margin-top: var(--fh-space-5);
+  }
+  .actions {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--fh-space-3);
+    margin-top: var(--fh-space-4);
+  }
+  .back {
+    font-family: var(--fh-font-mono);
+    font-size: var(--fh-text-mono-sm);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--fh-subtle);
+    text-decoration: none;
+  }
+  .back:hover {
+    color: var(--fh-accent);
+  }
 </style>

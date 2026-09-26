@@ -1,80 +1,78 @@
 <script setup lang="ts">
-/* Second factor for a login whose FIRST factor was SSO or a passkey.
- *
- * Neither of those paths used to challenge an enrolled TOTP factor - both
- * minted a full session outright - so turning 2FA on did nothing at all for
- * anyone who signed in that way, while the account page said it was on.
- *
- * The pending token arrives in the query string because the browser is
- * mid-redirect and holds no session yet. It grants nothing on its own, lives
- * five minutes, and this exchange is the only endpoint that accepts it. It is
- * dropped from the URL as soon as it is read so it does not linger in history
- * or get copied out of the address bar. */
-import { onMounted, ref } from 'vue'
-import { useI18n } from 'vue-i18n'
-import { useRoute, useRouter } from 'vue-router'
+  /* Second factor for a login whose FIRST factor was SSO or a passkey.
+   *
+   * Neither of those paths used to challenge an enrolled TOTP factor - both
+   * minted a full session outright - so turning 2FA on did nothing at all for
+   * anyone who signed in that way, while the account page said it was on.
+   *
+   * The pending token arrives in the query string because the browser is
+   * mid-redirect and holds no session yet. It grants nothing on its own, lives
+   * five minutes, and this exchange is the only endpoint that accepts it. It is
+   * dropped from the URL as soon as it is read so it does not linger in history
+   * or get copied out of the address bar. */
+  import { onMounted, ref } from 'vue'
+  import { useI18n } from 'vue-i18n'
+  import { useRoute, useRouter } from 'vue-router'
 
-import { asEnvelope } from '@/api/client'
-import { useApiError } from '@/composables/useApiError'
-import { useAuthStore } from '@/stores/auth'
+  import { asEnvelope } from '@/api/client'
+  import { useApiError } from '@/composables/useApiError'
+  import { useAuthStore } from '@/stores/auth'
 
-const { t } = useI18n()
-const { describe } = useApiError()
-const route = useRoute()
-const router = useRouter()
-const auth = useAuthStore()
+  const { t } = useI18n()
+  const { describe } = useApiError()
+  const route = useRoute()
+  const router = useRouter()
+  const auth = useAuthStore()
 
-const pendingToken = ref('')
-const code = ref('')
-const useRecovery = ref(false)
-const submitting = ref(false)
-const errorMsg = ref<string | null>(null)
+  const pendingToken = ref('')
+  const code = ref('')
+  const useRecovery = ref(false)
+  const submitting = ref(false)
+  const errorMsg = ref<string | null>(null)
 
-onMounted(() => {
-  const raw = route.query.pending
-  pendingToken.value = typeof raw === 'string' ? raw : ''
-  if (!pendingToken.value) {
-    router.replace({ name: 'login' })
-    return
-  }
-  // Strip it from the address bar immediately.
-  router.replace({ name: 'login-2fa' })
-})
-
-async function onSubmit() {
-  const entered = code.value.trim()
-  if (!entered || submitting.value) return
-  submitting.value = true
-  errorMsg.value = null
-  try {
-    await auth.completeSecondFactor(
-      pendingToken.value,
-      useRecovery.value
-        ? { recoveryCode: entered }
-        : { totpCode: entered.replace(/\s+/g, '') },
-    )
-    await router.replace({ name: 'home' })
-  } catch (err) {
-    const codeStr = asEnvelope(err)?.code
-    // The pending token is short-lived by design; when it lapses the only
-    // honest thing to say is "start again" rather than leaving the user
-    // retyping codes against a token that can no longer work.
-    if (codeStr === 'PENDING_2FA_EXPIRED' || codeStr === 'INVALID_TOKEN') {
-      await router.replace({ name: 'login', query: { expired: '1' } })
+  onMounted(() => {
+    const raw = route.query.pending
+    pendingToken.value = typeof raw === 'string' ? raw : ''
+    if (!pendingToken.value) {
+      router.replace({ name: 'login' })
       return
     }
-    errorMsg.value = describe(err)
-    code.value = ''
-  } finally {
-    submitting.value = false
-  }
-}
+    // Strip it from the address bar immediately.
+    router.replace({ name: 'login-2fa' })
+  })
 
-function toggleRecovery() {
-  useRecovery.value = !useRecovery.value
-  code.value = ''
-  errorMsg.value = null
-}
+  async function onSubmit() {
+    const entered = code.value.trim()
+    if (!entered || submitting.value) return
+    submitting.value = true
+    errorMsg.value = null
+    try {
+      await auth.completeSecondFactor(
+        pendingToken.value,
+        useRecovery.value ? { recoveryCode: entered } : { totpCode: entered.replace(/\s+/g, '') },
+      )
+      await router.replace({ name: 'home' })
+    } catch (err) {
+      const codeStr = asEnvelope(err)?.code
+      // The pending token is short-lived by design; when it lapses the only
+      // honest thing to say is "start again" rather than leaving the user
+      // retyping codes against a token that can no longer work.
+      if (codeStr === 'PENDING_2FA_EXPIRED' || codeStr === 'INVALID_TOKEN') {
+        await router.replace({ name: 'login', query: { expired: '1' } })
+        return
+      }
+      errorMsg.value = describe(err)
+      code.value = ''
+    } finally {
+      submitting.value = false
+    }
+  }
+
+  function toggleRecovery() {
+    useRecovery.value = !useRecovery.value
+    code.value = ''
+    errorMsg.value = null
+  }
 </script>
 
 <template>
@@ -115,20 +113,20 @@ function toggleRecovery() {
 </template>
 
 <style scoped>
-.twofa-page {
-  max-width: 26rem;
-  margin: 4rem auto;
-  padding: 0 1rem;
-}
-.twofa-form {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  margin-top: 1.5rem;
-}
-.actions {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-}
+  .twofa-page {
+    max-width: 26rem;
+    margin: 4rem auto;
+    padding: 0 1rem;
+  }
+  .twofa-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    margin-top: 1.5rem;
+  }
+  .actions {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
 </style>

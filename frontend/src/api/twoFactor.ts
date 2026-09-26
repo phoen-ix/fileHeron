@@ -1,9 +1,5 @@
 import api from './client'
-import type {
-  RecoveryCodesResponse,
-  TotpSetupResponse,
-  TotpStatusResponse,
-} from '@/types/api'
+import type { RecoveryCodesResponse, TotpSetupResponse, TotpStatusResponse } from '@/types/api'
 
 export function getStatus() {
   return api.get<TotpStatusResponse>('/account/2fa/status')
@@ -21,9 +17,6 @@ export function disable(payload: { password: string; code_or_recovery: string })
   return api.post('/account/2fa/disable', payload)
 }
 
-export function regenerateRecoveryCodes(payload: {
-  password: string
-  code_or_recovery: string
-}) {
+export function regenerateRecoveryCodes(payload: { password: string; code_or_recovery: string }) {
   return api.post<RecoveryCodesResponse>('/account/2fa/recovery-codes/regenerate', payload)
 }

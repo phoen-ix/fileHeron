@@ -194,10 +194,7 @@ export const useAuthStore = defineStore('auth', () => {
   async function loginWithPasskey(
     email: string,
     password: string,
-  ): Promise<
-    | { status: 'ok'; me: MeResponse }
-    | { status: 'pending_2fa'; pendingToken: string }
-  > {
+  ): Promise<{ status: 'ok'; me: MeResponse } | { status: 'pending_2fa'; pendingToken: string }> {
     const begin = await webauthnApi.authBegin(email, password)
     const opts = begin.data.options as {
       challenge: string

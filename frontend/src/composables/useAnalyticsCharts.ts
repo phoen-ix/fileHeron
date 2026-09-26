@@ -13,12 +13,7 @@ interface Bar {
 /** Map values to evenly-spaced bars filling `width` × `height`. Heights scale
  *  to the max value (0 → a 0-height bar). `gap` is the fraction (0-1) of each
  *  slot left as spacing. */
-export function scaleBars(
-  values: number[],
-  width: number,
-  height: number,
-  gap = 0.25,
-): Bar[] {
+export function scaleBars(values: number[], width: number, height: number, gap = 0.25): Bar[] {
   if (values.length === 0) return []
   const max = Math.max(1, ...values)
   const slot = width / values.length

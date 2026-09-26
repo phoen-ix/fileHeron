@@ -78,12 +78,14 @@ import type {
   UserRole,
 } from '@/types/api'
 
-export function listUsers(params: {
-  q?: string
-  role?: UserRole
-  page?: number
-  page_size?: number
-} = {}) {
+export function listUsers(
+  params: {
+    q?: string
+    role?: UserRole
+    page?: number
+    page_size?: number
+  } = {},
+) {
   return api.get<AdminUserListResponse>('/admin/users', { params })
 }
 
@@ -106,7 +108,6 @@ export function getMotdSettings() {
 export function updateMotdSettings(payload: UpdateMotdSettingsRequest) {
   return api.put<MotdSettingsResponse>('/admin/settings/motd', payload)
 }
-
 
 // --- Updates (release-check) settings ------------------------------------
 // Cadence/enable for the release-check cron lives on the Scheduled tasks page.
@@ -170,7 +171,6 @@ export interface CheckUpdatesResult {
 export function checkUpdatesNow() {
   return api.post<CheckUpdatesResult>('/admin/system/check-updates')
 }
-
 
 // --- System / ops view (operational audit) -------------------------------
 
@@ -241,7 +241,6 @@ export function runCron(jobName: string) {
 export function runLiveChecks() {
   return api.get<{ live: LiveChecks }>('/admin/system/live')
 }
-
 
 // Phase 4 - self-update.
 
@@ -380,9 +379,7 @@ export function updateUser(id: number, payload: UpdateUserRequest) {
 }
 
 export function forcePasswordReset(id: number) {
-  return api.post<ForcePasswordResetResponse>(
-    `/admin/users/${id}/force-password-reset`,
-  )
+  return api.post<ForcePasswordResetResponse>(`/admin/users/${id}/force-password-reset`)
 }
 
 export function changeUserEmail(id: number, payload: AdminChangeEmailRequest) {
@@ -416,17 +413,19 @@ export function erasureReceiptPdf(auditId: number) {
  * 1001 and get a 422 back. */
 export const ADMIN_LOG_MAX_PAGE = 1000
 
-export function listAuditLog(params: {
-  event_type?: string
-  actor_user_id?: number
-  target_type?: string
-  target_id?: string
-  from?: string
-  to?: string
-  page?: number
-  page_size?: number
-  cursor?: string
-} = {}) {
+export function listAuditLog(
+  params: {
+    event_type?: string
+    actor_user_id?: number
+    target_type?: string
+    target_id?: string
+    from?: string
+    to?: string
+    page?: number
+    page_size?: number
+    cursor?: string
+  } = {},
+) {
   return api.get<AdminAuditResponse>('/admin/audit-log', { params })
 }
 
@@ -484,18 +483,20 @@ export function exportAuditCsv(params: Record<string, string> = {}) {
 
 // Mail log (v1.11.0)
 
-export function listMailLog(params: {
-  q?: string
-  recipient_email?: string
-  recipient_user_id?: number
-  category?: string
-  status?: string
-  from?: string
-  to?: string
-  page?: number
-  page_size?: number
-  cursor?: string
-} = {}) {
+export function listMailLog(
+  params: {
+    q?: string
+    recipient_email?: string
+    recipient_user_id?: number
+    category?: string
+    status?: string
+    from?: string
+    to?: string
+    page?: number
+    page_size?: number
+    cursor?: string
+  } = {},
+) {
   return api.get<AdminMailListResponse>('/admin/mail-log', { params })
 }
 
@@ -511,16 +512,18 @@ export function exportMailCsv(params: Record<string, string> = {}) {
   return api.get('/admin/mail-log/export.csv', { params, responseType: 'blob' })
 }
 
-export function listErrorLog(params: {
-  code?: string
-  status_code?: number
-  source?: string
-  ip?: string
-  from?: string
-  to?: string
-  page?: number
-  page_size?: number
-} = {}) {
+export function listErrorLog(
+  params: {
+    code?: string
+    status_code?: number
+    source?: string
+    ip?: string
+    from?: string
+    to?: string
+    page?: number
+    page_size?: number
+  } = {},
+) {
   return api.get<AdminErrorListResponse>('/admin/error-log', { params })
 }
 
@@ -535,19 +538,18 @@ export function getTokenPolicy() {
 }
 
 export function updateTokenPolicy(payload: UpdateTokenPolicyRequest) {
-  return api.put<TokenPolicyResponse>(
-    '/admin/settings/api-tokens/policy',
-    payload,
-  )
+  return api.put<TokenPolicyResponse>('/admin/settings/api-tokens/policy', payload)
 }
 
-export function adminListApiTokens(params: {
-  q?: string
-  owner_id?: number
-  status?: 'active' | 'disabled' | 'revoked' | 'expired'
-  page?: number
-  page_size?: number
-} = {}) {
+export function adminListApiTokens(
+  params: {
+    q?: string
+    owner_id?: number
+    status?: 'active' | 'disabled' | 'revoked' | 'expired'
+    page?: number
+    page_size?: number
+  } = {},
+) {
   return api.get<AdminApiTokenListResponse>('/admin/api-tokens', { params })
 }
 
@@ -569,20 +571,22 @@ export function adminRevokeApiToken(id: number) {
 
 // Admin file history (post-Phase 10)
 
-export function adminListFiles(params: {
-  q?: string
-  state?: string
-  uploader_id?: number
-  share_state?: string
-  orphaned?: boolean
-  include_inactive?: boolean
-  from?: string
-  to?: string
-  sort?: string
-  direction?: 'asc' | 'desc'
-  page?: number
-  page_size?: number
-} = {}) {
+export function adminListFiles(
+  params: {
+    q?: string
+    state?: string
+    uploader_id?: number
+    share_state?: string
+    orphaned?: boolean
+    include_inactive?: boolean
+    from?: string
+    to?: string
+    sort?: string
+    direction?: 'asc' | 'desc'
+    page?: number
+    page_size?: number
+  } = {},
+) {
   return api.get<AdminFileListResponse>('/admin/files', { params })
 }
 
@@ -598,15 +602,17 @@ export function adminDeleteFile(fileId: string) {
 
 // Admin session oversight (v1.7.0)
 
-export function adminListSessions(params: {
-  q?: string
-  user_id?: number
-  include_inactive?: boolean
-  sort?: 'created_at' | 'last_used_at' | 'expires_at'
-  direction?: 'asc' | 'desc'
-  page?: number
-  page_size?: number
-} = {}) {
+export function adminListSessions(
+  params: {
+    q?: string
+    user_id?: number
+    include_inactive?: boolean
+    sort?: 'created_at' | 'last_used_at' | 'expires_at'
+    direction?: 'asc' | 'desc'
+    page?: number
+    page_size?: number
+  } = {},
+) {
   return api.get<AdminSessionListResponse>('/admin/sessions', { params })
 }
 
@@ -625,10 +631,7 @@ export function getPublicLinkPolicy() {
 }
 
 export function updatePublicLinkPolicy(payload: UpdatePublicLinkPolicyRequest) {
-  return api.put<PublicLinkPolicyResponse>(
-    '/admin/settings/public-links/policy',
-    payload,
-  )
+  return api.put<PublicLinkPolicyResponse>('/admin/settings/public-links/policy', payload)
 }
 
 // Email / SMTP settings (post-Phase 10)
@@ -661,13 +664,8 @@ export function getFilePreviewSettings() {
   return api.get<FilePreviewSettingsResponse>('/admin/settings/file-preview')
 }
 
-export function updateFilePreviewSettings(
-  payload: UpdateFilePreviewSettingsRequest,
-) {
-  return api.put<FilePreviewSettingsResponse>(
-    '/admin/settings/file-preview',
-    payload,
-  )
+export function updateFilePreviewSettings(payload: UpdateFilePreviewSettingsRequest) {
+  return api.put<FilePreviewSettingsResponse>('/admin/settings/file-preview', payload)
 }
 
 // Share-approval policy (v1.24.0)
@@ -676,13 +674,8 @@ export function getShareApprovalSettings() {
   return api.get<ShareApprovalSettingsResponse>('/admin/settings/share-approval')
 }
 
-export function updateShareApprovalSettings(
-  payload: UpdateShareApprovalSettingsRequest,
-) {
-  return api.put<ShareApprovalSettingsResponse>(
-    '/admin/settings/share-approval',
-    payload,
-  )
+export function updateShareApprovalSettings(payload: UpdateShareApprovalSettingsRequest) {
+  return api.put<ShareApprovalSettingsResponse>('/admin/settings/share-approval', payload)
 }
 
 // Site URL (kv override of APP_URL env)
@@ -938,12 +931,7 @@ export function updateCronSchedule(name: string, payload: UpdateCronScheduleRequ
 
 // --- Configuration backup / restore (v1.33.0) ---------------------------
 
-export type BackupCategory =
-  | 'settings_branding'
-  | 'oidc_webhooks'
-  | 'groups'
-  | 'users'
-  | 'logs'
+export type BackupCategory = 'settings_branding' | 'oidc_webhooks' | 'groups' | 'users' | 'logs'
 export type BackupSecretMode = 'passphrase' | 'ciphertext' | 'exclude'
 
 export interface BackupExportRequest {
@@ -993,11 +981,7 @@ export function previewBackupImport(file: File, passphrase?: string) {
 /** `password` is the acting admin's own, re-confirmed - separate from
  *  `passphrase`, which decrypts the artifact. Import replaces users, purges
  *  identities, invalidates every share and deletes the bytes. */
-export function importConfigBackup(
-  file: File,
-  passphrase: string | undefined,
-  password: string,
-) {
+export function importConfigBackup(file: File, passphrase: string | undefined, password: string) {
   const form = new FormData()
   form.append('file', file)
   if (passphrase) form.append('passphrase', passphrase)

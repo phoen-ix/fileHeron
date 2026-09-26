@@ -16,17 +16,17 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
-import { useRoute } from 'vue-router'
+  import { computed } from 'vue'
+  import { useRoute } from 'vue-router'
 
-import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
-import AdminTabs from '@/components/admin/AdminTabs.vue'
-import { findNavItem } from '@/config/adminNav'
+  import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
+  import AdminTabs from '@/components/admin/AdminTabs.vue'
+  import { findNavItem } from '@/config/adminNav'
 
-const route = useRoute()
-const match = computed(() => findNavItem(route.name))
-const tabs = computed(() => match.value?.item.tabs ?? [])
-const activeTabId = computed(() =>
-  match.value?.tab ? `admin-tab-${match.value.tab.routeName}` : undefined,
-)
+  const route = useRoute()
+  const match = computed(() => findNavItem(route.name))
+  const tabs = computed(() => match.value?.item.tabs ?? [])
+  const activeTabId = computed(() =>
+    match.value?.tab ? `admin-tab-${match.value.tab.routeName}` : undefined,
+  )
 </script>

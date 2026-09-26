@@ -243,20 +243,9 @@ export interface UpdateGroupRequest {
 
 export type ShareKind = 'outbound' | 'inbound'
 export type ShareState =
-  | 'active'
-  | 'expired'
-  | 'revoked'
-  | 'deleted'
-  | 'failed'
-  | 'pending_approval'
-  | 'rejected'
+  'active' | 'expired' | 'revoked' | 'deleted' | 'failed' | 'pending_approval' | 'rejected'
 // Mirrors backend app/models/file.py::FileState.
-export type FileState =
-  | 'uploading'
-  | 'ready_unscanned'
-  | 'clean'
-  | 'infected'
-  | 'deleted'
+export type FileState = 'uploading' | 'ready_unscanned' | 'clean' | 'infected' | 'deleted'
 
 export interface FileInShareResponse {
   id: string
@@ -932,10 +921,7 @@ export interface CreateApiTokenResponse {
 
 /* Admin API tokens (post-Phase 10) */
 
-export type TokenPolicyMode =
-  | 'everyone'
-  | 'employees_admins'
-  | 'admins_only'
+export type TokenPolicyMode = 'everyone' | 'employees_admins' | 'admins_only'
 
 export type TokenStatus = 'active' | 'disabled' | 'revoked' | 'expired'
 

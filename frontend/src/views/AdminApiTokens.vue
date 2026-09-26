@@ -1,242 +1,234 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { useI18n } from 'vue-i18n'
+  import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
+  import { useI18n } from 'vue-i18n'
 
-import {
-  adminCreateApiToken,
-  adminDisableApiToken,
-  adminListApiTokens,
-  adminReactivateApiToken,
-  adminRevokeApiToken,
-} from '@/api/admin'
-import { searchUsers } from '@/api/users'
-import ExpiryPicker from '@/components/ExpiryPicker.vue'
-import Pager from '@/components/Pager.vue'
-import { useApiError } from '@/composables/useApiError'
-import { useDebouncedSearch } from '@/composables/useDebouncedSearch'
-import { usePaginatedList } from '@/composables/usePaginatedList'
-import { useSiteDateFormat } from '@/composables/useSiteDateFormat'
-import { useUiStore } from '@/stores/ui'
-import { defaultTokenExpiryLocal, siteLocalIsoToUtcIso } from '@/utils/datetime'
-import { TOKEN_SCOPE_GROUPS, scopeLabelKey } from '@/utils/tokenScopes'
-import type {
-  AdminApiTokenItem,
-  CreateApiTokenResponse,
-  TokenStatus,
-  UserSearchItem,
-} from '@/types/api'
+  import {
+    adminCreateApiToken,
+    adminDisableApiToken,
+    adminListApiTokens,
+    adminReactivateApiToken,
+    adminRevokeApiToken,
+  } from '@/api/admin'
+  import { searchUsers } from '@/api/users'
+  import ExpiryPicker from '@/components/ExpiryPicker.vue'
+  import Pager from '@/components/Pager.vue'
+  import { useApiError } from '@/composables/useApiError'
+  import { useDebouncedSearch } from '@/composables/useDebouncedSearch'
+  import { usePaginatedList } from '@/composables/usePaginatedList'
+  import { useSiteDateFormat } from '@/composables/useSiteDateFormat'
+  import { useUiStore } from '@/stores/ui'
+  import { defaultTokenExpiryLocal, siteLocalIsoToUtcIso } from '@/utils/datetime'
+  import { TOKEN_SCOPE_GROUPS, scopeLabelKey } from '@/utils/tokenScopes'
+  import type {
+    AdminApiTokenItem,
+    CreateApiTokenResponse,
+    TokenStatus,
+    UserSearchItem,
+  } from '@/types/api'
 
-const { t } = useI18n()
-const { formatDate } = useSiteDateFormat()
-const { describe } = useApiError()
-const ui = useUiStore()
+  const { t } = useI18n()
+  const { formatDate } = useSiteDateFormat()
+  const { describe } = useApiError()
+  const ui = useUiStore()
 
-const q = ref('')
-const status = ref<TokenStatus | ''>('')
-const busyTokenId = ref<number | null>(null)
+  const q = ref('')
+  const status = ref<TokenStatus | ''>('')
+  const busyTokenId = ref<number | null>(null)
 
-const { items, total, page, pageSize, loading, errorMsg, load } =
-  usePaginatedList<AdminApiTokenItem>(({ page, pageSize }) =>
-    adminListApiTokens({
-      q: q.value || undefined,
-      status: status.value || undefined,
-      page,
-      page_size: pageSize,
-    }).then((r) => r.data),
-  )
+  const { items, total, page, pageSize, loading, errorMsg, load } =
+    usePaginatedList<AdminApiTokenItem>(({ page, pageSize }) =>
+      adminListApiTokens({
+        q: q.value || undefined,
+        status: status.value || undefined,
+        page,
+        page_size: pageSize,
+      }).then((r) => r.data),
+    )
 
-useDebouncedSearch(q, () => {
-  page.value = 1
-  void load()
-})
-watch(status, () => {
-  page.value = 1
-  void load()
-})
-watch(page, load)
+  useDebouncedSearch(q, () => {
+    page.value = 1
+    void load()
+  })
+  watch(status, () => {
+    page.value = 1
+    void load()
+  })
+  watch(page, load)
 
-async function onDisable(item: AdminApiTokenItem) {
-  busyTokenId.value = item.id
-  try {
-    const { data } = await adminDisableApiToken(item.id)
-    items.value = items.value.map((t) => (t.id === data.id ? data : t))
-    ui.pushToast(t('admin_api_tokens.toast.disabled'), 'success')
-  } catch (err) {
-    ui.pushToast(describe(err), 'error')
-  } finally {
-    busyTokenId.value = null
-  }
-}
-
-async function onReactivate(item: AdminApiTokenItem) {
-  busyTokenId.value = item.id
-  try {
-    const { data } = await adminReactivateApiToken(item.id)
-    items.value = items.value.map((t) => (t.id === data.id ? data : t))
-    ui.pushToast(t('admin_api_tokens.toast.reactivated'), 'success')
-  } catch (err) {
-    ui.pushToast(describe(err), 'error')
-  } finally {
-    busyTokenId.value = null
-  }
-}
-
-async function onRevoke(item: AdminApiTokenItem) {
-  if (!(await ui.confirm({ message: t('admin_api_tokens.revoke_confirm'), danger: true }))) return
-  busyTokenId.value = item.id
-  try {
-    await adminRevokeApiToken(item.id)
-    await load()
-    ui.pushToast(t('admin_api_tokens.toast.revoked'), 'success')
-  } catch (err) {
-    ui.pushToast(describe(err), 'error')
-  } finally {
-    busyTokenId.value = null
-  }
-}
-
-// --- Generate token for user (inline form) ------------------------------
-
-const showCreateForm = ref(false)
-const userQuery = ref('')
-const userSuggestions = ref<UserSearchItem[]>([])
-const selectedUser = ref<UserSearchItem | null>(null)
-const newName = ref('')
-// Re-auth: this route mints a token for ANY user, so it is the one a stolen
-// admin session would reach for.
-const adminPassword = ref('')
-// Least-privilege, matching ApiTokenPanel.vue. These were "never expires" +
-// "unrestricted", so an admin who filled in name + user + password handed out a
-// permanent full-access credential acting as that user - and nothing revokes
-// API tokens on password reset or "sign out other sessions". The target user
-// cannot see or revoke what was minted for them from their own panel either,
-// which makes this the stronger case of the two, not the weaker one. Both wide
-// options remain one click away; they just have to be chosen.
-const tokenExpiresAt = ref<string | null>(defaultTokenExpiryLocal())
-const scopeMode = ref<'full' | 'limited'>('limited')
-const selectedScopes = ref<string[]>([])
-const creating = ref(false)
-const createError = ref<string | null>(null)
-const TOKEN_PRESETS = ['7d', '30d', '90d', '1y', 'never'] as const
-
-function scopeLabel(scope: string): string {
-  return t(scopeLabelKey(scope))
-}
-const plaintextResult = ref<CreateApiTokenResponse | null>(null)
-const copied = ref(false)
-let userSearchTimer: ReturnType<typeof setTimeout> | null = null
-
-watch(userQuery, () => {
-  if (userSearchTimer) clearTimeout(userSearchTimer)
-  if (selectedUser.value && selectedUser.value.display_name === userQuery.value) {
-    return
-  }
-  // The text no longer names the picked user, so the pick is stale. Dropping it
-  // here is what makes "type over the box and press Enter" fail closed: it used
-  // to submit the PREVIOUS selection, so an admin who typed "ali", clicked
-  // Alice, then retyped "Bob" and submitted handed Bob a full-privilege token
-  // acting as Alice - with every audit row attributing his actions to her, and
-  // nothing on screen naming the owner (audit #2).
-  selectedUser.value = null
-  if (!userQuery.value || userQuery.value.length < 2) {
-    userSuggestions.value = []
-    return
-  }
-  userSearchTimer = setTimeout(async () => {
+  async function onDisable(item: AdminApiTokenItem) {
+    busyTokenId.value = item.id
     try {
-      const { data } = await searchUsers(userQuery.value)
-      userSuggestions.value = data.items
-    } catch {
-      userSuggestions.value = []
+      const { data } = await adminDisableApiToken(item.id)
+      items.value = items.value.map((t) => (t.id === data.id ? data : t))
+      ui.pushToast(t('admin_api_tokens.toast.disabled'), 'success')
+    } catch (err) {
+      ui.pushToast(describe(err), 'error')
+    } finally {
+      busyTokenId.value = null
     }
-  }, 200)
-})
-
-function pickUser(u: UserSearchItem) {
-  selectedUser.value = u
-  userQuery.value = u.display_name
-  userSuggestions.value = []
-}
-
-onBeforeUnmount(() => {
-  if (userSearchTimer) clearTimeout(userSearchTimer)
-})
-
-function resetCreateForm() {
-  showCreateForm.value = false
-  userQuery.value = ''
-  userSuggestions.value = []
-  selectedUser.value = null
-  newName.value = ''
-  tokenExpiresAt.value = defaultTokenExpiryLocal()
-  scopeMode.value = 'limited'
-  selectedScopes.value = []
-  createError.value = null
-}
-
-async function onCreateForUser() {
-  if (!selectedUser.value) {
-    createError.value = t('admin_api_tokens.no_user_selected')
-    return
   }
-  creating.value = true
-  createError.value = null
-  try {
-    const { data } = await adminCreateApiToken({
-      target_user_id: selectedUser.value.user_id,
-      name: newName.value,
-      expires_at:
-        tokenExpiresAt.value === null
-          ? null
-          : siteLocalIsoToUtcIso(tokenExpiresAt.value),
-      scopes: scopeMode.value === 'full' ? null : selectedScopes.value,
-      password: adminPassword.value,
-    })
-    plaintextResult.value = data
-    adminPassword.value = ''
+
+  async function onReactivate(item: AdminApiTokenItem) {
+    busyTokenId.value = item.id
+    try {
+      const { data } = await adminReactivateApiToken(item.id)
+      items.value = items.value.map((t) => (t.id === data.id ? data : t))
+      ui.pushToast(t('admin_api_tokens.toast.reactivated'), 'success')
+    } catch (err) {
+      ui.pushToast(describe(err), 'error')
+    } finally {
+      busyTokenId.value = null
+    }
+  }
+
+  async function onRevoke(item: AdminApiTokenItem) {
+    if (!(await ui.confirm({ message: t('admin_api_tokens.revoke_confirm'), danger: true }))) return
+    busyTokenId.value = item.id
+    try {
+      await adminRevokeApiToken(item.id)
+      await load()
+      ui.pushToast(t('admin_api_tokens.toast.revoked'), 'success')
+    } catch (err) {
+      ui.pushToast(describe(err), 'error')
+    } finally {
+      busyTokenId.value = null
+    }
+  }
+
+  // --- Generate token for user (inline form) ------------------------------
+
+  const showCreateForm = ref(false)
+  const userQuery = ref('')
+  const userSuggestions = ref<UserSearchItem[]>([])
+  const selectedUser = ref<UserSearchItem | null>(null)
+  const newName = ref('')
+  // Re-auth: this route mints a token for ANY user, so it is the one a stolen
+  // admin session would reach for.
+  const adminPassword = ref('')
+  // Least-privilege, matching ApiTokenPanel.vue. These were "never expires" +
+  // "unrestricted", so an admin who filled in name + user + password handed out a
+  // permanent full-access credential acting as that user - and nothing revokes
+  // API tokens on password reset or "sign out other sessions". The target user
+  // cannot see or revoke what was minted for them from their own panel either,
+  // which makes this the stronger case of the two, not the weaker one. Both wide
+  // options remain one click away; they just have to be chosen.
+  const tokenExpiresAt = ref<string | null>(defaultTokenExpiryLocal())
+  const scopeMode = ref<'full' | 'limited'>('limited')
+  const selectedScopes = ref<string[]>([])
+  const creating = ref(false)
+  const createError = ref<string | null>(null)
+  const TOKEN_PRESETS = ['7d', '30d', '90d', '1y', 'never'] as const
+
+  function scopeLabel(scope: string): string {
+    return t(scopeLabelKey(scope))
+  }
+  const plaintextResult = ref<CreateApiTokenResponse | null>(null)
+  const copied = ref(false)
+  let userSearchTimer: ReturnType<typeof setTimeout> | null = null
+
+  watch(userQuery, () => {
+    if (userSearchTimer) clearTimeout(userSearchTimer)
+    if (selectedUser.value && selectedUser.value.display_name === userQuery.value) {
+      return
+    }
+    // The text no longer names the picked user, so the pick is stale. Dropping it
+    // here is what makes "type over the box and press Enter" fail closed: it used
+    // to submit the PREVIOUS selection, so an admin who typed "ali", clicked
+    // Alice, then retyped "Bob" and submitted handed Bob a full-privilege token
+    // acting as Alice - with every audit row attributing his actions to her, and
+    // nothing on screen naming the owner (audit #2).
+    selectedUser.value = null
+    if (!userQuery.value || userQuery.value.length < 2) {
+      userSuggestions.value = []
+      return
+    }
+    userSearchTimer = setTimeout(async () => {
+      try {
+        const { data } = await searchUsers(userQuery.value)
+        userSuggestions.value = data.items
+      } catch {
+        userSuggestions.value = []
+      }
+    }, 200)
+  })
+
+  function pickUser(u: UserSearchItem) {
+    selectedUser.value = u
+    userQuery.value = u.display_name
+    userSuggestions.value = []
+  }
+
+  onBeforeUnmount(() => {
+    if (userSearchTimer) clearTimeout(userSearchTimer)
+  })
+
+  function resetCreateForm() {
     showCreateForm.value = false
     userQuery.value = ''
+    userSuggestions.value = []
     selectedUser.value = null
     newName.value = ''
     tokenExpiresAt.value = defaultTokenExpiryLocal()
     scopeMode.value = 'limited'
     selectedScopes.value = []
-    await load()
-  } catch (err) {
-    createError.value = describe(err)
-  } finally {
-    creating.value = false
+    createError.value = null
   }
-}
 
-async function copyPlaintext() {
-  if (!plaintextResult.value) return
-  try {
-    await navigator.clipboard.writeText(plaintextResult.value.plaintext_token)
-    copied.value = true
-    setTimeout(() => (copied.value = false), 1600)
-  } catch {
-    /* clipboard blocked */
+  async function onCreateForUser() {
+    if (!selectedUser.value) {
+      createError.value = t('admin_api_tokens.no_user_selected')
+      return
+    }
+    creating.value = true
+    createError.value = null
+    try {
+      const { data } = await adminCreateApiToken({
+        target_user_id: selectedUser.value.user_id,
+        name: newName.value,
+        expires_at:
+          tokenExpiresAt.value === null ? null : siteLocalIsoToUtcIso(tokenExpiresAt.value),
+        scopes: scopeMode.value === 'full' ? null : selectedScopes.value,
+        password: adminPassword.value,
+      })
+      plaintextResult.value = data
+      adminPassword.value = ''
+      showCreateForm.value = false
+      userQuery.value = ''
+      selectedUser.value = null
+      newName.value = ''
+      tokenExpiresAt.value = defaultTokenExpiryLocal()
+      scopeMode.value = 'limited'
+      selectedScopes.value = []
+      await load()
+    } catch (err) {
+      createError.value = describe(err)
+    } finally {
+      creating.value = false
+    }
   }
-}
 
-function dismissPlaintext() {
-  plaintextResult.value = null
-}
+  async function copyPlaintext() {
+    if (!plaintextResult.value) return
+    try {
+      await navigator.clipboard.writeText(plaintextResult.value.plaintext_token)
+      copied.value = true
+      setTimeout(() => (copied.value = false), 1600)
+    } catch {
+      /* clipboard blocked */
+    }
+  }
 
+  function dismissPlaintext() {
+    plaintextResult.value = null
+  }
 
-onMounted(load)
+  onMounted(load)
 </script>
 
 <template>
   <div class="fh-page" data-density="operator">
     <div class="fh-tab-toolbar">
-      <button
-        v-if="!showCreateForm"
-        type="button"
-        class="fh-btn"
-        @click="showCreateForm = true"
-      >
+      <button v-if="!showCreateForm" type="button" class="fh-btn" @click="showCreateForm = true">
         {{ t('admin_api_tokens.create_cta') }} <span aria-hidden="true">→</span>
       </button>
     </div>
@@ -244,18 +236,19 @@ onMounted(load)
     <hr class="fh-rule" />
 
     <!-- Create-on-behalf form -->
-    <form
-      v-if="showCreateForm"
-      class="create-form"
-      @submit.prevent="onCreateForUser"
-    >
+    <form v-if="showCreateForm" class="create-form" @submit.prevent="onCreateForUser">
       <h2 class="form-h2">{{ t('admin_api_tokens.create_heading') }}</h2>
       <p class="fh-field-help">{{ t('admin_api_tokens.create_help') }}</p>
 
       <label class="fh-field">
         <span class="fh-field-label">{{ t('admin_api_tokens.target_user') }}</span>
         <span v-if="selectedUser" class="picked-user fh-mono">
-          {{ t('admin_api_tokens.picked_user', { name: selectedUser.display_name, email: selectedUser.email }) }}
+          {{
+            t('admin_api_tokens.picked_user', {
+              name: selectedUser.display_name,
+              email: selectedUser.email,
+            })
+          }}
         </span>
         <input
           v-model.trim="userQuery"
@@ -287,22 +280,24 @@ onMounted(load)
         />
       </label>
 
-      <ExpiryPicker
-        v-model="tokenExpiresAt"
-        :presets="TOKEN_PRESETS"
-        :disabled="creating"
-      />
+      <ExpiryPicker v-model="tokenExpiresAt" :presets="TOKEN_PRESETS" :disabled="creating" />
       <span class="fh-field-help">{{ t('api_tokens.expiry_help') }}</span>
 
       <fieldset class="scopes-field">
         <legend class="fh-field-label">{{ t('api_tokens.scopes_legend') }}</legend>
         <label class="radio-row">
           <input v-model="scopeMode" type="radio" value="full" :disabled="creating" />
-          <span><strong>{{ t('api_tokens.scope_full') }}</strong> - {{ t('api_tokens.scope_full_help') }}</span>
+          <span
+            ><strong>{{ t('api_tokens.scope_full') }}</strong> -
+            {{ t('api_tokens.scope_full_help') }}</span
+          >
         </label>
         <label class="radio-row">
           <input v-model="scopeMode" type="radio" value="limited" :disabled="creating" />
-          <span><strong>{{ t('api_tokens.scope_limited') }}</strong> - {{ t('api_tokens.scope_limited_help') }}</span>
+          <span
+            ><strong>{{ t('api_tokens.scope_limited') }}</strong> -
+            {{ t('api_tokens.scope_limited_help') }}</span
+          >
         </label>
         <div v-if="scopeMode === 'limited'" class="scope-groups">
           <div v-for="grp in TOKEN_SCOPE_GROUPS" :key="grp.group" class="scope-group">
@@ -315,9 +310,9 @@ onMounted(load)
         </div>
       </fieldset>
 
-      <div
-v-if="createError" class="fh-notice" role="alert"
-        data-tone="error">{{ createError }}</div>
+      <div v-if="createError" class="fh-notice" role="alert" data-tone="error">
+        {{ createError }}
+      </div>
 
       <!-- Re-auth. Minting a token on someone else's behalf is the strongest
            form of this action, so it is gated like the self-service one. -->
@@ -337,7 +332,13 @@ v-if="createError" class="fh-notice" role="alert"
         <button
           type="submit"
           class="fh-btn"
-          :disabled="creating || !selectedUser || !newName || !adminPassword || (scopeMode === 'limited' && selectedScopes.length === 0)"
+          :disabled="
+            creating ||
+            !selectedUser ||
+            !newName ||
+            !adminPassword ||
+            (scopeMode === 'limited' && selectedScopes.length === 0)
+          "
         >
           {{ creating ? t('common.loading') : t('admin_api_tokens.create_submit') }}
         </button>
@@ -351,7 +352,11 @@ v-if="createError" class="fh-notice" role="alert"
     <div v-if="plaintextResult" class="plaintext-box fh-rise">
       <div class="plaintext-eyebrow">{{ t('admin_api_tokens.plaintext_eyebrow') }}</div>
       <div class="plaintext-owner">
-        {{ t('admin_api_tokens.plaintext_owner', { name: plaintextResult.owner_display_name || plaintextResult.owner_user_id }) }}
+        {{
+          t('admin_api_tokens.plaintext_owner', {
+            name: plaintextResult.owner_display_name || plaintextResult.owner_user_id,
+          })
+        }}
       </div>
       <div class="plaintext-warning">{{ t('admin_api_tokens.plaintext_warning') }}</div>
       <pre class="plaintext-token fh-mono">{{ plaintextResult.plaintext_token }}</pre>
@@ -374,10 +379,7 @@ v-if="createError" class="fh-notice" role="alert"
           class="fh-field-input search"
           :placeholder="t('admin_api_tokens.search_placeholder')"
         />
-        <select
-        v-model="status" class="status-select"
-        :aria-label="t('common.filter')"
-      >
+        <select v-model="status" class="status-select" :aria-label="t('common.filter')">
           <option value="">{{ t('admin_api_tokens.status_all') }}</option>
           <option value="active">{{ t('admin_api_tokens.status.active') }}</option>
           <option value="disabled">{{ t('admin_api_tokens.status.disabled') }}</option>
@@ -387,9 +389,9 @@ v-if="createError" class="fh-notice" role="alert"
       </div>
 
       <div v-if="loading" class="loading">{{ t('common.loading') }}</div>
-      <div
-v-else-if="errorMsg" class="fh-notice" role="alert"
-        data-tone="error">{{ errorMsg }}</div>
+      <div v-else-if="errorMsg" class="fh-notice" role="alert" data-tone="error">
+        {{ errorMsg }}
+      </div>
 
       <div v-else-if="items.length > 0" class="fh-table-scroll">
         <table class="token-table">
@@ -430,7 +432,11 @@ v-else-if="errorMsg" class="fh-notice" role="alert"
               <td class="fh-mono">{{ formatDate(item.last_used_at) }}</td>
               <td class="fh-mono">{{ formatDate(item.created_at) }}</td>
               <td class="fh-mono">
-                {{ item.expires_at ? formatDate(item.expires_at) : t('admin_api_tokens.never_expires') }}
+                {{
+                  item.expires_at
+                    ? formatDate(item.expires_at)
+                    : t('admin_api_tokens.never_expires')
+                }}
               </td>
               <td>
                 <div class="actions">
@@ -478,232 +484,231 @@ v-else-if="errorMsg" class="fh-notice" role="alert"
 </template>
 
 <style scoped>
-.create-form {
-  display: flex;
-  flex-direction: column;
-  gap: var(--fh-space-2);
-  max-width: 520px;
-  margin-bottom: var(--fh-space-4);
-  padding-bottom: var(--fh-space-4);
-  border-bottom: 1px solid var(--fh-hairline);
-}
+  .create-form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--fh-space-2);
+    max-width: 520px;
+    margin-bottom: var(--fh-space-4);
+    padding-bottom: var(--fh-space-4);
+    border-bottom: 1px solid var(--fh-hairline);
+  }
 
-.form-h2 {
-  font-family: var(--fh-font-display);
-  font-size: 1.25rem;
-  margin: 0 0 var(--fh-space-2);
-}
+  .form-h2 {
+    font-family: var(--fh-font-display);
+    font-size: 1.25rem;
+    margin: 0 0 var(--fh-space-2);
+  }
 
-.form-actions {
-  display: flex;
-  gap: var(--fh-space-3);
-  align-items: baseline;
-  margin-top: var(--fh-space-2);
-}
+  .form-actions {
+    display: flex;
+    gap: var(--fh-space-3);
+    align-items: baseline;
+    margin-top: var(--fh-space-2);
+  }
 
-.scopes-field {
-  border: var(--fh-border);
-  border-radius: var(--fh-radius-sm);
-  padding: var(--fh-space-3);
-  display: flex;
-  flex-direction: column;
-  gap: var(--fh-space-2);
-  margin: 0;
-}
+  .scopes-field {
+    border: var(--fh-border);
+    border-radius: var(--fh-radius-sm);
+    padding: var(--fh-space-3);
+    display: flex;
+    flex-direction: column;
+    gap: var(--fh-space-2);
+    margin: 0;
+  }
 
-.radio-row,
-.scopes-field .check {
-  display: flex;
-  align-items: baseline;
-  gap: var(--fh-space-2);
-  font-size: var(--fh-text-body-sm);
-}
+  .radio-row,
+  .scopes-field .check {
+    display: flex;
+    align-items: baseline;
+    gap: var(--fh-space-2);
+    font-size: var(--fh-text-body-sm);
+  }
 
-.scope-groups {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--fh-space-4);
-  margin-top: var(--fh-space-1);
-  padding-left: var(--fh-space-3);
-}
+  .scope-groups {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--fh-space-4);
+    margin-top: var(--fh-space-1);
+    padding-left: var(--fh-space-3);
+  }
 
-.scope-group {
-  display: flex;
-  flex-direction: column;
-  gap: var(--fh-space-1);
-}
+  .scope-group {
+    display: flex;
+    flex-direction: column;
+    gap: var(--fh-space-1);
+  }
 
-.scope-group-title {
-  font-family: var(--fh-font-mono);
-  font-size: var(--fh-text-mono-sm);
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: var(--fh-subtle);
-}
+  .scope-group-title {
+    font-family: var(--fh-font-mono);
+    font-size: var(--fh-text-mono-sm);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--fh-subtle);
+  }
 
-.token-scopes-cell {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--fh-space-1);
-  margin-top: var(--fh-space-1);
-  max-width: 320px;
-}
+  .token-scopes-cell {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--fh-space-1);
+    margin-top: var(--fh-space-1);
+    max-width: 320px;
+  }
 
-.scope-chip {
-  font-family: var(--fh-font-mono);
-  font-size: var(--fh-text-mono-sm);
-  padding: 0.1rem 0.5rem;
-  border: var(--fh-border);
-  border-radius: var(--fh-radius-sm);
-  background: var(--fh-paper-raised);
-  color: var(--fh-ink-soft);
-}
+  .scope-chip {
+    font-family: var(--fh-font-mono);
+    font-size: var(--fh-text-mono-sm);
+    padding: 0.1rem 0.5rem;
+    border: var(--fh-border);
+    border-radius: var(--fh-radius-sm);
+    background: var(--fh-paper-raised);
+    color: var(--fh-ink-soft);
+  }
 
-.scope-chip.full {
-  color: var(--fh-subtle);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-}
+  .scope-chip.full {
+    color: var(--fh-subtle);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
 
-.user-suggestions {
-  list-style: none;
-  margin: var(--fh-space-1) 0 0;
-  padding: 0;
-  border: 1px solid var(--fh-hairline);
-  background: var(--fh-paper-raised);
-  max-height: 220px;
-  overflow-y: auto;
-}
+  .user-suggestions {
+    list-style: none;
+    margin: var(--fh-space-1) 0 0;
+    padding: 0;
+    border: 1px solid var(--fh-hairline);
+    background: var(--fh-paper-raised);
+    max-height: 220px;
+    overflow-y: auto;
+  }
 
-.user-suggest {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: var(--fh-space-2);
-  width: 100%;
-  background: none;
-  border: none;
-  text-align: left;
-  cursor: pointer;
-  font: inherit;
-}
+  .user-suggest {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: var(--fh-space-2);
+    width: 100%;
+    background: none;
+    border: none;
+    text-align: left;
+    cursor: pointer;
+    font: inherit;
+  }
 
-.user-suggest:hover {
-  background: var(--fh-paper-sunk);
-}
+  .user-suggest:hover {
+    background: var(--fh-paper-sunk);
+  }
 
-.plaintext-box {
-  margin-bottom: var(--fh-space-4);
-  padding: var(--fh-space-4);
-  background: var(--fh-accent-soft);
-  border: var(--fh-border);
-  border-left: 2px solid var(--fh-accent);
-  border-radius: var(--fh-radius-sm);
-  display: flex;
-  flex-direction: column;
-  gap: var(--fh-space-2);
-}
+  .plaintext-box {
+    margin-bottom: var(--fh-space-4);
+    padding: var(--fh-space-4);
+    background: var(--fh-accent-soft);
+    border: var(--fh-border);
+    border-left: 2px solid var(--fh-accent);
+    border-radius: var(--fh-radius-sm);
+    display: flex;
+    flex-direction: column;
+    gap: var(--fh-space-2);
+  }
 
-.plaintext-eyebrow {
-  font-family: var(--fh-font-mono);
-  font-size: var(--fh-text-mono-sm);
-  text-transform: uppercase;
-  letter-spacing: 0.14em;
-  color: var(--fh-subtle);
-}
+  .plaintext-eyebrow {
+    font-family: var(--fh-font-mono);
+    font-size: var(--fh-text-mono-sm);
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: var(--fh-subtle);
+  }
 
-.plaintext-token {
-  background: var(--fh-paper);
-  padding: var(--fh-space-3);
-  border: var(--fh-border);
-  border-radius: var(--fh-radius-sm);
-  font-size: var(--fh-text-mono-md);
-  word-break: break-all;
-  white-space: pre-wrap;
-  margin: 0;
-  user-select: all;
-}
+  .plaintext-token {
+    background: var(--fh-paper);
+    padding: var(--fh-space-3);
+    border: var(--fh-border);
+    border-radius: var(--fh-radius-sm);
+    font-size: var(--fh-text-mono-md);
+    word-break: break-all;
+    white-space: pre-wrap;
+    margin: 0;
+    user-select: all;
+  }
 
-.plaintext-actions {
-  display: flex;
-  gap: var(--fh-space-3);
-}
+  .plaintext-actions {
+    display: flex;
+    gap: var(--fh-space-3);
+  }
 
-.filters {
-  display: flex;
-  gap: var(--fh-space-3);
-  margin-bottom: var(--fh-space-4);
-  align-items: baseline;
-}
+  .filters {
+    display: flex;
+    gap: var(--fh-space-3);
+    margin-bottom: var(--fh-space-4);
+    align-items: baseline;
+  }
 
-.search {
-  flex: 1;
-  max-width: 360px;
-}
+  .search {
+    flex: 1;
+    max-width: 360px;
+  }
 
-.status-select {
-  font: inherit;
-  background: transparent;
-  border: var(--fh-border-strong);
-  border-radius: var(--fh-radius-sm);
-  padding: 4px 8px;
-  color: var(--fh-ink);
-}
+  .status-select {
+    font: inherit;
+    background: transparent;
+    border: var(--fh-border-strong);
+    border-radius: var(--fh-radius-sm);
+    padding: 4px 8px;
+    color: var(--fh-ink);
+  }
 
-.loading {
-  color: var(--fh-subtle);
-  padding: var(--fh-space-5) 0;
-}
+  .loading {
+    color: var(--fh-subtle);
+    padding: var(--fh-space-5) 0;
+  }
 
-.token-table {
-  width: 100%;
-  border-collapse: collapse;
-}
+  .token-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
 
-.token-table th,
-.token-table td {
-  text-align: left;
-  padding: var(--fh-space-2) var(--fh-space-3);
-  border-bottom: 1px solid var(--fh-rule);
-  vertical-align: top;
-}
+  .token-table th,
+  .token-table td {
+    text-align: left;
+    padding: var(--fh-space-2) var(--fh-space-3);
+    border-bottom: 1px solid var(--fh-rule);
+    vertical-align: top;
+  }
 
-.token-table th {
-  font-family: var(--fh-font-mono);
-  font-size: var(--fh-text-mono-sm);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--fh-subtle);
-  font-weight: 500;
-}
+  .token-table th {
+    font-family: var(--fh-font-mono);
+    font-size: var(--fh-text-mono-sm);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--fh-subtle);
+    font-weight: 500;
+  }
 
-.row-name {
-  font-weight: 500;
-}
+  .row-name {
+    font-weight: 500;
+  }
 
-.row-hint {
-  font-size: var(--fh-text-mono-sm);
-  color: var(--fh-subtle);
-}
+  .row-hint {
+    font-size: var(--fh-text-mono-sm);
+    color: var(--fh-subtle);
+  }
 
-.actions-col {
-  width: 1%;
-  white-space: nowrap;
-}
+  .actions-col {
+    width: 1%;
+    white-space: nowrap;
+  }
 
-.actions {
-  display: flex;
-  gap: var(--fh-space-2);
-  white-space: nowrap;
-  justify-content: flex-end;
-}
+  .actions {
+    display: flex;
+    gap: var(--fh-space-2);
+    white-space: nowrap;
+    justify-content: flex-end;
+  }
 
-.fh-btn-text.danger {
-  color: var(--fh-danger);
-}
+  .fh-btn-text.danger {
+    color: var(--fh-danger);
+  }
 
-.empty {
-  margin: var(--fh-space-3) 0;
-}
-
+  .empty {
+    margin: var(--fh-space-3) 0;
+  }
 </style>

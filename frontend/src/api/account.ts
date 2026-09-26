@@ -63,10 +63,7 @@ export function changePassword(payload: { current_password: string; new_password
 
 /** Self-service email change (gated on the `email_change.self_service` policy). */
 export function requestEmailChange(payload: { new_email: string; current_password: string }) {
-  return api.post<{ ok: boolean; applied: boolean; mode: string }>(
-    '/account/email',
-    payload,
-  )
+  return api.post<{ ok: boolean; applied: boolean; mode: string }>('/account/email', payload)
 }
 
 // Sessions live under /auth (not /account) so the refresh cookie - which is

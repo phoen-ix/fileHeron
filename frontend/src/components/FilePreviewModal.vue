@@ -1,92 +1,91 @@
 <script setup lang="ts">
-/* In-browser file preview lightbox. Renders by kind:
- *  - image → <img src=…>          (browser streams it)
- *  - pdf   → <iframe src=…>        (browser-native PDF viewer)
- *  - text  → fetched as text into a <pre> (capped by size)
- * `url` is the inline preview URL already authorised for the caller (a `?dt=`
- * token for the authed view, or the path-scoped unlock cookie for the public
- * view). The bytes are served by the backend with a safe Content-Type +
- * nosniff/CSP hardening; this component never renders user HTML. */
-import axios from 'axios'
-import { computed, nextTick, ref, watch } from 'vue'
-import { useI18n } from 'vue-i18n'
+  /* In-browser file preview lightbox. Renders by kind:
+   *  - image → <img src=…>          (browser streams it)
+   *  - pdf   → <iframe src=…>        (browser-native PDF viewer)
+   *  - text  → fetched as text into a <pre> (capped by size)
+   * `url` is the inline preview URL already authorised for the caller (a `?dt=`
+   * token for the authed view, or the path-scoped unlock cookie for the public
+   * view). The bytes are served by the backend with a safe Content-Type +
+   * nosniff/CSP hardening; this component never renders user HTML. */
+  import axios from 'axios'
+  import { computed, nextTick, ref, watch } from 'vue'
+  import { useI18n } from 'vue-i18n'
 
-import { previewKind, TEXT_PREVIEW_MAX_BYTES, type PreviewKind } from '@/utils/preview'
+  import { previewKind, TEXT_PREVIEW_MAX_BYTES, type PreviewKind } from '@/utils/preview'
 
-interface PreviewFile {
-  original_filename: string
-  mime_type: string
-  size_bytes: number
-}
-
-const props = defineProps<{
-  open: boolean
-  file: PreviewFile | null
-  url: string | null
-}>()
-
-const emit = defineEmits<{ close: []; download: [] }>()
-
-const { t } = useI18n()
-const closeBtn = ref<HTMLButtonElement | null>(null)
-
-const kind = computed<PreviewKind | null>(() =>
-  props.file ? previewKind(props.file.mime_type) : null,
-)
-
-const textContent = ref('')
-const textLoading = ref(false)
-const textError = ref(false)
-const textTooLarge = computed(
-  () => !!props.file && props.file.size_bytes > TEXT_PREVIEW_MAX_BYTES,
-)
-
-// Monotonic request token. Opening a second file while the first is still
-// loading meant whichever response arrived LAST won - so a slow response could
-// render the previous file's contents under the current file's name, in a modal
-// whose whole job is to show you what is in a file (audit 2026-07-30,
-// fe-correct-10). Every write below is gated on still being the newest request.
-let textRequestId = 0
-
-async function loadText(url: string) {
-  const requestId = ++textRequestId
-  textContent.value = ''
-  textError.value = false
-  if (textTooLarge.value) return
-  textLoading.value = true
-  try {
-    const { data } = await axios.get(url, {
-      responseType: 'text',
-      withCredentials: true,
-    })
-    if (requestId !== textRequestId) return
-    // axios may parse JSON-looking text into an object; coerce back to a string.
-    textContent.value =
-      typeof data === 'string' ? data : JSON.stringify(data, null, 2)
-  } catch {
-    if (requestId !== textRequestId) return
-    textError.value = true
-  } finally {
-    if (requestId === textRequestId) textLoading.value = false
+  interface PreviewFile {
+    original_filename: string
+    mime_type: string
+    size_bytes: number
   }
-}
 
-watch(
-  () => [props.open, props.url] as const,
-  async ([open, url]) => {
-    if (open) {
-      await nextTick()
-      closeBtn.value?.focus()
-      if (kind.value === 'text' && url) await loadText(url)
-    } else {
-      // Invalidate any in-flight load so a late response cannot repopulate a
-      // closed modal.
-      textRequestId += 1
-      textContent.value = ''
-      textError.value = false
+  const props = defineProps<{
+    open: boolean
+    file: PreviewFile | null
+    url: string | null
+  }>()
+
+  const emit = defineEmits<{ close: []; download: [] }>()
+
+  const { t } = useI18n()
+  const closeBtn = ref<HTMLButtonElement | null>(null)
+
+  const kind = computed<PreviewKind | null>(() =>
+    props.file ? previewKind(props.file.mime_type) : null,
+  )
+
+  const textContent = ref('')
+  const textLoading = ref(false)
+  const textError = ref(false)
+  const textTooLarge = computed(
+    () => !!props.file && props.file.size_bytes > TEXT_PREVIEW_MAX_BYTES,
+  )
+
+  // Monotonic request token. Opening a second file while the first is still
+  // loading meant whichever response arrived LAST won - so a slow response could
+  // render the previous file's contents under the current file's name, in a modal
+  // whose whole job is to show you what is in a file (audit 2026-07-30,
+  // fe-correct-10). Every write below is gated on still being the newest request.
+  let textRequestId = 0
+
+  async function loadText(url: string) {
+    const requestId = ++textRequestId
+    textContent.value = ''
+    textError.value = false
+    if (textTooLarge.value) return
+    textLoading.value = true
+    try {
+      const { data } = await axios.get(url, {
+        responseType: 'text',
+        withCredentials: true,
+      })
+      if (requestId !== textRequestId) return
+      // axios may parse JSON-looking text into an object; coerce back to a string.
+      textContent.value = typeof data === 'string' ? data : JSON.stringify(data, null, 2)
+    } catch {
+      if (requestId !== textRequestId) return
+      textError.value = true
+    } finally {
+      if (requestId === textRequestId) textLoading.value = false
     }
-  },
-)
+  }
+
+  watch(
+    () => [props.open, props.url] as const,
+    async ([open, url]) => {
+      if (open) {
+        await nextTick()
+        closeBtn.value?.focus()
+        if (kind.value === 'text' && url) await loadText(url)
+      } else {
+        // Invalidate any in-flight load so a late response cannot repopulate a
+        // closed modal.
+        textRequestId += 1
+        textContent.value = ''
+        textError.value = false
+      }
+    },
+  )
 </script>
 
 <template>
@@ -109,12 +108,7 @@ watch(
           <button type="button" class="fh-btn-text" @click="emit('download')">
             {{ t('file_preview.download') }} <span aria-hidden="true">↓</span>
           </button>
-          <button
-            ref="closeBtn"
-            type="button"
-            class="fh-btn-text"
-            @click="emit('close')"
-          >
+          <button ref="closeBtn" type="button" class="fh-btn-text" @click="emit('close')">
             {{ t('file_preview.close') }} ✕
           </button>
         </div>
@@ -157,90 +151,90 @@ watch(
 </template>
 
 <style scoped>
-.preview-backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(26, 29, 36, 0.55);
-  display: grid;
-  place-items: center;
-  /* Above the confirm dialog (z-index 300). */
-  z-index: 301;
-  padding: var(--fh-space-4);
-}
+  .preview-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(26, 29, 36, 0.55);
+    display: grid;
+    place-items: center;
+    /* Above the confirm dialog (z-index 300). */
+    z-index: 301;
+    padding: var(--fh-space-4);
+  }
 
-.preview-modal {
-  background: var(--fh-paper-raised);
-  border: 1px solid var(--fh-hairline-strong);
-  box-shadow: 0 16px 48px rgba(26, 29, 36, 0.2);
-  width: min(980px, 94vw);
-  max-height: 92vh;
-  display: flex;
-  flex-direction: column;
-}
+  .preview-modal {
+    background: var(--fh-paper-raised);
+    border: 1px solid var(--fh-hairline-strong);
+    box-shadow: 0 16px 48px rgba(26, 29, 36, 0.2);
+    width: min(980px, 94vw);
+    max-height: 92vh;
+    display: flex;
+    flex-direction: column;
+  }
 
-.preview-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--fh-space-3);
-  padding: var(--fh-space-3) var(--fh-space-4);
-  border-bottom: 1px solid var(--fh-hairline);
-}
+  .preview-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--fh-space-3);
+    padding: var(--fh-space-3) var(--fh-space-4);
+    border-bottom: 1px solid var(--fh-hairline);
+  }
 
-.preview-name {
-  font-size: var(--fh-text-mono-sm);
-  color: var(--fh-ink);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
+  .preview-name {
+    font-size: var(--fh-text-mono-sm);
+    color: var(--fh-ink);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 
-.preview-head-actions {
-  display: flex;
-  gap: var(--fh-space-3);
-  flex-shrink: 0;
-}
+  .preview-head-actions {
+    display: flex;
+    gap: var(--fh-space-3);
+    flex-shrink: 0;
+  }
 
-.preview-body {
-  min-height: 0;
-  flex: 1;
-  overflow: auto;
-  display: grid;
-  place-items: center;
-  background: var(--fh-paper-sunk);
-}
+  .preview-body {
+    min-height: 0;
+    flex: 1;
+    overflow: auto;
+    display: grid;
+    place-items: center;
+    background: var(--fh-paper-sunk);
+  }
 
-.preview-status {
-  color: var(--fh-subtle);
-  padding: var(--fh-space-6);
-  text-align: center;
-}
+  .preview-status {
+    color: var(--fh-subtle);
+    padding: var(--fh-space-6);
+    text-align: center;
+  }
 
-.preview-image {
-  max-width: 100%;
-  max-height: 86vh;
-  object-fit: contain;
-}
+  .preview-image {
+    max-width: 100%;
+    max-height: 86vh;
+    object-fit: contain;
+  }
 
-.preview-frame {
-  width: 100%;
-  height: 80vh;
-  border: 0;
-  background: var(--fh-paper);
-}
+  .preview-frame {
+    width: 100%;
+    height: 80vh;
+    border: 0;
+    background: var(--fh-paper);
+  }
 
-.preview-text {
-  align-self: stretch;
-  justify-self: stretch;
-  margin: 0;
-  padding: var(--fh-space-4);
-  width: 100%;
-  font-family: var(--fh-font-mono);
-  font-size: var(--fh-text-mono-sm);
-  line-height: 1.5;
-  color: var(--fh-ink);
-  white-space: pre-wrap;
-  word-break: break-word;
-  overflow: auto;
-}
+  .preview-text {
+    align-self: stretch;
+    justify-self: stretch;
+    margin: 0;
+    padding: var(--fh-space-4);
+    width: 100%;
+    font-family: var(--fh-font-mono);
+    font-size: var(--fh-text-mono-sm);
+    line-height: 1.5;
+    color: var(--fh-ink);
+    white-space: pre-wrap;
+    word-break: break-word;
+    overflow: auto;
+  }
 </style>

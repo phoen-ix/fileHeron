@@ -1,28 +1,28 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
-import { useRoute } from 'vue-router'
+  import { onMounted, ref } from 'vue'
+  import { useRoute } from 'vue-router'
 
-import AuthCanvas from '@/components/AuthCanvas.vue'
-import { verifyEmail } from '@/api/auth'
-import { useApiError } from '@/composables/useApiError'
+  import AuthCanvas from '@/components/AuthCanvas.vue'
+  import { verifyEmail } from '@/api/auth'
+  import { useApiError } from '@/composables/useApiError'
 
-const route = useRoute()
-const { describe } = useApiError()
+  const route = useRoute()
+  const { describe } = useApiError()
 
-type State = 'verifying' | 'ok' | 'error'
-const state = ref<State>('verifying')
-const error = ref<string | null>(null)
+  type State = 'verifying' | 'ok' | 'error'
+  const state = ref<State>('verifying')
+  const error = ref<string | null>(null)
 
-onMounted(async () => {
-  const token = String(route.params.token ?? '')
-  try {
-    await verifyEmail({ token })
-    state.value = 'ok'
-  } catch (e) {
-    state.value = 'error'
-    error.value = describe(e)
-  }
-})
+  onMounted(async () => {
+    const token = String(route.params.token ?? '')
+    try {
+      await verifyEmail({ token })
+      state.value = 'ok'
+    } catch (e) {
+      state.value = 'error'
+      error.value = describe(e)
+    }
+  })
 </script>
 
 <template>

@@ -7,19 +7,9 @@ import { listShares } from '@/api/shares'
 import { searchUsers } from '@/api/users'
 import { useApiError } from '@/composables/useApiError'
 import { useTableSort } from '@/composables/useTableSort'
-import type {
-  GroupResponse,
-  ShareListItem,
-  ShareState,
-  UserSearchItem,
-} from '@/types/api'
+import type { GroupResponse, ShareListItem, ShareState, UserSearchItem } from '@/types/api'
 
-type GroupBy =
-  | 'none'
-  | 'recipient_user'
-  | 'recipient_group'
-  | 'sender'
-  | 'via_group'
+type GroupBy = 'none' | 'recipient_user' | 'recipient_group' | 'sender' | 'via_group'
 
 interface RenderGroup {
   key: string
@@ -323,9 +313,7 @@ export function useShareListState(box: ComputedRef<'outbox' | 'inbox'>) {
     return [...map.values()].sort((a, b) => a.label.localeCompare(b.label))
   })
 
-  function collectGroupKeys(
-    item: ShareListItem,
-  ): { key: string; label: string }[] {
+  function collectGroupKeys(item: ShareListItem): { key: string; label: string }[] {
     if (groupBy.value === 'sender' && item.sender) {
       return [{ key: `u-${item.sender.id}`, label: item.sender.display_name }]
     }
@@ -339,10 +327,7 @@ export function useShareListState(box: ComputedRef<'outbox' | 'inbox'>) {
       }
       return out
     }
-    if (
-      groupBy.value === 'recipient_group' ||
-      groupBy.value === 'via_group'
-    ) {
+    if (groupBy.value === 'recipient_group' || groupBy.value === 'via_group') {
       const out: { key: string; label: string }[] = []
       for (const r of item.recipients) {
         if (r.kind === 'group') out.push({ key: `g-${r.id}`, label: r.label })

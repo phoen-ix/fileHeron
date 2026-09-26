@@ -2,13 +2,7 @@ import type { MeResponse } from '@/types/api'
 
 /** Pickable landing route names (mirrors `services/account_prefs.py
  *  ALLOWED_LANDING_ROUTES`). Single source of truth for the SPA. */
-const ALLOWED_LANDING_ROUTES = [
-  'home',
-  'outbox',
-  'inbox',
-  'share-create',
-  'account',
-] as const
+const ALLOWED_LANDING_ROUTES = ['home', 'outbox', 'inbox', 'share-create', 'account'] as const
 
 type LandingRouteName = (typeof ALLOWED_LANDING_ROUTES)[number]
 

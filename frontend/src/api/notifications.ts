@@ -7,11 +7,13 @@ import type {
   PreferencesResponse,
 } from '@/types/api'
 
-export function listNotifications(params: {
-  unread?: boolean
-  page?: number
-  page_size?: number
-} = {}) {
+export function listNotifications(
+  params: {
+    unread?: boolean
+    page?: number
+    page_size?: number
+  } = {},
+) {
   return api.get<NotificationListResponse>('/notifications', { params })
 }
 
@@ -31,9 +33,7 @@ export function getPreferences() {
   return api.get<PreferencesResponse>('/notifications/preferences')
 }
 
-export function updatePreferences(
-  preferences: Record<NotificationCategory, NotificationChannel>,
-) {
+export function updatePreferences(preferences: Record<NotificationCategory, NotificationChannel>) {
   return api.put<PreferencesResponse>('/notifications/preferences', {
     preferences,
   })

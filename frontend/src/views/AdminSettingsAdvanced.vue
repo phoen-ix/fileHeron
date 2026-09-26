@@ -3,13 +3,13 @@
      config/adminTunablePlacement.ts): the retention windows and the low-disk
      thresholds. Same URL, honest name. -->
 <script setup lang="ts">
-import { useI18n } from 'vue-i18n'
+  import { useI18n } from 'vue-i18n'
 
-import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
-import TunableFields from '@/components/admin/TunableFields.vue'
-import { ADVANCED_ROUTE } from '@/config/adminTunablePlacement'
+  import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
+  import TunableFields from '@/components/admin/TunableFields.vue'
+  import { ADVANCED_ROUTE } from '@/config/adminTunablePlacement'
 
-const { t } = useI18n()
+  const { t } = useI18n()
 </script>
 
 <template>
@@ -21,6 +21,11 @@ const { t } = useI18n()
 </template>
 
 <style scoped>
-.advanced-settings { max-width: none; }
-.intro { margin-bottom: var(--fh-space-4); max-width: 64ch; }
+  .advanced-settings {
+    max-width: none;
+  }
+  .intro {
+    margin-bottom: var(--fh-space-4);
+    max-width: 64ch;
+  }
 </style>

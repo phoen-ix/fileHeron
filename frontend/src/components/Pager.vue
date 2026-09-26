@@ -1,21 +1,21 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-import { useI18n } from 'vue-i18n'
+  import { computed } from 'vue'
+  import { useI18n } from 'vue-i18n'
 
-const props = defineProps<{
-  page: number
-  total: number
-  pageSize: number
-  /** The server's own page ceiling, when it has one below what `total` implies. */
-  maxPage?: number
-}>()
-const emit = defineEmits<{ 'update:page': [n: number] }>()
-const { t } = useI18n()
+  const props = defineProps<{
+    page: number
+    total: number
+    pageSize: number
+    /** The server's own page ceiling, when it has one below what `total` implies. */
+    maxPage?: number
+  }>()
+  const emit = defineEmits<{ 'update:page': [n: number] }>()
+  const { t } = useI18n()
 
-const totalPages = computed(() => {
-  const pages = Math.max(1, Math.ceil(props.total / props.pageSize))
-  return props.maxPage ? Math.min(pages, props.maxPage) : pages
-})
+  const totalPages = computed(() => {
+    const pages = Math.max(1, Math.ceil(props.total / props.pageSize))
+    return props.maxPage ? Math.min(pages, props.maxPage) : pages
+  })
 </script>
 
 <template>
@@ -43,16 +43,16 @@ const totalPages = computed(() => {
 </template>
 
 <style scoped>
-.pager {
-  display: flex;
-  gap: var(--fh-space-3);
-  align-items: baseline;
-  justify-content: center;
-  margin-top: var(--fh-space-4);
-}
+  .pager {
+    display: flex;
+    gap: var(--fh-space-3);
+    align-items: baseline;
+    justify-content: center;
+    margin-top: var(--fh-space-4);
+  }
 
-.page-info {
-  color: var(--fh-subtle);
-  font-size: var(--fh-text-mono-sm);
-}
+  .page-info {
+    color: var(--fh-subtle);
+    font-size: var(--fh-text-mono-sm);
+  }
 </style>

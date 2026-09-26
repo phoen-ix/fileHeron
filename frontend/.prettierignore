@@ -1,0 +1,3 @@
+# One entry per line on purpose: backend/tests/test_admin_search_index_pin.py
+# parses this registry with line-based regexes, and Prettier would wrap it.
+src/config/adminSearchIndex.ts

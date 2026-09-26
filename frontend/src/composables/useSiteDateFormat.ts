@@ -7,11 +7,7 @@
  */
 import { useI18n } from 'vue-i18n'
 
-import {
-  formatDateInSiteTime,
-  formatExpiryInSiteTime,
-  formatInSiteTime,
-} from '@/utils/datetime'
+import { formatDateInSiteTime, formatExpiryInSiteTime, formatInSiteTime } from '@/utils/datetime'
 
 export function useSiteDateFormat() {
   const { locale, t } = useI18n()

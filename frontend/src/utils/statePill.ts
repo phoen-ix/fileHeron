@@ -21,12 +21,7 @@ export function mailStatusPill(status: string): PillTone {
 export function shareStatePill(state: ShareState | string): PillTone {
   if (state === 'active') return 'active'
   if (state === 'expired' || state === 'pending_approval') return 'warn'
-  if (
-    state === 'revoked' ||
-    state === 'deleted' ||
-    state === 'failed' ||
-    state === 'rejected'
-  )
+  if (state === 'revoked' || state === 'deleted' || state === 'failed' || state === 'rejected')
     return 'danger'
   return undefined
 }

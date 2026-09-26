@@ -21,71 +21,71 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
-import { useI18n } from 'vue-i18n'
-import { useRoute } from 'vue-router'
+  import { computed, onMounted, ref, watch } from 'vue'
+  import { useI18n } from 'vue-i18n'
+  import { useRoute } from 'vue-router'
 
-import { getLegal, type LegalContentResponse } from '@/api/legal'
+  import { getLegal, type LegalContentResponse } from '@/api/legal'
 
-const route = useRoute()
-const { t, locale } = useI18n()
+  const route = useRoute()
+  const { t, locale } = useI18n()
 
-const kind = computed<'imprint' | 'privacy'>(() =>
-  route.name === 'privacy' ? 'privacy' : 'imprint',
-)
-const title = computed(() => t(`legal.${kind.value}`))
+  const kind = computed<'imprint' | 'privacy'>(() =>
+    route.name === 'privacy' ? 'privacy' : 'imprint',
+  )
+  const title = computed(() => t(`legal.${kind.value}`))
 
-const loading = ref(true)
-const data = ref<LegalContentResponse | null>(null)
+  const loading = ref(true)
+  const data = ref<LegalContentResponse | null>(null)
 
-const html = computed(() => {
-  if (!data.value) return ''
-  const de = data.value.html_de
-  const en = data.value.html_en
-  // Show the viewer's language; fall back to the other when empty.
-  return locale.value === 'de' ? de || en : en || de
-})
-const available = computed(() => !!data.value?.enabled && !!html.value)
+  const html = computed(() => {
+    if (!data.value) return ''
+    const de = data.value.html_de
+    const en = data.value.html_en
+    // Show the viewer's language; fall back to the other when empty.
+    return locale.value === 'de' ? de || en : en || de
+  })
+  const available = computed(() => !!data.value?.enabled && !!html.value)
 
-async function load() {
-  loading.value = true
-  data.value = null
-  try {
-    const { data: d } = await getLegal(kind.value)
-    data.value = d
-  } catch {
+  async function load() {
+    loading.value = true
     data.value = null
-  } finally {
-    loading.value = false
+    try {
+      const { data: d } = await getLegal(kind.value)
+      data.value = d
+    } catch {
+      data.value = null
+    } finally {
+      loading.value = false
+    }
   }
-}
 
-watch(kind, load)
-onMounted(load)
+  watch(kind, load)
+  onMounted(load)
 </script>
 
 <style scoped>
-.legal-page {
-  max-width: 720px;
-}
-.loading {
-  color: var(--fh-subtle);
-  padding: var(--fh-space-3) 0;
-}
-.legal-content :deep(h1),
-.legal-content :deep(h2),
-.legal-content :deep(h3) {
-  font-family: var(--fh-font-display);
-  font-weight: 400;
-  margin: var(--fh-space-4) 0 var(--fh-space-2);
-}
-.legal-content :deep(p),
-.legal-content :deep(ul),
-.legal-content :deep(ol) {
-  margin: 0 0 var(--fh-space-2);
-  line-height: 1.6;
-}
-.legal-content :deep(a) {
-  color: var(--fh-accent);
-}
+  .legal-page {
+    max-width: 720px;
+  }
+  .loading {
+    color: var(--fh-subtle);
+    padding: var(--fh-space-3) 0;
+  }
+  .legal-content :deep(h1),
+  .legal-content :deep(h2),
+  .legal-content :deep(h3) {
+    font-family: var(--fh-font-display);
+    font-weight: 400;
+    margin: var(--fh-space-4) 0 var(--fh-space-2);
+  }
+  .legal-content :deep(p),
+  .legal-content :deep(ul),
+  .legal-content :deep(ol) {
+    margin: 0 0 var(--fh-space-2);
+    line-height: 1.6;
+  }
+  .legal-content :deep(a) {
+    color: var(--fh-accent);
+  }
 </style>

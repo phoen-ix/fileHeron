@@ -1,122 +1,117 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
-import { useI18n } from 'vue-i18n'
+  import { computed, onMounted, ref, watch } from 'vue'
+  import { useI18n } from 'vue-i18n'
 
-import api from '@/api/client'
-import {
-  adminListFiles,
-  adminQuarantinePurge,
-  adminQuarantineRelease,
-} from '@/api/admin'
-import Pager from '@/components/Pager.vue'
-import { useApiError } from '@/composables/useApiError'
-import { useDebouncedSearch } from '@/composables/useDebouncedSearch'
-import { useEscapeToClose } from '@/composables/useEscapeToClose'
-import { usePaginatedList } from '@/composables/usePaginatedList'
-import { useSiteDateFormat } from '@/composables/useSiteDateFormat'
-import { useUiStore } from '@/stores/ui'
-import type { AdminFileItem } from '@/types/api'
-import { formatBytes } from '@/utils/bytes'
+  import api from '@/api/client'
+  import { adminListFiles, adminQuarantinePurge, adminQuarantineRelease } from '@/api/admin'
+  import Pager from '@/components/Pager.vue'
+  import { useApiError } from '@/composables/useApiError'
+  import { useDebouncedSearch } from '@/composables/useDebouncedSearch'
+  import { useEscapeToClose } from '@/composables/useEscapeToClose'
+  import { usePaginatedList } from '@/composables/usePaginatedList'
+  import { useSiteDateFormat } from '@/composables/useSiteDateFormat'
+  import { useUiStore } from '@/stores/ui'
+  import type { AdminFileItem } from '@/types/api'
+  import { formatBytes } from '@/utils/bytes'
 
-const { t } = useI18n()
-const { formatDate } = useSiteDateFormat()
-const { describe, describeBlob } = useApiError()
-const ui = useUiStore()
+  const { t } = useI18n()
+  const { formatDate } = useSiteDateFormat()
+  const { describe, describeBlob } = useApiError()
+  const ui = useUiStore()
 
-const q = ref('')
+  const q = ref('')
 
-type ConfirmKind = 'release' | 'purge'
+  type ConfirmKind = 'release' | 'purge'
 
-const confirm = ref<{
-  kind: ConfirmKind
-  file: AdminFileItem
-  reason: string
-  busy: boolean
-} | null>(null)
+  const confirm = ref<{
+    kind: ConfirmKind
+    file: AdminFileItem
+    reason: string
+    busy: boolean
+  } | null>(null)
 
-const { items, total, page, pageSize, loading, errorMsg, load } =
-  usePaginatedList<AdminFileItem>(({ page, pageSize }) =>
-    adminListFiles({
-      q: q.value || undefined,
-      state: 'infected',
-      sort: 'uploaded_at',
-      direction: 'desc',
-      page,
-      page_size: pageSize,
-    }).then((r) => r.data),
+  const { items, total, page, pageSize, loading, errorMsg, load } = usePaginatedList<AdminFileItem>(
+    ({ page, pageSize }) =>
+      adminListFiles({
+        q: q.value || undefined,
+        state: 'infected',
+        sort: 'uploaded_at',
+        direction: 'desc',
+        page,
+        page_size: pageSize,
+      }).then((r) => r.data),
   )
 
-useDebouncedSearch(q, () => {
-  page.value = 1
-  void load()
-})
-watch(page, load)
+  useDebouncedSearch(q, () => {
+    page.value = 1
+    void load()
+  })
+  watch(page, load)
 
-
-async function onDownload(file: AdminFileItem) {
-  try {
-    const resp = await api.get(`/admin/files/${file.file_id}/quarantine/download`, {
-      responseType: 'blob',
-    })
-    const url = URL.createObjectURL(resp.data as Blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `${file.filename}.quarantined`
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(url)
-  } catch (err) {
-    // axios with responseType=blob delivers the ERROR body as a Blob too, so
-    // describe() cannot see the envelope. This view had its own inline
-    // re-parse; it is now `describeBlob` in useApiError, shared with the four
-    // admin CSV/backup downloads that were all showing the generic message
-    // (audit 2026-07-30, fe-correct-12).
-    ui.pushToast(await describeBlob(err), 'error')
-  }
-}
-
-function openConfirm(kind: ConfirmKind, file: AdminFileItem) {
-  confirm.value = { kind, file, reason: '', busy: false }
-}
-
-function closeConfirm() {
-  confirm.value = null
-}
-
-// Escape must close the one dialog in the admin shell that irreversibly
-// destroys evidence of an infected upload. The backdrop's @keydown.escape never
-// fired - the backdrop is not on the key event's propagation path (audit #2).
-useEscapeToClose(
-  computed(() => confirm.value !== null),
-  closeConfirm,
-)
-
-async function submitConfirm() {
-  const c = confirm.value
-  if (c == null) return
-  // Release still requires a justification - admin is reactivating
-  // a file the AV scanner flagged. Purge does not - it's the cleanup
-  // path for a row the admin has already reviewed.
-  if (c.kind === 'release' && c.reason.trim().length < 10) return
-  c.busy = true
-  try {
-    if (c.kind === 'release') {
-      await adminQuarantineRelease(c.file.file_id, { reason: c.reason })
-      ui.pushToast(t('admin_quarantine.toast.released'), 'success')
-    } else {
-      await adminQuarantinePurge(c.file.file_id)
-      ui.pushToast(t('admin_quarantine.toast.purged'), 'success')
+  async function onDownload(file: AdminFileItem) {
+    try {
+      const resp = await api.get(`/admin/files/${file.file_id}/quarantine/download`, {
+        responseType: 'blob',
+      })
+      const url = URL.createObjectURL(resp.data as Blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${file.filename}.quarantined`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      // axios with responseType=blob delivers the ERROR body as a Blob too, so
+      // describe() cannot see the envelope. This view had its own inline
+      // re-parse; it is now `describeBlob` in useApiError, shared with the four
+      // admin CSV/backup downloads that were all showing the generic message
+      // (audit 2026-07-30, fe-correct-12).
+      ui.pushToast(await describeBlob(err), 'error')
     }
-    confirm.value = null
-    await load()
-  } catch (err) {
-    c.busy = false
-    ui.pushToast(describe(err), 'error')
   }
-}
 
-onMounted(load)
+  function openConfirm(kind: ConfirmKind, file: AdminFileItem) {
+    confirm.value = { kind, file, reason: '', busy: false }
+  }
+
+  function closeConfirm() {
+    confirm.value = null
+  }
+
+  // Escape must close the one dialog in the admin shell that irreversibly
+  // destroys evidence of an infected upload. The backdrop's @keydown.escape never
+  // fired - the backdrop is not on the key event's propagation path (audit #2).
+  useEscapeToClose(
+    computed(() => confirm.value !== null),
+    closeConfirm,
+  )
+
+  async function submitConfirm() {
+    const c = confirm.value
+    if (c == null) return
+    // Release still requires a justification - admin is reactivating
+    // a file the AV scanner flagged. Purge does not - it's the cleanup
+    // path for a row the admin has already reviewed.
+    if (c.kind === 'release' && c.reason.trim().length < 10) return
+    c.busy = true
+    try {
+      if (c.kind === 'release') {
+        await adminQuarantineRelease(c.file.file_id, { reason: c.reason })
+        ui.pushToast(t('admin_quarantine.toast.released'), 'success')
+      } else {
+        await adminQuarantinePurge(c.file.file_id)
+        ui.pushToast(t('admin_quarantine.toast.purged'), 'success')
+      }
+      confirm.value = null
+      await load()
+    } catch (err) {
+      c.busy = false
+      ui.pushToast(describe(err), 'error')
+    }
+  }
+
+  onMounted(load)
 </script>
 
 <template>
@@ -140,9 +135,7 @@ onMounted(load)
     </div>
 
     <div v-if="loading" class="loading">{{ t('common.loading') }}</div>
-    <div
-v-else-if="errorMsg" class="fh-notice" role="alert"
-        data-tone="error">{{ errorMsg }}</div>
+    <div v-else-if="errorMsg" class="fh-notice" role="alert" data-tone="error">{{ errorMsg }}</div>
 
     <div v-else-if="items.length > 0" class="fh-table-scroll">
       <table class="files-table">
@@ -241,8 +234,7 @@ v-else-if="errorMsg" class="fh-notice" role="alert"
             class="fh-btn"
             :class="{ danger: confirm.kind === 'purge' }"
             :disabled="
-              confirm.busy ||
-              (confirm.kind === 'release' && confirm.reason.trim().length < 10)
+              confirm.busy || (confirm.kind === 'release' && confirm.reason.trim().length < 10)
             "
             @click="submitConfirm"
           >
@@ -259,122 +251,121 @@ v-else-if="errorMsg" class="fh-notice" role="alert"
 </template>
 
 <style scoped>
-.total-count {
-  font-size: var(--fh-text-mono-sm);
-  color: var(--fh-subtle);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-}
+  .total-count {
+    font-size: var(--fh-text-mono-sm);
+    color: var(--fh-subtle);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
 
-.intro {
-  margin: var(--fh-space-2) 0 var(--fh-space-3);
-  max-width: 64ch;
-}
+  .intro {
+    margin: var(--fh-space-2) 0 var(--fh-space-3);
+    max-width: 64ch;
+  }
 
-.filters {
-  display: flex;
-  gap: var(--fh-space-3);
-  margin-bottom: var(--fh-space-4);
-}
+  .filters {
+    display: flex;
+    gap: var(--fh-space-3);
+    margin-bottom: var(--fh-space-4);
+  }
 
-.search {
-  flex: 1;
-  max-width: 360px;
-}
+  .search {
+    flex: 1;
+    max-width: 360px;
+  }
 
-.loading,
-.empty {
-  color: var(--fh-subtle);
-  padding: var(--fh-space-4) 0;
-}
+  .loading,
+  .empty {
+    color: var(--fh-subtle);
+    padding: var(--fh-space-4) 0;
+  }
 
-.files-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--fh-text-body-sm);
-}
+  .files-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--fh-text-body-sm);
+  }
 
-.files-table th,
-.files-table td {
-  text-align: left;
-  padding: var(--fh-space-2) var(--fh-space-3);
-  border-bottom: var(--fh-border);
-  vertical-align: top;
-}
+  .files-table th,
+  .files-table td {
+    text-align: left;
+    padding: var(--fh-space-2) var(--fh-space-3);
+    border-bottom: var(--fh-border);
+    vertical-align: top;
+  }
 
-.files-table th {
-  font-family: var(--fh-font-mono);
-  font-size: var(--fh-text-mono-sm);
-  color: var(--fh-subtle);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  font-weight: normal;
-}
+  .files-table th {
+    font-family: var(--fh-font-mono);
+    font-size: var(--fh-text-mono-sm);
+    color: var(--fh-subtle);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-weight: normal;
+  }
 
-.numeric {
-  text-align: right;
-}
+  .numeric {
+    text-align: right;
+  }
 
-.row-name {
-  color: var(--fh-ink);
-}
+  .row-name {
+    color: var(--fh-ink);
+  }
 
-.row-hint {
-  font-size: var(--fh-text-mono-sm);
-  color: var(--fh-subtle);
-}
+  .row-hint {
+    font-size: var(--fh-text-mono-sm);
+    color: var(--fh-subtle);
+  }
 
-.actions-cell {
-  display: flex;
-  gap: var(--fh-space-2);
-  flex-wrap: wrap;
-}
+  .actions-cell {
+    display: flex;
+    gap: var(--fh-space-2);
+    flex-wrap: wrap;
+  }
 
-.danger {
-  color: var(--fh-danger, #b91c1c);
-}
+  .danger {
+    color: var(--fh-danger, #b91c1c);
+  }
 
+  .confirm-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(20, 16, 8, 0.45);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 60;
+    padding: var(--fh-space-3);
+  }
 
-.confirm-backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(20, 16, 8, 0.45);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 60;
-  padding: var(--fh-space-3);
-}
+  .confirm-card {
+    background: var(--fh-paper);
+    padding: var(--fh-space-5);
+    border-radius: var(--fh-radius-md);
+    max-width: 540px;
+    width: 100%;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.18);
+    display: flex;
+    flex-direction: column;
+    gap: var(--fh-space-3);
+  }
 
-.confirm-card {
-  background: var(--fh-paper);
-  padding: var(--fh-space-5);
-  border-radius: var(--fh-radius-md);
-  max-width: 540px;
-  width: 100%;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.18);
-  display: flex;
-  flex-direction: column;
-  gap: var(--fh-space-3);
-}
+  .confirm-h2 {
+    font-family: var(--fh-font-display);
+    font-size: 1.5rem;
+    margin: 0;
+  }
 
-.confirm-h2 {
-  font-family: var(--fh-font-display);
-  font-size: 1.5rem;
-  margin: 0;
-}
+  .target {
+    background: var(--fh-paper-raised);
+    padding: var(--fh-space-2) var(--fh-space-3);
+    border-radius: var(--fh-radius-sm);
+    font-size: var(--fh-text-mono-sm);
+    word-break: break-all;
+  }
 
-.target {
-  background: var(--fh-paper-raised);
-  padding: var(--fh-space-2) var(--fh-space-3);
-  border-radius: var(--fh-radius-sm);
-  font-size: var(--fh-text-mono-sm);
-  word-break: break-all;
-}
-
-.confirm-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--fh-space-3);
-}
+  .confirm-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--fh-space-3);
+  }
 </style>

@@ -1,164 +1,162 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
-import { useI18n } from 'vue-i18n'
+  import { onMounted, ref } from 'vue'
+  import { useI18n } from 'vue-i18n'
 
-import {
-  fetchInboxNow,
-  getImapSettings,
-  testImap,
-  updateImapSettings,
-} from '@/api/admin'
-import { asEnvelope } from '@/api/client'
-import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
-import { useApiError } from '@/composables/useApiError'
-import { useUiStore } from '@/stores/ui'
-import type { ImapSettingsResponse, ImapTestResponse } from '@/types/api'
+  import { fetchInboxNow, getImapSettings, testImap, updateImapSettings } from '@/api/admin'
+  import { asEnvelope } from '@/api/client'
+  import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
+  import { useApiError } from '@/composables/useApiError'
+  import { useUiStore } from '@/stores/ui'
+  import type { ImapSettingsResponse, ImapTestResponse } from '@/types/api'
 
-const { t } = useI18n()
-const { describe } = useApiError()
-const ui = useUiStore()
+  const { t } = useI18n()
+  const { describe } = useApiError()
+  const ui = useUiStore()
 
-const loading = ref(true)
-const saving = ref(false)
-const testing = ref(false)
-const fetching = ref(false)
-const errorMsg = ref<string | null>(null)
-const testResult = ref<ImapTestResponse | null>(null)
-// Revealed only when the backend asks for it: testing a server other than
-// the saved one while relying on the stored mail password.
-const stepUpNeeded = ref(false)
-const confirmPassword = ref('')
-const isPasswordSet = ref(false)
-const lastPollAt = ref<string | null>(null)
-const passwordTouched = ref(false)
+  const loading = ref(true)
+  const saving = ref(false)
+  const testing = ref(false)
+  const fetching = ref(false)
+  const errorMsg = ref<string | null>(null)
+  const testResult = ref<ImapTestResponse | null>(null)
+  // Revealed only when the backend asks for it: testing a server other than
+  // the saved one while relying on the stored mail password.
+  const stepUpNeeded = ref(false)
+  const confirmPassword = ref('')
+  const isPasswordSet = ref(false)
+  const lastPollAt = ref<string | null>(null)
+  const passwordTouched = ref(false)
 
-const form = ref({
-  enabled: false,
-  use_smtp_credentials: true,
-  host: '',
-  port: 993,
-  user: '',
-  password: '',
-  tls_mode: 'implicit' as 'implicit' | 'starttls' | 'none',
-  mailbox: 'INBOX',
-  post_fetch_action: 'mark_read' as 'mark_read' | 'untouched' | 'move' | 'delete',
-  move_folder: 'fileHeron/Processed',
-  notify_mode: 'off' as 'off' | 'human' | 'all',
-  require_known_sender: true,
-  tls_insecure: false,
-})
-
-function hydrate(s: ImapSettingsResponse) {
-  form.value = {
-    enabled: s.enabled,
-    use_smtp_credentials: s.use_smtp_credentials,
-    host: s.host,
-    port: s.port,
-    user: s.user,
+  const form = ref({
+    enabled: false,
+    use_smtp_credentials: true,
+    host: '',
+    port: 993,
+    user: '',
     password: '',
-    tls_mode: s.tls_mode,
-    mailbox: s.mailbox,
-    post_fetch_action: s.post_fetch_action,
-    move_folder: s.move_folder,
-    notify_mode: s.notify_mode,
-    require_known_sender: s.require_known_sender,
-    tls_insecure: s.tls_insecure,
-  }
-  isPasswordSet.value = s.is_password_set
-  lastPollAt.value = s.last_poll_at
-  passwordTouched.value = false
-}
+    tls_mode: 'implicit' as 'implicit' | 'starttls' | 'none',
+    mailbox: 'INBOX',
+    post_fetch_action: 'mark_read' as 'mark_read' | 'untouched' | 'move' | 'delete',
+    move_folder: 'fileHeron/Processed',
+    notify_mode: 'off' as 'off' | 'human' | 'all',
+    require_known_sender: true,
+    tls_insecure: false,
+  })
 
-async function load() {
-  loading.value = true
-  try {
-    const { data } = await getImapSettings()
-    hydrate(data)
-  } catch (err) {
-    errorMsg.value = describe(err)
-  } finally {
-    loading.value = false
-  }
-}
-
-async function onSave() {
-  saving.value = true
-  errorMsg.value = null
-  try {
-    const { data } = await updateImapSettings({
-      ...form.value,
-      password: passwordTouched.value ? form.value.password : null,
-    })
-    hydrate(data)
-    ui.pushToast(t('admin_imap.saved_toast'), 'success')
-  } catch (err) {
-    errorMsg.value = describe(err)
-  } finally {
-    saving.value = false
-  }
-}
-
-async function onTest() {
-  testing.value = true
-  testResult.value = null
-  try {
-    // The EDITED form, not the stored settings - see the route's note.
-    const { data } = await testImap({
-      host: form.value.host,
-      port: form.value.port,
-      user: form.value.use_smtp_credentials ? '' : form.value.user,
-      password: form.value.use_smtp_credentials ? null : form.value.password || null,
-      tls_mode: form.value.tls_mode,
-      mailbox: form.value.mailbox,
-      ...(confirmPassword.value ? { confirm_password: confirmPassword.value } : {}),
-    })
-    testResult.value = data
-    // Only clear the step-up password once the test actually passed; a
-    // server-side failure (`ok: false`) is a 200 and the admin will retry.
-    if (data.ok) {
-      confirmPassword.value = ''
-      stepUpNeeded.value = false
+  function hydrate(s: ImapSettingsResponse) {
+    form.value = {
+      enabled: s.enabled,
+      use_smtp_credentials: s.use_smtp_credentials,
+      host: s.host,
+      port: s.port,
+      user: s.user,
+      password: '',
+      tls_mode: s.tls_mode,
+      mailbox: s.mailbox,
+      post_fetch_action: s.post_fetch_action,
+      move_folder: s.move_folder,
+      notify_mode: s.notify_mode,
+      require_known_sender: s.require_known_sender,
+      tls_insecure: s.tls_insecure,
     }
-  } catch (err) {
-    // Testing a server other than the saved one, while relying on the stored
-    // password, is the only case that can send that password somewhere new.
-    if (asEnvelope(err)?.code === 'STEP_UP_REQUIRED') {
-      stepUpNeeded.value = true
-      return
-    }
-    errorMsg.value = describe(err)
-  } finally {
-    testing.value = false
+    isPasswordSet.value = s.is_password_set
+    lastPollAt.value = s.last_poll_at
+    passwordTouched.value = false
   }
-}
 
-async function onFetchNow() {
-  fetching.value = true
-  try {
-    const { data } = await fetchInboxNow()
-    if (data.ok && data.skipped) {
-      ui.pushToast(t('admin_imap.fetch_skipped', { reason: data.skipped }), 'warn')
-    } else if (data.ok && (data.ingested ?? 0) > 0) {
-      ui.pushToast(t('admin_imap.fetch_done', { n: data.ingested ?? 0 }, data.ingested ?? 0), 'success')
-    } else if (data.ok) {
-      ui.pushToast(
-        t('admin_imap.fetch_empty', { mailbox: data.mailbox ?? 'INBOX', total: data.total ?? 0 }),
-        'success',
-      )
-    } else {
-      ui.pushToast(data.error || t('admin_imap.fetch_failed'), 'warn')
+  async function load() {
+    loading.value = true
+    try {
+      const { data } = await getImapSettings()
+      hydrate(data)
+    } catch (err) {
+      errorMsg.value = describe(err)
+    } finally {
+      loading.value = false
     }
-  } catch (err) {
-    ui.pushToast(describe(err), 'warn')
-  } finally {
-    fetching.value = false
   }
-}
 
-const actionOptions = ['mark_read', 'untouched', 'move', 'delete'] as const
-const notifyOptions = ['off', 'human', 'all'] as const
+  async function onSave() {
+    saving.value = true
+    errorMsg.value = null
+    try {
+      const { data } = await updateImapSettings({
+        ...form.value,
+        password: passwordTouched.value ? form.value.password : null,
+      })
+      hydrate(data)
+      ui.pushToast(t('admin_imap.saved_toast'), 'success')
+    } catch (err) {
+      errorMsg.value = describe(err)
+    } finally {
+      saving.value = false
+    }
+  }
 
-onMounted(load)
+  async function onTest() {
+    testing.value = true
+    testResult.value = null
+    try {
+      // The EDITED form, not the stored settings - see the route's note.
+      const { data } = await testImap({
+        host: form.value.host,
+        port: form.value.port,
+        user: form.value.use_smtp_credentials ? '' : form.value.user,
+        password: form.value.use_smtp_credentials ? null : form.value.password || null,
+        tls_mode: form.value.tls_mode,
+        mailbox: form.value.mailbox,
+        ...(confirmPassword.value ? { confirm_password: confirmPassword.value } : {}),
+      })
+      testResult.value = data
+      // Only clear the step-up password once the test actually passed; a
+      // server-side failure (`ok: false`) is a 200 and the admin will retry.
+      if (data.ok) {
+        confirmPassword.value = ''
+        stepUpNeeded.value = false
+      }
+    } catch (err) {
+      // Testing a server other than the saved one, while relying on the stored
+      // password, is the only case that can send that password somewhere new.
+      if (asEnvelope(err)?.code === 'STEP_UP_REQUIRED') {
+        stepUpNeeded.value = true
+        return
+      }
+      errorMsg.value = describe(err)
+    } finally {
+      testing.value = false
+    }
+  }
+
+  async function onFetchNow() {
+    fetching.value = true
+    try {
+      const { data } = await fetchInboxNow()
+      if (data.ok && data.skipped) {
+        ui.pushToast(t('admin_imap.fetch_skipped', { reason: data.skipped }), 'warn')
+      } else if (data.ok && (data.ingested ?? 0) > 0) {
+        ui.pushToast(
+          t('admin_imap.fetch_done', { n: data.ingested ?? 0 }, data.ingested ?? 0),
+          'success',
+        )
+      } else if (data.ok) {
+        ui.pushToast(
+          t('admin_imap.fetch_empty', { mailbox: data.mailbox ?? 'INBOX', total: data.total ?? 0 }),
+          'success',
+        )
+      } else {
+        ui.pushToast(data.error || t('admin_imap.fetch_failed'), 'warn')
+      }
+    } catch (err) {
+      ui.pushToast(describe(err), 'warn')
+    } finally {
+      fetching.value = false
+    }
+  }
+
+  const actionOptions = ['mark_read', 'untouched', 'move', 'delete'] as const
+  const notifyOptions = ['off', 'human', 'all'] as const
+
+  onMounted(load)
 </script>
 
 <template>
@@ -177,9 +175,7 @@ onMounted(load)
         </span>
       </label>
 
-      <div
-v-if="errorMsg" class="fh-notice" role="alert"
-        data-tone="danger">{{ errorMsg }}</div>
+      <div v-if="errorMsg" class="fh-notice" role="alert" data-tone="danger">{{ errorMsg }}</div>
 
       <h2 class="form-h2">{{ t('admin_imap.connection') }}</h2>
 
@@ -198,7 +194,13 @@ v-if="errorMsg" class="fh-notice" role="alert"
       <div class="row-2">
         <label class="fh-field">
           <span class="fh-field-label">{{ t('admin_imap.port') }}</span>
-          <input v-model.number="form.port" type="number" class="fh-field-input" min="1" max="65535" />
+          <input
+            v-model.number="form.port"
+            type="number"
+            class="fh-field-input"
+            min="1"
+            max="65535"
+          />
         </label>
         <label class="fh-field">
           <span class="fh-field-label">{{ t('admin_imap.tls') }}</span>
@@ -240,14 +242,20 @@ v-if="errorMsg" class="fh-notice" role="alert"
       <h2 class="form-h2">{{ t('admin_imap.behaviour') }}</h2>
       <p class="fh-field-help">
         {{ t('admin_imap.schedule_moved') }}
-        <RouterLink :to="{ name: 'admin-scheduled-tasks' }">{{ t('admin.nav.scheduled_tasks') }}</RouterLink>
+        <RouterLink :to="{ name: 'admin-scheduled-tasks' }">{{
+          t('admin.nav.scheduled_tasks')
+        }}</RouterLink>
       </p>
       <label class="fh-field">
         <span class="fh-field-label">{{ t('admin_imap.post_fetch') }}</span>
         <select v-model="form.post_fetch_action" class="fh-field-input">
-          <option v-for="a in actionOptions" :key="a" :value="a">{{ t(`admin_imap.action_${a}`) }}</option>
+          <option v-for="a in actionOptions" :key="a" :value="a">
+            {{ t(`admin_imap.action_${a}`) }}
+          </option>
         </select>
-        <span class="fh-field-help">{{ t(`admin_imap.action_${form.post_fetch_action}_help`) }}</span>
+        <span class="fh-field-help">{{
+          t(`admin_imap.action_${form.post_fetch_action}_help`)
+        }}</span>
       </label>
       <label v-if="form.post_fetch_action === 'move'" class="fh-field">
         <span class="fh-field-label">{{ t('admin_imap.move_folder') }}</span>
@@ -256,7 +264,9 @@ v-if="errorMsg" class="fh-notice" role="alert"
       <label class="fh-field">
         <span class="fh-field-label">{{ t('admin_imap.notify') }}</span>
         <select v-model="form.notify_mode" class="fh-field-input">
-          <option v-for="n in notifyOptions" :key="n" :value="n">{{ t(`admin_imap.notify_${n}`) }}</option>
+          <option v-for="n in notifyOptions" :key="n" :value="n">
+            {{ t(`admin_imap.notify_${n}`) }}
+          </option>
         </select>
       </label>
       <label class="fh-field check-row">
@@ -318,37 +328,37 @@ v-if="errorMsg" class="fh-notice" role="alert"
 </template>
 
 <style scoped>
-.intro {
-  margin: var(--fh-space-2) 0 var(--fh-space-4);
-}
-.row-2 {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--fh-space-3);
-}
-.toggle-row {
-  display: flex;
-  gap: var(--fh-space-2);
-  align-items: flex-start;
-  margin-bottom: var(--fh-space-4);
-}
-.mode-name {
-  display: block;
-  font-weight: 500;
-}
-.mode-help {
-  display: block;
-  color: var(--fh-ink-soft);
-  font-size: var(--fh-text-body-sm);
-}
-.fh-field {
-  display: block;
-  margin-bottom: var(--fh-space-3);
-}
-.actions {
-  display: flex;
-  gap: var(--fh-space-3);
-  align-items: center;
-  margin: var(--fh-space-4) 0;
-}
+  .intro {
+    margin: var(--fh-space-2) 0 var(--fh-space-4);
+  }
+  .row-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--fh-space-3);
+  }
+  .toggle-row {
+    display: flex;
+    gap: var(--fh-space-2);
+    align-items: flex-start;
+    margin-bottom: var(--fh-space-4);
+  }
+  .mode-name {
+    display: block;
+    font-weight: 500;
+  }
+  .mode-help {
+    display: block;
+    color: var(--fh-ink-soft);
+    font-size: var(--fh-text-body-sm);
+  }
+  .fh-field {
+    display: block;
+    margin-bottom: var(--fh-space-3);
+  }
+  .actions {
+    display: flex;
+    gap: var(--fh-space-3);
+    align-items: center;
+    margin: var(--fh-space-4) 0;
+  }
 </style>

@@ -1,13 +1,13 @@
 <script setup lang="ts">
-import { useI18n } from 'vue-i18n'
+  import { useI18n } from 'vue-i18n'
 
-import type { SessionRecord } from '@/types/api'
-import { formatInSiteTime } from '@/utils/datetime'
-import { uaShort } from '@/utils/ua'
+  import type { SessionRecord } from '@/types/api'
+  import { formatInSiteTime } from '@/utils/datetime'
+  import { uaShort } from '@/utils/ua'
 
-defineProps<{ session: SessionRecord }>()
-const emit = defineEmits<{ revoke: [id: number] }>()
-const { t, locale } = useI18n()
+  defineProps<{ session: SessionRecord }>()
+  const emit = defineEmits<{ revoke: [id: number] }>()
+  const { t, locale } = useI18n()
 </script>
 
 <template>
@@ -37,57 +37,57 @@ const { t, locale } = useI18n()
 </template>
 
 <style scoped>
-.sr {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--fh-space-3);
-  padding: var(--fh-space-3) 0;
-  border-top: 1px solid var(--fh-hairline);
-  list-style: none;
-}
+  .sr {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--fh-space-3);
+    padding: var(--fh-space-3) 0;
+    border-top: 1px solid var(--fh-hairline);
+    list-style: none;
+  }
 
-.sr:last-child {
-  border-bottom: 1px solid var(--fh-hairline);
-}
+  .sr:last-child {
+    border-bottom: 1px solid var(--fh-hairline);
+  }
 
-.sr-left {
-  display: inline-flex;
-  align-items: baseline;
-  gap: var(--fh-space-2);
-}
+  .sr-left {
+    display: inline-flex;
+    align-items: baseline;
+    gap: var(--fh-space-2);
+  }
 
-.sr-ua {
-  font-size: var(--fh-text-body-md);
-  color: var(--fh-ink);
-}
+  .sr-ua {
+    font-size: var(--fh-text-body-md);
+    color: var(--fh-ink);
+  }
 
-.sr-pill {
-  font-family: var(--fh-font-mono);
-  font-size: var(--fh-text-mono-sm);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--fh-accent);
-  border: 1px solid var(--fh-accent);
-  padding: 1px 6px;
-}
+  .sr-pill {
+    font-family: var(--fh-font-mono);
+    font-size: var(--fh-text-mono-sm);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--fh-accent);
+    border: 1px solid var(--fh-accent);
+    padding: 1px 6px;
+  }
 
-.sr-right {
-  display: inline-flex;
-  align-items: baseline;
-  gap: var(--fh-space-3);
-}
+  .sr-right {
+    display: inline-flex;
+    align-items: baseline;
+    gap: var(--fh-space-3);
+  }
 
-.sr-meta {
-  display: inline-flex;
-  align-items: baseline;
-  gap: var(--fh-space-3);
-  font-family: var(--fh-font-mono);
-  font-size: var(--fh-text-mono-sm);
-  color: var(--fh-subtle);
-}
+  .sr-meta {
+    display: inline-flex;
+    align-items: baseline;
+    gap: var(--fh-space-3);
+    font-family: var(--fh-font-mono);
+    font-size: var(--fh-text-mono-sm);
+    color: var(--fh-subtle);
+  }
 
-.sr-ip {
-  letter-spacing: 0.04em;
-}
+  .sr-ip {
+    letter-spacing: 0.04em;
+  }
 </style>

@@ -9,11 +9,7 @@ import { onScopeDispose, watch, type Ref } from 'vue'
  * followed by navigating away used to fire `cb` - a request and a state write -
  * against a view that no longer existed.
  */
-export function useDebouncedSearch(
-  source: Ref<unknown>,
-  cb: () => void,
-  delay = 220,
-): void {
+export function useDebouncedSearch(source: Ref<unknown>, cb: () => void, delay = 220): void {
   let timer: ReturnType<typeof setTimeout> | null = null
   watch(source, () => {
     if (timer) clearTimeout(timer)

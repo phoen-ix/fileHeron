@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { useAuthStore } from '@/stores/auth'
+  import { useAuthStore } from '@/stores/auth'
 
-const auth = useAuthStore()
+  const auth = useAuthStore()
 </script>
 
 <template>
@@ -28,37 +28,37 @@ const auth = useAuthStore()
 </template>
 
 <style scoped>
-.home {
-  display: flex;
-  justify-content: center;
-  padding-top: var(--fh-space-6);
-}
+  .home {
+    display: flex;
+    justify-content: center;
+    padding-top: var(--fh-space-6);
+  }
 
-.welcome-card {
-  width: 100%;
-  max-width: 480px;
-  padding: var(--fh-space-5);
-  border-top: 1px solid var(--fh-hairline);
-  display: flex;
-  flex-direction: column;
-  gap: var(--fh-space-2);
-}
+  .welcome-card {
+    width: 100%;
+    max-width: 480px;
+    padding: var(--fh-space-5);
+    border-top: 1px solid var(--fh-hairline);
+    display: flex;
+    flex-direction: column;
+    gap: var(--fh-space-2);
+  }
 
-.welcome-line {
-  display: flex;
-  align-items: baseline;
-  gap: var(--fh-space-3);
-  font-size: var(--fh-text-body-md);
-}
+  .welcome-line {
+    display: flex;
+    align-items: baseline;
+    gap: var(--fh-space-3);
+    font-size: var(--fh-text-body-md);
+  }
 
-.welcome-line .fh-kv-value {
-  color: var(--fh-ink);
-}
+  .welcome-line .fh-kv-value {
+    color: var(--fh-ink);
+  }
 
-.welcome-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--fh-space-3);
-  margin-top: var(--fh-space-3);
-}
+  .welcome-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--fh-space-3);
+    margin-top: var(--fh-space-3);
+  }
 </style>

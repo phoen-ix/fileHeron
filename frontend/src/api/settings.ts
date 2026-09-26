@@ -81,20 +81,14 @@ export function createProvider(payload: CreateOIDCProviderRequest) {
 }
 
 export function updateProvider(id: string, payload: UpdateOIDCProviderRequest) {
-  return api.patch<OIDCProviderItem>(
-    `/admin/settings/sso/providers/${id}`,
-    payload,
-  )
+  return api.patch<OIDCProviderItem>(`/admin/settings/sso/providers/${id}`, payload)
 }
 
 export function deleteProvider(id: string) {
   return api.delete(`/admin/settings/sso/providers/${id}`)
 }
 
-export function testProviderConnection(
-  id: string,
-  payload: { issuer_url?: string },
-) {
+export function testProviderConnection(id: string, payload: { issuer_url?: string }) {
   return api.post<TestConnectionResponse>(
     `/admin/settings/sso/providers/${id}/test-connection`,
     payload,
@@ -102,10 +96,7 @@ export function testProviderConnection(
 }
 
 export function testDiscovery(payload: { issuer_url?: string }) {
-  return api.post<TestConnectionResponse>(
-    '/admin/settings/sso/test-discovery',
-    payload,
-  )
+  return api.post<TestConnectionResponse>('/admin/settings/sso/test-discovery', payload)
 }
 
 export function listPresets() {

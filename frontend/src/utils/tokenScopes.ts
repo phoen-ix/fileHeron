@@ -29,7 +29,7 @@ export const TOKEN_SCOPE_GROUPS: { group: 'sharing' | 'files'; scopes: TokenScop
       'shares:manage',
       'recipients:search',
       'public_links:read',
-  'public_links:write',
+      'public_links:write',
     ],
   },
   { group: 'files', scopes: ['files:upload', 'files:download', 'files:delete'] },

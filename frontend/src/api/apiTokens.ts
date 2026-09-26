@@ -1,8 +1,5 @@
 import api from './client'
-import type {
-  ApiTokenListResponse,
-  CreateApiTokenResponse,
-} from '@/types/api'
+import type { ApiTokenListResponse, CreateApiTokenResponse } from '@/types/api'
 
 export function listTokens() {
   return api.get<ApiTokenListResponse>('/account/api-tokens')

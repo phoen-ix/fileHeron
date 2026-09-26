@@ -114,7 +114,7 @@ export function useSSE(opts: UseSSEOptions) {
     es = new EventSource(u, { withCredentials: true })
     es.onopen = () => {
       connected.value = true
-      reconnectAttempt = 0  // reset backoff on successful open
+      reconnectAttempt = 0 // reset backoff on successful open
       consecutiveErrors = 0
       opts.onOpen?.()
     }
@@ -160,10 +160,7 @@ export function useSSE(opts: UseSSEOptions) {
 
   function _scheduleReconnect() {
     if (stopped || reconnectTimer !== null) return
-    const delay = Math.min(
-      RECONNECT_CAP_MS,
-      RECONNECT_BASE_MS * 2 ** Math.min(reconnectAttempt, 5),
-    )
+    const delay = Math.min(RECONNECT_CAP_MS, RECONNECT_BASE_MS * 2 ** Math.min(reconnectAttempt, 5))
     reconnectAttempt += 1
     reconnectTimer = window.setTimeout(() => {
       reconnectTimer = null

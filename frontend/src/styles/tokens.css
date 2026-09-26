@@ -55,12 +55,11 @@
   --fh-focus-ring: #b45309;
 
   /* --- typography --------------------------------------------------------- */
-  --fh-font-display: 'Instrument Serif', 'Iowan Old Style', 'Palatino Linotype',
-    Georgia, serif;
-  --fh-font-body: 'Geist Variable', ui-sans-serif, -apple-system, 'Segoe UI', system-ui,
-    sans-serif;
-  --fh-font-mono: 'Geist Mono Variable', ui-monospace, 'SF Mono', 'Cascadia Code',
-    'JetBrains Mono', Menlo, monospace;
+  --fh-font-display: 'Instrument Serif', 'Iowan Old Style', 'Palatino Linotype', Georgia, serif;
+  --fh-font-body: 'Geist Variable', ui-sans-serif, -apple-system, 'Segoe UI', system-ui, sans-serif;
+  --fh-font-mono:
+    'Geist Mono Variable', ui-monospace, 'SF Mono', 'Cascadia Code', 'JetBrains Mono', Menlo,
+    monospace;
 
   /* Editorial scale (client-facing) */
   --fh-text-display-xl: 3.5rem; /* 56 */

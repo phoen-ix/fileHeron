@@ -73,8 +73,16 @@ export const ADMIN_NAV: AdminNavCategory[] = [
     key: 'people',
     labelKey: 'admin.nav_cat.people',
     items: [
-      { routeName: 'admin-users', labelKey: 'admin.nav.users', matchNames: ['admin-users', 'admin-user-detail'] },
-      { routeName: 'admin-groups', labelKey: 'admin.nav.groups', matchNames: ['admin-groups', 'admin-group-detail'] },
+      {
+        routeName: 'admin-users',
+        labelKey: 'admin.nav.users',
+        matchNames: ['admin-users', 'admin-user-detail'],
+      },
+      {
+        routeName: 'admin-groups',
+        labelKey: 'admin.nav.groups',
+        matchNames: ['admin-groups', 'admin-group-detail'],
+      },
       {
         routeName: 'admin-sessions',
         labelKey: 'admin.nav.sessions',
@@ -98,7 +106,11 @@ export const ADMIN_NAV: AdminNavCategory[] = [
         labelKey: 'admin.nav.sso',
         matchNames: ['admin-settings-sso', 'admin-settings-sso-new', 'admin-settings-sso-edit'],
       },
-      { routeName: 'admin-settings-twofa', labelKey: 'admin.nav.twofa', matchNames: ['admin-settings-twofa'] },
+      {
+        routeName: 'admin-settings-twofa',
+        labelKey: 'admin.nav.twofa',
+        matchNames: ['admin-settings-twofa'],
+      },
       // "Rate limits" was a three-field page with a jargon name; the task is
       // "stop password guessing", so lockout, per-address limits and HIBP sit
       // together, beside the other sign-in identifier policy (email change).
@@ -117,7 +129,11 @@ export const ADMIN_NAV: AdminNavCategory[] = [
     key: 'sharing',
     labelKey: 'admin.nav_cat.sharing',
     items: [
-      { routeName: 'admin-file-history', labelKey: 'admin.nav.file_history', matchNames: ['admin-file-history'] },
+      {
+        routeName: 'admin-file-history',
+        labelKey: 'admin.nav.file_history',
+        matchNames: ['admin-file-history'],
+      },
       {
         routeName: 'admin-quarantine',
         labelKey: 'admin.nav.quarantine',
@@ -127,22 +143,63 @@ export const ADMIN_NAV: AdminNavCategory[] = [
           { routeName: 'admin-settings-quarantine', labelKey: 'admin.nav_tab.alerts_scanner' },
         ],
       },
-      { routeName: 'admin-settings-share-approval', labelKey: 'admin.nav.share_approval', matchNames: ['admin-settings-share-approval'] },
-      { routeName: 'admin-settings-public-links', labelKey: 'admin.nav.public_links', matchNames: ['admin-settings-public-links'] },
-      { routeName: 'admin-settings-transfers', labelKey: 'admin.nav.transfers', matchNames: ['admin-settings-transfers'] },
-      { routeName: 'admin-analytics', labelKey: 'admin.nav.analytics', matchNames: ['admin-analytics'] },
+      {
+        routeName: 'admin-settings-share-approval',
+        labelKey: 'admin.nav.share_approval',
+        matchNames: ['admin-settings-share-approval'],
+      },
+      {
+        routeName: 'admin-settings-public-links',
+        labelKey: 'admin.nav.public_links',
+        matchNames: ['admin-settings-public-links'],
+      },
+      {
+        routeName: 'admin-settings-transfers',
+        labelKey: 'admin.nav.transfers',
+        matchNames: ['admin-settings-transfers'],
+      },
+      {
+        routeName: 'admin-analytics',
+        labelKey: 'admin.nav.analytics',
+        matchNames: ['admin-analytics'],
+      },
     ],
   },
   {
     key: 'email',
     labelKey: 'admin.nav_cat.email',
     items: [
-      { routeName: 'admin-inbox', labelKey: 'admin.nav.inbox', matchNames: ['admin-inbox', 'admin-inbox-detail'], badge: 'inbox_unread' },
-      { routeName: 'admin-mail-log', labelKey: 'admin.nav.mail_log', matchNames: ['admin-mail-log', 'admin-mail-detail'] },
-      { routeName: 'admin-settings-email', labelKey: 'admin.nav.email', matchNames: ['admin-settings-email'] },
-      { routeName: 'admin-settings-imap', labelKey: 'admin.nav.imap', matchNames: ['admin-settings-imap'] },
-      { routeName: 'admin-settings-email-templates', labelKey: 'admin.nav.email_templates', matchNames: ['admin-settings-email-templates'] },
-      { routeName: 'admin-settings-webhooks', labelKey: 'admin.nav.webhooks', matchNames: ['admin-settings-webhooks'] },
+      {
+        routeName: 'admin-inbox',
+        labelKey: 'admin.nav.inbox',
+        matchNames: ['admin-inbox', 'admin-inbox-detail'],
+        badge: 'inbox_unread',
+      },
+      {
+        routeName: 'admin-mail-log',
+        labelKey: 'admin.nav.mail_log',
+        matchNames: ['admin-mail-log', 'admin-mail-detail'],
+      },
+      {
+        routeName: 'admin-settings-email',
+        labelKey: 'admin.nav.email',
+        matchNames: ['admin-settings-email'],
+      },
+      {
+        routeName: 'admin-settings-imap',
+        labelKey: 'admin.nav.imap',
+        matchNames: ['admin-settings-imap'],
+      },
+      {
+        routeName: 'admin-settings-email-templates',
+        labelKey: 'admin.nav.email_templates',
+        matchNames: ['admin-settings-email-templates'],
+      },
+      {
+        routeName: 'admin-settings-webhooks',
+        labelKey: 'admin.nav.webhooks',
+        matchNames: ['admin-settings-webhooks'],
+      },
     ],
   },
   {
@@ -162,7 +219,11 @@ export const ADMIN_NAV: AdminNavCategory[] = [
           { routeName: 'admin-settings-scan-guard', labelKey: 'admin.nav_tab.scan_guard' },
         ],
       },
-      { routeName: 'admin-settings-anomaly', labelKey: 'admin.nav.anomaly', matchNames: ['admin-settings-anomaly'] },
+      {
+        routeName: 'admin-settings-anomaly',
+        labelKey: 'admin.nav.anomaly',
+        matchNames: ['admin-settings-anomaly'],
+      },
       { routeName: 'admin-audit', labelKey: 'admin.nav.audit', matchNames: ['admin-audit'] },
     ],
   },
@@ -170,8 +231,16 @@ export const ADMIN_NAV: AdminNavCategory[] = [
     key: 'site',
     labelKey: 'admin.nav_cat.site',
     items: [
-      { routeName: 'admin-settings-general', labelKey: 'admin.nav.general', matchNames: ['admin-settings-general'] },
-      { routeName: 'admin-settings-branding', labelKey: 'admin.nav.branding', matchNames: ['admin-settings-branding'] },
+      {
+        routeName: 'admin-settings-general',
+        labelKey: 'admin.nav.general',
+        matchNames: ['admin-settings-general'],
+      },
+      {
+        routeName: 'admin-settings-branding',
+        labelKey: 'admin.nav.branding',
+        matchNames: ['admin-settings-branding'],
+      },
     ],
   },
   {
@@ -179,7 +248,11 @@ export const ADMIN_NAV: AdminNavCategory[] = [
     labelKey: 'admin.nav_cat.system',
     items: [
       { routeName: 'admin-system', labelKey: 'admin.nav.system', matchNames: ['admin-system'] },
-      { routeName: 'admin-scheduled-tasks', labelKey: 'admin.nav.scheduled_tasks', matchNames: ['admin-scheduled-tasks'] },
+      {
+        routeName: 'admin-scheduled-tasks',
+        labelKey: 'admin.nav.scheduled_tasks',
+        matchNames: ['admin-scheduled-tasks'],
+      },
       // Errors are OPERATIONS, not security: the alerts fire on failed
       // background tasks and 5xx, so they sit beside Scheduled tasks and
       // Status. The log and the alert settings are two tabs of one page.
@@ -192,9 +265,21 @@ export const ADMIN_NAV: AdminNavCategory[] = [
           { routeName: 'admin-settings-error-alerts', labelKey: 'admin.nav_tab.alerts' },
         ],
       },
-      { routeName: 'admin-settings-maintenance', labelKey: 'admin.nav.maintenance', matchNames: ['admin-settings-maintenance'] },
-      { routeName: 'admin-settings-backup', labelKey: 'admin.nav.backup', matchNames: ['admin-settings-backup'] },
-      { routeName: 'admin-settings-advanced', labelKey: 'admin.nav.advanced', matchNames: ['admin-settings-advanced'] },
+      {
+        routeName: 'admin-settings-maintenance',
+        labelKey: 'admin.nav.maintenance',
+        matchNames: ['admin-settings-maintenance'],
+      },
+      {
+        routeName: 'admin-settings-backup',
+        labelKey: 'admin.nav.backup',
+        matchNames: ['admin-settings-backup'],
+      },
+      {
+        routeName: 'admin-settings-advanced',
+        labelKey: 'admin.nav.advanced',
+        matchNames: ['admin-settings-advanced'],
+      },
     ],
   },
 ]
@@ -246,9 +331,7 @@ export function findNavItem(routeName: string | symbol | null | undefined): Admi
 /** The default open-set for a mode when nothing is persisted: expanded opens
  *  all categories; accordion/manual start with none (the active route's
  *  category is then auto-expanded on navigation). */
-export function defaultOpenCategoriesFor(
-  mode: AdminNavCollapseMode,
-): AdminNavCategoryKey[] {
+export function defaultOpenCategoriesFor(mode: AdminNavCollapseMode): AdminNavCategoryKey[] {
   return mode === 'expanded' ? [...ADMIN_CATEGORY_KEYS] : []
 }
 

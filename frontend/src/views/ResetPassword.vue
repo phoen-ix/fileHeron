@@ -1,33 +1,33 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-import { useRoute } from 'vue-router'
+  import { ref } from 'vue'
+  import { useRoute } from 'vue-router'
 
-import AuthCanvas from '@/components/AuthCanvas.vue'
-import PasswordStrength from '@/components/PasswordStrength.vue'
-import { resetPassword } from '@/api/auth'
-import { useApiError } from '@/composables/useApiError'
+  import AuthCanvas from '@/components/AuthCanvas.vue'
+  import PasswordStrength from '@/components/PasswordStrength.vue'
+  import { resetPassword } from '@/api/auth'
+  import { useApiError } from '@/composables/useApiError'
 
-const route = useRoute()
-const { describe } = useApiError()
+  const route = useRoute()
+  const { describe } = useApiError()
 
-const token = String(route.params.token ?? '')
-const newPassword = ref('')
-const submitting = ref(false)
-const done = ref(false)
-const error = ref<string | null>(null)
+  const token = String(route.params.token ?? '')
+  const newPassword = ref('')
+  const submitting = ref(false)
+  const done = ref(false)
+  const error = ref<string | null>(null)
 
-async function onSubmit() {
-  error.value = null
-  submitting.value = true
-  try {
-    await resetPassword({ token, new_password: newPassword.value })
-    done.value = true
-  } catch (e) {
-    error.value = describe(e)
-  } finally {
-    submitting.value = false
+  async function onSubmit() {
+    error.value = null
+    submitting.value = true
+    try {
+      await resetPassword({ token, new_password: newPassword.value })
+      done.value = true
+    } catch (e) {
+      error.value = describe(e)
+    } finally {
+      submitting.value = false
+    }
   }
-}
 </script>
 
 <template>
@@ -74,10 +74,10 @@ async function onSubmit() {
 </template>
 
 <style scoped>
-.form {
-  margin-top: var(--fh-space-5);
-}
-.actions {
-  margin-top: var(--fh-space-4);
-}
+  .form {
+    margin-top: var(--fh-space-5);
+  }
+  .actions {
+    margin-top: var(--fh-space-4);
+  }
 </style>

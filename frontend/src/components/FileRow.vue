@@ -29,12 +29,7 @@
       </span>
     </div>
     <div class="actions">
-      <button
-        v-if="canPreview"
-        type="button"
-        class="fh-btn-text"
-        @click="emit('preview', file)"
-      >
+      <button v-if="canPreview" type="button" class="fh-btn-text" @click="emit('preview', file)">
         {{ t('file_preview.open') }}
       </button>
       <button
@@ -60,140 +55,139 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import { useI18n } from 'vue-i18n'
+  import { computed, ref } from 'vue'
+  import { useI18n } from 'vue-i18n'
 
-import { deleteFile, getDownloadUrl } from '@/api/files'
-import { useApiError } from '@/composables/useApiError'
-import { useAuthStore } from '@/stores/auth'
-import { useUiStore } from '@/stores/ui'
-import type { FileInShareResponse, FileState } from '@/types/api'
-import { previewKind } from '@/utils/preview'
-import { formatBytes } from '@/utils/bytes'
+  import { deleteFile, getDownloadUrl } from '@/api/files'
+  import { useApiError } from '@/composables/useApiError'
+  import { useAuthStore } from '@/stores/auth'
+  import { useUiStore } from '@/stores/ui'
+  import type { FileInShareResponse, FileState } from '@/types/api'
+  import { previewKind } from '@/utils/preview'
+  import { formatBytes } from '@/utils/bytes'
 
-const props = defineProps<{
-  file: FileInShareResponse
-  canDelete?: boolean
-}>()
+  const props = defineProps<{
+    file: FileInShareResponse
+    canDelete?: boolean
+  }>()
 
-const emit = defineEmits<{
-  deleted: [fileId: string]
-  preview: [file: FileInShareResponse]
-}>()
+  const emit = defineEmits<{
+    deleted: [fileId: string]
+    preview: [file: FileInShareResponse]
+  }>()
 
-const { t } = useI18n()
-const { describe } = useApiError()
-const ui = useUiStore()
-const auth = useAuthStore()
-const deleting = ref(false)
-const downloading = ref(false)
+  const { t } = useI18n()
+  const { describe } = useApiError()
+  const ui = useUiStore()
+  const auth = useAuthStore()
+  const deleting = ref(false)
+  const downloading = ref(false)
 
-// Preview only clean (AV-passed) files of a supported type, and only while the
-// admin global switch is on. previewKind mirrors the backend allowlist.
-const canPreview = computed(
-  () =>
-    auth.user?.file_preview_enabled !== false &&
-    props.file.state === 'clean' &&
-    previewKind(props.file.mime_type) !== null,
-)
+  // Preview only clean (AV-passed) files of a supported type, and only while the
+  // admin global switch is on. previewKind mirrors the backend allowlist.
+  const canPreview = computed(
+    () =>
+      auth.user?.file_preview_enabled !== false &&
+      props.file.state === 'clean' &&
+      previewKind(props.file.mime_type) !== null,
+  )
 
-async function onDownload() {
-  downloading.value = true
-  try {
-    const { data } = await getDownloadUrl(props.file.id)
-    // Browser navigates to the signed URL; server's
-    // Content-Disposition forces the download dialog. We don't
-    // open a new tab - same-tab navigation lets the browser
-    // re-use the existing connection and the page restores when
-    // the download dialog appears.
-    window.location.href = data.url
-  } catch (err) {
-    ui.pushToast(describe(err), 'error')
-  } finally {
-    downloading.value = false
+  async function onDownload() {
+    downloading.value = true
+    try {
+      const { data } = await getDownloadUrl(props.file.id)
+      // Browser navigates to the signed URL; server's
+      // Content-Disposition forces the download dialog. We don't
+      // open a new tab - same-tab navigation lets the browser
+      // re-use the existing connection and the page restores when
+      // the download dialog appears.
+      window.location.href = data.url
+    } catch (err) {
+      ui.pushToast(describe(err), 'error')
+    } finally {
+      downloading.value = false
+    }
   }
-}
 
-function canDownload(state: FileState): boolean {
-  // `ready_unscanned` is NOT downloadable: the backend answers 425
-  // SCAN_IN_PROGRESS unconditionally. Offering the button anyway produced a
-  // toast that contradicted the row's own green "Ready" pill, and the bulk ZIP
-  // quietly handed over an archive missing those files (audit #2).
-  return state === 'clean'
-}
-
-function pillForFile(state: FileState): 'active' | 'warn' | 'danger' | undefined {
-  if (state === 'clean') return 'active'
-  if (state === 'uploading' || state === 'ready_unscanned') return 'warn'
-  if (state === 'infected') return 'danger'
-  return undefined
-}
-
-async function onDelete() {
-  if (!(await ui.confirm({ message: t('files.actions.delete_confirm'), danger: true }))) return
-  deleting.value = true
-  try {
-    await deleteFile(props.file.id)
-    emit('deleted', props.file.id)
-  } catch (err) {
-    // There was no catch here at all: a server refusal (403, 409, a 500)
-    // rejected silently, the spinner stopped, and the row stayed put - which
-    // reads as "nothing happened" for a destructive action the user just
-    // confirmed. The next thing they do is click it again (audit 2026-07-30,
-    // fe-correct-8).
-    ui.pushToast(describe(err), 'error')
-  } finally {
-    deleting.value = false
+  function canDownload(state: FileState): boolean {
+    // `ready_unscanned` is NOT downloadable: the backend answers 425
+    // SCAN_IN_PROGRESS unconditionally. Offering the button anyway produced a
+    // toast that contradicted the row's own green "Ready" pill, and the bulk ZIP
+    // quietly handed over an archive missing those files (audit #2).
+    return state === 'clean'
   }
-}
 
+  function pillForFile(state: FileState): 'active' | 'warn' | 'danger' | undefined {
+    if (state === 'clean') return 'active'
+    if (state === 'uploading' || state === 'ready_unscanned') return 'warn'
+    if (state === 'infected') return 'danger'
+    return undefined
+  }
+
+  async function onDelete() {
+    if (!(await ui.confirm({ message: t('files.actions.delete_confirm'), danger: true }))) return
+    deleting.value = true
+    try {
+      await deleteFile(props.file.id)
+      emit('deleted', props.file.id)
+    } catch (err) {
+      // There was no catch here at all: a server refusal (403, 409, a 500)
+      // rejected silently, the spinner stopped, and the row stayed put - which
+      // reads as "nothing happened" for a destructive action the user just
+      // confirmed. The next thing they do is click it again (audit 2026-07-30,
+      // fe-correct-8).
+      ui.pushToast(describe(err), 'error')
+    } finally {
+      deleting.value = false
+    }
+  }
 </script>
 
 <style scoped>
-.file-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  gap: var(--fh-space-3);
-  align-items: center;
-  padding: var(--fh-space-3) 0;
-  border-bottom: var(--fh-border);
-  list-style: none;
-}
-
-.meta {
-  min-width: 0;
-}
-
-.filename {
-  font-size: var(--fh-text-body-md);
-  color: var(--fh-ink);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.sub {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--fh-space-3);
-  font-size: var(--fh-text-mono-sm);
-  color: var(--fh-subtle);
-  margin-top: 2px;
-}
-
-.actions {
-  display: flex;
-  gap: var(--fh-space-3);
-}
-
-.fh-btn-text.danger {
-  color: var(--fh-danger);
-}
-
-@media (max-width: 720px) {
   .file-row {
-    grid-template-columns: 1fr;
-    gap: var(--fh-space-1);
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    gap: var(--fh-space-3);
+    align-items: center;
+    padding: var(--fh-space-3) 0;
+    border-bottom: var(--fh-border);
+    list-style: none;
   }
-}
+
+  .meta {
+    min-width: 0;
+  }
+
+  .filename {
+    font-size: var(--fh-text-body-md);
+    color: var(--fh-ink);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .sub {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--fh-space-3);
+    font-size: var(--fh-text-mono-sm);
+    color: var(--fh-subtle);
+    margin-top: 2px;
+  }
+
+  .actions {
+    display: flex;
+    gap: var(--fh-space-3);
+  }
+
+  .fh-btn-text.danger {
+    color: var(--fh-danger);
+  }
+
+  @media (max-width: 720px) {
+    .file-row {
+      grid-template-columns: 1fr;
+      gap: var(--fh-space-1);
+    }
+  }
 </style>

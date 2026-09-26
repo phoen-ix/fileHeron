@@ -1,68 +1,68 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
-import { useI18n } from 'vue-i18n'
+  import { onMounted, ref } from 'vue'
+  import { useI18n } from 'vue-i18n'
 
-import {
-  getMaintenanceSettings,
-  updateMaintenanceSettings,
-  type MaintenanceSettingsResponse,
-} from '@/api/admin'
-import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
-import { useApiError } from '@/composables/useApiError'
-import { useSiteStore } from '@/stores/site'
-import { useUiStore } from '@/stores/ui'
+  import {
+    getMaintenanceSettings,
+    updateMaintenanceSettings,
+    type MaintenanceSettingsResponse,
+  } from '@/api/admin'
+  import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
+  import { useApiError } from '@/composables/useApiError'
+  import { useSiteStore } from '@/stores/site'
+  import { useUiStore } from '@/stores/ui'
 
-const { t } = useI18n()
-const { describe } = useApiError()
-const ui = useUiStore()
-const site = useSiteStore()
+  const { t } = useI18n()
+  const { describe } = useApiError()
+  const ui = useUiStore()
+  const site = useSiteStore()
 
-const loading = ref(true)
-const saving = ref(false)
-const errorMsg = ref<string | null>(null)
-const enabled = ref(false)
-const message = ref('')
-const activity = ref<{ uploads: number; downloads: number }>({ uploads: 0, downloads: 0 })
+  const loading = ref(true)
+  const saving = ref(false)
+  const errorMsg = ref<string | null>(null)
+  const enabled = ref(false)
+  const message = ref('')
+  const activity = ref<{ uploads: number; downloads: number }>({ uploads: 0, downloads: 0 })
 
-function apply(data: MaintenanceSettingsResponse) {
-  enabled.value = data.enabled
-  message.value = data.message
-  activity.value = { uploads: data.active_uploads, downloads: data.active_downloads }
-}
-
-async function load() {
-  loading.value = true
-  errorMsg.value = null
-  try {
-    const { data } = await getMaintenanceSettings()
-    apply(data)
-  } catch (err) {
-    errorMsg.value = describe(err)
-  } finally {
-    loading.value = false
+  function apply(data: MaintenanceSettingsResponse) {
+    enabled.value = data.enabled
+    message.value = data.message
+    activity.value = { uploads: data.active_uploads, downloads: data.active_downloads }
   }
-}
 
-async function onSave() {
-  saving.value = true
-  errorMsg.value = null
-  try {
-    const { data } = await updateMaintenanceSettings({
-      enabled: enabled.value,
-      message: message.value,
-    })
-    apply(data)
-    // Refresh the global banner immediately (config-public drives it).
-    await site.loadConfig()
-    ui.pushToast(t('admin_maintenance.saved_toast'), 'success')
-  } catch (err) {
-    errorMsg.value = describe(err)
-  } finally {
-    saving.value = false
+  async function load() {
+    loading.value = true
+    errorMsg.value = null
+    try {
+      const { data } = await getMaintenanceSettings()
+      apply(data)
+    } catch (err) {
+      errorMsg.value = describe(err)
+    } finally {
+      loading.value = false
+    }
   }
-}
 
-onMounted(() => void load())
+  async function onSave() {
+    saving.value = true
+    errorMsg.value = null
+    try {
+      const { data } = await updateMaintenanceSettings({
+        enabled: enabled.value,
+        message: message.value,
+      })
+      apply(data)
+      // Refresh the global banner immediately (config-public drives it).
+      await site.loadConfig()
+      ui.pushToast(t('admin_maintenance.saved_toast'), 'success')
+    } catch (err) {
+      errorMsg.value = describe(err)
+    } finally {
+      saving.value = false
+    }
+  }
+
+  onMounted(() => void load())
 </script>
 
 <template>
@@ -94,15 +94,15 @@ onMounted(() => void load())
       </label>
 
       <p class="fh-field-help activity">
-        {{ t('admin_maintenance.activity', {
-          up: activity.uploads,
-          down: activity.downloads,
-        }) }}
+        {{
+          t('admin_maintenance.activity', {
+            up: activity.uploads,
+            down: activity.downloads,
+          })
+        }}
       </p>
 
-      <div
-v-if="errorMsg" class="fh-notice" role="alert"
-        data-tone="error">{{ errorMsg }}</div>
+      <div v-if="errorMsg" class="fh-notice" role="alert" data-tone="error">{{ errorMsg }}</div>
 
       <div class="actions">
         <button type="submit" class="fh-btn" :disabled="saving">
@@ -114,29 +114,29 @@ v-if="errorMsg" class="fh-notice" role="alert"
 </template>
 
 <style scoped>
-.intro {
-  margin-bottom: 1.5rem;
-  max-width: 60ch;
-}
-.toggle {
-  display: flex;
-  gap: 0.6rem;
-  align-items: center;
-}
-.toggle-fieldset {
-  border: none;
-  padding: 0;
-  margin: 0 0 1.25rem;
-}
-.fh-field {
-  display: block;
-  max-width: none;
-  margin-bottom: 1rem;
-}
-.activity {
-  margin: 0.5rem 0 1rem;
-}
-.actions {
-  margin-top: 1rem;
-}
+  .intro {
+    margin-bottom: 1.5rem;
+    max-width: 60ch;
+  }
+  .toggle {
+    display: flex;
+    gap: 0.6rem;
+    align-items: center;
+  }
+  .toggle-fieldset {
+    border: none;
+    padding: 0;
+    margin: 0 0 1.25rem;
+  }
+  .fh-field {
+    display: block;
+    max-width: none;
+    margin-bottom: 1rem;
+  }
+  .activity {
+    margin: 0.5rem 0 1rem;
+  }
+  .actions {
+    margin-top: 1rem;
+  }
 </style>

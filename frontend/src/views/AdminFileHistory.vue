@@ -1,119 +1,132 @@
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'
-import { useI18n } from 'vue-i18n'
-import { useRoute } from 'vue-router'
+  import { onMounted, ref, watch } from 'vue'
+  import { useI18n } from 'vue-i18n'
+  import { useRoute } from 'vue-router'
 
-import { adminDeleteFile, adminListFiles, adminReclaimFile } from '@/api/admin'
-import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
-import Pager from '@/components/Pager.vue'
-import { useApiError } from '@/composables/useApiError'
-import { useDebouncedSearch } from '@/composables/useDebouncedSearch'
-import { usePaginatedList } from '@/composables/usePaginatedList'
-import { useSiteDateFormat } from '@/composables/useSiteDateFormat'
-import { useTableSort } from '@/composables/useTableSort'
-import { useUiStore } from '@/stores/ui'
-import type { AdminFileItem, FileState, ShareState } from '@/types/api'
-import { formatBytes } from '@/utils/bytes'
-import { shareStatePill } from '@/utils/statePill'
+  import { adminDeleteFile, adminListFiles, adminReclaimFile } from '@/api/admin'
+  import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
+  import Pager from '@/components/Pager.vue'
+  import { useApiError } from '@/composables/useApiError'
+  import { useDebouncedSearch } from '@/composables/useDebouncedSearch'
+  import { usePaginatedList } from '@/composables/usePaginatedList'
+  import { useSiteDateFormat } from '@/composables/useSiteDateFormat'
+  import { useTableSort } from '@/composables/useTableSort'
+  import { useUiStore } from '@/stores/ui'
+  import type { AdminFileItem, FileState, ShareState } from '@/types/api'
+  import { formatBytes } from '@/utils/bytes'
+  import { shareStatePill } from '@/utils/statePill'
 
-const { t } = useI18n()
-const { formatDate } = useSiteDateFormat()
-const { describe } = useApiError()
-const ui = useUiStore()
-const route = useRoute()
+  const { t } = useI18n()
+  const { formatDate } = useSiteDateFormat()
+  const { describe } = useApiError()
+  const ui = useUiStore()
+  const route = useRoute()
 
-const q = ref('')
-const stateFilter = ref<FileState | ''>('')
-const shareStateFilter = ref<ShareState | ''>('')
-const orphanedOnly = ref(false)
-const includeInactive = ref(false)
-// Deep-link from the admin user-detail "View in File History" link.
-const uploaderId = ref<number | null>(
-  route.query.uploader_id ? Number(route.query.uploader_id) : null,
-)
-const reclaiming = ref<string | null>(null)
-const deleting = ref<string | null>(null)
+  const q = ref('')
+  const stateFilter = ref<FileState | ''>('')
+  const shareStateFilter = ref<ShareState | ''>('')
+  const orphanedOnly = ref(false)
+  const includeInactive = ref(false)
+  // Deep-link from the admin user-detail "View in File History" link.
+  const uploaderId = ref<number | null>(
+    route.query.uploader_id ? Number(route.query.uploader_id) : null,
+  )
+  const reclaiming = ref<string | null>(null)
+  const deleting = ref<string | null>(null)
 
-const sort = useTableSort({ defaultBy: 'uploaded_at', defaultDir: 'desc' })
+  const sort = useTableSort({ defaultBy: 'uploaded_at', defaultDir: 'desc' })
 
-const { items, total, page, pageSize, loading, errorMsg, load } =
-  usePaginatedList<AdminFileItem>(({ page, pageSize }) =>
-    adminListFiles({
-      q: q.value || undefined,
-      state: stateFilter.value || undefined,
-      share_state: shareStateFilter.value || undefined,
-      orphaned: orphanedOnly.value || undefined,
-      include_inactive: includeInactive.value || undefined,
-      uploader_id: uploaderId.value ?? undefined,
-      sort: sort.sortBy.value,
-      direction: sort.sortDir.value,
-      page,
-      page_size: pageSize,
-    }).then((r) => r.data),
+  const { items, total, page, pageSize, loading, errorMsg, load } = usePaginatedList<AdminFileItem>(
+    ({ page, pageSize }) =>
+      adminListFiles({
+        q: q.value || undefined,
+        state: stateFilter.value || undefined,
+        share_state: shareStateFilter.value || undefined,
+        orphaned: orphanedOnly.value || undefined,
+        include_inactive: includeInactive.value || undefined,
+        uploader_id: uploaderId.value ?? undefined,
+        sort: sort.sortBy.value,
+        direction: sort.sortDir.value,
+        page,
+        page_size: pageSize,
+      }).then((r) => r.data),
   )
 
-useDebouncedSearch(q, () => {
-  page.value = 1
-  void load()
-})
-watch([stateFilter, shareStateFilter, orphanedOnly, includeInactive], () => {
-  page.value = 1
-  void load()
-})
+  useDebouncedSearch(q, () => {
+    page.value = 1
+    void load()
+  })
+  watch([stateFilter, shareStateFilter, orphanedOnly, includeInactive], () => {
+    page.value = 1
+    void load()
+  })
 
-function clearUploaderFilter() {
-  uploaderId.value = null
-  page.value = 1
-  void load()
-}
-
-async function onReclaim(it: AdminFileItem) {
-  if (reclaiming.value) return
-  if (!(await ui.confirm({ message: t('admin_file_history.reclaim_confirm', { name: it.filename }), danger: true }))) return
-  reclaiming.value = it.file_id
-  try {
-    await adminReclaimFile(it.file_id)
-    ui.pushToast(t('admin_file_history.reclaimed_toast', { name: it.filename }), 'success')
-    await load()
-  } catch (err) {
-    ui.pushToast(describe(err), 'error')
-  } finally {
-    reclaiming.value = null
+  function clearUploaderFilter() {
+    uploaderId.value = null
+    page.value = 1
+    void load()
   }
-}
 
-async function onDelete(it: AdminFileItem) {
-  if (deleting.value) return
-  if (!(await ui.confirm({ message: t('admin_file_history.delete_confirm', { name: it.filename }), danger: true }))) return
-  deleting.value = it.file_id
-  try {
-    await adminDeleteFile(it.file_id)
-    ui.pushToast(t('admin_file_history.deleted_toast', { name: it.filename }), 'success')
-    await load()
-  } catch (err) {
-    ui.pushToast(describe(err), 'error')
-  } finally {
-    deleting.value = null
+  async function onReclaim(it: AdminFileItem) {
+    if (reclaiming.value) return
+    if (
+      !(await ui.confirm({
+        message: t('admin_file_history.reclaim_confirm', { name: it.filename }),
+        danger: true,
+      }))
+    )
+      return
+    reclaiming.value = it.file_id
+    try {
+      await adminReclaimFile(it.file_id)
+      ui.pushToast(t('admin_file_history.reclaimed_toast', { name: it.filename }), 'success')
+      await load()
+    } catch (err) {
+      ui.pushToast(describe(err), 'error')
+    } finally {
+      reclaiming.value = null
+    }
   }
-}
-watch([sort.sortBy, sort.sortDir, page], load)
 
+  async function onDelete(it: AdminFileItem) {
+    if (deleting.value) return
+    if (
+      !(await ui.confirm({
+        message: t('admin_file_history.delete_confirm', { name: it.filename }),
+        danger: true,
+      }))
+    )
+      return
+    deleting.value = it.file_id
+    try {
+      await adminDeleteFile(it.file_id)
+      ui.pushToast(t('admin_file_history.deleted_toast', { name: it.filename }), 'success')
+      await load()
+    } catch (err) {
+      ui.pushToast(describe(err), 'error')
+    } finally {
+      deleting.value = null
+    }
+  }
+  watch([sort.sortBy, sort.sortDir, page], load)
 
-function pillForFileState(s: FileState): string | undefined {
-  if (s === 'clean') return 'active'
-  if (s === 'deleted' || s === 'infected') return 'danger'
-  if (s === 'ready_unscanned') return 'warn'
-  return undefined
-}
+  function pillForFileState(s: FileState): string | undefined {
+    if (s === 'clean') return 'active'
+    if (s === 'deleted' || s === 'infected') return 'danger'
+    if (s === 'ready_unscanned') return 'warn'
+    return undefined
+  }
 
-onMounted(load)
+  onMounted(load)
 </script>
 
 <template>
   <div class="fh-page" data-density="operator">
     <AdminPageHeader>
       <template #actions>
-        <span class="fh-mono total-count">{{ t('admin_file_history.total_count', { n: total }) }}</span>
+        <span class="fh-mono total-count">{{
+          t('admin_file_history.total_count', { n: total })
+        }}</span>
       </template>
     </AdminPageHeader>
 
@@ -129,10 +142,7 @@ onMounted(load)
         class="fh-field-input search"
         :placeholder="t('admin_file_history.search_placeholder')"
       />
-      <select
-        v-model="stateFilter" class="filter-select"
-        :aria-label="t('common.filter')"
-      >
+      <select v-model="stateFilter" class="filter-select" :aria-label="t('common.filter')">
         <option value="">{{ t('admin_file_history.file_state_all') }}</option>
         <option value="clean">clean</option>
         <option value="ready_unscanned">ready_unscanned</option>
@@ -140,10 +150,7 @@ onMounted(load)
         <option value="deleted">deleted</option>
         <option value="uploading">uploading</option>
       </select>
-      <select
-        v-model="shareStateFilter" class="filter-select"
-        :aria-label="t('common.filter')"
-      >
+      <select v-model="shareStateFilter" class="filter-select" :aria-label="t('common.filter')">
         <option value="">{{ t('admin_file_history.share_state_all') }}</option>
         <option value="active">{{ t('share_state.active') }}</option>
         <option value="pending_approval">{{ t('share_state.pending_approval') }}</option>
@@ -172,9 +179,7 @@ onMounted(load)
     </div>
 
     <div v-if="loading" class="loading">{{ t('common.loading') }}</div>
-    <div
-v-else-if="errorMsg" class="fh-notice" role="alert"
-        data-tone="error">{{ errorMsg }}</div>
+    <div v-else-if="errorMsg" class="fh-notice" role="alert" data-tone="error">{{ errorMsg }}</div>
 
     <div v-else-if="items.length > 0" class="fh-table-scroll">
       <table class="files-table">
@@ -285,7 +290,9 @@ v-else-if="errorMsg" class="fh-notice" role="alert"
                 :disabled="reclaiming === it.file_id"
                 @click="onReclaim(it)"
               >
-                {{ reclaiming === it.file_id ? t('common.loading') : t('admin_file_history.reclaim') }}
+                {{
+                  reclaiming === it.file_id ? t('common.loading') : t('admin_file_history.reclaim')
+                }}
               </button>
               <!-- Quarantined bytes are released or purged on the Quarantine
                    page, under their own audit event; the backend refuses a plain
@@ -320,116 +327,116 @@ v-else-if="errorMsg" class="fh-notice" role="alert"
 </template>
 
 <style scoped>
-.total-count {
-  font-size: var(--fh-text-mono-sm);
-  color: var(--fh-subtle);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-}
+  .total-count {
+    font-size: var(--fh-text-mono-sm);
+    color: var(--fh-subtle);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
 
-.intro {
-  margin: var(--fh-space-2) 0 var(--fh-space-3);
-  max-width: 64ch;
-}
+  .intro {
+    margin: var(--fh-space-2) 0 var(--fh-space-3);
+    max-width: 64ch;
+  }
 
-.filters {
-  display: flex;
-  gap: var(--fh-space-3);
-  margin-bottom: var(--fh-space-4);
-  align-items: baseline;
-  flex-wrap: wrap;
-}
+  .filters {
+    display: flex;
+    gap: var(--fh-space-3);
+    margin-bottom: var(--fh-space-4);
+    align-items: baseline;
+    flex-wrap: wrap;
+  }
 
-.search {
-  flex: 1;
-  max-width: 360px;
-}
+  .search {
+    flex: 1;
+    max-width: 360px;
+  }
 
-.filter-select {
-  font: inherit;
-  background: transparent;
-  border: var(--fh-border-strong);
-  border-radius: var(--fh-radius-sm);
-  padding: 4px 8px;
-  color: var(--fh-ink);
-}
+  .filter-select {
+    font: inherit;
+    background: transparent;
+    border: var(--fh-border-strong);
+    border-radius: var(--fh-radius-sm);
+    padding: 4px 8px;
+    color: var(--fh-ink);
+  }
 
-.orphan-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--fh-space-2);
-  font-size: var(--fh-text-body-sm);
-  color: var(--fh-subtle);
-  cursor: pointer;
-}
+  .orphan-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--fh-space-2);
+    font-size: var(--fh-text-body-sm);
+    color: var(--fh-subtle);
+    cursor: pointer;
+  }
 
-.orphan-badge {
-  margin-left: var(--fh-space-2);
-}
+  .orphan-badge {
+    margin-left: var(--fh-space-2);
+  }
 
-.reclaim-btn {
-  color: var(--fh-accent);
-  white-space: nowrap;
-}
+  .reclaim-btn {
+    color: var(--fh-accent);
+    white-space: nowrap;
+  }
 
-.loading {
-  color: var(--fh-subtle);
-  padding: var(--fh-space-5) 0;
-}
+  .loading {
+    color: var(--fh-subtle);
+    padding: var(--fh-space-5) 0;
+  }
 
-.files-table {
-  width: 100%;
-  border-collapse: collapse;
-}
+  .files-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
 
-.files-table th,
-.files-table td {
-  text-align: left;
-  padding: var(--fh-space-2) var(--fh-space-3);
-  border-bottom: 1px solid var(--fh-rule);
-  vertical-align: top;
-}
+  .files-table th,
+  .files-table td {
+    text-align: left;
+    padding: var(--fh-space-2) var(--fh-space-3);
+    border-bottom: 1px solid var(--fh-rule);
+    vertical-align: top;
+  }
 
-.files-table th {
-  font-family: var(--fh-font-mono);
-  font-size: var(--fh-text-mono-sm);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--fh-subtle);
-  font-weight: 500;
-  user-select: none;
-}
+  .files-table th {
+    font-family: var(--fh-font-mono);
+    font-size: var(--fh-text-mono-sm);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--fh-subtle);
+    font-weight: 500;
+    user-select: none;
+  }
 
-.files-table th[role="button"] {
-  cursor: pointer;
-}
+  .files-table th[role='button'] {
+    cursor: pointer;
+  }
 
-.files-table th[role="button"]:hover {
-  color: var(--fh-ink);
-}
+  .files-table th[role='button']:hover {
+    color: var(--fh-ink);
+  }
 
-.sort-ind {
-  display: inline-block;
-  width: 1ch;
-  margin-left: 2px;
-  color: var(--fh-accent);
-}
+  .sort-ind {
+    display: inline-block;
+    width: 1ch;
+    margin-left: 2px;
+    color: var(--fh-accent);
+  }
 
-.row-name {
-  font-weight: 500;
-}
+  .row-name {
+    font-weight: 500;
+  }
 
-.row-hint {
-  font-size: var(--fh-text-mono-sm);
-  color: var(--fh-subtle);
-}
+  .row-hint {
+    font-size: var(--fh-text-mono-sm);
+    color: var(--fh-subtle);
+  }
 
-.numeric {
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-}
+  .numeric {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
 
-.empty {
-  margin: var(--fh-space-3) 0;
-}
+  .empty {
+    margin: var(--fh-space-3) 0;
+  }
 </style>

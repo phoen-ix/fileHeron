@@ -1,171 +1,171 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
-import { useI18n } from 'vue-i18n'
-import { useRoute, useRouter } from 'vue-router'
+  import { computed, nextTick, onMounted, ref, watch } from 'vue'
+  import { useI18n } from 'vue-i18n'
+  import { useRoute, useRouter } from 'vue-router'
 
-import AuthCanvas from '@/components/AuthCanvas.vue'
-import { asEnvelope } from '@/api/client'
-import { oidcStartUrl, type PublicProvider } from '@/api/oidc'
-import { useApiError } from '@/composables/useApiError'
-import { effectiveLandingPath } from '@/composables/useEffectiveLanding'
-import { POST_LOGIN_REDIRECT_KEY } from '@/router/postLoginRedirect'
-import { isWebAuthnSupported } from '@/composables/useWebAuthn'
-import { useAuthStore } from '@/stores/auth'
-import { useSiteStore } from '@/stores/site'
+  import AuthCanvas from '@/components/AuthCanvas.vue'
+  import { asEnvelope } from '@/api/client'
+  import { oidcStartUrl, type PublicProvider } from '@/api/oidc'
+  import { useApiError } from '@/composables/useApiError'
+  import { effectiveLandingPath } from '@/composables/useEffectiveLanding'
+  import { POST_LOGIN_REDIRECT_KEY } from '@/router/postLoginRedirect'
+  import { isWebAuthnSupported } from '@/composables/useWebAuthn'
+  import { useAuthStore } from '@/stores/auth'
+  import { useSiteStore } from '@/stores/site'
 
-const auth = useAuthStore()
-const router = useRouter()
-const route = useRoute()
-const { describe } = useApiError()
-const { t, te } = useI18n()
+  const auth = useAuthStore()
+  const router = useRouter()
+  const route = useRoute()
+  const { describe } = useApiError()
+  const { t, te } = useI18n()
 
-type Mode = 'creds' | 'code'
+  type Mode = 'creds' | 'code'
 
-const email = ref('')
-const password = ref('')
-// One second-factor field that accepts EITHER a 6-digit TOTP code or a
-// recovery code (formatted XXXX-XXXX). The two shapes never collide, so
-// onSubmit routes to the right endpoint - the user never has to choose.
-const code = ref('')
-const mode = ref<Mode>('creds')
-const error = ref<string | null>(null)
-const submitting = ref(false)
+  const email = ref('')
+  const password = ref('')
+  // One second-factor field that accepts EITHER a 6-digit TOTP code or a
+  // recovery code (formatted XXXX-XXXX). The two shapes never collide, so
+  // onSubmit routes to the right endpoint - the user never has to choose.
+  const code = ref('')
+  const mode = ref<Mode>('creds')
+  const error = ref<string | null>(null)
+  const submitting = ref(false)
 
-const codeInputRef = ref<HTMLInputElement | null>(null)
+  const codeInputRef = ref<HTMLInputElement | null>(null)
 
-// Show the "Use passkey" button only when the browser supports
-// WebAuthn AND the user is past the password step. The browser
-// support check is computed once on script setup; navigator API
-// availability doesn't change at runtime.
-const passkeySupported = isWebAuthnSupported()
+  // Show the "Use passkey" button only when the browser supports
+  // WebAuthn AND the user is past the password step. The browser
+  // support check is computed once on script setup; navigator API
+  // availability doesn't change at runtime.
+  const passkeySupported = isWebAuthnSupported()
 
-const site = useSiteStore()
-const providers = computed<PublicProvider[]>(() => site.providers)
-const motdText = computed<string>(() => site.motd?.text ?? '')
+  const site = useSiteStore()
+  const providers = computed<PublicProvider[]>(() => site.providers)
+  const motdText = computed<string>(() => site.motd?.text ?? '')
 
-function onProviderClick(p: PublicProvider) {
-  // Carry the deep link across the IdP round-trip. The OIDC callback is a
-  // BACKEND redirect that always lands on `/`, so a user who followed a link to
-  // a share, got bounced to /login?redirect=/share/abc and signed in with SSO
-  // arrived at the dashboard with no idea what they had been trying to open -
-  // while the password form honoured the same parameter (audit 2026-07-30,
-  // fe-auth-7). sessionStorage, not localStorage: it must not outlive the tab.
-  const target = route.query.redirect
-  if (typeof target === 'string' && target.startsWith('/') && !target.startsWith('//')) {
-    try {
-      window.sessionStorage?.setItem(POST_LOGIN_REDIRECT_KEY, target)
-    } catch {
-      /* storage unavailable - fall back to landing on the default page */
-    }
-  }
-  window.location.href = oidcStartUrl(p.id)
-}
-
-watch(mode, async (m) => {
-  await nextTick()
-  if (m === 'code') codeInputRef.value?.focus()
-})
-
-// A failed SSO callback redirects here with ?oidc_error=CODE. Before that the
-// backend answered the IdP's browser redirect with a raw JSON error body on an
-// /api/ URL: no nav, no retry, and for OIDC_NO_ACCOUNT - the expected outcome
-// for anyone without an invite - no explanation either.
-onMounted(() => {
-  // The second-factor interstitial sends `?expired=1` when its five-minute
-  // pending token lapsed. This page never read it, so the user landed on a
-  // bare form with no idea why they were back here.
-  if (route.query.expired === '1') {
-    error.value = t('login.pending_expired')
-    void router.replace({ path: route.path, query: {} })
-    return
-  }
-  const failed = route.query.oidc_error
-  if (typeof failed !== 'string' || !failed) return
-  const key = `errors.${failed}`
-  error.value = te(key) ? t(key) : t('errors.generic')
-  void router.replace({ path: route.path, query: {} })
-})
-
-const submitLabel = computed(() => (submitting.value ? 'login.submitting' : 'login.submit'))
-// Honour an explicit ?redirect=... ("back to where I was going");
-// otherwise compute the user's effective landing once they've logged
-// in. Login flow: auth.login() populates auth.user, so by the time we
-// evaluate `redirectTo` the MeResponse is in the store.
-const redirectTo = computed(() => {
-  const explicit = route.query.redirect as string | undefined
-  if (explicit) return explicit
-  return effectiveLandingPath(auth.user)
-})
-
-// A TOTP code is exactly six digits; a recovery code is XXXX-XXXX (letters +
-// a hyphen). They never collide, so we route on shape alone.
-function isTotpShape(v: string): boolean {
-  return /^\d{6}$/.test(v.replace(/\s+/g, ''))
-}
-
-async function onSubmit() {
-  error.value = null
-  submitting.value = true
-  try {
-    if (mode.value === 'creds') {
-      // Step 1: email + password only. If 2FA is on, the server answers
-      // TOTP_REQUIRED and we reveal the code step below (no penalty - the
-      // password was already verified).
-      await auth.login(email.value, password.value)
-    } else {
-      const entered = code.value.trim()
-      if (isTotpShape(entered)) {
-        await auth.login(email.value, password.value, entered.replace(/\s+/g, ''))
-      } else {
-        await auth.loginWithRecovery(email.value, password.value, entered)
+  function onProviderClick(p: PublicProvider) {
+    // Carry the deep link across the IdP round-trip. The OIDC callback is a
+    // BACKEND redirect that always lands on `/`, so a user who followed a link to
+    // a share, got bounced to /login?redirect=/share/abc and signed in with SSO
+    // arrived at the dashboard with no idea what they had been trying to open -
+    // while the password form honoured the same parameter (audit 2026-07-30,
+    // fe-auth-7). sessionStorage, not localStorage: it must not outlive the tab.
+    const target = route.query.redirect
+    if (typeof target === 'string' && target.startsWith('/') && !target.startsWith('//')) {
+      try {
+        window.sessionStorage?.setItem(POST_LOGIN_REDIRECT_KEY, target)
+      } catch {
+        /* storage unavailable - fall back to landing on the default page */
       }
     }
-    await router.push(redirectTo.value)
-  } catch (e) {
-    const env = asEnvelope(e)
-    if (env?.code === 'TOTP_REQUIRED') {
-      mode.value = 'code'
-      error.value = null
-    } else {
-      error.value = describe(e)
-      // Wrong code → clear it so the next attempt starts fresh.
-      if (mode.value === 'code') code.value = ''
-    }
-  } finally {
-    submitting.value = false
+    window.location.href = oidcStartUrl(p.id)
   }
-}
 
-// Passkey-as-second-factor login. Triggered from the TOTP step when
-// the user has registered a passkey on this account. The backend
-// returns a WebAuthn challenge after validating the password; the
-// browser prompts the user, signs the challenge, and we ship the
-// assertion back to mint the same JWT + refresh cookie as the
-// password+TOTP path.
-async function tryPasskey() {
-  error.value = null
-  submitting.value = true
-  try {
-    const result = await auth.loginWithPasskey(email.value, password.value)
-    if (result.status === 'pending_2fa') {
-      // The assertion carried no user verification, so the passkey does not
-      // count as the second factor: hand the pending token to the same
-      // interstitial the SSO flow uses. It strips the token from the URL.
-      await router.push({ name: 'login-2fa', query: { pending: result.pendingToken } })
+  watch(mode, async (m) => {
+    await nextTick()
+    if (m === 'code') codeInputRef.value?.focus()
+  })
+
+  // A failed SSO callback redirects here with ?oidc_error=CODE. Before that the
+  // backend answered the IdP's browser redirect with a raw JSON error body on an
+  // /api/ URL: no nav, no retry, and for OIDC_NO_ACCOUNT - the expected outcome
+  // for anyone without an invite - no explanation either.
+  onMounted(() => {
+    // The second-factor interstitial sends `?expired=1` when its five-minute
+    // pending token lapsed. This page never read it, so the user landed on a
+    // bare form with no idea why they were back here.
+    if (route.query.expired === '1') {
+      error.value = t('login.pending_expired')
+      void router.replace({ path: route.path, query: {} })
       return
     }
-    await router.push(redirectTo.value)
-  } catch (e) {
-    if (e instanceof DOMException && e.name === 'NotAllowedError') {
-      // User cancelled the platform prompt or it timed out.
-      error.value = t('login.passkey_cancelled')
-    } else {
-      error.value = describe(e)
-    }
-  } finally {
-    submitting.value = false
+    const failed = route.query.oidc_error
+    if (typeof failed !== 'string' || !failed) return
+    const key = `errors.${failed}`
+    error.value = te(key) ? t(key) : t('errors.generic')
+    void router.replace({ path: route.path, query: {} })
+  })
+
+  const submitLabel = computed(() => (submitting.value ? 'login.submitting' : 'login.submit'))
+  // Honour an explicit ?redirect=... ("back to where I was going");
+  // otherwise compute the user's effective landing once they've logged
+  // in. Login flow: auth.login() populates auth.user, so by the time we
+  // evaluate `redirectTo` the MeResponse is in the store.
+  const redirectTo = computed(() => {
+    const explicit = route.query.redirect as string | undefined
+    if (explicit) return explicit
+    return effectiveLandingPath(auth.user)
+  })
+
+  // A TOTP code is exactly six digits; a recovery code is XXXX-XXXX (letters +
+  // a hyphen). They never collide, so we route on shape alone.
+  function isTotpShape(v: string): boolean {
+    return /^\d{6}$/.test(v.replace(/\s+/g, ''))
   }
-}
+
+  async function onSubmit() {
+    error.value = null
+    submitting.value = true
+    try {
+      if (mode.value === 'creds') {
+        // Step 1: email + password only. If 2FA is on, the server answers
+        // TOTP_REQUIRED and we reveal the code step below (no penalty - the
+        // password was already verified).
+        await auth.login(email.value, password.value)
+      } else {
+        const entered = code.value.trim()
+        if (isTotpShape(entered)) {
+          await auth.login(email.value, password.value, entered.replace(/\s+/g, ''))
+        } else {
+          await auth.loginWithRecovery(email.value, password.value, entered)
+        }
+      }
+      await router.push(redirectTo.value)
+    } catch (e) {
+      const env = asEnvelope(e)
+      if (env?.code === 'TOTP_REQUIRED') {
+        mode.value = 'code'
+        error.value = null
+      } else {
+        error.value = describe(e)
+        // Wrong code → clear it so the next attempt starts fresh.
+        if (mode.value === 'code') code.value = ''
+      }
+    } finally {
+      submitting.value = false
+    }
+  }
+
+  // Passkey-as-second-factor login. Triggered from the TOTP step when
+  // the user has registered a passkey on this account. The backend
+  // returns a WebAuthn challenge after validating the password; the
+  // browser prompts the user, signs the challenge, and we ship the
+  // assertion back to mint the same JWT + refresh cookie as the
+  // password+TOTP path.
+  async function tryPasskey() {
+    error.value = null
+    submitting.value = true
+    try {
+      const result = await auth.loginWithPasskey(email.value, password.value)
+      if (result.status === 'pending_2fa') {
+        // The assertion carried no user verification, so the passkey does not
+        // count as the second factor: hand the pending token to the same
+        // interstitial the SSO flow uses. It strips the token from the URL.
+        await router.push({ name: 'login-2fa', query: { pending: result.pendingToken } })
+        return
+      }
+      await router.push(redirectTo.value)
+    } catch (e) {
+      if (e instanceof DOMException && e.name === 'NotAllowedError') {
+        // User cancelled the platform prompt or it timed out.
+        error.value = t('login.passkey_cancelled')
+      } else {
+        error.value = describe(e)
+      }
+    } finally {
+      submitting.value = false
+    }
+  }
 </script>
 
 <template>
@@ -183,11 +183,7 @@ async function tryPasskey() {
       {{ motdText }}
     </div>
 
-    <div
-      v-if="providers.length > 0 && mode === 'creds'"
-      class="oidc-btns fh-rise"
-      data-stagger="3"
-    >
+    <div v-if="providers.length > 0 && mode === 'creds'" class="oidc-btns fh-rise" data-stagger="3">
       <button
         v-for="p in providers"
         :key="p.id"
@@ -281,96 +277,96 @@ async function tryPasskey() {
 </template>
 
 <style scoped>
-.motd-banner {
-  margin-top: var(--fh-space-4);
-  padding: var(--fh-space-3);
-  background: var(--fh-accent-soft);
-  border-left: 2px solid var(--fh-accent);
-  border-radius: var(--fh-radius-sm);
-  font-size: var(--fh-text-body-sm);
-  white-space: pre-wrap;
-}
+  .motd-banner {
+    margin-top: var(--fh-space-4);
+    padding: var(--fh-space-3);
+    background: var(--fh-accent-soft);
+    border-left: 2px solid var(--fh-accent);
+    border-radius: var(--fh-radius-sm);
+    font-size: var(--fh-text-body-sm);
+    white-space: pre-wrap;
+  }
 
-.form {
-  margin-top: var(--fh-space-5);
-}
+  .form {
+    margin-top: var(--fh-space-5);
+  }
 
-.oidc-btns {
-  margin-top: var(--fh-space-5);
-  display: flex;
-  flex-direction: column;
-  gap: var(--fh-space-2);
-}
+  .oidc-btns {
+    margin-top: var(--fh-space-5);
+    display: flex;
+    flex-direction: column;
+    gap: var(--fh-space-2);
+  }
 
-.oidc-btn {
-  width: 100%;
-  justify-content: center;
-}
+  .oidc-btn {
+    width: 100%;
+    justify-content: center;
+  }
 
-.oidc-rule {
-  position: relative;
-  margin: var(--fh-space-4) 0 0;
-  text-align: center;
-}
+  .oidc-rule {
+    position: relative;
+    margin: var(--fh-space-4) 0 0;
+    text-align: center;
+  }
 
-.oidc-rule::before {
-  content: attr(data-label);
-  display: inline-block;
-  position: absolute;
-  top: -8px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: var(--fh-paper);
-  padding: 0 var(--fh-space-2);
-  font-family: var(--fh-font-mono);
-  font-size: var(--fh-text-mono-sm);
-  text-transform: uppercase;
-  letter-spacing: 0.14em;
-  color: var(--fh-subtle);
-}
+  .oidc-rule::before {
+    content: attr(data-label);
+    display: inline-block;
+    position: absolute;
+    top: -8px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--fh-paper);
+    padding: 0 var(--fh-space-2);
+    font-family: var(--fh-font-mono);
+    font-size: var(--fh-text-mono-sm);
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: var(--fh-subtle);
+  }
 
-.step-2fa {
-  border-top: 1px solid var(--fh-hairline);
-  padding-top: var(--fh-space-3);
-  margin-top: var(--fh-space-3);
-}
+  .step-2fa {
+    border-top: 1px solid var(--fh-hairline);
+    padding-top: var(--fh-space-3);
+    margin-top: var(--fh-space-3);
+  }
 
-.step-2fa-alts {
-  display: flex;
-  flex-direction: column;
-  gap: var(--fh-space-2);
-  align-items: flex-start;
-  margin-top: var(--fh-space-3);
-}
+  .step-2fa-alts {
+    display: flex;
+    flex-direction: column;
+    gap: var(--fh-space-2);
+    align-items: flex-start;
+    margin-top: var(--fh-space-3);
+  }
 
-.passkey-btn {
-  width: 100%;
-  justify-content: center;
-}
+  .passkey-btn {
+    width: 100%;
+    justify-content: center;
+  }
 
-.recovery-toggle {
-  font-size: var(--fh-text-body-sm);
-}
+  .recovery-toggle {
+    font-size: var(--fh-text-body-sm);
+  }
 
-.actions {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--fh-space-3);
-  margin-top: var(--fh-space-4);
-}
+  .actions {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--fh-space-3);
+    margin-top: var(--fh-space-4);
+  }
 
-.forgot {
-  font-family: var(--fh-font-mono);
-  font-size: var(--fh-text-mono-sm);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  text-decoration: none;
-  color: var(--fh-subtle);
-  transition: color var(--fh-duration-fast) var(--fh-easing);
-}
+  .forgot {
+    font-family: var(--fh-font-mono);
+    font-size: var(--fh-text-mono-sm);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    text-decoration: none;
+    color: var(--fh-subtle);
+    transition: color var(--fh-duration-fast) var(--fh-easing);
+  }
 
-.forgot:hover {
-  color: var(--fh-accent);
-}
+  .forgot:hover {
+    color: var(--fh-accent);
+  }
 </style>

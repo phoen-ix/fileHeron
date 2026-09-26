@@ -25,17 +25,14 @@ export interface WebAuthnRegisterBeginRequest {
  *  one costs the current password, exactly like disabling TOTP does. */
 export function registerBegin(password: string) {
   const payload: WebAuthnRegisterBeginRequest = { password }
-  return api.post<{ options: Record<string, unknown> }>(
-    '/account/webauthn/register/begin',
-    payload,
-  )
+  return api.post<{ options: Record<string, unknown> }>('/account/webauthn/register/begin', payload)
 }
 
 export function registerComplete(name: string, credential: unknown) {
-  return api.post<WebAuthnCredentialItem>(
-    '/account/webauthn/register/complete',
-    { name, credential },
-  )
+  return api.post<WebAuthnCredentialItem>('/account/webauthn/register/complete', {
+    name,
+    credential,
+  })
 }
 
 export function deleteCredential(id: number) {

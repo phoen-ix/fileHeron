@@ -15,31 +15,33 @@
 
     <p class="fh-field-help cadence">
       {{ t('admin_anomaly.cadence_note') }}
-      <RouterLink :to="{ name: 'admin-scheduled-tasks' }">{{ t('admin.nav.scheduled_tasks') }}</RouterLink>
+      <RouterLink :to="{ name: 'admin-scheduled-tasks' }">{{
+        t('admin.nav.scheduled_tasks')
+      }}</RouterLink>
     </p>
   </div>
 </template>
 
 <script setup lang="ts">
-import { useI18n } from 'vue-i18n'
+  import { useI18n } from 'vue-i18n'
 
-import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
-import TunableFields from '@/components/admin/TunableFields.vue'
+  import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
+  import TunableFields from '@/components/admin/TunableFields.vue'
 
-const { t } = useI18n()
+  const { t } = useI18n()
 </script>
 
 <style scoped>
-.anomaly-page {
-  max-width: 44rem;
-}
+  .anomaly-page {
+    max-width: 44rem;
+  }
 
-.intro {
-  margin: var(--fh-space-1) 0 0;
-  max-width: 64ch;
-}
+  .intro {
+    margin: var(--fh-space-1) 0 0;
+    max-width: 64ch;
+  }
 
-.cadence {
-  margin-top: var(--fh-space-4);
-}
+  .cadence {
+    margin-top: var(--fh-space-4);
+  }
 </style>

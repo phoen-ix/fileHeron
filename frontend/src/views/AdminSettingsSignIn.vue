@@ -13,16 +13,16 @@
 </template>
 
 <script setup lang="ts">
-import { useI18n } from 'vue-i18n'
+  import { useI18n } from 'vue-i18n'
 
-import TunableFields from '@/components/admin/TunableFields.vue'
+  import TunableFields from '@/components/admin/TunableFields.vue'
 
-const { t } = useI18n()
+  const { t } = useI18n()
 </script>
 
 <style scoped>
-.intro {
-  margin: 0 0 var(--fh-space-3);
-  max-width: 64ch;
-}
+  .intro {
+    margin: 0 0 var(--fh-space-3);
+    max-width: 64ch;
+  }
 </style>

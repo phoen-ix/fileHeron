@@ -79,8 +79,10 @@ export async function performRegistration(serverOptions: RegisterOptions) {
     response: {
       attestationObject: bufToB64url(r.attestationObject),
       clientDataJSON: bufToB64url(r.clientDataJSON),
-      transports: (r as AuthenticatorAttestationResponse & { getTransports?(): string[] })
-        .getTransports?.() ?? [],
+      transports:
+        (
+          r as AuthenticatorAttestationResponse & { getTransports?(): string[] }
+        ).getTransports?.() ?? [],
     },
     clientExtensionResults: cred.getClientExtensionResults(),
   }

@@ -232,7 +232,11 @@ const router = createRouter({
               path: '/admin/settings/error-alerts',
               name: 'admin-settings-error-alerts',
               component: () => import('@/views/AdminSettingsErrorAlerts.vue'),
-              meta: { density: 'operator', titleKey: 'admin_settings_error_alerts', requiresRole: 'admin' },
+              meta: {
+                density: 'operator',
+                titleKey: 'admin_settings_error_alerts',
+                requiresRole: 'admin',
+              },
             },
           ],
         },
@@ -269,7 +273,11 @@ const router = createRouter({
               path: '/admin/settings/sessions',
               name: 'admin-settings-sessions',
               component: () => import('@/views/AdminSettingsSessions.vue'),
-              meta: { density: 'operator', titleKey: 'admin_settings_sessions', requiresRole: 'admin' },
+              meta: {
+                density: 'operator',
+                titleKey: 'admin_settings_sessions',
+                requiresRole: 'admin',
+              },
             },
           ],
         },
@@ -288,7 +296,11 @@ const router = createRouter({
               path: '/admin/settings/quarantine',
               name: 'admin-settings-quarantine',
               component: () => import('@/views/AdminSettingsQuarantine.vue'),
-              meta: { density: 'operator', titleKey: 'admin_settings_quarantine', requiresRole: 'admin' },
+              meta: {
+                density: 'operator',
+                titleKey: 'admin_settings_quarantine',
+                requiresRole: 'admin',
+              },
             },
           ],
         },
@@ -307,7 +319,11 @@ const router = createRouter({
               path: '/admin/settings/api-tokens',
               name: 'admin-settings-api-tokens',
               component: () => import('@/views/AdminSettingsApiTokens.vue'),
-              meta: { density: 'operator', titleKey: 'admin_settings_api_tokens', requiresRole: 'admin' },
+              meta: {
+                density: 'operator',
+                titleKey: 'admin_settings_api_tokens',
+                requiresRole: 'admin',
+              },
             },
           ],
         },
@@ -341,13 +357,21 @@ const router = createRouter({
           path: 'settings/public-links',
           name: 'admin-settings-public-links',
           component: () => import('@/views/AdminSettingsPublicLinks.vue'),
-          meta: { density: 'operator', titleKey: 'admin_settings_public_links', requiresRole: 'admin' },
+          meta: {
+            density: 'operator',
+            titleKey: 'admin_settings_public_links',
+            requiresRole: 'admin',
+          },
         },
         {
           path: 'settings/transfers',
           name: 'admin-settings-transfers',
           component: () => import('@/views/AdminSettingsTransfers.vue'),
-          meta: { density: 'operator', titleKey: 'admin_settings_transfers', requiresRole: 'admin' },
+          meta: {
+            density: 'operator',
+            titleKey: 'admin_settings_transfers',
+            requiresRole: 'admin',
+          },
         },
         {
           path: 'settings/anomaly',
@@ -359,7 +383,11 @@ const router = createRouter({
           path: 'settings/share-approval',
           name: 'admin-settings-share-approval',
           component: () => import('@/views/AdminSettingsShareApproval.vue'),
-          meta: { density: 'operator', titleKey: 'admin_settings_share_approval', requiresRole: 'admin' },
+          meta: {
+            density: 'operator',
+            titleKey: 'admin_settings_share_approval',
+            requiresRole: 'admin',
+          },
         },
         {
           path: 'settings/email',
@@ -371,7 +399,11 @@ const router = createRouter({
           path: 'settings/email-templates',
           name: 'admin-settings-email-templates',
           component: () => import('@/views/AdminSettingsEmailTemplates.vue'),
-          meta: { density: 'operator', titleKey: 'admin_settings_email_templates', requiresRole: 'admin' },
+          meta: {
+            density: 'operator',
+            titleKey: 'admin_settings_email_templates',
+            requiresRole: 'admin',
+          },
         },
         {
           path: 'settings/imap',
@@ -413,13 +445,21 @@ const router = createRouter({
               path: '',
               name: 'admin-settings-sign-in',
               component: () => import('@/views/AdminSettingsSignIn.vue'),
-              meta: { density: 'operator', titleKey: 'admin_settings_sign_in', requiresRole: 'admin' },
+              meta: {
+                density: 'operator',
+                titleKey: 'admin_settings_sign_in',
+                requiresRole: 'admin',
+              },
             },
             {
               path: '/admin/settings/email-change',
               name: 'admin-settings-email-change',
               component: () => import('@/views/AdminSettingsEmailChange.vue'),
-              meta: { density: 'operator', titleKey: 'admin_settings_email_change', requiresRole: 'admin' },
+              meta: {
+                density: 'operator',
+                titleKey: 'admin_settings_email_change',
+                requiresRole: 'admin',
+              },
             },
           ],
         },
@@ -440,7 +480,11 @@ const router = createRouter({
               path: '/admin/settings/scan-guard',
               name: 'admin-settings-scan-guard',
               component: () => import('@/views/AdminSettingsScanGuard.vue'),
-              meta: { density: 'operator', titleKey: 'admin_settings_scan_guard', requiresRole: 'admin' },
+              meta: {
+                density: 'operator',
+                titleKey: 'admin_settings_scan_guard',
+                requiresRole: 'admin',
+              },
             },
           ],
         },
@@ -460,7 +504,11 @@ const router = createRouter({
           path: 'settings/maintenance',
           name: 'admin-settings-maintenance',
           component: () => import('@/views/AdminSettingsMaintenance.vue'),
-          meta: { density: 'operator', titleKey: 'admin_settings_maintenance', requiresRole: 'admin' },
+          meta: {
+            density: 'operator',
+            titleKey: 'admin_settings_maintenance',
+            requiresRole: 'admin',
+          },
         },
         {
           path: 'system',
@@ -571,20 +619,12 @@ export function navigationGuard(
   }
 
   // Admin-only routes - bounce non-admins to their effective landing.
-  if (
-    to.meta.requiresRole === 'admin' &&
-    auth.isAuthenticated &&
-    auth.user?.role !== 'admin'
-  ) {
+  if (to.meta.requiresRole === 'admin' && auth.isAuthenticated && auth.user?.role !== 'admin') {
     return { path: effectiveLandingPath(auth.user) }
   }
 
   // Hitting `/` while admin disabled the home page → redirect forward.
-  if (
-    to.name === 'home' &&
-    auth.isAuthenticated &&
-    auth.user?.home_page_enabled === false
-  ) {
+  if (to.name === 'home' && auth.isAuthenticated && auth.user?.home_page_enabled === false) {
     return { path: effectiveLandingPath(auth.user) }
   }
 

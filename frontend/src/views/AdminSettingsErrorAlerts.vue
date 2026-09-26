@@ -1,163 +1,162 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
-import { useI18n } from 'vue-i18n'
+  import { computed, onMounted, ref, watch } from 'vue'
+  import { useI18n } from 'vue-i18n'
 
-import { getErrorAlertSettings, updateErrorAlertSettings } from '@/api/admin'
-import TunableFields from '@/components/admin/TunableFields.vue'
-import { useApiError } from '@/composables/useApiError'
-import { useUiStore } from '@/stores/ui'
+  import { getErrorAlertSettings, updateErrorAlertSettings } from '@/api/admin'
+  import TunableFields from '@/components/admin/TunableFields.vue'
+  import { useApiError } from '@/composables/useApiError'
+  import { useUiStore } from '@/stores/ui'
 
-const { t } = useI18n()
-const { describe } = useApiError()
-const ui = useUiStore()
+  const { t } = useI18n()
+  const { describe } = useApiError()
+  const ui = useUiStore()
 
-const loading = ref(true)
-const saving = ref(false)
-const errorMsg = ref<string | null>(null)
+  const loading = ref(true)
+  const saving = ref(false)
+  const errorMsg = ref<string | null>(null)
 
-// Alerting (the throttled email subset).
-const enabled = ref(false)
-const sourceHttp5xx = ref(true)
-const sourceHttp4xx = ref(false)
-const sourceWorker = ref(true)
-const recipientsMode = ref<'admins' | 'custom'>('admins')
-const customRecipientsText = ref('')
-const cooldownMinutes = ref(15)
-const maxPerHour = ref(20)
+  // Alerting (the throttled email subset).
+  const enabled = ref(false)
+  const sourceHttp5xx = ref(true)
+  const sourceHttp4xx = ref(false)
+  const sourceWorker = ref(true)
+  const recipientsMode = ref<'admins' | 'custom'>('admins')
+  const customRecipientsText = ref('')
+  const cooldownMinutes = ref(15)
+  const maxPerHour = ref(20)
 
-// Logging (the complete record, decoupled from alerting).
-const logEnabled = ref(true)
-const capture4xx = ref(false)
-const codes4xxText = ref('')
-const retentionDays = ref(90)
+  // Logging (the complete record, decoupled from alerting).
+  const logEnabled = ref(true)
+  const capture4xx = ref(false)
+  const codes4xxText = ref('')
+  const retentionDays = ref(90)
 
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
-const parsedRecipients = computed<string[]>(() =>
-  customRecipientsText.value
-    .split(/[\n,]/)
-    .map((s) => s.trim())
-    .filter((s) => s.length > 0),
-)
+  const parsedRecipients = computed<string[]>(() =>
+    customRecipientsText.value
+      .split(/[\n,]/)
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0),
+  )
 
-const invalidRecipients = computed<string[]>(() =>
-  parsedRecipients.value.filter((addr) => !EMAIL_RE.test(addr)),
-)
+  const invalidRecipients = computed<string[]>(() =>
+    parsedRecipients.value.filter((addr) => !EMAIL_RE.test(addr)),
+  )
 
-const codeTokens = computed<string[]>(() =>
-  codes4xxText.value
-    .split(/[\s,]+/)
-    .map((s) => s.trim())
-    .filter((s) => s.length > 0),
-)
+  const codeTokens = computed<string[]>(() =>
+    codes4xxText.value
+      .split(/[\s,]+/)
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0),
+  )
 
-const parsed4xxCodes = computed<number[]>(() => {
-  const seen = new Set<number>()
-  for (const tok of codeTokens.value) {
-    const n = Number(tok)
-    if (Number.isInteger(n) && n >= 400 && n <= 499) seen.add(n)
+  const parsed4xxCodes = computed<number[]>(() => {
+    const seen = new Set<number>()
+    for (const tok of codeTokens.value) {
+      const n = Number(tok)
+      if (Number.isInteger(n) && n >= 400 && n <= 499) seen.add(n)
+    }
+    return [...seen].sort((a, b) => a - b)
+  })
+
+  const invalid4xxCodes = computed<string[]>(() =>
+    codeTokens.value.filter((tok) => {
+      const n = Number(tok)
+      return !(Number.isInteger(n) && n >= 400 && n <= 499)
+    }),
+  )
+
+  // Emailing 4xx requires capturing them first.
+  watch(capture4xx, (on) => {
+    if (!on) sourceHttp4xx.value = false
+  })
+
+  const validationError = computed<string | null>(() => {
+    // Logging validation (independent of the alert master switch).
+    if (capture4xx.value) {
+      if (parsed4xxCodes.value.length === 0) return t('admin_error_alerts.err_4xx_empty')
+      if (invalid4xxCodes.value.length > 0)
+        return t('admin_error_alerts.err_4xx_bad', { list: invalid4xxCodes.value.join(', ') })
+    }
+    if (retentionDays.value < 0 || retentionDays.value > 3650)
+      return t('admin_error_alerts.err_retention_range')
+    // Alerting validation.
+    if (enabled.value) {
+      if (cooldownMinutes.value < 1 || cooldownMinutes.value > 1440)
+        return t('admin_error_alerts.err_cooldown_range')
+      if (maxPerHour.value < 1 || maxPerHour.value > 1000)
+        return t('admin_error_alerts.err_cap_range')
+      if (recipientsMode.value === 'custom') {
+        if (parsedRecipients.value.length === 0) return t('admin_error_alerts.err_custom_empty')
+        if (invalidRecipients.value.length > 0)
+          return t('admin_error_alerts.err_bad_email', { list: invalidRecipients.value.join(', ') })
+      }
+    }
+    return null
+  })
+
+  const canSave = computed(() => !saving.value && validationError.value === null)
+
+  function apply(data: Awaited<ReturnType<typeof getErrorAlertSettings>>['data']) {
+    enabled.value = data.enabled
+    sourceHttp5xx.value = data.source_http_5xx
+    sourceHttp4xx.value = data.source_http_4xx
+    sourceWorker.value = data.source_worker
+    recipientsMode.value = data.recipients_mode
+    customRecipientsText.value = data.custom_recipients.join('\n')
+    cooldownMinutes.value = data.cooldown_minutes
+    maxPerHour.value = data.max_per_hour
+    logEnabled.value = data.log_enabled
+    capture4xx.value = data.capture_4xx
+    codes4xxText.value = data.http_4xx_codes.join(', ')
+    retentionDays.value = data.retention_days
   }
-  return [...seen].sort((a, b) => a - b)
-})
 
-const invalid4xxCodes = computed<string[]>(() =>
-  codeTokens.value.filter((tok) => {
-    const n = Number(tok)
-    return !(Number.isInteger(n) && n >= 400 && n <= 499)
-  }),
-)
-
-// Emailing 4xx requires capturing them first.
-watch(capture4xx, (on) => {
-  if (!on) sourceHttp4xx.value = false
-})
-
-const validationError = computed<string | null>(() => {
-  // Logging validation (independent of the alert master switch).
-  if (capture4xx.value) {
-    if (parsed4xxCodes.value.length === 0) return t('admin_error_alerts.err_4xx_empty')
-    if (invalid4xxCodes.value.length > 0)
-      return t('admin_error_alerts.err_4xx_bad', { list: invalid4xxCodes.value.join(', ') })
-  }
-  if (retentionDays.value < 0 || retentionDays.value > 3650)
-    return t('admin_error_alerts.err_retention_range')
-  // Alerting validation.
-  if (enabled.value) {
-    if (cooldownMinutes.value < 1 || cooldownMinutes.value > 1440)
-      return t('admin_error_alerts.err_cooldown_range')
-    if (maxPerHour.value < 1 || maxPerHour.value > 1000)
-      return t('admin_error_alerts.err_cap_range')
-    if (recipientsMode.value === 'custom') {
-      if (parsedRecipients.value.length === 0)
-        return t('admin_error_alerts.err_custom_empty')
-      if (invalidRecipients.value.length > 0)
-        return t('admin_error_alerts.err_bad_email', { list: invalidRecipients.value.join(', ') })
+  async function load() {
+    loading.value = true
+    errorMsg.value = null
+    try {
+      const { data } = await getErrorAlertSettings()
+      apply(data)
+    } catch (err) {
+      errorMsg.value = describe(err)
+    } finally {
+      loading.value = false
     }
   }
-  return null
-})
 
-const canSave = computed(() => !saving.value && validationError.value === null)
-
-function apply(data: Awaited<ReturnType<typeof getErrorAlertSettings>>['data']) {
-  enabled.value = data.enabled
-  sourceHttp5xx.value = data.source_http_5xx
-  sourceHttp4xx.value = data.source_http_4xx
-  sourceWorker.value = data.source_worker
-  recipientsMode.value = data.recipients_mode
-  customRecipientsText.value = data.custom_recipients.join('\n')
-  cooldownMinutes.value = data.cooldown_minutes
-  maxPerHour.value = data.max_per_hour
-  logEnabled.value = data.log_enabled
-  capture4xx.value = data.capture_4xx
-  codes4xxText.value = data.http_4xx_codes.join(', ')
-  retentionDays.value = data.retention_days
-}
-
-async function load() {
-  loading.value = true
-  errorMsg.value = null
-  try {
-    const { data } = await getErrorAlertSettings()
-    apply(data)
-  } catch (err) {
-    errorMsg.value = describe(err)
-  } finally {
-    loading.value = false
+  async function onSave() {
+    if (!canSave.value) return
+    saving.value = true
+    errorMsg.value = null
+    try {
+      const { data } = await updateErrorAlertSettings({
+        enabled: enabled.value,
+        source_http_5xx: sourceHttp5xx.value,
+        source_http_4xx: sourceHttp4xx.value,
+        source_worker: sourceWorker.value,
+        recipients_mode: recipientsMode.value,
+        custom_recipients: parsedRecipients.value,
+        cooldown_minutes: cooldownMinutes.value,
+        max_per_hour: maxPerHour.value,
+        log_enabled: logEnabled.value,
+        capture_4xx: capture4xx.value,
+        http_4xx_codes: parsed4xxCodes.value,
+        retention_days: retentionDays.value,
+      })
+      apply(data)
+      ui.pushToast(t('admin_error_alerts.saved_toast'), 'success')
+    } catch (err) {
+      errorMsg.value = describe(err)
+    } finally {
+      saving.value = false
+    }
   }
-}
 
-async function onSave() {
-  if (!canSave.value) return
-  saving.value = true
-  errorMsg.value = null
-  try {
-    const { data } = await updateErrorAlertSettings({
-      enabled: enabled.value,
-      source_http_5xx: sourceHttp5xx.value,
-      source_http_4xx: sourceHttp4xx.value,
-      source_worker: sourceWorker.value,
-      recipients_mode: recipientsMode.value,
-      custom_recipients: parsedRecipients.value,
-      cooldown_minutes: cooldownMinutes.value,
-      max_per_hour: maxPerHour.value,
-      log_enabled: logEnabled.value,
-      capture_4xx: capture4xx.value,
-      http_4xx_codes: parsed4xxCodes.value,
-      retention_days: retentionDays.value,
-    })
-    apply(data)
-    ui.pushToast(t('admin_error_alerts.saved_toast'), 'success')
-  } catch (err) {
-    errorMsg.value = describe(err)
-  } finally {
-    saving.value = false
-  }
-}
-
-onMounted(() => {
-  void load()
-})
+  onMounted(() => {
+    void load()
+  })
 </script>
 
 <template>
@@ -176,7 +175,9 @@ onMounted(() => {
         </label>
         <p class="fh-field-help">{{ t('admin_error_alerts.log_enabled_help') }}</p>
         <p class="fh-field-help">
-          <RouterLink :to="{ name: 'admin-error-log' }">{{ t('admin_error_alerts.view_log_link') }} &rarr;</RouterLink>
+          <RouterLink :to="{ name: 'admin-error-log' }"
+            >{{ t('admin_error_alerts.view_log_link') }} &rarr;</RouterLink
+          >
         </p>
 
         <template v-if="logEnabled">
@@ -196,7 +197,13 @@ onMounted(() => {
           </template>
           <label class="num-field">
             <span>{{ t('admin_error_alerts.retention_label') }}</span>
-            <input v-model.number="retentionDays" type="number" class="fh-input" min="0" max="3650" />
+            <input
+              v-model.number="retentionDays"
+              type="number"
+              class="fh-input"
+              min="0"
+              max="3650"
+            />
           </label>
           <p class="fh-field-help">{{ t('admin_error_alerts.retention_help') }}</p>
         </template>
@@ -227,7 +234,9 @@ onMounted(() => {
             </label>
             <p class="fh-field-help">{{ t('admin_error_alerts.http_4xx_help') }}</p>
           </template>
-          <p v-else class="fh-field-help cron-note">{{ t('admin_error_alerts.http_4xx_needs_capture') }}</p>
+          <p v-else class="fh-field-help cron-note">
+            {{ t('admin_error_alerts.http_4xx_needs_capture') }}
+          </p>
 
           <label class="toggle">
             <input v-model="sourceWorker" type="checkbox" />
@@ -265,11 +274,23 @@ onMounted(() => {
           <div class="num-row">
             <label class="num-field">
               <span>{{ t('admin_error_alerts.cooldown_label') }}</span>
-              <input v-model.number="cooldownMinutes" type="number" class="fh-input" min="1" max="1440" />
+              <input
+                v-model.number="cooldownMinutes"
+                type="number"
+                class="fh-input"
+                min="1"
+                max="1440"
+              />
             </label>
             <label class="num-field">
               <span>{{ t('admin_error_alerts.cap_label') }}</span>
-              <input v-model.number="maxPerHour" type="number" class="fh-input" min="1" max="1000" />
+              <input
+                v-model.number="maxPerHour"
+                type="number"
+                class="fh-input"
+                min="1"
+                max="1000"
+              />
             </label>
           </div>
           <p class="fh-field-help">{{ t('admin_error_alerts.throttle_help') }}</p>
@@ -277,9 +298,7 @@ onMounted(() => {
       </template>
 
       <div v-if="validationError" class="fh-notice" data-tone="warning">{{ validationError }}</div>
-      <div
-v-if="errorMsg" class="fh-notice" role="alert"
-        data-tone="error">{{ errorMsg }}</div>
+      <div v-if="errorMsg" class="fh-notice" role="alert" data-tone="error">{{ errorMsg }}</div>
 
       <div class="actions">
         <button type="submit" class="fh-btn" :disabled="!canSave">
@@ -298,84 +317,84 @@ v-if="errorMsg" class="fh-notice" role="alert"
 </template>
 
 <style scoped>
-.section-h2 {
-  font-family: var(--fh-font-display);
-  font-size: 1.25rem;
-  font-weight: 400;
-  margin: 0 0 var(--fh-space-2);
-}
+  .section-h2 {
+    font-family: var(--fh-font-display);
+    font-size: 1.25rem;
+    font-weight: 400;
+    margin: 0 0 var(--fh-space-2);
+  }
 
-.policy-page {
-  max-width: none;
-}
+  .policy-page {
+    max-width: none;
+  }
 
-.intro {
-  margin: var(--fh-space-2) 0 var(--fh-space-3);
-  max-width: 64ch;
-}
+  .intro {
+    margin: var(--fh-space-2) 0 var(--fh-space-3);
+    max-width: 64ch;
+  }
 
-.loading {
-  color: var(--fh-subtle);
-  padding: var(--fh-space-4) 0;
-}
+  .loading {
+    color: var(--fh-subtle);
+    padding: var(--fh-space-4) 0;
+  }
 
-.policy-form {
-  display: flex;
-  flex-direction: column;
-  gap: var(--fh-space-4);
-  margin-top: var(--fh-space-3);
-}
+  .policy-form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--fh-space-4);
+    margin-top: var(--fh-space-3);
+  }
 
-.toggle-fieldset {
-  border: 1px solid var(--fh-rule);
-  border-radius: var(--fh-radius-sm);
-  padding: var(--fh-space-3);
-  display: flex;
-  flex-direction: column;
-  gap: var(--fh-space-2);
-}
+  .toggle-fieldset {
+    border: 1px solid var(--fh-rule);
+    border-radius: var(--fh-radius-sm);
+    padding: var(--fh-space-3);
+    display: flex;
+    flex-direction: column;
+    gap: var(--fh-space-2);
+  }
 
-.legend {
-  font-weight: 600;
-  padding: 0;
-  color: var(--fh-ink);
-}
+  .legend {
+    font-weight: 600;
+    padding: 0;
+    color: var(--fh-ink);
+  }
 
-.toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--fh-space-2);
-  cursor: pointer;
-}
+  .toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--fh-space-2);
+    cursor: pointer;
+  }
 
-.recipients-area {
-  width: 100%;
-  font-family: var(--fh-font-mono, monospace);
-  resize: vertical;
-}
+  .recipients-area {
+    width: 100%;
+    font-family: var(--fh-font-mono, monospace);
+    resize: vertical;
+  }
 
-.num-row {
-  display: flex;
-  gap: var(--fh-space-4);
-  flex-wrap: wrap;
-}
+  .num-row {
+    display: flex;
+    gap: var(--fh-space-4);
+    flex-wrap: wrap;
+  }
 
-.num-field {
-  display: flex;
-  flex-direction: column;
-  gap: var(--fh-space-1);
-}
+  .num-field {
+    display: flex;
+    flex-direction: column;
+    gap: var(--fh-space-1);
+  }
 
-.num-field input {
-  width: 8rem;
-}
+  .num-field input {
+    width: 8rem;
+  }
 
-.cron-note {
-  font-style: italic;
-}
+  .cron-note {
+    font-style: italic;
+  }
 
-.actions {
-  display: flex;
-  gap: var(--fh-space-3);
-}
+  .actions {
+    display: flex;
+    gap: var(--fh-space-3);
+  }
 </style>

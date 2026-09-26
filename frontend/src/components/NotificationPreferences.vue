@@ -5,108 +5,99 @@
 
     <div v-if="loading" class="loading">{{ t('common.loading') }}</div>
 
-    <NotificationPreferencesTable
-      v-else
-      :items="items"
-      :saving="saving"
-      @change="onChange"
-    />
+    <NotificationPreferencesTable v-else :items="items" :saving="saving" @change="onChange" />
 
     <p v-if="savedAt" class="fh-field-help saved">{{ t('common.saved') }}</p>
   </section>
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
-import { useI18n } from 'vue-i18n'
+  import { onMounted, ref } from 'vue'
+  import { useI18n } from 'vue-i18n'
 
-import NotificationPreferencesTable from '@/components/NotificationPreferencesTable.vue'
-import { useApiError } from '@/composables/useApiError'
-import { useUiStore } from '@/stores/ui'
-import {
-  getPreferences,
-  updatePreferences,
-} from '@/api/notifications'
-import type {
-  NotificationCategory,
-  NotificationChannel,
-  PreferenceItem,
-} from '@/types/api'
+  import NotificationPreferencesTable from '@/components/NotificationPreferencesTable.vue'
+  import { useApiError } from '@/composables/useApiError'
+  import { useUiStore } from '@/stores/ui'
+  import { getPreferences, updatePreferences } from '@/api/notifications'
+  import type { NotificationCategory, NotificationChannel, PreferenceItem } from '@/types/api'
 
-const { t } = useI18n()
-const ui = useUiStore()
-const { describe } = useApiError()
+  const { t } = useI18n()
+  const ui = useUiStore()
+  const { describe } = useApiError()
 
-const items = ref<PreferenceItem[]>([])
-const loading = ref(true)
-const saving = ref(false)
-const savedAt = ref<number | null>(null)
+  const items = ref<PreferenceItem[]>([])
+  const loading = ref(true)
+  const saving = ref(false)
+  const savedAt = ref<number | null>(null)
 
-async function load() {
-  loading.value = true
-  try {
-    const { data } = await getPreferences()
-    items.value = data.items
-  } catch (err) {
-    ui.pushToast(describe(err), 'error')
-  } finally {
-    loading.value = false
+  async function load() {
+    loading.value = true
+    try {
+      const { data } = await getPreferences()
+      items.value = data.items
+    } catch (err) {
+      ui.pushToast(describe(err), 'error')
+    } finally {
+      loading.value = false
+    }
   }
-}
 
-async function onChange(cat: NotificationCategory, channel: NotificationChannel) {
-  saving.value = true
-  // Keep the previous value so a failed save can be rolled back. The select is
-  // controlled by `items`, and the local write below only happened on success -
-  // but the BROWSER had already moved the dropdown, so a rejected save left the
-  // control showing a preference the server does not have, with no error
-  // anywhere (audit 2026-07-30, fe-correct-5).
-  const row = items.value.find((i) => i.category === cat)
-  const previous = row?.channel
-  try {
-    await updatePreferences({ [cat]: channel } as Record<NotificationCategory, NotificationChannel>)
-    // Reflect the saved value locally (the table is now controlled via props).
-    if (row) row.channel = channel
-    savedAt.value = Date.now()
-    setTimeout(() => {
-      if (savedAt.value && Date.now() - savedAt.value > 1500) savedAt.value = null
-    }, 1700)
-  } catch (err) {
-    if (row && previous !== undefined) row.channel = previous
-    ui.pushToast(describe(err), 'error')
-  } finally {
-    saving.value = false
+  async function onChange(cat: NotificationCategory, channel: NotificationChannel) {
+    saving.value = true
+    // Keep the previous value so a failed save can be rolled back. The select is
+    // controlled by `items`, and the local write below only happened on success -
+    // but the BROWSER had already moved the dropdown, so a rejected save left the
+    // control showing a preference the server does not have, with no error
+    // anywhere (audit 2026-07-30, fe-correct-5).
+    const row = items.value.find((i) => i.category === cat)
+    const previous = row?.channel
+    try {
+      await updatePreferences({ [cat]: channel } as Record<
+        NotificationCategory,
+        NotificationChannel
+      >)
+      // Reflect the saved value locally (the table is now controlled via props).
+      if (row) row.channel = channel
+      savedAt.value = Date.now()
+      setTimeout(() => {
+        if (savedAt.value && Date.now() - savedAt.value > 1500) savedAt.value = null
+      }, 1700)
+    } catch (err) {
+      if (row && previous !== undefined) row.channel = previous
+      ui.pushToast(describe(err), 'error')
+    } finally {
+      saving.value = false
+    }
   }
-}
 
-onMounted(load)
+  onMounted(load)
 </script>
 
 <style scoped>
-.prefs {
-  display: flex;
-  flex-direction: column;
-  gap: var(--fh-space-2);
-}
+  .prefs {
+    display: flex;
+    flex-direction: column;
+    gap: var(--fh-space-2);
+  }
 
-.prefs-h3 {
-  font-family: var(--fh-font-display);
-  font-size: 1.5rem;
-  font-weight: 400;
-  margin: 0 0 var(--fh-space-2);
-}
+  .prefs-h3 {
+    font-family: var(--fh-font-display);
+    font-size: 1.5rem;
+    font-weight: 400;
+    margin: 0 0 var(--fh-space-2);
+  }
 
-.intro {
-  margin: 0 0 var(--fh-space-2);
-  max-width: 60ch;
-}
+  .intro {
+    margin: 0 0 var(--fh-space-2);
+    max-width: 60ch;
+  }
 
-.loading {
-  color: var(--fh-subtle);
-  padding: var(--fh-space-3) 0;
-}
+  .loading {
+    color: var(--fh-subtle);
+    padding: var(--fh-space-3) 0;
+  }
 
-.saved {
-  color: var(--fh-success);
-}
+  .saved {
+    color: var(--fh-success);
+  }
 </style>

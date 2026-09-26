@@ -9,14 +9,8 @@ import type {
 
 /* Authed: managed from ShareDetail. */
 
-export function createPublicLink(
-  shareId: string,
-  payload: CreatePublicLinkRequest,
-) {
-  return api.post<CreatePublicLinkResponse>(
-    `/shares/${shareId}/public-link`,
-    payload,
-  )
+export function createPublicLink(shareId: string, payload: CreatePublicLinkRequest) {
+  return api.post<CreatePublicLinkResponse>(`/shares/${shareId}/public-link`, payload)
 }
 
 export function getPublicLink(shareId: string) {
@@ -43,10 +37,7 @@ export function fetchPublicShare(token: string) {
 }
 
 export function unlockPublicShare(token: string, password: string) {
-  return publicClient.post<{ ok: boolean }>(
-    `/api/public/${token}/unlock`,
-    { password },
-  )
+  return publicClient.post<{ ok: boolean }>(`/api/public/${token}/unlock`, { password })
 }
 
 export function publicDownloadUrl(token: string, fileId: string): string {

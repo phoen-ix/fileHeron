@@ -1,78 +1,78 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
-import { useI18n } from 'vue-i18n'
+  import { onMounted, ref } from 'vue'
+  import { useI18n } from 'vue-i18n'
 
-import { getEmailChangePolicy, updateEmailChangePolicy } from '@/api/admin'
-import { useApiError } from '@/composables/useApiError'
-import { useAuthStore } from '@/stores/auth'
-import { useUiStore } from '@/stores/ui'
-import type {
-  EmailChangeOidcMode,
-  EmailChangePolicyResponse,
-  EmailChangeVerificationMode,
-} from '@/types/api'
+  import { getEmailChangePolicy, updateEmailChangePolicy } from '@/api/admin'
+  import { useApiError } from '@/composables/useApiError'
+  import { useAuthStore } from '@/stores/auth'
+  import { useUiStore } from '@/stores/ui'
+  import type {
+    EmailChangeOidcMode,
+    EmailChangePolicyResponse,
+    EmailChangeVerificationMode,
+  } from '@/types/api'
 
-const { t } = useI18n()
-const { describe } = useApiError()
-const ui = useUiStore()
-const auth = useAuthStore()
+  const { t } = useI18n()
+  const { describe } = useApiError()
+  const ui = useUiStore()
+  const auth = useAuthStore()
 
-const loading = ref(true)
-const saving = ref(false)
-const errorMsg = ref<string | null>(null)
+  const loading = ref(true)
+  const saving = ref(false)
+  const errorMsg = ref<string | null>(null)
 
-const verificationMode = ref<EmailChangeVerificationMode>('verify_new')
-const selfService = ref(false)
-const oidcMode = ref<EmailChangeOidcMode>('reset_setpw')
+  const verificationMode = ref<EmailChangeVerificationMode>('verify_new')
+  const selfService = ref(false)
+  const oidcMode = ref<EmailChangeOidcMode>('reset_setpw')
 
-const VERIFICATION_MODES: EmailChangeVerificationMode[] = [
-  'verify_new',
-  'verify_both',
-  'immediate',
-]
-const OIDC_MODES: EmailChangeOidcMode[] = ['reset_setpw', 'reset_only', 'keep']
+  const VERIFICATION_MODES: EmailChangeVerificationMode[] = [
+    'verify_new',
+    'verify_both',
+    'immediate',
+  ]
+  const OIDC_MODES: EmailChangeOidcMode[] = ['reset_setpw', 'reset_only', 'keep']
 
-function applyResponse(data: EmailChangePolicyResponse) {
-  verificationMode.value = data.verification_mode
-  selfService.value = data.self_service
-  oidcMode.value = data.oidc_mode
-}
-
-async function load() {
-  loading.value = true
-  errorMsg.value = null
-  try {
-    const { data } = await getEmailChangePolicy()
-    applyResponse(data)
-  } catch (err) {
-    errorMsg.value = describe(err)
-  } finally {
-    loading.value = false
+  function applyResponse(data: EmailChangePolicyResponse) {
+    verificationMode.value = data.verification_mode
+    selfService.value = data.self_service
+    oidcMode.value = data.oidc_mode
   }
-}
 
-async function onSave() {
-  saving.value = true
-  errorMsg.value = null
-  try {
-    const { data } = await updateEmailChangePolicy({
-      verification_mode: verificationMode.value,
-      self_service: selfService.value,
-      oidc_mode: oidcMode.value,
-    })
-    applyResponse(data)
-    // The self-service flag drives `can_change_own_email` on /me, which the
-    // Account page reads to show/hide its email-change block.
-    await auth.refreshMe()
-    ui.pushToast(t('admin_settings_email_change.saved_toast'), 'success')
-  } catch (err) {
-    errorMsg.value = describe(err)
-  } finally {
-    saving.value = false
+  async function load() {
+    loading.value = true
+    errorMsg.value = null
+    try {
+      const { data } = await getEmailChangePolicy()
+      applyResponse(data)
+    } catch (err) {
+      errorMsg.value = describe(err)
+    } finally {
+      loading.value = false
+    }
   }
-}
 
-onMounted(load)
+  async function onSave() {
+    saving.value = true
+    errorMsg.value = null
+    try {
+      const { data } = await updateEmailChangePolicy({
+        verification_mode: verificationMode.value,
+        self_service: selfService.value,
+        oidc_mode: oidcMode.value,
+      })
+      applyResponse(data)
+      // The self-service flag drives `can_change_own_email` on /me, which the
+      // Account page reads to show/hide its email-change block.
+      await auth.refreshMe()
+      ui.pushToast(t('admin_settings_email_change.saved_toast'), 'success')
+    } catch (err) {
+      errorMsg.value = describe(err)
+    } finally {
+      saving.value = false
+    }
+  }
+
+  onMounted(load)
 </script>
 
 <template>
@@ -88,11 +88,7 @@ onMounted(load)
         <legend class="fh-field-label">
           {{ t('admin_settings_email_change.mode_label') }}
         </legend>
-        <label
-          v-for="m in VERIFICATION_MODES"
-          :key="m"
-          class="opt-radio"
-        >
+        <label v-for="m in VERIFICATION_MODES" :key="m" class="opt-radio">
           <input v-model="verificationMode" type="radio" :value="m" />
           <span class="opt-text">
             <span class="opt-name">{{ t(`admin_settings_email_change.mode.${m}`) }}</span>
@@ -106,11 +102,7 @@ onMounted(load)
         <legend class="fh-field-label">
           {{ t('admin_settings_email_change.oidc_label') }}
         </legend>
-        <label
-          v-for="m in OIDC_MODES"
-          :key="m"
-          class="opt-radio"
-        >
+        <label v-for="m in OIDC_MODES" :key="m" class="opt-radio">
           <input v-model="oidcMode" type="radio" :value="m" />
           <span class="opt-text">
             <span class="opt-name">{{ t(`admin_settings_email_change.oidc.${m}`) }}</span>
@@ -128,9 +120,7 @@ onMounted(load)
         <p class="fh-field-help">{{ t('admin_settings_email_change.self_service_help') }}</p>
       </fieldset>
 
-      <div
-v-if="errorMsg" class="fh-notice" role="alert"
-        data-tone="error">{{ errorMsg }}</div>
+      <div v-if="errorMsg" class="fh-notice" role="alert" data-tone="error">{{ errorMsg }}</div>
 
       <div class="actions">
         <button type="submit" class="fh-btn" :disabled="saving">
@@ -142,67 +132,67 @@ v-if="errorMsg" class="fh-notice" role="alert"
 </template>
 
 <style scoped>
-.policy-page {
-  max-width: none;
-}
+  .policy-page {
+    max-width: none;
+  }
 
-.intro {
-  margin: var(--fh-space-2) 0 var(--fh-space-3);
-  max-width: 64ch;
-}
+  .intro {
+    margin: var(--fh-space-2) 0 var(--fh-space-3);
+    max-width: 64ch;
+  }
 
-.loading {
-  color: var(--fh-subtle);
-  padding: var(--fh-space-4) 0;
-}
+  .loading {
+    color: var(--fh-subtle);
+    padding: var(--fh-space-4) 0;
+  }
 
-.policy-form {
-  display: flex;
-  flex-direction: column;
-  gap: var(--fh-space-4);
-  margin-top: var(--fh-space-3);
-}
+  .policy-form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--fh-space-4);
+    margin-top: var(--fh-space-3);
+  }
 
-.opt-fieldset,
-.toggle-fieldset {
-  border: 1px solid var(--fh-rule);
-  border-radius: var(--fh-radius-sm);
-  padding: var(--fh-space-3);
-  display: flex;
-  flex-direction: column;
-  gap: var(--fh-space-2);
-}
+  .opt-fieldset,
+  .toggle-fieldset {
+    border: 1px solid var(--fh-rule);
+    border-radius: var(--fh-radius-sm);
+    padding: var(--fh-space-3);
+    display: flex;
+    flex-direction: column;
+    gap: var(--fh-space-2);
+  }
 
-.opt-radio {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--fh-space-2);
-  cursor: pointer;
-}
+  .opt-radio {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--fh-space-2);
+    cursor: pointer;
+  }
 
-.opt-radio input {
-  margin-top: 4px;
-}
+  .opt-radio input {
+    margin-top: 4px;
+  }
 
-.opt-text {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
+  .opt-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
 
-.opt-name {
-  color: var(--fh-ink);
-}
+  .opt-name {
+    color: var(--fh-ink);
+  }
 
-.toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--fh-space-2);
-  cursor: pointer;
-}
+  .toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--fh-space-2);
+    cursor: pointer;
+  }
 
-.actions {
-  display: flex;
-  gap: var(--fh-space-3);
-}
+  .actions {
+    display: flex;
+    gap: var(--fh-space-3);
+  }
 </style>

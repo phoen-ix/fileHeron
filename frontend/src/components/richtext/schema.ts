@@ -48,11 +48,7 @@ const nodeSpec: Record<string, NodeSpec> = {
         align: alignFromDOM(d as HTMLElement),
       }),
     })),
-    toDOM: (node) => [
-      `h${node.attrs.level}`,
-      alignToDOM(node.attrs.align as Alignment | null),
-      0,
-    ],
+    toDOM: (node) => [`h${node.attrs.level}`, alignToDOM(node.attrs.align as Alignment | null), 0],
   },
 
   blockquote: {
@@ -135,7 +131,12 @@ const markSpec: Record<string, MarkSpec> = {
     toDOM: () => ['u', 0],
   },
   strikethrough: {
-    parseDOM: [{ tag: 's' }, { tag: 'strike' }, { tag: 'del' }, { style: 'text-decoration=line-through' }],
+    parseDOM: [
+      { tag: 's' },
+      { tag: 'strike' },
+      { tag: 'del' },
+      { style: 'text-decoration=line-through' },
+    ],
     toDOM: () => ['s', 0],
   },
   code: {
@@ -166,8 +167,6 @@ const markSpec: Record<string, MarkSpec> = {
 // Compose: base nodes + list nodes + table nodes.
 let nodes = OrderedMap.from(nodeSpec)
 nodes = addListNodes(nodes, 'paragraph block*', 'block')
-nodes = nodes.append(
-  tableNodes({ tableGroup: 'block', cellContent: 'block+', cellAttributes: {} }),
-)
+nodes = nodes.append(tableNodes({ tableGroup: 'block', cellContent: 'block+', cellAttributes: {} }))
 
 export const schema = new Schema({ nodes, marks: markSpec })

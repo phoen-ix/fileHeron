@@ -1,42 +1,42 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+  import { ref } from 'vue'
+  import { useRoute, useRouter } from 'vue-router'
 
-import AuthCanvas from '@/components/AuthCanvas.vue'
-import PasswordStrength from '@/components/PasswordStrength.vue'
-import { useApiError } from '@/composables/useApiError'
-import { useAuthStore } from '@/stores/auth'
-import type { Locale } from '@/types/api'
+  import AuthCanvas from '@/components/AuthCanvas.vue'
+  import PasswordStrength from '@/components/PasswordStrength.vue'
+  import { useApiError } from '@/composables/useApiError'
+  import { useAuthStore } from '@/stores/auth'
+  import type { Locale } from '@/types/api'
 
-const auth = useAuthStore()
-const route = useRoute()
-const router = useRouter()
-const { describe } = useApiError()
+  const auth = useAuthStore()
+  const route = useRoute()
+  const router = useRouter()
+  const { describe } = useApiError()
 
-const token = String(route.params.token ?? '')
-const displayName = ref('')
-const password = ref('')
-const locale = ref<Locale>('en')
-const error = ref<string | null>(null)
-const submitting = ref(false)
+  const token = String(route.params.token ?? '')
+  const displayName = ref('')
+  const password = ref('')
+  const locale = ref<Locale>('en')
+  const error = ref<string | null>(null)
+  const submitting = ref(false)
 
-async function onSubmit() {
-  error.value = null
-  submitting.value = true
-  try {
-    await auth.registerFromInvite({
-      token,
-      password: password.value,
-      display_name: displayName.value,
-      locale: locale.value,
-    })
-    await router.push('/')
-  } catch (e) {
-    error.value = describe(e)
-  } finally {
-    submitting.value = false
+  async function onSubmit() {
+    error.value = null
+    submitting.value = true
+    try {
+      await auth.registerFromInvite({
+        token,
+        password: password.value,
+        display_name: displayName.value,
+        locale: locale.value,
+      })
+      await router.push('/')
+    } catch (e) {
+      error.value = describe(e)
+    } finally {
+      submitting.value = false
+    }
   }
-}
 </script>
 
 <template>
@@ -109,38 +109,38 @@ async function onSubmit() {
 </template>
 
 <style scoped>
-.form {
-  margin-top: var(--fh-space-5);
-}
+  .form {
+    margin-top: var(--fh-space-5);
+  }
 
-.locale-row {
-  margin-top: var(--fh-space-4);
-}
+  .locale-row {
+    margin-top: var(--fh-space-4);
+  }
 
-.locale-pick {
-  display: inline-flex;
-  gap: var(--fh-space-3);
-  margin-top: var(--fh-space-1);
-}
+  .locale-pick {
+    display: inline-flex;
+    gap: var(--fh-space-3);
+    margin-top: var(--fh-space-1);
+  }
 
-.locale-opt {
-  background: none;
-  border: 1px solid var(--fh-hairline-strong);
-  font: inherit;
-  color: var(--fh-ink);
-  padding: var(--fh-space-1) var(--fh-space-3);
-  cursor: pointer;
-  border-radius: var(--fh-radius-sm);
-  transition: all var(--fh-duration-fast) var(--fh-easing);
-}
+  .locale-opt {
+    background: none;
+    border: 1px solid var(--fh-hairline-strong);
+    font: inherit;
+    color: var(--fh-ink);
+    padding: var(--fh-space-1) var(--fh-space-3);
+    cursor: pointer;
+    border-radius: var(--fh-radius-sm);
+    transition: all var(--fh-duration-fast) var(--fh-easing);
+  }
 
-.locale-opt.active {
-  background: var(--fh-ink);
-  color: var(--fh-paper);
-  border-color: var(--fh-ink);
-}
+  .locale-opt.active {
+    background: var(--fh-ink);
+    color: var(--fh-paper);
+    border-color: var(--fh-ink);
+  }
 
-.actions {
-  margin-top: var(--fh-space-4);
-}
+  .actions {
+    margin-top: var(--fh-space-4);
+  }
 </style>

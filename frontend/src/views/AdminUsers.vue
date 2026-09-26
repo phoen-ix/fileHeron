@@ -1,290 +1,285 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
-import { useI18n } from 'vue-i18n'
-import { useRouter } from 'vue-router'
+  import { computed, onMounted, ref, watch } from 'vue'
+  import { useI18n } from 'vue-i18n'
+  import { useRouter } from 'vue-router'
 
-import { useEscapeToClose } from '@/composables/useEscapeToClose'
+  import { useEscapeToClose } from '@/composables/useEscapeToClose'
 
-import {
-  activateInvite,
-  listInvites,
-  listUsers,
-  regenerateInvite,
-  resendInvite,
-  revokeInvite,
-} from '@/api/admin'
-import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
-import Pager from '@/components/Pager.vue'
-import PasswordStrength from '@/components/PasswordStrength.vue'
-import { useApiError } from '@/composables/useApiError'
-import { useDebouncedSearch } from '@/composables/useDebouncedSearch'
-import { useInviteForm } from '@/composables/useInviteForm'
-import { useSiteDateFormat } from '@/composables/useSiteDateFormat'
-import { useUiStore } from '@/stores/ui'
-import { formatBytes } from '@/utils/bytes'
-import type {
-  AdminInviteItem,
-  AdminUserItem,
-  UserRole,
-} from '@/types/api'
+  import {
+    activateInvite,
+    listInvites,
+    listUsers,
+    regenerateInvite,
+    resendInvite,
+    revokeInvite,
+  } from '@/api/admin'
+  import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
+  import Pager from '@/components/Pager.vue'
+  import PasswordStrength from '@/components/PasswordStrength.vue'
+  import { useApiError } from '@/composables/useApiError'
+  import { useDebouncedSearch } from '@/composables/useDebouncedSearch'
+  import { useInviteForm } from '@/composables/useInviteForm'
+  import { useSiteDateFormat } from '@/composables/useSiteDateFormat'
+  import { useUiStore } from '@/stores/ui'
+  import { formatBytes } from '@/utils/bytes'
+  import type { AdminInviteItem, AdminUserItem, UserRole } from '@/types/api'
 
-const router = useRouter()
-const { t } = useI18n()
-const { formatDateOnly: formatDate } = useSiteDateFormat()
-const { describe } = useApiError()
-const ui = useUiStore()
+  const router = useRouter()
+  const { t } = useI18n()
+  const { formatDateOnly: formatDate } = useSiteDateFormat()
+  const { describe } = useApiError()
+  const ui = useUiStore()
 
-const items = ref<AdminUserItem[]>([])
-const total = ref(0)
-const page = ref(1)
-const pageSize = ref(50)
-const q = ref('')
-const role = ref<UserRole | ''>('')
-const loading = ref(true)
-const errorMsg = ref<string | null>(null)
+  const items = ref<AdminUserItem[]>([])
+  const total = ref(0)
+  const page = ref(1)
+  const pageSize = ref(50)
+  const q = ref('')
+  const role = ref<UserRole | ''>('')
+  const loading = ref(true)
+  const errorMsg = ref<string | null>(null)
 
-// Out-of-order guard. Typing in the filter fires a request per keystroke
-// (debounced, not serialised), and whichever response arrived LAST won - so a
-// slow early request could overwrite the results of a newer, narrower one and
-// leave the table showing rows that do not match what is in the search box
-// (audit 2026-07-30, fe-correct-11). Same `seq` pattern usePaginatedList uses.
-let loadSeq = 0
+  // Out-of-order guard. Typing in the filter fires a request per keystroke
+  // (debounced, not serialised), and whichever response arrived LAST won - so a
+  // slow early request could overwrite the results of a newer, narrower one and
+  // leave the table showing rows that do not match what is in the search box
+  // (audit 2026-07-30, fe-correct-11). Same `seq` pattern usePaginatedList uses.
+  let loadSeq = 0
 
-async function load() {
-  const mine = ++loadSeq
-  loading.value = true
-  errorMsg.value = null
-  try {
-    const { data } = await listUsers({
-      q: q.value || undefined,
-      role: role.value || undefined,
-      page: page.value,
-      page_size: pageSize.value,
-    })
-    if (mine !== loadSeq) return
-    items.value = data.items
-    total.value = data.total
-  } catch (err) {
-    if (mine !== loadSeq) return
-    errorMsg.value = describe(err)
-  } finally {
-    if (mine === loadSeq) loading.value = false
+  async function load() {
+    const mine = ++loadSeq
+    loading.value = true
+    errorMsg.value = null
+    try {
+      const { data } = await listUsers({
+        q: q.value || undefined,
+        role: role.value || undefined,
+        page: page.value,
+        page_size: pageSize.value,
+      })
+      if (mine !== loadSeq) return
+      items.value = data.items
+      total.value = data.total
+    } catch (err) {
+      if (mine !== loadSeq) return
+      errorMsg.value = describe(err)
+    } finally {
+      if (mine === loadSeq) loading.value = false
+    }
   }
-}
 
-useDebouncedSearch(q, () => {
-  page.value = 1
-  void load()
-})
-watch(role, () => {
-  page.value = 1
-  void load()
-})
-watch(page, load)
-
-function open(u: AdminUserItem) {
-  router.push({ name: 'admin-user-detail', params: { id: u.id } })
-}
-
-// --- Invite form (state + submit lifecycle in useInviteForm) -------------
-
-const {
-  showInviteForm,
-  inviteEmail,
-  inviteDisplayName,
-  inviteRole,
-  inviting,
-  inviteError,
-  availableGroups,
-  selectedGroupIds,
-  createDirectly,
-  invitePassword,
-  openInviteForm,
-  closeInviteForm,
-  toggleGroup,
-  onInvite,
-} = useInviteForm({ onUserCreated: load })
-
-
-
-
-// --- Pending invites section ---------------------------------------------
-
-const invites = ref<AdminInviteItem[]>([])
-const invitesLoading = ref(false)
-const invitesErrorMsg = ref<string | null>(null)
-
-// Modal state - only one of these is non-null at a time.
-const detailsInvite = ref<AdminInviteItem | null>(null)
-const activateInviteRow = ref<AdminInviteItem | null>(null)
-const activateDisplayName = ref('')
-const activateInProgress = ref(false)
-const activateError = ref<string | null>(null)
-const revokeInviteRow = ref<AdminInviteItem | null>(null)
-const revokeInProgress = ref(false)
-const actionInProgressId = ref<number | null>(null)
-
-async function loadInvites() {
-  invitesLoading.value = true
-  invitesErrorMsg.value = null
-  try {
-    const { data } = await listInvites({ state: 'all', page: 1, page_size: 100 })
-    invites.value = data.items
-  } catch (err) {
-    invitesErrorMsg.value = describe(err)
-  } finally {
-    invitesLoading.value = false
-  }
-}
-
-function inviteRowKey(inv: AdminInviteItem): number {
-  return inv.id
-}
-
-function deriveDisplayName(email: string): string {
-  const local = email.split('@')[0] ?? ''
-  return local
-    .replace(/[._]/g, ' ')
-    .replace(/\b\w/g, (c) => c.toUpperCase())
-}
-
-// A fresh link REPLACES the invite's token, so the link already emailed stops
-// working. This was a bare "Copy link" that rotated the token and then wrote the
-// clipboard: the emailed link died unannounced, and where the clipboard is
-// unavailable (plain-HTTP installs) or refuses after the await (Safari), nobody
-// was left holding a working link at all. Confirm first, then SHOW the link;
-// the clipboard is only a convenience.
-const freshInviteLink = ref<{ email: string; url: string } | null>(null)
-
-async function onCopyLink(inv: AdminInviteItem) {
-  const ok = await ui.confirm({
-    title: t('admin_users.invites.new_link.confirm_title'),
-    message: t('admin_users.invites.new_link.confirm_body', { email: inv.email }),
-    confirmLabel: t('admin_users.invites.new_link.confirm_action'),
-    danger: true,
-  })
-  if (!ok) return
-  actionInProgressId.value = inv.id
-  try {
-    const { data } = await regenerateInvite(inv.id)
-    freshInviteLink.value = { email: inv.email, url: data.url }
-    void loadInvites()
-    await copyFreshInviteLink()
-  } catch (err) {
-    ui.pushToast(describe(err), 'error')
-  } finally {
-    actionInProgressId.value = null
-  }
-}
-
-async function copyFreshInviteLink() {
-  if (!freshInviteLink.value) return
-  try {
-    await navigator.clipboard.writeText(freshInviteLink.value.url)
-    ui.pushToast(t('admin_users.invites.toast.link_copied'), 'success')
-  } catch {
-    // The link is on screen; the notice says to copy it by hand.
-  }
-}
-
-async function onResend(inv: AdminInviteItem) {
-  actionInProgressId.value = inv.id
-  try {
-    const { data } = await resendInvite(inv.id)
-    ui.pushToast(
-      t('admin_users.invites.toast.resent', {
-        expires: formatDate(data.expires_at),
-      }),
-      'success',
-    )
-    void loadInvites()
-  } catch (err) {
-    ui.pushToast(describe(err), 'error')
-  } finally {
-    actionInProgressId.value = null
-  }
-}
-
-function openDetails(inv: AdminInviteItem) {
-  detailsInvite.value = inv
-}
-function closeDetails() {
-  detailsInvite.value = null
-}
-
-function openRevoke(inv: AdminInviteItem) {
-  revokeInviteRow.value = inv
-}
-function closeRevoke() {
-  revokeInviteRow.value = null
-}
-async function onConfirmRevoke() {
-  if (!revokeInviteRow.value) return
-  revokeInProgress.value = true
-  try {
-    await revokeInvite(revokeInviteRow.value.id)
-    ui.pushToast(t('admin_users.invites.toast.deleted'), 'success')
-    closeRevoke()
-    void loadInvites()
-  } catch (err) {
-    ui.pushToast(describe(err), 'error')
-  } finally {
-    revokeInProgress.value = false
-  }
-}
-
-// Escape on each of the three invite modals. The `@keydown.escape` each
-// backdrop carries cannot fire: the backdrop is not focusable, so it is never
-// on the propagation path from whatever inside has focus (audit 2026-07-30).
-useEscapeToClose(computed(() => detailsInvite.value !== null), closeDetails)
-useEscapeToClose(computed(() => revokeInviteRow.value !== null), closeRevoke)
-useEscapeToClose(computed(() => activateInviteRow.value !== null), closeActivate)
-
-function openActivate(inv: AdminInviteItem) {
-  activateInviteRow.value = inv
-  activateDisplayName.value = deriveDisplayName(inv.email)
-  activateError.value = null
-}
-function closeActivate() {
-  activateInviteRow.value = null
-  activateError.value = null
-}
-async function onConfirmActivate() {
-  if (!activateInviteRow.value) return
-  activateInProgress.value = true
-  activateError.value = null
-  try {
-    await activateInvite(activateInviteRow.value.id, {
-      display_name: activateDisplayName.value || undefined,
-    })
-    ui.pushToast(t('admin_users.invites.toast.activated'), 'success')
-    closeActivate()
-    // Refresh both lists - invite row vanishes, new user appears.
-    void loadInvites()
+  useDebouncedSearch(q, () => {
+    page.value = 1
     void load()
-  } catch (err) {
-    activateError.value = describe(err)
-  } finally {
-    activateInProgress.value = false
-  }
-}
+  })
+  watch(role, () => {
+    page.value = 1
+    void load()
+  })
+  watch(page, load)
 
-onMounted(() => {
-  void load()
-  void loadInvites()
-})
+  function open(u: AdminUserItem) {
+    router.push({ name: 'admin-user-detail', params: { id: u.id } })
+  }
+
+  // --- Invite form (state + submit lifecycle in useInviteForm) -------------
+
+  const {
+    showInviteForm,
+    inviteEmail,
+    inviteDisplayName,
+    inviteRole,
+    inviting,
+    inviteError,
+    availableGroups,
+    selectedGroupIds,
+    createDirectly,
+    invitePassword,
+    openInviteForm,
+    closeInviteForm,
+    toggleGroup,
+    onInvite,
+  } = useInviteForm({ onUserCreated: load })
+
+  // --- Pending invites section ---------------------------------------------
+
+  const invites = ref<AdminInviteItem[]>([])
+  const invitesLoading = ref(false)
+  const invitesErrorMsg = ref<string | null>(null)
+
+  // Modal state - only one of these is non-null at a time.
+  const detailsInvite = ref<AdminInviteItem | null>(null)
+  const activateInviteRow = ref<AdminInviteItem | null>(null)
+  const activateDisplayName = ref('')
+  const activateInProgress = ref(false)
+  const activateError = ref<string | null>(null)
+  const revokeInviteRow = ref<AdminInviteItem | null>(null)
+  const revokeInProgress = ref(false)
+  const actionInProgressId = ref<number | null>(null)
+
+  async function loadInvites() {
+    invitesLoading.value = true
+    invitesErrorMsg.value = null
+    try {
+      const { data } = await listInvites({ state: 'all', page: 1, page_size: 100 })
+      invites.value = data.items
+    } catch (err) {
+      invitesErrorMsg.value = describe(err)
+    } finally {
+      invitesLoading.value = false
+    }
+  }
+
+  function inviteRowKey(inv: AdminInviteItem): number {
+    return inv.id
+  }
+
+  function deriveDisplayName(email: string): string {
+    const local = email.split('@')[0] ?? ''
+    return local.replace(/[._]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+  }
+
+  // A fresh link REPLACES the invite's token, so the link already emailed stops
+  // working. This was a bare "Copy link" that rotated the token and then wrote the
+  // clipboard: the emailed link died unannounced, and where the clipboard is
+  // unavailable (plain-HTTP installs) or refuses after the await (Safari), nobody
+  // was left holding a working link at all. Confirm first, then SHOW the link;
+  // the clipboard is only a convenience.
+  const freshInviteLink = ref<{ email: string; url: string } | null>(null)
+
+  async function onCopyLink(inv: AdminInviteItem) {
+    const ok = await ui.confirm({
+      title: t('admin_users.invites.new_link.confirm_title'),
+      message: t('admin_users.invites.new_link.confirm_body', { email: inv.email }),
+      confirmLabel: t('admin_users.invites.new_link.confirm_action'),
+      danger: true,
+    })
+    if (!ok) return
+    actionInProgressId.value = inv.id
+    try {
+      const { data } = await regenerateInvite(inv.id)
+      freshInviteLink.value = { email: inv.email, url: data.url }
+      void loadInvites()
+      await copyFreshInviteLink()
+    } catch (err) {
+      ui.pushToast(describe(err), 'error')
+    } finally {
+      actionInProgressId.value = null
+    }
+  }
+
+  async function copyFreshInviteLink() {
+    if (!freshInviteLink.value) return
+    try {
+      await navigator.clipboard.writeText(freshInviteLink.value.url)
+      ui.pushToast(t('admin_users.invites.toast.link_copied'), 'success')
+    } catch {
+      // The link is on screen; the notice says to copy it by hand.
+    }
+  }
+
+  async function onResend(inv: AdminInviteItem) {
+    actionInProgressId.value = inv.id
+    try {
+      const { data } = await resendInvite(inv.id)
+      ui.pushToast(
+        t('admin_users.invites.toast.resent', {
+          expires: formatDate(data.expires_at),
+        }),
+        'success',
+      )
+      void loadInvites()
+    } catch (err) {
+      ui.pushToast(describe(err), 'error')
+    } finally {
+      actionInProgressId.value = null
+    }
+  }
+
+  function openDetails(inv: AdminInviteItem) {
+    detailsInvite.value = inv
+  }
+  function closeDetails() {
+    detailsInvite.value = null
+  }
+
+  function openRevoke(inv: AdminInviteItem) {
+    revokeInviteRow.value = inv
+  }
+  function closeRevoke() {
+    revokeInviteRow.value = null
+  }
+  async function onConfirmRevoke() {
+    if (!revokeInviteRow.value) return
+    revokeInProgress.value = true
+    try {
+      await revokeInvite(revokeInviteRow.value.id)
+      ui.pushToast(t('admin_users.invites.toast.deleted'), 'success')
+      closeRevoke()
+      void loadInvites()
+    } catch (err) {
+      ui.pushToast(describe(err), 'error')
+    } finally {
+      revokeInProgress.value = false
+    }
+  }
+
+  // Escape on each of the three invite modals. The `@keydown.escape` each
+  // backdrop carries cannot fire: the backdrop is not focusable, so it is never
+  // on the propagation path from whatever inside has focus (audit 2026-07-30).
+  useEscapeToClose(
+    computed(() => detailsInvite.value !== null),
+    closeDetails,
+  )
+  useEscapeToClose(
+    computed(() => revokeInviteRow.value !== null),
+    closeRevoke,
+  )
+  useEscapeToClose(
+    computed(() => activateInviteRow.value !== null),
+    closeActivate,
+  )
+
+  function openActivate(inv: AdminInviteItem) {
+    activateInviteRow.value = inv
+    activateDisplayName.value = deriveDisplayName(inv.email)
+    activateError.value = null
+  }
+  function closeActivate() {
+    activateInviteRow.value = null
+    activateError.value = null
+  }
+  async function onConfirmActivate() {
+    if (!activateInviteRow.value) return
+    activateInProgress.value = true
+    activateError.value = null
+    try {
+      await activateInvite(activateInviteRow.value.id, {
+        display_name: activateDisplayName.value || undefined,
+      })
+      ui.pushToast(t('admin_users.invites.toast.activated'), 'success')
+      closeActivate()
+      // Refresh both lists - invite row vanishes, new user appears.
+      void loadInvites()
+      void load()
+    } catch (err) {
+      activateError.value = describe(err)
+    } finally {
+      activateInProgress.value = false
+    }
+  }
+
+  onMounted(() => {
+    void load()
+    void loadInvites()
+  })
 </script>
 
 <template>
   <div class="fh-page" data-density="operator">
     <AdminPageHeader>
       <template #actions>
-        <button
-          v-if="!showInviteForm"
-          type="button"
-          class="fh-btn"
-          @click="openInviteForm"
-        >
+        <button v-if="!showInviteForm" type="button" class="fh-btn" @click="openInviteForm">
           {{ t('admin_users.invite_button') }} <span aria-hidden="true">→</span>
         </button>
       </template>
@@ -304,7 +299,9 @@ onMounted(() => {
           required
         />
         <span class="fh-field-help">{{
-          createDirectly ? t('admin_users.invite_email_help_direct') : t('admin_users.invite_email_help')
+          createDirectly
+            ? t('admin_users.invite_email_help_direct')
+            : t('admin_users.invite_email_help')
         }}</span>
       </label>
       <label class="fh-field">
@@ -362,9 +359,9 @@ onMounted(() => {
         <span class="fh-field-help">{{ t('admin_users.invite_password_help') }}</span>
         <PasswordStrength :password="invitePassword" />
       </label>
-      <div
-v-if="inviteError" class="fh-notice" role="alert"
-        data-tone="error">{{ inviteError }}</div>
+      <div v-if="inviteError" class="fh-notice" role="alert" data-tone="error">
+        {{ inviteError }}
+      </div>
       <div class="form-actions">
         <button
           type="submit"
@@ -380,8 +377,8 @@ v-if="inviteError" class="fh-notice" role="alert"
             inviting
               ? t('common.loading')
               : createDirectly
-              ? t('admin_users.invite_create_submit')
-              : t('admin_users.invite_submit')
+                ? t('admin_users.invite_create_submit')
+                : t('admin_users.invite_submit')
           }}
         </button>
         <button type="button" class="fh-btn-text" @click="closeInviteForm">
@@ -391,192 +388,198 @@ v-if="inviteError" class="fh-notice" role="alert"
     </form>
 
     <template v-if="!showInviteForm">
-
-    <!-- Pending invites section -->
-    <section v-if="invites.length > 0 || invitesLoading" class="invites-section">
-      <h2 class="section-h2">{{ t('admin_users.invites.heading') }}</h2>
-      <p class="fh-field-help section-help">{{ t('admin_users.invites.help') }}</p>
-      <div v-if="freshInviteLink" class="fh-notice fresh-link" data-tone="info" role="status">
-        <p>{{ t('admin_users.invites.new_link.ready', { email: freshInviteLink.email }) }}</p>
-        <input
-          class="fh-field-input fh-mono"
-          readonly
-          :value="freshInviteLink.url"
-          :aria-label="t('admin_users.invites.new_link.field_label')"
-          @focus="($event.target as HTMLInputElement).select()"
-        />
-        <div class="fresh-link-actions">
-          <button type="button" class="fh-btn-text" @click="copyFreshInviteLink">
-            {{ t('admin_users.invites.new_link.copy') }}
-          </button>
-          <button type="button" class="fh-btn-text" @click="freshInviteLink = null">
-            {{ t('admin_users.invites.new_link.dismiss') }}
-          </button>
+      <!-- Pending invites section -->
+      <section v-if="invites.length > 0 || invitesLoading" class="invites-section">
+        <h2 class="section-h2">{{ t('admin_users.invites.heading') }}</h2>
+        <p class="fh-field-help section-help">{{ t('admin_users.invites.help') }}</p>
+        <div v-if="freshInviteLink" class="fh-notice fresh-link" data-tone="info" role="status">
+          <p>{{ t('admin_users.invites.new_link.ready', { email: freshInviteLink.email }) }}</p>
+          <input
+            class="fh-field-input fh-mono"
+            readonly
+            :value="freshInviteLink.url"
+            :aria-label="t('admin_users.invites.new_link.field_label')"
+            @focus="($event.target as HTMLInputElement).select()"
+          />
+          <div class="fresh-link-actions">
+            <button type="button" class="fh-btn-text" @click="copyFreshInviteLink">
+              {{ t('admin_users.invites.new_link.copy') }}
+            </button>
+            <button type="button" class="fh-btn-text" @click="freshInviteLink = null">
+              {{ t('admin_users.invites.new_link.dismiss') }}
+            </button>
+          </div>
         </div>
+        <div v-if="invitesLoading" class="loading">{{ t('common.loading') }}</div>
+        <div v-else-if="invitesErrorMsg" class="fh-notice" role="alert" data-tone="error">
+          {{ invitesErrorMsg }}
+        </div>
+        <div v-else class="fh-table-scroll">
+          <table class="invites-table">
+            <thead>
+              <tr>
+                <th>{{ t('admin_users.invites.col.email') }}</th>
+                <th>{{ t('admin_users.invites.col.role') }}</th>
+                <th>{{ t('admin_users.invites.col.state') }}</th>
+                <th>{{ t('admin_users.invites.col.invited_by') }}</th>
+                <th>{{ t('admin_users.invites.col.sent') }}</th>
+                <th>{{ t('admin_users.invites.col.expires') }}</th>
+                <th class="actions-col">{{ t('admin_users.invites.col.actions') }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="inv in invites" :key="inviteRowKey(inv)">
+                <td class="fh-mono">{{ inv.email }}</td>
+                <td>
+                  <span class="fh-mono role">{{ inv.target_role }}</span>
+                </td>
+                <td>
+                  <span class="fh-pill" :data-state="inv.state === 'pending' ? 'warn' : 'danger'">
+                    {{ t(`admin_users.invites.state.${inv.state}`) }}
+                  </span>
+                </td>
+                <td>
+                  <span v-if="inv.invited_by_display_name">{{ inv.invited_by_display_name }}</span>
+                  <span v-else class="subtle fh-mono">{{
+                    t('admin_users.invites.invited_by_unknown')
+                  }}</span>
+                </td>
+                <td class="fh-mono">{{ formatDate(inv.created_at) }}</td>
+                <td class="fh-mono">{{ formatDate(inv.expires_at) }}</td>
+                <td class="actions-col">
+                  <button
+                    type="button"
+                    class="fh-btn-text inline-action"
+                    :disabled="actionInProgressId === inv.id"
+                    @click="onCopyLink(inv)"
+                  >
+                    {{ t('admin_users.invites.action.copy_link') }}
+                  </button>
+                  <button
+                    type="button"
+                    class="fh-btn-text inline-action"
+                    :disabled="actionInProgressId === inv.id"
+                    @click="onResend(inv)"
+                  >
+                    {{ t('admin_users.invites.action.resend') }}
+                  </button>
+                  <button type="button" class="fh-btn-text inline-action" @click="openDetails(inv)">
+                    {{ t('admin_users.invites.action.details') }}
+                  </button>
+                  <button
+                    type="button"
+                    class="fh-btn-text inline-action"
+                    @click="openActivate(inv)"
+                  >
+                    {{ t('admin_users.invites.action.activate') }}
+                  </button>
+                  <button
+                    type="button"
+                    class="fh-btn-text inline-action danger"
+                    @click="openRevoke(inv)"
+                  >
+                    {{ t('admin_users.invites.action.delete') }}
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <hr class="fh-rule section-divider" />
+      </section>
+
+      <div class="filters">
+        <input
+          v-model.trim="q"
+          :aria-label="t('admin_users.search_placeholder')"
+          type="search"
+          class="fh-field-input search"
+          :placeholder="t('admin_users.search_placeholder')"
+        />
+        <select v-model="role" class="role-select" :aria-label="t('common.filter')">
+          <option value="">{{ t('admin_users.role_all') }}</option>
+          <option value="admin">admin</option>
+          <option value="employee">employee</option>
+          <option value="client">client</option>
+        </select>
       </div>
-      <div v-if="invitesLoading" class="loading">{{ t('common.loading') }}</div>
-      <div
-v-else-if="invitesErrorMsg" class="fh-notice" role="alert"
-        data-tone="error">{{ invitesErrorMsg }}</div>
-      <div v-else class="fh-table-scroll">
-        <table class="invites-table">
+
+      <div v-if="loading" class="loading">{{ t('common.loading') }}</div>
+      <div v-else-if="errorMsg" class="fh-notice" role="alert" data-tone="error">
+        {{ errorMsg }}
+      </div>
+
+      <div v-else-if="items.length" class="fh-table-scroll">
+        <table class="user-table">
           <thead>
             <tr>
-              <th>{{ t('admin_users.invites.col.email') }}</th>
-              <th>{{ t('admin_users.invites.col.role') }}</th>
-              <th>{{ t('admin_users.invites.col.state') }}</th>
-              <th>{{ t('admin_users.invites.col.invited_by') }}</th>
-              <th>{{ t('admin_users.invites.col.sent') }}</th>
-              <th>{{ t('admin_users.invites.col.expires') }}</th>
-              <th class="actions-col">{{ t('admin_users.invites.col.actions') }}</th>
+              <th class="id-col">{{ t('admin_users.col.id') }}</th>
+              <th>{{ t('admin_users.col.name') }}</th>
+              <th>{{ t('admin_users.col.role') }}</th>
+              <th>{{ t('admin_users.col.status') }}</th>
+              <th>{{ t('admin_users.col.2fa') }}</th>
+              <th class="storage-col">{{ t('admin_users.col.storage') }}</th>
+              <th>{{ t('admin_users.col.created') }}</th>
+              <th>{{ t('admin_users.col.last_login') }}</th>
             </tr>
           </thead>
           <tbody>
-            <tr v-for="inv in invites" :key="inviteRowKey(inv)">
-              <td class="fh-mono">{{ inv.email }}</td>
-              <td><span class="fh-mono role">{{ inv.target_role }}</span></td>
+            <tr
+              v-for="u in items"
+              :key="u.id"
+              tabindex="0"
+              @click="open(u)"
+              @keydown.enter="open(u)"
+            >
+              <td class="fh-mono id-col">{{ u.id }}</td>
               <td>
-                <span
-                  class="fh-pill"
-                  :data-state="inv.state === 'pending' ? 'warn' : 'danger'"
-                >
-                  {{ t(`admin_users.invites.state.${inv.state}`) }}
-                </span>
+                <div class="row-name">{{ u.display_name }}</div>
+                <div class="row-hint fh-mono">{{ u.email }}</div>
               </td>
               <td>
-                <span v-if="inv.invited_by_display_name">{{ inv.invited_by_display_name }}</span>
-                <span v-else class="subtle fh-mono">{{ t('admin_users.invites.invited_by_unknown') }}</span>
+                <span class="fh-mono role">{{ u.role }}</span>
               </td>
-              <td class="fh-mono">{{ formatDate(inv.created_at) }}</td>
-              <td class="fh-mono">{{ formatDate(inv.expires_at) }}</td>
-              <td class="actions-col">
-                <button
-                  type="button"
-                  class="fh-btn-text inline-action"
-                  :disabled="actionInProgressId === inv.id"
-                  @click="onCopyLink(inv)"
-                >
-                  {{ t('admin_users.invites.action.copy_link') }}
-                </button>
-                <button
-                  type="button"
-                  class="fh-btn-text inline-action"
-                  :disabled="actionInProgressId === inv.id"
-                  @click="onResend(inv)"
-                >
-                  {{ t('admin_users.invites.action.resend') }}
-                </button>
-                <button
-                  type="button"
-                  class="fh-btn-text inline-action"
-                  @click="openDetails(inv)"
-                >
-                  {{ t('admin_users.invites.action.details') }}
-                </button>
-                <button
-                  type="button"
-                  class="fh-btn-text inline-action"
-                  @click="openActivate(inv)"
-                >
-                  {{ t('admin_users.invites.action.activate') }}
-                </button>
-                <button
-                  type="button"
-                  class="fh-btn-text inline-action danger"
-                  @click="openRevoke(inv)"
-                >
-                  {{ t('admin_users.invites.action.delete') }}
-                </button>
+              <td>
+                <span v-if="u.is_disabled" class="fh-pill" data-state="danger">{{
+                  t('admin_users.status.disabled')
+                }}</span>
+                <span v-else-if="u.requires_2fa" class="fh-pill" data-state="warn">{{
+                  t('admin_users.status.needs_2fa')
+                }}</span>
+                <span v-else class="fh-pill" data-state="active">{{
+                  t('admin_users.status.active')
+                }}</span>
               </td>
+              <td>
+                <span v-if="u.has_2fa" class="fh-mono">on</span>
+                <span v-else class="fh-mono subtle">off</span>
+              </td>
+              <td class="fh-mono storage-col">
+                {{ formatBytes(u.storage_used_bytes)
+                }}<span v-if="u.quota_bytes" class="subtle">
+                  / {{ formatBytes(u.quota_bytes) }}</span
+                >
+              </td>
+              <td class="fh-mono">{{ formatDate(u.created_at) }}</td>
+              <td class="fh-mono">{{ formatDate(u.last_login_at) }}</td>
             </tr>
           </tbody>
         </table>
       </div>
-      <hr class="fh-rule section-divider" />
-    </section>
 
-    <div class="filters">
-      <input
-        v-model.trim="q"
-        :aria-label="t('admin_users.search_placeholder')"
-        type="search"
-        class="fh-field-input search"
-        :placeholder="t('admin_users.search_placeholder')"
-      />
-      <select
-        v-model="role" class="role-select"
-        :aria-label="t('common.filter')"
-      >
-        <option value="">{{ t('admin_users.role_all') }}</option>
-        <option value="admin">admin</option>
-        <option value="employee">employee</option>
-        <option value="client">client</option>
-      </select>
-    </div>
+      <p v-else class="empty-state fh-field-help">{{ t('admin_users.empty') }}</p>
 
-    <div v-if="loading" class="loading">{{ t('common.loading') }}</div>
-    <div
-v-else-if="errorMsg" class="fh-notice" role="alert"
-        data-tone="error">{{ errorMsg }}</div>
-
-    <div v-else-if="items.length" class="fh-table-scroll">
-      <table class="user-table">
-        <thead>
-          <tr>
-            <th class="id-col">{{ t('admin_users.col.id') }}</th>
-            <th>{{ t('admin_users.col.name') }}</th>
-            <th>{{ t('admin_users.col.role') }}</th>
-            <th>{{ t('admin_users.col.status') }}</th>
-            <th>{{ t('admin_users.col.2fa') }}</th>
-            <th class="storage-col">{{ t('admin_users.col.storage') }}</th>
-            <th>{{ t('admin_users.col.created') }}</th>
-            <th>{{ t('admin_users.col.last_login') }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr
-            v-for="u in items"
-            :key="u.id"
-            tabindex="0"
-            @click="open(u)"
-            @keydown.enter="open(u)"
-          >
-            <td class="fh-mono id-col">{{ u.id }}</td>
-            <td>
-              <div class="row-name">{{ u.display_name }}</div>
-              <div class="row-hint fh-mono">{{ u.email }}</div>
-            </td>
-            <td><span class="fh-mono role">{{ u.role }}</span></td>
-            <td>
-              <span v-if="u.is_disabled" class="fh-pill" data-state="danger">{{ t('admin_users.status.disabled') }}</span>
-              <span v-else-if="u.requires_2fa" class="fh-pill" data-state="warn">{{ t('admin_users.status.needs_2fa') }}</span>
-              <span v-else class="fh-pill" data-state="active">{{ t('admin_users.status.active') }}</span>
-            </td>
-            <td>
-              <span v-if="u.has_2fa" class="fh-mono">on</span>
-              <span v-else class="fh-mono subtle">off</span>
-            </td>
-            <td class="fh-mono storage-col">
-              {{ formatBytes(u.storage_used_bytes) }}<span
-                v-if="u.quota_bytes"
-                class="subtle"
-              > / {{ formatBytes(u.quota_bytes) }}</span>
-            </td>
-            <td class="fh-mono">{{ formatDate(u.created_at) }}</td>
-            <td class="fh-mono">{{ formatDate(u.last_login_at) }}</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-
-    <p v-else class="empty-state fh-field-help">{{ t('admin_users.empty') }}</p>
-
-    <Pager v-model:page="page" :total="total" :page-size="pageSize" />
+      <Pager v-model:page="page" :total="total" :page-size="pageSize" />
     </template>
 
     <!-- Details modal -->
     <!-- eslint-disable-next-line vuejs-accessibility/no-static-element-interactions -- modal backdrop: click-outside is a convenience, Escape is the keyboard path; revisited with the modal focus work -->
-    <div v-if="detailsInvite" class="fh-modal-backdrop" @click.self="closeDetails" @keydown.escape="closeDetails">
+    <div
+      v-if="detailsInvite"
+      class="fh-modal-backdrop"
+      @click.self="closeDetails"
+      @keydown.escape="closeDetails"
+    >
       <div class="fh-modal" role="dialog" :aria-label="t('admin_users.invites.details.title')">
         <h2 class="modal-h2">{{ t('admin_users.invites.details.title') }}</h2>
         <dl class="details-list">
@@ -599,7 +602,9 @@ v-else-if="errorMsg" class="fh-notice" role="alert"
               {{ detailsInvite.invited_by_display_name }}
               <span class="subtle fh-mono">(id={{ detailsInvite.invited_by_id }})</span>
             </span>
-            <span v-else class="subtle fh-mono">{{ t('admin_users.invites.invited_by_unknown') }}</span>
+            <span v-else class="subtle fh-mono">{{
+              t('admin_users.invites.invited_by_unknown')
+            }}</span>
           </dd>
           <dt>{{ t('admin_users.invites.details.created_at') }}</dt>
           <dd class="fh-mono">{{ formatDate(detailsInvite.created_at) }}</dd>
@@ -625,7 +630,12 @@ v-else-if="errorMsg" class="fh-notice" role="alert"
 
     <!-- Activate modal -->
     <!-- eslint-disable-next-line vuejs-accessibility/no-static-element-interactions -- modal backdrop: click-outside is a convenience, Escape is the keyboard path; revisited with the modal focus work -->
-    <div v-if="activateInviteRow" class="fh-modal-backdrop" @click.self="closeActivate" @keydown.escape="closeActivate">
+    <div
+      v-if="activateInviteRow"
+      class="fh-modal-backdrop"
+      @click.self="closeActivate"
+      @keydown.escape="closeActivate"
+    >
       <div class="fh-modal" role="dialog" :aria-label="t('admin_users.invites.activate.title')">
         <h2 class="modal-h2">{{ t('admin_users.invites.activate.title') }}</h2>
         <p class="modal-body">
@@ -637,18 +647,22 @@ v-else-if="errorMsg" class="fh-notice" role="alert"
           }}
         </p>
         <label class="fh-field">
-          <span class="fh-field-label">{{ t('admin_users.invites.activate.display_name_label') }}</span>
+          <span class="fh-field-label">{{
+            t('admin_users.invites.activate.display_name_label')
+          }}</span>
           <input
             v-model.trim="activateDisplayName"
             class="fh-field-input"
             type="text"
             maxlength="120"
           />
-          <span class="fh-field-help">{{ t('admin_users.invites.activate.display_name_help') }}</span>
+          <span class="fh-field-help">{{
+            t('admin_users.invites.activate.display_name_help')
+          }}</span>
         </label>
-        <div
-v-if="activateError" class="fh-notice" role="alert"
-        data-tone="error">{{ activateError }}</div>
+        <div v-if="activateError" class="fh-notice" role="alert" data-tone="error">
+          {{ activateError }}
+        </div>
         <div class="form-actions">
           <button
             type="button"
@@ -656,7 +670,9 @@ v-if="activateError" class="fh-notice" role="alert"
             :disabled="activateInProgress"
             @click="onConfirmActivate"
           >
-            {{ activateInProgress ? t('common.loading') : t('admin_users.invites.activate.confirm') }}
+            {{
+              activateInProgress ? t('common.loading') : t('admin_users.invites.activate.confirm')
+            }}
           </button>
           <button type="button" class="fh-btn-text" @click="closeActivate">
             {{ t('common.cancel') }}
@@ -667,8 +683,17 @@ v-if="activateError" class="fh-notice" role="alert"
 
     <!-- Revoke confirmation -->
     <!-- eslint-disable-next-line vuejs-accessibility/no-static-element-interactions -- modal backdrop: click-outside is a convenience, Escape is the keyboard path; revisited with the modal focus work -->
-    <div v-if="revokeInviteRow" class="fh-modal-backdrop" @click.self="closeRevoke" @keydown.escape="closeRevoke">
-      <div class="fh-modal fh-modal--small" role="dialog" :aria-label="t('admin_users.invites.delete.title')">
+    <div
+      v-if="revokeInviteRow"
+      class="fh-modal-backdrop"
+      @click.self="closeRevoke"
+      @keydown.escape="closeRevoke"
+    >
+      <div
+        class="fh-modal fh-modal--small"
+        role="dialog"
+        :aria-label="t('admin_users.invites.delete.title')"
+      >
         <h2 class="modal-h2">{{ t('admin_users.invites.delete.title') }}</h2>
         <p class="modal-body">
           {{ t('admin_users.invites.delete.body', { email: revokeInviteRow.email }) }}
@@ -692,271 +717,271 @@ v-if="activateError" class="fh-notice" role="alert"
 </template>
 
 <style scoped>
-.filters {
-  display: flex;
-  gap: var(--fh-space-3);
-  margin-bottom: var(--fh-space-4);
-  align-items: baseline;
-}
+  .filters {
+    display: flex;
+    gap: var(--fh-space-3);
+    margin-bottom: var(--fh-space-4);
+    align-items: baseline;
+  }
 
-.invite-form {
-  display: flex;
-  flex-direction: column;
-  gap: var(--fh-space-2);
-  max-width: 520px;
-  margin-bottom: var(--fh-space-4);
-  padding-bottom: var(--fh-space-4);
-  border-bottom: 1px solid var(--fh-hairline);
-}
+  .invite-form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--fh-space-2);
+    max-width: 520px;
+    margin-bottom: var(--fh-space-4);
+    padding-bottom: var(--fh-space-4);
+    border-bottom: 1px solid var(--fh-hairline);
+  }
 
-.form-h2 {
-  font-family: var(--fh-font-display);
-  font-size: 1.25rem;
-  margin: 0 0 var(--fh-space-2);
-}
+  .form-h2 {
+    font-family: var(--fh-font-display);
+    font-size: 1.25rem;
+    margin: 0 0 var(--fh-space-2);
+  }
 
-.form-actions {
-  display: flex;
-  gap: var(--fh-space-3);
-  align-items: baseline;
-  margin-top: var(--fh-space-2);
-}
+  .form-actions {
+    display: flex;
+    gap: var(--fh-space-3);
+    align-items: baseline;
+    margin-top: var(--fh-space-2);
+  }
 
-.group-checks {
-  list-style: none;
-  margin: var(--fh-space-1) 0 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--fh-space-1);
-}
+  .group-checks {
+    list-style: none;
+    margin: var(--fh-space-1) 0 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--fh-space-1);
+  }
 
-.group-check {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--fh-space-2);
-  cursor: pointer;
-}
+  .group-check {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--fh-space-2);
+    cursor: pointer;
+  }
 
-.fh-checkbox-row {
-  display: flex;
-  align-items: center;
-  gap: var(--fh-space-2);
-  cursor: pointer;
-  font-size: var(--fh-text-body-sm);
-}
+  .fh-checkbox-row {
+    display: flex;
+    align-items: center;
+    gap: var(--fh-space-2);
+    cursor: pointer;
+    font-size: var(--fh-text-body-sm);
+  }
 
-.group-name {
-  font-family: var(--fh-font-mono);
-  font-size: var(--fh-text-mono-sm);
-}
+  .group-name {
+    font-family: var(--fh-font-mono);
+    font-size: var(--fh-text-mono-sm);
+  }
 
-.search {
-  flex: 1;
-  max-width: 360px;
-}
+  .search {
+    flex: 1;
+    max-width: 360px;
+  }
 
-.role-select {
-  font: inherit;
-  background: transparent;
-  border: var(--fh-border-strong);
-  border-radius: var(--fh-radius-sm);
-  padding: 4px 8px;
-  color: var(--fh-ink);
-}
+  .role-select {
+    font: inherit;
+    background: transparent;
+    border: var(--fh-border-strong);
+    border-radius: var(--fh-radius-sm);
+    padding: 4px 8px;
+    color: var(--fh-ink);
+  }
 
-.loading {
-  color: var(--fh-subtle);
-  padding: var(--fh-space-5) 0;
-}
+  .loading {
+    color: var(--fh-subtle);
+    padding: var(--fh-space-5) 0;
+  }
 
-.user-table {
-  width: 100%;
-  border-collapse: collapse;
-}
+  .user-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
 
-.user-table th {
-  text-align: left;
-  font-family: var(--fh-font-mono);
-  font-size: var(--fh-text-mono-sm);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--fh-subtle);
-  font-weight: 500;
-  padding: var(--fh-space-2) var(--fh-space-3) var(--fh-space-2) 0;
-  border-bottom: var(--fh-border);
-}
+  .user-table th {
+    text-align: left;
+    font-family: var(--fh-font-mono);
+    font-size: var(--fh-text-mono-sm);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--fh-subtle);
+    font-weight: 500;
+    padding: var(--fh-space-2) var(--fh-space-3) var(--fh-space-2) 0;
+    border-bottom: var(--fh-border);
+  }
 
-.user-table tbody tr {
-  cursor: pointer;
-}
+  .user-table tbody tr {
+    cursor: pointer;
+  }
 
-.user-table tbody tr:hover {
-  background: var(--fh-paper-raised);
-}
+  .user-table tbody tr:hover {
+    background: var(--fh-paper-raised);
+  }
 
-.user-table tbody tr:focus-visible {
-  outline: 2px solid var(--fh-focus-ring);
-  outline-offset: -2px;
-}
+  .user-table tbody tr:focus-visible {
+    outline: 2px solid var(--fh-focus-ring);
+    outline-offset: -2px;
+  }
 
-.user-table td {
-  padding: var(--fh-space-3) var(--fh-space-3) var(--fh-space-3) 0;
-  border-bottom: var(--fh-border);
-  vertical-align: middle;
-}
+  .user-table td {
+    padding: var(--fh-space-3) var(--fh-space-3) var(--fh-space-3) 0;
+    border-bottom: var(--fh-border);
+    vertical-align: middle;
+  }
 
-.row-name {
-  color: var(--fh-ink);
-}
+  .row-name {
+    color: var(--fh-ink);
+  }
 
-.row-hint {
-  font-size: var(--fh-text-mono-sm);
-  color: var(--fh-subtle);
-}
+  .row-hint {
+    font-size: var(--fh-text-mono-sm);
+    color: var(--fh-subtle);
+  }
 
-.id-col {
-  width: 4rem;
-  font-size: var(--fh-text-mono-sm);
-  color: var(--fh-subtle);
-}
+  .id-col {
+    width: 4rem;
+    font-size: var(--fh-text-mono-sm);
+    color: var(--fh-subtle);
+  }
 
-.role {
-  font-size: var(--fh-text-mono-sm);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--fh-subtle);
-}
+  .role {
+    font-size: var(--fh-text-mono-sm);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--fh-subtle);
+  }
 
-.subtle {
-  color: var(--fh-subtle);
-}
+  .subtle {
+    color: var(--fh-subtle);
+  }
 
-/* --- Pending invites section --- */
+  /* --- Pending invites section --- */
 
-.invites-section {
-  margin-bottom: var(--fh-space-5);
-}
+  .invites-section {
+    margin-bottom: var(--fh-space-5);
+  }
 
-.section-h2 {
-  font-family: var(--fh-font-display);
-  font-size: 1.1rem;
-  margin: 0 0 var(--fh-space-1);
-  color: var(--fh-ink);
-}
+  .section-h2 {
+    font-family: var(--fh-font-display);
+    font-size: 1.1rem;
+    margin: 0 0 var(--fh-space-1);
+    color: var(--fh-ink);
+  }
 
-.section-help {
-  margin-bottom: var(--fh-space-3);
-}
+  .section-help {
+    margin-bottom: var(--fh-space-3);
+  }
 
-.section-divider {
-  margin-top: var(--fh-space-4);
-  margin-bottom: var(--fh-space-4);
-}
+  .section-divider {
+    margin-top: var(--fh-space-4);
+    margin-bottom: var(--fh-space-4);
+  }
 
-.invites-table {
-  width: 100%;
-  border-collapse: collapse;
-}
+  .invites-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
 
-.invites-table th {
-  text-align: left;
-  font-family: var(--fh-font-mono);
-  font-size: var(--fh-text-mono-sm);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--fh-subtle);
-  font-weight: 500;
-  padding: var(--fh-space-2) var(--fh-space-3) var(--fh-space-2) 0;
-  border-bottom: var(--fh-border);
-}
+  .invites-table th {
+    text-align: left;
+    font-family: var(--fh-font-mono);
+    font-size: var(--fh-text-mono-sm);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--fh-subtle);
+    font-weight: 500;
+    padding: var(--fh-space-2) var(--fh-space-3) var(--fh-space-2) 0;
+    border-bottom: var(--fh-border);
+  }
 
-.invites-table td {
-  padding: var(--fh-space-3) var(--fh-space-3) var(--fh-space-3) 0;
-  border-bottom: var(--fh-border);
-  vertical-align: middle;
-  font-size: var(--fh-text-body-sm);
-}
+  .invites-table td {
+    padding: var(--fh-space-3) var(--fh-space-3) var(--fh-space-3) 0;
+    border-bottom: var(--fh-border);
+    vertical-align: middle;
+    font-size: var(--fh-text-body-sm);
+  }
 
-.actions-col {
-  text-align: right;
-  white-space: nowrap;
-}
+  .actions-col {
+    text-align: right;
+    white-space: nowrap;
+  }
 
-.inline-action {
-  font-size: var(--fh-text-body-sm);
-  margin-left: var(--fh-space-2);
-}
+  .inline-action {
+    font-size: var(--fh-text-body-sm);
+    margin-left: var(--fh-space-2);
+  }
 
-.inline-action.danger {
-  color: var(--fh-danger, #b91c1c);
-}
+  .inline-action.danger {
+    color: var(--fh-danger, #b91c1c);
+  }
 
-/* --- Modals --- */
+  /* --- Modals --- */
 
-.fh-modal-backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(26, 29, 36, 0.4);
-  display: grid;
-  place-items: center;
-  z-index: 100;
-}
+  .fh-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(26, 29, 36, 0.4);
+    display: grid;
+    place-items: center;
+    z-index: 100;
+  }
 
-.fh-modal {
-  background: var(--fh-paper);
-  border: 1px solid var(--fh-hairline-strong);
-  box-shadow: 0 8px 40px rgba(26, 29, 36, 0.15);
-  padding: var(--fh-space-5);
-  width: min(560px, 92vw);
-  max-height: 92vh;
-  overflow-y: auto;
-}
+  .fh-modal {
+    background: var(--fh-paper);
+    border: 1px solid var(--fh-hairline-strong);
+    box-shadow: 0 8px 40px rgba(26, 29, 36, 0.15);
+    padding: var(--fh-space-5);
+    width: min(560px, 92vw);
+    max-height: 92vh;
+    overflow-y: auto;
+  }
 
-.fh-modal--small {
-  width: min(420px, 92vw);
-}
+  .fh-modal--small {
+    width: min(420px, 92vw);
+  }
 
-.modal-h2 {
-  font-family: var(--fh-font-display);
-  font-size: 1.25rem;
-  margin: 0 0 var(--fh-space-3);
-}
+  .modal-h2 {
+    font-family: var(--fh-font-display);
+    font-size: 1.25rem;
+    margin: 0 0 var(--fh-space-3);
+  }
 
-.modal-body {
-  margin: 0 0 var(--fh-space-4);
-  color: var(--fh-ink);
-}
+  .modal-body {
+    margin: 0 0 var(--fh-space-4);
+    color: var(--fh-ink);
+  }
 
-.details-list {
-  display: grid;
-  grid-template-columns: max-content 1fr;
-  gap: var(--fh-space-2) var(--fh-space-4);
-  margin: 0 0 var(--fh-space-4);
-}
+  .details-list {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: var(--fh-space-2) var(--fh-space-4);
+    margin: 0 0 var(--fh-space-4);
+  }
 
-.details-list dt {
-  font-family: var(--fh-font-mono);
-  font-size: var(--fh-text-mono-sm);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--fh-subtle);
-}
+  .details-list dt {
+    font-family: var(--fh-font-mono);
+    font-size: var(--fh-text-mono-sm);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--fh-subtle);
+  }
 
-.details-list dd {
-  margin: 0;
-}
-.fresh-link {
-  display: flex;
-  flex-direction: column;
-  gap: var(--fh-space-2);
-  margin-bottom: var(--fh-space-3);
-}
-.fresh-link p {
-  margin: 0;
-}
-.fresh-link-actions {
-  display: flex;
-  gap: var(--fh-space-3);
-}
+  .details-list dd {
+    margin: 0;
+  }
+  .fresh-link {
+    display: flex;
+    flex-direction: column;
+    gap: var(--fh-space-2);
+    margin-bottom: var(--fh-space-3);
+  }
+  .fresh-link p {
+    margin: 0;
+  }
+  .fresh-link-actions {
+    display: flex;
+    gap: var(--fh-space-3);
+  }
 </style>

@@ -1,123 +1,123 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
-import { useI18n } from 'vue-i18n'
-import { useRoute } from 'vue-router'
+  import { computed, onMounted, ref, watch } from 'vue'
+  import { useI18n } from 'vue-i18n'
+  import { useRoute } from 'vue-router'
 
-import { ADMIN_LOG_MAX_PAGE, exportMailCsv, listMailLog } from '@/api/admin'
-import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
-import Pager from '@/components/Pager.vue'
-import { useApiError } from '@/composables/useApiError'
-import { useDebouncedSearch } from '@/composables/useDebouncedSearch'
-import { useSiteDateFormat } from '@/composables/useSiteDateFormat'
-import { useUiStore } from '@/stores/ui'
-import type { AdminMailRow } from '@/types/api'
-import { siteLocalIsoToUtcIso } from '@/utils/datetime'
-import { downloadBlob } from '@/utils/downloadBlob'
-import { mailStatusPill } from '@/utils/statePill'
+  import { ADMIN_LOG_MAX_PAGE, exportMailCsv, listMailLog } from '@/api/admin'
+  import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
+  import Pager from '@/components/Pager.vue'
+  import { useApiError } from '@/composables/useApiError'
+  import { useDebouncedSearch } from '@/composables/useDebouncedSearch'
+  import { useSiteDateFormat } from '@/composables/useSiteDateFormat'
+  import { useUiStore } from '@/stores/ui'
+  import type { AdminMailRow } from '@/types/api'
+  import { siteLocalIsoToUtcIso } from '@/utils/datetime'
+  import { downloadBlob } from '@/utils/downloadBlob'
+  import { mailStatusPill } from '@/utils/statePill'
 
-const { t } = useI18n()
-const { formatDate } = useSiteDateFormat()
-const { describe, describeBlob } = useApiError()
-const ui = useUiStore()
-const route = useRoute()
+  const { t } = useI18n()
+  const { formatDate } = useSiteDateFormat()
+  const { describe, describeBlob } = useApiError()
+  const ui = useUiStore()
+  const route = useRoute()
 
-const items = ref<AdminMailRow[]>([])
-const total = ref(0)
-const page = ref(1)
-const pageSize = ref(50)
-const q = ref('')
-const category = ref('')
-const status = ref('')
-const recipientEmail = ref('')
-const fromTs = ref('')
-const toTs = ref('')
-// Set when arriving via a "View all emails to this user" deep-link.
-const recipientUserId = ref<number | null>(null)
+  const items = ref<AdminMailRow[]>([])
+  const total = ref(0)
+  const page = ref(1)
+  const pageSize = ref(50)
+  const q = ref('')
+  const category = ref('')
+  const status = ref('')
+  const recipientEmail = ref('')
+  const fromTs = ref('')
+  const toTs = ref('')
+  // Set when arriving via a "View all emails to this user" deep-link.
+  const recipientUserId = ref<number | null>(null)
 
-const loading = ref(true)
-const errorMsg = ref<string | null>(null)
+  const loading = ref(true)
+  const errorMsg = ref<string | null>(null)
 
-const statusOptions = ['', 'queued', 'sent', 'failed', 'error']
-const statusTone = mailStatusPill
+  const statusOptions = ['', 'queued', 'sent', 'failed', 'error']
+  const statusTone = mailStatusPill
 
-const filterParams = computed(() => {
-  const p: Record<string, string> = {}
-  if (q.value) p.q = q.value
-  if (category.value) p.category = category.value
-  if (status.value) p.status = status.value
-  if (recipientEmail.value) p.recipient_email = recipientEmail.value
-  if (recipientUserId.value !== null) p.recipient_user_id = String(recipientUserId.value)
-  // `datetime-local` yields a bare wall-clock string. Sent as-is it was
-  // compared as naive UTC, so in a site timezone of UTC+2 a filter set to the
-  // moment shown on a row excluded that row and the next two hours - the
-  // investigator saw an empty table and the same hole landed in the CSV
-  // export (audit #2). Convert to an instant, interpreting the picker's value
-  // in the site timezone, exactly as the display does.
-  if (fromTs.value) p.from = siteLocalIsoToUtcIso(fromTs.value)
-  if (toTs.value) p.to = siteLocalIsoToUtcIso(toTs.value)
-  return p
-})
+  const filterParams = computed(() => {
+    const p: Record<string, string> = {}
+    if (q.value) p.q = q.value
+    if (category.value) p.category = category.value
+    if (status.value) p.status = status.value
+    if (recipientEmail.value) p.recipient_email = recipientEmail.value
+    if (recipientUserId.value !== null) p.recipient_user_id = String(recipientUserId.value)
+    // `datetime-local` yields a bare wall-clock string. Sent as-is it was
+    // compared as naive UTC, so in a site timezone of UTC+2 a filter set to the
+    // moment shown on a row excluded that row and the next two hours - the
+    // investigator saw an empty table and the same hole landed in the CSV
+    // export (audit #2). Convert to an instant, interpreting the picker's value
+    // in the site timezone, exactly as the display does.
+    if (fromTs.value) p.from = siteLocalIsoToUtcIso(fromTs.value)
+    if (toTs.value) p.to = siteLocalIsoToUtcIso(toTs.value)
+    return p
+  })
 
-// Out-of-order guard. Typing in the filter fires a request per keystroke
-// (debounced, not serialised), and whichever response arrived LAST won - so a
-// slow early request could overwrite the results of a newer, narrower one and
-// leave the table showing rows that do not match what is in the search box
-// (audit 2026-07-30, fe-correct-11). Same `seq` pattern usePaginatedList uses.
-let loadSeq = 0
+  // Out-of-order guard. Typing in the filter fires a request per keystroke
+  // (debounced, not serialised), and whichever response arrived LAST won - so a
+  // slow early request could overwrite the results of a newer, narrower one and
+  // leave the table showing rows that do not match what is in the search box
+  // (audit 2026-07-30, fe-correct-11). Same `seq` pattern usePaginatedList uses.
+  let loadSeq = 0
 
-async function load() {
-  const mine = ++loadSeq
-  loading.value = true
-  errorMsg.value = null
-  try {
-    const { data } = await listMailLog({
-      ...filterParams.value,
-      recipient_user_id: recipientUserId.value ?? undefined,
-      page: page.value,
-      page_size: pageSize.value,
-    })
-    if (mine !== loadSeq) return
-    items.value = data.items
-    total.value = data.total
-  } catch (err) {
-    if (mine !== loadSeq) return
-    errorMsg.value = describe(err)
-  } finally {
-    if (mine === loadSeq) loading.value = false
+  async function load() {
+    const mine = ++loadSeq
+    loading.value = true
+    errorMsg.value = null
+    try {
+      const { data } = await listMailLog({
+        ...filterParams.value,
+        recipient_user_id: recipientUserId.value ?? undefined,
+        page: page.value,
+        page_size: pageSize.value,
+      })
+      if (mine !== loadSeq) return
+      items.value = data.items
+      total.value = data.total
+    } catch (err) {
+      if (mine !== loadSeq) return
+      errorMsg.value = describe(err)
+    } finally {
+      if (mine === loadSeq) loading.value = false
+    }
   }
-}
 
-useDebouncedSearch(filterParams, () => {
-  page.value = 1
-  void load()
-})
-watch(page, load)
+  useDebouncedSearch(filterParams, () => {
+    page.value = 1
+    void load()
+  })
+  watch(page, load)
 
-const exporting = ref(false)
-async function onExportCsv() {
-  exporting.value = true
-  try {
-    const { data } = await exportMailCsv(filterParams.value)
-    downloadBlob(data as Blob, 'mail-log.csv')
-  } catch (err) {
-    ui.pushToast(await describeBlob(err), 'error')
-  } finally {
-    exporting.value = false
+  const exporting = ref(false)
+  async function onExportCsv() {
+    exporting.value = true
+    try {
+      const { data } = await exportMailCsv(filterParams.value)
+      downloadBlob(data as Blob, 'mail-log.csv')
+    } catch (err) {
+      ui.pushToast(await describeBlob(err), 'error')
+    } finally {
+      exporting.value = false
+    }
   }
-}
 
-onMounted(() => {
-  const ruid = route.query.recipient_user_id
-  // Kept in a ref the template renders and can clear. It used to be invisible:
-  // an admin arriving from a user's detail page then typed an address into the
-  // visible Recipient box, got zero rows for a query that still carried
-  // `recipient_user_id`, and concluded the mail had never been sent - with
-  // every visible filter consistent with that conclusion (audit #2).
-  if (typeof ruid === 'string' && ruid) recipientUserId.value = Number(ruid)
-  const remail = route.query.recipient_email
-  if (typeof remail === 'string' && remail) recipientEmail.value = remail
-  void load()
-})
+  onMounted(() => {
+    const ruid = route.query.recipient_user_id
+    // Kept in a ref the template renders and can clear. It used to be invisible:
+    // an admin arriving from a user's detail page then typed an address into the
+    // visible Recipient box, got zero rows for a query that still carried
+    // `recipient_user_id`, and concluded the mail had never been sent - with
+    // every visible filter consistent with that conclusion (audit #2).
+    if (typeof ruid === 'string' && ruid) recipientUserId.value = Number(ruid)
+    const remail = route.query.recipient_email
+    if (typeof remail === 'string' && remail) recipientEmail.value = remail
+    void load()
+  })
 </script>
 
 <template>
@@ -125,7 +125,12 @@ onMounted(() => {
     <AdminPageHeader>
       <p class="fh-field-help intro">{{ t('admin_mail.intro') }}</p>
       <template #actions>
-        <button type="button" class="fh-btn fh-btn-ghost" :disabled="exporting" @click="onExportCsv">
+        <button
+          type="button"
+          class="fh-btn fh-btn-ghost"
+          :disabled="exporting"
+          @click="onExportCsv"
+        >
           {{ t('admin_mail.export_csv') }}
         </button>
       </template>
@@ -135,13 +140,17 @@ onMounted(() => {
 
     <div class="filters">
       <input
-        v-model.trim="q" class="fh-field-input" :placeholder="t('admin_mail.filter.q')"
+        v-model.trim="q"
+        class="fh-field-input"
+        :placeholder="t('admin_mail.filter.q')"
         :aria-label="t('admin_mail.filter.q')"
-/>
+      />
       <input
-        v-model.trim="recipientEmail" class="fh-field-input" :placeholder="t('admin_mail.filter.recipient')"
+        v-model.trim="recipientEmail"
+        class="fh-field-input"
+        :placeholder="t('admin_mail.filter.recipient')"
         :aria-label="t('admin_mail.filter.recipient')"
-/>
+      />
       <button
         v-if="recipientUserId !== null"
         type="button"
@@ -151,31 +160,34 @@ onMounted(() => {
         {{ t('admin_mail.filter.user_scope', { id: recipientUserId }) }} x
       </button>
       <input
-        v-model.trim="category" class="fh-field-input" :placeholder="t('admin_mail.filter.category')"
+        v-model.trim="category"
+        class="fh-field-input"
+        :placeholder="t('admin_mail.filter.category')"
         :aria-label="t('admin_mail.filter.category')"
-/>
-      <select
-        v-model="status" class="fh-field-input"
-        :aria-label="t('common.filter')"
-      >
+      />
+      <select v-model="status" class="fh-field-input" :aria-label="t('common.filter')">
         <option v-for="s in statusOptions" :key="s" :value="s">
           {{ s ? t(`admin_mail.status.${s}`) : t('admin_mail.filter.status_any') }}
         </option>
       </select>
       <input
-        v-model="fromTs" class="fh-field-input" type="datetime-local" :title="t('admin_mail.filter.from')"
+        v-model="fromTs"
+        class="fh-field-input"
+        type="datetime-local"
+        :title="t('admin_mail.filter.from')"
         :aria-label="t('admin_mail.filter.from')"
-/>
+      />
       <input
-        v-model="toTs" class="fh-field-input" type="datetime-local" :title="t('admin_mail.filter.to')"
+        v-model="toTs"
+        class="fh-field-input"
+        type="datetime-local"
+        :title="t('admin_mail.filter.to')"
         :aria-label="t('admin_mail.filter.to')"
-/>
+      />
     </div>
 
     <div v-if="loading" class="loading">{{ t('common.loading') }}</div>
-    <div
-v-else-if="errorMsg" class="fh-notice" role="alert"
-        data-tone="error">{{ errorMsg }}</div>
+    <div v-else-if="errorMsg" class="fh-notice" role="alert" data-tone="error">{{ errorMsg }}</div>
     <div v-else-if="items.length === 0" class="loading">{{ t('admin_mail.empty') }}</div>
 
     <div v-else class="fh-table-scroll">
@@ -198,7 +210,9 @@ v-else-if="errorMsg" class="fh-notice" role="alert"
                 :to="{ name: 'admin-user-detail', params: { id: r.recipient_user_id } }"
                 class="recipient-link"
               >
-                <span class="recipient-name">{{ r.recipient_display_name ?? `#${r.recipient_user_id}` }}</span>
+                <span class="recipient-name">{{
+                  r.recipient_display_name ?? `#${r.recipient_user_id}`
+                }}</span>
                 <span class="recipient-hint fh-mono">{{ r.recipient_email }}</span>
               </RouterLink>
               <span v-else class="fh-mono">{{ r.recipient_email }}</span>
@@ -211,10 +225,14 @@ v-else-if="errorMsg" class="fh-notice" role="alert"
               >
                 {{ r.subject }}
               </RouterLink>
-              <span v-if="r.masked" class="fh-pill mini" data-state="warn">{{ t('admin_mail.masked') }}</span>
+              <span v-if="r.masked" class="fh-pill mini" data-state="warn">{{
+                t('admin_mail.masked')
+              }}</span>
             </td>
             <td>
-              <span class="fh-pill" :data-state="statusTone(r.status)">{{ t(`admin_mail.status.${r.status}`) }}</span>
+              <span class="fh-pill" :data-state="statusTone(r.status)">{{
+                t(`admin_mail.status.${r.status}`)
+              }}</span>
               <span v-if="r.smtp_code" class="fh-mono code">{{ r.smtp_code }}</span>
             </td>
           </tr>
@@ -222,95 +240,100 @@ v-else-if="errorMsg" class="fh-notice" role="alert"
       </table>
     </div>
 
-    <Pager v-model:page="page" :total="total" :page-size="pageSize" :max-page="ADMIN_LOG_MAX_PAGE" />
+    <Pager
+      v-model:page="page"
+      :total="total"
+      :page-size="pageSize"
+      :max-page="ADMIN_LOG_MAX_PAGE"
+    />
   </div>
 </template>
 
 <style scoped>
-.intro {
-  margin: var(--fh-space-2) 0 0;
-  max-width: 60ch;
-}
+  .intro {
+    margin: var(--fh-space-2) 0 0;
+    max-width: 60ch;
+  }
 
-.filters {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: var(--fh-space-2);
-  margin-bottom: var(--fh-space-4);
-}
+  .filters {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: var(--fh-space-2);
+    margin-bottom: var(--fh-space-4);
+  }
 
-.loading {
-  color: var(--fh-subtle);
-  padding: var(--fh-space-5) 0;
-}
+  .loading {
+    color: var(--fh-subtle);
+    padding: var(--fh-space-5) 0;
+  }
 
-.mail-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--fh-text-body-sm);
-}
+  .mail-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--fh-text-body-sm);
+  }
 
-.mail-table th {
-  text-align: left;
-  font-family: var(--fh-font-mono);
-  font-size: var(--fh-text-mono-sm);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--fh-subtle);
-  font-weight: 500;
-  padding: var(--fh-space-2) var(--fh-space-3) var(--fh-space-2) 0;
-  border-bottom: var(--fh-border);
-}
+  .mail-table th {
+    text-align: left;
+    font-family: var(--fh-font-mono);
+    font-size: var(--fh-text-mono-sm);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--fh-subtle);
+    font-weight: 500;
+    padding: var(--fh-space-2) var(--fh-space-3) var(--fh-space-2) 0;
+    border-bottom: var(--fh-border);
+  }
 
-.mail-table td {
-  padding: var(--fh-space-2) var(--fh-space-3) var(--fh-space-2) 0;
-  border-bottom: var(--fh-border);
-  vertical-align: top;
-}
+  .mail-table td {
+    padding: var(--fh-space-2) var(--fh-space-3) var(--fh-space-2) 0;
+    border-bottom: var(--fh-border);
+    vertical-align: top;
+  }
 
-.nowrap {
-  white-space: nowrap;
-}
+  .nowrap {
+    white-space: nowrap;
+  }
 
-.recipient-cell {
-  max-width: 18rem;
-}
+  .recipient-cell {
+    max-width: 18rem;
+  }
 
-.recipient-link {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  text-decoration: none;
-  color: inherit;
-}
+  .recipient-link {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    text-decoration: none;
+    color: inherit;
+  }
 
-.recipient-link:hover .recipient-name {
-  color: var(--fh-accent);
-}
+  .recipient-link:hover .recipient-name {
+    color: var(--fh-accent);
+  }
 
-.recipient-hint {
-  font-size: var(--fh-text-mono-sm);
-  color: var(--fh-subtle);
-}
+  .recipient-hint {
+    font-size: var(--fh-text-mono-sm);
+    color: var(--fh-subtle);
+  }
 
-.subject-link {
-  color: var(--fh-ink);
-  text-decoration: none;
-}
+  .subject-link {
+    color: var(--fh-ink);
+    text-decoration: none;
+  }
 
-.subject-link:hover {
-  color: var(--fh-accent);
-  text-decoration: underline;
-}
+  .subject-link:hover {
+    color: var(--fh-accent);
+    text-decoration: underline;
+  }
 
-.fh-pill.mini {
-  margin-left: var(--fh-space-2);
-  font-size: 10px;
-}
+  .fh-pill.mini {
+    margin-left: var(--fh-space-2);
+    font-size: 10px;
+  }
 
-.code {
-  margin-left: var(--fh-space-2);
-  font-size: var(--fh-text-mono-sm);
-  color: var(--fh-subtle);
-}
+  .code {
+    margin-left: var(--fh-space-2);
+    font-size: var(--fh-text-mono-sm);
+    color: var(--fh-subtle);
+  }
 </style>

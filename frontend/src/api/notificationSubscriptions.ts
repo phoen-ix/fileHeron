@@ -16,19 +16,16 @@ const subClient = axios.create({
 })
 
 export function fetchSubscriptions(token: string) {
-  return subClient.get<SubscriptionContextResponse>(
-    `/api/notification-subscriptions/${token}`,
-  )
+  return subClient.get<SubscriptionContextResponse>(`/api/notification-subscriptions/${token}`)
 }
 
 export function updateSubscriptions(
   token: string,
   preferences: Record<string, NotificationChannel>,
 ) {
-  return subClient.put<SubscriptionContextResponse>(
-    `/api/notification-subscriptions/${token}`,
-    { preferences },
-  )
+  return subClient.put<SubscriptionContextResponse>(`/api/notification-subscriptions/${token}`, {
+    preferences,
+  })
 }
 
 export function unsubscribeCategory(token: string, category: string) {

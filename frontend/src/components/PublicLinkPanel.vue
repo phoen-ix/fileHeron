@@ -34,7 +34,9 @@
         <div class="kv">
           <span class="kv-label">{{ t('public_link.password') }}</span>
           <span class="kv-value">
-            {{ active.has_password ? t('public_link.password_set') : t('public_link.password_none') }}
+            {{
+              active.has_password ? t('public_link.password_set') : t('public_link.password_none')
+            }}
           </span>
         </div>
         <div class="kv">
@@ -64,12 +66,7 @@
         </div>
       </div>
       <div class="actions">
-        <button
-          type="button"
-          class="fh-btn-danger fh-btn"
-          :disabled="revoking"
-          @click="onRevoke"
-        >
+        <button type="button" class="fh-btn-danger fh-btn" :disabled="revoking" @click="onRevoke">
           {{ revoking ? t('common.loading') : t('public_link.revoke') }}
         </button>
       </div>
@@ -131,9 +128,7 @@
         </span>
       </label>
 
-      <div
-v-if="errorMsg" class="fh-notice" role="alert"
-        data-tone="error">{{ errorMsg }}</div>
+      <div v-if="errorMsg" class="fh-notice" role="alert" data-tone="error">{{ errorMsg }}</div>
       <div class="actions">
         <button type="submit" class="fh-btn" :disabled="creating">
           {{ creating ? t('common.loading') : t('public_link.create_submit') }}
@@ -144,322 +139,315 @@ v-if="errorMsg" class="fh-notice" role="alert"
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
-import { useI18n } from 'vue-i18n'
+  import { onMounted, ref } from 'vue'
+  import { useI18n } from 'vue-i18n'
 
-import {
-  createPublicLink,
-  getPublicLink,
-  revokePublicLink,
-} from '@/api/publicLinks'
-import { useApiError } from '@/composables/useApiError'
-import { useSiteDateFormat } from '@/composables/useSiteDateFormat'
-import { useUiStore } from '@/stores/ui'
-import type {
-  CreatePublicLinkResponse,
-  PublicLinkResponse,
-} from '@/types/api'
+  import { createPublicLink, getPublicLink, revokePublicLink } from '@/api/publicLinks'
+  import { useApiError } from '@/composables/useApiError'
+  import { useSiteDateFormat } from '@/composables/useSiteDateFormat'
+  import { useUiStore } from '@/stores/ui'
+  import type { CreatePublicLinkResponse, PublicLinkResponse } from '@/types/api'
 
-const props = defineProps<{ shareId: string }>()
+  const props = defineProps<{ shareId: string }>()
 
-const { t } = useI18n()
-const { describe } = useApiError()
-const { formatDate } = useSiteDateFormat()
-const ui = useUiStore()
+  const { t } = useI18n()
+  const { describe } = useApiError()
+  const { formatDate } = useSiteDateFormat()
+  const ui = useUiStore()
 
-const active = ref<PublicLinkResponse | null>(null)
-const justCreated = ref<CreatePublicLinkResponse | null>(null)
-const loading = ref(true)
-const creating = ref(false)
-const revoking = ref(false)
-const errorMsg = ref<string | null>(null)
-const newPassword = ref('')
-const newLimit = ref<number | null>(null)
-const newNotify = ref(false)
-const copiedTimer = ref<number | null>(null)
+  const active = ref<PublicLinkResponse | null>(null)
+  const justCreated = ref<CreatePublicLinkResponse | null>(null)
+  const loading = ref(true)
+  const creating = ref(false)
+  const revoking = ref(false)
+  const errorMsg = ref<string | null>(null)
+  const newPassword = ref('')
+  const newLimit = ref<number | null>(null)
+  const newNotify = ref(false)
+  const copiedTimer = ref<number | null>(null)
 
-async function load() {
-  loading.value = true
-  try {
-    const { data } = await getPublicLink(props.shareId)
-    active.value = data
-  } catch {
-    active.value = null
-  } finally {
-    loading.value = false
-  }
-}
-
-async function onCreate() {
-  errorMsg.value = null
-  creating.value = true
-  try {
-    const { data } = await createPublicLink(props.shareId, {
-      password: newPassword.value || null,
-      download_limit: newLimit.value || null,
-      notify_on_download: newNotify.value,
-    })
-    justCreated.value = data
-    active.value = {
-      id: data.id,
-      url: data.url,
-      qr_svg: data.qr_svg,
-      download_limit: data.download_limit,
-      downloads_remaining: data.downloads_remaining,
-      notify_on_download: data.notify_on_download,
-      has_password: data.has_password,
-      // The create response genuinely has neither - a link that was just made
-      // is not locked and not revoked. (CreatePublicLinkResponse used to claim
-      // it inherited both from PublicLinkResponse, which made this read like a
-      // workaround; the type was the thing that was wrong.)
-      locked_until: null,
-      revoked_at: null,
-      created_at: data.created_at,
+  async function load() {
+    loading.value = true
+    try {
+      const { data } = await getPublicLink(props.shareId)
+      active.value = data
+    } catch {
+      active.value = null
+    } finally {
+      loading.value = false
     }
-    newPassword.value = ''
-    newLimit.value = null
-    newNotify.value = false
-  } catch (err) {
-    errorMsg.value = describe(err)
-  } finally {
-    creating.value = false
   }
-}
 
-async function onRevoke() {
-  if (!active.value) return
-  if (!(await ui.confirm({ message: t('public_link.revoke_confirm'), danger: true }))) return
-  revoking.value = true
-  try {
-    await revokePublicLink(props.shareId)
-    active.value = null
+  async function onCreate() {
+    errorMsg.value = null
+    creating.value = true
+    try {
+      const { data } = await createPublicLink(props.shareId, {
+        password: newPassword.value || null,
+        download_limit: newLimit.value || null,
+        notify_on_download: newNotify.value,
+      })
+      justCreated.value = data
+      active.value = {
+        id: data.id,
+        url: data.url,
+        qr_svg: data.qr_svg,
+        download_limit: data.download_limit,
+        downloads_remaining: data.downloads_remaining,
+        notify_on_download: data.notify_on_download,
+        has_password: data.has_password,
+        // The create response genuinely has neither - a link that was just made
+        // is not locked and not revoked. (CreatePublicLinkResponse used to claim
+        // it inherited both from PublicLinkResponse, which made this read like a
+        // workaround; the type was the thing that was wrong.)
+        locked_until: null,
+        revoked_at: null,
+        created_at: data.created_at,
+      }
+      newPassword.value = ''
+      newLimit.value = null
+      newNotify.value = false
+    } catch (err) {
+      errorMsg.value = describe(err)
+    } finally {
+      creating.value = false
+    }
+  }
+
+  async function onRevoke() {
+    if (!active.value) return
+    if (!(await ui.confirm({ message: t('public_link.revoke_confirm'), danger: true }))) return
+    revoking.value = true
+    try {
+      await revokePublicLink(props.shareId)
+      active.value = null
+      justCreated.value = null
+      ui.pushToast(t('public_link.revoked_toast'), 'success')
+    } catch (err) {
+      ui.pushToast(describe(err), 'error')
+    } finally {
+      revoking.value = false
+    }
+  }
+
+  async function copyToClipboard(text: string) {
+    try {
+      await navigator.clipboard.writeText(text)
+      if (copiedTimer.value) clearTimeout(copiedTimer.value)
+      copiedTimer.value = window.setTimeout(() => {
+        copiedTimer.value = null
+      }, 1600)
+    } catch {
+      /* clipboard blocked */
+    }
+  }
+
+  async function copyUrl() {
+    if (justCreated.value) await copyToClipboard(justCreated.value.url)
+  }
+
+  async function copyActiveUrl() {
+    if (active.value?.url) await copyToClipboard(active.value.url)
+  }
+
+  function dismissJustCreated() {
     justCreated.value = null
-    ui.pushToast(t('public_link.revoked_toast'), 'success')
-  } catch (err) {
-    ui.pushToast(describe(err), 'error')
-  } finally {
-    revoking.value = false
   }
-}
 
-async function copyToClipboard(text: string) {
-  try {
-    await navigator.clipboard.writeText(text)
-    if (copiedTimer.value) clearTimeout(copiedTimer.value)
-    copiedTimer.value = window.setTimeout(() => {
-      copiedTimer.value = null
-    }, 1600)
-  } catch {
-    /* clipboard blocked */
-  }
-}
-
-async function copyUrl() {
-  if (justCreated.value) await copyToClipboard(justCreated.value.url)
-}
-
-async function copyActiveUrl() {
-  if (active.value?.url) await copyToClipboard(active.value.url)
-}
-
-function dismissJustCreated() {
-  justCreated.value = null
-}
-
-function downloadQr(svg: string | null | undefined) {
-  if (!svg) return
-  const blobUrl = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }))
-  const img = new Image()
-  img.onload = () => {
-    const size = 512
-    const canvas = document.createElement('canvas')
-    canvas.width = size
-    canvas.height = size
-    const ctx = canvas.getContext('2d')
-    if (ctx) {
-      ctx.fillStyle = '#ffffff'
-      ctx.fillRect(0, 0, size, size)
-      ctx.drawImage(img, 0, 0, size, size)
-      const a = document.createElement('a')
-      a.href = canvas.toDataURL('image/png')
-      a.download = 'public-link-qr.png'
-      a.click()
+  function downloadQr(svg: string | null | undefined) {
+    if (!svg) return
+    const blobUrl = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }))
+    const img = new Image()
+    img.onload = () => {
+      const size = 512
+      const canvas = document.createElement('canvas')
+      canvas.width = size
+      canvas.height = size
+      const ctx = canvas.getContext('2d')
+      if (ctx) {
+        ctx.fillStyle = '#ffffff'
+        ctx.fillRect(0, 0, size, size)
+        ctx.drawImage(img, 0, 0, size, size)
+        const a = document.createElement('a')
+        a.href = canvas.toDataURL('image/png')
+        a.download = 'public-link-qr.png'
+        a.click()
+      }
+      URL.revokeObjectURL(blobUrl)
     }
-    URL.revokeObjectURL(blobUrl)
+    img.onerror = () => URL.revokeObjectURL(blobUrl)
+    img.src = blobUrl
   }
-  img.onerror = () => URL.revokeObjectURL(blobUrl)
-  img.src = blobUrl
-}
 
-onMounted(load)
+  onMounted(load)
 </script>
 
 <style scoped>
-.public-link-panel {
-  display: flex;
-  flex-direction: column;
-  gap: var(--fh-space-2);
-  padding-top: var(--fh-space-4);
-  border-top: var(--fh-border);
-  margin-top: var(--fh-space-4);
-}
+  .public-link-panel {
+    display: flex;
+    flex-direction: column;
+    gap: var(--fh-space-2);
+    padding-top: var(--fh-space-4);
+    border-top: var(--fh-border);
+    margin-top: var(--fh-space-4);
+  }
 
-.panel-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: var(--fh-space-3);
-}
+  .panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: var(--fh-space-3);
+  }
 
-.panel-header h3 {
-  margin: 0;
-  font-family: var(--fh-font-display);
-  font-size: 1.5rem;
-  font-weight: 400;
-}
+  .panel-header h3 {
+    margin: 0;
+    font-family: var(--fh-font-display);
+    font-size: 1.5rem;
+    font-weight: 400;
+  }
 
-.intro {
-  margin: 0 0 var(--fh-space-2);
-  max-width: 60ch;
-}
+  .intro {
+    margin: 0 0 var(--fh-space-2);
+    max-width: 60ch;
+  }
 
-.loading {
-  color: var(--fh-subtle);
-  padding: var(--fh-space-3) 0;
-}
+  .loading {
+    color: var(--fh-subtle);
+    padding: var(--fh-space-3) 0;
+  }
 
-.active-card,
-.create-form {
-  background: var(--fh-paper-raised);
-  border: var(--fh-border);
-  border-radius: var(--fh-radius-sm);
-  padding: var(--fh-space-4);
-  display: flex;
-  flex-direction: column;
-  gap: var(--fh-space-3);
-}
+  .active-card,
+  .create-form {
+    background: var(--fh-paper-raised);
+    border: var(--fh-border);
+    border-radius: var(--fh-radius-sm);
+    padding: var(--fh-space-4);
+    display: flex;
+    flex-direction: column;
+    gap: var(--fh-space-3);
+  }
 
-.kvs {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: var(--fh-space-3);
-}
+  .kvs {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: var(--fh-space-3);
+  }
 
-.kv {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
+  .kv {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
 
-.kv-label {
-  font-family: var(--fh-font-mono);
-  font-size: var(--fh-text-mono-sm);
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: var(--fh-subtle);
-}
+  .kv-label {
+    font-family: var(--fh-font-mono);
+    font-size: var(--fh-text-mono-sm);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--fh-subtle);
+  }
 
-.kv-value {
-  font-size: var(--fh-text-body-md);
-  color: var(--fh-ink);
-}
+  .kv-value {
+    font-size: var(--fh-text-body-md);
+    color: var(--fh-ink);
+  }
 
-.token-note {
-  margin: 0;
-}
+  .token-note {
+    margin: 0;
+  }
 
-.url-row {
-  display: flex;
-  flex-direction: column;
-  gap: var(--fh-space-1);
-  background: var(--fh-paper);
-  border: var(--fh-border);
-  border-radius: var(--fh-radius-sm);
-  padding: var(--fh-space-3);
-}
+  .url-row {
+    display: flex;
+    flex-direction: column;
+    gap: var(--fh-space-1);
+    background: var(--fh-paper);
+    border: var(--fh-border);
+    border-radius: var(--fh-radius-sm);
+    padding: var(--fh-space-3);
+  }
 
-.url-row .actions,
-.url-row button {
-  align-self: flex-start;
-}
+  .url-row .actions,
+  .url-row button {
+    align-self: flex-start;
+  }
 
-.created-box {
-  background: var(--fh-accent-soft);
-  border: var(--fh-border);
-  border-left: 2px solid var(--fh-accent);
-  border-radius: var(--fh-radius-sm);
-  padding: var(--fh-space-4);
-  display: flex;
-  flex-direction: column;
-  gap: var(--fh-space-2);
-}
+  .created-box {
+    background: var(--fh-accent-soft);
+    border: var(--fh-border);
+    border-left: 2px solid var(--fh-accent);
+    border-radius: var(--fh-radius-sm);
+    padding: var(--fh-space-4);
+    display: flex;
+    flex-direction: column;
+    gap: var(--fh-space-2);
+  }
 
-.created-eyebrow {
-  font-family: var(--fh-font-mono);
-  font-size: var(--fh-text-mono-sm);
-  text-transform: uppercase;
-  letter-spacing: 0.14em;
-  color: var(--fh-subtle);
-}
+  .created-eyebrow {
+    font-family: var(--fh-font-mono);
+    font-size: var(--fh-text-mono-sm);
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: var(--fh-subtle);
+  }
 
-.warning {
-  color: var(--fh-ink);
-  margin: 0;
-}
+  .warning {
+    color: var(--fh-ink);
+    margin: 0;
+  }
 
-.url {
-  background: var(--fh-paper);
-  padding: var(--fh-space-3);
-  border: var(--fh-border);
-  border-radius: var(--fh-radius-sm);
-  font-size: var(--fh-text-mono-md);
-  word-break: break-all;
-  white-space: pre-wrap;
-  margin: 0;
-  user-select: all;
-}
+  .url {
+    background: var(--fh-paper);
+    padding: var(--fh-space-3);
+    border: var(--fh-border);
+    border-radius: var(--fh-radius-sm);
+    font-size: var(--fh-text-mono-md);
+    word-break: break-all;
+    white-space: pre-wrap;
+    margin: 0;
+    user-select: all;
+  }
 
-.checkbox {
-  display: flex;
-  gap: var(--fh-space-2);
-  align-items: flex-start;
-}
+  .checkbox {
+    display: flex;
+    gap: var(--fh-space-2);
+    align-items: flex-start;
+  }
 
-.cb-label {
-  display: block;
-}
+  .cb-label {
+    display: block;
+  }
 
-.cb-help {
-  display: block;
-  font-size: var(--fh-text-body-sm);
-  color: var(--fh-subtle);
-}
+  .cb-help {
+    display: block;
+    font-size: var(--fh-text-body-sm);
+    color: var(--fh-subtle);
+  }
 
-.actions {
-  display: flex;
-  gap: var(--fh-space-3);
-  margin-top: var(--fh-space-1);
-}
+  .actions {
+    display: flex;
+    gap: var(--fh-space-3);
+    margin-top: var(--fh-space-1);
+  }
 
-.qr-section {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--fh-space-2);
-}
+  .qr-section {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--fh-space-2);
+  }
 
-.qr-svg {
-  width: 180px;
-  max-width: 100%;
-  background: #fff;
-  padding: var(--fh-space-2);
-  border: var(--fh-border);
-  border-radius: var(--fh-radius-sm);
-}
+  .qr-svg {
+    width: 180px;
+    max-width: 100%;
+    background: #fff;
+    padding: var(--fh-space-2);
+    border: var(--fh-border);
+    border-radius: var(--fh-radius-sm);
+  }
 
-.qr-svg :deep(svg) {
-  display: block;
-  width: 100%;
-  height: auto;
-}
+  .qr-svg :deep(svg) {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
 </style>

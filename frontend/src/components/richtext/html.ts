@@ -49,9 +49,9 @@ function stripTableWidths(root: HTMLElement): void {
   root.querySelectorAll('td[width], th[width]').forEach((el) => {
     el.removeAttribute('width')
   })
-  root.querySelectorAll('table[style], td[style], th[style], col[style]').forEach(
-    (el) => el.removeAttribute('style'),
-  )
+  root
+    .querySelectorAll('table[style], td[style], th[style], col[style]')
+    .forEach((el) => el.removeAttribute('style'))
 }
 
 /** Serialise a ProseMirror document back to an HTML string. */

@@ -41,9 +41,7 @@ export function useAdminNavCollapse() {
   function seed(): Set<AdminNavCategoryKey> {
     const persisted = auth.user?.admin_nav_open_categories
     if (persisted != null) {
-      return new Set(
-        persisted.filter((k): k is AdminNavCategoryKey => VALID.has(k)),
-      )
+      return new Set(persisted.filter((k): k is AdminNavCategoryKey => VALID.has(k)))
     }
     return new Set(defaultOpenCategoriesFor(mode.value))
   }

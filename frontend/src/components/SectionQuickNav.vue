@@ -1,22 +1,22 @@
 <script setup lang="ts">
-import { useI18n } from 'vue-i18n'
+  import { useI18n } from 'vue-i18n'
 
-export interface QuickNavSection {
-  id: string
-  labelKey: string
-}
+  export interface QuickNavSection {
+    id: string
+    labelKey: string
+  }
 
-defineProps<{
-  sections: QuickNavSection[]
-  active: string
-  ariaLabel: string
-}>()
+  defineProps<{
+    sections: QuickNavSection[]
+    active: string
+    ariaLabel: string
+  }>()
 
-defineEmits<{
-  jump: [id: string]
-}>()
+  defineEmits<{
+    jump: [id: string]
+  }>()
 
-const { t } = useI18n()
+  const { t } = useI18n()
 </script>
 
 <template>
@@ -39,64 +39,64 @@ const { t } = useI18n()
 </template>
 
 <style scoped>
-.quicknav ul {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-}
+  .quicknav ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+  }
 
-.quicknav-item {
-  display: flex;
-  align-items: center;
-  gap: var(--fh-space-2);
-  width: 100%;
-  background: none;
-  border: 0;
-  padding: var(--fh-space-2) 0;
-  cursor: pointer;
-  text-align: left;
-  font-family: var(--fh-font-mono);
-  font-size: var(--fh-text-mono-sm);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--fh-subtle);
-  transition: color var(--fh-duration-fast) var(--fh-easing);
-}
+  .quicknav-item {
+    display: flex;
+    align-items: center;
+    gap: var(--fh-space-2);
+    width: 100%;
+    background: none;
+    border: 0;
+    padding: var(--fh-space-2) 0;
+    cursor: pointer;
+    text-align: left;
+    font-family: var(--fh-font-mono);
+    font-size: var(--fh-text-mono-sm);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--fh-subtle);
+    transition: color var(--fh-duration-fast) var(--fh-easing);
+  }
 
-.quicknav-item:hover {
-  color: var(--fh-ink);
-}
+  .quicknav-item:hover {
+    color: var(--fh-ink);
+  }
 
-.quicknav-item:focus-visible {
-  outline: 2px solid var(--fh-accent);
-  outline-offset: 2px;
-}
+  .quicknav-item:focus-visible {
+    outline: 2px solid var(--fh-accent);
+    outline-offset: 2px;
+  }
 
-.quicknav-rule {
-  display: inline-block;
-  width: 1px;
-  height: 0.875rem;
-  background: var(--fh-hairline);
-  transition:
-    width var(--fh-duration-fast) var(--fh-easing),
-    background var(--fh-duration-fast) var(--fh-easing);
-}
+  .quicknav-rule {
+    display: inline-block;
+    width: 1px;
+    height: 0.875rem;
+    background: var(--fh-hairline);
+    transition:
+      width var(--fh-duration-fast) var(--fh-easing),
+      background var(--fh-duration-fast) var(--fh-easing);
+  }
 
-.quicknav-item.is-active {
-  color: var(--fh-accent);
-}
+  .quicknav-item.is-active {
+    color: var(--fh-accent);
+  }
 
-.quicknav-item.is-active .quicknav-rule {
-  width: 2px;
-  background: var(--fh-accent);
-}
+  .quicknav-item.is-active .quicknav-rule {
+    width: 2px;
+    background: var(--fh-accent);
+  }
 
-.quicknav-label {
-  flex: 1;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
+  .quicknav-label {
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
 </style>

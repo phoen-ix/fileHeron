@@ -104,6 +104,16 @@ ENTRYPOINT ["/entrypoint.sh"]
 # variable expansion. Do NOT "simplify" this to exec-form CMD: that loses the
 # expansion, and moving the flag into entrypoint.sh would append it to whatever
 # CMD is given, breaking `docker compose run backend python ...`.
+#
+# --timeout-graceful-shutdown bounds that drain. Unbounded, uvicorn waits for
+# every open connection, and the SSE streams (bell + admin live status) live 60s
+# by design, so a stop took whatever an open tab's stream had left: 20s in the
+# v2.19.0 update's data-layer stop, and measured 58s against this image with one
+# stream open - Docker SIGKILLs first, so the drain never completed anyway. After
+# 5s uvicorn cancels what is still running and exits cleanly (3.2s measured).
+# Keep it under Docker's 10s default grace and the updater's
+# APP_STOP_TIMEOUT_SEC; tests/infra/test_images_and_compose.py pins both.
 ENV FORWARDED_ALLOW_IPS="*"
 CMD exec uvicorn app.main:app --host 0.0.0.0 --port 8000 \
-    --proxy-headers --forwarded-allow-ips="$FORWARDED_ALLOW_IPS"
+    --proxy-headers --forwarded-allow-ips="$FORWARDED_ALLOW_IPS" \
+    --timeout-graceful-shutdown 5

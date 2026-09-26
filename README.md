@@ -842,17 +842,19 @@ backup has succeeded:
 4. Fast-forwards your checkout to the release commit (`git merge --ff-only`, as
    the checkout's owner), so `docker-compose.yml`, `docker/` and `scripts/` match
    the release.
-5. Recreates only the changed infra services, one at a time, each waiting for its
-   healthcheck. For the database and Redis the backend and worker are stopped
+5. Recreates the database and Redis if the release changes them, one at a time,
+   each waiting for its healthcheck. The backend and worker are stopped
    meanwhile, so expect a few minutes of downtime when MariaDB upgrades itself
    (`MARIADB_AUTO_UPGRADE=1`). If the database or Redis does not come back
    healthy, the update stops, the old app is started again and the job names the
-   backup to restore (see *Restoring a pre-update backup*); ClamAV or tusd failing
-   only adds a warning.
-6. Swaps backend, worker and frontend, waits for the new version, and recreates
-   the updater-shim; a failed start rolls the APP back automatically. Infra is
-   never rolled back automatically - a MariaDB or Redis major has no way back in
-   place.
+   backup to restore (see *Restoring a pre-update backup*).
+6. Swaps backend, worker and frontend and waits for the new version; a failed
+   start rolls the APP back automatically. Infra is never rolled back
+   automatically - a MariaDB or Redis major has no way back in place.
+7. Recreates ClamAV and tusd if the release changes them, with the new app
+   already serving - neither is needed to answer a request, so the app is not
+   kept down while ClamAV loads its signatures. A failure only adds a warning.
+   Then it recreates the updater-shim.
 
 **When the infra step is skipped** the app update still runs, and the job shows
 a warning with the manual command:

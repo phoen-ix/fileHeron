@@ -37,9 +37,12 @@ services:
     # counts (utils/client_ip.is_blockable refuses non-global addresses), so
     # the two environments disagreeing is exactly the divergence that hides a
     # guard misconfiguration until production.
+    # --timeout-graceful-shutdown: see the prod Dockerfile. Here it also keeps a
+    # --reload restart from waiting out an open tab's 60s SSE stream.
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000",
               "--reload", "--proxy-headers",
-              "--forwarded-allow-ips=${FORWARDED_ALLOW_IPS:-*}"]
+              "--forwarded-allow-ips=${FORWARDED_ALLOW_IPS:-*}",
+              "--timeout-graceful-shutdown", "5"]
 
   # Mirror the backend's source-mount + dev image for the ARQ worker so
   # code changes take effect on `compose restart worker` without a

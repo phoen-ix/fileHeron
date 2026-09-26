@@ -76,8 +76,19 @@ IMAGES_TO_PULL = SERVICES + ["updater-shim", "updater-executor"]
 INFRA_SYNC_ORDER = ("db", "redis", "clamav", "tusd")
 # Recreating one of these takes the data layer away from the app, so backend and
 # worker are stopped around it and a failure is fatal. clamav and tusd failing
-# only degrades scanning/uploads and ends the update with a warning.
+# only degrades scanning/uploads and ends the update with a warning - which is
+# also why they are recreated AFTER the new app is up (sync_remaining_infra),
+# never while it is stopped: the v2.19.0 update kept the app down 22s longer
+# waiting on clamav's healthcheck, and a clamav first start syncs signatures
+# for minutes.
 DATA_SERVICES = frozenset({"db", "redis"})
+# `docker stop -t` for backend and worker around a data-layer recreate. uvicorn
+# bounds its own drain with --timeout-graceful-shutdown (docker/backend/
+# Dockerfile, pinned below this value), so this is only the ceiling for an OLD
+# backend that lacks that flag: without it uvicorn waits for every open SSE
+# stream (60s lifetime) and the v2.19.0 update's stop took 20s. Same as
+# Docker's default grace.
+APP_STOP_TIMEOUT_SEC = 10
 # Health budget floors per infra service; the real budget also derives from the
 # service's own healthcheck. A MariaDB major upgrade runs mariadb-upgrade before
 # the server reports healthy, and clamav's first start syncs signatures.
@@ -1088,38 +1099,44 @@ def wait_service_healthy(service: str, image: str, budget: int) -> bool:
     return False
 
 
-def sync_infra(plan: InfraPlan, previous_tag: str, backup_dir: str | None) -> int:
-    """Recreate the planned infra services, in order, each health-gated.
+def _recreate_infra(svc: str, plan: InfraPlan, env: dict[str, str]) -> bool:
+    """Recreate one planned infra service and wait for it; on failure its log
+    tail goes into the job log."""
+    log_line(f"infra: recreating {svc} ({plan.reasons[svc]})")
+    # --force-recreate: compose's hash does not cover the CONTENT of a
+    # bind-mounted file (clamd.conf), so a changed one would not restart.
+    # --pull never: the image was pulled before anything went down.
+    rc = run_capture(
+        ["docker", "compose", "-f", str(COMPOSE_FILE), "up", "-d", "--no-deps",
+         "--force-recreate", "--pull", "never", svc],
+        env=env,
+    )
+    if rc == 0 and wait_service_healthy(svc, plan.images[svc], plan.budgets[svc]):
+        return True
+    run_capture(["docker", "compose", "-f", str(COMPOSE_FILE), "logs", "--no-color", "--tail", "50", svc],
+                env=env)
+    return False
 
-    For db and redis the backend and worker are stopped first (raw `docker
-    stop`, which cannot cascade the way `compose stop` might) - the app would
-    otherwise serve 500s against a missing database. There is no automatic
-    infra rollback: MariaDB and Redis majors cannot go back in place, which is
-    what the pre-update backup is for."""
+
+def sync_data_layer(plan: InfraPlan, previous_tag: str, backup_dir: str | None) -> int:
+    """Recreate the planned db and redis, in order, each health-gated, BEFORE
+    the new app starts, so it is health-checked against the release's data layer.
+
+    The backend and worker are stopped first (raw `docker stop`, which cannot
+    cascade the way `compose stop` might) - the app would otherwise serve 500s
+    against a missing database. There is no automatic infra rollback: MariaDB
+    and Redis majors cannot go back in place, which is what the pre-update
+    backup is for."""
+    services = [s for s in plan.services if s in DATA_SERVICES]
+    if not services:
+        return 0
     env = _compose_env(previous_tag)
-    stopped: list[str] = []
-    if DATA_SERVICES & set(plan.services):
-        stopped = [c for c in (_container_id(s) for s in ("backend", "worker")) if c]
-        if stopped:
-            log_line("stopping backend and worker while the data layer is recreated")
-            run_capture(["docker", "stop", "-t", "30", *stopped])
-    for svc in plan.services:
-        log_line(f"infra: recreating {svc} ({plan.reasons[svc]})")
-        # --force-recreate: compose's hash does not cover the CONTENT of a
-        # bind-mounted file (clamd.conf), so a changed one would not restart.
-        # --pull never: the image was pulled before anything went down.
-        rc = run_capture(
-            ["docker", "compose", "-f", str(COMPOSE_FILE), "up", "-d", "--no-deps",
-             "--force-recreate", "--pull", "never", svc],
-            env=env,
-        )
-        if rc == 0 and wait_service_healthy(svc, plan.images[svc], plan.budgets[svc]):
-            continue
-        run_capture(["docker", "compose", "-f", str(COMPOSE_FILE), "logs", "--no-color", "--tail", "50", svc],
-                    env=env)
-        if svc not in DATA_SERVICES:
-            add_warning(f"{svc} did not come up healthy on {plan.images[svc]}; the update continues - "
-                        f"check `docker compose logs {svc}`")
+    stopped = [c for c in (_container_id(s) for s in ("backend", "worker")) if c]
+    if stopped:
+        log_line("stopping backend and worker while the data layer is recreated")
+        run_capture(["docker", "stop", "-t", str(APP_STOP_TIMEOUT_SEC), *stopped])
+    for svc in services:
+        if _recreate_infra(svc, plan, env):
             continue
         if stopped:
             log_line("starting the previous backend and worker again")
@@ -1134,6 +1151,23 @@ def sync_infra(plan: InfraPlan, previous_tag: str, backup_dir: str | None) -> in
         )
         return 20
     return 0
+
+
+def sync_remaining_infra(plan: InfraPlan, target_tag: str) -> None:
+    """Recreate the planned clamav and tusd AFTER the new app is up and
+    verified, with it running. Neither is needed to serve requests, and a
+    failure only warns, so waiting on them while the app is stopped was pure
+    downtime. The new backend then meets the old tusd for a few seconds, which
+    is the compatible direction: the backend handles every hook a tusd sends,
+    while a new tusd could call hooks an old backend does not have. A clamav
+    restart delays scans, and av_scan_file's retry backoff outlasts a clamav
+    cold start."""
+    env = _compose_env(target_tag)
+    for svc in plan.services:
+        if svc in DATA_SERVICES or _recreate_infra(svc, plan, env):
+            continue
+        add_warning(f"{svc} did not come up healthy on {plan.images[svc]}; the update continues - "
+                    f"check `docker compose logs {svc}`")
 
 
 # --- pre-update backup ----------------------------------------------------------
@@ -1526,13 +1560,14 @@ def main() -> int:
             log_line("WARN rollback target has no alembic_head (legacy) - skipping stamp "
                      "(pre-fix behavior; may hit the migration trap)")
 
-    # Infra before the app, so the new app is health-checked against the
-    # release's infra. A db/redis failure returns here, BEFORE FH_TAG and the
+    # The data layer before the app, so the new app is health-checked against
+    # the release's db and redis. A failure returns here, BEFORE FH_TAG and the
     # rollback target move: the old app is started again on the old tag.
-    if plan.services:
+    # clamav and tusd wait until the new app is verified (sync_remaining_infra).
+    if DATA_SERVICES & set(plan.services):
         write_job_field(status="restarting")
         set_phase("syncing_infra")
-        rc = sync_infra(plan, previous_tag, backup_dir)
+        rc = sync_data_layer(plan, previous_tag, backup_dir)
         if rc != 0:
             return rc
 
@@ -1587,6 +1622,12 @@ def main() -> int:
         write_job_field(status="failed", error="rollback: backend health check timed out",
                         finished_at=utcnow_iso())
         return 4
+
+    # Still `restarting`: the job is not done until these are, and a failed
+    # app start above auto-rolls back without ever touching them.
+    if set(plan.services) - DATA_SERVICES:
+        set_phase("syncing_services")
+        sync_remaining_infra(plan, target_tag)
 
     write_job_field(status="healthy", finished_at=utcnow_iso())
 

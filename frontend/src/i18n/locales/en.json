@@ -622,9 +622,10 @@
         "pulling": "Pulling images…",
         "backing_up": "Backing up the database…",
         "syncing_checkout": "Updating the host checkout…",
-        "syncing_infra": "Upgrading database, Redis, ClamAV, tusd…",
+        "syncing_infra": "Upgrading the database and Redis…",
         "restarting_app": "Restarting the app…",
-        "verifying": "Waiting for the new version to report healthy…"
+        "verifying": "Waiting for the new version to report healthy…",
+        "syncing_services": "Upgrading ClamAV and tusd…"
       }
     },
     "live": {

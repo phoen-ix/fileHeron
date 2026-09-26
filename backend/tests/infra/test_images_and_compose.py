@@ -117,6 +117,29 @@ def test_the_backend_cmd_execs_so_uvicorn_becomes_pid_1():
     )
 
 
+def test_uvicorn_bounds_its_drain_under_every_stop_grace(executor, compose):
+    """Unbounded, uvicorn's graceful shutdown waits for every open connection,
+    and the SSE streams live 60s by design: the v2.19.0 update's data-layer
+    stop took 20s, and one open stream held a stop for 58s (measured against
+    the v2.19.0 image). Docker SIGKILLs at its grace, so that drain never
+    completed anyway. The bound must stay under Docker's 10s default grace
+    (every compose recreate of the backend) and under the updater's own stop
+    timeout, or uvicorn is killed before it exits and the flag buys nothing."""
+    dockerfile = (ROOT / "docker" / "backend" / "Dockerfile").read_text(encoding="utf-8")
+    cmd = re.search(r"^CMD\s+(.+?)(?=\n[A-Z]|\Z)", dockerfile, re.M | re.S)
+    assert cmd, "no CMD in the backend Dockerfile"
+    m = re.search(r"--timeout-graceful-shutdown[ =](\d+)", cmd.group(1))
+    assert m, "the backend CMD lost --timeout-graceful-shutdown"
+    bound = int(m.group(1))
+    backend = re.search(r"\n  backend:\n(.*?)(?=\n  [a-z][a-z-]*:\n)", compose, re.S)
+    assert backend, "no backend service in docker-compose.yml"
+    assert "stop_grace_period" not in backend.group(1), "a compose grace moves the ceiling; re-derive it"
+    assert 0 < bound < 10
+    assert bound < executor.APP_STOP_TIMEOUT_SEC
+    dev = (ROOT / "docker-compose.dev.yml").read_text(encoding="utf-8")
+    assert re.search(rf'"--timeout-graceful-shutdown",\s*"{bound}"', dev), "dev runs a different bound"
+
+
 def test_the_healthcheck_dependency_is_still_installed():
     """Control: curl backs the compose HEALTHCHECK. Removing it would make every
     backend container report unhealthy."""

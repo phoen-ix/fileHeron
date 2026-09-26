@@ -388,7 +388,7 @@ def test_options_fall_back_to_the_defaults(executor):
     assert d["infra_sync"] is True and d["backup_on_db_change"] is True
 
 
-# --- sync_infra ---------------------------------------------------------------------
+# --- sync_data_layer / sync_remaining_infra -----------------------------------------
 
 
 def _plan(ex, services):
@@ -404,34 +404,62 @@ def _plan(ex, services):
 @pytest.fixture
 def docker_calls(executor, monkeypatch):
     calls: list[list[str]] = []
+    envs: list[dict | None] = []
     health: dict[str, bool] = {}
-    monkeypatch.setattr(executor, "run_capture", lambda cmd, env=None: calls.append(cmd) or 0)
+
+    def run_capture(cmd, env=None):
+        calls.append(cmd)
+        envs.append(env)
+        return 0
+
+    monkeypatch.setattr(executor, "run_capture", run_capture)
     monkeypatch.setattr(executor, "_container_id", lambda s: f"cid-{s}")
     monkeypatch.setattr(executor, "wait_service_healthy", lambda s, _i, _b: health.get(s, True))
     executor.STATE_FILE.write_text(json.dumps({"id": "j", "status": "restarting"}))
-    return calls, health
+    return calls, health, envs
+
+
+def _ups(calls):
+    return [c for c in calls if "up" in c]
 
 
 def test_the_data_layer_is_recreated_with_the_app_stopped(executor, docker_calls):
-    calls, _ = docker_calls
-    assert executor.sync_infra(_plan(executor, ["db", "redis"]), "v1.0.0", "backups/pre-update/x") == 0
-    assert calls[0] == ["docker", "stop", "-t", "30", "cid-backend", "cid-worker"]
-    ups = [c for c in calls if "up" in c]
-    assert [c[-1] for c in ups] == ["db", "redis"]
+    calls, _, _ = docker_calls
+    plan = _plan(executor, ["db", "redis", "clamav", "tusd"])
+    assert executor.sync_data_layer(plan, "v1.0.0", "backups/pre-update/x") == 0
+    assert calls[0] == ["docker", "stop", "-t", str(executor.APP_STOP_TIMEOUT_SEC),
+                        "cid-backend", "cid-worker"]
+    ups = _ups(calls)
+    assert [c[-1] for c in ups] == ["db", "redis"], "clamav/tusd are not the data layer's to recreate"
     for c in ups:
         assert {"--no-deps", "--force-recreate"} <= set(c) and c[c.index("--pull") + 1] == "never"
 
 
-def test_clamav_or_tusd_alone_leave_the_app_running(executor, docker_calls):
-    calls, _ = docker_calls
-    assert executor.sync_infra(_plan(executor, ["clamav", "tusd"]), "v1.0.0", None) == 0
+def test_without_db_or_redis_the_data_layer_step_touches_nothing(executor, docker_calls):
+    calls, _, _ = docker_calls
+    assert executor.sync_data_layer(_plan(executor, ["clamav", "tusd"]), "v1.0.0", None) == 0
+    assert calls == []
+
+
+def test_clamav_and_tusd_are_recreated_with_the_app_running(executor, docker_calls):
+    """The v2.19.0 update stopped the app, then waited 22s on clamav's
+    healthcheck before starting it again - neither service is needed to serve a
+    request. They are recreated after the new app, never stopping it."""
+    calls, _, envs = docker_calls
+    executor.sync_remaining_infra(_plan(executor, ["db", "redis", "clamav", "tusd"]), "v1.1.0")
     assert not any(c[:2] == ["docker", "stop"] for c in calls)
+    ups = _ups(calls)
+    assert [c[-1] for c in ups] == ["clamav", "tusd"], "db/redis belong to the data-layer step"
+    for c in ups:
+        assert {"--no-deps", "--force-recreate"} <= set(c) and c[c.index("--pull") + 1] == "never"
+    # FH_TAG already names the release here; the compose run must agree with .env.
+    assert {e["FH_TAG"] for c, e in zip(calls, envs, strict=True) if "up" in c} == {"v1.1.0"}
 
 
 def test_a_failed_database_restarts_the_old_app_and_fails_the_job(executor, docker_calls):
-    calls, health = docker_calls
+    calls, health, _ = docker_calls
     health["db"] = False
-    rc = executor.sync_infra(_plan(executor, ["db", "redis"]), "v1.0.0", "backups/pre-update/x")
+    rc = executor.sync_data_layer(_plan(executor, ["db", "redis"]), "v1.0.0", "backups/pre-update/x")
     assert rc == 20
     assert ["docker", "start", "cid-backend", "cid-worker"] in calls
     assert not any(c[-1] == "redis" and "up" in c for c in calls), "stopped at the first failure"
@@ -441,12 +469,13 @@ def test_a_failed_database_restarts_the_old_app_and_fails_the_job(executor, dock
 
 
 def test_a_failed_clamav_is_a_warning(executor, docker_calls):
-    _, health = docker_calls
+    calls, health, _ = docker_calls
     health["clamav"] = False
-    assert executor.sync_infra(_plan(executor, ["clamav", "tusd"]), "v1.0.0", None) == 0
+    executor.sync_remaining_infra(_plan(executor, ["clamav", "tusd"]), "v1.1.0")
     state = json.loads(executor.STATE_FILE.read_text())
     assert state["status"] == "restarting"
     assert any("clamav did not come up healthy" in w for w in state["warnings"])
+    assert _ups(calls)[-1][-1] == "tusd", "a clamav failure must not skip tusd"
 
 
 def _inspect_sequence(executor, monkeypatch, answers):
@@ -501,7 +530,6 @@ def flow(executor, monkeypatch):
     ))
     monkeypatch.setattr(executor, "capture_alembic_head", lambda: "abc123")
     monkeypatch.setattr(executor, "_pull", lambda ref, quiet=False: events.append(f"pull {ref}") or 0)
-    monkeypatch.setattr(executor, "wait_for_backend_health", lambda *a, **k: events.append("health") or True)
 
     def run_capture(cmd, env=None):
         if "up" in cmd:
@@ -513,7 +541,10 @@ def flow(executor, monkeypatch):
     monkeypatch.setattr(executor, "write_current_tag",
                         lambda t: events.append(f"tag {t}") or real_write_tag(t))
     monkeypatch.setattr(executor, "prune_pre_update_backups", lambda *a, **k: events.append("prune"))
-    state = {"plan": executor.InfraPlan(), "backup": "backups/pre-update/b", "ff": True, "sync": 0}
+    state = {"plan": executor.InfraPlan(), "backup": "backups/pre-update/b", "ff": True, "sync": 0,
+             "health": True}
+    monkeypatch.setattr(executor, "wait_for_backend_health",
+                        lambda *a, **k: events.append("health") or state["health"])
 
     def plan_infra(*_a):
         events.append("plan")
@@ -524,9 +555,21 @@ def flow(executor, monkeypatch):
                         lambda *a: events.append("backup") or state["backup"])
     monkeypatch.setattr(executor, "fast_forward_checkout",
                         lambda *a: events.append("ff") or state["ff"])
-    monkeypatch.setattr(executor, "sync_infra",
-                        lambda *a: events.append("sync") or state["sync"])
+    monkeypatch.setattr(executor, "sync_data_layer",
+                        lambda *a: events.append("sync data") or state["sync"])
+
+    def sync_remaining_infra(*_a):
+        # The job must still be in flight: the SPA and the shim treat `healthy`
+        # as done.
+        events.append("sync rest while " + json.loads(executor.STATE_FILE.read_text())["status"])
+
+    monkeypatch.setattr(executor, "sync_remaining_infra", sync_remaining_infra)
+    monkeypatch.setattr(executor, "auto_rollback", lambda *a, **k: events.append("auto_rollback") or 7)
     return events, state
+
+
+def _synced(events) -> bool:
+    return any(e.startswith("sync") for e in events)
 
 
 def _options(executor, **opts):
@@ -543,10 +586,39 @@ def test_a_database_change_forces_a_backup_before_anything_changes(executor, flo
     _options(executor, backup=False)
     assert executor.main() == 0
     order = [e for e in events if not e.startswith("pull")]
-    assert order == ["plan", "backup", "prune", "ff", "sync", f"tag {TAG}",
+    assert order == ["plan", "backup", "prune", "ff", "sync data", f"tag {TAG}",
                      "up frontend", "health", "up updater-shim"]
     assert events.index("pull db:new") < events.index("backup")
     assert json.loads(executor.STATE_FILE.read_text())["backup_dir"] == "backups/pre-update/b"
+
+
+def test_clamav_and_tusd_wait_until_the_new_app_is_verified(executor, flow):
+    events, state = flow
+    plan = _plan(executor, ["db", "redis", "clamav", "tusd"])
+    plan.ff_commit = "c" * 40
+    state["plan"] = plan
+    assert executor.main() == 0
+    order = [e for e in events if not e.startswith("pull")]
+    assert order == ["plan", "backup", "prune", "ff", "sync data", f"tag {TAG}",
+                     "up frontend", "health", "sync rest while restarting", "up updater-shim"]
+    job = json.loads(executor.STATE_FILE.read_text())
+    assert job["status"] == "healthy"
+
+
+def test_clamav_alone_never_runs_the_data_layer_step(executor, flow):
+    events, state = flow
+    state["plan"] = _plan(executor, ["clamav"])
+    assert executor.main() == 0
+    assert "sync data" not in events
+    assert events.index("health") < events.index("sync rest while restarting")
+
+
+def test_a_failed_app_start_rolls_back_without_touching_clamav_or_tusd(executor, flow):
+    events, state = flow
+    state["plan"], state["health"] = _plan(executor, ["db", "clamav", "tusd"]), False
+    assert executor.main() == 7
+    assert "auto_rollback" in events
+    assert not any(e.startswith("sync rest") for e in events)
 
 
 def test_no_forced_backup_when_the_setting_is_off(executor, flow):
@@ -561,7 +633,7 @@ def test_the_checkbox_alone_takes_a_backup(executor, flow):
     events, _ = flow
     _options(executor, backup=True)
     assert executor.main() == 0
-    assert "backup" in events and "sync" not in events
+    assert "backup" in events and not _synced(events)
 
 
 def test_a_failed_backup_changes_nothing(executor, flow):
@@ -570,7 +642,7 @@ def test_a_failed_backup_changes_nothing(executor, flow):
     plan.ff_commit = "c" * 40
     state["plan"], state["backup"] = plan, None
     assert executor.main() == 6
-    assert not {"ff", "sync", "prune"} & set(events)
+    assert not {"ff", "prune"} & set(events) and not _synced(events)
     assert not any(e.startswith(("tag", "up")) for e in events)
     assert executor.read_current_tag() == "v1.0.0"
     assert json.loads(executor.STATE_FILE.read_text())["status"] == "failed"
@@ -583,7 +655,7 @@ def test_a_failed_fast_forward_still_updates_the_app(executor, flow):
     plan.ff_commit = "c" * 40
     state["plan"], state["ff"] = plan, False
     assert executor.main() == 0
-    assert "sync" not in events and "up frontend" in events
+    assert not _synced(events) and "up frontend" in events
 
 
 def test_a_failed_data_layer_leaves_the_tag_and_rollback_target_alone(executor, flow):
@@ -602,7 +674,7 @@ def test_a_rollback_never_touches_git_infra_or_backups(executor, flow):
     job.update(action="rollback", target_tag="v0.9.0", options={"backup": True})
     executor.STATE_FILE.write_text(json.dumps(job))
     assert executor.main() == 0
-    assert not {"plan", "backup", "prune", "ff", "sync"} & set(events)
+    assert not {"plan", "backup", "prune", "ff"} & set(events) and not _synced(events)
 
 
 # --- pins ---------------------------------------------------------------------------
@@ -620,6 +692,17 @@ def test_every_status_the_executor_writes_is_one_the_shim_knows():
     written = set(re.findall(r'status="([a-z_]+)"', EXECUTOR.read_text(encoding="utf-8")))
     assert written, "no status literal found in run.py"
     assert written <= known, f"statuses the shim does not know: {written - known}"
+
+
+@pytest.mark.parametrize("locale", ["en", "de"])
+def test_every_phase_the_executor_sets_has_a_label(locale):
+    """AdminSystem renders `admin_system.update.phase.<phase>` only when the key
+    exists (`te`), so a phase without a label shows nothing, silently."""
+    phases = set(re.findall(r'set_phase\("([a-z_]+)"\)', EXECUTOR.read_text(encoding="utf-8")))
+    assert "syncing_services" in phases, "the scan found no set_phase literal"
+    path = ROOT / "frontend" / "src" / "i18n" / "locales" / f"{locale}.json"
+    labels = json.loads(path.read_text(encoding="utf-8"))["admin_system"]["update"]["phase"]
+    assert phases <= set(labels), f"phases without a {locale} label: {phases - set(labels)}"
 
 
 def test_the_infra_list_is_separate_and_exact(executor):

@@ -622,9 +622,10 @@
         "pulling": "Images werden geladen …",
         "backing_up": "Datenbank wird gesichert …",
         "syncing_checkout": "Host-Checkout wird aktualisiert …",
-        "syncing_infra": "Datenbank, Redis, ClamAV, tusd werden aktualisiert …",
+        "syncing_infra": "Datenbank und Redis werden aktualisiert …",
         "restarting_app": "App wird neu gestartet …",
-        "verifying": "Warte, bis die neue Version gesund meldet …"
+        "verifying": "Warte, bis die neue Version gesund meldet …",
+        "syncing_services": "ClamAV und tusd werden aktualisiert …"
       }
     },
     "live": {

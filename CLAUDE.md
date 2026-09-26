@@ -25,30 +25,29 @@ governs, never under the release that found it.
 
 ## Current state
 
-Backend **`v2.19.2`** is the newest tag (2026-09-26): the updater-shim traps
-SIGTERM, so the executor's final shim recreate no longer waits 10s.
-**`v2.19.1`** (same day): an update keeps the app down only while db/redis
-are recreated (clamav/tusd follow the verified app) and uvicorn's drain is
-bounded to 5s. **`v2.19.0`** (same day) is the release whose
+Backend **`v2.20.0`** is the newest tag (2026-09-26): automatic updates, off by
+default (§Self-update). **`v2.19.1`/`v2.19.2`** (same day): an update keeps the
+app down only while db/redis are recreated (clamav/tusd follow the verified
+app), uvicorn's drain is bounded to 5s, and the updater-shim stops on SIGTERM.
+**`v2.19.0`** (same day) is the release whose
 updater backs up DB+Redis and syncs infra, and the one that moved MariaDB 11 ->
 12.3, Redis 7 -> 8.10 and ClamAV 1.5.4 through it. Desktop client
 **`client-v1.4.6`** (shipped beside v2.18.0; refresh classification + hashed
-build lock) is still current - no v2.19.x changes anything under `client/`.
+build lock) is still current - nothing since v2.18.0 changes `client/`.
 **`v2.17.0` is a tag with NO images** (its release run failed the dependency
 audit on three anyio CVEs; tags are immutable, so the same commits shipped as
 v2.17.1 plus the anyio bump). **v2.17.1 shipped a sidebar showing nothing but
 "Overview"** (a `v-if` on the Overview link captured the categories' `v-else`;
 no test mounted AdminLayout); v2.17.2 is that one-line fix plus
-`tests/components/AdminLayout.test.ts`. **The reference host runs v2.19.1**
-(in-app update 2026-09-26 15:36 from v2.19.0, 42 s to `healthy`, no warnings,
-not rehearsed: no infra change, pre-update backup
-`backups/pre-update/2026-09-26_153631_v2.19.0-to-v2.19.1`; API down ~17 s, of
-which 11 s was the old v2.19.0 backend's unbounded drain hitting Docker's 10 s
-grace - the next update stops a bounded one; backend `Cmd` carries
-`--timeout-graceful-shutdown 5`, `FH_VERSION` checked). The v2.19.0 update
-before it synced infra: db/redis/clamav on `mariadb:12.3.3` / `redis:8.10.2` /
-`clamav:1.5.4`, API down ~70 s. The default moves of v2.16.0 and v2.19.0 are
-live there; v2.17.x, v2.18.0 and v2.19.1 move no default.
+`tests/components/AdminLayout.test.ts`. **The reference host runs v2.19.2**
+(in-app update 2026-09-26 16:07 from v2.19.1, 34 s to `healthy`, no warnings;
+the old backend - the first with the 5 s drain bound - stopped in 7.3 s against
+11.1 s on the update before, API down ~14 s; the shim recreate still took
+10.4 s because the shim being stopped was v2.19.1's, untrapped - the next
+update stops a trapped one). The v2.19.0 update before them synced infra:
+db/redis/clamav on `mariadb:12.3.3` / `redis:8.10.2` / `clamav:1.5.4`, API
+down ~70 s. The default moves of v2.16.0 and v2.19.0 are
+live there; v2.17.x, v2.18.0 and v2.19.1/.2 move no default.
 `data/updater/rollback_target.json` holds the version BEFORE last, not the
 running one. Images and working tree can diverge without any deploy - see §Ops
 on which half of a fix is live.
@@ -102,6 +101,7 @@ record.
 | v2.19.0 | - | - when the updater can sync infra (it fast-forwards the checkout, backs up, and recreates db/redis/clamav: MariaDB 11 -> 12.3 with `MARIADB_AUTO_UPGRADE`, Redis 7 -> 8.10, ClamAV 1.5.4); where it SKIPS (dirty/diverged checkout, override file, `COMPOSE_FILE`, no git) the log names `git fetch --tags && git merge --ff-only v2.19.0 && docker compose up -d --no-deps db redis clamav tusd`. The update TO v2.19.0 runs the new executor from the OLD SPA/backend (no checkbox, no options): the executor defaults do the backup. An old `data/redis/.gitkeep` may stay (uid 999, unlink warning; harmless) | **TWO default moves**, both updater: `updates.infra_sync` ON (an update recreates changed infra) and `updates.backup_on_db_change` ON (+ `updates.backup_default` ON: the Update dialog's box starts checked from the next update on). A MariaDB major cannot be rolled back in place - Rollback returns the app only |
 | v2.19.1 | - | - (a user `command:` override for the backend needs `--timeout-graceful-shutdown 5` added by hand; the update TO v2.19.1 still stops the unbounded v2.19.0 backend, up to Docker's 10s grace) | - |
 | v2.19.2 | - | - (the update TO v2.19.2 still stops the old, untrapped shim: 10s once, after `healthy`) | - |
+| v2.20.0 | - | - | - (automatic updates ship OFF. New `PUT /api/admin/settings/auto-update` is step-up gated when it turns them on or changes them while on; `pending_update.requested_by_id` may be `null`, with a new `origin`) |
 
 **Ten endpoints require the caller's own `password` in the body**: the v2.9.0
 re-auth gates `/api/admin/backup/export`, `/api/admin/backup/import` (form

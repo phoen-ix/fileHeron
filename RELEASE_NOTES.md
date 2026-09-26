@@ -1,3 +1,58 @@
+# file:Heron v2.20.0
+
+**Automatic updates, off by default.** Turn them on under **Status & updates**
+and file:Heron installs new releases by itself, at a time you choose, the same
+careful way a postponed update runs: new transfers pause, running ones finish,
+the database is backed up and the app restarts.
+
+**No migration, no default move, no host step.** Nothing changes until an admin
+turns automatic updates on. No desktop client release.
+
+---
+
+## What changes
+
+- **Automatic updates** (Status & updates). Choose which releases install
+  themselves - **patch releases only** (the default, e.g. v2.19.1 → v2.19.2),
+  patch and minor, or any newer release - and how long a release must have been
+  public first (**24 hours** by default, so a quick follow-up fix can come out
+  first). Releases outside your choice are still announced; install those with
+  **Update** as before.
+- **It asks for your password.** Turning automatic updates on, or widening them
+  while they are on, needs your password, because they install releases without
+  anyone entering it. Turning them off never asks.
+- **Its own scheduled task.** `auto_update` runs daily at **03:30** (site time).
+  Change its time, pause it or run it now on **Scheduled tasks**. The update card
+  shows what it will install and when.
+- **How it installs.** Exactly like **Postpone**: new transfers pause, running ones
+  finish (at most the drain wait), then the update runs with your usual
+  pre-update backup setting. It waits if an update is already running or
+  pending, and never starts while you have turned maintenance mode on yourself.
+- **You hear how it went.** Admins get an alert when an automatic update is
+  scheduled and another when it ends. This also applies to updates you
+  postponed, which used to finish silently. The audit log records
+  `update_auto_scheduled`, `update_completed` and `update_failed`.
+- **No retry loop.** A release whose automatic install fails or is rolled back
+  is not retried automatically; a newer release, or a manual **Update**, still
+  works. The update card names the release it skipped.
+
+## For API clients
+
+- New `GET` / `PUT /api/admin/settings/auto-update`. The `PUT` requires the
+  caller's `password` when it turns automatic updates on or changes them while
+  they are on; a wrong or missing one answers `403 INVALID_PASSWORD`.
+- In `GET /api/admin/system/transfer-activity`, `pending_update.requested_by_id`
+  is `null` for an update the automatic updater scheduled, and a new `origin`
+  field says `admin` or `auto`.
+
+---
+
+## Upgrading
+
+Click **Update**. Automatic updates stay off until you turn them on.
+
+---
+
 # file:Heron v2.19.2
 
 **The updater's helper container now stops at once.** Every update ended with

@@ -241,7 +241,12 @@ def clear_maintenance_after_update(db: Session) -> bool:
 
 
 def apply_pending_update(
-    db: Session, *, actor: User | None = None, request=None, reason: str = "drain"
+    db: Session,
+    *,
+    actor: User | None = None,
+    request=None,
+    reason: str = "drain",
+    backup: bool | None = None,
 ) -> dict | None:
     """Fire the deferred update: clear the pending record, keep maintenance ON,
     and hand the tag to the updater. Used by the drain worker and the admin
@@ -261,6 +266,10 @@ def apply_pending_update(
     retries. That was not a rare path - the drain worker runs in the worker
     container, which had no /state bind mount, so this call failed EVERY time
     (audit 2026-07-30). The mount is fixed in docker-compose.yml.
+
+    `backup`: the "Update now" dialog's choice; otherwise the one stored when the
+    update was postponed; otherwise (a record from before the checkbox) the
+    admin default.
     """
     pending = get_pending_update(db)
     if not pending:
@@ -290,8 +299,19 @@ def apply_pending_update(
     db.commit()
 
     from .release_apply import apply as _release_apply
+    from .release_apply import job_options
+
+    if backup is None:
+        stored = pending.get("backup")
+        if isinstance(stored, bool):
+            backup = stored
+        else:
+            from . import settings_registry
+
+            backup = bool(settings_registry.effective(db, settings_registry.K.UPDATES_BACKUP_DEFAULT))
+    options = job_options(db, backup=backup)
     try:
-        result = _release_apply(action="update", target_tag=pending["target_tag"])
+        result = _release_apply(action="update", target_tag=pending["target_tag"], options=options)
     except Exception:
         db.rollback()
         set_enabled(db, True, actor=actor, audit=False)
@@ -310,7 +330,7 @@ def apply_pending_update(
         actor_user_id=actor.id if actor else None,
         target_type="update_job",
         target_id=result["job_id"],
-        metadata={"target_tag": pending["target_tag"], "via": reason},
+        metadata={"target_tag": pending["target_tag"], "via": reason, "backup": backup},
         request=request,
     )
     db.commit()

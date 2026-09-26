@@ -1,7 +1,8 @@
 # fileHeron updater-executor - ephemeral. Spawned per-update by the
-# shim (`docker/updater-shim/`), does one job (pull images, rewrite
-# FH_TAG, `docker compose up -d backend worker frontend`, poll backend
-# health), then exits. The exit code is the job status; progress
+# shim (`docker/updater-shim/`), does one job (pull images, optionally
+# back up the database, fast-forward the host checkout and recreate the
+# infra services the release changed, rewrite FH_TAG, `docker compose up
+# -d backend worker frontend`, poll backend health), then exits. The exit code is the job status; progress
 # updates land in /state/current_job.json so backend can show them
 # to the admin in real time.
 #
@@ -14,8 +15,9 @@ FROM python:3.14.7-alpine3.24
 WORKDIR /app
 
 # docker CLI + compose plugin for the up -d call. curl for the health
-# probe (avoids a Python HTTP dep beyond stdlib).
-RUN apk add --no-cache docker-cli docker-cli-compose curl
+# probe (avoids a Python HTTP dep beyond stdlib). git to fast-forward the
+# host checkout to the release (run as the checkout's owner, never root).
+RUN apk add --no-cache docker-cli docker-cli-compose curl git
 
 ARG FH_VERSION=0.0.0-dev
 ARG FH_GIT_SHA=unknown

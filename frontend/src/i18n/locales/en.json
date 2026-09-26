@@ -575,7 +575,8 @@
       "confirm": {
         "title_update": "Update to {v}?",
         "title_rollback": "Roll back to {v}?",
-        "body": "Pulls the new images and restarts backend/worker/frontend. The app will be briefly unreachable. Confirm with your password.",
+        "body": "Pulls the new images, optionally backs up the database first, upgrades the database, Redis, ClamAV and tusd if the release changes them, and restarts the app. The app is briefly unreachable; a database upgrade can take several minutes. Confirm with your password.",
+        "body_rollback": "Pulls the previous version's images and restarts backend/worker/frontend on it. The database, Redis, ClamAV and tusd stay as they are. Confirm with your password.",
         "action": "Apply"
       },
       "job": {
@@ -586,7 +587,9 @@
         "done": "Done - running on {tag}.",
         "rolled_back": "Update failed - rolled back to the previous version.",
         "failed": "Failed to roll to {tag}.",
-        "log": "Show log"
+        "log": "Show log",
+        "backup_dir": "Pre-update backup: {dir}",
+        "warnings": "Warnings"
       },
       "toast": {
         "done": "Successfully updated to {tag}.",
@@ -608,7 +611,21 @@
         "cancelled": "Postponed update cancelled; maintenance mode off."
       },
       "rollback_head_unknown": "The database revision from before that update was not recorded, so a rollback across a migration will need a manual `alembic stamp`.",
-      "rollback_head_unknown_confirm": "The pre-update database revision was not recorded. If that release included a migration, the older version will not boot until an operator runs `alembic stamp` by hand (see README, Rollback). Continue only if you know the release carried no migration, or you can reach the host."
+      "rollback_head_unknown_confirm": "The pre-update database revision was not recorded. If that release included a migration, the older version will not boot until an operator runs `alembic stamp` by hand (see README, Rollback). Continue only if you know the release carried no migration, or you can reach the host.",
+      "backup": {
+        "label": "Back up database first",
+        "help": "Dumps MariaDB and snapshots Redis to backups/pre-update/ on the host before anything changes. Uploaded files are not included (the nightly backup covers them).",
+        "forced_note": "Taken anyway if this release upgrades the database."
+      },
+      "phase": {
+        "planning": "Checking what the release changes…",
+        "pulling": "Pulling images…",
+        "backing_up": "Backing up the database…",
+        "syncing_checkout": "Updating the host checkout…",
+        "syncing_infra": "Upgrading database, Redis, ClamAV, tusd…",
+        "restarting_app": "Restarting the app…",
+        "verifying": "Waiting for the new version to report healthy…"
+      }
     },
     "live": {
       "heading": "Live checks",
@@ -726,7 +743,12 @@
         "app_name": "Application / brand name"
       },
       "updates": {
-        "drain_max_wait_min": "Postpone-update drain max wait (minutes)"
+        "drain_max_wait_min": "Postpone-update drain max wait (minutes)",
+        "backup_default": "Back up the database before updating (pre-checked)",
+        "backup_on_db_change": "Always back up when the release upgrades the database",
+        "backup_keep": "Pre-update backups to keep",
+        "backup_max_age_days": "Delete pre-update backups older than (days)",
+        "infra_sync": "Let updates upgrade db, Redis, ClamAV and tusd"
       },
       "storage": {
         "low_threshold_percent": "Low-disk threshold (% free)",
@@ -791,7 +813,12 @@
         "hibp_enabled": "Check new passwords against the Have I Been Pwned breach corpus (k-anonymity, no password leaves the server). Fails open if the service is unreachable."
       },
       "updates": {
-        "drain_max_wait_min": "When an admin postpones a self-update, how long maintenance mode waits for in-flight transfers to finish before applying the update anyway. (1-1440 min, default 30.)"
+        "drain_max_wait_min": "When an admin postpones a self-update, how long maintenance mode waits for in-flight transfers to finish before applying the update anyway. (1-1440 min, default 30.)",
+        "backup_default": "Whether the Update dialog's \"Back up database first\" box starts checked. The backup (MariaDB dump + Redis snapshot) goes to backups/pre-update/ on the host.",
+        "backup_on_db_change": "The updater takes the backup even when the box is unchecked if the release changes the database service - a MariaDB major upgrade cannot be undone.",
+        "backup_keep": "How many pre-update backups the updater keeps; older ones are deleted on the next update. The newest is always kept. (0 = no count limit, max 100, default 3.)",
+        "backup_max_age_days": "Pre-update backups older than this are deleted on the next update. The newest is always kept. (0 = no age limit, max 3650, default 30.)",
+        "infra_sync": "When a release changes the database, Redis, ClamAV or tusd, the updater fast-forwards the host checkout to the release and recreates just those services. Off: those stay a manual host step."
       },
       "storage": {
         "low_threshold_percent": "Flag storage low when free space drops below this percent of the volume. 0 disables the percent check. (0-50%, default 5.)",

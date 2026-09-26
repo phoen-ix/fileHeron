@@ -159,6 +159,7 @@ DYNAMIC_PREFIXES = (
     "admin_ip_blocks.reason.",
     "admin_ip_blocks.status.",
     "admin_system.update.job.",             # per updater job state
+    "admin_system.update.phase.",           # per updater job phase (AdminSystem phaseLabel)
     "share_create.progress.log.",           # useUpload log kinds
     "share_create.intro.",                  # per share kind
     "share_detail.eyebrow.",

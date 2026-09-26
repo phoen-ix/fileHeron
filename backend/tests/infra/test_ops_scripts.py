@@ -343,3 +343,114 @@ def test_the_drill_defaults_like_compose(tmp_path: Path) -> None:
     what compose's `${FH_TAG:-latest}` would run."""
     assert "CHILD_SEES=latest" in _run_drill_env(tmp_path, "DB_ROOT_PASSWORD=x\n", {})
     assert "CHILD_SEES=latest" in _run_drill_env(tmp_path, _DOTENV, {"FH_TAG": ""})
+
+
+# --- restore.sh on a pre-update (database-only) backup ---------------------------
+#
+# The in-app updater's pre-update backup holds db.sql + redis.rdb and no tarballs.
+# restore.sh used to wipe data/files FIRST and only then fail on the missing
+# files.tar.gz - every upload destroyed on the way to an error. It now decides
+# what the backup holds from the manifest, before the prompt and before `down`.
+# These run the real script under bash with a stub `docker` that answers the
+# redis loader's probes.
+
+_STUB_DOCKER = """#!/bin/sh
+echo "docker $*" >> "$DOCKER_LOG"
+case "$*" in
+  "compose ps -q redis") echo cid ;;
+  *"redis-cli DBSIZE"*) echo 3 ;;
+  *"CONFIG SET appendonly yes"*) echo OK ;;
+  *"INFO persistence"*) printf 'aof_enabled:1\\naof_rewrite_in_progress:0\\naof_last_bgrewrite_status:ok\\n' ;;
+esac
+exit 0
+"""
+
+
+def _restore_fixture(tmp_path: Path, artifacts: dict[str, bytes]) -> tuple[Path, Path, dict[str, str]]:
+    import hashlib
+    import shutil
+
+    root = tmp_path / "root"
+    (root / "scripts").mkdir(parents=True)
+    shutil.copy(_SCRIPTS / "restore.sh", root / "scripts" / "restore.sh")
+    (root / ".env").write_text("DB_ROOT_PASSWORD=x\n")
+    (root / "data" / "files").mkdir(parents=True)
+    (root / "data" / "files" / "sentinel.bin").write_text("an upload\n")
+    (root / "data" / "redis").mkdir(parents=True)
+    backup = tmp_path / "backup"
+    backup.mkdir()
+    lines = []
+    for name, data in artifacts.items():
+        (backup / name).write_bytes(data)
+        lines.append(f"{hashlib.sha256(data).hexdigest()}  {name}\n")
+    (backup / "manifest.txt").write_text("".join(lines))
+    bindir = tmp_path / "bin"
+    bindir.mkdir()
+    (bindir / "docker").write_text(_STUB_DOCKER)
+    (bindir / "docker").chmod(0o755)
+    log = tmp_path / "docker.log"
+    log.write_text("")
+    env = {"PATH": f"{bindir}:/usr/bin:/bin", "DOCKER_LOG": str(log)}
+    return root, backup, env
+
+
+def _run_restore(root: Path, backup: Path, env: dict[str, str]):
+    import subprocess
+
+    return subprocess.run(  # noqa: S603 - this repo's own script, stub docker on PATH
+        ["/bin/bash", str(root / "scripts" / "restore.sh"), str(backup)],
+        input="restore\n", env=env, capture_output=True, text=True, timeout=60,
+    )
+
+
+def _tarball(tmp_path: Path, tree: str, member: str) -> bytes:
+    import io
+    import tarfile
+
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w:gz") as tar:
+        data = b"restored\n"
+        info = tarfile.TarInfo(f"{tree}/{member}")
+        info.size = len(data)
+        tar.addfile(info, io.BytesIO(data))
+    return buf.getvalue()
+
+
+def test_a_database_backup_restores_without_touching_the_files(tmp_path: Path) -> None:
+    root, backup, env = _restore_fixture(tmp_path, {
+        "db.sql": b"-- dump\n-- Dump completed\n",
+        "redis.rdb": b"REDIS0012",
+        "KIND": b"kind=pre-update\ncomponents=db,redis\n",
+    })
+    r = _run_restore(root, backup, env)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert (root / "data" / "files" / "sentinel.bin").read_text() == "an upload\n"
+    assert "data/files and data/quarantine are NOT touched" in r.stdout
+    assert "kind=pre-update" in r.stdout
+    log = Path(env["DOCKER_LOG"]).read_text()
+    assert "chown -R 1000:1000 /d/files" not in log
+    assert "compose up -d redis" in log and "compose up -d db" in log
+
+
+def test_a_full_backup_still_replaces_the_files(tmp_path: Path) -> None:
+    root, backup, env = _restore_fixture(tmp_path, {
+        "db.sql": b"-- dump\n",
+        "files.tar.gz": _tarball(tmp_path, "files", "2026/09/a.bin"),
+        "quarantine.tar.gz": _tarball(tmp_path, "quarantine", "q.bin"),
+        "redis.rdb": b"REDIS0012",
+    })
+    r = _run_restore(root, backup, env)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert not (root / "data" / "files" / "sentinel.bin").exists()
+    assert (root / "data" / "files" / "2026" / "09" / "a.bin").read_text() == "restored\n"
+
+
+def test_a_backup_of_neither_shape_changes_nothing(tmp_path: Path) -> None:
+    root, backup, env = _restore_fixture(tmp_path, {
+        "db.sql": b"-- dump\n",
+        "files.tar.gz": _tarball(tmp_path, "files", "a.bin"),
+    })
+    r = _run_restore(root, backup, env)
+    assert r.returncode == 2, r.stdout + r.stderr
+    assert Path(env["DOCKER_LOG"]).read_text() == "", "nothing may run before the shape is known"
+    assert (root / "data" / "files" / "sentinel.bin").exists()

@@ -3,16 +3,20 @@
 #
 # Usage:
 #   scripts/restore.sh ./backups/2026-05-15_021500
+#   scripts/restore.sh ./backups/pre-update/2026-09-26_120000_v2.18.0-to-v2.19.0
 #
 # What it does (with confirmations):
-#   1. Verifies sha256s in manifest.txt
+#   1. Verifies sha256s in manifest.txt, and decides from it what the backup
+#      holds: a FULL backup (backup.sh: db.sql, redis.rdb, files.tar.gz,
+#      quarantine.tar.gz) or a DATABASE backup (the in-app updater's pre-update
+#      backup: db.sql, redis.rdb). Anything else stops here, before any change.
 #   2. Stops the docker stack
-#   3. Wipes ./data/{db,files,quarantine,redis} - DESTRUCTIVE
-#   4. Restores DB via mariadb client (drops and re-imports DB_NAME)
-#   5. Restores files.tar.gz + quarantine.tar.gz under ./data/
-#   6. Restores redis.rdb into the redis container's volume (removing the AOF
+#   3. Full backup only: wipes ./data/{files,quarantine} and restores
+#      files.tar.gz + quarantine.tar.gz under ./data/ - DESTRUCTIVE
+#   4. Restores redis.rdb into the redis container's volume (removing the AOF
 #      first - see the step itself for why that is load-bearing)
-#   7. Brings the stack back up
+#   5. Restores DB via mariadb client (drops and re-imports DB_NAME)
+#   6. Brings the stack back up
 #
 # This is irreversible. Read the prompts.
 
@@ -44,9 +48,35 @@ fi
 echo "[restore] verifying manifest …"
 ( cd "$BACKUP" && sha256sum -c manifest.txt )
 
+# What the backup holds decides what gets touched, and it is decided HERE, before
+# the prompt and before `down`. A pre-update backup has no tarballs: the old flow
+# wiped data/files and only then failed on the missing files.tar.gz, destroying
+# every upload on the way to an error. awk rather than a grep pipeline: with
+# pipefail, `grep -q` closing the pipe early can SIGPIPE the writer and report a
+# match as a failure.
+listed() { awk -v f="$1" '$2 == f { found = 1 } END { exit !found }' "$BACKUP/manifest.txt"; }
+if listed db.sql && listed redis.rdb && listed files.tar.gz && listed quarantine.tar.gz; then
+    MODE=full
+elif listed db.sql && listed redis.rdb && ! listed files.tar.gz && ! listed quarantine.tar.gz; then
+    MODE=db-redis
+else
+    echo "FATAL: $BACKUP/manifest.txt lists neither a full backup (db.sql, redis.rdb," \
+         "files.tar.gz, quarantine.tar.gz) nor a database backup (db.sql, redis.rdb)" >&2
+    exit 2
+fi
+if [ -f "$BACKUP/KIND" ]; then
+    echo "[restore] backup: $(tr '\n' ' ' < "$BACKUP/KIND")"
+fi
+
 echo
-echo "  WARNING: this will DELETE the current database, data/files, data/quarantine,"
-echo "           and Redis state, then restore from $BACKUP. This cannot be undone."
+if [ "$MODE" = full ]; then
+    echo "  WARNING: this will DELETE the current database, data/files, data/quarantine,"
+    echo "           and Redis state, then restore from $BACKUP. This cannot be undone."
+else
+    echo "  WARNING: this will DELETE the current database and Redis state, then restore"
+    echo "           them from $BACKUP. data/files and data/quarantine are NOT touched."
+    echo "           This cannot be undone."
+fi
 echo
 read -r -p "  Type 'restore' to proceed: " ANSWER
 [ "$ANSWER" = "restore" ] || { echo "[restore] aborted"; exit 3; }
@@ -54,21 +84,25 @@ read -r -p "  Type 'restore' to proceed: " ANSWER
 echo "[restore] stopping stack …"
 docker compose down
 
-echo "[restore] wiping local data …"
-rm -rf data/files data/quarantine
-mkdir -p data/files data/quarantine
+if [ "$MODE" = full ]; then
+    echo "[restore] wiping local data …"
+    rm -rf data/files data/quarantine
+    mkdir -p data/files data/quarantine
 
-echo "[restore] restoring file archives …"
-tar -C data -xzf "$BACKUP/files.tar.gz"
-tar -C data -xzf "$BACKUP/quarantine.tar.gz"
+    echo "[restore] restoring file archives …"
+    tar -C data -xzf "$BACKUP/files.tar.gz"
+    tar -C data -xzf "$BACKUP/quarantine.tar.gz"
 
-# The containers run as UID 1000; the dirs above were just recreated as whoever
-# invoked this script. On any host where that is not uid 1000, the backend,
-# worker and tusd cannot write after the restore and uploads fail immediately -
-# at the worst possible moment. install.sh and restore_drill_e2e.sh both already
-# do this; restore.sh was the outlier (audit 2026-07-30).
-echo "[restore] fixing ownership for the containers (UID 1000) …"
-docker run --rm -v "$ROOT/data":/d alpine chown -R 1000:1000 /d/files /d/quarantine
+    # The containers run as UID 1000; the dirs above were just recreated as whoever
+    # invoked this script. On any host where that is not uid 1000, the backend,
+    # worker and tusd cannot write after the restore and uploads fail immediately -
+    # at the worst possible moment. install.sh and restore_drill_e2e.sh both already
+    # do this; restore.sh was the outlier (audit 2026-07-30).
+    echo "[restore] fixing ownership for the containers (UID 1000) …"
+    docker run --rm -v "$ROOT/data":/d alpine chown -R 1000:1000 /d/files /d/quarantine
+else
+    echo "[restore] database backup: data/files and data/quarantine are left as they are"
+fi
 
 echo "[restore] restoring redis snapshot …"
 # Redis runs with `--appendonly yes`, and a Redis 7 server started with AOF

@@ -54,6 +54,15 @@ def _lift_if_stale(db) -> bool:
     stamp = maintenance_svc.get_handoff_at(db)
     if not stamp:
         return False
+    # An update that is still RUNNING is not a hand-off that produced nothing:
+    # a pre-update backup plus a MariaDB major upgrade can outlast the stale
+    # window, and lifting the gate then lets new transfers start against a
+    # stack about to restart. The 6 h cap in clear_maintenance_after_update
+    # still bounds a job file stuck in-flight.
+    from ..services import release_apply
+
+    if release_apply.get_version().get("job_in_progress"):
+        return False
     try:
         from datetime import datetime, timedelta
 

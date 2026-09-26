@@ -26,10 +26,8 @@ From the 2026-07-30 audit.
 """
 from __future__ import annotations
 
-import importlib.util
 import json
 import re
-import sys
 from pathlib import Path
 
 import pytest
@@ -39,22 +37,8 @@ EXECUTOR = ROOT / "docker" / "updater-executor" / "run.py"
 SHIM = ROOT / "docker" / "updater-shim" / "shim.sh"
 
 
-@pytest.fixture
-def executor(tmp_path, monkeypatch):
-    """Load run.py with its paths pointed at a temp directory."""
-    state = tmp_path / "state"
-    workspace = tmp_path / "workspace"
-    state.mkdir()
-    workspace.mkdir()
-    monkeypatch.setenv("EXECUTOR_STATE_FILE", str(state / "current_job.json"))
-    monkeypatch.setenv("EXECUTOR_WORKSPACE", str(workspace))
-
-    spec = importlib.util.spec_from_file_location("fh_updater_run", EXECUTOR)
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules["fh_updater_run"] = mod
-    spec.loader.exec_module(mod)
-    yield mod
-    sys.modules.pop("fh_updater_run", None)
+# The `executor` fixture (run.py loaded against a temp state dir + workspace)
+# lives in tests/infra/conftest.py, shared with the backup and infra-sync tests.
 
 
 # --- flow-selfupdate-8 -------------------------------------------------------
@@ -213,7 +197,7 @@ def test_the_shim_is_deliberately_not_recreated():
     src = EXECUTOR.read_text(encoding="utf-8")
     import ast
 
-    m = re.search(r"SERVICES = (\[[^\]]*\])", src)
+    m = re.search(r"^SERVICES = (\[[^\]]*\])", src, re.M)
     assert m
     assert "updater-shim" not in m.group(1)
     assert {"backend", "worker", "frontend"} == set(ast.literal_eval(m.group(1)))

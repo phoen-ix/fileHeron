@@ -575,7 +575,8 @@
       "confirm": {
         "title_update": "Auf {v} aktualisieren?",
         "title_rollback": "Auf {v} zurückrollen?",
-        "body": "Holt die neuen Images und startet Backend/Worker/Frontend neu. Die App ist kurz nicht erreichbar. Mit deinem Passwort bestätigen.",
+        "body": "Holt die neuen Images, sichert optional zuerst die Datenbank, aktualisiert Datenbank, Redis, ClamAV und tusd, falls das Release sie ändert, und startet die App neu. Die App ist kurz nicht erreichbar; ein Datenbank-Upgrade kann einige Minuten dauern. Mit deinem Passwort bestätigen.",
+        "body_rollback": "Holt die Images der vorherigen Version und startet Backend/Worker/Frontend darauf neu. Datenbank, Redis, ClamAV und tusd bleiben, wie sie sind. Mit deinem Passwort bestätigen.",
         "action": "Anwenden"
       },
       "job": {
@@ -586,7 +587,9 @@
         "done": "Fertig - läuft auf {tag}.",
         "rolled_back": "Update fehlgeschlagen - auf die vorherige Version zurückgerollt.",
         "failed": "Update auf {tag} fehlgeschlagen.",
-        "log": "Log anzeigen"
+        "log": "Log anzeigen",
+        "backup_dir": "Sicherung vor dem Update: {dir}",
+        "warnings": "Warnungen"
       },
       "toast": {
         "done": "Erfolgreich auf {tag} aktualisiert.",
@@ -608,7 +611,21 @@
         "cancelled": "Verschobenes Update abgebrochen; Wartungsmodus aus."
       },
       "rollback_head_unknown": "Die Datenbank-Revision von vor diesem Update wurde nicht erfasst; ein Rollback über eine Migration hinweg erfordert daher ein manuelles `alembic stamp`.",
-      "rollback_head_unknown_confirm": "Die Datenbank-Revision von vor dem Update wurde nicht erfasst. Falls dieses Release eine Migration enthielt, startet die ältere Version erst, nachdem jemand `alembic stamp` von Hand ausführt (siehe README, Rollback). Nur fortfahren, wenn das Release keine Migration enthielt oder Zugriff auf den Host besteht."
+      "rollback_head_unknown_confirm": "Die Datenbank-Revision von vor dem Update wurde nicht erfasst. Falls dieses Release eine Migration enthielt, startet die ältere Version erst, nachdem jemand `alembic stamp` von Hand ausführt (siehe README, Rollback). Nur fortfahren, wenn das Release keine Migration enthielt oder Zugriff auf den Host besteht.",
+      "backup": {
+        "label": "Zuerst Datenbank sichern",
+        "help": "Sichert MariaDB und Redis auf dem Host nach backups/pre-update/, bevor sich etwas ändert. Hochgeladene Dateien sind nicht enthalten (die nächtliche Sicherung deckt sie ab).",
+        "forced_note": "Wird trotzdem angelegt, wenn dieses Release die Datenbank aktualisiert."
+      },
+      "phase": {
+        "planning": "Prüfe, was das Release ändert …",
+        "pulling": "Images werden geladen …",
+        "backing_up": "Datenbank wird gesichert …",
+        "syncing_checkout": "Host-Checkout wird aktualisiert …",
+        "syncing_infra": "Datenbank, Redis, ClamAV, tusd werden aktualisiert …",
+        "restarting_app": "App wird neu gestartet …",
+        "verifying": "Warte, bis die neue Version gesund meldet …"
+      }
     },
     "live": {
       "heading": "Live-Prüfungen",
@@ -726,7 +743,12 @@
         "app_name": "Anwendungs-/Markenname"
       },
       "updates": {
-        "drain_max_wait_min": "Max. Wartezeit beim verschobenen Update (Minuten)"
+        "drain_max_wait_min": "Max. Wartezeit beim verschobenen Update (Minuten)",
+        "backup_default": "Datenbank vor dem Update sichern (vorausgewählt)",
+        "backup_on_db_change": "Immer sichern, wenn das Release die Datenbank aktualisiert",
+        "backup_keep": "Aufzubewahrende Sicherungen vor Updates",
+        "backup_max_age_days": "Sicherungen vor Updates löschen nach (Tagen)",
+        "infra_sync": "Updates dürfen Datenbank, Redis, ClamAV und tusd aktualisieren"
       },
       "storage": {
         "low_threshold_percent": "Schwelle wenig Platz (% frei)",
@@ -791,7 +813,12 @@
         "hibp_enabled": "Neue Passwörter gegen die Have-I-Been-Pwned-Datenbank prüfen (k-Anonymität, kein Passwort verlässt den Server). Fällt bei Nichterreichbarkeit offen aus."
       },
       "updates": {
-        "drain_max_wait_min": "Wenn ein Admin ein Self-Update verschiebt, wie lange der Wartungsmodus auf laufende Übertragungen wartet, bevor das Update trotzdem angewendet wird. (1-1440 Min., Standard 30.)"
+        "drain_max_wait_min": "Wenn ein Admin ein Self-Update verschiebt, wie lange der Wartungsmodus auf laufende Übertragungen wartet, bevor das Update trotzdem angewendet wird. (1-1440 Min., Standard 30.)",
+        "backup_default": "Ob das Feld „Zuerst Datenbank sichern“ im Update-Dialog vorausgewählt ist. Die Sicherung (MariaDB-Dump + Redis-Snapshot) landet auf dem Host unter backups/pre-update/.",
+        "backup_on_db_change": "Der Updater sichert auch ohne Häkchen, wenn das Release den Datenbank-Dienst ändert - ein MariaDB-Major-Upgrade lässt sich nicht rückgängig machen.",
+        "backup_keep": "Wie viele Sicherungen vor Updates der Updater behält; ältere werden beim nächsten Update gelöscht. Die neueste bleibt immer. (0 = keine Anzahlgrenze, max. 100, Standard 3.)",
+        "backup_max_age_days": "Sicherungen vor Updates, die älter sind, werden beim nächsten Update gelöscht. Die neueste bleibt immer. (0 = keine Altersgrenze, max. 3650, Standard 30.)",
+        "infra_sync": "Ändert ein Release Datenbank, Redis, ClamAV oder tusd, setzt der Updater den Host-Checkout per Fast-Forward auf das Release und erstellt genau diese Dienste neu. Aus: Das bleibt ein manueller Schritt auf dem Host."
       },
       "storage": {
         "low_threshold_percent": "Speicher als knapp markieren, wenn der freie Platz unter diesen Prozentsatz des Volumes fällt. 0 = Prozentprüfung aus. (0-50 %, Standard 5.)",

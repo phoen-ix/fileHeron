@@ -251,6 +251,10 @@ export interface UpdaterStatus {
    *  across a migration will then need a manual `alembic stamp`. */
   rollback_alembic_head_known?: boolean
   job_in_progress: string | null
+  /** Admin setting: whether the Update dialog's backup box starts checked. */
+  backup_default?: boolean
+  /** Admin setting: the updater backs up anyway when the release changes the database. */
+  backup_on_db_change?: boolean
 }
 
 export interface UpdaterJob {
@@ -264,6 +268,13 @@ export interface UpdaterJob {
   error: string | null
   previous_tag: string | null
   rollback_reason: string | null
+  /** Progress detail beside `state` (planning, backing_up, syncing_infra, ...);
+   *  absent from executors older than the pre-update backup. */
+  phase?: string | null
+  /** Workspace-relative directory of the pre-update backup, when one was taken. */
+  backup_dir?: string | null
+  /** Problems that did not fail the update (e.g. infra sync skipped). */
+  warnings?: string[]
 }
 
 export function getUpdaterStatus() {
@@ -283,11 +294,17 @@ export interface UpdateApplyResult {
   deadline_iso?: string
 }
 
-export function applyUpdate(password: string, target_tag: string, postpone = false) {
+export function applyUpdate(
+  password: string,
+  target_tag: string,
+  postpone = false,
+  backup?: boolean,
+) {
   return api.post<UpdateApplyResult>('/admin/system/update', {
     password,
     target_tag,
     postpone,
+    backup,
   })
 }
 
@@ -303,6 +320,8 @@ export interface PendingUpdate {
   target_tag: string
   deadline_iso: string
   requested_by_id: number
+  /** The backup choice made when postponing; null on an older record. */
+  backup?: boolean | null
 }
 
 export interface TransferActivity {
@@ -316,8 +335,8 @@ export function getTransferActivity() {
   return api.get<TransferActivity>('/admin/system/transfer-activity')
 }
 
-export function forcePendingUpdate(password: string) {
-  return api.post<UpdateApplyResult>('/admin/system/update/now', { password })
+export function forcePendingUpdate(password: string, backup?: boolean) {
+  return api.post<UpdateApplyResult>('/admin/system/update/now', { password, backup })
 }
 
 export function cancelPendingUpdate() {

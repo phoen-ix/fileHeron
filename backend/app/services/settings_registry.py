@@ -93,6 +93,14 @@ TUNABLES: list[Tunable] = [
     # Postpone-update drain cap: 1 min floor, 24h ceiling. After this the
     # deferred update applies even if transfers haven't fully drained.
     Tunable(K.UPDATES_DRAIN_MAX_WAIT_MIN, "UPDATES_DRAIN_MAX_WAIT_MIN", "int", "updates", 1, 1440),
+    # Pre-update backup + infra sync. The bounds are repeated in the executor
+    # (docker/updater-executor/run.py _OPTION_BOUNDS), which re-validates every
+    # job field because it runs as root.
+    Tunable(K.UPDATES_BACKUP_DEFAULT, "UPDATES_BACKUP_DEFAULT", "bool", "updates"),
+    Tunable(K.UPDATES_BACKUP_ON_DB_CHANGE, "UPDATES_BACKUP_ON_DB_CHANGE", "bool", "updates"),
+    Tunable(K.UPDATES_BACKUP_KEEP, "UPDATES_BACKUP_KEEP", "int", "updates", 0, 100),
+    Tunable(K.UPDATES_BACKUP_MAX_AGE_DAYS, "UPDATES_BACKUP_MAX_AGE_DAYS", "int", "updates", 0, 3650),
+    Tunable(K.UPDATES_INFRA_SYNC, "UPDATES_INFRA_SYNC", "bool", "updates"),
     Tunable(K.HIBP_ENABLED, "HIBP_ENABLED", "bool", "security"),
     Tunable(K.APP_NAME, "APP_NAME", "str", "branding"),
     # --- Storage / low-disk degradation (≤ 1 TiB byte ceiling) ---

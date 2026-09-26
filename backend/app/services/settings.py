@@ -231,6 +231,15 @@ class Keys:
     # Registry tunable: how long the postpone flow waits for transfers to drain
     # before applying the update anyway.
     UPDATES_DRAIN_MAX_WAIT_MIN = "updates.drain_max_wait_min"
+    # Registry tunables handed to the updater-executor in each job's `options`
+    # (the backend cannot see ./backups; the executor applies them). backup_default
+    # only pre-checks the Update dialog's box; backup_on_db_change is enforced by
+    # the executor itself.
+    UPDATES_BACKUP_DEFAULT = "updates.backup_default"
+    UPDATES_BACKUP_ON_DB_CHANGE = "updates.backup_on_db_change"
+    UPDATES_BACKUP_KEEP = "updates.backup_keep"
+    UPDATES_BACKUP_MAX_AGE_DAYS = "updates.backup_max_age_days"
+    UPDATES_INFRA_SYNC = "updates.infra_sync"
     # Error alerting (email admins on server errors). Master switch + the HTTP-5xx
     # source toggle + recipient targeting are simple kv; the cooldown + hourly cap
     # are registry tunables (see settings_registry). The worker/cron source has

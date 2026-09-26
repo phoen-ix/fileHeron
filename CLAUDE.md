@@ -51,14 +51,19 @@ an available update. A release also needs the desktop-client half bumped in
 `pyproject.toml` + `__init__.py` + `client/RELEASE_NOTES.md` in lockstep before
 its `client-v*` tag; CI checks that on every push.
 
-**The in-app updater swaps ONLY the backend/worker/frontend images** (plus the
-updater-shim, recreated from the HOST's compose file - so a change to its own
-compose section needs a `git pull` there first). A compose change to any other
-service keeps running its old command until someone runs
-`docker compose up -d <svc>` on the host. v2.12.0's
-row below is the dangerous shape: the migration lands, `last_progress_at` stays
-NULL forever, every reader falls back to `created_at`, and the upload reaper goes
-on killing long uploads while the release notes say it is fixed.
+**The in-app updater swaps backend/worker/frontend on every update, and brings
+the infra (db, redis, clamav, tusd) to the release only when it can.** Executors
+from the pre-update-backup release on fast-forward the host checkout to the
+release commit (as its owner, only to the executor image's own `FH_GIT_SHA`) and
+recreate the infra services whose definition changed, after an optional DB+Redis
+backup (§Ops). When that is unsafe - dirty or diverged checkout, an override file,
+`COMPOSE_FILE`, not a git clone, `updates.infra_sync` off - it SKIPS infra with a
+warning naming the manual command, and a compose change to those services keeps
+running its old command until someone runs it. v2.12.0's row below is that shape:
+the migration lands, `last_progress_at` stays NULL forever, every reader falls
+back to `created_at`, and the upload reaper goes on killing long uploads while
+the release notes say it is fixed. Traefik on the host and the `scripts/ops/*`
+units (copies) are never covered.
 
 ### Migrations, host steps and default moves
 
@@ -609,6 +614,14 @@ The invariants that keep them true:
 
 - **Every `docker compose up` in `updater-executor/run.py` passes `--no-deps`.** `up` also brings up a service's `depends_on`, so whenever compose decided db or redis needed recreating, an update restarted the data layer too - and the backend then had to wait on `depends_on: db: service_healthy` for a COLD MariaDB (healthcheck `interval: 10s, retries: 5` over `innodb_initialized`). Measured: **30s** of 5xx with the data layer restarted against **6s** for updates that left db and redis alone. The `compose run` calls already had the flag; only `up` did not. The fix rides `updater-executor:<target_tag>`, which the shim pulls per run, so it applies to the update that INSTALLS it.
 - **Every 5xx in an update window is the PROXY's, not the app's.** `error_log` has ZERO rows in those windows while capturing every other 500, so the capture path works and the app simply was not running; Traefik's own 500 body is the 21-byte `Internal Server Error`. Status alone does not tell you which layer answered: check for an `error_log` row and the body size.
+- **Infra sync: `INFRA_SYNC_ORDER` is a SEPARATE constant from `SERVICES`** (pinned exactly by `test_the_shim_is_deliberately_not_recreated`, now anchored `^SERVICES = `). Infra `up` is `--no-deps --force-recreate --pull never`, one service at a time, each gated on its own healthcheck (budget from the healthcheck, floored per service; redis also waits for DBSIZE to be an integer). Backend and worker are stopped with RAW `docker stop` only when db or redis is recreated - `compose stop/start` may cascade. A db/redis failure restarts the old app and fails the job BEFORE `write_current_tag`; clamav/tusd failing is a warning. Infra is never rolled back: MariaDB and Redis majors cannot go back in place.
+- **"Changed" is decided by the executor, never by compose's config hash** (it already differs between host- and executor-created containers for identical definitions - see §Deploy + rollback). A service changes on image drift (running `.Config.Image` vs the release's, normalised), a before/after `compose config --format json` diff from one binary in one run, or a bind-mounted checkout file touched by the fast-forward (initdb scripts exempt). The config JSON carries every `.env` secret: `_compose_config` never logs it or compose's stderr (pinned).
+- **`plan_infra` is READ-ONLY and the backup comes before any host change.** Order: plan → pull app + infra images → backup (fails = job fails, nothing changed) → prune → ff → infra → tag/rollback file → app `up`. A release compose that does not resolve against the host's `.env` skips infra WITHOUT the ff, or the ff'd file would also break the app `up` and the auto-rollback. A checkout AHEAD of the tag syncs from itself only while `git diff tag HEAD -- docker-compose.yml <mounts>` is empty - never unreleased infra.
+- **The executor writes only statuses every older shim, backend and SPA know**; detail goes in the job's `phase`, `backup_dir` and `warnings` fields (the shim's `jq '. + {}'` keeps them). The shim supervising an update is the PREVIOUS release's, so a new status would hit its `*)` arm and, after exit, be overwritten as a crash. Pinned: every `status="…"` literal in run.py has a case arm in shim.sh.
+- **The executor's option defaults protect the update that installs it.** That update's job comes from the OLD backend with no `options`, so `_OPTION_DEFAULTS` must stay `infra_sync=True, backup_on_db_change=True` - that is what backs up before the first MariaDB upgrade. Bounds are duplicated in the registry and pinned equal (`test_the_retention_bounds_match_the_executors`). The Update-dialog checkbox only exists from the release AFTER, and rollbacks run the older executor, which ignores options.
+- **A release's compose app sections must run the PREVIOUS app release too.** After an infra sync the checkout is at the new tag, and auto-rollback (and Rollback) move only app images, against that compose file and the new infra.
+- **Pre-update backups live in `backups/pre-update/<stamp>_<from>-to-<to>/`** (db.sql, redis.rdb, KIND, manifest.txt), invisible to backup.sh's keep-7 (counts `backups/*/` with a manifest), the drill (`backups/20*`) and restic. 0700/0600 and chowned to the owner of `backups/` - the executor is root and backup.sh's host user must be able to delete them. Retention runs on each update and never deletes the newest. The dump password travels as `MYSQL_PWD` env, never argv.
+- **`restore.sh` decides full vs database-only from the manifest BEFORE the prompt and `down`.** It used to wipe `data/files` and then fail on the missing tarball. Run-the-script tests with a stub docker in `test_ops_scripts.py`.
 - **Which half of a fix is live on a host depends on where it ships.** `scripts/` and `scripts/ops/*` run from the WORKING TREE (systemd's `ExecStart` points at `/opt/fileHeron/scripts/...`), so a commit to them takes effect on the next timer firing with no release, no image and no push. Everything under `backend/` and `frontend/` is baked into an image and reaches a host only via a tagged release. A local-only commit touching both therefore leaves the host running new scripts against old code. Don't infer "deployed" from `git log`.
 
 ### Deploy + rollback (`scripts/deploy.sh`, `scripts/rollback.sh`)

@@ -359,6 +359,10 @@ class UpdateApplyRequest(BaseModel):
     # drain worker apply once in-flight transfers finish (or the max-wait cap
     # elapses). The SPA sets this after seeing active transfers.
     postpone: bool = Field(default=False)
+    # Back up the database (+ Redis) before updating. None = the admin setting
+    # `updates.backup_default`, so a client that predates the checkbox keeps
+    # working. Rollback ignores it.
+    backup: bool | None = Field(default=None)
 
     @field_validator("target_tag")
     @classmethod
@@ -439,12 +443,32 @@ def _dispatch_ops_to_admins(db: Session, payload: dict, link_url: str) -> None:
 
 
 @router.get("/system/update-status", response_model=UpdaterStatus)
-def update_status(_admin: User = Depends(get_current_admin)) -> dict:
+def update_status(
+    db: Session = Depends(get_db), _admin: User = Depends(get_current_admin)
+) -> dict:
     """Read-only: what's the updater's current state? Returns
-    {current_tag, rollback_target, job_in_progress}. Frontend polls
+    {current_tag, rollback_target, job_in_progress} plus the two backup
+    settings the Update dialog renders its checkbox from. Frontend polls
     this on mount + after kicking off a job."""
-    from ...services import release_apply
-    return release_apply.get_version()
+    from ...services import release_apply, settings_registry
+
+    status = release_apply.get_version()
+    status["backup_default"] = bool(
+        settings_registry.effective(db, settings_registry.K.UPDATES_BACKUP_DEFAULT)
+    )
+    status["backup_on_db_change"] = bool(
+        settings_registry.effective(db, settings_registry.K.UPDATES_BACKUP_ON_DB_CHANGE)
+    )
+    return status
+
+
+def _resolve_backup(db: Session, requested: bool | None) -> bool:
+    """The dialog's choice, or the admin default when the caller sent none."""
+    if requested is not None:
+        return requested
+    from ...services import settings_registry
+
+    return bool(settings_registry.effective(db, settings_registry.K.UPDATES_BACKUP_DEFAULT))
 
 
 @router.get("/system/update-jobs/{job_id}", response_model=UpdaterJob)
@@ -473,6 +497,7 @@ def apply_update(
     if not payload.target_tag:
         raise AppError(400, "INVALID_INPUT", "target_tag is required.")
     _refuse_downgrade(payload.target_tag)
+    backup = _resolve_backup(db, payload.backup)
 
     if payload.postpone:
         from datetime import timedelta
@@ -490,6 +515,7 @@ def apply_update(
                 "target_tag": payload.target_tag,
                 "deadline_iso": deadline,
                 "requested_by_id": admin.id,
+                "backup": backup,
             },
             actor=admin,
         )
@@ -499,7 +525,7 @@ def apply_update(
             actor_user_id=admin.id,
             target_type="update_job",
             target_id=None,
-            metadata={"target_tag": payload.target_tag, "deadline": deadline},
+            metadata={"target_tag": payload.target_tag, "deadline": deadline, "backup": backup},
             request=request,
         )
         db.commit()
@@ -518,7 +544,11 @@ def apply_update(
         maintenance_svc.set_enabled(db, False, actor=admin, request=request)
         db.commit()
 
-    result = release_apply.apply(action="update", target_tag=payload.target_tag)
+    result = release_apply.apply(
+        action="update",
+        target_tag=payload.target_tag,
+        options=release_apply.job_options(db, backup=backup),
+    )
 
     record_audit_event(
         db,
@@ -526,7 +556,7 @@ def apply_update(
         actor_user_id=admin.id,
         target_type="update_job",
         target_id=result["job_id"],
-        metadata={"target_tag": payload.target_tag},
+        metadata={"target_tag": payload.target_tag, "backup": backup},
         request=request,
     )
     _dispatch_ops_to_admins(
@@ -609,7 +639,7 @@ def force_pending_update(
 
     _verify_password_or_403(db, admin, payload.password, request=request)
     result = maintenance_svc.apply_pending_update(
-        db, actor=admin, request=request, reason="admin_force"
+        db, actor=admin, request=request, reason="admin_force", backup=payload.backup
     )
     if result is None:
         raise AppError(409, "NO_PENDING_UPDATE", "There is no postponed update to apply.")

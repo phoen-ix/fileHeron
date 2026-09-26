@@ -102,6 +102,8 @@ class UpdaterStatus(APIBaseModel):
     rollback_target: str | None = None
     rollback_alembic_head_known: bool = False
     job_in_progress: str | None = None
+    backup_default: bool = True
+    backup_on_db_change: bool = True
 
 
 class UpdaterJob(APIBaseModel):
@@ -115,6 +117,9 @@ class UpdaterJob(APIBaseModel):
     error: str | None = None
     previous_tag: str | None = None
     rollback_reason: str | None = None
+    phase: str | None = None
+    backup_dir: str | None = None
+    warnings: list[str] = []
 
 
 class UpdateApplyResult(APIBaseModel):
@@ -131,6 +136,8 @@ class PendingUpdate(APIBaseModel):
     target_tag: str
     deadline_iso: str
     requested_by_id: int
+    # None on a record postponed before the checkbox existed.
+    backup: bool | None = None
 
 
 class TransferActivityResponse(APIBaseModel):

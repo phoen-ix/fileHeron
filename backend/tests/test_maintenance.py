@@ -174,9 +174,10 @@ def test_apply_pending_update_hands_off_with_the_gate_still_shut(db, monkeypatch
     from app.services import release_apply
 
     calls = {}
-    def _fake_apply(*, action, target_tag):
+    def _fake_apply(*, action, target_tag, options=None):
         calls["action"] = action
         calls["target_tag"] = target_tag
+        calls["options"] = options
         return {"job_id": "job-1", "action": action, "target_tag": target_tag}
     monkeypatch.setattr(release_apply, "apply", _fake_apply)
 
@@ -186,7 +187,19 @@ def test_apply_pending_update_hands_off_with_the_gate_still_shut(db, monkeypatch
 
     result = maintenance_svc.apply_pending_update(db, reason="drain")
     assert result["job_id"] == "job-1"
-    assert calls == {"action": "update", "target_tag": "v9.9.9"}
+    # A record postponed before the checkbox existed carries no `backup`, so the
+    # admin default (on) applies; the registry values ride along for the executor.
+    assert calls == {
+        "action": "update",
+        "target_tag": "v9.9.9",
+        "options": {
+            "backup": True,
+            "backup_on_db_change": True,
+            "backup_keep": 3,
+            "backup_max_age_days": 30,
+            "infra_sync": True,
+        },
+    }
     assert maintenance_svc.is_enabled(db) is True, "the gate re-opened mid-pull"
     assert maintenance_svc.get_pending_update(db) is None
     assert maintenance_svc.get_handoff_at(db) is not None
@@ -228,7 +241,7 @@ async def test_drain_worker_fires_when_drained(db, monkeypatch):
 
     monkeypatch.setattr(
         release_apply, "apply",
-        lambda *, action, target_tag: {"job_id": "j", "action": action, "target_tag": target_tag},
+        lambda *, action, target_tag, options=None: {"job_id": "j", "action": action, "target_tag": target_tag},
     )
     maintenance_svc.set_enabled(db, True, actor=None)
     maintenance_svc.set_pending_update(
@@ -253,7 +266,7 @@ async def test_drain_worker_fires_past_deadline(db, monkeypatch):
 
     monkeypatch.setattr(
         release_apply, "apply",
-        lambda *, action, target_tag: {"job_id": "j", "action": action, "target_tag": target_tag},
+        lambda *, action, target_tag, options=None: {"job_id": "j", "action": action, "target_tag": target_tag},
     )
     maintenance_svc.set_enabled(db, True, actor=None)
     maintenance_svc.set_pending_update(
@@ -308,7 +321,7 @@ async def test_an_unknown_download_count_still_fires_at_the_deadline(db, monkeyp
 
     monkeypatch.setattr(
         release_apply, "apply",
-        lambda *, action, target_tag: {"job_id": "j"},
+        lambda *, action, target_tag, options=None: {"job_id": "j"},
     )
     maintenance_svc.set_enabled(db, True, actor=None)
     maintenance_svc.set_pending_update(

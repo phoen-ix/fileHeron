@@ -193,6 +193,17 @@ class Settings(BaseSettings):
     # for in-flight transfers to finish before applying the update anyway.
     # Admin-tunable via the registry. Default 30 min.
     UPDATES_DRAIN_MAX_WAIT_MIN: int = 30
+    # Self-update: pre-update DB+Redis backup and infra sync (all admin-tunable).
+    # BACKUP_DEFAULT pre-checks the Update dialog's box; BACKUP_ON_DB_CHANGE makes
+    # the updater back up regardless when the release changes the db service.
+    # Pre-update backups beyond KEEP or older than MAX_AGE_DAYS are pruned on the
+    # next update (0 = no limit; the newest is always kept). INFRA_SYNC lets an
+    # update fast-forward the checkout and recreate changed db/redis/clamav/tusd.
+    UPDATES_BACKUP_DEFAULT: bool = True
+    UPDATES_BACKUP_ON_DB_CHANGE: bool = True
+    UPDATES_BACKUP_KEEP: int = 3
+    UPDATES_BACKUP_MAX_AGE_DAYS: int = 30
+    UPDATES_INFRA_SYNC: bool = True
     # Where finalized files live + tusd's working dir + AV quarantine.
     # Must all be on the SAME filesystem (atomic os.rename across them).
     STORAGE_ROOT: str = "/data/files"

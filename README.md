@@ -724,6 +724,66 @@ Or via host cron:
 ./scripts/restore.sh ./backups/<stamp>/   # sha256-verifies, prompts for literal "restore", then reimports
 ```
 
+`restore.sh` reads the manifest before it asks anything: a full backup (`db.sql`,
+`redis.rdb`, `files.tar.gz`, `quarantine.tar.gz`) replaces the database, Redis and
+`data/files` + `data/quarantine`; a **pre-update backup** (`db.sql` + `redis.rdb`,
+see below) replaces the database and Redis only and leaves the files alone. A
+manifest of neither shape stops before anything is touched.
+
+### Restoring a pre-update backup
+
+The in-app Update can back up the database and Redis first (a checkbox in the
+Update dialog; always, by default, when the release upgrades the database). Those
+backups land in `backups/pre-update/<stamp>_<from>-to-<to>/` - apart from the
+nightly ones, so they are not counted by the nightly retention, not drilled and not
+pushed to restic. The updater keeps the newest `updates.backup_keep` (3) and
+deletes any older than `updates.backup_max_age_days` (30) on each update; the newest
+one is always kept.
+
+**Undo an update's data, the server itself is fine** (for example a migration that
+went wrong): roll the app back, then restore:
+
+```bash
+scripts/rollback.sh <from-tag>          # or Rollback in /admin/system
+./scripts/restore.sh backups/pre-update/<dir>
+```
+
+The database, Redis, ClamAV and tusd stay on their new versions; the old app runs
+against them.
+
+**The database (or Redis) did not come back during an update.** The job names the
+backup and the old app is running again, but the data service is stuck on the
+release's definition. Go back to the previous compose file first - enough whenever
+the data directory itself is intact (a bad setting, an image problem):
+
+```bash
+git checkout <from-tag>                  # the compose file of the version you came from
+docker compose up -d --no-deps db        # or redis
+```
+
+**MariaDB cannot read its datadir any more** (it upgraded `data/db` before failing),
+or you need the old server version back: a major upgrade rewrites `data/db` in
+place and cannot be undone, so go back to an empty datadir on the old version and
+load the backup into it:
+
+```bash
+docker stop fileheron-backend fileheron-worker && docker compose stop db
+docker run --rm -v "$PWD/data":/d alpine mv /d/db /d/db.failed-upgrade
+git checkout <from-tag>                  # the compose file pins the old images
+sed -i 's/^FH_TAG=.*/FH_TAG=<from-tag>/' .env
+docker compose up -d db                  # fresh datadir, created from .env
+./scripts/restore.sh backups/pre-update/<dir>
+```
+
+The next update upgrades again, after a fresh backup. A database-only restore
+leaves files uploaded after the backup on disk without a row, and rows deleted
+after it are back without their bytes; `restore_validate.py` lists both:
+
+```bash
+docker cp scripts/restore_validate.py fileheron-backend:/app/scripts/
+docker compose exec -T backend python scripts/restore_validate.py
+```
+
 **Restore drills** prove the backup actually restores. `scripts/restore_drill_e2e.sh`
 restores the latest backup into an **isolated throwaway compose project** (own name,
 data, port - never touches the live stack), runs `alembic upgrade head`, then
@@ -746,9 +806,9 @@ drill cannot report green once backups have stopped arriving.
 > ```
 >
 > The units are copied, not symlinked, so re-copy and `daemon-reload` after
-> changing them. `OnFailure=` is commented out in both: until you point it at a
-> unit that notifies you, a failed backup is only a `failed` unit and a journald
-> line. Set `BACKUP_RESTIC_REPO`/`BACKUP_RESTIC_PASSWORD` if you want the
+> changing them. Both carry `OnFailure=fileheron-alert-failure@%n.service`, which
+> emails the app's admins - install that unit too, or a failed backup is only a
+> `failed` unit and a journald line. Set `BACKUP_RESTIC_REPO`/`BACKUP_RESTIC_PASSWORD` if you want the
 > archive pushed offsite; unset means local-only.
 
 ## Upgrades
@@ -768,21 +828,54 @@ Alembic migrations run from the backend entrypoint on every boot - idempotent
 only**; back up before upgrading. (Image downgrade after a forward migration needs an
 `alembic stamp` from the newer image first.)
 
-**App vs. infra - which upgrades need the host step.** The in-app Update swaps only
-the app images it builds: **backend, worker, frontend** - and, at the end of a
-successful run, recreates the updater-shim on its new image, using the compose file
-of your checkout. Changes to the **database, Redis, ClamAV or tusd images,
-`docker-compose.yml` (the shim's own section included), `docker/clamav/clamd.conf`,
-or your host Traefik config are NOT covered** - those need the manual
-`git pull && docker compose up -d` above. Each release's notes call out
-when a host step is required; a plain app release does not.
+**What an in-app Update does**, in order - nothing on the host changes before the
+backup has succeeded:
 
-**MariaDB 11 -> 12.3 (host step).** `docker-compose.yml` moved the `db` service to
-`mariadb:12.3` (newest LTS) with `MARIADB_AUTO_UPGRADE=1`, so the container upgrades
-`data/db` in place on its first start on the new image. The in-app Update does not
-touch the database: run `./scripts/backup.sh` first (a major upgrade cannot be rolled
-back), then `git pull && docker compose up -d db`, and check `docker compose logs db`
-for the upgrade before bringing the app back.
+1. Works out which infra services (database, Redis, ClamAV, tusd) the release
+   changes: a new image, a changed `docker-compose.yml` section, or a changed file
+   the service mounts from the checkout (`docker/clamav/clamd.conf`).
+2. Pulls the release's app images and the new infra images.
+3. Backs up the database and Redis to `backups/pre-update/` when the Update
+   dialog's box is checked - and regardless when the release changes the database
+   (`updates.backup_on_db_change`). A failed backup stops the update with nothing
+   changed.
+4. Fast-forwards your checkout to the release commit (`git merge --ff-only`, as
+   the checkout's owner), so `docker-compose.yml`, `docker/` and `scripts/` match
+   the release.
+5. Recreates only the changed infra services, one at a time, each waiting for its
+   healthcheck. For the database and Redis the backend and worker are stopped
+   meanwhile, so expect a few minutes of downtime when MariaDB upgrades itself
+   (`MARIADB_AUTO_UPGRADE=1`). If the database or Redis does not come back
+   healthy, the update stops, the old app is started again and the job names the
+   backup to restore (see *Restoring a pre-update backup*); ClamAV or tusd failing
+   only adds a warning.
+6. Swaps backend, worker and frontend, waits for the new version, and recreates
+   the updater-shim; a failed start rolls the APP back automatically. Infra is
+   never rolled back automatically - a MariaDB or Redis major has no way back in
+   place.
+
+**When the infra step is skipped** the app update still runs, and the job shows
+a warning with the manual command:
+
+```bash
+git fetch --tags && git merge --ff-only <tag> \
+  && docker compose up -d --no-deps db redis clamav tusd
+```
+
+It skips when the checkout has local edits to files the release changes, has
+diverged, or is ahead of the release with infra changes the release does not
+have; when a `docker-compose.override.yml` exists or `.env` sets `COMPOSE_FILE`
+(the updater cannot apply either); when the install is not a git checkout or is a
+shallow clone; when the release's compose file needs a variable your `.env` lacks;
+or when `updates.infra_sync` is off. Keep site settings in `.env`, not in
+`docker-compose.yml`. Your host Traefik config and the `scripts/ops/` systemd units
+(copies) stay manual. If the host reboots while the data layer is being
+recreated, bring the rest back with `docker compose up -d`.
+
+**The first update from a version without this** (v2.18.0 and older) already runs
+the new updater - the shim always runs the target release's executor - so it syncs
+infra and backs up before a database upgrade; the checkbox itself appears in the
+Update dialog from the following update on.
 
 **Scripted deploy / rollback (bootstrap + hotpatch).** `scripts/deploy.sh` pulls
 the GHCR images for `FH_TAG`, taken from the environment first and `.env` second
@@ -960,6 +1053,10 @@ via `/admin/settings/advanced`.
 | `FH_TAG` | `latest` | GHCR image tag (the in-app updater rewrites it). |
 | `UPDATER_HOST_WORKSPACE` / `UPDATER_HOST_STATE` | `${PWD}` / `${PWD}/data/updater` | Host paths the updater shim resolves. |
 | `UPDATES_DRAIN_MAX_WAIT_MIN` | `30` | Max wait for transfers to drain before a postponed update applies. ↻ |
+| `UPDATES_BACKUP_DEFAULT` | `true` | Whether the Update dialog's "Back up database first" box starts checked. ↻ |
+| `UPDATES_BACKUP_ON_DB_CHANGE` | `true` | Back up before updating whenever the release changes the database service, checkbox or not. ↻ |
+| `UPDATES_BACKUP_KEEP` / `UPDATES_BACKUP_MAX_AGE_DAYS` | `3` / `30` | Retention of `backups/pre-update/`, applied on each update (0 = no limit; the newest is always kept). ↻ |
+| `UPDATES_INFRA_SYNC` | `true` | Let an update fast-forward the checkout and recreate changed db/redis/clamav/tusd. ↻ |
 | `BACKUP_RESTIC_REPO` / `BACKUP_RESTIC_PASSWORD` | empty | Optional offsite restic push - read by the host `scripts/backup.sh`, not by the app. |
 | `METRICS_BEARER_TOKEN` / `METRICS_ALLOWED_IPS` / `METRICS_CACHE_TTL_SEC` | empty/empty/`60` | `/api/metrics` auth + cache. |
 | `OIDC_ALLOW_INSECURE_HTTP` | `false` | Disables HTTPS enforcement for OIDC discovery, JWKS **and the client-secret-bearing token exchange**. Only for a self-hosted IdP on a trusted private network with no TLS. |

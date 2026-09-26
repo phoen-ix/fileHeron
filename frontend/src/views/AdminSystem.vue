@@ -29,7 +29,7 @@
   import { useUiStore } from '@/stores/ui'
   import { formatInSiteTime } from '@/utils/datetime'
 
-  const { t, locale } = useI18n()
+  const { t, te, locale } = useI18n()
   const { describe } = useApiError()
   const ui = useUiStore()
 
@@ -58,6 +58,9 @@
   )
   const confirming = ref<null | 'update' | 'rollback' | 'force'>(null)
   const passwordInput = ref('')
+  // "Back up database first" - starts from the admin setting (or the choice
+  // stored when the update was postponed); rollback does not offer it.
+  const backupBeforeUpdate = ref(true)
   const confirmError = ref<string | null>(null)
   const submitting = ref(false)
   const checking = ref(false)
@@ -268,6 +271,9 @@
     confirming.value = kind
     passwordInput.value = ''
     confirmError.value = null
+    const settingDefault = updaterStatus.value?.backup_default ?? true
+    backupBeforeUpdate.value =
+      kind === 'force' ? (pendingUpdate.value?.backup ?? settingDefault) : settingDefault
     if (kind === 'update') {
       // Refresh the in-flight transfer counts so the dialog can offer "postpone".
       await loadTransferActivity()
@@ -301,7 +307,12 @@
           ui.pushToast(t('admin_system.update.toast.no_target'), 'error')
           return
         }
-        const { data } = await applyUpdate(passwordInput.value, tag, postpone)
+        const { data } = await applyUpdate(
+          passwordInput.value,
+          tag,
+          postpone,
+          backupBeforeUpdate.value,
+        )
         if (data.postponed) {
           ui.pushToast(t('admin_system.update.postpone.enabled_toast'), 'success')
           await loadTransferActivity()
@@ -309,7 +320,7 @@
           void pollJob(data.job_id)
         }
       } else if (confirming.value === 'force') {
-        const { data } = await forcePendingUpdate(passwordInput.value)
+        const { data } = await forcePendingUpdate(passwordInput.value, backupBeforeUpdate.value)
         await loadTransferActivity()
         if (data.job_id) void pollJob(data.job_id)
       } else {
@@ -333,6 +344,14 @@
       activeJob.value !== null &&
       ['queued', 'pulling', 'restarting', 'rolling_back'].includes(activeJob.value.state),
   )
+
+  // Executors that back up and sync infra report a finer-grained phase; an
+  // unknown one (a newer executor than this SPA) is simply not shown.
+  const phaseLabel = computed(() => {
+    const phase = activeJob.value?.phase
+    const key = `admin_system.update.phase.${phase}`
+    return phase && te(key) ? t(key) : null
+  })
 
   onMounted(() => {
     void load()
@@ -553,7 +572,17 @@
                     : t(`admin_system.update.job.${activeJob.state}`, { tag: activeJob.target_tag })
               }}
             </strong>
+            <span v-if="jobInFlight && phaseLabel" class="job-phase">{{ phaseLabel }}</span>
             <span v-if="activeJob.error" class="error-line">{{ activeJob.error }}</span>
+            <span v-if="activeJob.backup_dir" class="job-backup">
+              {{ t('admin_system.update.job.backup_dir', { dir: activeJob.backup_dir }) }}
+            </span>
+          </div>
+          <div v-if="activeJob.warnings?.length" class="fh-notice job-warnings" data-tone="warning">
+            <strong>{{ t('admin_system.update.job.warnings') }}</strong>
+            <ul>
+              <li v-for="(w, i) in activeJob.warnings" :key="i">{{ w }}</li>
+            </ul>
           </div>
           <details v-if="activeJob.log_tail.length > 0" class="job-log" open>
             <summary>{{ t('admin_system.update.job.log') }}</summary>
@@ -645,7 +674,13 @@
                     })
             }}
           </h2>
-          <p class="modal-body">{{ t('admin_system.update.confirm.body') }}</p>
+          <p class="modal-body">
+            {{
+              confirming === 'rollback'
+                ? t('admin_system.update.confirm.body_rollback')
+                : t('admin_system.update.confirm.body')
+            }}
+          </p>
           <div
             v-if="confirming === 'rollback' && updaterStatus?.rollback_alembic_head_known === false"
             class="fh-notice"
@@ -666,6 +701,20 @@
             }}
           </div>
           <form @submit.prevent="submitConfirm(false)">
+            <label v-if="confirming !== 'rollback'" class="checkbox backup-check">
+              <input v-model="backupBeforeUpdate" type="checkbox" data-testid="update-backup" />
+              <span>
+                <span class="cb-label">{{ t('admin_system.update.backup.label') }}</span>
+                <span class="cb-help">{{ t('admin_system.update.backup.help') }}</span>
+                <span
+                  v-if="!backupBeforeUpdate && updaterStatus?.backup_on_db_change !== false"
+                  class="cb-help"
+                  data-testid="update-backup-forced"
+                >
+                  {{ t('admin_system.update.backup.forced_note') }}
+                </span>
+              </span>
+            </label>
             <label class="fh-field">
               <span class="fh-field-label">{{ t('common.current_password') }}</span>
               <input
@@ -926,6 +975,36 @@
     display: flex;
     flex-direction: column;
     gap: var(--fh-space-1);
+  }
+  .job-phase,
+  .job-backup {
+    color: var(--fh-subtle);
+    font-size: var(--fh-text-body-sm);
+  }
+  .job-backup {
+    font-family: var(--fh-font-mono);
+    word-break: break-all;
+  }
+  .job-warnings {
+    margin-top: var(--fh-space-2);
+  }
+  .job-warnings ul {
+    margin: var(--fh-space-1) 0 0;
+    padding-left: var(--fh-space-4);
+  }
+  .checkbox {
+    display: flex;
+    gap: var(--fh-space-2);
+    align-items: flex-start;
+    padding: var(--fh-space-2) 0;
+  }
+  .cb-label {
+    display: block;
+  }
+  .cb-help {
+    display: block;
+    font-size: var(--fh-text-body-sm);
+    color: var(--fh-subtle);
   }
   .job-log {
     margin-top: var(--fh-space-2);

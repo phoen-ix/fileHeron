@@ -133,7 +133,24 @@ def get_job(job_id: str) -> dict:
         "error": state.get("error"),
         "previous_tag": state.get("previous_tag"),
         "rollback_reason": state.get("rollback_reason"),
+        # Written by executors that back up and sync infra; absent from older
+        # ones. `phase` is progress detail beside `state`, whose values stay the
+        # ones every shim knows.
+        "phase": _str_or_none(state.get("phase")),
+        "backup_dir": _str_or_none(state.get("backup_dir")),
+        "warnings": _warnings(state.get("warnings")),
     }
+
+
+def _str_or_none(value: object) -> str | None:
+    return value[:500] if isinstance(value, str) else None
+
+
+def _warnings(value: object) -> list[str]:
+    """The executor caps these too; the file is root-written, so cap again."""
+    if not isinstance(value, list):
+        return []
+    return [w[:500] for w in value if isinstance(w, str)][:20]
 
 
 def _normalize_state(s: str) -> str:
@@ -182,7 +199,23 @@ def _claim_lock():
             handle.close()
 
 
-def apply(*, action: str, target_tag: str | None) -> dict:
+def job_options(db, *, backup: bool) -> dict:
+    """The `options` block of an update job: whether to back up first, plus the
+    registry values the executor applies itself - it alone can see ./backups and
+    the host checkout. The executor re-validates every field; an executor older
+    than this ignores the block."""
+    from . import settings_registry as reg
+
+    return {
+        "backup": bool(backup),
+        "backup_on_db_change": bool(reg.effective(db, reg.K.UPDATES_BACKUP_ON_DB_CHANGE)),
+        "backup_keep": int(reg.effective(db, reg.K.UPDATES_BACKUP_KEEP)),
+        "backup_max_age_days": int(reg.effective(db, reg.K.UPDATES_BACKUP_MAX_AGE_DAYS)),
+        "infra_sync": bool(reg.effective(db, reg.K.UPDATES_INFRA_SYNC)),
+    }
+
+
+def apply(*, action: str, target_tag: str | None, options: dict | None = None) -> dict:
     """Write a new job to the state file. Returns the job id; the
     caller (admin endpoint) hands that to the SPA which polls /jobs/{id}
     for live progress.
@@ -190,6 +223,9 @@ def apply(*, action: str, target_tag: str | None) -> dict:
     Translates the v0.x update/rollback contract:
     - action=update → target_tag must be supplied
     - action=rollback → target_tag is read from rollback_target.json
+
+    `options` (see job_options) rides along in the job; the shim merges state
+    with `jq '. + {...}'`, so it survives to the executor.
     """
     with _claim_lock():
         # Refuse if a job is in flight. Same UX as the v0.x single-flight
@@ -229,14 +265,17 @@ def apply(*, action: str, target_tag: str | None) -> dict:
                 "Updater state directory is not writable; check the /state bind mount.",
             ) from e
 
-        job = {
-            "id": str(uuid.uuid4()),
+        job_id = str(uuid.uuid4())
+        job: dict[str, object] = {
+            "id": job_id,
             "action": action,
             "target_tag": target,
             "status": "pending",
             "created_at": _utcnow_iso(),
             "log_tail": [],
         }
+        if options is not None:
+            job["options"] = options
         _write_state_text(json.dumps(job, indent=2))
-        logger.info("update job written: id=%s action=%s target=%s", job["id"], action, target)
-        return {"job_id": job["id"], "action": action, "target_tag": target}
+        logger.info("update job written: id=%s action=%s target=%s", job_id, action, target)
+        return {"job_id": job_id, "action": action, "target_tag": target}

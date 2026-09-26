@@ -15,7 +15,7 @@ RUFF_PIN := $(shell sed -n 's/.*"ruff==\([0-9.]*\)".*/\1/p' backend/pyproject.to
 
 help:
 	@echo "Targets:"
-	@echo "  lint / lint-backend / lint-frontend   CI lint gates (ruff + eslint)"
+	@echo "  lint / lint-backend / lint-frontend   CI lint gates (ruff + eslint + prettier)"
 	@echo "  lint-docker    backend ruff in an ephemeral python:3.12-slim (no local ruff needed)"
 	@echo "  typecheck      backend mypy, exactly as CI's infra-lint job runs it"
 	@echo "  test / test-backend / test-frontend   pytest (needs backend .[dev]) + vitest"
@@ -93,7 +93,7 @@ lint-backend:
 	cd backend && ruff check --no-cache .
 
 lint-frontend:
-	cd frontend && npm run lint
+	cd frontend && npm run lint && npm run format:check
 
 # Escape hatch when the host ruff can't/shouldn't be synced: re-resolves the
 # pin in a throwaway container, faithful to CI with nothing installed on the

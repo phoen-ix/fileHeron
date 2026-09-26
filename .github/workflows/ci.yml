@@ -234,6 +234,10 @@ jobs:
         run: npm run build
       - name: Lint (eslint)
         run: npm run lint
+      # The .prettierrc existed but nothing enforced it, so 134 files had
+      # drifted by the time they were reformatted in one go (f928a20).
+      - name: Format (prettier --check)
+        run: npm run format:check
       - name: Unit tests (vitest)
         run: npm run test
 

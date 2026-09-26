@@ -58,7 +58,7 @@ cd .. && docker compose -f docker-compose.yml -f docker-compose.e2e.yml down -v
 |---|---|
 | Backend lint (ruff, pinned) | `make lint-backend` (or `make lint-docker` if you don't have the pinned ruff) |
 | Backend types (mypy, pinned) | `make typecheck` |
-| Frontend lint (eslint) | `make lint-frontend` |
+| Frontend lint + format (eslint, prettier --check) | `make lint-frontend` (`make fmt` fixes formatting) |
 | Backend tests | `make test-backend` |
 | Frontend type-check + tests | `make build` + `make test-frontend` |
 | Migrations up/down roundtrip + MariaDB semantics | `make test-mariadb` (throwaway MariaDB in Docker); also runs in CI (`alembic-roundtrip` job) |

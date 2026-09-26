@@ -1,3 +1,21 @@
+# file:Heron v2.19.2
+
+**The updater's helper container now stops at once.** Every update ended with
+a 10-second wait while Docker stopped the old updater-shim, which ignored the
+stop signal until Docker killed it. It now exits immediately. The app was never
+affected: this happened after the update had already finished.
+
+**No migration, no default move, no host step.** No desktop client release.
+
+---
+
+## Upgrading
+
+Click **Update**. This update still has to stop the old helper, so its last
+step takes 10 seconds one more time; updates after it do not.
+
+---
+
 # file:Heron v2.19.1
 
 **Updates keep the app down for less time.** An update that upgrades the

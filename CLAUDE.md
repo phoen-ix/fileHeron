@@ -25,13 +25,15 @@ governs, never under the release that found it.
 
 ## Current state
 
-Backend **`v2.19.1`** is the newest tag (2026-09-26): an update keeps the app
-down only while db/redis are recreated (clamav/tusd follow the verified app) and
-uvicorn's drain is bounded to 5s. **`v2.19.0`** (same day) is the release whose
+Backend **`v2.19.2`** is the newest tag (2026-09-26): the updater-shim traps
+SIGTERM, so the executor's final shim recreate no longer waits 10s.
+**`v2.19.1`** (same day): an update keeps the app down only while db/redis
+are recreated (clamav/tusd follow the verified app) and uvicorn's drain is
+bounded to 5s. **`v2.19.0`** (same day) is the release whose
 updater backs up DB+Redis and syncs infra, and the one that moved MariaDB 11 ->
 12.3, Redis 7 -> 8.10 and ClamAV 1.5.4 through it. Desktop client
 **`client-v1.4.6`** (shipped beside v2.18.0; refresh classification + hashed
-build lock) is still current - neither v2.19.x changes anything under `client/`.
+build lock) is still current - no v2.19.x changes anything under `client/`.
 **`v2.17.0` is a tag with NO images** (its release run failed the dependency
 audit on three anyio CVEs; tags are immutable, so the same commits shipped as
 v2.17.1 plus the anyio bump). **v2.17.1 shipped a sidebar showing nothing but
@@ -99,6 +101,7 @@ record.
 | v2.18.0 | `202609240001` `users.email` + `invite_tokens.email` → `utf8mb4_bin` (MariaDB; lowercases first) | - (`SETUP_TOKEN` matters only to a not-yet-set-up instance; install.sh writes it. The updater-shim healthcheck is in `docker-compose.yml`: the executor recreates the shim on its new image but from the HOST's compose file, so it appears only where the checkout has been pulled - on the reference host, whose checkout is `main`, the next in-app update brings it) | `POST /api/admin/system/update` refuses a target older than the running version (`409 DOWNGRADE_REFUSED`). A rollback across the migration is safe: `stamp` leaves the binary collation, which older code only compares more strictly |
 | v2.19.0 | - | - when the updater can sync infra (it fast-forwards the checkout, backs up, and recreates db/redis/clamav: MariaDB 11 -> 12.3 with `MARIADB_AUTO_UPGRADE`, Redis 7 -> 8.10, ClamAV 1.5.4); where it SKIPS (dirty/diverged checkout, override file, `COMPOSE_FILE`, no git) the log names `git fetch --tags && git merge --ff-only v2.19.0 && docker compose up -d --no-deps db redis clamav tusd`. The update TO v2.19.0 runs the new executor from the OLD SPA/backend (no checkbox, no options): the executor defaults do the backup. An old `data/redis/.gitkeep` may stay (uid 999, unlink warning; harmless) | **TWO default moves**, both updater: `updates.infra_sync` ON (an update recreates changed infra) and `updates.backup_on_db_change` ON (+ `updates.backup_default` ON: the Update dialog's box starts checked from the next update on). A MariaDB major cannot be rolled back in place - Rollback returns the app only |
 | v2.19.1 | - | - (a user `command:` override for the backend needs `--timeout-graceful-shutdown 5` added by hand; the update TO v2.19.1 still stops the unbounded v2.19.0 backend, up to Docker's 10s grace) | - |
+| v2.19.2 | - | - (the update TO v2.19.2 still stops the old, untrapped shim: 10s once, after `healthy`) | - |
 
 **Nine endpoints require the caller's own `password` in the body**: the v2.9.0
 re-auth gates `/api/admin/backup/export`, `/api/admin/backup/import` (form

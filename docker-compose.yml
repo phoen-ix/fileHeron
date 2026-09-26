@@ -1,6 +1,6 @@
 services:
   db:
-    image: mariadb:11
+    image: mariadb:12.3
     container_name: ${COMPOSE_PROJECT_NAME:-fileheron}-db
     restart: unless-stopped
     security_opt: ["no-new-privileges:true"]  # no setuid escalation (audit L23)
@@ -15,6 +15,9 @@ services:
       MYSQL_DATABASE: ${DB_NAME:-fileheron}
       MYSQL_USER: ${DB_USER:-fileheron_app}
       MYSQL_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+      # Runs mariadb-upgrade once when data/db was written by an older major
+      # (11.x -> 12.3). Back up first: a major upgrade has no way back.
+      MARIADB_AUTO_UPGRADE: "1"
     volumes:
       - ${COMPOSE_HOST_ROOT:-${PWD:-/opt/fileHeron}}/data/db:/var/lib/mysql
       - ${COMPOSE_HOST_ROOT:-${PWD:-/opt/fileHeron}}/docker/mariadb/init.sh:/docker-entrypoint-initdb.d/init.sh:ro

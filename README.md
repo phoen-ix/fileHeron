@@ -109,7 +109,7 @@ instead of being sent - handy for dev. Full operator walkthrough: [First install
 |---|---|
 | Backend | Python 3.14, FastAPI, SQLAlchemy 2.0, Alembic, Pydantic v2, ARQ |
 | Auth / crypto | argon2-cffi (Argon2id), PyJWT, py_webauthn, multi-provider OIDC code flow |
-| Data / cache | MariaDB 11, Redis 7-alpine (ARQ queue, rate limits, quota Lua, SSE pubsub) |
+| Data / cache | MariaDB 12.3, Redis 7-alpine (ARQ queue, rate limits, quota Lua, SSE pubsub) |
 | Upload | tusd (Go) + Uppy (browser) + any TUS client (API) |
 | Frontend | Vue 3, Vite, Pinia, Vue Router, vue-i18n, axios, dayjs, vitest - **no UI framework** (native `<input type=datetime-local>`); rich text via MIT ProseMirror |
 | Antivirus | ClamAV (clamd) |
@@ -776,6 +776,13 @@ of your checkout. Changes to the **database, Redis, ClamAV or tusd images,
 or your host Traefik config are NOT covered** - those need the manual
 `git pull && docker compose up -d` above. Each release's notes call out
 when a host step is required; a plain app release does not.
+
+**MariaDB 11 -> 12.3 (host step).** `docker-compose.yml` moved the `db` service to
+`mariadb:12.3` (newest LTS) with `MARIADB_AUTO_UPGRADE=1`, so the container upgrades
+`data/db` in place on its first start on the new image. The in-app Update does not
+touch the database: run `./scripts/backup.sh` first (a major upgrade cannot be rolled
+back), then `git pull && docker compose up -d db`, and check `docker compose logs db`
+for the upgrade before bringing the app back.
 
 **Scripted deploy / rollback (bootstrap + hotpatch).** `scripts/deploy.sh` pulls
 the GHCR images for `FH_TAG`, taken from the environment first and `.env` second

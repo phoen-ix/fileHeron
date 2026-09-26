@@ -1,6 +1,6 @@
 """Production semantics the SQLite harness cannot express.
 
-The application suite runs on SQLite + StaticPool. Production is MariaDB 11,
+The application suite runs on SQLite + StaticPool. Production is MariaDB 12.3,
 `utf8mb4/utf8mb4_unicode_ci`, with no `sql_mode` override (so
 STRICT_TRANS_TABLES) and DATETIME columns that declare no fractional-second
 precision. Three whole classes of behaviour therefore differ between what the

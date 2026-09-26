@@ -12,7 +12,7 @@
 # at all - the docstrings said only "point DB_* at a throwaway MariaDB" - so
 # every session invented one, and the invented one was
 # `docker run -d --name … mariadb:11` with no --rm, torn down later with
-# `docker rm -f` and no -v. mariadb:11 declares VOLUME /var/lib/mysql, so each
+# `docker rm -f` and no -v. mariadb:12.3 declares VOLUME /var/lib/mysql, so each
 # cycle stranded a ~167 MB anonymous volume. Six of them accumulated in a single
 # day on the reference host before anyone noticed, which is how a procedure that
 # lives only in someone's head fails: it gets re-derived, and re-derived wrong.
@@ -48,7 +48,7 @@ DB_ROOT_PASSWORD=root-not-a-secret
 
 # Pinned to what the backend image and CI actually use, so a green run here
 # means the same thing a green run there does.
-MARIADB_IMAGE=mariadb:11
+MARIADB_IMAGE=mariadb:12.3
 PYTHON_IMAGE=python:3.14-slim
 
 DEFAULT_FILES=(

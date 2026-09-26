@@ -476,8 +476,90 @@ def test_every_blocking_step_extends_the_heartbeat_first():
         window = lines[max(0, idx - 15):idx]
         return any('heartbeat "$STUCK_THRESHOLD_SEC"' in line for line in window)
 
-    assert preceded_by_long_heartbeat('if ! docker pull "$executor_image"')
+    assert preceded_by_long_heartbeat('docker pull "$executor_image" &')
     assert preceded_by_long_heartbeat("docker run --rm \\")
     loop = lines.index("while true; do")
-    assert lines[loop + 1].strip() == 'sleep "$POLL_INTERVAL_SEC"'
+    assert lines[loop + 1].strip() == 'sleep "$POLL_INTERVAL_SEC" & wait $!'
     assert lines[loop + 2].strip() == "heartbeat"
+
+
+def _start_shim(tmp_path, *, executor_running: bool):
+    """The real shim.sh with a fake `docker` whose `run` blocks for a minute,
+    standing in for an executor that is still working."""
+    import json
+    import os
+    import shutil
+    import subprocess
+
+    bash = shutil.which("bash")
+    assert bash
+    fake = tmp_path / "bin"
+    fake.mkdir()
+    started = tmp_path / "run-started"
+    docker = fake / "docker"
+    docker.write_text(
+        '#!/bin/sh\ncase "$1" in\n  pull) exit 0 ;;\n'
+        f'  run) touch "{started}"; exec sleep 60 ;;\nesac\n'
+    )
+    docker.chmod(0o755)
+    state = tmp_path / "state" / "current_job.json"
+    if executor_running:
+        assert shutil.which("jq"), "the shim needs jq to claim a job"
+        state.parent.mkdir()
+        state.write_text(json.dumps(
+            {"id": "t", "status": "pending", "target_tag": "v9.9.9", "action": "update"}
+        ))
+    env = {
+        "PATH": f"{fake}:{os.environ.get('PATH', '/usr/bin:/bin')}",
+        "SHIM_STATE_FILE": str(state),
+        "SHIM_POLL_INTERVAL_SEC": "1" if executor_running else "30",
+        "SHIM_HEARTBEAT_FILE": str(tmp_path / "hb"),
+    }
+    # A FILE, not a pipe: the orphaned fake executor keeps its stdout open, and
+    # a pipe would make reading the output wait out its minute.
+    out = (tmp_path / "shim.log").open("w")
+    # S603: bash running this repo's own script.
+    proc = subprocess.Popen(  # noqa: S603
+        [bash, str(SHIM)], env=env, stdout=out, stderr=subprocess.STDOUT, start_new_session=True,
+    )
+    ready = started if executor_running else tmp_path / "hb"
+    return proc, ready, tmp_path / "shim.log"
+
+
+@pytest.mark.parametrize("executor_running", [False, True], ids=["idle", "executor-running"])
+def test_sigterm_stops_the_shim_at_once(tmp_path, executor_running):
+    """As PID 1 the shim ignored SIGTERM, so every `docker stop` of it waited out
+    Docker's 10s grace for a SIGKILL - on every update, because the executor
+    recreates the shim as its last step, while the shim is still blocked in that
+    executor's `docker run`. Measured against the released image as PID 1:
+    30.1s to stop (-t 30, exit 137) before, 0.1s and exit 0 after.
+
+    This runs the shim as an ordinary process, where an UNtrapped SIGTERM kills
+    bash with -15 (fails the exit-code check), and a trap on a FOREGROUND child
+    is deferred until that child's minute is up (fails the timeout). Only a
+    trap plus an interruptible wait passes both."""
+    import os
+    import signal
+    import subprocess
+    import time
+
+    proc, ready, log = _start_shim(tmp_path, executor_running=executor_running)
+    try:
+        deadline = time.monotonic() + 15
+        while not ready.exists():
+            assert proc.poll() is None, log.read_text()
+            assert time.monotonic() < deadline, "the shim never reached its blocking step"
+            time.sleep(0.1)
+        time.sleep(0.5)
+        proc.send_signal(signal.SIGTERM)
+        try:
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            pytest.fail("the shim did not exit within 5s of SIGTERM:\n" + log.read_text())
+    finally:
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+    assert proc.returncode == 0, log.read_text()
+    assert "received SIGTERM - exiting" in log.read_text()

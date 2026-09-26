@@ -48,6 +48,24 @@ log() {
     printf '[shim %s] %s\n' "$(date -u +%Y-%m-%dT%H:%M:%S)" "$*"
 }
 
+# As PID 1 this script gets no default signal handling: without a trap SIGTERM
+# does nothing, and every `docker stop` of this container waited out Docker's
+# 10s grace for the SIGKILL - on every update, because the executor recreates
+# the shim as its last step. A trap alone is not enough either: bash runs it
+# only once the FOREGROUND child returns, and at that moment the child is the
+# executor's `docker run`, blocked on the very compose command recreating this
+# container. So each blocking step below is `cmd & wait $!`, which a trapped
+# signal interrupts at once. Exiting mid-step changes nothing the SIGKILL did
+# not already do 10s later: the executor is a sibling container the daemon
+# keeps running without our docker CLI, a job left in flight is failed by the
+# next shim's startup sweep, and every state write is a rename.
+on_signal() {
+    log "received $1 - exiting"
+    exit 0
+}
+trap 'on_signal SIGTERM' TERM
+trap 'on_signal SIGINT' INT
+
 # Replace STATE_FILE atomically with $1, ensuring 0644 mode so the
 # backend (uid 1000 appuser) can read it. Without this, mktemp's
 # default 0600 + mv leaks through, every shim write silently breaks
@@ -98,7 +116,7 @@ if [ -f "$STATE_FILE" ]; then
 fi
 
 while true; do
-    sleep "$POLL_INTERVAL_SEC"
+    sleep "$POLL_INTERVAL_SEC" & wait $!
     heartbeat
 
     [ -f "$STATE_FILE" ] || continue
@@ -160,7 +178,8 @@ while true; do
             # before spawning anything.
             log "pulling $executor_image"
             heartbeat "$STUCK_THRESHOLD_SEC"
-            if ! docker pull "$executor_image"; then
+            docker pull "$executor_image" &
+            if ! wait $!; then
                 log "pull failed; marking job failed"
                 tmp=$(shim_mktemp)
                 jq --arg err "executor pull failed: $executor_image" \
@@ -194,8 +213,8 @@ while true; do
                 -e "UPDATER_HOST_WORKSPACE=$HOST_WORKSPACE" \
                 -e "UPDATER_HOST_STATE=$HOST_STATE" \
                 -e "GHCR_OWNER=$GHCR_OWNER" \
-                "$executor_image" \
-                || exit_code=$?
+                "$executor_image" &
+            wait $! || exit_code=$?
 
             log "executor exited (code=$exit_code)"
             # The executor updates status itself (healthy/failed/etc.)

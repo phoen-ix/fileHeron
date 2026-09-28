@@ -140,6 +140,26 @@ def create_link(
             "APPROVAL_REQUIRED",
             "This share was approved without a public link. Ask an approver to attach one.",
         )
+    # A share that was never held can still be one the policy WOULD hold with
+    # a link on it (scope `outbound_to_clients`, internal recipients only, or a
+    # share older than the policy). Attaching the link is a new act of
+    # publishing, made today, so today's policy is asked - unlike a file added
+    # to an approved share, which is judged by the stored
+    # `approval_was_required`. Admins pass as above; an exempt approver's own
+    # share passes because `is_approval_required` already exempts it.
+    if (
+        share.state == ShareState.active
+        and not share.approval_was_required
+        and actor.role != UserRole.admin
+    ):
+        from . import share_approval as approval_svc
+
+        if approval_svc.is_approval_required(db, share, with_public_link=True):
+            raise AppError(
+                409,
+                "APPROVAL_REQUIRED",
+                "A public link on this share needs approval first. Ask an admin to attach one.",
+            )
 
     # `share_id` carries a plain UNIQUE constraint with no revoked-row
     # exclusion, so the table can hold exactly ONE row per share, revoked or

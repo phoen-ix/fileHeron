@@ -62,7 +62,7 @@
     "API_TOKEN_EXPIRED": "Dieses API-Token ist abgelaufen.",
     "API_TOKEN_NOT_ALLOWED": "Deine Administration hat das Anlegen von API-Tokens eingeschränkt.",
     "APPROVAL_POLICY_INERT": "Diese Kombination würde nichts zur Freigabe einreihen. Erweitern Sie den Kreis der Freigebenden oder den Geltungsbereich.",
-    "APPROVAL_REQUIRED": "Diese Freigabe wurde ohne öffentlichen Link genehmigt. Bitten Sie eine genehmigende Person, einen anzuhängen.",
+    "APPROVAL_REQUIRED": "Ein öffentlicher Link auf dieser Freigabe muss erst genehmigt werden. Bitten Sie einen Administrator, ihn anzuhängen.",
     "ATTACHMENT_NOT_CLEAN": "Dieser Anhang hat die Virenprüfung noch nicht bestanden.",
     "ATTACHMENT_NOT_FOUND": "Anhang nicht gefunden.",
     "AUTH_REQUIRED": "Bitte zuerst anmelden.",

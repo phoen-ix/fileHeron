@@ -457,3 +457,42 @@ def test_the_masking_pattern_follows_the_base_path():
     # Negative control: an ordinary share URL is left alone.
     plain, did2 = mail_log.mask_sensitive("https://x.test/share/abc-123")
     assert not did2 and plain == "https://x.test/share/abc-123"
+
+
+# ---- retention ------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_addresses_are_forgotten_once_the_share_ends(db, make_user):
+    """No account means `erase_user` cannot reach them, so the share's life is
+    their retention. A rejected share keeps them: it can be resubmitted, and
+    they have not been mailed yet."""
+    from app.workers import prune_history
+
+    _enable(db)
+    sender = make_user(email="emp@test.local", role=UserRole.employee, password=PW)
+    by_state = {}
+    for state in (
+        ShareState.active,
+        ShareState.expired,
+        ShareState.revoked,
+        ShareState.failed,
+        ShareState.rejected,
+    ):
+        share = share_svc.create_share(
+            db,
+            created_by=sender,
+            kind=ShareKind.outbound,
+            external_emails=[f"{state.value}@example.com"],
+            expires_at=None,
+            allow_no_recipients=True,
+        )
+        share.state = state
+        by_state[state] = share.id
+    db.commit()
+
+    result = await prune_history.prune_history(None)
+
+    left = {r.share_id for r in db.query(ShareExternalRecipient).all()}
+    assert left == {by_state[ShareState.active], by_state[ShareState.rejected]}
+    assert result["share_external_recipients"] == 3

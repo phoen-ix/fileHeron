@@ -19,7 +19,7 @@ import asyncio
 import logging
 from datetime import timedelta
 
-from sqlalchemy import delete
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from ..database import SessionLocal
@@ -30,6 +30,8 @@ from ..models.error_log import ErrorLog
 from ..models.ip_block import IpBlock
 from ..models.login_attempt import LoginAttempt
 from ..models.public_link_attempt import PublicLinkAttempt
+from ..models.share import Share, ShareState
+from ..models.share_external_recipient import ShareExternalRecipient
 from ..models.webhook import WebhookDelivery
 from ..services.cron_tracker import track_cron
 from ..utils.dbresult import updated_rows
@@ -148,6 +150,7 @@ async def prune_history(_ctx) -> dict:
         keep=IpBlock.expires_at < utc_now(),
     )
     inbound_pruned = await _prune_inbound(inbound_days)
+    external_pruned = _prune_ended_external_recipients()
     return {
         "public_link_password_attempts": link_attempt_pruned,
         "audit_log": audit_pruned,
@@ -158,7 +161,42 @@ async def prune_history(_ctx) -> dict:
         "error_log": error_pruned,
         "ip_blocks": ip_block_pruned,
         "inbound_messages": inbound_pruned,
+        "share_external_recipients": external_pruned,
     }
+
+
+# A share in one of these states can never send its link again: the bytes are
+# gone or going, and nothing revives it. `rejected` is NOT here - a rejected
+# share can be resubmitted, and its addresses have not been mailed yet.
+_ENDED_SHARE_STATES = (
+    ShareState.expired,
+    ShareState.revoked,
+    ShareState.deleted,
+    ShareState.failed,
+)
+
+
+def _prune_ended_external_recipients() -> int:
+    """Forget the addresses a share without an account was mailed to, once the
+    share has ended. They belong to people with no account, whom
+    `erase_user` cannot reach, so the share's life is their retention; the
+    mail log keeps the record of the send for its own window. Not age-based
+    like the tables above - an ended share has no further use for them."""
+    db: Session = SessionLocal()
+    try:
+        ended = select(Share.id).where(Share.state.in_(_ENDED_SHARE_STATES))
+        result = db.execute(
+            delete(ShareExternalRecipient).where(
+                ShareExternalRecipient.share_id.in_(ended)
+            )
+        )
+        db.commit()
+        removed = updated_rows(result) or 0
+    finally:
+        db.close()
+    if removed:
+        logger.info("prune_history: share_external_recipients pruned=%d", removed)
+    return removed
 
 
 async def _prune_inbound(days: int) -> int:

@@ -203,15 +203,27 @@ def _has_client_recipient(db: Session, share: Share) -> bool:
     return via_group is not None
 
 
-def is_approval_required(db: Session, share: Share) -> bool:
+def is_approval_required(
+    db: Session, share: Share, *, with_public_link: bool = False
+) -> bool:
     """Whether this share must be approved before it goes live. Call AFTER the
-    share's recipient rows are flushed (scope `outbound_to_clients` reads them)."""
+    share's recipient rows are flushed (scope `outbound_to_clients` reads them).
+
+    `with_public_link`: the share carries (or is about to carry) a public link.
+    A link is readable by anyone who holds it, so under `outbound_to_clients` -
+    "does this leave the organisation" - it counts exactly like a client
+    recipient. The link row is created AFTER this check on the create path,
+    which is why the caller says so rather than this function looking it up:
+    without it, a share whose only audience was a public link went live
+    unreviewed under the one scope meant to catch it."""
     if not is_enabled(db):
         return False
     scope = effective_scope(db)
     if share.kind == ShareKind.inbound and scope != "all":
         return False
-    if scope == "outbound_to_clients" and not _has_client_recipient(db, share):
+    if scope == "outbound_to_clients" and not (
+        with_public_link or _has_client_recipient(db, share)
+    ):
         return False
     if exempt_approvers(db):
         creator = share.created_by or db.get(User, share.created_by_id)

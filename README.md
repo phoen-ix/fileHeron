@@ -166,7 +166,7 @@ deduplicated to once per 6 h). After login you land on your **default landing pa
 
 Until the share can be sent, a list above **Create + send** says what is missing: no file yet, no recipient (or public link), or text typed into Recipients that was never picked from the list.
 
-**Recipients without an account** (off by default; *Admin → Sharing → Public links → Recipients without an account*). When an admin turns it on, anyone allowed to create public links can type an address that matches no one and pick *Send a download link to …*. That address is emailed the share's public link once the files have landed (and, if the share needs approval, once it is approved). No account is created, and the link's password is never in the mail - pass it on yourself. Everyone emailed shares the one link and its download counter. Under the approval scope *outbound to clients*, such a share is held for approval. A second switch makes the form ask whether to also **invite** each address as a client account (unticked by default); the link goes out either way.
+**Recipients without an account** (off by default; *Admin → Sharing → Public links → Recipients without an account*). When an admin turns it on, anyone allowed to create public links can type an address that matches no one and pick *Send a download link to …*. That address is emailed the share's public link once the files have landed (and, if the share needs approval, once it is approved). No account is created, and the link's password is never in the mail - pass it on yourself. Everyone emailed shares the one link and its download counter. Under the approval scope *outbound to clients*, such a share is held for approval. The addresses are shown on the share page (to you, admins and approvers) until the share ends; the daily cleanup then forgets them, and the mail log keeps the record of the send for its retention window. A second switch makes the form ask whether to also **invite** each address as a client account (unticked by default); the link goes out either way.
 
 ## Receiving a share (`/inbox`)
 
@@ -318,9 +318,15 @@ riding on the earlier one. The share itself stays live throughout: everything
 already approved keeps downloading, and any public link keeps working. Approvers
 see "N file(s) added after approval" on the share and can **release** them to
 recipients or **discard** them. For the same reason, a public link can no longer
-be attached to a share after it has been approved (ask an approver), a share
+be attached to a share after it has been approved (ask an admin), a share
 cannot be approved while a file is still uploading, and an approval is refused if
 the contents changed since the approver opened the page.
+
+**A public link leaves the organisation.** With the scope *outbound to clients*,
+a share that carries a public link - or goes to an address without an account -
+is held like one addressed to a client. Attaching a link later to a live share
+that this policy would hold needs an admin (`409 APPROVAL_REQUIRED`); an
+approver whose own shares are exempt may still attach one to their own share.
 
 ## Account page (`/account`)
 

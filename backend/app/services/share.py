@@ -376,6 +376,7 @@ def create_share(
     subject: str | None = None,
     message: str | None = None,
     allow_no_recipients: bool = False,
+    with_public_link: bool = False,
     notify_recipients: bool | None = None,
     download_limit: int | None = None,
     request=None,
@@ -482,7 +483,9 @@ def create_share(
 
     from . import share_approval as approval_svc
 
-    if approval_svc.is_approval_required(db, share):
+    # The caller attaches the link after this returns, so it says whether one
+    # is coming - a link is an audience outside the organisation.
+    if approval_svc.is_approval_required(db, share, with_public_link=with_public_link):
         # Hold the share for review: freeze the notify choice, ping the
         # approvers, and DON'T notify recipients yet - that happens on approval.
         # `approval_was_required` outlives the decision: it is what tells a later

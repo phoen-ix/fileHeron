@@ -62,7 +62,7 @@
     "API_TOKEN_EXPIRED": "That API token has expired.",
     "API_TOKEN_NOT_ALLOWED": "Your administrator has restricted API token creation.",
     "APPROVAL_POLICY_INERT": "That combination would queue nothing for approval. Widen the approver set or the scope.",
-    "APPROVAL_REQUIRED": "This share was approved without a public link. Ask an approver to attach one.",
+    "APPROVAL_REQUIRED": "A public link on this share needs approval first. Ask an admin to attach one.",
     "ATTACHMENT_NOT_CLEAN": "This attachment has not passed the antivirus scan yet.",
     "ATTACHMENT_NOT_FOUND": "Attachment not found.",
     "AUTH_REQUIRED": "Please sign in to continue.",

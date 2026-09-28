@@ -263,8 +263,7 @@ def test_a_password_is_mentioned_and_never_sent(db, make_user, sent):
     assert "Sekrit-pass-42" not in (mail["html_body"] or "")
 
 
-def test_a_quiet_share_mails_nobody(db, make_user, sent):
-    """The sender's "notify recipients" choice covers these addresses too."""
+def _share_with(db, make_user, *, notify_recipients, email_external_link):
     _enable(db)
     sender = make_user(email="emp@test.local", role=UserRole.employee, password=PW)
     share = share_svc.create_share(
@@ -274,7 +273,8 @@ def test_a_quiet_share_mails_nobody(db, make_user, sent):
         external_emails=["ext@example.com"],
         expires_at=None,
         allow_no_recipients=True,
-        notify_recipients=False,
+        notify_recipients=notify_recipients,
+        email_external_link=email_external_link,
     )
     public_link_svc.create_link(
         db, actor=sender, share=share, password=None, download_limit=None,
@@ -284,8 +284,43 @@ def test_a_quiet_share_mails_nobody(db, make_user, sent):
     land_file(db, share, sender)
     share_svc.announce_if_ready(db, share.id)
     db.commit()
+    return share
+
+
+def test_the_sender_can_decline_the_link_mail(db, make_user, sent):
+    """Unticked "Email the download link": the address is recorded and never
+    mailed - the sender sends the link themselves."""
+    share = _share_with(db, make_user, notify_recipients=True, email_external_link=False)
 
     assert _link_mails(sent) == []
+    row = db.query(ShareExternalRecipient).filter_by(share_id=share.id).one()
+    assert row.send_link is False and row.notified_at is None
+
+
+def test_notify_recipients_does_not_decide_the_link_mail(db, make_user, sent):
+    """"Notify recipient(s)" is about ACCOUNT recipients. A sender who keeps a
+    share quiet for colleagues but asked for the link to be mailed gets it
+    mailed - the two choices are separate on the form."""
+    _share_with(db, make_user, notify_recipients=False, email_external_link=True)
+
+    assert [m["to"] for m in _link_mails(sent)] == ["ext@example.com"]
+
+
+@pytest.mark.asyncio
+async def test_the_payload_says_whether_the_link_is_mailed(make_user, db, client, login_as):
+    _enable(db)
+    make_user(email="emp@test.local", role=UserRole.employee, password=PW)
+    token, _ = await login_as("emp@test.local", PW)
+
+    mailed = await _post(client, token, _body(["ext@example.com"]))
+    body = _body(["two@example.com"])
+    body["email_external_link"] = False
+    not_mailed = await _post(client, token, body)
+
+    assert mailed.status_code == 201 and not_mailed.status_code == 201
+    assert mailed.json()["external_recipients_emailed"] is True
+    assert not_mailed.json()["external_recipients_emailed"] is False
+    assert not_mailed.json()["external_recipients"] == ["two@example.com"]
 
 
 def test_a_revoked_link_is_not_mailed(db, make_user, sent):

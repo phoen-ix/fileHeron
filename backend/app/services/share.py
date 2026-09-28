@@ -267,9 +267,11 @@ def _dispatch_share_created(
     # has been established to go to nobody), and `notify_on_activation` is what
     # `announce_if_ready` reads to decide whether one is still owed.
     share.notify_on_activation = None
-    if notify_recipients and share.kind == ShareKind.outbound:
+    if share.kind == ShareKind.outbound:
         # Before the early return below: a share whose only recipients have no
-        # account notifies no user, and must still send them the link.
+        # account notifies no user, and must still send them the link. NOT
+        # gated on `notify_recipients` - that is the sender's choice about
+        # ACCOUNT recipients; these addresses carry their own (`send_link`).
         from . import external_recipients as external_svc
 
         external_svc.send_links(db, share)
@@ -373,6 +375,7 @@ def create_share(
     recipient_user_ids: list[int] | None = None,
     recipient_group_ids: list[int] | None = None,
     external_emails: list[str] | None = None,
+    email_external_link: bool = True,
     subject: str | None = None,
     message: str | None = None,
     allow_no_recipients: bool = False,
@@ -467,7 +470,11 @@ def create_share(
     if kind == ShareKind.outbound and external_emails:
         from . import external_recipients as external_svc
 
-        external_count = len(external_svc.add_to_share(db, share, external_emails))
+        external_count = len(
+            external_svc.add_to_share(
+                db, share, external_emails, send_link=email_external_link
+            )
+        )
     db.flush()
 
     audit_meta: dict[str, object] = {

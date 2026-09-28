@@ -66,6 +66,11 @@ class CreateShareRequest(APIBaseModel):
     # is shared across all recipients + sender + admins; first-come-
     # first-served. Mirrors the public_link.download_limit semantic.
     download_limit: int | None = Field(default=None, gt=0, le=100_000)
+    # Whether `recipients.emails` are mailed the public link (v2.22.0). The
+    # sender's choice, independent of `notify_recipients`, which covers account
+    # recipients. False records the addresses and mails nobody - the sender
+    # sends the link themselves. Optional, defaulting to what v2.21.0 did.
+    email_external_link: bool = True
 
     @model_validator(mode="after")
     def _recipients_or_public_link(self):
@@ -231,6 +236,9 @@ class ShareResponse(APIBaseModel):
     # approver must see that it leaves the organisation); empty for everyone
     # else, like the co-recipients the RosterVisibility projection hides.
     external_recipients: list[str] = []
+    # Whether those addresses are (to be) mailed the link - the sender's choice
+    # at create time. Same visibility as `external_recipients`; False otherwise.
+    external_recipients_emailed: bool = False
 
 
 class ApproveShareRequest(APIBaseModel):

@@ -16,6 +16,9 @@ export function createShare(payload: {
   message?: string | null
   public_link?: PublicLinkOnCreate | null
   notify_recipients?: boolean | null
+  /** v2.22.0: whether `recipients.emails` are mailed the public link. Omit =
+   *  true. Independent of `notify_recipients` (account recipients). */
+  email_external_link?: boolean
   /** v1.1.0 per-share download limit. Omit / null = unlimited. */
   download_limit?: number | null
 }) {

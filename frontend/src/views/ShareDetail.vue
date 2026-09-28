@@ -572,7 +572,11 @@
         <span v-for="email in share.external_recipients" :key="email" class="group-chip">
           ↗ {{ email }}
         </span>
-        <span class="inbox-flag fh-mono">{{ t('share_detail.external_via_link') }}</span>
+        <span class="inbox-flag fh-mono">{{
+          share.external_recipients_emailed
+            ? t('share_detail.external_emailed')
+            : t('share_detail.external_not_emailed')
+        }}</span>
       </div>
 
       <div v-if="share.message" class="message">{{ share.message }}</div>

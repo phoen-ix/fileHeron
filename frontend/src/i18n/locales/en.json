@@ -1926,7 +1926,11 @@
     "external_option": "Send a download link to {email}",
     "external_chip_hint": "download link",
     "no_account": "No one you can send to has the address {email}.",
-    "no_account_public_link": "To share with them anyway, attach a public link below.",
+    "no_account_admin": "No account has the address {email}.",
+    "no_account_action": "Clear this field and send them the public link yourself, or ask an admin to allow sending to addresses without an account.",
+    "no_account_action_admin": "Clear this field and send them the public link yourself, or turn on {setting} to have file:Heron email it to them.",
+    "external_setting_name": "Recipients without an account",
+    "clear": "Clear",
     "not_added": "“{q}” isn't added yet. Pick it from the list."
   },
   "expiry": {
@@ -2130,9 +2134,14 @@
       "no_recipient": "Pick a recipient from the list.",
       "no_recipient_or_link": "Pick a recipient from the list, or attach a public link below.",
       "recipient_not_added": "“{q}” is typed in Recipients but not picked. Choose it from the list, or clear the field.",
+      "no_account": "“{q}” has no account, so it can't be added here. Clear the field and send them a public link yourself.",
+      "no_account_admin": "“{q}” has no account, so it can't be added here. Clear the field and send them a public link yourself, or turn on Recipients without an account (Admin › Public links).",
       "no_expiry": "Choose when the share expires."
     },
-    "external_quiet_warning": "Recipients without an account only hear about this share by email. With notifications off, they receive nothing.",
+    "email_link": {
+      "label": "Email the download link to these addresses",
+      "help": "Untick to send the link yourself - copy it after the share is created."
+    },
     "invite": {
       "question": "Also create accounts for them?",
       "help": "These addresses have no account. Tick one to also send it an invitation as a client. The download link goes out either way.",
@@ -2184,7 +2193,8 @@
     "files_heading": "Files ({n})",
     "targeted_groups": "Groups",
     "external_recipients": "Sent to (no account)",
-    "external_via_link": "via public link",
+    "external_emailed": "link emailed",
+    "external_not_emailed": "not emailed - send the link yourself",
     "empty": "No files in this share.",
     "end_share_cta": "End share",
     "end_share_confirm": "End this share now and delete all uploaded files? This cannot be undone.",

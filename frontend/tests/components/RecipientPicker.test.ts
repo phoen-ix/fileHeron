@@ -31,7 +31,10 @@ function mountPicker(props: Record<string, unknown> = {}) {
   const i18n = createI18n({ legacy: false, locale: 'en', fallbackLocale: 'en', messages: { en } })
   return mount(RecipientPicker, {
     props: { modelValue: { user_ids: [], group_ids: [], emails: [] }, ...props },
-    global: { plugins: [i18n] },
+    global: {
+      plugins: [i18n],
+      stubs: { RouterLink: { props: ['to'], template: '<a class="router-link"><slot /></a>' } },
+    },
   })
 }
 
@@ -72,24 +75,53 @@ describe('RecipientPicker', () => {
     const pending = w.find('[data-testid="recipient-pending"]')
     expect(pending.exists()).toBe(true)
     expect(pending.text()).toContain('isn\'t added yet')
-    expect(w.emitted('update:pending')?.at(-1)).toEqual(['anna'])
+    expect(w.emitted('update:pending')?.at(-1)).toEqual([{ text: 'anna', noAccount: false }])
     expect(w.emitted('update:modelValue')).toBeUndefined()
   })
 
-  it('names an address that matches no one, and points at the public link', async () => {
+  it('tells staff what they can do with an address that matches no one', async () => {
     const w = mountPicker({ canPublicLink: true })
     await type(w, 'michael@elsewhere.test')
 
-    expect(w.find('.results-empty').text()).toContain('No one you can send to has the address')
-    expect(w.find('.results-empty').text()).toContain('attach a public link')
+    const empty = w.find('.results-empty').text()
+    expect(empty).toContain('No one you can send to has the address')
+    expect(empty).toContain(en.recipient.no_account_action)
     expect(w.find('[data-testid="external-option"]').exists()).toBe(false)
+    expect(w.emitted('update:pending')?.at(-1)).toEqual([
+      { text: 'michael@elsewhere.test', noAccount: true },
+    ])
 
     await w.find('input').trigger('blur')
     vi.advanceTimersByTime(150)
     await flushPromises()
-    expect(w.find('[data-testid="recipient-pending"]').text()).toContain(
-      'michael@elsewhere.test',
-    )
+    const pending = w.find('[data-testid="recipient-pending"]')
+    expect(pending.text()).toContain('michael@elsewhere.test')
+    expect(pending.text()).toContain(en.recipient.no_account_action)
+    expect(pending.find('.router-link').exists()).toBe(false)
+  })
+
+  it('shows an admin the switch that would make the address addable', async () => {
+    const w = mountPicker({ canPublicLink: true, isAdmin: true })
+    await type(w, 'michael@elsewhere.test', { blur: true })
+
+    const pending = w.find('[data-testid="recipient-pending"]')
+    expect(pending.text()).toContain('No account has the address michael@elsewhere.test')
+    const link = pending.find('.router-link')
+    expect(link.exists()).toBe(true)
+    expect(link.text()).toBe(en.recipient.external_setting_name)
+    expect(pending.text()).not.toContain(en.recipient.no_account_action)
+  })
+
+  it('clears the typed text in one click, which clears the blocker', async () => {
+    const w = mountPicker({ canPublicLink: true })
+    await type(w, 'michael@elsewhere.test', { blur: true })
+
+    await w.find('[data-testid="recipient-clear"]').trigger('click')
+    await flushPromises()
+
+    expect((w.find('input').element as HTMLInputElement).value).toBe('')
+    expect(w.find('[data-testid="recipient-pending"]').exists()).toBe(false)
+    expect(w.emitted('update:pending')?.at(-1)).toEqual([{ text: '', noAccount: false }])
   })
 
   it('offers a download link to an unknown address only when allowed', async () => {
@@ -104,7 +136,7 @@ describe('RecipientPicker', () => {
     expect(w.emitted('update:modelValue')?.at(-1)).toEqual([
       { user_ids: [], group_ids: [], emails: ['michael@elsewhere.test'] },
     ])
-    expect(w.emitted('update:pending')?.at(-1)).toEqual([''])
+    expect(w.emitted('update:pending')?.at(-1)).toEqual([{ text: '', noAccount: false }])
     expect(w.text()).toContain('michael@elsewhere.test')
   })
 

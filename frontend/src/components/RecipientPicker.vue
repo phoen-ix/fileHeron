@@ -124,7 +124,7 @@
         </div>
 
         <div v-if="settled && optionCount === 0 && query" class="results-empty">
-          {{ noAccountFor ? noAccountMessage : t('recipient.no_results') }}
+          {{ noAccountFor ? noAccountPlain : t('recipient.no_results') }}
         </div>
       </div>
     </div>
@@ -133,12 +133,42 @@
     <!-- Typed but never picked: the text in the box is not a recipient, and the
          form's submit stays disabled because of it. Say so where the text is. -->
     <div
-      v-else-if="pendingMessage"
-      class="fh-field-error"
+      v-else-if="query && !showResults"
+      class="fh-field-error pending"
       role="status"
       data-testid="recipient-pending"
     >
-      {{ pendingMessage }}
+      <template v-if="noAccountFor">
+        {{ noAccountBase }}
+        <!-- Name the way out. An admin gets a link to the switch that makes
+             this address addable; staff are told what they can do themselves.
+             "Attach a public link" alone was not a way out: the typed text
+             still blocked the form. -->
+        <i18n-t
+          v-if="isAdmin"
+          keypath="recipient.no_account_action_admin"
+          scope="global"
+          tag="span"
+          data-testid="no-account-admin-action"
+        >
+          <template #setting>
+            <RouterLink :to="{ name: 'admin-settings-public-links', hash: '#external-recipients' }">
+              {{ t('recipient.external_setting_name') }}
+            </RouterLink>
+          </template>
+        </i18n-t>
+        <span v-else-if="canPublicLink">{{ t('recipient.no_account_action') }}</span>
+      </template>
+      <template v-else>{{ t('recipient.not_added', { q: query }) }}</template>
+      <button
+        type="button"
+        class="fh-btn-text pending-clear"
+        data-testid="recipient-clear"
+        :disabled="disabled"
+        @click="query = ''"
+      >
+        {{ t('recipient.clear') }}
+      </button>
     </div>
     <div v-else class="fh-field-help">{{ t('recipient.help_phase4') }}</div>
   </div>
@@ -164,14 +194,18 @@
     /** The sender may attach a public link - the no-account message points at
      *  it when external sending itself is not offered. */
     canPublicLink?: boolean
+    /** An admin is told where the switch for addresses without an account is. */
+    isAdmin?: boolean
   }>()
 
   const emit = defineEmits<{
     'update:modelValue': [value: ShareRecipientsRequest]
     'update:selectedUsers': [users: UserSearchItem[]]
     'update:selectedGroups': [groups: GroupResponse[]]
-    /** The search text that has NOT become a recipient ('' when none). */
-    'update:pending': [text: string]
+    /** The search text that has NOT become a recipient ('' when none), and
+     *  whether it is an address that cannot be added at all - the form words
+     *  its blocker differently, since "pick it from the list" is impossible. */
+    'update:pending': [pending: { text: string; noAccount: boolean }]
   }>()
 
   const { t } = useI18n()
@@ -301,10 +335,25 @@
     return queryMatchesSomeone.value ? null : email
   })
 
-  const noAccountMessage = computed(() => {
+  const noAccountBase = computed(() =>
+    noAccountFor.value
+      ? t(props.isAdmin ? 'recipient.no_account_admin' : 'recipient.no_account', {
+          email: noAccountFor.value,
+        })
+      : '',
+  )
+
+  /** The same guidance as plain text, for the results list. */
+  const noAccountPlain = computed(() => {
     if (!noAccountFor.value) return ''
-    const base = t('recipient.no_account', { email: noAccountFor.value })
-    return props.canPublicLink ? `${base} ${t('recipient.no_account_public_link')}` : base
+    if (props.isAdmin) {
+      return `${noAccountBase.value} ${t('recipient.no_account_action_admin', {
+        setting: t('recipient.external_setting_name'),
+      })}`
+    }
+    return props.canPublicLink
+      ? `${noAccountBase.value} ${t('recipient.no_account_action')}`
+      : noAccountBase.value
   })
 
   const optionCount = computed(
@@ -312,17 +361,13 @@
   )
   const externalIdx = computed(() => filteredUsers.value.length + filteredGroups.value.length)
 
-  const pendingMessage = computed(() => {
-    if (!query.value || showResults.value) return ''
-    return noAccountFor.value
-      ? noAccountMessage.value
-      : t('recipient.not_added', { q: query.value })
+  watch([query, noAccountFor], ([text, noAccount]) => {
+    emit('update:pending', { text, noAccount: !!noAccount })
   })
 
   let searchTimer: ReturnType<typeof setTimeout> | null = null
 
   watch(query, (v) => {
-    emit('update:pending', v)
     errorMsg.value = null
     if (searchTimer) clearTimeout(searchTimer)
     searchTimer = setTimeout(() => {
@@ -508,6 +553,10 @@
 
   .search-wrap {
     position: relative;
+  }
+
+  .pending-clear {
+    margin-left: var(--fh-space-2);
   }
 
   .results {

@@ -333,6 +333,8 @@ export interface ShareResponse {
   /** Addresses with no account that were mailed the public link. Only for a
    *  viewer who may see the full roster; empty for everyone else. */
   external_recipients?: string[]
+  /** Whether those addresses are mailed the link - the sender's choice. */
+  external_recipients_emailed?: boolean
 }
 
 export interface PublicLinkSummary {

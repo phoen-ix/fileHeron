@@ -53,7 +53,14 @@
   // not sent anywhere; it blocks submit and is named in the blocker list, so a
   // typed-but-unpicked address can no longer leave the button grey for no
   // visible reason.
-  const recipientPending = ref('')
+  // `noAccount`: the text is an address that cannot be added at all (no
+  // account, and sending to such addresses is off) - "pick it from the list"
+  // would be impossible advice, so the blocker says what IS possible.
+  const recipientPending = ref<{ text: string; noAccount: boolean }>({
+    text: '',
+    noAccount: false,
+  })
+  const isAdmin = computed(() => auth.user?.role === 'admin')
   // null = user picked the "Never" preset (v1.1.4 - share never auto-deletes).
   // Initial state is undefined so the picker's auto-emit on mount fills it
   // with the default 7-day preset; from then on the picker always emits a
@@ -89,6 +96,10 @@
   // Addresses the sender ticked to ALSO invite as a client account. Unticked by
   // default: an account is a bigger step than a link, so it is asked, not assumed.
   const inviteChoices = ref<Record<string, boolean>>({})
+  // The sender's choice whether addresses without an account are mailed the
+  // link; unticked, they are recorded and the sender sends the link. Separate
+  // from `notifyRecipients`, which is about account recipients.
+  const emailExternalLink = ref(true)
   const includePublicLink = ref(false)
   watch(hasExternal, (v) => {
     if (v) includePublicLink.value = true
@@ -120,8 +131,18 @@
       const hasPublicLink = includePublicLink.value && canCreatePublicLink.value
       // Clients always submit to the company, so they need neither a recipient
       // nor a public link - just files. Staff still require one of the two.
-      if (recipientPending.value) {
-        out.push(t('share_create.blockers.recipient_not_added', { q: recipientPending.value }))
+      const pending = recipientPending.value
+      if (pending.text && pending.noAccount) {
+        out.push(
+          t(
+            isAdmin.value
+              ? 'share_create.blockers.no_account_admin'
+              : 'share_create.blockers.no_account',
+            { q: pending.text },
+          ),
+        )
+      } else if (pending.text) {
+        out.push(t('share_create.blockers.recipient_not_added', { q: pending.text }))
       } else if (!hasRecipients && !hasPublicLink) {
         out.push(
           canCreatePublicLink.value
@@ -182,6 +203,7 @@
         message: message.value || null,
         public_link: publicLinkPayload,
         notify_recipients: notifyRecipients.value,
+        email_external_link: emailExternalLink.value,
         download_limit: shareDownloadLimit.value || null,
       })
       shareId.value = data.id
@@ -283,7 +305,8 @@
     subject.value = ''
     message.value = ''
     recipients.value = { user_ids: [], group_ids: [], emails: [] }
-    recipientPending.value = ''
+    recipientPending.value = { text: '', noAccount: false }
+    emailExternalLink.value = true
     inviteChoices.value = {}
     // undefined → ExpiryPicker's mount auto-emit refills the 7-day default
     // when the form remounts (v-if, not v-show).
@@ -357,6 +380,7 @@
               :disabled="submitting || upload.isActive.value"
               :allow-external="canShareExternal"
               :can-public-link="canCreatePublicLink"
+              :is-admin="isAdmin"
               @update:pending="recipientPending = $event"
             />
             <p v-if="canCreatePublicLink" class="fh-field-help recipients-hint">
@@ -397,13 +421,21 @@
             <span class="toggle-help">{{ t('share_create.notify_recipients_help') }}</span>
           </span>
         </label>
-        <p
-          v-if="hasExternal && !notifyRecipients"
-          class="fh-field-error"
-          data-testid="external-quiet"
-        >
-          {{ t('share_create.external_quiet_warning') }}
-        </p>
+      </section>
+
+      <section v-if="hasExternal" class="notify-recipients-section" data-testid="email-link">
+        <hr class="fh-rule" />
+        <label class="public-link-toggle">
+          <input
+            v-model="emailExternalLink"
+            type="checkbox"
+            :disabled="submitting || upload.isActive.value"
+          />
+          <span>
+            <span class="toggle-name">{{ t('share_create.email_link.label') }}</span>
+            <span class="toggle-help">{{ t('share_create.email_link.help') }}</span>
+          </span>
+        </label>
       </section>
 
       <section v-if="offerInvite" class="invite-section" data-testid="invite-offer">

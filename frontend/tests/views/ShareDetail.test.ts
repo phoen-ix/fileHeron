@@ -100,17 +100,30 @@ beforeEach(() => {
 
 describe('ShareDetail - recipients without an account', () => {
   it('lists the addresses the link was mailed to, beside the groups and message', async () => {
-    const w = await mountPage(share({ external_recipients: ['ext@example.com', 'two@example.com'] }))
+    const w = await mountPage(
+      share({
+        external_recipients: ['ext@example.com', 'two@example.com'],
+        external_recipients_emailed: true,
+      }),
+    )
 
     const block = w.find('[data-testid="external-recipients"]')
     expect(block.exists()).toBe(true)
     expect(block.text()).toContain(en.share_detail.external_recipients)
     expect(block.text()).toContain('ext@example.com')
     expect(block.text()).toContain('two@example.com')
-    expect(block.text()).toContain(en.share_detail.external_via_link)
+    expect(block.text()).toContain(en.share_detail.external_emailed)
     // The neighbouring blocks still render - the new v-if did not capture them.
     expect(w.text()).toContain('Finance')
     expect(w.find('.message').text()).toBe('See attached.')
+  })
+
+  it('says when the sender chose to send the link themselves', async () => {
+    const w = await mountPage(
+      share({ external_recipients: ['ext@example.com'], external_recipients_emailed: false }),
+    )
+    const block = w.find('[data-testid="external-recipients"]')
+    expect(block.text()).toContain(en.share_detail.external_not_emailed)
   })
 
   it('renders nothing when there are none, or the viewer is not shown them', async () => {

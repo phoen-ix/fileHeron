@@ -1926,7 +1926,11 @@
     "external_option": "Download-Link an {email} senden",
     "external_chip_hint": "Download-Link",
     "no_account": "Niemand, an den du senden kannst, hat die Adresse {email}.",
-    "no_account_public_link": "Um trotzdem mit dieser Person zu teilen, hänge unten einen öffentlichen Link an.",
+    "no_account_admin": "Kein Konto hat die Adresse {email}.",
+    "no_account_action": "Leere dieses Feld und sende ihnen den öffentlichen Link selbst, oder bitte eine Administration, das Senden an Adressen ohne Konto zu erlauben.",
+    "no_account_action_admin": "Leere dieses Feld und sende ihnen den öffentlichen Link selbst, oder schalte {setting} ein, damit file:Heron ihn per E-Mail verschickt.",
+    "external_setting_name": "Empfänger ohne Konto",
+    "clear": "Leeren",
     "not_added": "„{q}“ ist noch nicht hinzugefügt. Wähle den Eintrag aus der Liste."
   },
   "expiry": {
@@ -2130,9 +2134,14 @@
       "no_recipient": "Wähle einen Empfänger aus der Liste.",
       "no_recipient_or_link": "Wähle einen Empfänger aus der Liste oder hänge unten einen öffentlichen Link an.",
       "recipient_not_added": "„{q}“ steht im Empfängerfeld, ist aber nicht ausgewählt. Wähle den Eintrag aus der Liste oder leere das Feld.",
+      "no_account": "„{q}“ hat kein Konto und kann hier nicht hinzugefügt werden. Leere das Feld und sende ihnen selbst einen öffentlichen Link.",
+      "no_account_admin": "„{q}“ hat kein Konto und kann hier nicht hinzugefügt werden. Leere das Feld und sende ihnen selbst einen öffentlichen Link, oder schalte „Empfänger ohne Konto“ ein (Admin › Öffentliche Links).",
       "no_expiry": "Lege fest, wann die Freigabe abläuft."
     },
-    "external_quiet_warning": "Empfänger ohne Konto erfahren nur per E-Mail von dieser Freigabe. Ohne Benachrichtigung erhalten sie nichts.",
+    "email_link": {
+      "label": "Download-Link per E-Mail an diese Adressen senden",
+      "help": "Nimm das Häkchen weg, um den Link selbst zu senden - kopiere ihn, nachdem die Freigabe erstellt ist."
+    },
     "invite": {
       "question": "Auch Konten für sie anlegen?",
       "help": "Diese Adressen haben kein Konto. Wähle eine aus, um ihr zusätzlich eine Einladung als Kunde zu senden. Der Download-Link geht in jedem Fall raus.",
@@ -2184,7 +2193,8 @@
     "files_heading": "Dateien ({n})",
     "targeted_groups": "Gruppen",
     "external_recipients": "Gesendet an (ohne Konto)",
-    "external_via_link": "über öffentlichen Link",
+    "external_emailed": "Link per E-Mail gesendet",
+    "external_not_emailed": "nicht per E-Mail gesendet - sende den Link selbst",
     "empty": "Diese Freigabe enthält keine Dateien.",
     "end_share_cta": "Freigabe beenden",
     "end_share_confirm": "Diese Freigabe jetzt beenden und alle hochgeladenen Dateien löschen? Kann nicht rückgängig gemacht werden.",

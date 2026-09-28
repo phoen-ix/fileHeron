@@ -8,13 +8,17 @@ has gone out, nothing more; no authorisation check reads it.
 `notified_at` makes the announcement idempotent per address: `announce_if_ready`
 already claims the share once, and the stamp keeps a later re-announce from
 mailing the same address twice.
+
+`send_link` is the SENDER's choice (v2.22.0): false records the address and
+never mails it - the sender sends the link themselves. It is not governed by
+the share's "notify recipients" flag, which is about account recipients.
 """
 from __future__ import annotations
 
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import BigInteger, DateTime, ForeignKey, Index, Integer, String
+from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Index, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ..database import Base
@@ -45,5 +49,8 @@ class ShareExternalRecipient(Base):
     email: Mapped[str] = mapped_column(EMAIL_COLUMN_TYPE, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(), nullable=False, default=utc_now)
     notified_at: Mapped[datetime | None] = mapped_column(DateTime(), nullable=True)
+    send_link: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="1"
+    )
 
     share: Mapped[Share] = relationship("Share", back_populates="external_recipients")

@@ -172,6 +172,9 @@ def _to_share_response(db: Session, share, *, viewer: User | None = None) -> Sha
             if roster.may_see_full(share.id)
             else []
         ),
+        external_recipients_emailed=(
+            roster.may_see_full(share.id) and external_svc.any_emailed(db, share.id)
+        ),
     )
 
 
@@ -270,6 +273,7 @@ def create_share(
         recipient_user_ids=payload.recipients.user_ids,
         recipient_group_ids=payload.recipients.group_ids,
         external_emails=payload.recipients.emails,
+        email_external_link=payload.email_external_link,
         expires_at=payload.expires_at,
         subject=payload.subject,
         message=payload.message,

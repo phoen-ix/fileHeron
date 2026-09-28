@@ -95,11 +95,14 @@ def assert_may_send(
         )
 
 
-def add_to_share(db: Session, share: Share, emails: list[str]) -> list[ShareExternalRecipient]:
+def add_to_share(
+    db: Session, share: Share, emails: list[str], *, send_link: bool = True
+) -> list[ShareExternalRecipient]:
     """Write one row per distinct address. Caller flushes (and must, before
-    `share_approval.is_approval_required` reads them)."""
+    `share_approval.is_approval_required` reads them). `send_link` is the
+    sender's choice whether these addresses are mailed the link at all."""
     rows = [
-        ShareExternalRecipient(share_id=share.id, email=email)
+        ShareExternalRecipient(share_id=share.id, email=email, send_link=send_link)
         for email in dict.fromkeys(emails)
     ]
     db.add_all(rows)
@@ -116,6 +119,20 @@ def addresses(db: Session, share_id: str) -> list[str]:
     ]
 
 
+def any_emailed(db: Session, share_id: str) -> bool:
+    """True when the share's addresses are (to be) mailed the link - the
+    sender's per-share choice, surfaced on the share page."""
+    return (
+        db.query(ShareExternalRecipient.id)
+        .filter(
+            ShareExternalRecipient.share_id == share_id,
+            ShareExternalRecipient.send_link.is_(True),
+        )
+        .first()
+        is not None
+    )
+
+
 def has_any(db: Session, share_id: str) -> bool:
     return (
         db.query(ShareExternalRecipient.id)
@@ -126,8 +143,9 @@ def has_any(db: Session, share_id: str) -> bool:
 
 
 def send_links(db: Session, share: Share) -> int:
-    """Mail the share's public link to every address not yet told. Returns how
-    many were queued. Caller commits; the sends go out after the commit.
+    """Mail the share's public link to every address the sender chose to have
+    mailed (`send_link`) and not yet told. Returns how many were queued. Caller
+    commits; the sends go out after the commit.
 
     Called from the share announcement, so the share is active and its files
     have landed. Nothing is sent - and the rows stay unstamped - when the link
@@ -138,6 +156,7 @@ def send_links(db: Session, share: Share) -> int:
         db.query(ShareExternalRecipient)
         .filter(
             ShareExternalRecipient.share_id == share.id,
+            ShareExternalRecipient.send_link.is_(True),
             ShareExternalRecipient.notified_at.is_(None),
         )
         .order_by(ShareExternalRecipient.id)

@@ -49,7 +49,7 @@ const uploadItems = (uploadModule as unknown as { __items: { value: unknown[] } 
 
 const RecipientPickerStub = defineComponent({
   name: 'RecipientPicker',
-  props: ['modelValue', 'disabled', 'allowExternal', 'canPublicLink'],
+  props: ['modelValue', 'disabled', 'allowExternal', 'canPublicLink', 'isAdmin'],
   emits: ['update:modelValue', 'update:pending'],
   setup: () => () => h('div', { class: 'recipient-picker-stub' }),
 })
@@ -121,13 +121,13 @@ describe('ShareCreate', () => {
     expect(submitBtn(w).attributes('aria-describedby')).toBe('share-create-blockers')
 
     queueOneFile()
-    picker(w).vm.$emit('update:pending', 'michael.fiedler@syncore.at')
+    picker(w).vm.$emit('update:pending', { text: 'anna', noAccount: false })
     await flushPromises()
     expect(submitBtn(w).attributes('disabled')).toBeDefined()
-    expect(blockerText(w)).toContain('michael.fiedler@syncore.at')
+    expect(blockerText(w)).toContain('“anna” is typed in Recipients but not picked')
     expect(blockerText(w)).not.toContain(en.share_create.blockers.no_files)
 
-    picker(w).vm.$emit('update:pending', '')
+    picker(w).vm.$emit('update:pending', { text: '', noAccount: false })
     picker(w).vm.$emit('update:modelValue', { user_ids: [5], group_ids: [], emails: [] })
     await flushPromises()
     expect(w.find('[data-testid="submit-blockers"]').exists()).toBe(false)
@@ -159,18 +159,56 @@ describe('ShareCreate', () => {
     expect(payload.public_link).not.toBeNull()
   })
 
-  it('warns that a quiet share reaches no address without an account', async () => {
+  it('never tells anyone to pick an address with no account from the list', async () => {
+    // The 2026-09-28 11:44 dead end: the address could not be added, the hint
+    // said to attach a public link, and the blocker said "choose it from the
+    // list" - impossible advice, with the link already attached.
+    const w = mountView()
+    await flushPromises()
+    queueOneFile()
+    await w.find('.public-link-section input[type="checkbox"]').setValue(true)
+    picker(w).vm.$emit('update:pending', {
+      text: 'michael.fiedler@syncore.at',
+      noAccount: true,
+    })
+    await flushPromises()
+    expect(blockerText(w)).toContain('has no account, so it can')
+    expect(blockerText(w)).not.toContain('Choose it from the list')
+    expect(blockerText(w)).not.toContain('Recipients without an account')
+    expect(picker(w).props('isAdmin')).toBe(false)
+  })
+
+  it('points an admin at the switch in the blocker too', async () => {
+    const w = mountView({ role: 'admin' })
+    await flushPromises()
+    picker(w).vm.$emit('update:pending', {
+      text: 'michael.fiedler@syncore.at',
+      noAccount: true,
+    })
+    await flushPromises()
+    expect(picker(w).props('isAdmin')).toBe(true)
+    expect(blockerText(w)).toContain('Recipients without an account')
+  })
+
+  it('lets the sender decide whether the addresses get the link by email', async () => {
     const w = mountView({ can_share_external: true })
     await flushPromises()
+    expect(w.find('[data-testid="email-link"]').exists()).toBe(false)
+
+    queueOneFile()
     picker(w).vm.$emit('update:modelValue', {
       user_ids: [],
       group_ids: [],
       emails: ['ext@example.com'],
     })
     await flushPromises()
-    expect(w.find('[data-testid="external-quiet"]').exists()).toBe(false)
-    await w.find('.notify-recipients-section input[type="checkbox"]').setValue(false)
-    expect(w.find('[data-testid="external-quiet"]').exists()).toBe(true)
+    const box = w.find('[data-testid="email-link"] input[type="checkbox"]')
+    expect((box.element as HTMLInputElement).checked).toBe(true)
+
+    await box.setValue(false)
+    await w.find('form').trigger('submit')
+    await flushPromises()
+    expect(api.createShare.mock.calls[0][0].email_external_link).toBe(false)
   })
 
   it('asks about invites only when the admin turned it on, and invites only the ticked', async () => {

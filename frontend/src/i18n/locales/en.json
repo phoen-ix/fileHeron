@@ -2161,8 +2161,8 @@
       "download_limit_placeholder": "e.g. 10",
       "download_limit_help": "Maximum number of successful downloads. Leave blank for unlimited.",
       "notify_label": "Notify me on every download",
-      "result_eyebrow": "Public link (shown once)",
-      "result_warning": "Copy this URL now - it won't be shown again. Send it to the recipient via your usual channel."
+      "result_eyebrow": "Public link",
+      "result_warning": "Send it to the recipient via your usual channel. You can copy it again any time from the share's page."
     },
     "progress": {
       "uploading_title": "Uploading…",
@@ -2237,11 +2237,6 @@
     "revoke": "Revoke link",
     "revoke_confirm": "Revoke this public link? Anyone with the URL will lose access immediately.",
     "revoked_toast": "Public link revoked.",
-    "just_created": "New public link",
-    "url_warning": "Copy the URL now. It will not be shown again.",
-    "copy": "Copy URL",
-    "copied": "Copied",
-    "acknowledged": "I've saved the URL",
     "create_submit": "Create public link",
     "password_label": "Password (optional)",
     "password_placeholder": "Leave blank for no password",
@@ -2252,7 +2247,8 @@
     "notify_label": "Email me on each download",
     "notify_help": "Get notified when someone downloads via this link.",
     "locked": "Locked",
-    "locked_until": "Locked after too many failed password attempts - unlocks {when}. Recipients cannot open it until then."
+    "locked_until": "Locked after too many failed password attempts - unlocks {when}. Recipients cannot open it until then.",
+    "created_toast": "Public link created."
   },
   "public_share": {
     "eyebrow": "file:Heron",

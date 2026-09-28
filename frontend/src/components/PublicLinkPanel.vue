@@ -11,7 +11,11 @@
 
     <div v-if="loading" class="loading">{{ t('common.loading') }}</div>
 
-    <div v-else-if="active && !justCreated" class="active-card">
+    <!-- The URL is shown here for as long as the link lives: the token is
+         stored encrypted precisely so its owner can copy it again. A link is
+         not a one-time secret like an API token, so there is no "copy it now,
+         it won't be shown again" step after creating one. -->
+    <div v-else-if="active" class="active-card">
       <div v-if="active.url" class="url-row">
         <span class="kv-label">{{ t('public_link.url_label') }}</span>
         <pre class="url fh-mono">{{ active.url }}</pre>
@@ -72,28 +76,6 @@
       </div>
     </div>
 
-    <div v-else-if="justCreated" class="created-box fh-rise">
-      <div class="created-eyebrow">{{ t('public_link.just_created') }}</div>
-      <p class="warning">{{ t('public_link.url_warning') }}</p>
-      <pre class="url fh-mono">{{ justCreated.url }}</pre>
-      <div v-if="justCreated.qr_svg" class="qr-section">
-        <span class="kv-label">{{ t('public_link.qr_label') }}</span>
-        <!-- eslint-disable-next-line vue/no-v-html -- server-rendered, deterministic QR SVG (no user input) -->
-        <div class="qr-svg" v-html="justCreated.qr_svg" />
-        <button type="button" class="fh-btn-text" @click="downloadQr(justCreated.qr_svg)">
-          {{ t('public_link.qr_download') }}
-        </button>
-      </div>
-      <div class="actions">
-        <button type="button" class="fh-btn-text" @click="copyUrl">
-          {{ copiedTimer ? t('public_link.copied') : t('public_link.copy') }}
-        </button>
-        <button type="button" class="fh-btn-text" @click="dismissJustCreated">
-          {{ t('public_link.acknowledged') }}
-        </button>
-      </div>
-    </div>
-
     <form v-else class="create-form" @submit.prevent="onCreate">
       <label class="fh-field">
         <span class="fh-field-label">{{ t('public_link.password_label') }}</span>
@@ -146,7 +128,7 @@
   import { useApiError } from '@/composables/useApiError'
   import { useSiteDateFormat } from '@/composables/useSiteDateFormat'
   import { useUiStore } from '@/stores/ui'
-  import type { CreatePublicLinkResponse, PublicLinkResponse } from '@/types/api'
+  import type { PublicLinkResponse } from '@/types/api'
 
   const props = defineProps<{ shareId: string }>()
 
@@ -156,7 +138,6 @@
   const ui = useUiStore()
 
   const active = ref<PublicLinkResponse | null>(null)
-  const justCreated = ref<CreatePublicLinkResponse | null>(null)
   const loading = ref(true)
   const creating = ref(false)
   const revoking = ref(false)
@@ -187,7 +168,6 @@
         download_limit: newLimit.value || null,
         notify_on_download: newNotify.value,
       })
-      justCreated.value = data
       active.value = {
         id: data.id,
         url: data.url,
@@ -207,6 +187,7 @@
       newPassword.value = ''
       newLimit.value = null
       newNotify.value = false
+      ui.pushToast(t('public_link.created_toast'), 'success')
     } catch (err) {
       errorMsg.value = describe(err)
     } finally {
@@ -221,7 +202,6 @@
     try {
       await revokePublicLink(props.shareId)
       active.value = null
-      justCreated.value = null
       ui.pushToast(t('public_link.revoked_toast'), 'success')
     } catch (err) {
       ui.pushToast(describe(err), 'error')
@@ -242,16 +222,8 @@
     }
   }
 
-  async function copyUrl() {
-    if (justCreated.value) await copyToClipboard(justCreated.value.url)
-  }
-
   async function copyActiveUrl() {
     if (active.value?.url) await copyToClipboard(active.value.url)
-  }
-
-  function dismissJustCreated() {
-    justCreated.value = null
   }
 
   function downloadQr(svg: string | null | undefined) {
@@ -369,30 +341,6 @@
   .url-row .actions,
   .url-row button {
     align-self: flex-start;
-  }
-
-  .created-box {
-    background: var(--fh-accent-soft);
-    border: var(--fh-border);
-    border-left: 2px solid var(--fh-accent);
-    border-radius: var(--fh-radius-sm);
-    padding: var(--fh-space-4);
-    display: flex;
-    flex-direction: column;
-    gap: var(--fh-space-2);
-  }
-
-  .created-eyebrow {
-    font-family: var(--fh-font-mono);
-    font-size: var(--fh-text-mono-sm);
-    text-transform: uppercase;
-    letter-spacing: 0.14em;
-    color: var(--fh-subtle);
-  }
-
-  .warning {
-    color: var(--fh-ink);
-    margin: 0;
   }
 
   .url {

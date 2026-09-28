@@ -166,8 +166,10 @@ class GroupRecipientRef(APIBaseModel):
 
 
 class InlinePublicLinkResult(APIBaseModel):
-    """Returned only on `POST /api/shares` when `public_link` was set
-    in the request - plaintext URL shown ONCE."""
+    """Returned only on `POST /api/shares` when `public_link` was set in the
+    request. Not a one-time secret: the token is stored encrypted, and the
+    owner and admins can read the URL again via
+    `GET /api/shares/{id}/public-link`."""
     id: str
     url: str
     qr_svg: str | None = None

@@ -68,6 +68,14 @@ describe('ShareUploadProgress', () => {
     expect(w.find('.plaintext-token').text()).toBe('https://example.com/d/tok')
   })
 
+  it('says the link can be copied again later, never that it is shown once', () => {
+    // The share page keeps showing the URL (the token is stored encrypted);
+    // "copy it now, it won't be shown again" made users think it was lost.
+    const box = makeWrapper({ publicLink: PUBLIC_LINK }).find('.plaintext-box').text()
+    expect(box).toContain("copy it again any time from the share's page")
+    expect(box).not.toMatch(/shown once|won't be shown again/i)
+  })
+
   it('hides action buttons while active, shows them when settled', () => {
     expect(makeWrapper({ isActive: true }).find('.actions').exists()).toBe(false)
     expect(makeWrapper({ isActive: false }).find('.actions').exists()).toBe(true)

@@ -424,7 +424,8 @@ export interface PublicLinkResponse {
   created_at: string
 }
 
-/** Returned exactly once, on creation. Deliberately NOT an extension of
+/** The reply to creating a link (its URL stays readable afterwards through
+ *  PublicLinkResponse.url). Deliberately NOT an extension of
  *  PublicLinkResponse: the backend model is standalone and carries neither
  *  `locked_until` nor `revoked_at` (a brand-new link has neither). */
 export interface CreatePublicLinkResponse {

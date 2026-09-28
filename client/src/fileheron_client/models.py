@@ -105,7 +105,8 @@ class GroupRecipientRef(_Base):
 
 class InlinePublicLinkResult(_Base):
     """Returned on POST /api/shares when ``public_link`` was set
-    in the request - plaintext URL shown ONCE. Mirrors the backend
+    in the request. The URL stays readable afterwards via
+    GET /api/shares/{id}/public-link (owner and admins). Mirrors the backend
     schema; ``_Base`` ignores any extra fields so server-side
     additions don't break us."""
     id: str

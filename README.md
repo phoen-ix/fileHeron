@@ -162,7 +162,7 @@ deduplicated to once per 6 h). After login you land on your **default landing pa
 2. **Drop files** - under 100 MB go via one multipart POST; larger use resumable TUS (close the tab and resume later from the same browser). Total is capped by your quota.
 3. **Subject** (optional) - defaults to the first file's name.
 4. **Expiry** (required) - the cron hard-deletes the bytes the hour after it passes.
-5. **Public link** (optional, if allowed) - set password, download-count limit, and "notify me on download". The URL is shown **once** on submit; copy it before navigating away.
+5. **Public link** (optional, if allowed) - set password, download-count limit, and "notify me on download". The URL is shown when the share is created and stays available on the share's page (owner and admins), with a QR code.
 
 Until the share can be sent, a list above **Create + send** says what is missing: no file yet, no recipient (or public link), or text typed into Recipients that was never picked from the list. An address with no account cannot be picked while *Recipients without an account* is off: clear the field (one click) and send the public link yourself - admins get a link to the switch.
 

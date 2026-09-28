@@ -142,3 +142,34 @@ describe('counted messages use plural forms', () => {
     expect(found.filter((k) => !remaining.has(k))).toEqual([])
   })
 })
+
+/* A public link's URL is re-viewable on the share page - the token is stored
+ * encrypted so its owner can copy it again. The SPA kept telling people to
+ * "copy it now, it won't be shown again" long after that stopped being true
+ * (2026-09-28). API tokens and webhook secrets are the genuine show-once
+ * secrets and are deliberately outside this scan. */
+describe('public-link strings never call the URL a one-time secret', () => {
+  const ONE_TIME = /shown once|won't be shown again|not be shown again|einmalige Anzeige|nicht erneut angezeigt/i
+
+  function linkStrings(messages: Record<string, unknown>): string[] {
+    const out: string[] = []
+    const walk = (o: unknown) => {
+      if (typeof o === 'string') out.push(o)
+      else if (o && typeof o === 'object') Object.values(o).forEach(walk)
+    }
+    walk(messages.public_link)
+    walk((messages.share_create as Record<string, unknown>).public_link)
+    return out
+  }
+
+  for (const [name, messages] of [
+    ['en', en],
+    ['de', de],
+  ] as const) {
+    it(`${name}: no link string claims the URL is shown only once`, () => {
+      const strings = linkStrings(messages as Record<string, unknown>)
+      expect(strings.length).toBeGreaterThan(10)
+      expect(strings.filter((s) => ONE_TIME.test(s))).toEqual([])
+    })
+  }
+})

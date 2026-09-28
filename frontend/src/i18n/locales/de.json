@@ -2161,8 +2161,8 @@
       "download_limit_placeholder": "z. B. 10",
       "download_limit_help": "Maximale Anzahl erfolgreicher Downloads. Leer lassen für unbegrenzt.",
       "notify_label": "Bei jedem Download benachrichtigen",
-      "result_eyebrow": "Öffentlicher Link (einmalige Anzeige)",
-      "result_warning": "URL jetzt kopieren - wird nicht erneut angezeigt. Über deinen üblichen Kanal an den Empfänger senden."
+      "result_eyebrow": "Öffentlicher Link",
+      "result_warning": "Sende ihn über deinen üblichen Kanal an den Empfänger. Du kannst ihn jederzeit wieder auf der Seite der Freigabe kopieren."
     },
     "progress": {
       "uploading_title": "Wird hochgeladen…",
@@ -2237,11 +2237,6 @@
     "revoke": "Link widerrufen",
     "revoke_confirm": "Diesen öffentlichen Link widerrufen? Wer die URL hat, verliert sofort den Zugriff.",
     "revoked_toast": "Öffentlicher Link widerrufen.",
-    "just_created": "Neuer öffentlicher Link",
-    "url_warning": "URL jetzt kopieren. Sie wird nicht erneut angezeigt.",
-    "copy": "URL kopieren",
-    "copied": "Kopiert",
-    "acknowledged": "Ich habe die URL gespeichert",
     "create_submit": "Öffentlichen Link erstellen",
     "password_label": "Passwort (optional)",
     "password_placeholder": "Leer für kein Passwort",
@@ -2252,7 +2247,8 @@
     "notify_label": "Bei jedem Download per E-Mail benachrichtigen",
     "notify_help": "E-Mail erhalten, wenn jemand über diesen Link herunterlädt.",
     "locked": "Gesperrt",
-    "locked_until": "Nach zu vielen fehlgeschlagenen Passwortversuchen gesperrt - wird {when} entsperrt. Empfänger können ihn bis dahin nicht öffnen."
+    "locked_until": "Nach zu vielen fehlgeschlagenen Passwortversuchen gesperrt - wird {when} entsperrt. Empfänger können ihn bis dahin nicht öffnen.",
+    "created_toast": "Öffentlicher Link erstellt."
   },
   "public_share": {
     "eyebrow": "file:Heron",

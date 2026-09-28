@@ -66,6 +66,10 @@
   // with the default 7-day preset; from then on the picker always emits a
   // concrete value (string OR null).
   const expiresAtLocal = ref<string | null | undefined>(undefined)
+  // A preset counts from when the files are READY (v2.23.0): its duration, or
+  // null for a typed date / "never", which stay exact. A big upload used to eat
+  // into "1 hour" and could outlive the share.
+  const expiresRelativeSec = ref<number | null>(null)
   // Per-share opt-out for the `share_created` notification + email fan-out.
   // Initial state mirrors the admin-controlled kv (surfaced via /me) so the
   // admin can decide whether senders see this on or off by default.
@@ -196,9 +200,10 @@
         // picker emits a site-tz wall-clock string - convert it to a UTC
         // instant interpreting it in the site tz (matches display).
         expires_at:
-          expiresAtLocal.value === null
+          expiresRelativeSec.value !== null || expiresAtLocal.value === null
             ? null
             : siteLocalIsoToUtcIso(expiresAtLocal.value as string),
+        expires_in_sec: expiresRelativeSec.value,
         subject: subject.value || null,
         message: message.value || null,
         public_link: publicLinkPayload,
@@ -391,7 +396,12 @@
             <span class="fh-field-label">{{ t('share_create.recipient_label') }}</span>
             <p class="fh-field-help">{{ t('share_create.to_company') }}</p>
           </div>
-          <ExpiryPicker v-model="expiresAtLocal" :disabled="submitting || upload.isActive.value" />
+          <ExpiryPicker
+            v-model="expiresAtLocal"
+            v-model:relative="expiresRelativeSec"
+            from-ready
+            :disabled="submitting || upload.isActive.value"
+          />
           <label class="fh-field share-limit-field">
             <span class="fh-field-label">{{ t('share_create.download_limit_label') }}</span>
             <input

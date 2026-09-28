@@ -136,6 +136,22 @@ class Share(Base):
     approval_decided_at: Mapped[datetime | None] = mapped_column(DateTime(), nullable=True)
     rejection_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     notify_on_activation: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    # v2.23.0. A preset expiry ("1 hour") counts from when the files are READY
+    # (downloadable), not from creation: while this is set the clock has not
+    # started and `expires_at` is NULL. `_dispatch_share_created` - the one
+    # "ready" moment - sets `expires_at = now + expires_in_sec` and clears it.
+    expires_in_sec: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # v2.23.0. Files added to a live share whose "files added" notice waits for
+    # them to be downloadable (the virus scan). The count to announce; NULL =
+    # nothing owed. Claimed and cleared by one conditional UPDATE.
+    pending_added_notice: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # v2.23.0. The owner's client said its upload batch is complete
+    # (`register_files_added`). Lets the post-scan trigger announce at once
+    # instead of waiting out ANNOUNCE_QUIET_SECONDS, which only exists to guess
+    # the end of a batch for clients that never say so.
+    upload_batch_done: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
 
     created_by: Mapped[User] = relationship("User", foreign_keys=[created_by_id])
     files: Mapped[list[File]] = relationship(

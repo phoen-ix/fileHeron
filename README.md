@@ -161,8 +161,10 @@ deduplicated to once per 6 h). After login you land on your **default landing pa
 1. **Pick recipients** - search shows who you may send to (employees see all employees + connected clients; clients see connected employees + any company-inbox group). Pick a **group** to address every current member (membership changes retroactively change who can read it).
 2. **Drop files** - under 100 MB go via one multipart POST; larger use resumable TUS (close the tab and resume later from the same browser). Total is capped by your quota.
 3. **Subject** (optional) - defaults to the first file's name.
-4. **Expiry** (required) - the cron hard-deletes the bytes the hour after it passes.
+4. **Expiry** (required) - a preset ("1 hour", "7 days", ...) counts from when the files are **ready to download**, so a long upload never eats into it; a date and time you type stays exact. A share is never expired while an upload into it is still running. After the expiry passes, the hourly cleanup deletes the bytes.
 5. **Public link** (optional, if allowed) - set password, download-count limit, and "notify me on download". The URL is shown when the share is created and stays available on the share's page (owner and admins), with a QR code.
+
+Recipients are emailed once the files can actually be downloaded - after the upload **and** the virus scan - so the link never answers "scan in progress". Files added to a share later are announced the same way.
 
 Until the share can be sent, a list above **Create + send** says what is missing: no file yet, no recipient (or public link), or text typed into Recipients that was never picked from the list. An address with no account cannot be picked while *Recipients without an account* is off: clear the field (one click) and send the public link yourself - admins get a link to the switch.
 

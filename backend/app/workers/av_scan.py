@@ -32,6 +32,26 @@ logger = logging.getLogger("fileheron.workers.av_scan")
 _RETRY_MAX_DEFER_SEC = 300
 
 
+def _notify_recipients_if_ready(db, *, share_id: str | None) -> None:
+    """A file just became downloadable: send whatever recipient mail was waiting
+    for that - the share's announcement or an owed "files added" notice
+    (v2.23.0, `share.notify_if_downloadable`). The minute sweep is the fallback.
+    Never raises: the verdict is already committed, and a mail that fails here is
+    sent by the sweep instead."""
+    if not share_id:
+        return
+    try:
+        from ..services import share as share_svc
+
+        # Commit either way: a False return has written nothing, and a
+        # rollback would expire every object the session holds for no reason.
+        share_svc.notify_if_downloadable(db, share_id)
+        db.commit()
+    except Exception:
+        db.rollback()
+        logger.exception("av_scan: recipient notice for share %s failed", share_id)
+
+
 def _release_unscanned(db, *, file_id: str, file: File, reason: str) -> dict:
     """Release a file without a trusted verdict: `clean` state,
     `av_unscanned = True`, and a durable audit row saying which threshold did it.
@@ -83,6 +103,7 @@ def _release_unscanned(db, *, file_id: str, file: File, reason: str) -> dict:
             "reason": reason,
         },
     )
+    share_id = file.share_id
     db.commit()
     logger.warning(
         "av_scan: %s (%d bytes) released as UNSCANNED, not clean - %s",
@@ -90,6 +111,7 @@ def _release_unscanned(db, *, file_id: str, file: File, reason: str) -> dict:
         file.size_bytes or 0,
         reason,
     )
+    _notify_recipients_if_ready(db, share_id=share_id)
     return {
         "file_id": file_id,
         "state": "clean",
@@ -229,8 +251,10 @@ async def av_scan_file(_ctx, file_id: str) -> dict:
                     file_id,
                 )
                 return {"file_id": file_id, "state": "superseded"}
+            share_id = file.share_id
             db.commit()
             logger.info("av_scan: %s clean", file_id)
+            _notify_recipients_if_ready(db, share_id=share_id)
             return {"file_id": file_id, "state": "clean"}
 
         if result.state == "infected":

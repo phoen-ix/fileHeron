@@ -1952,7 +1952,10 @@
     "in_days": "in {n} Tag | in {n} Tagen",
     "in_past": "bereits vorbei - bitte zukünftigen Zeitpunkt wählen",
     "never_label": "Nie",
-    "never_help": "Läuft nicht automatisch ab. Manuell widerrufen, wenn nicht mehr benötigt."
+    "never_help": "Läuft nicht automatisch ab. Manuell widerrufen, wenn nicht mehr benötigt.",
+    "after_ready": "{duration}, nachdem die Dateien bereit sind",
+    "duration_hours": "{n} Stunde | {n} Stunden",
+    "duration_days": "{n} Tag | {n} Tage"
   },
   "file_preview": {
     "open": "Vorschau",

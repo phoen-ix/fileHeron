@@ -71,6 +71,9 @@ class PublicShareResponse(APIBaseModel):
     message: str | None
     # None = never-expire share (v1.1.4). SPA renders this as "Never".
     expires_at: datetime | None
+    # Set while a preset expiry's clock has not started (the files are not
+    # ready yet); `expires_at` is then null. See CreateShareRequest.
+    expires_in_sec: int | None = None
     requires_password: bool
     unlocked: bool
     downloads_remaining: int | None

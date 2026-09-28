@@ -46,10 +46,15 @@
     /** Optional override of the preset buttons (default = the share set).
      *  e.g. API tokens pass ['7d','30d','90d','1y','never']. */
     presets?: readonly PresetId[]
+    /** A preset counts from when the files are READY, not from now (the new-
+     *  share form). The active preset's duration is emitted as `relative`
+     *  (seconds); a typed date, or "never", emits null - those stay exact. */
+    fromReady?: boolean
   }>()
 
   const emit = defineEmits<{
     'update:modelValue': [value: string | null]
+    'update:relative': [seconds: number | null]
   }>()
 
   const { t, locale } = useI18n()
@@ -161,9 +166,20 @@
     return siteLocalIsoToEpochMs(dt.value) - Date.now()
   })
 
+  /** The active timed preset's duration, when presets count from ready. */
+  const relativeSeconds = computed<number | null>(() => {
+    if (!props.fromReady) return null
+    const preset = presets.find((p) => p.id === activePreset.value)
+    return preset && preset.ms !== null ? preset.ms / 1000 : null
+  })
+  watch(relativeSeconds, (v) => emit('update:relative', v), { immediate: true })
+
   const hintText = computed(() => {
     if (activePreset.value === 'never' || dt.value === null) {
       return t('expiry.never_help')
+    }
+    if (relativeSeconds.value !== null && activePreset.value) {
+      return t('expiry.after_ready', { duration: t(`expiry.presets.${activePreset.value}`) })
     }
     const ms = expiresInMs.value
     if (ms <= 0) return t('expiry.in_past')

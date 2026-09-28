@@ -12,6 +12,9 @@ export function createShare(payload: {
   recipients: ShareRecipientsRequest
   /** ISO datetime, or null = never-expire (v1.1.4). */
   expires_at: string | null
+  /** v2.23.0: a preset expiry counted from when the files are ready; send
+   *  expires_at: null with it. */
+  expires_in_sec?: number | null
   subject?: string | null
   message?: string | null
   public_link?: PublicLinkOnCreate | null

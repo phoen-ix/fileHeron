@@ -71,6 +71,20 @@ class CreateShareRequest(APIBaseModel):
     # recipients. False records the addresses and mails nobody - the sender
     # sends the link themselves. Optional, defaulting to what v2.21.0 did.
     email_external_link: bool = True
+    # A preset expiry (v2.23.0): the share lives this long AFTER its files are
+    # ready (downloadable), not after creation - a "1 hour" share holding a big
+    # upload used to expire mid-transfer. Send `expires_at: null` with it; a
+    # client that sends only `expires_at` keeps the exact-time behaviour.
+    expires_in_sec: int | None = Field(default=None, gt=0, le=10 * 366 * 24 * 3600)
+
+    @model_validator(mode="after")
+    def _one_kind_of_expiry(self):
+        if self.expires_in_sec is not None and self.expires_at is not None:
+            raise ValueError(
+                "Send either expires_at (an exact time) or expires_in_sec "
+                "(counted from when the files are ready), not both."
+            )
+        return self
 
     @model_validator(mode="after")
     def _recipients_or_public_link(self):
@@ -208,6 +222,9 @@ class ShareResponse(APIBaseModel):
     # None = never-expire share (v1.1.4). SPA renders this as "Never".
     expires_at: datetime | None
     created_by_id: int
+    # Set while a preset expiry's clock has not started (files not ready yet);
+    # `expires_at` is then null. See CreateShareRequest.expires_in_sec.
+    expires_in_sec: int | None = None
     recipient_user_ids: list[int]
     recipient_groups: list[GroupRecipientRef]
     files: list[FileInShareResponse]
@@ -302,6 +319,8 @@ class ShareListItem(APIBaseModel):
     effective_subject: str = ""
     created_at: datetime
     expires_at: datetime | None
+    # See ShareResponse.expires_in_sec.
+    expires_in_sec: int | None = None
     created_by_id: int
     file_count: int
     total_size_bytes: int

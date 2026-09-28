@@ -13,6 +13,7 @@
   import { useUiStore } from '@/stores/ui'
   import type { ShareListItem, ShareRecipientRef } from '@/types/api'
   import { formatBytes } from '@/utils/bytes'
+  import { afterReadyLabel } from '@/utils/duration'
   import { shareStatePill } from '@/utils/statePill'
 
   const { t } = useI18n()
@@ -345,7 +346,13 @@
                 </td>
                 <td class="numeric">{{ item.file_count }}</td>
                 <td class="numeric fh-mono">{{ formatBytes(item.total_size_bytes) }}</td>
-                <td class="fh-mono">{{ formatExpiry(item.expires_at) }}</td>
+                <td class="fh-mono">
+                  {{
+                    item.expires_in_sec
+                      ? afterReadyLabel(item.expires_in_sec, t)
+                      : formatExpiry(item.expires_at)
+                  }}
+                </td>
               </tr>
             </tbody>
           </table>

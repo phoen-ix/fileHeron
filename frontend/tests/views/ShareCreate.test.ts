@@ -55,7 +55,8 @@ const RecipientPickerStub = defineComponent({
 })
 const ExpiryPickerStub = defineComponent({
   name: 'ExpiryPicker',
-  emits: ['update:modelValue'],
+  props: ['modelValue', 'relative', 'fromReady', 'disabled'],
+  emits: ['update:modelValue', 'update:relative'],
   mounted() {
     this.$emit('update:modelValue', '2030-01-01T10:00')
   },
@@ -246,5 +247,36 @@ describe('ShareCreate', () => {
       email: 'b@example.com',
       target_role: 'client',
     })
+  })
+
+  it('sends a preset as a duration from ready, and a typed time as exact', async () => {
+    const w = mountView()
+    await flushPromises()
+    queueOneFile()
+    picker(w).vm.$emit('update:modelValue', { user_ids: [5], group_ids: [], emails: [] })
+    const expiry = w.findComponent(ExpiryPickerStub)
+    expect(expiry.props('fromReady')).not.toBe(false)
+
+    expiry.vm.$emit('update:relative', 3600)
+    await flushPromises()
+    await w.find('form').trigger('submit')
+    await flushPromises()
+    expect(api.createShare.mock.calls[0][0]).toMatchObject({
+      expires_at: null,
+      expires_in_sec: 3600,
+    })
+
+    api.createShare.mockClear()
+    const again = mountView()
+    await flushPromises()
+    queueOneFile()
+    picker(again).vm.$emit('update:modelValue', { user_ids: [5], group_ids: [], emails: [] })
+    again.findComponent(ExpiryPickerStub).vm.$emit('update:relative', null)
+    await flushPromises()
+    await again.find('form').trigger('submit')
+    await flushPromises()
+    const payload = api.createShare.mock.calls[0][0]
+    expect(payload.expires_in_sec).toBeNull()
+    expect(typeof payload.expires_at).toBe('string')
   })
 })

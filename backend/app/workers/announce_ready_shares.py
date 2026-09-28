@@ -16,6 +16,8 @@ from __future__ import annotations
 import logging
 from datetime import timedelta
 
+from sqlalchemy import and_, or_
+
 from ..database import SessionLocal
 from ..models.file import File
 from ..models.share import Share, ShareState
@@ -40,8 +42,16 @@ async def announce_ready_shares(_ctx) -> dict:
             .join(File, File.share_id == Share.id)
             .filter(
                 Share.state == ShareState.active,
-                Share.notify_on_activation.isnot(None),
-                Share.created_at > utc_now() - timedelta(hours=_LOOKBACK_HOURS),
+                or_(
+                    and_(
+                        Share.notify_on_activation.isnot(None),
+                        Share.created_at > utc_now() - timedelta(hours=_LOOKBACK_HOURS),
+                    ),
+                    # An owed "files added" notice (v2.23.0): files added to a
+                    # live share, waiting for their scan. Added later than the
+                    # share was created, so no created-at window applies.
+                    Share.pending_added_notice.isnot(None),
+                ),
             )
             .distinct()
             .limit(200)
@@ -49,7 +59,9 @@ async def announce_ready_shares(_ctx) -> dict:
         )
         for (share_id,) in candidates:
             try:
-                if share_svc.announce_if_ready(db, share_id, require_quiet=True):
+                # Fallback for the post-scan trigger in av_scan: the same one
+                # entry point, so both decide "downloadable" identically.
+                if share_svc.notify_if_downloadable(db, share_id):
                     db.commit()
                     sent += 1
                 else:

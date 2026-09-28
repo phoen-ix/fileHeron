@@ -531,3 +531,22 @@ async def test_addresses_are_forgotten_once_the_share_ends(db, make_user):
     left = {r.share_id for r in db.query(ShareExternalRecipient).all()}
     assert left == {by_state[ShareState.active], by_state[ShareState.rejected]}
     assert result["share_external_recipients"] == 3
+
+
+def test_the_link_mail_waits_for_the_scan(db, make_user, sent):
+    """A link whose download answers "scan in progress" is the confusion this
+    avoids: the address hears about the share once its files can be fetched."""
+    from app.models.file import FileState
+
+    sender, share, _token = _external_share(db, make_user)
+    f = land_file(db, share, sender, state=FileState.ready_unscanned)
+    db.commit()
+    share_svc.announce_if_ready(db, share.id)
+    db.commit()
+    assert _link_mails(sent) == []
+
+    f.state = FileState.clean
+    db.commit()
+    share_svc.announce_if_ready(db, share.id)
+    db.commit()
+    assert [m["to"] for m in _link_mails(sent)] == ["ext@example.com"]

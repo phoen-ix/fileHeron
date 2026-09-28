@@ -39,4 +39,32 @@ describe('ExpiryPicker', () => {
     await never.trigger('click')
     expect(w.emitted('update:modelValue')?.at(-1)).toEqual([null])
   })
+
+  it('from ready: a preset emits its duration and says when the clock starts', async () => {
+    // A "1 hour" share holding a 20 GB upload expired mid-transfer: the preset
+    // counted from the click. On the new-share form it counts from ready.
+    setActivePinia(createPinia())
+    const i18n = createI18n({ legacy: false, locale: 'en', fallbackLocale: 'en', messages: { en } })
+    const w = mount(ExpiryPicker, {
+      props: { modelValue: undefined, fromReady: true },
+      global: { plugins: [i18n] },
+    })
+    expect(w.emitted('update:relative')?.at(-1)).toEqual([7 * 24 * 3600])
+
+    const hour = w.findAll('button').find((b) => b.text() === en.expiry.presets['1h'])!
+    await hour.trigger('click')
+    expect(w.emitted('update:relative')?.at(-1)).toEqual([3600])
+    expect(w.find('.hint').text()).toBe('1 hour after the files are ready')
+
+    await w.find('input[type="datetime-local"]').setValue('2031-01-02T09:30')
+    expect(w.emitted('update:relative')?.at(-1)).toEqual([null])
+  })
+
+  it('without from-ready, a preset stays an exact time', async () => {
+    const w = mountPicker('2027-12-01T10:00:00')
+    const hour = w.findAll('button').find((b) => b.text() === en.expiry.presets['1h'])!
+    await hour.trigger('click')
+    expect((w.emitted('update:relative') ?? []).every((e) => e[0] === null)).toBe(true)
+    expect(w.find('.hint').text()).toMatch(/^in /)
+  })
 })

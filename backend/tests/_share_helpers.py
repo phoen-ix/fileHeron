@@ -17,9 +17,16 @@ from app.models.file import File, FileState
 from app.services import share as share_svc
 
 
-def land_file(db, share, uploader, *, name="doc.bin", size=10) -> File:
+def land_file(
+    db, share, uploader, *, name="doc.bin", size=10, state=FileState.clean
+) -> File:
     """Attach one finalized file to `share` exactly as the upload pipeline
-    would, without announcing."""
+    would, without announcing.
+
+    `clean` by default: a finished, SCANNED file - since v2.23.0 a share is
+    announced only when its files are downloadable, and `ready_unscanned`
+    answers 425 until the scan is done. Pass `state=FileState.ready_unscanned`
+    to model a file still being scanned."""
     f = File(
         id=str(uuid.uuid4()),
         share_id=share.id,
@@ -27,7 +34,7 @@ def land_file(db, share, uploader, *, name="doc.bin", size=10) -> File:
         mime_type="application/octet-stream",
         size_bytes=size,
         storage_path=f"/tmp/{uuid.uuid4()}.bin",
-        state=FileState.ready_unscanned,
+        state=state,
         uploaded_by_id=uploader.id,
     )
     db.add(f)

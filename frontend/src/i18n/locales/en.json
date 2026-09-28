@@ -1952,7 +1952,10 @@
     "in_days": "in {n} day | in {n} days",
     "in_past": "already past - pick a future time",
     "never_label": "Never",
-    "never_help": "This will not expire automatically. Revoke it manually when it is no longer needed."
+    "never_help": "This will not expire automatically. Revoke it manually when it is no longer needed.",
+    "after_ready": "{duration} after the files are ready",
+    "duration_hours": "{n} hour | {n} hours",
+    "duration_days": "{n} day | {n} days"
   },
   "file_preview": {
     "open": "Preview",

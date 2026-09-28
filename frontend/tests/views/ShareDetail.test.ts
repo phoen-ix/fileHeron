@@ -134,4 +134,10 @@ describe('ShareDetail - recipients without an account', () => {
     const older = await mountPage(share({ external_recipients: undefined }))
     expect(older.find('[data-testid="external-recipients"]').exists()).toBe(false)
   })
+
+  it('shows a preset expiry that has not started as counting from ready', async () => {
+    const w = await mountPage(share({ expires_at: null, expires_in_sec: 3600 }))
+    expect(w.text()).toContain('1 hour after the files are ready')
+    expect(w.text()).not.toContain(en.expiry.never_label)
+  })
 })

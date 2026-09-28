@@ -172,6 +172,7 @@ def landing(
         subject=None if gated else share.subject,
         message=None if gated else share.message,
         expires_at=share.expires_at,
+        expires_in_sec=share.expires_in_sec,
         requires_password=link.password_hash is not None,
         unlocked=unlocked,
         downloads_remaining=link.downloads_remaining,

@@ -253,6 +253,18 @@ def _recipient_notify_ids(
     return ids
 
 
+def _start_expiry_clock(share: Share) -> None:
+    """A preset expiry counts from the moment the files are ready - this one.
+    Before the email payloads are built, so they carry the real expiry."""
+    if share.expires_in_sec is None:
+        return
+    from datetime import timedelta
+
+    share.expires_at = utc_now() + timedelta(seconds=share.expires_in_sec)
+    share.expires_in_sec = None
+    share.expiring_notified_at = None
+
+
 def _dispatch_share_created(
     db: Session, share: Share, *, notify_recipients: bool
 ) -> None:
@@ -267,6 +279,7 @@ def _dispatch_share_created(
     # has been established to go to nobody), and `notify_on_activation` is what
     # `announce_if_ready` reads to decide whether one is still owed.
     share.notify_on_activation = None
+    _start_expiry_clock(share)
     if share.kind == ShareKind.outbound:
         # Before the early return below: a share whose only recipients have no
         # account notifies no user, and must still send them the link. NOT
@@ -376,6 +389,7 @@ def create_share(
     recipient_group_ids: list[int] | None = None,
     external_emails: list[str] | None = None,
     email_external_link: bool = True,
+    expires_in_sec: int | None = None,
     subject: str | None = None,
     message: str | None = None,
     allow_no_recipients: bool = False,
@@ -455,6 +469,9 @@ def create_share(
         # Mirror limit → remaining on create. Subsequent edits via
         # update_share_limit recompute remaining = max(0, new_limit - used).
         downloads_remaining=download_limit,
+        # A preset ("1 hour") counts from READY: the clock starts in
+        # `_dispatch_share_created`, so `expires_at` stays NULL until then.
+        expires_in_sec=expires_in_sec if expires_at is None else None,
     )
     db.add(share)
     db.flush()
@@ -533,7 +550,7 @@ def create_share(
     # bell, in both locales, for every share this product has ever sent
     # (audit #2). Freeze the choice the same way the approval path does and let
     # `announce_if_ready` fire it once the uploads land.
-    if _has_landed_file(db, share):
+    if _ready_to_announce(db, share):
         _dispatch_share_created(db, share, notify_recipients=resolved_notify)
     else:
         share.notify_on_activation = resolved_notify
@@ -552,17 +569,43 @@ def _still_uploading(db: Session, share: Share) -> bool:
     )
 
 
-def _has_landed_file(db: Session, share: Share) -> bool:
+def _awaiting_scan(db: Session, share: Share) -> bool:
+    """A file has landed but its virus scan has not finished: a download of it
+    answers 425 SCAN_IN_PROGRESS."""
     from ..models.file import File, FileState
 
     return (
         db.query(File.id)
-        .filter(
-            File.share_id == share.id,
-            File.state.notin_((FileState.uploading, FileState.deleted)),
-        )
+        .filter(File.share_id == share.id, File.state == FileState.ready_unscanned)
         .first()
         is not None
+    )
+
+
+def _has_downloadable_file(db: Session, share: Share) -> bool:
+    """`clean` - scanned, or released unscanned above clamd's ceiling."""
+    from ..models.file import File, FileState
+
+    return (
+        db.query(File.id)
+        .filter(File.share_id == share.id, File.state == FileState.clean)
+        .first()
+        is not None
+    )
+
+
+def _ready_to_announce(db: Session, share: Share) -> bool:
+    """THE "ready" moment: nothing still uploading, nothing still being scanned,
+    and something to download. The recipient email, the link email to addresses
+    without an account and a preset expiry's clock all start here.
+
+    It used to be "a file has LANDED" - `ready_unscanned` counted - so the
+    recipient was mailed a link that answered "scan in progress" until clamd
+    finished (v2.23.0)."""
+    return (
+        not _still_uploading(db, share)
+        and not _awaiting_scan(db, share)
+        and _has_downloadable_file(db, share)
     )
 
 
@@ -599,7 +642,7 @@ def announce_if_ready(db: Session, share_id: str, *, require_quiet: bool = False
         return False
     if share.notify_on_activation is None:
         return False
-    if _still_uploading(db, share) or not _has_landed_file(db, share):
+    if not _ready_to_announce(db, share):
         return False
     if require_quiet:
         newest = (
@@ -1111,7 +1154,7 @@ def approve_share(
     # first upload landed, with nothing to correct it afterwards (audit #2
     # cross-check). If they are not there yet, the frozen flag stays set and
     # the batch signal or the announce sweep does it.
-    if _has_landed_file(db, share) and not _still_uploading(db, share):
+    if _ready_to_announce(db, share):
         notify = (
             share.notify_on_activation if share.notify_on_activation is not None else True
         )
@@ -1564,6 +1607,9 @@ def update_share_expiry(
             )
     old = share.expires_at
     share.expires_at = new_expires_at
+    # An explicit time from the owner replaces a preset whose clock had not
+    # started yet (it would otherwise overwrite this on the ready moment).
+    share.expires_in_sec = None
     # Any change to the expiry resets the 24h-warning idempotency marker. It
     # used to reset only when the expiry was CLEARED, so a share that had
     # already been warned about and was then extended by a month never got a
@@ -1697,11 +1743,23 @@ def register_files_added(
         request=request,
     )
 
+    # The owner's client says its batch is complete. Recorded so the post-scan
+    # trigger can announce the moment the files are downloadable instead of
+    # waiting out the quiet window that guesses the end of a batch.
+    if not share.upload_batch_done:
+        share.upload_batch_done = True
+        db.flush()
+
     # If the share has not announced itself yet - the normal case for the very
     # first batch, since files attach at upload time - this IS the announcement,
     # not a "files were added" follow-up. Sending both would tell the recipient
     # about a share and then immediately about an addition to it.
     if announce_if_ready(db, share.id):
+        return share
+    # Still owed but not ready (the scan has not finished): the announcement
+    # fires later, from the scan trigger or the sweep, and counts these files.
+    # A "files added" notice now would reach recipients before the share itself.
+    if share.notify_on_activation is not None:
         return share
 
     # Never for a share still awaiting approval: the recipients cannot see it
@@ -1717,10 +1775,61 @@ def register_files_added(
     if added_count > 0 and approval_svc.files_awaiting_review(db, share):
         _notify_approvers_pending(db, share)
     elif notify and added_count > 0 and share.state == ShareState.active:
-        _notify_recipients_files_added(db, share, actor=user, added_count=added_count)
+        if _ready_to_announce(db, share):
+            _notify_recipients_files_added(db, share, actor=user, added_count=added_count)
+        else:
+            # Not downloadable yet (being scanned): owe the notice, delivered by
+            # `notify_if_downloadable` once it is - a mail whose download answers
+            # "scan in progress" is exactly the confusion this avoids.
+            share.pending_added_notice = (share.pending_added_notice or 0) + added_count
 
     db.flush()
     return share
+
+
+def _deliver_pending_added_notice(db: Session, share: Share) -> bool:
+    """Send an owed "files added" notice once everything on the share can be
+    downloaded. Claimed by a conditional UPDATE, so of two callers racing
+    exactly one sends. Returns True if this call sent it."""
+    count = share.pending_added_notice
+    if not count or share.state != ShareState.active:
+        return False
+    if not _ready_to_announce(db, share):
+        return False
+    claimed = updated_rows(
+        db.execute(
+            update(Share)
+            .where(Share.id == share.id, Share.pending_added_notice.isnot(None))
+            .values(pending_added_notice=None)
+        )
+    )
+    if not claimed:
+        return False
+    db.flush()
+    db.refresh(share)
+    owner = share.created_by or db.get(User, share.created_by_id)
+    if owner is None:
+        return False
+    _notify_recipients_files_added(db, share, actor=owner, added_count=count)
+    return True
+
+
+def notify_if_downloadable(db: Session, share_id: str) -> bool:
+    """Called when a file on the share becomes downloadable (its scan finished)
+    and by the minute sweep: send whatever recipient mail was waiting for that -
+    the share's announcement, or an owed "files added" notice. Caller commits.
+
+    The announcement skips the quiet window when the owner's client already
+    reported its batch complete; otherwise the window still guards against
+    announcing between two files of a sequential upload."""
+    share = db.query(Share).filter(Share.id == share_id).one_or_none()
+    if share is None:
+        return False
+    if share.notify_on_activation is not None:
+        return announce_if_ready(
+            db, share_id, require_quiet=not share.upload_batch_done
+        )
+    return _deliver_pending_added_notice(db, share)
 
 
 def _notify_recipients_files_added(

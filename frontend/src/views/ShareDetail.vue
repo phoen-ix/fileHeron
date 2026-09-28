@@ -31,6 +31,7 @@
   import { useUiStore } from '@/stores/ui'
   import type { FileInShareResponse, ShareResponse } from '@/types/api'
   import { formatBytes } from '@/utils/bytes'
+  import { afterReadyLabel } from '@/utils/duration'
   import { siteLocalIsoToUtcIso } from '@/utils/datetime'
   import { shareStatePill } from '@/utils/statePill'
 
@@ -444,7 +445,11 @@
         </span>
         <span class="fh-kv">
           <span class="fh-kv-label">{{ t('share_detail.expires') }}</span>
-          <span class="fh-kv-value">{{ formatExpiry(share.expires_at) }}</span>
+          <span class="fh-kv-value">{{
+            share.expires_in_sec
+              ? afterReadyLabel(share.expires_in_sec, t)
+              : formatExpiry(share.expires_at)
+          }}</span>
           <button
             v-if="canManage && share.state === 'active' && !editingExpiry"
             type="button"

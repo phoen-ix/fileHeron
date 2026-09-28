@@ -8,17 +8,28 @@ For each expired share that's still `active`:
 Idempotent: re-running the job picks up no work the second time because
 shares move out of `active` after the first run. File deletion is also
 idempotent (silently no-ops on missing files).
+
+**A share with an upload still making progress is NOT expired** (v2.23.0). The
+job used to expire it anyway: the `uploading` row went `deleted`, tusd kept
+accepting the bytes (no hook runs per PATCH), and the transfer was refused only
+at pre-finish - a 20 GB upload failed after its last byte. "Making progress" is
+`services/upload_liveness`, the one definition the stale-upload reaper and the
+drain counter share, so a stalled transfer stops holding the share once it is
+stale, and an abandoned one can never keep a share alive.
 """
 from __future__ import annotations
 
 import logging
 
+from sqlalchemy import exists
 from sqlalchemy.orm import selectinload
 
 from ..database import SessionLocal
 from ..models.audit_log import AuditEventType
+from ..models.file import File, FileState
 from ..models.share import Share, ShareState
 from ..services import file as file_svc
+from ..services import upload_liveness
 from ..services.audit import record_audit_event
 from ..services.cron_tracker import track_cron
 from ..utils.timeutil import utc_now
@@ -40,10 +51,19 @@ async def expire_files(_ctx) -> dict:
     failed_shares = 0
     try:
         now = utc_now()
+        live_upload = exists().where(
+            File.share_id == Share.id,
+            File.state == FileState.uploading,
+            upload_liveness.last_activity() >= upload_liveness.stale_cutoff(db),
+        )
         shares = (
             db.query(Share)
             .options(selectinload(Share.files))
-            .filter(Share.state == ShareState.active, Share.expires_at < now)
+            .filter(
+                Share.state == ShareState.active,
+                Share.expires_at < now,
+                ~live_upload,
+            )
             .all()
         )
         for share in shares:

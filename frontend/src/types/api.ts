@@ -302,8 +302,11 @@ export interface ShareResponse {
   message: string | null
   created_at: string
   /** ISO datetime, or null = never-expire (v1.1.4). SPA renders null
-   *  as "Never" via formatExpiryInSiteTime. */
+   *  as "Never" via formatExpiryInSiteTime - unless expires_in_sec is set. */
   expires_at: string | null
+  /** A preset expiry whose clock starts when the files are ready (v2.23.0);
+   *  expires_at is null until then. */
+  expires_in_sec?: number | null
   created_by_id: number
   recipient_user_ids: number[]
   recipient_groups: GroupRecipientRef[]
@@ -463,8 +466,11 @@ export interface PublicShareResponse {
   share_id: string
   subject: string | null
   message: string | null
-  /** ISO datetime, or null = never-expire (v1.1.4). */
+  /** ISO datetime, or null = never-expire (v1.1.4) - unless expires_in_sec is
+   *  set, in which case the clock simply has not started yet. */
   expires_at: string | null
+  /** A preset expiry that starts when the files are ready (v2.23.0). */
+  expires_in_sec?: number | null
   requires_password: boolean
   unlocked: boolean
   downloads_remaining: number | null
@@ -876,6 +882,8 @@ export interface ShareListItem {
   created_at: string
   /** ISO datetime, or null = never-expire (v1.1.4). */
   expires_at: string | null
+  /** See ShareResponse.expires_in_sec. */
+  expires_in_sec?: number | null
   created_by_id: number
   file_count: number
   total_size_bytes: number

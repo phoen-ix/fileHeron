@@ -21,6 +21,7 @@
   import { useSiteStore } from '@/stores/site'
   import type { PublicShareFile, PublicShareResponse } from '@/types/api'
   import { formatBytes } from '@/utils/bytes'
+  import { afterReadyLabel } from '@/utils/duration'
   import { previewKind } from '@/utils/preview'
 
   const route = useRoute()
@@ -187,7 +188,11 @@
 
       <p class="fh-rise expires-line" data-stagger="2">
         <span class="fh-kv-label">{{ t('public_share.expires') }}</span>
-        <span class="fh-kv-value fh-mono">{{ formatExpiry(share.expires_at) }}</span>
+        <span class="fh-kv-value fh-mono">{{
+          share.expires_in_sec
+            ? afterReadyLabel(share.expires_in_sec, t)
+            : formatExpiry(share.expires_at)
+        }}</span>
       </p>
 
       <p v-if="share.message" class="message fh-rise" data-stagger="3">

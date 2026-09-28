@@ -1,3 +1,37 @@
+# file:Heron v2.22.1
+
+**Public links are no longer described as "shown once".** You can always copy
+a share's public link again from the share's page.
+
+**No migration, no default move, no host step.** No desktop client release.
+
+---
+
+## What changes
+
+- After **Create + send**, the link box read "Public link (shown once) - Copy
+  this URL now - it won't be shown again". That was not true: every link's
+  address is stored, and the share's page shows it to its owner and to admins,
+  with **Copy** and a **QR code**, for as long as the link exists. The box now
+  says so.
+- Creating a link on the share's page no longer opens a one-time box with "It
+  will not be shown again" and an "I've saved the URL" button. The new link
+  appears straight away in the normal **Public link** panel.
+- Only a very old link, created before addresses were stored, cannot be shown
+  again; the panel says so and suggests revoking it and creating a new one, as
+  before.
+
+API tokens and webhook signing secrets really are shown only once and keep
+that warning.
+
+---
+
+## Upgrading
+
+Click **Update**, or let automatic updates install it: it is a patch release.
+
+---
+
 # file:Heron v2.22.0
 
 **An address without an account no longer dead-ends the new-share form, and

@@ -25,7 +25,10 @@ governs, never under the release that found it.
 
 ## Current state
 
-Backend **`v2.20.1`** is the newest tag (2026-09-26): the admin search's two
+Backend **`v2.21.0`** is the newest tag (2026-09-28): the new-share form says
+why it cannot be sent, recipients without an account (off by default, via the
+emailed public link), and a public link counts as leaving the organisation for
+share approval. **`v2.20.1`** (2026-09-26): the admin search's two
 "Updates" results open Status & updates again. **`v2.20.0`** (same day):
 automatic updates, off by default (§Self-update). **`v2.19.1`/`v2.19.2`** (same day): an update keeps the
 app down only while db/redis are recreated (clamav/tusd follow the verified
@@ -103,6 +106,7 @@ record.
 | v2.19.2 | - | - (the update TO v2.19.2 still stops the old, untrapped shim: 10s once, after `healthy`) | - |
 | v2.20.0 | - | - | - (automatic updates ship OFF. New `PUT /api/admin/settings/auto-update` is step-up gated when it turns them on or changes them while on; `pending_update.requested_by_id` may be `null`, with a new `origin`) |
 | v2.20.1 | - | - | - |
+| v2.21.0 | `202609280001` `share_external_recipients` | - | - (recipients without an account ship OFF: `share.external_recipients.enabled` / `.offer_invite`). **Behaviour change for approval scope `outbound_to_clients` only:** a share created with a public link is now HELD, and attaching a link later to a live share the policy would hold answers `409 APPROVAL_REQUIRED` for non-admins (an exempt approver's own share passes). New optional `recipients.emails` on `POST /api/shares`; `external_recipients` on the share payload; `can_share_external` / `offer_invite_on_external` on `/me` |
 
 **Ten endpoints require the caller's own `password` in the body**: the v2.9.0
 re-auth gates `/api/admin/backup/export`, `/api/admin/backup/import` (form

@@ -1,3 +1,88 @@
+# file:Heron v2.21.0
+
+**The new-share form says why it cannot be sent yet.** Plus, off by default:
+sending a share to an email address that has no account, by emailing it the
+share's public link. And for share approval, a public link now counts as
+leaving the organisation.
+
+**One migration** (`202609280001`, runs by itself on start). **No default
+moves.** **One behaviour change for share approval with the scope *outbound to
+clients*** (see below). No host step. No desktop client release.
+
+---
+
+## Why "Create + send" is grey
+
+The button used to turn grey with nothing on the page saying why. The most
+common cause: an address typed into **Recipients** but never picked from the
+list is not a recipient, and the list could not even show "No matches.". A
+short list above the button now names everything that is missing - no file
+yet, no recipient or public link, text typed into Recipients but not picked,
+no expiry - and the button is enabled only when that list is empty. The
+recipient field also says so directly: "isn't added yet", or "No one you can
+send to has this address".
+
+## Recipients without an account (off by default)
+
+Turn it on at **Admin › Sharing › Public links › Recipients without an
+account**.
+
+- Anyone allowed to create public links can type an address that matches no one
+  and pick **Send a download link to …**. The share's public link is switched on
+  (it has to be), and the address is emailed that link once the files have
+  landed - after approval, if the share needs it. No account is created.
+- **The link's password is never in the email**; the sender passes it on. Everyone
+  emailed shares the one link and its download counter.
+- The link is masked in the mail log and cannot be resent from there, like a
+  password-reset link.
+- The addresses show on the share page for the sender, admins and approvers,
+  and are forgotten by the daily cleanup once the share ends. The mail log keeps
+  the record of the send for its own retention window.
+- A second switch, **Ask the sender whether to also invite them**, adds a
+  question to the form: invite each such address as a client account (unticked
+  by default). The link goes out either way; a failed invite never undoes the
+  share.
+
+## Share approval: a public link leaves the organisation
+
+**Only if share approval is on with the scope *outbound to clients*.** That
+scope holds shares that leave the organisation, but it only looked at
+recipients: a share whose audience was a public link went live without review.
+Now:
+
+- A share created **with a public link**, or to an address without an account,
+  is held like one addressed to a client.
+- **Attaching a public link later** to a live share that this policy would hold
+  needs an admin (`409 APPROVAL_REQUIRED`). An approver whose own shares are
+  exempt can still attach one to their own share.
+
+Shares already live are not re-checked; only a link attached from now on is.
+
+## For API clients
+
+- `POST /api/shares`: optional `recipients.emails` (up to 20 addresses). Refused
+  with `403 EXTERNAL_RECIPIENTS_DISABLED` while the switch is off, and with
+  `400 EXTERNAL_RECIPIENT_NEEDS_LINK` without `public_link`. The public-link
+  policy applies as for any link.
+- The share payload has `external_recipients` (empty unless the caller may see
+  the full recipient list); `/api/account/me` has `can_share_external` and
+  `offer_invite_on_external`.
+- `GET`/`PUT /api/admin/settings/public-links/policy` carry
+  `external_recipients_enabled` and `external_recipients_offer_invite`; both are
+  optional on the `PUT` (left out = unchanged).
+- `POST /api/shares/{id}/public-link` can now answer `409 APPROVAL_REQUIRED` for a
+  share that was never held, under the scope above.
+
+---
+
+## Upgrading
+
+Click **Update**. This is a minor release: automatic updates install it only if
+you set them to minor or any release. Nothing changes until an admin turns the
+new switches on, except the approval behaviour above.
+
+---
+
 # file:Heron v2.20.1
 
 **The admin search finds the update settings again.** Searching the admin

@@ -1,3 +1,54 @@
+# file:Heron v2.22.0
+
+**An address without an account no longer dead-ends the new-share form, and
+the sender decides whether it is emailed the download link.**
+
+**One migration** (`202609280002`, runs by itself on start). **No default
+moves.** No host step. No desktop client release.
+
+---
+
+## The recipient field says what you can actually do
+
+In v2.21.0, typing an address that has no account, while **Recipients without
+an account** is off, led in a circle: the hint said to attach a public link, and
+after you did, the form still would not send and told you to "choose it from the
+list" - which that address can never be. Now:
+
+- The hint and the list above **Create + send** say what is possible: clear the
+  field and send the public link yourself. Admins also get a link to the
+  **Recipients without an account** switch.
+- A **Clear** button next to the hint empties the field in one click.
+- The typed address still stops the share from being sent until you clear it,
+  so an address is never silently dropped.
+
+## The sender decides whether the link is emailed
+
+With **Recipients without an account** turned on, adding such an address now
+shows **Email the download link to these addresses** (ticked by default).
+Untick it to only record the address and send the link yourself.
+
+This used to follow **Notify recipient(s) by email**, so keeping a share quiet
+for colleagues also silently withheld the link from the outside address. That
+box now covers recipients with an account only. The share page says **link
+emailed** or **not emailed - send the link yourself** next to the addresses.
+
+## For API clients
+
+- `POST /api/shares`: optional `email_external_link` (default `true`, what
+  v2.21.0 did). `false` records `recipients.emails` and mails none of them. It no
+  longer depends on `notify_recipients`.
+- The share payload has `external_recipients_emailed`.
+
+---
+
+## Upgrading
+
+Click **Update**. This is a minor release: automatic updates install it only if
+you set them to minor or any release.
+
+---
+
 # file:Heron v2.21.0
 
 **The new-share form says why it cannot be sent yet.** Plus, off by default:

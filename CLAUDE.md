@@ -25,7 +25,9 @@ governs, never under the release that found it.
 
 ## Current state
 
-Backend **`v2.22.1`** is the newest tag (2026-09-28): public links are no
+Backend **`v2.23.0`** is the newest tag (2026-09-28): a share's expiry clock and
+its recipient mail start when its files can be downloaded; no share expires
+during a live upload. **`v2.22.1`** (same day): public links are no
 longer described as "shown once" - the share page always shows them again.
 **`v2.22.0`** (same day): an address without an account no longer dead-ends the
 new-share form, and the sender decides whether it is emailed the link.
@@ -113,6 +115,7 @@ record.
 | v2.21.0 | `202609280001` `share_external_recipients` | - | - (recipients without an account ship OFF: `share.external_recipients.enabled` / `.offer_invite`). **Behaviour change for approval scope `outbound_to_clients` only:** a share created with a public link is now HELD, and attaching a link later to a live share the policy would hold answers `409 APPROVAL_REQUIRED` for non-admins (an exempt approver's own share passes). New optional `recipients.emails` on `POST /api/shares`; `external_recipients` on the share payload; `can_share_external` / `offer_invite_on_external` on `/me` |
 | v2.22.0 | `202609280002` `share_external_recipients.send_link` | - | - (the link mail to an address without an account is the sender's per-share `email_external_link`, default true, and no longer follows `notify_recipients`; `external_recipients_emailed` on the share payload) |
 | v2.22.1 | - | - | - |
+| v2.23.0 | `202609280003` `shares.expires_in_sec` + `pending_added_notice` + `upload_batch_done` | - | - (behaviour: the recipient mail - and the link mail to addresses without an account - now waits for the virus scan, not just the upload; a preset expiry counts from ready; `expire_files` never expires a share with a live upload. New optional `expires_in_sec` on `POST /api/shares`, on the share, list and public payloads; `expires_at` is null while it is set) |
 
 **Ten endpoints require the caller's own `password` in the body**: the v2.9.0
 re-auth gates `/api/admin/backup/export`, `/api/admin/backup/import` (form

@@ -1,3 +1,61 @@
+# file:Heron v2.23.0
+
+**A big upload no longer fails because its share expired, a share's expiry
+starts when its files are ready, and recipients are emailed only once the
+download actually works.**
+
+**One migration** (`202609280003`, runs by itself on start). **No default
+moves.** No host step. No desktop client release.
+
+---
+
+## Why a big upload could fail
+
+The hourly cleanup expired a share even while a file was still being uploaded
+into it. The upload kept running and was refused only after its last byte - a
+20 GB transfer lost at the very end. On top of that, "1 hour" counted from the
+moment you clicked, so a long upload used up the share's time.
+
+## What changes
+
+- **No expiry during an upload.** A share is not expired while an upload into
+  it is still making progress. An upload that has stopped moving no longer
+  holds it, so an abandoned transfer cannot keep a share alive. This also
+  covers the desktop client and API clients.
+- **Presets count from "ready".** "1 hour", "7 days" and the other presets
+  start when the files can be downloaded, not when you click. Until then the
+  new-share form, the share page, the share list and the public link page show
+  "1 hour after the files are ready". A date and time you type stays exact,
+  and changing the expiry on the share page replaces the preset.
+- **Emails only when the download works.** Recipients - and addresses emailed
+  the link - hear about a share only after the upload and the virus scan are
+  done, so the link never answers "scan in progress". The email goes out right
+  after the scan finishes. "Files added" emails wait the same way and never
+  arrive before the share's own announcement.
+
+One visible difference: for files under 2 GB the recipient email now arrives
+after the virus scan, usually a few seconds later than before. Larger files are
+not scanned (as before) and are announced as soon as they have landed.
+
+## For API clients
+
+- `POST /api/shares`: optional `expires_in_sec` - the share lives that long
+  after its files are ready. Send `expires_at: null` with it; sending both is a
+  422. A client that sends only `expires_at` keeps the exact-time behaviour.
+- The share payload, the share list and the public link metadata carry
+  `expires_in_sec`; while it is set, `expires_at` is `null` because the clock
+  has not started. A share created this way shows no expiry in the desktop
+  client until its files are ready.
+
+---
+
+## Upgrading
+
+Click **Update**. This is a minor release: automatic updates install it only if
+you set them to minor or any release.
+
+---
+
 # file:Heron v2.22.1
 
 **Public links are no longer described as "shown once".** You can always copy

@@ -23,6 +23,7 @@ from ....schemas.public_link import (
     PublicLinkPolicyResponse,
     UpdatePublicLinkPolicyRequest,
 )
+from ....services import external_recipients as external_svc
 from ....services import public_link as public_link_svc
 from ....services import settings as settings_svc
 from ....services.audit import record_audit_event
@@ -63,6 +64,8 @@ def get_public_link_policy(
         allowed_groups=[
             PublicLinkAllowedGroup(id=g.id, name=g.name) for g in groups
         ],
+        external_recipients_enabled=external_svc.is_enabled(db),
+        external_recipients_offer_invite=external_svc.offers_invite(db),
     )
 
 
@@ -128,17 +131,37 @@ def update_public_link_policy(
         value=json.dumps(payload.allowed_group_ids) if payload.allowed_group_ids else None,
         actor=admin,
     )
+    metadata: dict[str, object] = {
+        "mode": payload.mode,
+        "user_count": len(payload.allowed_user_ids),
+        "group_count": len(payload.allowed_group_ids),
+    }
+    written: list[str] = []
+    for field, key in (
+        (
+            payload.external_recipients_enabled,
+            settings_svc.Keys.SHARE_EXTERNAL_RECIPIENTS_ENABLED,
+        ),
+        (
+            payload.external_recipients_offer_invite,
+            settings_svc.Keys.SHARE_EXTERNAL_RECIPIENTS_OFFER_INVITE,
+        ),
+    ):
+        if field is None:
+            continue
+        settings_svc.set_value(
+            db, key=key, value="true" if field else "false", actor=admin
+        )
+        written.append(key)
+    if written:
+        metadata["keys"] = written
     record_audit_event(
         db,
         event_type=AuditEventType.public_link_policy_changed,
         actor_user_id=admin.id,
         target_type="settings",
         target_id="public_link_policy",
-        metadata={
-            "mode": payload.mode,
-            "user_count": len(payload.allowed_user_ids),
-            "group_count": len(payload.allowed_group_ids),
-        },
+        metadata=metadata,
         request=request,
     )
     db.commit()

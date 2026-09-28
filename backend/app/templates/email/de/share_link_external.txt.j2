@@ -1,0 +1,16 @@
+Hallo,
+
+{{ sender_name }} hat dir über {{ app_name }} {{ file_count }} Datei{% if file_count != 1 %}en{% endif %} gesendet{% if subject %} - „{{ subject }}"{% endif %}.
+
+{% if message %}Nachricht:
+{{ message }}
+
+{% endif %}Herunterladen: {{ link_url }}
+
+{% if has_password %}Der Download ist passwortgeschützt. {{ sender_name }} gibt dir das Passwort separat.
+
+{% endif %}{% if expires_at %}Verfügbar bis {{ expires_at|dt_locale(locale) }}.
+
+{% endif %}Du brauchst kein Konto. Falls du diese Nachricht nicht erwartet hast, kannst du sie ignorieren.
+
+- {{ app_name }}

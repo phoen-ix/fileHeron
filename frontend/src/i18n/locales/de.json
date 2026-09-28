@@ -211,6 +211,8 @@
     "PUBLIC_LINK_EXHAUSTED": "Dieser Link hat sein Download-Limit erreicht.",
     "PUBLIC_LINK_EXISTS": "Diese Freigabe hat bereits einen öffentlichen Link. Widerrufen Sie ihn zuerst.",
     "PUBLIC_LINK_LOCKED": "Dieser Link ist nach zu vielen Fehlversuchen vorübergehend gesperrt.",
+    "EXTERNAL_RECIPIENTS_DISABLED": "Das Senden an Adressen ohne Konto ist auf dieser Instanz ausgeschaltet.",
+    "EXTERNAL_RECIPIENT_NEEDS_LINK": "Empfänger ohne Konto sind nur über einen öffentlichen Link erreichbar. Aktiviere den öffentlichen Link und versuche es erneut.",
     "PUBLIC_LINK_NOT_ALLOWED": "Deine Administration hat das Anlegen öffentlicher Links eingeschränkt.",
     "PUBLIC_LINK_NOT_FOUND": "Dieser Link ist ungültig.",
     "PUBLIC_LINK_RATE_LIMITED": "Zu viele Versuche. Bitte warten Sie und versuchen Sie es erneut.",
@@ -1110,6 +1112,7 @@
     },
     "template": {
       "share_created": "Freigabe erstellt",
+      "share_link_external": "Download-Link (Empfänger ohne Konto)",
       "share_files_added": "Dateien zu Freigabe hinzugefügt",
       "share_expiring": "Freigabe läuft ab",
       "share_pending_approval": "Freigabe benötigt Genehmigung",
@@ -1205,7 +1208,15 @@
     "groups_inbox": "Firmen-Postfach",
     "saved_toast": "Öffentliche-Links-Richtlinie gespeichert.",
     "brute_force_title": "Passwort-Brute-Force",
-    "brute_force_help": "Ein Link wird für alle Adressen gesperrt, sobald so viele falsche Passwörter im Zeitfenster von mindestens drei verschiedenen Adressen eintreffen; eine einzelne Adresse bekommt nur das Limit pro Adresse."
+    "brute_force_help": "Ein Link wird für alle Adressen gesperrt, sobald so viele falsche Passwörter im Zeitfenster von mindestens drei verschiedenen Adressen eintreffen; eine einzelne Adresse bekommt nur das Limit pro Adresse.",
+    "external": {
+      "title": "Empfänger ohne Konto",
+      "help": "Absender können eine E-Mail-Adresse ohne Konto eintragen. Diese Person erhält den öffentlichen Link der Freigabe per E-Mail; es wird kein Konto angelegt. Nur wer öffentliche Links erstellen darf (oben), kann das nutzen, und das Passwort eines geschützten Links steht nie in der E-Mail.",
+      "enabled_label": "Senden an Adressen ohne Konto erlauben",
+      "enabled_help": "Aus: Die Empfängerliste findet nur bestehende Konten und Gruppen.",
+      "offer_invite_label": "Absender fragen, ob sie zusätzlich eingeladen werden sollen",
+      "offer_invite_help": "Das Formular für neue Freigaben bietet an, jede solche Adresse als Kundenkonto einzuladen. Standardmäßig nicht angehakt; der Link geht in jedem Fall raus."
+    }
   },
   "admin_api_tokens": {
     "create_cta": "Token für Benutzer anlegen",
@@ -1910,7 +1921,13 @@
     "section_users": "Personen",
     "section_groups": "Gruppen",
     "inbox_flag": "Sammelpostfach",
-    "no_results": "Keine Treffer."
+    "no_results": "Keine Treffer.",
+    "section_external": "Ohne Konto",
+    "external_option": "Download-Link an {email} senden",
+    "external_chip_hint": "Download-Link",
+    "no_account": "Niemand, an den du senden kannst, hat die Adresse {email}.",
+    "no_account_public_link": "Um trotzdem mit dieser Person zu teilen, hänge unten einen öffentlichen Link an.",
+    "not_added": "„{q}“ ist noch nicht hinzugefügt. Wähle den Eintrag aus der Liste."
   },
   "expiry": {
     "label": "Läuft ab",
@@ -2107,12 +2124,30 @@
     "toast_done": "Freigabe erstellt.",
     "toast_pending": "Freigabe zur Genehmigung eingereicht.",
     "toast_partial": "{n} Datei konnte nicht hochgeladen werden. Unten erneut versuchen. | {n} Dateien konnten nicht hochgeladen werden. Unten erneut versuchen.",
+    "blockers": {
+      "title": "Bevor du senden kannst:",
+      "no_files": "Füge mindestens eine Datei hinzu.",
+      "no_recipient": "Wähle einen Empfänger aus der Liste.",
+      "no_recipient_or_link": "Wähle einen Empfänger aus der Liste oder hänge unten einen öffentlichen Link an.",
+      "recipient_not_added": "„{q}“ steht im Empfängerfeld, ist aber nicht ausgewählt. Wähle den Eintrag aus der Liste oder leere das Feld.",
+      "no_expiry": "Lege fest, wann die Freigabe abläuft."
+    },
+    "external_quiet_warning": "Empfänger ohne Konto erfahren nur per E-Mail von dieser Freigabe. Ohne Benachrichtigung erhalten sie nichts.",
+    "invite": {
+      "question": "Auch Konten für sie anlegen?",
+      "help": "Diese Adressen haben kein Konto. Wähle eine aus, um ihr zusätzlich eine Einladung als Kunde zu senden. Der Download-Link geht in jedem Fall raus.",
+      "option": "{email} als Kunde einladen",
+      "sent": "Einladung an {email} gesendet.",
+      "failed": "{email} konnte nicht eingeladen werden: {reason}"
+    },
     "public_link": {
       "toggle_label": "Auch einen öffentlichen Download-Link erstellen",
       "toggle_help": "Jeder mit dem Link kann herunterladen - kein fileHeron-Konto nötig. Optional mit Passwort und Download-Limit absichern.",
       "password_label": "Passwort (optional)",
       "password_placeholder": "Leer lassen für keinen Passwortschutz",
       "password_help": "Wer den Link hat, braucht dieses Passwort, um die Freigabe freizuschalten.",
+      "required_for_external": "Erforderlich: Empfänger ohne Konto erhalten diesen Link per E-Mail.",
+      "password_help_external": "Das Passwort steht nicht in der E-Mail. Gib es den Empfängern selbst über einen anderen Kanal.",
       "download_limit_label": "Download-Limit (optional)",
       "download_limit_placeholder": "z. B. 10",
       "download_limit_help": "Maximale Anzahl erfolgreicher Downloads. Leer lassen für unbegrenzt.",
@@ -2148,6 +2183,8 @@
     "total": "Gesamt",
     "files_heading": "Dateien ({n})",
     "targeted_groups": "Gruppen",
+    "external_recipients": "Gesendet an (ohne Konto)",
+    "external_via_link": "über öffentlichen Link",
     "empty": "Diese Freigabe enthält keine Dateien.",
     "end_share_cta": "Freigabe beenden",
     "end_share_confirm": "Diese Freigabe jetzt beenden und alle hochgeladenen Dateien löschen? Kann nicht rückgängig gemacht werden.",

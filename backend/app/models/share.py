@@ -23,6 +23,7 @@ from ..utils.timeutil import utc_now
 
 if TYPE_CHECKING:
     from .file import File
+    from .share_external_recipient import ShareExternalRecipient
     from .share_recipient import ShareRecipient
     from .user import User
 
@@ -142,4 +143,11 @@ class Share(Base):
     )
     recipients: Mapped[list[ShareRecipient]] = relationship(
         "ShareRecipient", back_populates="share", cascade="all, delete-orphan"
+    )
+    # Addresses with no account that were emailed the share's public link.
+    external_recipients: Mapped[list[ShareExternalRecipient]] = relationship(
+        "ShareExternalRecipient",
+        back_populates="share",
+        cascade="all, delete-orphan",
+        order_by="ShareExternalRecipient.id",
     )

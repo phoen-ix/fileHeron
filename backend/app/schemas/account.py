@@ -25,6 +25,12 @@ class MeResponse(APIBaseModel):
     # toggle in /share/new when False. Re-evaluated on every /me fetch
     # so policy changes propagate on the next refresh.
     can_create_public_link: bool = True
+    # Recipients with no account (v2.21.0). `can_share_external`: the compose
+    # form may offer "send a download link to <address>" - the instance switch
+    # AND the public-link policy AND staff. `offer_invite_on_external`: it also
+    # asks the sender whether to invite that address as a client account.
+    can_share_external: bool = False
+    offer_invite_on_external: bool = False
     # Per-user post-login destination. NULL = use system default.
     # Validated against `services/account_prefs.ALLOWED_LANDING_ROUTES`
     # in the PATCH endpoint.

@@ -162,7 +162,17 @@ def _has_client_recipient(db: Session, share: Share) -> bool:
 
     Group membership is resolved at query time, matching how
     `is_authorized_to_download` decides who can actually fetch the bytes.
+
+    An address with no account (`share_external_recipients`) counts too: it is
+    by definition outside the organisation, and the whole point of the scope.
+    Without it, a policy that holds every share to a client would wave through
+    the same files mailed to that client's private address.
     """
+    from . import external_recipients as external_svc
+
+    if external_svc.has_any(db, share.id):
+        return True
+
     direct = (
         db.query(ShareRecipient.recipient_user_id)
         .join(User, User.id == ShareRecipient.recipient_user_id)

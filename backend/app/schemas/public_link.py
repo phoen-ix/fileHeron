@@ -112,9 +112,16 @@ class PublicLinkPolicyResponse(APIBaseModel):
     allowed_group_ids: list[int]
     allowed_users: list[PublicLinkAllowedUser]
     allowed_groups: list[PublicLinkAllowedGroup]
+    # Recipients with no account (v2.21.0): `share.external_recipients.*`.
+    external_recipients_enabled: bool = False
+    external_recipients_offer_invite: bool = False
 
 
 class UpdatePublicLinkPolicyRequest(APIBaseModel):
     mode: PublicLinkPolicyMode
     allowed_user_ids: list[int] = Field(default_factory=list)
     allowed_group_ids: list[int] = Field(default_factory=list)
+    # None = leave unchanged. Optional so an SPA one release behind, which does
+    # not send them, is neither refused nor read as "turn it off".
+    external_recipients_enabled: bool | None = None
+    external_recipients_offer_invite: bool | None = None

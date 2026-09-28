@@ -1,0 +1,14 @@
+{% extends "layout.html.j2" %}
+{% import "_components.html.j2" as ui %}
+{% block subject %}{{ sender_name }} hat dir Dateien gesendet{% endblock %}
+{% block content %}
+  {% set title = subject if subject else sender_name ~ " hat dir Dateien gesendet" %}
+  {{ ui.eyebrow("Dateien für dich") }}
+  {{ ui.headline(title, size="lg") }}
+  {% call ui.para() %}<strong>{{ sender_name }}</strong> hat dir über {{ app_name }} {{ file_count }} Datei{% if file_count != 1 %}en{% endif %} gesendet.{% endcall %}
+  {% if message %}{% call ui.quote() %}{{ message }}{% endcall %}{% endif %}
+  {% if has_password %}{% call ui.note() %}Der Download ist passwortgeschützt. <strong>{{ sender_name }}</strong> gibt dir das Passwort separat.{% endcall %}{% endif %}
+  {% if expires_at %}{% call ui.note(gap=24) %}Verfügbar bis <strong>{{ expires_at|dt_locale(locale) }}</strong>.{% endcall %}{% endif %}
+  {{ ui.button(link_url, "Dateien herunterladen", gap=24) }}
+  {{ ui.note("Du brauchst kein Konto. Falls du diese Nachricht nicht erwartet hast, kannst du sie ignorieren.", gap=0) }}
+{% endblock %}

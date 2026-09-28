@@ -22,6 +22,7 @@ import re
 
 from sqlalchemy.orm import Session
 
+from ..config import settings
 from ..models.email_log import EmailLog, EmailStatus, EmailVia
 
 logger = logging.getLogger("fileheron.mail_log")
@@ -29,9 +30,16 @@ logger = logging.getLogger("fileheron.mail_log")
 # Token segment of the one-time auth links built in services/email.py:
 #   {site}/reset-password/{token}, /verify-email/{token}, /register/{token},
 #   /confirm-email-change/{token}, /cancel-email-change/{token}
+# plus a share's public link, {site}{PUBLIC_LINK_BASE_PATH}/{token}, mailed to a
+# recipient with no account (services/external_recipients.py). That token is a
+# bearer credential for the share's bytes, so it is masked like the others. The
+# path comes from the SAME setting the link builder reads, never a literal `/d/`,
+# or an operator who moved the base path would get live tokens in the log.
 _AUTH_LINK_RE = re.compile(
     r"(/(?:reset-password|verify-email|register|confirm-email-change"
-    r"|cancel-email-change)/)([A-Za-z0-9._~\-]+)"
+    r"|cancel-email-change|"
+    + re.escape(settings.PUBLIC_LINK_BASE_PATH.strip("/"))
+    + r")/)([A-Za-z0-9._~\-]+)"
 )
 _REDACTED = r"\1<redacted>"
 
@@ -56,6 +64,7 @@ _AUTH_LINK_CATEGORIES = {
     "email_change_confirm",
     "email_change_verify_old",
     "email_change_alert",
+    "share_link_external",
 }
 
 _BODY_UNAVAILABLE = "[body unavailable: masking error]"

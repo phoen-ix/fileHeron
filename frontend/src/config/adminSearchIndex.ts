@@ -24,8 +24,8 @@
  * Conventions: one entry per line, grouped by page with a comment per page;
  * keywords lowercase, EN and DE mixed freely; a `hash` only where the page
  * actually renders that id (General's `<section id>`s, Advanced's
- * `id="tunable-<key>"` controls and Status & updates' `#updates` /
- * `#auto-update`). */
+ * `id="tunable-<key>"` controls, Status & updates' `#updates` /
+ * `#auto-update` and Public links' `#external-recipients`). */
 
 export interface AdminSearchEntry {
   /** Leaf route to navigate to. Must be in ADMIN_ROUTE_NAMES. */
@@ -83,6 +83,8 @@ export const ADMIN_SEARCH_INDEX: readonly AdminSearchEntry[] = [
   { routeName: 'admin-settings-public-links', labelKey: 'admin_public_link_policy.allowlist_heading', keywords: ['whitelist', 'exception', 'always allowed', 'link allowlist', 'ausnahme'] },
   { routeName: 'admin-settings-public-links', labelKey: 'admin_public_link_policy.users_label', keywords: ['public link users', 'allow user links'] },
   { routeName: 'admin-settings-public-links', labelKey: 'admin_public_link_policy.groups_label', keywords: ['public link groups', 'allow group links'] },
+  { routeName: 'admin-settings-public-links', hash: '#external-recipients', labelKey: 'admin_public_link_policy.external.title', keywords: ['external recipient', 'no account', 'guest', 'email address', 'send to email', 'ohne konto', 'extern', 'gast'] },
+  { routeName: 'admin-settings-public-links', hash: '#external-recipients', labelKey: 'admin_public_link_policy.external.offer_invite_label', keywords: ['invite recipient', 'create account', 'einladen', 'konto anlegen', 'new user'] },
 
   // --- Share approval / four-eyes (admin-settings-share-approval)
   { routeName: 'admin-settings-share-approval', labelKey: 'admin_share_approval.enable_label', keywords: ['four eyes', 'vier augen', 'freigabe', 'approval', 'review before sending', 'pending approval', 'genehmigung'] },

@@ -21,6 +21,13 @@ export interface MeResponse {
   /** Post-Phase 10: derived from the public-link policy. SPA hides
    * the inline-create toggle in /share/new when False. */
   can_create_public_link: boolean
+  /** v2.21.0: the compose form may offer "send a download link to <address>"
+   *  for an address with no account (instance switch + public-link policy +
+   *  staff). */
+  can_share_external: boolean
+  /** v2.21.0: the compose form also asks whether to invite that address as a
+   *  client account. */
+  offer_invite_on_external: boolean
   /** Post-Phase 10: per-user post-login destination. Route name like
    * `outbox`, `inbox`, etc. or null = use system default. */
   default_landing_page: string | null
@@ -323,6 +330,9 @@ export interface ShareResponse {
   /** File IDs appended to an already-approved share and still awaiting a
    *  decision. Non-empty means this active share needs an approver's attention. */
   files_awaiting_review?: string[]
+  /** Addresses with no account that were mailed the public link. Only for a
+   *  viewer who may see the full roster; empty for everyone else. */
+  external_recipients?: string[]
 }
 
 export interface PublicLinkSummary {
@@ -335,6 +345,8 @@ export interface PublicLinkSummary {
 export interface ShareRecipientsRequest {
   user_ids: number[]
   group_ids: number[]
+  /** Addresses with no account; mailed the share's public link (v2.21.0). */
+  emails?: string[]
 }
 
 export interface PublicLinkOnCreate {
@@ -379,12 +391,17 @@ export interface PublicLinkPolicyResponse {
   allowed_group_ids: number[]
   allowed_users: PublicLinkAllowedUserItem[]
   allowed_groups: PublicLinkAllowedGroupItem[]
+  external_recipients_enabled: boolean
+  external_recipients_offer_invite: boolean
 }
 
 export interface UpdatePublicLinkPolicyRequest {
   mode: PublicLinkPolicyMode
   allowed_user_ids: number[]
   allowed_group_ids: number[]
+  /** Omitted = leave unchanged. */
+  external_recipients_enabled?: boolean
+  external_recipients_offer_invite?: boolean
 }
 
 /* Public links (Phase 5) */

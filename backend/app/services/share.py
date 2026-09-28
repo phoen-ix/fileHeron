@@ -267,6 +267,12 @@ def _dispatch_share_created(
     # has been established to go to nobody), and `notify_on_activation` is what
     # `announce_if_ready` reads to decide whether one is still owed.
     share.notify_on_activation = None
+    if notify_recipients and share.kind == ShareKind.outbound:
+        # Before the early return below: a share whose only recipients have no
+        # account notifies no user, and must still send them the link.
+        from . import external_recipients as external_svc
+
+        external_svc.send_links(db, share)
     notify_user_ids = _recipient_notify_ids(
         db, share, notify_recipients=notify_recipients
     )
@@ -366,6 +372,7 @@ def create_share(
     expires_at: datetime | None,
     recipient_user_ids: list[int] | None = None,
     recipient_group_ids: list[int] | None = None,
+    external_emails: list[str] | None = None,
     subject: str | None = None,
     message: str | None = None,
     allow_no_recipients: bool = False,
@@ -452,13 +459,25 @@ def create_share(
         db.add(ShareRecipient(share_id=share.id, recipient_user_id=u.id))
     for g in groups:
         db.add(ShareRecipient(share_id=share.id, recipient_group_id=g.id))
+    # Addresses with no account (the router has already checked the sender may
+    # use them). Flushed with the other recipient rows, BEFORE the approval
+    # check below - `outbound_to_clients` counts them as leaving the org.
+    external_count = 0
+    if kind == ShareKind.outbound and external_emails:
+        from . import external_recipients as external_svc
+
+        external_count = len(external_svc.add_to_share(db, share, external_emails))
     db.flush()
 
-    audit_meta = {
+    audit_meta: dict[str, object] = {
         "kind": kind.value,
         "recipient_user_ids": [u.id for u in users],
         "recipient_group_ids": [g.id for g in groups],
     }
+    if external_count:
+        # A count, not the addresses: they belong to people with no account,
+        # whom erasure cannot reach, and the audit log is kept longest of all.
+        audit_meta["external_recipient_count"] = external_count
     resolved_notify = _resolved_notify_flag(db, notify_recipients)
 
     from . import share_approval as approval_svc

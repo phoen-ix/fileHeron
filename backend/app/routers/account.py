@@ -78,6 +78,10 @@ def _me_response(db: Session, user: User) -> MeResponse:
 
     me_resp = MeResponse.model_validate(user)
     me_resp.can_create_public_link = public_link_svc.is_allowed_to_create(db, user)
+    from ..services import external_recipients as external_svc
+
+    me_resp.can_share_external = external_svc.may_send(db, user)
+    me_resp.offer_invite_on_external = external_svc.may_offer_invite(db, user)
     me_resp.home_page_enabled = settings_svc.get_bool(
         db, settings_svc.Keys.HOME_PAGE_ENABLED, default=True
     )

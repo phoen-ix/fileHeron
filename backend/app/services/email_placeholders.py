@@ -78,6 +78,21 @@ REGISTRY: dict[str, TemplateSpec] = {
         Placeholder("[EXPIRES_AT]", "Expiry", "When the share expires.", "expires_at", kind="datetime"),
         _SHARE_LINK,
     )),
+    # Sent to an address with NO account (share.external_recipients.enabled).
+    # The link is the share's public link - a bearer credential - so it is an
+    # auth_link: it must keep the canonical `/d/<token>` path mail_log masks.
+    # Never a password placeholder: the password is not in the mail.
+    "share_link_external": TemplateSpec("share_link_external", "shares", _p(
+        _SENDER,
+        Placeholder("[FILE_COUNT]", "File count", "Number of files in the share.", "file_count"),
+        _SUBJECT,
+        Placeholder("[MESSAGE]", "Message", "Optional message from the sender.", "message"),
+        Placeholder("[EXPIRES_AT]", "Expiry", "When the share expires.", "expires_at", kind="datetime"),
+        Placeholder(
+            "[DOWNLOAD_LINK]", "Download link", "The share's public download link.",
+            "link_url", kind="url", required=True, auth_link=True,
+        ),
+    )),
     "share_files_added": TemplateSpec("share_files_added", "shares", _p(
         _SENDER, _RECIPIENT,
         Placeholder("[FILE_COUNT]", "Added file count", "Number of newly added files.", "added_count"),
@@ -337,6 +352,12 @@ def build_substitutions(
     return text_values, html_values
 
 
+def _public_link_base_path() -> str:
+    from ..config import settings
+
+    return settings.PUBLIC_LINK_BASE_PATH
+
+
 def sample_ctx(slug: str, *, app_url: str) -> dict:
     """Realistic render context for preview / test-send. Keyed by the underlying
     context keys (so it flows through build_substitutions unchanged). Auth links
@@ -401,6 +422,10 @@ def sample_ctx(slug: str, *, app_url: str) -> dict:
         "register_url": f"{app_url}/register/SAMPLETOKEN",
         "confirm_url": f"{app_url}/confirm-email-change/SAMPLETOKEN",
         "cancel_url": f"{app_url}/cancel-email-change/SAMPLETOKEN",
+        # share_link_external: the public link, in its canonical path, and the
+        # branch that says a password is needed without ever carrying it.
+        "link_url": f"{app_url}{_public_link_base_path()}/SAMPLETOKEN",
+        "has_password": False,
     }
     # lockout / email_change_alert use the token-free forgot-password link.
     if slug in ("lockout_warning", "email_change_alert"):

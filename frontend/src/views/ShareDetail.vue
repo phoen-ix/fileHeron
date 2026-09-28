@@ -561,6 +561,20 @@
         </span>
       </div>
 
+      <!-- Addresses with no account the public link was mailed to. The API only
+           sends them to a viewer who may see the full roster. -->
+      <div
+        v-if="share.external_recipients && share.external_recipients.length > 0"
+        class="recipient-groups"
+        data-testid="external-recipients"
+      >
+        <span class="group-eyebrow">{{ t('share_detail.external_recipients') }}</span>
+        <span v-for="email in share.external_recipients" :key="email" class="group-chip">
+          ↗ {{ email }}
+        </span>
+        <span class="inbox-flag fh-mono">{{ t('share_detail.external_via_link') }}</span>
+      </div>
+
       <div v-if="share.message" class="message">{{ share.message }}</div>
 
       <!-- Share-approval (v1.24.0): owner banners + approver actions. -->

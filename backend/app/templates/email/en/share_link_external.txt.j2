@@ -1,0 +1,16 @@
+Hello,
+
+{{ sender_name }} sent you {{ file_count }} file{% if file_count != 1 %}s{% endif %} via {{ app_name }}{% if subject %} - "{{ subject }}"{% endif %}.
+
+{% if message %}Message:
+{{ message }}
+
+{% endif %}Download: {{ link_url }}
+
+{% if has_password %}The download is password-protected. {{ sender_name }} will give you the password separately.
+
+{% endif %}{% if expires_at %}Available until {{ expires_at|dt_locale(locale) }}.
+
+{% endif %}You don't need an account. If you weren't expecting this, you can ignore the email.
+
+- {{ app_name }}

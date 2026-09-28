@@ -308,6 +308,7 @@ mark too, with the opposite bias: when in doubt, WRITE the row.
 - **Add files to an active share:** attach at *upload* time (`file_svc::create_pending` sets `files.share_id`), gated `state=active` + `created_by_id==owner` (**owner-only, no admin bypass**) → `POST …/files-added`.
 - **Inline public link on create:** `CreateShareRequest.public_link` - atomic, plaintext URL returned **once**; refuses `403 PUBLIC_LINK_NOT_ALLOWED` before writing if policy denies.
 - **The `share_created` announcement is DEFERRED until the uploads land** (`share.announce_if_ready`) - a share is empty at create time, so every notification once said "0 files".
+- **`ShareCreate.vue`'s `canSubmit` is DERIVED from its visible `blockers` list** - add a submit condition to the list, never beside it. The button went grey with nothing on screen saying why (a typed but unpicked recipient: `RecipientPicker` emits only picked chips, and its "No matches." line could never render); the picker now reports un-picked text via `update:pending`, which is itself a blocker.
 
 ### Co-recipient privacy
 
@@ -357,6 +358,19 @@ than detail shows a fully privileged viewer.
 - **Counter:** atomic `UPDATE … downloads_remaining-1 WHERE remaining>0` + rowcount. NULL = unlimited.
 - **Brute-force lock needs BOTH conditions.** After `PUBLIC_LINK_PASSWORD_RATE_LIMIT` (10) in `PUBLIC_LINK_PASSWORD_WINDOW_SEC` (900) **AND** from `MIN_DISTINCT_IPS_FOR_LOCK` (3) distinct IPs, `locked_until` is set on the **link** (all IPs). **The distinct-IP condition is the whole point**: a link-wide lock reachable by ONE address is a ~10-guess denial of service against the legitimate recipients. A single IP gets the router's per-IP 429 and nothing more.
 - **Policy** kv `public_link.policy_mode` ∈ everyone|employees_admins|admins_only + allowlists; single gate `services/public_link.py::is_allowed_to_create` (admin always passes).
+- **`services/public_link.py::public_url` is the ONE link-URL builder** (`stored_url` rebuilds it from `token_encrypted`, None when it cannot). Two routers each kept a copy of the f-string; a third reader of `PUBLIC_LINK_BASE_PATH` now masks the mail log, so a copy that drifts leaks.
+
+### Recipients without an account (`services/external_recipients.py`, v2.21.0)
+
+`recipients.emails` on `POST /api/shares`; rows in `share_external_recipients`; the share's public link is MAILED to each address. Off by default (`share.external_recipients.enabled`, plus `.offer_invite` for the compose form's "also invite as client" question); both on the Public links admin page, written by its PUT (optional fields, `None` = unchanged).
+
+- **The public-link policy is the gate, deliberately.** An address gets nothing a pasted link would not, so `may_send` = switch AND `is_allowed_to_create` AND not a client, and a request with `emails` must carry `public_link` (`EXTERNAL_RECIPIENT_NEEDS_LINK`) - the password and counter stay the sender's choice.
+- **Never look the address up.** Refusing or converting an address "because it has an account" tells an employee that an unconnected client exists; mail goes to exactly what was typed, and this is not account mail (the stored-address rule in §Conventions is about mail ABOUT an account).
+- **The mail is sent from `share._dispatch_share_created`, BEFORE its early return** - a share whose only recipients have no account notifies no user, and every announcement path (files-added, the sweep, approval) funnels through it, so the link is never mailed before it works. `notified_at` makes it once per address; a revoked or undecryptable link sends nothing and leaves the row unstamped. The sender's `notify_recipients` choice covers these addresses too.
+- **`share_approval._has_client_recipient` counts them** - `outbound_to_clients` means "does this leave the organisation", and the rows are flushed before `is_approval_required` for that reason.
+- **The link is a bearer credential in a mail body**: `mail_log._AUTH_LINK_RE` builds its public-link alternative from `settings.PUBLIC_LINK_BASE_PATH` (never a literal `/d/`), `share_link_external` is in `_AUTH_LINK_CATEGORIES` (no resend), and its `[DOWNLOAD_LINK]` placeholder is `auth_link=True`. No unsubscribe footer - no user, no preferences. The link password is never in the mail.
+- **Addresses are shown only to `RosterVisibility.may_see_full` viewers** (`ShareResponse.external_recipients`, `[]` otherwise), and audit rows carry a COUNT, never the addresses - erasure cannot reach a person with no account.
+- **Found, left open:** a share whose ONLY recipient is an inline public link is never held under `outbound_to_clients` - the link is created after `is_approval_required` runs. External rows close this for their own path only.
 
 ## Email: notifications, templates, mail log
 

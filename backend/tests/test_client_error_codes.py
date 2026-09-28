@@ -43,6 +43,14 @@ _NOT_CLIENT_REACHABLE = {
     "NO_ONE_CLICK_UNSUBSCRIBE": (
         "notification-subscription routes; the client has no preferences UI"
     ),
+    "EXTERNAL_RECIPIENTS_DISABLED": (
+        "raised only for `recipients.emails` on POST /api/shares, which the "
+        "desktop client never sends"
+    ),
+    "EXTERNAL_RECIPIENT_NEEDS_LINK": (
+        "raised only for `recipients.emails` on POST /api/shares, which the "
+        "desktop client never sends"
+    ),
     "STEP_UP_REQUIRED": (
         "step-up re-auth gates backup export/import, erasure, API-token creation "
         "and self-update - the client calls none of those routes"

@@ -1,0 +1,14 @@
+{% extends "layout.html.j2" %}
+{% import "_components.html.j2" as ui %}
+{% block subject %}{{ sender_name }} sent you files{% endblock %}
+{% block content %}
+  {% set title = subject if subject else sender_name ~ " sent you files" %}
+  {{ ui.eyebrow("Files for you") }}
+  {{ ui.headline(title, size="lg") }}
+  {% call ui.para() %}<strong>{{ sender_name }}</strong> sent you {{ file_count }} file{% if file_count != 1 %}s{% endif %} via {{ app_name }}.{% endcall %}
+  {% if message %}{% call ui.quote() %}{{ message }}{% endcall %}{% endif %}
+  {% if has_password %}{% call ui.note() %}The download is password-protected. <strong>{{ sender_name }}</strong> will give you the password separately.{% endcall %}{% endif %}
+  {% if expires_at %}{% call ui.note(gap=24) %}Available until <strong>{{ expires_at|dt_locale(locale) }}</strong>.{% endcall %}{% endif %}
+  {{ ui.button(link_url, "Download the files", gap=24) }}
+  {{ ui.note("You don't need an account. If you weren't expecting this, you can ignore this email.", gap=0) }}
+{% endblock %}

@@ -10,6 +10,7 @@ from pydantic import Field, field_validator, model_validator
 
 from ..models.share import ShareKind, ShareState
 from .common import APIBaseModel
+from .types import EmailLike
 
 
 class ShareRecipientsRequest(APIBaseModel):
@@ -18,6 +19,11 @@ class ShareRecipientsRequest(APIBaseModel):
     # single-org share.
     user_ids: list[int] = Field(default_factory=list, max_length=1000)
     group_ids: list[int] = Field(default_factory=list, max_length=1000)
+    # Addresses with no account, mailed the share's public link (v2.21.0, off
+    # unless `share.external_recipients.enabled`). Optional with a default, so
+    # a client that predates it is unaffected. Bounded far lower than the id
+    # lists: each one is an outbound mail to an arbitrary address.
+    emails: list[EmailLike] = Field(default_factory=list, max_length=20)
 
     @field_validator("user_ids", "group_ids")
     @classmethod
@@ -25,6 +31,13 @@ class ShareRecipientsRequest(APIBaseModel):
         if any(i <= 0 for i in v):
             raise ValueError("ids must be positive integers")
         return v
+
+    @field_validator("emails")
+    @classmethod
+    def _dedupe_emails(cls, v: list[str]) -> list[str]:
+        # EmailLike already stripped and lowercased each one - the same
+        # normalisation `utils.crypto.normalize_email` applies on write.
+        return list(dict.fromkeys(v))
 
 
 class PublicLinkOnCreate(APIBaseModel):
@@ -64,9 +77,12 @@ class CreateShareRequest(APIBaseModel):
         # Outbound: recipients are optional iff an inline public link is
         # attached - the link IS the access mechanism. Without either, the
         # share has no path to a consumer and shouldn't exist.
+        # An email recipient counts here; that it also needs the link is the
+        # router's EXTERNAL_RECIPIENT_NEEDS_LINK, which says so in words.
         if (
             not self.recipients.user_ids
             and not self.recipients.group_ids
+            and not self.recipients.emails
             and self.public_link is None
         ):
             raise ValueError(
@@ -210,6 +226,11 @@ class ShareResponse(APIBaseModel):
     # decision. Non-empty means the approvals view should offer this share even
     # though its state is `active`.
     files_awaiting_review: list[str] = []
+    # Addresses with no account this share's public link was mailed to. Only
+    # for a viewer who may see the full roster (admin, creator, approver - the
+    # approver must see that it leaves the organisation); empty for everyone
+    # else, like the co-recipients the RosterVisibility projection hides.
+    external_recipients: list[str] = []
 
 
 class ApproveShareRequest(APIBaseModel):

@@ -31,6 +31,8 @@ const BASE_ME = {
   last_login_at: null,
   quota_bytes: null,
   can_create_public_link: true,
+  can_share_external: false,
+  offer_invite_on_external: false,
   default_landing_page: null,
   home_page_enabled: true,
   requires_2fa: false,

@@ -76,6 +76,13 @@ class Keys:
     # the create-share form. When the sender doesn't override the field,
     # this kv decides whether `share_created` notifications fan out.
     SHARE_NOTIFY_RECIPIENTS_DEFAULT = "share.notify_recipients_default"  # boolean
+    # Recipients with no account (v2.21.0), both default OFF. When enabled, a
+    # sender who may create public links can address a share to a bare email
+    # address, which is mailed the share's public link. `offer_invite` makes
+    # the compose form ask whether to also invite that address as a client.
+    # Rendered on the Public links admin page (services/external_recipients.py).
+    SHARE_EXTERNAL_RECIPIENTS_ENABLED = "share.external_recipients.enabled"  # boolean
+    SHARE_EXTERNAL_RECIPIENTS_OFFER_INVITE = "share.external_recipients.offer_invite"  # boolean
     # Share-approval workflow (v1.24.0). All admin-tunable, read live via
     # services/share_approval.py. The approver set reuses the policy_gate shape
     # (mode + additive user/group allowlist; admin always passes).

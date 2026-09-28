@@ -9,10 +9,11 @@
    *
    * The form locks while uploads are in flight so users don't accidentally
    * mash Send twice. */
-  import { computed, ref } from 'vue'
+  import { computed, ref, watch } from 'vue'
   import { useI18n } from 'vue-i18n'
   import { useRouter } from 'vue-router'
 
+  import { inviteUser } from '@/api/account'
   import { createShare, registerFilesAdded } from '@/api/shares'
   import ExpiryPicker from '@/components/ExpiryPicker.vue'
   import FileUploadArea from '@/components/FileUploadArea.vue'
@@ -47,7 +48,12 @@
 
   const subject = ref('')
   const message = ref('')
-  const recipients = ref<ShareRecipientsRequest>({ user_ids: [], group_ids: [] })
+  const recipients = ref<ShareRecipientsRequest>({ user_ids: [], group_ids: [], emails: [] })
+  // Text typed into the recipient search that never became a recipient. It is
+  // not sent anywhere; it blocks submit and is named in the blocker list, so a
+  // typed-but-unpicked address can no longer leave the button grey for no
+  // visible reason.
+  const recipientPending = ref('')
   // null = user picked the "Never" preset (v1.1.4 - share never auto-deletes).
   // Initial state is undefined so the picker's auto-emit on mount fills it
   // with the default 7-day preset; from then on the picker always emits a
@@ -72,7 +78,21 @@
   // --- Inline public link --------------------------------------------------
 
   const canCreatePublicLink = computed(() => auth.user?.can_create_public_link !== false)
+  // Recipients with no account (v2.21.0): they get the public link by email,
+  // so a share with any of them must carry one.
+  const canShareExternal = computed(() => auth.user?.can_share_external === true)
+  const externalEmails = computed(() => recipients.value.emails ?? [])
+  const hasExternal = computed(() => externalEmails.value.length > 0)
+  const offerInvite = computed(
+    () => auth.user?.offer_invite_on_external === true && hasExternal.value,
+  )
+  // Addresses the sender ticked to ALSO invite as a client account. Unticked by
+  // default: an account is a bigger step than a link, so it is asked, not assumed.
+  const inviteChoices = ref<Record<string, boolean>>({})
   const includePublicLink = ref(false)
+  watch(hasExternal, (v) => {
+    if (v) includePublicLink.value = true
+  })
   const plPassword = ref('')
   const plDownloadLimit = ref<number | null>(null)
   const plNotifyOnDownload = ref(false)
@@ -84,24 +104,42 @@
 
   const errorCount = computed(() => upload.items.value.filter((i) => i.state === 'error').length)
 
-  const canSubmit = computed(() => {
-    const hasRecipients =
-      recipients.value.user_ids.length > 0 || recipients.value.group_ids.length > 0
-    // Public-link-only shares (no directed recipient) are valid as long
-    // as the user has the toggle on AND policy lets them create one.
-    const hasPublicLink = includePublicLink.value && canCreatePublicLink.value
-    // Clients always submit to the company, so they need neither a recipient
-    // nor a public link - just files. Staff still require one of the two.
-    if (!isClient.value && !hasRecipients && !hasPublicLink) return false
+  /** Why the form cannot be sent yet, in words. `canSubmit` is DERIVED from
+   *  this list, so the button can never be disabled for a reason the list does
+   *  not show - the defect this replaced was exactly that. */
+  const blockers = computed<string[]>(() => {
+    const out: string[] = []
+    if (upload.items.value.length === 0) out.push(t('share_create.blockers.no_files'))
+    if (!isClient.value) {
+      const hasRecipients =
+        recipients.value.user_ids.length > 0 ||
+        recipients.value.group_ids.length > 0 ||
+        hasExternal.value
+      // Public-link-only shares (no directed recipient) are valid as long
+      // as the user has the toggle on AND policy lets them create one.
+      const hasPublicLink = includePublicLink.value && canCreatePublicLink.value
+      // Clients always submit to the company, so they need neither a recipient
+      // nor a public link - just files. Staff still require one of the two.
+      if (recipientPending.value) {
+        out.push(t('share_create.blockers.recipient_not_added', { q: recipientPending.value }))
+      } else if (!hasRecipients && !hasPublicLink) {
+        out.push(
+          canCreatePublicLink.value
+            ? t('share_create.blockers.no_recipient_or_link')
+            : t('share_create.blockers.no_recipient'),
+        )
+      }
+    }
     // Picker emits a value on mount (default 7d preset), so by the time
     // the user can click submit, expiresAtLocal is either a string (some
     // datetime) OR null (Never). undefined = picker hasn't initialized.
-    if (expiresAtLocal.value === undefined) return false
-    if (upload.items.value.length === 0) return false
-    if (submitting.value) return false
-    if (upload.isActive.value) return false
-    return true
+    if (expiresAtLocal.value === undefined) out.push(t('share_create.blockers.no_expiry'))
+    return out
   })
+
+  const canSubmit = computed(
+    () => blockers.value.length === 0 && !submitting.value && !upload.isActive.value,
+  )
 
   // 'finalizing' counts as "done enough" for navigation: the file is
   // already on tusd's disk and the server-side post-finish hook is in
@@ -122,7 +160,7 @@
     submitting.value = true
     try {
       let publicLinkPayload: PublicLinkOnCreate | null = null
-      if (includePublicLink.value && canCreatePublicLink.value) {
+      if ((includePublicLink.value || hasExternal.value) && canCreatePublicLink.value) {
         publicLinkPayload = {
           password: plPassword.value || null,
           download_limit: plDownloadLimit.value || null,
@@ -152,6 +190,7 @@
         plResult.value = data.public_link
       }
       submitting.value = false
+      void inviteChosen()
       // Swap to the dedicated progress screen BEFORE uploads start, so the
       // list mounts while items are still 'queued' and the user watches each
       // one advance. Uploads keep running here because useUpload stays mounted.
@@ -173,6 +212,27 @@
       // createShare failed before any swap - stay on the form with the error.
       errorMsg.value = describe(err)
       submitting.value = false
+    }
+  }
+
+  // The share already reaches these addresses through the link; an invite is an
+  // extra, so its failure (already invited, already has an account, not allowed)
+  // is reported and never undoes the share. The invite route applies its own
+  // rules - an employee may only invite clients, which is what is offered.
+  async function inviteChosen() {
+    if (!offerInvite.value) return
+    const chosen = externalEmails.value.filter((e) => inviteChoices.value[e])
+    for (const email of chosen) {
+      try {
+        await inviteUser({
+          email,
+          display_name_hint: email.split('@')[0] || email,
+          target_role: 'client',
+        })
+        ui.pushToast(t('share_create.invite.sent', { email }), 'success')
+      } catch (err) {
+        ui.pushToast(t('share_create.invite.failed', { email, reason: describe(err) }), 'warn', 8000)
+      }
     }
   }
 
@@ -218,7 +278,9 @@
     errorMsg.value = null
     subject.value = ''
     message.value = ''
-    recipients.value = { user_ids: [], group_ids: [] }
+    recipients.value = { user_ids: [], group_ids: [], emails: [] }
+    recipientPending.value = ''
+    inviteChoices.value = {}
     // undefined → ExpiryPicker's mount auto-emit refills the 7-day default
     // when the form remounts (v-if, not v-show).
     expiresAtLocal.value = undefined
@@ -286,7 +348,13 @@
             {{ t('share_create.client_audience_notice') }}
           </p>
           <template v-if="!isClient">
-            <RecipientPicker v-model="recipients" :disabled="submitting || upload.isActive.value" />
+            <RecipientPicker
+              v-model="recipients"
+              :disabled="submitting || upload.isActive.value"
+              :allow-external="canShareExternal"
+              :can-public-link="canCreatePublicLink"
+              @update:pending="recipientPending = $event"
+            />
             <p v-if="canCreatePublicLink" class="fh-field-help recipients-hint">
               {{ t('share_create.recipients_or_public_link_hint') }}
             </p>
@@ -325,6 +393,27 @@
             <span class="toggle-help">{{ t('share_create.notify_recipients_help') }}</span>
           </span>
         </label>
+        <p
+          v-if="hasExternal && !notifyRecipients"
+          class="fh-field-error"
+          data-testid="external-quiet"
+        >
+          {{ t('share_create.external_quiet_warning') }}
+        </p>
+      </section>
+
+      <section v-if="offerInvite" class="invite-section" data-testid="invite-offer">
+        <hr class="fh-rule" />
+        <span class="toggle-name">{{ t('share_create.invite.question') }}</span>
+        <span class="toggle-help">{{ t('share_create.invite.help') }}</span>
+        <label v-for="email in externalEmails" :key="email" class="public-link-toggle compact">
+          <input
+            v-model="inviteChoices[email]"
+            type="checkbox"
+            :disabled="submitting || upload.isActive.value"
+          />
+          <span>{{ t('share_create.invite.option', { email }) }}</span>
+        </label>
       </section>
 
       <section v-if="canCreatePublicLink" class="public-link-section">
@@ -333,15 +422,19 @@
           <input
             v-model="includePublicLink"
             type="checkbox"
-            :disabled="submitting || upload.isActive.value"
+            :disabled="submitting || upload.isActive.value || hasExternal"
           />
           <span>
             <span class="toggle-name">{{ t('share_create.public_link.toggle_label') }}</span>
-            <span class="toggle-help">{{ t('share_create.public_link.toggle_help') }}</span>
+            <span class="toggle-help">{{
+              hasExternal
+                ? t('share_create.public_link.required_for_external')
+                : t('share_create.public_link.toggle_help')
+            }}</span>
           </span>
         </label>
 
-        <div v-if="includePublicLink" class="public-link-fields">
+        <div v-if="includePublicLink || hasExternal" class="public-link-fields">
           <label class="fh-field">
             <span class="fh-field-label">{{ t('share_create.public_link.password_label') }}</span>
             <input
@@ -352,7 +445,11 @@
               :placeholder="t('share_create.public_link.password_placeholder')"
               :disabled="submitting || upload.isActive.value"
             />
-            <span class="fh-field-help">{{ t('share_create.public_link.password_help') }}</span>
+            <span class="fh-field-help">{{
+              hasExternal
+                ? t('share_create.public_link.password_help_external')
+                : t('share_create.public_link.password_help')
+            }}</span>
           </label>
 
           <label class="fh-field">
@@ -386,11 +483,29 @@
 
       <div v-if="errorMsg" class="fh-notice" role="alert" data-tone="error">{{ errorMsg }}</div>
 
+      <div
+        v-if="blockers.length && !submitting && !upload.isActive.value"
+        id="share-create-blockers"
+        class="blockers"
+        aria-live="polite"
+        data-testid="submit-blockers"
+      >
+        <span class="fh-field-label">{{ t('share_create.blockers.title') }}</span>
+        <ul>
+          <li v-for="b in blockers" :key="b">{{ b }}</li>
+        </ul>
+      </div>
+
       <div class="actions">
         <button class="fh-btn-text" type="button" @click="router.back()">
           {{ t('common.cancel') }}
         </button>
-        <button class="fh-btn" type="submit" :disabled="!canSubmit">
+        <button
+          class="fh-btn"
+          type="submit"
+          :disabled="!canSubmit"
+          :aria-describedby="blockers.length ? 'share-create-blockers' : undefined"
+        >
           {{
             submitting || upload.isActive.value ? t('share_create.sending') : t('share_create.send')
           }}
@@ -484,6 +599,24 @@
   .toggle-help {
     font-size: var(--fh-text-body-sm);
     color: var(--fh-subtle);
+  }
+
+  .invite-section {
+    display: flex;
+    flex-direction: column;
+    gap: var(--fh-space-2);
+  }
+
+  .blockers {
+    align-self: flex-end;
+    max-width: 60ch;
+    font-size: var(--fh-text-body-sm);
+    color: var(--fh-ink-soft);
+  }
+
+  .blockers ul {
+    margin: var(--fh-space-1) 0 0;
+    padding-left: var(--fh-space-4);
   }
 
   .public-link-fields {

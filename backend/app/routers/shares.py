@@ -6,7 +6,6 @@ import logging
 from fastapi import APIRouter, Depends, Query, Request, status
 from sqlalchemy.orm import Session
 
-from ..config import settings
 from ..dependencies import get_db, request_has_scope, require_scope
 from ..middleware.errors import AppError
 from ..models.file import FileApprovalState, FileState
@@ -34,6 +33,7 @@ from ..schemas.share import (
     ShareSenderRef,
     UpdateShareRequest,
 )
+from ..services import external_recipients as external_svc
 from ..services import file as file_svc
 from ..services import public_link as public_link_svc
 from ..services import rate_limit as rate_limit_svc
@@ -167,6 +167,11 @@ def _to_share_response(db: Session, share, *, viewer: User | None = None) -> Sha
             else None
         ),
         files_awaiting_review=files_pending,
+        external_recipients=(
+            external_svc.addresses(db, share.id)
+            if roster.may_see_full(share.id)
+            else []
+        ),
     )
 
 
@@ -198,12 +203,6 @@ def _public_link_summary(
         downloads_remaining=link.downloads_remaining,
         created_at=link.created_at,
     )
-
-
-def _public_link_url(token: str, db: Session) -> str:
-    from ..services import site as site_svc
-
-    return f"{site_svc.get_site_url(db)}{settings.PUBLIC_LINK_BASE_PATH}/{token}"
 
 
 @router.post("", response_model=ShareResponse, status_code=status.HTTP_201_CREATED)
@@ -253,12 +252,24 @@ def create_share(
     # too, but we never trust the client). Inbound ignores any recipients.
     kind = ShareKind.inbound if user.role == UserRole.client else ShareKind.outbound
 
+    # Addresses with no account ride the public link, so the policy gate above
+    # already covers who may use them; this adds the instance switch and the
+    # need for a link. Also before any write.
+    external_svc.assert_may_send(
+        db,
+        user,
+        kind=kind,
+        emails=payload.recipients.emails,
+        has_link=payload.public_link is not None,
+    )
+
     share = share_svc.create_share(
         db,
         created_by=user,
         kind=kind,
         recipient_user_ids=payload.recipients.user_ids,
         recipient_group_ids=payload.recipients.group_ids,
+        external_emails=payload.recipients.emails,
         expires_at=payload.expires_at,
         subject=payload.subject,
         message=payload.message,
@@ -284,7 +295,7 @@ def create_share(
             notify_on_download=payload.public_link.notify_on_download,
             request=request,
         )
-        inline_url = _public_link_url(created.plaintext_token, db)
+        inline_url = public_link_svc.public_url(db, created.plaintext_token)
         from ..utils.qr import render_qr_svg
         public_link_inline = InlinePublicLinkResult(
             id=created.record.id,

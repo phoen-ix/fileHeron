@@ -31,6 +31,7 @@ from .public_link import PublicLink
 from .public_link_attempt import PublicLinkAttempt, PublicLinkAttemptOutcome
 from .refresh_token import RefreshToken
 from .share import Share, ShareKind, ShareState
+from .share_external_recipient import ShareExternalRecipient
 from .share_recipient import ShareRecipient
 from .user import Locale, User, UserRole
 from .user_notification_preference import (
@@ -86,6 +87,7 @@ __all__ = [
     "RefreshToken",
     "Share",
     "ShareKind",
+    "ShareExternalRecipient",
     "ShareRecipient",
     "ShareState",
     "User",

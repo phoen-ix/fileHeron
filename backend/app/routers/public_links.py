@@ -8,7 +8,6 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, Request, status
 from sqlalchemy.orm import Session
 
-from ..config import settings
 from ..dependencies import get_db, require_scope
 from ..middleware.errors import AppError
 from ..models.user import User, UserRole
@@ -23,12 +22,6 @@ from ..services import share as share_svc
 router = APIRouter(prefix="/api/shares", tags=["public_links"])
 
 
-def _public_url(token: str, db: Session) -> str:
-    from ..services import site as site_svc
-
-    return f"{site_svc.get_site_url(db)}{settings.PUBLIC_LINK_BASE_PATH}/{token}"
-
-
 def _qr_for(url: str | None) -> str | None:
     """Server-render an inline SVG QR of the public URL (reuses the same
     helper as 2FA enrolment). None when there's no URL to encode."""
@@ -40,25 +33,9 @@ def _qr_for(url: str | None) -> str | None:
 
 
 def _to_metadata(link, db: Session) -> PublicLinkResponse:
-    # Decrypt the token + build the URL for the owner-facing view.
-    # Legacy rows (no encrypted column) get url=None; the SPA renders
-    # a "URL not stored - revoke + recreate" hint in that case.
-    url: str | None = None
-    if link.token_encrypted:
-        from ..utils.crypto import decrypt_setting
-
-        try:
-            url = _public_url(decrypt_setting(link.token_encrypted), db)
-        except Exception:
-            # JWT_SECRET rotated without re-encrypting → log shape only,
-            # surface as null so the owner sees the legacy fallback
-            # rather than a 500.
-            import logging
-
-            logging.getLogger("fileheron.public_link").warning(
-                "decrypt_setting failed for public_link %s; URL not surfaced",
-                link.id,
-            )
+    # Legacy rows (no encrypted column) and undecryptable ones get url=None;
+    # the SPA renders a "URL not stored - revoke + recreate" hint in that case.
+    url = public_link_svc.stored_url(db, link)
     return PublicLinkResponse(
         id=link.id,
         url=url,
@@ -96,7 +73,7 @@ def create_public_link(
         request=request,
     )
     db.commit()
-    created_url = _public_url(created.plaintext_token, db)
+    created_url = public_link_svc.public_url(db, created.plaintext_token)
     return CreatePublicLinkResponse(
         id=created.record.id,
         url=created_url,

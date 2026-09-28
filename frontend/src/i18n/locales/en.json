@@ -211,6 +211,8 @@
     "PUBLIC_LINK_EXHAUSTED": "This link has reached its download limit.",
     "PUBLIC_LINK_EXISTS": "This share already has a public link. Revoke it first.",
     "PUBLIC_LINK_LOCKED": "This link is temporarily locked after too many failed attempts.",
+    "EXTERNAL_RECIPIENTS_DISABLED": "Sending to an address without an account is turned off on this instance.",
+    "EXTERNAL_RECIPIENT_NEEDS_LINK": "A recipient without an account can only be reached through a public link. Turn on the public link and try again.",
     "PUBLIC_LINK_NOT_ALLOWED": "Your administrator has restricted public link creation.",
     "PUBLIC_LINK_NOT_FOUND": "This link is not valid.",
     "PUBLIC_LINK_RATE_LIMITED": "Too many attempts. Please wait and try again.",
@@ -1110,6 +1112,7 @@
     },
     "template": {
       "share_created": "Share created",
+      "share_link_external": "Download link (recipient without an account)",
       "share_files_added": "Files added to a share",
       "share_expiring": "Share expiring",
       "share_pending_approval": "Share needs approval",
@@ -1205,7 +1208,15 @@
     "groups_inbox": "company inbox",
     "saved_toast": "Public link policy saved.",
     "brute_force_title": "Password brute force",
-    "brute_force_help": "A link is locked for every address once this many wrong passwords arrive in the window from at least three distinct addresses; a single address only gets the per-address limit."
+    "brute_force_help": "A link is locked for every address once this many wrong passwords arrive in the window from at least three distinct addresses; a single address only gets the per-address limit.",
+    "external": {
+      "title": "Recipients without an account",
+      "help": "Let senders type an email address that has no account. That person gets the share's public link by email; no account is created. Only senders who may create public links (above) can use it, and the password of a protected link is never in the email.",
+      "enabled_label": "Allow sending to addresses without an account",
+      "enabled_help": "Off: the recipient list only finds existing accounts and groups.",
+      "offer_invite_label": "Ask the sender whether to also invite them",
+      "offer_invite_help": "The new-share form offers to invite each such address as a client account. Unticked by default; the link goes out either way."
+    }
   },
   "admin_api_tokens": {
     "create_cta": "Generate token for user",
@@ -1910,7 +1921,13 @@
     "section_users": "People",
     "section_groups": "Groups",
     "inbox_flag": "company inbox",
-    "no_results": "No matches."
+    "no_results": "No matches.",
+    "section_external": "Without an account",
+    "external_option": "Send a download link to {email}",
+    "external_chip_hint": "download link",
+    "no_account": "No one you can send to has the address {email}.",
+    "no_account_public_link": "To share with them anyway, attach a public link below.",
+    "not_added": "“{q}” isn't added yet. Pick it from the list."
   },
   "expiry": {
     "label": "Expires",
@@ -2107,12 +2124,30 @@
     "toast_done": "Share created.",
     "toast_pending": "Share submitted for approval.",
     "toast_partial": "{n} file failed to upload. Retry below. | {n} files failed to upload. Retry below.",
+    "blockers": {
+      "title": "Before you can send:",
+      "no_files": "Add at least one file.",
+      "no_recipient": "Pick a recipient from the list.",
+      "no_recipient_or_link": "Pick a recipient from the list, or attach a public link below.",
+      "recipient_not_added": "“{q}” is typed in Recipients but not picked. Choose it from the list, or clear the field.",
+      "no_expiry": "Choose when the share expires."
+    },
+    "external_quiet_warning": "Recipients without an account only hear about this share by email. With notifications off, they receive nothing.",
+    "invite": {
+      "question": "Also create accounts for them?",
+      "help": "These addresses have no account. Tick one to also send it an invitation as a client. The download link goes out either way.",
+      "option": "Invite {email} as a client",
+      "sent": "Invitation sent to {email}.",
+      "failed": "Could not invite {email}: {reason}"
+    },
     "public_link": {
       "toggle_label": "Also create a public download link",
       "toggle_help": "Anyone with the link can download - no fileHeron account needed. Optionally protect with a password and a download counter.",
       "password_label": "Password (optional)",
       "password_placeholder": "Leave blank for no password",
       "password_help": "Anyone with the link will need this password to unlock the share.",
+      "required_for_external": "Required: recipients without an account receive this link by email.",
+      "password_help_external": "The email does not contain the password. Give it to the recipients yourself, by another channel.",
       "download_limit_label": "Download limit (optional)",
       "download_limit_placeholder": "e.g. 10",
       "download_limit_help": "Maximum number of successful downloads. Leave blank for unlimited.",
@@ -2148,6 +2183,8 @@
     "total": "Total",
     "files_heading": "Files ({n})",
     "targeted_groups": "Groups",
+    "external_recipients": "Sent to (no account)",
+    "external_via_link": "via public link",
     "empty": "No files in this share.",
     "end_share_cta": "End share",
     "end_share_confirm": "End this share now and delete all uploaded files? This cannot be undone.",

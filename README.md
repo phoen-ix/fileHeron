@@ -164,6 +164,10 @@ deduplicated to once per 6 h). After login you land on your **default landing pa
 4. **Expiry** (required) - the cron hard-deletes the bytes the hour after it passes.
 5. **Public link** (optional, if allowed) - set password, download-count limit, and "notify me on download". The URL is shown **once** on submit; copy it before navigating away.
 
+Until the share can be sent, a list above **Create + send** says what is missing: no file yet, no recipient (or public link), or text typed into Recipients that was never picked from the list.
+
+**Recipients without an account** (off by default; *Admin → Sharing → Public links → Recipients without an account*). When an admin turns it on, anyone allowed to create public links can type an address that matches no one and pick *Send a download link to …*. That address is emailed the share's public link once the files have landed (and, if the share needs approval, once it is approved). No account is created, and the link's password is never in the mail - pass it on yourself. Everyone emailed shares the one link and its download counter. Under the approval scope *outbound to clients*, such a share is held for approval. A second switch makes the form ask whether to also **invite** each address as a client account (unticked by default); the link goes out either way.
+
 ## Receiving a share (`/inbox`)
 
 The inbox lists shares addressed to you (directly or via a group). Per file you see a

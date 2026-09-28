@@ -10,7 +10,7 @@
         :data-kind="chip.kind"
       >
         <span class="chip-icon" aria-hidden="true">
-          {{ chip.kind === 'group' ? '◇' : '◆' }}
+          {{ chip.kind === 'group' ? '◇' : chip.kind === 'email' ? '↗' : '◆' }}
         </span>
         <span class="chip-label">{{ chip.label }}</span>
         <span v-if="chip.hint" class="chip-hint fh-mono">{{ chip.hint }}</span>
@@ -37,7 +37,7 @@
         :disabled="disabled"
         role="combobox"
         aria-autocomplete="list"
-        :aria-expanded="showResults && (filteredUsers.length > 0 || filteredGroups.length > 0)"
+        :aria-expanded="showResults && optionCount > 0"
         :aria-controls="`${inputId}-listbox`"
         :aria-activedescendant="activeOptionId"
         @focus="showResults = true"
@@ -47,8 +47,12 @@
         @keydown.enter.prevent="selectCursor"
         @keydown.escape="showResults = false"
       />
+      <!-- Open whenever there is something to say, INCLUDING "nothing matched":
+           the list used to render only when it had rows, so its own
+           "No matches." line could never appear and a typed address that
+           matched nobody looked exactly like a picked one. -->
       <div
-        v-if="showResults && (filteredUsers.length || filteredGroups.length || loading)"
+        v-if="showResults && (optionCount > 0 || loading || (query && settled))"
         :id="`${inputId}-listbox`"
         class="results"
         role="listbox"
@@ -99,16 +103,41 @@
           </button>
         </div>
 
-        <div
-          v-if="!loading && !filteredUsers.length && !filteredGroups.length && query"
-          class="results-empty"
-        >
-          {{ t('recipient.no_results') }}
+        <div v-if="externalOption" class="results-section">
+          <div class="section-eyebrow">{{ t('recipient.section_external') }}</div>
+          <button
+            :id="`${inputId}-opt-${externalIdx}`"
+            type="button"
+            class="result-row"
+            :class="{ active: cursorIdx === externalIdx }"
+            role="option"
+            :aria-selected="cursorIdx === externalIdx"
+            data-testid="external-option"
+            @mousedown.prevent="addEmail(externalOption)"
+            @mouseenter="cursorIdx = externalIdx"
+          >
+            <span class="row-icon" aria-hidden="true">↗</span>
+            <span class="row-name">{{ t('recipient.external_option', { email: externalOption }) }}</span>
+          </button>
+        </div>
+
+        <div v-if="settled && optionCount === 0 && query" class="results-empty">
+          {{ noAccountFor ? noAccountMessage : t('recipient.no_results') }}
         </div>
       </div>
     </div>
 
     <div v-if="errorMsg" class="fh-field-error">{{ errorMsg }}</div>
+    <!-- Typed but never picked: the text in the box is not a recipient, and the
+         form's submit stays disabled because of it. Say so where the text is. -->
+    <div
+      v-else-if="pendingMessage"
+      class="fh-field-error"
+      role="status"
+      data-testid="recipient-pending"
+    >
+      {{ pendingMessage }}
+    </div>
     <div v-else class="fh-field-help">{{ t('recipient.help_phase4') }}</div>
   </div>
 </template>
@@ -127,12 +156,20 @@
     selectedUsers?: UserSearchItem[]
     selectedGroups?: GroupResponse[]
     disabled?: boolean
+    /** Offer "send a download link to <address>" for an address that matches
+     *  no one (`/me.can_share_external`). */
+    allowExternal?: boolean
+    /** The sender may attach a public link - the no-account message points at
+     *  it when external sending itself is not offered. */
+    canPublicLink?: boolean
   }>()
 
   const emit = defineEmits<{
     'update:modelValue': [value: ShareRecipientsRequest]
     'update:selectedUsers': [users: UserSearchItem[]]
     'update:selectedGroups': [groups: GroupResponse[]]
+    /** The search text that has NOT become a recipient ('' when none). */
+    'update:pending': [text: string]
   }>()
 
   const { t } = useI18n()
@@ -156,6 +193,7 @@
   // display_name / email / etc on the chips without re-fetching.
   const selectedUsersLocal = ref<UserSearchItem[]>([...(props.selectedUsers ?? [])])
   const selectedGroupsLocal = ref<GroupResponse[]>([...(props.selectedGroups ?? [])])
+  const selectedEmailsLocal = ref<string[]>([...(props.modelValue.emails ?? [])])
 
   // Search results.
   const allUserResults = ref<UserSearchItem[]>([])
@@ -175,12 +213,15 @@
   )
 
   const hasSelection = computed(
-    () => selectedUsersLocal.value.length > 0 || selectedGroupsLocal.value.length > 0,
+    () =>
+      selectedUsersLocal.value.length > 0 ||
+      selectedGroupsLocal.value.length > 0 ||
+      selectedEmailsLocal.value.length > 0,
   )
 
   interface Chip {
-    kind: 'user' | 'group'
-    id: number
+    kind: 'user' | 'group' | 'email'
+    id: number | string
     label: string
     hint?: string
   }
@@ -197,6 +238,9 @@
     }
     for (const g of selectedGroupsLocal.value) {
       cs.push({ kind: 'group', id: g.id, label: g.name })
+    }
+    for (const e of selectedEmailsLocal.value) {
+      cs.push({ kind: 'email', id: e, label: e, hint: t('recipient.external_chip_hint') })
     }
     return cs
   })
@@ -215,9 +259,66 @@
       .slice(0, 6)
   })
 
+  // Same shape the backend's EmailLike accepts, so an offered address is never
+  // one the server then refuses as malformed.
+  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+  /** The query as an address, or null when it does not look like one. */
+  const queryEmail = computed(() => {
+    const q = query.value.trim().toLowerCase()
+    return EMAIL_RE.test(q) ? q : null
+  })
+
+  /** The query the current results answer. Until the debounced search for the
+   *  text in the box has come back, the list is stale, and deciding "nobody has
+   *  this address" from it would offer a link to someone about to appear. */
+  const searchedQuery = ref<string | null>(null)
+  const settled = computed(() => !loading.value && searchedQuery.value === query.value)
+
+  const queryMatchesSomeone = computed(() => {
+    const email = queryEmail.value
+    if (!email) return false
+    return (
+      allUserResults.value.some((u) => u.email.toLowerCase() === email) ||
+      selectedUsersLocal.value.some((u) => u.email.toLowerCase() === email)
+    )
+  })
+
+  /** The address to offer a download link to, or null. */
+  const externalOption = computed(() => {
+    const email = queryEmail.value
+    if (!props.allowExternal || !email || !settled.value) return null
+    if (queryMatchesSomeone.value || selectedEmailsLocal.value.includes(email)) return null
+    return email
+  })
+
+  /** An address that matches no one the sender can reach, with no link offer. */
+  const noAccountFor = computed(() => {
+    const email = queryEmail.value
+    if (props.allowExternal || !email || !settled.value) return null
+    return queryMatchesSomeone.value ? null : email
+  })
+
+  const noAccountMessage = computed(() => {
+    if (!noAccountFor.value) return ''
+    const base = t('recipient.no_account', { email: noAccountFor.value })
+    return props.canPublicLink ? `${base} ${t('recipient.no_account_public_link')}` : base
+  })
+
+  const optionCount = computed(
+    () => filteredUsers.value.length + filteredGroups.value.length + (externalOption.value ? 1 : 0),
+  )
+  const externalIdx = computed(() => filteredUsers.value.length + filteredGroups.value.length)
+
+  const pendingMessage = computed(() => {
+    if (!query.value || showResults.value) return ''
+    return noAccountFor.value ? noAccountMessage.value : t('recipient.not_added', { q: query.value })
+  })
+
   let searchTimer: ReturnType<typeof setTimeout> | null = null
 
   watch(query, (v) => {
+    emit('update:pending', v)
     errorMsg.value = null
     if (searchTimer) clearTimeout(searchTimer)
     searchTimer = setTimeout(() => {
@@ -235,6 +336,7 @@
       const { data } = await searchUsers(q)
       if (seq !== searchSeq) return
       allUserResults.value = data.items
+      searchedQuery.value = q
       cursorIdx.value = 0
     } catch (err) {
       if (seq === searchSeq) errorMsg.value = describe(err)
@@ -256,6 +358,7 @@
     const value: ShareRecipientsRequest = {
       user_ids: selectedUsersLocal.value.map((u) => u.user_id),
       group_ids: selectedGroupsLocal.value.map((g) => g.id),
+      emails: [...selectedEmailsLocal.value],
     }
     emit('update:modelValue', value)
     emit('update:selectedUsers', [...selectedUsersLocal.value])
@@ -278,17 +381,27 @@
     emitModel()
   }
 
+  function addEmail(email: string | null) {
+    if (!email || selectedEmailsLocal.value.includes(email)) return
+    selectedEmailsLocal.value.push(email)
+    query.value = ''
+    showResults.value = false
+    emitModel()
+  }
+
   function removeChip(chip: Chip) {
     if (chip.kind === 'user') {
       selectedUsersLocal.value = selectedUsersLocal.value.filter((u) => u.user_id !== chip.id)
-    } else {
+    } else if (chip.kind === 'group') {
       selectedGroupsLocal.value = selectedGroupsLocal.value.filter((g) => g.id !== chip.id)
+    } else {
+      selectedEmailsLocal.value = selectedEmailsLocal.value.filter((e) => e !== chip.id)
     }
     emitModel()
   }
 
   function moveCursor(delta: number) {
-    const total = filteredUsers.value.length + filteredGroups.value.length
+    const total = optionCount.value
     if (!total) return
     cursorIdx.value = (cursorIdx.value + delta + total) % total
     showResults.value = true
@@ -296,14 +409,16 @@
 
   function selectCursor() {
     const usersLen = filteredUsers.value.length
-    const total = usersLen + filteredGroups.value.length
+    const total = optionCount.value
     // Enter with no results (or a stale cursor past the shrunk list) must not
     // deref undefined - bail out instead of crashing the keydown handler.
     if (cursorIdx.value < 0 || cursorIdx.value >= total) return
     if (cursorIdx.value < usersLen) {
       addUser(filteredUsers.value[cursorIdx.value])
-    } else {
+    } else if (cursorIdx.value < externalIdx.value) {
       addGroup(filteredGroups.value[cursorIdx.value - usersLen])
+    } else {
+      addEmail(externalOption.value)
     }
   }
 

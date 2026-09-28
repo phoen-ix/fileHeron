@@ -32,6 +32,9 @@
   const allowedUsers = ref<PublicLinkAllowedUserItem[]>([])
   const allowedGroups = ref<PublicLinkAllowedGroupItem[]>([])
   const availableGroups = ref<GroupResponse[]>([])
+  // Recipients with no account (v2.21.0) - both default off.
+  const externalEnabled = ref(false)
+  const externalOfferInvite = ref(false)
 
   const userQuery = ref('')
   const userSuggestions = ref<UserSearchItem[]>([])
@@ -90,6 +93,8 @@
     mode.value = data.mode
     allowedUsers.value = data.allowed_users
     allowedGroups.value = data.allowed_groups
+    externalEnabled.value = data.external_recipients_enabled
+    externalOfferInvite.value = data.external_recipients_offer_invite
   }
 
   async function load() {
@@ -117,6 +122,10 @@
         mode: mode.value,
         allowed_user_ids: allowedUsers.value.map((u) => u.id),
         allowed_group_ids: allowedGroups.value.map((g) => g.id),
+        external_recipients_enabled: externalEnabled.value,
+        // Stored as set, but only meaningful while the first switch is on -
+        // turning that off also turns this off, so re-enabling starts quiet.
+        external_recipients_offer_invite: externalEnabled.value && externalOfferInvite.value,
       })
       applyResponse(data)
       // Refresh /me so the local can_create_public_link flag reflects the
@@ -230,6 +239,30 @@
           </ul>
         </div>
       </section>
+
+      <fieldset id="external-recipients" class="mode-fieldset">
+        <legend class="fh-field-label">{{ t('admin_public_link_policy.external.title') }}</legend>
+        <p class="fh-field-help">{{ t('admin_public_link_policy.external.help') }}</p>
+        <label class="mode-option">
+          <input v-model="externalEnabled" type="checkbox" data-testid="external-enabled" />
+          <span>
+            <span class="mode-name">{{ t('admin_public_link_policy.external.enabled_label') }}</span>
+            <span class="mode-help">{{ t('admin_public_link_policy.external.enabled_help') }}</span>
+          </span>
+        </label>
+        <label class="mode-option">
+          <input
+            v-model="externalOfferInvite"
+            type="checkbox"
+            :disabled="!externalEnabled"
+            data-testid="external-offer-invite"
+          />
+          <span>
+            <span class="mode-name">{{ t('admin_public_link_policy.external.offer_invite_label') }}</span>
+            <span class="mode-help">{{ t('admin_public_link_policy.external.offer_invite_help') }}</span>
+          </span>
+        </label>
+      </fieldset>
 
       <div v-if="errorMsg" class="fh-notice" role="alert" data-tone="error">{{ errorMsg }}</div>
 

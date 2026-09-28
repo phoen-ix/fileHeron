@@ -65,6 +65,32 @@ logger = logging.getLogger("fileheron.public_link")
 
 
 
+def public_url(db: Session, token: str) -> str:
+    """The recipient-facing URL for a plaintext link token. The ONE builder:
+    the create routes, the owner's metadata view and the mail to a recipient
+    with no account all use it, and `mail_log` masks the same base path."""
+    from ..config import settings
+
+    return f"{site_svc.get_site_url(db)}{settings.PUBLIC_LINK_BASE_PATH}/{token}"
+
+
+def stored_url(db: Session, link: PublicLink) -> str | None:
+    """Rebuild a link's URL from its encrypted token, or None when it cannot be:
+    a legacy row stored no ciphertext, or `JWT_SECRET` was rotated without
+    re-encrypting. None, never a raise - callers render a fallback."""
+    if not link.token_encrypted:
+        return None
+    from ..utils.crypto import decrypt_setting
+
+    try:
+        return public_url(db, decrypt_setting(link.token_encrypted))
+    except Exception:
+        logger.warning(
+            "decrypt_setting failed for public_link %s; URL not surfaced", link.id
+        )
+        return None
+
+
 class CreatedLink(NamedTuple):
     record: PublicLink
     plaintext_token: str  # shown to creator once

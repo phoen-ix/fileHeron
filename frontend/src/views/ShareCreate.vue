@@ -231,7 +231,11 @@
         })
         ui.pushToast(t('share_create.invite.sent', { email }), 'success')
       } catch (err) {
-        ui.pushToast(t('share_create.invite.failed', { email, reason: describe(err) }), 'warn', 8000)
+        ui.pushToast(
+          t('share_create.invite.failed', { email, reason: describe(err) }),
+          'warn',
+          8000,
+        )
       }
     }
   }

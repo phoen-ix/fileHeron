@@ -117,7 +117,9 @@
             @mouseenter="cursorIdx = externalIdx"
           >
             <span class="row-icon" aria-hidden="true">↗</span>
-            <span class="row-name">{{ t('recipient.external_option', { email: externalOption }) }}</span>
+            <span class="row-name">{{
+              t('recipient.external_option', { email: externalOption })
+            }}</span>
           </button>
         </div>
 
@@ -312,7 +314,9 @@
 
   const pendingMessage = computed(() => {
     if (!query.value || showResults.value) return ''
-    return noAccountFor.value ? noAccountMessage.value : t('recipient.not_added', { q: query.value })
+    return noAccountFor.value
+      ? noAccountMessage.value
+      : t('recipient.not_added', { q: query.value })
   })
 
   let searchTimer: ReturnType<typeof setTimeout> | null = null

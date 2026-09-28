@@ -246,7 +246,9 @@
         <label class="mode-option">
           <input v-model="externalEnabled" type="checkbox" data-testid="external-enabled" />
           <span>
-            <span class="mode-name">{{ t('admin_public_link_policy.external.enabled_label') }}</span>
+            <span class="mode-name">{{
+              t('admin_public_link_policy.external.enabled_label')
+            }}</span>
             <span class="mode-help">{{ t('admin_public_link_policy.external.enabled_help') }}</span>
           </span>
         </label>
@@ -258,8 +260,12 @@
             data-testid="external-offer-invite"
           />
           <span>
-            <span class="mode-name">{{ t('admin_public_link_policy.external.offer_invite_label') }}</span>
-            <span class="mode-help">{{ t('admin_public_link_policy.external.offer_invite_help') }}</span>
+            <span class="mode-name">{{
+              t('admin_public_link_policy.external.offer_invite_label')
+            }}</span>
+            <span class="mode-help">{{
+              t('admin_public_link_policy.external.offer_invite_help')
+            }}</span>
           </span>
         </label>
       </fieldset>

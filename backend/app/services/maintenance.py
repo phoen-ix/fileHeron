@@ -514,6 +514,9 @@ def notify_admins(db: Session, *, payload: dict) -> None:
     from ..models.user import UserRole
     from .notification import dispatch
 
+    # The mail renders `at` as "when"; without it an update alert carried no
+    # time at all.
+    payload = {**payload, "at": payload.get("at") or utc_now().isoformat()}
     admins = (
         db.query(User)
         .filter(User.role == UserRole.admin, User.is_disabled.is_(False))

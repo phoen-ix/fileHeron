@@ -13,17 +13,18 @@
     {{ ui.headline("Ein Serverfehler ist aufgetreten") }}
   {% endif %}
   {% call ui.specs() %}
-    {% if source in ("worker", "ops") %}{{ ui.spec("Aufgabe", job_name) }}{% else %}{{ ui.spec("Anfrage", method ~ " " ~ path) }}{% endif %}
-    {% if status_code %}{{ ui.spec("Status", status_code ~ " " ~ code) }}{% else %}{{ ui.spec("Code", code) }}{% endif %}
-    {% if exception_type %}{{ ui.spec("Fehler", exception_type ~ (" - " ~ message if message else "")) }}{% elif message %}{{ ui.spec("Detail", message) }}{% endif %}
-    {{ ui.spec("Zeit", at|dt_locale(locale)) }}
-    {% if ip %}{{ ui.spec("Von IP", ip) }}{% endif %}
-    {% if request_id %}{{ ui.spec("Request-ID", request_id) }}{% endif %}
-    {% if user_id %}{{ ui.spec("Benutzer", "#" ~ user_id ~ (" (via " ~ auth_via ~ ")" if auth_via else "")) }}{% endif %}
-    {{ ui.spec("Vorkommen", occurrence_count) }}
-  {% endcall %}
+    {%- if source in ("worker", "ops") %}{{ ui.spec("Aufgabe", job_name) }}{% else %}{{ ui.spec("Anfrage", method ~ " " ~ path) }}{% endif %}
+    {%- if status_code %}{{ ui.spec("Status", status_code ~ " " ~ code) }}{% else %}{{ ui.spec("Code", code) }}{% endif %}
+    {%- if exception_type %}{{ ui.spec("Fehler", exception_type ~ (" - " ~ message if message else "")) }}{% elif message %}{{ ui.spec("Detail", message) }}{% endif %}
+    {{- ui.spec("Zeit", at|dt_locale(locale)) }}
+    {%- if ip %}{{ ui.spec("Von IP", ip) }}{% endif %}
+    {%- if request_id %}{{ ui.spec("Request-ID", request_id) }}{% endif %}
+    {%- if user_id %}{{ ui.spec("Benutzer", "#" ~ user_id ~ (" (via " ~ auth_via ~ ")" if auth_via else "")) }}{% endif %}
+    {{- ui.spec("Vorkommen", occurrence_count) }}
+    {{- ui.spec("Version", app_version) }}
+  {%- endcall %}
   {% if suppressed_count and suppressed_since %}
     {% call ui.note() %}{{ suppressed_count }} frühere(s) Vorkommen unterdrückt seit {{ suppressed_since|dt_locale(locale) }}.{% endcall %}
   {% endif %}
-  {% call ui.note(gap=0) %}Diese Benachrichtigungen verwaltest du unter <strong>/admin/settings/error-alerts</strong>.{% endcall %}
+  {% call ui.note(gap=0) %}Diese Benachrichtigungen verwaltest du unter <strong>{{ app_url }}/admin/settings/error-alerts</strong>.{% endcall %}
 {% endblock %}

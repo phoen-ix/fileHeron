@@ -46,6 +46,7 @@ SLUGS: list[str] = sorted(json.loads((_ROOT / "en" / "subjects.json").read_text(
 _INJECTED = {
     "app_name", "app_url", "locale", "site_timezone", "self", "ui",
     "manage_subscriptions_url", "unsubscribe_url", "brand_logo_url",
+    "app_version",  # services/email.py::_render passes it to every template
 }
 
 # The five slugs that are NOT admin-editable and so are absent from
@@ -61,6 +62,8 @@ _NON_EDITABLE_CTX: dict[str, dict] = {
     "ops_alert": {
         "reason": "cron_failed", "job_name": "expire_files", "type": "worker",
         "error": "TimeoutError: clamd did not answer", "detail": "attempt 3 of 3",
+        # the update/rollback senders (routers/admin/system.py, maintenance.py)
+        "target_tag": "v9.9.9", "via": "auto", "actor": "Ada Admin",
     },
     "server_error": {
         "source": "worker", "job_name": "expire_files",
@@ -78,9 +81,8 @@ def _ctx(slug: str) -> dict:
 
     The 21 editable slugs use the SAME sample context the admin preview and
     test-send use (routers/admin/email_templates.py), so "renders here" implies
-    "renders in the preview". `app_name` is popped: _resolve_subject does
-    `template.format(**ctx, app_name=...)` and a duplicate key raises TypeError,
-    which its `except (KeyError, IndexError)` does not catch.
+    "renders in the preview". `app_name` is popped so the value under test is
+    the one render_email is given, not the sample's.
     """
     base = ep.sample_ctx(slug, app_url=_APP_URL)
     base.pop("app_name", None)
@@ -280,8 +282,12 @@ def test_every_slug_renders_both_parts_in_every_locale(locale, slug):
     assert subject.strip(), f"{locale}/{slug}: empty subject"
     assert "{" not in subject and "}" not in subject, (
         f"{locale}/{slug}: unsubstituted subject {subject!r}. _resolve_subject "
-        f"catches KeyError and returns the RAW template, so a key the subject needs "
-        f"but nobody passes ships to the recipient verbatim."
+        f"renders a field the payload lacks as empty; braces surviving means that "
+        f"fallback is gone and a missing key ships to the recipient verbatim."
+    )
+    assert not subject.rstrip().endswith(":"), (
+        f"{locale}/{slug}: subject {subject!r} ends in a dangling colon - the reason "
+        f"it introduces rendered empty and _resolve_subject did not trim it"
     )
     assert text.strip(), f"{locale}/{slug}: empty text part"
     assert html is not None, (
@@ -292,6 +298,12 @@ def test_every_slug_renders_both_parts_in_every_locale(locale, slug):
     assert html.strip(), f"{locale}/{slug}: empty html part"
     assert "<!doctype html" in html.lower(), f"{locale}/{slug}: not layout-wrapped"
     assert _APP_NAME in html, f"{locale}/{slug}: html part carries no app name"
+
+    blank = [n for n, line in enumerate(html.splitlines(), 1) if line and not line.strip()]
+    assert not blank, (
+        f"{locale}/{slug}: html lines {blank[:5]} hold only whitespace - "
+        f"quoted-printable spells each as a visible `=20` line in the raw mail"
+    )
 
     for name, part in (("text", text), ("html", html)):
         hit = _LEAK.search(part)

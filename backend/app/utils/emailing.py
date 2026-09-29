@@ -17,8 +17,11 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from email.message import EmailMessage
+from email.utils import format_datetime, formataddr, make_msgid
 
 import aiosmtplib
+
+from .timeutil import utc_now_aware
 
 logger = logging.getLogger("fileheron.email")
 
@@ -47,7 +50,12 @@ class SmtpConfig:
 
     @property
     def from_header(self) -> str:
-        return f"{self.from_name} <{self.from_email}>"
+        # formataddr, never an f-string: the product's own name is "file:Heron",
+        # and an unquoted colon in a display name is RFC 5322 GROUP syntax - the
+        # header serialised as `file:Heron <x@y>;`, a group named "file", which
+        # Gmail rejects and DMARC cannot take a From domain from. formataddr
+        # quotes a name with specials and RFC 2047-encodes a non-ASCII one.
+        return formataddr((self.from_name, self.from_email))
 
 
 
@@ -85,6 +93,17 @@ def build_message(
     msg = EmailMessage()
     msg["From"] = cfg.from_header
     msg["To"] = to
+    # Both are mandatory (RFC 5322 s3.6) and neither EmailMessage nor aiosmtplib
+    # adds them: Gmail rejects mail without a Message-ID, rspamd scores the
+    # absence of either, and a DKIM signer can only sign headers that exist.
+    msg["Date"] = format_datetime(utc_now_aware())
+    domain = cfg.from_email.rpartition("@")[2].strip()
+    msg["Message-ID"] = make_msgid(domain=domain or None)
+    # Every mail this instance sends is machine-generated, so vacation
+    # responders and auto-replies must not answer it (RFC 3834); Exchange and
+    # Outlook read their own header for the same thing.
+    msg["Auto-Submitted"] = "auto-generated"
+    msg["X-Auto-Response-Suppress"] = "All"
     # Defence in depth on top of the display-name validation. EmailMessage
     # raises ValueError on CR/LF in a header value, so an unsanitised value does
     # not inject a header - it kills the send outright, and the sender of a
@@ -99,6 +118,10 @@ def build_message(
     msg.set_content(text_body)
     if html_body:
         msg.add_alternative(html_body, subtype="html")
+        # add_alternative builds each sub-part as an EmailMessage, which stamps
+        # its own MIME-Version; the header belongs on the top level only.
+        for part in msg.iter_parts():
+            del part["MIME-Version"]
     return msg
 
 

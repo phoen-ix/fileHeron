@@ -39,6 +39,37 @@ def test_render_email_ops_alert_renders():
     assert "expire_files" in text and "boom" in text
 
 
+@pytest.mark.parametrize("locale, word", [("en", "operations alert"), ("de", "betriebswarnung")])
+def test_an_ops_alert_subject_names_its_reason(locale, word):
+    """The subject was the same for every alert, so mail clients threaded them
+    all into one conversation."""
+    subject, _text, _html = email_svc.render_email(locale, "ops_alert", {"reason": "backup_failed"})
+    assert word in subject.lower()
+    assert subject.endswith(": backup_failed")
+
+
+def test_an_ops_alert_without_a_reason_has_a_clean_subject():
+    subject, _text, _html = email_svc.render_email("en", "ops_alert", {"detail": "x"})
+    assert "{" not in subject and not subject.rstrip().endswith(":")
+    assert subject.lower().endswith("operations alert")
+
+
+@pytest.mark.parametrize("locale", ["en", "de"])
+def test_an_update_alert_says_what_who_when_and_which_version(locale):
+    """update/rollback alerts passed target_tag and the actor and nothing
+    rendered them; the text part also had no link while the html had a button."""
+    from app.version import VERSION
+
+    payload = {"reason": "update_triggered", "actor": "Ada Admin", "target_tag": "v9.9.9",
+               "at": "2026-09-29T19:00:00"}
+    _subject, text, html = email_svc.render_email(locale, "ops_alert", payload,
+                                                  app_url="https://files.example.org")
+    for part in (text, html):
+        assert "v9.9.9" in part and "Ada Admin" in part and VERSION in part
+        assert "2026" in part
+    assert "https://files.example.org/admin/system" in text
+
+
 def test_render_email_inbound_message_renders_de():
     payload = {"sender": "a@x.com", "subject": "Hi there", "classification": "normal"}
     subject, text, _html = email_svc.render_email("de", "inbound_message", payload)

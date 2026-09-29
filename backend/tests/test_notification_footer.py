@@ -220,6 +220,13 @@ def test_both_preference_routes_serialise_the_same_row(make_user, db):
         assert "PreferenceItem(category=" not in src
 
 
+def _cfg():
+    from app.utils.emailing import SmtpConfig
+
+    return SmtpConfig(host="smtp.example.com", port=587, user="", password="",
+                      from_email="no-reply@example.com", from_name="file:Heron")
+
+
 def test_the_one_click_post_header_value_is_the_one_rfc_8058_fixes():
     """RFC 8058 s3.1 fixes the value and clients match it literally. This read
     `List=One-Click`, which no client honours - so one-click silently degraded
@@ -229,11 +236,9 @@ def test_the_one_click_post_header_value_is_the_one_rfc_8058_fixes():
     the literal is written out here so the test fails if the constant moves."""
     from app.utils.emailing import build_message
 
-    class _Cfg:
-        from_header = "file:Heron <no-reply@example.com>"
 
     msg = build_message(
-        _Cfg(),
+        _cfg(),
         to="a@example.com",
         subject="s",
         text_body="t",
@@ -249,9 +254,7 @@ def test_no_one_click_headers_when_there_is_nothing_to_unsubscribe_from():
     make some clients offer the button."""
     from app.utils.emailing import build_message
 
-    class _Cfg:
-        from_header = "file:Heron <no-reply@example.com>"
 
-    msg = build_message(_Cfg(), to="a@example.com", subject="s", text_body="t")
+    msg = build_message(_cfg(), to="a@example.com", subject="s", text_body="t")
     assert msg["List-Unsubscribe"] is None
     assert msg["List-Unsubscribe-Post"] is None

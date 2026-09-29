@@ -25,8 +25,9 @@ governs, never under the release that found it.
 
 ## Current state
 
-Backend **`v2.23.1`** is the newest tag (2026-09-29): nightly backups are
-written owner-only (`backup.sh` under `umask 077`), pyjwt 2.14.0
+Backend **`v2.23.1`** is the newest tag (2026-09-29): every email's From was
+RFC 5322 group syntax and none had a Date or Message-ID (§Email); nightly
+backups are written owner-only (`backup.sh` under `umask 077`); pyjwt 2.14.0
 (CVE-2026-102274) and one malformed key no longer fails a provider's whole JWKS;
 the rest is code-scanning cleanup. **`v2.23.0`** (2026-09-28): a share's expiry clock and
 its recipient mail start when its files can be downloaded; no share expires
@@ -118,7 +119,7 @@ record.
 | v2.22.0 | `202609280002` `share_external_recipients.send_link` | - | - (the link mail to an address without an account is the sender's per-share `email_external_link`, default true, and no longer follows `notify_recipients`; `external_recipients_emailed` on the share payload) |
 | v2.22.1 | - | - | - |
 | v2.23.0 | `202609280003` `shares.expires_in_sec` + `pending_added_notice` + `upload_batch_done` | - | - (behaviour: the recipient mail - and the link mail to addresses without an account - now waits for the virus scan, not just the upload; a preset expiry counts from ready; `expire_files` never expires a share with a live upload. New optional `expires_in_sec` on `POST /api/shares`, on the share, list and public payloads; `expires_at` is null while it is set) |
-| v2.23.1 | - | optional: `chmod 700 backups backups/20*/ && chmod 600 backups/20*/*` tightens backups taken before (new ones are owner-only; `backup.sh` reaches a host with its checkout, which the updater fast-forwards where it can) | - |
+| v2.23.1 | - | optional: `chmod 700 backups backups/20*/ && chmod 600 backups/20*/*` tightens backups taken before (new ones are owner-only; `backup.sh` reaches a host with its checkout, which the updater fast-forwards where it can) | - (behaviour: every mail's From is quoted, and it carries Date, Message-ID, Auto-Submitted and X-Auto-Response-Suppress; the `ops_alert` subject carries its reason) |
 
 **Ten endpoints require the caller's own `password` in the body**: the v2.9.0
 re-auth gates `/api/admin/backup/export`, `/api/admin/backup/import` (form
@@ -405,6 +406,10 @@ given. Failures are logged, never propagated. Categories + defaults:
 its `run_after_commit` flush with a `run_after_rollback` clear - without the
 latter a rolled-back batch is silently adopted by the next dispatch on that
 session.
+
+- **Every mail's headers are set in `utils/emailing.py::build_message`, and From goes through `formataddr`, never an f-string.** The product's own name has a colon, and an unquoted `file:Heron <x@y>` is RFC 5322 GROUP syntax: every mail shipped as `From: file:Heron <…>;`, with no Date and no Message-ID, until v2.23.1 - Gmail rejects that, rspamd scores it, DMARC cannot take a domain from it. `build_message` also sets `Auto-Submitted: auto-generated` + `X-Auto-Response-Suppress: All` on every mail and strips the `MIME-Version` that `add_alternative` stamps on sub-parts. `test_email_headers.py` asserts on the RE-PARSED bytes; the object's own header view looks plausible either way.
+- **`render_email` empties whitespace-only lines in the HTML.** Every template's layout left some (indented block tags, the optional footer lines), and quoted-printable spells each as a visible `=20` line, which reads as table rows that rendered empty. Pinned for every slug and locale in `test_email_template_matrix.py`.
+- **`_resolve_subject` renders a key the payload lacks as EMPTY, never the raw template.** It returned the literal `{braces}` on a KeyError; it now trims what a missing field leaves (a trailing `: `, an empty `()`). `ops_alert`'s subject carries `{reason}`, which all eight senders pass.
 
 ### Unsubscribe: THREE tiers, not two
 

@@ -4,10 +4,15 @@
 {% endif %}{% if type %}Type:    {{ type }}
 {% endif %}{% if subject %}Subject: {{ subject }}
 {% endif %}{% if count %}Count:   {{ count }}
+{% endif %}{% if target_tag %}Release: {{ target_tag }}
+{% endif %}{% if via %}Trigger: {{ via }}
+{% endif %}{% if actor %}By:      {{ actor }}
 {% endif %}{% if error %}Error:   {{ error }}
 {% endif %}{% if detail %}Detail:  {{ detail }}
 {% endif %}{% if at %}When:    {{ at|dt_locale(locale) }}
-{% endif %}
-Review it in the admin area (System, Audit log, or the relevant page).
+{% endif %}Version: {{ app_version }}
+
+Open the admin area: {{ app_url }}/admin/system
+Depending on the alert, the detail may be in the audit log or on the relevant page.
 
 - {{ app_name }}

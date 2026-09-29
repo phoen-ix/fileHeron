@@ -4,10 +4,15 @@
 {% endif %}{% if type %}Typ:          {{ type }}
 {% endif %}{% if subject %}Betreff:      {{ subject }}
 {% endif %}{% if count %}Anzahl:       {{ count }}
+{% endif %}{% if target_tag %}Release:      {{ target_tag }}
+{% endif %}{% if via %}Auslöser:     {{ via }}
+{% endif %}{% if actor %}Durch:        {{ actor }}
 {% endif %}{% if error %}Fehler:       {{ error }}
 {% endif %}{% if detail %}Detail:       {{ detail }}
 {% endif %}{% if at %}Zeitpunkt:    {{ at|dt_locale(locale) }}
-{% endif %}
-Im Admin-Bereich ansehen (System, Audit-Log oder die betreffende Seite).
+{% endif %}Version:      {{ app_version }}
+
+Admin-Bereich öffnen: {{ app_url }}/admin/system
+Je nach Warnung stehen die Details im Audit-Log oder auf der betreffenden Seite.
 
 - {{ app_name }}

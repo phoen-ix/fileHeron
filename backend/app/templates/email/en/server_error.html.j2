@@ -13,17 +13,18 @@
     {{ ui.headline("A server error occurred") }}
   {% endif %}
   {% call ui.specs() %}
-    {% if source in ("worker", "ops") %}{{ ui.spec("task", job_name) }}{% else %}{{ ui.spec("request", method ~ " " ~ path) }}{% endif %}
-    {% if status_code %}{{ ui.spec("status", status_code ~ " " ~ code) }}{% else %}{{ ui.spec("code", code) }}{% endif %}
-    {% if exception_type %}{{ ui.spec("error", exception_type ~ (" - " ~ message if message else "")) }}{% elif message %}{{ ui.spec("detail", message) }}{% endif %}
-    {{ ui.spec("when", at|dt_locale(locale)) }}
-    {% if ip %}{{ ui.spec("from ip", ip) }}{% endif %}
-    {% if request_id %}{{ ui.spec("request id", request_id) }}{% endif %}
-    {% if user_id %}{{ ui.spec("user", "#" ~ user_id ~ (" (via " ~ auth_via ~ ")" if auth_via else "")) }}{% endif %}
-    {{ ui.spec("occurrences", occurrence_count) }}
-  {% endcall %}
+    {%- if source in ("worker", "ops") %}{{ ui.spec("task", job_name) }}{% else %}{{ ui.spec("request", method ~ " " ~ path) }}{% endif %}
+    {%- if status_code %}{{ ui.spec("status", status_code ~ " " ~ code) }}{% else %}{{ ui.spec("code", code) }}{% endif %}
+    {%- if exception_type %}{{ ui.spec("error", exception_type ~ (" - " ~ message if message else "")) }}{% elif message %}{{ ui.spec("detail", message) }}{% endif %}
+    {{- ui.spec("when", at|dt_locale(locale)) }}
+    {%- if ip %}{{ ui.spec("from ip", ip) }}{% endif %}
+    {%- if request_id %}{{ ui.spec("request id", request_id) }}{% endif %}
+    {%- if user_id %}{{ ui.spec("user", "#" ~ user_id ~ (" (via " ~ auth_via ~ ")" if auth_via else "")) }}{% endif %}
+    {{- ui.spec("occurrences", occurrence_count) }}
+    {{- ui.spec("version", app_version) }}
+  {%- endcall %}
   {% if suppressed_count and suppressed_since %}
     {% call ui.note() %}{{ suppressed_count }} earlier occurrence(s) suppressed since {{ suppressed_since|dt_locale(locale) }}.{% endcall %}
   {% endif %}
-  {% call ui.note(gap=0) %}Manage these alerts under <strong>/admin/settings/error-alerts</strong>.{% endcall %}
+  {% call ui.note(gap=0) %}Manage these alerts under <strong>{{ app_url }}/admin/settings/error-alerts</strong>.{% endcall %}
 {% endblock %}

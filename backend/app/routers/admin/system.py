@@ -422,6 +422,9 @@ def _dispatch_ops_to_admins(db: Session, payload: dict, link_url: str) -> None:
     not just the admin who clicked. Mirrors cron_tracker._maybe_alert_admins."""
     from ...models.notification import NotificationCategory
     from ...services.notification import dispatch
+    # The mail renders `at` as "when"; without it an update alert carried no
+    # time at all.
+    payload = {**payload, "at": payload.get("at") or utc_now().isoformat()}
     admins = (
         db.query(User)
         .filter(User.role == UserRole.admin, User.is_disabled.is_(False))
@@ -569,6 +572,7 @@ def apply_update(
         payload={
             "reason": "update_triggered",
             "actor_id": admin.id,
+            "actor": admin.display_name or admin.email,
             "target_tag": payload.target_tag,
             "job_id": result["job_id"],
         },
@@ -607,6 +611,7 @@ def apply_rollback(
         payload={
             "reason": "rollback_triggered",
             "actor_id": admin.id,
+            "actor": admin.display_name or admin.email,
             "target_tag": result.get("target_tag"),
             "job_id": result["job_id"],
         },

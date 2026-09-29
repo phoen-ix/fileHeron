@@ -33,6 +33,7 @@ from ..config import settings
 from ..database import SessionLocal
 from ..models.user import Locale
 from ..utils.emailing import SmtpConfig, send_email
+from ..version import VERSION
 from . import richtext
 
 DEFAULT_TIMEZONE = "UTC"
@@ -128,6 +129,8 @@ def _render(
         app_url=app_url if app_url is not None else settings.APP_URL,
         locale=code,
         site_timezone=site_timezone or DEFAULT_TIMEZONE,
+        # The operator's first question about an alert is which release said it.
+        app_version=VERSION,
     )
 
 
@@ -140,10 +143,19 @@ def _resolve_subject(
     template = book.get(slug)
     if template is None:
         template = (_SUBJECTS.get("en") or {}).get(slug, slug)
+    values = _MissingIsEmpty({**ctx, "app_name": app_name or settings.APP_NAME})
     try:
-        return template.format(**ctx, app_name=app_name or settings.APP_NAME)
-    except (KeyError, IndexError):
+        subject = template.format_map(values)
+    except (IndexError, ValueError):
         return template
+    # A field the payload did not carry renders empty rather than sending the
+    # template's literal `{braces}`; tidy what that leaves behind.
+    return re.sub(r"\s*(?::|\(\))\s*$", "", subject.replace(" ()", "")).strip()
+
+
+class _MissingIsEmpty(dict):
+    def __missing__(self, key: str) -> str:
+        return ""
 
 
 def _sub(text: str, mapping: dict[str, str]) -> str:
@@ -472,7 +484,18 @@ def render_email(
 
     if manage_url:
         text = _append_text_footer(text, manage_url, unsub_url, code)
+    if html:
+        html = _WHITESPACE_ONLY_LINE.sub("", html)
     return subject, text, html
+
+
+# The layout's optional footer lines and every template's indented block tags
+# leave lines holding nothing but indentation. Invisible when rendered, but
+# quoted-printable spells each one as a visible `=20` line in the raw mail, which
+# reads as rows that rendered empty. Emptying them changes no layout - HTML
+# ignores the whitespace, and inside a pre-wrap quote a line of spaces and an
+# empty line look the same.
+_WHITESPACE_ONLY_LINE = re.compile(r"(?m)^[ \t]+$")
 
 
 # -------------------------------------------------------------------------

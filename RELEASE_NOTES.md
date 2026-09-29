@@ -1,7 +1,8 @@
 # file:Heron v2.23.1
 
-**Nightly backups can now be read only by their owner**, and **one malformed
-key at your identity provider no longer breaks SSO sign-in.**
+**Emails from file:Heron are no longer malformed**, **nightly backups can now
+be read only by their owner**, and **one malformed key at your identity
+provider no longer breaks SSO sign-in.**
 
 **No migration, no default move.** One optional host step (below). No desktop
 client release.
@@ -10,6 +11,18 @@ client release.
 
 ## What changes
 
+- **Emails:** every email file:Heron sent had a broken sender line. The colon
+  in "file:Heron" made `From:` read as a group of addresses rather than one
+  sender. The emails also had no Date and no Message-ID. Some mail servers,
+  Gmail among them, reject mail like that, and spam filters score it down.
+  Emails now carry a correct sender, a date and a message ID, and mark
+  themselves as automatic so out-of-office replies do not answer them. This
+  covers every email: sign-in and password mails, share notifications,
+  alerts.
+- **Operations alerts** name their reason in the subject, so they no longer
+  all land in one conversation. An update or rollback alert now shows the
+  release, who started it, when, and the running version. The plain-text
+  part links to the admin area like the HTML part does.
 - `scripts/backup.sh` now creates each backup folder as 0700 and its files as
   0600, like the backups the updater takes before an update. Until now
   `db.sql` - every password hash, every email address and the encrypted

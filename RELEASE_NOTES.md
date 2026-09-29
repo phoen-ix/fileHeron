@@ -1,3 +1,43 @@
+# file:Heron v2.23.2
+
+**Confirming your password now happens in a popup**, the way the Update button
+already did, instead of in a password field on the page.
+
+**No migration, no default move, no host step.** No desktop client release.
+
+---
+
+## What changes
+
+Eight actions ask for your own password before they run. Each opened a
+password field inside the page; they now all open the same popup, like
+**Update** does:
+
+- turning automatic updates on, or changing them while they are on;
+- exporting and importing a configuration backup. For import, the popup is
+  also the warning: the separate "are you sure" dialog and the password are
+  now one step;
+- creating an API token (your own, or one for another user);
+- adding a passkey. After the password, your browser's own passkey prompt
+  follows as before;
+- erasing a user (the last step);
+- testing SMTP or IMAP against a different server while using the saved
+  password.
+
+A wrong password is shown inside the popup, which stays open. **Esc** or
+**Cancel** closes it.
+
+Unchanged: signing in, changing your password or email address, and the
+two-factor pages that also ask for a code.
+
+---
+
+## Upgrading
+
+Click **Update**, or let automatic updates install it: it is a patch release.
+
+---
+
 # file:Heron v2.23.1
 
 **Emails from file:Heron are no longer malformed**, **nightly backups can now

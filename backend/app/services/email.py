@@ -149,8 +149,14 @@ def _resolve_subject(
     except (IndexError, ValueError):
         return template
     # A field the payload did not carry renders empty rather than sending the
-    # template's literal `{braces}`; tidy what that leaves behind.
-    return re.sub(r"\s*(?::|\(\))\s*$", "", subject.replace(" ()", "")).strip()
+    # template's literal `{braces}`; tidy what that leaves behind. String ops,
+    # not a regex: the subject holds user text, and `\s*...\s*$` backtracks
+    # quadratically over a long run of spaces (CodeQL py/polynomial-redos).
+    tidy = subject.replace(" ()", "").strip()
+    for tail in (":", "()"):
+        if tidy.endswith(tail):
+            tidy = tidy[: -len(tail)].rstrip()
+    return tidy
 
 
 class _MissingIsEmpty(dict):

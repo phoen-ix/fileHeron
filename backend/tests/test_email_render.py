@@ -70,6 +70,24 @@ def test_an_update_alert_says_what_who_when_and_which_version(locale):
     assert "https://files.example.org/admin/system" in text
 
 
+def test_a_missing_subject_field_leaves_no_colon_or_empty_brackets():
+    ops = email_svc._resolve_subject("en", "ops_alert", {})
+    err = email_svc._resolve_subject("en", "server_error", {})
+    assert not ops.endswith(":") and "{" not in ops
+    assert "()" not in err and "{" not in err
+
+
+def test_subject_tidying_is_linear_in_user_text():
+    """The tidy-up was a `\\s*...\\s*$` regex over a subject that holds user
+    text - quadratic on a long run of spaces (CodeQL py/polynomial-redos)."""
+    import time
+
+    started = time.monotonic()
+    subject = email_svc._resolve_subject("en", "ops_alert", {"reason": " " * 200_000 + "x"})
+    assert time.monotonic() - started < 1.0
+    assert subject.endswith("x")
+
+
 def test_render_email_inbound_message_renders_de():
     payload = {"sender": "a@x.com", "subject": "Hi there", "classification": "normal"}
     subject, text, _html = email_svc.render_email("de", "inbound_message", payload)

@@ -25,7 +25,9 @@ governs, never under the release that found it.
 
 ## Current state
 
-Backend **`v2.23.0`** is the newest tag (2026-09-28): a share's expiry clock and
+Backend **`v2.23.1`** is the newest tag (2026-09-29): nightly backups are
+written owner-only (`backup.sh` under `umask 077`); the rest is code-scanning
+cleanup. **`v2.23.0`** (2026-09-28): a share's expiry clock and
 its recipient mail start when its files can be downloaded; no share expires
 during a live upload. **`v2.22.1`** (same day): public links are no
 longer described as "shown once" - the share page always shows them again.
@@ -49,14 +51,13 @@ audit on three anyio CVEs; tags are immutable, so the same commits shipped as
 v2.17.1 plus the anyio bump). **v2.17.1 shipped a sidebar showing nothing but
 "Overview"** (a `v-if` on the Overview link captured the categories' `v-else`;
 no test mounted AdminLayout); v2.17.2 is that one-line fix plus
-`tests/components/AdminLayout.test.ts`. **The reference host runs v2.20.0**
-(in-app update 2026-09-26 17:38 from v2.19.2, 37 s to `healthy`, no warnings;
-backend stop 7.0 s with the 5 s drain bound (11.1 s before it existed), API
-down ~14 s; the shim recreate took **0.32 s** - the first update to stop a
-shim that traps SIGTERM, against 10.4 s the update before). The v2.19.0 update earlier that day synced infra:
-db/redis/clamav on `mariadb:12.3.3` / `redis:8.10.2` / `clamav:1.5.4`, API
-down ~70 s. The default moves of v2.16.0 and v2.19.0 are
-live there; v2.17.x, v2.18.0, v2.19.1/.2 and v2.20.0 move no default.
+`tests/components/AdminLayout.test.ts`. **The reference host runs v2.23.0**
+(in-app update 2026-09-29 05:06 UTC from v2.22.0, 41 s to `healthy`, no
+warnings, pre-update backup taken); v2.23.1's `backup.sh` is already live there
+from the working tree. Its infra has been on `mariadb:12.3.3` /
+`redis:8.10.2` / `clamav:1.5.4` since the v2.19.0 update (API down ~70 s). The
+default moves of v2.16.0 and v2.19.0 are live there; v2.17.x, v2.18.0 and
+v2.19.1 through v2.23.1 move no default.
 `data/updater/rollback_target.json` holds the version BEFORE last, not the
 running one. Images and working tree can diverge without any deploy - see §Ops
 on which half of a fix is live.
@@ -116,6 +117,7 @@ record.
 | v2.22.0 | `202609280002` `share_external_recipients.send_link` | - | - (the link mail to an address without an account is the sender's per-share `email_external_link`, default true, and no longer follows `notify_recipients`; `external_recipients_emailed` on the share payload) |
 | v2.22.1 | - | - | - |
 | v2.23.0 | `202609280003` `shares.expires_in_sec` + `pending_added_notice` + `upload_batch_done` | - | - (behaviour: the recipient mail - and the link mail to addresses without an account - now waits for the virus scan, not just the upload; a preset expiry counts from ready; `expire_files` never expires a share with a live upload. New optional `expires_in_sec` on `POST /api/shares`, on the share, list and public payloads; `expires_at` is null while it is set) |
+| v2.23.1 | - | optional: `chmod 700 backups backups/20*/ && chmod 600 backups/20*/*` tightens backups taken before (new ones are owner-only; `backup.sh` reaches a host with its checkout, which the updater fast-forwards where it can) | - |
 
 **Ten endpoints require the caller's own `password` in the body**: the v2.9.0
 re-auth gates `/api/admin/backup/export`, `/api/admin/backup/import` (form

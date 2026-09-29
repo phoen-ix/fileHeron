@@ -1,3 +1,47 @@
+# file:Heron v2.23.1
+
+**Nightly backups can now be read only by their owner.** Until now any account
+on the server could read the database dump inside each nightly backup.
+
+**No migration, no default move.** One optional host step (below). No desktop
+client release.
+
+---
+
+## What changes
+
+- `scripts/backup.sh` now creates each backup folder as 0700 and its files as
+  0600, like the backups the updater takes before an update. Until now
+  `db.sql` - every password hash, every email address and the encrypted
+  secrets - and `files.tar.gz` were 0644 in a 0755 folder, so any local
+  account on the server could read them.
+- If the updater has to create the `backups/` folder itself, it now creates it
+  0700 instead of 0755.
+- Code-scanning cleanup: the remaining findings were in test code, or turned
+  out not to be defects. Nothing else changes in how file:Heron behaves.
+
+The in-app update brings the new `backup.sh` with the checkout wherever it can
+update the checkout; where it cannot, the update log says so and names the
+command. The next nightly backup after that is owner-only.
+
+## Backups taken before this release
+
+Older backups keep their old modes. To tighten them, run this in the install
+directory as the user that owns `backups/`:
+
+```
+chmod 700 backups backups/20*/
+chmod 600 backups/20*/*
+```
+
+---
+
+## Upgrading
+
+Click **Update**, or let automatic updates install it: it is a patch release.
+
+---
+
 # file:Heron v2.23.0
 
 **A big upload no longer fails because its share expired, a share's expiry

@@ -1,0 +1,20 @@
+# Read by the init step of .github/workflows/codeql.yml. The query suite stays
+# `security-extended` (set in the workflow, which takes precedence); this file
+# only removes what cannot apply here.
+name: fileHeron CodeQL config
+
+query-filters:
+  # Log injection (CWE-117) is forging a log line by putting a newline in a
+  # logged value. Every logging call in backend/app ends in the one root handler
+  # utils/logger.py::configure_logging installs, in both processes that take
+  # remote input (app/main.py's lifespan, app/workers/worker.py), and that
+  # handler writes each record as one JSON object - a newline in a value is
+  # escaped inside a JSON string, so no value can start a second line. The query
+  # does not model that, so it flagged 13 call sites, and each one came back
+  # under a new alert number whenever its line moved.
+  # Pinned by tests/test_structured_logging.py::
+  # test_a_newline_in_a_logged_value_cannot_start_a_second_line. If that test
+  # ever has to change because a plain-text handler is wanted, remove this
+  # exclusion in the same commit.
+  - exclude:
+      id: py/log-injection

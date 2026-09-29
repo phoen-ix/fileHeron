@@ -17,6 +17,7 @@ of the thing it is supposed to check.
 """
 from __future__ import annotations
 
+import io
 import json
 import logging
 import re
@@ -113,3 +114,37 @@ def test_configure_logging_strips_arqs_own_handler(logging_state):
 
     assert arq.handlers == [], "arq's own handler survived - worker events will log twice"
     assert arq.propagate is True, "arq records must still reach the single root JSON handler"
+
+
+def test_a_newline_in_a_logged_value_cannot_start_a_second_line(logging_state):
+    """Why CodeQL's py/log-injection is switched off
+    (.github/codeql/codeql-config.yml): every logging call in backend/app ends
+    in the one root JSON handler, which escapes a newline inside a JSON string,
+    so a user-supplied value cannot forge a line. Emitted through a real logger
+    and captured from the installed handler, not the formatter alone - a
+    plain-text handler added beside it fails here, and then the check has to
+    come back on."""
+    configure_logging()
+    captured = []
+    for handler in logging.getLogger().handlers:
+        assert isinstance(handler, logging.StreamHandler), handler
+        buf = io.StringIO()
+        handler.setStream(buf)
+        captured.append(buf)
+
+    hostile = 'x\n{"level": "CRITICAL", "message": "forged"}\r\ny'
+    log = logging.getLogger("fileheron.test_log_injection")
+    log.warning("provider=%s", hostile, extra={"target_id": hostile})
+    try:
+        raise ValueError(hostile)
+    except ValueError:
+        log.exception("handler %s failed", hostile)
+
+    for buf in captured:
+        lines = buf.getvalue().splitlines()
+        assert len(lines) == 2, f"two log calls must give two lines, got {lines!r}"
+        warning, error = (json.loads(line) for line in lines)
+        assert warning["message"] == f"provider={hostile}"
+        assert warning["target_id"] == hostile
+        assert error["message"] == f"handler {hostile} failed"
+        assert hostile in error["exc_info"]

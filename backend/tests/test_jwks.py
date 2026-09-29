@@ -159,3 +159,67 @@ def test_reset_cache_clears(monkeypatch):
     jwks_svc._cache["x"] = (0.0, {})
     jwks_svc._reset_cache()
     assert jwks_svc._cache == {}
+
+
+# --- CVE-2026-102274: one malformed key failed the whole set -----------------
+
+
+def _serve_jwks(monkeypatch, doc: dict) -> None:
+    """Run the real `_fetch_jwks` - streaming, byte cap, per-key parse - against
+    a MockTransport answering with `doc`. The SSRF guard resolves DNS, so it is
+    stubbed; it has its own tests."""
+    import httpx
+
+    real_client = httpx.AsyncClient
+
+    def client(*a, **kw):
+        kw["transport"] = httpx.MockTransport(lambda _req: httpx.Response(200, json=doc))
+        return real_client(*a, **kw)
+
+    monkeypatch.setattr(jwks_svc, "assert_public_http_url", lambda *a, **kw: None)
+    monkeypatch.setattr(jwks_svc.httpx, "AsyncClient", client)
+
+
+def _good_jwk(kid: str) -> dict:
+    import json
+
+    from jwt.algorithms import RSAAlgorithm
+
+    from tests._oidc_helpers import _key
+
+    return {**json.loads(RSAAlgorithm.to_jwk(_key().public_key())), "kid": kid, "use": "sig"}
+
+
+@pytest.mark.asyncio
+async def test_a_malformed_rsa_key_is_skipped_and_the_rest_load(monkeypatch):
+    """Real key material: an empty modulus next to a usable key. pyjwt 2.13.0
+    raised cryptography's plain ValueError here, past the except, so the whole
+    fetch failed and so did every sign-in through the provider."""
+    bad = {"kty": "RSA", "kid": "bad", "n": "", "e": "AQAB"}
+    _serve_jwks(monkeypatch, {"keys": [bad, _good_jwk("good")]})
+
+    keys = await jwks_svc._fetch_jwks("https://idp.example.com/jwks")
+
+    assert set(keys) == {"good"}
+
+
+@pytest.mark.asyncio
+async def test_a_plain_valueerror_from_one_key_does_not_fail_the_set(monkeypatch):
+    """Pins the per-key `except ValueError` itself, whatever the installed pyjwt
+    wraps: a release that lets a ValueError through again must not fail the
+    set."""
+    import jwt
+
+    real_pyjwk = jwt.PyJWK
+
+    def pyjwk(raw, *a, **kw):
+        if raw.get("kid") == "bad":
+            raise ValueError("n must be >= 3.")
+        return real_pyjwk(raw, *a, **kw)
+
+    monkeypatch.setattr(jwt, "PyJWK", pyjwk)
+    _serve_jwks(monkeypatch, {"keys": [{"kty": "RSA", "kid": "bad"}, _good_jwk("good")]})
+
+    keys = await jwks_svc._fetch_jwks("https://idp.example.com/jwks")
+
+    assert set(keys) == {"good"}

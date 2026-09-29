@@ -1,7 +1,7 @@
 # file:Heron v2.23.1
 
-**Nightly backups can now be read only by their owner.** Until now any account
-on the server could read the database dump inside each nightly backup.
+**Nightly backups can now be read only by their owner**, and **one malformed
+key at your identity provider no longer breaks SSO sign-in.**
 
 **No migration, no default move.** One optional host step (below). No desktop
 client release.
@@ -17,6 +17,11 @@ client release.
   account on the server could read them.
 - If the updater has to create the `backups/` folder itself, it now creates it
   0700 instead of 0755.
+- **SSO:** if your identity provider's published key list contained one key
+  file:Heron could not read, every sign-in through that provider failed. That
+  key is now skipped (and logged) and the others still work. The JWT library
+  is updated to pyjwt 2.14.0, which fixes the same problem and other security
+  issues (CVE-2026-102274).
 - Code-scanning cleanup: the remaining findings were in test code, or turned
   out not to be defects. Nothing else changes in how file:Heron behaves.
 

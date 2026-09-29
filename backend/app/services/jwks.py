@@ -87,9 +87,12 @@ async def _fetch_jwks(jwks_uri: str) -> dict[str, jwt.PyJWK]:
             # OIDC IdPs in the wild always set kid; skip any rogue
             # entry rather than guessing the binding.
             continue
+        # ValueError too: pyjwt before 2.14.0 let cryptography's plain
+        # ValueError through for a malformed RSA key (CVE-2026-102274), and one
+        # bad key then failed the whole set - every sign-in via this provider.
         try:
             keys[kid] = jwt.PyJWK(raw)
-        except (jwt.InvalidKeyError, jwt.PyJWKError) as e:
+        except (jwt.InvalidKeyError, jwt.PyJWKError, ValueError) as e:
             logger.warning("JWKS skipping unparseable key kid=%s: %s", kid, e)
     return keys
 

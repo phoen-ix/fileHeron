@@ -26,8 +26,9 @@ governs, never under the release that found it.
 ## Current state
 
 Backend **`v2.23.1`** is the newest tag (2026-09-29): nightly backups are
-written owner-only (`backup.sh` under `umask 077`); the rest is code-scanning
-cleanup. **`v2.23.0`** (2026-09-28): a share's expiry clock and
+written owner-only (`backup.sh` under `umask 077`), pyjwt 2.14.0
+(CVE-2026-102274) and one malformed key no longer fails a provider's whole JWKS;
+the rest is code-scanning cleanup. **`v2.23.0`** (2026-09-28): a share's expiry clock and
 its recipient mail start when its files can be downloaded; no share expires
 during a live upload. **`v2.22.1`** (same day): public links are no
 longer described as "shown once" - the share page always shows them again.

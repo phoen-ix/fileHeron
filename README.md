@@ -14,6 +14,20 @@ password + download-count limit. Single organisation, three flat roles (admin /
 employee / client); the same UI serves all three, with admin-only links hidden for
 the rest.
 
+<p align="center">
+  <img src="docs/screenshots/share-page.png" alt="A share's page: its files with their antivirus verdicts and preview, download and delete actions, and the share's public link" width="880">
+</p>
+
+<details>
+<summary>The same page in German</summary>
+<p align="center">
+  <img src="docs/screenshots/share-page.de.png" alt="The same share page with the interface in German" width="880">
+</p>
+</details>
+
+<sub>Every screenshot here is of a seeded demo organisation, taken by the docs tour in
+[`e2e/docs/`](e2e/docs/) - see [CONTRIBUTING.md](CONTRIBUTING.md#docs-screenshots).</sub>
+
 > **Naming.** The display name is **file:Heron** (with the colon). The repository
 > directory, container names, package names, code identifiers, and env-var names all
 > use **fileHeron** without the colon - filesystems and most tools forbid `:`.
@@ -138,6 +152,8 @@ Audience: anyone with an account - admin, employee, or client.
 
 ## Logging in
 
+<img src="docs/screenshots/login.png" alt="The sign-in page" width="800">
+
 Open the app URL and you land on **Login**. Up to three ways to authenticate,
 depending on what the admin configured:
 
@@ -158,6 +174,8 @@ deduplicated to once per 6 h). After login you land on your **default landing pa
 
 ## Sending a share (`/share/new`)
 
+<img src="docs/screenshots/share-new.png" alt="The new-share form: three files queued, a subject and message, a person and a group as recipients, and a seven-day expiry" width="640">
+
 1. **Pick recipients** - search shows who you may send to (employees see all employees + connected clients; clients see connected employees + any company-inbox group). Pick a **group** to address every current member (membership changes retroactively change who can read it).
 2. **Drop files** - under 100 MB go via one multipart POST; larger use resumable TUS (close the tab and resume later from the same browser). Total is capped by your quota.
 3. **Subject** (optional) - defaults to the first file's name.
@@ -171,6 +189,8 @@ Until the share can be sent, a list above **Create + send** says what is missing
 **Recipients without an account** (off by default; *Admin → Sharing → Public links → Recipients without an account*). When an admin turns it on, anyone allowed to create public links can type an address that matches no one and pick *Send a download link to …*. The form then asks **Email the download link to these addresses** (ticked by default): ticked, the address is emailed the share's public link once the files have landed (and, if the share needs approval, once it is approved); unticked, it is only recorded and you send the link yourself. This is separate from *Notify recipient(s) by email*, which covers recipients with an account. No account is created, and the link's password is never in the mail - pass it on yourself. Everyone emailed shares the one link and its download counter. Under the approval scope *outbound to clients*, such a share is held for approval. The addresses are shown on the share page (to you, admins and approvers) until the share ends; the daily cleanup then forgets them, and the mail log keeps the record of the send for its retention window. A second switch makes the form ask whether to also **invite** each address as a client account (unticked by default); the link goes out either way.
 
 ## Receiving a share (`/inbox`)
+
+<img src="docs/screenshots/inbox.png" alt="A client's inbox with two shares from an employee" width="800">
 
 The inbox lists shares addressed to you (directly or via a group). Per file you see a
 **Download** button (scanned clean), "Scan in progress" (`425`), "Quarantined"
@@ -192,6 +212,8 @@ the share's download budget.
 
 ## Managing your shares (`/outbox`)
 
+<img src="docs/screenshots/outbox.png" alt="The outbox filtered to every state, with active, revoked and expired shares" width="800">
+
 Click column headers to **sort**; **filter** by recipient/sender/state (default =
 active only)/free text; **group** by recipient or group. On a share's detail page:
 **Edit expiry**, **Expire now** (deletes bytes immediately), **Revoke**, **Add files**
@@ -199,6 +221,8 @@ active only)/free text; **group** by recipient or group. On a share's detail pag
 revoke).
 
 ## Public links (anonymous recipients)
+
+<img src="docs/screenshots/public-link.png" alt="What an anonymous recipient sees after unlocking a password-protected public link: the message, the files and the downloads left" width="800">
 
 The recipient opens `/d/{token}` - subject + file list, no login. A password prompts
 to unlock first (10 wrong tries in 15 min *from at least 3 different addresses*
@@ -306,6 +330,8 @@ exactly that text.
 
 ## Share approval (four-eyes)
 
+<img src="docs/screenshots/approvals.png" alt="The approvals queue with one share waiting for review" width="800">
+
 Optional, admin-controlled. When enabled, a new share enters **pending approval** -
 recipients aren't notified and can't access anything until an **approver** approves
 (or rejects with a reason). Approvers get an **Approvals** queue; senders see "pending"
@@ -331,6 +357,8 @@ that this policy would hold needs an admin (`409 APPROVAL_REQUIRED`); an
 approver whose own shares are exempt may still attach one to their own share.
 
 ## Account page (`/account`)
+
+<img src="docs/screenshots/account.png" alt="The account page with its section quick-nav" width="800">
 
 A single scrollable page (left quick-nav with scroll-spy):
 
@@ -362,7 +390,11 @@ A policy and the state it produces share one page as tabs (Quarantine: Files | A
 scanner; API tokens: Tokens | Policy; Blocked sources: Blocks & allowlist | Auto-block rules
 (Scan guard); Errors & alerts: Log | Alerts); every tab keeps its historical URL.
 
+<img src="docs/screenshots/admin-overview.png" alt="The admin overview: the task-grouped sidebar, the setting search, attention tiles, service status and every admin page" width="800">
+
 ## User management
+
+<img src="docs/screenshots/admin-users.png" alt="The admin user list: employees and clients with role, status, 2FA, storage and last sign-in" width="800">
 
 - **`/admin/users`** - paginated, role/status filter, search. **Invite** (one-time link, 24 h; optional initial groups; pre-flights `USER_EXISTS` / `INVITE_PENDING`) or **create directly** (set a password; account active immediately, for out-of-band hand-off).
 - **`/admin/users/:id`** - edit name/role/quota (NULL = unlimited)/disabled, plus three irreversible actions: **Force password reset** (one-time token), **Erase user (GDPR)** (hard-deletes files, anonymises the row, audits `user_erased`; two-step with a pre-flight count), and **Erasure receipt PDF**. The page also shows the user's **sessions** and **current files** (with per-file delete) and authoritative **storage** figure.

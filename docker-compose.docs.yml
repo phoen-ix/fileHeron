@@ -1,0 +1,23 @@
+# Docs-screenshot overlay: a THIRD file over docker-compose.e2e.yml, used by
+# .github/workflows/docs-screenshots.yml. It changes only who the seeded accounts
+# are, so the committed screenshots show the demo organisation the tour seeds
+# (e2e/docs/seed.ts) instead of the e2e fixtures:
+#
+#   COMPOSE_PROJECT_NAME=fileheron_docs docker compose \
+#     -f docker-compose.yml -f docker-compose.e2e.yml -f docker-compose.docs.yml up -d --build
+#
+# Tear down with the same three files and `down -v`. The mounts are the e2e
+# stack's, i.e. ./data of the checkout it runs from - never run this from a
+# directory whose data/ belongs to a live instance.
+services:
+  backend:
+    build:
+      args:
+        # The admin overview's status line shows it; the workflow passes the
+        # newest release tag so the screenshot does not read "0.0.0-dev".
+        FH_VERSION: ${DOCS_FH_VERSION:-0.0.0-dev}
+    environment:
+      # The tour renames this account "Anna Berger" and uses it as the admin.
+      ADMIN_BOOTSTRAP_EMAIL: anna.berger@heron-demo.example
+      # No seeded "E2E User" client in the users list.
+      TEST_ACCOUNT_EMAIL: ""

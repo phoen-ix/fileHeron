@@ -7,7 +7,8 @@ name: CI
 on:
   push:
     branches: [main]
-    # A prose-only push cannot break a test, and running the suite for one
+    # A prose-only push cannot break a test (nor can one that only swaps the
+    # README screenshots in docs/), and running the suite for one
     # buys nothing but a queue slot and, when the runner or GitHub itself is
     # having a bad day, a failure notification about a changelog edit. The
     # filter is on PUSH only: a PR still gets the full suite whatever it
@@ -18,6 +19,7 @@ on:
       - '**/*.md'
       - 'LICENSE'
       - '.gitignore'
+      - 'docs/**'
   pull_request: {}
   # Callable so server-release.yml can GATE a tag build on these exact jobs
   # rather than duplicating them. Before this, a release ran no tests at all:

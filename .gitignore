@@ -29,6 +29,11 @@ node_modules/
 .parcel-cache/
 .vite/
 
+# Playwright output (e2e suite + the docs tour's render-check screenshots)
+e2e/test-results/
+e2e/playwright-report/
+e2e/docs-tour-out/
+
 # Build artifacts (root + per-workspace)
 dist/
 backend/dist/

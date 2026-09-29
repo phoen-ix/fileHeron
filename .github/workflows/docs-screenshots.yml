@@ -1,0 +1,102 @@
+name: Docs screenshots
+
+# Regenerates the README screenshots (docs/screenshots/*.png): builds the stack
+# from source like e2e.yml, seeds the demo organisation (e2e/docs/seed.ts) and
+# runs the docs tour (e2e/playwright.docs.config.ts). The PNGs come back as the
+# `docs-screenshots` artifact - this workflow never commits. Unzip the artifact
+# into docs/screenshots/, look at the diff, and commit it yourself
+# (CONTRIBUTING.md "Docs screenshots").
+#
+# Manual only: screenshots are regenerated on purpose, when a page worth
+# showing has changed, not on every push - each regeneration adds ~2 MB of
+# PNGs to the history. The same tour runs as a render check in e2e.yml; that
+# artifact carries the e2e fixtures and is never the one to commit.
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-screenshots
+  cancel-in-progress: true
+
+jobs:
+  screenshots:
+    runs-on: ubuntu-latest
+    env:
+      COMPOSE_PROJECT_NAME: fileheron_docs
+      # Compose requires these (${VAR:?}); test-only values.
+      DB_ROOT_PASSWORD: docs-root-not-a-secret
+      DB_PASSWORD: docs-db-not-a-secret
+      JWT_SECRET: docs-jwt-secret-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      TUS_HOOK_SECRET: docs-tus-secret-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      APP_URL: http://localhost:8080
+      # docker-compose.docs.yml bootstraps this admin; the password is the one
+      # docker-compose.e2e.yml sets.
+      DOCS_ADMIN_EMAIL: anna.berger@heron-demo.example
+      DOCS_ADMIN_PASSWORD: AdminPass123!
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The tags, for the version the admin overview shows.
+          fetch-depth: 0
+
+      - name: Prepare data dirs (UID-1000-owned, as the containers write them)
+        run: |
+          mkdir -p data/files data/uploads data/quarantine data/updater
+          sudo chown -R 1000:1000 data/files data/uploads data/quarantine data/updater
+
+      - name: Build + start the stack
+        # No clamav (AV_SKIP reports "skipped" either way) and no updater-shim.
+        # Retry: Docker Hub base-image pulls intermittently fail from runners.
+        run: |
+          DOCS_FH_VERSION="$(git describe --tags --abbrev=0 --match 'v[0-9]*.[0-9]*.[0-9]*')"
+          export DOCS_FH_VERSION
+          echo "building as ${DOCS_FH_VERSION}"
+          for i in 1 2 3; do
+            docker compose -f docker-compose.yml -f docker-compose.e2e.yml -f docker-compose.docs.yml \
+              up -d --build db redis backend worker tusd frontend && exit 0
+            echo "::warning::build/up attempt $i failed (likely a Docker Hub hiccup); retrying in 20s"
+            sleep 20
+          done
+          echo "build/up failed after 3 attempts"; exit 1
+
+      - name: Wait for the stack to answer
+        run: |
+          for _ in $(seq 1 60); do
+            if curl -fsS http://localhost:8080/api/health >/dev/null 2>&1 \
+               && curl -fsS http://localhost:8080/ >/dev/null 2>&1; then
+              echo "stack ready"; exit 0
+            fi
+            sleep 5
+          done
+          echo "stack never became ready"; exit 1
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
+        with:
+          node-version: '24'
+
+      - name: Install Playwright
+        working-directory: e2e
+        run: |
+          npm ci --no-audit --no-fund
+          npx playwright install --with-deps chromium
+
+      - name: Run the docs tour
+        working-directory: e2e
+        run: npx playwright test -c playwright.docs.config.ts
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: docs-screenshots
+          path: docs/screenshots/
+          retention-days: 14
+
+      - name: Stack logs on failure
+        if: failure()
+        run: docker compose -f docker-compose.yml -f docker-compose.e2e.yml -f docker-compose.docs.yml logs --tail=300
+
+      - name: Tear down
+        if: always()
+        run: docker compose -f docker-compose.yml -f docker-compose.e2e.yml -f docker-compose.docs.yml down -v

@@ -19,12 +19,14 @@ on:
       - '**/*.md'
       - 'LICENSE'
       - '.gitignore'
+      - 'docs/**'
   pull_request:
     branches: [main]
     paths-ignore:
       - '**/*.md'
       - 'LICENSE'
       - '.gitignore'
+      - 'docs/**'
   schedule:
     - cron: '27 3 * * 1'  # weekly, Monday 03:27 UTC
 

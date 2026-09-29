@@ -9,6 +9,7 @@
     type AutoUpdateSettingsResponse,
     type UpdateAutoUpdateSettingsRequest,
   } from '@/api/admin'
+  import StepUpDialog from '@/components/StepUpDialog.vue'
   import { useApiError } from '@/composables/useApiError'
   import { useUiStore } from '@/stores/ui'
 
@@ -27,7 +28,8 @@
   const enabled = ref(false)
   const scope = ref<AutoUpdateScope>('patch')
   const minAgeHours = ref(24)
-  const password = ref('')
+  const stepUpOpen = ref(false)
+  const stepUpError = ref<string | null>(null)
 
   const changed = computed(
     () =>
@@ -61,24 +63,36 @@
     }
   }
 
-  async function onSave() {
+  function onSave() {
     if (!saved.value || !changed.value) return
+    if (needsPassword.value) {
+      stepUpError.value = null
+      stepUpOpen.value = true
+      return
+    }
+    void save()
+  }
+
+  async function save(password?: string) {
     saving.value = true
     errorMsg.value = null
+    stepUpError.value = null
     const payload: UpdateAutoUpdateSettingsRequest = {
       enabled: enabled.value,
       scope: scope.value,
       min_age_hours: minAgeHours.value,
     }
-    if (needsPassword.value) payload.password = password.value
+    if (password !== undefined) payload.password = password
     try {
       const { data } = await updateAutoUpdateSettings(payload)
       apply(data)
-      password.value = ''
+      stepUpOpen.value = false
       ui.pushToast(t('admin_auto_update.saved_toast'), 'success')
       emit('saved', data)
     } catch (err) {
-      errorMsg.value = describe(err)
+      // A wrong password belongs in the dialog the admin is looking at.
+      if (stepUpOpen.value) stepUpError.value = describe(err)
+      else errorMsg.value = describe(err)
     } finally {
       saving.value = false
     }
@@ -143,32 +157,29 @@
         {{ t('admin_auto_update.skipped', { tag: saved.skipped_tag }) }}
       </div>
 
-      <label v-if="needsPassword" class="fh-field">
-        <span class="fh-field-label">{{ t('admin_auto_update.password_label') }}</span>
-        <input
-          v-model="password"
-          class="fh-field-input"
-          type="password"
-          autocomplete="current-password"
-          required
-          data-testid="auto-update-password"
-        />
-        <span class="fh-field-help">{{ t('admin_auto_update.password_help') }}</span>
-      </label>
-
       <div v-if="errorMsg" class="fh-notice" role="alert" data-tone="error">{{ errorMsg }}</div>
 
       <div class="actions">
         <button
           type="submit"
           class="fh-btn"
-          :disabled="saving || !changed || (needsPassword && !password)"
+          :disabled="saving || !changed"
           data-testid="auto-update-save"
         >
           {{ saving ? t('common.loading') : t('common.save') }}
         </button>
       </div>
     </form>
+
+    <StepUpDialog
+      :open="stepUpOpen"
+      :message="t('admin_auto_update.password_help')"
+      :confirm-label="t('common.save')"
+      :busy="saving"
+      :error="stepUpError"
+      @confirm="save"
+      @cancel="stepUpOpen = false"
+    />
   </section>
 </template>
 

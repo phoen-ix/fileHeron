@@ -11,6 +11,7 @@
     type BackupSecretMode,
   } from '@/api/admin'
   import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
+  import StepUpDialog from '@/components/StepUpDialog.vue'
   import { useApiError } from '@/composables/useApiError'
   import { useUiStore } from '@/stores/ui'
   import { downloadBlob } from '@/utils/downloadBlob'
@@ -48,14 +49,19 @@
       secretMode.value !== 'passphrase' ||
       (passphrase.value.length >= MIN_PASSPHRASE && passphrase.value === passphraseConfirm.value),
   )
-  // The acting admin's own password, re-confirmed. Export reads secrets back out
-  // and import is destructive, so both re-auth - the gate the self-update routes
-  // have always had. Distinct from `passphrase`, which encrypts the artifact.
-  const adminPassword = ref('')
+  // The acting admin's own password, re-confirmed in a dialog. Export reads
+  // secrets back out and import is destructive, so both re-auth - the gate the
+  // self-update routes have always had. Distinct from `passphrase`, which
+  // encrypts the artifact.
+  const stepUp = ref<'export' | 'import' | null>(null)
+  const stepUpError = ref<string | null>(null)
 
-  const canExport = computed(
-    () => anySelected.value && passphraseOk.value && !exporting.value && !!adminPassword.value,
-  )
+  function openStepUp(kind: 'export' | 'import') {
+    stepUpError.value = null
+    stepUp.value = kind
+  }
+
+  const canExport = computed(() => anySelected.value && passphraseOk.value && !exporting.value)
 
   function onSecretModeChange() {
     if (secretMode.value !== 'passphrase') {
@@ -65,9 +71,10 @@
     }
   }
 
-  async function onExport() {
+  async function onExport(password: string) {
     if (!canExport.value) return
     exporting.value = true
+    stepUpError.value = null
     try {
       const categories = CATEGORY_KEYS.filter((k) => selected.value[k])
       const { data } = await exportConfigBackup({
@@ -75,13 +82,14 @@
         secret_mode: secretMode.value,
         passphrase: secretMode.value === 'passphrase' ? passphrase.value : null,
         include_env: includeEnv.value,
-        password: adminPassword.value,
+        password,
       })
+      stepUp.value = null
       const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '')
       downloadBlob(data as Blob, `fileheron-config-${stamp}.fhbackup.json`)
       ui.pushToast(t('admin_backup.export_done'), 'success')
     } catch (err) {
-      ui.pushToast(await describeBlob(err), 'error')
+      stepUpError.value = await describeBlob(err)
     } finally {
       exporting.value = false
     }
@@ -120,29 +128,24 @@
     }
   }
 
-  async function onImport() {
+  // The dialog is the confirmation too: it names what the import destroys, so
+  // the password and the "are you sure" are one step, not two dialogs.
+  async function onImport(password: string) {
     if (!importFile.value || !preview.value) return
-    const ok = await ui.confirm({
-      title: t('admin_backup.confirm_title'),
-      message: t('admin_backup.confirm_body', {
-        shares: preview.value.shares_to_invalidate,
-      }),
-      confirmLabel: t('admin_backup.confirm_cta'),
-      danger: true,
-    })
-    if (!ok) return
     importing.value = true
     importError.value = null
+    stepUpError.value = null
     try {
       const { data } = await importConfigBackup(
         importFile.value,
         importPassphrase.value || undefined,
-        adminPassword.value,
+        password,
       )
+      stepUp.value = null
       preview.value = data
       ui.pushToast(t('admin_backup.import_done'), 'success')
     } catch (err) {
-      importError.value = describe(err)
+      stepUpError.value = describe(err)
     } finally {
       importing.value = false
     }
@@ -220,24 +223,17 @@
         {{ t('admin_backup.plaintext_warning') }}
       </div>
 
-      <!-- Re-auth. This export can carry password hashes, decrypted TOTP seeds
-           and (with include_env) the instance's own secrets, so an admin
-           session alone is not enough to spend it. -->
-      <fieldset class="group">
-        <legend>{{ t('admin_backup.admin_password_label') }}</legend>
-        <input
-          v-model="adminPassword"
-          :aria-label="t('admin_backup.admin_password_ph')"
-          type="password"
-          class="fh-input"
-          autocomplete="current-password"
-          :placeholder="t('admin_backup.admin_password_ph')"
-        />
-        <p class="fh-field-help">{{ t('admin_backup.admin_password_help') }}</p>
-      </fieldset>
-
+      <!-- Re-auth happens in the dialog: this export can carry password hashes,
+           decrypted TOTP seeds and (with include_env) the instance's own
+           secrets, so an admin session alone is not enough to spend it. -->
       <div class="actions">
-        <button type="button" class="fh-btn" :disabled="!canExport" @click="onExport">
+        <button
+          type="button"
+          class="fh-btn"
+          :disabled="!canExport"
+          data-testid="backup-export"
+          @click="openStepUp('export')"
+        >
           {{ exporting ? t('common.loading') : t('admin_backup.export_cta') }}
         </button>
       </div>
@@ -343,31 +339,42 @@
         </div>
 
         <!-- Import replaces users, purges identities, invalidates every active
-             share and deletes the bytes. Same re-auth as export. -->
-        <fieldset v-if="preview.dry_run" class="group">
-          <legend>{{ t('admin_backup.admin_password_label') }}</legend>
-          <input
-            v-model="adminPassword"
-            :aria-label="t('admin_backup.admin_password_ph')"
-            type="password"
-            class="fh-input"
-            autocomplete="current-password"
-            :placeholder="t('admin_backup.admin_password_ph')"
-          />
-        </fieldset>
-
+             share and deletes the bytes. Same re-auth as export, in the dialog
+             that also states what it destroys. -->
         <div v-if="preview.dry_run" class="actions">
           <button
             type="button"
             class="fh-btn fh-btn--danger"
-            :disabled="importing || !adminPassword"
-            @click="onImport"
+            :disabled="importing"
+            data-testid="backup-import"
+            @click="openStepUp('import')"
           >
             {{ importing ? t('common.loading') : t('admin_backup.import_cta') }}
           </button>
         </div>
       </div>
     </section>
+
+    <StepUpDialog
+      :open="stepUp === 'export'"
+      :message="t('admin_backup.admin_password_help')"
+      :confirm-label="t('admin_backup.export_cta')"
+      :busy="exporting"
+      :error="stepUpError"
+      @confirm="onExport"
+      @cancel="stepUp = null"
+    />
+    <StepUpDialog
+      :open="stepUp === 'import'"
+      :title="t('admin_backup.confirm_title')"
+      :message="t('admin_backup.confirm_body', { shares: preview?.shares_to_invalidate ?? 0 })"
+      :confirm-label="t('admin_backup.confirm_cta')"
+      :busy="importing"
+      :error="stepUpError"
+      danger
+      @confirm="onImport"
+      @cancel="stepUp = null"
+    />
   </div>
 </template>
 

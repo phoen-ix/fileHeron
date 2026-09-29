@@ -12,6 +12,7 @@
   import { searchUsers } from '@/api/users'
   import ExpiryPicker from '@/components/ExpiryPicker.vue'
   import Pager from '@/components/Pager.vue'
+  import StepUpDialog from '@/components/StepUpDialog.vue'
   import { useApiError } from '@/composables/useApiError'
   import { useDebouncedSearch } from '@/composables/useDebouncedSearch'
   import { usePaginatedList } from '@/composables/usePaginatedList'
@@ -102,9 +103,10 @@
   const userSuggestions = ref<UserSearchItem[]>([])
   const selectedUser = ref<UserSearchItem | null>(null)
   const newName = ref('')
-  // Re-auth: this route mints a token for ANY user, so it is the one a stolen
-  // admin session would reach for.
-  const adminPassword = ref('')
+  // Re-auth, in a dialog: this route mints a token for ANY user, so it is the
+  // one a stolen admin session would reach for.
+  const stepUpOpen = ref(false)
+  const stepUpError = ref<string | null>(null)
   // Least-privilege, matching ApiTokenPanel.vue. These were "never expires" +
   // "unrestricted", so an admin who filled in name + user + password handed out a
   // permanent full-access credential acting as that user - and nothing revokes
@@ -174,13 +176,20 @@
     createError.value = null
   }
 
-  async function onCreateForUser() {
+  function openStepUp() {
     if (!selectedUser.value) {
       createError.value = t('admin_api_tokens.no_user_selected')
       return
     }
-    creating.value = true
     createError.value = null
+    stepUpError.value = null
+    stepUpOpen.value = true
+  }
+
+  async function onCreateForUser(password: string) {
+    if (!selectedUser.value) return
+    creating.value = true
+    stepUpError.value = null
     try {
       const { data } = await adminCreateApiToken({
         target_user_id: selectedUser.value.user_id,
@@ -188,10 +197,10 @@
         expires_at:
           tokenExpiresAt.value === null ? null : siteLocalIsoToUtcIso(tokenExpiresAt.value),
         scopes: scopeMode.value === 'full' ? null : selectedScopes.value,
-        password: adminPassword.value,
+        password,
       })
+      stepUpOpen.value = false
       plaintextResult.value = data
-      adminPassword.value = ''
       showCreateForm.value = false
       userQuery.value = ''
       selectedUser.value = null
@@ -201,7 +210,7 @@
       selectedScopes.value = []
       await load()
     } catch (err) {
-      createError.value = describe(err)
+      stepUpError.value = describe(err)
     } finally {
       creating.value = false
     }
@@ -236,7 +245,7 @@
     <hr class="fh-rule" />
 
     <!-- Create-on-behalf form -->
-    <form v-if="showCreateForm" class="create-form" @submit.prevent="onCreateForUser">
+    <form v-if="showCreateForm" class="create-form" @submit.prevent="openStepUp">
       <h2 class="form-h2">{{ t('admin_api_tokens.create_heading') }}</h2>
       <p class="fh-field-help">{{ t('admin_api_tokens.create_help') }}</p>
 
@@ -314,20 +323,6 @@
         {{ createError }}
       </div>
 
-      <!-- Re-auth. Minting a token on someone else's behalf is the strongest
-           form of this action, so it is gated like the self-service one. -->
-      <label class="fh-field">
-        <span class="fh-field-label">{{ t('api_tokens.password_label') }}</span>
-        <input
-          v-model="adminPassword"
-          class="fh-field-input"
-          type="password"
-          autocomplete="current-password"
-          :placeholder="t('api_tokens.password_placeholder')"
-          required
-        />
-      </label>
-
       <div class="form-actions">
         <button
           type="submit"
@@ -336,7 +331,6 @@
             creating ||
             !selectedUser ||
             !newName ||
-            !adminPassword ||
             (scopeMode === 'limited' && selectedScopes.length === 0)
           "
         >
@@ -347,6 +341,18 @@
         </button>
       </div>
     </form>
+
+    <!-- Re-auth. Minting a token on someone else's behalf is the strongest form
+         of this action, so it is gated like the self-service one. -->
+    <StepUpDialog
+      :open="stepUpOpen"
+      :message="t('api_tokens.password_help')"
+      :confirm-label="t('admin_api_tokens.create_submit')"
+      :busy="creating"
+      :error="stepUpError"
+      @confirm="onCreateForUser"
+      @cancel="stepUpOpen = false"
+    />
 
     <!-- Plaintext one-time disclosure -->
     <div v-if="plaintextResult" class="plaintext-box fh-rise">

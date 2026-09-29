@@ -19,6 +19,7 @@
     updateUser,
   } from '@/api/admin'
   import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
+  import StepUpDialog from '@/components/StepUpDialog.vue'
   import { useApiError } from '@/composables/useApiError'
   import { downloadBlob } from '@/utils/downloadBlob'
   import { useSiteDateFormat } from '@/composables/useSiteDateFormat'
@@ -64,9 +65,11 @@
   // on an SMTP-less instance the change could never complete (audit #2).
   const changeEmailOldLink = ref<string | null>(null)
 
-  const eraseStep = ref<0 | 1 | 2>(0)
-  // Re-auth for the irreversible step; cleared as soon as the call returns.
-  const erasePassword = ref('')
+  const eraseStep = ref<0 | 1>(0)
+  // Re-auth for the irreversible step, in a dialog that is also the final
+  // confirmation.
+  const eraseDialogOpen = ref(false)
+  const eraseError = ref<string | null>(null)
   const erasing = ref(false)
 
   const sessions = ref<AdminSessionRow[]>([])
@@ -325,13 +328,17 @@
       }
       return
     }
-    if (eraseStep.value === 1) {
-      eraseStep.value = 2
-      return
-    }
+    eraseError.value = null
+    eraseDialogOpen.value = true
+  }
+
+  async function onEraseConfirmed(password: string) {
+    if (!user.value) return
     erasing.value = true
+    eraseError.value = null
     try {
-      const { data } = await eraseUser(user.value.id, erasePassword.value)
+      const { data } = await eraseUser(user.value.id, password)
+      eraseDialogOpen.value = false
       receiptAuditId.value = data.audit_id
       ui.pushToast(
         t(
@@ -351,7 +358,10 @@
       }
       await router.push({ name: 'admin-users' })
     } catch (err) {
-      ui.pushToast(describe(err), 'error')
+      // A wrong password belongs in the dialog; anything after it closed (the
+      // receipt, the navigation) is a toast.
+      if (eraseDialogOpen.value) eraseError.value = describe(err)
+      else ui.pushToast(describe(err), 'error')
     } finally {
       erasing.value = false
     }
@@ -668,26 +678,11 @@
             }}
           </li>
         </ul>
-        <p v-if="eraseStep === 2" class="fh-notice" data-tone="error" role="alert">
-          {{ t('admin_user_detail.erase_step2') }}
-        </p>
-        <!-- Re-auth on the last step. Erasure is irreversible, and an admin
-             access token alone should not be enough to spend it - the same
-             reasoning the self-update routes have always applied. -->
-        <label v-if="eraseStep === 2" class="fh-field">
-          <span class="fh-field-label">{{ t('admin_user_detail.erase_password_label') }}</span>
-          <input
-            v-model="erasePassword"
-            type="password"
-            class="fh-field-input"
-            autocomplete="current-password"
-            :placeholder="t('admin_user_detail.erase_password_placeholder')"
-          />
-        </label>
         <button
           type="button"
           class="fh-btn fh-btn-danger"
-          :disabled="erasing || isErased || (eraseStep === 2 && !erasePassword)"
+          :disabled="erasing || isErased"
+          data-testid="erase-user"
           @click="onErase"
         >
           {{
@@ -695,11 +690,23 @@
               ? t('admin_user_detail.already_erased')
               : eraseStep === 0
                 ? t('admin_user_detail.erase')
-                : eraseStep === 1
-                  ? t('admin_user_detail.erase_confirm_1')
-                  : t('admin_user_detail.erase_confirm_final')
+                : t('admin_user_detail.erase_confirm_1')
           }}
         </button>
+        <!-- Re-auth on the last step. Erasure is irreversible, and an admin
+             access token alone should not be enough to spend it - the same
+             reasoning the self-update routes have always applied. -->
+        <StepUpDialog
+          :open="eraseDialogOpen"
+          :title="t('admin_user_detail.erase')"
+          :message="t('admin_user_detail.erase_step1')"
+          :confirm-label="t('admin_user_detail.erase_confirm_final')"
+          :busy="erasing"
+          :error="eraseError"
+          danger
+          @confirm="onEraseConfirmed"
+          @cancel="eraseDialogOpen = false"
+        />
       </div>
     </template>
   </div>

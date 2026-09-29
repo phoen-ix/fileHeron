@@ -1,7 +1,7 @@
 /* The email settings view had no component test at all, so the step-up change
  * would have shipped with zero regression cover on the one surface an admin
  * actually touches. These pin the two behaviours that matter: the everyday
- * test must stay promptless, and the refusal must reveal the password field
+ * test must stay promptless, and the refusal must open the password dialog
  * rather than surfacing a raw error. */
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
@@ -98,7 +98,7 @@ describe('AdminSettingsEmail', () => {
     expect(w.find('input[type="password"][autocomplete="current-password"]').exists()).toBe(false)
   })
 
-  it('reveals the password field when the server asks for re-auth', async () => {
+  it('opens the password dialog when the server asks for re-auth', async () => {
     testEmailSend.mockRejectedValueOnce(stepUpRefusal())
     const w = makeWrapper()
     await flushPromises()
@@ -106,13 +106,13 @@ describe('AdminSettingsEmail', () => {
     await testButton(w).trigger('click')
     await flushPromises()
 
-    const field = w.find('input[type="password"][autocomplete="current-password"]')
-    expect(field.exists()).toBe(true)
+    const dialog = w.find('[data-testid="step-up-dialog"]')
+    expect(dialog.exists()).toBe(true)
     // The refusal is explained, not surfaced as a raw failed-test result.
-    expect(w.text()).toContain('Confirm your password')
+    expect(dialog.text()).toContain('Confirm your password')
   })
 
-  it('sends the confirmation password on the retry', async () => {
+  it('sends the confirmation password on the retry and closes the dialog', async () => {
     testEmailSend.mockRejectedValueOnce(stepUpRefusal())
     const w = makeWrapper()
     await flushPromises()
@@ -120,12 +120,33 @@ describe('AdminSettingsEmail', () => {
     await testButton(w).trigger('click')
     await flushPromises()
 
-    await w.find('input[type="password"][autocomplete="current-password"]').setValue('my-own-password')
-    await testButton(w).trigger('click')
+    await w.find('[data-testid="step-up-password"]').setValue('my-own-password')
+    await w.find('[data-testid="step-up-dialog"] form').trigger('submit')
     await flushPromises()
 
     const calls = testEmailSend.mock.calls
     const lastCall = calls[calls.length - 1][0] as Record<string, unknown>
     expect(lastCall.confirm_password).toBe('my-own-password')
+    expect(w.find('[data-testid="step-up-dialog"]').exists()).toBe(false)
+  })
+
+  it('a wrong password stays in the dialog', async () => {
+    testEmailSend.mockRejectedValueOnce(stepUpRefusal()).mockRejectedValueOnce({
+      isAxiosError: true,
+      response: { status: 403, data: { code: 'INVALID_PASSWORD', error: 'Password incorrect.' } },
+    })
+    const w = makeWrapper()
+    await flushPromises()
+    await recipient(w).setValue('ops@example.com')
+    await testButton(w).trigger('click')
+    await flushPromises()
+
+    await w.find('[data-testid="step-up-password"]').setValue('nope')
+    await w.find('[data-testid="step-up-dialog"] form').trigger('submit')
+    await flushPromises()
+
+    const dialog = w.find('[data-testid="step-up-dialog"]')
+    expect(dialog.exists()).toBe(true)
+    expect(dialog.find('[role="alert"]').exists()).toBe(true)
   })
 })

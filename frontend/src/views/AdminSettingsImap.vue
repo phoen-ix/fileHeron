@@ -5,6 +5,7 @@
   import { fetchInboxNow, getImapSettings, testImap, updateImapSettings } from '@/api/admin'
   import { asEnvelope } from '@/api/client'
   import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
+  import StepUpDialog from '@/components/StepUpDialog.vue'
   import { useApiError } from '@/composables/useApiError'
   import { useUiStore } from '@/stores/ui'
   import type { ImapSettingsResponse, ImapTestResponse } from '@/types/api'
@@ -21,8 +22,11 @@
   const testResult = ref<ImapTestResponse | null>(null)
   // Revealed only when the backend asks for it: testing a server other than
   // the saved one while relying on the stored mail password.
-  const stepUpNeeded = ref(false)
+  // The step-up password, asked in a dialog once the server refuses the test.
+  // Kept until a test passes, so retrying a failing server does not ask again.
   const confirmPassword = ref('')
+  const stepUpOpen = ref(false)
+  const stepUpError = ref<string | null>(null)
   const isPasswordSet = ref(false)
   const lastPollAt = ref<string | null>(null)
   const passwordTouched = ref(false)
@@ -93,6 +97,11 @@
     }
   }
 
+  function onStepUpConfirm(password: string) {
+    confirmPassword.value = password
+    void onTest()
+  }
+
   async function onTest() {
     testing.value = true
     testResult.value = null
@@ -112,13 +121,22 @@
       // server-side failure (`ok: false`) is a 200 and the admin will retry.
       if (data.ok) {
         confirmPassword.value = ''
-        stepUpNeeded.value = false
       }
+      stepUpOpen.value = false
     } catch (err) {
       // Testing a server other than the saved one, while relying on the stored
       // password, is the only case that can send that password somewhere new.
       if (asEnvelope(err)?.code === 'STEP_UP_REQUIRED') {
-        stepUpNeeded.value = true
+        confirmPassword.value = ''
+        stepUpError.value = null
+        stepUpOpen.value = true
+        return
+      }
+      // The dialog is open, so this answers the password it just sent (a wrong
+      // one, or the step-up rate limit): show it there.
+      if (stepUpOpen.value) {
+        confirmPassword.value = ''
+        stepUpError.value = describe(err)
         return
       }
       errorMsg.value = describe(err)
@@ -294,24 +312,19 @@
         </button>
       </div>
 
-      <!-- Only shown once the server has refused: testing a server other than
-           the saved one, using the saved password, is the one case that can
-           send that password somewhere it has never been sent. -->
-      <div v-if="stepUpNeeded" class="fh-notice" data-tone="warning">
-        <strong>{{ t('admin_imap.step_up_title') }}</strong>
-        <p>{{ t('admin_imap.step_up_help') }}</p>
-        <label class="fh-field">
-          <span class="fh-field-label">{{ t('admin_imap.step_up_label') }}</span>
-          <input
-            v-model="confirmPassword"
-            class="fh-field-input"
-            type="password"
-            autocomplete="current-password"
-            :disabled="testing"
-            @keyup.enter="onTest"
-          />
-        </label>
-      </div>
+      <!-- Opened once the server has refused: testing a server other than the
+           saved one, using the saved password, is the one case that can send that
+           password somewhere it has never been sent. -->
+      <StepUpDialog
+        :open="stepUpOpen"
+        :title="t('admin_imap.step_up_title')"
+        :message="t('admin_imap.step_up_help')"
+        :confirm-label="t('admin_imap.test')"
+        :busy="testing"
+        :error="stepUpError"
+        @confirm="onStepUpConfirm"
+        @cancel="stepUpOpen = false"
+      />
 
       <div v-if="testResult" class="fh-notice" :data-tone="testResult.ok ? 'success' : 'danger'">
         <strong>{{ testResult.ok ? t('admin_imap.test_ok') : t('admin_imap.test_fail') }}</strong>

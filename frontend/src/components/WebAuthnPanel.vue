@@ -41,25 +41,13 @@
             :placeholder="t('webauthn.name_placeholder')"
           />
         </label>
-        <!-- Re-auth: a passkey that verifies its user counts as the second
-             factor at login, so adding one is gated on the password, the way
-             turning TOTP off is. -->
-        <label class="fh-field">
-          <span class="fh-field-label">{{ t('webauthn.password_label') }}</span>
-          <input
-            v-model="regPassword"
-            class="fh-field-input"
-            type="password"
-            autocomplete="current-password"
-          />
-          <span class="fh-field-help">{{ t('webauthn.password_help') }}</span>
-        </label>
         <div class="actions">
           <button
             type="button"
             class="fh-btn"
-            :disabled="busy || !newName || !regPassword"
-            @click="onRegister"
+            :disabled="busy || !newName"
+            data-testid="webauthn-register"
+            @click="openStepUp"
           >
             {{ busy ? t('common.loading') : t('webauthn.register') }}
           </button>
@@ -76,6 +64,19 @@
 
       <div v-if="errorMsg" class="fh-notice" role="alert" data-tone="error">{{ errorMsg }}</div>
     </div>
+
+    <!-- Re-auth: a passkey that verifies its user counts as the second factor
+         at login, so adding one is gated on the password, the way turning TOTP
+         off is. -->
+    <StepUpDialog
+      :open="stepUpOpen"
+      :message="t('webauthn.password_help')"
+      :confirm-label="t('webauthn.register')"
+      :busy="busy"
+      :error="stepUpError"
+      @confirm="onRegister"
+      @cancel="stepUpOpen = false"
+    />
   </section>
 </template>
 
@@ -90,6 +91,7 @@
     registerComplete,
     type WebAuthnCredentialItem,
   } from '@/api/webauthn'
+  import StepUpDialog from '@/components/StepUpDialog.vue'
   import { useApiError } from '@/composables/useApiError'
   import { useSiteDateFormat } from '@/composables/useSiteDateFormat'
   import { isWebAuthnSupported, performRegistration } from '@/composables/useWebAuthn'
@@ -106,11 +108,17 @@
   const errorMsg = ref<string | null>(null)
   const adding = ref(false)
   const newName = ref('')
-  const regPassword = ref('')
+  const stepUpOpen = ref(false)
+  const stepUpError = ref<string | null>(null)
 
   function cancelAdd() {
     adding.value = false
-    regPassword.value = ''
+  }
+
+  function openStepUp() {
+    errorMsg.value = null
+    stepUpError.value = null
+    stepUpOpen.value = true
   }
 
   async function load() {
@@ -122,11 +130,23 @@
     }
   }
 
-  async function onRegister() {
+  async function onRegister(password: string) {
     errorMsg.value = null
+    stepUpError.value = null
     busy.value = true
+    // The password is only checked here; a wrong one stays in the dialog. Past
+    // it the browser's own passkey prompt takes over, and its outcome is shown
+    // on the page as before.
+    let data: Awaited<ReturnType<typeof registerBegin>>['data']
     try {
-      const { data } = await registerBegin(regPassword.value)
+      data = (await registerBegin(password)).data
+    } catch (err) {
+      stepUpError.value = describe(err)
+      busy.value = false
+      return
+    }
+    stepUpOpen.value = false
+    try {
       // The server returns the options under {options: ...}; py_webauthn's
       // options_to_json shape uses the standard keys (challenge, rp, user, …).
       const opts = data.options as Record<string, unknown>
@@ -152,7 +172,6 @@
       await registerComplete(newName.value, cred)
       adding.value = false
       newName.value = ''
-      regPassword.value = ''
       ui.pushToast(t('webauthn.added_toast'), 'success')
       await load()
     } catch (err: unknown) {

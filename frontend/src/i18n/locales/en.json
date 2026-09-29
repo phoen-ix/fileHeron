@@ -19,6 +19,7 @@
     "password": "Password",
     "new_password": "New password",
     "current_password": "Current password",
+    "confirm_your_password": "Confirm your password",
     "display_name": "Display name",
     "language": "Language",
     "delete": "Delete",
@@ -461,8 +462,6 @@
   },
   "admin_backup": {
     "admin_password_help": "Re-entered because this file can contain password hashes, two-factor seeds and server secrets.",
-    "admin_password_label": "Confirm your password",
-    "admin_password_ph": "Your account password",
     "intro": "Export this instance's configuration to rebuild it after a crash, or import a backup to restore it. Shared files are not included - importing a backup invalidates every active share.",
     "export_title": "Export configuration",
     "export_help": "Choose what to include and how to handle secrets, then download a single backup file.",
@@ -951,7 +950,6 @@
     "min_age_label": "Wait after publication (hours)",
     "min_age_help": "A release is installed at the first run at least this long after it was published, so a quick follow-up fix can come out first. 0 installs it at the next run.",
     "schedule": "Runs as its own scheduled task, auto_update (daily at 03:30 unless you change it). Change its time or pause it on",
-    "password_label": "Your password",
     "password_help": "Needed to turn automatic updates on, or to change them while they are on, because they install releases without asking for it.",
     "skipped": "{tag} failed to install automatically and will not be retried automatically. Install it with Update, or wait for a newer release.",
     "saved_toast": "Automatic update settings saved."
@@ -1004,8 +1002,7 @@
     "test_failed": "Test email failed.",
     "hint_label": "What to try:",
     "step_up_title": "Confirm your password",
-    "step_up_help": "You are testing a different mail server from the one saved. Because the saved password would be sent to it, confirm your own password first.",
-    "step_up_label": "Your password"
+    "step_up_help": "You are testing a different mail server from the one saved. Because the saved password would be sent to it, confirm your own password first."
   },
   "admin_imap": {
     "intro": "Fetch messages from the configured mailbox so replies, bounces and auto-replies show up in the in-app Inbox. Off by default.",
@@ -1058,8 +1055,7 @@
     "tls_insecure": "Do not verify the server certificate",
     "tls_insecure_help": "Only for an internal mail server with a private or self-signed certificate. The connection is still encrypted, but anyone on the network path can impersonate the server and read the login.",
     "step_up_title": "Confirm your password",
-    "step_up_help": "You are testing a different mail server from the one saved. Because the saved password would be sent to it, confirm your own password first.",
-    "step_up_label": "Your password"
+    "step_up_help": "You are testing a different mail server from the one saved. Because the saved password would be sent to it, confirm your own password first."
   },
   "admin_inbox": {
     "intro": "Messages fetched from the configured mailbox - replies, bounces and auto-replies.",
@@ -1346,7 +1342,6 @@
     "add_cta": "Add a passkey",
     "name_label": "Label",
     "name_placeholder": "e.g. MacBook Touch ID",
-    "password_label": "Current password",
     "password_help": "A passkey that verifies you (PIN or biometric) can replace your authenticator code at sign-in, so adding one asks for your password - just like turning two-factor off does.",
     "register": "Register passkey",
     "added_toast": "Passkey added.",
@@ -1603,8 +1598,6 @@
     }
   },
   "admin_user_detail": {
-    "erase_password_label": "Confirm your password",
-    "erase_password_placeholder": "Your account password",
     "profile": "Profile",
     "role": "Role",
     "quota": "Quota (bytes)",
@@ -1635,7 +1628,6 @@
     "erase_help": "Right-to-erasure permanently anonymizes this user and hard-deletes every file they uploaded. The action cannot be undone.",
     "erase": "Erase user",
     "erase_step1": "This will hard-delete every file this user uploaded. The user row is anonymized to [erased]. The action is irreversible.",
-    "erase_step2": "Final confirmation. Click once more to erase.",
     "erase_confirm_1": "I understand - continue",
     "erase_confirm_final": "Erase permanently",
     "erased_toast": "User erased - {n} file ({bytes}) deleted. | User erased - {n} files ({bytes}) deleted.",
@@ -1983,8 +1975,6 @@
   },
   "api_tokens": {
     "password_help": "API tokens keep working after a password reset or signing out other sessions, so creating one is confirmed with your password.",
-    "password_label": "Confirm your password",
-    "password_placeholder": "Your account password",
     "title": "API tokens",
     "intro": "Tokens authorize programmatic uploads via the API or TUS clients. Create one per script or device.",
     "sessions_note": "These are separate from your browser/app sessions: signing out other sessions does not revoke them. Revoke a token here to disconnect its client (e.g. the desktop app) immediately.",

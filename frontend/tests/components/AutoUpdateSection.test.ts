@@ -35,10 +35,20 @@ async function mountIt() {
   return w
 }
 
-const password = (w: Awaited<ReturnType<typeof mountIt>>) =>
-  w.find('[data-testid="auto-update-password"]')
-const save = (w: Awaited<ReturnType<typeof mountIt>>) =>
-  w.find<HTMLButtonElement>('[data-testid="auto-update-save"]')
+type W = Awaited<ReturnType<typeof mountIt>>
+const dialog = (w: W) => w.find('[data-testid="step-up-dialog"]')
+const save = (w: W) => w.find<HTMLButtonElement>('[data-testid="auto-update-save"]')
+
+async function submitSettings(w: W) {
+  await w.find('form').trigger('submit')
+  await flushPromises()
+}
+
+async function confirmPassword(w: W, pw: string) {
+  await w.find('[data-testid="step-up-password"]').setValue(pw)
+  await dialog(w).find('form').trigger('submit')
+  await flushPromises()
+}
 
 describe('AutoUpdateSection', () => {
   beforeEach(() => {
@@ -59,19 +69,21 @@ describe('AutoUpdateSection', () => {
       'patch',
     )
     expect(w.find<HTMLInputElement>('[data-testid="auto-update-min-age"]').element.value).toBe('24')
-    expect(password(w).exists()).toBe(false)
+    expect(w.find('input[type="password"]').exists()).toBe(false)
     expect(save(w).element.disabled).toBe(true)
   })
 
-  it('turning it on asks for the password and sends it', async () => {
+  it('turning it on asks for the password in a dialog and sends it', async () => {
     getAutoUpdateSettings.mockResolvedValue(settings())
     const w = await mountIt()
     await w.find('[data-testid="auto-update-enabled"]').setValue(true)
-    expect(password(w).exists()).toBe(true)
-    expect(save(w).element.disabled).toBe(true)
-    await password(w).setValue('pw')
-    await w.find('form').trigger('submit')
-    await flushPromises()
+    // No inline field: the form itself never holds the password.
+    expect(w.find('input[type="password"]').exists()).toBe(false)
+    expect(save(w).element.disabled).toBe(false)
+    await submitSettings(w)
+    expect(updateAutoUpdateSettings).not.toHaveBeenCalled()
+    expect(dialog(w).exists()).toBe(true)
+    await confirmPassword(w, 'pw')
     expect(updateAutoUpdateSettings).toHaveBeenCalledWith({
       enabled: true,
       scope: 'patch',
@@ -79,25 +91,24 @@ describe('AutoUpdateSection', () => {
       password: 'pw',
     })
     expect(w.emitted('saved')).toHaveLength(1)
-    // Saved and unchanged again: the field is gone and emptied.
-    expect(password(w).exists()).toBe(false)
+    expect(dialog(w).exists()).toBe(false)
   })
 
   it('changing it while on asks for the password too', async () => {
     getAutoUpdateSettings.mockResolvedValue(settings({ enabled: true }))
     const w = await mountIt()
-    expect(password(w).exists()).toBe(false)
     await w.find('[data-testid="auto-update-scope"]').setValue('any')
-    expect(password(w).exists()).toBe(true)
+    await submitSettings(w)
+    expect(dialog(w).exists()).toBe(true)
+    expect(updateAutoUpdateSettings).not.toHaveBeenCalled()
   })
 
   it('turning it off needs no password', async () => {
     getAutoUpdateSettings.mockResolvedValue(settings({ enabled: true, scope: 'minor' }))
     const w = await mountIt()
     await w.find('[data-testid="auto-update-enabled"]').setValue(false)
-    expect(password(w).exists()).toBe(false)
-    await w.find('form').trigger('submit')
-    await flushPromises()
+    await submitSettings(w)
+    expect(dialog(w).exists()).toBe(false)
     expect(updateAutoUpdateSettings).toHaveBeenCalledWith({
       enabled: false,
       scope: 'minor',
@@ -105,7 +116,7 @@ describe('AutoUpdateSection', () => {
     })
   })
 
-  it('shows the error and keeps the form when the password is wrong', async () => {
+  it('shows a wrong password inside the dialog and keeps it open', async () => {
     getAutoUpdateSettings.mockResolvedValue(settings())
     updateAutoUpdateSettings.mockRejectedValue({
       isAxiosError: true,
@@ -116,12 +127,21 @@ describe('AutoUpdateSection', () => {
     })
     const w = await mountIt()
     await w.find('[data-testid="auto-update-enabled"]').setValue(true)
-    await password(w).setValue('nope')
-    await w.find('form').trigger('submit')
-    await flushPromises()
-    expect(w.find('[role="alert"]').exists()).toBe(true)
+    await submitSettings(w)
+    await confirmPassword(w, 'nope')
+    expect(dialog(w).find('[role="alert"]').exists()).toBe(true)
     expect(w.emitted('saved')).toBeUndefined()
-    expect(password(w).exists()).toBe(true)
+    expect(dialog(w).exists()).toBe(true)
+  })
+
+  it('cancelling the dialog saves nothing', async () => {
+    getAutoUpdateSettings.mockResolvedValue(settings())
+    const w = await mountIt()
+    await w.find('[data-testid="auto-update-enabled"]').setValue(true)
+    await submitSettings(w)
+    await dialog(w).find('button[type="button"]').trigger('click')
+    expect(dialog(w).exists()).toBe(false)
+    expect(updateAutoUpdateSettings).not.toHaveBeenCalled()
   })
 
   it('names a release that failed to install automatically', async () => {

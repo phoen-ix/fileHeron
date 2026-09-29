@@ -13,9 +13,10 @@ import en from '@/i18n/locales/en.json'
 
 const listTokens = vi.fn(async () => ({ data: { items: [], can_create: true } }))
 const revokeToken = vi.fn(async (_id: number) => ({}))
+const createToken = vi.fn()
 vi.mock('@/api/apiTokens', () => ({
   listTokens: () => listTokens(),
-  createToken: vi.fn(),
+  createToken: (...args: unknown[]) => createToken(...args),
   revokeToken: (id: number) => revokeToken(id),
 }))
 
@@ -119,5 +120,53 @@ describe('ApiTokenPanel failures are shown, not swallowed', () => {
     expect(revokeToken).toHaveBeenCalledWith(5)
     expect(ui.toasts.some((t) => t.tone === 'error')).toBe(true)
     expect(w.text()).toContain('ci')
+  })
+})
+
+describe('ApiTokenPanel asks for the password in a dialog', () => {
+  const dialog = (w: Wrapper) => w.find('[data-testid="step-up-dialog"]')
+
+  async function fillAndSubmit(w: Wrapper, { open = true } = {}) {
+    if (open) await button(w, 'Create token').trigger('click')
+    await w.find('input[type="text"]').setValue('ci')
+    await w.find('input[type="radio"][value="full"]').setValue()
+    await w.find('form.create-form').trigger('submit')
+    await flushPromises()
+  }
+
+  beforeEach(() => {
+    createToken.mockReset()
+  })
+
+  it('the form holds no password; the dialog does, and creating sends it', async () => {
+    createToken.mockResolvedValue({ data: { plaintext_token: 'fh_x_y', id: 1 } })
+    const w = makeWrapper()
+    await flushPromises()
+    await button(w, 'Create token').trigger('click')
+    expect(w.find('input[type="password"]').exists()).toBe(false)
+    await fillAndSubmit(w, { open: false })
+    expect(createToken).not.toHaveBeenCalled()
+    expect(dialog(w).exists()).toBe(true)
+    await w.find('[data-testid="step-up-password"]').setValue('pw')
+    await dialog(w).find('form').trigger('submit')
+    await flushPromises()
+    expect(createToken).toHaveBeenCalledWith('ci', expect.anything(), null, 'pw')
+    expect(dialog(w).exists()).toBe(false)
+    expect(w.text()).toContain('fh_x_y')
+  })
+
+  it('a wrong password stays in the dialog', async () => {
+    createToken.mockRejectedValue({
+      isAxiosError: true,
+      response: { status: 403, data: { code: 'INVALID_PASSWORD', error: 'Password incorrect.' } },
+    })
+    const w = makeWrapper()
+    await flushPromises()
+    await fillAndSubmit(w)
+    await w.find('[data-testid="step-up-password"]').setValue('nope')
+    await dialog(w).find('form').trigger('submit')
+    await flushPromises()
+    expect(dialog(w).exists()).toBe(true)
+    expect(dialog(w).find('[role="alert"]').exists()).toBe(true)
   })
 })

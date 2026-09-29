@@ -5,6 +5,7 @@
   import { getEmailSettings, testEmailSend, updateEmailSettings } from '@/api/admin'
   import { asEnvelope } from '@/api/client'
   import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
+  import StepUpDialog from '@/components/StepUpDialog.vue'
   import { useApiError } from '@/composables/useApiError'
   import { useUiStore } from '@/stores/ui'
   import type {
@@ -27,8 +28,11 @@
   const testTo = ref('')
   // Revealed only when the backend asks for it: testing a server other than
   // the saved one while relying on the stored mail password.
-  const stepUpNeeded = ref(false)
+  // The step-up password, asked in a dialog once the server refuses the test.
+  // Kept until a test passes, so retrying a failing server does not ask again.
   const confirmPassword = ref('')
+  const stepUpOpen = ref(false)
+  const stepUpError = ref<string | null>(null)
   // Most MTAs require SMTP AUTH. We block save/test on blank credentials
   // unless the admin explicitly opts into an anonymous (no-auth) relay.
   const allowAnonymous = ref(false)
@@ -147,6 +151,11 @@
     }
   }
 
+  function onStepUpConfirm(password: string) {
+    confirmPassword.value = password
+    void onTest()
+  }
+
   async function onTest() {
     if (authBlocked.value) {
       testResult.value = {
@@ -180,18 +189,27 @@
       // Only clear on success. A test that reached the server but failed there
       // (`ok: false` - a wrong SMTP password, an unreachable host) comes back as
       // a 200, and clearing here made the admin retype the step-up password to
-      // try again. A wrong step-up password is a thrown STEP_UP_REQUIRED below.
+      // try again. A wrong step-up password is a thrown INVALID_PASSWORD below.
       if (data.ok) {
         confirmPassword.value = ''
-        stepUpNeeded.value = false
       }
+      stepUpOpen.value = false
     } catch (err) {
       // Testing a server other than the saved one, while relying on the stored
       // password, is the only case that can send that password somewhere new. The
-      // backend refuses it until the admin re-authenticates; reveal the field.
+      // backend refuses it until the admin re-authenticates; ask in the dialog.
       if (asEnvelope(err)?.code === 'STEP_UP_REQUIRED') {
-        stepUpNeeded.value = true
+        confirmPassword.value = ''
+        stepUpError.value = null
+        stepUpOpen.value = true
         testResult.value = null
+        return
+      }
+      // The dialog is open, so this answers the password it just sent (a wrong
+      // one, or the step-up rate limit): show it there.
+      if (stepUpOpen.value) {
+        confirmPassword.value = ''
+        stepUpError.value = describe(err)
         return
       }
       testResult.value = {
@@ -355,24 +373,19 @@
           </button>
         </div>
 
-        <!-- Only shown once the server has refused: testing a server other than
-             the saved one, using the saved password, is the one case that can
-             send that password somewhere it has never been sent. -->
-        <div v-if="stepUpNeeded" class="fh-notice" data-tone="warning">
-          <strong>{{ t('admin_email.step_up_title') }}</strong>
-          <p>{{ t('admin_email.step_up_help') }}</p>
-          <label class="fh-field">
-            <span class="fh-field-label">{{ t('admin_email.step_up_label') }}</span>
-            <input
-              v-model="confirmPassword"
-              class="fh-field-input"
-              type="password"
-              autocomplete="current-password"
-              :disabled="testing"
-              @keyup.enter="onTest"
-            />
-          </label>
-        </div>
+        <!-- Opened once the server has refused: testing a server other than the
+             saved one, using the saved password, is the one case that can send that
+             password somewhere it has never been sent. -->
+        <StepUpDialog
+          :open="stepUpOpen"
+          :title="t('admin_email.step_up_title')"
+          :message="t('admin_email.step_up_help')"
+          :confirm-label="t('admin_email.test_button')"
+          :busy="testing"
+          :error="stepUpError"
+          @confirm="onStepUpConfirm"
+          @cancel="stepUpOpen = false"
+        />
 
         <div v-if="testResult" class="fh-notice" :data-tone="testResult.ok ? 'success' : 'error'">
           <strong v-if="testResult.ok">{{ t('admin_email.test_ok') }}</strong>

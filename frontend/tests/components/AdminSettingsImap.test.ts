@@ -24,13 +24,13 @@ const SETTINGS = {
 
 const getImapSettings = vi.fn(async () => ({ data: SETTINGS }))
 const updateImapSettings = vi.fn(async (p: unknown) => ({ data: { ...SETTINGS, ...(p as object) } }))
-const testImap = vi.fn(async () => ({ data: { ok: true, error: null, hint: null, folders: ['INBOX', 'Sent'] } }))
+const testImap = vi.fn(async (_p?: unknown) => ({ data: { ok: true, error: null, hint: null, folders: ['INBOX', 'Sent'] } }))
 const fetchInboxNow = vi.fn(async () => ({ data: { ok: true, skipped: null, error: null, fetched: 0, ingested: 0 } }))
 
 vi.mock('@/api/admin', () => ({
   getImapSettings: () => getImapSettings(),
   updateImapSettings: (p: unknown) => updateImapSettings(p),
-  testImap: () => testImap(),
+  testImap: (p: unknown) => testImap(p),
   fetchInboxNow: () => fetchInboxNow(),
 }))
 
@@ -97,5 +97,30 @@ describe('AdminSettingsImap', () => {
     expect(testImap).toHaveBeenCalled()
     expect(w.text()).toContain('Connection OK')
     expect(w.text()).toContain('INBOX, Sent')
+  })
+
+  it('asks for the password in a dialog when the server refuses, then retries with it', async () => {
+    testImap.mockRejectedValueOnce({
+      isAxiosError: true,
+      response: { status: 403, data: { code: 'STEP_UP_REQUIRED', error: 'nope' } },
+    })
+    const w = makeWrapper()
+    await flushPromises()
+    const testBtn = w.findAll('button').find((b) => b.text() === 'Test connection')!
+    await testBtn.trigger('click')
+    await flushPromises()
+    const dialog = w.find('[data-testid="step-up-dialog"]')
+    expect(dialog.exists()).toBe(true)
+    expect(dialog.text()).toContain('Confirm your password')
+
+    await w.find('[data-testid="step-up-password"]').setValue('my-own-password')
+    await w.find('[data-testid="step-up-dialog"] form').trigger('submit')
+    await flushPromises()
+    const calls = testImap.mock.calls
+    expect((calls[calls.length - 1][0] as Record<string, unknown>).confirm_password).toBe(
+      'my-own-password',
+    )
+    expect(w.find('[data-testid="step-up-dialog"]').exists()).toBe(false)
+    expect(w.text()).toContain('Connection OK')
   })
 })

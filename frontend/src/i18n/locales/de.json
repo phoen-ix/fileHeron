@@ -19,6 +19,7 @@
     "password": "Passwort",
     "new_password": "Neues Passwort",
     "current_password": "Aktuelles Passwort",
+    "confirm_your_password": "Passwort bestätigen",
     "display_name": "Anzeigename",
     "language": "Sprache",
     "delete": "Löschen",
@@ -461,8 +462,6 @@
   },
   "admin_backup": {
     "admin_password_help": "Erneut erforderlich, weil diese Datei Passwort-Hashes, Zwei-Faktor-Schlüssel und Server-Geheimnisse enthalten kann.",
-    "admin_password_label": "Passwort bestätigen",
-    "admin_password_ph": "Ihr Kontopasswort",
     "intro": "Exportiere die Konfiguration dieser Instanz, um sie nach einem Ausfall wieder aufzubauen, oder importiere eine Sicherung. Geteilte Dateien sind nicht enthalten - ein Import macht jede aktive Freigabe ungültig.",
     "export_title": "Konfiguration exportieren",
     "export_help": "Wähle aus, was enthalten sein soll und wie mit Geheimnissen umgegangen wird, und lade dann eine einzelne Sicherungsdatei herunter.",
@@ -951,7 +950,6 @@
     "min_age_label": "Wartezeit nach Veröffentlichung (Stunden)",
     "min_age_help": "Ein Release wird beim ersten Lauf installiert, der mindestens so lange nach seiner Veröffentlichung liegt, damit eine schnelle Nachbesserung zuerst erscheinen kann. 0 installiert es beim nächsten Lauf.",
     "schedule": "Läuft als eigene geplante Aufgabe, auto_update (täglich um 03:30, sofern du es nicht änderst). Zeit ändern oder pausieren unter",
-    "password_label": "Dein Passwort",
     "password_help": "Nötig, um automatische Updates einzuschalten oder sie zu ändern, während sie an sind, weil sie Releases installieren, ohne danach zu fragen.",
     "skipped": "{tag} ließ sich nicht automatisch installieren und wird nicht erneut automatisch versucht. Installiere es mit Update oder warte auf ein neueres Release.",
     "saved_toast": "Einstellungen für automatische Updates gespeichert."
@@ -1004,8 +1002,7 @@
     "test_failed": "Test-E-Mail fehlgeschlagen.",
     "hint_label": "Lösungsvorschlag:",
     "step_up_title": "Passwort bestätigen",
-    "step_up_help": "Sie testen einen anderen Mailserver als den gespeicherten. Da dabei das gespeicherte Passwort an diesen Server gesendet würde, bestätigen Sie bitte zuerst Ihr eigenes Passwort.",
-    "step_up_label": "Ihr Passwort"
+    "step_up_help": "Sie testen einen anderen Mailserver als den gespeicherten. Da dabei das gespeicherte Passwort an diesen Server gesendet würde, bestätigen Sie bitte zuerst Ihr eigenes Passwort."
   },
   "admin_imap": {
     "intro": "Nachrichten aus dem konfigurierten Postfach abrufen, damit Antworten, Unzustellbarkeitsmeldungen und automatische Antworten im In-App-Posteingang erscheinen. Standardmäßig aus.",
@@ -1058,8 +1055,7 @@
     "tls_insecure": "Serverzertifikat nicht prüfen",
     "tls_insecure_help": "Nur für einen internen Mailserver mit privatem oder selbstsigniertem Zertifikat. Die Verbindung bleibt verschlüsselt, aber jeder auf dem Netzwerkweg kann sich als der Server ausgeben und die Anmeldedaten mitlesen.",
     "step_up_title": "Passwort bestätigen",
-    "step_up_help": "Sie testen einen anderen Mailserver als den gespeicherten. Da dabei das gespeicherte Passwort an diesen Server gesendet würde, bestätigen Sie bitte zuerst Ihr eigenes Passwort.",
-    "step_up_label": "Ihr Passwort"
+    "step_up_help": "Sie testen einen anderen Mailserver als den gespeicherten. Da dabei das gespeicherte Passwort an diesen Server gesendet würde, bestätigen Sie bitte zuerst Ihr eigenes Passwort."
   },
   "admin_inbox": {
     "intro": "Aus dem konfigurierten Postfach abgerufene Nachrichten - Antworten, Unzustellbarkeitsmeldungen und automatische Antworten.",
@@ -1346,7 +1342,6 @@
     "add_cta": "Passkey hinzufügen",
     "name_label": "Bezeichnung",
     "name_placeholder": "z. B. MacBook Touch ID",
-    "password_label": "Aktuelles Passwort",
     "password_help": "Ein Passkey mit Nutzerverifizierung (PIN oder Biometrie) kann bei der Anmeldung den Authenticator-Code ersetzen. Deshalb wird beim Hinzufügen das Passwort abgefragt - genau wie beim Abschalten der Zwei-Faktor-Anmeldung.",
     "register": "Passkey registrieren",
     "added_toast": "Passkey hinzugefügt.",
@@ -1603,8 +1598,6 @@
     }
   },
   "admin_user_detail": {
-    "erase_password_label": "Passwort bestätigen",
-    "erase_password_placeholder": "Ihr Kontopasswort",
     "profile": "Profil",
     "role": "Rolle",
     "quota": "Kontingent (Bytes)",
@@ -1635,7 +1628,6 @@
     "erase_help": "Recht auf Löschung anonymisiert den Benutzer dauerhaft und löscht jede hochgeladene Datei endgültig. Nicht umkehrbar.",
     "erase": "Benutzer löschen",
     "erase_step1": "Damit werden alle vom Benutzer hochgeladenen Dateien endgültig gelöscht und die Zeile auf [erased] anonymisiert. Nicht umkehrbar.",
-    "erase_step2": "Endgültige Bestätigung. Erneut klicken, um zu löschen.",
     "erase_confirm_1": "Ich verstehe - fortfahren",
     "erase_confirm_final": "Endgültig löschen",
     "erased_toast": "Benutzer gelöscht - {n} Datei ({bytes}) entfernt. | Benutzer gelöscht - {n} Dateien ({bytes}) entfernt.",
@@ -1983,8 +1975,6 @@
   },
   "api_tokens": {
     "password_help": "API-Token funktionieren auch nach einem Passwort-Reset oder dem Abmelden anderer Sitzungen weiter - deshalb wird die Erstellung mit Ihrem Passwort bestätigt.",
-    "password_label": "Passwort bestätigen",
-    "password_placeholder": "Ihr Kontopasswort",
     "title": "API-Tokens",
     "intro": "Tokens autorisieren Uploads über die API oder TUS-Clients. Pro Skript oder Gerät einen Token erstellen.",
     "sessions_note": "Diese sind von deinen Browser-/App-Sitzungen getrennt: Das Abmelden anderer Sitzungen widerruft sie nicht. Widerrufe hier ein Token, um seinen Client (z. B. die Desktop-App) sofort zu trennen.",

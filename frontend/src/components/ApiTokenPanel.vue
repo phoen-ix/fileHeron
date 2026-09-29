@@ -21,7 +21,7 @@
       {{ t('api_tokens.disabled_by_admin') }}
     </p>
 
-    <form v-if="creating" class="create-form" @submit.prevent="onCreate">
+    <form v-if="creating" class="create-form" @submit.prevent="openStepUp">
       <label class="fh-field">
         <span class="fh-field-label">{{ t('api_tokens.name_label') }}</span>
         <input
@@ -64,31 +64,12 @@
         </div>
       </fieldset>
 
-      <!-- Re-auth. The token outlives this session and is not revoked by a
-           password reset or "sign out other sessions", so creating one asks for
-           the password the same way changing it does. -->
-      <label class="fh-field">
-        <span class="fh-field-label">{{ t('api_tokens.password_label') }}</span>
-        <input
-          v-model="createPassword"
-          class="fh-field-input"
-          type="password"
-          autocomplete="current-password"
-          :placeholder="t('api_tokens.password_placeholder')"
-          required
-        />
-        <span class="fh-field-help">{{ t('api_tokens.password_help') }}</span>
-      </label>
-
       <div class="create-form-actions">
         <button
           type="submit"
           class="fh-btn"
           :disabled="
-            creatingBusy ||
-            !newName ||
-            !createPassword ||
-            (scopeMode === 'limited' && selectedScopes.length === 0)
+            creatingBusy || !newName || (scopeMode === 'limited' && selectedScopes.length === 0)
           "
         >
           {{ creatingBusy ? t('common.loading') : t('api_tokens.create_submit') }}
@@ -99,6 +80,19 @@
       </div>
       <div v-if="errorMsg" class="fh-field-error">{{ errorMsg }}</div>
     </form>
+
+    <!-- Re-auth. The token outlives this session and is not revoked by a
+         password reset or "sign out other sessions", so creating one asks for
+         the password the same way changing it does. -->
+    <StepUpDialog
+      :open="stepUpOpen"
+      :message="t('api_tokens.password_help')"
+      :confirm-label="t('api_tokens.create_cta')"
+      :busy="creatingBusy"
+      :error="errorMsg"
+      @confirm="onCreate"
+      @cancel="stepUpOpen = false"
+    />
 
     <div v-if="plaintext" class="plaintext-box fh-rise">
       <div class="plaintext-eyebrow">{{ t('api_tokens.plaintext_eyebrow') }}</div>
@@ -167,6 +161,7 @@
 
   import { createToken, listTokens, revokeToken } from '@/api/apiTokens'
   import ExpiryPicker from '@/components/ExpiryPicker.vue'
+  import StepUpDialog from '@/components/StepUpDialog.vue'
   import { useApiError } from '@/composables/useApiError'
   import { useSiteDateFormat } from '@/composables/useSiteDateFormat'
   import { useUiStore } from '@/stores/ui'
@@ -200,8 +195,6 @@
   const expiresAtLocal = ref<string | null>(DEFAULT_EXPIRY_LOCAL())
   const scopeMode = ref<'full' | 'limited'>('limited')
   const selectedScopes = ref<string[]>([])
-  // Re-auth for creation - see the API client for why.
-  const createPassword = ref('')
   const plaintext = ref<CreateApiTokenResponse | null>(null)
 
   function scopeLabel(scope: string): string {
@@ -230,18 +223,25 @@
     }
   }
 
-  async function onCreate() {
+  const stepUpOpen = ref(false)
+
+  function openStepUp() {
+    errorMsg.value = null
+    stepUpOpen.value = true
+  }
+
+  async function onCreate(password: string) {
     errorMsg.value = null
     creatingBusy.value = true
     try {
       const expiresAt =
         expiresAtLocal.value === null ? null : siteLocalIsoToUtcIso(expiresAtLocal.value)
       const scopes = scopeMode.value === 'full' ? null : selectedScopes.value
-      const { data } = await createToken(newName.value, expiresAt, scopes, createPassword.value)
+      const { data } = await createToken(newName.value, expiresAt, scopes, password)
+      stepUpOpen.value = false
       plaintext.value = data
       creating.value = false
       newName.value = ''
-      createPassword.value = ''
       expiresAtLocal.value = DEFAULT_EXPIRY_LOCAL()
       scopeMode.value = 'limited'
       selectedScopes.value = []
@@ -256,7 +256,6 @@
   function cancelCreate() {
     creating.value = false
     newName.value = ''
-    createPassword.value = ''
     // Back to the least-privilege defaults the form opens with. This reset to
     // "never expires" + "full access" - the pre-hardening defaults - so the
     // SECOND time the form was opened it offered a permanent unrestricted

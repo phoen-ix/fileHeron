@@ -22,6 +22,10 @@
 # Recovery: see scripts/restore.sh.
 
 set -euo pipefail
+# Owner-only, like the updater's backups/pre-update: db.sql holds every password
+# hash and Fernet ciphertext, and under the default umask it landed 0644 in a
+# 0755 directory - readable by any local account on the host.
+umask 077
 
 # Resolve paths relative to repo root.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

@@ -283,6 +283,37 @@ def test_local_retention_runs_before_the_push() -> None:
     assert src.index("# 5. Local retention") < src.index("# 6. Optional restic push")
 
 
+# --- 2026-09-29: every nightly db.sql was world-readable ---------------------
+
+
+def test_a_backup_is_written_owner_only(tmp_path: Path) -> None:
+    """The real head of backup.sh - everything up to the staging directory and
+    its trap - run under bash from a copy, then a file written into $DEST the
+    way the dump is. Under the default umask db.sql was 0644 in a 0755
+    directory, readable by every local account."""
+    import os
+    import shutil
+    import subprocess
+
+    src = (_ROOT / "scripts" / "backup.sh").read_text(encoding="utf-8")
+    trap = "trap 'rm -rf \"$DEST\"' EXIT\n"
+    head = src[:src.index(trap) + len(trap)]
+    assert "umask" not in src[len(head):], "a later umask would loosen what the head sets"
+    probe = tmp_path / "scripts" / "backup_head.sh"
+    probe.parent.mkdir()
+    probe.write_text(head + ': > "$DEST/db.sql"\nstat -c %a "$ROOT/backups" "$DEST" "$DEST/db.sql"\n')
+    bash = shutil.which("bash")
+    assert bash, "bash is required to exercise backup.sh"
+    # S603: an absolute bash running this repo's own script text.
+    r = subprocess.run(  # noqa: S603
+        [bash, str(probe)],
+        env={"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "DB_ROOT_PASSWORD": "x"},
+        capture_output=True, text=True, timeout=30,
+    )
+    assert r.returncode == 0, r.stderr
+    assert r.stdout.split() == ["700", "700", "600"]
+
+
 # --- 2026-09-25: the drill ignored a caller's FH_TAG ------------------------
 
 

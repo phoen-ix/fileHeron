@@ -1323,7 +1323,7 @@ def take_pre_update_backup(previous_tag: str, target_tag: str, alembic_head: str
     for path in ([backups] if created_backups else []) + [BACKUP_ROOT]:
         if owner is not None and os.geteuid() == 0:
             os.chown(path, owner[0], owner[1])
-        os.chmod(path, 0o700 if path == BACKUP_ROOT else 0o755)
+        os.chmod(path, 0o700)
 
     stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d_%H%M%S")
     name = f"{stamp}_{_safe_label(previous_tag)}-to-{_safe_label(target_tag)}"

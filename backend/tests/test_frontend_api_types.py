@@ -63,7 +63,9 @@ FRONTEND_ONLY = {
 # --- a very small TypeScript reader ------------------------------------------
 
 _IFACE = re.compile(r"^export interface (\w+)(?:\s+extends\s+([\w,\s]+))?\s*\{", re.M)
-_TYPE_UNION = re.compile(r"^export type (\w+)\s*=\s*((?:[^=;{}]|\n)*?)(?=\n(?:export|/\*|//)|\n\n|\Z)", re.M)
+# `[^=;{}]` already matches a newline. An explicit `|\n` beside it made every
+# newline matchable two ways, i.e. exponential backtracking (CodeQL py/redos).
+_TYPE_UNION = re.compile(r"^export type (\w+)\s*=\s*([^=;{}]*?)(?=\n(?:export|/\*|//)|\n\n|\Z)", re.M)
 _FIELD = re.compile(r"^\s{2}(\w+)(\??):\s*(.+?)\s*$")
 
 

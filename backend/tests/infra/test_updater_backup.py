@@ -96,10 +96,21 @@ def test_a_backup_holds_the_dump_the_snapshot_and_a_verifiable_manifest(executor
     assert kind["kind"] == "pre-update" and kind["components"] == "db,redis"
     assert (kind["from_tag"], kind["to_tag"]) == ("v1.0.0", "v1.1.0")
     assert kind["alembic_head"] == "202609240001" and kind["db_image"] == "mariadb:11.8.3"
-    # the dump holds password hashes: owner-only
+    # the dump holds password hashes: owner-only, and so is a backups/ the
+    # executor had to create (this fixture's workspace has none)
     assert d.stat().st_mode & 0o777 == 0o700
     assert all(p.stat().st_mode & 0o777 == 0o600 for p in d.iterdir())
+    assert (executor.WORKSPACE / "backups").stat().st_mode & 0o777 == 0o700
     assert not list(executor.BACKUP_ROOT.glob(".partial-*"))
+
+
+def test_an_existing_backups_dir_keeps_its_mode(executor, docker):
+    backups = executor.WORKSPACE / "backups"
+    backups.mkdir()
+    backups.chmod(0o750)
+    assert _backup(executor)
+    assert backups.stat().st_mode & 0o777 == 0o750
+    assert executor.BACKUP_ROOT.stat().st_mode & 0o777 == 0o700
 
 
 def test_the_root_password_never_appears_in_an_argv(executor, docker):

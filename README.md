@@ -42,7 +42,7 @@ the rest.
 
 - [Quickstart](#quickstart) · [Architecture](#architecture) · [Tech stack](#tech-stack) · [Highlights](#highlights)
 - [**Using file:Heron** (end-user guide)](#using-fileheron-end-user-guide)
-  - [Logging in](#logging-in) · [Sending](#sending-a-share-sharenew) · [Receiving](#receiving-a-share-inbox) · [Managing shares](#managing-your-shares-outbox) · [Public links](#public-links-anonymous-recipients) · [Preview](#in-browser-preview) · [Share approval](#share-approval-four-eyes) · [Account](#account-page-account)
+  - [Logging in](#logging-in) · [Sending](#sending-a-share-sharenew) · [Receiving](#receiving-a-share-inbox) · [Managing shares](#managing-your-shares-outbox) · [Public links](#public-links-anonymous-recipients) · [Preview](#in-browser-preview) · [Share approval](#share-approval-four-eyes) · [Secrets](#secrets-secrets) · [Account](#account-page-account)
 - [**Admin guide**](#admin-guide)
   - [Users](#user-management) · [Groups](#groups) · [Audit log](#audit-log-adminaudit-log) · [File history](#file-history-adminfile-history) · [Sessions](#sessions-adminsessions) · [Quarantine](#quarantine-adminquarantine) · [Analytics](#analytics-adminanalytics) · [Error log & alerts](#error-log--alerts-adminerror-log--adminsettingserror-alerts) · [Webhooks](#webhooks-adminsettingswebhooks) · [Scheduled tasks](#scheduled-tasks-adminscheduled-tasks)
   - [Policies & settings](#policies--settings): API tokens · public links · 2FA · SSO · SMTP · IMAP · share approval · email-change · branding · maintenance · config backup · advanced
@@ -135,6 +135,7 @@ instead of being sent - handy for dev. Full operator walkthrough: [First install
 - **Bidirectional sharing** - outbound (company → client) and inbound (client → employee or a company-inbox group), with sortable/filterable/groupable Outbox & Inbox lists and a cross-user admin **File history**.
 - **Resumable transfers up to ~30 GB** (TUS) with a direct-multipart fast path under 100 MB; per-user quotas reserved atomically via Redis Lua. **Bulk ZIP** download of a whole share (single streamed archive).
 - **Time-limited shares** with editable expiry + "Expire now", **public links** (Argon2 password + brute-force lockout + atomic download-count limit), and an optional **four-eyes share approval** workflow.
+- **Secrets** (off by default) - send a password or other short text to people, groups, addresses without an account or a link; readable a set number of times and/or until a date, then destroyed. Encrypted per secret, optional passphrase as an extra encryption layer, never readable by admins.
 - **Scoped, admin-governed API tokens** - least-privilege scopes (`403 INSUFFICIENT_SCOPE` outside them); a policy gate decides who may mint them.
 - **Antivirus on every upload** (ClamAV) with reversible quarantine; **in-browser preview** of PDFs / images / text from a strict allowlist.
 - **Auth**: Argon2id, JWT + rotating refresh with reuse-detection, TOTP + recovery codes, **WebAuthn/passkeys**, **multi-provider OIDC SSO**, HIBP breach check, per-user session cap, lockout + per-IP rate limits.
@@ -168,7 +169,7 @@ deduplicated to once per 6 h). After login you land on your **default landing pa
 ## The page layout
 
 - Top **brand mark** ("file:Heron") - back to home (or a static label if home is disabled).
-- Centre nav: **Outbox**, **Inbox**, **New share** (plus **Approvals** if you're an approver).
+- Centre nav: **Outbox**, **Inbox**, **New share** (plus **Approvals** if you're an approver, and **Secrets** when an admin has turned them on).
 - Right: 🔔 **notification bell** (live via SSE), then your **name menu** (Account, Admin for admins, Sign out).
 - One warm-amber accent on warm off-white; light theme only.
 
@@ -356,6 +357,58 @@ is held like one addressed to a client. Attaching a link later to a live share
 that this policy would hold needs an admin (`409 APPROVAL_REQUIRED`); an
 approver whose own shares are exempt may still attach one to their own share.
 
+## Secrets (`/secrets`)
+
+Off by default (*Admin → Sharing & files → Secrets → Policy*); once an admin turns
+it on, a **Secrets** link appears in the header. A secret is a password, a key or
+any short text (up to 10,000 characters) for named people or a link. It can be
+read a set number of times and/or until a date, and is then destroyed. Its text is
+never put in an email: recipients are told that a secret is waiting and open it in
+file:Heron.
+
+**Sending** (`/secrets/new`):
+
+1. **The secret** - type or paste it, or **Generate a password** (length and character classes; made in your browser).
+2. **Label** (optional) - the only part anyone sees before revealing it, and the only part in notifications and mail. Don't put the secret there.
+3. **Recipients** - people and groups, as for a share. If the admin allows it, staff can also type an **email address without an account** (each address gets its own link, mailed to it) and **create a link** to pass on themselves (chat, phone; with a QR code). Clients can send only to the employees they are connected to.
+4. **Limits** - a view limit, an expiry, or both (at least one); whichever comes first ends the secret. The form starts at 1 view and 7 days. How the views count: **Each person** (everyone who can read it gets them, each group member too) or **All together** (one pool; once used, it is gone for all). With a group among the recipients there is a third choice, **Each recipient**: every person, address and the link gets the views, and a group's members share theirs, so the first member's view can use them up for the rest.
+5. **Passphrase** (optional) - part of the encryption, not just a prompt: without it nobody can open the secret, not even the server's operator, and if it is lost the secret cannot be recovered. Tell the recipients another way. You may choose that too many wrong passphrases destroy the secret for that recipient.
+6. **Notify me when it is viewed** (off by default) - a notice for each view, and one when the secret is used up or expires unread.
+
+**Receiving.** A secret addressed to you is under **Secrets → Received**, and you
+are notified. Only the **Reveal** button uses a view: opening the page or a link
+costs nothing (mail scanners open links before people do). When it was the last
+view the page says so - copy it then. A group member can read a secret if they
+were in the group when it was sent **and** still are. A wrong passphrase never
+uses a view. Repeated wrong passphrases are slowed down, and a link is locked for
+a while only when they come from several addresses, so one person guessing cannot
+lock the real recipient out. If the sender or the admin chose so, too many wrong
+passphrases instead destroy the secret for that recipient.
+
+**Status.** Under **Secrets → Sent** the sender sees each secret's views left,
+who viewed it and when (with the address for a view through a link or an email
+link), and can **Burn now**, copy their links again, **replace the link** (a new
+URL with a fresh count) or remove it. Neither the sender nor an admin can read
+the secret itself. A link opens `/s#...`: the part after `#` never leaves the
+browser, so the token reaches no proxy or access log.
+
+**When a secret ends** - its views used, its expiry passed, or burned - its
+encrypted text, its key and its links are deleted from the database at once. The
+record (label, recipients, view log) is kept for 90 days (*Data retention &
+storage*, `0` keeps it), then pruned.
+
+<details>
+<summary>How a secret is protected</summary>
+
+- **Encryption.** Each secret's text is encrypted with a key made for it alone. That key is wrapped by the instance key (derived from `JWT_SECRET`, like TOTP secrets) and, with a passphrase, by an Argon2id key derived from the passphrase underneath. The passphrase is stored nowhere. `scripts/rotate_jwt_secret.py` re-wraps the outer layer without needing any passphrase.
+- **Only recipients read it.** The text is in exactly one response: the reveal. Audit rows, webhooks and logs carry the label, ids and counts - never the text, a token or an address (the audit log counts addresses). Notifications and mail never carry the text; the sender's "viewed" notice names who viewed it - the person, or the address or link and its IP.
+- **Counting.** A view is claimed by one conditional `UPDATE ... WHERE views_used < limit` while the secret's row is locked, so two people revealing the last view at once cannot both get it.
+- **Tokens.** A link token is 43 random characters; the server stores its SHA-256 for lookup and an encrypted copy so the sender can copy the link again (showing it again is audited). The page posts the token in a request body, never in a URL, and the mail log masks it (`/s#<redacted>`, no resend).
+- **Ending is final.** Burned, expired and used-up secrets cannot be recovered from the database. A configuration import burns every active secret, and erasing a user deletes the secrets they sent.
+- **API.** `/api/secrets` with five token scopes: `secrets:send`, `secrets:read` (metadata, never the text), `secrets:reveal` (the text), `secrets:manage` (burn; create, replace or remove the link) and `secrets:links` (read the links back). Link and address holders use `POST /api/public/secrets/peek` (free) and `/reveal`. The desktop client has no secrets view yet.
+
+</details>
+
 ## Account page (`/account`)
 
 <img src="docs/screenshots/account.png" alt="The account page with its section quick-nav" width="800">
@@ -371,7 +424,7 @@ A single scrollable page (left quick-nav with scroll-spy):
 - **SSO connections** - connect/disconnect OIDC providers (refuses on email mismatch).
 - **Email address** - change your sign-in email (if the admin's [email-change policy](#policies--settings) allows it), via a confirm-by-email flow.
 - **Notifications** - per-category channel (off / email / in-app / both). Security-critical types (password reset, sign-in alerts) are shown but **locked on**.
-- **API tokens** - if policy allows: **Full access** or **Limited** (tick exactly what it may do across *Sharing* and *Files*); a limited token is refused (`403 INSUFFICIENT_SCOPE`) outside its scopes. Plaintext shown once.
+- **API tokens** - if policy allows: **Full access** or **Limited** (tick exactly what it may do across *Sharing*, *Files* and *Secrets*); a limited token is refused (`403 INSUFFICIENT_SCOPE`) outside its scopes. Plaintext shown once.
 
 Every email carries a **Manage subscriptions** footer link (and ordinary
 notifications a one-click **Unsubscribe**) that works **without logging in** via a
@@ -387,8 +440,9 @@ is an **Overview** (what needs attention, a search over every setting, all pages
 the sidebar groups the pages by task: **People & access** · **Sharing & files** ·
 **Email & notifications** · **Security & audit** · **Site & appearance** · **System**.
 A policy and the state it produces share one page as tabs (Quarantine: Files | Alerts &
-scanner; API tokens: Tokens | Policy; Blocked sources: Blocks & allowlist | Auto-block rules
-(Scan guard); Errors & alerts: Log | Alerts); every tab keeps its historical URL.
+scanner; API tokens: Tokens | Policy; Secrets: Secrets | Policy; Blocked sources: Blocks &
+allowlist | Auto-block rules (Scan guard); Errors & alerts: Log | Alerts); every tab keeps its
+historical URL.
 
 <img src="docs/screenshots/admin-overview.png" alt="The admin overview: the task-grouped sidebar, the setting search, attention tiles, service status and every admin page" width="800">
 
@@ -397,7 +451,7 @@ scanner; API tokens: Tokens | Policy; Blocked sources: Blocks & allowlist | Auto
 <img src="docs/screenshots/admin-users.png" alt="The admin user list: employees and clients with role, status, 2FA, storage and last sign-in" width="800">
 
 - **`/admin/users`** - paginated, role/status filter, search. **Invite** (one-time link, 24 h; optional initial groups; pre-flights `USER_EXISTS` / `INVITE_PENDING`) or **create directly** (set a password; account active immediately, for out-of-band hand-off).
-- **`/admin/users/:id`** - edit name/role/quota (NULL = unlimited)/disabled, plus three irreversible actions: **Force password reset** (one-time token), **Erase user (GDPR)** (hard-deletes files, anonymises the row, audits `user_erased`; two-step with a pre-flight count), and **Erasure receipt PDF**. The page also shows the user's **sessions** and **current files** (with per-file delete) and authoritative **storage** figure.
+- **`/admin/users/:id`** - edit name/role/quota (NULL = unlimited)/disabled, plus three irreversible actions: **Force password reset** (one-time token), **Erase user (GDPR)** (hard-deletes files and the secrets they sent, anonymises the row, audits `user_erased`; two-step with a pre-flight count), and **Erasure receipt PDF**. The page also shows the user's **sessions** and **current files** (with per-file delete) and authoritative **storage** figure.
 
 ## Groups
 
@@ -485,6 +539,7 @@ always pass.
 |---|---|---|
 | API token policy | `/admin/settings/api-tokens` | Who may mint API tokens (+ allowlist). Cross-user inventory at `/admin/api-tokens` (disable/revoke, generate-for-user, per-token scopes). |
 | Public-link policy | `/admin/settings/public-links` | Who may mint public links. |
+| Secrets | `/admin/settings/secrets` (the *Policy* tab of **Secrets**; the *Secrets* tab at `/admin/secrets` lists every secret's metadata, with **Burn now**) | The on/off switch (off by default; turning it off stops new secrets, those already sent stay readable until they end), who may send secrets (default everyone; a client reaches only connected employees), who may send them outside the organisation - to an address or as a link (default employees and admins; never a client), what wrong passphrases do (slow down and lock, or destroy after N), and the limits: most views (100), latest expiry (90 days), longest life (90 days, also ending secrets that have only a view limit; `0` = none) and the passphrase throttle. Admins never see a secret's text or its links. |
 | 2FA enforcement | `/admin/settings/twofa` | Which roles/groups must enrol TOTP (computed live; **no admin escape**). |
 | SSO providers | `/admin/settings/sso` | Multi-provider OIDC CRUD (entra/google/authentik/keycloak/custom presets, smart-prefill, test-discovery). DELETE refused while users are bound. |
 | SMTP / email | `/admin/settings/email` | Live SMTP override (DB beats env), HELO host, test-send with the error class/code surfaced. Password Fernet-encrypted, never echoed. |
@@ -500,8 +555,8 @@ always pass.
 | Anomaly detection | `/admin/settings/anomaly` | The four heuristic thresholds; advisory only. |
 | Self-update | `/admin/system` | Releases API URL (forks repoint it), the postponed-update drain wait and **automatic updates** (off by default; turning them on asks for your password), on **Status & updates**; the poll cadence lives on [Scheduled tasks](#scheduled-tasks-adminscheduled-tasks), not here. |
 | Maintenance mode | `/admin/settings/maintenance` | Pause **new** transfers (in-progress + resumable ones finish); standalone or via drain-before-update. |
-| Configuration backup | `/admin/settings/backup` | Export/import settings/branding/OIDC/webhooks/groups/users (+ optional logs) to one `*.fhbackup.json`; three secret modes (passphrase / ciphertext / exclude). Files excluded; import invalidates active shares + revokes sessions. |
-| Data retention & storage | `/admin/settings/advanced` | What remains of the **registry overlay** on this page: every retention window and the low-disk thresholds, editable **live, clamped to safe bounds**. The other registry groups render on the page of their task through the same endpoint (`frontend/src/config/adminTunablePlacement.ts`): session lifetimes on **Sessions › Policy** (`/admin/settings/sessions`), lockout + sign-in limits + HIBP on **Sign-in policies**, the public-link brute-force limits on **Public links**, the upload cap and download tunables on **Files & transfers**, anomaly thresholds on **Anomaly detection**, the alert throttle on **Errors & alerts**, the drain wait on **Status & updates**, the app name on **Branding & legal**. |
+| Configuration backup | `/admin/settings/backup` | Export/import settings/branding/OIDC/webhooks/groups/users (+ optional logs) to one `*.fhbackup.json`; three secret modes (passphrase / ciphertext / exclude). Files and secrets excluded; import invalidates active shares, burns active secrets and revokes sessions. |
+| Data retention & storage | `/admin/settings/advanced` | What remains of the **registry overlay** on this page: every retention window and the low-disk thresholds, editable **live, clamped to safe bounds**. The other registry groups render on the page of their task through the same endpoint (`frontend/src/config/adminTunablePlacement.ts`): session lifetimes on **Sessions › Policy** (`/admin/settings/sessions`), lockout + sign-in limits + HIBP on **Sign-in policies**, the public-link brute-force limits on **Public links**, the secret limits and passphrase throttle on **Secrets › Policy**, the upload cap and download tunables on **Files & transfers**, anomaly thresholds on **Anomaly detection**, the alert throttle on **Errors & alerts**, the drain wait on **Status & updates**, the app name on **Branding & legal**. |
 
 **Anomaly detection** is heuristic and **alert-only** (it never blocks): an hourly cron
 flags mass-download, multi-network access, and login-failure spikes against the
@@ -520,6 +575,7 @@ thresholds on `/admin/settings/anomaly`, dispatching an `ops_alert`.
 - **Sessions / invites:** `refresh_token_rotated`, `refresh_token_reused`, `refresh_token_evicted`, `refresh_token_admin_revoked`, `invite_created`, `invite_consumed`, `invite_revoked`, `invite_purged`.
 - **Shares / files:** `share_created`, `share_revoked`, `share_expired`, `share_expiry_updated`, `share_limit_updated`, `share_files_added`, `share_failed`, `share_submitted_for_approval`, `share_approved`, `share_rejected`, `share_resubmitted`, `file_finalized`, `file_downloaded`, `file_deleted`, `file_expired`, `file_upload_abandoned`, `file_quarantined`, `file_quarantine_released`, `file_quarantine_purged`, `av_reload_triggered`.
 - **Public links / groups:** `public_link_created`, `public_link_revoked`, `public_link_consumed`, `group_created`, `group_updated`, `group_deleted`, `group_member_added`, `group_member_removed`.
+- **Secrets:** `secret_created`, `secret_viewed`, `secret_burned` (every view used), `secret_expired`, `secret_revoked` (burned early by the sender, an admin or a config import), `secret_recipient_burned` (too many wrong passphrases), `secret_link_shown`, `secret_link_replaced`, `secret_link_removed`, `secret_policy_changed`. Metadata only - never the text, a token or an address. `secret_created`, `secret_viewed` and `secret_burned` are also webhook events.
 - **API tokens / OIDC:** `api_token_created` / `_revoked` / `_disabled` / `_reactivated` / `_admin_revoked` / `_admin_created`, `oidc_linked`, `oidc_unlinked`, `oidc_provider_created` / `_updated` / `_deleted`.
 - **Email / messaging:** `email_resent`, `email_undeliverable`, `email_template_changed`, `email_template_reset`, `smtp_config_changed`, `imap_config_changed`.
 - **Settings / policy:** `api_policy_changed`, `public_link_policy_changed`, `twofa_policy_changed`, `quarantine_policy_changed`, `share_defaults_policy_changed`, `share_approval_policy_changed`, `home_page_toggled`, `file_preview_toggled`, `motd_changed`, `branding_changed`, `legal_changed`, `site_url_changed`, `site_timezone_changed`, `updates_settings_changed`, `error_alert_settings_changed`, `webhook_created` / `_updated` / `_deleted`, `settings_changed`.
@@ -993,11 +1049,13 @@ defaults: [ARQ workers + cron](#arq-workers--cron).
 - **Bypass ClamAV in CI/dev** - `AV_SKIP=true` (boot refuses `production + true`).
 - **Rotate `JWT_SECRET`** - `docker compose exec backend python /app/scripts/rotate_jwt_secret.py` re-encrypts every
   Fernet-protected field (TOTP secrets, OIDC client secrets, public-link tokens,
-  the encrypted SMTP/IMAP passwords) under the new secret. Stop the worker, run
+  the encrypted SMTP/IMAP passwords, each secret's wrapped key and secret links)
+  under the new secret - a secret's passphrase layer is untouched, so no passphrase
+  is needed. Stop the worker, run
   with `OLD_JWT_SECRET`/`NEW_JWT_SECRET` set (`--dry-run` first; safe to re-run
   after a crash), update `.env`, restart backend + worker. Rotating *without* it
-  locks out every TOTP user and breaks SSO, the stored SMTP password, and
-  public-link re-view. All sessions invalidate (forced re-login) - plan a window.
+  locks out every TOTP user and breaks SSO, the stored SMTP password,
+  public-link re-view and every active secret. All sessions invalidate (forced re-login) - plan a window.
 
 ## Settings reference
 
@@ -1085,6 +1143,10 @@ via `/admin/settings/advanced`.
 > verdict clamd never produced.
 | `PUBLIC_LINK_BASE_PATH` | `/d` | Public-link URL prefix. |
 | `PUBLIC_LINK_PASSWORD_RATE_LIMIT` / `_WINDOW_SEC` / `PUBLIC_LINK_LOCKOUT_SEC` | `10`/`900`/`900` | Per-link password brute-force guard. ↻ |
+| `SECRET_LINK_BASE_PATH` | `/s` | Secret-link URL prefix (`{site}/s#<token>`; the SPA serves `/s`). |
+| `SECRETS_MAX_VIEWS` / `SECRETS_MAX_EXPIRY_DAYS` / `SECRETS_MAX_LIFETIME_DAYS` | `100`/`90`/`90` | Ceilings for a secret: most views, latest expiry, longest life (`0` = no lifetime ceiling). ↻ |
+| `SECRETS_PASSPHRASE_MAX_FAILURES` | `10` | Wrong passphrases before a secret is destroyed for that recipient (when that mode is chosen). ↻ |
+| `SECRETS_PASSPHRASE_RATE_LIMIT` / `_WINDOW_SEC` / `_LOCKOUT_SEC` | `10`/`900`/`900` | Wrong-passphrase throttle per recipient and address, and how long a link is locked. ↻ |
 | `DOWNLOAD_SIGNED_URL_TTL_SEC` | `900` | Signed-download-URL lifetime (30s-1h). ↻ |
 | `DOWNLOAD_RESUME_CREDIT_HOURS` | `24` | How long a logged download lets the same user resume it for free (1-168h). Shorter tightens the download budget; longer suits clients that pause overnight. ↻ |
 
@@ -1108,6 +1170,7 @@ via `/admin/settings/advanced`.
 | `NOTIFICATION_READ_RETENTION_DAYS` | `3` | Read in-app notification cleanup. ↻ |
 | `QUARANTINE_PURGE_AFTER_DAYS` / `ORPHAN_RECLAIM_AFTER_DAYS` / `TUS_UPLOAD_ABANDONED_AFTER_HOURS` | `90`/`7`/`24` | Quarantine purge / orphan reclaim / abandoned-upload windows. ↻ |
 | `REFRESH_TOKEN_RETENTION_DAYS` / `INVITE_RETENTION_DAYS` | `30`/`14` | Token + invite retention. ↻ |
+| `SECRET_RETENTION_DAYS` | `90` | How long the record of an ended secret is kept (its text is gone at once; `0` keeps it). ↻ |
 | `FH_TAG` | `latest` | GHCR image tag (the in-app updater rewrites it). |
 | `UPDATER_HOST_WORKSPACE` / `UPDATER_HOST_STATE` | `${PWD}` / `${PWD}/data/updater` | Host paths the updater shim resolves. |
 | `UPDATES_DRAIN_MAX_WAIT_MIN` | `30` | Max wait for transfers to drain before a postponed update applies. ↻ |
@@ -1140,7 +1203,7 @@ registry overlay for every `↻` env var above.
 | UI language | `users.locale` (EN/DE); overrides browser language. |
 | Default landing page | `home` / `outbox` / `inbox` / `new` / `account`. |
 | Storage quota | `users.quota_bytes` (admin-set; NULL = unlimited). |
-| Notification channels | Per category → `off` / `email` / `in_app` / `both`. **17 categories**: `share_created`, `share_files_added`, `share_expiring`, `share_pending_approval`, `share_approved`, `share_rejected`, `public_link_downloaded`, `account_created`, `reset_password`*, `login_alert`*, `oidc_linked`, `file_quarantined`, `session_evicted`, plus admin-only `ops_alert`, `release_available`, `inbound_message`, `server_error`. (*locked on - can't be disabled.) |
+| Notification channels | Per category → `off` / `email` / `in_app` / `both`. **20 categories**: `share_created`, `share_files_added`, `share_expiring`, `share_pending_approval`, `share_approved`, `share_rejected`, `public_link_downloaded`, `secret_received`, `secret_viewed`, `secret_ended`, `account_created`, `reset_password`*, `login_alert`*, `oidc_linked`, `file_quarantined`, `session_evicted`, plus admin-only `ops_alert`, `release_available`, `inbound_message`, `server_error`. (*locked on - can't be disabled.) |
 | 2FA / recovery codes / passkeys | TOTP, 10 one-time recovery codes, WebAuthn credentials. |
 | SSO connections / API tokens | Link/unlink OIDC; mint/scope/revoke your own tokens (if policy allows). |
 
@@ -1236,7 +1299,7 @@ historical cadence.
 `anomaly_check` (heuristic alerts), `rescan_inbound_attachments`,
 `release_check` (~daily; filters backend `vX.Y.Z` tags, matched in full).
 
-**Every 5 min:** `imap_poll` (self-gated on `imap.enabled`/mode/interval).
+**Every 5 min:** `imap_poll` (self-gated on `imap.enabled`/mode/interval), `expire_secrets` (ends and shreds expired secrets, and any nobody can read any more).
 **Every minute:** `drain_pending_update` (applies a postponed update once transfers drain, and reports how a handed-off update ended).
 **Daily 03:30:** `auto_update` (installs a newer release when automatic updates are on).
 
@@ -1244,7 +1307,7 @@ historical cadence.
 `cleanup_read_notifications`, `prune_history`, `reclaim_orphaned_files`.
 
 `prune_history` prunes `audit_log`, `download_log`, `email_log`, `login_attempts`,
-`webhook_deliveries`, `error_log`, and `inbound_messages` (each window `0` disables).
+`webhook_deliveries`, `error_log`, `inbound_messages` and ended secrets (each window `0` disables).
 
 **Event-driven:** `av_scan_file(file_id)` (quarantines on infection) and
 `send_email_job(...)` (resolves SMTP per job; permanent 5xx → `email_undeliverable` +

@@ -62,6 +62,23 @@ export interface MeResponse {
   /** v1.15.0: open sidebar category keys, synced across devices. null =
    * never set (client uses the mode's default); [] = all collapsed. */
   admin_nav_open_categories: string[] | null
+  /** v2.24.0: the Secrets feature is on (anyone may RECEIVE one). */
+  secrets_enabled: boolean
+  /** v2.24.0: this user may send a secret (the send policy). */
+  can_send_secrets: boolean
+  /** v2.24.0: ...and to an email address or as a link (the external policy;
+   *  never a client). */
+  can_send_secrets_external: boolean
+  /** v2.24.0: the admin's ceilings, for the compose form. null while off. */
+  secret_limits: SecretLimitsResponse | null
+}
+
+export interface SecretLimitsResponse {
+  max_views: number
+  max_expiry_days: number
+  max_lifetime_days: number
+  passphrase_failure_mode: string
+  passphrase_max_failures: number
 }
 
 export interface ShareDefaultsResponse {
@@ -500,6 +517,9 @@ export type NotificationCategory =
   | 'release_available'
   | 'inbound_message'
   | 'server_error'
+  | 'secret_received'
+  | 'secret_viewed'
+  | 'secret_ended'
 
 export type NotificationChannel = 'off' | 'email' | 'in_app' | 'both'
 
@@ -683,6 +703,8 @@ export interface ErasePreflight {
   bytes_to_delete: number
   shares_created: number
   shares_received_to_anonymize: number
+  /** v2.24.0: secrets they sent, deleted outright. */
+  secrets_to_delete: number
 }
 
 export interface EraseUserResponse {
@@ -1417,4 +1439,236 @@ export interface InboxDetail extends InboxListItem {
 
 export interface UpdateInboxStatusRequest {
   status: InboxStatus
+}
+
+/* Secrets (v2.24.0) - backend schemas/secret.py. Only RevealSecretResponse
+ * carries a secret's content; everything else is metadata. */
+
+export type SecretState = 'active' | 'burned' | 'expired' | 'revoked'
+export type SecretViewScope = 'per_person' | 'per_recipient' | 'total'
+export type SecretRecipientKind = 'user' | 'group' | 'email' | 'link'
+export type SecretAccessOutcome = 'viewed' | 'wrong_passphrase' | 'locked' | 'burned'
+export type SecretPolicyMode = 'everyone' | 'employees_admins' | 'admins_only'
+export type PassphraseFailureMode = 'lock' | 'burn'
+
+export interface SecretRecipientsRequest {
+  user_ids: number[]
+  group_ids: number[]
+  emails: string[]
+}
+
+export interface CreateSecretRequest {
+  content: string
+  label?: string | null
+  passphrase?: string | null
+  max_views?: number | null
+  view_scope?: SecretViewScope
+  /** UTC ISO datetime, or null = no expiry (then a view limit is required). */
+  expires_at?: string | null
+  recipients?: SecretRecipientsRequest
+  create_link?: boolean
+  notify_on_view?: boolean
+  burn_on_failures?: boolean
+}
+
+export interface SecretUserRef {
+  id: number
+  display_name: string
+}
+
+export interface SecretGroupRef {
+  id: number
+  name: string
+}
+
+export interface SecretMemberStatus {
+  user: SecretUserRef
+  views_used: number
+  last_viewed_at: string | null
+  eligible: boolean
+  burned: boolean
+}
+
+export interface SecretRecipientStatus {
+  id: number
+  kind: SecretRecipientKind
+  user?: SecretUserRef | null
+  group?: SecretGroupRef | null
+  email?: string | null
+  views_used: number
+  views_left: number | null
+  failed_attempts: number
+  locked_until: string | null
+  burned: boolean
+  revoked: boolean
+  emailed_at: string | null
+  created_at: string
+  members?: SecretMemberStatus[]
+}
+
+export interface SecretEvent {
+  at: string
+  outcome: SecretAccessOutcome
+  recipient_id: number | null
+  kind: SecretRecipientKind | null
+  user: SecretUserRef | null
+  email: string | null
+  ip: string | null
+}
+
+export interface SecretRecipientSummary {
+  users?: number
+  groups?: number
+  emails?: number
+  link?: boolean
+}
+
+export interface SecretResponse {
+  id: string
+  state: SecretState
+  label: string | null
+  sender: SecretUserRef
+  created_at: string
+  ended_at: string | null
+  expires_at: string | null
+  max_views: number | null
+  view_scope: SecretViewScope
+  /** Sender and admins only; null for a recipient (who reads my_views_left). */
+  views_used: number | null
+  has_passphrase: boolean
+  notify_on_view: boolean
+  burn_after_failures: number | null
+  viewer_role: 'sender' | 'admin' | 'recipient'
+  my_views_left?: number | null
+  can_reveal?: boolean
+  still_recipient?: boolean
+  burned_for_me?: boolean
+  my_failed_attempts?: number
+  recipients?: SecretRecipientStatus[]
+  recipient_summary?: SecretRecipientSummary
+  events?: SecretEvent[]
+  /** Create response only, when a link was made. */
+  link_url?: string | null
+  link_qr_svg?: string | null
+}
+
+export interface SecretListItem {
+  id: string
+  state: SecretState
+  label: string | null
+  sender: SecretUserRef
+  created_at: string
+  ended_at: string | null
+  expires_at: string | null
+  max_views: number | null
+  view_scope: SecretViewScope
+  /** Sent box and the admin list; null in the received box. */
+  views_used: number | null
+  has_passphrase: boolean
+  my_views_left?: number | null
+  recipient_summary?: SecretRecipientSummary | null
+}
+
+export interface SecretListResponse {
+  items: SecretListItem[]
+  total?: number
+  page?: number
+  page_size?: number
+}
+
+export interface RevealSecretRequest {
+  passphrase?: string | null
+}
+
+export interface RevealSecretResponse {
+  content: string
+  views_left: number | null
+  ended: boolean
+}
+
+export interface PublicSecretTokenRequest {
+  token: string
+}
+
+export interface PublicRevealSecretRequest extends PublicSecretTokenRequest {
+  passphrase?: string | null
+}
+
+export interface PublicSecretPeekResponse {
+  requires_passphrase: boolean
+  label: string | null
+  sender_name: string | null
+  expires_at: string | null
+  views_left: number | null
+  locked_until: string | null
+  attempts_left: number | null
+}
+
+export interface SecretLinkItem {
+  recipient_id: number
+  kind: SecretRecipientKind
+  email: string | null
+  url: string | null
+  qr_svg: string | null
+}
+
+export interface SecretLinksResponse {
+  items: SecretLinkItem[]
+}
+
+export interface SecretLinkResponse {
+  recipient_id: number
+  url: string
+  qr_svg: string
+}
+
+export interface SecretAllowedUser {
+  id: number
+  display_name: string
+  email: string
+  role: string
+}
+
+export interface SecretAllowedGroup {
+  id: number
+  name: string
+}
+
+export interface SecretPolicySide {
+  mode: SecretPolicyMode
+  allowed_user_ids: number[]
+  allowed_group_ids: number[]
+  allowed_users: SecretAllowedUser[]
+  allowed_groups: SecretAllowedGroup[]
+}
+
+export interface SecretPolicyResponse {
+  enabled: boolean
+  send: SecretPolicySide
+  external: SecretPolicySide
+  passphrase_failure_mode: PassphraseFailureMode
+}
+
+export interface UpdateSecretPolicySide {
+  mode: SecretPolicyMode
+  allowed_user_ids?: number[]
+  allowed_group_ids?: number[]
+}
+
+export interface UpdateSecretPolicyRequest {
+  enabled?: boolean | null
+  send?: UpdateSecretPolicySide | null
+  external?: UpdateSecretPolicySide | null
+  passphrase_failure_mode?: PassphraseFailureMode | null
+}
+
+export interface AdminSecretListItem extends SecretListItem {
+  sender_email: string
+}
+
+export interface AdminSecretListResponse {
+  items: AdminSecretListItem[]
+  total?: number
+  page?: number
+  page_size?: number
 }

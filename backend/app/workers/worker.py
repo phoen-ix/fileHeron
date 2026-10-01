@@ -39,6 +39,7 @@ from .cron_dispatch import cron_dispatch
 from .disk_check import disk_check
 from .drain_pending_update import drain_pending_update
 from .expire_files import expire_files
+from .expire_secrets import expire_secrets
 from .imap_poll import imap_poll
 from .notify_admin_error import notify_admin_error
 from .ops_check import ops_check
@@ -83,6 +84,7 @@ class WorkerSettings:
         drain_pending_update,
         auto_update,
         announce_ready_shares,
+        expire_secrets,
         cron_dispatch,
         notify_admin_error,
     ]

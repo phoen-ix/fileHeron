@@ -14,12 +14,20 @@ export const TOKEN_SCOPES = [
   'files:upload',
   'files:download',
   'files:delete',
+  'secrets:send',
+  'secrets:read',
+  'secrets:reveal',
+  'secrets:manage',
+  'secrets:links',
 ] as const
 
 type TokenScope = (typeof TOKEN_SCOPES)[number]
 
 /** Display grouping for the create form (purely presentational). */
-export const TOKEN_SCOPE_GROUPS: { group: 'sharing' | 'files'; scopes: TokenScope[] }[] = [
+export const TOKEN_SCOPE_GROUPS: {
+  group: 'sharing' | 'files' | 'secrets'
+  scopes: TokenScope[]
+}[] = [
   {
     group: 'sharing',
     scopes: [
@@ -33,6 +41,10 @@ export const TOKEN_SCOPE_GROUPS: { group: 'sharing' | 'files'; scopes: TokenScop
     ],
   },
   { group: 'files', scopes: ['files:upload', 'files:download', 'files:delete'] },
+  {
+    group: 'secrets',
+    scopes: ['secrets:send', 'secrets:read', 'secrets:reveal', 'secrets:manage', 'secrets:links'],
+  },
 ]
 
 /** i18n key for a scope label, e.g. "files:upload" -> "api_tokens.scopes.files_upload". */

@@ -42,6 +42,10 @@ const BASE_ME = {
   can_approve_shares: false,
   admin_nav_collapse_mode: null as AdminNavCollapseMode | null,
   admin_nav_open_categories: null as string[] | null,
+  secrets_enabled: false,
+  can_send_secrets: false,
+  can_send_secrets_external: false,
+  secret_limits: null,
 }
 
 // Shared mutable "server" state so getMe echoes back what the last persist

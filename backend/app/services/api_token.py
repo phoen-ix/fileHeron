@@ -59,6 +59,13 @@ SCOPES: frozenset[str] = frozenset(
         "public_links:read",  # read back an existing public link's URL/QR
         "public_links:write", # create/revoke a public link (+ inline-on-create)
         "recipients:search",  # GET /api/users/search, /api/users/me/connections
+        # Secrets (v2.24.0). Reading the CONTENT is its own grant, as is reading a
+        # link back: both hand over the secret itself, which metadata does not.
+        "secrets:send",       # POST /api/secrets
+        "secrets:read",       # list/read secret metadata (never the content)
+        "secrets:reveal",     # POST /api/secrets/{id}/reveal (the content)
+        "secrets:manage",     # burn; create/replace/remove the copyable link
+        "secrets:links",      # read back a secret's link URLs (re-viewable)
     }
 )
 

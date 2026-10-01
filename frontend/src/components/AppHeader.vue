@@ -66,6 +66,9 @@
           <RouterLink :to="{ name: 'inbox' }" class="nav-link">
             {{ $t('header.inbox') }}
           </RouterLink>
+          <RouterLink v-if="auth.user?.secrets_enabled" :to="{ name: 'secrets' }" class="nav-link">
+            {{ $t('header.secrets') }}
+          </RouterLink>
           <RouterLink
             v-if="auth.user?.can_approve_shares"
             :to="{ name: 'approvals' }"
@@ -96,7 +99,7 @@
           <div v-if="menuOpen" class="user-pop" role="menu">
             <!-- Below 720px the .app-nav above is hidden, and these were the
                  only links left: a recipient on a phone had no way to reach
-                 their inbox. The same four destinations, narrow screens only. -->
+                 their inbox. The same destinations, narrow screens only. -->
             <RouterLink
               :to="{ name: 'outbox' }"
               class="user-pop-item narrow-only"
@@ -112,6 +115,15 @@
               @click="menuOpen = false"
             >
               {{ $t('header.inbox') }}
+            </RouterLink>
+            <RouterLink
+              v-if="auth.user?.secrets_enabled"
+              :to="{ name: 'secrets' }"
+              class="user-pop-item narrow-only"
+              role="menuitem"
+              @click="menuOpen = false"
+            >
+              {{ $t('header.secrets') }}
             </RouterLink>
             <RouterLink
               v-if="auth.user?.can_approve_shares"

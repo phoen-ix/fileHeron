@@ -87,6 +87,13 @@ class NotificationCategory(str, enum.Enum):
     # cap in services/error_alert.py already throttle, so email-by-default is
     # safe). Plain string -> no migration.
     server_error = "server_error"
+    # Secrets (v2.24.0). `secret_received` goes to every account person who may
+    # read a new secret; `secret_viewed` / `secret_ended` go to its sender, only
+    # when they ticked "notify me" (and `secret_ended` always when an admin, not
+    # the sender, burned it). The payload carries the label - never the content.
+    secret_received = "secret_received"
+    secret_viewed = "secret_viewed"
+    secret_ended = "secret_ended"
 
 
 # Categories only ever dispatched to admins (the dispatch sites filter on

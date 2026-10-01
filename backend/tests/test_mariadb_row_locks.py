@@ -164,3 +164,47 @@ def test_the_counter_is_correct_once_the_lock_is_released(mariadb, locked_user):
             {"e": _EMAIL},
         ).scalar()
     assert n == 2, f"expected 2 recorded failures, got {n}"
+
+
+@_SKIP
+def test_a_secret_reveal_locks_the_secret_row(mariadb, locked_user):
+    """Secrets (v2.24.0): a reveal locks the secret row for its whole
+    check-claim-decrypt-burn sequence. The view counters are conditional UPDATEs
+    and would hold on their own; the lock is what keeps a concurrent last view,
+    Burn now and the expiry sweep from interleaving between the eligibility
+    check and the shred. Asserted on the emitted SQL, like the sites above."""
+    import inspect
+
+    from app.services import secret_reveal
+
+    for fn in (secret_reveal.reveal_for_user, secret_reveal.reveal_by_token):
+        assert "_lock(db" in inspect.getsource(fn), f"{fn.__name__} no longer locks"
+
+    sid = "00000000-0000-4000-8000-0000000000a1"
+    with mariadb.begin() as conn:
+        conn.execute(sa.text("DELETE FROM secrets WHERE id = :i"), {"i": sid})
+        conn.execute(
+            sa.text(
+                "INSERT INTO secrets (id, created_by_id, has_passphrase, view_scope, "
+                "views_used, notify_on_view, state, created_at) "
+                "SELECT :i, id, 0, 'per_person', 0, 0, 'active', NOW() "
+                "FROM users WHERE email = :e"
+            ),
+            {"i": sid, "e": _EMAIL},
+        )
+    statements: list[str] = []
+    conn = mariadb.connect()
+    try:
+        @sa.event.listens_for(conn, "before_cursor_execute")
+        def _capture(_c, _cur, stmt, _p, _ctx, _many):  # noqa: ANN001
+            statements.append(stmt)
+
+        with Session(bind=conn) as db:
+            assert secret_reveal._lock(db, sid) is not None
+        assert any(
+            "FOR UPDATE" in s.upper() and "FROM secrets" in s for s in statements
+        ), statements
+    finally:
+        conn.close()
+        with mariadb.begin() as c:
+            c.execute(sa.text("DELETE FROM secrets WHERE id = :i"), {"i": sid})

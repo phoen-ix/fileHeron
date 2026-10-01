@@ -1015,6 +1015,8 @@ export interface BackupImportSummary {
   categories: string[]
   shares_to_invalidate: number
   files_deleted: number
+  /** v2.24.0: active secrets the import burns. */
+  secrets_to_burn?: number
   counts: Record<string, unknown>
   purged_users: string[]
   purged_groups: string[]

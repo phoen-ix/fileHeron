@@ -46,12 +46,14 @@ describe('ADMIN_NAV taxonomy', () => {
     expect(ADMIN_CATEGORY_KEYS).toEqual(['people', 'sharing', 'email', 'security', 'site', 'system'])
   })
 
-  it('places 30 items distributed 7 / 6 / 6 / 3 / 2 / 6, none over seven', () => {
+  it('places 31 items distributed 7 / 7 / 6 / 3 / 2 / 6, none over seven', () => {
     // The previous taxonomy had 14 of 32 links under "System" - one appended
     // entry per release. Seven is the ceiling; a new page goes into the
     // category of its task, and a policy + its state page become tabs.
-    expect(ADMIN_NAV.map((c) => c.items.length)).toEqual([7, 6, 6, 3, 2, 6])
-    expect(allItems()).toHaveLength(30)
+    // Sharing reached the ceiling with Secrets (v2.24.0): the next sharing
+    // page has to become a tab of an existing item, or something moves.
+    expect(ADMIN_NAV.map((c) => c.items.length)).toEqual([7, 7, 6, 3, 2, 6])
+    expect(allItems()).toHaveLength(31)
     for (const cat of ADMIN_NAV) expect(cat.items.length).toBeLessThanOrEqual(7)
   })
 
@@ -111,6 +113,7 @@ describe('tabs', () => {
         'admin-error-log',
         'admin-ip-blocks',
         'admin-quarantine',
+        'admin-secrets',
         'admin-sessions',
         'admin-settings-sign-in',
       ].sort(),

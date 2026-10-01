@@ -83,6 +83,23 @@ class Keys:
     # Rendered on the Public links admin page (services/external_recipients.py).
     SHARE_EXTERNAL_RECIPIENTS_ENABLED = "share.external_recipients.enabled"  # boolean
     SHARE_EXTERNAL_RECIPIENTS_OFFER_INVITE = "share.external_recipients.offer_invite"  # boolean
+    # Secrets (v2.24.0, services/secret.py). Ships OFF. Two policy gates of the
+    # policy_gate shape: who may send a secret at all (default everyone - a
+    # client can only reach employees they are connected to), and who may send
+    # one to an email address or as a link, i.e. out of the organisation
+    # (default employees + admins; a client never). Written by the Secrets
+    # policy route, never by /settings/advanced.
+    SECRETS_ENABLED = "secrets.enabled"  # boolean
+    SECRETS_SEND_POLICY_MODE = "secrets.send_policy_mode"
+    SECRETS_SEND_ALLOWED_USERS = "secrets.send_allowed_user_ids"    # JSON list[int]
+    SECRETS_SEND_ALLOWED_GROUPS = "secrets.send_allowed_group_ids"  # JSON list[int]
+    SECRETS_EXTERNAL_POLICY_MODE = "secrets.external_policy_mode"
+    SECRETS_EXTERNAL_ALLOWED_USERS = "secrets.external_allowed_user_ids"    # JSON list[int]
+    SECRETS_EXTERNAL_ALLOWED_GROUPS = "secrets.external_allowed_group_ids"  # JSON list[int]
+    # "lock" (throttle + lock, the public-link pattern) | "burn" (after N wrong
+    # passphrases the secret burns for that recipient). A sender may tighten a
+    # single secret to "burn"; never loosen it.
+    SECRETS_PASSPHRASE_FAILURE_MODE = "secrets.passphrase_failure_mode"
     # Share-approval workflow (v1.24.0). All admin-tunable, read live via
     # services/share_approval.py. The approver set reuses the policy_gate shape
     # (mode + additive user/group allowlist; admin always passes).
@@ -166,6 +183,14 @@ class Keys:
     PUBLIC_LINK_PASSWORD_RATE_LIMIT = "public_link.password_rate_limit"
     PUBLIC_LINK_PASSWORD_WINDOW_SEC = "public_link.password_window_sec"
     PUBLIC_LINK_LOCKOUT_SEC = "public_link.lockout_sec"
+    # Secrets (v2.24.0) - registry tunables, rendered on the Secrets policy tab.
+    SECRETS_MAX_VIEWS = "secrets.max_views"
+    SECRETS_MAX_EXPIRY_DAYS = "secrets.max_expiry_days"
+    SECRETS_MAX_LIFETIME_DAYS = "secrets.max_lifetime_days"  # 0 = no ceiling
+    SECRETS_PASSPHRASE_MAX_FAILURES = "secrets.passphrase_max_failures"
+    SECRETS_PASSPHRASE_RATE_LIMIT = "secrets.passphrase_rate_limit"
+    SECRETS_PASSPHRASE_WINDOW_SEC = "secrets.passphrase_window_sec"
+    SECRETS_PASSPHRASE_LOCKOUT_SEC = "secrets.passphrase_lockout_sec"
     REFRESH_TOKEN_RETENTION_DAYS = "retention.refresh_token_days"
     INVITE_RETENTION_DAYS = "retention.invite_days"
     AUDIT_LOG_RETENTION_DAYS = "retention.audit_log_days"
@@ -286,6 +311,7 @@ class Keys:
     ERROR_LOG_4XX_CODES = "error_log.http_4xx_codes"   # CSV of HTTP status codes (e.g. "429,409")
     ERROR_LOG_RETENTION_DAYS = "error_log.retention_days"  # registry tunable (int; 0 disables prune)
     PUBLIC_LINK_ATTEMPT_RETENTION_DAYS = "retention.public_link_attempt_days"  # registry tunable
+    SECRET_RETENTION_DAYS = "retention.secret_days"  # registry tunable; 0 keeps ended secrets
     ERROR_LOG_SCAN_CAPTURE_PER_MIN = "error_log.scan_capture_per_min"  # registry tunable (int; 4xx capture rate/min)
 
     # --- Scan guard (v2.10.0) ------------------------------------------------

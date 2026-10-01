@@ -147,6 +147,26 @@ const router = createRouter({
       meta: { density: 'operator', titleKey: 'share_detail' },
     },
 
+    /* secrets (v2.24.0) ------------------------------------------------------ */
+    {
+      path: '/secrets',
+      name: 'secrets',
+      component: () => import('@/views/SecretList.vue'),
+      meta: { density: 'operator', titleKey: 'secrets' },
+    },
+    {
+      path: '/secrets/new',
+      name: 'secret-create',
+      component: () => import('@/views/SecretCreate.vue'),
+      meta: { density: 'operator', titleKey: 'secret_create' },
+    },
+    {
+      path: '/secrets/:id',
+      name: 'secret-detail',
+      component: () => import('@/views/SecretDetail.vue'),
+      meta: { density: 'operator', titleKey: 'secret_detail' },
+    },
+
     /* admin --------------------------------------------------------------- */
     {
       path: '/admin',
@@ -354,6 +374,29 @@ const router = createRouter({
           meta: { density: 'operator', titleKey: 'admin_settings_sso_edit', requiresRole: 'admin' },
         },
         {
+          path: 'secrets',
+          component: () => import('@/views/AdminTabShell.vue'),
+          meta: { density: 'operator', titleKey: 'admin_secrets', requiresRole: 'admin' },
+          children: [
+            {
+              path: '',
+              name: 'admin-secrets',
+              component: () => import('@/views/AdminSecrets.vue'),
+              meta: { density: 'operator', titleKey: 'admin_secrets', requiresRole: 'admin' },
+            },
+            {
+              path: '/admin/settings/secrets',
+              name: 'admin-settings-secrets',
+              component: () => import('@/views/AdminSettingsSecrets.vue'),
+              meta: {
+                density: 'operator',
+                titleKey: 'admin_settings_secrets',
+                requiresRole: 'admin',
+              },
+            },
+          ],
+        },
+        {
           path: 'settings/public-links',
           name: 'admin-settings-public-links',
           component: () => import('@/views/AdminSettingsPublicLinks.vue'),
@@ -540,6 +583,15 @@ const router = createRouter({
       name: 'public-share',
       component: () => import('@/views/PublicShare.vue'),
       meta: { public: true, density: 'editorial', titleKey: 'public_share' },
+    },
+
+    /* a secret behind a link (v2.24.0). The token is the URL FRAGMENT
+     * (/s#<token>), never a path segment: no proxy or access log sees it. */
+    {
+      path: '/s',
+      name: 'public-secret',
+      component: () => import('@/views/PublicSecret.vue'),
+      meta: { public: true, density: 'editorial', titleKey: 'public_secret' },
     },
 
     /* anonymous "manage subscriptions" page (email footer links) ----------- */

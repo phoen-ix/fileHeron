@@ -33,6 +33,9 @@ const CATEGORIES = [
   'release_available',
   'inbound_message',
   'server_error',
+  'secret_received',
+  'secret_viewed',
+  'secret_ended',
 ] as const
 
 describe('notif_bell.cat covers every NotificationCategory', () => {

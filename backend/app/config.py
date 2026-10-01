@@ -365,6 +365,22 @@ class Settings(BaseSettings):
     PUBLIC_LINK_PASSWORD_WINDOW_SEC: int = 900  # 15 minutes
     PUBLIC_LINK_LOCKOUT_SEC: int = 900  # link locked for 15 min after lockout
 
+    # --- Secrets (v2.24.0) ---------------------------------------------------
+    # Defaults for the admin-tunable registry keys (services/settings_registry);
+    # the feature itself ships OFF (kv `secrets.enabled`). The link is
+    # `{site}{SECRET_LINK_BASE_PATH}#<token>`: the token rides the URL FRAGMENT,
+    # which no proxy or access log ever sees, and reaches the API in a POST body.
+    SECRET_LINK_BASE_PATH: str = "/s"
+    SECRETS_MAX_VIEWS: int = 100
+    SECRETS_MAX_EXPIRY_DAYS: int = 90
+    # Ends a secret this long after it was sent even when the sender chose views
+    # only. 0 = no ceiling.
+    SECRETS_MAX_LIFETIME_DAYS: int = 90
+    SECRETS_PASSPHRASE_MAX_FAILURES: int = 10
+    SECRETS_PASSPHRASE_RATE_LIMIT: int = 10   # wrong passphrases per (recipient, IP) per window
+    SECRETS_PASSPHRASE_WINDOW_SEC: int = 900
+    SECRETS_PASSPHRASE_LOCKOUT_SEC: int = 900
+
     # --- Anomaly detection (v1.20.0, heuristic / GeoIP-free) ------------------
     # Hourly anomaly_check cron; thresholds admin-tunable. Alerts only - these
     # findings never block anyone, and the scan guard's auth-failure signal is a
@@ -387,6 +403,9 @@ class Settings(BaseSettings):
     # Brute-force attempt rows carry client IPs and nothing ever removed
     # one, so they accumulated for the life of the instance.
     PUBLIC_LINK_ATTEMPT_RETENTION_DAYS: int = 90
+    # How long an ENDED secret's record (recipients, view log) is kept. Its
+    # content is destroyed the moment it ends, whatever this says. 0 = keep.
+    SECRET_RETENTION_DAYS: int = 90
     # Max 4xx error events captured into the log per minute (global front-guard in
     # middleware/errors.py, mirrored to the edge nginx limit_req). Raise for fuller
     # scan visibility; it bounds the worst-case log-write rate during a probe storm.

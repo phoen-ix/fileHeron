@@ -10,6 +10,15 @@ from .common import APIBaseModel
 from .types import EmailLike
 
 
+class SecretLimitsResponse(APIBaseModel):
+    """The admin's secret ceilings, for the compose form (v2.24.0)."""
+    max_views: int
+    max_expiry_days: int
+    max_lifetime_days: int
+    passphrase_failure_mode: str
+    passphrase_max_failures: int
+
+
 class MeResponse(APIBaseModel):
     id: int
     email: str
@@ -71,6 +80,14 @@ class MeResponse(APIBaseModel):
     # NULL = never set (client uses the mode's default). [] = all collapsed
     # (explicit, distinct from NULL).
     admin_nav_open_categories: list[str] | None = None
+    # Secrets (v2.24.0). `secrets_enabled` shows the Secrets nav entry (anyone
+    # may RECEIVE one); `can_send_secrets` the compose button;
+    # `can_send_secrets_external` the address + link options; `secret_limits`
+    # the ceilings the compose form enforces before the server does.
+    secrets_enabled: bool = False
+    can_send_secrets: bool = False
+    can_send_secrets_external: bool = False
+    secret_limits: SecretLimitsResponse | None = None
 
 
 class ChangePasswordRequest(APIBaseModel):

@@ -154,6 +154,15 @@ export const ADMIN_NAV: AdminNavCategory[] = [
         matchNames: ['admin-settings-public-links'],
       },
       {
+        routeName: 'admin-secrets',
+        labelKey: 'admin.nav.secrets',
+        matchNames: ['admin-secrets', 'admin-settings-secrets'],
+        tabs: [
+          { routeName: 'admin-secrets', labelKey: 'admin.nav_tab.secrets' },
+          { routeName: 'admin-settings-secrets', labelKey: 'admin.nav_tab.policy' },
+        ],
+      },
+      {
         routeName: 'admin-settings-transfers',
         labelKey: 'admin.nav.transfers',
         matchNames: ['admin-settings-transfers'],

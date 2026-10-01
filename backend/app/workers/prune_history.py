@@ -95,6 +95,7 @@ async def prune_history(_ctx) -> dict:
         error_days = _sr.effective(_db0, _sr.K.ERROR_LOG_RETENTION_DAYS)
         link_attempt_days = _sr.effective(_db0, _sr.K.PUBLIC_LINK_ATTEMPT_RETENTION_DAYS)
         ip_block_days = _sr.effective(_db0, _sr.K.IP_BLOCK_RETENTION_DAYS)
+        secret_days = _sr.effective(_db0, _sr.K.SECRET_RETENTION_DAYS)
     finally:
         _db0.close()
     # `user_erased` rows are the GDPR receipt. `config_backup.apply_backup` is
@@ -151,6 +152,7 @@ async def prune_history(_ctx) -> dict:
     )
     inbound_pruned = await _prune_inbound(inbound_days)
     external_pruned = _prune_ended_external_recipients()
+    secrets_pruned = _prune_ended_secrets(secret_days)
     return {
         "public_link_password_attempts": link_attempt_pruned,
         "audit_log": audit_pruned,
@@ -162,6 +164,7 @@ async def prune_history(_ctx) -> dict:
         "ip_blocks": ip_block_pruned,
         "inbound_messages": inbound_pruned,
         "share_external_recipients": external_pruned,
+        "secrets": secrets_pruned,
     }
 
 
@@ -197,6 +200,31 @@ def _prune_ended_external_recipients() -> int:
     if removed:
         logger.info("prune_history: share_external_recipients pruned=%d", removed)
     return removed
+
+
+def _prune_ended_secrets(days: int) -> int:
+    """Delete the records of secrets that ended more than `days` ago - their
+    recipients, the addresses they were mailed to and their view log, which
+    carries client IPs. The content went the moment each one ended; this is
+    the rest. 0 keeps them. Batched, one commit per batch."""
+    if days <= 0:
+        return 0
+    from ..services import secret as secret_svc
+
+    total = 0
+    db: Session = SessionLocal()
+    try:
+        while True:
+            n = secret_svc.prune_ended(db, older_than_days=days, batch=500)
+            db.commit()
+            total += n
+            if n < 500:
+                break
+    finally:
+        db.close()
+    if total:
+        logger.info("prune_history: secrets pruned=%d", total)
+    return total
 
 
 async def _prune_inbound(days: int) -> int:

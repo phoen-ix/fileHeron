@@ -15,6 +15,7 @@ Sub-modules:
 - invites        invite tokens list + revoke/regenerate/resend/activate
 - sessions       cross-user session oversight + revoke
 - system         operator-facing health + cron history (operational audit)
+- secrets        every secret's metadata (never its content)
 
 The parent prefix `/api/admin` is set here once; sub-routers don't repeat it.
 """
@@ -37,6 +38,7 @@ from . import (
     oidc,
     quarantine,
     scan_guard,
+    secrets,
     sessions,
     settings,
     system,
@@ -47,8 +49,8 @@ from . import (
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 _SUBROUTERS = (
     analytics, api_tokens, audit, backup, crons, email_templates, errors, files, imap,
-    invites, mail, oidc, quarantine, scan_guard, sessions, settings, system, users,
-    webhooks,
+    invites, mail, oidc, quarantine, scan_guard, secrets, sessions, settings, system,
+    users, webhooks,
 )
 for _sub in _SUBROUTERS:
     router.include_router(_sub.router)

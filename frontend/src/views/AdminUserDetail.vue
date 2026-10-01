@@ -677,6 +677,15 @@
               })
             }}
           </li>
+          <li v-if="preflight.secrets_to_delete">
+            {{
+              t(
+                'admin_user_detail.erase_preflight_secrets',
+                { n: preflight.secrets_to_delete },
+                preflight.secrets_to_delete,
+              )
+            }}
+          </li>
         </ul>
         <button
           type="button"

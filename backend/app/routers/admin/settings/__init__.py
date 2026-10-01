@@ -26,6 +26,7 @@ from . import (
     maintenance,
     public_links,
     quarantine,
+    secrets,
     share_approval,
     share_defaults,
     site,
@@ -35,6 +36,7 @@ from . import (
 router = APIRouter()
 _SUBROUTERS = (
     public_links,
+    secrets,
     email,
     home_motd_updates,
     file_preview,

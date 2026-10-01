@@ -317,6 +317,8 @@ class ErasePreflightResponse(APIBaseModel):
     bytes_to_delete: int
     shares_created: int
     shares_received_to_anonymize: int
+    # Secrets they sent (v2.24.0): deleted outright, content and record.
+    secrets_to_delete: int = 0
 
 
 class InboxUnreadCountResponse(APIBaseModel):

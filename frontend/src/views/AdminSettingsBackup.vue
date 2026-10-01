@@ -295,6 +295,11 @@
           <li class="danger">
             {{ t('admin_backup.sum_shares', { n: preview.shares_to_invalidate }) }}
           </li>
+          <li v-if="preview.secrets_to_burn" class="danger">
+            {{
+              t('admin_backup.sum_secrets', { n: preview.secrets_to_burn }, preview.secrets_to_burn)
+            }}
+          </li>
           <li v-if="preview.categories.includes('users')" class="danger">
             {{ t('admin_backup.sum_sessions') }}
           </li>

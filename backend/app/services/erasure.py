@@ -552,6 +552,14 @@ def _erase_user_locked(
     )
     pii_purged["group_members"] = pii_purged_group_members
 
+    # Secrets (v2.24.0): the ones this person SENT go entirely - content and
+    # record - and they are removed from every secret sent TO them, with their
+    # view log (it carries their IP). A secret nobody can read any more as a
+    # result is burned.
+    from . import secret as secret_svc
+
+    pii_purged["secrets_deleted"] = secret_svc.erase_user(db, target)
+
     # audit_log rows are retained, but two event types carry the person's
     # plaintext addresses in their metadata, so the note below - "references the
     # user by anonymised id" - was never true of them. /admin/audit and its CSV
@@ -756,6 +764,9 @@ def compute_erasure_summary(db: Session, *, target: User) -> dict:
         )
         .count()
     )
+    from ..models.secret import Secret
+
+    secrets_sent = db.query(Secret).filter(Secret.created_by_id == target.id).count()
     return {
         "user_id": target.id,
         "display_name": target.display_name,
@@ -766,6 +777,7 @@ def compute_erasure_summary(db: Session, *, target: User) -> dict:
         "bytes_to_delete": total_bytes,
         "shares_created": shares_created,
         "shares_received_to_anonymize": shares_received,
+        "secrets_to_delete": secrets_sent,
     }
 
 

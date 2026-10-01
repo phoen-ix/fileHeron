@@ -305,7 +305,28 @@
     "ALLOWLIST_ENTRY_NOT_FOUND": "Dieser Eintrag in der Ausnahmeliste existiert nicht mehr.",
     "BLOCK_STATUS_INVALID": "Unbekannter Statusfilter für Sperren.",
     "CONFLICT_RETRY": "Jemand hat dies im selben Moment geändert. Bitte erneut versuchen.",
-    "SETTING_MANAGED_ELSEWHERE": "Diese Einstellung wird auf ihrer eigenen Seite verwaltet, die Folgewirkungen anwendet, die diese allgemeine Seite nicht kennt."
+    "SETTING_MANAGED_ELSEWHERE": "Diese Einstellung wird auf ihrer eigenen Seite verwaltet, die Folgewirkungen anwendet, die diese allgemeine Seite nicht kennt.",
+    "SECRETS_DISABLED": "Geheimnisse sind auf diesem Server ausgeschaltet.",
+    "SECRET_NOT_ALLOWED": "Dein Administrator erlaubt dir nicht, Geheimnisse zu senden.",
+    "SECRET_EXTERNAL_NOT_ALLOWED": "Du darfst kein Geheimnis an eine E-Mail-Adresse oder als Link senden.",
+    "SECRET_CONTENT_INVALID": "Ein Geheimnis muss zwischen 1 und 10.000 Zeichen lang sein.",
+    "SECRET_NEEDS_LIMIT": "Lege eine Aufrufgrenze, ein Ablaufdatum oder beides fest.",
+    "SECRET_LIMIT_EXCEEDED": "Das liegt über der Grenze, die dein Administrator erlaubt.",
+    "SECRET_NO_RECIPIENTS": "Füge mindestens einen Empfänger hinzu oder erstelle einen Link.",
+    "SECRET_RECIPIENT_NOT_ALLOWED": "Du kannst ein Geheimnis nur an die Personen senden, mit denen du zusammenarbeitest.",
+    "SECRET_NOT_FOUND": "Dieses Geheimnis gibt es nicht.",
+    "SECRET_ENDED": "Dieses Geheimnis ist nicht mehr verfügbar.",
+    "SECRET_LINK_NOT_FOUND": "Dieses Geheimnis hat keinen Link.",
+    "SECRET_LINK_REVOKED": "Der Absender hat diesen Link ersetzt oder entfernt.",
+    "SECRET_LOCKED": "Dieses Geheimnis ist nach zu vielen falschen Passphrasen eine Weile gesperrt.",
+    "SECRET_NOT_A_RECIPIENT": "Du bist kein Empfänger dieses Geheimnisses mehr.",
+    "SECRET_PASSPHRASE_INVALID": "Diese Passphrase ist nicht richtig.",
+    "SECRET_PASSPHRASE_REQUIRED": "Dieses Geheimnis braucht seine Passphrase.",
+    "SECRET_RATE_LIMITED": "Zu viele falsche Passphrasen. Versuche es später erneut.",
+    "SECRET_RECIPIENT_BURNED": "Zu viele falsche Passphrasen - dieses Geheimnis ist für dich weg.",
+    "SECRET_REVEAL_FORBIDDEN": "Nur die Empfänger eines Geheimnisses können es öffnen.",
+    "SECRET_UNREADABLE": "Dieses Geheimnis kann auf diesem Server nicht entschlüsselt werden. Bitte den Absender, es erneut zu senden.",
+    "SECRET_VIEWS_EXHAUSTED": "Du hast die Aufrufe dieses Geheimnisses verbraucht."
   },
   "login": {
     "title": "Anmelden",
@@ -383,7 +404,8 @@
     "inbox": "Empfangen",
     "new_share": "Neue Freigabe",
     "approvals": "Genehmigungen",
-    "admin": "Admin"
+    "admin": "Admin",
+    "secrets": "Geheimnisse"
   },
   "admin": {
     "eyebrow": "Admin",
@@ -419,7 +441,8 @@
       "errors": "Fehler & Alarme",
       "sign_in": "Anmelderichtlinien",
       "transfers": "Dateien & Übertragung",
-      "anomaly": "Anomalie-Erkennung"
+      "anomaly": "Anomalie-Erkennung",
+      "secrets": "Geheimnisse"
     },
     "nav_cat": {
       "people": "Personen & Zugriff",
@@ -443,7 +466,8 @@
       "alerts": "Alarme",
       "active": "Aktiv",
       "passwords": "Passwörter & Brute-Force",
-      "email_change": "E-Mail-Änderung"
+      "email_change": "E-Mail-Änderung",
+      "secrets": "Geheimnisse"
     },
     "tabs_label": "Seiten-Tabs"
   },
@@ -522,7 +546,8 @@
     "confirm_cta": "Ersetzen & importieren",
     "sum_admins_installed": "Legt {n} Administrator-Konto an | Legt {n} Administrator-Konten an",
     "sum_oidc_issuers": "Legt SSO-Provider an",
-    "sum_webhook_urls": "Legt Webhooks an, die zeigen auf"
+    "sum_webhook_urls": "Legt Webhooks an, die zeigen auf",
+    "sum_secrets": "{n} aktives Geheimnis wird vernichtet. | {n} aktive Geheimnisse werden vernichtet."
   },
   "admin_scheduled_tasks": {
     "intro": "Lege fest, wie oft jeder Hintergrundjob läuft, fixiere eine tägliche Uhrzeit oder deaktiviere ihn. Tägliche Zeiten verwenden die Seiten-Zeitzone ({tz}).",
@@ -708,7 +733,8 @@
       "anomaly": "Anomalie-Erkennung",
       "updates": "Updates",
       "error_alert": "Fehler & Alarme",
-      "scan_guard": "Scan-Schutz"
+      "scan_guard": "Scan-Schutz",
+      "secrets": "Geheimnisse"
     },
     "keys": {
       "auth": {
@@ -743,7 +769,8 @@
         "webhook_delivery_days": "Webhook-Zustellungen (Tage, 0 = unbegrenzt)",
         "upload_stale_hours": "Hängende laufende Uploads (Stunden)",
         "public_link_attempt_days": "Passwortversuche für öffentliche Links (Tage)",
-        "ip_block_days": "Abgelaufene IP-Sperren (Tage)"
+        "ip_block_days": "Abgelaufene IP-Sperren (Tage)",
+        "secret_days": "Beendete Geheimnisse (Tage, 0 = für immer behalten)"
       },
       "uploads": {
         "max_direct_bytes": "Größenlimit für Direkt-Upload (Bytes)"
@@ -783,6 +810,15 @@
       "error_log": {
         "retention_days": "Fehlerprotokoll (Tage, 0 = unbegrenzt)",
         "scan_capture_per_min": "Max. 4xx-Fehler pro Minute protokollieren (höher = mehr Scan-Erfassung)"
+      },
+      "secrets": {
+        "max_views": "Höchstzahl an Aufrufen pro Geheimnis",
+        "max_expiry_days": "Spätestes Ablaufdatum (Tage)",
+        "max_lifetime_days": "Längste Lebensdauer (Tage, 0 = keine)",
+        "passphrase_max_failures": "Falsche Passphrasen bis zur Vernichtung (Vernichtungsmodus)",
+        "passphrase_rate_limit": "Falsche Passphrasen pro Quelle und Zeitfenster",
+        "passphrase_window_sec": "Passphrase-Zeitfenster (Sekunden)",
+        "passphrase_lockout_sec": "Sperrdauer des Links (Sekunden)"
       }
     },
     "help": {
@@ -850,6 +886,10 @@
         "password_rate_limit": "Passwortversuche für einen öffentlichen Link im Fenster, bevor der Link gesperrt wird. (1-1000, Standard 10.)",
         "password_window_sec": "Fenster, über das die Passwortversuche öffentlicher Links gezählt werden. (30-86400 Sek., Standard 900.)",
         "lockout_sec": "Wie lange ein öffentlicher Link (für alle IPs) nach zu vielen falschen Passwörtern gesperrt bleibt. (30-86400 Sek., Standard 900.)"
+      },
+      "secrets": {
+        "max_lifetime_days": "Beendet ein Geheimnis so lange nach dem Senden, auch eines, das nur mit Aufrufgrenze gesendet wurde - ein ungelesenes Geheimnis bleibt so nicht unbegrenzt auf dem Server.",
+        "passphrase_max_failures": "Gilt, wenn falsche Passphrasen ein Geheimnis vernichten - von dir für alle Geheimnisse festgelegt oder von einem Absender für eines."
       }
     },
     "reset_aria": "{name} auf Standardwert zurücksetzen ({default})",
@@ -1104,7 +1144,8 @@
       "shares": "Freigaben & Dateien",
       "account": "Konto",
       "security": "Sicherheit & Anmeldung",
-      "system": "System"
+      "system": "System",
+      "secrets": "Geheimnisse"
     },
     "template": {
       "share_created": "Freigabe erstellt",
@@ -1128,7 +1169,11 @@
       "email_change_verify_old": "E-Mail-Änderung - von alter Adresse bestätigen",
       "email_change_alert": "E-Mail-Änderung - Sicherheitswarnung",
       "email_change_completed": "E-Mail-Änderung - abgeschlossen",
-      "release_available": "Update verfügbar"
+      "release_available": "Update verfügbar",
+      "secret_received": "Geheimnis erhalten",
+      "secret_link_external": "Geheimnis-Link (Empfänger ohne Konto)",
+      "secret_viewed": "Geheimnis angesehen",
+      "secret_ended": "Geheimnis beendet"
     },
     "locale": {
       "en": "English",
@@ -1380,7 +1425,10 @@
       "ops_alert": "Betriebsalarm",
       "release_available": "Update verfügbar",
       "inbound_message": "Eingehende Nachricht",
-      "server_error": "Serverfehler"
+      "server_error": "Serverfehler",
+      "secret_received": "Geheimnis",
+      "secret_viewed": "Geheimnis angesehen",
+      "secret_ended": "Geheimnis beendet"
     },
     "headline": {
       "share_created": "{sender_name} hat dir {file_count} Datei gesendet. | {sender_name} hat dir {file_count} Dateien gesendet.",
@@ -1410,7 +1458,20 @@
       "share_approved": "Freigabe genehmigt",
       "share_files_added": "Dateien zu einer Freigabe hinzugefügt",
       "share_pending_approval": "Freigabe wartet auf Genehmigung",
-      "share_rejected": "Freigabe abgelehnt"
+      "share_rejected": "Freigabe abgelehnt",
+      "secret_received": "{sender_name} hat dir ein Geheimnis gesendet",
+      "secret_viewed": {
+        "user": "{viewer} hat dein Geheimnis angesehen",
+        "email": "Dein Geheimnis wurde über den Link an {viewer} angesehen",
+        "link": "Dein Geheimnis wurde über seinen Link angesehen",
+        "generic": "Dein Geheimnis wurde angesehen"
+      },
+      "secret_ended": {
+        "burned": "Dein Geheimnis ist aufgebraucht und vernichtet",
+        "expired_unread": "Dein Geheimnis ist ungelesen abgelaufen",
+        "revoked_by_admin": "Ein Administrator hat dein Geheimnis vernichtet",
+        "generic": "Dein Geheimnis ist beendet"
+      }
     },
     "disconnected": "Live-Aktualisierungen sind getrennt - es wird erneut versucht. Zum sofortigen Verbinden die Seite neu laden."
   },
@@ -1649,7 +1710,8 @@
     "erase_preflight_files": "{n} Datei wird endgültig gelöscht ({bytes}). | {n} Dateien werden endgültig gelöscht ({bytes}).",
     "erase_preflight_shares": "{created} von dieser Person erstellte Freigabe(n) werden widerrufen; {received} empfangene Freigabe(n) werden anonymisiert.",
     "change_email_old_link_eyebrow": "Bestätigungslink für die ALTE Adresse",
-    "change_email_old_link_help": "Im Modus \"beide bestätigen\" müssen BEIDE Links geöffnet werden. Die Änderung wird erst wirksam, wenn auch die alte Adresse bestätigt ist."
+    "change_email_old_link_help": "Im Modus \"beide bestätigen\" müssen BEIDE Links geöffnet werden. Die Änderung wird erst wirksam, wenn auch die alte Adresse bestätigt ist.",
+    "erase_preflight_secrets": "{n} von ihr/ihm gesendetes Geheimnis wird gelöscht. | {n} von ihr/ihm gesendete Geheimnisse werden gelöscht."
   },
   "admin_mail": {
     "intro": "Jede von file:Heron gesendete E-Mail wird hier mit ihrem Zustellergebnis erfasst. Einmal-Auth-Links (Passwort-Reset, Einladung, Verifizierung) werden gespeichert geschwärzt.",
@@ -1737,7 +1799,10 @@
       "oidc_linked": "SSO-Konto verknüpft",
       "user_erased": "Benutzer gelöscht",
       "anomaly_detected": "Anomalie erkannt",
-      "ops_alert": "Betriebs-Alarm"
+      "ops_alert": "Betriebs-Alarm",
+      "secret_created": "Geheimnis gesendet",
+      "secret_viewed": "Geheimnis angesehen",
+      "secret_burned": "Geheimnis aufgebraucht"
     }
   },
   "admin_analytics": {
@@ -1923,7 +1988,15 @@
     "no_account_action_admin": "Leere dieses Feld und sende ihnen den öffentlichen Link selbst, oder schalte {setting} ein, damit file:Heron ihn per E-Mail verschickt.",
     "external_setting_name": "Empfänger ohne Konto",
     "clear": "Leeren",
-    "not_added": "„{q}“ ist noch nicht hinzugefügt. Wähle den Eintrag aus der Liste."
+    "not_added": "„{q}“ ist noch nicht hinzugefügt. Wähle den Eintrag aus der Liste.",
+    "secret": {
+      "external_option": "Geheimnis-Link an {email} senden",
+      "external_chip_hint": "Geheimnis-Link",
+      "no_account_action": "Leere das Feld. Um ein Geheimnis an eine Adresse ohne Konto zu senden, brauchst du das Recht, außerhalb der Organisation zu senden.",
+      "no_account_action_admin": "Leere das Feld oder erlaube das Senden außerhalb der Organisation in {setting}.",
+      "external_setting_name": "der Geheimnis-Richtlinie",
+      "help_phase4": "Suche Personen nach Name oder E-Mail. Wähle eine Gruppe, um jedes ihrer Mitglieder zu erreichen."
+    }
   },
   "expiry": {
     "label": "Läuft ab",
@@ -2016,8 +2089,14 @@
       "files_upload": "Dateien hochladen",
       "files_download": "Dateien herunterladen & ansehen",
       "files_delete": "Dateien löschen",
-      "public_links_read": "Öffentliche Links auflisten & ansehen (gibt die Klartext-URL zurück)"
-    }
+      "public_links_read": "Öffentliche Links auflisten & ansehen (gibt die Klartext-URL zurück)",
+      "secrets_send": "Geheimnisse senden",
+      "secrets_read": "Metadaten von Geheimnissen auflisten & lesen",
+      "secrets_reveal": "An dich gesendete Geheimnisse anzeigen (liefert den Inhalt)",
+      "secrets_manage": "Geheimnisse vernichten, ihre Links erstellen & entfernen",
+      "secrets_links": "Links von Geheimnissen erneut lesen (liefert den Link)"
+    },
+    "scope_group_secrets": "Geheimnisse"
   },
   "richtext": {
     "undo": "Rückgängig",
@@ -2641,7 +2720,13 @@
     "admin_settings_sessions": "Sitzungen · Richtlinie",
     "admin_settings_sign_in": "Anmelderichtlinien",
     "admin_settings_transfers": "Dateien & Übertragung",
-    "admin_settings_anomaly": "Anomalie-Erkennung"
+    "admin_settings_anomaly": "Anomalie-Erkennung",
+    "secrets": "Geheimnisse",
+    "secret_create": "Neues Geheimnis",
+    "secret_detail": "Geheimnis",
+    "public_secret": "Geheimnis",
+    "admin_secrets": "Geheimnisse",
+    "admin_settings_secrets": "Geheimnisse · Richtlinie"
   },
   "not_found": {
     "eyebrow": "404 · nicht gefunden",
@@ -2841,5 +2926,279 @@
     "intro": "Eine stündliche Prüfung meldet Massen-Downloads, Zugriffe aus vielen Netzwerken und Häufungen fehlgeschlagener Anmeldungen anhand dieser Schwellen.",
     "advisory": "Nur beratend: ein Fund benachrichtigt einen Admin (und löst einen Webhook aus), blockiert aber niemanden.",
     "cadence_note": "Die Prüfung läuft nach dem Zeitplan unter"
+  },
+  "secret_state": {
+    "active": "Aktiv",
+    "burned": "Aufgebraucht",
+    "expired": "Abgelaufen",
+    "revoked": "Vernichtet"
+  },
+  "secrets": {
+    "eyebrow": "Geheimnisse",
+    "title": "Geheimnisse",
+    "intro": "Passwörter und andere kurze Geheimnisse, nur eine bestimmte Anzahl von Malen oder bis zu einem Datum lesbar, danach vernichtet. Sie werden nie per E-Mail versendet.",
+    "new": "Neues Geheimnis",
+    "box_label": "Anzeigen",
+    "box": {
+      "received": "Empfangen",
+      "sent": "Gesendet"
+    },
+    "search_placeholder": "Nach Bezeichnung oder Absender suchen…",
+    "filter_label": "Status",
+    "filter": {
+      "active": "Aktiv",
+      "ended": "Beendet",
+      "all": "Alle"
+    },
+    "col": {
+      "label": "Bezeichnung",
+      "from": "Von",
+      "to": "An",
+      "views": "Aufrufe",
+      "expires": "Läuft ab",
+      "state": "Status"
+    },
+    "no_label": "(ohne Bezeichnung)",
+    "passphrase_flag": "Passphrase",
+    "created": "Gesendet {d}",
+    "views": {
+      "unlimited": "Unbegrenzt",
+      "left": "noch {n} Aufruf | noch {n} Aufrufe",
+      "used_unlimited": "{used}-mal angesehen",
+      "used_of": "{used} von {max}"
+    },
+    "audience": {
+      "users": "{n} Person | {n} Personen",
+      "groups": "{n} Gruppe | {n} Gruppen",
+      "emails": "{n} Adresse | {n} Adressen",
+      "link": "Link"
+    },
+    "empty": {
+      "received": "Keine Geheimnisse für dich.",
+      "sent": "Du hast noch kein Geheimnis gesendet."
+    },
+    "copy_link": "Link kopieren",
+    "copied": "Kopiert",
+    "kind": {
+      "user": "Person",
+      "group": "Gruppe",
+      "email": "Adresse",
+      "link": "Link"
+    },
+    "scope": {
+      "per_person": "Pro Person",
+      "per_person_help": "Jede Person, die es lesen darf, erhält die Aufrufe - auch jedes Mitglied einer Gruppe.",
+      "per_recipient": "Pro Empfänger",
+      "per_recipient_help": "Jede Person, jede Adresse und der Link erhalten die Aufrufe; eine Gruppe teilt sie, der Aufruf des ersten Mitglieds kann sie also für alle anderen verbrauchen.",
+      "total": "Alle zusammen",
+      "total_help": "Alle teilen sich die Aufrufe: Sind sie verbraucht, ist es für alle weg."
+    },
+    "outcome": {
+      "viewed": "Angesehen",
+      "wrong_passphrase": "Falsche Passphrase",
+      "locked": "Gesperrt",
+      "burned": "Vernichtet (falsche Passphrasen)"
+    },
+    "create": {
+      "title": "Geheimnis senden",
+      "intro": "Ein Passwort, ein Schlüssel oder ein anderer kurzer Text. Empfänger zeigen ihn in file:Heron an; er steht nie in einer E-Mail und wird vernichtet, sobald seine Aufrufe verbraucht sind oder er abläuft.",
+      "content_label": "Geheimnis",
+      "content_help": "Bis zu 10.000 Zeichen. Nur die Empfänger können es anzeigen - nicht du und kein Administrator.",
+      "label_label": "Bezeichnung",
+      "label_placeholder": "z. B. VPN für Projekt Heron",
+      "label_help": "Optional. Der einzige Teil, der vor dem Anzeigen und in Benachrichtigungen erscheint. Schreib das Geheimnis nicht hier hinein.",
+      "client_hint": "Du kannst ein Geheimnis an die Personen senden, mit denen du zusammenarbeitest.",
+      "link_label": "Auch einen Link erstellen",
+      "link_toggle_help": "Ein Link, den du selbst weitergibst (Chat, Telefon). Jeder mit dem Link kann das Geheimnis innerhalb seiner Grenzen öffnen.",
+      "limits_title": "Grenzen",
+      "limits_help": "Lege eine Aufrufgrenze, ein Ablaufdatum oder beides fest. Was zuerst eintritt, beendet das Geheimnis.",
+      "limit_views": "Anzahl der Aufrufe begrenzen",
+      "views_label": "Aufrufe",
+      "scope_label": "Aufrufe zählen",
+      "lifetime_note": "Ohne Ablaufdatum endet es, sobald seine Aufrufe verbraucht sind - spätestens nach {days} Tagen (Grenze deines Administrators).",
+      "passphrase_title": "Passphrase",
+      "passphrase_help": "Optional. Sie wird Teil der Verschlüsselung: Ohne sie kann niemand das Geheimnis öffnen, auch nicht der Betreiber des Servers - und geht sie verloren, ist das Geheimnis nicht wiederherstellbar. Teile sie den Empfängern auf anderem Weg mit (Telefon, Chat).",
+      "passphrase_label": "Passphrase",
+      "passphrase_repeat": "Passphrase wiederholen",
+      "burn_by_admin": "Nach {n} falschen Passphrasen wird das Geheimnis für diesen Empfänger vernichtet (Regel deines Administrators).",
+      "burn_label": "Nach {n} falschen Passphrasen vernichten",
+      "burn_help": "Pro Empfänger. Sonst werden falsche Versuche verlangsamt und der Link wird eine Weile gesperrt.",
+      "notify_label": "Benachrichtige mich, wenn es angesehen wird",
+      "notify_help": "Eine Nachricht pro Aufruf und eine, wenn es aufgebraucht ist oder ungelesen abläuft.",
+      "send": "Geheimnis senden",
+      "sending": "Wird gesendet…",
+      "sent_toast": "Geheimnis gesendet.",
+      "sent_title": "Geheimnis gesendet",
+      "link_help": "Gib diesen Link selbst weiter. Du kannst ihn auf der Seite des Geheimnisses erneut kopieren.",
+      "view_status": "Status ansehen",
+      "blockers": {
+        "title": "Bevor du senden kannst:",
+        "no_content": "Gib das Geheimnis ein.",
+        "too_long": "Das Geheimnis ist länger als 10.000 Zeichen.",
+        "recipient_not_added": "„{q}“ steht im Empfängerfeld, ist aber nicht hinzugefügt. Wähle den Eintrag aus der Liste oder leere das Feld.",
+        "no_account": "„{q}“ hat kein Konto und kann hier nicht hinzugefügt werden. Leere das Feld.",
+        "no_recipient": "Wähle einen Empfänger aus der Liste.",
+        "no_recipient_or_link": "Wähle einen Empfänger aus der Liste oder erstelle einen Link.",
+        "no_expiry_yet": "Lege fest, wann es abläuft.",
+        "no_limit": "Lege eine Aufrufgrenze, ein Ablaufdatum oder beides fest.",
+        "views_invalid": "Gib eine ganze Zahl an Aufrufen ein, mindestens 1.",
+        "views_too_many": "Höchstens {max} Aufrufe sind erlaubt.",
+        "expiry_past": "Das Ablaufdatum muss in der Zukunft liegen.",
+        "expiry_too_far": "Es darf höchstens in {days} Tagen ablaufen.",
+        "passphrase_short": "Die Passphrase braucht mindestens {n} Zeichen.",
+        "passphrase_mismatch": "Die beiden Passphrasen stimmen nicht überein."
+      }
+    },
+    "generator": {
+      "toggle": "Passwort erzeugen",
+      "length": "Länge: {n}",
+      "classes": "Zeichen",
+      "class": {
+        "lower": "a-z",
+        "upper": "A-Z",
+        "digits": "0-9",
+        "symbols": "Sonderzeichen",
+        "avoidAmbiguous": "Verwechselbare vermeiden (0/O, 1/l)"
+      },
+      "again": "Ein anderes",
+      "use": "Dieses Passwort verwenden"
+    },
+    "reveal": {
+      "last_view_warning": "Das ist der letzte Aufruf. Kopiere das Geheimnis, sobald es erscheint - verlässt du diese Seite, ist es weg.",
+      "passphrase_label": "Passphrase",
+      "passphrase_help": "Der Absender hat sie dir separat gegeben.",
+      "passphrase_help_burn": "Der Absender hat sie dir separat gegeben. Nach {n} weiteren falschen Versuch wird das Geheimnis für dich vernichtet. | Der Absender hat sie dir separat gegeben. Nach {n} weiteren falschen Versuchen wird das Geheimnis für dich vernichtet.",
+      "button": "Anzeigen",
+      "hidden": "••••••••••••",
+      "copy": "Kopieren",
+      "copied": "Kopiert",
+      "hide": "Verbergen",
+      "show": "Zeigen",
+      "destroyed": "Das war der letzte Aufruf: Das Geheimnis ist vernichtet. Kopiere es jetzt - es wird nicht noch einmal angezeigt.",
+      "no_views_left": "Du hast keine Aufrufe mehr. Kopiere es jetzt - es wird nicht noch einmal angezeigt.",
+      "views_left": "Noch {n} Aufruf. | Noch {n} Aufrufe."
+    },
+    "detail": {
+      "back": "Alle Geheimnisse",
+      "from": "Von",
+      "sent": "Gesendet",
+      "expires": "Läuft ab",
+      "limit_label": "Aufrufe",
+      "no_view_limit": "Unbegrenzt",
+      "limit": {
+        "per_person": "{n} pro Person | {n} pro Person",
+        "per_recipient": "{n} pro Empfänger | {n} pro Empfänger",
+        "total": "{n} insgesamt | {n} insgesamt"
+      },
+      "passphrase": "Passphrase",
+      "passphrase_burn": "Ja - nach {n} falschen vernichtet",
+      "ended_at": "Beendet",
+      "ended": {
+        "burned": "Seine Aufrufe sind verbraucht; das Geheimnis ist vernichtet.",
+        "expired": "Es ist abgelaufen; das Geheimnis ist vernichtet.",
+        "revoked": "Es wurde vernichtet."
+      },
+      "burned_for_me": "Zu viele falsche Passphrasen - dieses Geheimnis ist für dich weg.",
+      "not_recipient": "Du bist kein Empfänger dieses Geheimnisses mehr.",
+      "no_views_left": "Du hast deine Aufrufe verbraucht.",
+      "sender_note": "Nur die Empfänger können es anzeigen - du siehst, wer es wann getan hat.",
+      "admin_note": "Administratoren sehen den Status eines Geheimnisses; anzeigen können es nur seine Empfänger.",
+      "burn": "Jetzt vernichten",
+      "burn_title": "Dieses Geheimnis vernichten?",
+      "burn_confirm": "Es wird sofort vernichtet und niemand kann es mehr lesen. Das lässt sich nicht rückgängig machen.",
+      "burned_toast": "Das Geheimnis wurde vernichtet.",
+      "links_title": "Links",
+      "links_help": "Jede Adresse hat ihren eigenen Link, dazu kann es einen Link geben, den du selbst weitergibst. Wer einen Link hat, kann das Geheimnis innerhalb seiner Grenzen öffnen.",
+      "show_links": "Links anzeigen",
+      "replace_link": "Link ersetzen",
+      "create_link": "Link erstellen",
+      "remove_link": "Link entfernen",
+      "replace_confirm": "Der aktuelle Link funktioniert sofort nicht mehr. Ersetzen?",
+      "remove_confirm": "Der Link funktioniert sofort nicht mehr. Entfernen?",
+      "no_links": "Es gibt keine Links.",
+      "link_unavailable": "Dieser Link kann nicht mehr angezeigt werden.",
+      "the_link": "Der Link",
+      "recipients_title": "Empfänger",
+      "activity_title": "Aktivität",
+      "no_activity": "Noch niemand hat es angesehen.",
+      "left_group": "hat die Gruppe verlassen",
+      "views_used": "{n} Aufruf | {n} Aufrufe",
+      "views_used_left": "{n} angesehen · noch {left}",
+      "col": {
+        "recipient": "Empfänger",
+        "views": "Aufrufe",
+        "status": "Status",
+        "when": "Wann",
+        "what": "Was",
+        "who": "Wer",
+        "ip": "Adresse"
+      },
+      "status": {
+        "revoked": "Ersetzt",
+        "burned": "Vernichtet (falsche Passphrasen)",
+        "locked": "Gesperrt bis {d}",
+        "emailed": "Gemailt {d}",
+        "not_emailed": "Nicht gemailt"
+      }
+    }
+  },
+  "public_secret": {
+    "eyebrow": "file:Heron",
+    "incomplete": "Dieser Link ist unvollständig - der Teil nach dem # fehlt. Öffne den Link genau so, wie du ihn erhalten hast.",
+    "unavailable": "Dieses Geheimnis ist nicht verfügbar",
+    "title": "Ein Geheimnis für dich",
+    "title_protected": "Ein geschütztes Geheimnis",
+    "from": "Von {name}",
+    "until": "Verfügbar bis {d}",
+    "views_left": "noch {n} Aufruf | noch {n} Aufrufe",
+    "intro": "Nichts wird angezeigt, bevor du auf „Anzeigen“ klickst. Jedes Anzeigen verbraucht einen Aufruf.",
+    "locked": "Dieses Geheimnis ist nach zu vielen falschen Passphrasen bis {d} gesperrt."
+  },
+  "admin_secrets": {
+    "intro": "Alle Geheimnisse auf diesem Server: wer sie an wen gesendet hat, wie oft sie angesehen wurden und wann sie enden. Administratoren können ein Geheimnis vernichten, aber nie lesen.",
+    "total": "{n} Geheimnis | {n} Geheimnisse",
+    "search_placeholder": "Nach Bezeichnung oder Absender suchen…",
+    "empty": "Keine passenden Geheimnisse.",
+    "open": "Öffnen",
+    "burn_confirm": "Dieses Geheimnis von {sender} vernichten? Es wird sofort vernichtet und niemand kann es mehr lesen.",
+    "col": {
+      "actions": "Aktionen"
+    }
+  },
+  "admin_settings_secrets": {
+    "intro": "Geheimnisse sind Passwörter und andere kurze Texte, die nur eine bestimmte Anzahl von Malen oder bis zu einem Datum lesbar sind und danach vernichtet werden. Niemand außer ihren Empfängern kann sie lesen - auch Administratoren nicht.",
+    "enabled_label": "Geheimnisse einschalten",
+    "enabled_help": "Standardmäßig aus. Ausschalten verhindert neue Geheimnisse; bestehende bleiben lesbar, bis sie enden.",
+    "send_title": "Wer Geheimnisse senden darf",
+    "send_help": "An Personen mit Konto. Ein Kunde erreicht immer nur die Mitarbeiter, mit denen er verbunden ist.",
+    "external_title": "Wer sie außerhalb der Organisation senden darf",
+    "external_help": "An eine E-Mail-Adresse ohne Konto oder als Link. Nie ein Kunde.",
+    "mode": {
+      "everyone": "Alle",
+      "everyone_help": "Jeder angemeldete Benutzer.",
+      "employees_admins": "Mitarbeiter und Admins",
+      "employees_admins_help": "Kunden nur, wenn unten erlaubt.",
+      "admins_only": "Nur Admins",
+      "admins_only_help": "Andere nur, wenn unten erlaubt."
+    },
+    "mode_outside": {
+      "employees_admins_help": "Alle Mitarbeiter und Admins. Nie ein Kunde.",
+      "admins_only_help": "Mitarbeiter nur, wenn unten erlaubt. Nie ein Kunde."
+    },
+    "allow_users": "Zusätzlich erlaubt: Personen",
+    "allow_groups": "Zusätzlich erlaubt: Gruppen",
+    "users_placeholder": "Personen suchen…",
+    "client_never": "ein Kunde: hier nie erlaubt",
+    "failure_title": "Falsche Passphrasen",
+    "failure_help": "Was passiert, wenn jemand wiederholt eine falsche Passphrase eingibt.",
+    "failure": {
+      "lock": "Verlangsamen und sperren",
+      "lock_help": "Eine Quelle wird verlangsamt; Fehlversuche von mehreren Quellen sperren den Link für eine Weile. Empfohlen.",
+      "burn": "Nach zu vielen vernichten",
+      "burn_help": "Nach der eingestellten Zahl falscher Passphrasen wird das Geheimnis für diesen Empfänger vernichtet. Absender können das für ein einzelnes Geheimnis immer wählen."
+    },
+    "saved_toast": "Geheimnis-Richtlinie gespeichert.",
+    "limits_title": "Grenzen",
+    "limits_help": "Die Obergrenzen, innerhalb derer Absender arbeiten, und die Drosselung bei Passphrasen."
   }
 }

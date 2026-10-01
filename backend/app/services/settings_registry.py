@@ -61,6 +61,7 @@ TUNABLES: list[Tunable] = [
     Tunable(K.WEBHOOK_DELIVERY_RETENTION_DAYS, "WEBHOOK_DELIVERY_RETENTION_DAYS", "int", "retention", 0, 3650),
     Tunable(K.ERROR_LOG_RETENTION_DAYS, "ERROR_LOG_RETENTION_DAYS", "int", "retention", 0, 3650),
     Tunable(K.PUBLIC_LINK_ATTEMPT_RETENTION_DAYS, "PUBLIC_LINK_ATTEMPT_RETENTION_DAYS", "int", "retention", 0, 3650),
+    Tunable(K.SECRET_RETENTION_DAYS, "SECRET_RETENTION_DAYS", "int", "retention", 0, 3650),
     Tunable(K.IP_BLOCK_RETENTION_DAYS, "IP_BLOCK_RETENTION_DAYS", "int", "retention", 0, 3650),
     Tunable(K.NOTIFICATION_READ_RETENTION_DAYS, "NOTIFICATION_READ_RETENTION_DAYS", "int", "retention", 0, 3650),
     Tunable(K.QUARANTINE_PURGE_AFTER_DAYS, "QUARANTINE_PURGE_AFTER_DAYS", "int", "retention", 0, 3650),
@@ -103,6 +104,19 @@ TUNABLES: list[Tunable] = [
     Tunable(K.UPDATES_INFRA_SYNC, "UPDATES_INFRA_SYNC", "bool", "updates"),
     Tunable(K.HIBP_ENABLED, "HIBP_ENABLED", "bool", "security"),
     Tunable(K.APP_NAME, "APP_NAME", "str", "branding"),
+    # --- Secrets (v2.24.0) ---
+    # Ceilings on what a sender may choose. The lifetime ceiling also ends a
+    # secret sent with a view limit only (0 = none), so an unread secret cannot
+    # sit on the server indefinitely unless the admin says it may.
+    Tunable(K.SECRETS_MAX_VIEWS, "SECRETS_MAX_VIEWS", "int", "secrets", 1, 10_000),
+    Tunable(K.SECRETS_MAX_EXPIRY_DAYS, "SECRETS_MAX_EXPIRY_DAYS", "int", "secrets", 1, 3650),
+    Tunable(K.SECRETS_MAX_LIFETIME_DAYS, "SECRETS_MAX_LIFETIME_DAYS", "int", "secrets", 0, 3650),
+    # Wrong passphrases before a secret burns for that recipient (burn mode).
+    Tunable(K.SECRETS_PASSPHRASE_MAX_FAILURES, "SECRETS_PASSPHRASE_MAX_FAILURES", "int", "secrets", 1, 100),
+    # Throttle + lock (lock mode, and the throttle in burn mode too).
+    Tunable(K.SECRETS_PASSPHRASE_RATE_LIMIT, "SECRETS_PASSPHRASE_RATE_LIMIT", "int", "secrets", 1, 1000),
+    Tunable(K.SECRETS_PASSPHRASE_WINDOW_SEC, "SECRETS_PASSPHRASE_WINDOW_SEC", "int", "secrets", 30, 86400),
+    Tunable(K.SECRETS_PASSPHRASE_LOCKOUT_SEC, "SECRETS_PASSPHRASE_LOCKOUT_SEC", "int", "secrets", 30, 86400),
     # --- Storage / low-disk degradation (≤ 1 TiB byte ceiling) ---
     Tunable(K.STORAGE_LOW_THRESHOLD_PERCENT, "STORAGE_LOW_THRESHOLD_PERCENT", "int", "storage", 0, 50),
     Tunable(K.STORAGE_LOW_THRESHOLD_BYTES, "STORAGE_LOW_THRESHOLD_BYTES", "int", "storage", 0, 1_099_511_627_776),

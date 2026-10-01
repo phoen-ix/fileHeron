@@ -39,6 +39,10 @@ WEBHOOK_EVENTS: list[str] = [
     AuditEventType.share_expired.value,
     AuditEventType.file_quarantined.value,
     AuditEventType.public_link_consumed.value,
+    # Secrets (v2.24.0): metadata only - never the content, a token or an address.
+    AuditEventType.secret_created.value,
+    AuditEventType.secret_viewed.value,
+    AuditEventType.secret_burned.value,
     AuditEventType.oidc_linked.value,
     AuditEventType.user_erased.value,
     AuditEventType.anomaly_detected.value,

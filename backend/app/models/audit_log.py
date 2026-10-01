@@ -194,6 +194,19 @@ class AuditEventType(str, enum.Enum):
     update_postpone_cancelled = "update_postpone_cancelled"
     # Automatic updates: the daily cron scheduled a release (actor None).
     update_auto_scheduled = "update_auto_scheduled"
+    # Secrets (v2.24.0). Metadata carries ids, counts, limits and modes - never
+    # the content, a link token, a passphrase or an email address (a count of
+    # addresses only: erasure cannot reach a person with no account).
+    secret_created = "secret_created"
+    secret_viewed = "secret_viewed"
+    secret_burned = "secret_burned"                        # every view used
+    secret_expired = "secret_expired"
+    secret_revoked = "secret_revoked"                      # burned early by sender/admin/import
+    secret_recipient_burned = "secret_recipient_burned"    # too many wrong passphrases
+    secret_link_shown = "secret_link_shown"                # the sender copied a link again
+    secret_link_replaced = "secret_link_replaced"
+    secret_link_removed = "secret_link_removed"
+    secret_policy_changed = "secret_policy_changed"
 
 
 

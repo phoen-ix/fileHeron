@@ -305,7 +305,28 @@
     "ALLOWLIST_ENTRY_NOT_FOUND": "That allowlist entry is not there any more.",
     "BLOCK_STATUS_INVALID": "Unknown block status filter.",
     "CONFLICT_RETRY": "Someone changed this at the same moment. Try again.",
-    "SETTING_MANAGED_ELSEWHERE": "That setting is managed on its own settings page, which applies side effects this generic page cannot."
+    "SETTING_MANAGED_ELSEWHERE": "That setting is managed on its own settings page, which applies side effects this generic page cannot.",
+    "SECRETS_DISABLED": "Secrets are turned off on this server.",
+    "SECRET_NOT_ALLOWED": "Your administrator has not allowed you to send secrets.",
+    "SECRET_EXTERNAL_NOT_ALLOWED": "You may not send a secret to an email address or as a link.",
+    "SECRET_CONTENT_INVALID": "A secret must be between 1 and 10,000 characters.",
+    "SECRET_NEEDS_LIMIT": "Set a view limit, an expiry, or both.",
+    "SECRET_LIMIT_EXCEEDED": "That is above the limit your administrator allows.",
+    "SECRET_NO_RECIPIENTS": "Add at least one recipient, or create a link.",
+    "SECRET_RECIPIENT_NOT_ALLOWED": "You can send a secret only to the people you work with.",
+    "SECRET_NOT_FOUND": "This secret does not exist.",
+    "SECRET_ENDED": "This secret is no longer available.",
+    "SECRET_LINK_NOT_FOUND": "This secret has no link.",
+    "SECRET_LINK_REVOKED": "The sender replaced or removed this link.",
+    "SECRET_LOCKED": "This secret is locked for a while after too many wrong passphrases.",
+    "SECRET_NOT_A_RECIPIENT": "You are no longer a recipient of this secret.",
+    "SECRET_PASSPHRASE_INVALID": "That passphrase is not correct.",
+    "SECRET_PASSPHRASE_REQUIRED": "This secret needs its passphrase.",
+    "SECRET_RATE_LIMITED": "Too many wrong passphrases. Try again later.",
+    "SECRET_RECIPIENT_BURNED": "Too many wrong passphrases - this secret is gone for you.",
+    "SECRET_REVEAL_FORBIDDEN": "Only the recipients of a secret can open it.",
+    "SECRET_UNREADABLE": "This secret can't be decrypted on this server. Ask the sender to send it again.",
+    "SECRET_VIEWS_EXHAUSTED": "You have used up the views of this secret."
   },
   "login": {
     "title": "Sign in",
@@ -383,7 +404,8 @@
     "inbox": "Received",
     "new_share": "New share",
     "approvals": "Approvals",
-    "admin": "Admin"
+    "admin": "Admin",
+    "secrets": "Secrets"
   },
   "admin": {
     "eyebrow": "Admin",
@@ -419,7 +441,8 @@
       "errors": "Errors & alerts",
       "sign_in": "Sign-in policies",
       "transfers": "Files & transfers",
-      "anomaly": "Anomaly detection"
+      "anomaly": "Anomaly detection",
+      "secrets": "Secrets"
     },
     "nav_cat": {
       "people": "People & access",
@@ -443,7 +466,8 @@
       "alerts": "Alerts",
       "active": "Active",
       "passwords": "Passwords & brute force",
-      "email_change": "Email change"
+      "email_change": "Email change",
+      "secrets": "Secrets"
     },
     "tabs_label": "Page tabs"
   },
@@ -522,7 +546,8 @@
     "confirm_cta": "Replace & import",
     "sum_admins_installed": "Installs {n} administrator account | Installs {n} administrator accounts",
     "sum_oidc_issuers": "Installs SSO providers",
-    "sum_webhook_urls": "Installs webhooks pointing at"
+    "sum_webhook_urls": "Installs webhooks pointing at",
+    "sum_secrets": "{n} active secret will be burned. | {n} active secrets will be burned."
   },
   "admin_scheduled_tasks": {
     "intro": "Set how often each background job runs, pin a daily time, or disable it. Daily times use the site timezone ({tz}).",
@@ -708,7 +733,8 @@
       "anomaly": "Anomaly detection",
       "updates": "Updates",
       "error_alert": "Errors & alerts",
-      "scan_guard": "Scan guard"
+      "scan_guard": "Scan guard",
+      "secrets": "Secrets"
     },
     "keys": {
       "auth": {
@@ -743,7 +769,8 @@
         "webhook_delivery_days": "Webhook deliveries (days, 0 = keep forever)",
         "upload_stale_hours": "Stale in-progress uploads (hours)",
         "public_link_attempt_days": "Public-link password attempts (days)",
-        "ip_block_days": "Expired IP blocks (days)"
+        "ip_block_days": "Expired IP blocks (days)",
+        "secret_days": "Ended secrets (days, 0 = keep forever)"
       },
       "uploads": {
         "max_direct_bytes": "Direct-upload size cap (bytes)"
@@ -783,6 +810,15 @@
       "error_log": {
         "retention_days": "Error log (days, 0 = keep forever)",
         "scan_capture_per_min": "Max 4xx errors logged per minute (raise for fuller scan capture)"
+      },
+      "secrets": {
+        "max_views": "Most views a secret may allow",
+        "max_expiry_days": "Furthest expiry (days)",
+        "max_lifetime_days": "Longest lifetime (days, 0 = none)",
+        "passphrase_max_failures": "Wrong passphrases before it is destroyed (burn mode)",
+        "passphrase_rate_limit": "Wrong passphrases per source per window",
+        "passphrase_window_sec": "Passphrase window (seconds)",
+        "passphrase_lockout_sec": "Link lock duration (seconds)"
       }
     },
     "help": {
@@ -850,6 +886,10 @@
         "password_rate_limit": "Public-link password attempts allowed within the window below before the link is locked. (1-1000, default 10.)",
         "password_window_sec": "Window the public-link password attempts are counted over. (30-86400 sec, default 900.)",
         "lockout_sec": "How long a public link stays locked (all IPs) after too many wrong passwords. (30-86400 sec, default 900.)"
+      },
+      "secrets": {
+        "max_lifetime_days": "Ends a secret this long after it was sent, even one sent with a view limit only, so an unread secret cannot stay on the server indefinitely.",
+        "passphrase_max_failures": "Used when wrong passphrases destroy a secret - set by you for every secret, or by a sender for one."
       }
     },
     "reset_aria": "Reset {name} to its default ({default})",
@@ -1104,7 +1144,8 @@
       "shares": "Shares & files",
       "account": "Account",
       "security": "Security & sign-in",
-      "system": "System"
+      "system": "System",
+      "secrets": "Secrets"
     },
     "template": {
       "share_created": "Share created",
@@ -1128,7 +1169,11 @@
       "email_change_verify_old": "Email change - approve from old address",
       "email_change_alert": "Email change - security alert",
       "email_change_completed": "Email change - completed",
-      "release_available": "Update available"
+      "release_available": "Update available",
+      "secret_received": "Secret received",
+      "secret_link_external": "Secret link (recipient without an account)",
+      "secret_viewed": "Secret viewed",
+      "secret_ended": "Secret ended"
     },
     "locale": {
       "en": "English",
@@ -1380,7 +1425,10 @@
       "ops_alert": "Ops alert",
       "release_available": "Update available",
       "inbound_message": "Inbound message",
-      "server_error": "Server error"
+      "server_error": "Server error",
+      "secret_received": "Secret",
+      "secret_viewed": "Secret viewed",
+      "secret_ended": "Secret ended"
     },
     "headline": {
       "share_created": "{sender_name} sent you {file_count} file. | {sender_name} sent you {file_count} files.",
@@ -1410,7 +1458,20 @@
       "share_approved": "Share approved",
       "share_files_added": "Files added to a share",
       "share_pending_approval": "Share awaiting approval",
-      "share_rejected": "Share rejected"
+      "share_rejected": "Share rejected",
+      "secret_received": "{sender_name} sent you a secret",
+      "secret_viewed": {
+        "user": "{viewer} viewed your secret",
+        "email": "Your secret was viewed through the link sent to {viewer}",
+        "link": "Your secret was viewed through its link",
+        "generic": "Your secret was viewed"
+      },
+      "secret_ended": {
+        "burned": "Your secret was used up and destroyed",
+        "expired_unread": "Your secret expired unread",
+        "revoked_by_admin": "An administrator burned your secret",
+        "generic": "Your secret has ended"
+      }
     },
     "disconnected": "Live updates are disconnected - retrying. Reload the page to reconnect now."
   },
@@ -1649,7 +1710,8 @@
     "erase_preflight_files": "{n} file will be permanently deleted ({bytes}). | {n} files will be permanently deleted ({bytes}).",
     "erase_preflight_shares": "{created} share(s) they created will be revoked; {received} received share(s) will be anonymised.",
     "change_email_old_link_eyebrow": "Confirmation link for the OLD address",
-    "change_email_old_link_help": "In verify-both mode BOTH links must be opened. The change does not apply until the old address is confirmed too."
+    "change_email_old_link_help": "In verify-both mode BOTH links must be opened. The change does not apply until the old address is confirmed too.",
+    "erase_preflight_secrets": "{n} secret they sent will be deleted. | {n} secrets they sent will be deleted."
   },
   "admin_mail": {
     "intro": "Every email file:Heron sends is recorded here with its delivery outcome. One-time auth links (password reset, invite, verify) are redacted at rest.",
@@ -1737,7 +1799,10 @@
       "oidc_linked": "SSO account linked",
       "user_erased": "User erased",
       "anomaly_detected": "Anomaly detected",
-      "ops_alert": "Operational alert"
+      "ops_alert": "Operational alert",
+      "secret_created": "Secret sent",
+      "secret_viewed": "Secret viewed",
+      "secret_burned": "Secret used up"
     }
   },
   "admin_analytics": {
@@ -1923,7 +1988,15 @@
     "no_account_action_admin": "Clear this field and send them the public link yourself, or turn on {setting} to have file:Heron email it to them.",
     "external_setting_name": "Recipients without an account",
     "clear": "Clear",
-    "not_added": "“{q}” isn't added yet. Pick it from the list."
+    "not_added": "“{q}” isn't added yet. Pick it from the list.",
+    "secret": {
+      "external_option": "Send a secret link to {email}",
+      "external_chip_hint": "secret link",
+      "no_account_action": "Clear this field. Sending a secret to an address without an account needs the right to send outside the organisation.",
+      "no_account_action_admin": "Clear this field, or allow sending outside the organisation in {setting}.",
+      "external_setting_name": "the Secrets policy",
+      "help_phase4": "Search for people by name or email. Pick a group to reach each of its members."
+    }
   },
   "expiry": {
     "label": "Expires",
@@ -2016,8 +2089,14 @@
       "files_upload": "Upload files",
       "files_download": "Download & preview files",
       "files_delete": "Delete files",
-      "public_links_read": "List & read public links (returns the plaintext URL)"
-    }
+      "public_links_read": "List & read public links (returns the plaintext URL)",
+      "secrets_send": "Send secrets",
+      "secrets_read": "List & read secret metadata",
+      "secrets_reveal": "Reveal secrets sent to you (returns the content)",
+      "secrets_manage": "Burn secrets, create & remove their links",
+      "secrets_links": "Read secret links back (returns the link)"
+    },
+    "scope_group_secrets": "Secrets"
   },
   "richtext": {
     "undo": "Undo",
@@ -2641,7 +2720,13 @@
     "admin_settings_sessions": "Sessions · Policy",
     "admin_settings_sign_in": "Sign-in policies",
     "admin_settings_transfers": "Files & transfers",
-    "admin_settings_anomaly": "Anomaly detection"
+    "admin_settings_anomaly": "Anomaly detection",
+    "secrets": "Secrets",
+    "secret_create": "New secret",
+    "secret_detail": "Secret",
+    "public_secret": "Secret",
+    "admin_secrets": "Secrets",
+    "admin_settings_secrets": "Secrets · Policy"
   },
   "not_found": {
     "eyebrow": "404 · not found",
@@ -2841,5 +2926,279 @@
     "intro": "An hourly check flags mass downloads, access from many networks and bursts of failed sign-ins against these thresholds.",
     "advisory": "Advisory only: a finding alerts an admin (and fires a webhook) and never blocks anyone.",
     "cadence_note": "The check runs on the schedule set under"
+  },
+  "secret_state": {
+    "active": "Active",
+    "burned": "Used up",
+    "expired": "Expired",
+    "revoked": "Burned"
+  },
+  "secrets": {
+    "eyebrow": "Secrets",
+    "title": "Secrets",
+    "intro": "Passwords and other short secrets, readable only a set number of times or until a date, then destroyed. They are never sent by email.",
+    "new": "New secret",
+    "box_label": "Show",
+    "box": {
+      "received": "Received",
+      "sent": "Sent"
+    },
+    "search_placeholder": "Search by label or sender…",
+    "filter_label": "State",
+    "filter": {
+      "active": "Active",
+      "ended": "Ended",
+      "all": "All"
+    },
+    "col": {
+      "label": "Label",
+      "from": "From",
+      "to": "To",
+      "views": "Views",
+      "expires": "Expires",
+      "state": "State"
+    },
+    "no_label": "(no label)",
+    "passphrase_flag": "passphrase",
+    "created": "Sent {d}",
+    "views": {
+      "unlimited": "No limit",
+      "left": "{n} view left | {n} views left",
+      "used_unlimited": "{used} viewed",
+      "used_of": "{used} of {max}"
+    },
+    "audience": {
+      "users": "{n} person | {n} people",
+      "groups": "{n} group | {n} groups",
+      "emails": "{n} address | {n} addresses",
+      "link": "link"
+    },
+    "empty": {
+      "received": "No secrets for you.",
+      "sent": "You haven't sent a secret yet."
+    },
+    "copy_link": "Copy link",
+    "copied": "Copied",
+    "kind": {
+      "user": "person",
+      "group": "group",
+      "email": "address",
+      "link": "link"
+    },
+    "scope": {
+      "per_person": "Each person",
+      "per_person_help": "Everyone who can read it gets the views - each member of a group too.",
+      "per_recipient": "Each recipient",
+      "per_recipient_help": "Every person, address and the link gets the views; a group shares them, so the first member's view can use them up for the rest.",
+      "total": "All together",
+      "total_help": "The views are shared by everyone: once they are used, it is gone for all."
+    },
+    "outcome": {
+      "viewed": "Viewed",
+      "wrong_passphrase": "Wrong passphrase",
+      "locked": "Locked",
+      "burned": "Burned (wrong passphrases)"
+    },
+    "create": {
+      "title": "Send a secret",
+      "intro": "A password, a key or any short text. Recipients reveal it on file:Heron; it is never put in an email, and it is destroyed once its views are used or it expires.",
+      "content_label": "Secret",
+      "content_help": "Up to 10,000 characters. Only the recipients can reveal it - not you, and not an administrator.",
+      "label_label": "Label",
+      "label_placeholder": "e.g. VPN for project Heron",
+      "label_help": "Optional. The only part shown before it is revealed, and in notifications. Don't put the secret here.",
+      "client_hint": "You can send a secret to the people you work with.",
+      "link_label": "Also create a link",
+      "link_toggle_help": "A link you pass on yourself (chat, phone). Anyone who has it can open the secret, within its limits.",
+      "limits_title": "Limits",
+      "limits_help": "Set a view limit, an expiry, or both. Whichever comes first ends the secret.",
+      "limit_views": "Limit the number of views",
+      "views_label": "Views",
+      "scope_label": "Count the views for",
+      "lifetime_note": "Without an expiry it ends once its views are used - at the latest after {days} days (your administrator's limit).",
+      "passphrase_title": "Passphrase",
+      "passphrase_help": "Optional. It becomes part of the encryption: nobody can open the secret without it, not even the server's operator - and if it is lost, the secret cannot be recovered. Tell the recipients another way (phone, chat).",
+      "passphrase_label": "Passphrase",
+      "passphrase_repeat": "Repeat the passphrase",
+      "burn_by_admin": "After {n} wrong passphrases the secret is destroyed for that recipient (your administrator's rule).",
+      "burn_label": "Destroy it after {n} wrong passphrases",
+      "burn_help": "Per recipient. Otherwise wrong guesses are slowed down and the link is locked for a while.",
+      "notify_label": "Notify me when it is viewed",
+      "notify_help": "One notice per view, and one when it is used up or expires unread.",
+      "send": "Send secret",
+      "sending": "Sending…",
+      "sent_toast": "Secret sent.",
+      "sent_title": "Secret sent",
+      "link_help": "Pass this link on yourself. You can copy it again from the secret's page.",
+      "view_status": "See its status",
+      "blockers": {
+        "title": "Before you can send:",
+        "no_content": "Enter the secret.",
+        "too_long": "The secret is longer than 10,000 characters.",
+        "recipient_not_added": "“{q}” is in the recipient field but not added. Pick it from the list or clear the field.",
+        "no_account": "“{q}” has no account and can't be added here. Clear the field.",
+        "no_recipient": "Pick a recipient from the list.",
+        "no_recipient_or_link": "Pick a recipient from the list, or create a link.",
+        "no_expiry_yet": "Choose when it expires.",
+        "no_limit": "Set a view limit, an expiry, or both.",
+        "views_invalid": "Enter a whole number of views, at least 1.",
+        "views_too_many": "At most {max} views are allowed.",
+        "expiry_past": "The expiry must be in the future.",
+        "expiry_too_far": "It may expire at most {days} days from now.",
+        "passphrase_short": "The passphrase needs at least {n} characters.",
+        "passphrase_mismatch": "The two passphrases differ."
+      }
+    },
+    "generator": {
+      "toggle": "Generate a password",
+      "length": "Length: {n}",
+      "classes": "Characters",
+      "class": {
+        "lower": "a-z",
+        "upper": "A-Z",
+        "digits": "0-9",
+        "symbols": "Symbols",
+        "avoidAmbiguous": "Avoid look-alikes (0/O, 1/l)"
+      },
+      "again": "Another one",
+      "use": "Use this password"
+    },
+    "reveal": {
+      "last_view_warning": "This is the last view. Copy the secret when it appears - once you leave this page it is gone.",
+      "passphrase_label": "Passphrase",
+      "passphrase_help": "The sender gave you this separately.",
+      "passphrase_help_burn": "The sender gave you this separately. After {n} more wrong attempt the secret is destroyed for you. | The sender gave you this separately. After {n} more wrong attempts the secret is destroyed for you.",
+      "button": "Reveal",
+      "hidden": "••••••••••••",
+      "copy": "Copy",
+      "copied": "Copied",
+      "hide": "Hide",
+      "show": "Show",
+      "destroyed": "That was the last view: the secret has been destroyed. Copy it now - it will not be shown again.",
+      "no_views_left": "You have no views left. Copy it now - it will not be shown again.",
+      "views_left": "{n} view left. | {n} views left."
+    },
+    "detail": {
+      "back": "All secrets",
+      "from": "From",
+      "sent": "Sent",
+      "expires": "Expires",
+      "limit_label": "Views",
+      "no_view_limit": "No limit",
+      "limit": {
+        "per_person": "{n} per person | {n} per person",
+        "per_recipient": "{n} per recipient | {n} per recipient",
+        "total": "{n} in total | {n} in total"
+      },
+      "passphrase": "Passphrase",
+      "passphrase_burn": "Yes - destroyed after {n} wrong",
+      "ended_at": "Ended",
+      "ended": {
+        "burned": "Its views have been used; the secret is destroyed.",
+        "expired": "It has expired; the secret is destroyed.",
+        "revoked": "It was burned; the secret is destroyed."
+      },
+      "burned_for_me": "Too many wrong passphrases - this secret is gone for you.",
+      "not_recipient": "You are no longer a recipient of this secret.",
+      "no_views_left": "You have used up your views.",
+      "sender_note": "Only the recipients can reveal it - you see who did, and when.",
+      "admin_note": "Administrators see a secret's status; only its recipients can reveal it.",
+      "burn": "Burn now",
+      "burn_title": "Burn this secret?",
+      "burn_confirm": "It is destroyed at once and nobody can read it any more. This can't be undone.",
+      "burned_toast": "The secret was burned.",
+      "links_title": "Links",
+      "links_help": "Each address has its own link, and there may be one link you pass on yourself. Anyone holding a link can open the secret within its limits.",
+      "show_links": "Show links",
+      "replace_link": "Replace the link",
+      "create_link": "Create a link",
+      "remove_link": "Remove the link",
+      "replace_confirm": "The current link stops working at once. Replace it?",
+      "remove_confirm": "The link stops working at once. Remove it?",
+      "no_links": "There are no links.",
+      "link_unavailable": "This link can't be shown again.",
+      "the_link": "The link",
+      "recipients_title": "Recipients",
+      "activity_title": "Activity",
+      "no_activity": "Nobody has viewed it yet.",
+      "left_group": "left the group",
+      "views_used": "{n} view | {n} views",
+      "views_used_left": "{n} viewed · {left} left",
+      "col": {
+        "recipient": "Recipient",
+        "views": "Views",
+        "status": "Status",
+        "when": "When",
+        "what": "What",
+        "who": "Who",
+        "ip": "Address"
+      },
+      "status": {
+        "revoked": "Replaced",
+        "burned": "Destroyed (wrong passphrases)",
+        "locked": "Locked until {d}",
+        "emailed": "Emailed {d}",
+        "not_emailed": "Not emailed"
+      }
+    }
+  },
+  "public_secret": {
+    "eyebrow": "file:Heron",
+    "incomplete": "This link is incomplete - the part after the # is missing. Open the link exactly as you received it.",
+    "unavailable": "This secret is not available",
+    "title": "A secret for you",
+    "title_protected": "A protected secret",
+    "from": "From {name}",
+    "until": "Available until {d}",
+    "views_left": "{n} view left | {n} views left",
+    "intro": "Nothing is shown until you click Reveal. Each reveal uses a view.",
+    "locked": "This secret is locked until {d} after too many wrong passphrases."
+  },
+  "admin_secrets": {
+    "intro": "Every secret on this server: who sent it to whom, how often it was viewed, and when it ends. Administrators can burn a secret, never read it.",
+    "total": "{n} secret | {n} secrets",
+    "search_placeholder": "Search by label or sender…",
+    "empty": "No secrets match.",
+    "open": "Open",
+    "burn_confirm": "Burn this secret from {sender}? It is destroyed at once and nobody can read it any more.",
+    "col": {
+      "actions": "Actions"
+    }
+  },
+  "admin_settings_secrets": {
+    "intro": "Secrets are passwords and other short texts, readable a set number of times or until a date, then destroyed. Nobody but their recipients can read them - administrators included.",
+    "enabled_label": "Turn on secrets",
+    "enabled_help": "Off by default. Turning it off stops new secrets; existing ones stay readable until they end.",
+    "send_title": "Who may send secrets",
+    "send_help": "To people with an account. A client can only ever reach the employees they are connected to.",
+    "external_title": "Who may send them outside the organisation",
+    "external_help": "To an email address without an account, or as a link. Never a client.",
+    "mode": {
+      "everyone": "Everyone",
+      "everyone_help": "Every signed-in user.",
+      "employees_admins": "Employees and admins",
+      "employees_admins_help": "Clients only when allowed below.",
+      "admins_only": "Admins only",
+      "admins_only_help": "Others only when allowed below."
+    },
+    "mode_outside": {
+      "employees_admins_help": "Every employee and admin. Never a client.",
+      "admins_only_help": "Employees only when allowed below. Never a client."
+    },
+    "allow_users": "Also allowed: people",
+    "allow_groups": "Also allowed: groups",
+    "users_placeholder": "Search people…",
+    "client_never": "a client: never allowed here",
+    "failure_title": "Wrong passphrases",
+    "failure_help": "What happens when someone keeps entering a wrong passphrase.",
+    "failure": {
+      "lock": "Slow down and lock",
+      "lock_help": "One source is slowed down; failures from several sources lock the link for a while. Recommended.",
+      "burn": "Destroy after too many",
+      "burn_help": "After the set number of wrong passphrases the secret is destroyed for that recipient. Senders can always choose this for one secret."
+    },
+    "saved_toast": "Secrets policy saved.",
+    "limits_title": "Limits",
+    "limits_help": "The ceilings a sender works within, and the passphrase throttle."
   }
 }

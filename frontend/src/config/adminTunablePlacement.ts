@@ -30,6 +30,7 @@ export const GROUP_PLACEMENT: Readonly<Record<string, string>> = {
   branding: 'admin-settings-branding',
   anomaly: 'admin-settings-anomaly',
   error_alert: 'admin-settings-error-alerts',
+  secrets: 'admin-settings-secrets',
   retention: ADVANCED_ROUTE,
   storage: ADVANCED_ROUTE,
 }

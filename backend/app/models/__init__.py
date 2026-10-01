@@ -30,6 +30,17 @@ from .password_reset_token import PasswordResetToken
 from .public_link import PublicLink
 from .public_link_attempt import PublicLinkAttempt, PublicLinkAttemptOutcome
 from .refresh_token import RefreshToken
+from .secret import (
+    Secret,
+    SecretAccessEvent,
+    SecretAccessOutcome,
+    SecretGroupMember,
+    SecretRecipient,
+    SecretRecipientKind,
+    SecretState,
+    SecretUserState,
+    SecretViewScope,
+)
 from .share import Share, ShareKind, ShareState
 from .share_external_recipient import ShareExternalRecipient
 from .share_recipient import ShareRecipient
@@ -85,6 +96,15 @@ __all__ = [
     "PublicLinkAttempt",
     "PublicLinkAttemptOutcome",
     "RefreshToken",
+    "Secret",
+    "SecretAccessEvent",
+    "SecretAccessOutcome",
+    "SecretGroupMember",
+    "SecretRecipient",
+    "SecretRecipientKind",
+    "SecretState",
+    "SecretUserState",
+    "SecretViewScope",
     "Share",
     "ShareKind",
     "ShareExternalRecipient",

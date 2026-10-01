@@ -35,11 +35,16 @@ logger = logging.getLogger("fileheron.mail_log")
 # bearer credential for the share's bytes, so it is masked like the others. The
 # path comes from the SAME setting the link builder reads, never a literal `/d/`,
 # or an operator who moved the base path would get live tokens in the log.
+# And a secret's link, {site}{SECRET_LINK_BASE_PATH}#{token} (services/secret.py):
+# the token is in the FRAGMENT there, so it is matched after `#`, not `/`. It IS
+# the secret for whoever opens it.
 _AUTH_LINK_RE = re.compile(
     r"(/(?:reset-password|verify-email|register|confirm-email-change"
     r"|cancel-email-change|"
     + re.escape(settings.PUBLIC_LINK_BASE_PATH.strip("/"))
-    + r")/)([A-Za-z0-9._~\-]+)"
+    + r")/|"
+    + re.escape(settings.SECRET_LINK_BASE_PATH)
+    + r"#)([A-Za-z0-9._~\-]+)"
 )
 _REDACTED = r"\1<redacted>"
 
@@ -65,6 +70,7 @@ _AUTH_LINK_CATEGORIES = {
     "email_change_verify_old",
     "email_change_alert",
     "share_link_external",
+    "secret_link_external",
 }
 
 _BODY_UNAVAILABLE = "[body unavailable: masking error]"

@@ -117,9 +117,7 @@
             @mouseenter="cursorIdx = externalIdx"
           >
             <span class="row-icon" aria-hidden="true">↗</span>
-            <span class="row-name">{{
-              t('recipient.external_option', { email: externalOption })
-            }}</span>
+            <span class="row-name">{{ externalOptionText(externalOption) }}</span>
           </button>
         </div>
 
@@ -146,18 +144,18 @@
              still blocked the form. -->
         <i18n-t
           v-if="isAdmin"
-          keypath="recipient.no_account_action_admin"
+          :keypath="adminActionKeypath"
           scope="global"
           tag="span"
           data-testid="no-account-admin-action"
         >
           <template #setting>
-            <RouterLink :to="{ name: 'admin-settings-public-links', hash: '#external-recipients' }">
-              {{ t('recipient.external_setting_name') }}
+            <RouterLink :to="externalSettingRoute">
+              {{ settingName }}
             </RouterLink>
           </template>
         </i18n-t>
-        <span v-else-if="canPublicLink">{{ t('recipient.no_account_action') }}</span>
+        <span v-else-if="canPublicLink || purpose === 'secret'">{{ actionText }}</span>
       </template>
       <template v-else>{{ t('recipient.not_added', { q: query }) }}</template>
       <button
@@ -170,7 +168,7 @@
         {{ t('recipient.clear') }}
       </button>
     </div>
-    <div v-else class="fh-field-help">{{ t('recipient.help_phase4') }}</div>
+    <div v-else class="fh-field-help">{{ helpText }}</div>
   </div>
 </template>
 
@@ -196,6 +194,13 @@
     canPublicLink?: boolean
     /** An admin is told where the switch for addresses without an account is. */
     isAdmin?: boolean
+    /** 'secret' (v2.24.0): the secret compose form - an address gets its own
+     *  secret link, not the share's download link, and the guidance points at
+     *  the Secrets policy. Default 'share'. */
+    purpose?: 'share' | 'secret'
+    /** False hides groups entirely - a client sends a secret only to the
+     *  employees they are connected to. Default true. */
+    allowGroups?: boolean
   }>()
 
   const emit = defineEmits<{
@@ -276,7 +281,7 @@
       cs.push({ kind: 'group', id: g.id, label: g.name })
     }
     for (const e of selectedEmailsLocal.value) {
-      cs.push({ kind: 'email', id: e, label: e, hint: t('recipient.external_chip_hint') })
+      cs.push({ kind: 'email', id: e, label: e, hint: chipHint.value })
     }
     return cs
   })
@@ -287,6 +292,7 @@
   })
 
   const filteredGroups = computed(() => {
+    if (props.allowGroups === false) return []
     const selectedIds = new Set(selectedGroupsLocal.value.map((g) => g.id))
     const needle = query.value.toLowerCase().trim()
     return allGroupResults.value
@@ -343,16 +349,54 @@
       : '',
   )
 
+  // The secret form words a few lines differently (`recipient.secret.*`).
+  // Spelled out per key, not built from a prefix: the i18n key scan
+  // (backend/tests/test_frontend_i18n_keys.py) can only see literal keys.
+  const isSecret = computed(() => props.purpose === 'secret')
+  function externalOptionText(email: string): string {
+    return isSecret.value
+      ? t('recipient.secret.external_option', { email })
+      : t('recipient.external_option', { email })
+  }
+  const chipHint = computed(() =>
+    isSecret.value ? t('recipient.secret.external_chip_hint') : t('recipient.external_chip_hint'),
+  )
+  const settingName = computed(() =>
+    isSecret.value
+      ? t('recipient.secret.external_setting_name')
+      : t('recipient.external_setting_name'),
+  )
+  const actionText = computed(() =>
+    isSecret.value ? t('recipient.secret.no_account_action') : t('recipient.no_account_action'),
+  )
+  function actionAdminText(setting: string): string {
+    return isSecret.value
+      ? t('recipient.secret.no_account_action_admin', { setting })
+      : t('recipient.no_account_action_admin', { setting })
+  }
+  const adminActionKeypath = computed(() =>
+    isSecret.value
+      ? 'recipient.secret.no_account_action_admin'
+      : 'recipient.no_account_action_admin',
+  )
+  const helpText = computed(() =>
+    isSecret.value ? t('recipient.secret.help_phase4') : t('recipient.help_phase4'),
+  )
+
+  const externalSettingRoute = computed(() =>
+    props.purpose === 'secret'
+      ? { name: 'admin-settings-secrets' }
+      : { name: 'admin-settings-public-links', hash: '#external-recipients' },
+  )
+
   /** The same guidance as plain text, for the results list. */
   const noAccountPlain = computed(() => {
     if (!noAccountFor.value) return ''
     if (props.isAdmin) {
-      return `${noAccountBase.value} ${t('recipient.no_account_action_admin', {
-        setting: t('recipient.external_setting_name'),
-      })}`
+      return `${noAccountBase.value} ${actionAdminText(settingName.value)}`
     }
-    return props.canPublicLink
-      ? `${noAccountBase.value} ${t('recipient.no_account_action')}`
+    return props.canPublicLink || props.purpose === 'secret'
+      ? `${noAccountBase.value} ${actionText.value}`
       : noAccountBase.value
   })
 
@@ -395,6 +439,7 @@
   }
 
   async function loadInitialGroups() {
+    if (props.allowGroups === false) return
     try {
       const { data } = await listRecipientTargetGroups()
       allGroupResults.value = data.items

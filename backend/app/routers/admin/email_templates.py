@@ -38,7 +38,7 @@ from ...utils.timeutil import utc_now
 
 router = APIRouter(tags=["admin"])
 
-_GROUP_ORDER = ["shares", "account", "security", "system"]
+_GROUP_ORDER = ["shares", "secrets", "account", "security", "system"]
 _LOCALE_LABELS = {"en": "English", "de": "Deutsch"}
 
 

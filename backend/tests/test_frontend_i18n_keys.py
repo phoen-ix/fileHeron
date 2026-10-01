@@ -188,6 +188,17 @@ DYNAMIC_PREFIXES = (
     "admin_scan_guard.notify_help.",
     "admin_users.invites.state.",           # per invite state
     "legal.",                               # per legal page kind
+    # Secrets (v2.24.0)
+    "secret_state.",                        # per SecretState
+    "secrets.scope.",                       # per view scope (+ _help)
+    "secrets.kind.",                        # per recipient kind
+    "secrets.outcome.",                     # per access-event outcome
+    "secrets.empty.",                       # per box
+    "secrets.detail.ended.",                # per ended state
+    "secrets.detail.limit.",                # per view scope
+    "secrets.generator.class.",             # per character class
+    "admin_settings_secrets.mode.",         # per policy mode (+ _help)
+    "admin_settings_secrets.failure.",      # per wrong-passphrase mode (+ _help)
 )
 
 

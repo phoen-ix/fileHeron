@@ -105,6 +105,21 @@ def _me_response(db: Session, user: User) -> MeResponse:
     from ..services import email_change_policy
 
     me_resp.can_change_own_email = email_change_policy.self_service_enabled(db)
+    from ..schemas.account import SecretLimitsResponse
+    from ..services import secret as secret_svc
+
+    if secret_svc.is_enabled(db):
+        me_resp.secrets_enabled = True
+        me_resp.can_send_secrets = secret_svc.may_send(db, user)
+        me_resp.can_send_secrets_external = secret_svc.may_send_external(db, user)
+        lim = secret_svc.limits(db)
+        me_resp.secret_limits = SecretLimitsResponse(
+            max_views=lim.max_views,
+            max_expiry_days=lim.max_expiry_days,
+            max_lifetime_days=lim.max_lifetime_days,
+            passphrase_failure_mode=lim.passphrase_failure_mode,
+            passphrase_max_failures=lim.passphrase_max_failures,
+        )
     return me_resp
 
 

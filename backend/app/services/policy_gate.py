@@ -1,4 +1,4 @@
-"""Shared create-policy gate for API tokens and public links.
+"""Shared create-policy gate for API tokens, public links and secrets.
 
 Both features expose the same admin-tunable shape: a policy ``mode`` plus an
 additive user/group allowlist, stored in ``app_settings`` under
@@ -32,16 +32,23 @@ def _parse_id_list(raw: str | None) -> list[int]:
 
 
 def resolve_policy(
-    db: Session, *, mode_key: str, users_key: str, groups_key: str
+    db: Session,
+    *,
+    mode_key: str,
+    users_key: str,
+    groups_key: str,
+    default_mode: str = DEFAULT_POLICY_MODE,
 ) -> tuple[str, list[int], list[int]]:
     """Read ``(mode, allowed_user_ids, allowed_group_ids)`` from app_settings.
 
-    Falls back to ``DEFAULT_POLICY_MODE`` + empty allowlists so an unconfigured
-    deploy keeps working until an admin sets a stricter policy.
+    Falls back to ``default_mode`` + empty allowlists so an unconfigured deploy
+    keeps working until an admin sets a stricter policy. A feature passes its own
+    default only where its gate is not the only control (secrets: a client can
+    only ever reach the employees they are connected to).
     """
     from . import settings as settings_svc
 
-    mode = settings_svc.get(db, mode_key) or DEFAULT_POLICY_MODE
+    mode = settings_svc.get(db, mode_key) or default_mode
     if mode == "disabled":
         # Legacy mode (removed v1.51) - collapse to its functional equivalent.
         # Do NOT let it fall through to DEFAULT_POLICY_MODE below: that would
@@ -49,14 +56,20 @@ def resolve_policy(
         # to employees_admins.
         mode = "admins_only"
     if mode not in POLICY_MODES:
-        mode = DEFAULT_POLICY_MODE
+        mode = default_mode
     user_ids = _parse_id_list(settings_svc.get(db, users_key))
     group_ids = _parse_id_list(settings_svc.get(db, groups_key))
     return mode, user_ids, group_ids
 
 
 def is_allowed(
-    db: Session, user: User, *, mode_key: str, users_key: str, groups_key: str
+    db: Session,
+    user: User,
+    *,
+    mode_key: str,
+    users_key: str,
+    groups_key: str,
+    default_mode: str = DEFAULT_POLICY_MODE,
 ) -> bool:
     """True if ``user`` may create under the active policy.
 
@@ -66,7 +79,11 @@ def is_allowed(
     if user.role == UserRole.admin:
         return True
     mode, allowed_users, allowed_groups = resolve_policy(
-        db, mode_key=mode_key, users_key=users_key, groups_key=groups_key
+        db,
+        mode_key=mode_key,
+        users_key=users_key,
+        groups_key=groups_key,
+        default_mode=default_mode,
     )
     if mode == "everyone":
         return True

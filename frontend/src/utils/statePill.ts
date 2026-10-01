@@ -1,4 +1,4 @@
-import type { ShareState } from '@/types/api'
+import type { SecretState, ShareState } from '@/types/api'
 
 type PillTone = 'active' | 'warn' | 'danger' | undefined
 
@@ -23,5 +23,15 @@ export function shareStatePill(state: ShareState | string): PillTone {
   if (state === 'expired' || state === 'pending_approval') return 'warn'
   if (state === 'revoked' || state === 'deleted' || state === 'failed' || state === 'rejected')
     return 'danger'
+  return undefined
+}
+
+/** Secret state (v2.24.0) → pill tone. `burned` is the normal end - every view
+ *  was used - so it reads neutral; an unread expiry is a warning, a secret
+ *  burned early by hand is the exceptional one. */
+export function secretStatePill(state: SecretState | string): PillTone {
+  if (state === 'active') return 'active'
+  if (state === 'expired') return 'warn'
+  if (state === 'revoked') return 'danger'
   return undefined
 }

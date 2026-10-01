@@ -44,7 +44,7 @@ class Placeholder:
 @dataclass(frozen=True)
 class TemplateSpec:
     slug: str
-    group: str  # UI grouping: "shares" | "account" | "security" | "system"
+    group: str  # UI grouping: "shares" | "secrets" | "account" | "security" | "system"
     placeholders: tuple[Placeholder, ...] = field(default_factory=tuple)
 
 
@@ -66,6 +66,15 @@ _RECIPIENT = Placeholder(
 _SENDER = Placeholder("[SENDER]", "Sender name", "Display name of the person who sent the share.", "sender_name")
 _SUBJECT = Placeholder("[SUBJECT]", "Share subject", "The share's subject/title.", "subject")
 _SHARE_LINK = Placeholder("[SHARE_LINK]", "Share link", "URL to open the share.", "share_url", kind="url")
+_LABEL = Placeholder("[LABEL]", "Secret label", "The label the sender gave the secret.", "label")
+_SECRET_LINK = Placeholder(
+    "[SECRET_DETAILS_LINK]", "Secret page", "URL to open the secret (sign-in required).",
+    "secret_url", kind="url",
+)
+_SECRET_STATUS = Placeholder(
+    "[SECRET_DETAILS_LINK]", "Secret page", "URL of the secret's status page.",
+    "secret_url", kind="url",
+)
 
 
 REGISTRY: dict[str, TemplateSpec] = {
@@ -125,6 +134,40 @@ REGISTRY: dict[str, TemplateSpec] = {
             "downloads_remaining",
         ),
         _SHARE_LINK,
+    )),
+    # ---- Secrets (v2.24.0) -------------------------------------------------
+    # Never a placeholder for the content, or for the passphrase: neither is in
+    # any render context. [LABEL] is what the sender chose to show.
+    "secret_received": TemplateSpec("secret_received", "secrets", _p(
+        _SENDER, _RECIPIENT, _LABEL,
+        Placeholder("[EXPIRES_AT]", "Expiry", "When the secret expires.", "expires_at", kind="datetime"),
+        Placeholder("[MAX_VIEWS]", "View limit", "How often it may be viewed.", "max_views"),
+        _SECRET_LINK,
+    )),
+    # Mailed to an address with NO account. The link is the secret for whoever
+    # opens it - an auth_link: the token rides `{SECRET_LINK_BASE_PATH}#<token>`,
+    # the shape mail_log masks. Never a passphrase placeholder.
+    "secret_link_external": TemplateSpec("secret_link_external", "secrets", _p(
+        _SENDER, _LABEL,
+        Placeholder("[EXPIRES_AT]", "Expiry", "When the secret expires.", "expires_at", kind="datetime"),
+        Placeholder("[MAX_VIEWS]", "View limit", "How often it may be viewed.", "max_views"),
+        Placeholder(
+            "[SECRET_LINK]", "Secret link", "The link that opens the secret.",
+            "link_url", kind="url", required=True, auth_link=True,
+        ),
+    )),
+    "secret_viewed": TemplateSpec("secret_viewed", "secrets", _p(
+        _RECIPIENT, _LABEL,
+        Placeholder("[VIEWER]", "Viewer", "Who viewed it (name, or the address).", "viewer"),
+        Placeholder("[VIEWED_AT]", "Viewed at", "When it was viewed.", "at", kind="datetime"),
+        Placeholder("[VIEWS_LEFT]", "Views left", "Views remaining for that recipient.", "views_left"),
+        Placeholder("[IP]", "IP address", "Address a link/address view came from.", "ip"),
+        _SECRET_STATUS,
+    )),
+    "secret_ended": TemplateSpec("secret_ended", "secrets", _p(
+        _RECIPIENT, _LABEL,
+        Placeholder("[VIEWS_USED]", "Views used", "How often it was viewed.", "views_used"),
+        _SECRET_STATUS,
     )),
     "file_quarantined": TemplateSpec("file_quarantined", "shares", _p(
         Placeholder("[UPLOADER]", "Uploader name", "Display name of who uploaded the file.", "uploader_name"),
@@ -358,6 +401,12 @@ def _public_link_base_path() -> str:
     return settings.PUBLIC_LINK_BASE_PATH
 
 
+def _secret_link_base_path() -> str:
+    from ..config import settings
+
+    return settings.SECRET_LINK_BASE_PATH
+
+
 def sample_ctx(slug: str, *, app_url: str) -> dict:
     """Realistic render context for preview / test-send. Keyed by the underlying
     context keys (so it flows through build_substitutions unchanged). Auth links
@@ -426,8 +475,28 @@ def sample_ctx(slug: str, *, app_url: str) -> dict:
         # branch that says a password is needed without ever carrying it.
         "link_url": f"{app_url}{_public_link_base_path()}/SAMPLETOKEN",
         "has_password": False,
+        # Secrets (v2.24.0). Never content - no template can print it.
+        "label": "VPN for project Heron",
+        "has_passphrase": False,
+        "max_views": 1,
+        "view_scope": "per_person",
+        "shared_with_group": False,
+        "views_left": 0,
+        "views_used": 1,
+        "viewer": "Grace Hopper",
+        "ip": "203.0.113.42",
+        "secret_url": f"{app_url}/secrets/SAMPLE",
     }
     # lockout / email_change_alert use the token-free forgot-password link.
     if slug in ("lockout_warning", "email_change_alert"):
         base["reset_url"] = f"{app_url}/forgot-password"
+    # The secret link carries its token in the FRAGMENT.
+    if slug == "secret_link_external":
+        base["link_url"] = f"{app_url}{_secret_link_base_path()}#SAMPLETOKEN"
+    # Keys these templates branch on, which other templates use differently.
+    if slug == "secret_viewed":
+        base["via"] = "email"
+        base["viewer"] = "grace@example.com"
+    if slug == "secret_ended":
+        base["reason"] = "burned"
     return base

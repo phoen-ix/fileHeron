@@ -11,7 +11,9 @@ table, which is a different technique and not subject to that limitation.
 
 The exempt list is the point. Each entry is a router that authenticates some
 other way, and adding to it should feel like a decision:
-  - anonymous by design (health, setup, branding, telemetry, public)
+  - anonymous by design (health, setup, branding, telemetry, public, and
+    public_secrets - the holder of a secret's link has no account; the token
+    rides the request body)
   - reachable before 2FA setup completes (auth, account.setup_router)
   - self-authenticating on a signed token or HMAC, because the caller cannot
     send an Authorization header (files.download_router `?dt=`, both SSE
@@ -34,6 +36,7 @@ _EXEMPT = {
     "auth.router",
     "account.setup_router",
     "public.router",
+    "public_secrets.router",
     "notification_subscriptions.router",
     "branding.router",
     "telemetry.router",

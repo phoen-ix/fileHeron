@@ -25,7 +25,8 @@
  * keywords lowercase, EN and DE mixed freely; a `hash` only where the page
  * actually renders that id (General's `<section id>`s, Advanced's
  * `id="tunable-<key>"` controls, Status & updates' `#updates` /
- * `#auto-update` and Public links' `#external-recipients`). */
+ * `#auto-update`, Public links' `#external-recipients` and Secrets'
+ * `#secrets-enabled`). */
 
 export interface AdminSearchEntry {
   /** Leaf route to navigate to. Must be in ADMIN_ROUTE_NAMES. */
@@ -85,6 +86,12 @@ export const ADMIN_SEARCH_INDEX: readonly AdminSearchEntry[] = [
   { routeName: 'admin-settings-public-links', labelKey: 'admin_public_link_policy.groups_label', keywords: ['public link groups', 'allow group links'] },
   { routeName: 'admin-settings-public-links', hash: '#external-recipients', labelKey: 'admin_public_link_policy.external.title', keywords: ['external recipient', 'no account', 'guest', 'email address', 'send to email', 'ohne konto', 'extern', 'gast'] },
   { routeName: 'admin-settings-public-links', hash: '#external-recipients', labelKey: 'admin_public_link_policy.external.offer_invite_label', keywords: ['invite recipient', 'create account', 'einladen', 'konto anlegen', 'new user'] },
+
+  // --- Secrets (admin-settings-secrets) - the policy tab; the list tab is the item itself
+  { routeName: 'admin-settings-secrets', hash: '#secrets-enabled', labelKey: 'admin_settings_secrets.enabled_label', keywords: ['password sharing', 'one-time secret', 'passwort teilen', 'geheimnis', 'credentials', 'zugangsdaten', 'burn after reading'] },
+  { routeName: 'admin-settings-secrets', labelKey: 'admin_settings_secrets.send_title', keywords: ['who can send secrets', 'secret policy', 'geheimnis richtlinie', 'send password'] },
+  { routeName: 'admin-settings-secrets', labelKey: 'admin_settings_secrets.external_title', keywords: ['secret link', 'secret email', 'outside organisation', 'extern', 'ohne konto'] },
+  { routeName: 'admin-settings-secrets', labelKey: 'admin_settings_secrets.failure_title', keywords: ['wrong passphrase', 'falsche passphrase', 'brute force secret', 'burn after'] },
 
   // --- Share approval / four-eyes (admin-settings-share-approval)
   { routeName: 'admin-settings-share-approval', labelKey: 'admin_share_approval.enable_label', keywords: ['four eyes', 'vier augen', 'freigabe', 'approval', 'review before sending', 'pending approval', 'genehmigung'] },
@@ -257,6 +264,13 @@ export const ADMIN_SEARCH_INDEX: readonly AdminSearchEntry[] = [
   { routeName: 'admin-settings-public-links', hash: '#tunable-public_link.password_rate_limit', labelKey: 'admin_advanced.keys.public_link.password_rate_limit', keywords: ['public link password attempts', 'link password guessing', 'brute force link'] },
   { routeName: 'admin-settings-public-links', hash: '#tunable-public_link.password_window_sec', labelKey: 'admin_advanced.keys.public_link.password_window_sec', keywords: ['public link password window', 'link attempts window'] },
   { routeName: 'admin-settings-public-links', hash: '#tunable-public_link.lockout_sec', labelKey: 'admin_advanced.keys.public_link.lockout_sec', keywords: ['public link lock', 'link locked', 'link lockout', 'link gesperrt'] },
+  { routeName: 'admin-settings-secrets', hash: '#tunable-secrets.max_views', labelKey: 'admin_advanced.keys.secrets.max_views', keywords: ['secret views', 'view limit', 'aufrufe', 'max views'] },
+  { routeName: 'admin-settings-secrets', hash: '#tunable-secrets.max_expiry_days', labelKey: 'admin_advanced.keys.secrets.max_expiry_days', keywords: ['secret expiry', 'ablauf', 'max expiry'] },
+  { routeName: 'admin-settings-secrets', hash: '#tunable-secrets.max_lifetime_days', labelKey: 'admin_advanced.keys.secrets.max_lifetime_days', keywords: ['secret lifetime', 'lebensdauer', 'unread secret'] },
+  { routeName: 'admin-settings-secrets', hash: '#tunable-secrets.passphrase_max_failures', labelKey: 'admin_advanced.keys.secrets.passphrase_max_failures', keywords: ['burn after wrong passphrase', 'falsche passphrase'] },
+  { routeName: 'admin-settings-secrets', hash: '#tunable-secrets.passphrase_rate_limit', labelKey: 'admin_advanced.keys.secrets.passphrase_rate_limit', keywords: ['secret passphrase attempts', 'throttle'] },
+  { routeName: 'admin-settings-secrets', hash: '#tunable-secrets.passphrase_window_sec', labelKey: 'admin_advanced.keys.secrets.passphrase_window_sec', keywords: ['secret passphrase window'] },
+  { routeName: 'admin-settings-secrets', hash: '#tunable-secrets.passphrase_lockout_sec', labelKey: 'admin_advanced.keys.secrets.passphrase_lockout_sec', keywords: ['secret link lock', 'gesperrt'] },
   { routeName: 'admin-settings-advanced', hash: '#tunable-retention.refresh_token_days', labelKey: 'admin_advanced.keys.retention.refresh_token_days', keywords: ['refresh token cleanup', 'old sessions', 'session rows', 'revoked tokens'] },
   { routeName: 'admin-settings-advanced', hash: '#tunable-retention.invite_days', labelKey: 'admin_advanced.keys.retention.invite_days', keywords: ['invite expiry', 'pending invites', 'einladung', 'unused invites'] },
   { routeName: 'admin-settings-advanced', hash: '#tunable-retention.audit_log_days', labelKey: 'admin_advanced.keys.retention.audit_log_days', keywords: ['audit retention', 'audit log', 'prune audit', 'protokoll', 'audit trail'] },
@@ -266,6 +280,7 @@ export const ADMIN_SEARCH_INDEX: readonly AdminSearchEntry[] = [
   { routeName: 'admin-settings-advanced', hash: '#tunable-retention.login_attempt_days', labelKey: 'admin_advanced.keys.retention.login_attempt_days', keywords: ['login attempts', 'login history', 'forensics', 'anmeldeversuche'] },
   { routeName: 'admin-settings-advanced', hash: '#tunable-retention.webhook_delivery_days', labelKey: 'admin_advanced.keys.retention.webhook_delivery_days', keywords: ['webhook deliveries', 'webhook history', 'delivery retention'] },
   { routeName: 'admin-settings-advanced', hash: '#tunable-retention.public_link_attempt_days', labelKey: 'admin_advanced.keys.retention.public_link_attempt_days', keywords: ['public link attempts', 'password attempts log', 'link attempt history'] },
+  { routeName: 'admin-settings-advanced', hash: '#tunable-retention.secret_days', labelKey: 'admin_advanced.keys.retention.secret_days', keywords: ['secret history', 'ended secrets', 'geheimnisse aufbewahrung'] },
   { routeName: 'admin-settings-advanced', hash: '#tunable-retention.ip_block_days', labelKey: 'admin_advanced.keys.retention.ip_block_days', keywords: ['ip block history', 'old blocks', 'block retention', 'released blocks'] },
   { routeName: 'admin-settings-advanced', hash: '#tunable-retention.notification_read_days', labelKey: 'admin_advanced.keys.retention.notification_read_days', keywords: ['notifications cleanup', 'read notifications', 'bell', 'benachrichtigungen'] },
   { routeName: 'admin-settings-advanced', hash: '#tunable-retention.quarantine_purge_days', labelKey: 'admin_advanced.keys.retention.quarantine_purge_days', keywords: ['quarantine purge', 'infected bytes', 'quarantäne löschen', 'malware retention'] },

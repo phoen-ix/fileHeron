@@ -71,6 +71,7 @@ from ..models.group_member import GroupMember
 from ..models.login_attempt import LoginAttempt
 from ..models.notification import Notification, NotificationCategory
 from ..models.oidc_provider import OIDCProvider
+from ..models.secret import Secret, SecretState
 from ..models.share import Share, ShareState
 from ..models.user import User, UserRole
 from ..models.user_notification_preference import (
@@ -129,12 +130,16 @@ _JSON_USER_ID_KEYS = {
     settings_svc.Keys.API_TOKEN_ALLOWED_USERS,
     settings_svc.Keys.PUBLIC_LINK_ALLOWED_USERS,
     settings_svc.Keys.SHARE_APPROVAL_APPROVER_USERS,
+    settings_svc.Keys.SECRETS_SEND_ALLOWED_USERS,
+    settings_svc.Keys.SECRETS_EXTERNAL_ALLOWED_USERS,
 }
 _JSON_GROUP_ID_KEYS = {
     settings_svc.Keys.API_TOKEN_ALLOWED_GROUPS,
     settings_svc.Keys.PUBLIC_LINK_ALLOWED_GROUPS,
     settings_svc.Keys.TWOFA_REQUIRED_GROUPS,
     settings_svc.Keys.SHARE_APPROVAL_APPROVER_GROUPS,
+    settings_svc.Keys.SECRETS_SEND_ALLOWED_GROUPS,
+    settings_svc.Keys.SECRETS_EXTERNAL_ALLOWED_GROUPS,
 }
 # os.environ keys captured into the optional env snapshot. Hardcoded whitelist -
 # we NEVER dump **os.environ.
@@ -658,6 +663,9 @@ class ImportSummary:
     categories: list[str]
     shares_to_invalidate: int = 0
     files_deleted: int = 0
+    # Active secrets the import burns (v2.24.0): their recipient rows point at
+    # identities and groups the import rewrites.
+    secrets_to_burn: int = 0
     counts: dict[str, Any] = field(default_factory=dict)
     purged_users: list[str] = field(default_factory=list)
     purged_groups: list[str] = field(default_factory=list)
@@ -701,6 +709,9 @@ def preview_backup(db: Session, parsed: ParsedBackup) -> ImportSummary:
     )
     summary.shares_to_invalidate = (
         db.query(Share).filter(Share.state == ShareState.active).count()
+    )
+    summary.secrets_to_burn = (
+        db.query(Secret).filter(Secret.state == SecretState.active).count()
     )
     if "settings_branding" in p:
         sb = p["settings_branding"]
@@ -1256,6 +1267,16 @@ def apply_backup(db: Session, *, parsed: ParsedBackup, actor: User, request=None
     file_svc.purge_expired_bytes(db, inv["to_purge"], reason="config_restore")
     summary.shares_to_invalidate = inv["expired_shares"]
     summary.files_deleted = inv["deleted_files"]
+    # Secrets go the same way, in the same committed pass, for the same reason:
+    # every recipient row points at a user or group id the steps below rewrite,
+    # so a secret could otherwise open for somebody it was never sent to.
+    # Burning destroys the content - nothing to unlink afterwards.
+    from . import secret as secret_svc
+
+    summary.secrets_to_burn = secret_svc.revoke_all_active(
+        db, actor=actor, reason="config_import", request=request
+    )
+    db.commit()
 
     prefix_before_import: str | None = None
     user_id_map: dict[int, int] = {}
@@ -1705,6 +1726,7 @@ def apply_backup(db: Session, *, parsed: ParsedBackup, actor: User, request=None
             "categories": parsed.categories,
             "secret_mode": parsed.secret_mode,
             "shares_invalidated": summary.shares_to_invalidate,
+            "secrets_burned": summary.secrets_to_burn,
             "purged_users": len(summary.purged_users),
             "purged_groups": len(summary.purged_groups),
             "sessions_revoked": summary.sessions_revoked,

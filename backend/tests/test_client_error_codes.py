@@ -29,6 +29,8 @@ pytestmark = pytest.mark.skipif(
     not _CLIENT_LOCALES.is_dir(), reason="client/ is not present in this checkout"
 )
 
+_SECRETS_WEB_ONLY = "secrets routes; the desktop client has no secrets UI in this release"
+
 # Raised outside routers/admin/ but only reachable from an admin surface, so the
 # heuristic below over-includes them. Each needs a reason, not just an entry.
 _NOT_CLIENT_REACHABLE = {
@@ -55,6 +57,30 @@ _NOT_CLIENT_REACHABLE = {
         "step-up re-auth gates backup export/import, erasure, API-token creation "
         "and self-update - the client calls none of those routes"
     ),
+    # Secrets (v2.24.0): /api/secrets/* and /api/public/secrets/*. The desktop
+    # client has no secrets UI yet - its users open the mailed link in a
+    # browser. When it gains one, these move into its locales.
+    "SECRETS_DISABLED": _SECRETS_WEB_ONLY,
+    "SECRET_CONTENT_INVALID": _SECRETS_WEB_ONLY,
+    "SECRET_ENDED": _SECRETS_WEB_ONLY,
+    "SECRET_EXTERNAL_NOT_ALLOWED": _SECRETS_WEB_ONLY,
+    "SECRET_LIMIT_EXCEEDED": _SECRETS_WEB_ONLY,
+    "SECRET_LINK_NOT_FOUND": _SECRETS_WEB_ONLY,
+    "SECRET_LINK_REVOKED": _SECRETS_WEB_ONLY,
+    "SECRET_LOCKED": _SECRETS_WEB_ONLY,
+    "SECRET_NEEDS_LIMIT": _SECRETS_WEB_ONLY,
+    "SECRET_NOT_ALLOWED": _SECRETS_WEB_ONLY,
+    "SECRET_NOT_A_RECIPIENT": _SECRETS_WEB_ONLY,
+    "SECRET_NOT_FOUND": _SECRETS_WEB_ONLY,
+    "SECRET_NO_RECIPIENTS": _SECRETS_WEB_ONLY,
+    "SECRET_PASSPHRASE_INVALID": _SECRETS_WEB_ONLY,
+    "SECRET_PASSPHRASE_REQUIRED": _SECRETS_WEB_ONLY,
+    "SECRET_RATE_LIMITED": _SECRETS_WEB_ONLY,
+    "SECRET_RECIPIENT_BURNED": _SECRETS_WEB_ONLY,
+    "SECRET_RECIPIENT_NOT_ALLOWED": _SECRETS_WEB_ONLY,
+    "SECRET_REVEAL_FORBIDDEN": _SECRETS_WEB_ONLY,
+    "SECRET_UNREADABLE": _SECRETS_WEB_ONLY,
+    "SECRET_VIEWS_EXHAUSTED": _SECRETS_WEB_ONLY,
 }
 
 # Admin-only service modules, mirroring test_error_code_i18n_coverage.py.

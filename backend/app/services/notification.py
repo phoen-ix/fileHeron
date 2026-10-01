@@ -69,6 +69,11 @@ _DEFAULT_CHANNEL: dict[NotificationCategory, NotificationChannel] = {
     # hourly cap in services/error_alert.py already throttle, so this can't
     # mailstorm; admins can opt down to in_app via their preferences.
     NotificationCategory.server_error: NotificationChannel.both,
+    # Secrets: a recipient must learn a secret is waiting, and the sender opted
+    # into the view/end notices per secret, so both channels by default.
+    NotificationCategory.secret_received: NotificationChannel.both,
+    NotificationCategory.secret_viewed: NotificationChannel.both,
+    NotificationCategory.secret_ended: NotificationChannel.both,
 }
 
 

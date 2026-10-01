@@ -20,18 +20,29 @@
 
   const { te } = useI18n()
 
+  const SUB_TEMPLATE_FIELD: Partial<Record<string, string>> = {
+    ops_alert: 'reason',
+    secret_viewed: 'via',
+    secret_ended: 'reason',
+  }
+
   const headline = computed(() => {
     // Each category has its own template under notif_bell.headline.{category}
     // with the payload spread. Use $t with arguments - fall back to the
     // generic line if the key is missing entirely.
     const payload = props.item.payload || {}
-    // ops_alert is a single category with a `reason` field that picks the
-    // sub-template (cron_failed / update_triggered / rollback_triggered).
-    if (props.item.category === 'ops_alert') {
-      const reason = (payload as Record<string, unknown>).reason as string | undefined
-      const key = `notif_bell.headline.ops_alert.${reason ?? 'generic'}`
+    // A few categories carry a field that picks the sub-template: ops_alert's
+    // `reason` (cron_failed / update_triggered / rollback_triggered...), and a
+    // secret's `via` (who viewed it) and `reason` (how it ended).
+    const subField = SUB_TEMPLATE_FIELD[props.item.category]
+    if (subField) {
+      const sub = (payload as Record<string, unknown>)[subField] as string | undefined
+      const key = `notif_bell.headline.${props.item.category}.${sub ?? 'generic'}`
       if (te(key)) return t(key, payload as Record<string, unknown>)
-      return t('notif_bell.headline.ops_alert.generic', payload as Record<string, unknown>)
+      return t(
+        `notif_bell.headline.${props.item.category}.generic`,
+        payload as Record<string, unknown>,
+      )
     }
     const key = `notif_bell.headline.${props.item.category}`
     // A payload that carries a file count picks the singular/plural form.

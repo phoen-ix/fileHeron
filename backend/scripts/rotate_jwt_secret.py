@@ -8,11 +8,22 @@ JWT_SECRET is the seed for the HKDF-derived Fernet key that protects:
 - ``public_links.token_encrypted``    (public-link plaintext copy)
 - ``app_settings`` rows where ``is_encrypted=True``  (today: SMTP_PASSWORD)
 - ``webhooks.secret_encrypted``       (per-webhook HMAC signing secrets)
+- ``secrets.key_encrypted``           (each secret's wrapped content key)
+- ``secret_recipients.token_encrypted``  (secret links, re-viewable by the sender)
 
 If you rotate JWT_SECRET without this script, all of the above become
 unreadable - TOTP-enrolled users lock out, OIDC SSO breaks, the SMTP
-password disappears, admins can't re-view public-link URLs, and every
-webhook delivery fails to sign.
+password disappears, admins can't re-view public-link URLs, every
+webhook delivery fails to sign, and every unread secret is lost.
+
+``secrets.key_encrypted`` is re-wrapped at its OUTER layer only. A secret
+sent with a passphrase has a second layer underneath, keyed by that
+passphrase, which this script neither needs nor touches - the bytes inside
+the outer layer are carried over as they are. The content (``ciphertext``)
+is under the secret's own key and is not touched at all.
+
+``tests/test_rotate_jwt_secret_covers_every_column.py`` fails when a model
+gains a ``*_encrypted`` column that this script does not rotate.
 
 USAGE
 -----
@@ -86,6 +97,7 @@ from app.database import SessionLocal  # noqa: E402
 from app.models.app_setting import AppSetting  # noqa: E402
 from app.models.oidc_provider import OIDCProvider  # noqa: E402
 from app.models.public_link import PublicLink  # noqa: E402
+from app.models.secret import Secret, SecretRecipient  # noqa: E402
 from app.models.user_totp import UserTOTP  # noqa: E402
 from app.models.webhook import Webhook  # noqa: E402
 from app.utils.crypto import _FERNET_HKDF_INFO  # noqa: E402
@@ -238,6 +250,28 @@ def main() -> int:
             db.query(Webhook).all(),
             lambda r: r.secret_encrypted,
             lambda r, v: setattr(r, "secret_encrypted", v),
+            is_bytes=False, old=old_f, new=new_f,
+        )
+        total_errors += s.errors
+
+        # 6. Secrets: the wrapped content key (str column, NULL once a secret
+        # has ended - shredded). Outer layer only; see the module docstring.
+        s = rotate_table(
+            db, "secrets.key_encrypted",
+            db.query(Secret).all(),
+            lambda r: r.key_encrypted,
+            lambda r, v: setattr(r, "key_encrypted", v),
+            is_bytes=False, old=old_f, new=new_f,
+        )
+        total_errors += s.errors
+
+        # 7. Secret links, kept so the sender can copy them again (str column,
+        # NULL for account recipients and once a secret has ended).
+        s = rotate_table(
+            db, "secret_recipients.token_encrypted",
+            db.query(SecretRecipient).all(),
+            lambda r: r.token_encrypted,
+            lambda r, v: setattr(r, "token_encrypted", v),
             is_bytes=False, old=old_f, new=new_f,
         )
         total_errors += s.errors

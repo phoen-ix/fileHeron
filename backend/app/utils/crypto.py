@@ -11,12 +11,17 @@ be audited in one place and unit-tested.
 - hmac_sign(payload, secret): used for tusd metadata signing (Phase 3a).
 - encrypt_totp_secret / decrypt_totp_secret: Fernet (AES-128 CBC + HMAC) under
   a key HKDF-derived from JWT_SECRET. Rotation: change JWT_SECRET + run
-  ``backend/scripts/rotate_jwt_secret.py``, which re-encrypts ALL FIVE Fernet
-  columns (TOTP secrets, OIDC client secrets, SMTP/IMAP passwords in
-  app_settings, public-link tokens, webhook signing secrets) - not just TOTP.
+  ``backend/scripts/rotate_jwt_secret.py``, which re-encrypts EVERY Fernet
+  column (TOTP secrets, OIDC client secrets, SMTP/IMAP passwords in
+  app_settings, public-link tokens, webhook signing secrets, secret keys and
+  secret links) - not just TOTP. A test fails when a `*_encrypted` column is
+  added that the script does not rotate.
   The path named here used to be scripts/rotate_totp_key.py, which has never
   existed (audit 2026-07-30).
 - new_recovery_code(): 8-char alphanumeric recovery code, "K7XQ-2L9P" style.
+- seal_secret / unwrap_secret_key / open_secret_content: the Secrets feature
+  (v2.24.0). A fresh key per secret, optionally under an Argon2id key derived
+  from the sender's passphrase, wrapped by the same instance Fernet key.
 """
 from __future__ import annotations
 
@@ -24,10 +29,11 @@ import base64
 import hashlib
 import hmac
 import secrets
+from dataclasses import dataclass
 
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
-from cryptography.fernet import Fernet
+from cryptography.fernet import Fernet, InvalidToken
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 
@@ -282,3 +288,123 @@ def new_recovery_code() -> str:
 
 def generate_recovery_codes(count: int = 10) -> list[str]:
     return [new_recovery_code() for _ in range(count)]
+
+
+# ---------------------------------------------------------------------------
+# Secrets (v2.24.0)
+#
+#   ciphertext    = Fernet(data_key).encrypt(text)
+#   key_encrypted = instance_fernet.encrypt(data_key)                 no passphrase
+#   key_encrypted = instance_fernet.encrypt(Fernet(kek).encrypt(dk))  passphrase
+#   kek           = Argon2id(passphrase, salt)
+#
+# The instance layer is OUTERMOST, so backend/scripts/rotate_jwt_secret.py can
+# re-wrap every secret without knowing any passphrase. The passphrase layer is
+# what makes a passphrase more than a gate: without it, a database dump plus the
+# .env opens nothing. A wrong passphrase is Fernet's InvalidToken on the middle
+# layer - its HMAC is the verifier, so no separate hash of the passphrase exists.
+# ---------------------------------------------------------------------------
+
+# Bounds for KDF parameters read back from a row. The database is trusted, but
+# these values decide how much memory one reveal allocates, so they are checked
+# rather than believed - the same reasoning as validate_scrypt_params.
+_SECRET_KDF_MAX_TIME = 20
+_SECRET_KDF_MAX_MEMORY_KIB = 1024 * 1024
+_SECRET_KDF_MAX_PARALLELISM = 16
+
+
+class SecretPassphraseError(Exception):
+    """The passphrase layer did not open: the passphrase is wrong or missing."""
+
+
+@dataclass(frozen=True)
+class SealedSecret:
+    ciphertext: str
+    key_encrypted: str
+    kdf_salt: str | None
+    kdf_params: str | None
+
+
+def _secret_kek(passphrase: str, salt: bytes, *, t: int, m: int, p: int) -> bytes:
+    from argon2.low_level import Type, hash_secret_raw
+
+    raw = hash_secret_raw(
+        passphrase.encode("utf-8"),
+        salt,
+        time_cost=t,
+        memory_cost=m,
+        parallelism=p,
+        hash_len=32,
+        type=Type.ID,
+    )
+    return base64.urlsafe_b64encode(raw)
+
+
+def _parse_secret_kdf_params(params: str) -> tuple[int, int, int]:
+    try:
+        fields = dict(part.split("=", 1) for part in params.split(","))
+        t, m, p = int(fields["t"]), int(fields["m"]), int(fields["p"])
+    except (KeyError, ValueError) as e:
+        raise SecretUndecryptableError("secret kdf params") from e
+    if not (
+        1 <= t <= _SECRET_KDF_MAX_TIME
+        and 1 <= p <= _SECRET_KDF_MAX_PARALLELISM
+        and 8 * p <= m <= _SECRET_KDF_MAX_MEMORY_KIB
+    ):
+        raise SecretUndecryptableError("secret kdf params out of range")
+    return t, m, p
+
+
+def seal_secret(plaintext: str, passphrase: str | None) -> SealedSecret:
+    """Encrypt a secret's text under a fresh key, wrapped as described above."""
+    data_key = Fernet.generate_key()
+    ciphertext = Fernet(data_key).encrypt(plaintext.encode("utf-8")).decode("ascii")
+    wrapped = data_key
+    salt_hex: str | None = None
+    params: str | None = None
+    if passphrase:
+        salt = secrets.token_bytes(16)
+        t = settings.ARGON2_TIME_COST
+        m = settings.ARGON2_MEMORY_COST_KIB
+        p = settings.ARGON2_PARALLELISM
+        wrapped = Fernet(_secret_kek(passphrase, salt, t=t, m=m, p=p)).encrypt(data_key)
+        salt_hex = salt.hex()
+        params = f"t={t},m={m},p={p}"
+    key_encrypted = _get_fernet().encrypt(wrapped).decode("ascii")
+    return SealedSecret(ciphertext, key_encrypted, salt_hex, params)
+
+
+def unwrap_secret_key(
+    key_encrypted: str,
+    *,
+    kdf_salt: str | None,
+    kdf_params: str | None,
+    passphrase: str | None,
+) -> bytes:
+    """The secret's data key. Raises SecretPassphraseError for a wrong or missing
+    passphrase (the caller counts it), SecretUndecryptableError when the instance
+    layer does not open (JWT_SECRET rotated without the rotation script)."""
+    try:
+        inner = _get_fernet().decrypt(key_encrypted.encode("ascii"))
+    except Exception as e:
+        raise SecretUndecryptableError("secret key") from e
+    if not kdf_salt:
+        return inner
+    if not passphrase or not kdf_params:
+        raise SecretPassphraseError()
+    t, m, p = _parse_secret_kdf_params(kdf_params)
+    try:
+        salt = bytes.fromhex(kdf_salt)
+    except ValueError as e:
+        raise SecretUndecryptableError("secret kdf salt") from e
+    try:
+        return Fernet(_secret_kek(passphrase, salt, t=t, m=m, p=p)).decrypt(inner)
+    except InvalidToken as e:
+        raise SecretPassphraseError() from e
+
+
+def open_secret_content(ciphertext: str, data_key: bytes) -> str:
+    try:
+        return Fernet(data_key).decrypt(ciphertext.encode("ascii")).decode("utf-8")
+    except Exception as e:
+        raise SecretUndecryptableError("secret content") from e

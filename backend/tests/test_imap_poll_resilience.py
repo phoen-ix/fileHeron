@@ -3,7 +3,7 @@
 Three defects from the 2026-07-30 audit, all with the same blast radius - the
 poll aborts before `last_uid` is persisted, so the next run starts from the same
 highwater, hits the same message and dies identically. Inbound ingestion stops
-permanently on a single mail, which is exactly the failure mode CLAUDE.md warns
+permanently on a single mail, which is exactly the failure mode docs/engineering/inbound-mail.md warns
 about for this subsystem.
 
   1. A crafted Date raises OverflowError, which escaped inbound_parse's

@@ -266,7 +266,7 @@ def hard_delete(
     # helper and unlinked that copy under a plain `file_deleted` audit row,
     # bypassing quarantine_admin.purge and its `file_quarantine_purged`
     # receipt - the same evidence mark_deleted_for_expiry deliberately refuses
-    # to hand out (CLAUDE.md accepted residual #4). Only a caller that MUST
+    # to hand out (docs/engineering/decisions.md accepted residual #4). Only a caller that MUST
     # destroy the bytes regardless - right-to-erasure and the config-import
     # identity purge - may opt in.
     if was_infected and not allow_quarantined:

@@ -262,7 +262,8 @@ def test_every_roster_builder_goes_through_the_shared_projection():
 
     A hand list is precisely why this defect happened: the rule was applied to
     the two routes someone thought of, and the third was written later without
-    it. CLAUDE.md records the same lesson from test_migration_reruns, which
+    it. CLAUDE.md §Conventions records the same lesson (a rule pinned
+    generically, never by a hand list); test_migration_reruns learned it first - it
     "named three by hand until v2.13.1, so it could not see a new migration,
     which is where the mistake gets made".
 

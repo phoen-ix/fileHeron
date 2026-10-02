@@ -191,7 +191,7 @@ def test_catchup_never_raises_into_the_stream(monkeypatch, make_user, db):
 async def test_the_stream_replays_then_closes(db, make_user, monkeypatch):
     """Catch-up frames come out BEFORE the live loop, and the connection ends
     with the `: close` frame that drives the client's deterministic reconnect
-    (the 60s lifetime is by design - see CLAUDE.md)."""
+    (the 60s lifetime is by design - see docs/engineering/mail.md)."""
     u = make_user(email="stream@test.local")
     n = _notif(db, u)
     db.commit()

@@ -1,6 +1,6 @@
 """Daily cron: unlink quarantined-file bytes after a retention window.
 
-CLAUDE.md's quarantine flow keeps infected files on disk under
+The quarantine flow (docs/engineering/antivirus.md) keeps infected files on disk under
 `QUARANTINE_DIR` indefinitely so admins can release / inspect / purge
 via the admin UI. In practice many incidents don't get touched and
 the bytes accumulate.

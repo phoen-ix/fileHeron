@@ -165,7 +165,7 @@ def create_link(
     # exclusion, so the table can hold exactly ONE row per share, revoked or
     # not. Filtering on `revoked_at IS NULL` here therefore let a re-create past
     # this friendly 409 and straight into an unhandled IntegrityError -> 500,
-    # making "revoke and re-create" (which CLAUDE.md and the SPA both tell users
+    # making "revoke and re-create" (which docs/engineering/public-links.md and the SPA both tell users
     # to do for legacy links) permanently impossible (audit 2026-07-30).
     #
     # Fixed by consuming the revoked row instead of colliding with it: the old

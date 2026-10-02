@@ -1281,8 +1281,9 @@ registry overlay for every `↻` env var above.
 
 # Developer guide
 
-Detail-level invariants live in `CLAUDE.md` (the source of truth for AI-assisted
-sessions); this is the human walkthrough.
+Detail-level invariants live in `CLAUDE.md` (the cross-cutting rules, the source of
+truth for AI-assisted sessions) and `docs/engineering/<area>.md` (one deep dive per
+subsystem, listed in CLAUDE.md's documentation map); this is the human walkthrough.
 
 ## Code layout
 

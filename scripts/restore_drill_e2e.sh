@@ -53,7 +53,7 @@ fi
 # tar self-destruct in backup.sh used to cause, silently - this drill happily
 # re-verified the same old archive and refreshed LAST_SUCCESSFUL_DRILL every
 # week. A green drill then meant "some old backup is still intact", not
-# "backups are being taken", while README.md and CLAUDE.md both cite that file
+# "backups are being taken", while README.md and docs/engineering/deploy-and-backups.md both cite that file
 # as proof the pipeline works. A drill that cannot go red when the pipeline
 # stops is not evidence.
 : "${DRILL_MAX_BACKUP_AGE_HOURS:=48}"

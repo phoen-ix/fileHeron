@@ -40,7 +40,7 @@ from ..middleware.errors import AppError
 from ..utils.crypto import constant_time_equals
 
 # 5 minutes. The SPA mints a fresh token on every (re)connect and the
-# server closes the stream every 60s by design (see CLAUDE.md). A 2-minute
+# server closes the stream every 60s by design (see docs/engineering/mail.md). A 2-minute
 # TTL used to expire during throttled/background-tab reconnects (browsers
 # defer the connect long past the mint), surfacing as a 401 on the stream;
 # 5 minutes comfortably outlives that window while staying short-lived.

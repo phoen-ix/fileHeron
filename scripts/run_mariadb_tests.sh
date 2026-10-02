@@ -88,7 +88,7 @@ docker run -d --rm --name "$DB_CONTAINER" --network "$NETWORK" \
 # uses. A connect loop is NOT a readiness gate: the server accepts connections
 # before InnoDB has finished initialising, and the migrations are the first
 # thing that runs. The restore drill was broken for exactly this reason (a
-# `redis-cli PING` loop that exits 0 on an error reply) - see CLAUDE.md.
+# `redis-cli PING` loop that exits 0 on an error reply) - see docs/engineering/deploy-and-backups.md.
 log "waiting for InnoDB to finish initialising ..."
 ready=0
 for _ in $(seq 1 60); do

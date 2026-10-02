@@ -210,7 +210,7 @@ async def direct_upload(
         # finalize() is the expensive one. The comment above claimed staging in
         # TUS_UPLOAD_DIR makes this a same-filesystem rename, but compose mounts
         # ./data/uploads and ./data/files as SEPARATE bind mounts - the
-        # cross-device case CLAUDE.md documents - so shutil.move degrades to a
+        # cross-device case docs/engineering/uploads.md documents - so shutil.move degrades to a
         # full copy of the whole file, and on the S3 backend it is a blocking
         # upload. Either way it must not run on the event loop.
         await asyncio.to_thread(backend.finalize, tmp_path, locator)

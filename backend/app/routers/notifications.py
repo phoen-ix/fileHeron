@@ -247,7 +247,7 @@ async def stream(
       can't send Authorization headers.
     - `Authorization: Bearer <jwt>` - for curl/CI.
 
-    Important Traefik / reverse-proxy headers below - see CLAUDE.md
+    Important Traefik / reverse-proxy headers below - see docs/engineering/mail.md
     for the labels operators must NOT add (no buffering middleware)."""
     user = _resolve_stream_user(request, db, token, authorization)
     user_id = user.id

@@ -1,0 +1,37 @@
+# Storage backend and encryption at rest
+
+Engineering deep dive, split out of `CLAUDE.md`. The root file keeps a short
+summary and points here. Read this before changing the code listed below.
+
+**Code:** `backend/app/services/{storage_backend,storage,storage_guard,file_encryption,encryption_lanes}.py`, `backend/app/utils/file_crypto.py`, `backend/app/models/storage_purge.py`, `backend/app/workers/{encrypt_at_rest,disk_check}.py`, `backend/scripts/decrypt_files_at_rest.py`, `frontend/src/views/AdminSettingsEncryption.vue`
+
+## Storage backend (local | S3)
+
+All file byte-I/O routes through `services/storage_backend.py` (`StorageBackend`
+ABC, cached `get_storage_backend`; env `STORAGE_BACKEND` local|s3) - never touch
+the filesystem directly.
+
+- **`File.storage_path` is a backend-interpreted locator** - local: absolute on-disk path (byte-identical to pre-abstraction rows, so no migration); s3: object key.
+- `supports_disk_stats` True only for local - gates kernel-sendfile downloads, clamd path-scan, and the disk-space guard.
+- `serve_response`: local → `FileResponse` (sendfile, Range-capable, countable for the maintenance drain); **S3 → 307 presigned redirect** (can't carry `extra_headers`, so preview nosniff/CSP rides the previewable-type allowlist alone, and the backend never sees the bytes so the drain can't count them). clamd on S3 = INSTREAM; quarantine = server-side copy between key prefixes. Boot fail-fast if `STORAGE_BACKEND=s3` and `S3_BUCKET` unset.
+- **The S3 redirect writes the recency mark BEFORE returning** - it returned first, so the mark was never written on S3 at all.
+- **Deliberately left:** the branding logo's `Cache-Control` on the 307. That is a CACHING loss, not a security one - the logo's content type is magic-byte sniffed and clamped.
+
+## Encryption at rest
+
+`utils/file_crypto.py` (format), `services/file_encryption.py` (read side, swap
+engine, status), `services/encryption_lanes.py` (release lane + backfill),
+`workers/encrypt_at_rest.py`, admin `/admin/settings/encryption`. Ships OFF
+(`storage.encrypt_at_rest`). → README §Encryption at rest for the operator view.
+
+- **`enc_version` NULL is plaintext and takes EXACTLY the old path** (FileResponse/sendfile, the S3 307, clamd's path scan, ZIP `add_path`); rows of both kinds coexist forever. **Ciphertext must never reach a plaintext reader** - a path scan of ciphertext answers "clean" (AV silently off), a download serves noise - so every byte read goes through `file_encryption.open_plaintext`/`cipher_for_*` or a branch that checked `enc_version` first, pinned over every call site by `test_ciphertext_never_reaches_plaintext_readers.py` (RAW_READERS allowlist). `serve_response(..., cipher=)` is a REQUIRED keyword so mypy makes each caller decide.
+- **Format v1:** 16-byte header, 1 MiB AES-256-GCM chunks, counter nonce, AAD = header + index + final flag (reorder/truncate/extend all fail); a fresh data key per WRITE, wrapped by the instance Fernet with kind AND row id inside (`crypto.wrap_file_key`) - a key copied to another row does not open. `*_encrypted` naming keeps `rotate_jwt_secret.py` covering it.
+- **The encrypted response is `_EncryptedFileResponse`, a FileResponse subclass overriding only the byte reads**, so Range/If-Range/416/multipart/Content-Disposition keep Starlette's semantics; `test_encrypted_range_matrix.py` uses plaintext FileResponse as the ORACLE. A mid-stream authentication failure aborts the stream and writes `file_integrity_failed` + an alert. **The ZIP of encrypted members is byte-identical** (add_stream with the row's plaintext size and a seekable decrypting reader), so `LAYOUT_VERSION` and cached CRCs stay valid - asserted on produced bytes.
+- **A stored file is never rewritten in place.** `prepare_rewrite` commits a LEASE row (`storage_purge_queue`, heartbeated) before the first byte, writes the other form to a sibling locator and checks its size; the caller's conditional UPDATE (old locator + old `enc_version` + state) swaps the row; `finish_rewrite` queues the OLD bytes. A crash leaves the old row plus queued debris, never a row on half-written bytes. `sweep_purges` records a failed unlink once (`record_orphan_locator`) - by then no row names those bytes.
+- **The release lane holds a verdict instead of flipping:** `av_scan_file` writes `files.release_verdict` (conditional) and leaves the row `ready_unscanned` (425); `encrypt_new_files` encrypts and releases in ONE conditional UPDATE (`av_release.apply_verdict` with the swap folded in), then mails - never downloadable as plaintext, never announced before the swap. **`ready_unscanned` must stay terminal**: any failure releases as plaintext with `file_encryption_deferred`; only a cancel (worker shutdown) leaves the verdict, and a held row the stale sweep re-enqueues RE-KICKS the lane - never a rescan.
+- **One lane run at a time, and no verdict lost in the hand-over:** every kick marks dirty BEFORE trying the lock; the holder clears the mark before reading the queue and re-checks it AFTER releasing; passes are capped (`_MAX_PASSES`) so an uncleared mark cannot spin. Locks are `RedisLease` (renewed, fail OPEN - the conditional UPDATEs are the real guard).
+- **The backfill (`encrypt_existing_files`, REGISTRY, 10 min, kicked on enable)** walks ids by keyset (a failure is never re-selected in one run), skips a file served in the last 30 min, waits `PLAINTEXT_PURGE_GRACE` (1 h) before purging the plaintext (a ZIP stream opens members lazily), defers an object for a day after 3 failures (fixed Redis keys, never a keyspace walk), stops on low space, **re-reads the switch per object** (the decrypt script must not race it), and returns `CRON_FAILED_KEY` when it tried and achieved nothing. Every run also sweeps due purges and releases held files - with the switch OFF too.
+- **The switch is a policy-route setting, step-up gated BOTH ways** (off decides whether new uploads leave plaintext); ON also needs `acknowledge_key_custody` (400 `ENCRYPTION_ACK_REQUIRED`, checked BEFORE the password so a refused request spends no attempt). Not a registry tunable (pinned) - `/settings/advanced` has no step-up. `...last_run` is in `_TRANSIENT_SETTING_KEYS` and is read field by field.
+- **Backups restore encrypted files only with `.env`** (the wrapping key derives from `JWT_SECRET`). `scripts/restore_validate.py` decrypts a sample's first chunk - and **the weekly drill copies that WORKING-TREE script into the host's OLDER image**, so the check skips when the image or the schema predates encryption and the script imports nothing new at top level (`test_restore_validate_encryption.py` pins the import set). Never add a top-level import there.
+- **The way back out:** Rollback refuses (`409 ROLLBACK_BLOCKED_BY_ENCRYPTION`) while encrypted objects exist and the target's `alembic_head` does not include `202610030001` - an unknown head counts as "cannot". `backend/scripts/decrypt_files_at_rest.py` (`--turn-off`, `--purge-now`) undoes it through the same engine; `--purge-now` also clears earlier backfills' waiting plaintext, which an old release would never delete. The migration's `downgrade()` refuses while any row is encrypted.
+- **Erasure deletes a file's queued copies at once** (`purge_copies_now`) - the receipt's "erased" must be true now, not after the grace. Inbound attachments are written encrypted from the first byte (scanned in memory; row flushed first because the key binds its id) and fall back to plaintext with an audit row.

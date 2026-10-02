@@ -2,7 +2,7 @@
      cron. They only ever existed as a group inside the Advanced page, so a
      security feature with its own webhook event had no page. It is advisory
      by design - a finding alerts an admin and never blocks anything; there is
-     no wiring from a finding to the scan guard (CLAUDE.md §Anomaly detection). -->
+     no wiring from a finding to the scan guard (docs/engineering/observability.md §Anomaly detection). -->
 <template>
   <div class="fh-page anomaly-page" data-density="operator">
     <AdminPageHeader>

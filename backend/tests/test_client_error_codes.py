@@ -7,7 +7,7 @@ an untranslated path and got the backend's English prose, which is the SPA's own
 pre-audit failure mode one surface over.
 
 Scoped, not blanket. The client is a non-admin surface and implements neither
-OIDC nor WebAuthn (out of scope for v1, see CLAUDE.md), so those codes are
+OIDC nor WebAuthn (out of scope for v1, see docs/engineering/desktop-client.md), so those codes are
 excluded structurally rather than by hand. What remains that the client still
 cannot reach is DECLARED below with a reason, so the exemption is reviewed
 rather than implied - the same shape `test_wrong_secret_routes.py` uses when it

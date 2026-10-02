@@ -207,7 +207,7 @@ def test_redis_unreachable_fails_open(make_user, db, monkeypatch):
 
     monkeypatch.setattr(quota_svc, "get_redis", boom)
 
-    # CLAUDE.md: quota is a fairness control, not a hard cap. On Redis
+    # docs/engineering/uploads.md: quota is a fairness control, not a hard cap. On Redis
     # outage, the upload is allowed through.
     result = quota_svc.reserve_bytes(db, user=user, additional_bytes=42)
     assert result == 42

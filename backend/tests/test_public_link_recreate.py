@@ -4,7 +4,7 @@
 exclusion, so the table holds exactly one row per share. create_link filtered
 its conflict check on `revoked_at IS NULL`, so after a revoke the friendly 409
 no longer fired and the insert hit the constraint instead - an unhandled
-IntegrityError, i.e. a 500. "Revoke and re-create" is exactly what CLAUDE.md and
+IntegrityError, i.e. a 500. "Revoke and re-create" is exactly what docs/engineering/public-links.md and
 the SPA tell users to do for legacy links, so that path was permanently broken
 (audit 2026-07-30).
 """

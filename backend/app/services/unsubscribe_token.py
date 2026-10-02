@@ -24,7 +24,7 @@ matrix, and it mutates that matrix. It carried no issue time, so it could not
 be compared against ``users.sessions_invalidated_at`` - which meant a password
 change, a password reset, "sign out all other sessions", an admin revoke-all
 and an API-token revocation all left it working, for up to 180 days. Only
-rotating ``JWT_SECRET`` revoked it. CLAUDE.md states the rule it broke: every
+rotating ``JWT_SECRET`` revoked it. docs/engineering/auth.md states the rule it broke: every
 signed token standing in for a session goes through
 ``jwt_session.was_issued_before_revocation``.
 

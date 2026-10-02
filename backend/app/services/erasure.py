@@ -174,12 +174,12 @@ def erase_user(
     # The dialect guard is DEAD DEFENCE and the comment that justified it was
     # false: SQLite does not "reject" FOR UPDATE. SQLAlchemy's
     # `SQLiteCompiler.for_update_clause` returns "", compiling it away silently -
-    # which the other eight lock sites already prove, since `rate_limit.py` and
+    # which the other ten lock sites already prove, since `rate_limit.py` and
     # `routers/public.py` call `with_for_update` with no guard at all on a green
     # SQLite suite. Kept only because removing it is a behaviour-neutral edit to
     # the erasure path and not worth the diff; do not copy this shape.
     #
-    # The real framing: production emits FOR UPDATE at nine sites and the
+    # The real framing: production emits FOR UPDATE at eleven sites and the
     # harness at zero, uniformly. `tests/test_mariadb_row_locks.py` is where a
     # lock is actually exercised. The ordering here - lock/re-read BEFORE the
     # erased check - is what removes the race, and is asserted separately.

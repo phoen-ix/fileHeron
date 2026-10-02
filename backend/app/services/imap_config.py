@@ -129,7 +129,7 @@ def move_folder(db: Session) -> str:
 def require_known_sender(db: Session) -> bool:
     """Whether ingest refuses mail from an address with no user account.
 
-    CLAUDE.md and the product's model both say "no anonymous senders", and
+    docs/engineering/inbound-mail.md and the product's model both say "no anonymous senders", and
     nothing implemented it: any internet sender could land admin-downloadable
     attachments on the storage backend, attributable to no user, counted
     against no quota and behind no rate limit - 50,000 x 40 MB fills the volume

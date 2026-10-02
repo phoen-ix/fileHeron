@@ -236,6 +236,7 @@ def test_the_s3_redirect_still_writes_the_recency_mark(monkeypatch, tmp_path):
 
     resp = sb.serve_response(
         backend=_S3ish(),
+        cipher=None,
         locator="2026/08/abc.bin",
         filename="abc.bin",
         mime_type="application/octet-stream",
@@ -272,6 +273,7 @@ def test_the_s3_redirect_does_not_register_a_drain_entry(monkeypatch):
 
     sb.serve_response(
         backend=_S3ish(),
+        cipher=None,
         locator="2026/08/abc.bin",
         filename="abc.bin",
         mime_type="application/octet-stream",

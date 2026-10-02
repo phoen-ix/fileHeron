@@ -18,14 +18,17 @@ import logging
 import re
 import shutil
 from abc import ABC, abstractmethod
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import BinaryIO, cast
+from typing import TYPE_CHECKING, BinaryIO, cast
 
 from fastapi.responses import FileResponse
 
 from ..config import settings
 from ..utils.timeutil import utc_now
+
+if TYPE_CHECKING:
+    from .file_encryption import StoredCipher
 
 logger = logging.getLogger("fileheron.storage_backend")
 
@@ -418,6 +421,190 @@ class _CountedFileResponse(FileResponse):
                 transfer_activity.download_finished(self._dl_id)
 
 
+class _EncryptedFileResponse(FileResponse):
+    """The plaintext of an ENCRYPTED stored file, served with FileResponse's own
+    semantics.
+
+    Everything about the response - Range parsing, If-Range, 416 and 400,
+    multi-range, HEAD, Content-Disposition, Accept-Ranges - is FileResponse's,
+    inherited unchanged; only the three methods that read the file are replaced
+    to stream decrypted plaintext of exactly the requested window. That is what
+    keeps the desktop client's `bytes=1-1` probe (206 + Content-Range + ETag),
+    its segmented downloads and a browser's resume working the same as for a
+    plaintext file. The ETag and Last-Modified come from the row, not the
+    ciphertext's stat, so they are stable across a re-encryption. `pathsend`
+    is never used: it would hand the server the CIPHERTEXT path.
+    """
+
+    chunk_size = 1024 * 1024
+
+    def __init__(
+        self,
+        *,
+        backend: StorageBackend,
+        locator: str,
+        cipher: StoredCipher,
+        filename: str,
+        media_type: str,
+        disposition: str,
+        extra_headers: dict[str, str] | None,
+        dl_id: str | None,
+        ref: str,
+    ) -> None:
+        import os
+        import stat
+        from email.utils import formatdate
+
+        from .file_encryption import opener
+
+        mtime = (
+            cipher.last_modified.replace(tzinfo=timezone.utc).timestamp()
+            if cipher.last_modified is not None
+            else 0
+        )
+        headers = dict(extra_headers or {})
+        headers["etag"] = cipher.etag
+        headers["last-modified"] = formatdate(mtime, usegmt=True)
+        st = os.stat_result(
+            (stat.S_IFREG | 0o600, 0, 0, 1, 0, 0, cipher.plaintext_size, int(mtime), int(mtime), int(mtime))
+        )
+        super().__init__(
+            path=locator,
+            headers=headers,
+            media_type=media_type,
+            filename=filename,
+            stat_result=st,
+            content_disposition_type=disposition,
+        )
+        self._opener = opener(backend, locator)
+        self._cipher = cipher
+        self._dl_id = dl_id
+        self._ref = ref
+
+    async def __call__(self, scope, receive, send) -> None:
+        try:
+            await super().__call__(scope, receive, send)
+        finally:
+            if self._dl_id is not None:
+                from . import transfer_activity
+
+                transfer_activity.download_finished(self._dl_id)
+
+    async def _body(self, send, start: int, end: int, *, more_after: bool) -> None:
+        """Send plaintext [start, end) as body messages."""
+        from starlette.concurrency import iterate_in_threadpool
+
+        from ..utils import file_crypto
+
+        if end <= start:
+            if not more_after:
+                await send({"type": "http.response.body", "body": b"", "more_body": False})
+            return
+        pieces = file_crypto.iter_plaintext(
+            self._opener, self._cipher.dek, self._cipher.plaintext_size, start, end - 1
+        )
+        try:
+            async for piece in iterate_in_threadpool(pieces):
+                await send({"type": "http.response.body", "body": piece, "more_body": True})
+        except file_crypto.FileCryptoError as e:
+            # Headers are out: the only honest thing left is to abort the
+            # connection, so the client sees a failed transfer, not a file.
+            import anyio
+
+            await anyio.to_thread.run_sync(_report_integrity_failure, self._ref, e)
+            raise
+        if not more_after:
+            await send({"type": "http.response.body", "body": b"", "more_body": False})
+
+    async def _handle_simple(self, send, send_header_only: bool, send_pathsend: bool) -> None:
+        await send({"type": "http.response.start", "status": self.status_code, "headers": self.raw_headers})
+        if send_header_only:
+            await send({"type": "http.response.body", "body": b"", "more_body": False})
+        else:
+            await self._body(send, 0, self._cipher.plaintext_size, more_after=False)
+
+    async def _handle_single_range(self, send, start: int, end: int, file_size: int, send_header_only: bool) -> None:
+        from starlette.datastructures import MutableHeaders
+
+        headers = MutableHeaders(raw=list(self.raw_headers))
+        headers["content-range"] = f"bytes {start}-{end - 1}/{file_size}"
+        headers["content-length"] = str(end - start)
+        await send({"type": "http.response.start", "status": 206, "headers": headers.raw})
+        if send_header_only:
+            await send({"type": "http.response.body", "body": b"", "more_body": False})
+        else:
+            await self._body(send, start, end, more_after=False)
+
+    async def _handle_multiple_ranges(self, send, ranges, file_size: int, send_header_only: bool) -> None:
+        from secrets import token_hex
+
+        from starlette.datastructures import MutableHeaders
+
+        boundary = token_hex(13)
+        content_length, header_generator = self.generate_multipart(
+            ranges, boundary, file_size, self.headers["content-type"]
+        )
+        headers = MutableHeaders(raw=list(self.raw_headers))
+        headers["content-type"] = f"multipart/byteranges; boundary={boundary}"
+        headers["content-length"] = str(content_length)
+        await send({"type": "http.response.start", "status": 206, "headers": headers.raw})
+        if send_header_only:
+            await send({"type": "http.response.body", "body": b"", "more_body": False})
+            return
+        for start, end in ranges:
+            await send({"type": "http.response.body", "body": header_generator(start, end), "more_body": True})
+            await self._body(send, start, end, more_after=True)
+            await send({"type": "http.response.body", "body": b"\r\n", "more_body": True})
+        await send({"type": "http.response.body", "body": f"--{boundary}--".encode("latin-1"), "more_body": False})
+
+
+def _report_integrity_failure(ref: str, exc: Exception) -> None:
+    """An encrypted file failed to authenticate WHILE being served. Audited
+    and sent to the error log/alerts once an hour per file; never raises."""
+    logger.error("encrypted file %s failed authentication while served: %s", ref, exc)
+    try:
+        from . import alert_dedup
+
+        if alert_dedup.seen_recently(f"fh:enc:integrity:{ref}", 3600):
+            return
+        from ..database import SessionLocal
+        from ..models.audit_log import AuditEventType
+        from . import job_queue
+        from .audit import record_audit_event
+
+        db = SessionLocal()
+        try:
+            record_audit_event(
+                db,
+                event_type=AuditEventType.file_integrity_failed,
+                actor_user_id=None,
+                target_type="file",
+                target_id=ref,
+                metadata={"error": str(exc)[:200]},
+            )
+            db.commit()
+        finally:
+            db.close()
+        job_queue.enqueue(
+            "notify_admin_error",
+            event={
+                "source": "http",
+                "exception_type": type(exc).__name__,
+                "message": f"stored file {ref} failed authentication: {exc}"[:500],
+                "method": "GET",
+                "path": f"file:{ref}",
+                "status_code": 500,
+                "code": "FILE_INTEGRITY_FAILED",
+                "request_id": None,
+                "user_id": None,
+                "auth_via": None,
+                "at": utc_now().isoformat(),
+            },
+        )
+    except Exception:
+        logger.warning("integrity-failure report failed for %s", ref, exc_info=True)
+
+
 def serve_response(
     backend: StorageBackend,
     *,
@@ -425,6 +612,7 @@ def serve_response(
     filename: str,
     mime_type: str,
     ttl_sec: int,
+    cipher: StoredCipher | None,
     disposition: str = "attachment",
     extra_headers: dict[str, str] | None = None,
     count: bool = False,
@@ -433,6 +621,14 @@ def serve_response(
     """The HTTP response for a file. Local backend → FileResponse (kernel
     sendfile, Range-capable); object backend → 307 redirect to a presigned URL
     so the browser fetches/resumes bytes from the store directly.
+
+    `cipher` is REQUIRED (services/file_encryption.cipher_for_file /
+    cipher_for_attachment, or None for bytes that are never encrypted, like the
+    logo): every caller has to decide, and mypy holds it to that. None takes
+    exactly the path described here. An encrypted file is decrypted and
+    streamed by this process on BOTH backends - a presigned URL would hand the
+    browser ciphertext - with FileResponse's own Range semantics
+    (_EncryptedFileResponse), and is counted for the drain on both.
 
     `disposition` is "attachment" (download, default - preserves every existing
     caller) or "inline" (preview). `extra_headers` (preview hardening:
@@ -447,6 +643,40 @@ def serve_response(
     from fastapi.responses import RedirectResponse
 
     mime_type = safe_media_type(mime_type)
+
+    if cipher is not None:
+        from ..middleware.errors import AppError
+        from ..utils import file_crypto
+
+        # Checked before the 200 goes out: a ciphertext of the wrong length can
+        # only fail mid-stream, after the client was promised a whole file.
+        try:
+            stored = backend.size(locator)
+        except Exception as e:
+            logger.error("encrypted file %s: cannot stat %s: %s", file_id, locator, e)
+            raise AppError(500, "FILE_UNREADABLE", "This file cannot be read.") from e
+        if stored != file_crypto.ciphertext_size(cipher.plaintext_size):
+            logger.error(
+                "encrypted file %s: %d stored bytes, expected %d",
+                file_id, stored, file_crypto.ciphertext_size(cipher.plaintext_size),
+            )
+            raise AppError(500, "FILE_UNREADABLE", "This file cannot be read.")
+        enc_dl_id = None
+        if count:
+            from . import transfer_activity
+
+            enc_dl_id = transfer_activity.download_started(file_id)
+        return _EncryptedFileResponse(
+            backend=backend,
+            locator=locator,
+            cipher=cipher,
+            filename=filename,
+            media_type=mime_type,
+            disposition=disposition,
+            extra_headers=extra_headers,
+            dl_id=enc_dl_id,
+            ref=file_id or locator,
+        )
 
     url = backend.download_url(
         locator=locator,

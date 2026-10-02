@@ -32,7 +32,7 @@ from ...schemas.imap_settings import (
     UpdateImapSettingsRequest,
     UpdateInboxStatusRequest,
 )
-from ...services import imap_config, mail_test_gate
+from ...services import file_encryption, imap_config, mail_test_gate
 from ...services import imap_poll as imap_poll_svc
 from ...services import settings as settings_svc
 from ...services import storage_backend as storage_svc
@@ -401,6 +401,7 @@ def download_inbox_attachment(
     return storage_svc.serve_response(
         backend,
         locator=att.storage_key,
+        cipher=file_encryption.cipher_for_attachment(att),
         filename=att.filename,
         mime_type=att.content_type or "application/octet-stream",
         ttl_sec=300,

@@ -47,6 +47,7 @@ class AuditEventType(str, enum.Enum):
     recovery_code_used = "recovery_code_used"              # Phase 1b
     account_locked = "account_locked"                      # Phase 1b
     account_unlocked = "account_unlocked"                  # admin "Unlock now"
+    file_integrity_failed = "file_integrity_failed"        # encrypted file failed to authenticate
     rate_limited = "rate_limited"                          # Phase 1b
     # Re-auth gate refused (services/step_up.py). Deliberately NOT login_failure:
     # these are not logins, and folding them in would pollute the login-failure

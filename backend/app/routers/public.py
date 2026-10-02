@@ -44,9 +44,9 @@ from ..schemas.public_link import (
     UnlockPublicLinkResponse,
 )
 from ..services import file as file_svc
+from ..services import file_encryption, transfer_activity
 from ..services import public_link as public_link_svc
 from ..services import settings as settings_svc
-from ..services import transfer_activity
 from ..services import zip_stream as zip_stream_svc
 from ..services.audit import record_audit_event
 from ..services.storage_backend import get_storage_backend
@@ -397,6 +397,7 @@ def public_download(
     return serve_response(
         backend,
         locator=file.storage_path,
+        cipher=file_encryption.cipher_for_file(file),
         filename=file.original_filename,
         mime_type=file.mime_type,
         ttl_sec=ttl,
@@ -530,6 +531,7 @@ def public_preview(
     return serve_response(
         backend,
         locator=file.storage_path,
+        cipher=file_encryption.cipher_for_file(file),
         filename=file.original_filename,
         mime_type=preview_svc.safe_content_type(file.mime_type),
         ttl_sec=ttl,

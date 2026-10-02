@@ -20,6 +20,7 @@ from ...schemas.quarantine import (
     QuarantineActionRequest,
 )
 from ...services import av_scan as av_scan_svc
+from ...services import file_encryption
 from ...services import quarantine_admin as quarantine_admin_svc
 from ...services.audit import record_audit_event
 
@@ -59,6 +60,7 @@ def admin_quarantine_download(
     return serve_response(
         backend,
         locator=file.storage_path,
+        cipher=file_encryption.cipher_for_file(file),
         filename=f"{file.original_filename}.quarantined",
         mime_type="application/octet-stream",
         ttl_sec=ttl,

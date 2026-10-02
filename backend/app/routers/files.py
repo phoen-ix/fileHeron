@@ -18,9 +18,9 @@ from ..models.user import User, UserRole
 from ..schemas.common import SignedUrlResponse
 from ..services import download_token as download_token_svc
 from ..services import file as file_svc
+from ..services import file_encryption, transfer_activity
 from ..services import settings_registry as _sr
 from ..services import share as share_svc
-from ..services import transfer_activity
 from ..services import zip_stream as zip_stream_svc
 from ..services.audit import record_audit_event
 from ..services.storage_backend import get_storage_backend
@@ -320,6 +320,7 @@ def preview_file(
     return serve_response(
         backend,
         locator=file.storage_path,
+        cipher=file_encryption.cipher_for_file(file),
         filename=file.original_filename,
         mime_type=preview_svc.safe_content_type(file.mime_type),
         ttl_sec=ttl,
@@ -482,6 +483,7 @@ def download_file(
     return serve_response(
         backend,
         locator=file.storage_path,
+        cipher=file_encryption.cipher_for_file(file),
         filename=file.original_filename,
         mime_type=file.mime_type,
         ttl_sec=ttl,

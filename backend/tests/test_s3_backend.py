@@ -73,7 +73,7 @@ def test_serve_response_redirects_for_s3(s3_env, tmp_path):
     src.write_bytes(b"x")
     loc = b.generate_locator("fid-3")
     b.finalize(str(src), loc)
-    resp = serve_response(b, locator=loc, filename="x", mime_type="text/plain", ttl_sec=60)
+    resp = serve_response(b, locator=loc, cipher=None, filename="x", mime_type="text/plain", ttl_sec=60)
     assert isinstance(resp, RedirectResponse)
     assert resp.status_code == 307
 

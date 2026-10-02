@@ -54,6 +54,7 @@ def get_branding_logo(db: Session = Depends(get_db)) -> Response:
     return serve_response(
         backend,
         locator=locator,
+        cipher=None,  # the logo is public by design and never encrypted
         filename=filename,
         mime_type=content_type,
         ttl_sec=_LOGO_CACHE_SEC,
@@ -78,6 +79,7 @@ def get_branding_logo_png(db: Session = Depends(get_db)) -> Response:
     return serve_response(
         backend,
         locator=locator,
+        cipher=None,  # the logo is public by design and never encrypted
         filename="logo.png",
         mime_type="image/png",
         ttl_sec=_LOGO_CACHE_SEC,

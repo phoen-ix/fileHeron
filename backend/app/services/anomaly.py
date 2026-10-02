@@ -76,7 +76,7 @@ def multi_network(db: Session, *, cutoff: datetime, threshold: int) -> list[Find
     by_user: dict[int, set[str]] = {}
     for uid, ip in pairs:
         gh = ip_geohash5(ip)
-        if gh:
+        if gh and uid is not None:
             by_user.setdefault(uid, set()).add(gh)
     return [
         Finding("multi_network", str(uid), len(nets), {"user_id": uid, "networks": len(nets)})
@@ -160,6 +160,7 @@ def login_stuffing(db: Session, *, cutoff: datetime, threshold: int) -> list[Fin
             {"ip": ip, "failures": int(n), "distinct_emails": int(emails)},
         )
         for ip, n, emails in rows
-        if int(emails) >= _MIN_DISTINCT_EMAILS
+        if ip is not None
+        and int(emails) >= _MIN_DISTINCT_EMAILS
         and not _looks_like_shared_egress(int(n), int(success_counts.get(ip, 0)))
     ]

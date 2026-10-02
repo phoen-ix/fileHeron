@@ -12,16 +12,18 @@ license = { text = "MIT" }
 requires-python = ">=3.14"
 
 dependencies = [
-    # NOT `fastapi[standard]`: that extra pulls fastapi-cli -> fastapi-cloud-cli,
-    # which drags a commercial cloud CLI, the Sentry SDK and two Rust-extension
-    # packages (fastar, rignore) into the PRODUCTION image - about a sixth of
-    # the lock file - for a `fastapi dev` command this project never runs
-    # (uvicorn is the server; see docker/backend/Dockerfile). Everything the app
-    # imports from the extra is declared explicitly below: httpx, jinja2,
-    # python-multipart, pydantic-settings; email-validator and
-    # pydantic-extra-types still arrive with the remaining extra
-    # (audit 2026-07-30, deps-15).
-    "fastapi[standard-no-fastapi-cloud-cli]>=0.115",
+    # Plain `fastapi`, NO extra. `fastapi[standard]` pulled fastapi-cli ->
+    # fastapi-cloud-cli, which dragged a commercial cloud CLI, the Sentry SDK and
+    # two Rust-extension packages into the PRODUCTION image (audit 2026-07-30,
+    # deps-15); from 0.142 every `standard*` extra also pulls the OpenTelemetry
+    # SDK, an OTLP exporter and protobuf (ten packages). The app uses none of
+    # it, nor the `fastapi dev` CLI (uvicorn is the server; see
+    # docker/backend/Dockerfile). What the app does need from the old extra is
+    # declared explicitly: httpx, jinja2, python-multipart, pydantic-settings,
+    # uvicorn[standard] and email-validator. `opentelemetry-api` itself is a
+    # hard FastAPI dependency since 0.142 and stays.
+    "fastapi>=0.115",
+    "email-validator>=2.0",
     "uvicorn[standard]>=0.30",
     "sqlalchemy>=2.0",
     "pymysql>=1.1",
@@ -79,14 +81,14 @@ dev = [
     # silently reddens a green main on the next release with zero code change, and
     # drifts from any local copy. Bump deliberately. Local gate must match:
     # `pip install --user --upgrade ruff==<this>` (or run ruff in an ephemeral python container).
-    "ruff==0.16.9",
+    "ruff==0.16.10",
     # Pinned for the same reason ruff is, and the reason was learned here the
     # hard way: this floated at >=1.10 while the exemption list below was
     # measured, and by the time anyone re-measured it the resolver was serving
     # mypy 2.x - a major version, crossed silently, because every error it
     # would have surfaced sat inside an `ignore_errors` module. Bump
     # deliberately; the local gate is `make typecheck`.
-    "mypy==2.3.1",
+    "mypy==2.4.0",
     # Real stubs, not `ignore_missing_imports`. Measured both: the stubs are
     # strictly better - they removed 10 "library stubs not installed" errors AND
     # turned the survivors into genuine findings (reportlab's `list[Flowable]`

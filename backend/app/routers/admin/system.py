@@ -124,7 +124,7 @@ def system_status(
         )
         # Success / failure counts in the last 24h, for the at-a-glance number.
         cutoff = utc_now() - timedelta(hours=24)
-        counts = {
+        counts: dict[CronRunStatus | str, int] = {
             row[0]: row[1]
             for row in db.query(CronRun.status, func.count(CronRun.id))
             .filter(CronRun.job_name == name, CronRun.started_at >= cutoff)

@@ -106,6 +106,26 @@ def test_the_runtime_image_does_not_carry_the_cloud_cli():
         )
 
 
+def test_the_runtime_image_does_not_carry_the_telemetry_sdk():
+    """From FastAPI 0.142 every `standard*` extra pulls the OpenTelemetry SDK,
+    an OTLP exporter and protobuf - ten packages the app never uses - into the
+    PRODUCTION image. fastapi is declared WITHOUT an extra for that reason (and
+    deps-15's). `opentelemetry-api` alone is a hard FastAPI dependency and is
+    allowed."""
+    declared = {r.name: r for r in _declared()}
+    assert not declared["fastapi"].extras, (
+        f"fastapi carries an extra again: {sorted(declared['fastapi'].extras)}"
+    )
+    locked = _locked()
+    for gone in (
+        "opentelemetry-sdk", "opentelemetry-exporter-otlp-proto-http", "protobuf",
+        "fastapi-cli", "typer", "rich",
+    ):
+        assert canonicalize_name(gone) not in locked, (
+            f"{gone} is back in the runtime lock file"
+        )
+
+
 def test_what_the_app_actually_imports_is_still_locked():
     """Control: dropping the extra must not drop anything the code needs. These
     arrive via the extra on a normal `fastapi[standard]` install and are

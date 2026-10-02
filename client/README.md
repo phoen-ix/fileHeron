@@ -4,7 +4,10 @@ CustomTkinter desktop client for the file:Heron platform (migrated off
 PySide6 in v0.4.0 - pure-Python GUI, ~10 MB of deps vs Qt6's ~150 MB).
 Talks to the same REST API as the SPA - login (email/password + TOTP or
 API token), browse Inbox & Outbox, download files, and create new
-shares (direct multipart for ≤100 MB, TUS resumable for larger).
+shares (direct multipart for ≤100 MB, TUS resumable for larger). With a
+server v2.24.0 or newer that has secrets switched on, a **Secrets** tab
+sends, requests, reveals and answers secrets; a revealed secret is masked
+until *Show* and is dropped from the window when you leave it.
 
 Windows-first. Linux + macOS source-runs the same; only the
 release-build pipeline is Windows-only for now.
@@ -123,7 +126,8 @@ client/
 │   ├── __main__.py        # entry point
 │   ├── config.py          # platformdirs + keyring
 │   ├── models.py          # subset Pydantic mirrors of backend schemas
-│   ├── api/               # httpx wrappers (auth, shares, files, uploads)
+│   ├── api/               # httpx wrappers (auth, shares, files, uploads, secrets)
+│   ├── secret_rules.py    # secret forms: blockers, presets, generator (no Tk)
 │   ├── tus.py             # raw TUS 1.0.0 client (chunked PATCH + resume)
 │   └── ui/                # CustomTkinter windows + workers
 └── tests/                 # pytest, no GUI, no real network

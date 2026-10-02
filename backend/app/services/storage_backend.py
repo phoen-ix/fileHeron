@@ -86,6 +86,47 @@ class StorageBackend(ABC):
     def quarantine_locator(self, share_id: str, filename: str) -> str:
         """Locator for a quarantined copy of `filename` under `share_id`."""
 
+    # --- encryption at rest (services/file_encryption.py) -------------------
+
+    @abstractmethod
+    def open_range(self, locator: str, start: int, end_incl: int) -> BinaryIO:
+        """A stream of bytes `[start, end_incl]` only. Encrypted files are read
+        a chunk window at a time (Range, ZIP resume, the seekable reader)."""
+
+    @abstractmethod
+    def write_stream(self, locator: str, reader) -> None:
+        """Create `locator` from a readable stream - refusing to overwrite one
+        that exists - and make it durable before returning."""
+
+    @abstractmethod
+    def sibling_locator(self, locator: str, name: str) -> str:
+        """A locator named `name` beside `locator` (same directory / prefix)."""
+
+
+class _BoundedReader:
+    """At most `remaining` bytes of an already-positioned file."""
+
+    def __init__(self, raw: BinaryIO, remaining: int) -> None:
+        self._raw = raw
+        self._remaining = remaining
+
+    def read(self, size: int = -1) -> bytes:
+        if self._remaining <= 0:
+            return b""
+        n = self._remaining if size is None or size < 0 else min(size, self._remaining)
+        data = self._raw.read(n)
+        self._remaining -= len(data)
+        return data
+
+    def close(self) -> None:
+        self._raw.close()
+
+    def __enter__(self) -> _BoundedReader:
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        self.close()
+
 
 class LocalFilesystemBackend(StorageBackend):
     """The bind-mount backend - byte-for-byte the behaviour before the
@@ -142,6 +183,33 @@ class LocalFilesystemBackend(StorageBackend):
 
     def quarantine_locator(self, share_id: str, filename: str) -> str:
         return str(Path(settings.QUARANTINE_DIR) / share_id / filename)
+
+    def open_range(self, locator: str, start: int, end_incl: int) -> BinaryIO:
+        # Handed to the caller inside _BoundedReader, which closes it.
+        raw = open(locator, "rb")  # noqa: SIM115
+        raw.seek(start)
+        return cast("BinaryIO", _BoundedReader(raw, end_incl - start + 1))
+
+    def write_stream(self, locator: str, reader) -> None:
+        import os
+
+        dest = Path(locator)
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        # "xb": a name collision is a bug in the caller, never an overwrite.
+        with open(dest, "xb") as out:
+            shutil.copyfileobj(reader, out, 1024 * 1024)
+            out.flush()
+            os.fsync(out.fileno())
+        # The rename-free swap commits a row pointing at this file; make the
+        # directory entry durable too before that can happen.
+        fd = os.open(dest.parent, os.O_RDONLY)
+        try:
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+
+    def sibling_locator(self, locator: str, name: str) -> str:
+        return str(Path(locator).with_name(name))
 
 
 class S3Backend(StorageBackend):
@@ -244,6 +312,27 @@ class S3Backend(StorageBackend):
 
     def quarantine_locator(self, share_id: str, filename: str) -> str:
         return f"{self._prefix}quarantine/{share_id}/{filename}"
+
+    def open_range(self, locator: str, start: int, end_incl: int) -> BinaryIO:
+        obj = self._s3.get_object(Bucket=self._bucket, Key=locator, Range=f"bytes={start}-{end_incl}")
+        return cast("BinaryIO", obj["Body"])
+
+    def write_stream(self, locator: str, reader) -> None:
+        from boto3.s3.transfer import TransferConfig
+
+        # Streams the reader in 16 MiB parts: no local temp copy of the object.
+        # S3 offers no create-if-absent here; locators passed to this are
+        # unique by construction (a random suffix per attempt).
+        self._s3.upload_fileobj(
+            reader,
+            self._bucket,
+            locator,
+            Config=TransferConfig(multipart_chunksize=16 * 1024 * 1024, max_concurrency=4),
+        )
+
+    def sibling_locator(self, locator: str, name: str) -> str:
+        head, sep, _tail = locator.rpartition("/")
+        return f"{head}{sep}{name}"
 
 
 def _content_disposition(disposition: str, filename: str) -> str:

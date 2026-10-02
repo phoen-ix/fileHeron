@@ -22,7 +22,7 @@ from sqlalchemy import func
 from ..database import SessionLocal
 from ..models.inbound_attachment import AttachmentAVState, InboundAttachment
 from ..redis_client import get_redis, sync
-from ..services import av_scan
+from ..services import av_scan, file_encryption
 from ..services import storage_backend as storage_svc
 from ..services.cron_tracker import track_cron
 from ..utils.timeutil import utc_now_aware
@@ -114,12 +114,10 @@ async def rescan_inbound_attachments(_ctx) -> dict:
             # workers/av_scan.py:160-172 already does this correctly, with a
             # comment describing this exact failure - the 2026-07-30 fix was
             # applied to one of the two call sites.
-            def _scan(key: str = att.storage_key) -> av_scan.ScanResult:
-                local = backend.local_path(key)
-                if local is not None:
-                    return av_scan.scan_path(local)
-                with backend.open(key) as fh:
-                    return av_scan.scan_stream(fh)
+            cipher = file_encryption.cipher_for_attachment(att)
+
+            def _scan(key: str = att.storage_key, cipher=cipher) -> av_scan.ScanResult:
+                return av_scan.scan_stored(backend, key, cipher)
 
             try:
                 result = await asyncio.to_thread(_scan)

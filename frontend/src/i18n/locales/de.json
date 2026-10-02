@@ -105,6 +105,7 @@
     "FILE_NOT_SCANNED": "Diese Datei war zu groß für die Virenprüfung und kann daher nicht im Browser angezeigt werden. Laden Sie sie herunter und prüfen Sie sie lokal.",
     "FILE_PENDING_APPROVAL": "Diese Datei wurde nach der Genehmigung der Freigabe hinzugefügt und wartet auf Prüfung.",
     "FILE_QUARANTINED": "Diese Datei befindet sich in Quarantäne. Bitte über die Quarantäne-Seite freigeben oder endgültig löschen statt hier zu löschen.",
+    "FILE_UNREADABLE": "Diese Datei kann nicht gelesen werden. Ein Administrator wurde benachrichtigt.",
     "FILE_QUARANTINED_ADMIN_ONLY": "Diese Datei wurde vom Virenscanner markiert. Nur Admins können sie über die Quarantäne bearbeiten.",
     "FILE_RECORD_MISSING": "Dieser Upload ist nicht mehr registriert. Bitte starten Sie ihn erneut.",
     "FINAL_SIZE_MISMATCH": "Die hochgeladene Größe stimmt nicht mit der angekündigten überein.",

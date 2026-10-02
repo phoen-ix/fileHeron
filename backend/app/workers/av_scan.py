@@ -147,7 +147,6 @@ async def av_scan_file(_ctx, file_id: str) -> dict:
         # stream the bytes to clamd via INSTREAM (no shared path).
         from ..services.storage_backend import get_storage_backend
         backend = get_storage_backend()
-        local = backend.local_path(locator)
 
         # Decide unscannable BEFORE scanning, against CLAMD_MAX_FILE_SIZE - the
         # ceiling clamd clamps ITSELF to, not the operator-tunable
@@ -187,11 +186,15 @@ async def av_scan_file(_ctx, file_id: str) -> dict:
         # freeze every other job in the process (send_email, webhook_deliver,
         # every cron) for its whole duration, up to the socket timeout per file.
         # Hand them to a thread so only this task waits (audit 2026-07-30).
+        # A file is scanned BEFORE it is ever encrypted (the release lane runs
+        # after the verdict), so this is None in normal operation; the cipher
+        # is passed anyway so an encrypted row can never reach the path scan.
+        from ..services import file_encryption
+
+        cipher = file_encryption.cipher_for_file(file)
+
         def _scan() -> av_scan_svc.ScanResult:
-            if local is not None:
-                return av_scan_svc.scan_path(local)
-            with backend.open(locator) as fh:
-                return av_scan_svc.scan_stream(fh)
+            return av_scan_svc.scan_stored(backend, locator, cipher)
 
         try:
             result = await asyncio.to_thread(_scan)

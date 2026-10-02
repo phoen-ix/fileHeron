@@ -188,6 +188,27 @@ def scan_stream(fh) -> ScanResult:
         s.close()
 
 
+def scan_stored(backend, locator: str, cipher=None) -> ScanResult:
+    """Scan stored bytes the way their storage allows - the ONE entry point the
+    scanners use.
+
+    Plaintext on the local backend: clamd reads the shared mount (zero copy).
+    Plaintext on an object store: INSTREAM. ENCRYPTED bytes: always INSTREAM
+    over the decrypted stream - clamd's path scan would read ciphertext, find
+    nothing, and answer "clean" for every file, which is antivirus switched off
+    without a sound. `cipher` is services/file_encryption.StoredCipher or None."""
+    if cipher is None:
+        local = backend.local_path(locator)
+        if local is not None:
+            return scan_path(local)
+        with backend.open(locator) as fh:
+            return scan_stream(fh)
+    from .file_encryption import open_plaintext
+
+    with open_plaintext(backend, locator, cipher) as fh:
+        return scan_stream(fh)
+
+
 def ping() -> bool:
     """Healthcheck - returns True if clamd answers PONG.
 

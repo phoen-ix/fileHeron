@@ -18,6 +18,7 @@ from ..schemas.account import (
     CreateInviteResponse,
     InviteRequest,
     MeResponse,
+    PendingEmailChangeResponse,
     RequestEmailChangeRequest,
     UpdateAdminNavModeRequest,
     UpdateAdminNavOpenRequest,
@@ -399,6 +400,23 @@ async def change_email(
     db.commit()
     await email_change_svc.dispatch_request_emails(db, outcome)
     return {"ok": True, "applied": outcome.applied, "mode": outcome.mode}
+
+
+@router.get("/email", response_model=PendingEmailChangeResponse)
+def get_own_pending_email_change(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    """My pending email change, so the account page can show it and offer the
+    cancel below. Nothing exposed it: a change waiting for confirmation was
+    invisible until the 24h token expired, and the self-cancel route had no
+    caller at all."""
+    from ..services import email_change as email_change_svc
+
+    row = email_change_svc.pending_for(db, user)
+    if row is None:
+        return {"pending": None}
+    return {"pending": {"new_email": row.new_email, "expires_at": row.expires_at.isoformat()}}
 
 
 @router.delete("/email", response_model=CancelEmailChangeResponse, status_code=status.HTTP_200_OK)

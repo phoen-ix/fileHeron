@@ -14,6 +14,7 @@
   import WebAuthnPanel from '@/components/WebAuthnPanel.vue'
   import { useApiError } from '@/composables/useApiError'
   import { useScrollSpy } from '@/composables/useScrollSpy'
+  import { useSiteDateFormat } from '@/composables/useSiteDateFormat'
   import { setLocale } from '@/i18n'
   import { useAuthStore } from '@/stores/auth'
   import { useUiStore } from '@/stores/ui'
@@ -58,6 +59,41 @@
   const emailPw = ref('')
   const emailSubmitting = ref(false)
   const emailError = ref<string | null>(null)
+  const { formatDate } = useSiteDateFormat()
+
+  // A change waiting for its confirmation link. Shown whether or not
+  // self-service is enabled: an admin can start a change for this user, and
+  // cancelling one's own pending change is always allowed.
+  const pendingEmail = ref<accountApi.PendingEmailChange | null>(null)
+  const pendingCancelling = ref(false)
+
+  async function loadPendingEmail() {
+    try {
+      pendingEmail.value = (await accountApi.getPendingEmailChange()).data.pending
+    } catch {
+      pendingEmail.value = null
+    }
+  }
+
+  async function cancelPendingEmail() {
+    const pending = pendingEmail.value
+    if (!pending) return
+    const ok = await ui.confirm({
+      message: t('account.email_change_cancel_confirm', { email: pending.new_email }),
+      danger: true,
+    })
+    if (!ok) return
+    pendingCancelling.value = true
+    try {
+      await accountApi.cancelOwnEmailChange()
+      pendingEmail.value = null
+      ui.pushToast(t('account.email_change_cancelled'), 'success')
+    } catch (e) {
+      ui.pushToast(describe(e), 'error')
+    } finally {
+      pendingCancelling.value = false
+    }
+  }
 
   async function changeEmail() {
     emailError.value = null
@@ -78,7 +114,12 @@
         data.applied ? t('account.email_change_applied') : t('account.email_change_pending'),
         'success',
       )
-      if (data.applied) await auth.refreshMe()
+      if (data.applied) {
+        pendingEmail.value = null
+        await auth.refreshMe()
+      } else {
+        await loadPendingEmail()
+      }
     } catch (e) {
       emailError.value = describe(e)
     } finally {
@@ -103,7 +144,7 @@
       landingPage.value = auth.user.default_landing_page
       navMode.value = auth.user.admin_nav_collapse_mode ?? 'accordion'
     }
-    await Promise.all([loadTotp(), loadSessions()])
+    await Promise.all([loadTotp(), loadSessions(), loadPendingEmail()])
   })
 
   async function changeNavMode(m: AdminNavCollapseMode) {
@@ -389,13 +430,44 @@
         </div>
       </section>
 
-      <!-- Email change (self-service - only when the admin enabled it) -->
-      <section v-if="auth.user?.can_change_own_email" id="email" class="account-section">
+      <!-- Email change (self-service - only when the admin enabled it; a pending
+           change is shown, and can be cancelled, either way) -->
+      <section
+        v-if="auth.user?.can_change_own_email || pendingEmail"
+        id="email"
+        class="account-section"
+      >
         <h2 class="account-h2">{{ $t('account.section_email') }}</h2>
-        <p class="fh-field-help" style="margin-bottom: var(--fh-space-3)">
+        <div
+          v-if="pendingEmail"
+          class="fh-notice pending-email"
+          data-tone="info"
+          data-testid="email-pending"
+        >
+          <span>{{
+            $t('account.email_change_pending_line', {
+              email: pendingEmail.new_email,
+              time: formatDate(pendingEmail.expires_at),
+            })
+          }}</span>
+          <button
+            type="button"
+            class="fh-btn fh-btn-ghost"
+            data-testid="email-pending-cancel"
+            :disabled="pendingCancelling"
+            @click="cancelPendingEmail"
+          >
+            {{ $t('account.email_change_cancel') }}
+          </button>
+        </div>
+        <p
+          v-if="auth.user?.can_change_own_email"
+          class="fh-field-help"
+          style="margin-bottom: var(--fh-space-3)"
+        >
           {{ $t('account.email_change_help') }}
         </p>
-        <form @submit.prevent="changeEmail">
+        <form v-if="auth.user?.can_change_own_email" @submit.prevent="changeEmail">
           <div class="fh-field">
             <label class="fh-field-label" for="acc-email-new">{{
               $t('account.email_change_new')
@@ -627,6 +699,15 @@
     margin: var(--fh-space-5) 0;
     padding-top: var(--fh-space-4);
     border-top: 1px solid var(--fh-hairline);
+  }
+
+  .pending-email {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--fh-space-3);
+    margin-bottom: var(--fh-space-3);
   }
 
   .account-section:first-of-type {

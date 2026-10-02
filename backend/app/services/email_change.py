@@ -375,6 +375,22 @@ def confirm_email_change(
     )
 
 
+def pending_for(db: Session, user: User) -> EmailChangeToken | None:
+    """The user's live pending change - neither used, cancelled nor expired -
+    newest first (with the id tiebreaker: MariaDB stores whole seconds)."""
+    return (
+        db.query(EmailChangeToken)
+        .filter(
+            EmailChangeToken.user_id == user.id,
+            EmailChangeToken.used_at.is_(None),
+            EmailChangeToken.cancelled_at.is_(None),
+            EmailChangeToken.expires_at > utc_now(),
+        )
+        .order_by(EmailChangeToken.created_at.desc(), EmailChangeToken.id.desc())
+        .first()
+    )
+
+
 def cancel_email_change(
     db: Session,
     *,

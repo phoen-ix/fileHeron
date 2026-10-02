@@ -43,28 +43,52 @@ WRONG_SECRET_CODES = frozenset(
     }
 )
 
-# Where each raise site is reachable from, and whether the SPA's shared axios
-# instance can hit it. `None` = not reachable through that instance, with the
-# reason, so the exemption is recorded rather than assumed.
+# Where each raise site is reachable from - (method, path) - and whether the
+# SPA's shared axios instance can hit it. `None` = not reachable through that
+# instance, with the reason, so the exemption is recorded rather than assumed.
+# The METHOD matters where a path serves more than one: `/account/email` is the
+# password-checked POST and also the secret-free GET/DELETE, whose 401 means an
+# expired session that must be refreshed and replayed.
 #
 # Keyed by (module stem, enclosing function).
-DECLARED: dict[tuple[str, str], str | None] = {
+DECLARED: dict[tuple[str, str], tuple[str, str] | None] = {
     # `/auth/login` also covers `/auth/login/recovery`, which substring-matches it.
-    ("auth", "login"): "/auth/login",
-    ("auth", "login_with_recovery"): "/auth/login",
+    ("auth", "login"): ("POST", "/auth/login"),
+    ("auth", "login_with_recovery"): ("POST", "/auth/login"),
     # Shared first-factor helper. Its SPA-reachable caller is the login route;
     # the WebAuthn path reaches it through webauthn.ts's own interceptor-less
     # `anonClient`, so it never enters the replay logic.
-    ("auth", "authenticate_first_factor"): "/auth/login",
+    ("auth", "authenticate_first_factor"): ("POST", "/auth/login"),
     # The second-factor exchange after SSO or a passkey. Missed until it was
     # found by review - `/auth/login` does not substring-match it.
-    ("auth", "complete_pending_second_factor"): "/auth/2fa/complete",
-    ("auth", "change_password"): "/account/change-password",
-    ("account", "change_email"): "/account/email",
-    ("totp", "confirm_enable"): "/account/2fa/enable",
-    ("totp", "disable"): "/account/2fa/disable",
-    ("totp", "regenerate_recovery_codes"): "/account/2fa/recovery-codes/regenerate",
+    ("auth", "complete_pending_second_factor"): ("POST", "/auth/2fa/complete"),
+    ("auth", "change_password"): ("POST", "/account/change-password"),
+    ("account", "change_email"): ("POST", "/account/email"),
+    ("totp", "confirm_enable"): ("POST", "/account/2fa/enable"),
+    ("totp", "disable"): ("POST", "/account/2fa/disable"),
+    ("totp", "regenerate_recovery_codes"): ("POST", "/account/2fa/recovery-codes/regenerate"),
 }
+
+
+def _is_auth_call_entries() -> dict[str, str | None]:
+    """path -> the method guard on its isAuthCall entry (None = unguarded)."""
+    source = _CLIENT_TS.read_text()
+    start = source.index("const isAuthCall =")
+    # Search for the terminator FROM `start`: the classifier above the
+    # interceptor contains an earlier `if (status === 401`, and slicing to that
+    # produced an empty block - a scan that silently examined nothing, which is
+    # the failure this whole file exists to prevent. Hence the non-empty assert.
+    block = source[start : source.index("if (status === 401", start)]
+    entries = {
+        path: (method or None)
+        for method, path in re.findall(
+            r"(?:original\.method\?\.toUpperCase\(\) === '([A-Z]+)' && )?"
+            r"url\.includes\('([^']+)'\)",
+            block,
+        )
+    }
+    assert entries, "the isAuthCall scan matched nothing - it has stopped working"
+    return entries
 
 
 def _raise_sites() -> list[tuple[str, str, int, str]]:
@@ -116,19 +140,41 @@ def test_every_reachable_route_is_excluded_in_the_spa():
     """The declared routes must actually appear in the SPA's isAuthCall chain."""
     if not _CLIENT_TS.exists():  # backend-only checkout
         pytest.skip("frontend/ not present")
-    source = _CLIENT_TS.read_text()
-    start = source.index("const isAuthCall =")
-    # Search for the terminator FROM `start`: the classifier above the
-    # interceptor contains an earlier `if (status === 401`, and slicing to that
-    # produced an empty block - a scan that silently examined nothing, which is
-    # the failure this whole file exists to prevent. Hence the non-empty assert.
-    block = source[start : source.index("if (status === 401", start)]
-    listed = set(re.findall(r"url\.includes\('([^']+)'\)", block))
-    assert listed, "the isAuthCall scan matched nothing - it has stopped working"
-
-    missing = sorted({r for r in DECLARED.values() if r is not None} - listed)
+    listed = set(_is_auth_call_entries())
+    missing = sorted({r[1] for r in DECLARED.values() if r is not None} - listed)
     assert not missing, (
         f"Route(s) that 401 for a wrong submitted secret but are NOT in "
         f"isAuthCall: {missing}. The interceptor will refresh, replay the same "
         "wrong secret, and sign the user out on the second 401."
     )
+
+
+def test_a_shared_path_is_excluded_only_for_its_secret_method():
+    """Where the app serves another method at a declared path, the isAuthCall
+    entry must be guarded to the declared method - an unguarded one would also
+    exclude the secret-free methods from refresh-and-replay, so an expired
+    session on, say, GET /account/email would sign the user out instead of
+    refreshing. The regex used to read `url.includes(...)` alone, so a guard
+    could be dropped without this file noticing."""
+    if not _CLIENT_TS.exists():  # backend-only checkout
+        pytest.skip("frontend/ not present")
+    from app.main import app
+    from tests._route_helpers import iter_api_routes
+
+    served: dict[str, set[str]] = {}
+    for route in iter_api_routes(app):
+        for m in route.methods or set():
+            if m not in ("HEAD", "OPTIONS"):
+                served.setdefault(route.path, set()).add(m)
+    entries = _is_auth_call_entries()
+    checked = 0
+    for method, path in {r for r in DECLARED.values() if r is not None}:
+        methods = served.get(f"/api{path}", set())
+        assert method in methods, f"{method} /api{path} is declared but not served"
+        if len(methods) > 1:
+            checked += 1
+            assert entries.get(path) == method, (
+                f"/api{path} serves {sorted(methods)}; its isAuthCall entry must be "
+                f"guarded to {method}, found {entries.get(path)!r}"
+            )
+    assert checked, "no declared path serves more than one method - the guard check went vacuous"

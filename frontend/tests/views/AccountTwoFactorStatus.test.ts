@@ -11,7 +11,10 @@ import en from '@/i18n/locales/en.json'
 
 const getStatus = vi.fn()
 vi.mock('@/api/twoFactor', () => ({ getStatus: () => getStatus() }))
-vi.mock('@/api/account', () => ({ listSessions: vi.fn(async () => ({ data: { items: [] } })) }))
+vi.mock('@/api/account', () => ({
+  listSessions: vi.fn(async () => ({ data: { items: [] } })),
+  getPendingEmailChange: vi.fn(async () => ({ data: { pending: null } })),
+}))
 vi.mock('@/composables/useScrollSpy', () => ({
   useScrollSpy: () => ({ active: ref(''), lockTo: vi.fn() }),
 }))

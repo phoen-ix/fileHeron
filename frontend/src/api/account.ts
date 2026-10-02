@@ -66,6 +66,30 @@ export function requestEmailChange(payload: { new_email: string; current_passwor
   return api.post<{ ok: boolean; applied: boolean; mode: string }>('/account/email', payload)
 }
 
+export interface PendingEmailChange {
+  new_email: string
+  expires_at: string
+}
+
+export interface PendingEmailChangeResponse {
+  pending: PendingEmailChange | null
+}
+
+export interface CancelEmailChangeResponse {
+  ok: boolean
+  cancelled: number
+}
+
+/** My own pending email change (waiting for its confirmation link), if any. */
+export function getPendingEmailChange() {
+  return api.get<PendingEmailChangeResponse>('/account/email')
+}
+
+/** Withdraw my pending email change; its confirmation link stops working. */
+export function cancelOwnEmailChange() {
+  return api.delete<CancelEmailChangeResponse>('/account/email')
+}
+
 // Sessions live under /auth (not /account) so the refresh cookie - which is
 // path-scoped to /api/auth - is sent, letting the backend flag the current
 // session and keep it on "sign out others".

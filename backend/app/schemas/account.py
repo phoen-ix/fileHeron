@@ -177,6 +177,18 @@ class CancelEmailChangeResponse(APIBaseModel):
     cancelled: int
 
 
+class PendingEmailChange(APIBaseModel):
+    new_email: str
+    expires_at: str
+
+
+class PendingEmailChangeResponse(APIBaseModel):
+    """GET /api/account/email - the caller's own live pending change, if any.
+    Its own route rather than a `/me` field: only the account page needs it,
+    and `/me` is fetched on every navigation."""
+    pending: PendingEmailChange | None = None
+
+
 class CreateInviteResponse(APIBaseModel):
     ok: bool = True
     email: str

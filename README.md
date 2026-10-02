@@ -88,8 +88,10 @@ If your host user isn't UID 1000, first make the data dirs writable by the
 containers: `docker run --rm -v "$PWD/data":/data alpine chown -R 1000:1000 /data/{uploads,quarantine,files,updater}`
 (see [Common operational issues](#common-operational-issues)).
 
-If `SMTP_HOST` is empty, all outgoing email is logged to the backend container
-instead of being sent - handy for dev. Full operator walkthrough: [First install](#first-install).
+If no SMTP server is configured, outgoing email is not sent. Outside production
+it is printed to the container log instead - handy for dev; in production only its
+recipient and subject are logged (the body carries live one-time links), and the
+admin mail log keeps a masked copy. Full operator walkthrough: [First install](#first-install).
 
 ## Architecture
 
@@ -1101,7 +1103,7 @@ via `/admin/settings/advanced`.
 
 | Variable | Default | What it does |
 |---|---|---|
-| `SMTP_HOST` | empty | **Empty → email logged to stdout.** |
+| `SMTP_HOST` | empty | **Empty (and none set at `/admin/settings/email`) → email is not sent.** Outside production it is printed to the container log; in production only its recipient and subject are logged. |
 | `SMTP_PORT`/`SMTP_USER`/`SMTP_PASSWORD` | `587`/empty/empty | Connection + auth (DB overrides via `/admin/settings/email`). |
 | `SMTP_FROM_EMAIL`/`SMTP_FROM_NAME` | `noreply@fileheron.local`/`fileHeron` | Envelope sender. |
 | `SMTP_HELO_HOST` | empty | EHLO/HELO name (empty = container FQDN). |

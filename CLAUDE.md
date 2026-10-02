@@ -144,7 +144,7 @@ one `# file:Heron vX.Y.Z` section each, newest first; older releases live in
 
 → README §Quickstart for full dev/prod compose steps. CLAUDE-only notes:
 
-- `SMTP_HOST` empty ⇒ all outgoing email is logged to backend stdout.
+- **No SMTP host ⇒ mail is not sent, and only OUTSIDE production is it printed** (`utils/emailing.py::send_email`): in production just recipient + subject are logged, since a body carries live one-time tokens (audit M13); the e2e helpers scrape reset/register tokens from the dev printout. Both halves pinned by `tests/test_mail_dev_fallback.py`.
 - **Operator escape hatch:** `docker compose exec backend python scripts/promote_user.py <email>` promotes any existing user to admin without the API - for an admin who lost TOTP + recovery codes. Repo path `backend/scripts/`, in-container `scripts/`.
 - **`SETUP_TOKEN` gates the anonymous `/setup` wizard** while no admin exists: `install.sh` generates it before `compose up` and prints `/setup?token=...`, so nobody who finds a fresh public instance first can claim it. Empty = the old open wizard.
 - **`ADMIN_BOOTSTRAP_EMAIL` Path 2 is bounded by `setup.is_setup_complete`** - unbounded, it re-promoted and re-ENABLED that account on every boot, so a deliberate demotion reverted on restart.

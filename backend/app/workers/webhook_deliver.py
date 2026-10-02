@@ -120,13 +120,18 @@ async def webhook_deliver(
 
         delivery.attempts = attempt
         try:
-            async with httpx.AsyncClient(
-                timeout=_TIMEOUT_SEC, follow_redirects=False
-            ) as client:
-                resp = await client.post(wh.url, content=body, headers=headers)
-            delivery.response_code = resp.status_code
-            ok = 200 <= resp.status_code < 300
-            err = None if ok else f"HTTP {resp.status_code}"
+            # Streamed, and the body is never read: only the status decides the
+            # outcome. A plain `client.post` buffers the whole response from a
+            # URL an admin typed, so a receiver answering with an endless body
+            # held the worker until the timeout - with its memory.
+            async with (
+                httpx.AsyncClient(timeout=_TIMEOUT_SEC, follow_redirects=False) as client,
+                client.stream("POST", wh.url, content=body, headers=headers) as resp,
+            ):
+                status_code = resp.status_code
+            delivery.response_code = status_code
+            ok = 200 <= status_code < 300
+            err = None if ok else f"HTTP {status_code}"
         except Exception as e:  # network / timeout / DNS
             delivery.response_code = None
             ok = False

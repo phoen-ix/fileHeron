@@ -14,7 +14,6 @@ Tests reset the cache via `_reset_cache()` (see conftest autouse).
 """
 from __future__ import annotations
 
-import json
 import logging
 import time
 from typing import Any
@@ -25,6 +24,7 @@ import jwt
 from ..config import settings
 from ..middleware.errors import AppError
 from ..models.oidc_provider import OIDCProvider
+from ..utils.http_fetch import ResponseTooLargeError, fetch_json_capped
 from ..utils.net import assert_public_http_url
 from . import oidc as oidc_svc
 
@@ -52,33 +52,26 @@ async def _fetch_jwks(jwks_uri: str) -> dict[str, jwt.PyJWK]:
         require_https=not settings.OIDC_ALLOW_INSECURE_HTTP,
     )
     try:
-        async with httpx.AsyncClient(timeout=5.0) as cli, cli.stream("GET", jwks_uri) as resp:
-            resp.raise_for_status()
-            cl = resp.headers.get("content-length")
-            if cl is not None and int(cl) > _JWKS_MAX_BYTES:
-                raise AppError(
-                    503, "OIDC_JWKS_TOO_LARGE", "Identity provider key set is too large."
-                )
-            buf = bytearray()
-            async for chunk in resp.aiter_bytes():
-                buf.extend(chunk)
-                if len(buf) > _JWKS_MAX_BYTES:
-                    raise AppError(
-                        503,
-                        "OIDC_JWKS_TOO_LARGE",
-                        "Identity provider key set is too large.",
-                    )
-        doc = json.loads(bytes(buf))
+        doc = await fetch_json_capped("GET", jwks_uri, max_bytes=_JWKS_MAX_BYTES, http_timeout_sec=5.0)
+    except ResponseTooLargeError as e:
+        raise AppError(
+            503, "OIDC_JWKS_TOO_LARGE", "Identity provider key set is too large."
+        ) from e
     except httpx.HTTPError as e:
         logger.warning("JWKS fetch failed uri=%s: %s", jwks_uri, e)
         raise AppError(
             503, "OIDC_JWKS_UNAVAILABLE", "Identity provider key set is unreachable."
         ) from e
-    except (ValueError, json.JSONDecodeError) as e:
+    except ValueError as e:
         logger.warning("JWKS parse failed uri=%s: %s", jwks_uri, e)
         raise AppError(
             503, "OIDC_JWKS_UNAVAILABLE", "Identity provider key set is malformed."
         ) from e
+    if not isinstance(doc, dict):
+        logger.warning("JWKS is not a JSON object uri=%s", jwks_uri)
+        raise AppError(
+            503, "OIDC_JWKS_UNAVAILABLE", "Identity provider key set is malformed."
+        )
 
     keys: dict[str, jwt.PyJWK] = {}
     for raw in doc.get("keys", []):

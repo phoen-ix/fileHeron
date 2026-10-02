@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+from contextlib import asynccontextmanager
 
 import pytest
 
@@ -112,10 +113,12 @@ class _FakeClient:
     async def __aexit__(self, *a):
         return False
 
-    async def post(self, url, content=None, headers=None):
+    @asynccontextmanager
+    async def stream(self, method, url, content=None, headers=None):
+        assert method == "POST"
         if self._raise:
             raise self._raise
-        return _FakeResp(self._code)
+        yield _FakeResp(self._code)
 
 
 @pytest.mark.asyncio

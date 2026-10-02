@@ -34,7 +34,6 @@ Security boundaries:
 """
 from __future__ import annotations
 
-import json
 import logging
 import secrets
 import time
@@ -51,6 +50,7 @@ from ..models.oidc_provider import OIDCPreset, OIDCProvider
 from ..models.user import User, UserRole
 from ..utils.columns import declared_width
 from ..utils.crypto import normalize_email
+from ..utils.http_fetch import ResponseTooLargeError, fetch_json_capped
 from ..utils.net import assert_public_http_url
 from . import rate_limit as rate_limit_svc
 from .audit import record_audit_event
@@ -74,6 +74,9 @@ logger = logging.getLogger("fileheron.oidc")
 # Hard byte cap streamed off the wire so a malicious/compromised IdP discovery
 # endpoint can't OOM the worker (mirrors _JWKS_MAX_BYTES in jwks.py).
 _DISCOVERY_MAX_BYTES = 1 * 1024 * 1024
+# A token response is a few KB of JWTs. Same cap, same reason: the token
+# endpoint is whatever the discovery document named.
+_TOKEN_RESPONSE_MAX_BYTES = 1 * 1024 * 1024
 # (fetched_at monotonic, document). Entries expire: the cache had no TTL, so an
 # IdP that moved its token or JWKS endpoint kept being called at the old
 # address until the process restarted - jwks._cache already ages out hourly,
@@ -102,40 +105,34 @@ async def _discovery(provider: OIDCProvider) -> dict[str, Any]:
         require_https=not settings.OIDC_ALLOW_INSECURE_HTTP,
     )
     try:
-        async with httpx.AsyncClient(timeout=5.0) as cli, cli.stream("GET", url) as resp:
-            resp.raise_for_status()
-            cl = resp.headers.get("content-length")
-            if cl is not None and int(cl) > _DISCOVERY_MAX_BYTES:
-                raise AppError(
-                    503, "OIDC_DISCOVERY_TOO_LARGE",
-                    "Identity provider discovery document is too large.",
-                )
-            buf = bytearray()
-            async for chunk in resp.aiter_bytes():
-                buf.extend(chunk)
-                if len(buf) > _DISCOVERY_MAX_BYTES:
-                    raise AppError(
-                        503, "OIDC_DISCOVERY_TOO_LARGE",
-                        "Identity provider discovery document is too large.",
-                    )
+        doc = await fetch_json_capped(
+            "GET", url, max_bytes=_DISCOVERY_MAX_BYTES, http_timeout_sec=5.0
+        )
+    except ResponseTooLargeError as e:
+        raise AppError(
+            503, "OIDC_DISCOVERY_TOO_LARGE",
+            "Identity provider discovery document is too large.",
+        ) from e
     except httpx.HTTPError as e:
         logger.warning("OIDC discovery failed provider=%s: %s", provider.id, e)
         raise AppError(503, "OIDC_UNAVAILABLE", "Identity provider is unreachable.") from e
-    # Parse INSIDE the failure contract. This sat outside every try, so an IdP
-    # answering 200 with a non-JSON body - a captive portal, an HTML error
-    # page, a truncated response - raised a bare JSONDecodeError and surfaced
-    # as an unhandled 500 instead of the OIDC_UNAVAILABLE this function
-    # otherwise promises. services/jwks.py already gets this right; discovery
-    # and token exchange did not (audit 2026-07-30).
-    try:
-        doc = json.loads(bytes(buf))
-    except (ValueError, json.JSONDecodeError) as e:
+    # Parsing is INSIDE the failure contract: an IdP answering 200 with a
+    # non-JSON body - a captive portal, an HTML error page, a truncated
+    # response - once surfaced as an unhandled 500 instead of the
+    # OIDC_UNAVAILABLE this function otherwise promises (audit 2026-07-30). A
+    # JSON value that is not an object is the same fault.
+    except ValueError as e:
         logger.warning(
             "OIDC discovery returned a non-JSON body provider=%s", provider.id
         )
         raise AppError(
             503, "OIDC_UNAVAILABLE", "Identity provider is unreachable."
         ) from e
+    if not isinstance(doc, dict):
+        logger.warning(
+            "OIDC discovery returned a non-object body provider=%s", provider.id
+        )
+        raise AppError(503, "OIDC_UNAVAILABLE", "Identity provider is unreachable.")
     # The discovery document's `issuer` MUST equal the issuer we fetched it from
     # (OIDC Discovery spec); otherwise a tampered/rogue discovery endpoint could
     # advertise a different issuer that later weakens ID-token validation (Info-3).
@@ -236,30 +233,35 @@ async def _exchange_code(
     )
     secret = get_client_secret(provider)
     try:
-        async with httpx.AsyncClient(timeout=10.0) as cli:
-            resp = await cli.post(
-                token_url,
-                data={
-                    "grant_type": "authorization_code",
-                    "code": code,
-                    "client_id": provider.client_id,
-                    "client_secret": secret,
-                    "redirect_uri": _redirect_uri(provider, kind=kind),
-                },
-            )
-            resp.raise_for_status()
-    except httpx.HTTPError as e:
+        body = await fetch_json_capped(
+            "POST",
+            token_url,
+            max_bytes=_TOKEN_RESPONSE_MAX_BYTES,
+            http_timeout_sec=10.0,
+            data={
+                "grant_type": "authorization_code",
+                "code": code,
+                "client_id": provider.client_id,
+                "client_secret": secret,
+                "redirect_uri": _redirect_uri(provider, kind=kind),
+            },
+        )
+    except (httpx.HTTPError, ResponseTooLargeError) as e:
         logger.warning("OIDC token exchange failed provider=%s: %s", provider.id, e)
         raise AppError(401, "OIDC_TOKEN_EXCHANGE_FAILED", "Token exchange failed.") from e
-    try:
-        return resp.json()
-    except (ValueError, json.JSONDecodeError) as e:
+    except ValueError as e:
         logger.warning(
             "OIDC token endpoint returned a non-JSON body provider=%s", provider.id
         )
         raise AppError(
             401, "OIDC_TOKEN_EXCHANGE_FAILED", "Token exchange failed."
         ) from e
+    if not isinstance(body, dict):
+        logger.warning(
+            "OIDC token endpoint returned a non-object body provider=%s", provider.id
+        )
+        raise AppError(401, "OIDC_TOKEN_EXCHANGE_FAILED", "Token exchange failed.")
+    return body
 
 
 async def _verify_id_token(

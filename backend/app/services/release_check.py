@@ -54,6 +54,7 @@ from ..database import SessionLocal
 from ..middleware.errors import AppError
 from ..models.notification import NotificationCategory
 from ..models.user import User, UserRole
+from ..utils.http_fetch import ResponseTooLargeError, fetch_json_capped, mib
 from ..utils.net import assert_public_http_url
 from ..utils.timeutil import utc_now
 from . import settings as settings_svc
@@ -75,6 +76,11 @@ DEFAULT_UPDATES_API_URL = (
     "https://api.github.com/repos/phoen-ix/fileHeron/releases?per_page=30"
 )
 _HTTP_TIMEOUT_SEC = 10
+# The whole list response, streamed and refused past this. GitHub's default
+# page (per_page=30) is well under 1 MiB; a fork may ask per_page=100 with long
+# notes. Without a cap the admin-configurable URL could answer with any size
+# and it was read whole into the worker's memory.
+_RESPONSE_MAX_BYTES = 8 * 1024 * 1024
 _BODY_MAX_BYTES = 8192
 
 # How many CONSECUTIVE SCHEDULED failures make the cron report failure rather
@@ -181,10 +187,9 @@ async def _fetch_releases(url: str):
     # SSRF guard for the admin-configurable updates URL - block loopback /
     # metadata while still allowing a self-hosted/internal release mirror.
     assert_public_http_url(url, allow_private=True, require_https=False)
-    async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT_SEC) as client:
-        r = await client.get(url, headers=headers)
-        r.raise_for_status()
-        return r.json()
+    return await fetch_json_capped(
+        "GET", url, max_bytes=_RESPONSE_MAX_BYTES, http_timeout_sec=_HTTP_TIMEOUT_SEC, headers=headers
+    )
 
 
 _HTTP_STATUS_HINTS = {
@@ -237,6 +242,9 @@ def _describe_upstream_error(e: BaseException) -> str:
         except Exception:  # a stub response with no usable headers
             pass
         return f"upstream HTTP {code}" + (f" - {hint}" if hint else "")
+
+    if isinstance(e, ResponseTooLargeError):
+        return f"upstream response larger than {mib(e.limit)} - check updates.api_url"
 
     if isinstance(e, httpx.TimeoutException):
         return (

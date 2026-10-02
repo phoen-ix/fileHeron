@@ -9,44 +9,22 @@ every login with OIDC_ISSUER_MISMATCH.
 """
 from __future__ import annotations
 
+import httpx
 import pytest
 
 from app.models.user import UserRole
 from app.routers.admin import oidc as oidc_router
+from tests._http_mock import serve
 
 PW = "Pass12345678!"
 
 
-class _Resp:
-    def __init__(self, doc):
-        self._doc = doc
-
-    def raise_for_status(self):
-        return None
-
-    def json(self):
-        return self._doc
-
-
-class _Client:
-    def __init__(self, doc):
-        self._doc = doc
-
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, *exc):
-        return False
-
-    async def get(self, url):
-        return _Resp(self._doc)
-
-
 def _serve_discovery(monkeypatch, doc):
     # No DNS in the test container, and the probe resolves the host before it
-    # connects: stub both the SSRF guard and the HTTP client.
+    # connects: stub the SSRF guard, and answer the real streamed fetch with a
+    # MockTransport.
     monkeypatch.setattr(oidc_router, "assert_public_http_url", lambda *a, **k: None)
-    monkeypatch.setattr(oidc_router.httpx, "AsyncClient", lambda *a, **k: _Client(doc))
+    serve(monkeypatch, lambda _req: httpx.Response(200, json=doc))
 
 
 async def _admin_headers(make_user, login_as):

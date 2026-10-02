@@ -27,6 +27,7 @@ from ...services import oidc as oidc_svc
 from ...services import oidc_admin as oidc_admin_svc
 from ...services.audit import record_audit_event
 from ...utils.crypto import encrypt_setting
+from ...utils.http_fetch import ResponseTooLargeError, fetch_json_capped, mib
 from ...utils.net import assert_public_http_url
 from ...utils.timeutil import utc_now
 
@@ -272,6 +273,12 @@ async def test_discovery_only(
     return await _probe_issuer(issuer)
 
 
+# The login path's own cap (services/oidc.py::_DISCOVERY_MAX_BYTES): a document
+# the probe accepted and sign-in refused would be the green-test-red-login trap
+# the issuer check below exists to close.
+_PROBE_MAX_BYTES = oidc_svc._DISCOVERY_MAX_BYTES
+
+
 async def _probe_issuer(issuer: str) -> TestConnectionResponse:
     if not issuer:
         return TestConnectionResponse(ok=False, error="No issuer URL provided.")
@@ -283,12 +290,15 @@ async def _probe_issuer(issuer: str) -> TestConnectionResponse:
             url, allow_private=True,
             require_https=not settings.OIDC_ALLOW_INSECURE_HTTP,
         )
-        async with httpx.AsyncClient(timeout=5.0) as cli:
-            resp = await cli.get(url)
-            resp.raise_for_status()
-        doc = resp.json()
+        doc = await fetch_json_capped(
+            "GET", url, max_bytes=_PROBE_MAX_BYTES, http_timeout_sec=5.0
+        )
     except AppError as e:
         return TestConnectionResponse(ok=False, error=e.message)
+    except ResponseTooLargeError as e:
+        return TestConnectionResponse(
+            ok=False, error=f"Discovery document is larger than {mib(e.limit)}."
+        )
     except httpx.HTTPStatusError as e:
         return TestConnectionResponse(
             ok=False, error=f"IdP returned HTTP {e.response.status_code}"
@@ -297,6 +307,8 @@ async def _probe_issuer(issuer: str) -> TestConnectionResponse:
         return TestConnectionResponse(ok=False, error=f"Could not reach IdP: {e}")
     except Exception as e:
         return TestConnectionResponse(ok=False, error=f"Bad discovery doc: {e}")
+    if not isinstance(doc, dict):
+        return TestConnectionResponse(ok=False, error="Bad discovery doc: not a JSON object")
 
     # The same check the login path applies (services/oidc.py::_discovery),
     # with the same one-trailing-slash tolerance. This probe used to report

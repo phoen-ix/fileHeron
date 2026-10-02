@@ -3,14 +3,20 @@ the admin /system/status endpoint reads it, and update_available flips
 when the cached `latest_version` differs from the running VERSION."""
 from __future__ import annotations
 
+import json
+from contextlib import asynccontextmanager
+
 import httpx
 import pytest
 
 from app.services import release_check as rc
 from app.services import settings as settings_svc
+from app.utils.http_fetch import ResponseTooLargeError
 
 
 class _StubResponse:
+    headers: dict[str, str] = {}
+
     def __init__(self, payload: dict, status_code: int = 200):
         self._payload = payload
         self.status_code = status_code
@@ -24,16 +30,29 @@ class _StubResponse:
     def json(self):
         return self._payload
 
+    async def aiter_bytes(self):
+        yield json.dumps(self._payload).encode()
 
-class _StubClient:
-    def __init__(self, response: _StubResponse | Exception):
-        self._response = response
+
+class _GetStub:
+    """The fetch streams (utils/http_fetch.py); these stubs answer a `get`, so
+    `stream` hands that answer back as the streamed response."""
 
     async def __aenter__(self):
         return self
 
     async def __aexit__(self, *a):
         return None
+
+    @asynccontextmanager
+    async def stream(self, method, url, **kw):
+        assert method == "GET"
+        yield await self.get(url, **kw)
+
+
+class _StubClient(_GetStub):
+    def __init__(self, response: _StubResponse | Exception):
+        self._response = response
 
     async def get(self, *_a, **_kw):
         if isinstance(self._response, Exception):
@@ -200,13 +219,7 @@ async def test_url_override_is_used(db, monkeypatch):
     GET that URL instead of the default upstream."""
     captured: dict[str, str] = {}
 
-    class _CapturingClient:
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, *a):
-            return None
-
+    class _CapturingClient(_GetStub):
         async def get(self, url, **_kw):
             captured["url"] = url
             return _StubResponse(
@@ -284,13 +297,7 @@ async def test_manual_run_always_fetches(db, monkeypatch):
     mode gate and no 24h guard since, whatever its docstring said."""
     called = {"n": 0}
 
-    class _Stub:
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, *a):
-            return None
-
+    class _Stub(_GetStub):
         async def get(self, *_a, **_kw):
             called["n"] += 1
             return _StubResponse(
@@ -588,6 +595,7 @@ def test_every_upstream_error_message_says_something_after_the_colon():
         httpx.HTTPStatusError("stub", request=None, response=None),  # type: ignore[arg-type]
         ValueError(""),
         RuntimeError("boom"),
+        ResponseTooLargeError(8 * 1024 * 1024),
     ]
     for exc in cases:
         msg = rc._describe_upstream_error(exc)

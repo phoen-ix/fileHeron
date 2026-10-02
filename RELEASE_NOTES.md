@@ -1,3 +1,136 @@
+# file:Heron v2.25.0
+
+**Encryption at rest: stored files can be kept encrypted, so backups, disk
+images and the storage bucket hold no readable file contents.** Off by default.
+Also: admins can unlock a locked-out account, the account page shows a pending
+email change, and the admin Overview lists the latest settings changes. Desktop
+client **1.5.2** ships alongside.
+
+**One migration** (`202610030001`, runs by itself on start). **No default
+moves**: encryption ships off. **tusd moves to 2.10.1**, which the update
+applies by itself wherever it can update infrastructure (below). An empty
+`FORWARDED_ALLOW_IPS=` in `.env` now means "any proxy" (below).
+
+---
+
+## Encryption at rest (off by default)
+
+Turn it on at **Admin › Security & audit › Encryption at rest**. First tick that
+you keep a safe copy of `.env`, then confirm with your password. README
+§Encryption at rest has the details.
+
+- **New uploads** are encrypted right after the virus scan, before anyone is
+  told they are there. Until then they cannot be downloaded, as before.
+- **Files already stored** are encrypted in the background, a few at a time, by
+  the scheduled task `encrypt_existing_files` (every 10 minutes). The
+  unencrypted copy is deleted an hour later. Inbound mail attachments are
+  stored encrypted from the start.
+- **Downloads work as before:** previews, resumed downloads, the desktop client
+  and ZIP archives. A download paused at the moment its file gets encrypted
+  starts once more from the beginning when resumed.
+- **What it protects:** file contents in backups, offsite copies, disk images,
+  a stolen disk and the S3 bucket. **What it does not protect against:** anyone
+  who controls the server, because the key is kept beside the files.
+- **Backups need `.env` to restore encrypted files.** The key comes from this
+  instance's `JWT_SECRET` in `.env`, and backups deliberately do not contain
+  `.env`. Keep a copy of `.env` somewhere safe and apart from the backups.
+  `scripts/restore_validate.py` now decrypts a sample after a restore and says
+  so when the key does not match.
+- **Turning it off** also asks for your password. It stops encrypting new
+  uploads; files already encrypted stay encrypted and keep working.
+- **If a file cannot be encrypted** (for example, too little free space), it is
+  stored unencrypted for now, recorded in the audit log, and tried again later.
+  After three failures it is set aside for a day; **Try them again** on the
+  page retries at once.
+- **Rolling back to an earlier version is refused while encrypted files
+  exist**, because earlier versions cannot read them. Decrypt first with
+  `docker compose exec backend python scripts/decrypt_files_at_rest.py --turn-off --purge-now`.
+- On a **versioned S3 bucket**, the replaced unencrypted objects stay as older
+  versions until a lifecycle rule removes them.
+
+## Admin pages
+
+- **Unlock now:** a user locked out by too many wrong passwords shows
+  **locked until** a time on their admin page, with an **Unlock now** button.
+  The user list shows them as locked.
+- **Recently changed settings** on the Admin overview: the latest settings
+  changes, who made them, and a link to the page each was made on.
+- **Branding & legal** is now two tabs, **Branding** and **Legal pages**.
+  Addresses are unchanged.
+
+## Your account
+
+- **A pending email change** shows on the account page, with **Cancel change**.
+- When an admin cancels someone's email change, the audit log now names the
+  admin, not the user.
+
+## Fixes
+
+- **`FORWARDED_ALLOW_IPS`:** an empty value in `.env` reached the server as
+  "trust no proxy", so behind a reverse proxy every user shared the proxy's
+  address in the sign-in limits. An empty value now means `*`, as it already
+  did in the development setup. A value you have set is unchanged.
+- A long display name without spaces (such as an email address) made every
+  page wider than a phone screen. It is now shortened with "…".
+- While Redis is down, the alerts about failing checks (disk space, scheduled
+  tasks, Redis itself) are no longer sent again on every run.
+- Requests to SSO providers, the update check and webhook targets now refuse
+  an oversized answer instead of reading it whole.
+- **Status & updates** and **Scheduled tasks** load with a fixed, small number
+  of database queries, and a notification to many people sends its live
+  updates over one connection.
+
+## For API clients
+
+- **New routes:**
+  - `GET` and `PUT /api/admin/settings/encryption`. The `PUT` needs the
+    caller's `password` whenever it turns encryption on or off; turning it on
+    also needs `acknowledge_key_custody: true`, or it answers `400
+    ENCRYPTION_ACK_REQUIRED`.
+  - `POST /api/admin/settings/encryption/retry-failed`.
+  - `POST /api/admin/users/{id}/unlock`.
+  - `GET /api/account/email`: the pending email change, or `null`.
+  - `GET /api/admin/audit-log/settings-changes`.
+- **`locked_until`** on the admin user payload, set while a lockout is in force.
+- **`POST /api/admin/system/rollback`** answers `409
+  ROLLBACK_BLOCKED_BY_ENCRYPTION` while encrypted files exist and the target
+  version predates encryption.
+- **New error code `FILE_UNREADABLE`** (500): an encrypted file that cannot be
+  read.
+- **New audit events:** `account_unlocked`, `encryption_at_rest_changed`,
+  `file_encryption_deferred`, `file_encryption_failed`,
+  `file_integrity_failed`.
+
+## Desktop client 1.5.2
+
+- Outlined buttons (Back, Open folder, Cancel, Discard, Settings) showed no
+  text in the light theme. They do now.
+- A translated message for an encrypted file the server cannot read.
+- Updated libraries.
+
+## Also
+
+- **Updated components:** tusd 2.10.1 and Python 3.14.8 in the images, and
+  library updates for the server and the web app (among them Uppy 6 and
+  VueUse 15).
+
+---
+
+## Upgrading
+
+Click **Update**. This is a minor release: automatic updates install it only if
+you set them to minor or any release. Nothing changes until an admin turns
+encryption on.
+
+- **tusd 2.10.1:** the update recreates tusd wherever it can update
+  infrastructure. Where it cannot (a modified or diverged checkout, an override
+  file, `COMPOSE_FILE` set), the update log names the manual step; afterwards
+  run `docker compose up -d --no-deps tusd`.
+- **Before turning encryption on,** make sure a copy of `.env` is kept
+  somewhere other than the backups.
+
+---
+
 # file:Heron v2.24.0
 
 **Secrets: send a password, a key or any short text that can be read a set

@@ -46,9 +46,9 @@ Area detail goes to its doc, not back here.
 
 ## Current state
 
-Backend **`v2.24.0`** is the newest tag and **`client-v1.5.1`** the newest desktop
-client; the reference host runs **v2.23.0**. `main` carries work not yet tagged
-(the *next (untagged)* row of the migration table). What each release changed, the
+Backend **`v2.25.0`** is the newest tag (encryption at rest, off by default) and
+**`client-v1.5.2`** the newest desktop client; the reference host runs
+**v2.23.0**. What each release changed, the
 host's infra and the per-tag migrations, host steps and default moves are in
 [`releases.md`](docs/engineering/releases.md). **Keep this paragraph and that file current on release.**
 

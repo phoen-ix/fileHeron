@@ -1,3 +1,26 @@
+# Desktop client 1.5.2
+
+**Outlined buttons are readable again in the light theme.**
+
+Requires server **v2.6.1 or newer** (unchanged).
+
+---
+
+## Buttons that showed no text
+
+Buttons drawn as an outline - **Back**, **Open folder**, **Cancel** and
+**Discard** on the share page, **Settings** in the top bar, and the remove
+button in **Add files** - showed white text on the light background, so they
+looked like empty boxes. Their text now shows in both themes.
+
+## Also
+
+- A translated message (English and German) when the server cannot read an
+  encrypted file (server v2.25.0 with encryption at rest on).
+- Updated libraries: cryptography 50.0.2, platformdirs 4.12.2.
+
+---
+
 # Desktop client 1.5.1
 
 **A share's public link now shows on its page in the app.**

@@ -74,7 +74,7 @@ describe('RecipientPicker', () => {
 
     const pending = w.find('[data-testid="recipient-pending"]')
     expect(pending.exists()).toBe(true)
-    expect(pending.text()).toContain('isn\'t added yet')
+    expect(pending.text()).toContain("isn't added yet")
     expect(w.emitted('update:pending')?.at(-1)).toEqual([{ text: 'anna', noAccount: false }])
     expect(w.emitted('update:modelValue')).toBeUndefined()
   })
@@ -157,5 +157,12 @@ describe('RecipientPicker', () => {
     vi.advanceTimersByTime(50)
     await flushPromises()
     expect(w.find('[data-testid="external-option"]').exists()).toBe(false)
+  })
+
+  it('labels the field for whom a secret request asks', () => {
+    expect(mountPicker().find('label').text()).toBe(en.recipient.label)
+    expect(mountPicker({ purpose: 'request' }).find('label').text()).toBe(
+      en.recipient.request.label,
+    )
   })
 })

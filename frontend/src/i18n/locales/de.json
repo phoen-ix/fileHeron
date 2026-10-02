@@ -2017,6 +2017,7 @@
       "help_phase4": "Suche Personen nach Name oder E-Mail. Wähle eine Gruppe, um jedes ihrer Mitglieder zu erreichen."
     },
     "request": {
+      "label": "Wen fragen",
       "external_option": "{email} per E-Mail fragen",
       "external_chip_hint": "Antwort-Link",
       "no_account_action": "Leere dieses Feld. Eine Adresse ohne Konto zu fragen erfordert das Recht, außerhalb der Organisation zu senden.",

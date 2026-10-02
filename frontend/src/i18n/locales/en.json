@@ -2017,6 +2017,7 @@
       "help_phase4": "Search for people by name or email. Pick a group to reach each of its members."
     },
     "request": {
+      "label": "Ask whom",
       "external_option": "Ask {email} by email",
       "external_chip_hint": "answer link",
       "no_account_action": "Clear this field. Asking an address without an account needs the right to send outside the organisation.",

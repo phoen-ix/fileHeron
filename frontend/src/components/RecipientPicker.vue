@@ -1,6 +1,6 @@
 <template>
   <div class="recipient-picker">
-    <label class="fh-field-label" :for="inputId">{{ t('recipient.label') }}</label>
+    <label class="fh-field-label" :for="inputId">{{ fieldLabel }}</label>
 
     <div v-if="hasSelection" class="chips-row">
       <span
@@ -358,6 +358,9 @@
   // wording, but an address is ASKED, not sent something.
   const isRequest = computed(() => props.purpose === 'request')
   const isSecret = computed(() => props.purpose === 'secret' || isRequest.value)
+  const fieldLabel = computed(() =>
+    isRequest.value ? t('recipient.request.label') : t('recipient.label'),
+  )
   function externalOptionText(email: string): string {
     if (isRequest.value) return t('recipient.request.external_option', { email })
     return isSecret.value

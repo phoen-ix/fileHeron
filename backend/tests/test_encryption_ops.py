@@ -263,3 +263,29 @@ def test_the_syspath_shim_survives_a_foreign_cwd():
     combined = r.stdout + r.stderr
     assert "Traceback" not in combined, combined
     assert r.returncode == 0 and "--turn-off" in combined
+
+
+# --- erasure ------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_erasure_deletes_a_swapped_files_waiting_copy_at_once(db, make_user):
+    """"Erased" must be true when the receipt says so, not an hour later."""
+    from app.services import erasure
+
+    admin = make_user(email="ops-eraser@test.local", role=UserRole.admin)
+    subject = make_user(email="ops-subject@test.local", role=UserRole.employee)
+    sh = Share(created_by_id=subject.id, kind=ShareKind.outbound, state=ShareState.active)
+    db.add(sh)
+    db.flush()
+    f = File(share_id=sh.id, original_filename="cv.pdf", size_bytes=len(DATA), uploaded_by_id=subject.id,
+             state=FileState.clean, storage_path=store_plain(DATA, name="cv"))
+    db.add(f)
+    db.commit()
+    plain = f.storage_path
+    assert fe.rewrite_stored(db, fe.target_for_file(f), encrypt=True, purge_after=timedelta(hours=1))
+    assert sb.get_storage_backend().exists(plain), "precondition: the plaintext copy waits"
+
+    erasure.erase_user(db, target=subject, actor=admin)
+    assert not sb.get_storage_backend().exists(plain)
+    assert db.query(StoragePurge).count() == 0

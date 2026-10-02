@@ -46,6 +46,7 @@ from ..models.user_totp import UserTOTP
 from ..models.user_webauthn_credential import UserWebAuthnCredential
 from ..utils.timeutil import utc_now
 from . import file as file_svc
+from . import file_encryption
 from .audit import record_audit_event
 
 # The tombstone `erase_user` writes. ONE definition: this was open-coded three
@@ -267,6 +268,9 @@ def _erase_user_locked(
             # the moment we say it (audit 2026-07-30).
             if tus_id:
                 _unlink_tus_partial(tus_id)
+            # Encryption at rest keeps a swapped file's previous bytes for an
+            # hour (a stream may still be reading them). Not the subject's.
+            file_encryption.purge_copies_now(db, str(f_id))
             # Commit each deletion durably. hard_delete unlinks the bytes BEFORE
             # marking the row deleted, so if a LATER file's unlink fails (which
             # aborts the whole erasure), a transaction rollback must not revert -

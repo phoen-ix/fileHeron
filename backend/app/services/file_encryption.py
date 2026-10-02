@@ -408,6 +408,22 @@ def sweep_purges(db: Session, *, limit: int = 200) -> dict[str, int]:
     return {"purged": purged, "failed": failed}
 
 
+def purge_copies_now(db: Session, ref: str) -> int:
+    """Delete every queued copy of one object's bytes NOW: the copies its
+    swaps replaced, and any debris of a write. For erasure, whose "erased"
+    must be true when it says so, not an hour later. Raises OSError on the
+    first copy that cannot be deleted - the caller aborts, as it does for the
+    object's own bytes. Does not commit."""
+    from .storage_backend import get_storage_backend
+
+    backend = get_storage_backend()
+    rows = db.query(StoragePurge).filter(StoragePurge.ref == ref).all()
+    for row in rows:
+        backend.delete(row.locator)
+        db.delete(row)
+    return len(rows)
+
+
 # ---------------------------------------------------------------------------
 # The switch and the admin status
 # ---------------------------------------------------------------------------

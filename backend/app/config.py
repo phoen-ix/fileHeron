@@ -574,10 +574,13 @@ if os.environ.get("PYTEST_CURRENT_TEST") is None:
 
     # AV_SKIP is meant for tests - in production, uploads must be
     # scanned before they're available for download. If both are
-    # set, we crash on boot rather than ship infected files.
-    if settings.AV_SKIP:
-        _fail_or_warn(
-            "AV_SKIP=true in production. Antivirus scanning would be "
+    # set, we crash on boot rather than ship infected files. NOT
+    # `_fail_or_warn`: outside production AV_SKIP is the intended setting
+    # (CI, e2e, the dev stack), and the warning printed "in production" on
+    # every boot of every backend and worker process where there was none.
+    if settings.AV_SKIP and settings.is_production:
+        sys.exit(
+            "FATAL: AV_SKIP=true in production. Antivirus scanning would be "
             "disabled and uploaded files served as `clean` without "
             "inspection. Set AV_SKIP=false."
         )

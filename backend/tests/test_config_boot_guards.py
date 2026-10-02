@@ -96,3 +96,19 @@ def test_the_same_problem_only_warns_in_development():
     assert r.returncode == 0, r.stderr
     assert "BOOTED" in r.stdout
     assert "placeholder" in r.stderr, "the developer got no warning at all"
+
+
+def test_av_skip_is_fatal_in_production():
+    r = _boot(ENVIRONMENT="production", AV_SKIP="true")
+    assert r.returncode != 0
+    assert "AV_SKIP=true in production" in r.stderr
+
+
+def test_av_skip_is_silent_outside_production():
+    """It is the intended setting for CI, e2e and the dev stack. As a warning
+    it printed "AV_SKIP=true in production" from every process of every
+    development boot."""
+    r = _boot(ENVIRONMENT="development", AV_SKIP="true")
+    assert r.returncode == 0, r.stderr
+    assert "BOOTED" in r.stdout
+    assert "AV_SKIP" not in r.stderr, r.stderr

@@ -25,7 +25,11 @@ governs, never under the release that found it.
 
 ## Current state
 
-Backend **`v2.23.2`** is the newest tag (2026-09-29): every step-up password
+Backend **`v2.24.0`** is the newest tag (2026-10-02): secrets - a password or
+short text readable a set number of times or until a date, then shredded - and
+requesting one (§Secrets); off by default, two migrations. Desktop client
+**`client-v1.5.0`** ships beside it with a Secrets tab. **`v2.23.2`**
+(2026-09-29): every step-up password
 prompt is `StepUpDialog`, a popup (§Step-up re-auth). **`v2.23.1`** (same day):
 every email's From was
 RFC 5322 group syntax and none had a Date or Message-ID (§Email); nightly
@@ -48,8 +52,8 @@ app), uvicorn's drain is bounded to 5s, and the updater-shim stops on SIGTERM.
 **`v2.19.0`** (same day) is the release whose
 updater backs up DB+Redis and syncs infra, and the one that moved MariaDB 11 ->
 12.3, Redis 7 -> 8.10 and ClamAV 1.5.4 through it. Desktop client
-**`client-v1.4.6`** (shipped beside v2.18.0; refresh classification + hashed
-build lock) is still current - nothing since v2.18.0 changes `client/`.
+**`client-v1.5.0`** (shipped beside v2.24.0; the Secrets tab, which needs a
+v2.24.0 server - everything else still works from v2.6.1) is current.
 **`v2.17.0` is a tag with NO images** (its release run failed the dependency
 audit on three anyio CVEs; tags are immutable, so the same commits shipped as
 v2.17.1 plus the anyio bump). **v2.17.1 shipped a sidebar showing nothing but
@@ -61,7 +65,7 @@ warnings, pre-update backup taken); v2.23.1's `backup.sh` is already live there
 from the working tree. Its infra has been on `mariadb:12.3.3` /
 `redis:8.10.2` / `clamav:1.5.4` since the v2.19.0 update (API down ~70 s). The
 default moves of v2.16.0 and v2.19.0 are live there; v2.17.x, v2.18.0 and
-v2.19.1 through v2.23.1 move no default.
+v2.19.1 through v2.24.0 move no default.
 `data/updater/rollback_target.json` holds the version BEFORE last, not the
 running one. Images and working tree can diverge without any deploy - see §Ops
 on which half of a fix is live.
@@ -123,7 +127,7 @@ record.
 | v2.23.0 | `202609280003` `shares.expires_in_sec` + `pending_added_notice` + `upload_batch_done` | - | - (behaviour: the recipient mail - and the link mail to addresses without an account - now waits for the virus scan, not just the upload; a preset expiry counts from ready; `expire_files` never expires a share with a live upload. New optional `expires_in_sec` on `POST /api/shares`, on the share, list and public payloads; `expires_at` is null while it is set) |
 | v2.23.1 | - | optional: `chmod 700 backups backups/20*/ && chmod 600 backups/20*/*` tightens backups taken before (new ones are owner-only; `backup.sh` reaches a host with its checkout, which the updater fast-forwards where it can) | - (behaviour: every mail's From is quoted, and it carries Date, Message-ID, Auto-Submitted and X-Auto-Response-Suppress; the `ops_alert` subject carries its reason) |
 | v2.23.2 | - | - | - (SPA only: the eight step-up password fields are one popup; no API change) |
-| v2.24.0 (unreleased) | `202610010001` five tables: `secrets`, `secret_recipients`, `secret_group_members`, `secret_user_states`, `secret_access_events`; `202610020001` secret requests: `secret_requests`, `secret_request_targets`, `secret_request_group_members`, and on `secrets` a NULLable `created_by_id` plus `request_id`, `is_answer`, `answered_by_email`, `req_*`, `has_request_passphrase` | - | - (secrets ship OFF: `secrets.enabled`. New `/api/secrets*`, `/api/secret-requests*`, `/api/public/secrets/{peek,reveal}`, `/api/public/secret-requests/{peek,answer}`, six `secrets:*` token scopes (`secrets:request` asks), `/me` gains `secrets_enabled`, `can_send_secrets`, `can_send_secrets_external`, `secret_limits`; config import now also burns every active secret. `PUBLIC_LINK_BASE_PATH` is no longer read from the environment - the SPA only ever served `/d`, so a different value had only produced dead links) |
+| v2.24.0 | `202610010001` five tables: `secrets`, `secret_recipients`, `secret_group_members`, `secret_user_states`, `secret_access_events`; `202610020001` secret requests: `secret_requests`, `secret_request_targets`, `secret_request_group_members`, and on `secrets` a NULLable `created_by_id` plus `request_id`, `is_answer`, `answered_by_email`, `req_*`, `has_request_passphrase` | - | - (secrets ship OFF: `secrets.enabled`. New `/api/secrets*`, `/api/secret-requests*`, `/api/public/secrets/{peek,reveal}`, `/api/public/secret-requests/{peek,answer}`, six `secrets:*` token scopes (`secrets:request` asks), `/me` gains `secrets_enabled`, `can_send_secrets`, `can_send_secrets_external`, `secret_limits`; config import now also burns every active secret. `PUBLIC_LINK_BASE_PATH` is no longer read from the environment - the SPA only ever served `/d`, so a different value had only produced dead links) |
 
 **Ten endpoints require the caller's own `password` in the body**: the v2.9.0
 re-auth gates `/api/admin/backup/export`, `/api/admin/backup/import` (form

@@ -1,3 +1,144 @@
+# file:Heron v2.24.0
+
+**Secrets: send a password, a key or any short text that can be read a set
+number of times or until a date, and is then destroyed - and ask someone to
+send you one.** Off by default. Desktop client **1.5.0** ships alongside, with
+a Secrets tab.
+
+**Two migrations** (`202610010001` and `202610020001`, run by themselves on
+start). **No default moves**: secrets ship off. **No host step.** One
+environment variable is no longer read, `PUBLIC_LINK_BASE_PATH` (below).
+
+---
+
+## Secrets (off by default)
+
+Turn them on at **Admin › Sharing & files › Secrets › Policy**. A **Secrets**
+link then appears in the header. README §Secrets has the details.
+
+- **Sending:** the text (up to 10,000 characters, or **Generate a password**),
+  an optional label, and the recipients - people and groups as for a share.
+  If the policy allows it, also an email address without an account (each
+  address is mailed its own link) or a link you pass on yourself.
+- **Limits:** a number of views, an expiry, or both; whichever comes first
+  ends the secret. Views can count per person or for everyone together, and
+  with a group among the recipients also per recipient.
+- **Passphrase (optional):** it is part of the encryption, so nobody can open
+  the secret without it - not even the server's operator - and a lost one
+  cannot be recovered.
+- **The text is never in an email.** Recipients are told a secret is waiting
+  and open it in file:Heron. Only the **Reveal** button uses a view: opening
+  the page or a link costs nothing, so mail scanners that follow links cannot
+  use it up. A wrong passphrase never uses a view.
+- **Wrong passphrases:** they are slowed down. A link is locked for a while
+  only when the wrong guesses come from several addresses, so one person
+  guessing cannot lock out the real recipient. You can choose instead that too
+  many wrong passphrases destroy the secret for that recipient.
+- **When a secret ends** - views used, expired, or burned - its encrypted text,
+  key and links are deleted from the database at once.
+- **The sender** sees who viewed it and when, can **Burn now**, copy their links
+  again, and replace or remove the link. Neither the sender nor an admin can
+  read the text.
+
+**Admin settings:**
+- the on/off switch - turning it off stops new secrets, and those already sent
+  stay readable until they end;
+- who may send secrets (default everyone; a client reaches only the employees
+  they are connected to);
+- who may send them outside the organisation, to an address or as a link
+  (default employees and admins, never a client);
+- what wrong passphrases do (slow down and lock, or destroy after a number);
+- the limits: most views (100), latest expiry (90 days), longest life
+  (90 days, also for a secret with only a view limit).
+
+The **Secrets** tab next to **Policy** lists every secret's details, with
+**Burn now**, but never its text or links. An ended secret's record (label,
+recipients, views) is kept 90 days, then removed; the period is under **Data
+retention & storage**.
+
+## Requesting a secret
+
+Instead of sending, you can ask someone for a password: **Request a secret** on
+the Secrets page.
+
+- **The request:** say what you need (and an optional note), whom you ask
+  (people, groups, addresses without an account, or a link), how long the
+  request stays open, and how the answer may be read.
+- **Answering:** the person asked types the secret into file:Heron, with a
+  passphrase of their own if they like. Someone asked through an address or
+  a link needs no account.
+- **The first answer closes the request**, and every other link to it stops
+  working. The answer arrives as a secret only you can open, and you are told
+  in the app and by email.
+- **Your passphrase (optional):** the answer is encrypted to it. Nobody, the
+  server included, can open the answer without it, and nobody has to pass a
+  passphrase to you.
+- **Afterwards:** you can cancel an open request, copy its links again, and
+  discard the answer unread. An unanswered request expires at its time and you
+  are told.
+
+Who may ask follows the same rules as who may send. Admins see every request
+under **Secrets › Requests** and can cancel it.
+
+## Desktop client 1.5.0
+
+The desktop client gains a **Secrets** tab with received and sent secrets and
+requests. It can send and request a secret, reveal one and answer a request.
+
+- A revealed secret is masked until **Show**; **Copy** works while it is
+  masked.
+- The text is removed from the window when you leave the page.
+- The tab appears only when the server runs this release with secrets
+  switched on. Everything else still works with server v2.6.1 or newer.
+
+## `PUBLIC_LINK_BASE_PATH` is no longer read
+
+The public-link path is now fixed at `/d`, like the new `/s` (secrets) and
+`/r` (requests).
+
+- The web app only ever served `/d`, so a different value in `.env` produced
+  links that led nowhere. An instance that had set it gets working links
+  again.
+- The variable is gone from `.env.example`; a leftover line in your `.env` is
+  ignored and can be deleted.
+
+## For API clients
+
+- **New routes:**
+  - `/api/secrets`, `/api/secret-requests`;
+  - for link and address holders, `POST /api/public/secrets/peek` and
+    `/reveal`, and `POST /api/public/secret-requests/peek` and `/answer`.
+    The token always travels in the request body.
+- **Six new token scopes:**
+  - `secrets:send` (also used to answer a request);
+  - `secrets:read` (details, never the text) and `secrets:reveal` (the text);
+  - `secrets:manage`, `secrets:links` and `secrets:request`.
+
+  Existing tokens limited to chosen scopes do not get them.
+- **`/api/account/me`** has `secrets_enabled`, `can_send_secrets`,
+  `can_send_secrets_external` and `secret_limits`.
+- **A wrong passphrase answers `403`** with `SECRET_PASSPHRASE_INVALID` (or
+  `SECRET_REQUEST_PASSPHRASE_INVALID` for the requester's own passphrase),
+  never `401`.
+- **New webhook events:** `secret_created`, `secret_viewed`, `secret_burned`,
+  `secret_request_created`, `secret_request_answered`. Like the audit log,
+  they carry no text, token or address.
+- **New notification types:** `secret_received`, `secret_viewed`,
+  `secret_ended`, `secret_requested`, `secret_request_update`.
+- **Configuration backup:** importing one now also burns every active secret
+  and cancels open requests, beside invalidating active shares. Secrets are
+  never exported.
+
+---
+
+## Upgrading
+
+Click **Update**. This is a minor release: automatic updates install it only if
+you set them to minor or any release. Nothing changes until an admin turns
+secrets on.
+
+---
+
 # file:Heron v2.23.2
 
 **Confirming your password now happens in a popup**, the way the Update button

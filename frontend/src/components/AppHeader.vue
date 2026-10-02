@@ -93,7 +93,7 @@
             @click="menuOpen = !menuOpen"
           >
             <span class="initials">{{ initials }}</span>
-            <span class="dn">{{ auth.user?.display_name }}</span>
+            <span class="dn" :title="auth.user?.display_name">{{ auth.user?.display_name }}</span>
             <span class="chev" aria-hidden="true">⌄</span>
           </button>
           <div v-if="menuOpen" class="user-pop" role="menu">
@@ -234,6 +234,10 @@
     display: flex;
     align-items: center;
     gap: var(--fh-space-4);
+    /* Lets a long display name shrink instead of widening the page: one with
+       no spaces (an email address, say) pushed every page 50px sideways on a
+       phone. */
+    min-width: 0;
   }
 
   @media (max-width: 720px) {
@@ -255,6 +259,7 @@
 
   .user-menu {
     position: relative;
+    min-width: 0;
   }
 
   .user-trigger {
@@ -269,6 +274,8 @@
     font: inherit;
     color: var(--fh-ink);
     transition: border-color var(--fh-duration-fast) var(--fh-easing);
+    max-width: 100%;
+    min-width: 0;
   }
 
   .user-trigger:hover {
@@ -290,6 +297,15 @@
 
   .dn {
     font-size: var(--fh-text-body-sm);
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .initials,
+  .chev {
+    flex-shrink: 0;
   }
 
   .chev {

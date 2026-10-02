@@ -1,3 +1,32 @@
+# file:Heron v2.25.1
+
+**A documentation release: the README's architecture overview is up to date
+again. Nothing changes in the running server.**
+
+**No migration, no default moves, no host step.** The desktop client stays at
+**1.5.2**.
+
+---
+
+## Changes
+
+- **README, Architecture:** the diagram and notes now show MariaDB 12.3 and
+  Redis 8.10, tusd's hooks into the backend, the in-app updater, encryption at
+  rest, the virus scan's ~2 GiB limit and the desktop client. The tech stack
+  names the encryption library.
+- A test of the admin policy pages no longer removes HTML comments with a
+  regular expression (a code-scanning finding). The product is unaffected.
+
+---
+
+## Upgrading
+
+Click **Update** - or leave it for the next release, since the server it
+installs behaves exactly like v2.25.0. Automatic updates install it at any
+scope, patch included.
+
+---
+
 # file:Heron v2.25.0
 
 **Encryption at rest: stored files can be kept encrypted, so backups, disk

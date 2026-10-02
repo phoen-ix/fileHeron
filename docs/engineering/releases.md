@@ -7,7 +7,8 @@ summary and points here. Read this before changing the code listed below.
 
 ## Current state
 
-Backend **`v2.25.0`** is the newest tag (2026-10-02): encryption at rest - every
+Backend **`v2.25.1`** is the newest tag (2026-10-02): a documentation release - the README's
+Architecture section brought up to date; no runtime change. **`v2.25.0`** (same day): encryption at rest - every
 stored file kept as ciphertext under a per-file key (`docs/engineering/storage-and-encryption.md`),
 off by default, one migration - plus unlock-now, the pending email change on the
 account page and the Overview's recent settings changes; tusd 2.10.1 rides the
@@ -54,7 +55,7 @@ warnings, pre-update backup taken); v2.23.1's `backup.sh` is already live there
 from the working tree. Its infra has been on `mariadb:12.3.3` /
 `redis:8.10.2` / `clamav:1.5.4` since the v2.19.0 update (API down ~70 s). The
 default moves of v2.16.0 and v2.19.0 are live there; v2.17.x, v2.18.0 and
-v2.19.1 through v2.25.0 move no default.
+v2.19.1 through v2.25.1 move no default.
 `data/updater/rollback_target.json` holds the version BEFORE last, not the
 running one. Images and working tree can diverge without any deploy - see `docs/engineering/deploy-and-backups.md` §Ops
 on which half of a fix is live.
@@ -98,6 +99,7 @@ record.
 | v2.23.2 | - | - | - (SPA only: the eight step-up password fields are one popup; no API change) |
 | v2.24.0 | `202610010001` five tables: `secrets`, `secret_recipients`, `secret_group_members`, `secret_user_states`, `secret_access_events`; `202610020001` secret requests: `secret_requests`, `secret_request_targets`, `secret_request_group_members`, and on `secrets` a NULLable `created_by_id` plus `request_id`, `is_answer`, `answered_by_email`, `req_*`, `has_request_passphrase` | - | - (secrets ship OFF: `secrets.enabled`. New `/api/secrets*`, `/api/secret-requests*`, `/api/public/secrets/{peek,reveal}`, `/api/public/secret-requests/{peek,answer}`, six `secrets:*` token scopes (`secrets:request` asks), `/me` gains `secrets_enabled`, `can_send_secrets`, `can_send_secrets_external`, `secret_limits`; config import now also burns every active secret. `PUBLIC_LINK_BASE_PATH` is no longer read from the environment - the SPA only ever served `/d`, so a different value had only produced dead links) |
 | v2.25.0 | `202610030001` encryption at rest: `files.enc_version` + `key_encrypted` + `release_verdict` (+ `ix_files_enc_state`), `inbound_attachments.enc_version` + `key_encrypted`, table `storage_purge_queue`; `downgrade()` REFUSES while any row is encrypted | - when the updater can sync infra (tusd v2.9.2 -> v2.10.1); where it SKIPS, `docker compose up -d --no-deps tusd` after the fast-forward the log names | - (encryption ships OFF: `storage.encrypt_at_rest`. New `GET/PUT /api/admin/settings/encryption` (PUT step-up gated BOTH ways), `POST .../retry-failed`, `POST /api/admin/users/{id}/unlock`, `GET /api/account/email`, `GET /api/admin/audit-log/settings-changes`; Rollback answers `409 ROLLBACK_BLOCKED_BY_ENCRYPTION` while encrypted files exist and the target predates the migration. Behaviour: an empty `FORWARDED_ALLOW_IPS=` now reaches uvicorn as `*`, not "" - it had trusted no proxy) |
+| v2.25.1 | - | - | - (docs and one test only: README Architecture; images rebuilt with no runtime change) |
 
 Per-release admin-facing notes for v2.13.0 and newer are in `RELEASE_NOTES.md`,
 one `# file:Heron vX.Y.Z` section each, newest first; older releases live in

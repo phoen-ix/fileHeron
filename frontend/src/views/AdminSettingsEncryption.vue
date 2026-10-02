@@ -166,20 +166,21 @@
           <dt>{{ t('admin_encryption.last_run_label') }}</dt>
           <dd data-testid="encryption-last-run">
             <template v-if="status.last_run">
-              <span class="fh-mono">{{
+              <span class="fh-mono run-when">{{
                 formatInSiteTime(status.last_run.finished_at, locale)
               }}</span>
-              -
-              {{
-                t('admin_encryption.last_run_summary', {
-                  encrypted: status.last_run.encrypted,
-                  remaining: status.last_run.remaining,
-                })
-              }}
-              <template v-if="status.last_run.failed > 0">
-                · {{ t('admin_encryption.last_run_failed', { n: status.last_run.failed }) }}
-              </template>
-              <span v-if="stoppedLabel" class="fh-field-help stopped">({{ stoppedLabel }})</span>
+              <span class="run-summary">
+                {{
+                  t('admin_encryption.last_run_summary', {
+                    encrypted: status.last_run.encrypted,
+                    remaining: status.last_run.remaining,
+                  })
+                }}
+                <template v-if="status.last_run.failed > 0">
+                  · {{ t('admin_encryption.last_run_failed', { n: status.last_run.failed }) }}
+                </template>
+                <span v-if="stoppedLabel" class="fh-field-help stopped">({{ stoppedLabel }})</span>
+              </span>
             </template>
             <template v-else>{{ t('admin_encryption.last_run_never') }}</template>
           </dd>
@@ -338,6 +339,11 @@
 
   .kv dd {
     margin: 0;
+  }
+
+  .run-when,
+  .run-summary {
+    display: block;
   }
 
   .stopped {

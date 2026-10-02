@@ -39,7 +39,8 @@ proxies external HTTPS to those local ports.
    `Path('/api/uploads/direct')` router (see below).
 5. **Don't let clients spoof their IP via `X-Forwarded-For` (audit H5).**
    The backend trusts the left-most `X-Forwarded-For` value (uvicorn
-   `--proxy-headers --forwarded-allow-ips=*`) for the per-IP login
+   `--proxy-headers --forwarded-allow-ips="${FORWARDED_ALLOW_IPS:-*}"`, so
+   `*` unless `.env` says otherwise) for the per-IP login
    rate-limit + account-lockout, the `login_attempts` / `audit_log` IPs,
    `known_devices`, and `TUS_HOOK_ALLOWED_IPS`. Traefik MUST set that header
    to the real client IP and MUST NOT trust an incoming, client-supplied one:

@@ -112,9 +112,47 @@ def test_the_backend_cmd_execs_so_uvicorn_becomes_pid_1():
         "backend CMD must start with `exec`, or /bin/sh stays PID 1 and uvicorn "
         "never receives SIGTERM"
     )
-    assert "$FORWARDED_ALLOW_IPS" in body, (
+    assert "${FORWARDED_ALLOW_IPS:-" in body, (
         "the forwarded-allow-ips flag must stay variable-driven"
     )
+
+
+def test_forwarded_allow_ips_has_one_name_and_one_default():
+    """Which peer uvicorn trusts for X-Forwarded-For decides the address every
+    rate limit, audit row and scan-guard counter keys on. It is set in four
+    places - the image ENV, the image CMD's fallback, the dev compose's
+    fallback and the value `.env.example` ships (install.sh copies it) - and
+    they drifted: an EMPTY value in .env reached the production CMD as "" (trust
+    nobody) while dev read it as `*`. Every fallback must be `:-` (empty counts
+    as unset) and all four must agree. No other compose file may set the flag
+    or the variable, or one stack would quietly differ from the rest."""
+    dockerfile = (ROOT / "docker" / "backend" / "Dockerfile").read_text(encoding="utf-8")
+    dev = (ROOT / "docker-compose.dev.yml").read_text(encoding="utf-8")
+    env_example = (ROOT / ".env.example").read_text(encoding="utf-8")
+
+    env_m = re.search(r'^ENV FORWARDED_ALLOW_IPS="([^"]*)"$', dockerfile, re.M)
+    cmd_m = re.search(r'--forwarded-allow-ips="\$\{FORWARDED_ALLOW_IPS:-([^}]*)\}"', dockerfile)
+    dev_m = re.search(r'--forwarded-allow-ips=\$\{FORWARDED_ALLOW_IPS:-([^}]*)\}', dev)
+    example_m = re.search(r"^FORWARDED_ALLOW_IPS=(.*)$", env_example, re.M)
+    found = {
+        "Dockerfile ENV": env_m,
+        "Dockerfile CMD `:-` fallback": cmd_m,
+        "docker-compose.dev.yml `:-` fallback": dev_m,
+        ".env.example value": example_m,
+    }
+    missing = [where for where, m in found.items() if m is None]
+    assert not missing, f"FORWARDED_ALLOW_IPS not found in the expected form in: {missing}"
+    values = {where: m.group(1).strip() for where, m in found.items() if m}
+    assert len(set(values.values())) == 1, f"FORWARDED_ALLOW_IPS defaults disagree: {values}"
+
+    others = sorted(p.name for p in ROOT.glob("docker-compose*.yml") if p.name != "docker-compose.dev.yml")
+    assert "docker-compose.yml" in others, others
+    for name in others:
+        text = (ROOT / name).read_text(encoding="utf-8")
+        assert "forwarded-allow-ips" not in text and "FORWARDED_ALLOW_IPS" not in text, (
+            f"{name} sets the forwarded-allow-ips flag or variable; it must come "
+            "from .env through the image CMD like everywhere else"
+        )
 
 
 def test_uvicorn_bounds_its_drain_under_every_stop_grace(executor, compose):

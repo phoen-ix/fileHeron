@@ -89,7 +89,12 @@ ENTRYPOINT ["/entrypoint.sh"]
 # baked into the CMD, so an operator following the documented hardening advice
 # to pin it to their proxy's address changed nothing at all - the setting they
 # were told to set had no reader (audit 2026-07-30). Shell form so the variable
-# expands; entrypoint.sh still execs this as the CMD.
+# expands; entrypoint.sh still execs this as the CMD. `${...:-*}`, not `$...`:
+# compose's env_file overrides the ENV below, so a `FORWARDED_ALLOW_IPS=` left
+# empty in .env reached uvicorn as "" - trust no proxy, every user behind the
+# edge collapsing into the proxy's address for the login limiter - while the dev
+# compose already read empty as `*`. One name, one default, pinned by
+# tests/infra/test_images_and_compose.py.
 #
 # The leading `exec` is load-bearing. Docker wraps a shell-form CMD as
 # ["/bin/sh","-c", ...], and without it the shell STAYS as PID 1 with uvicorn as
@@ -115,5 +120,5 @@ ENTRYPOINT ["/entrypoint.sh"]
 # APP_STOP_TIMEOUT_SEC; tests/infra/test_images_and_compose.py pins both.
 ENV FORWARDED_ALLOW_IPS="*"
 CMD exec uvicorn app.main:app --host 0.0.0.0 --port 8000 \
-    --proxy-headers --forwarded-allow-ips="$FORWARDED_ALLOW_IPS" \
+    --proxy-headers --forwarded-allow-ips="${FORWARDED_ALLOW_IPS:-*}" \
     --timeout-graceful-shutdown 5

@@ -38,7 +38,10 @@ from app.workers import ops_check as ops
 def quiet_deps(monkeypatch):
     """Silence the three checks that already alert, so a dispatch in a test can
     only have come from the cron check."""
-    monkeypatch.setattr(ops, "_check_av", lambda _db: None)
+    async def _av_ok(_db):
+        return None
+
+    monkeypatch.setattr(ops, "_check_av", _av_ok)
     monkeypatch.setattr(ops, "_check_redis", lambda: None)
     monkeypatch.setattr(ops, "_check_smtp", lambda _db: None)
     monkeypatch.setattr(ops, "_dedup_seen", lambda _reason: False)

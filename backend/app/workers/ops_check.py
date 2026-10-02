@@ -19,6 +19,7 @@ can show "ops_check last ran 23 minutes ago".
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import timedelta
 
@@ -86,16 +87,37 @@ def _alert_admins(db, *, reason: str, detail: str) -> int:
     return n
 
 
-def _check_av(db) -> str | None:
-    """Return None if AV is healthy, an error string otherwise."""
+# One failed ping is not an outage. clamd stops answering for several seconds
+# while it activates a freshly downloaded signature database - freshclam does
+# that once a day, at a time anchored to when the clamav container started -
+# and the hourly check landed in that window on 2026-10-01 and -02, mailing
+# every admin "av_unhealthy" about a daemon that never went down. A real outage
+# outlasts the retries; a reload does not. Worst case 3 x the 5 s ping timeout
+# plus 2 x 10 s, well inside the job's timeout.
+_AV_PING_ATTEMPTS = 3
+_AV_PING_RETRY_DELAY_SEC = 10.0
+
+
+async def _check_av(db) -> str | None:
+    """Return None if AV is healthy, an error string otherwise. The ping runs in
+    a thread (it is blocking socket I/O) and the waits are asyncio sleeps, so a
+    real outage does not freeze the worker's event loop for half a minute."""
     try:
         from ..config import settings
         if getattr(settings, "AV_SKIP", False):
             return None
         from ..services import av_scan
-        if av_scan.ping():
-            return None
-        return "ClamAV ping returned false"
+        for attempt in range(_AV_PING_ATTEMPTS):
+            if attempt:
+                await asyncio.sleep(_AV_PING_RETRY_DELAY_SEC)
+            if await asyncio.to_thread(av_scan.ping):
+                if attempt:
+                    logger.info("ops_check: ClamAV answered on attempt %d", attempt + 1)
+                return None
+        return (
+            f"ClamAV ping returned false {_AV_PING_ATTEMPTS} times over "
+            f"{int(_AV_PING_RETRY_DELAY_SEC * (_AV_PING_ATTEMPTS - 1))} s"
+        )
     except Exception as e:
         return f"ClamAV check raised: {e}"
 
@@ -167,7 +189,7 @@ async def ops_check(_ctx) -> dict:
     dispatched = 0
     summary = {"av": "ok", "redis": "ok", "smtp": "ok", "crons": "ok"}
     try:
-        av_err = _check_av(db)
+        av_err = await _check_av(db)
         if av_err:
             summary["av"] = av_err
             dispatched += _alert_admins(db, reason="av_unhealthy", detail=av_err)

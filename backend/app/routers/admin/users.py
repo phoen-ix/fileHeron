@@ -39,6 +39,15 @@ def _has_2fa(db: Session, user_id: int) -> bool:
     return totp is not None and totp.enabled_at is not None
 
 
+def _locked_until(u: User):
+    """`locked_until` only while it is in force - a lapsed lockout leaves the
+    column set until the next login attempt, and the page must not call that
+    account locked."""
+    from ...services import rate_limit as rate_limit_svc
+
+    return u.locked_until if rate_limit_svc.is_account_locked(u) else None
+
+
 def _to_user_item(db: Session, u: User) -> AdminUserItem:
     """Single-user serialization (detail / invite responses). The list
     endpoint uses `_hydrate_user_items` for bulk efficiency."""
@@ -58,6 +67,7 @@ def _to_user_item(db: Session, u: User) -> AdminUserItem:
         last_login_at=u.last_login_at,
         has_2fa=_has_2fa(db, u.id),
         email_verified=u.email_verified,
+        locked_until=_locked_until(u),
     )
 
 
@@ -91,6 +101,7 @@ def _hydrate_user_items(db: Session, rows: list[User]) -> list[AdminUserItem]:
             last_login_at=u.last_login_at,
             has_2fa=totp_enabled.get(u.id, False),
             email_verified=u.email_verified,
+            locked_until=_locked_until(u),
         )
         for u in rows
     ]
@@ -192,6 +203,21 @@ def force_password_reset(
         plaintext_token=plaintext,
         expires_at=utc_now() + timedelta(hours=1),
     )
+
+
+@router.post("/users/{user_id}/unlock", response_model=AdminUserItem)
+def unlock_user(
+    user_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin),
+) -> AdminUserItem:
+    """Lift a login lockout now. No password re-entry, like force-reset: it
+    grants nothing the user's own next successful login would not."""
+    target = um_svc.get_or_404(db, user_id)
+    um_svc.unlock_account(db, actor=admin, target=target, request=request)
+    db.commit()
+    return _to_user_item(db, target)
 
 
 @router.post("/users/{user_id}/email", response_model=AdminChangeEmailResponse)

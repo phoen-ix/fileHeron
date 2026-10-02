@@ -232,6 +232,7 @@ when 2FA on), `/login/recovery`, `/webauthn/begin`+`/complete`, OIDC
 
 - **Session cap** `MAX_ACTIVE_SESSIONS_PER_USER` (default 10) - oldest evicted per login. Cleanup cron soft-revokes expired, hard-deletes past `REFRESH_TOKEN_RETENTION_DAYS` (30).
 - **Lockout:** 5 consecutive `INVALID_CREDENTIALS` → `locked_until = now+15min` + lockout email (6h dedup); success resets.
+- **An admin can lift a lockout now:** `POST /api/admin/users/{id}/unlock` (`user_management.unlock_account`, audited `account_unlocked`, no step-up - it grants nothing the user's next login would not). It clears `failed_login_count` + `locked_until` and deliberately leaves `lockout_email_sent_at` (the mail dedup, which no reset clears). `AdminUserItem.locked_until` is set only while the lock is in force - a lapsed one stays in the column until the next attempt.
 - **Per-IP rate limit:** 10 / 15min Redis sliding window → 429 `RATE_LIMITED`, fail-open. The same `check_ip_allowed(...)` gates register/forgot/verify/reset/change-password.
 - **Forensics:** every attempt → `login_attempts`; new device → `known_devices` (UA-hash + IP /24 geohash) → `services/login_alert.py::fire_new_device_alert` on first sighting, carrying the real client IP + browser version + raw user-agent.
 

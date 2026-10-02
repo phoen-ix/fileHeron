@@ -446,6 +446,11 @@ export function forcePasswordReset(id: number) {
   return api.post<ForcePasswordResetResponse>(`/admin/users/${id}/force-password-reset`)
 }
 
+/** Lift a login lockout now instead of after its window; returns the user. */
+export function unlockUser(id: number) {
+  return api.post<AdminUserItem>(`/admin/users/${id}/unlock`)
+}
+
 export function changeUserEmail(id: number, payload: AdminChangeEmailRequest) {
   return api.post<AdminChangeEmailResponse>(`/admin/users/${id}/email`, payload)
 }

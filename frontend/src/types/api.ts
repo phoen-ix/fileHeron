@@ -593,6 +593,9 @@ export interface AdminUserItem {
   has_2fa: boolean
   /** v1.13.0: drives the "verification pending" pill on the detail page. */
   email_verified: boolean
+  /** Set only while a login lockout is in force: the "Locked until" pill and
+   * the Unlock now button. */
+  locked_until: string | null
 }
 
 export interface AdminUserListResponse {

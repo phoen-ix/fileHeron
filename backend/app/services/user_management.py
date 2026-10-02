@@ -201,6 +201,36 @@ def update_user(
     return target
 
 
+def unlock_account(db: Session, *, actor: User, target: User, request=None) -> bool:
+    """Lift a login lockout now, instead of after its 15 minutes.
+
+    Nothing could clear `users.locked_until` short of a successful login or a
+    password reset, and a locked account cannot log in - so an admin whose user
+    was locked out (a stale password manager, a colleague's typos) could only
+    tell them to wait. Clears the failure count with it, as a served lockout
+    does. Leaves `lockout_email_sent_at` alone: that is the 6-hour dedup on the
+    lockout MAIL, not lock state, and neither existing reset clears it either.
+    Returns False (and writes nothing) when the account was not locked."""
+    from . import rate_limit as rate_limit_svc
+
+    if not rate_limit_svc.is_account_locked(target):
+        return False
+    failures = target.failed_login_count or 0
+    target.failed_login_count = 0
+    target.locked_until = None
+    record_audit_event(
+        db,
+        event_type=AuditEventType.account_unlocked,
+        actor_user_id=actor.id,
+        target_type="user",
+        target_id=str(target.id),
+        metadata={"failed_login_count": failures},
+        request=request,
+    )
+    db.flush()
+    return True
+
+
 def force_password_reset(
     db: Session, *, actor: User, target: User, request=None
 ) -> str:

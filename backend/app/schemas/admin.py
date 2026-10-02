@@ -32,6 +32,9 @@ class AdminUserItem(APIBaseModel):
     has_2fa: bool
     # Drives the "verification pending" pill on the admin user-detail page.
     email_verified: bool = True
+    # Set only while a login lockout is in force (users.locked_until in the
+    # future): drives the "Locked until" pill and the Unlock now button.
+    locked_until: datetime | None = None
 
 
 class AdminUserListResponse(APIBaseModel):

@@ -264,6 +264,7 @@ def test_toggle_groups_expose_their_selected_state():
     for rel in (
         "views/Account.vue",
         "views/RegisterFromInvite.vue",
+        "views/AdminSettingsLegal.vue",
         "components/ExpiryPicker.vue",
     ):
         src = (FRONTEND / rel).read_text()

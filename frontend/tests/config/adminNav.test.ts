@@ -106,7 +106,7 @@ describe('ADMIN_NAV taxonomy', () => {
 describe('tabs', () => {
   const tabbed = allItems().filter((i) => i.tabs)
 
-  it('exist on the merged policy/state pairs', () => {
+  it('exist on the merged policy/state pairs and on pages split in two', () => {
     expect(tabbed.map((i) => i.routeName).sort()).toEqual(
       [
         'admin-api-tokens',
@@ -115,6 +115,7 @@ describe('tabs', () => {
         'admin-quarantine',
         'admin-secrets',
         'admin-sessions',
+        'admin-settings-branding',
         'admin-settings-sign-in',
       ].sort(),
     )

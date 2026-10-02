@@ -474,7 +474,9 @@
       "passwords": "Passwords & brute force",
       "email_change": "Email change",
       "secrets": "Secrets",
-      "requests": "Requests"
+      "requests": "Requests",
+      "branding": "Branding",
+      "legal": "Legal pages"
     },
     "tabs_label": "Page tabs"
   },
@@ -1511,7 +1513,7 @@
     }
   },
   "admin_branding": {
-    "intro": "Upload a logo, choose where it appears, and maintain your imprint and privacy pages.",
+    "intro": "Upload a logo, choose where it appears, and set the application name.",
     "logo": {
       "title": "Logo",
       "help": "PNG, JPEG or WebP, up to 2 MB. It shows next to the app name on the surfaces you enable below.",
@@ -2736,6 +2738,7 @@
     "admin_settings_imap": "Inbound mail (IMAP)",
     "admin_settings_general": "General",
     "admin_settings_branding": "Branding & legal",
+    "admin_settings_legal": "Legal pages",
     "admin_settings_twofa": "2FA enforcement",
     "admin_settings_quarantine": "Quarantine · Alerts & scanner",
     "admin_settings_email_change": "Sign-in policies · Email change",

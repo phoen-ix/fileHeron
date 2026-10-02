@@ -474,7 +474,9 @@
       "passwords": "Passwörter & Brute-Force",
       "email_change": "E-Mail-Änderung",
       "secrets": "Geheimnisse",
-      "requests": "Anfragen"
+      "requests": "Anfragen",
+      "branding": "Branding",
+      "legal": "Rechtliche Seiten"
     },
     "tabs_label": "Seiten-Tabs"
   },
@@ -1511,7 +1513,7 @@
     }
   },
   "admin_branding": {
-    "intro": "Lade ein Logo hoch, lege fest, wo es erscheint, und pflege Impressum und Datenschutzerklärung.",
+    "intro": "Lade ein Logo hoch, lege fest, wo es erscheint, und setze den Anwendungsnamen.",
     "logo": {
       "title": "Logo",
       "help": "PNG, JPEG oder WebP, bis 2 MB. Es erscheint neben dem App-Namen auf den unten aktivierten Flächen.",
@@ -2736,6 +2738,7 @@
     "admin_settings_imap": "Eingehende E-Mail (IMAP)",
     "admin_settings_general": "Allgemein",
     "admin_settings_branding": "Branding & Rechtliches",
+    "admin_settings_legal": "Rechtliche Seiten",
     "admin_settings_twofa": "2FA-Pflicht",
     "admin_settings_quarantine": "Quarantäne · Alarme & Scanner",
     "admin_settings_email_change": "Anmelderichtlinien · E-Mail-Änderung",

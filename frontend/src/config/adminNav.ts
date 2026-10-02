@@ -11,7 +11,9 @@
  * until "System" held 14 of 32 links. Two rules keep it from regrowing:
  *  - a policy and the state it produces are TABS on one item, never two
  *    siblings a word apart (Quarantine / Quarantine alerts, API tokens /
- *    Token policy, Error log / Error alerts, Scan guard / Blocked sources);
+ *    Token policy, Error log / Error alerts, Scan guard / Blocked sources) -
+ *    and so are the two halves of a page that outgrew one form (Branding |
+ *    Legal pages: one menu item, two Saves that shared nothing);
  *  - a new page goes into the category of its task, and no category holds
  *    more than seven items. */
 
@@ -249,7 +251,11 @@ export const ADMIN_NAV: AdminNavCategory[] = [
       {
         routeName: 'admin-settings-branding',
         labelKey: 'admin.nav.branding',
-        matchNames: ['admin-settings-branding'],
+        matchNames: ['admin-settings-branding', 'admin-settings-legal'],
+        tabs: [
+          { routeName: 'admin-settings-branding', labelKey: 'admin.nav_tab.branding' },
+          { routeName: 'admin-settings-legal', labelKey: 'admin.nav_tab.legal' },
+        ],
       },
     ],
   },

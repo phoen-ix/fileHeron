@@ -568,7 +568,7 @@ always pass.
 | Email templates | `/admin/settings/email-templates` | Per-(template, language) subject/body overrides in a **ProseMirror HTML** editor; placeholders, live preview, test-send, reset-to-default. Auth-link templates can't drop their required link. |
 | Share approval | `/admin/settings/share-approval` | The four-eyes workflow (who approves, which shares, content review, self-approval). |
 | Email-change policy | `/admin/settings/email-change` (the *Email change* tab of **Sign-in policies**) | Whether users may change their own sign-in email and the verification mode (`immediate` / `verify_new` / `verify_both`) + what happens to an OIDC binding on change. |
-| Branding & legal | `/admin/settings/branding` | Logo (magic-byte-validated; per-surface toggles), optional logo link, and the imprint/privacy pages (per-language ProseMirror, nh3-sanitised). |
+| Branding & legal | `/admin/settings/branding` · `/admin/settings/legal` | Two tabs. Branding: logo (magic-byte-validated; per-surface toggles), optional logo link, application name. Legal pages: the imprint/privacy pages (per-language ProseMirror, nh3-sanitised). |
 | Site | `/admin/settings/general` | Site URL (overrides `APP_URL` for links) + IANA timezone (drives 24-h timestamps). A section of **General**, not its own route. |
 | Quarantine alerts / Home / MOTD | the Quarantine page's *Alerts & scanner* tab (`/admin/settings/quarantine`), and sections of `/admin/settings/general` | Single-knob toggles. Home page and MOTD are sections of **General**. |
 | Sign-in policies | `/admin/settings/sign-in` | Account lockout, per-address sign-in/registration limits, the HIBP breach check; *Email change* is its second tab. |

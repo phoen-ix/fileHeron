@@ -485,10 +485,33 @@ const router = createRouter({
           meta: { density: 'operator', titleKey: 'admin_settings_general', requiresRole: 'admin' },
         },
         {
+          // Two halves that shared one form and nothing else: the branding page
+          // keeps its URL, the legal pages get their own.
           path: 'settings/branding',
-          name: 'admin-settings-branding',
-          component: () => import('@/views/AdminSettingsBranding.vue'),
+          component: () => import('@/views/AdminTabShell.vue'),
           meta: { density: 'operator', titleKey: 'admin_settings_branding', requiresRole: 'admin' },
+          children: [
+            {
+              path: '',
+              name: 'admin-settings-branding',
+              component: () => import('@/views/AdminSettingsBranding.vue'),
+              meta: {
+                density: 'operator',
+                titleKey: 'admin_settings_branding',
+                requiresRole: 'admin',
+              },
+            },
+            {
+              path: '/admin/settings/legal',
+              name: 'admin-settings-legal',
+              component: () => import('@/views/AdminSettingsLegal.vue'),
+              meta: {
+                density: 'operator',
+                titleKey: 'admin_settings_legal',
+                requiresRole: 'admin',
+              },
+            },
+          ],
         },
         {
           // Legacy bookmark: the dedicated home-page view was folded

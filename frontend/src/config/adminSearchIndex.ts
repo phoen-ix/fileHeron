@@ -55,13 +55,13 @@ export const ADMIN_SEARCH_INDEX: readonly AdminSearchEntry[] = [
   { routeName: 'admin-settings-general', hash: '#motd', labelKey: 'admin_motd.toggle_label', keywords: ['motd', 'banner', 'login page notice'] },
   { routeName: 'admin-settings-general', hash: '#motd', labelKey: 'admin_motd.text_label', keywords: ['motd', 'banner text', 'notice text', 'hinweistext'] },
 
-  // --- Branding & legal (admin-settings-branding)
+  // --- Branding & legal (admin-settings-branding, admin-settings-legal)
   { routeName: 'admin-settings-branding', labelKey: 'admin_branding.logo.title', keywords: ['login page logo', 'brand image', 'upload logo', 'bild', 'png', 'company logo'] },
   { routeName: 'admin-settings-branding', labelKey: 'admin_branding.surfaces.title', keywords: ['where logo appears', 'logo on header', 'logo in emails', 'logo login page', 'desktop client logo'] },
   { routeName: 'admin-settings-branding', labelKey: 'admin_branding.link.label', keywords: ['logo url', 'logo href', 'click logo', 'logo target', 'homepage link'] },
-  { routeName: 'admin-settings-branding', labelKey: 'admin_branding.legal.title', keywords: ['imprint', 'privacy policy', 'impressum', 'datenschutz', 'footer', 'legal notice', 'rechtliches'] },
-  { routeName: 'admin-settings-branding', labelKey: 'admin_branding.legal.imprint_enable', keywords: ['impressum', 'legal notice', 'imprint page'] },
-  { routeName: 'admin-settings-branding', labelKey: 'admin_branding.legal.privacy_enable', keywords: ['datenschutz', 'datenschutzerklärung', 'gdpr', 'dsgvo', 'privacy policy'] },
+  { routeName: 'admin-settings-legal', labelKey: 'admin_branding.legal.title', keywords: ['imprint', 'privacy policy', 'impressum', 'datenschutz', 'footer', 'legal notice', 'rechtliches'] },
+  { routeName: 'admin-settings-legal', labelKey: 'admin_branding.legal.imprint_enable', keywords: ['impressum', 'legal notice', 'imprint page'] },
+  { routeName: 'admin-settings-legal', labelKey: 'admin_branding.legal.privacy_enable', keywords: ['datenschutz', 'datenschutzerklärung', 'gdpr', 'dsgvo', 'privacy policy'] },
 
   // --- SSO providers (admin-settings-sso) - the fields live on the new/edit
   // form; the list is the parameterless route an admin picks a provider from

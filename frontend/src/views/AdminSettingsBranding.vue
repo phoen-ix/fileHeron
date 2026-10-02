@@ -5,22 +5,16 @@
   import {
     deleteBrandingLogo,
     getBrandingSettings,
-    getLegalSettings,
     updateBrandingSettings,
-    updateLegalSettings,
     uploadBrandingLogo,
     type BrandingSettingsResponse,
-    type LegalSettingsResponse,
   } from '@/api/admin'
-  import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
   import TunableFields from '@/components/admin/TunableFields.vue'
-  import RichTextEditor from '@/components/RichTextEditor.vue'
   import { useApiError } from '@/composables/useApiError'
-  import { SUPPORTED_LOCALES, type SupportedLocale } from '@/i18n'
   import { useSiteStore } from '@/stores/site'
   import { useUiStore } from '@/stores/ui'
 
-  const { t, te } = useI18n()
+  const { t } = useI18n()
   const { describe } = useApiError()
   const ui = useUiStore()
   const site = useSiteStore()
@@ -32,18 +26,8 @@
   const errorMsg = ref<string | null>(null)
 
   const branding = ref<BrandingSettingsResponse | null>(null)
-  const legal = ref<LegalSettingsResponse | null>(null)
-
-  // Which language the legal editor currently shows (one at a time, via tabs).
-  const activeLegalLocale = ref<SupportedLocale>('en')
-
-  function legalLangLabel(code: SupportedLocale): string {
-    const k = `admin_branding.legal.lang_${code}`
-    return te(k) ? t(k) : code.toUpperCase()
-  }
 
   const savingBranding = ref(false)
-  const savingLegal = ref(false)
   const uploading = ref(false)
   const cacheBust = ref(0)
 
@@ -57,12 +41,7 @@
     loading.value = true
     errorMsg.value = null
     try {
-      const [{ data: b }, { data: l }] = await Promise.all([
-        getBrandingSettings(),
-        getLegalSettings(),
-      ])
-      branding.value = b
-      legal.value = l
+      branding.value = (await getBrandingSettings()).data
     } catch (err) {
       errorMsg.value = describe(err)
     } finally {
@@ -137,27 +116,11 @@
     }
   }
 
-  async function saveLegal() {
-    if (!legal.value) return
-    savingLegal.value = true
-    try {
-      const { data } = await updateLegalSettings(legal.value)
-      legal.value = data
-      await site.loadConfig()
-      ui.pushToast(t('common.saved'), 'success')
-    } catch (err) {
-      ui.pushToast(describe(err), 'error')
-    } finally {
-      savingLegal.value = false
-    }
-  }
-
   onMounted(load)
 </script>
 
 <template>
   <div class="branding-page" data-density="operator">
-    <AdminPageHeader />
     <p class="fh-field-help intro">{{ t('admin_branding.intro') }}</p>
 
     <div v-if="loading" class="loading">{{ t('common.loading') }}</div>
@@ -252,63 +215,6 @@
         <h2 class="settings-h2">{{ t('admin_branding.name_title') }}</h2>
         <TunableFields route="admin-settings-branding" :headings="false" />
       </section>
-
-      <hr class="fh-rule" />
-
-      <!-- Legal ----------------------------------------------------------- -->
-      <section class="settings-section">
-        <h2 class="settings-h2">{{ t('admin_branding.legal.title') }}</h2>
-        <p class="fh-field-help">{{ t('admin_branding.legal.help') }}</p>
-
-        <!-- Language tab: show one language at a time so the editor doesn't cramp
-             as more languages are added (scales by SUPPORTED_LOCALES). -->
-        <div
-          class="locale-tabs"
-          role="tablist"
-          :aria-label="t('admin_branding.legal.language_tab_group')"
-        >
-          <button
-            v-for="loc in SUPPORTED_LOCALES"
-            :key="loc"
-            type="button"
-            role="tab"
-            class="locale-tab"
-            :class="{ active: loc === activeLegalLocale }"
-            :aria-selected="loc === activeLegalLocale"
-            @click="activeLegalLocale = loc"
-          >
-            {{ legalLangLabel(loc) }}
-          </button>
-        </div>
-
-        <template v-for="kind in ['imprint', 'privacy'] as const" :key="kind">
-          <div class="legal-doc">
-            <label class="toggle-row">
-              <input v-model="legal![kind].enabled" type="checkbox" />
-              <span class="toggle-name">{{ t(`admin_branding.legal.${kind}_enable`) }}</span>
-            </label>
-            <!-- Every locale's editor stays mounted (v-show, not v-if) so a fast
-                 tab switch never drops the last debounced keystroke. -->
-            <div
-              v-for="loc in SUPPORTED_LOCALES"
-              v-show="loc === activeLegalLocale"
-              :key="loc"
-              class="legal-lang"
-            >
-              <RichTextEditor
-                v-model="legal![kind][loc]"
-                :aria-label="t(`admin_branding.legal.${kind}_enable`) + ' ' + loc.toUpperCase()"
-              />
-            </div>
-          </div>
-        </template>
-
-        <div class="actions">
-          <button type="button" class="fh-btn" :disabled="savingLegal" @click="saveLegal">
-            {{ savingLegal ? t('common.loading') : t('common.save') }}
-          </button>
-        </div>
-      </section>
     </template>
   </div>
 </template>
@@ -382,39 +288,10 @@
     flex-direction: column;
     gap: var(--fh-space-2);
   }
-  .check,
-  .toggle-row {
+  .check {
     display: flex;
     align-items: center;
     gap: var(--fh-space-2);
-  }
-  .legal-doc {
-    margin: var(--fh-space-3) 0 var(--fh-space-4);
-  }
-  .locale-tabs {
-    display: flex;
-    gap: var(--fh-space-1);
-    margin: var(--fh-space-2) 0 var(--fh-space-3);
-    border-bottom: 1px solid var(--fh-hairline);
-  }
-  .locale-tab {
-    padding: 0.4rem 0.9rem;
-    border: none;
-    border-bottom: 2px solid transparent;
-    background: none;
-    color: var(--fh-ink-soft);
-    font-family: var(--fh-font-body);
-    cursor: pointer;
-  }
-  .locale-tab.active {
-    color: var(--fh-ink);
-    border-bottom-color: var(--fh-accent);
-  }
-  .legal-lang {
-    display: flex;
-    flex-direction: column;
-    gap: var(--fh-space-1);
-    margin-top: var(--fh-space-2);
   }
   .actions {
     margin-top: var(--fh-space-3);

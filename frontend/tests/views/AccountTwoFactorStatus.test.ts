@@ -13,7 +13,7 @@ const getStatus = vi.fn()
 vi.mock('@/api/twoFactor', () => ({ getStatus: () => getStatus() }))
 vi.mock('@/api/account', () => ({ listSessions: vi.fn(async () => ({ data: { items: [] } })) }))
 vi.mock('@/composables/useScrollSpy', () => ({
-  useScrollSpy: () => ({ active: ref(null), lockTo: vi.fn() }),
+  useScrollSpy: () => ({ active: ref(''), lockTo: vi.fn() }),
 }))
 
 import Account from '@/views/Account.vue'

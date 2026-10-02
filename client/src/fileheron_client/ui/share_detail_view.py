@@ -171,13 +171,21 @@ class ShareDetailView(ctk.CTkFrame):
         # populated by _load_public_link via background fetch).
         self._build_public_link_section(outer)
 
-        ctk.CTkLabel(outer, text=t("share_detail.files_heading"), anchor="w").pack(fill="x")
+        # Actions row - packed FIRST and at the bottom. pack() hands out space
+        # in packing order, so a row packed last is the first thing squeezed
+        # off a short window: with the public-link section showing, it fell
+        # below the edge of the default 1000x640. (The new-share form pins its
+        # action row the same way.)
+        btns = ctk.CTkFrame(outer, fg_color="transparent")
+        btns.pack(side="bottom", fill="x")
+
+        # Kept on self: the public-link section is packed only once its fetch
+        # returns, and pack() appends, so it is placed `before=` this heading
+        # rather than landing under the file list.
+        self._files_heading = ctk.CTkLabel(outer, text=t("share_detail.files_heading"), anchor="w")
+        self._files_heading.pack(fill="x")
         self.file_scroll = ctk.CTkScrollableFrame(outer, fg_color="transparent")
         self.file_scroll.pack(fill="both", expand=True, pady=(2, 8))
-
-        # Actions row.
-        btns = ctk.CTkFrame(outer, fg_color="transparent")
-        btns.pack(fill="x")
 
         # v0.10.0: owner-only "Add files" - upload more files into this active
         # share (the upload endpoints are owner-only; admins can't, so this is
@@ -288,9 +296,10 @@ class ShareDetailView(ctk.CTkFrame):
         if revoked:
             bits.append(t("share_detail.pl_revoked"))
         self._pl_info_var.set("  ·  ".join(bits))
-        # Reveal the section now that we have content.
-        self._pl_section_label.pack(fill="x", pady=(8, 0))
-        self._pl_section.pack(fill="x", pady=(0, 8))
+        # Reveal the section now that we have content - above the files, not
+        # appended after the action buttons.
+        self._pl_section_label.pack(fill="x", pady=(8, 0), before=self._files_heading)
+        self._pl_section.pack(fill="x", pady=(0, 8), before=self._files_heading)
 
     def _copy_pl_url(self) -> None:
         # Copy + flash "✓ Copied"; warns on the rare clipboard-lock failure.

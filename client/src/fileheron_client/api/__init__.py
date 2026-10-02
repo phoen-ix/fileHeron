@@ -24,6 +24,7 @@ from .secrets import (
 from .shares import (
     create_share,
     expire_share_now,
+    get_public_link,
     get_share,
     list_shares,
     patch_share_download_limit,
@@ -48,6 +49,7 @@ __all__ = [
     "get_share",
     "create_share",
     "expire_share_now",
+    "get_public_link",
     "patch_share_expiry",
     "patch_share_download_limit",
     "register_files_added",

@@ -52,8 +52,10 @@ app), uvicorn's drain is bounded to 5s, and the updater-shim stops on SIGTERM.
 **`v2.19.0`** (same day) is the release whose
 updater backs up DB+Redis and syncs infra, and the one that moved MariaDB 11 ->
 12.3, Redis 7 -> 8.10 and ClamAV 1.5.4 through it. Desktop client
-**`client-v1.5.0`** (shipped beside v2.24.0; the Secrets tab, which needs a
-v2.24.0 server - everything else still works from v2.6.1) is current.
+**`client-v1.5.1`** (2026-10-02, a client-only patch: the share page shows its
+public link, which it never did since v0.5.3) is current; **`client-v1.5.0`**
+shipped beside v2.24.0 with the Secrets tab, which needs a v2.24.0 server -
+everything else still works from v2.6.1.
 **`v2.17.0` is a tag with NO images** (its release run failed the dependency
 audit on three anyio CVEs; tags are immutable, so the same commits shipped as
 v2.17.1 plus the anyio bump). **v2.17.1 shipped a sidebar showing nothing but
@@ -936,6 +938,8 @@ Out of scope v1: OIDC, WebAuthn, admin shell, SSE. Direct ≤100 MB; TUS above
 - **The Secrets tab is added only when `/me` says `secrets_enabled`** - an older server's `/me` lacks the field, so the default hides the tab rather than offering routes the server lacks. Pinned by `test_the_tab_exists_only_when_secrets_are_on`.
 - **A revealed secret lives only in `ui/secret_widgets.py::RevealCard`**: masked by the constant `MASK` (never the text's length), dropped by `clear()` on Back and on destroy, and no secrets module logs or prints at all. The card stays mounted after the last view (`SecretDetailView._revealed_here`, the web's `revealedHere` rule). All pinned in `tests/test_secrets_ui_structure.py`, which also runs the Tk-thread scan over EVERY `ui/` module.
 - **The secret forms' rules live in `secret_rules.py` (no Tk)**: blockers, presets, addresses, the generator - so the Linux leg tests what the views decide. Send is disabled exactly while the visible blockers list is non-empty (the ShareCreate rule).
+- **Every `api_pkg.<name>` must be exported by `api/__init__.py`.** `from .. import api as api_pkg` binds the package and the attribute is looked up only at CALL time, inside a worker whose failure handler may swallow it: `api_pkg.get_public_link` was never exported, so the share page's public-link section never rendered from v0.5.3 to v1.5.0. Pinned over every module by `tests/test_api_exports.py`.
+- **A widget packed after a fetch lands at the END of its parent's pack order, and the row packed last is the first squeezed off a short window.** Pack late widgets `before=` their neighbour (the public-link section, `before=self._files_heading`) and pin an action row `side="bottom"` FIRST (the share page and the new-share form both do); both pinned in `tests/test_api_exports.py`.
 - **Builds:** tag `client-v*` → `.github/workflows/client-release.yml` runs tests + PyInstaller, then RUNS the built `.exe` with `--selfcheck` (bounded 120s + kill, so a hang is a build failure) and publishes it with the hand-written `client/RELEASE_NOTES.md`. The version/notes guards run FIRST, before install and build. Tests are AST/structural on Linux; the **Windows leg imports every `ui/` module** (that runner has real Tk), the closest CI gets to launching the app.
 - **Lint:** `client/pyproject.toml` carries a ruff config matching the backend's select list, gated in CI - its first run found a call whose import was missing, a `NameError` on every single-file download that the structural tests could not see.
 

@@ -46,9 +46,9 @@ Area detail goes to its doc, not back here.
 
 ## Current state
 
-Backend **`v2.25.1`** is the newest tag (docs only; v2.25.0 brought encryption at rest, off by default) and
+Backend **`v2.25.1`** is the newest tag (v2.25.0 brought encryption at rest, off by default) and
 **`client-v1.5.2`** the newest desktop client; the reference host runs
-**v2.23.0**. What each release changed, the
+**v2.24.0**. What each release changed, the
 host's infra and the per-tag migrations, host steps and default moves are in
 [`releases.md`](docs/engineering/releases.md). **Keep this paragraph and that file current on release.**
 

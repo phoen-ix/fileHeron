@@ -1,14 +1,28 @@
 # file:Heron v2.25.1
 
-**A documentation release: the README's architecture overview is up to date
-again. Nothing changes in the running server.**
+**No more false "ClamAV unhealthy" alerts when the virus signatures update.**
+Also: the README's architecture overview is up to date again.
 
 **No migration, no default moves, no host step.** The desktop client stays at
 **1.5.2**.
 
 ---
 
-## Changes
+## A false antivirus alert
+
+Admins could receive an **operations alert** "av_unhealthy - ClamAV ping
+returned false" although the virus scanner was working.
+
+- **Why:** once a day ClamAV downloads new signatures and switches over to
+  them, and for several seconds during the switch it does not answer. The
+  hourly health check asked exactly then on two days in a row, got no answer
+  within its 5 seconds, and alerted at once.
+- **Now:** a check that gets no answer tries again twice, 10 seconds apart, and
+  alerts only when ClamAV still does not answer. A real outage is still
+  reported in the same hourly run; the signature switch-over no longer is.
+- Uploads were never affected: a scan that meets the switch-over retries.
+
+## Documentation
 
 - **README, Architecture:** the diagram and notes now show MariaDB 12.3 and
   Redis 8.10, tusd's hooks into the backend, the in-app updater, encryption at
@@ -21,9 +35,7 @@ again. Nothing changes in the running server.**
 
 ## Upgrading
 
-Click **Update** - or leave it for the next release, since the server it
-installs behaves exactly like v2.25.0. Automatic updates install it at any
-scope, patch included.
+Click **Update**. Automatic updates install it at any scope, patch included.
 
 ---
 

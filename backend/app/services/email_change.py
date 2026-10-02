@@ -380,11 +380,15 @@ def cancel_email_change(
     *,
     token: str | None = None,
     user: User | None = None,
+    actor: User | None = None,
     request: Request | None = None,
 ) -> int:
     """Invalidate pending change(s). ``token`` = old-email "it wasn't me"
     kill switch; ``user`` = self/admin revoke of every live pending change.
-    Returns the count cancelled. Caller commits."""
+    ``actor`` is who did it when that is not ``user`` (an admin): the audit row
+    named the TARGET as the actor of an admin's cancel, so the log said the
+    user withdrew a change they may never have seen. Returns the count
+    cancelled. Caller commits."""
     base = db.query(EmailChangeToken).filter(
         EmailChangeToken.used_at.is_(None),
         EmailChangeToken.cancelled_at.is_(None),
@@ -457,13 +461,14 @@ def cancel_email_change(
         count = updated_rows(result)
         if count:
             db.flush()
+            by_admin = actor is not None and actor.id != user.id
             record_audit_event(
                 db,
                 event_type=AuditEventType.email_change_cancelled,
-                actor_user_id=user.id,
+                actor_user_id=(actor or user).id,
                 target_type="user",
                 target_id=str(user.id),
-                metadata={"via": "user_revoke", "count": count},
+                metadata={"via": "admin_revoke" if by_admin else "user_revoke", "count": count},
                 request=request,
             )
         return count

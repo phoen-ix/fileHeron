@@ -242,7 +242,7 @@ def cancel_user_email_change(
     user_id: int,
     request: Request,
     db: Session = Depends(get_db),
-    _admin: User = Depends(get_current_admin),
+    admin: User = Depends(get_current_admin),
 ) -> dict:
     """Withdraw a user's pending email change(s).
 
@@ -251,7 +251,7 @@ def cancel_user_email_change(
     started a change to a mistyped address could only wait 24h for the token to
     expire (audit 2026-07-30, flow-emailchange-8)."""
     target = um_svc.get_or_404(db, user_id)
-    count = email_change_svc.cancel_email_change(db, user=target, request=request)
+    count = email_change_svc.cancel_email_change(db, user=target, actor=admin, request=request)
     db.commit()
     return {"ok": True, "cancelled": count}
 

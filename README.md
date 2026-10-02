@@ -399,6 +399,23 @@ encrypted text, its key and its links are deleted from the database at once. The
 record (label, recipients, view log) is kept for 90 days (*Data retention &
 storage*, `0` keeps it), then pruned.
 
+**Requesting a secret** (`/secrets/requests/new`, or *Request a secret* on the
+Secrets page). Instead of sending, you ask someone for a password: say what you
+need (and an optional note - both are shown to whoever may answer, so never put a
+secret there), whom you ask (people, groups, addresses without an account - each
+mailed its own answer link - and/or a link you pass on yourself, under the same
+rules as sending), how long the request stays open, and how the answer may be
+read (views and/or how long after it arrives). The person asked types the secret
+on the request page (or on the `/r#...` page behind a link, without an account),
+optionally with a passphrase of their own. **The first answer closes the
+request**: every other link stops working, and the answer arrives as a secret that
+only you can open (you are told in-app and by mail). If you set a **passphrase**
+when asking, the answer is encrypted to it: nobody, the server included, can open
+it without that passphrase, and nobody has to pass a passphrase to you. Requests
+are under **Secrets → Requests** (*Asked by me* / *Asked of me*); you can cancel an
+open one, copy its links again, and discard the answer unread. An unanswered
+request expires at its time and you are told.
+
 <details>
 <summary>How a secret is protected</summary>
 
@@ -407,7 +424,8 @@ storage*, `0` keeps it), then pruned.
 - **Counting.** A view is claimed by one conditional `UPDATE ... WHERE views_used < limit` while the secret's row is locked, so two people revealing the last view at once cannot both get it.
 - **Tokens.** A link token is 43 random characters; the server stores its SHA-256 for lookup and an encrypted copy so the sender can copy the link again (showing it again is audited). The page posts the token in a request body, never in a URL, and the mail log masks it (`/s#<redacted>`, no resend).
 - **Ending is final.** Burned, expired and used-up secrets cannot be recovered from the database. A configuration import burns every active secret, and erasing a user deletes the secrets they sent.
-- **API.** `/api/secrets` with five token scopes: `secrets:send`, `secrets:read` (metadata, never the text), `secrets:reveal` (the text), `secrets:manage` (burn; create, replace or remove the link) and `secrets:links` (read the links back). Link and address holders use `POST /api/public/secrets/peek` (free) and `/reveal`. The desktop client has no secrets view yet.
+- **Requests.** An answer to a request is an ordinary secret whose only reader is the requester - the same encryption, counting and shredding. The requester's passphrase is turned into a key pair when asking and only the **public** key is kept; the answer is sealed to it inside the instance layer, so opening it needs the passphrase again. The first answer is claimed by one conditional `UPDATE` while the request row is locked, so two answers cannot both land. Answer links ride `/r#<token>` like secret links.
+- **API.** `/api/secrets` with six token scopes: `secrets:send` (also: answering a request), `secrets:read` (metadata, never the text), `secrets:reveal` (the text), `secrets:manage` (burn; create, replace or remove the link), `secrets:links` (read the links back) and `secrets:request` (ask for a secret: `/api/secret-requests`). Link and address holders use `POST /api/public/secrets/peek` (free) and `/reveal`, and `POST /api/public/secret-requests/peek` (free) and `/answer`. The desktop client has no secrets view yet.
 
 </details>
 
@@ -541,7 +559,7 @@ always pass.
 |---|---|---|
 | API token policy | `/admin/settings/api-tokens` | Who may mint API tokens (+ allowlist). Cross-user inventory at `/admin/api-tokens` (disable/revoke, generate-for-user, per-token scopes). |
 | Public-link policy | `/admin/settings/public-links` | Who may mint public links. |
-| Secrets | `/admin/settings/secrets` (the *Policy* tab of **Secrets**; the *Secrets* tab at `/admin/secrets` lists every secret's metadata, with **Burn now**) | The on/off switch (off by default; turning it off stops new secrets, those already sent stay readable until they end), who may send secrets (default everyone; a client reaches only connected employees), who may send them outside the organisation - to an address or as a link (default employees and admins; never a client), what wrong passphrases do (slow down and lock, or destroy after N), and the limits: most views (100), latest expiry (90 days), longest life (90 days, also ending secrets that have only a view limit; `0` = none) and the passphrase throttle. Admins never see a secret's text or its links. |
+| Secrets | `/admin/settings/secrets` (the *Policy* tab of **Secrets**; the *Secrets* tab at `/admin/secrets` lists every secret's metadata, with **Burn now**, and the *Requests* tab at `/admin/secret-requests` every secret request, with **Cancel**) | The on/off switch (off by default; turning it off stops new secrets, those already sent stay readable until they end), who may send secrets (default everyone; a client reaches only connected employees), who may send them outside the organisation - to an address or as a link (default employees and admins; never a client), what wrong passphrases do (slow down and lock, or destroy after N), and the limits: most views (100), latest expiry (90 days), longest life (90 days, also ending secrets that have only a view limit; `0` = none) and the passphrase throttle - the same rules decide who may ask for a secret, and whom. Admins never see a secret's text or its links. |
 | 2FA enforcement | `/admin/settings/twofa` | Which roles/groups must enrol TOTP (computed live; **no admin escape**). |
 | SSO providers | `/admin/settings/sso` | Multi-provider OIDC CRUD (entra/google/authentik/keycloak/custom presets, smart-prefill, test-discovery). DELETE refused while users are bound. |
 | SMTP / email | `/admin/settings/email` | Live SMTP override (DB beats env), HELO host, test-send with the error class/code surfaced. Password Fernet-encrypted, never echoed. |
@@ -577,7 +595,7 @@ thresholds on `/admin/settings/anomaly`, dispatching an `ops_alert`.
 - **Sessions / invites:** `refresh_token_rotated`, `refresh_token_reused`, `refresh_token_evicted`, `refresh_token_admin_revoked`, `invite_created`, `invite_consumed`, `invite_revoked`, `invite_purged`.
 - **Shares / files:** `share_created`, `share_revoked`, `share_expired`, `share_expiry_updated`, `share_limit_updated`, `share_files_added`, `share_failed`, `share_submitted_for_approval`, `share_approved`, `share_rejected`, `share_resubmitted`, `file_finalized`, `file_downloaded`, `file_deleted`, `file_expired`, `file_upload_abandoned`, `file_quarantined`, `file_quarantine_released`, `file_quarantine_purged`, `av_reload_triggered`.
 - **Public links / groups:** `public_link_created`, `public_link_revoked`, `public_link_consumed`, `group_created`, `group_updated`, `group_deleted`, `group_member_added`, `group_member_removed`.
-- **Secrets:** `secret_created`, `secret_viewed`, `secret_burned` (every view used), `secret_expired`, `secret_revoked` (burned early by the sender, an admin or a config import), `secret_recipient_burned` (too many wrong passphrases), `secret_link_shown`, `secret_link_replaced`, `secret_link_removed`, `secret_policy_changed`. Metadata only - never the text, a token or an address. `secret_created`, `secret_viewed` and `secret_burned` are also webhook events.
+- **Secrets:** `secret_created`, `secret_viewed`, `secret_burned` (every view used), `secret_expired`, `secret_revoked` (burned early by the sender, an admin or a config import), `secret_recipient_burned` (too many wrong passphrases), `secret_link_shown`, `secret_link_replaced`, `secret_link_removed`, `secret_policy_changed`, and for requests `secret_request_created`, `secret_request_answered`, `secret_request_cancelled`, `secret_request_expired`, `secret_request_link_shown`. Metadata only - never the text, a token or an address. `secret_created`, `secret_viewed`, `secret_burned`, `secret_request_created` and `secret_request_answered` are also webhook events.
 - **API tokens / OIDC:** `api_token_created` / `_revoked` / `_disabled` / `_reactivated` / `_admin_revoked` / `_admin_created`, `oidc_linked`, `oidc_unlinked`, `oidc_provider_created` / `_updated` / `_deleted`.
 - **Email / messaging:** `email_resent`, `email_undeliverable`, `email_template_changed`, `email_template_reset`, `smtp_config_changed`, `imap_config_changed`.
 - **Settings / policy:** `api_policy_changed`, `public_link_policy_changed`, `twofa_policy_changed`, `quarantine_policy_changed`, `share_defaults_policy_changed`, `share_approval_policy_changed`, `home_page_toggled`, `file_preview_toggled`, `motd_changed`, `branding_changed`, `legal_changed`, `site_url_changed`, `site_timezone_changed`, `updates_settings_changed`, `error_alert_settings_changed`, `webhook_created` / `_updated` / `_deleted`, `settings_changed`.
@@ -1203,7 +1221,7 @@ registry overlay for every `↻` env var above.
 | UI language | `users.locale` (EN/DE); overrides browser language. |
 | Default landing page | `home` / `outbox` / `inbox` / `new` / `account`. |
 | Storage quota | `users.quota_bytes` (admin-set; NULL = unlimited). |
-| Notification channels | Per category → `off` / `email` / `in_app` / `both`. **20 categories**: `share_created`, `share_files_added`, `share_expiring`, `share_pending_approval`, `share_approved`, `share_rejected`, `public_link_downloaded`, `secret_received`, `secret_viewed`, `secret_ended`, `account_created`, `reset_password`*, `login_alert`*, `oidc_linked`, `file_quarantined`, `session_evicted`, plus admin-only `ops_alert`, `release_available`, `inbound_message`, `server_error`. (*locked on - can't be disabled.) |
+| Notification channels | Per category → `off` / `email` / `in_app` / `both`. **22 categories**: `share_created`, `share_files_added`, `share_expiring`, `share_pending_approval`, `share_approved`, `share_rejected`, `public_link_downloaded`, `secret_received`, `secret_viewed`, `secret_ended`, `secret_requested`, `secret_request_update`, `account_created`, `reset_password`*, `login_alert`*, `oidc_linked`, `file_quarantined`, `session_evicted`, plus admin-only `ops_alert`, `release_available`, `inbound_message`, `server_error`. (*locked on - can't be disabled.) |
 | 2FA / recovery codes / passkeys | TOTP, 10 one-time recovery codes, WebAuthn credentials. |
 | SSO connections / API tokens | Link/unlink OIDC; mint/scope/revoke your own tokens (if policy allows). |
 
@@ -1299,7 +1317,7 @@ historical cadence.
 `anomaly_check` (heuristic alerts), `rescan_inbound_attachments`,
 `release_check` (~daily; filters backend `vX.Y.Z` tags, matched in full).
 
-**Every 5 min:** `imap_poll` (self-gated on `imap.enabled`/mode/interval), `expire_secrets` (ends and shreds expired secrets, and any nobody can read any more).
+**Every 5 min:** `imap_poll` (self-gated on `imap.enabled`/mode/interval), `expire_secrets` (ends and shreds expired secrets and any nobody can read any more, and closes unanswered secret requests past their time).
 **Every minute:** `drain_pending_update` (applies a postponed update once transfers drain, and reports how a handed-off update ended).
 **Daily 03:30:** `auto_update` (installs a newer release when automatic updates are on).
 
@@ -1307,7 +1325,7 @@ historical cadence.
 `cleanup_read_notifications`, `prune_history`, `reclaim_orphaned_files`.
 
 `prune_history` prunes `audit_log`, `download_log`, `email_log`, `login_attempts`,
-`webhook_deliveries`, `error_log`, `inbound_messages` and ended secrets (each window `0` disables).
+`webhook_deliveries`, `error_log`, `inbound_messages`, ended secrets and ended secret requests (each window `0` disables).
 
 **Event-driven:** `av_scan_file(file_id)` (quarantines on infection) and
 `send_email_job(...)` (resolves SMTP per job; permanent 5xx → `email_undeliverable` +

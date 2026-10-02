@@ -84,6 +84,7 @@ class MainWindow:
             command=self._open_settings,
             width=110, height=28, fg_color="transparent",
             border_width=1, hover_color=("gray85", "gray25"),
+            text_color=("gray10", "gray90"),
         ).pack(side="right")
 
         self.tabs = ctk.CTkTabview(self._app_root)

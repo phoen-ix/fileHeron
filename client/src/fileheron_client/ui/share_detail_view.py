@@ -146,6 +146,7 @@ class ShareDetailView(ctk.CTkFrame):
             fg_color="transparent",
             border_width=1,
             hover_color=("gray85", "gray25"),
+            text_color=("gray10", "gray90"),
             command=self._on_back,
         ).pack(side="left")
 
@@ -692,7 +693,7 @@ class ShareDetailView(ctk.CTkFrame):
         ctk.CTkButton(
             cell, text=t("share_detail.open_folder_btn"), width=72,
             fg_color="transparent", border_width=1,
-            hover_color=("gray85", "gray25"),
+            hover_color=("gray85", "gray25"), text_color=("gray10", "gray90"),
             command=lambda p=dest: self._reveal_path(p),
         ).pack(side="right")
         ctk.CTkButton(
@@ -789,6 +790,7 @@ class ShareDetailView(ctk.CTkFrame):
         ctk.CTkButton(
             cell, text=t("share_detail.cancel_btn"), width=72,
             fg_color="transparent", border_width=1, hover_color=("gray85", "gray25"),
+            text_color=("gray10", "gray90"),
             command=lambda fid=file_id: self._cancel_download(fid),
         ).pack(side="right")
         pause_btn = ctk.CTkButton(
@@ -808,6 +810,7 @@ class ShareDetailView(ctk.CTkFrame):
         ctk.CTkButton(
             cell, text=t("share_detail.discard_btn"), width=72,
             fg_color="transparent", border_width=1, hover_color=("gray85", "gray25"),
+            text_color=("gray10", "gray90"),
             command=lambda fid=file_id: self._discard_download(fid),
         ).pack(side="right")
         ctk.CTkButton(

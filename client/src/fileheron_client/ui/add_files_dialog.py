@@ -147,7 +147,7 @@ class AddFilesDialog:
         status = ctk.CTkLabel(row, text=t("add_files.state_pending"), width=90, anchor="w")
         remove = ctk.CTkButton(
             row, text="✕", width=28, fg_color="transparent", border_width=1,
-            hover_color=("gray85", "gray25"),
+            hover_color=("gray85", "gray25"), text_color=("gray10", "gray90"),
             command=lambda key=ps: self._remove_row(key),
         )
         remove.grid(row=0, column=2, padx=(8, 0))  # bar/status appear on upload

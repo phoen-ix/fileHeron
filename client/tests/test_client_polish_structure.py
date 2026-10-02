@@ -100,3 +100,24 @@ def test_info_and_error_popups_are_toasts() -> None:
 def test_end_share_confirm_stays_modal() -> None:
     # The one destructive action keeps the blocking yes/no confirm.
     assert "mb.confirm(" in _src("share_detail_view.py")
+
+
+def test_every_outlined_button_sets_a_readable_text_colour():
+    """A CTkButton with a transparent background keeps CTk's default WHITE text,
+    which is invisible on the light theme: the share page's Back, Open folder,
+    Cancel and Discard, the top bar's Settings and Add files' "✕" all read as
+    blank buttons in light mode. Generic over every ui module, so a new
+    outlined button cannot repeat it."""
+    found, missing = 0, []
+    for path in sorted(UI.glob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not (isinstance(node, ast.Call) and ast.unparse(node.func).endswith("CTkButton")):
+                continue
+            kw = {k.arg: ast.unparse(k.value) for k in node.keywords if k.arg}
+            if kw.get("fg_color") == "'transparent'":
+                found += 1
+                if "text_color" not in kw:
+                    missing.append(f"{path.name}:{node.lineno}")
+    assert found >= 8, f"the scan went vacuous ({found} outlined buttons)"
+    assert not missing, f"outlined buttons without a text_color: {missing}"

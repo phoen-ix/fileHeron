@@ -900,6 +900,7 @@ warm-amber accent `#b45309` on `#faf8f3`. Density via `[data-density="operator"]
 (`Pager`, `ConfirmDialog`) + `src/composables/` + `src/utils/`;
 `BrandMark.vue linkable` prop (false when home off).
 
+- **A boolean prop whose default must be TRUE is a negative flag (`hideGroups`), never an `allowX` read as `=== false`.** Vue casts an ABSENT boolean prop to `false`, not `undefined`, so `RecipientPicker`'s first `allowGroups` hid every group on the new-share form, which never passes it - caught by the e2e docs tour before v2.24.0 shipped, pinned in `RecipientPicker.test.ts`.
 - **Every `<table>` is the only child of a `.fh-table-scroll` wrapper, and no `<td>`/`<th>` class sets `display: flex|grid`** - without the wrapper one wide table widened the whole page on a phone, and a flex cell stops stretching to its row (its border floats mid-row). Put the flex on a `<div>` inside the cell. Pinned over every `.vue` by `backend/tests/test_frontend_table_layout.py` (in the backend suite because vitest serves CSS as an empty string).
 
 ## Operational gotchas (recently bitten)

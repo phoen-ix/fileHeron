@@ -22,7 +22,7 @@ import SecretRequestCreate from '@/views/SecretRequestCreate.vue'
 
 const RecipientPickerStub = defineComponent({
   name: 'RecipientPicker',
-  props: ['modelValue', 'disabled', 'allowExternal', 'allowGroups', 'isAdmin', 'purpose'],
+  props: ['modelValue', 'disabled', 'allowExternal', 'hideGroups', 'isAdmin', 'purpose'],
   emits: ['update:modelValue', 'update:pending'],
   setup: () => () => h('div', { class: 'recipient-picker-stub' }),
 })

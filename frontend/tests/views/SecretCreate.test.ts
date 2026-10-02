@@ -21,7 +21,7 @@ import SecretCreate from '@/views/SecretCreate.vue'
 
 const RecipientPickerStub = defineComponent({
   name: 'RecipientPicker',
-  props: ['modelValue', 'disabled', 'allowExternal', 'allowGroups', 'isAdmin', 'purpose'],
+  props: ['modelValue', 'disabled', 'allowExternal', 'hideGroups', 'isAdmin', 'purpose'],
   emits: ['update:modelValue', 'update:pending'],
   setup: () => () => h('div', { class: 'recipient-picker-stub' }),
 })
@@ -159,10 +159,16 @@ describe('SecretCreate', () => {
     expect(push).not.toHaveBeenCalled()
   })
 
+  it('offers staff their groups', async () => {
+    const w = mountView()
+    await flushPromises()
+    expect(picker(w).props('hideGroups')).toBe(false)
+  })
+
   it('offers a client no groups, no addresses and no link', async () => {
     const w = mountView({ role: 'client', can_send_secrets_external: false })
     await flushPromises()
-    expect(picker(w).props('allowGroups')).toBe(false)
+    expect(picker(w).props('hideGroups')).toBe(true)
     expect(picker(w).props('allowExternal')).toBe(false)
     expect(w.find('[data-testid="create-link"]').exists()).toBe(false)
     expect(blockers(w)).toContain(en.secrets.create.blockers.no_recipient)

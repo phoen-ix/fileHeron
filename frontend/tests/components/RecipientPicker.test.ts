@@ -166,3 +166,38 @@ describe('RecipientPicker', () => {
     )
   })
 })
+
+describe('RecipientPicker groups', () => {
+  const RIVERSIDE = {
+    id: 3,
+    name: 'Project Riverside',
+    description: null,
+    is_company_inbox: false,
+    member_count: 3,
+  }
+
+  beforeEach(() => {
+    api.listRecipientTargetGroups.mockResolvedValue({ data: { items: [RIVERSIDE] } })
+  })
+
+  // Vue casts an ABSENT boolean prop to false, not undefined. The flag was an
+  // `allowGroups` checked as `=== false`, which held on every form that did
+  // not pass it - the new-share form showed "No matches." for every group
+  // (found by the docs tour, 2026-10-02). Hence the negative `hideGroups`.
+  it('offers groups when no flag is passed, as on the new-share form', async () => {
+    const w = mountPicker()
+    await flushPromises()
+    expect(api.listRecipientTargetGroups).toHaveBeenCalledTimes(1)
+    await type(w, 'River')
+    const rows = w.findAll('.result-row').map((r) => r.text())
+    expect(rows.some((t) => t.includes('Project Riverside'))).toBe(true)
+  })
+
+  it('neither asks for nor offers groups with hide-groups', async () => {
+    const w = mountPicker({ hideGroups: true })
+    await flushPromises()
+    expect(api.listRecipientTargetGroups).not.toHaveBeenCalled()
+    await type(w, 'River')
+    expect(w.findAll('.result-row').some((r) => r.text().includes('Project Riverside'))).toBe(false)
+  })
+})

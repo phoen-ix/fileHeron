@@ -200,9 +200,11 @@
      *  secret link, not the share's download link, and the guidance points at
      *  the Secrets policy. Default 'share'. */
     purpose?: 'share' | 'secret' | 'request'
-    /** False hides groups entirely - a client sends a secret only to the
-     *  employees they are connected to. Default true. */
-    allowGroups?: boolean
+    /** Hide groups entirely - a client sends a secret only to the employees
+     *  they are connected to. A NEGATIVE flag on purpose: Vue casts an absent
+     *  boolean prop to false, so an `allowGroups` read as false on every form
+     *  that did not pass it, and the new-share form lost its groups. */
+    hideGroups?: boolean
   }>()
 
   const emit = defineEmits<{
@@ -294,7 +296,7 @@
   })
 
   const filteredGroups = computed(() => {
-    if (props.allowGroups === false) return []
+    if (props.hideGroups) return []
     const selectedIds = new Set(selectedGroupsLocal.value.map((g) => g.id))
     const needle = query.value.toLowerCase().trim()
     return allGroupResults.value
@@ -455,7 +457,7 @@
   }
 
   async function loadInitialGroups() {
-    if (props.allowGroups === false) return
+    if (props.hideGroups) return
     try {
       const { data } = await listRecipientTargetGroups()
       allGroupResults.value = data.items

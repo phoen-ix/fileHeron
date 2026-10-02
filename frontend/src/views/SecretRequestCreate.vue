@@ -236,7 +236,7 @@
           <RecipientPicker
             v-model="recipients"
             purpose="request"
-            :allow-groups="!isClient"
+            :hide-groups="isClient"
             :allow-external="canExternal"
             :is-admin="isAdmin"
             :disabled="submitting"

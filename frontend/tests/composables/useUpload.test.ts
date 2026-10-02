@@ -10,6 +10,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 // than a build-time constant (audit #2), so these need a Pinia.
 beforeEach(() => {
   setActivePinia(createPinia())
+  uploads.directUpload.mockReset()
+  uploads.initUpload.mockReset()
 })
 
 // Stub Uppy's plugin chain - the composable's add/remove/retry
@@ -46,6 +48,12 @@ vi.mock('@uppy/core', () => {
     },
   }
 })
+
+// The upload API itself: nothing here may reach the network (a real request
+// goes to happy-dom's localhost:3000 and fails - tests/setup/noRealNetwork.ts
+// now fails any test that tries).
+const uploads = vi.hoisted(() => ({ directUpload: vi.fn(), initUpload: vi.fn() }))
+vi.mock('@/api/uploads', () => uploads)
 
 import { useUpload } from '@/composables/useUpload'
 
@@ -104,13 +112,17 @@ describe('useUpload', () => {
     item.state = 'error'
     item.error = 'simulated'
     item.progress = 42
-    // Make startItem fail without hitting the network.
+    // The retried upload fails again - through the mocked API, not a network.
+    uploads.directUpload.mockRejectedValueOnce(new Error('offline'))
     const promise = u.retry(item.uid)
-    // After retry resets, state should be queued/preparing/error depending
-    // on async timing - at minimum the previous error is cleared synchronously.
+    // The previous error is cleared synchronously, before the new attempt runs.
     expect(item.error).toBeNull()
     expect(item.progress).toBe(0)
     await promise
+    expect(uploads.directUpload).toHaveBeenCalledTimes(1)
+    expect(item.state).toBe('error')
+    expect(item.error).toBe('offline')
+    expect(item.errorCode).toBe('UPLOAD_FAILED')
     wrapper.unmount()
   })
 

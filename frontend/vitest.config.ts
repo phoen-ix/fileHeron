@@ -9,6 +9,8 @@ export default mergeConfig(
       globals: true,
       environment: 'happy-dom',
       include: ['tests/**/*.test.ts', 'src/**/*.test.ts'],
+      // Fails any test that makes a real HTTP request (see the file).
+      setupFiles: ['tests/setup/noRealNetwork.ts'],
     },
   }),
 )

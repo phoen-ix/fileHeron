@@ -21,9 +21,11 @@ from sqlalchemy import func
 
 from ..database import SessionLocal
 from ..models.inbound_attachment import AttachmentAVState, InboundAttachment
+from ..redis_client import get_redis, sync
 from ..services import av_scan
 from ..services import storage_backend as storage_svc
 from ..services.cron_tracker import track_cron
+from ..utils.timeutil import utc_now_aware
 
 logger = logging.getLogger("fileheron.workers.rescan_inbound_attachments")
 
@@ -33,35 +35,42 @@ _BATCH = 200
 _FAIL_KEY = "fh:inbound:rescan:fail:"
 _FAIL_THRESHOLD = 5
 _FAIL_TTL_SEC = 24 * 3600
+# Attachments at the threshold, scored by the time of their latest failure.
+# A FIXED key the reader can ask directly: finding them used to be a SCAN over
+# `fh:inbound:rescan:fail:*`, and this Redis may be shared - walking a keyspace
+# under another tenant's load is the latency tax scan_guard.py refuses for the
+# same reason. Retention is per member (pruned by score, like scan_guard's
+# watchlist), so an attachment is forgiven 24h after its last failure, as the
+# counter's own TTL always did; the key's EXPIRE only collects an idle set.
+_DEFERRED_KEY = "fh:inbound:rescan:deferred"
 
 
 def _record_failure(att_id: int) -> None:
     """Count a failed rescan so a permanently unscannable attachment stops
     consuming a slot. Fails open: no Redis, no deferral."""
     try:
-        from ..redis_client import get_redis
-
         r = get_redis()
         key = f"{_FAIL_KEY}{att_id}"
-        r.incr(key)
-        r.expire(key, _FAIL_TTL_SEC)
+        pipe = r.pipeline()
+        pipe.incr(key)
+        pipe.expire(key, _FAIL_TTL_SEC)
+        count = int(pipe.execute()[0])
+        if count >= _FAIL_THRESHOLD:
+            pipe = r.pipeline()
+            pipe.zadd(_DEFERRED_KEY, {str(att_id): utc_now_aware().timestamp()})
+            pipe.expire(_DEFERRED_KEY, _FAIL_TTL_SEC)
+            pipe.execute()
     except Exception:
         pass
 
 
 def _deferred_ids() -> set[int]:
     try:
-        from ..redis_client import get_redis, sync
-
         r = get_redis()
-        out: set[int] = set()
-        for key in r.scan_iter(match=f"{_FAIL_KEY}*", count=500):
-            name = key.decode() if isinstance(key, bytes) else str(key)
-            raw = sync(r.get(name))
-            count = int(raw) if raw is not None else 0
-            if count >= _FAIL_THRESHOLD:
-                out.add(int(name.rsplit(":", 1)[-1]))
-        return out
+        cutoff = utc_now_aware().timestamp() - _FAIL_TTL_SEC
+        r.zremrangebyscore(_DEFERRED_KEY, "-inf", f"({cutoff}")
+        members = sync(r.zrange(_DEFERRED_KEY, 0, -1))
+        return {int(m.decode() if isinstance(m, bytes) else m) for m in members}
     except Exception:
         return set()
 

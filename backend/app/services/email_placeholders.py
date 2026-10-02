@@ -71,6 +71,12 @@ _SECRET_LINK = Placeholder(
     "[SECRET_DETAILS_LINK]", "Secret page", "URL to open the secret (sign-in required).",
     "secret_url", kind="url",
 )
+_REQUESTER = Placeholder(
+    "[REQUESTER]", "Requester name", "Display name of the person asking for the secret.",
+    "requester_name",
+)
+_ASKED_FOR = Placeholder("[ASKED_FOR]", "Asked for", "What the requester asks for.", "label")
+_NOTE = Placeholder("[NOTE]", "Note", "The requester's optional note.", "note")
 _SECRET_STATUS = Placeholder(
     "[SECRET_DETAILS_LINK]", "Secret page", "URL of the secret's status page.",
     "secret_url", kind="url",
@@ -168,6 +174,38 @@ REGISTRY: dict[str, TemplateSpec] = {
         _RECIPIENT, _LABEL,
         Placeholder("[VIEWS_USED]", "Views used", "How often it was viewed.", "views_used"),
         _SECRET_STATUS,
+    )),
+    # Secret requests: someone asks for a secret. [ASKED_FOR] and [NOTE] are what
+    # the requester chose to show whoever answers - never the answer itself.
+    "secret_requested": TemplateSpec("secret_requested", "secrets", _p(
+        _RECIPIENT, _REQUESTER, _ASKED_FOR, _NOTE,
+        Placeholder("[OPEN_UNTIL]", "Open until", "When the request closes.", "expires_at", kind="datetime"),
+        Placeholder(
+            "[REQUEST_LINK]", "Request page", "URL to answer the request (sign-in required).",
+            "request_url", kind="url",
+        ),
+    )),
+    # Mailed to an address with NO account. Whoever holds the link answers in
+    # the requester's name - an auth_link: the token rides
+    # `{REQUEST_LINK_BASE_PATH}#<token>`, the shape mail_log masks.
+    "secret_request_external": TemplateSpec("secret_request_external", "secrets", _p(
+        _REQUESTER, _ASKED_FOR, _NOTE,
+        Placeholder("[OPEN_UNTIL]", "Open until", "When the request closes.", "expires_at", kind="datetime"),
+        Placeholder(
+            "[ANSWER_LINK]", "Answer link", "The link to the page where the secret is entered.",
+            "link_url", kind="url", required=True, auth_link=True,
+        ),
+    )),
+    "secret_request_update": TemplateSpec("secret_request_update", "secrets", _p(
+        _RECIPIENT, _ASKED_FOR,
+        Placeholder(
+            "[ANSWERED_BY]", "Answered by", "Who answered (name, the address, or empty for the link).",
+            "answered_by",
+        ),
+        Placeholder(
+            "[SECRET_DETAILS_LINK]", "Answer page", "URL to open the answer, or the request.",
+            "secret_url", kind="url",
+        ),
     )),
     "file_quarantined": TemplateSpec("file_quarantined", "shares", _p(
         Placeholder("[UPLOADER]", "Uploader name", "Display name of who uploaded the file.", "uploader_name"),
@@ -407,6 +445,12 @@ def _secret_link_base_path() -> str:
     return settings.SECRET_LINK_BASE_PATH
 
 
+def _request_link_base_path() -> str:
+    from ..config import settings
+
+    return settings.REQUEST_LINK_BASE_PATH
+
+
 def sample_ctx(slug: str, *, app_url: str) -> dict:
     """Realistic render context for preview / test-send. Keyed by the underlying
     context keys (so it flows through build_substitutions unchanged). Auth links
@@ -486,6 +530,13 @@ def sample_ctx(slug: str, *, app_url: str) -> dict:
         "viewer": "Grace Hopper",
         "ip": "203.0.113.42",
         "secret_url": f"{app_url}/secrets/SAMPLE",
+        # Secret requests.
+        "requester_name": "Ada Lovelace",
+        "note": "The admin password of the new router, please.",
+        "request_url": f"{app_url}/secrets/requests/SAMPLE",
+        "outcome": "answered",
+        "answered_by": "Grace Hopper",
+        "answered_via": "user",
     }
     # lockout / email_change_alert use the token-free forgot-password link.
     if slug in ("lockout_warning", "email_change_alert"):
@@ -493,6 +544,10 @@ def sample_ctx(slug: str, *, app_url: str) -> dict:
     # The secret link carries its token in the FRAGMENT.
     if slug == "secret_link_external":
         base["link_url"] = f"{app_url}{_secret_link_base_path()}#SAMPLETOKEN"
+    if slug == "secret_request_external":
+        base["link_url"] = f"{app_url}{_request_link_base_path()}#SAMPLETOKEN"
+    if slug in ("secret_requested", "secret_request_external", "secret_request_update"):
+        base["label"] = "Router admin password"
     # Keys these templates branch on, which other templates use differently.
     if slug == "secret_viewed":
         base["via"] = "email"

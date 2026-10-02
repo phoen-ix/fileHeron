@@ -378,6 +378,8 @@ class Settings(BaseSettings):
     # A ClassVar for the same reason as PUBLIC_LINK_BASE_PATH: the SPA route is
     # fixed.
     SECRET_LINK_BASE_PATH: ClassVar[str] = "/s"
+    # The answer page of a secret request, `{site}/r#<token>` - same reasoning.
+    REQUEST_LINK_BASE_PATH: ClassVar[str] = "/r"
     SECRETS_MAX_VIEWS: int = 100
     SECRETS_MAX_EXPIRY_DAYS: int = 90
     # Ends a secret this long after it was sent even when the sender chose views

@@ -207,6 +207,13 @@ class AuditEventType(str, enum.Enum):
     secret_link_replaced = "secret_link_replaced"
     secret_link_removed = "secret_link_removed"
     secret_policy_changed = "secret_policy_changed"
+    # Secret requests (v2.24.0) - asking someone for a secret. Same rule: ids
+    # and counts, never an address, a token or a passphrase.
+    secret_request_created = "secret_request_created"
+    secret_request_answered = "secret_request_answered"
+    secret_request_cancelled = "secret_request_cancelled"
+    secret_request_expired = "secret_request_expired"
+    secret_request_link_shown = "secret_request_link_shown"  # the requester copied a link again
 
 
 

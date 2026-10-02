@@ -42,7 +42,9 @@ from .routers import (
     oidc_connect,
     public,
     public_links,
+    public_secret_requests,
     public_secrets,
+    secret_requests,
     secrets,
     setup,
     shares,
@@ -132,6 +134,7 @@ app.include_router(auth.router)
 app.include_router(account.setup_router)         # /me + /2fa/* + /locale only
 app.include_router(public.router)                # anonymous public-link landing
 app.include_router(public_secrets.router)        # anonymous secret peek/reveal (token in the body)
+app.include_router(public_secret_requests.router)  # anonymous request peek/answer (token in the body)
 app.include_router(notification_subscriptions.router)  # anonymous, token-authed
 app.include_router(branding.router)              # anonymous logo + legal pages
 app.include_router(telemetry.router)             # anonymous SPA client-404 beacon
@@ -157,6 +160,7 @@ app.include_router(files.download_router)
 app.include_router(shares.router, dependencies=_gate)
 app.include_router(public_links.router, dependencies=_gate)
 app.include_router(secrets.router, dependencies=_gate)
+app.include_router(secret_requests.router, dependencies=_gate)
 app.include_router(users.router, dependencies=_gate)
 app.include_router(groups.router, dependencies=_gate)
 app.include_router(notifications.router, dependencies=_gate)

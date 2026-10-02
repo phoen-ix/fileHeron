@@ -1017,6 +1017,7 @@ export interface BackupImportSummary {
   files_deleted: number
   /** v2.24.0: active secrets the import burns. */
   secrets_to_burn?: number
+  secret_requests_to_cancel?: number
   counts: Record<string, unknown>
   purged_users: string[]
   purged_groups: string[]

@@ -94,6 +94,12 @@ class NotificationCategory(str, enum.Enum):
     secret_received = "secret_received"
     secret_viewed = "secret_viewed"
     secret_ended = "secret_ended"
+    # Secret requests (v2.24.0). `secret_requested` goes to every account person
+    # asked (directly or through a group); `secret_request_update` goes to the
+    # requester when the answer arrives or the request expires unanswered
+    # (`outcome` picks the sub-template).
+    secret_requested = "secret_requested"
+    secret_request_update = "secret_request_update"
 
 
 # Categories only ever dispatched to admins (the dispatch sites filter on

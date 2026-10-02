@@ -326,7 +326,13 @@
     "SECRET_RECIPIENT_BURNED": "Too many wrong passphrases - this secret is gone for you.",
     "SECRET_REVEAL_FORBIDDEN": "Only the recipients of a secret can open it.",
     "SECRET_UNREADABLE": "This secret can't be decrypted on this server. Ask the sender to send it again.",
-    "SECRET_VIEWS_EXHAUSTED": "You have used up the views of this secret."
+    "SECRET_VIEWS_EXHAUSTED": "You have used up the views of this secret.",
+    "SECRET_REQUEST_CLOSED": "This request no longer takes an answer.",
+    "SECRET_REQUEST_LABEL_INVALID": "Say what you are asking for.",
+    "SECRET_REQUEST_NOT_FOUND": "This request does not exist.",
+    "SECRET_REQUEST_PASSPHRASE_INVALID": "The passphrase of your request is not correct.",
+    "SECRET_REQUEST_PASSPHRASE_REQUIRED": "Enter the passphrase you set on your request.",
+    "SECRET_REQUEST_SELF": "You cannot answer your own request."
   },
   "login": {
     "title": "Sign in",
@@ -467,7 +473,8 @@
       "active": "Active",
       "passwords": "Passwords & brute force",
       "email_change": "Email change",
-      "secrets": "Secrets"
+      "secrets": "Secrets",
+      "requests": "Requests"
     },
     "tabs_label": "Page tabs"
   },
@@ -547,7 +554,8 @@
     "sum_admins_installed": "Installs {n} administrator account | Installs {n} administrator accounts",
     "sum_oidc_issuers": "Installs SSO providers",
     "sum_webhook_urls": "Installs webhooks pointing at",
-    "sum_secrets": "{n} active secret will be burned. | {n} active secrets will be burned."
+    "sum_secrets": "{n} active secret will be burned. | {n} active secrets will be burned.",
+    "sum_secret_requests": "{n} open secret request will be cancelled. | {n} open secret requests will be cancelled."
   },
   "admin_scheduled_tasks": {
     "intro": "Set how often each background job runs, pin a daily time, or disable it. Daily times use the site timezone ({tz}).",
@@ -1173,7 +1181,10 @@
       "secret_received": "Secret received",
       "secret_link_external": "Secret link (recipient without an account)",
       "secret_viewed": "Secret viewed",
-      "secret_ended": "Secret ended"
+      "secret_ended": "Secret ended",
+      "secret_requested": "Secret requested",
+      "secret_request_external": "Secret requested (address without an account)",
+      "secret_request_update": "Secret request answered or expired"
     },
     "locale": {
       "en": "English",
@@ -1428,7 +1439,9 @@
       "server_error": "Server error",
       "secret_received": "Secret",
       "secret_viewed": "Secret viewed",
-      "secret_ended": "Secret ended"
+      "secret_ended": "Secret ended",
+      "secret_requested": "Secret request",
+      "secret_request_update": "Your request"
     },
     "headline": {
       "share_created": "{sender_name} sent you {file_count} file. | {sender_name} sent you {file_count} files.",
@@ -1471,6 +1484,12 @@
         "expired_unread": "Your secret expired unread",
         "revoked_by_admin": "An administrator burned your secret",
         "generic": "Your secret has ended"
+      },
+      "secret_requested": "{requester_name} asks you for a secret",
+      "secret_request_update": {
+        "answered": "Your request “{label}” was answered",
+        "expired": "Nobody answered your request “{label}”",
+        "generic": "Your secret request changed"
       }
     },
     "disconnected": "Live updates are disconnected - retrying. Reload the page to reconnect now."
@@ -1996,6 +2015,12 @@
       "no_account_action_admin": "Clear this field, or allow sending outside the organisation in {setting}.",
       "external_setting_name": "the Secrets policy",
       "help_phase4": "Search for people by name or email. Pick a group to reach each of its members."
+    },
+    "request": {
+      "external_option": "Ask {email} by email",
+      "external_chip_hint": "answer link",
+      "no_account_action": "Clear this field. Asking an address without an account needs the right to send outside the organisation.",
+      "help_phase4": "Search for people by name or email. Pick a group: any of its members can answer."
     }
   },
   "expiry": {
@@ -2094,7 +2119,8 @@
       "secrets_read": "List & read secret metadata",
       "secrets_reveal": "Reveal secrets sent to you (returns the content)",
       "secrets_manage": "Burn secrets, create & remove their links",
-      "secrets_links": "Read secret links back (returns the link)"
+      "secrets_links": "Read secret links back (returns the link)",
+      "secrets_request": "Ask for secrets (create, list & cancel requests)"
     },
     "scope_group_secrets": "Secrets"
   },
@@ -2726,7 +2752,11 @@
     "secret_detail": "Secret",
     "public_secret": "Secret",
     "admin_secrets": "Secrets",
-    "admin_settings_secrets": "Secrets · Policy"
+    "admin_settings_secrets": "Secrets · Policy",
+    "secret_request_create": "Request a secret",
+    "secret_request_detail": "Secret request",
+    "public_secret_request": "Secret request",
+    "admin_secret_requests": "Secret requests"
   },
   "not_found": {
     "eyebrow": "404 · not found",
@@ -2941,7 +2971,8 @@
     "box_label": "Show",
     "box": {
       "received": "Received",
-      "sent": "Sent"
+      "sent": "Sent",
+      "requests": "Requests"
     },
     "search_placeholder": "Search by label or sender…",
     "filter_label": "State",
@@ -3076,7 +3107,9 @@
       "show": "Show",
       "destroyed": "That was the last view: the secret has been destroyed. Copy it now - it will not be shown again.",
       "no_views_left": "You have no views left. Copy it now - it will not be shown again.",
-      "views_left": "{n} view left. | {n} views left."
+      "views_left": "{n} view left. | {n} views left.",
+      "request_passphrase_label": "The passphrase you set on your request",
+      "request_passphrase_help": "You chose it when you asked. Nobody else knows it, and it cannot be recovered."
     },
     "detail": {
       "back": "All secrets",
@@ -3139,7 +3172,13 @@
         "locked": "Locked until {d}",
         "emailed": "Emailed {d}",
         "not_emailed": "Not emailed"
-      }
+      },
+      "via_request_link": "Someone with your request link",
+      "answer_to_yours": "This is the answer to your request.",
+      "answer_by_you": "This is your answer to a request.",
+      "see_request": "See the request",
+      "request_passphrase": "Your passphrase",
+      "burn_answer": "Discard it unread"
     }
   },
   "public_secret": {
@@ -3163,7 +3202,8 @@
     "burn_confirm": "Burn this secret from {sender}? It is destroyed at once and nobody can read it any more.",
     "col": {
       "actions": "Actions"
-    }
+    },
+    "no_account": "no account"
   },
   "admin_settings_secrets": {
     "intro": "Secrets are passwords and other short texts, readable a set number of times or until a date, then destroyed. Nobody but their recipients can read them - administrators included.",
@@ -3200,5 +3240,140 @@
     "saved_toast": "Secrets policy saved.",
     "limits_title": "Limits",
     "limits_help": "The ceilings a sender works within, and the passphrase throttle."
+  },
+  "secret_request_state": {
+    "open": "Open",
+    "fulfilled": "Answered",
+    "cancelled": "Cancelled",
+    "expired": "Expired"
+  },
+  "secret_requests": {
+    "eyebrow": "Secret request",
+    "new": "Request a secret",
+    "box_label": "Which requests",
+    "box": {
+      "mine": "Asked by me",
+      "asked": "Asked of me"
+    },
+    "search_placeholder": "Search by what was asked or by name…",
+    "filter_label": "Requests to show",
+    "filter": {
+      "open": "Open",
+      "closed": "Closed",
+      "all": "All"
+    },
+    "col": {
+      "label": "Asked for",
+      "asked": "Asked",
+      "open_until": "Open until"
+    },
+    "asked_on": "Asked {d}",
+    "empty": {
+      "mine": "You haven't asked for a secret yet.",
+      "asked": "Nobody has asked you for a secret."
+    },
+    "terms": {
+      "views": "{n} view | {n} views",
+      "lifetime": "for {n} day after it arrives | for {n} days after it arrives"
+    },
+    "via": {
+      "email": "an address",
+      "link": "the request link"
+    },
+    "closed": {
+      "fulfilled": "It has been answered.",
+      "cancelled": "It was cancelled.",
+      "expired": "It is no longer open.",
+      "requester_unavailable": "It can no longer be answered."
+    },
+    "answer": {
+      "only_requester": "Only {name} will be able to open what you send.",
+      "only_requester_passphrase": "Only {name} will be able to open what you send - with a passphrase they chose.",
+      "content_label": "The secret",
+      "passphrase_toggle": "Add a passphrase of your own (optional)",
+      "passphrase_help": "It becomes part of the encryption. Tell it to them another way - they need it as well to open the secret.",
+      "sending": "Sending…",
+      "send": "Send it",
+      "sent": "Sent. {name} has been told.",
+      "the_requester": "the person who asked"
+    },
+    "create": {
+      "title": "Request a secret",
+      "intro": "Ask someone for a password, a key or any short text. They type it into file:Heron, and it arrives as a secret only you can open. The first answer closes the request.",
+      "label_label": "What do you need?",
+      "label_placeholder": "e.g. Router admin password",
+      "note_label": "Note (optional)",
+      "note_help": "Shown to whoever may answer, link holders too - never put a secret here.",
+      "client_hint": "You can ask the employees you work with.",
+      "link_label": "Also create a link",
+      "link_toggle_help": "A link you pass on yourself. Whoever opens it first can answer.",
+      "open_until_label": "Open until",
+      "open_until_help": "The first answer closes the request.",
+      "limits_title": "How the answer may be read",
+      "limits_help": "A view limit, a lifetime, or both. Whichever runs out first destroys the answer.",
+      "lifetime_label": "Available for",
+      "lifetime": {
+        "1h": "1 hour",
+        "1d": "1 day",
+        "7d": "7 days",
+        "30d": "30 days",
+        "90d": "90 days",
+        "none": "No time limit"
+      },
+      "lifetime_help": "Counted from the moment the answer arrives.",
+      "passphrase_title": "Your passphrase (optional)",
+      "passphrase_help": "The answer is encrypted to it: only you can open it, with this passphrase. Nobody stores it - if you lose it, the answer cannot be opened.",
+      "blockers": {
+        "no_label": "Say what you need.",
+        "no_target": "Pick someone to ask.",
+        "no_target_or_link": "Pick someone to ask, or create a link.",
+        "no_limit": "Set a view limit, a lifetime, or both."
+      },
+      "sent_toast": "Request sent.",
+      "sent_title": "Request sent",
+      "link_help": "Pass this link on yourself. Whoever opens it first can answer.",
+      "view_status": "See the request",
+      "sending": "Sending…",
+      "send": "Send request"
+    },
+    "detail": {
+      "back": "All requests",
+      "asked_by": "Asked by",
+      "open_until": "Open until",
+      "terms": "The answer",
+      "passphrase": "Your passphrase",
+      "answered": "Answered",
+      "cancel": "Cancel request",
+      "cancel_title": "Cancel this request?",
+      "cancel_confirm": "Nobody can answer it any more, and its links stop working.",
+      "cancelled_toast": "The request was cancelled.",
+      "open_answer": "Open the answer",
+      "links_title": "Links",
+      "links_help": "Each address has its own link, and there may be one you pass on yourself. Whoever answers first closes the request.",
+      "asked_title": "Asked",
+      "col_target": "Who",
+      "col_kind": "How",
+      "col_mailed": "Mailed",
+      "passphrase_requester": "Requester's passphrase"
+    }
+  },
+  "public_secret_request": {
+    "eyebrow": "file:Heron",
+    "incomplete": "This link is incomplete - the part after the # is missing. Open the link exactly as you received it.",
+    "unavailable": "This request is not available",
+    "closed_title": "This request is closed",
+    "from": "Asked by {name}",
+    "until": "Open until {d}",
+    "terms": "Readable: {terms}"
+  },
+  "admin_secret_requests": {
+    "total": "{n} request | {n} requests",
+    "intro": "Every secret request on this server: who asked whom for what, until when, and its state. Administrators can cancel a request; they never see its links or an answer.",
+    "search_placeholder": "Search what or who…",
+    "empty": "No requests.",
+    "col": {
+      "requester": "Requester"
+    },
+    "cancel_confirm": "Cancel {name}'s request? Nobody can answer it any more."
   }
 }

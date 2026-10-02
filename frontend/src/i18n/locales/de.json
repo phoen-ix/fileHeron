@@ -326,7 +326,13 @@
     "SECRET_RECIPIENT_BURNED": "Zu viele falsche Passphrasen - dieses Geheimnis ist für dich weg.",
     "SECRET_REVEAL_FORBIDDEN": "Nur die Empfänger eines Geheimnisses können es öffnen.",
     "SECRET_UNREADABLE": "Dieses Geheimnis kann auf diesem Server nicht entschlüsselt werden. Bitte den Absender, es erneut zu senden.",
-    "SECRET_VIEWS_EXHAUSTED": "Du hast die Aufrufe dieses Geheimnisses verbraucht."
+    "SECRET_VIEWS_EXHAUSTED": "Du hast die Aufrufe dieses Geheimnisses verbraucht.",
+    "SECRET_REQUEST_CLOSED": "Diese Anfrage nimmt keine Antwort mehr an.",
+    "SECRET_REQUEST_LABEL_INVALID": "Gib an, worum du bittest.",
+    "SECRET_REQUEST_NOT_FOUND": "Diese Anfrage gibt es nicht.",
+    "SECRET_REQUEST_PASSPHRASE_INVALID": "Die Passphrase deiner Anfrage ist nicht korrekt.",
+    "SECRET_REQUEST_PASSPHRASE_REQUIRED": "Gib die Passphrase ein, die du bei deiner Anfrage gewählt hast.",
+    "SECRET_REQUEST_SELF": "Du kannst deine eigene Anfrage nicht beantworten."
   },
   "login": {
     "title": "Anmelden",
@@ -467,7 +473,8 @@
       "active": "Aktiv",
       "passwords": "Passwörter & Brute-Force",
       "email_change": "E-Mail-Änderung",
-      "secrets": "Geheimnisse"
+      "secrets": "Geheimnisse",
+      "requests": "Anfragen"
     },
     "tabs_label": "Seiten-Tabs"
   },
@@ -547,7 +554,8 @@
     "sum_admins_installed": "Legt {n} Administrator-Konto an | Legt {n} Administrator-Konten an",
     "sum_oidc_issuers": "Legt SSO-Provider an",
     "sum_webhook_urls": "Legt Webhooks an, die zeigen auf",
-    "sum_secrets": "{n} aktives Geheimnis wird vernichtet. | {n} aktive Geheimnisse werden vernichtet."
+    "sum_secrets": "{n} aktives Geheimnis wird vernichtet. | {n} aktive Geheimnisse werden vernichtet.",
+    "sum_secret_requests": "{n} offene Anfrage nach einem Geheimnis wird abgebrochen. | {n} offene Anfragen nach Geheimnissen werden abgebrochen."
   },
   "admin_scheduled_tasks": {
     "intro": "Lege fest, wie oft jeder Hintergrundjob läuft, fixiere eine tägliche Uhrzeit oder deaktiviere ihn. Tägliche Zeiten verwenden die Seiten-Zeitzone ({tz}).",
@@ -1173,7 +1181,10 @@
       "secret_received": "Geheimnis erhalten",
       "secret_link_external": "Geheimnis-Link (Empfänger ohne Konto)",
       "secret_viewed": "Geheimnis angesehen",
-      "secret_ended": "Geheimnis beendet"
+      "secret_ended": "Geheimnis beendet",
+      "secret_requested": "Geheimnis angefragt",
+      "secret_request_external": "Geheimnis angefragt (Adresse ohne Konto)",
+      "secret_request_update": "Anfrage beantwortet oder abgelaufen"
     },
     "locale": {
       "en": "English",
@@ -1428,7 +1439,9 @@
       "server_error": "Serverfehler",
       "secret_received": "Geheimnis",
       "secret_viewed": "Geheimnis angesehen",
-      "secret_ended": "Geheimnis beendet"
+      "secret_ended": "Geheimnis beendet",
+      "secret_requested": "Anfrage",
+      "secret_request_update": "Deine Anfrage"
     },
     "headline": {
       "share_created": "{sender_name} hat dir {file_count} Datei gesendet. | {sender_name} hat dir {file_count} Dateien gesendet.",
@@ -1471,6 +1484,12 @@
         "expired_unread": "Dein Geheimnis ist ungelesen abgelaufen",
         "revoked_by_admin": "Ein Administrator hat dein Geheimnis vernichtet",
         "generic": "Dein Geheimnis ist beendet"
+      },
+      "secret_requested": "{requester_name} bittet dich um ein Geheimnis",
+      "secret_request_update": {
+        "answered": "Deine Anfrage „{label}“ wurde beantwortet",
+        "expired": "Niemand hat deine Anfrage „{label}“ beantwortet",
+        "generic": "Deine Anfrage hat sich geändert"
       }
     },
     "disconnected": "Live-Aktualisierungen sind getrennt - es wird erneut versucht. Zum sofortigen Verbinden die Seite neu laden."
@@ -1996,6 +2015,12 @@
       "no_account_action_admin": "Leere das Feld oder erlaube das Senden außerhalb der Organisation in {setting}.",
       "external_setting_name": "der Geheimnis-Richtlinie",
       "help_phase4": "Suche Personen nach Name oder E-Mail. Wähle eine Gruppe, um jedes ihrer Mitglieder zu erreichen."
+    },
+    "request": {
+      "external_option": "{email} per E-Mail fragen",
+      "external_chip_hint": "Antwort-Link",
+      "no_account_action": "Leere dieses Feld. Eine Adresse ohne Konto zu fragen erfordert das Recht, außerhalb der Organisation zu senden.",
+      "help_phase4": "Suche Personen nach Name oder E-Mail. Wähle eine Gruppe: jedes ihrer Mitglieder kann antworten."
     }
   },
   "expiry": {
@@ -2094,7 +2119,8 @@
       "secrets_read": "Metadaten von Geheimnissen auflisten & lesen",
       "secrets_reveal": "An dich gesendete Geheimnisse anzeigen (liefert den Inhalt)",
       "secrets_manage": "Geheimnisse vernichten, ihre Links erstellen & entfernen",
-      "secrets_links": "Links von Geheimnissen erneut lesen (liefert den Link)"
+      "secrets_links": "Links von Geheimnissen erneut lesen (liefert den Link)",
+      "secrets_request": "Geheimnisse anfragen (Anfragen erstellen, auflisten & abbrechen)"
     },
     "scope_group_secrets": "Geheimnisse"
   },
@@ -2726,7 +2752,11 @@
     "secret_detail": "Geheimnis",
     "public_secret": "Geheimnis",
     "admin_secrets": "Geheimnisse",
-    "admin_settings_secrets": "Geheimnisse · Richtlinie"
+    "admin_settings_secrets": "Geheimnisse · Richtlinie",
+    "secret_request_create": "Geheimnis anfragen",
+    "secret_request_detail": "Anfrage",
+    "public_secret_request": "Anfrage",
+    "admin_secret_requests": "Anfragen nach Geheimnissen"
   },
   "not_found": {
     "eyebrow": "404 · nicht gefunden",
@@ -2941,7 +2971,8 @@
     "box_label": "Anzeigen",
     "box": {
       "received": "Empfangen",
-      "sent": "Gesendet"
+      "sent": "Gesendet",
+      "requests": "Anfragen"
     },
     "search_placeholder": "Nach Bezeichnung oder Absender suchen…",
     "filter_label": "Status",
@@ -3076,7 +3107,9 @@
       "show": "Zeigen",
       "destroyed": "Das war der letzte Aufruf: Das Geheimnis ist vernichtet. Kopiere es jetzt - es wird nicht noch einmal angezeigt.",
       "no_views_left": "Du hast keine Aufrufe mehr. Kopiere es jetzt - es wird nicht noch einmal angezeigt.",
-      "views_left": "Noch {n} Aufruf. | Noch {n} Aufrufe."
+      "views_left": "Noch {n} Aufruf. | Noch {n} Aufrufe.",
+      "request_passphrase_label": "Die Passphrase deiner Anfrage",
+      "request_passphrase_help": "Du hast sie beim Anfragen gewählt. Niemand sonst kennt sie, und sie kann nicht wiederhergestellt werden."
     },
     "detail": {
       "back": "Alle Geheimnisse",
@@ -3139,7 +3172,13 @@
         "locked": "Gesperrt bis {d}",
         "emailed": "Gemailt {d}",
         "not_emailed": "Nicht gemailt"
-      }
+      },
+      "via_request_link": "Jemand mit dem Link deiner Anfrage",
+      "answer_to_yours": "Das ist die Antwort auf deine Anfrage.",
+      "answer_by_you": "Das ist deine Antwort auf eine Anfrage.",
+      "see_request": "Anfrage ansehen",
+      "request_passphrase": "Deine Passphrase",
+      "burn_answer": "Ungelesen verwerfen"
     }
   },
   "public_secret": {
@@ -3163,7 +3202,8 @@
     "burn_confirm": "Dieses Geheimnis von {sender} vernichten? Es wird sofort vernichtet und niemand kann es mehr lesen.",
     "col": {
       "actions": "Aktionen"
-    }
+    },
+    "no_account": "kein Konto"
   },
   "admin_settings_secrets": {
     "intro": "Geheimnisse sind Passwörter und andere kurze Texte, die nur eine bestimmte Anzahl von Malen oder bis zu einem Datum lesbar sind und danach vernichtet werden. Niemand außer ihren Empfängern kann sie lesen - auch Administratoren nicht.",
@@ -3200,5 +3240,140 @@
     "saved_toast": "Geheimnis-Richtlinie gespeichert.",
     "limits_title": "Grenzen",
     "limits_help": "Die Obergrenzen, innerhalb derer Absender arbeiten, und die Drosselung bei Passphrasen."
+  },
+  "secret_request_state": {
+    "open": "Offen",
+    "fulfilled": "Beantwortet",
+    "cancelled": "Abgebrochen",
+    "expired": "Abgelaufen"
+  },
+  "secret_requests": {
+    "eyebrow": "Anfrage",
+    "new": "Geheimnis anfragen",
+    "box_label": "Welche Anfragen",
+    "box": {
+      "mine": "Von mir",
+      "asked": "An mich"
+    },
+    "search_placeholder": "Suche nach dem Angefragten oder nach Namen…",
+    "filter_label": "Angezeigte Anfragen",
+    "filter": {
+      "open": "Offen",
+      "closed": "Geschlossen",
+      "all": "Alle"
+    },
+    "col": {
+      "label": "Angefragt",
+      "asked": "Gefragt",
+      "open_until": "Offen bis"
+    },
+    "asked_on": "Gefragt am {d}",
+    "empty": {
+      "mine": "Du hast noch kein Geheimnis angefragt.",
+      "asked": "Niemand hat dich um ein Geheimnis gebeten."
+    },
+    "terms": {
+      "views": "{n} Aufruf | {n} Aufrufe",
+      "lifetime": "{n} Tag nach Eingang | {n} Tage nach Eingang"
+    },
+    "via": {
+      "email": "eine Adresse",
+      "link": "der Link der Anfrage"
+    },
+    "closed": {
+      "fulfilled": "Sie wurde bereits beantwortet.",
+      "cancelled": "Sie wurde abgebrochen.",
+      "expired": "Sie ist nicht mehr offen.",
+      "requester_unavailable": "Sie kann nicht mehr beantwortet werden."
+    },
+    "answer": {
+      "only_requester": "Nur {name} kann öffnen, was du sendest.",
+      "only_requester_passphrase": "Nur {name} kann öffnen, was du sendest - mit einer selbst gewählten Passphrase.",
+      "content_label": "Das Geheimnis",
+      "passphrase_toggle": "Eigene Passphrase hinzufügen (optional)",
+      "passphrase_help": "Sie wird Teil der Verschlüsselung. Teile sie auf anderem Weg mit - sie wird zum Öffnen ebenfalls gebraucht.",
+      "sending": "Wird gesendet…",
+      "send": "Senden",
+      "sent": "Gesendet. {name} wurde benachrichtigt.",
+      "the_requester": "die anfragende Person"
+    },
+    "create": {
+      "title": "Geheimnis anfragen",
+      "intro": "Bitte jemanden um ein Passwort, einen Schlüssel oder einen kurzen Text. Die Person gibt es in file:Heron ein, und es kommt als Geheimnis an, das nur du öffnen kannst. Die erste Antwort schließt die Anfrage.",
+      "label_label": "Was brauchst du?",
+      "label_placeholder": "z. B. Admin-Passwort des Routers",
+      "note_label": "Notiz (optional)",
+      "note_help": "Wird allen gezeigt, die antworten dürfen, auch Link-Inhabern - schreib hier nie ein Geheimnis hinein.",
+      "client_hint": "Du kannst die Mitarbeiter fragen, mit denen du zusammenarbeitest.",
+      "link_label": "Auch einen Link erstellen",
+      "link_toggle_help": "Ein Link, den du selbst weitergibst. Wer ihn zuerst öffnet, kann antworten.",
+      "open_until_label": "Offen bis",
+      "open_until_help": "Die erste Antwort schließt die Anfrage.",
+      "limits_title": "Wie die Antwort gelesen werden darf",
+      "limits_help": "Ein Aufruflimit, eine Lebensdauer oder beides. Was zuerst endet, vernichtet die Antwort.",
+      "lifetime_label": "Verfügbar für",
+      "lifetime": {
+        "1h": "1 Stunde",
+        "1d": "1 Tag",
+        "7d": "7 Tage",
+        "30d": "30 Tage",
+        "90d": "90 Tage",
+        "none": "Ohne Zeitlimit"
+      },
+      "lifetime_help": "Gezählt ab dem Moment, in dem die Antwort eingeht.",
+      "passphrase_title": "Deine Passphrase (optional)",
+      "passphrase_help": "Die Antwort wird damit verschlüsselt: nur du kannst sie öffnen, mit dieser Passphrase. Sie wird nirgends gespeichert - geht sie verloren, lässt sich die Antwort nicht mehr öffnen.",
+      "blockers": {
+        "no_label": "Gib an, was du brauchst.",
+        "no_target": "Wähle jemanden, den du fragen möchtest.",
+        "no_target_or_link": "Wähle jemanden, den du fragen möchtest, oder erstelle einen Link.",
+        "no_limit": "Lege ein Aufruflimit, eine Lebensdauer oder beides fest."
+      },
+      "sent_toast": "Anfrage gesendet.",
+      "sent_title": "Anfrage gesendet",
+      "link_help": "Gib diesen Link selbst weiter. Wer ihn zuerst öffnet, kann antworten.",
+      "view_status": "Anfrage ansehen",
+      "sending": "Wird gesendet…",
+      "send": "Anfrage senden"
+    },
+    "detail": {
+      "back": "Alle Anfragen",
+      "asked_by": "Gefragt von",
+      "open_until": "Offen bis",
+      "terms": "Die Antwort",
+      "passphrase": "Deine Passphrase",
+      "answered": "Beantwortet",
+      "cancel": "Anfrage abbrechen",
+      "cancel_title": "Diese Anfrage abbrechen?",
+      "cancel_confirm": "Niemand kann sie mehr beantworten, und ihre Links funktionieren nicht mehr.",
+      "cancelled_toast": "Die Anfrage wurde abgebrochen.",
+      "open_answer": "Antwort öffnen",
+      "links_title": "Links",
+      "links_help": "Jede Adresse hat ihren eigenen Link, und es kann einen geben, den du selbst weitergibst. Die erste Antwort schließt die Anfrage.",
+      "asked_title": "Gefragt",
+      "col_target": "Wer",
+      "col_kind": "Wie",
+      "col_mailed": "Gemailt",
+      "passphrase_requester": "Passphrase der anfragenden Person"
+    }
+  },
+  "public_secret_request": {
+    "eyebrow": "file:Heron",
+    "incomplete": "Dieser Link ist unvollständig - der Teil nach dem # fehlt. Öffne den Link genau so, wie du ihn erhalten hast.",
+    "unavailable": "Diese Anfrage ist nicht verfügbar",
+    "closed_title": "Diese Anfrage ist geschlossen",
+    "from": "Gefragt von {name}",
+    "until": "Offen bis {d}",
+    "terms": "Lesbar: {terms}"
+  },
+  "admin_secret_requests": {
+    "total": "{n} Anfrage | {n} Anfragen",
+    "intro": "Alle Anfragen nach Geheimnissen auf diesem Server: wer wen worum gebeten hat, bis wann und ihr Zustand. Administratoren können eine Anfrage abbrechen; ihre Links oder eine Antwort sehen sie nie.",
+    "search_placeholder": "Was oder wer…",
+    "empty": "Keine Anfragen.",
+    "col": {
+      "requester": "Anfragende Person"
+    },
+    "cancel_confirm": "Die Anfrage von {name} abbrechen? Niemand kann sie mehr beantworten."
   }
 }

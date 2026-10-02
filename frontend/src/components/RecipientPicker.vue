@@ -155,7 +155,9 @@
             </RouterLink>
           </template>
         </i18n-t>
-        <span v-else-if="canPublicLink || purpose === 'secret'">{{ actionText }}</span>
+        <span v-else-if="canPublicLink || purpose === 'secret' || purpose === 'request'">{{
+          actionText
+        }}</span>
       </template>
       <template v-else>{{ t('recipient.not_added', { q: query }) }}</template>
       <button
@@ -197,7 +199,7 @@
     /** 'secret' (v2.24.0): the secret compose form - an address gets its own
      *  secret link, not the share's download link, and the guidance points at
      *  the Secrets policy. Default 'share'. */
-    purpose?: 'share' | 'secret'
+    purpose?: 'share' | 'secret' | 'request'
     /** False hides groups entirely - a client sends a secret only to the
      *  employees they are connected to. Default true. */
     allowGroups?: boolean
@@ -352,23 +354,33 @@
   // The secret form words a few lines differently (`recipient.secret.*`).
   // Spelled out per key, not built from a prefix: the i18n key scan
   // (backend/tests/test_frontend_i18n_keys.py) can only see literal keys.
-  const isSecret = computed(() => props.purpose === 'secret')
+  // 'request' (asking for a secret) shares the Secrets policy and most of its
+  // wording, but an address is ASKED, not sent something.
+  const isRequest = computed(() => props.purpose === 'request')
+  const isSecret = computed(() => props.purpose === 'secret' || isRequest.value)
   function externalOptionText(email: string): string {
+    if (isRequest.value) return t('recipient.request.external_option', { email })
     return isSecret.value
       ? t('recipient.secret.external_option', { email })
       : t('recipient.external_option', { email })
   }
-  const chipHint = computed(() =>
-    isSecret.value ? t('recipient.secret.external_chip_hint') : t('recipient.external_chip_hint'),
-  )
+  const chipHint = computed(() => {
+    if (isRequest.value) return t('recipient.request.external_chip_hint')
+    return isSecret.value
+      ? t('recipient.secret.external_chip_hint')
+      : t('recipient.external_chip_hint')
+  })
   const settingName = computed(() =>
     isSecret.value
       ? t('recipient.secret.external_setting_name')
       : t('recipient.external_setting_name'),
   )
-  const actionText = computed(() =>
-    isSecret.value ? t('recipient.secret.no_account_action') : t('recipient.no_account_action'),
-  )
+  const actionText = computed(() => {
+    if (isRequest.value) return t('recipient.request.no_account_action')
+    return isSecret.value
+      ? t('recipient.secret.no_account_action')
+      : t('recipient.no_account_action')
+  })
   function actionAdminText(setting: string): string {
     return isSecret.value
       ? t('recipient.secret.no_account_action_admin', { setting })
@@ -379,12 +391,13 @@
       ? 'recipient.secret.no_account_action_admin'
       : 'recipient.no_account_action_admin',
   )
-  const helpText = computed(() =>
-    isSecret.value ? t('recipient.secret.help_phase4') : t('recipient.help_phase4'),
-  )
+  const helpText = computed(() => {
+    if (isRequest.value) return t('recipient.request.help_phase4')
+    return isSecret.value ? t('recipient.secret.help_phase4') : t('recipient.help_phase4')
+  })
 
   const externalSettingRoute = computed(() =>
-    props.purpose === 'secret'
+    isSecret.value
       ? { name: 'admin-settings-secrets' }
       : { name: 'admin-settings-public-links', hash: '#external-recipients' },
   )
@@ -395,7 +408,7 @@
     if (props.isAdmin) {
       return `${noAccountBase.value} ${actionAdminText(settingName.value)}`
     }
-    return props.canPublicLink || props.purpose === 'secret'
+    return props.canPublicLink || isSecret.value
       ? `${noAccountBase.value} ${actionText.value}`
       : noAccountBase.value
   })

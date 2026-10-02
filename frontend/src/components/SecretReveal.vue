@@ -17,6 +17,19 @@
         {{ t('secrets.reveal.last_view_warning') }}
       </p>
       <form class="reveal-form" @submit.prevent="onReveal">
+        <!-- An answer to the reader's own request may need the passphrase they
+             set when asking - a separate layer from the sender's. -->
+        <label v-if="requiresRequestPassphrase" class="fh-field">
+          <span class="fh-field-label">{{ t('secrets.reveal.request_passphrase_label') }}</span>
+          <input
+            v-model="requestPassphrase"
+            class="fh-field-input fh-field-mono"
+            type="password"
+            autocomplete="off"
+            data-testid="reveal-request-passphrase"
+          />
+          <span class="fh-field-help">{{ t('secrets.reveal.request_passphrase_help') }}</span>
+        </label>
         <label v-if="requiresPassphrase" class="fh-field">
           <span class="fh-field-label">{{ t('secrets.reveal.passphrase_label') }}</span>
           <input
@@ -36,7 +49,11 @@
         <button
           class="fh-btn"
           type="submit"
-          :disabled="busy || (requiresPassphrase && !passphrase)"
+          :disabled="
+            busy ||
+            (requiresPassphrase && !passphrase) ||
+            (requiresRequestPassphrase && !requestPassphrase)
+          "
           data-testid="reveal-button"
         >
           {{ busy ? t('common.loading') : t('secrets.reveal.button') }}
@@ -87,7 +104,12 @@
     viewsLeft: number | null
     /** Wrong passphrases left before it burns for this reader (burn mode). */
     attemptsLeft?: number | null
-    reveal: (passphrase: string | null) => Promise<RevealSecretResponse>
+    /** The reader's own request passphrase is needed too (an answer to their request). */
+    requiresRequestPassphrase?: boolean
+    reveal: (
+      passphrase: string | null,
+      requestPassphrase: string | null,
+    ) => Promise<RevealSecretResponse>
   }>()
   const emit = defineEmits<{
     revealed: [result: RevealSecretResponse]
@@ -99,6 +121,7 @@
   const { describe } = useApiError()
 
   const passphrase = ref('')
+  const requestPassphrase = ref('')
   const busy = ref(false)
   const error = ref<string | null>(null)
   const result = ref<RevealSecretResponse | null>(null)
@@ -120,15 +143,22 @@
     error.value = null
     busy.value = true
     try {
-      const data = await props.reveal(props.requiresPassphrase ? passphrase.value : null)
+      const data = await props.reveal(
+        props.requiresPassphrase ? passphrase.value : null,
+        props.requiresRequestPassphrase ? requestPassphrase.value : null,
+      )
       result.value = data
       passphrase.value = ''
+      requestPassphrase.value = ''
       emit('revealed', data)
     } catch (err) {
       error.value = describe(err)
       const code = asEnvelope(err)?.code
       if (code) emit('failed', code)
-      if (code && TERMINAL.has(code)) passphrase.value = ''
+      if (code && TERMINAL.has(code)) {
+        passphrase.value = ''
+        requestPassphrase.value = ''
+      }
     } finally {
       busy.value = false
     }

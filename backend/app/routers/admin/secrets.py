@@ -14,7 +14,7 @@ from ...models.secret import SecretRecipient, SecretState
 from ...models.user import User
 from ...schemas.secret import AdminSecretListItem, AdminSecretListResponse
 from ...services import secret as secret_svc
-from ..secrets import _user_ref, summary
+from ..secrets import answered_via, sender_ref, summary
 
 router = APIRouter()
 
@@ -44,8 +44,8 @@ def list_secrets(
                 id=s.id,
                 state=s.state,
                 label=s.label,
-                sender=_user_ref(s.created_by),
-                sender_email=s.created_by.email if s.created_by is not None else "",
+                sender=sender_ref(s),
+                sender_email=s.created_by.email if s.created_by is not None else None,
                 created_at=s.created_at,
                 ended_at=s.ended_at,
                 expires_at=s.expires_at,
@@ -54,6 +54,9 @@ def list_secrets(
                 views_used=s.views_used,
                 has_passphrase=s.has_passphrase,
                 recipient_summary=summary(recipients),
+                is_answer=s.is_answer,
+                answered_via=answered_via(s),
+                answered_by_email=s.answered_by_email,
             )
         )
     return AdminSecretListResponse(items=items, total=total, page=page, page_size=page_size)

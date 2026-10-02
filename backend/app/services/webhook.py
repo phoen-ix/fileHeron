@@ -43,6 +43,8 @@ WEBHOOK_EVENTS: list[str] = [
     AuditEventType.secret_created.value,
     AuditEventType.secret_viewed.value,
     AuditEventType.secret_burned.value,
+    AuditEventType.secret_request_created.value,
+    AuditEventType.secret_request_answered.value,
     AuditEventType.oidc_linked.value,
     AuditEventType.user_erased.value,
     AuditEventType.anomaly_detected.value,

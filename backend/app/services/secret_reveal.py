@@ -54,6 +54,7 @@ from ..models.user import User, UserRole
 from ..utils.columns import declared_width
 from ..utils.crypto import (
     SecretPassphraseError,
+    SecretRequestPassphraseError,
     SecretUndecryptableError,
     open_secret_content,
     unwrap_secret_key,
@@ -190,7 +191,17 @@ def _throttled() -> AppError:
     )
 
 
-def _wrong_passphrase(burn_after: int | None, failed: int) -> AppError:
+def _wrong_passphrase(burn_after: int | None, failed: int, *, layer: str = "sender") -> AppError:
+    """403, never 401. `layer` says WHICH passphrase was wrong on an answer to
+    a request that carries both: only the signed-in requester can try one, so
+    naming the layer tells nobody else anything."""
+    if layer == "request":
+        return AppError(
+            403,
+            "SECRET_REQUEST_PASSPHRASE_INVALID",
+            "Your request's passphrase is not correct.",
+            details={"attempts_left": max(0, burn_after - failed) if burn_after else None},
+        )
     return AppError(
         403,
         "SECRET_PASSPHRASE_INVALID",
@@ -227,7 +238,9 @@ def _claimed(db: Session, stmt: Any) -> bool:
     return updated_rows(db.execute(stmt)) == 1
 
 
-def _unwrap(db: Session, secret: Secret, passphrase: str | None) -> bytes:
+def _unwrap(
+    db: Session, secret: Secret, passphrase: str | None, request_passphrase: str | None = None
+) -> bytes:
     if not secret.key_encrypted or not secret.ciphertext:
         # Ended between the state check and here - cannot happen under the row
         # lock, but an AppError beats a decrypt of None.
@@ -237,6 +250,10 @@ def _unwrap(db: Session, secret: Secret, passphrase: str | None) -> bytes:
         kdf_salt=secret.kdf_salt,
         kdf_params=secret.kdf_params,
         passphrase=passphrase,
+        req_kdf_salt=secret.req_kdf_salt,
+        req_kdf_params=secret.req_kdf_params,
+        req_ephemeral_key=secret.req_ephemeral_key,
+        request_passphrase=request_passphrase,
     )
 
 
@@ -356,6 +373,7 @@ def reveal_for_user(
     passphrase: str | None,
     ip: str | None,
     request=None,
+    request_passphrase: str | None = None,
 ) -> RevealResult:
     secret = _lock(db, secret_id)
     if secret is None:
@@ -384,16 +402,22 @@ def reveal_for_user(
         raise _exhausted()
 
     lim = secret_svc.limits(db)
-    if secret.has_passphrase:
-        if not passphrase:
-            raise AppError(
-                400, "SECRET_PASSPHRASE_REQUIRED", "This secret needs its passphrase."
-            )
+    if secret.has_request_passphrase and not request_passphrase:
+        raise AppError(
+            400,
+            "SECRET_REQUEST_PASSPHRASE_REQUIRED",
+            "This answer needs the passphrase you set on your request.",
+        )
+    if secret.has_passphrase and not passphrase:
+        raise AppError(400, "SECRET_PASSPHRASE_REQUIRED", "This secret needs its passphrase.")
+    if secret.has_passphrase or secret.has_request_passphrase:
         since = utc_now() - timedelta(seconds=lim.passphrase_window_sec)
         if _failures_since(db, secret, since, user_id=user.id) >= lim.passphrase_rate_limit:
             raise _throttled()
     try:
-        data_key = _unwrap(db, secret, passphrase)
+        data_key = _unwrap(db, secret, passphrase, request_passphrase)
+    except SecretRequestPassphraseError:
+        _user_wrong_passphrase(db, secret, state, reach, ip=ip, request=request, layer="request")
     except SecretPassphraseError:
         _user_wrong_passphrase(db, secret, state, reach, ip=ip, request=request)
     except SecretUndecryptableError:
@@ -437,6 +461,7 @@ def _user_wrong_passphrase(
     *,
     ip: str | None,
     request: Any,
+    layer: str = "sender",
 ) -> NoReturn:
     """Record a wrong passphrase from a signed-in recipient, commit, raise."""
     _event(
@@ -475,7 +500,7 @@ def _user_wrong_passphrase(
         db.commit()
         raise _burned_for_you()
     db.commit()
-    raise _wrong_passphrase(burn_after, state.failed_attempts)
+    raise _wrong_passphrase(burn_after, state.failed_attempts, layer=layer)
 
 
 # ---------------------------------------------------------------------------

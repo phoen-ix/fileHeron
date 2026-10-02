@@ -69,6 +69,21 @@ def _user_ref(user: User | None) -> SecretUserRef:
     return SecretUserRef(id=user.id, display_name=user.display_name)
 
 
+def sender_ref(secret: Secret) -> SecretUserRef | None:
+    """The sender, or None for an answer to a request written without an account."""
+    return _user_ref(secret.created_by) if secret.created_by is not None else None
+
+
+def answered_via(secret: Secret) -> Literal["user", "email", "link"] | None:
+    """How an answer to a request came in - derived from the secret alone, so it
+    still reads right once the request is pruned."""
+    if not secret.is_answer:
+        return None
+    if secret.created_by_id is not None:
+        return "user"
+    return "email" if secret.answered_by_email else "link"
+
+
 def summary(recipients: list[SecretRecipient]) -> SecretRecipientSummary:
     kinds = [r.kind for r in recipients]
     return SecretRecipientSummary(
@@ -219,7 +234,7 @@ def to_response(db: Session, secret: Secret, viewer: User) -> SecretResponse:
         id=secret.id,
         state=secret.state,
         label=secret.label,
-        sender=_user_ref(secret.created_by),
+        sender=sender_ref(secret),
         created_at=secret.created_at,
         ended_at=secret.ended_at,
         expires_at=secret.expires_at,
@@ -227,9 +242,16 @@ def to_response(db: Session, secret: Secret, viewer: User) -> SecretResponse:
         view_scope=secret.view_scope,
         views_used=secret.views_used if is_sender or is_admin else None,
         has_passphrase=secret.has_passphrase,
+        has_request_passphrase=secret.has_request_passphrase,
         notify_on_view=secret.notify_on_view,
         burn_after_failures=secret.burn_after_failures,
         viewer_role=role,
+        is_answer=secret.is_answer,
+        request_id=secret.request_id,
+        answered_via=answered_via(secret),
+        answered_by_email=secret.answered_by_email,
+        can_burn=secret.state == SecretState.active
+        and secret_svc.burn_reason(db, secret, viewer) is not None,
     )
     if state is not None:
         st = secret_reveal.standing(db, secret, viewer)
@@ -312,7 +334,7 @@ def list_secrets(
             id=s.id,
             state=s.state,
             label=s.label,
-            sender=_user_ref(s.created_by),
+            sender=sender_ref(s),
             created_at=s.created_at,
             ended_at=s.ended_at,
             expires_at=s.expires_at,
@@ -320,6 +342,9 @@ def list_secrets(
             view_scope=s.view_scope,
             views_used=s.views_used if box == "sent" else None,
             has_passphrase=s.has_passphrase,
+            is_answer=s.is_answer,
+            answered_via=answered_via(s),
+            answered_by_email=s.answered_by_email,
         )
         if box == "sent":
             item.recipient_summary = summary(_recipients(db, s))
@@ -359,6 +384,7 @@ def reveal_secret(
         secret_id=secret_id,
         user=user,
         passphrase=payload.passphrase,
+        request_passphrase=payload.request_passphrase,
         ip=get_client_ip(request),
         request=request,
     )

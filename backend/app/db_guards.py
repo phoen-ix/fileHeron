@@ -112,9 +112,28 @@ def column_collation(bind, table: str, column: str) -> str | None:
     return row[0] if row else None
 
 
+def has_foreign_key(bind, table: str, name: str) -> bool:
+    """True iff a foreign key constraint named `name` exists on `table`. SQLite
+    cannot add one after the fact, so a revision asks only on MariaDB; there it
+    replaces a bare `try: create_foreign_key ... except: pass`, which also hid
+    real failures (an INT column against a BIGINT key is errno 150)."""
+    if bind.dialect.name == "mysql":
+        row = bind.execute(
+            sa.text(
+                "SELECT 1 FROM information_schema.table_constraints "
+                "WHERE table_schema = DATABASE() AND table_name = :t "
+                "AND constraint_name = :n AND constraint_type = 'FOREIGN KEY' LIMIT 1"
+            ),
+            {"t": table, "n": name},
+        ).fetchone()
+        return row is not None
+    return any(fk.get("name") == name for fk in sa.inspect(bind).get_foreign_keys(table))
+
+
 # Revisions import these under their historical private names.
 _has_table = has_table
 _has_column = has_column
 _has_index = has_index
 _column_nullable = column_nullable
 _column_collation = column_collation
+_has_foreign_key = has_foreign_key

@@ -24,6 +24,7 @@
     ops_alert: 'reason',
     secret_viewed: 'via',
     secret_ended: 'reason',
+    secret_request_update: 'outcome',
   }
 
   const headline = computed(() => {

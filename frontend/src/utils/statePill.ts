@@ -1,4 +1,4 @@
-import type { SecretState, ShareState } from '@/types/api'
+import type { SecretRequestState, SecretState, ShareState } from '@/types/api'
 
 type PillTone = 'active' | 'warn' | 'danger' | undefined
 
@@ -33,5 +33,22 @@ export function secretStatePill(state: SecretState | string): PillTone {
   if (state === 'active') return 'active'
   if (state === 'expired') return 'warn'
   if (state === 'revoked') return 'danger'
+  return undefined
+}
+
+/** What a secret request's pill says: its state, or "expired" once it is past
+ *  its time even before the sweep has caught up (`closed_reason`). */
+export function secretRequestStateKey(r: {
+  state: SecretRequestState
+  closed_reason: string | null
+}): SecretRequestState {
+  return r.state === 'open' && r.closed_reason === 'expired' ? 'expired' : r.state
+}
+
+/** Secret request state (v2.24.0) → pill tone. Answered is the normal end. */
+export function secretRequestPill(state: SecretRequestState | string): PillTone {
+  if (state === 'open') return 'active'
+  if (state === 'expired') return 'warn'
+  if (state === 'cancelled') return 'danger'
   return undefined
 }

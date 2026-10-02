@@ -10,6 +10,7 @@ JWT_SECRET is the seed for the HKDF-derived Fernet key that protects:
 - ``webhooks.secret_encrypted``       (per-webhook HMAC signing secrets)
 - ``secrets.key_encrypted``           (each secret's wrapped content key)
 - ``secret_recipients.token_encrypted``  (secret links, re-viewable by the sender)
+- ``secret_request_targets.token_encrypted``  (secret request links, for the requester)
 
 If you rotate JWT_SECRET without this script, all of the above become
 unreadable - TOTP-enrolled users lock out, OIDC SSO breaks, the SMTP
@@ -98,6 +99,7 @@ from app.models.app_setting import AppSetting  # noqa: E402
 from app.models.oidc_provider import OIDCProvider  # noqa: E402
 from app.models.public_link import PublicLink  # noqa: E402
 from app.models.secret import Secret, SecretRecipient  # noqa: E402
+from app.models.secret_request import SecretRequestTarget  # noqa: E402
 from app.models.user_totp import UserTOTP  # noqa: E402
 from app.models.webhook import Webhook  # noqa: E402
 from app.utils.crypto import _FERNET_HKDF_INFO  # noqa: E402
@@ -270,6 +272,17 @@ def main() -> int:
         s = rotate_table(
             db, "secret_recipients.token_encrypted",
             db.query(SecretRecipient).all(),
+            lambda r: r.token_encrypted,
+            lambda r, v: setattr(r, "token_encrypted", v),
+            is_bytes=False, old=old_f, new=new_f,
+        )
+        total_errors += s.errors
+
+        # 8. Secret request links, kept so the requester can copy them again
+        # (str column, NULL for account targets and once a request has closed).
+        s = rotate_table(
+            db, "secret_request_targets.token_encrypted",
+            db.query(SecretRequestTarget).all(),
             lambda r: r.token_encrypted,
             lambda r, v: setattr(r, "token_encrypted", v),
             is_bytes=False, old=old_f, new=new_f,

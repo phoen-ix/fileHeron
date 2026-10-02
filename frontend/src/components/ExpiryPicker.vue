@@ -1,6 +1,6 @@
 <template>
   <div class="expiry-picker">
-    <label class="fh-field-label">{{ t('expiry.label') }}</label>
+    <label class="fh-field-label">{{ label ?? t('expiry.label') }}</label>
     <div class="presets">
       <button
         v-for="preset in presets"
@@ -50,6 +50,8 @@
      *  share form). The active preset's duration is emitted as `relative`
      *  (seconds); a typed date, or "never", emits null - those stay exact. */
     fromReady?: boolean
+    /** Replaces the default "Expires" label (a secret request is "Open until"). */
+    label?: string
   }>()
 
   const emit = defineEmits<{

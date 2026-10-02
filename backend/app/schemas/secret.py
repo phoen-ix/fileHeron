@@ -121,11 +121,16 @@ class SecretRecipientSummary(APIBaseModel):
     link: bool = False
 
 
+AnsweredVia = Literal["user", "email", "link"]
+
+
 class SecretResponse(APIBaseModel):
     id: str
     state: SecretState
     label: str | None
-    sender: SecretUserRef
+    # None for an answer to a request written without an account; then
+    # `answered_via` and `answered_by_email` say where it came from.
+    sender: SecretUserRef | None
     created_at: datetime
     ended_at: datetime | None
     expires_at: datetime | None
@@ -136,9 +141,19 @@ class SecretResponse(APIBaseModel):
     # `my_views_left` instead.
     views_used: int | None
     has_passphrase: bool
+    # The requester's own passphrase layer (an answer to a request only).
+    has_request_passphrase: bool = False
     notify_on_view: bool
     burn_after_failures: int | None
     viewer_role: Literal["sender", "admin", "recipient"]
+    # An answer to a secret request: which request (None once it is pruned),
+    # and through what it came.
+    is_answer: bool = False
+    request_id: str | None = None
+    answered_via: AnsweredVia | None = None
+    answered_by_email: str | None = None
+    # Burn now is offered: the sender, the requester of an answer, an admin.
+    can_burn: bool = False
     # The viewing recipient's own standing (recipient view only).
     my_views_left: int | None = None
     can_reveal: bool = False
@@ -159,7 +174,7 @@ class SecretListItem(APIBaseModel):
     id: str
     state: SecretState
     label: str | None
-    sender: SecretUserRef
+    sender: SecretUserRef | None
     created_at: datetime
     ended_at: datetime | None
     expires_at: datetime | None
@@ -172,6 +187,9 @@ class SecretListItem(APIBaseModel):
     # Received box: what the viewer may still view. Sent box: whom it went to.
     my_views_left: int | None = None
     recipient_summary: SecretRecipientSummary | None = None
+    is_answer: bool = False
+    answered_via: AnsweredVia | None = None
+    answered_by_email: str | None = None
 
 
 class SecretListResponse(APIBaseModel):
@@ -183,6 +201,8 @@ class SecretListResponse(APIBaseModel):
 
 class RevealSecretRequest(APIBaseModel):
     passphrase: str | None = Field(default=None, max_length=256)
+    # The passphrase the requester set on their request (an answer only).
+    request_passphrase: str | None = Field(default=None, max_length=256)
 
 
 class RevealSecretResponse(APIBaseModel):
@@ -277,7 +297,7 @@ class UpdateSecretPolicyRequest(APIBaseModel):
 
 
 class AdminSecretListItem(SecretListItem):
-    sender_email: str
+    sender_email: str | None
 
 
 class AdminSecretListResponse(APIBaseModel):

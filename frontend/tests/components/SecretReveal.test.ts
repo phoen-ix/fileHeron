@@ -12,8 +12,12 @@ import type { RevealSecretResponse } from '@/types/api'
 
 function mountCard(props: {
   requiresPassphrase: boolean
+  requiresRequestPassphrase?: boolean
   viewsLeft: number | null
-  reveal: (passphrase: string | null) => Promise<RevealSecretResponse>
+  reveal: (
+    passphrase: string | null,
+    requestPassphrase: string | null,
+  ) => Promise<RevealSecretResponse>
 }) {
   const i18n = createI18n({ legacy: false, locale: 'en', fallbackLocale: 'en', messages: { en } })
   return mount(SecretReveal, { props, global: { plugins: [i18n] } })
@@ -36,7 +40,8 @@ describe('SecretReveal', () => {
     const w = mountCard({ requiresPassphrase: false, viewsLeft: 3, reveal })
     await w.find('[data-testid="reveal-button"]').trigger('submit')
     await flushPromises()
-    expect(reveal).toHaveBeenCalledWith(null)
+    // No passphrase layer asked for: neither is sent.
+    expect(reveal).toHaveBeenCalledWith(null, null)
     const box = w.find('[data-testid="secret-content"]')
     expect(box.text()).toBe(hostile)
     expect(box.find('img').exists()).toBe(false)
@@ -62,7 +67,7 @@ describe('SecretReveal', () => {
     await w.find('[data-testid="reveal-passphrase"]').setValue('guess')
     await w.find('form').trigger('submit')
     await flushPromises()
-    expect(reveal).toHaveBeenCalledWith('guess')
+    expect(reveal).toHaveBeenCalledWith('guess', null)
     expect(w.find('[role="alert"]').text()).toContain(en.errors.SECRET_PASSPHRASE_INVALID)
     expect(w.emitted('failed')?.[0]).toEqual(['SECRET_PASSPHRASE_INVALID'])
   })
@@ -73,5 +78,28 @@ describe('SecretReveal', () => {
     await w.find('form').trigger('submit')
     await flushPromises()
     expect(w.find('[data-testid="reveal-gone"]').text()).toBe(en.secrets.reveal.destroyed)
+  })
+
+  it('asks for the request passphrase on an answer sealed to it, and sends both', async () => {
+    const reveal = vi.fn().mockResolvedValue({ content: 'x', views_left: 0, ended: true })
+    const w = mountCard({
+      requiresPassphrase: true,
+      requiresRequestPassphrase: true,
+      viewsLeft: 1,
+      reveal,
+    })
+    const button = w.find('[data-testid="reveal-button"]')
+    await w.find('[data-testid="reveal-passphrase"]').setValue('theirs')
+    expect(button.attributes('disabled')).toBeDefined()
+    await w.find('[data-testid="reveal-request-passphrase"]').setValue('mine')
+    expect(button.attributes('disabled')).toBeUndefined()
+    await w.find('form').trigger('submit')
+    await flushPromises()
+    expect(reveal).toHaveBeenCalledWith('theirs', 'mine')
+  })
+
+  it('shows no request passphrase field for an ordinary secret', () => {
+    const w = mountCard({ requiresPassphrase: true, viewsLeft: 1, reveal: vi.fn() })
+    expect(w.find('[data-testid="reveal-request-passphrase"]').exists()).toBe(false)
   })
 })

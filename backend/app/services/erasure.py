@@ -559,6 +559,10 @@ def _erase_user_locked(
     from . import secret as secret_svc
 
     pii_purged["secrets_deleted"] = secret_svc.erase_user(db, target)
+    # Their secret requests go too, and every trace of them as someone asked.
+    from . import secret_request as request_svc
+
+    pii_purged["secret_requests_deleted"] = request_svc.erase_user(db, target)
 
     # audit_log rows are retained, but two event types carry the person's
     # plaintext addresses in their metadata, so the note below - "references the

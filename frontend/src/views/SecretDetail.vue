@@ -64,10 +64,20 @@
     }
   }
 
-  async function reveal(passphrase: string | null) {
-    const { data } = await revealSecret(id.value, passphrase)
+  async function reveal(passphrase: string | null, requestPassphrase: string | null) {
+    const { data } = await revealSecret(id.value, passphrase, requestPassphrase)
     return data
   }
+
+  /** Who it is from: the sender, or - for an answer to a request written
+   *  without an account - the address or the request link it came through. */
+  const fromText = computed(() => {
+    const s = secret.value
+    if (!s) return ''
+    if (s.sender) return s.sender.display_name
+    if (s.answered_via === 'email') return s.answered_by_email ?? ''
+    return t('secrets.detail.via_request_link')
+  })
 
   const revealedHere = ref(false)
   function onRevealed() {
@@ -223,10 +233,20 @@
         </span>
       </div>
 
+      <p v-if="secret.is_answer" class="answer-note" data-testid="answer-note">
+        {{ isRecipient ? t('secrets.detail.answer_to_yours') : t('secrets.detail.answer_by_you') }}
+        <RouterLink
+          v-if="secret.request_id && isRecipient"
+          :to="{ name: 'secret-request-detail', params: { id: secret.request_id } }"
+        >
+          {{ t('secrets.detail.see_request') }}
+        </RouterLink>
+      </p>
+
       <dl class="kvs">
         <div class="kv">
           <dt class="kv-label">{{ t('secrets.detail.from') }}</dt>
-          <dd class="kv-value">{{ secret.sender.display_name }}</dd>
+          <dd class="kv-value" data-testid="secret-from">{{ fromText }}</dd>
         </div>
         <div class="kv">
           <dt class="kv-label">{{ t('secrets.detail.sent') }}</dt>
@@ -252,6 +272,12 @@
             }}
           </dd>
         </div>
+        <div v-if="secret.is_answer" class="kv">
+          <dt class="kv-label">{{ t('secrets.detail.request_passphrase') }}</dt>
+          <dd class="kv-value">
+            {{ secret.has_request_passphrase ? t('common.yes') : t('common.no') }}
+          </dd>
+        </div>
         <div v-if="secret.ended_at" class="kv">
           <dt class="kv-label">{{ t('secrets.detail.ended_at') }}</dt>
           <dd class="kv-value fh-mono">{{ formatDate(secret.ended_at) }}</dd>
@@ -266,6 +292,7 @@
         <SecretReveal
           v-if="secret.can_reveal || revealedHere"
           :requires-passphrase="secret.has_passphrase"
+          :requires-request-passphrase="secret.has_request_passphrase"
           :views-left="secret.my_views_left ?? null"
           :attempts-left="
             secret.burn_after_failures
@@ -277,6 +304,18 @@
           @failed="load"
         />
         <p v-else class="fh-notice" data-testid="not-revealable">{{ notRevealable }}</p>
+        <!-- The requester may discard an answer to their own request unread. -->
+        <div v-if="secret.can_burn" class="actions-row">
+          <button
+            type="button"
+            class="fh-btn-text danger"
+            :disabled="burning"
+            data-testid="burn-answer"
+            @click="onBurn"
+          >
+            {{ burning ? t('common.loading') : t('secrets.detail.burn_answer') }}
+          </button>
+        </div>
       </section>
 
       <p v-else class="fh-field-help sender-note">
@@ -284,7 +323,9 @@
       </p>
 
       <template v-if="showsRoster">
-        <div v-if="active" class="actions-row">
+        <!-- A reader (the requester of an answer, even an admin) burns from the
+             reveal section above; never two buttons for one action. -->
+        <div v-if="secret.can_burn && !isRecipient" class="actions-row">
           <button
             type="button"
             class="fh-btn fh-btn-danger"
@@ -473,6 +514,14 @@
 
   .sender-note {
     max-width: 64ch;
+  }
+
+  .answer-note {
+    margin: 0 0 var(--fh-space-3);
+    color: var(--fh-ink-soft);
+    display: flex;
+    gap: var(--fh-space-2);
+    flex-wrap: wrap;
   }
 
   .section-h2 {

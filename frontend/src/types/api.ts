@@ -520,6 +520,8 @@ export type NotificationCategory =
   | 'secret_received'
   | 'secret_viewed'
   | 'secret_ended'
+  | 'secret_requested'
+  | 'secret_request_update'
 
 export type NotificationChannel = 'off' | 'email' | 'in_app' | 'both'
 
@@ -1523,11 +1525,15 @@ export interface SecretRecipientSummary {
   link?: boolean
 }
 
+/** How an answer to a secret request came in. */
+export type AnsweredVia = 'user' | 'email' | 'link'
+
 export interface SecretResponse {
   id: string
   state: SecretState
   label: string | null
-  sender: SecretUserRef
+  /** null for an answer to a request written without an account. */
+  sender: SecretUserRef | null
   created_at: string
   ended_at: string | null
   expires_at: string | null
@@ -1536,9 +1542,17 @@ export interface SecretResponse {
   /** Sender and admins only; null for a recipient (who reads my_views_left). */
   views_used: number | null
   has_passphrase: boolean
+  /** An answer to the reader's request, sealed to the passphrase they set. */
+  has_request_passphrase?: boolean
   notify_on_view: boolean
   burn_after_failures: number | null
   viewer_role: 'sender' | 'admin' | 'recipient'
+  is_answer?: boolean
+  request_id?: string | null
+  answered_via?: AnsweredVia | null
+  answered_by_email?: string | null
+  /** Burn now is offered: the sender, the requester of an answer, an admin. */
+  can_burn?: boolean
   my_views_left?: number | null
   can_reveal?: boolean
   still_recipient?: boolean
@@ -1556,7 +1570,7 @@ export interface SecretListItem {
   id: string
   state: SecretState
   label: string | null
-  sender: SecretUserRef
+  sender: SecretUserRef | null
   created_at: string
   ended_at: string | null
   expires_at: string | null
@@ -1567,6 +1581,9 @@ export interface SecretListItem {
   has_passphrase: boolean
   my_views_left?: number | null
   recipient_summary?: SecretRecipientSummary | null
+  is_answer?: boolean
+  answered_via?: AnsweredVia | null
+  answered_by_email?: string | null
 }
 
 export interface SecretListResponse {
@@ -1578,6 +1595,7 @@ export interface SecretListResponse {
 
 export interface RevealSecretRequest {
   passphrase?: string | null
+  request_passphrase?: string | null
 }
 
 export interface RevealSecretResponse {
@@ -1663,11 +1681,135 @@ export interface UpdateSecretPolicyRequest {
 }
 
 export interface AdminSecretListItem extends SecretListItem {
-  sender_email: string
+  sender_email: string | null
 }
 
 export interface AdminSecretListResponse {
   items: AdminSecretListItem[]
+  total?: number
+  page?: number
+  page_size?: number
+}
+
+/* Secret requests (v2.24.0) - backend schemas/secret_request.py. Asking someone
+ * for a secret; the answer becomes an ordinary secret for the requester, so no
+ * type here ever carries a secret's text on the way out. */
+
+export type SecretRequestState = 'open' | 'fulfilled' | 'cancelled' | 'expired'
+
+export interface CreateSecretRequestRequest {
+  label: string
+  note?: string | null
+  expires_at: string
+  answer_max_views?: number | null
+  answer_expires_in_sec?: number | null
+  passphrase?: string | null
+  recipients?: SecretRecipientsRequest
+  create_link?: boolean
+}
+
+export interface SecretRequestTargetStatus {
+  id: number
+  kind: SecretRecipientKind
+  user?: SecretUserRef | null
+  group?: SecretGroupRef | null
+  email?: string | null
+  notified_at?: string | null
+}
+
+export interface SecretRequestResponse {
+  id: string
+  state: SecretRequestState
+  /** Why it takes no answer, or null while open ("expired" also before the sweep). */
+  closed_reason: string | null
+  label: string
+  note: string | null
+  requester: SecretUserRef
+  created_at: string
+  expires_at: string
+  ended_at: string | null
+  answer_max_views: number | null
+  answer_expires_in_sec: number | null
+  has_passphrase: boolean
+  viewer_role: 'requester' | 'target' | 'admin'
+  can_answer?: boolean
+  targets?: SecretRequestTargetStatus[]
+  target_summary?: SecretRecipientSummary
+  fulfilled_at?: string | null
+  answered_via?: AnsweredVia | null
+  answered_by?: SecretUserRef | null
+  answered_by_email?: string | null
+  answer_secret_id?: string | null
+  /** Create response only, when a link was made. */
+  link_url?: string | null
+  link_qr_svg?: string | null
+}
+
+export interface SecretRequestListItem {
+  id: string
+  state: SecretRequestState
+  closed_reason: string | null
+  label: string
+  requester: SecretUserRef
+  created_at: string
+  expires_at: string
+  ended_at: string | null
+  has_passphrase: boolean
+  target_summary?: SecretRecipientSummary | null
+  answer_secret_id?: string | null
+  can_answer?: boolean
+}
+
+export interface SecretRequestListResponse {
+  items: SecretRequestListItem[]
+  total?: number
+  page?: number
+  page_size?: number
+}
+
+export interface AnswerSecretRequestRequest {
+  content: string
+  passphrase?: string | null
+}
+
+export interface AnswerSecretRequestResponse {
+  ok: boolean
+  requester_name: string | null
+}
+
+export interface PublicAnswerSecretRequestRequest extends PublicSecretTokenRequest {
+  content: string
+  passphrase?: string | null
+}
+
+export interface PublicSecretRequestPeekResponse {
+  requester_name: string | null
+  label: string
+  note: string | null
+  expires_at: string
+  answer_max_views: number | null
+  answer_expires_in_sec: number | null
+  has_passphrase: boolean
+}
+
+export interface SecretRequestLinkItem {
+  target_id: number
+  kind: SecretRecipientKind
+  email: string | null
+  url: string | null
+  qr_svg: string | null
+}
+
+export interface SecretRequestLinksResponse {
+  items: SecretRequestLinkItem[]
+}
+
+export interface AdminSecretRequestListItem extends SecretRequestListItem {
+  requester_email: string
+}
+
+export interface AdminSecretRequestListResponse {
+  items: AdminSecretRequestListItem[]
   total?: number
   page?: number
   page_size?: number

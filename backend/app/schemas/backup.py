@@ -50,6 +50,7 @@ class BackupImportSummaryResponse(BaseModel):
     shares_to_invalidate: int
     files_deleted: int = 0
     secrets_to_burn: int = 0
+    secret_requests_to_cancel: int = 0
     counts: dict[str, Any]
     purged_users: list[str]
     purged_groups: list[str]

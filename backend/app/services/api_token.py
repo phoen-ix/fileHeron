@@ -66,6 +66,7 @@ SCOPES: frozenset[str] = frozenset(
         "secrets:reveal",     # POST /api/secrets/{id}/reveal (the content)
         "secrets:manage",     # burn; create/replace/remove the copyable link
         "secrets:links",      # read back a secret's link URLs (re-viewable)
+        "secrets:request",    # ask for a secret: create/list/cancel requests, read their links
     }
 )
 

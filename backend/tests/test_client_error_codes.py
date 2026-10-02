@@ -81,6 +81,14 @@ _NOT_CLIENT_REACHABLE = {
     "SECRET_REVEAL_FORBIDDEN": _SECRETS_WEB_ONLY,
     "SECRET_UNREADABLE": _SECRETS_WEB_ONLY,
     "SECRET_VIEWS_EXHAUSTED": _SECRETS_WEB_ONLY,
+    # Secret requests (v2.24.0): /api/secret-requests/* and
+    # /api/public/secret-requests/* - web only, like the secrets above.
+    "SECRET_REQUEST_CLOSED": _SECRETS_WEB_ONLY,
+    "SECRET_REQUEST_LABEL_INVALID": _SECRETS_WEB_ONLY,
+    "SECRET_REQUEST_NOT_FOUND": _SECRETS_WEB_ONLY,
+    "SECRET_REQUEST_PASSPHRASE_INVALID": _SECRETS_WEB_ONLY,
+    "SECRET_REQUEST_PASSPHRASE_REQUIRED": _SECRETS_WEB_ONLY,
+    "SECRET_REQUEST_SELF": _SECRETS_WEB_ONLY,
 }
 
 # Admin-only service modules, mirroring test_error_code_i18n_coverage.py.

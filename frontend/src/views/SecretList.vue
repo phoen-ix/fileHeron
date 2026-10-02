@@ -1,12 +1,14 @@
 <script setup lang="ts">
-  /* /secrets - the secrets sent to me and the ones I sent (v2.24.0).
-   * Metadata only: a secret is opened on its own page, never from a list. */
+  /* /secrets - the secrets sent to me, the ones I sent, and secret requests
+   * (v2.24.0). Metadata only: a secret is opened on its own page, never from a
+   * list. The Requests tab is its own component with its own filters. */
   import { computed, onMounted, ref, watch } from 'vue'
   import { useI18n } from 'vue-i18n'
   import { useRoute, useRouter } from 'vue-router'
 
   import { listSecrets } from '@/api/secrets'
   import Pager from '@/components/Pager.vue'
+  import SecretRequestList from '@/components/SecretRequestList.vue'
   import { useApiError } from '@/composables/useApiError'
   import { useDebouncedSearch } from '@/composables/useDebouncedSearch'
   import { useSiteDateFormat } from '@/composables/useSiteDateFormat'
@@ -21,8 +23,9 @@
   const router = useRouter()
   const auth = useAuthStore()
 
-  const box = computed<'received' | 'sent'>(() =>
-    route.query.box === 'sent' ? 'sent' : 'received',
+  type Box = 'received' | 'sent' | 'requests'
+  const box = computed<Box>(() =>
+    route.query.box === 'sent' ? 'sent' : route.query.box === 'requests' ? 'requests' : 'received',
   )
   const canSend = computed(() => auth.user?.can_send_secrets === true)
 
@@ -42,11 +45,12 @@
   const errorMsg = ref<string | null>(null)
 
   async function load() {
+    if (box.value === 'requests') return
     loading.value = true
     errorMsg.value = null
     try {
       const { data } = await listSecrets({
-        box: box.value,
+        box: box.value === 'sent' ? 'sent' : 'received',
         state: STATES[stateFilter.value],
         q: q.value || undefined,
         page: page.value,
@@ -61,7 +65,7 @@
     }
   }
 
-  function setBox(next: 'received' | 'sent') {
+  function setBox(next: Box) {
     if (next !== box.value) router.replace({ name: 'secrets', query: { box: next } })
   }
 
@@ -94,6 +98,14 @@
       : t('secrets.views.used_of', { used: s.views_used, max: s.max_views })
   }
 
+  /** Who a received secret is from - the sender, or how an answer to my
+   *  request came in when nobody signed in wrote it. */
+  function fromText(s: SecretListItem): string {
+    if (s.sender) return s.sender.display_name
+    if (s.answered_via === 'email') return s.answered_by_email ?? ''
+    return t('secrets.detail.via_request_link')
+  }
+
   function audience(sum: SecretRecipientSummary | null | undefined): string {
     if (!sum) return '-'
     const parts: string[] = []
@@ -114,9 +126,18 @@
         <span class="fh-eyebrow">{{ t('secrets.eyebrow') }}</span>
         <h1 class="fh-display-md">{{ t('secrets.title') }}</h1>
       </div>
-      <RouterLink v-if="canSend" :to="{ name: 'secret-create' }" class="fh-btn">
-        {{ t('secrets.new') }} <span aria-hidden="true">→</span>
-      </RouterLink>
+      <div v-if="canSend" class="header-actions">
+        <RouterLink
+          :to="{ name: 'secret-request-create' }"
+          class="fh-btn-text"
+          data-testid="request-secret"
+        >
+          {{ t('secret_requests.new') }}
+        </RouterLink>
+        <RouterLink :to="{ name: 'secret-create' }" class="fh-btn">
+          {{ t('secrets.new') }} <span aria-hidden="true">→</span>
+        </RouterLink>
+      </div>
     </div>
     <p class="fh-field-help intro">{{ t('secrets.intro') }}</p>
 
@@ -142,23 +163,36 @@
         >
           {{ t('secrets.box.sent') }}
         </button>
+        <button
+          type="button"
+          class="box-btn"
+          :aria-pressed="box === 'requests'"
+          data-testid="box-requests"
+          @click="setBox('requests')"
+        >
+          {{ t('secrets.box.requests') }}
+        </button>
       </div>
-      <input
-        v-model.trim="q"
-        type="search"
-        class="fh-field-input search"
-        autocomplete="off"
-        :aria-label="t('secrets.search_placeholder')"
-        :placeholder="t('secrets.search_placeholder')"
-      />
-      <select v-model="stateFilter" class="filter-select" :aria-label="t('secrets.filter_label')">
-        <option value="active">{{ t('secrets.filter.active') }}</option>
-        <option value="ended">{{ t('secrets.filter.ended') }}</option>
-        <option value="all">{{ t('secrets.filter.all') }}</option>
-      </select>
+      <template v-if="box !== 'requests'">
+        <input
+          v-model.trim="q"
+          type="search"
+          class="fh-field-input search"
+          autocomplete="off"
+          :aria-label="t('secrets.search_placeholder')"
+          :placeholder="t('secrets.search_placeholder')"
+        />
+        <select v-model="stateFilter" class="filter-select" :aria-label="t('secrets.filter_label')">
+          <option value="active">{{ t('secrets.filter.active') }}</option>
+          <option value="ended">{{ t('secrets.filter.ended') }}</option>
+          <option value="all">{{ t('secrets.filter.all') }}</option>
+        </select>
+      </template>
     </div>
 
-    <div v-if="loading" class="loading">{{ t('common.loading') }}</div>
+    <SecretRequestList v-if="box === 'requests'" :can-request="canSend" />
+
+    <div v-else-if="loading" class="loading">{{ t('common.loading') }}</div>
     <div v-else-if="errorMsg" class="fh-notice" role="alert" data-tone="error">{{ errorMsg }}</div>
 
     <template v-else-if="items.length > 0">
@@ -193,7 +227,7 @@
                 </div>
               </td>
               <td>
-                <template v-if="box === 'received'">{{ s.sender.display_name }}</template>
+                <template v-if="box === 'received'">{{ fromText(s) }}</template>
                 <template v-else>{{ audience(s.recipient_summary) }}</template>
               </td>
               <td class="fh-mono">{{ viewsCell(s) }}</td>
@@ -229,6 +263,12 @@
 
   .intro {
     max-width: 64ch;
+  }
+
+  .header-actions {
+    display: flex;
+    gap: var(--fh-space-4);
+    align-items: center;
   }
 
   .filters {

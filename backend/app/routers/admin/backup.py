@@ -107,6 +107,7 @@ def _to_response(summary: cb.ImportSummary) -> BackupImportSummaryResponse:
         shares_to_invalidate=summary.shares_to_invalidate,
         files_deleted=summary.files_deleted,
         secrets_to_burn=summary.secrets_to_burn,
+        secret_requests_to_cancel=summary.secret_requests_to_cancel,
         counts=summary.counts,
         purged_users=summary.purged_users,
         purged_groups=summary.purged_groups,

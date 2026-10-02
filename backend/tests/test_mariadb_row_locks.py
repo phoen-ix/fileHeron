@@ -208,3 +208,49 @@ def test_a_secret_reveal_locks_the_secret_row(mariadb, locked_user):
         conn.close()
         with mariadb.begin() as c:
             c.execute(sa.text("DELETE FROM secrets WHERE id = :i"), {"i": sid})
+
+
+@_SKIP
+def test_answering_a_secret_request_locks_the_request_row(mariadb, locked_user):
+    """Secret requests (v2.24.0): the answer path locks the request row before
+    it checks state and expiry, so a concurrent answer, Cancel or the expiry
+    sweep cannot interleave between the check and the claim. The claim itself
+    is a conditional UPDATE and would hold alone - the lock is what keeps the
+    answer secret from being written for a request that just closed. Asserted
+    on the emitted SQL."""
+    import inspect
+
+    from app.services import secret_request
+
+    assert "_lock(db" in inspect.getsource(secret_request.answer_request), (
+        "answer_request no longer locks"
+    )
+
+    rid = "00000000-0000-4000-8000-0000000000b1"
+    with mariadb.begin() as conn:
+        conn.execute(sa.text("DELETE FROM secret_requests WHERE id = :i"), {"i": rid})
+        conn.execute(
+            sa.text(
+                "INSERT INTO secret_requests (id, requester_id, label, state, expires_at, "
+                "answer_max_views, created_at) "
+                "SELECT :i, id, 'lock test', 'open', NOW() + INTERVAL 1 DAY, 1, NOW() "
+                "FROM users WHERE email = :e"
+            ),
+            {"i": rid, "e": _EMAIL},
+        )
+    statements: list[str] = []
+    conn = mariadb.connect()
+    try:
+        @sa.event.listens_for(conn, "before_cursor_execute")
+        def _capture(_c, _cur, stmt, _p, _ctx, _many):  # noqa: ANN001
+            statements.append(stmt)
+
+        with Session(bind=conn) as db:
+            assert secret_request._lock(db, rid) is not None
+        assert any(
+            "FOR UPDATE" in s.upper() and "FROM secret_requests" in s for s in statements
+        ), statements
+    finally:
+        conn.close()
+        with mariadb.begin() as c:
+            c.execute(sa.text("DELETE FROM secret_requests WHERE id = :i"), {"i": rid})

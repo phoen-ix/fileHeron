@@ -37,13 +37,17 @@ logger = logging.getLogger("fileheron.mail_log")
 # so the two cannot drift apart and leave live tokens in the log.
 # And a secret's link, {site}{SECRET_LINK_BASE_PATH}#{token} (services/secret.py):
 # the token is in the FRAGMENT there, so it is matched after `#`, not `/`. It IS
-# the secret for whoever opens it.
+# the secret for whoever opens it. A secret REQUEST's answer link,
+# {site}{REQUEST_LINK_BASE_PATH}#{token} (services/secret_request.py), likewise:
+# whoever holds it answers in the requester's name.
 _AUTH_LINK_RE = re.compile(
     r"(/(?:reset-password|verify-email|register|confirm-email-change"
     r"|cancel-email-change|"
     + re.escape(settings.PUBLIC_LINK_BASE_PATH.strip("/"))
     + r")/|"
     + re.escape(settings.SECRET_LINK_BASE_PATH)
+    + r"#|"
+    + re.escape(settings.REQUEST_LINK_BASE_PATH)
     + r"#)([A-Za-z0-9._~\-]+)"
 )
 _REDACTED = r"\1<redacted>"
@@ -71,6 +75,7 @@ _AUTH_LINK_CATEGORIES = {
     "email_change_alert",
     "share_link_external",
     "secret_link_external",
+    "secret_request_external",
 }
 
 _BODY_UNAVAILABLE = "[body unavailable: masking error]"

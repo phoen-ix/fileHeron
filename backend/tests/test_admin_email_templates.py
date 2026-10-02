@@ -28,11 +28,13 @@ async def test_list_returns_all_slugs_and_locales(make_user, client, login_as):
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert {loc["code"] for loc in body["locales"]} == {"en", "de"}
-    # 22 + the four secret templates (v2.24.0), in their own group.
-    assert len(body["items"]) == 26
+    # 22 + the four secret and three secret-request templates (v2.24.0), in
+    # their own group.
+    assert len(body["items"]) == 29
     assert "secrets" in body["groups"]
     assert {i["slug"] for i in body["items"] if i["group"] == "secrets"} == {
         "secret_received", "secret_link_external", "secret_viewed", "secret_ended",
+        "secret_requested", "secret_request_external", "secret_request_update",
     }
     item = next(i for i in body["items"] if i["slug"] == "share_created")
     assert item["has_override"] == {"en": False, "de": False}

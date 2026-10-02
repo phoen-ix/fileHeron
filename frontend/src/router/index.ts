@@ -160,6 +160,20 @@ const router = createRouter({
       component: () => import('@/views/SecretCreate.vue'),
       meta: { density: 'operator', titleKey: 'secret_create' },
     },
+    /* secret requests (v2.24.0): asking someone for a secret. Three segments,
+     * so '/secrets/:id' never captures them. */
+    {
+      path: '/secrets/requests/new',
+      name: 'secret-request-create',
+      component: () => import('@/views/SecretRequestCreate.vue'),
+      meta: { density: 'operator', titleKey: 'secret_request_create' },
+    },
+    {
+      path: '/secrets/requests/:id',
+      name: 'secret-request-detail',
+      component: () => import('@/views/SecretRequestDetail.vue'),
+      meta: { density: 'operator', titleKey: 'secret_request_detail' },
+    },
     {
       path: '/secrets/:id',
       name: 'secret-detail',
@@ -385,6 +399,16 @@ const router = createRouter({
               meta: { density: 'operator', titleKey: 'admin_secrets', requiresRole: 'admin' },
             },
             {
+              path: '/admin/secret-requests',
+              name: 'admin-secret-requests',
+              component: () => import('@/views/AdminSecretRequests.vue'),
+              meta: {
+                density: 'operator',
+                titleKey: 'admin_secret_requests',
+                requiresRole: 'admin',
+              },
+            },
+            {
               path: '/admin/settings/secrets',
               name: 'admin-settings-secrets',
               component: () => import('@/views/AdminSettingsSecrets.vue'),
@@ -592,6 +616,15 @@ const router = createRouter({
       name: 'public-secret',
       component: () => import('@/views/PublicSecret.vue'),
       meta: { public: true, density: 'editorial', titleKey: 'public_secret' },
+    },
+
+    /* answer a secret request without an account (v2.24.0) - the token is the
+     * URL FRAGMENT (/r#<token>), like /s. */
+    {
+      path: '/r',
+      name: 'public-secret-request',
+      component: () => import('@/views/PublicSecretRequest.vue'),
+      meta: { public: true, density: 'editorial', titleKey: 'public_secret_request' },
     },
 
     /* anonymous "manage subscriptions" page (email footer links) ----------- */

@@ -408,6 +408,59 @@ def is_exhausted(db: Session, secret: Secret) -> bool:
 # ---------------------------------------------------------------------------
 
 
+def store_sealed(
+    db: Session,
+    *,
+    created_by_id: int | None,
+    content: str,
+    label: str | None,
+    passphrase: str | None,
+    max_views: int | None,
+    view_scope: SecretViewScope,
+    expires_at: datetime | None,
+    notify_on_view: bool,
+    burn_on_failures: bool,
+    lim: Limits,
+    request_keys: tuple[str, str, str] | None = None,
+    **answer_fields: object,
+) -> Secret:
+    """Encrypt `content` and store the secret row - the ONE place a secret is
+    sealed, for a sent secret and an answer to a request alike. `request_keys`
+    is the requester's (kdf_salt, kdf_params, public_key) when the answer is
+    sealed to their passphrase. Caller adds the readers and commits."""
+    request_public_key = request_keys[2] if request_keys else None
+    sealed = seal_secret(content, passphrase or None, request_public_key=request_public_key)
+    burn_after: int | None = None
+    if (passphrase or request_keys) and (
+        lim.passphrase_failure_mode == "burn" or burn_on_failures
+    ):
+        burn_after = lim.passphrase_max_failures
+    secret = Secret(
+        created_by_id=created_by_id,
+        label=(label or "").strip()[:_LABEL_MAX] or None,
+        ciphertext=sealed.ciphertext,
+        key_encrypted=sealed.key_encrypted,
+        kdf_salt=sealed.kdf_salt,
+        kdf_params=sealed.kdf_params,
+        has_passphrase=bool(passphrase),
+        req_kdf_salt=request_keys[0] if request_keys else None,
+        req_kdf_params=request_keys[1] if request_keys else None,
+        req_ephemeral_key=sealed.req_ephemeral_key,
+        has_request_passphrase=bool(request_keys),
+        max_views=max_views,
+        view_scope=view_scope if max_views is not None else SecretViewScope.per_person,
+        views_used=0,
+        expires_at=expires_at,
+        notify_on_view=notify_on_view,
+        burn_after_failures=burn_after,
+        state=_ACTIVE,
+        **answer_fields,
+    )
+    db.add(secret)
+    db.flush()
+    return secret
+
+
 @dataclass
 class CreatedSecret:
     secret: Secret
@@ -559,29 +612,19 @@ def create_secret(
         )
     users, groups = _validate_recipients(db, sender, user_ids, group_ids)
 
-    sealed = seal_secret(content, passphrase or None)
-    burn_after: int | None = None
-    if passphrase and (lim.passphrase_failure_mode == "burn" or burn_on_failures):
-        burn_after = lim.passphrase_max_failures
-
-    secret = Secret(
+    secret = store_sealed(
+        db,
         created_by_id=sender.id,
-        label=(label or "").strip()[:_LABEL_MAX] or None,
-        ciphertext=sealed.ciphertext,
-        key_encrypted=sealed.key_encrypted,
-        kdf_salt=sealed.kdf_salt,
-        kdf_params=sealed.kdf_params,
-        has_passphrase=bool(passphrase),
+        content=content,
+        label=label,
+        passphrase=passphrase,
         max_views=max_views,
-        view_scope=view_scope if max_views is not None else SecretViewScope.per_person,
-        views_used=0,
+        view_scope=view_scope,
         expires_at=expires_at,
         notify_on_view=notify_on_view,
-        burn_after_failures=burn_after,
-        state=_ACTIVE,
+        burn_on_failures=burn_on_failures,
+        lim=lim,
     )
-    db.add(secret)
-    db.flush()
 
     readers: list[int] = []
     for u in users:
@@ -634,7 +677,7 @@ def create_secret(
             "view_scope": secret.view_scope.value,
             "expires_at": expires_at.isoformat() if expires_at else None,
             "has_passphrase": secret.has_passphrase,
-            "burn_after_failures": burn_after,
+            "burn_after_failures": secret.burn_after_failures,
             "notify_on_view": notify_on_view,
         },
         request=request,
@@ -768,7 +811,7 @@ def notify_viewed(
     views_left: int | None,
 ) -> None:
     """Tell the sender a view happened, if they asked to be told."""
-    if not secret.notify_on_view:
+    if not secret.notify_on_view or secret.created_by_id is None:
         return
     sender = db.get(User, secret.created_by_id)
     if sender is None or sender.is_disabled:
@@ -804,7 +847,8 @@ def notify_viewed(
 
 
 def _notify_ended(db: Session, secret: Secret, reason: str) -> None:
-    sender = db.get(User, secret.created_by_id)
+    # An answer written without an account has nobody to tell.
+    sender = db.get(User, secret.created_by_id) if secret.created_by_id is not None else None
     if sender is None or sender.is_disabled:
         return
     from . import notification as notif_svc
@@ -866,6 +910,9 @@ def end_secret(
                 key_encrypted=None,
                 kdf_salt=None,
                 kdf_params=None,
+                req_kdf_salt=None,
+                req_kdf_params=None,
+                req_ephemeral_key=None,
             )
             .execution_options(synchronize_session=False)
         )
@@ -886,8 +933,14 @@ def end_secret(
         request=request,
     )
     if notify:
-        if state == SecretState.revoked and actor is not None and actor.id != secret.created_by_id:
-            # Someone else burned the sender's secret: always worth telling them.
+        if (
+            state == SecretState.revoked
+            and actor is not None
+            and actor.role == UserRole.admin
+            and actor.id != secret.created_by_id
+        ):
+            # An admin burned the sender's secret: always worth telling them.
+            # (The requester discarding their own answer is not news to anyone.)
             _notify_ended(db, secret, "revoked_by_admin")
         elif secret.notify_on_view and state == SecretState.burned:
             _notify_ended(db, secret, "burned")
@@ -907,18 +960,25 @@ def end_if_exhausted(db: Session, secret: Secret) -> bool:
     return end_secret(db, secret, SecretState.burned, reason="exhausted")
 
 
+def burn_reason(db: Session, secret: Secret, user: User) -> str | None:
+    """Why `user` may burn `secret` - "sender", "requester" (their own answer
+    to a request: it is theirs to discard unread) or "admin" - or None."""
+    if secret.created_by_id is not None and user.id == secret.created_by_id:
+        return "sender"
+    if secret.is_answer and user_state(db, secret, user.id) is not None:
+        return "requester"
+    if user.role == UserRole.admin:
+        return "admin"
+    return None
+
+
 def burn_now(db: Session, secret: Secret, *, actor: User, request=None) -> None:
-    """The sender's (or an admin's) Burn now. Idempotent. Caller commits."""
-    if actor.id != secret.created_by_id and actor.role != UserRole.admin:
+    """Burn now, by the sender, the requester of an answer, or an admin.
+    Idempotent. Caller commits."""
+    reason = burn_reason(db, secret, actor)
+    if reason is None:
         raise AppError(403, "FORBIDDEN", "Only the sender or an admin can do that.")
-    end_secret(
-        db,
-        secret,
-        SecretState.revoked,
-        actor=actor,
-        reason="sender" if actor.id == secret.created_by_id else "admin",
-        request=request,
-    )
+    end_secret(db, secret, SecretState.revoked, actor=actor, reason=reason, request=request)
 
 
 def expire_due(db: Session, *, limit: int = 500) -> int:
@@ -1097,7 +1157,8 @@ def viewer_role(db: Session, secret: Secret, user: User) -> str | None:
 
 
 def _list_query(db: Session, *, states: list[SecretState] | None, q: str):
-    query = db.query(Secret).join(User, User.id == Secret.created_by_id)
+    # OUTER: an answer to a request written without an account has no sender.
+    query = db.query(Secret).outerjoin(User, User.id == Secret.created_by_id)
     if states:
         query = query.filter(Secret.state.in_(states))
     term = q.strip()

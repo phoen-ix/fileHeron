@@ -74,6 +74,8 @@ _DEFAULT_CHANNEL: dict[NotificationCategory, NotificationChannel] = {
     NotificationCategory.secret_received: NotificationChannel.both,
     NotificationCategory.secret_viewed: NotificationChannel.both,
     NotificationCategory.secret_ended: NotificationChannel.both,
+    NotificationCategory.secret_requested: NotificationChannel.both,
+    NotificationCategory.secret_request_update: NotificationChannel.both,
 }
 
 

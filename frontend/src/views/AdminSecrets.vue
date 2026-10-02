@@ -70,10 +70,18 @@
     return parts.join(' · ') || '-'
   }
 
+  /** The sender, or - for an answer to a request written without an account -
+   *  the address or the request link it came through. */
+  function senderName(s: AdminSecretListItem): string {
+    if (s.sender) return s.sender.display_name
+    if (s.answered_via === 'email') return s.answered_by_email ?? ''
+    return t('secrets.detail.via_request_link')
+  }
+
   async function onBurn(s: AdminSecretListItem) {
     const ok = await ui.confirm({
       title: t('secrets.detail.burn_title'),
-      message: t('admin_secrets.burn_confirm', { sender: s.sender.display_name }),
+      message: t('admin_secrets.burn_confirm', { sender: senderName(s) }),
       confirmLabel: t('secrets.detail.burn'),
       danger: true,
     })
@@ -140,8 +148,11 @@
                 <div class="fh-mono row-hint">{{ formatDate(s.created_at) }}</div>
               </td>
               <td>
-                <div class="row-name">{{ s.sender.display_name }}</div>
-                <div class="fh-mono row-hint">{{ s.sender_email }}</div>
+                <div class="row-name">{{ senderName(s) }}</div>
+                <div v-if="s.sender_email" class="fh-mono row-hint">{{ s.sender_email }}</div>
+                <div v-else-if="s.is_answer" class="fh-mono row-hint">
+                  {{ t('admin_secrets.no_account') }}
+                </div>
               </td>
               <td>{{ audience(s.recipient_summary) }}</td>
               <td class="fh-mono nowrap">

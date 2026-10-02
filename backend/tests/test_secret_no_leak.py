@@ -123,3 +123,102 @@ async def test_nothing_but_the_reveal_ever_carries_the_secret(
     assert any(CANARY not in m["text_body"] for m in jobs if m.get("to") == "outside@example.com")
     assert PASSPHRASE not in mail["text_body"] and PASSPHRASE not in (mail["html_body"] or "")
     assert CANARY not in mail["text_body"] and CANARY not in (mail["html_body"] or "")
+
+
+REQUEST_PASSPHRASE = "CANARY-request-passphrase-must-not-leak"
+
+
+@pytest.mark.asyncio
+async def test_nothing_but_the_reveal_ever_carries_a_requested_secret(
+    db, make_user, client, login_as, monkeypatch, caplog
+):
+    """The same scan for a secret REQUEST: asked of a user, an address and a
+    link, answered anonymously with both passphrase layers, revealed by the
+    requester. The answer's text, both passphrases and every request token must
+    appear nowhere but the reveal (and each address's own mail, its own token)."""
+    from ._secret_helpers import ask
+
+    caplog.set_level(logging.DEBUG)
+    jobs: list[dict] = []
+    monkeypatch.setattr(job_queue, "enqueue", lambda name, *_a, **kw: jobs.append({"name": name, **kw}))
+    hooks: list[dict] = []
+    monkeypatch.setattr(
+        webhook_svc, "emit_after_commit", lambda _db, event, payload: hooks.append({"event": event, **payload})
+    )
+
+    enable(db)
+    requester = make_user(email="q@test.local", role=UserRole.employee, password=PW)
+    asked = make_user(email="a@test.local", role=UserRole.employee, password=PW)
+    created = ask(
+        db,
+        requester,
+        users=(asked,),
+        emails=("outside@example.com",),
+        link=True,
+        passphrase=REQUEST_PASSPHRASE,
+    )
+    rid = created.request.id
+    link_token = created.link_token
+    mail = next(j for j in jobs if j.get("to") == "outside@example.com")
+    email_token = token_of(next(w for w in mail["text_body"].split() if "/r#" in w))
+
+    responses = [await client.post("/api/public/secret-requests/peek", json={"token": link_token})]
+    answered = await client.post(
+        "/api/public/secret-requests/answer",
+        json={"token": email_token, "content": CANARY, "passphrase": PASSPHRASE},
+    )
+    responses.append(answered)
+    assert answered.status_code == 200
+    late = await client.post(
+        "/api/public/secret-requests/answer", json={"token": link_token, "content": CANARY}
+    )
+    responses.append(late)
+    assert late.status_code == 410
+
+    token, _ = await login_as(requester.email, PW)
+    responses.append(await client.get(f"/api/secret-requests/{rid}", headers=h(token)))
+    responses.append(await client.get("/api/secret-requests?box=mine", headers=h(token)))
+    box = (await client.get("/api/secrets?box=received", headers=h(token))).json()
+    (item,) = box["items"]
+    wrong = await client.post(
+        f"/api/secrets/{item['id']}/reveal",
+        json={"passphrase": PASSPHRASE, "request_passphrase": "not it at all"},
+        headers=h(token),
+    )
+    responses.append(wrong)
+    assert wrong.status_code == 403
+    right = await client.post(
+        f"/api/secrets/{item['id']}/reveal",
+        json={"passphrase": PASSPHRASE, "request_passphrase": REQUEST_PASSPHRASE},
+        headers=h(token),
+    )
+    assert right.status_code == 200 and right.json()["content"] == CANARY
+    asked_token, _ = await login_as(asked.email, PW)
+    responses.append(await client.get(f"/api/secret-requests/{rid}", headers=h(asked_token)))
+
+    needles = {
+        "content": CANARY,
+        "passphrase": PASSPHRASE,
+        "request passphrase": REQUEST_PASSPHRASE,
+        "link": link_token,
+        "mail link": email_token,
+    }
+    haystacks = {
+        "database": _all_values(db),
+        "log records": [
+            json.dumps({k: str(v) for k, v in r.__dict__.items()}) for r in caplog.records
+        ],
+        "webhook payloads": [json.dumps(p, default=str) for p in hooks],
+        "other responses": [r.text for r in responses],
+        "queued mails": [
+            json.dumps(j, default=str) for j in jobs if j.get("to") != "outside@example.com"
+        ],
+    }
+    for where, values in haystacks.items():
+        for what, needle in needles.items():
+            hits = [v[:120] for v in values if needle in v]
+            assert not hits, f"the {what} leaked into {where}: {hits}"
+    assert hooks and caplog.records
+    assert any(h.get("event") == "secret_request_answered" for h in hooks)
+    assert CANARY in right.text
+    assert REQUEST_PASSPHRASE not in mail["text_body"] and REQUEST_PASSPHRASE not in (mail["html_body"] or "")

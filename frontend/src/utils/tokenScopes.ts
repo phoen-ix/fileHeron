@@ -19,6 +19,7 @@ export const TOKEN_SCOPES = [
   'secrets:reveal',
   'secrets:manage',
   'secrets:links',
+  'secrets:request',
 ] as const
 
 type TokenScope = (typeof TOKEN_SCOPES)[number]
@@ -43,7 +44,14 @@ export const TOKEN_SCOPE_GROUPS: {
   { group: 'files', scopes: ['files:upload', 'files:download', 'files:delete'] },
   {
     group: 'secrets',
-    scopes: ['secrets:send', 'secrets:read', 'secrets:reveal', 'secrets:manage', 'secrets:links'],
+    scopes: [
+      'secrets:send',
+      'secrets:read',
+      'secrets:reveal',
+      'secrets:manage',
+      'secrets:links',
+      'secrets:request',
+    ],
   },
 ]
 

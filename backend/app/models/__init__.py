@@ -41,6 +41,12 @@ from .secret import (
     SecretUserState,
     SecretViewScope,
 )
+from .secret_request import (
+    SecretRequest,
+    SecretRequestGroupMember,
+    SecretRequestState,
+    SecretRequestTarget,
+)
 from .share import Share, ShareKind, ShareState
 from .share_external_recipient import ShareExternalRecipient
 from .share_recipient import ShareRecipient
@@ -105,6 +111,10 @@ __all__ = [
     "SecretState",
     "SecretUserState",
     "SecretViewScope",
+    "SecretRequest",
+    "SecretRequestGroupMember",
+    "SecretRequestState",
+    "SecretRequestTarget",
     "Share",
     "ShareKind",
     "ShareExternalRecipient",

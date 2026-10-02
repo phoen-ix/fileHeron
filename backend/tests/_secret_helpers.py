@@ -100,6 +100,42 @@ def send(
     return created
 
 
+def ask(
+    db,
+    requester: User,
+    *,
+    users: tuple[User, ...] = (),
+    groups: tuple[Group, ...] = (),
+    emails: tuple[str, ...] = (),
+    link: bool = False,
+    label: str = "Router password",
+    note: str | None = None,
+    passphrase: str | None = None,
+    views: int | None = 1,
+    lifetime: timedelta | None = timedelta(days=7),
+    open_for: timedelta = timedelta(days=7),
+):
+    """Create a secret request through the SERVICE, like the router, and commit."""
+    from app.services import secret_request as request_svc
+
+    created = request_svc.create_request(
+        db,
+        requester=requester,
+        label=label,
+        note=note,
+        expires_at=utc_now() + open_for,
+        answer_max_views=views,
+        answer_expires_in_sec=int(lifetime.total_seconds()) if lifetime is not None else None,
+        passphrase=passphrase,
+        user_ids=[u.id for u in users],
+        group_ids=[g.id for g in groups],
+        emails=list(emails),
+        create_link=link,
+    )
+    db.commit()
+    return created
+
+
 def h(token: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
 

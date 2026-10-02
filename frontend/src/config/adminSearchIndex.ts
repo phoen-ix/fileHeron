@@ -92,6 +92,8 @@ export const ADMIN_SEARCH_INDEX: readonly AdminSearchEntry[] = [
   { routeName: 'admin-settings-secrets', labelKey: 'admin_settings_secrets.send_title', keywords: ['who can send secrets', 'secret policy', 'geheimnis richtlinie', 'send password'] },
   { routeName: 'admin-settings-secrets', labelKey: 'admin_settings_secrets.external_title', keywords: ['secret link', 'secret email', 'outside organisation', 'extern', 'ohne konto'] },
   { routeName: 'admin-settings-secrets', labelKey: 'admin_settings_secrets.failure_title', keywords: ['wrong passphrase', 'falsche passphrase', 'brute force secret', 'burn after'] },
+  // --- Secret requests (admin-secret-requests) - the Requests tab of Secrets
+  { routeName: 'admin-secret-requests', labelKey: 'admin.nav_tab.requests', keywords: ['secret request', 'request a password', 'ask for a secret', 'geheimnis anfragen', 'anfrage', 'get secret'] },
 
   // --- Share approval / four-eyes (admin-settings-share-approval)
   { routeName: 'admin-settings-share-approval', labelKey: 'admin_share_approval.enable_label', keywords: ['four eyes', 'vier augen', 'freigabe', 'approval', 'review before sending', 'pending approval', 'genehmigung'] },

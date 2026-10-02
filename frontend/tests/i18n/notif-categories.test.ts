@@ -36,6 +36,8 @@ const CATEGORIES = [
   'secret_received',
   'secret_viewed',
   'secret_ended',
+  'secret_requested',
+  'secret_request_update',
 ] as const
 
 describe('notif_bell.cat covers every NotificationCategory', () => {

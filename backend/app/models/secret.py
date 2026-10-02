@@ -18,6 +18,13 @@ read it (direct recipients and snapshot members), created at send time so every
 counter is a conditional UPDATE rather than an insert race.
 
 How the view limit counts is `view_scope` - see services/secret_reveal.py.
+
+An ANSWER to a secret request (models/secret_request.py) is an ordinary secret
+whose only reader is the requester. It carries what it needs to stand alone once
+the request is pruned: `is_answer`, the request's label as its own, and - when
+nobody signed in wrote it - `created_by_id` NULL plus `answered_by_email` for an
+answer through a mailed link (NULL too for the copyable link). The requester's
+optional passphrase layer is `req_*` (utils/crypto.py).
 """
 from __future__ import annotations
 
@@ -94,8 +101,10 @@ class Secret(Base):
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_uuid)
-    created_by_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    # NULL only for an answer to a request written by someone without an
+    # account (through a mailed link or the request link).
+    created_by_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True
     )
     # The only part of a secret shown before it is revealed, and the only part
     # that appears in notices and mail. Chosen by the sender as such.
@@ -146,7 +155,30 @@ class Secret(Base):
     ended_at: Mapped[datetime | None] = mapped_column(DateTime(), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(), nullable=False, default=utc_now)
 
-    created_by: Mapped[User] = relationship("User", foreign_keys=[created_by_id])
+    # --- answers to a secret request ---
+    request_id: Mapped[str | None] = mapped_column(
+        String(36),
+        ForeignKey("secret_requests.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    # Survives the request's pruning: the requester may burn their answer.
+    is_answer: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+    # The address a mailed request link went to, when that link answered.
+    answered_by_email: Mapped[str | None] = mapped_column(EMAIL_COLUMN_TYPE, nullable=True)
+    # The requester's passphrase layer (all NULL without one); shredded with
+    # the rest when the secret ends.
+    req_kdf_salt: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    req_kdf_params: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    req_ephemeral_key: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # Survives the shred, like has_passphrase.
+    has_request_passphrase: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+
+    created_by: Mapped[User | None] = relationship("User", foreign_keys=[created_by_id])
     recipients: Mapped[list[SecretRecipient]] = relationship(
         "SecretRecipient",
         back_populates="secret",

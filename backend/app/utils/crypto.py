@@ -35,6 +35,7 @@ from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
 from cryptography.fernet import Fernet, InvalidToken
 from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey, X25519PublicKey
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 
 from ..config import settings
@@ -303,6 +304,17 @@ def generate_recovery_codes(count: int = 10) -> list[str]:
 # what makes a passphrase more than a gate: without it, a database dump plus the
 # .env opens nothing. A wrong passphrase is Fernet's InvalidToken on the middle
 # layer - its HMAC is the verifier, so no separate hash of the passphrase exists.
+#
+# An ANSWER to a secret request may carry a second passphrase layer, the
+# requester's, between the instance layer and the answerer's:
+#
+#   key_encrypted = instance_fernet.encrypt(Fernet(req_kek).encrypt(inner))
+#   req_kek       = HKDF(X25519(ephemeral, requester_public))
+#   requester key = X25519 from Argon2id(requester passphrase, salt)
+#
+# The request stores only the PUBLIC key (and salt + params), so the answer can
+# be sealed to it while nobody - the server included - holds anything that
+# opens it until the requester types the passphrase again at reveal.
 # ---------------------------------------------------------------------------
 
 # Bounds for KDF parameters read back from a row. The database is trusted, but
@@ -317,18 +329,37 @@ class SecretPassphraseError(Exception):
     """The passphrase layer did not open: the passphrase is wrong or missing."""
 
 
+class SecretRequestPassphraseError(Exception):
+    """The requester's passphrase layer did not open: wrong or missing."""
+
+
 @dataclass(frozen=True)
 class SealedSecret:
     ciphertext: str
     key_encrypted: str
     kdf_salt: str | None
     kdf_params: str | None
+    # The ephemeral X25519 public key of the requester's layer, when there is one.
+    req_ephemeral_key: str | None = None
 
 
-def _secret_kek(passphrase: str, salt: bytes, *, t: int, m: int, p: int) -> bytes:
+@dataclass(frozen=True)
+class RequestKeypair:
+    """What a secret request keeps of the requester's passphrase: salt, KDF
+    params and the PUBLIC key. Nothing here opens an answer."""
+
+    kdf_salt: str
+    kdf_params: str
+    public_key: str
+
+
+_REQUEST_KEK_INFO = b"fileheron-secret-request"
+
+
+def _argon2_raw(passphrase: str, salt: bytes, *, t: int, m: int, p: int) -> bytes:
     from argon2.low_level import Type, hash_secret_raw
 
-    raw = hash_secret_raw(
+    return hash_secret_raw(
         passphrase.encode("utf-8"),
         salt,
         time_cost=t,
@@ -337,7 +368,51 @@ def _secret_kek(passphrase: str, salt: bytes, *, t: int, m: int, p: int) -> byte
         hash_len=32,
         type=Type.ID,
     )
+
+
+def _secret_kek(passphrase: str, salt: bytes, *, t: int, m: int, p: int) -> bytes:
+    return base64.urlsafe_b64encode(_argon2_raw(passphrase, salt, t=t, m=m, p=p))
+
+
+def _current_kdf_params() -> tuple[int, int, int]:
+    return settings.ARGON2_TIME_COST, settings.ARGON2_MEMORY_COST_KIB, settings.ARGON2_PARALLELISM
+
+
+def _b64(raw: bytes) -> str:
+    return base64.urlsafe_b64encode(raw).decode("ascii")
+
+
+def _unb64_key(value: str) -> bytes:
+    try:
+        raw = base64.urlsafe_b64decode(value.encode("ascii"))
+    except (ValueError, UnicodeEncodeError) as e:
+        raise SecretUndecryptableError("secret request key") from e
+    if len(raw) != 32:
+        raise SecretUndecryptableError("secret request key length")
+    return raw
+
+
+def _request_kek(shared: bytes, ephemeral_pub: bytes, requester_pub: bytes) -> bytes:
+    raw = HKDF(
+        algorithm=hashes.SHA256(),
+        length=32,
+        salt=ephemeral_pub + requester_pub,
+        info=_REQUEST_KEK_INFO,
+    ).derive(shared)
     return base64.urlsafe_b64encode(raw)
+
+
+def request_keypair(passphrase: str) -> RequestKeypair:
+    """Derive the requester's X25519 key pair from their passphrase and keep the
+    public half. The private key exists only for the length of this call."""
+    salt = secrets.token_bytes(16)
+    t, m, p = _current_kdf_params()
+    private = X25519PrivateKey.from_private_bytes(_argon2_raw(passphrase, salt, t=t, m=m, p=p))
+    return RequestKeypair(
+        kdf_salt=salt.hex(),
+        kdf_params=f"t={t},m={m},p={p}",
+        public_key=_b64(private.public_key().public_bytes_raw()),
+    )
 
 
 def _parse_secret_kdf_params(params: str) -> tuple[int, int, int]:
@@ -355,8 +430,15 @@ def _parse_secret_kdf_params(params: str) -> tuple[int, int, int]:
     return t, m, p
 
 
-def seal_secret(plaintext: str, passphrase: str | None) -> SealedSecret:
-    """Encrypt a secret's text under a fresh key, wrapped as described above."""
+def seal_secret(
+    plaintext: str,
+    passphrase: str | None,
+    *,
+    request_public_key: str | None = None,
+) -> SealedSecret:
+    """Encrypt a secret's text under a fresh key, wrapped as described above:
+    the passphrase layer (if any), then the requester's layer (an answer to a
+    request with a passphrase), then the instance layer."""
     data_key = Fernet.generate_key()
     ciphertext = Fernet(data_key).encrypt(plaintext.encode("utf-8")).decode("ascii")
     wrapped = data_key
@@ -364,14 +446,49 @@ def seal_secret(plaintext: str, passphrase: str | None) -> SealedSecret:
     params: str | None = None
     if passphrase:
         salt = secrets.token_bytes(16)
-        t = settings.ARGON2_TIME_COST
-        m = settings.ARGON2_MEMORY_COST_KIB
-        p = settings.ARGON2_PARALLELISM
+        t, m, p = _current_kdf_params()
         wrapped = Fernet(_secret_kek(passphrase, salt, t=t, m=m, p=p)).encrypt(data_key)
         salt_hex = salt.hex()
         params = f"t={t},m={m},p={p}"
+    ephemeral_b64: str | None = None
+    if request_public_key:
+        requester_pub = _unb64_key(request_public_key)
+        ephemeral = X25519PrivateKey.generate()
+        ephemeral_pub = ephemeral.public_key().public_bytes_raw()
+        shared = ephemeral.exchange(X25519PublicKey.from_public_bytes(requester_pub))
+        wrapped = Fernet(_request_kek(shared, ephemeral_pub, requester_pub)).encrypt(wrapped)
+        ephemeral_b64 = _b64(ephemeral_pub)
     key_encrypted = _get_fernet().encrypt(wrapped).decode("ascii")
-    return SealedSecret(ciphertext, key_encrypted, salt_hex, params)
+    return SealedSecret(ciphertext, key_encrypted, salt_hex, params, ephemeral_b64)
+
+
+def _open_request_layer(
+    inner: bytes,
+    *,
+    req_kdf_salt: str | None,
+    req_kdf_params: str | None,
+    req_ephemeral_key: str,
+    request_passphrase: str | None,
+) -> bytes:
+    if not request_passphrase or not req_kdf_salt or not req_kdf_params:
+        raise SecretRequestPassphraseError()
+    t, m, p = _parse_secret_kdf_params(req_kdf_params)
+    try:
+        salt = bytes.fromhex(req_kdf_salt)
+    except ValueError as e:
+        raise SecretUndecryptableError("secret request kdf salt") from e
+    ephemeral_pub = _unb64_key(req_ephemeral_key)
+    private = X25519PrivateKey.from_private_bytes(
+        _argon2_raw(request_passphrase, salt, t=t, m=m, p=p)
+    )
+    shared = private.exchange(X25519PublicKey.from_public_bytes(ephemeral_pub))
+    kek = _request_kek(shared, ephemeral_pub, private.public_key().public_bytes_raw())
+    try:
+        return Fernet(kek).decrypt(inner)
+    except InvalidToken as e:
+        # A wrong passphrase derives a different key pair, so the ECDH secret
+        # and the KEK differ and the Fernet HMAC refuses - no separate verifier.
+        raise SecretRequestPassphraseError() from e
 
 
 def unwrap_secret_key(
@@ -380,14 +497,28 @@ def unwrap_secret_key(
     kdf_salt: str | None,
     kdf_params: str | None,
     passphrase: str | None,
+    req_kdf_salt: str | None = None,
+    req_kdf_params: str | None = None,
+    req_ephemeral_key: str | None = None,
+    request_passphrase: str | None = None,
 ) -> bytes:
-    """The secret's data key. Raises SecretPassphraseError for a wrong or missing
-    passphrase (the caller counts it), SecretUndecryptableError when the instance
-    layer does not open (JWT_SECRET rotated without the rotation script)."""
+    """The secret's data key. Raises SecretRequestPassphraseError when the
+    requester's layer does not open, SecretPassphraseError for the answerer's
+    or sender's passphrase (the caller counts both), SecretUndecryptableError
+    when the instance layer does not open (JWT_SECRET rotated without the
+    rotation script)."""
     try:
         inner = _get_fernet().decrypt(key_encrypted.encode("ascii"))
     except Exception as e:
         raise SecretUndecryptableError("secret key") from e
+    if req_ephemeral_key:
+        inner = _open_request_layer(
+            inner,
+            req_kdf_salt=req_kdf_salt,
+            req_kdf_params=req_kdf_params,
+            req_ephemeral_key=req_ephemeral_key,
+            request_passphrase=request_passphrase,
+        )
     if not kdf_salt:
         return inner
     if not passphrase or not kdf_params:

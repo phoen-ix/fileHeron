@@ -666,6 +666,7 @@ class ImportSummary:
     # Active secrets the import burns (v2.24.0): their recipient rows point at
     # identities and groups the import rewrites.
     secrets_to_burn: int = 0
+    secret_requests_to_cancel: int = 0
     counts: dict[str, Any] = field(default_factory=dict)
     purged_users: list[str] = field(default_factory=list)
     purged_groups: list[str] = field(default_factory=list)
@@ -712,6 +713,11 @@ def preview_backup(db: Session, parsed: ParsedBackup) -> ImportSummary:
     )
     summary.secrets_to_burn = (
         db.query(Secret).filter(Secret.state == SecretState.active).count()
+    )
+    from ..models.secret_request import SecretRequest, SecretRequestState
+
+    summary.secret_requests_to_cancel = (
+        db.query(SecretRequest).filter(SecretRequest.state == SecretRequestState.open).count()
     )
     if "settings_branding" in p:
         sb = p["settings_branding"]
@@ -1276,6 +1282,13 @@ def apply_backup(db: Session, *, parsed: ParsedBackup, actor: User, request=None
     summary.secrets_to_burn = secret_svc.revoke_all_active(
         db, actor=actor, reason="config_import", request=request
     )
+    # Open secret requests too: their targets point at ids rewritten below, and
+    # their link tokens are under the instance key the import may replace.
+    from . import secret_request as request_svc
+
+    summary.secret_requests_to_cancel = request_svc.cancel_all_open(
+        db, actor=actor, reason="config_import", request=request
+    )
     db.commit()
 
     prefix_before_import: str | None = None
@@ -1727,6 +1740,7 @@ def apply_backup(db: Session, *, parsed: ParsedBackup, actor: User, request=None
             "secret_mode": parsed.secret_mode,
             "shares_invalidated": summary.shares_to_invalidate,
             "secrets_burned": summary.secrets_to_burn,
+            "secret_requests_cancelled": summary.secret_requests_to_cancel,
             "purged_users": len(summary.purged_users),
             "purged_groups": len(summary.purged_groups),
             "sessions_revoked": summary.sessions_revoked,

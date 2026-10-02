@@ -153,6 +153,7 @@ async def prune_history(_ctx) -> dict:
     inbound_pruned = await _prune_inbound(inbound_days)
     external_pruned = _prune_ended_external_recipients()
     secrets_pruned = _prune_ended_secrets(secret_days)
+    requests_pruned = _prune_ended_secret_requests(secret_days)
     return {
         "public_link_password_attempts": link_attempt_pruned,
         "audit_log": audit_pruned,
@@ -165,6 +166,7 @@ async def prune_history(_ctx) -> dict:
         "inbound_messages": inbound_pruned,
         "share_external_recipients": external_pruned,
         "secrets": secrets_pruned,
+        "secret_requests": requests_pruned,
     }
 
 
@@ -224,6 +226,30 @@ def _prune_ended_secrets(days: int) -> int:
         db.close()
     if total:
         logger.info("prune_history: secrets pruned=%d", total)
+    return total
+
+
+def _prune_ended_secret_requests(days: int) -> int:
+    """Delete secret requests that ended more than `days` ago, with their
+    targets (addresses included). An answer stands on its own and keeps its
+    own retention. 0 keeps them. Batched, one commit per batch."""
+    if days <= 0:
+        return 0
+    from ..services import secret_request as request_svc
+
+    total = 0
+    db: Session = SessionLocal()
+    try:
+        while True:
+            n = request_svc.prune_ended(db, older_than_days=days, batch=500)
+            db.commit()
+            total += n
+            if n < 500:
+                break
+    finally:
+        db.close()
+    if total:
+        logger.info("prune_history: secret requests pruned=%d", total)
     return total
 
 

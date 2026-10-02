@@ -300,6 +300,15 @@
               t('admin_backup.sum_secrets', { n: preview.secrets_to_burn }, preview.secrets_to_burn)
             }}
           </li>
+          <li v-if="preview.secret_requests_to_cancel" class="danger">
+            {{
+              t(
+                'admin_backup.sum_secret_requests',
+                { n: preview.secret_requests_to_cancel },
+                preview.secret_requests_to_cancel,
+              )
+            }}
+          </li>
           <li v-if="preview.categories.includes('users')" class="danger">
             {{ t('admin_backup.sum_sessions') }}
           </li>

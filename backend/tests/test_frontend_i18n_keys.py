@@ -198,6 +198,9 @@ DYNAMIC_PREFIXES = (
     "secrets.detail.limit.",                # per view scope
     "secrets.generator.class.",             # per character class
     "admin_settings_secrets.mode.",         # per policy mode (+ _help)
+    "secret_request_state.",                # per SecretRequestState
+    "secret_requests.empty.",               # per box (mine / asked)
+    "secret_requests.closed.",              # per closed reason
     "admin_settings_secrets.failure.",      # per wrong-passphrase mode (+ _help)
 )
 

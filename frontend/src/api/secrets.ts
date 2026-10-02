@@ -36,8 +36,15 @@ export function getSecret(id: string) {
   return api.get<SecretResponse>(`/secrets/${id}`)
 }
 
-export function revealSecret(id: string, passphrase: string | null) {
-  return api.post<RevealSecretResponse>(`/secrets/${id}/reveal`, { passphrase })
+export function revealSecret(
+  id: string,
+  passphrase: string | null,
+  requestPassphrase: string | null = null,
+) {
+  return api.post<RevealSecretResponse>(`/secrets/${id}/reveal`, {
+    passphrase,
+    request_passphrase: requestPassphrase,
+  })
 }
 
 export function burnSecret(id: string) {

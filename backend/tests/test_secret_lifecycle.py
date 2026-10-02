@@ -319,3 +319,90 @@ def test_the_rotation_script_rotates_every_encrypted_column():
         and isinstance(node.args[1], ast.Constant)
     }
     assert set(columns) <= labels, set(columns) - labels
+
+
+# ---- secret requests (v2.24.0) ----------------------------------------------------------
+
+
+def test_ended_requests_are_pruned_and_their_answers_stand_alone(db, people):
+    from app.models.secret_request import SecretRequest, SecretRequestTarget
+    from app.services import secret_request as request_svc
+
+    from ._secret_helpers import ask
+
+    enable(db)
+    a, b, _ = people
+    answered = ask(db, a, users=(b,), emails=("guest@example.com",)).request
+    answer = request_svc.answer_request(
+        db, request_id=answered.id, content=CONTENT, passphrase=None, by_user=b
+    )
+    open_one = ask(db, a, users=(b,)).request
+    db.commit()
+    db.get(SecretRequest, answered.id).ended_at = utc_now() - timedelta(days=91)
+    db.commit()
+
+    assert request_svc.prune_ended(db, older_than_days=0) == 0, "0 keeps everything"
+    assert request_svc.prune_ended(db, older_than_days=90) == 1
+    db.commit()
+    db.expire_all()
+    assert db.get(SecretRequest, answered.id) is None
+    assert db.query(SecretRequestTarget).filter_by(request_id=answered.id).count() == 0
+    kept = db.get(Secret, answer.id)
+    assert kept.state == SecretState.active and kept.is_answer and kept.request_id is None
+    assert kept.label == "Router password", "the answer keeps what it needs"
+    assert secret_svc.burn_reason(db, kept, a) == "requester"
+    assert db.get(SecretRequest, open_one.id) is not None
+
+
+def test_erasure_removes_a_requester_and_a_target_from_requests(db, people, make_user):
+    from app.models.secret_request import SecretRequest, SecretRequestTarget
+    from app.services import secret_request as request_svc
+
+    from ._secret_helpers import ask
+
+    enable(db)
+    a, b, c = people
+    admin = make_user(email="adm@test.local", role=UserRole.admin)
+    theirs = ask(db, b, users=(a,)).request
+    asked_them = ask(db, a, users=(b, c)).request
+    answered = ask(db, b, users=(c,)).request
+    answer = request_svc.answer_request(
+        db, request_id=answered.id, content=CONTENT, passphrase=None, by_user=c
+    )
+    db.commit()
+
+    result = erasure.erase_user(db, actor=admin, target=b)
+    db.commit()
+    db.expire_all()
+
+    assert result["pii_purged"]["secret_requests_deleted"] == 2
+    assert db.get(SecretRequest, theirs.id) is None and db.get(SecretRequest, answered.id) is None
+    assert db.query(SecretRequestTarget).filter_by(target_user_id=b.id).count() == 0
+    assert db.get(SecretRequest, asked_them.id) is not None, "Cat can still answer Ann"
+    # Nobody left who can read Ben's answer: burned, shredded.
+    gone = db.get(Secret, answer.id)
+    assert gone.state == SecretState.burned and _shredded(gone)
+
+
+def test_a_config_import_cancels_every_open_request(db):
+    from app.models.secret_request import SecretRequest, SecretRequestState
+
+    from ._secret_helpers import ask
+
+    settings_svc.set_value(db, key=K.SMTP_HOST, value="mail.x", actor=None)
+    db.commit()
+    raw = cb.build_backup(
+        db, categories=["settings_branding"], secret_mode="exclude", passphrase=None, include_env=False
+    )
+    tgt = _fresh_session()
+    actor = _user(tgt, "admin@x", UserRole.admin)
+    asker, asked = _user(tgt, "s@x"), _user(tgt, "r@x")
+    enable(tgt)
+    req = ask(tgt, asker, users=(asked,), link=True).request
+
+    preview = cb.preview_backup(tgt, cb.parse_backup(raw, passphrase=None))
+    assert preview.secret_requests_to_cancel == 1
+    summary = cb.apply_backup(tgt, parsed=cb.parse_backup(raw, passphrase=None), actor=actor, request=None)
+    assert summary.secret_requests_to_cancel == 1
+    tgt.expire_all()
+    assert tgt.get(SecretRequest, req.id).state == SecretRequestState.cancelled

@@ -108,6 +108,8 @@ describe('SecretDetail', () => {
       data: secret({
         viewer_role: 'sender',
         can_reveal: false,
+        // The server decides who may burn (sender, requester of an answer, admin).
+        can_burn: true,
         recipients: [
           {
             id: 1,

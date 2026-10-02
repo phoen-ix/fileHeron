@@ -156,9 +156,10 @@ export const ADMIN_NAV: AdminNavCategory[] = [
       {
         routeName: 'admin-secrets',
         labelKey: 'admin.nav.secrets',
-        matchNames: ['admin-secrets', 'admin-settings-secrets'],
+        matchNames: ['admin-secrets', 'admin-secret-requests', 'admin-settings-secrets'],
         tabs: [
           { routeName: 'admin-secrets', labelKey: 'admin.nav_tab.secrets' },
+          { routeName: 'admin-secret-requests', labelKey: 'admin.nav_tab.requests' },
           { routeName: 'admin-settings-secrets', labelKey: 'admin.nav_tab.policy' },
         ],
       },

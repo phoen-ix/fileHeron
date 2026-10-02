@@ -335,7 +335,8 @@
     "SECRET_REQUEST_PASSPHRASE_REQUIRED": "Enter the passphrase you set on your request.",
     "SECRET_REQUEST_SELF": "You cannot answer your own request.",
     "ENCRYPTION_ACK_REQUIRED": "Confirm that encrypted files can only be restored together with this instance's .env.",
-    "REDIS_UNAVAILABLE": "The cache service can't be reached right now. Try again in a moment."
+    "REDIS_UNAVAILABLE": "The cache service can't be reached right now. Try again in a moment.",
+    "ROLLBACK_BLOCKED_BY_ENCRYPTION": "Stored files are encrypted at rest, and the version you would roll back to cannot read them. Turn encryption at rest off and run scripts/decrypt_files_at_rest.py in the backend container first."
   },
   "login": {
     "title": "Sign in",
@@ -3442,6 +3443,7 @@
     "retry": "Try them again",
     "retry_toast": "The set-aside files will be tried again in the next run.",
     "task_off": "The scheduled task encrypt_existing_files is switched off, so files already stored are not being encrypted.",
-    "task_link": "Scheduled tasks"
+    "task_link": "Scheduled tasks",
+    "stopped_disabled": "stopped: encryption was switched off"
   }
 }

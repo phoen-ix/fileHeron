@@ -335,7 +335,8 @@
     "SECRET_REQUEST_PASSPHRASE_REQUIRED": "Gib die Passphrase ein, die du bei deiner Anfrage gewählt hast.",
     "SECRET_REQUEST_SELF": "Du kannst deine eigene Anfrage nicht beantworten.",
     "ENCRYPTION_ACK_REQUIRED": "Bestätige, dass verschlüsselte Dateien nur zusammen mit der .env dieser Instanz wiederhergestellt werden können.",
-    "REDIS_UNAVAILABLE": "Der Cache-Dienst ist gerade nicht erreichbar. Versuche es gleich noch einmal."
+    "REDIS_UNAVAILABLE": "Der Cache-Dienst ist gerade nicht erreichbar. Versuche es gleich noch einmal.",
+    "ROLLBACK_BLOCKED_BY_ENCRYPTION": "Gespeicherte Dateien sind verschlüsselt, und die Version, auf die du zurückgehen würdest, kann sie nicht lesen. Schalte die Verschlüsselung gespeicherter Dateien aus und führe zuerst scripts/decrypt_files_at_rest.py im Backend-Container aus."
   },
   "login": {
     "title": "Anmelden",
@@ -3442,6 +3443,7 @@
     "retry": "Erneut versuchen",
     "retry_toast": "Die zurückgestellten Dateien werden im nächsten Lauf erneut versucht.",
     "task_off": "Die geplante Aufgabe encrypt_existing_files ist ausgeschaltet, deshalb werden bereits gespeicherte Dateien nicht verschlüsselt.",
-    "task_link": "Geplante Aufgaben"
+    "task_link": "Geplante Aufgaben",
+    "stopped_disabled": "beendet: die Verschlüsselung wurde ausgeschaltet"
   }
 }

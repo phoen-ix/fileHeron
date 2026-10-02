@@ -181,7 +181,7 @@ export interface EncryptionLastRun {
   deferred: number
   skipped: number
   remaining: number
-  stopped: 'budget' | 'insufficient_space' | null
+  stopped: 'budget' | 'insufficient_space' | 'disabled' | null
 }
 
 export interface EncryptionSettingsResponse {

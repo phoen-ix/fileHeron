@@ -450,6 +450,11 @@ def run_backfill(
                 if clock() >= deadline:
                     stopped = "budget"
                     break
+                # Switched off mid-run: stop at the next object, not in 50
+                # minutes - the decrypt script may be waiting to undo this.
+                if not file_encryption.is_enabled(db):
+                    stopped = "disabled"
+                    break
                 member = _member(kind, str(row_id))
                 if member in deferred:
                     counts["deferred_skipped"] += 1

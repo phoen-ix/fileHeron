@@ -61,6 +61,7 @@
     const stopped = status.value?.last_run?.stopped
     if (stopped === 'budget') return t('admin_encryption.stopped_budget')
     if (stopped === 'insufficient_space') return t('admin_encryption.stopped_insufficient_space')
+    if (stopped === 'disabled') return t('admin_encryption.stopped_disabled')
     return null
   })
 

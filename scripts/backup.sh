@@ -19,6 +19,12 @@
 # manifest. The header previously claimed staging happened under /tmp; it did
 # not - artifacts were written straight into the final directory.
 #
+# Encryption at rest: with it on, files.tar.gz and quarantine.tar.gz hold
+# ciphertext whose keys are wrapped under JWT_SECRET - which lives in .env, and
+# .env is deliberately NOT in this backup. Keep a copy of .env somewhere safe
+# and apart from these archives: a restore without it brings the database back
+# and not one encrypted file (scripts/restore_validate.py says so).
+#
 # Recovery: see scripts/restore.sh.
 
 set -euo pipefail

@@ -13,7 +13,8 @@ Checks:
   has a `storage_path` whose file exists on disk.
 - Every `share_recipients` row references a `share_id` that exists.
 - Sampled Fernet-encrypted fields actually DECRYPT under this instance's
-  JWT_SECRET. backup.sh does not capture .env, so a restore onto a host with a
+  JWT_SECRET - and so do sampled files encrypted at rest, where any are.
+  backup.sh does not capture .env, so a restore onto a host with a
   different JWT_SECRET leaves every TOTP secret, OIDC client secret, SMTP/IMAP
   password and public-link token intact but permanently unreadable - and every
   other check here still passes. Keep .env backed up separately; this check is
@@ -54,6 +55,68 @@ def _check(name: str, ok: bool, detail: str = "") -> bool:
     marker = "PASS" if ok else "FAIL"
     print(f"  {marker}: {name}" + (f" - {detail}" if detail else ""))
     return ok
+
+
+def _check_encrypted_files(db) -> bool:
+    """Sampled files encrypted at rest decrypt under THIS instance's key.
+
+    Without the right JWT_SECRET (backups do not contain .env) an encrypted
+    file comes back intact and unreadable - the same failure as the Fernet
+    fields above, but for the files themselves.
+
+    Everything here is guarded. The weekly drill copies THIS file into whatever
+    backend image the host runs, which may predate encryption at rest: then the
+    service module does not exist and the schema has no `enc_version` column,
+    and the check must skip, never fail or crash. Hence no top-level import of
+    anything new, and the column looked up before it is used."""
+    try:
+        from sqlalchemy import inspect as sa_inspect
+
+        from app.services import file_encryption
+        from app.services.storage_backend import get_storage_backend
+        from app.utils import file_crypto
+    except ImportError:
+        print("  SKIP: this image predates encryption at rest")
+        return True
+    try:
+        columns = {c["name"] for c in sa_inspect(db.connection()).get_columns("files")}
+    except Exception as e:  # pragma: no cover - a schema we cannot read is the alembic check's job
+        print(f"  WARN: could not inspect the files table: {e}")
+        return True
+    if "enc_version" not in columns or getattr(File, "enc_version", None) is None:
+        print("  SKIP: this schema predates encryption at rest")
+        return True
+    rows = (
+        db.query(File)
+        .filter(File.enc_version.isnot(None), File.storage_path.isnot(None),
+                File.state.in_([FileState.clean, FileState.infected]))
+        .limit(3)
+        .all()
+    )
+    if not rows:
+        print("  SKIP: no files are encrypted at rest")
+        return True
+    backend = get_storage_backend()
+    unreadable = []
+    for f in rows:
+        try:
+            cipher = file_encryption.cipher_for_file(f)
+            with file_encryption.open_plaintext(backend, f.storage_path, cipher) as fh:
+                # The first chunk authenticates the key and the header; an
+                # empty file's one tag is all there is. Never the whole file.
+                fh.read(file_crypto.CHUNK_SIZE)
+        except Exception as e:
+            unreadable.append(f"{f.id} ({type(e).__name__})")
+    return _check(
+        f"all {len(rows)} sampled files encrypted at rest decrypt",
+        not unreadable,
+        detail=(
+            "JWT_SECRET does not match the one these files were encrypted under - "
+            f"their contents are NOT recoverable without it. Failed: {unreadable}"
+            if unreadable
+            else ""
+        ),
+    )
 
 
 def main() -> int:
@@ -185,6 +248,10 @@ def main() -> int:
                 ),
             ):
                 failed += 1
+
+        # 4b. Files encrypted at rest decrypt too.
+        if not _check_encrypted_files(db):
+            failed += 1
 
         # 5. Alembic at head.
         try:

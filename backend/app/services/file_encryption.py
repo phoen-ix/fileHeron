@@ -428,6 +428,23 @@ def write_new_encrypted(backend: StorageBackend, locator: str, data: bytes, *, k
     }
 
 
+def count_encrypted(db: Session) -> int:
+    """Stored objects whose bytes are ciphertext - what a release from before
+    encryption at rest would serve as noise."""
+    from sqlalchemy import func
+
+    from ..models.file import File as FileModel
+    from ..models.inbound_attachment import InboundAttachment as AttModel
+
+    files = db.query(func.count(FileModel.id)).filter(
+        FileModel.enc_version.isnot(None), FileModel.storage_path.isnot(None)
+    ).scalar() or 0
+    atts = db.query(func.count(AttModel.id)).filter(
+        AttModel.enc_version.isnot(None), AttModel.storage_key.isnot(None)
+    ).scalar() or 0
+    return int(files) + int(atts)
+
+
 def is_enabled(db: Session) -> bool:
     from . import settings as settings_svc
 

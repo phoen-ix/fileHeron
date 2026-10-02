@@ -23,9 +23,13 @@ import tempfile
 import uuid
 from contextlib import contextmanager
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from ..middleware.errors import AppError
 from ..utils.timeutil import utc_now
+
+if TYPE_CHECKING:
+    from sqlalchemy.orm import Session
 
 logger = logging.getLogger("fileheron.release_apply")
 
@@ -87,6 +91,48 @@ def _read_rollback_record() -> dict | None:
         return rec if isinstance(rec, dict) else None
     except Exception:
         return None
+
+
+# The migration that added encryption at rest. A release whose schema predates
+# it reads every encrypted file as if it were plaintext: it would serve noise,
+# and path-scan ciphertext as "clean".
+ENCRYPTION_REVISION = "202610030001"
+_ALEMBIC_DIR = Path(__file__).resolve().parents[2] / "alembic"
+
+
+def _schema_includes(head: str, revision: str) -> bool | None:
+    """Whether the schema at `head` includes `revision`; None when this code
+    does not know `head` (or cannot read its migrations)."""
+    try:
+        from alembic.script import ScriptDirectory
+
+        script = ScriptDirectory(str(_ALEMBIC_DIR))
+        return any(r.revision == revision for r in script.iterate_revisions(head, "base"))
+    except Exception:
+        return None
+
+
+def assert_rollback_can_read_files(db: Session) -> None:
+    """Refuse a Rollback to a release that cannot read encrypted files while
+    any exist. An unknown target schema counts as "cannot": the cost of a
+    wrong yes is every encrypted file served as noise, the cost of a wrong no
+    is running the decrypt script first."""
+    record = _read_rollback_record() or {}
+    head = record.get("alembic_head")
+    if isinstance(head, str) and head and _schema_includes(head, ENCRYPTION_REVISION):
+        return
+    from . import file_encryption
+
+    n = file_encryption.count_encrypted(db)
+    if n:
+        raise AppError(
+            409,
+            "ROLLBACK_BLOCKED_BY_ENCRYPTION",
+            f"{n} stored file(s) are encrypted at rest, and the version you would roll back to "
+            "cannot read them. Turn encryption at rest off and run "
+            "`docker compose exec backend python scripts/decrypt_files_at_rest.py` first.",
+            details={"encrypted": n, "target_tag": record.get("tag")},
+        )
 
 
 def get_version() -> dict:

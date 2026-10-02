@@ -581,6 +581,7 @@ def apply_rollback(
     from ...services.audit import record_audit_event
 
     _verify_password_or_403(db, admin, payload.password, request=request)
+    release_apply.assert_rollback_can_read_files(db)
     result = release_apply.apply(action="rollback", target_tag=None)
 
     record_audit_event(

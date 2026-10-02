@@ -25,7 +25,8 @@ class EncryptionLastRun(APIBaseModel):
     deferred: int
     skipped: int
     remaining: int
-    # "budget" (the run's time ran out), "insufficient_space", or None.
+    # "budget" (the run's time ran out), "insufficient_space", "disabled" (the
+    # switch went off mid-run), or None.
     stopped: str | None = None
 
 

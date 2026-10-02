@@ -412,37 +412,68 @@ def _isolate_alert_dedup(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def _isolate_encryption_lanes(monkeypatch):
-    """Give services/encryption_lanes a per-test in-memory Redis. Its lock and
-    dirty-mark keys are FIXED names, so against the live Redis one test's lock
-    would make the next one's lane report `busy` - and collide with
-    production's."""
+    """Give services/encryption_lanes a per-test in-memory Redis. Its lock,
+    dirty-mark and deferral keys are FIXED names, so against the live Redis one
+    test's lock would make the next one's lane report `busy` - and collide with
+    production's. Yields {"strings", "hashes", "zsets"}."""
     from app.services import encryption_lanes
 
-    store: dict[str, str] = {}
+    strings: dict[str, str] = {}
+    hashes: dict[str, dict[str, int]] = {}
+    zsets: dict[str, dict[str, float]] = {}
 
     class _Fake:
         def set(self, key, value, ex=None, nx=False):
-            if nx and key in store:
+            if nx and key in strings:
                 return None
-            store[key] = value
+            strings[key] = value
             return True
 
         def get(self, key):
-            return store.get(key)
+            return strings.get(key)
 
         def getdel(self, key):
-            return store.pop(key, None)
+            return strings.pop(key, None)
 
         def expire(self, key, _ttl):
-            return key in store
+            return key in strings
 
         def delete(self, *keys):
             for k in keys:
-                store.pop(k, None)
+                strings.pop(k, None)
+                hashes.pop(k, None)
+                zsets.pop(k, None)
+
+        def hincrby(self, key, field, n):
+            h = hashes.setdefault(key, {})
+            h[field] = h.get(field, 0) + n
+            return h[field]
+
+        def hdel(self, key, *fields):
+            for f in fields:
+                hashes.get(key, {}).pop(f, None)
+
+        def zadd(self, key, mapping):
+            zsets.setdefault(key, {}).update(mapping)
+
+        def zremrangebyscore(self, key, lo, hi):
+            def _f(v):
+                return float(str(v).lstrip("("))
+
+            hi_open = str(hi).startswith("(")
+            z = zsets.get(key, {})
+            for m in [m for m, sc in z.items()
+                      if (lo == "-inf" or sc >= _f(lo)) and (sc < _f(hi) if hi_open else sc <= _f(hi))]:
+                z.pop(m, None)
+
+        def zrange(self, key, _start, _stop):
+            return sorted(zsets.get(key, {}), key=zsets.get(key, {}).get)
 
     monkeypatch.setattr(encryption_lanes, "get_redis", lambda: _Fake())
-    yield store
-    store.clear()
+    state = {"strings": strings, "hashes": hashes, "zsets": zsets}
+    yield state
+    for d in state.values():
+        d.clear()
 
 
 @pytest.fixture(autouse=True)

@@ -87,6 +87,7 @@ async def test_the_status_counts(client, db, make_user, login_as):
                              "awaiting_encryption": 1}
     assert body["inbound_attachments"] == {"encrypted": 0, "plaintext": 0}
     assert body["last_run"] is None
+    assert (body["deferred"], body["backfill_task_enabled"]) == (0, True)
 
 
 @pytest.mark.asyncio
@@ -164,11 +165,85 @@ async def test_non_admins_cannot_touch_it(client, db, make_user, login_as):
 
 
 @pytest.mark.asyncio
-async def test_a_corrupt_last_run_reads_as_none(client, db, make_user, login_as):
+async def test_the_last_run_is_read_field_by_field(client, db, make_user, login_as):
+    """The summary is this instance's own history; one in another shape must
+    not 500 the page."""
     h = await _headers(make_user, login_as)
-    settings_svc.set_value(db, key=K.STORAGE_ENCRYPT_LAST_RUN, value="{not json", actor=None)
-    db.commit()
+
+    def _put(value: str) -> None:
+        settings_svc.set_value(db, key=K.STORAGE_ENCRYPT_LAST_RUN, value=value, actor=None)
+        db.commit()
+
+    _put("{not json")
     assert (await client.get(URL, headers=h)).json()["last_run"] is None
-    settings_svc.set_value(db, key=K.STORAGE_ENCRYPT_LAST_RUN, value=json.dumps({"encrypted": 3}), actor=None)
-    db.commit()
-    assert (await client.get(URL, headers=h)).json()["last_run"] == {"encrypted": 3}
+    _put(json.dumps({"encrypted": 3}))
+    assert (await client.get(URL, headers=h)).json()["last_run"] is None, "no finished_at"
+    _put(json.dumps({"finished_at": "2026-10-02T10:00:00", "encrypted": 3, "failed": "x", "stopped": 7}))
+    assert (await client.get(URL, headers=h)).json()["last_run"] == {
+        "finished_at": "2026-10-02T10:00:00", "encrypted": 3, "failed": 0, "deferred": 0, "skipped": 0,
+        "remaining": 0, "stopped": None,
+    }
+
+
+@pytest.fixture
+def enqueued(monkeypatch):
+    from app.services import job_queue
+
+    jobs: list[str] = []
+    real = job_queue.enqueue  # conftest's no-op: sign-in mails etc. still go there
+
+    def _record(name, *a, **kw):
+        if name.startswith("encrypt_"):
+            jobs.append(name)
+        else:
+            real(name, *a, **kw)
+
+    monkeypatch.setattr(job_queue, "enqueue", _record)
+    return jobs
+
+
+@pytest.mark.asyncio
+async def test_turning_it_on_kicks_the_backfill_and_off_does_not(client, db, make_user, login_as, enqueued):
+    h = await _headers(make_user, login_as)
+    await client.put(URL, json={"enabled": True, "acknowledge_key_custody": True, "password": PASSWORD},
+                     headers=h)
+    assert enqueued == ["encrypt_existing_files"]
+    await client.put(URL, json={"enabled": False, "password": PASSWORD}, headers=h)
+    assert enqueued == ["encrypt_existing_files"]
+
+
+@pytest.mark.asyncio
+async def test_retry_failed_clears_the_deferrals_and_kicks_the_backfill(client, db, make_user, login_as,
+                                                                       enqueued):
+    from app.services import encryption_lanes as lanes
+
+    h = await _headers(make_user, login_as)
+    for _ in range(3):
+        lanes._record_failure("file:abc")
+    assert (await client.get(URL, headers=h)).json()["deferred"] == 1
+    r = await client.post(f"{URL}/retry-failed", headers=h)
+    assert r.status_code == 200, r.text
+    assert r.json()["deferred"] == 0
+    assert enqueued == ["encrypt_existing_files"]
+
+
+@pytest.mark.asyncio
+async def test_retry_failed_says_so_when_redis_is_down(client, db, make_user, login_as, enqueued, monkeypatch):
+    from app.services import encryption_lanes as lanes
+
+    h = await _headers(make_user, login_as)
+
+    def _down():
+        raise ConnectionError("redis is down")
+
+    monkeypatch.setattr(lanes, "get_redis", _down)
+    r = await client.post(f"{URL}/retry-failed", headers=h)
+    assert r.status_code == 503 and r.json()["code"] == "REDIS_UNAVAILABLE"
+    assert enqueued == []
+    assert (await client.get(URL, headers=h)).json()["deferred"] is None
+
+
+@pytest.mark.asyncio
+async def test_retry_failed_is_admin_only(client, make_user, login_as):
+    h = await _headers(make_user, login_as, "enc-retry-emp@test.local", role=UserRole.employee)
+    assert (await client.post(f"{URL}/retry-failed", headers=h)).status_code == 403

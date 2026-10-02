@@ -1,8 +1,6 @@
 """Admin: encryption at rest of stored files (/api/admin/settings/encryption)."""
 from __future__ import annotations
 
-from typing import Any
-
 from pydantic import Field
 
 from .common import APIBaseModel
@@ -20,6 +18,17 @@ class EncryptionAttachmentCounts(APIBaseModel):
     plaintext: int
 
 
+class EncryptionLastRun(APIBaseModel):
+    finished_at: str
+    encrypted: int
+    failed: int
+    deferred: int
+    skipped: int
+    remaining: int
+    # "budget" (the run's time ran out), "insufficient_space", or None.
+    stopped: str | None = None
+
+
 class EncryptionSettingsResponse(APIBaseModel):
     enabled: bool
     backend: str
@@ -27,7 +36,11 @@ class EncryptionSettingsResponse(APIBaseModel):
     inbound_attachments: EncryptionAttachmentCounts
     pending_purges: int
     failed_purges: int
-    last_run: dict[str, Any] | None = None
+    last_run: EncryptionLastRun | None = None
+    # Objects the backfill gave up on for a day after repeated failures; None
+    # when Redis cannot say.
+    deferred: int | None = None
+    backfill_task_enabled: bool
 
 
 class UpdateEncryptionSettingsRequest(APIBaseModel):

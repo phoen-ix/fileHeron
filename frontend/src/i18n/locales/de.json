@@ -334,7 +334,8 @@
     "SECRET_REQUEST_PASSPHRASE_INVALID": "Die Passphrase deiner Anfrage ist nicht korrekt.",
     "SECRET_REQUEST_PASSPHRASE_REQUIRED": "Gib die Passphrase ein, die du bei deiner Anfrage gewählt hast.",
     "SECRET_REQUEST_SELF": "Du kannst deine eigene Anfrage nicht beantworten.",
-    "ENCRYPTION_ACK_REQUIRED": "Bestätige, dass verschlüsselte Dateien nur zusammen mit der .env dieser Instanz wiederhergestellt werden können."
+    "ENCRYPTION_ACK_REQUIRED": "Bestätige, dass verschlüsselte Dateien nur zusammen mit der .env dieser Instanz wiederhergestellt werden können.",
+    "REDIS_UNAVAILABLE": "Der Cache-Dienst ist gerade nicht erreichbar. Versuche es gleich noch einmal."
   },
   "login": {
     "title": "Anmelden",
@@ -3417,7 +3418,7 @@
     "failed_purges": "davon mindestens einmal fehlgeschlagen",
     "how_title": "So funktioniert es",
     "how_new": "Ein neuer Upload wird direkt nach seiner Virenprüfung verschlüsselt, bevor jemand von ihm erfährt. Bis dahin ist er wie bisher nicht herunterladbar.",
-    "how_existing": "Bereits gespeicherte Dateien werden im Hintergrund nach und nach von der geplanten Aufgabe „Gespeicherte Dateien verschlüsseln“ verschlüsselt. Die unverschlüsselte Kopie wird eine Stunde später gelöscht.",
+    "how_existing": "Bereits gespeicherte Dateien werden im Hintergrund nach und nach von der geplanten Aufgabe encrypt_existing_files verschlüsselt. Die unverschlüsselte Kopie wird eine Stunde später gelöscht.",
     "how_downloads": "Downloads, Vorschauen, fortgesetzte Downloads und ZIP-Archive funktionieren genau wie bisher.",
     "custody_title": "Bevor du sie einschaltest",
     "custody_body": "Verschlüsselte Dateien lassen sich nur mit dem JWT_SECRET dieser Instanz lesen, das in der .env steht - und Backups enthalten die .env absichtlich nicht. Bewahre eine Kopie der .env sicher und getrennt von den Backups auf. Eine Wiederherstellung ohne sie bringt die Datenbank zurück, aber keine einzige verschlüsselte Datei.",
@@ -3429,6 +3430,18 @@
     "password_on": "Gib dein Passwort ein, um die Verschlüsselung gespeicherter Dateien einzuschalten.",
     "password_off": "Gib dein Passwort ein, um die Verschlüsselung gespeicherter Dateien auszuschalten. Neue Uploads werden dann unverschlüsselt gespeichert.",
     "saved_on": "Die Verschlüsselung gespeicherter Dateien ist eingeschaltet.",
-    "saved_off": "Die Verschlüsselung gespeicherter Dateien ist ausgeschaltet."
+    "saved_off": "Die Verschlüsselung gespeicherter Dateien ist ausgeschaltet.",
+    "last_run_label": "Letzter Hintergrundlauf",
+    "last_run_never": "Noch nicht gelaufen",
+    "last_run_summary": "{encrypted} verschlüsselt, {remaining} noch offen",
+    "last_run_failed": "{n} fehlgeschlagen",
+    "stopped_budget": "an seinem Zeitlimit beendet; der nächste Lauf macht weiter",
+    "stopped_insufficient_space": "beendet: nicht genug freier Speicherplatz",
+    "deferred_label": "Nach wiederholten Fehlern zurückgestellt",
+    "deferred_unknown": "unbekannt (Cache nicht erreichbar)",
+    "retry": "Erneut versuchen",
+    "retry_toast": "Die zurückgestellten Dateien werden im nächsten Lauf erneut versucht.",
+    "task_off": "Die geplante Aufgabe encrypt_existing_files ist ausgeschaltet, deshalb werden bereits gespeicherte Dateien nicht verschlüsselt.",
+    "task_link": "Geplante Aufgaben"
   }
 }

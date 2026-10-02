@@ -142,6 +142,7 @@ def test_a_process_that_dies_after_writing_leaves_a_lease_that_expires(db, row):
 def test_a_failed_purge_is_retried_and_audited_once(db, row, monkeypatch):
     old = row.storage_path
     backend = sb.get_storage_backend()
+    real_delete = backend.delete
     monkeypatch.setattr(backend, "delete", lambda _loc: (_ for _ in ()).throw(OSError("busy")))
     fe.rewrite_stored(db, fe.target_for_file(row), encrypt=True, purge_after=NOW)
     db.query(StoragePurge).update({"not_before": utc_now() - timedelta(seconds=1)})
@@ -152,7 +153,8 @@ def test_a_failed_purge_is_retried_and_audited_once(db, row, monkeypatch):
     assert db.query(AuditLog).filter(
         AuditLog.event_type == AuditEventType.file_purge_failed.value
     ).count() == 1
-    monkeypatch.undo()
+    # Only the delete - undo() would also lift conftest's Redis isolation.
+    monkeypatch.setattr(backend, "delete", real_delete)
     db.query(StoragePurge).update({"not_before": utc_now() - timedelta(seconds=1)})
     db.commit()
     fe.sweep_purges(db)

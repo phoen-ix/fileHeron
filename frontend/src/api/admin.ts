@@ -174,6 +174,16 @@ export interface EncryptionAttachmentCounts {
   plaintext: number
 }
 
+export interface EncryptionLastRun {
+  finished_at: string
+  encrypted: number
+  failed: number
+  deferred: number
+  skipped: number
+  remaining: number
+  stopped: 'budget' | 'insufficient_space' | null
+}
+
 export interface EncryptionSettingsResponse {
   enabled: boolean
   backend: string
@@ -181,7 +191,9 @@ export interface EncryptionSettingsResponse {
   inbound_attachments: EncryptionAttachmentCounts
   pending_purges: number
   failed_purges: number
-  last_run: Record<string, unknown> | null
+  last_run: EncryptionLastRun | null
+  deferred: number | null
+  backfill_task_enabled: boolean
 }
 
 export interface UpdateEncryptionSettingsRequest {
@@ -196,6 +208,10 @@ export function getEncryptionSettings() {
 
 export function updateEncryptionSettings(payload: UpdateEncryptionSettingsRequest) {
   return api.put<EncryptionSettingsResponse>('/admin/settings/encryption', payload)
+}
+
+export function retryFailedEncryption() {
+  return api.post<EncryptionSettingsResponse>('/admin/settings/encryption/retry-failed')
 }
 
 // --- Advanced (registry-driven) settings ---

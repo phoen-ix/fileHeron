@@ -17,7 +17,7 @@ from ....middleware.errors import AppError
 from ....models.audit_log import AuditEventType
 from ....models.user import User
 from ....schemas.encryption import EncryptionSettingsResponse, UpdateEncryptionSettingsRequest
-from ....services import file_encryption
+from ....services import encryption_lanes, file_encryption
 from ....services import settings as settings_svc
 from ....services.audit import record_audit_event
 
@@ -66,4 +66,27 @@ def update_encryption_settings(
             request=request,
         )
         db.commit()
+        if payload.enabled:
+            _kick_backfill()
     return EncryptionSettingsResponse.model_validate(file_encryption.status(db))
+
+
+@router.post("/settings/encryption/retry-failed", response_model=EncryptionSettingsResponse)
+def retry_failed_encryption(
+    db: Session = Depends(get_db),
+    _admin: User = Depends(get_current_admin),
+) -> EncryptionSettingsResponse:
+    """Forget the backfill's deferrals so the next run tries those files
+    again - for after the cause (a full disk, a storage fault) is fixed."""
+    try:
+        encryption_lanes.clear_deferrals()
+    except Exception as exc:
+        raise AppError(503, "REDIS_UNAVAILABLE", "The deferral list cannot be reached right now.") from exc
+    _kick_backfill()
+    return EncryptionSettingsResponse.model_validate(file_encryption.status(db))
+
+
+def _kick_backfill() -> None:
+    from ....services import job_queue
+
+    job_queue.enqueue(encryption_lanes.BACKFILL_JOB)

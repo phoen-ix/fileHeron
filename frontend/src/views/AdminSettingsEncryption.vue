@@ -9,6 +9,7 @@
 
   import {
     getEncryptionSettings,
+    retryFailedEncryption,
     updateEncryptionSettings,
     type EncryptionSettingsResponse,
   } from '@/api/admin'
@@ -17,8 +18,9 @@
   import { useApiError } from '@/composables/useApiError'
   import { useUiStore } from '@/stores/ui'
   import { formatBytes } from '@/utils/bytes'
+  import { formatInSiteTime } from '@/utils/datetime'
 
-  const { t } = useI18n()
+  const { t, locale } = useI18n()
   const { describe } = useApiError()
   const ui = useUiStore()
 
@@ -29,6 +31,7 @@
   const saving = ref(false)
   const stepUpOpen = ref(false)
   const stepUpError = ref<string | null>(null)
+  const retrying = ref(false)
 
   // What the open dialog will do - fixed when it opens, so a status reload
   // underneath it cannot flip the direction mid-prompt.
@@ -51,6 +54,26 @@
       errorMsg.value = describe(err)
     } finally {
       loading.value = false
+    }
+  }
+
+  const stoppedLabel = computed(() => {
+    const stopped = status.value?.last_run?.stopped
+    if (stopped === 'budget') return t('admin_encryption.stopped_budget')
+    if (stopped === 'insufficient_space') return t('admin_encryption.stopped_insufficient_space')
+    return null
+  })
+
+  async function onRetry() {
+    retrying.value = true
+    try {
+      const { data } = await retryFailedEncryption()
+      status.value = data
+      ui.pushToast(t('admin_encryption.retry_toast'), 'success')
+    } catch (err) {
+      ui.pushToast(describe(err), 'error')
+    } finally {
+      retrying.value = false
     }
   }
 
@@ -139,6 +162,48 @@
             {{ status.inbound_attachments.encrypted }} / {{ status.inbound_attachments.plaintext }}
           </dd>
 
+          <dt>{{ t('admin_encryption.last_run_label') }}</dt>
+          <dd data-testid="encryption-last-run">
+            <template v-if="status.last_run">
+              <span class="fh-mono">{{
+                formatInSiteTime(status.last_run.finished_at, locale)
+              }}</span>
+              -
+              {{
+                t('admin_encryption.last_run_summary', {
+                  encrypted: status.last_run.encrypted,
+                  remaining: status.last_run.remaining,
+                })
+              }}
+              <template v-if="status.last_run.failed > 0">
+                · {{ t('admin_encryption.last_run_failed', { n: status.last_run.failed }) }}
+              </template>
+              <span v-if="stoppedLabel" class="fh-field-help stopped">({{ stoppedLabel }})</span>
+            </template>
+            <template v-else>{{ t('admin_encryption.last_run_never') }}</template>
+          </dd>
+
+          <template v-if="status.deferred !== 0">
+            <dt>{{ t('admin_encryption.deferred_label') }}</dt>
+            <dd data-testid="encryption-deferred">
+              <template v-if="status.deferred === null">{{
+                t('admin_encryption.deferred_unknown')
+              }}</template>
+              <template v-else>
+                <span class="fh-mono">{{ status.deferred }}</span>
+                <button
+                  type="button"
+                  class="fh-btn-text inline-action"
+                  :disabled="retrying"
+                  data-testid="encryption-retry"
+                  @click="onRetry"
+                >
+                  {{ t('admin_encryption.retry') }}
+                </button>
+              </template>
+            </dd>
+          </template>
+
           <template v-if="status.pending_purges > 0">
             <dt>{{ t('admin_encryption.pending_purges') }}</dt>
             <dd class="fh-mono">
@@ -150,6 +215,19 @@
           </template>
         </dl>
       </section>
+
+      <p
+        v-if="status.enabled && !status.backfill_task_enabled"
+        class="fh-notice task-off"
+        role="alert"
+        data-tone="error"
+        data-testid="encryption-task-off"
+      >
+        {{ t('admin_encryption.task_off') }}
+        <RouterLink :to="{ name: 'admin-scheduled-tasks' }">{{
+          t('admin_encryption.task_link')
+        }}</RouterLink>
+      </p>
 
       <section class="block">
         <h2 class="h2">{{ t('admin_encryption.how_title') }}</h2>
@@ -259,6 +337,18 @@
 
   .kv dd {
     margin: 0;
+  }
+
+  .stopped {
+    margin-left: var(--fh-space-1);
+  }
+
+  .inline-action {
+    margin-left: var(--fh-space-2);
+  }
+
+  .task-off {
+    max-width: 72ch;
   }
 
   .how {

@@ -21,7 +21,7 @@ from sqlalchemy.orm import Session
 from ..models.inbound_attachment import AttachmentAVState, InboundAttachment
 from ..models.inbound_message import InboundMessage, MessageClass
 from ..models.user import User, UserRole
-from . import av_scan, imap_config, user_lookup
+from . import av_scan, file_encryption, imap_config, user_lookup
 from . import storage_backend as storage_svc
 from .inbound_parse import ParsedAttachment, ParsedMessage
 
@@ -163,16 +163,60 @@ def _store_attachment(db: Session, message_id_pk: int, att: ParsedAttachment) ->
         av_state = AttachmentAVState.clean
     else:
         av_state = AttachmentAVState.infected
+    row = InboundAttachment(
+        message_id=message_id_pk,
+        filename=att.filename[:255],
+        content_type=(att.content_type or None) and att.content_type[:127],
+        size_bytes=len(att.content),
+        storage_key=locator,
+        av_state=av_state,
+    )
+    # Encryption at rest: written encrypted from the first byte - the bytes
+    # were scanned in memory, so no plaintext copy ever needs to exist. The key
+    # is bound to the row id, hence the flush first. Any failure falls back to
+    # a plaintext copy (and an audit row); the backfill encrypts it later.
+    stored = False
+    if file_encryption.is_enabled(db):
+        db.add(row)
+        db.flush()
+        try:
+            values = file_encryption.write_new_encrypted(
+                backend, locator, att.content, kind=file_encryption.KIND_ATTACHMENT, row_id=str(row.id)
+            )
+            row.enc_version = values["enc_version"]
+            row.key_encrypted = values["key_encrypted"]
+            stored = True
+        except Exception as exc:
+            logger.warning("could not store inbound attachment %s encrypted; storing it as plaintext",
+                           att.filename, exc_info=True)
+            try:
+                backend.delete(locator)
+            except Exception:
+                pass
+            from ..models.audit_log import AuditEventType
+            from .audit import record_audit_event
+
+            record_audit_event(
+                db,
+                event_type=AuditEventType.file_encryption_deferred,
+                target_type="inbound_attachment",
+                target_id=str(row.id),
+                metadata={"reason": type(exc).__name__, "lane": "ingest"},
+            )
     tmp_name = None
     try:
-        with tempfile.NamedTemporaryFile(delete=False) as tmp:
-            tmp.write(att.content)
-            tmp_name = tmp.name
-        backend.finalize(tmp_name, locator)
+        if not stored:
+            with tempfile.NamedTemporaryFile(delete=False) as tmp:
+                tmp.write(att.content)
+                tmp_name = tmp.name
+            backend.finalize(tmp_name, locator)
     except Exception:
         logger.exception("failed to store inbound attachment %s", att.filename)
         if tmp_name and os.path.exists(tmp_name):
             os.unlink(tmp_name)
+        if row in db:
+            db.delete(row)
+            db.flush()
         return False
     # The bytes are on the storage backend already and the commit belongs to
     # run_poll, several layers up. If that commit never lands, the blob is
@@ -188,16 +232,7 @@ def _store_attachment(db: Session, message_id_pk: int, att: ParsedAttachment) ->
             logger.warning("inbound: could not drop orphaned attachment blob %s", loc)
 
     run_after_rollback(db, _drop_orphan)
-    db.add(
-        InboundAttachment(
-            message_id=message_id_pk,
-            filename=att.filename[:255],
-            content_type=(att.content_type or None) and att.content_type[:127],
-            size_bytes=len(att.content),
-            storage_key=locator,
-            av_state=av_state,
-        )
-    )
+    db.add(row)
     return True
 
 

@@ -413,6 +413,21 @@ def sweep_purges(db: Session, *, limit: int = 200) -> dict[str, int]:
 # ---------------------------------------------------------------------------
 
 
+def write_new_encrypted(backend: StorageBackend, locator: str, data: bytes, *, kind: str,
+                        row_id: str) -> dict[str, Any]:
+    """Store bytes that are encrypted from the first write (an inbound mail
+    attachment, which is scanned in memory and never needs a plaintext copy).
+    Returns the row's `enc_version` / `key_encrypted`."""
+    import io
+
+    dek = file_crypto.new_data_key()
+    backend.write_stream(locator, file_crypto.EncryptingReader(io.BytesIO(data), dek, len(data)))
+    return {
+        "enc_version": file_crypto.FORMAT_VERSION,
+        "key_encrypted": crypto.wrap_file_key(dek, kind=kind, row_id=row_id),
+    }
+
+
 def is_enabled(db: Session) -> bool:
     from . import settings as settings_svc
 
@@ -420,7 +435,8 @@ def is_enabled(db: Session) -> bool:
 
 
 def status(db: Session) -> dict[str, Any]:
-    """Counts for the admin page. Cheap: three grouped counts and a sum."""
+    """Counts for the admin page: a handful of counts, one sum, two settings
+    reads and one Redis read."""
     import json
 
     from sqlalchemy import func
@@ -443,14 +459,27 @@ def status(db: Session) -> dict[str, Any]:
     ).scalar() or 0
     att = dict(
         db.query(AttModel.enc_version.isnot(None), func.count(AttModel.id))
+        .filter(AttModel.storage_key.isnot(None))
         .group_by(AttModel.enc_version.isnot(None))
         .all()
     )
+    from . import cron_schedule, encryption_lanes
+
     raw_last = settings_svc.get(db, settings_svc.Keys.STORAGE_ENCRYPT_LAST_RUN)
     try:
-        last_run = json.loads(raw_last) if raw_last else None
+        parsed = json.loads(raw_last) if raw_last else None
     except ValueError:
-        last_run = None
+        parsed = None
+    # Read field by field: the summary is this instance's own history, and one
+    # written by another release must not 500 the page.
+    last_run = None
+    if isinstance(parsed, dict) and isinstance(parsed.get("finished_at"), str):
+        last_run = {"finished_at": parsed["finished_at"], "stopped": parsed.get("stopped")
+                    if isinstance(parsed.get("stopped"), str) else None}
+        for k in ("encrypted", "failed", "deferred", "skipped", "remaining"):
+            v = parsed.get(k)
+            last_run[k] = v if isinstance(v, int) else 0
+    deferred = encryption_lanes.deferred_members()
     return {
         "enabled": is_enabled(db),
         "backend": get_storage_backend().name,
@@ -467,4 +496,6 @@ def status(db: Session) -> dict[str, Any]:
         "pending_purges": db.query(func.count(StoragePurge.id)).scalar() or 0,
         "failed_purges": db.query(func.count(StoragePurge.id)).filter(StoragePurge.attempts > 0).scalar() or 0,
         "last_run": last_run,
+        "deferred": None if deferred is None else len(deferred),
+        "backfill_task_enabled": cron_schedule.effective(db, encryption_lanes.BACKFILL_JOB).enabled,
     }

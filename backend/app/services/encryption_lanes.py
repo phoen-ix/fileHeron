@@ -1,4 +1,6 @@
-"""Encryption at rest - the lane that encrypts a new upload before release.
+"""Encryption at rest - the lanes that move stored bytes into ciphertext.
+
+THE RELEASE LANE encrypts a new upload before it is released.
 
 With `storage.encrypt_at_rest` on, a scanned file is not flipped to `clean` by
 the scan. `av_scan_file` records the verdict in `files.release_verdict` and
@@ -19,23 +21,38 @@ a burst of uploads is encrypted in arrival order instead of all at once. Every
 kick marks the lane dirty BEFORE trying the lock; the holder clears the mark
 before it reads the queue and checks it again after it lets go - so a verdict
 that lands while the lane is busy is never left behind by the hand-over.
+
+THE BACKFILL (cron `encrypt_existing_files`) encrypts what is already stored:
+clean and quarantined files, and inbound mail attachments, one at a time
+within a time budget. The plaintext it replaces is purged an hour later, so a
+ZIP stream that opened its member list before the swap still finds it. A file
+served in the last half hour is left for a later run, and a file that fails
+three times is deferred for a day (an admin can clear that). Each run first
+sweeps due purges and releases any file the release lane left held - the
+backstop for a kick that never arrived.
 """
 from __future__ import annotations
 
+import json
 import logging
 import secrets
 import threading
+import time
 from collections import Counter
+from collections.abc import Callable, Iterator
 from datetime import timedelta
+from typing import Any
 
 from sqlalchemy import update
 from sqlalchemy.orm import Session
 
 from ..models.audit_log import AuditEventType
 from ..models.file import File, FileState
-from ..redis_client import get_redis
+from ..models.inbound_attachment import InboundAttachment
+from ..redis_client import get_redis, sync
 from ..utils import file_crypto
 from ..utils.dbresult import updated_rows
+from ..utils.timeutil import utc_now, utc_now_aware
 from . import av_release, file_encryption
 from .audit import record_audit_event
 
@@ -285,3 +302,222 @@ def run_release_lane(db: Session, *, cancel: threading.Event | None = None) -> d
                    _MAX_PASSES)
     totals["passes_exhausted"] += 1
     return dict(totals)
+
+
+# ---------------------------------------------------------------------------
+# The backfill
+# ---------------------------------------------------------------------------
+
+BACKFILL_JOB = "encrypt_existing_files"
+_BACKFILL_LOCK = "fh:enc:backfill:lock"
+# Failures per stored object ("file:<id>" / "inbound_attachment:<id>"), and the
+# objects deferred after `_FAIL_THRESHOLD` of them, scored by when the deferral
+# ends. FIXED keys, read directly - never a keyspace walk.
+_FAILURES_KEY = "fh:enc:backfill:failures"
+_DEFERRED_KEY = "fh:enc:backfill:deferred"
+_FAIL_THRESHOLD = 3
+_DEFER_SEC = 24 * 3600
+# Under the cron's 10-minute cadence plus the lock's own margin: a run never
+# overlaps the next tick by much, and the lock refuses the overlap anyway.
+BACKFILL_BUDGET_SEC = 50 * 60
+_BATCH = 100
+_BACKFILL_FILE_STATES = (FileState.clean, FileState.infected)
+
+
+def _member(kind: str, row_id: str) -> str:
+    return f"{kind}:{row_id}"
+
+
+def _record_failure(member: str) -> bool:
+    """Count a failed attempt; True when this one deferred the object. Fails
+    open: with no Redis nothing is deferred and the next run tries again."""
+    try:
+        r = get_redis()
+        if int(sync(r.hincrby(_FAILURES_KEY, member, 1))) < _FAIL_THRESHOLD:
+            return False
+        r.zadd(_DEFERRED_KEY, {member: utc_now_aware().timestamp() + _DEFER_SEC})
+        r.hdel(_FAILURES_KEY, member)
+        return True
+    except Exception:
+        logger.warning("backfill: could not record a failure (redis)")
+        return False
+
+
+def _clear_failure(member: str) -> None:
+    try:
+        get_redis().hdel(_FAILURES_KEY, member)
+    except Exception:
+        pass
+
+
+def deferred_members() -> set[str] | None:
+    """Objects currently deferred; None when Redis cannot say."""
+    try:
+        r = get_redis()
+        r.zremrangebyscore(_DEFERRED_KEY, "-inf", f"({utc_now_aware().timestamp()}")
+        return {m.decode() if isinstance(m, bytes) else m for m in sync(r.zrange(_DEFERRED_KEY, 0, -1))}
+    except Exception:
+        return None
+
+
+def clear_deferrals() -> None:
+    """The admin's "try the failed ones again". Raises when Redis is down, so
+    the route can say so instead of claiming it worked."""
+    get_redis().delete(_DEFERRED_KEY, _FAILURES_KEY)
+
+
+def _candidates(db: Session, kind: str) -> Iterator[Any]:
+    """The ids of every plaintext object of `kind`, in id order, a batch at a
+    time (keyset paging: a failed object is never re-selected inside one run)."""
+    last: Any = None
+    while True:
+        ids: list[Any]
+        if kind == file_encryption.KIND_FILE:
+            fq = db.query(File.id).filter(
+                File.enc_version.is_(None),
+                File.state.in_(_BACKFILL_FILE_STATES),
+                File.storage_path.isnot(None),
+            )
+            if last is not None:
+                fq = fq.filter(File.id > last)
+            ids = [i for (i,) in fq.order_by(File.id).limit(_BATCH).all()]
+        else:
+            aq = db.query(InboundAttachment.id).filter(
+                InboundAttachment.enc_version.is_(None),
+                InboundAttachment.storage_key.isnot(None),
+            )
+            if last is not None:
+                aq = aq.filter(InboundAttachment.id > last)
+            ids = [i for (i,) in aq.order_by(InboundAttachment.id).limit(_BATCH).all()]
+        if not ids:
+            return
+        last = ids[-1]
+        yield from ids
+
+
+def _plaintext_remaining(db: Session) -> int:
+    from sqlalchemy import func
+
+    files = db.query(func.count(File.id)).filter(
+        File.enc_version.is_(None), File.state.in_(_BACKFILL_FILE_STATES), File.storage_path.isnot(None)
+    ).scalar() or 0
+    atts = db.query(func.count(InboundAttachment.id)).filter(
+        InboundAttachment.enc_version.is_(None), InboundAttachment.storage_key.isnot(None)
+    ).scalar() or 0
+    return int(files) + int(atts)
+
+
+def _target(db: Session, kind: str, row_id: Any) -> file_encryption.Target | None:
+    if kind == file_encryption.KIND_FILE:
+        f = db.get(File, row_id)
+        if f is None or f.enc_version is not None or f.state not in _BACKFILL_FILE_STATES or not f.storage_path:
+            return None
+        return file_encryption.target_for_file(f)
+    a = db.get(InboundAttachment, row_id)
+    if a is None or a.enc_version is not None or not a.storage_key:
+        return None
+    return file_encryption.target_for_attachment(a)
+
+
+def run_backfill(
+    db: Session,
+    *,
+    cancel: threading.Event | None = None,
+    budget_sec: float = BACKFILL_BUDGET_SEC,
+    clock: Callable[[], float] = time.monotonic,
+) -> dict[str, Any]:
+    from . import settings as settings_svc
+    from . import transfer_activity
+    from .cron_tracker import CRON_FAILED_KEY
+
+    purged = file_encryption.sweep_purges(db)
+    held = run_release_lane(db, cancel=cancel)
+    if not file_encryption.is_enabled(db):
+        return {"skipped": "disabled", "purged": purged["purged"], "held_released": held}
+    lease = RedisLease(_BACKFILL_LOCK)
+    if not lease.acquire():
+        return {"skipped": "busy", "purged": purged["purged"]}
+
+    counts: Counter[str] = Counter()
+    stopped: str | None = None
+    deadline = clock() + budget_sec
+    deferred = deferred_members() or set()
+    try:
+        for kind in (file_encryption.KIND_FILE, file_encryption.KIND_ATTACHMENT):
+            for row_id in _candidates(db, kind):
+                if cancel is not None and cancel.is_set():
+                    raise file_crypto.EncryptionCancelledError("backfill cancelled")
+                if clock() >= deadline:
+                    stopped = "budget"
+                    break
+                member = _member(kind, str(row_id))
+                if member in deferred:
+                    counts["deferred_skipped"] += 1
+                    continue
+                if kind == file_encryption.KIND_FILE and transfer_activity.was_download_recent(str(row_id)):
+                    counts["recently_served"] += 1
+                    continue
+                target = _target(db, kind, row_id)
+                if target is None:
+                    continue
+                try:
+                    swapped = file_encryption.rewrite_stored(
+                        db,
+                        target,
+                        encrypt=True,
+                        purge_after=file_encryption.PLAINTEXT_PURGE_GRACE,
+                        expected_states=_BACKFILL_FILE_STATES if kind == file_encryption.KIND_FILE else None,
+                        cancel=cancel,
+                    )
+                except file_crypto.EncryptionCancelledError:
+                    raise
+                except file_encryption.InsufficientSpaceError:
+                    db.rollback()
+                    stopped = "insufficient_space"
+                    break
+                except Exception as exc:
+                    db.rollback()
+                    counts["failed"] += 1
+                    logger.warning("backfill: could not encrypt %s", member, exc_info=True)
+                    if _record_failure(member):
+                        counts["deferred"] += 1
+                        record_audit_event(
+                            db,
+                            event_type=AuditEventType.file_encryption_failed,
+                            actor_user_id=None,
+                            target_type=kind,
+                            target_id=str(row_id),
+                            metadata={"reason": _reason(exc), "attempts": _FAIL_THRESHOLD},
+                        )
+                        db.commit()
+                    continue
+                if swapped:
+                    counts["encrypted"] += 1
+                    _clear_failure(member)
+                else:
+                    counts["superseded"] += 1
+            if stopped is not None:
+                break
+    finally:
+        lease.release()
+
+    summary: dict[str, Any] = {
+        "finished_at": utc_now().replace(microsecond=0).isoformat(),
+        "encrypted": counts["encrypted"],
+        "failed": counts["failed"],
+        "deferred": counts["deferred"],
+        "skipped": counts["deferred_skipped"] + counts["recently_served"],
+        "remaining": _plaintext_remaining(db),
+        "stopped": stopped,
+    }
+    settings_svc.set_value(db, key=settings_svc.Keys.STORAGE_ENCRYPT_LAST_RUN,
+                           value=json.dumps(summary), actor=None)
+    db.commit()
+    result: dict[str, Any] = {**summary, "purged": purged["purged"], "held_released": held}
+    # A run that tried and got nothing done is a failed run: the Scheduled
+    # tasks page and the cron alert must see it, not a green "success".
+    if (counts["failed"] and not counts["encrypted"] and not counts["superseded"]) or (
+        stopped == "insufficient_space" and not counts["encrypted"]
+    ):
+        result[CRON_FAILED_KEY] = True
+    return result

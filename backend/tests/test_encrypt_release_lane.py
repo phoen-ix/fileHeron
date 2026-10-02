@@ -328,7 +328,7 @@ def test_a_busy_lane_is_marked_and_the_holder_takes_the_new_file(db, new_file, m
     assert nested == [{"busy": 1}]
     db.refresh(second)
     assert (second.state, second.enc_version) == (FileState.clean, 1)
-    assert _isolate_encryption_lanes == {}, "lock released, nothing left marked"
+    assert _isolate_encryption_lanes["strings"] == {}, "lock released, nothing left marked"
 
 
 def test_a_mark_after_the_last_pass_is_picked_up_after_the_lock_goes(db, new_file, monkeypatch):

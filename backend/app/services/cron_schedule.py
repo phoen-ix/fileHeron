@@ -60,6 +60,9 @@ REGISTRY: dict[str, CronSpec] = {
         CronSpec("reclaim_orphaned_files", "shares",
                  "Free bytes + quota from long-revoked/deleted shares.", KIND_DAILY,
                  default_daily_time="02:51"),
+        CronSpec("encrypt_existing_files", "shares",
+                 "Encrypt stored files not yet encrypted (encryption at rest) and delete the copies they replace.",
+                 KIND_INTERVAL, 10),
         # Mail
         CronSpec("imap_poll", "mail",
                  "Fetch the inbound mailbox over IMAP.", KIND_INTERVAL, 5),

@@ -334,7 +334,8 @@
     "SECRET_REQUEST_PASSPHRASE_INVALID": "The passphrase of your request is not correct.",
     "SECRET_REQUEST_PASSPHRASE_REQUIRED": "Enter the passphrase you set on your request.",
     "SECRET_REQUEST_SELF": "You cannot answer your own request.",
-    "ENCRYPTION_ACK_REQUIRED": "Confirm that encrypted files can only be restored together with this instance's .env."
+    "ENCRYPTION_ACK_REQUIRED": "Confirm that encrypted files can only be restored together with this instance's .env.",
+    "REDIS_UNAVAILABLE": "The cache service can't be reached right now. Try again in a moment."
   },
   "login": {
     "title": "Sign in",
@@ -3417,7 +3418,7 @@
     "failed_purges": "of which failed at least once",
     "how_title": "How it works",
     "how_new": "A new upload is encrypted right after its virus scan, before anyone is told it is there. Until then it can't be downloaded, as today.",
-    "how_existing": "Files already stored are encrypted in the background, a few at a time, by the scheduled task \"Encrypt stored files\". The unencrypted copy is deleted an hour later.",
+    "how_existing": "Files already stored are encrypted in the background, a few at a time, by the scheduled task encrypt_existing_files. The unencrypted copy is deleted an hour later.",
     "how_downloads": "Downloads, previews, resumes and ZIP archives work exactly as before.",
     "custody_title": "Before you turn it on",
     "custody_body": "Encrypted files can only be read with this instance's JWT_SECRET, which lives in .env - and backups deliberately do not contain .env. Keep a copy of .env somewhere safe and separate from the backups. A restore without it brings back the database but not one encrypted file.",
@@ -3429,6 +3430,18 @@
     "password_on": "Enter your password to turn encryption at rest on.",
     "password_off": "Enter your password to turn encryption at rest off. New uploads will be stored unencrypted.",
     "saved_on": "Encryption at rest is on.",
-    "saved_off": "Encryption at rest is off."
+    "saved_off": "Encryption at rest is off.",
+    "last_run_label": "Last background run",
+    "last_run_never": "Not run yet",
+    "last_run_summary": "{encrypted} encrypted, {remaining} still to do",
+    "last_run_failed": "{n} failed",
+    "stopped_budget": "stopped at its time limit; the next run continues",
+    "stopped_insufficient_space": "stopped: not enough free storage space",
+    "deferred_label": "Set aside after repeated failures",
+    "deferred_unknown": "unknown (cache unavailable)",
+    "retry": "Try them again",
+    "retry_toast": "The set-aside files will be tried again in the next run.",
+    "task_off": "The scheduled task encrypt_existing_files is switched off, so files already stored are not being encrypted.",
+    "task_link": "Scheduled tasks"
   }
 }

@@ -47,10 +47,10 @@ async def _oidc_callback(client, monkeypatch, provider, *, sub, email):
     install_jwks_mock(monkeypatch)
     patch_exchange(monkeypatch, make_claims(provider, sub=sub, email=email, nonce=nonce))
     oidc_svc.reset_discovery_cache()
+    client.cookies.set(oidc_svc.STATE_COOKIE, f"{state}::{provider.id}::{nonce}")
     return await client.get(
         f"/api/auth/oidc/callback/{provider.id}",
         params={"code": "abc", "state": state},
-        cookies={oidc_svc.STATE_COOKIE: f"{state}::{provider.id}::{nonce}"},
         follow_redirects=False,
     )
 

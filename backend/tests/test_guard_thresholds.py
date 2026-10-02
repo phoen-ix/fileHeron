@@ -44,11 +44,14 @@ def _png(w: int, h: int) -> bytes:
 
 
 def test_an_image_between_one_and_two_times_the_cap_is_refused(monkeypatch):
-    """This is the gap. Pillow would have decoded it with a warning."""
+    """This is the gap. Pillow would have decoded it with a warning - and the
+    warning is asserted, since that is the premise the guard rests on."""
+    from PIL import Image
+
     from app.services import image as image_svc
 
     monkeypatch.setattr(image_svc, "_MAX_PIXELS", 1000)
-    with pytest.raises(AppError) as exc:
+    with pytest.warns(Image.DecompressionBombWarning), pytest.raises(AppError) as exc:
         image_svc.to_client_png(_png(60, 30))  # 1800 px = 1.8x
     assert exc.value.code == "IMAGE_TOO_LARGE"
 

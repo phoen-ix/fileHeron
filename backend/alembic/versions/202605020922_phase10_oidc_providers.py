@@ -135,7 +135,7 @@ def upgrade() -> None:
                    :employee_groups, :redirect_uri, true,
                    :now, :now)
                 """
-            ),
+            ).bindparams(sa.bindparam("now", type_=sa.DateTime())),
             {
                 "id": provider_id,
                 "name": "Default (migrated)",

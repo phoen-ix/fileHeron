@@ -165,3 +165,13 @@ check_untyped_defs = true
 asyncio_mode = "auto"
 testpaths = ["tests"]
 pythonpath = ["."]
+# Every warning fails the run. A model FK cycle made sorted_tables and
+# compare_metadata silently skip the constraints involved, alembic.ini carried a
+# key alembic had deprecated, three migrations handed sqlite3 a raw datetime and
+# the OIDC tests used httpx's deprecated per-request cookies - all printed in
+# every run and nobody read them. A warning a test expects is asserted with
+# `pytest.warns`, never filtered here. The one exception is ResourceWarning,
+# which Python itself hides: the garbage collector reports an unclosed handle
+# in whichever test happens to be running when it collects, so as an error it
+# fails an unrelated test at random.
+filterwarnings = ["error", "ignore::ResourceWarning"]

@@ -35,7 +35,7 @@ def upgrade() -> None:
         sa.text(
             "UPDATE shares SET terminated_at = :now "
             "WHERE state IN ('revoked', 'deleted') AND terminated_at IS NULL"
-        ),
+        ).bindparams(sa.bindparam("now", type_=sa.DateTime())),
         {"now": now},
     )
 

@@ -131,9 +131,13 @@ class User(Base):
     # both have an "alice" subject without colliding.
     oidc_subject: Mapped[str | None] = mapped_column(String(255), nullable=True)
     # Phase 10: which OIDC provider this user is linked to. NULL = no link.
+    # `use_alter`: oidc_providers.created_by_id/updated_by_id point back at
+    # users, and without it that cycle makes `sorted_tables` (and alembic's
+    # compare_metadata) ignore every FK between the two tables. The migration
+    # added this one by ALTER as well.
     oidc_provider_id: Mapped[str | None] = mapped_column(
         String(36),
-        ForeignKey("oidc_providers.id", ondelete="SET NULL"),
+        ForeignKey("oidc_providers.id", ondelete="SET NULL", use_alter=True),
         nullable=True,
         index=True,
     )

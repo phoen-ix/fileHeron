@@ -124,15 +124,17 @@ def upgrade() -> None:
         )
 
     bind.execute(
-        sa.text(
-            "INSERT INTO app_settings (`key`, value, is_encrypted, updated_at) "
-            "VALUES (:k, '1', 0, :t)"
-        )
-        if bind.dialect.name == "mysql"
-        else sa.text(
-            "INSERT INTO app_settings (key, value, is_encrypted, updated_at) "
-            "VALUES (:k, '1', 0, :t)"
-        ),
+        (
+            sa.text(
+                "INSERT INTO app_settings (`key`, value, is_encrypted, updated_at) "
+                "VALUES (:k, '1', 0, :t)"
+            )
+            if bind.dialect.name == "mysql"
+            else sa.text(
+                "INSERT INTO app_settings (key, value, is_encrypted, updated_at) "
+                "VALUES (:k, '1', 0, :t)"
+            )
+        ).bindparams(sa.bindparam("t", type_=sa.DateTime())),
         {"k": _MARKER_KEY, "t": datetime.now(timezone.utc).replace(tzinfo=None)},
     )
 

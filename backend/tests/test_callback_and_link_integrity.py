@@ -108,10 +108,10 @@ async def test_an_unknown_identity_does_not_dead_end_the_browser(
         ),
     )
 
+    client.cookies.set(oidc_svc.STATE_COOKIE, f"{state}::{provider.id}::{nonce}")
     r = await client.get(
         f"/api/auth/oidc/callback/{provider.id}",
         params={"code": "abc", "state": state},
-        cookies={oidc_svc.STATE_COOKIE: f"{state}::{provider.id}::{nonce}"},
         follow_redirects=False,
     )
     assert r.status_code == 302, r.text

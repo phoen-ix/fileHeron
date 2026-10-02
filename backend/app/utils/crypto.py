@@ -273,6 +273,45 @@ def decrypt_setting(ciphertext: str) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Data keys of files encrypted at rest (services/file_encryption.py)
+# ---------------------------------------------------------------------------
+
+# A file's 32-byte data key is wrapped by the instance Fernet - the same layer
+# as every other `*_encrypted` column, so backend/scripts/rotate_jwt_secret.py
+# re-wraps it without touching file bytes. The KIND and the ROW ID are sealed
+# inside with the key: a key copied onto another row (or a storage_path swapped
+# between rows) unwraps as a mismatch instead of decrypting the wrong file.
+_FILE_KEY_MAGIC = b"FHK1"
+_FILE_KEY_KINDS = {"file": 1, "inbound_attachment": 2}
+
+
+class FileKeyMismatchError(SecretUndecryptableError):
+    """A wrapped file key decrypted, but belongs to another row or kind."""
+
+
+def wrap_file_key(dek: bytes, *, kind: str, row_id: str) -> str:
+    rid = row_id.encode("utf-8")
+    if len(rid) > 255:
+        raise ValueError("row id too long to bind")
+    payload = _FILE_KEY_MAGIC + bytes([_FILE_KEY_KINDS[kind], len(rid)]) + rid + dek
+    return _get_fernet().encrypt(payload).decode("ascii")
+
+
+def unwrap_file_key(wrapped: str, *, kind: str, row_id: str) -> bytes:
+    """The data key, or SecretUndecryptableError (wrong instance key) /
+    FileKeyMismatchError (right key, wrong row)."""
+    try:
+        payload = _get_fernet().decrypt(wrapped.encode("ascii"))
+    except Exception as e:
+        raise SecretUndecryptableError("file key") from e
+    rid = row_id.encode("utf-8")
+    head = _FILE_KEY_MAGIC + bytes([_FILE_KEY_KINDS[kind], len(rid)]) + rid
+    if not payload.startswith(head) or len(payload) != len(head) + 32:
+        raise FileKeyMismatchError(f"file key does not belong to {kind} {row_id}")
+    return payload[len(head):]
+
+
+# ---------------------------------------------------------------------------
 # Recovery codes (10 × 8-char alphanumeric, "K7XQ-2L9P" style)
 # ---------------------------------------------------------------------------
 

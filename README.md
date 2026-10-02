@@ -96,27 +96,34 @@ admin mail log keeps a masked copy. Full operator walkthrough: [First install](#
 ## Architecture
 
 ```
-       Host: Traefik  (TLS + ACME + multi-app routing)
-                 │
-   ┌─────────────┼──────────────────────┐
-   │             │                      │
-  /api      /uploads (TUS)             /
-   ▼             ▼                      ▼
- FastAPI       tusd                  nginx (SPA)
-   │             │
-   │       ./data/uploads/   (tusd working dir)
-   │             │
-   │             └─► finalize ─► ./data/files/{yyyy}/{mm}/{file-uuid}.bin
-   │
- ┌─────────┬──────────┬──────┐
- │ MariaDB │  Redis   │ ARQ  │  ─►  ClamAV  (async scan after finalize)
- │   11    │ 7-alpine │worker│
- └─────────┴──────────┴──────┘
+          Host: Traefik  (TLS + ACME + multi-app routing; denies /api/internal/*)
+                    │
+     ┌──────────────┼─────────────────────────┐
+     │              │                         │
+   /api       /uploads (TUS)                  /
+     ▼              ▼                         ▼
+  FastAPI ◄─hooks── tusd                 nginx (SPA)
+  backend           │
+     │        ./data/uploads/   (tusd working dir)
+     │              │
+     │              └─► finalize ─► ./data/files/{yyyy}/{mm}/{file-uuid}.bin
+     │                               (or an S3-compatible bucket)
+     │
+ ┌─────────┬─────────┬──────────────┐
+ │ MariaDB │  Redis  │  ARQ worker  │ ─► ClamAV  (scan after finalize)
+ │  12.3   │   8.10  │ jobs + crons │ ─► SMTP out · IMAP in · webhooks
+ └─────────┴─────────┴──────────────┘
+
+ updater-shim ─► updater-executor   (in-app Update: back up, pull, swap, verify, roll back)
 ```
 
-- The browser uploads with **Uppy + TUS** (resumable through any non-buffering proxy); API clients use any TUS library (`tuspy`, `go-tus`, raw curl) against the same endpoint.
-- Downloads stream from FastAPI via `FileResponse` + kernel `sendfile()` - fast even for 30 GB files.
-- ClamAV scans every upload asynchronously; infected files are quarantined and the parent share auto-revoked.
+- **Uploads:** the browser uses **Uppy + TUS** (resumable through any non-buffering proxy) and sends files under 100 MB (the default limit) as one direct upload; API clients use any TUS library (`tuspy`, `go-tus`, raw curl) against the same endpoint. tusd calls the backend on every upload event over HTTP hooks, so the backend decides who may upload what, and how much.
+- **Downloads** stream from FastAPI via `FileResponse` + kernel `sendfile()`, fast even for 30 GB files, with resume (HTTP Range). On S3 a plain file is a short-lived presigned redirect to the bucket; an [encrypted](#encryption-at-rest) file is decrypted by the backend as it streams.
+- **Virus scanning:** ClamAV scans each upload after finalize, before anyone can download it, up to clamd's own ~2 GiB ceiling; larger files are served flagged as not scanned. Infected files are quarantined and the parent share auto-revoked.
+- **Encryption at rest** (optional, off by default): after the scan each file is rewritten as AES-256-GCM ciphertext under its own key, so backups, disk images and the bucket hold no readable file contents. See [Encryption at rest](#encryption-at-rest).
+- **The ARQ worker** runs the scans, outgoing mail, webhooks and 23 scheduled tasks (expiry, cleanup, the inbound-mail poll, the encryption backfill, the update check), each re-timed on [Scheduled tasks](#scheduled-tasks-adminscheduled-tasks).
+- **In-app updates:** the `updater-shim` container picks up an Update or Rollback requested in the admin console and runs `updater-executor`, which by default backs up the database and Redis, pulls the release's images, swaps the app containers, brings changed infrastructure along, checks health and rolls back on failure. See [Upgrades](#upgrades).
+- **The desktop client** (Windows) uses the same REST API as the web app.
 - Optional **S3-compatible** storage backend (see [storage backend](#storage-backend-storage_backend)).
 
 ## Tech stack
@@ -124,7 +131,7 @@ admin mail log keeps a masked copy. Full operator walkthrough: [First install](#
 | Layer | Choice |
 |---|---|
 | Backend | Python 3.14, FastAPI, SQLAlchemy 2.0, Alembic, Pydantic v2, ARQ |
-| Auth / crypto | argon2-cffi (Argon2id), PyJWT, py_webauthn, multi-provider OIDC code flow |
+| Auth / crypto | argon2-cffi (Argon2id), PyJWT, py_webauthn, multi-provider OIDC code flow; cryptography (Fernet for secret fields, AES-256-GCM for files at rest) |
 | Data / cache | MariaDB 12.3, Redis 8 (ARQ queue, rate limits, quota Lua, SSE pubsub) |
 | Upload | tusd (Go) + Uppy (browser) + any TUS client (API) |
 | Frontend | Vue 3, Vite, Pinia, Vue Router, vue-i18n, axios, dayjs, vitest - **no UI framework** (native `<input type=datetime-local>`); rich text via MIT ProseMirror |

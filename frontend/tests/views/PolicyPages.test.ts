@@ -127,13 +127,19 @@ async function mountPage(page: Page, mode: string) {
 
 /** The form as rendered, minus what is not visible and changes when markup
  * moves into another component: scoped-CSS hash attributes, comments (template
- * comments and v-if anchors) and the pretty-printer's whitespace between tags. */
+ * comments and v-if anchors) and the pretty-printer's whitespace between tags.
+ * Comments are removed as DOM nodes, not by a regex over the HTML - this runs
+ * once, at the end of a test, so the mounted tree can lose them. */
 function markup(w: Awaited<ReturnType<typeof mountPage>>): string {
-  return w
-    .find('form')
+  const form = w.find('form')
+  const walker = document.createTreeWalker(form.element, NodeFilter.SHOW_COMMENT)
+  const comments: Node[] = []
+  while (walker.nextNode()) comments.push(walker.currentNode)
+  for (const c of comments) c.parentNode?.removeChild(c)
+  expect(comments.length, 'vacuity: the forms carry v-if anchors').toBeGreaterThan(0)
+  return form
     .html()
     .replace(/ data-v-[0-9a-f]+=""/g, '')
-    .replace(/<!--[\s\S]*?-->/g, '')
     .replace(/>\s+</g, '><')
 }
 

@@ -125,6 +125,7 @@ def build_zip_stream(
     `mtime` is the DOS timestamp stamped on every member - pass the share's
     creation time so the same share always produces the same bytes; the default
     is a fixed epoch, never the clock."""
+    from . import file_encryption
     from .storage_backend import get_storage_backend
 
     backend = get_storage_backend()
@@ -138,6 +139,21 @@ def build_zip_stream(
             # and it already failed - as a TypeError from backend.open(None),
             # mid-stream, after the archive had started. Say what is wrong.
             raise ValueError(f"file {f.id} is servable but has no storage locator")
+        cipher = file_encryption.cipher_for_file(f)
+        if cipher is not None:
+            # Encrypted at rest: the PLAINTEXT, through a lazy seekable reader,
+            # sized from the row - never add_path, which would size the member
+            # from the ciphertext on disk and declare a wrong archive length.
+            # The archive bytes are the same as for the plaintext file (members
+            # and CRCs are plaintext), so LAYOUT_VERSION stays put and an
+            # existing fh:zip:crc entry stays valid.
+            zs.add_stream(
+                partial(file_encryption.open_plaintext, backend, locator, cipher),
+                arcname,
+                size=f.size_bytes,
+                cache_key=f.id,
+            )
+            continue
         lp = backend.local_path(locator)
         if lp is not None:
             zs.add_path(lp, arcname, cache_key=f.id)  # local disk → add by path

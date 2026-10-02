@@ -1,3 +1,31 @@
+# Desktop client 1.5.1
+
+**A share's public link now shows on its page in the app.**
+
+Requires server **v2.6.1 or newer** (unchanged).
+
+---
+
+## The public link on the share page
+
+The share page was meant to show a share's public link (since 0.5.3), but a
+fault meant it never appeared. It does now, for the person who created the
+share and for administrators:
+
+- the link itself, with **Copy** and **Open**;
+- whether it has a password, how many downloads are left, and whether you are
+  notified on each download.
+
+Recipients see no link, as before, and nothing changes for a share without one.
+
+## Also
+
+- On a share with a public link, the buttons at the bottom of the page (**Add
+  files**, **Edit expiry**, **Edit limit**, **End share**, **Save all**) stay
+  visible at the app's normal window size.
+
+---
+
 # Desktop client 1.5.0
 
 **Secrets come to the desktop app: send, request, reveal and answer them in a

@@ -33,8 +33,8 @@ logger = logging.getLogger("fileheron.mail_log")
 # plus a share's public link, {site}{PUBLIC_LINK_BASE_PATH}/{token}, mailed to a
 # recipient with no account (services/external_recipients.py). That token is a
 # bearer credential for the share's bytes, so it is masked like the others. The
-# path comes from the SAME setting the link builder reads, never a literal `/d/`,
-# or an operator who moved the base path would get live tokens in the log.
+# path comes from the SAME constant the link builder reads, never a literal `/d/`,
+# so the two cannot drift apart and leave live tokens in the log.
 # And a secret's link, {site}{SECRET_LINK_BASE_PATH}#{token} (services/secret.py):
 # the token is in the FRAGMENT there, so it is matched after `#`, not `/`. It IS
 # the secret for whoever opens it.

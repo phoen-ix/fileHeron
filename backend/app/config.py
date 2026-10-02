@@ -9,6 +9,7 @@ import os
 import re
 import sys
 import warnings
+from typing import ClassVar
 from urllib.parse import quote_plus
 
 from pydantic import field_validator
@@ -360,7 +361,11 @@ class Settings(BaseSettings):
             return AV_MIN_SCAN_BYTES
         return v
     # Public-link tunables.
-    PUBLIC_LINK_BASE_PATH: str = "/d"
+    # The SPA's route prefix for public links. A ClassVar, not a setting: the
+    # route is fixed in frontend/src/router/index.ts and Vue routes on the
+    # browser's own URL, so any other value (even behind a proxy rewrite) only
+    # produced dead links. Pinned against the router by test_link_base_paths.py.
+    PUBLIC_LINK_BASE_PATH: ClassVar[str] = "/d"
     PUBLIC_LINK_PASSWORD_RATE_LIMIT: int = 10  # max attempts per (link, IP) per window
     PUBLIC_LINK_PASSWORD_WINDOW_SEC: int = 900  # 15 minutes
     PUBLIC_LINK_LOCKOUT_SEC: int = 900  # link locked for 15 min after lockout
@@ -370,7 +375,9 @@ class Settings(BaseSettings):
     # the feature itself ships OFF (kv `secrets.enabled`). The link is
     # `{site}{SECRET_LINK_BASE_PATH}#<token>`: the token rides the URL FRAGMENT,
     # which no proxy or access log ever sees, and reaches the API in a POST body.
-    SECRET_LINK_BASE_PATH: str = "/s"
+    # A ClassVar for the same reason as PUBLIC_LINK_BASE_PATH: the SPA route is
+    # fixed.
+    SECRET_LINK_BASE_PATH: ClassVar[str] = "/s"
     SECRETS_MAX_VIEWS: int = 100
     SECRETS_MAX_EXPIRY_DAYS: int = 90
     # Ends a secret this long after it was sent even when the sender chose views

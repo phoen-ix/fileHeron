@@ -1143,9 +1143,7 @@ via `/admin/settings/advanced`.
 > in the UI, and writes a `file_served_unscanned` audit event. Raising
 > `AV_MAX_SCAN_BYTES` does not extend coverage; it only makes fileHeron report a
 > verdict clamd never produced.
-| `PUBLIC_LINK_BASE_PATH` | `/d` | Public-link URL prefix. |
 | `PUBLIC_LINK_PASSWORD_RATE_LIMIT` / `_WINDOW_SEC` / `PUBLIC_LINK_LOCKOUT_SEC` | `10`/`900`/`900` | Per-link password brute-force guard. ↻ |
-| `SECRET_LINK_BASE_PATH` | `/s` | Secret-link URL prefix (`{site}/s#<token>`; the SPA serves `/s`). |
 | `SECRETS_MAX_VIEWS` / `SECRETS_MAX_EXPIRY_DAYS` / `SECRETS_MAX_LIFETIME_DAYS` | `100`/`90`/`90` | Ceilings for a secret: most views, latest expiry, longest life (`0` = no lifetime ceiling). ↻ |
 | `SECRETS_PASSPHRASE_MAX_FAILURES` | `10` | Wrong passphrases before a secret is destroyed for that recipient (when that mode is chosen). ↻ |
 | `SECRETS_PASSPHRASE_RATE_LIMIT` / `_WINDOW_SEC` / `_LOCKOUT_SEC` | `10`/`900`/`900` | Wrong-passphrase throttle per recipient and address, and how long a link is locked. ↻ |

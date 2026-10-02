@@ -4,6 +4,7 @@ import type {
   AdminApiTokenItem,
   AdminApiTokenListResponse,
   AdminAuditResponse,
+  AdminSettingsChangesResponse,
   AnalyticsResponse,
   EmailTemplatesListResponse,
   EmailTemplateItem,
@@ -496,6 +497,13 @@ export function listAuditLog(
   } = {},
 ) {
   return api.get<AdminAuditResponse>('/admin/audit-log', { params })
+}
+
+/** The newest settings changes, newest first (the Overview panel). */
+export function listSettingsChanges(limit = 8) {
+  return api.get<AdminSettingsChangesResponse>('/admin/audit-log/settings-changes', {
+    params: { limit },
+  })
 }
 
 // Outbound webhooks (v1.19.0).

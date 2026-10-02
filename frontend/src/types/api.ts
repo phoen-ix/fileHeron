@@ -747,6 +747,11 @@ export interface AdminAuditResponse {
   next_cursor: string | null
 }
 
+/** The newest settings changes - the Overview's "Recently changed" panel. */
+export interface AdminSettingsChangesResponse {
+  items: AdminAuditRow[]
+}
+
 /* Admin analytics dashboard (v1.18.0). */
 export interface AnalyticsDayPoint {
   date: string

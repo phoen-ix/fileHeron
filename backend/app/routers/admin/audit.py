@@ -15,9 +15,9 @@ from sqlalchemy.orm import Session
 
 from ...dependencies import get_current_admin, get_db
 from ...middleware.errors import AppError
-from ...models.audit_log import AuditLog
+from ...models.audit_log import AuditEventType, AuditLog
 from ...models.user import User
-from ...schemas.admin import AdminAuditResponse, AdminAuditRow
+from ...schemas.admin import AdminAuditResponse, AdminAuditRow, AdminSettingsChangesResponse
 from ...utils.timeutil import to_naive_utc
 
 router = APIRouter()
@@ -76,6 +76,77 @@ def _audit_query(
     if to_ts:
         q = q.filter(AuditLog.created_at <= to_ts)
     return q
+
+
+def _hydrate_rows(db: Session, rows: list[AuditLog]) -> list[AdminAuditRow]:
+    """Bulk-load every distinct actor referenced by `rows` so the SPA shows
+    recognisable names instead of bare integer IDs. One round-trip; misses
+    (erased / unknown actors) leave the fields null and the SPA renders a
+    small "(deleted)" tag."""
+    actor_ids = {r.actor_user_id for r in rows if r.actor_user_id is not None}
+    actors_by_id: dict[int, User] = {}
+    if actor_ids:
+        for u in db.query(User).filter(User.id.in_(actor_ids)).all():
+            actors_by_id[u.id] = u
+
+    items: list[AdminAuditRow] = []
+    for r in rows:
+        actor = actors_by_id.get(r.actor_user_id) if r.actor_user_id else None
+        items.append(
+            AdminAuditRow(
+                id=r.id,
+                event_type=r.event_type,
+                actor_user_id=r.actor_user_id,
+                actor_display_name=actor.display_name if actor else None,
+                actor_email=actor.email if actor else None,
+                target_type=r.target_type,
+                target_id=r.target_id,
+                request_id=r.request_id,
+                ip=r.ip,
+                extra=r.extra,
+                created_at=r.created_at,
+            )
+        )
+    return items
+
+
+# What the Overview's "Recently changed settings" panel lists. Settings
+# changes are written as target_type="settings" (pinned by
+# test_settings_change_links_pin.py); the two mail-test events share that
+# target type without changing anything, and a task's schedule is a setting
+# filed under target_type="cron".
+_NOT_A_SETTINGS_CHANGE = (
+    AuditEventType.smtp_test_foreign_target.value,
+    AuditEventType.imap_test_foreign_target.value,
+)
+_ALSO_A_SETTINGS_CHANGE = (AuditEventType.cron_schedule_changed.value,)
+
+
+@router.get("/audit-log/settings-changes", response_model=AdminSettingsChangesResponse)
+def list_settings_changes(
+    limit: int = Query(8, ge=1, le=50),
+    db: Session = Depends(get_db),
+    _admin: User = Depends(get_current_admin),
+) -> AdminSettingsChangesResponse:
+    """The newest settings changes, newest first. No COUNT: the panel shows a
+    handful and links to the full log, and a count over audit_log on every
+    Overview load would scan the table."""
+    rows = (
+        db.query(AuditLog)
+        .filter(
+            or_(
+                and_(
+                    AuditLog.target_type == "settings",
+                    AuditLog.event_type.notin_(_NOT_A_SETTINGS_CHANGE),
+                ),
+                AuditLog.event_type.in_(_ALSO_A_SETTINGS_CHANGE),
+            )
+        )
+        .order_by(AuditLog.created_at.desc(), AuditLog.id.desc())
+        .limit(limit)
+        .all()
+    )
+    return AdminSettingsChangesResponse(items=_hydrate_rows(db, rows))
 
 
 @router.get("/audit-log", response_model=AdminAuditResponse)
@@ -141,34 +212,7 @@ def list_audit(
             .all()
         )
         effective_page = page
-    # Bulk-load every distinct actor referenced on this page so the
-    # SPA shows recognisable names instead of bare integer IDs. One
-    # round-trip per page; misses (erased / unknown actors) leave the
-    # new fields null and the SPA renders a small "(deleted)" tag.
-    actor_ids = {r.actor_user_id for r in rows if r.actor_user_id is not None}
-    actors_by_id: dict[int, User] = {}
-    if actor_ids:
-        for u in db.query(User).filter(User.id.in_(actor_ids)).all():
-            actors_by_id[u.id] = u
-
-    items: list[AdminAuditRow] = []
-    for r in rows:
-        actor = actors_by_id.get(r.actor_user_id) if r.actor_user_id else None
-        items.append(
-            AdminAuditRow(
-                id=r.id,
-                event_type=r.event_type,
-                actor_user_id=r.actor_user_id,
-                actor_display_name=actor.display_name if actor else None,
-                actor_email=actor.email if actor else None,
-                target_type=r.target_type,
-                target_id=r.target_id,
-                request_id=r.request_id,
-                ip=r.ip,
-                extra=r.extra,
-                created_at=r.created_at,
-            )
-        )
+    items = _hydrate_rows(db, rows)
     next_cursor: str | None = None
     if len(rows) == page_size and rows:
         last = rows[-1]

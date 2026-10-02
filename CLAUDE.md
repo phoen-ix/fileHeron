@@ -650,7 +650,12 @@ on before v2.13.0.
 env; `services/settings.py::{get,get_bool,get_int,set_value}`. `Keys` is the
 authoritative key list; `_ENCRYPTED_KEYS = {smtp.password, imap.password}`
 (Fernet, same HKDF as TOTP). PATCH for secret keys: `null`=leave, `""`=clear,
-other=replace. Settings-change audits record counts/keys only (never values).
+other=replace. **Settings-change audits never record a SECRET value**; they record keys and counts, and
+a non-secret value an investigator needs where it is the forensic fact (site URL/timezone from→to - a
+changed site URL redirects every mailed link -, a scan-guard allowlist entry, a cron schedule). Every
+settings change is filed `target_type="settings"` with a `target_id` naming its area, which is what the
+Overview's "Recently changed" panel (`GET /api/admin/audit-log/settings-changes`) links by, through
+`config/adminSettingsChanges.ts`; `test_settings_change_links_pin.py` scans every audit call for both rules.
 
 Policy-gate pattern (mode ∈ everyone/employees_admins/admins_only + additive
 user/group allowlists; admin always passes): `api_token.*`, `public_link.*`,

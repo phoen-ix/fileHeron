@@ -159,6 +159,12 @@ class AdminAuditResponse(APIBaseModel):
     next_cursor: str | None = None
 
 
+class AdminSettingsChangesResponse(APIBaseModel):
+    """GET /api/admin/audit-log/settings-changes - the newest settings changes,
+    for the admin Overview's "Recently changed" panel."""
+    items: list[AdminAuditRow]
+
+
 # ---------------------------------------------------------------------------
 # Mail log (v1.11.0). One row per outbound email; bodies omitted from the
 # list/CSV rows (loaded only by the detail endpoint).

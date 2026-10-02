@@ -129,6 +129,14 @@ The public-link path is now fixed at `/d`, like the new `/s` (secrets) and
   and cancels open requests, beside invalidating active shares. Secrets are
   never exported.
 
+## Also
+
+- **Security updates of two libraries:**
+  - pyjwt 2.15.0 (CVE-2026-101918): a deeply nested token could crash the
+    token parser instead of being refused;
+  - urllib3 2.8.0 (CVE-2026-97687, -97688, -97689), used only by the S3
+    storage backend.
+
 ---
 
 ## Upgrading

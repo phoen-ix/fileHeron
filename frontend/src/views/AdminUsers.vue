@@ -543,6 +543,9 @@
                 <span v-if="u.is_disabled" class="fh-pill" data-state="danger">{{
                   t('admin_users.status.disabled')
                 }}</span>
+                <span v-else-if="u.locked_until" class="fh-pill" data-state="danger">{{
+                  t('admin_users.status.locked')
+                }}</span>
                 <span v-else-if="u.requires_2fa" class="fh-pill" data-state="warn">{{
                   t('admin_users.status.needs_2fa')
                 }}</span>

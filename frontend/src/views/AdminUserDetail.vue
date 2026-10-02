@@ -16,6 +16,7 @@
     forcePasswordReset,
     getUser,
     listMailLog,
+    unlockUser,
     updateUser,
   } from '@/api/admin'
   import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
@@ -55,6 +56,7 @@
 
   const resetting = ref(false)
   const resetTokenPlaintext = ref<string | null>(null)
+  const unlocking = ref(false)
 
   const newEmail = ref('')
   const skipVerification = ref(false)
@@ -274,6 +276,23 @@
     }
   }
 
+  // Lift a login lockout now rather than after its window. The server answers
+  // with the user, so the pill and the button go away from the same payload.
+  async function onUnlock() {
+    if (!user.value || unlocking.value) return
+    if (!(await ui.confirm({ message: t('admin_user_detail.unlock_confirm') }))) return
+    unlocking.value = true
+    try {
+      const { data } = await unlockUser(user.value.id)
+      user.value = data
+      ui.pushToast(t('admin_user_detail.unlocked_toast'), 'success')
+    } catch (err) {
+      ui.pushToast(describe(err), 'error')
+    } finally {
+      unlocking.value = false
+    }
+  }
+
   async function onChangeEmail() {
     if (!user.value || changingEmail.value) return
     const next = newEmail.value.trim()
@@ -399,6 +418,14 @@
         <span v-if="user.has_2fa" class="fh-pill" data-state="active">2FA on</span>
         <span v-else class="fh-pill">2FA off</span>
         <span v-if="user.is_disabled" class="fh-pill" data-state="danger">disabled</span>
+        <span
+          v-if="user.locked_until"
+          class="fh-pill"
+          data-state="danger"
+          data-testid="locked-pill"
+        >
+          {{ t('admin_user_detail.locked_pill', { time: formatDate(user.locked_until) }) }}
+        </span>
         <span v-if="!user.email_verified" class="fh-pill" data-state="warn">
           {{ t('admin_user_detail.email_unverified_pill') }}
         </span>
@@ -459,6 +486,16 @@
           </p>
         </div>
         <div class="actions">
+          <button
+            v-if="user.locked_until"
+            type="button"
+            class="fh-btn"
+            data-testid="unlock-btn"
+            :disabled="unlocking || isErased"
+            @click="onUnlock"
+          >
+            {{ t('admin_user_detail.unlock') }}
+          </button>
           <button
             type="button"
             class="fh-btn-ghost fh-btn"

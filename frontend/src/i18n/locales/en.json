@@ -1590,6 +1590,7 @@
     "status": {
       "active": "active",
       "disabled": "disabled",
+      "locked": "locked",
       "needs_2fa": "needs 2FA"
     },
     "prev": "prev",
@@ -1693,6 +1694,10 @@
     "reset_eyebrow": "Password reset link",
     "reset_warning": "Share this token via a secure out-of-band channel. The link expires in 1 hour.",
     "email_unverified_pill": "verification pending",
+    "locked_pill": "locked until {time}",
+    "unlock": "Unlock now",
+    "unlock_confirm": "Lift this sign-in lockout now? The failed-attempt count starts again from zero.",
+    "unlocked_toast": "Account unlocked.",
     "change_email": "Change email",
     "change_email_placeholder": "new{'@'}example.com",
     "change_email_help": "Follows the configured verification mode. If the user signs in via SSO, that link is reset per policy. A security notice goes to the old address.",

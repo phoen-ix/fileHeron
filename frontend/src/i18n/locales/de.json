@@ -1590,6 +1590,7 @@
     "status": {
       "active": "aktiv",
       "disabled": "deaktiviert",
+      "locked": "gesperrt",
       "needs_2fa": "2FA erforderlich"
     },
     "prev": "zurück",
@@ -1693,6 +1694,10 @@
     "reset_eyebrow": "Passwort-Reset-Link",
     "reset_warning": "Diesen Token über einen sicheren Kanal teilen. Der Link läuft in 1 Stunde ab.",
     "email_unverified_pill": "Bestätigung ausstehend",
+    "locked_pill": "gesperrt bis {time}",
+    "unlock": "Jetzt entsperren",
+    "unlock_confirm": "Diese Anmeldesperre jetzt aufheben? Die Zahl der Fehlversuche beginnt wieder bei null.",
+    "unlocked_toast": "Konto entsperrt.",
     "change_email": "E-Mail ändern",
     "change_email_placeholder": "neu{'@'}beispiel.de",
     "change_email_help": "Folgt dem konfigurierten Bestätigungsmodus. Meldet sich der Benutzer per SSO an, wird diese Verknüpfung gemäß Richtlinie zurückgesetzt. Eine Sicherheitsmeldung geht an die alte Adresse.",

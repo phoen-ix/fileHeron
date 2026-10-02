@@ -17,10 +17,9 @@ from arq import Retry
 
 from ..config import CLAMD_MAX_FILE_SIZE, settings
 from ..database import SessionLocal
-from ..models.audit_log import AuditEventType
 from ..models.file import File, FileState
+from ..services import av_release
 from ..services import av_scan as av_scan_svc
-from ..services.audit import record_audit_event
 from ..services.quarantine import quarantine_file
 
 logger = logging.getLogger("fileheron.workers.av_scan")
@@ -74,35 +73,14 @@ def _release_unscanned(db, *, file_id: str, file: File, reason: str) -> dict:
     store left these files at `ready_unscanned` forever, where every download
     answered `425 SCAN_IN_PROGRESS` - "try again shortly" - about a scan that
     was never going to happen."""
-    # Conditional flip, same reason as the clean path: share expiry may have
-    # committed `deleted` and freed the bytes while this ran.
-    updated = (
-        db.query(File)
-        .filter(File.id == file_id, File.state == FileState.ready_unscanned)
-        .update(
-            {File.state: FileState.clean, File.av_unscanned: True},
-            synchronize_session=False,
-        )
-    )
-    if updated == 0:
+    # Conditional flip + the audit row, one transaction (services/av_release):
+    # share expiry may have committed `deleted` and freed the bytes meanwhile.
+    if not av_release.apply_verdict(db, file, av_release.unscanned(reason)):
         db.rollback()
         logger.info(
             "av_scan: %s left ready_unscanned mid-scan; not releasing", file_id
         )
         return {"file_id": file_id, "state": "superseded"}
-    # Written in the same transaction as the state flip.
-    record_audit_event(
-        db,
-        event_type=AuditEventType.file_served_unscanned,
-        actor_user_id=file.uploaded_by_id,
-        target_type="file",
-        target_id=file_id,
-        metadata={
-            "size_bytes": file.size_bytes,
-            "av_max_scan_bytes": settings.AV_MAX_SCAN_BYTES,
-            "reason": reason,
-        },
-    )
     share_id = file.share_id
     db.commit()
     logger.warning(
@@ -235,19 +213,10 @@ async def av_scan_file(_ctx, file_id: str) -> dict:
                     file=file,
                     reason="exceeds_av_max_scan_bytes",
                 )
-            # Conditional flip: a slow scan can run while share expiry commits
-            # `deleted` (bytes gone). Only mark clean if the row is still
-            # ready_unscanned, else we would resurrect a deleted file whose
-            # bytes no longer exist (mirrors approve_share/expire_share_now).
-            updated = (
-                db.query(File)
-                .filter(File.id == file_id, File.state == FileState.ready_unscanned)
-                .update(
-                    {File.state: FileState.clean, File.av_unscanned: False},
-                    synchronize_session=False,
-                )
-            )
-            if updated == 0:
+            # Conditional flip (services/av_release): a slow scan can run while
+            # share expiry commits `deleted` (bytes gone), and marking clean then
+            # would resurrect a deleted file whose bytes no longer exist.
+            if not av_release.apply_verdict(db, file, av_release.VERDICT_CLEAN):
                 db.rollback()
                 logger.info(
                     "av_scan: %s left ready_unscanned mid-scan; not marking clean",

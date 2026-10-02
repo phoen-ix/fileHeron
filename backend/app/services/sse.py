@@ -160,6 +160,58 @@ def publish_sync(user_id: int, event: dict) -> None:
         )
 
 
+async def publish_many(events: list[tuple[int, dict]]) -> None:
+    """Push a whole notification fan-out over ONE connection and one pipeline.
+
+    `publish` opens and closes a client per event; a share to twenty people
+    published twenty times, each with its own connection (and, from a sync
+    route, its own event loop) - the per-recipient cost `job_queue.enqueue_many`
+    removed for the emails of the same fan-out (audit 2026-07-30, dos-15)."""
+    if not events:
+        return
+    r = _redis()
+    try:
+        pipe = r.pipeline(transaction=False)
+        for user_id, event in events:
+            pipe.publish(_channel(user_id), json.dumps(event))
+        await pipe.execute()
+    finally:
+        await r.aclose()
+
+
+def publish_many_sync(events: list[tuple[int, dict]]) -> None:
+    """`publish_sync` for a batch: one event loop and one connection when called
+    from the threadpool, one tracked task when a loop is already running.
+    Failures are logged, never raised - the in-app rows are the record."""
+    if not events:
+        return
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+    if loop is None:
+        try:
+            asyncio.run(publish_many(events))
+        except Exception:
+            logger.warning("SSE batch publish failed (%d events)", len(events), exc_info=True)
+        return
+    try:
+        task = loop.create_task(publish_many(events))
+        _track_publish_task(task)
+
+        def _on_done(t: asyncio.Task) -> None:
+            if not t.cancelled() and t.exception() is not None:
+                logger.warning(
+                    "SSE batch publish failed (%d events): %s", len(events), t.exception()
+                )
+
+        task.add_done_callback(_on_done)
+    except Exception:
+        logger.warning(
+            "SSE batch publish (loop variant) failed (%d events)", len(events), exc_info=True
+        )
+
+
 async def publish_admin(event: dict) -> None:
     """Fan-out to admins watching the system view. Fire-and-forget."""
     payload = json.dumps(event)

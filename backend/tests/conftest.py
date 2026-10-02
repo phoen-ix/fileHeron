@@ -433,12 +433,14 @@ def _no_op_sse_publish(monkeypatch):
     `notifications` row is what tests actually assert on."""
     from app.services import sse
     monkeypatch.setattr(sse, "publish_sync", lambda *_a, **_kw: None)
+    monkeypatch.setattr(sse, "publish_many_sync", lambda *_a, **_kw: None)
     monkeypatch.setattr(sse, "publish_admin_sync", lambda *_a, **_kw: None)
 
     async def _noop(*_a, **_kw):
         return None
 
     monkeypatch.setattr(sse, "publish", _noop)
+    monkeypatch.setattr(sse, "publish_many", _noop)
     monkeypatch.setattr(sse, "publish_admin", _noop)
 
 

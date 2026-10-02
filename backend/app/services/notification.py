@@ -18,6 +18,7 @@ resetting a password, …).
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from datetime import datetime
 from typing import Any
 
@@ -111,7 +112,40 @@ def _json_safe(value: Any) -> Any:
     return value
 
 
+def _batch_after_commit(db: Session, key: str, item: Any, flush: Callable[[list], None]) -> None:
+    """Hold `item` until this session commits, then hand the whole batch to
+    `flush` once - one Redis connection per commit, whatever the fan-out.
+
+    The batch lives on `db.info[key]`; the first item registers the single
+    after-commit flush and the matching after-rollback discard, later items
+    only append."""
+    from ..database import run_after_commit, run_after_rollback
+
+    pending = db.info.get(key)
+    if pending is None:
+        pending = []
+        db.info[key] = pending
+
+        def _flush() -> None:
+            # `pop`, not read-then-clear: the hook fires once per commit, and a
+            # second dispatch on the same session after that must start a fresh
+            # batch rather than re-send this one.
+            batch = db.info.pop(key, [])
+            if batch:
+                flush(batch)
+
+        run_after_commit(db, _flush)
+        # A rollback drops the flush thunk but knows nothing about the batch it
+        # was going to send. Left behind, that batch would be silently adopted
+        # by the NEXT dispatch on this session - which finds a non-None
+        # `pending`, registers no thunk of its own, and so sends the
+        # rolled-back items on the next commit or never sends its own.
+        run_after_rollback(db, lambda: db.info.pop(key, None))
+    pending.append(item)
+
+
 _PENDING_EMAIL_JOBS_KEY = "_fh_pending_email_jobs"
+_PENDING_SSE_EVENTS_KEY = "_fh_pending_sse_events"
 
 
 def _queue_email_job(db: Session, kwargs: dict) -> None:
@@ -121,36 +155,29 @@ def _queue_email_job(db: Session, kwargs: dict) -> None:
     Registering a separate after-commit thunk per recipient meant a share to
     twenty people built twenty event loops and twenty ARQ pools, serially, on
     the request thread while the sender waited for the response (audit
-    2026-07-30, dos-15). The jobs accumulate on the session instead, and a
-    single flush thunk is registered the first time - so the cost is one pool
-    per commit, whatever the recipient count.
+    2026-07-30, dos-15).
 
     Deliberately still per-recipient before this point: the render, the
     notification row and the mail-log row stay inline. Moving those behind the
     queue would change bell latency and would mean a Redis outage produced no
     rows at all, instead of rows whose sends failed and can be retried."""
-    from ..database import run_after_commit, run_after_rollback
+    _batch_after_commit(
+        db, _PENDING_EMAIL_JOBS_KEY, kwargs,
+        lambda batch: job_queue.enqueue_many([("send_email_job", (), kw) for kw in batch]),
+    )
 
-    pending = db.info.get(_PENDING_EMAIL_JOBS_KEY)
-    if pending is None:
-        pending = []
-        db.info[_PENDING_EMAIL_JOBS_KEY] = pending
 
-        def _flush() -> None:
-            # `pop`, not read-then-clear: the hook fires once per commit, and a
-            # second dispatch on the same session after that must start a fresh
-            # batch rather than re-send this one.
-            batch = db.info.pop(_PENDING_EMAIL_JOBS_KEY, [])
-            job_queue.enqueue_many([("send_email_job", (), kw) for kw in batch])
+def _queue_sse_event(db: Session, user_id: int, event: dict) -> None:
+    """The bell's live push, batched the same way: published after the commit
+    (firing pre-commit would ping the bell for a row a rollback then discards,
+    audit M8) and for the whole fan-out over one connection - it was one
+    publish, connection and (from a sync route) event loop per recipient."""
+    from . import sse as sse_svc
 
-        run_after_commit(db, _flush)
-        # A rollback drops the flush thunk but knows nothing about the batch it
-        # was going to send. Left behind, that batch would be silently adopted
-        # by the NEXT dispatch on this session - which finds a non-None
-        # `pending`, registers no thunk of its own, and so sends the
-        # rolled-back emails on the next commit or never sends its own.
-        run_after_rollback(db, lambda: db.info.pop(_PENDING_EMAIL_JOBS_KEY, None))
-    pending.append(kwargs)
+    _batch_after_commit(
+        db, _PENDING_SSE_EVENTS_KEY, (user_id, event),
+        lambda batch: sse_svc.publish_many_sync(batch),
+    )
 
 
 def dispatch(
@@ -210,9 +237,6 @@ def dispatch(
         # it pre-commit would ping the bell for a row a rollback then discards
         # (audit M8). Capture the payload now (values, not the ORM object).
         if _wants_in_app(channel):
-            from ..database import run_after_commit
-            from . import sse as sse_svc
-
             sse_event = {
                 "event": "notification",
                 "id": notif.id,
@@ -224,8 +248,7 @@ def dispatch(
                     "payload": notif.payload_json,
                 },
             }
-            _uid = user.id
-            run_after_commit(db, lambda: sse_svc.publish_sync(_uid, sse_event))
+            _queue_sse_event(db, user.id, sse_event)
 
     if _wants_email(channel) and email_to:
         try:

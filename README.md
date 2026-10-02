@@ -47,7 +47,7 @@ the rest.
   - [Users](#user-management) · [Groups](#groups) · [Audit log](#audit-log-adminaudit-log) · [File history](#file-history-adminfile-history) · [Sessions](#sessions-adminsessions) · [Quarantine](#quarantine-adminquarantine) · [Analytics](#analytics-adminanalytics) · [Error log & alerts](#error-log--alerts-adminerror-log--adminsettingserror-alerts) · [Webhooks](#webhooks-adminsettingswebhooks) · [Scheduled tasks](#scheduled-tasks-adminscheduled-tasks)
   - [Policies & settings](#policies--settings): API tokens · public links · 2FA · SSO · SMTP · IMAP · share approval · email-change · branding · maintenance · config backup · advanced
 - [**Operator guide**](#operator-guide)
-  - [Install](#first-install) · [Ports](#compose-ports) · [Traefik](#traefik-on-the-host) · [Hardening](#production-hardening-checklist) · [Storage](#storage-layout) · [Backups](#backups) · [Restore](#restore) · [Upgrades](#upgrades) · [Health & metrics](#health-checks--metrics) · [Background jobs](#background-jobs--housekeeping)
+  - [Install](#first-install) · [Ports](#compose-ports) · [Traefik](#traefik-on-the-host) · [Hardening](#production-hardening-checklist) · [Storage](#storage-layout) · [Encryption at rest](#encryption-at-rest) · [Backups](#backups) · [Restore](#restore) · [Upgrades](#upgrades) · [Health & metrics](#health-checks--metrics) · [Background jobs](#background-jobs--housekeeping)
   - [**Settings reference**](#settings-reference): [env vars](#1-environment-variables-boot) · [runtime settings](#2-admin-runtime-settings-hot---no-restart) · [per-user](#3-per-user-preferences-account)
 - [**Developer guide**](#developer-guide)
   - [Code layout](#code-layout) · [Request flow](#request-flow-typical) · [Auth](#auth-specifics) · [Uploads](#upload-pipeline) · [Cron](#arq-workers--cron) · [Conventions](#coding-conventions)
@@ -140,6 +140,7 @@ admin mail log keeps a masked copy. Full operator walkthrough: [First install](#
 - **Secrets** (off by default) - send a password or other short text to people, groups, addresses without an account or a link; readable a set number of times and/or until a date, then destroyed. Encrypted per secret, optional passphrase as an extra encryption layer, never readable by admins.
 - **Scoped, admin-governed API tokens** - least-privilege scopes (`403 INSUFFICIENT_SCOPE` outside them); a policy gate decides who may mint them.
 - **Antivirus on every upload** (ClamAV) with reversible quarantine; **in-browser preview** of PDFs / images / text from a strict allowlist.
+- **Encryption at rest** (off by default) - every stored file encrypted with a per-file key, so backups, disk images and the storage bucket hold no readable contents; downloads, resumes and ZIPs are unchanged.
 - **Auth**: Argon2id, JWT + rotating refresh with reuse-detection, TOTP + recovery codes, **WebAuthn/passkeys**, **multi-provider OIDC SSO**, HIBP breach check, per-user session cap, lockout + per-IP rate limits.
 - **Notifications** via one dispatch funnel (email + in-app SSE bell), per-user per-category channel prefs, one-click unsubscribe (RFC 8058).
 - **Email + branding self-service** - per-language **ProseMirror rich-text** editor for every email template and the imprint/privacy pages; logo white-labelling; inbound **IMAP** mailbox (replies / bounces / auto-replies surfaced in-app).
@@ -574,6 +575,7 @@ always pass.
 | Sign-in policies | `/admin/settings/sign-in` | Account lockout, per-address sign-in/registration limits, the HIBP breach check; *Email change* is its second tab. |
 | Files & transfers | `/admin/settings/transfers` | Share defaults, the direct-upload size cap, signed-URL lifetime + resume credit, in-browser preview. |
 | Anomaly detection | `/admin/settings/anomaly` | The four heuristic thresholds; advisory only. |
+| Encryption at rest | `/admin/settings/encryption` | Store every file encrypted with a key only this instance holds (off by default; turning it on needs a key-custody confirmation and your password, turning it off your password). Status, the background task's last run, and files set aside after repeated failures. See [Encryption at rest](#encryption-at-rest). |
 | Self-update | `/admin/system` | Releases API URL (forks repoint it), the postponed-update drain wait and **automatic updates** (off by default; turning them on asks for your password), on **Status & updates**; the poll cadence lives on [Scheduled tasks](#scheduled-tasks-adminscheduled-tasks), not here. |
 | Maintenance mode | `/admin/settings/maintenance` | Pause **new** transfers (in-progress + resumable ones finish); standalone or via drain-before-update. |
 | Configuration backup | `/admin/settings/backup` | Export/import settings/branding/OIDC/webhooks/groups/users (+ optional logs) to one `*.fhbackup.json`; three secret modes (passphrase / ciphertext / exclude). Files and secrets excluded; import invalidates active shares, burns active secrets and revokes sessions. |
@@ -591,10 +593,11 @@ thresholds on `/admin/settings/anomaly`, dispatching an `ops_alert`.
 <details>
 <summary>Grouped catalogue</summary>
 
-- **Auth / accounts:** `user_registered`, `user_created_by_admin`, `email_verified`, `login_success`, `login_failure`, `logout`, `account_locked`, `rate_limited`, `password_changed`, `password_reset_requested`, `password_reset_consumed`, `totp_enabled`, `totp_disabled`, `recovery_code_used`, `role_changed`, `user_disabled`, `user_erased`, `admin_bootstrapped`.
+- **Auth / accounts:** `user_registered`, `user_created_by_admin`, `email_verified`, `login_success`, `login_failure`, `logout`, `account_locked`, `account_unlocked`, `rate_limited`, `password_changed`, `password_reset_requested`, `password_reset_consumed`, `totp_enabled`, `totp_disabled`, `recovery_code_used`, `role_changed`, `user_disabled`, `user_erased`, `admin_bootstrapped`.
 - **Email-change:** `email_change_requested`, `email_changed`, `email_change_cancelled`, `email_change_policy_changed`.
 - **Sessions / invites:** `refresh_token_rotated`, `refresh_token_reused`, `refresh_token_evicted`, `refresh_token_admin_revoked`, `invite_created`, `invite_consumed`, `invite_revoked`, `invite_purged`.
 - **Shares / files:** `share_created`, `share_revoked`, `share_expired`, `share_expiry_updated`, `share_limit_updated`, `share_files_added`, `share_failed`, `share_submitted_for_approval`, `share_approved`, `share_rejected`, `share_resubmitted`, `file_finalized`, `file_downloaded`, `file_deleted`, `file_expired`, `file_upload_abandoned`, `file_quarantined`, `file_quarantine_released`, `file_quarantine_purged`, `av_reload_triggered`.
+- **Encryption at rest:** `encryption_at_rest_changed`, `file_encryption_deferred` (stored unencrypted for now; the backfill retries), `file_encryption_failed` (set aside after repeated failures), `file_integrity_failed` (an encrypted file failed to authenticate while being read).
 - **Public links / groups:** `public_link_created`, `public_link_revoked`, `public_link_consumed`, `group_created`, `group_updated`, `group_deleted`, `group_member_added`, `group_member_removed`.
 - **Secrets:** `secret_created`, `secret_viewed`, `secret_burned` (every view used), `secret_expired`, `secret_revoked` (burned early by the sender, an admin or a config import), `secret_recipient_burned` (too many wrong passphrases), `secret_link_shown`, `secret_link_replaced`, `secret_link_removed`, `secret_policy_changed`, and for requests `secret_request_created`, `secret_request_answered`, `secret_request_cancelled`, `secret_request_expired`, `secret_request_link_shown`. Metadata only - never the text, a token or an address. `secret_created`, `secret_viewed`, `secret_burned`, `secret_request_created` and `secret_request_answered` are also webhook events.
 - **API tokens / OIDC:** `api_token_created` / `_revoked` / `_disabled` / `_reactivated` / `_admin_revoked` / `_admin_created`, `oidc_linked`, `oidc_unlinked`, `oidc_provider_created` / `_updated` / `_deleted`.
@@ -766,9 +769,53 @@ via `S3_BUCKET` / `S3_REGION` / `S3_ENDPOINT_URL` / `S3_ACCESS_KEY_ID` /
 
 - Uploads stream to the bucket (multipart for large files); downloads **307-redirect to a presigned URL** (app does auth + the single budget decrement first); AV scans via clamd **INSTREAM**; quarantine is a server-side key-prefix copy.
 - **Pick the backend at install time** - switching local↔s3 with existing data isn't automatic (an operator script copies bytes + rewrites `files.storage_path`). `uploads/` (tusd staging) always stays local.
-- Bucket durability/versioning is your responsibility; `scripts/backup.sh` only tars local `./data/files`. INSTREAM is bounded by clamd `StreamMaxLength` (raise it for large files; a file over that limit but under clamd's ~2 GiB ceiling scans as `error` and is not served). Files past the ceiling are not streamed to clamd at all - they are served flagged `av_unscanned`, since no verdict is obtainable. The low-disk guard is a no-op on s3. At-rest encryption is your bucket's SSE.
+- Bucket durability/versioning is your responsibility; `scripts/backup.sh` only tars local `./data/files`. INSTREAM is bounded by clamd `StreamMaxLength` (raise it for large files; a file over that limit but under clamd's ~2 GiB ceiling scans as `error` and is not served). Files past the ceiling are not streamed to clamd at all - they are served flagged `av_unscanned`, since no verdict is obtainable. The low-disk guard is a no-op on s3. At-rest encryption is your bucket's SSE - or file:Heron's own, which also keeps the contents from the bucket's operator ([Encryption at rest](#encryption-at-rest)).
 
 </details>
+
+## Encryption at rest
+
+Off by default. Turn it on at **Admin › Security & audit › Encryption at rest**:
+tick that you have a safe copy of `.env`, then confirm with your password.
+
+**What it does.** Every file is stored encrypted (AES-256-GCM in 1 MiB chunks,
+a fresh key per file, wrapped by a key derived from `JWT_SECRET`). A new upload
+is encrypted right after its virus scan and before anyone is told it is there;
+until then it answers "scan in progress", as before. Files already stored are
+encrypted in the background by the scheduled task `encrypt_existing_files`, a
+few at a time; the unencrypted copy is deleted an hour later (a download that
+is still reading it finishes). Inbound mail attachments are stored encrypted
+from the start. Downloads, previews, resumes, the desktop client and ZIP
+archives work exactly as before.
+
+**What it protects:** file contents in backups, restic copies, disk images,
+a stolen disk, and the S3 bucket. **What it does not:** anyone who controls
+the server - the key lives beside the files. Also not covered: tusd's staging
+copy while an upload is in progress, and the disk blocks of a deleted
+unencrypted copy. On a **versioned** bucket, replaced unencrypted objects stay
+as noncurrent versions until a lifecycle rule removes them.
+
+> **Backups restore encrypted files only together with `.env`.** The archives
+> hold ciphertext; the key comes from `JWT_SECRET`, which backups deliberately
+> do not contain. A restore without it brings back the database and not one
+> encrypted file. `scripts/restore_validate.py` decrypts a sample and fails
+> loudly when the key does not match.
+
+**Turning it off** (also password-gated) stops encrypting new uploads; files
+already encrypted stay encrypted and keep working. A file that fails to encrypt
+is stored unencrypted for now (audited `file_encryption_deferred`) and the
+background task tries it again; after three failures it is set aside for a day
+(`file_encryption_failed`, **Try them again** on the page).
+
+**Rolling back** to a release from before encryption at rest is refused while
+encrypted files exist - that release would serve them as noise. Decrypt first:
+
+```bash
+docker compose exec backend python scripts/decrypt_files_at_rest.py --turn-off --purge-now
+```
+
+It refuses while encryption is on (unless `--turn-off`), waits for a running
+background pass, needs free space for one file at a time, and is safe to re-run.
 
 ## Backups
 
@@ -797,6 +844,9 @@ via `S3_BUCKET` / `S3_REGION` / `S3_ENDPOINT_URL` / `S3_ACCESS_KEY_ID` /
 >
 > The weekly restore drill cannot catch this: it restores on the same host,
 > reading the same `.env`.
+>
+> With [encryption at rest](#encryption-at-rest) on, the same goes for every
+> encrypted **file** in `files.tar.gz` and `quarantine.tar.gz`.
 
 With `BACKUP_RESTIC_REPO` + `BACKUP_RESTIC_PASSWORD` set, the dated dir is also pushed
 to that restic repo (S3/B2/SFTP/REST/local; password via `--password-file`, not env).
@@ -1067,6 +1117,7 @@ defaults: [ARQ workers + cron](#arq-workers--cron).
 ## Operator escape hatches
 
 - **Lost admin access** - `docker compose exec backend python scripts/promote_user.py <email>`.
+- **Leave encryption at rest** (or roll back to a release from before it) - `docker compose exec backend python scripts/decrypt_files_at_rest.py --turn-off` decrypts every stored file; add `--purge-now` before such a rollback so no replaced copy is left behind. See [Encryption at rest](#encryption-at-rest).
 - **Bypass ClamAV in CI/dev** - `AV_SKIP=true` (boot refuses `production + true`).
 - **Rotate `JWT_SECRET`** - `docker compose exec backend python /app/scripts/rotate_jwt_secret.py` re-encrypts every
   Fernet-protected field (TOTP secrets, OIDC client secrets, public-link tokens,
@@ -1281,7 +1332,7 @@ Array query params need `paramsSerializer: { indexes: null }` → `?state=active
 - Access JWT: HS256, 15 min, `{sub, iat, exp, jti, type:"access"}`. Refresh: 64 random bytes, SHA-256 in DB, 7 d, httpOnly cookie scoped `/api/auth`, `SameSite=Lax`, `Secure` in prod.
 - Rotation on every refresh; reuse of a rotated token revokes the **entire user family** (`refresh_token_reused`). `services/jwt_session.py::create_refresh_token` → `enforce_session_cap` enforces the session cap across all login flows (password / recovery / OIDC / WebAuthn / register-from-invite).
 - **API-token scopes** are deny-by-default: every `get_actor` route carries `Depends(require_scope(...))`, enforced only for `auth_via == "api_token"` (JWT/session + NULL-scope pass through).
-- **Step-up re-authentication.** These routes also require the caller's own current password in the request body (`password`; a form field on the import), even with a valid session or API token: `POST /api/admin/backup/export`, `POST /api/admin/backup/import`, `POST /api/admin/users/{id}/erase`, `POST /api/account/api-tokens`, `POST /api/admin/api-tokens`, `POST /api/account/webauthn/register/begin`, the self-update routes `POST /api/admin/system/update`, `/rollback` and `/update/now`, and `PUT /api/admin/settings/auto-update` when it turns automatic updates on or changes them while they are on (turning them off needs no password). A wrong password answers **`403 INVALID_PASSWORD`** (never 401 - the caller IS authenticated), is rate-limited per user and audited as `step_up_failed`. SSO-only accounts have no password and cannot pass it; the CLI escape hatch is the recovery. The SMTP/IMAP test buttons ask for it only when a stored secret would travel to a host other than the saved one.
+- **Step-up re-authentication.** These routes also require the caller's own current password in the request body (`password`; a form field on the import), even with a valid session or API token: `POST /api/admin/backup/export`, `POST /api/admin/backup/import`, `POST /api/admin/users/{id}/erase`, `POST /api/account/api-tokens`, `POST /api/admin/api-tokens`, `POST /api/account/webauthn/register/begin`, the self-update routes `POST /api/admin/system/update`, `/rollback` and `/update/now`, `PUT /api/admin/settings/auto-update` when it turns automatic updates on or changes them while they are on (turning them off needs no password), and `PUT /api/admin/settings/encryption` whenever it switches encryption at rest on or off. A wrong password answers **`403 INVALID_PASSWORD`** (never 401 - the caller IS authenticated), is rate-limited per user and audited as `step_up_failed`. SSO-only accounts have no password and cannot pass it; the CLI escape hatch is the recovery. The SMTP/IMAP test buttons ask for it only when a stored secret would travel to a host other than the saved one.
 - **Approving a share** (`POST /api/shares/{id}/approve`) requires a `content_fingerprint` - the digest of the files as the approver saw them; a stale one answers `409 CONTENT_CHANGED`.
 - **Self-update only moves forward.** `POST /api/admin/system/update` refuses a tag older than the running version (`409 DOWNGRADE_REFUSED`); go back with Rollback, which also restores the database schema pointer.
 
@@ -1328,7 +1379,10 @@ historical cadence.
 `prune_history` prunes `audit_log`, `download_log`, `email_log`, `login_attempts`,
 `webhook_deliveries`, `error_log`, `inbound_messages`, ended secrets and ended secret requests (each window `0` disables).
 
-**Event-driven:** `av_scan_file(file_id)` (quarantines on infection) and
+**Every 10 min:** `encrypt_existing_files` (encryption at rest: encrypts stored files, deletes the copies they replace, releases uploads waiting for encryption; with the switch off it only does the last two).
+
+**Event-driven:** `av_scan_file(file_id)` (quarantines on infection),
+`encrypt_new_files` (encryption at rest: encrypts a scanned upload, then releases it) and
 `send_email_job(...)` (resolves SMTP per job; permanent 5xx → `email_undeliverable` +
 admin alert).
 

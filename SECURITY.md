@@ -43,6 +43,12 @@ In scope: the server (FastAPI backend, worker, SPA), the tusd upload path and it
 HMAC hook boundary, authentication/2FA/OIDC/WebAuthn, API-token scopes, public
 links, the config-backup and update/rollback flows, and the desktop client.
 
+Encryption at rest (opt-in) protects stored file contents in backups, disk
+images and the storage bucket. It does not protect against a compromised host -
+the key lives beside the files - so "the host can decrypt the files" is not a
+finding; a way to read or alter an encrypted file WITHOUT the instance's
+`JWT_SECRET`, or to make the server serve ciphertext as content, is.
+
 Out of scope: issues that require a pre-compromised host or a malicious
 administrator; findings against a deployment that has not followed the hardening
 guidance in the README (e.g. running with `ENVIRONMENT=development`, exposed

@@ -130,16 +130,18 @@ record.
 | v2.23.1 | - | optional: `chmod 700 backups backups/20*/ && chmod 600 backups/20*/*` tightens backups taken before (new ones are owner-only; `backup.sh` reaches a host with its checkout, which the updater fast-forwards where it can) | - (behaviour: every mail's From is quoted, and it carries Date, Message-ID, Auto-Submitted and X-Auto-Response-Suppress; the `ops_alert` subject carries its reason) |
 | v2.23.2 | - | - | - (SPA only: the eight step-up password fields are one popup; no API change) |
 | v2.24.0 | `202610010001` five tables: `secrets`, `secret_recipients`, `secret_group_members`, `secret_user_states`, `secret_access_events`; `202610020001` secret requests: `secret_requests`, `secret_request_targets`, `secret_request_group_members`, and on `secrets` a NULLable `created_by_id` plus `request_id`, `is_answer`, `answered_by_email`, `req_*`, `has_request_passphrase` | - | - (secrets ship OFF: `secrets.enabled`. New `/api/secrets*`, `/api/secret-requests*`, `/api/public/secrets/{peek,reveal}`, `/api/public/secret-requests/{peek,answer}`, six `secrets:*` token scopes (`secrets:request` asks), `/me` gains `secrets_enabled`, `can_send_secrets`, `can_send_secrets_external`, `secret_limits`; config import now also burns every active secret. `PUBLIC_LINK_BASE_PATH` is no longer read from the environment - the SPA only ever served `/d`, so a different value had only produced dead links) |
+| *next (untagged)* | `202610030001` encryption at rest: `files.enc_version` + `key_encrypted` + `release_verdict` (+ `ix_files_enc_state`), `inbound_attachments.enc_version` + `key_encrypted`, table `storage_purge_queue`; `downgrade()` REFUSES while any row is encrypted | - | - (encryption ships OFF: `storage.encrypt_at_rest`. New `GET/PUT /api/admin/settings/encryption` (PUT step-up gated BOTH ways), `POST .../retry-failed`; Rollback answers `409 ROLLBACK_BLOCKED_BY_ENCRYPTION` while encrypted files exist and the target predates the migration. Give this row its tag on release) |
 
-**Ten endpoints require the caller's own `password` in the body**: the v2.9.0
+**Eleven endpoints require the caller's own `password` in the body**: the v2.9.0
 re-auth gates `/api/admin/backup/export`, `/api/admin/backup/import` (form
 field), `/api/admin/users/{id}/erase`, `/api/account/api-tokens`,
 `/api/admin/api-tokens`, since v2.15.0 `/api/account/webauthn/register/begin`,
 the self-update routes `/api/admin/system/update`, `/rollback` and
-`/update/now`, and `PUT /api/admin/settings/auto-update` (only when the result is
-ON and something changed - §Self-update). `verify_password_or_403` has nine direct
-call sites; two ask only conditionally, that one and the mail test gate (§The mail
-test-connection gate). README §Auth specifics lists them. `POST /api/shares/{id}/approve`
+`/update/now`, `PUT /api/admin/settings/auto-update` (only when the result is
+ON and something changed - §Self-update), and `PUT /api/admin/settings/encryption`
+(whenever it changes the switch, either way - §Encryption at rest).
+`verify_password_or_403` has ten direct call sites; three ask only conditionally:
+those two and the mail test gate (§The mail test-connection gate). README §Auth specifics lists them. `POST /api/shares/{id}/approve`
 separately requires a `content_fingerprint`.
 
 Per-release admin-facing notes for v2.13.0 and newer are in `RELEASE_NOTES.md`,
@@ -311,7 +313,7 @@ at the serving mark.**
 
 | mark | question | used by | TTL | on Redis failure |
 |---|---|---|---|---|
-| `transfer_activity.was_download_recent` | "did this instance serve bytes for this recently" | the maintenance DRAIN, and nothing else | 30 min | fails **OPEN** |
+| `transfer_activity.was_download_recent` | "did this instance serve bytes for this recently" | the maintenance DRAIN, and the encryption backfill's "leave it for later" (never a budget) | 30 min | fails **OPEN** |
 | `transfer_activity.was_download_paid` | "has THIS PRINCIPAL already paid" | budgets only | `PAID_TTL_SEC`, **2 h** | fails **CLOSED** |
 
 The paid mark is written ONLY where the counter moves and is keyed on the payer
@@ -379,6 +381,25 @@ than detail shows a fully privileged viewer.
 - **Quarantine** (`services/quarantine.py`): move to `${QUARANTINE_DIR}/{share_id}/{filename}`, set `infected`, revoke parent share, release quota, audit + notify (kv `quarantine.notify_admins` fans out to all admins). **Reversible** - infected bytes stay on disk indefinitely so admins can release/inspect/purge via `services/quarantine_admin.py`.
 - **`file.hard_delete` refuses an `infected` row with `409 FILE_QUARANTINED` unless `allow_quarantined=True`.** The row's `storage_path` IS the quarantine copy (quarantine rewrites it), and every interactive delete - the share page, `/admin/file-history`, the user-detail file list - reached the helper and unlinked that copy under a plain `file_deleted` row, bypassing `quarantine_admin.purge` and its `file_quarantine_purged` receipt. Only right-to-erasure and the config-import identity purge opt in; the added-files reject loop skips infected rows.
 - **`AV_SKIP=true`** marks every upload clean (CI/dev). Boot fail-fast refuses `production AND AV_SKIP=true`.
+
+## Encryption at rest
+
+`utils/file_crypto.py` (format), `services/file_encryption.py` (read side, swap
+engine, status), `services/encryption_lanes.py` (release lane + backfill),
+`workers/encrypt_at_rest.py`, admin `/admin/settings/encryption`. Ships OFF
+(`storage.encrypt_at_rest`). → README §Encryption at rest for the operator view.
+
+- **`enc_version` NULL is plaintext and takes EXACTLY the old path** (FileResponse/sendfile, the S3 307, clamd's path scan, ZIP `add_path`); rows of both kinds coexist forever. **Ciphertext must never reach a plaintext reader** - a path scan of ciphertext answers "clean" (AV silently off), a download serves noise - so every byte read goes through `file_encryption.open_plaintext`/`cipher_for_*` or a branch that checked `enc_version` first, pinned over every call site by `test_ciphertext_never_reaches_plaintext_readers.py` (RAW_READERS allowlist). `serve_response(..., cipher=)` is a REQUIRED keyword so mypy makes each caller decide.
+- **Format v1:** 16-byte header, 1 MiB AES-256-GCM chunks, counter nonce, AAD = header + index + final flag (reorder/truncate/extend all fail); a fresh data key per WRITE, wrapped by the instance Fernet with kind AND row id inside (`crypto.wrap_file_key`) - a key copied to another row does not open. `*_encrypted` naming keeps `rotate_jwt_secret.py` covering it.
+- **The encrypted response is `_EncryptedFileResponse`, a FileResponse subclass overriding only the byte reads**, so Range/If-Range/416/multipart/Content-Disposition keep Starlette's semantics; `test_encrypted_range_matrix.py` uses plaintext FileResponse as the ORACLE. A mid-stream authentication failure aborts the stream and writes `file_integrity_failed` + an alert. **The ZIP of encrypted members is byte-identical** (add_stream with the row's plaintext size and a seekable decrypting reader), so `LAYOUT_VERSION` and cached CRCs stay valid - asserted on produced bytes.
+- **A stored file is never rewritten in place.** `prepare_rewrite` commits a LEASE row (`storage_purge_queue`, heartbeated) before the first byte, writes the other form to a sibling locator and checks its size; the caller's conditional UPDATE (old locator + old `enc_version` + state) swaps the row; `finish_rewrite` queues the OLD bytes. A crash leaves the old row plus queued debris, never a row on half-written bytes. `sweep_purges` records a failed unlink once (`record_orphan_locator`) - by then no row names those bytes.
+- **The release lane holds a verdict instead of flipping:** `av_scan_file` writes `files.release_verdict` (conditional) and leaves the row `ready_unscanned` (425); `encrypt_new_files` encrypts and releases in ONE conditional UPDATE (`av_release.apply_verdict` with the swap folded in), then mails - never downloadable as plaintext, never announced before the swap. **`ready_unscanned` must stay terminal**: any failure releases as plaintext with `file_encryption_deferred`; only a cancel (worker shutdown) leaves the verdict, and a held row the stale sweep re-enqueues RE-KICKS the lane - never a rescan.
+- **One lane run at a time, and no verdict lost in the hand-over:** every kick marks dirty BEFORE trying the lock; the holder clears the mark before reading the queue and re-checks it AFTER releasing; passes are capped (`_MAX_PASSES`) so an uncleared mark cannot spin. Locks are `RedisLease` (renewed, fail OPEN - the conditional UPDATEs are the real guard).
+- **The backfill (`encrypt_existing_files`, REGISTRY, 10 min, kicked on enable)** walks ids by keyset (a failure is never re-selected in one run), skips a file served in the last 30 min, waits `PLAINTEXT_PURGE_GRACE` (1 h) before purging the plaintext (a ZIP stream opens members lazily), defers an object for a day after 3 failures (fixed Redis keys, never a keyspace walk), stops on low space, **re-reads the switch per object** (the decrypt script must not race it), and returns `CRON_FAILED_KEY` when it tried and achieved nothing. Every run also sweeps due purges and releases held files - with the switch OFF too.
+- **The switch is a policy-route setting, step-up gated BOTH ways** (off decides whether new uploads leave plaintext); ON also needs `acknowledge_key_custody` (400 `ENCRYPTION_ACK_REQUIRED`, checked BEFORE the password so a refused request spends no attempt). Not a registry tunable (pinned) - `/settings/advanced` has no step-up. `...last_run` is in `_TRANSIENT_SETTING_KEYS` and is read field by field.
+- **Backups restore encrypted files only with `.env`** (the wrapping key derives from `JWT_SECRET`). `scripts/restore_validate.py` decrypts a sample's first chunk - and **the weekly drill copies that WORKING-TREE script into the host's OLDER image**, so the check skips when the image or the schema predates encryption and the script imports nothing new at top level (`test_restore_validate_encryption.py` pins the import set). Never add a top-level import there.
+- **The way back out:** Rollback refuses (`409 ROLLBACK_BLOCKED_BY_ENCRYPTION`) while encrypted objects exist and the target's `alembic_head` does not include `202610030001` - an unknown head counts as "cannot". `backend/scripts/decrypt_files_at_rest.py` (`--turn-off`, `--purge-now`) undoes it through the same engine; `--purge-now` also clears earlier backfills' waiting plaintext, which an old release would never delete. The migration's `downgrade()` refuses while any row is encrypted.
+- **Erasure deletes a file's queued copies at once** (`purge_copies_now`) - the receipt's "erased" must be true now, not after the grace. Inbound attachments are written encrypted from the first byte (scanned in memory; row flushed first because the key binds its id) and fall back to plaintext with an audit row.
 
 ## Public links
 
@@ -791,7 +812,8 @@ gate table. The traps:
 - **`frontend/src/types/api.ts` (143 interfaces) + `frontend/src/api/*.ts` mirror the backend schemas by hand**, and `backend/tests/test_frontend_api_types.py` reads both sides. Every drift was FIELD-level inside a correctly-named interface, which is exactly what `vue-tsc -b` cannot see (`NotificationCategory` lacked `server_error` for 59 releases). **Codegen was considered and rejected**: 47 routes answer `-> dict`, the error envelope is assembled inside exception handlers where FastAPI's generator cannot see it, generation would widen twelve deliberately-narrowed unions back to `string`, and 148 symbols are imported by name across 69 files. **Don't re-propose it.**
 - **`backend/tests/test_client_models_contract.py`** pins `client/.../models.py` against `app/schemas` (`_ALIASES` maps the names that differ); **`test_client_error_codes.py`** covers error codes - a new `AppError` code on a client-reachable route needs both client locales, which is how `FILE_QUARANTINED` was caught.
 - **Script tests: only a subprocess test run from a foreign cwd can see a `sys.path` shim** - pytest runs from `backend/`, where `app` is already imported. `backend/scripts/rotate_jwt_secret.py`'s table list is pinned by `test_secret_lifecycle.py::test_the_rotation_script_rotates_every_encrypted_column` against every `*_encrypted` model column - a new Fernet column must carry that suffix to be covered.
-- **Only two suite files select the S3 backend.** `tests/test_disk_check_object_store.py` covers `disk_check`'s object-store branch (the sole writer clearing `storage.critical_low`, so a regression 507s every upload forever after a local→S3 move) and `tests/test_av_scan_s3_instream.py` covers `av_scan`'s INSTREAM arm - **`test_av_scan_instream.py` looks like coverage and is not**, exercising `scan_stream` against a fake socket without touching the worker or the branch.
+- **S3 coverage is per BRANCH, and few files select the backend at all.** `tests/test_disk_check_object_store.py` covers `disk_check`'s object-store branch (the sole writer clearing `storage.critical_low`, so a regression 507s every upload forever after a local→S3 move), `tests/test_av_scan_s3_instream.py` `av_scan`'s INSTREAM arm, and `test_encrypted_range_matrix.py` / `test_encryption_s3.py` the encrypted serve and both encryption lanes on moto - **`test_av_scan_instream.py` looks like coverage and is not**, exercising `scan_stream` against a fake socket without touching the worker or the branch.
+- **Never `monkeypatch.undo()` inside a test.** The fixture is shared with conftest's autouse isolation (`_isolated_transfer_marks`, `_isolate_alert_dedup`, `_isolate_encryption_lanes` - every fixed-key Redis user), so undo lifts those too and the rest of the test reaches for a real Redis (in the runner a dead port, on a host the live one). Restore just what you broke with another `setattr`.
 - **`test_alembic_roundtrip.py` seeds rows into the tables data migrations touch**, precisely because it once ran against an empty schema.
 - **The test engine enforces foreign keys**: a new test that inserts a child row needs a real parent and often a `db.flush()` between them.
 - **`client-tests` is a MATRIX (ubuntu + windows) and must stay one.** Linux-only for a Windows-only product meant the suite's first Windows run was on the release tag, and `client-v*` tags are immutable by repo ruleset, so a Windows-only failure spends the version number - `client-v1.3.0` died that way (`ZoneInfo` raises on Windows, which ships no IANA database; `tzdata` is now a dependency AND collected in the spec). **A `skipif` on Windows is a hole, not a nicety.** `ci.yml` also checks that `pyproject.toml`, `__init__.py` and `client/RELEASE_NOTES.md` agree on the version on every push.
@@ -814,6 +836,7 @@ admin-tunable via `services/cron_schedule.py::REGISTRY` + the minute
 - **`send_email_job`** resolves SMTP per job, retries transient, permanent 5xx → audit `email_undeliverable` + admin alert.
 - **The reclaim cron must count what it FREED**, not what it attempted - it incremented `reclaimed`/`bytes_freed` regardless and emailed every admin "Reclaimed N orphaned file(s)" for bytes still on the volume, having just moved the row out of its own filter forever.
 - **`worker.py`'s table of sixteen per-job cron minutes has governed nothing since v1.28.0** - don't read it as configuration.
+- **A job that may outlive `job_timeout` gets its own limits via `arq.worker.func(...)`** - the two encryption jobs run 6 h, `max_tries=1` (a dead run's files are picked up by the next kick or tick), `keep_result=0`. Code that iterates `WorkerSettings.functions` must read `.name` as well as `__name__`.
 
 ## Database schema
 
@@ -968,7 +991,6 @@ Each split silently breaks a pin:
 
 ### Open / deferred / dropped
 
-- **Deferred:** per-file envelope encryption - until storage leaves single-server bind mounts (KEK + ciphertext would otherwise share a container).
 - **Dropped:** Locust load-test baseline (real-load operation supersedes); zxcvbn-ts strength meter (HIBP is the real defense).
 - **Rejected:** OpenAPI codegen for the frontend types (see §Testing); a per-token access denylist (see §Auth); splitting the three files above.
 
@@ -994,3 +1016,6 @@ renumber, or that comment silently points at a different rule.
 3. **A partial destination file if `finalize` itself dies mid-copy.** The direct-upload path compensates (`run_after_rollback` registered immediately before the commit in `routers/uploads.py`), so this is the narrower window inside `shutil.move`'s copy fallback on a cross-device bind mount. Reclaimed by the orphan sweep; not worth a second write path.
 4. **`file.py`'s `was_infected` orphan is unreachable, not absent.** `mark_deleted_for_expiry` deliberately returns a None locator for a `was_infected` row so an unlink-by-`storage_path` cannot destroy quarantined evidence (`quarantine_file` REWRITES `storage_path` to the quarantine locator). The row would fall out of both purge filters if it ever got there - it cannot today, because every expiry entry point filters `Share.state == active` while quarantine revokes the parent share on marking. **Don't "fix" the None locator without re-reading that pair.**
 5. **`files.sha256_hex` is direct-upload-only and verified nowhere** - see §Database schema.
+6. **Encryption at rest leaves plaintext where it never reaches**: tusd's staging copy in `data/uploads` until finalize, and the disk blocks of an unlinked plaintext copy (no secure erase on a journalling filesystem or an SSD). It protects backups, restic copies, disk images and the bucket; the key lives beside the files, so it does not protect against the host.
+7. **On S3 the plaintext object exists until its swap, and a VERSIONED bucket keeps it as a noncurrent version** until a lifecycle rule removes it. The admin page says so on S3; file:Heron does not manage bucket lifecycle.
+8. **A backfill swap changes a file's ETag** (`"fhe-…"` instead of FileResponse's), so a browser resume paused across the swap restarts once (If-Range misses) instead of splicing. ZIP archives are byte-identical either way.

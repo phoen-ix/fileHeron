@@ -23,27 +23,9 @@ from __future__ import annotations
 import inspect
 
 import pytest
-from sqlalchemy import event
 
 from app.models.group import Group
 from app.models.user import UserRole
-
-
-@pytest.fixture
-def counting(db):
-    """Count SQL statements issued on the session's connection."""
-    stmts: list[str] = []
-
-    def _before(conn, cursor, statement, params, context, executemany):
-        stmts.append(statement)
-
-    engine = db.get_bind()
-    event.listen(engine, "before_cursor_execute", _before)
-    try:
-        yield stmts
-    finally:
-        event.remove(engine, "before_cursor_execute", _before)
-
 
 # --- dos-11 -----------------------------------------------------------------
 

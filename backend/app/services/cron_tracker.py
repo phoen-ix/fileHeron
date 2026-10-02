@@ -30,7 +30,7 @@ from collections.abc import Awaitable, Callable
 from datetime import timedelta
 from typing import Any
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from ..database import SessionLocal
@@ -120,6 +120,50 @@ def _prune_old_runs(db: Session, job_name: str) -> None:
                 CronRun.status == CronRunStatus.success,
             )
         )
+
+
+def latest_runs(db: Session) -> dict[str, CronRun]:
+    """The newest run of every job, in ONE query.
+
+    row_number() per job ordered by (started_at desc, id desc) - the id is the
+    tiebreaker CLAUDE.md requires on every timestamp ORDER BY, because MariaDB
+    stores whole seconds and two runs in one second would otherwise tie. The
+    admin status pages issued this as one query per job (22 of them).
+    """
+    rn = (
+        func.row_number()
+        .over(
+            partition_by=CronRun.job_name,
+            order_by=(CronRun.started_at.desc(), CronRun.id.desc()),
+        )
+        .label("rn")
+    )
+    ranked = select(CronRun.id.label("id"), rn).subquery()
+    rows = (
+        db.query(CronRun)
+        .join(ranked, ranked.c.id == CronRun.id)
+        .filter(ranked.c.rn == 1)
+        .all()
+    )
+    return {r.job_name: r for r in rows}
+
+
+def run_counts_since(db: Session, cutoff) -> dict[str, dict[str, int]]:
+    """`{job_name: {status: count}}` for runs started at or after `cutoff`, in
+    ONE grouped query. Status keys are the plain strings, whichever form the
+    driver handed back."""
+    out: dict[str, dict[str, int]] = {}
+    rows = (
+        db.query(CronRun.job_name, CronRun.status, func.count(CronRun.id))
+        .filter(CronRun.started_at >= cutoff)
+        .group_by(CronRun.job_name, CronRun.status)
+        .all()
+    )
+    for job_name, status, n in rows:
+        key = status.value if isinstance(status, CronRunStatus) else str(status)
+        per_job = out.setdefault(job_name, {})
+        per_job[key] = per_job.get(key, 0) + int(n)
+    return out
 
 
 def _maybe_alert_admins(db: Session, job_name: str, error_msg: str) -> None:

@@ -356,6 +356,25 @@ def _isolated_transfer_marks(monkeypatch):
     store.clear()
 
 
+@pytest.fixture
+def counting(db):
+    """Count SQL statements issued on the test engine (every session shares it,
+    so a request made through `client` is counted too). Yields the live list."""
+    from sqlalchemy import event
+
+    stmts: list[str] = []
+
+    def _before(conn, cursor, statement, params, context, executemany):
+        stmts.append(statement)
+
+    engine = db.get_bind()
+    event.listen(engine, "before_cursor_execute", _before)
+    try:
+        yield stmts
+    finally:
+        event.remove(engine, "before_cursor_execute", _before)
+
+
 @pytest.fixture(autouse=True)
 def _isolate_alert_dedup(monkeypatch):
     """Give services/alert_dedup a per-test in-memory Redis and a fresh

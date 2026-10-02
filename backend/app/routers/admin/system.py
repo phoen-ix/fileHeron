@@ -20,7 +20,6 @@ from datetime import timedelta
 from fastapi import APIRouter, Depends, Header, Query, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, field_validator
-from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from ...config import settings
@@ -42,7 +41,7 @@ from ...schemas.system import (
     UpdaterJob,
     UpdaterStatus,
 )
-from ...services import cron_schedule
+from ...services import cron_schedule, cron_tracker
 from ...utils.timeutil import utc_now
 
 router = APIRouter()
@@ -114,34 +113,21 @@ def system_status(
     _admin: User = Depends(get_current_admin),
 ) -> dict:
     """One-shot view for the admin /admin/system page."""
-    crons = []
-    for name in _KNOWN_CRONS:
-        last = (
-            db.query(CronRun)
-            .filter(CronRun.job_name == name)
-            .order_by(CronRun.started_at.desc(), CronRun.id.desc())
-            .first()
-        )
-        # Success / failure counts in the last 24h, for the at-a-glance number.
-        cutoff = utc_now() - timedelta(hours=24)
-        counts: dict[CronRunStatus | str, int] = {
-            row[0]: row[1]
-            for row in db.query(CronRun.status, func.count(CronRun.id))
-            .filter(CronRun.job_name == name, CronRun.started_at >= cutoff)
-            .group_by(CronRun.status)
-            .all()
+    # Two queries for every task, whatever the size of the registry - this loop
+    # used to run a latest-row and a 24h-count query per task.
+    newest_runs = cron_tracker.latest_runs(db)
+    counts = cron_tracker.run_counts_since(db, utc_now() - timedelta(hours=24))
+    crons = [
+        {
+            "job_name": name,
+            "last_run": _cron_row_dict(newest_runs.get(name)),
+            "last_24h": {
+                status: counts.get(name, {}).get(status, 0)
+                for status in ("success", "failure", "running")
+            },
         }
-        crons.append(
-            {
-                "job_name": name,
-                "last_run": _cron_row_dict(last),
-                "last_24h": {
-                    "success": int(counts.get(CronRunStatus.success, 0) or counts.get("success", 0) or 0),
-                    "failure": int(counts.get(CronRunStatus.failure, 0) or counts.get("failure", 0) or 0),
-                    "running": int(counts.get(CronRunStatus.running, 0) or counts.get("running", 0) or 0),
-                },
-            }
-        )
+        for name in _KNOWN_CRONS
+    ]
 
     recent_failures = [
         _cron_row_dict(r)

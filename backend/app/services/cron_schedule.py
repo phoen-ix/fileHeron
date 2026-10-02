@@ -11,6 +11,7 @@ the old ``_KNOWN_CRONS`` list).
 """
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -127,24 +128,30 @@ def _clamp_interval(spec: CronSpec, value: int) -> int:
     return max(spec.min_interval_min, min(_MAX_INTERVAL_MIN, value))
 
 
-def effective(db: Session, name: str) -> ResolvedSchedule:
-    spec = REGISTRY[name]
-    enabled = settings_svc.get_bool(db, _key(name, "enabled"), default=True)
-    kind = settings_svc.get(db, _key(name, "kind")) or spec.default_kind
-    if kind not in _KINDS:
-        kind = spec.default_kind
-    interval = _clamp_interval(
-        spec, settings_svc.get_int(db, _key(name, "interval_minutes"), default=spec.default_interval_min)
-    )
-    daily_time = settings_svc.get(db, _key(name, "daily_time")) or spec.default_daily_time
+def _source_worker_default(db: Session) -> bool:
     # Same default the alerter applies (error_alert._alert_source_enabled), so the
     # toggle on the Scheduled tasks page shows what will actually happen. Hardcoding
     # False here while the alerter defaulted to the global key would render every
     # task "off" on a page whose failures do alert.
-    alert_on_failure = settings_svc.get_bool(
-        db,
-        _key(name, "alert_on_failure"),
-        default=settings_svc.get_bool(db, settings_svc.Keys.ERROR_ALERT_SOURCE_WORKER, default=True),
+    return settings_svc.get_bool(db, settings_svc.Keys.ERROR_ALERT_SOURCE_WORKER, default=True)
+
+
+def _resolve(name: str, stored: Mapping[str, str], source_worker_default: bool) -> ResolvedSchedule:
+    """One task's schedule from its stored `cron.<name>.*` keys. Parsed with the
+    same helpers `settings.get_bool`/`get_int` use, so a bulk read and a per-key
+    read cannot disagree about what a stored string means."""
+    spec = REGISTRY[name]
+    enabled = settings_svc.parse_bool(stored.get(_key(name, "enabled")), True)
+    kind = stored.get(_key(name, "kind")) or spec.default_kind
+    if kind not in _KINDS:
+        kind = spec.default_kind
+    interval = _clamp_interval(
+        spec,
+        settings_svc.parse_int(stored.get(_key(name, "interval_minutes")), spec.default_interval_min),
+    )
+    daily_time = stored.get(_key(name, "daily_time")) or spec.default_daily_time
+    alert_on_failure = settings_svc.parse_bool(
+        stored.get(_key(name, "alert_on_failure")), source_worker_default
     )
     return ResolvedSchedule(
         name=name, group=spec.group, description=spec.description,
@@ -153,14 +160,45 @@ def effective(db: Session, name: str) -> ResolvedSchedule:
     )
 
 
-def get_last_run(db: Session, name: str) -> datetime | None:
-    raw = settings_svc.get(db, _key(name, "last_run_at"))
+def effective(db: Session, name: str) -> ResolvedSchedule:
+    """One task, two queries: its `cron.<name>.*` keys in one read (the trailing
+    dot keeps `cron.foo.` from matching `cron.foo_bar.`) plus the global
+    alerting default. It was six reads per task."""
+    return _resolve(
+        name, settings_svc.get_many(db, prefix=f"cron.{name}."), _source_worker_default(db)
+    )
+
+
+def _parse_last_run(raw: str | None) -> datetime | None:
     if not raw:
         return None
     try:
         return datetime.fromisoformat(raw)
     except ValueError:
         return None
+
+
+def get_last_run(db: Session, name: str) -> datetime | None:
+    return _parse_last_run(settings_svc.get(db, _key(name, "last_run_at")))
+
+
+@dataclass(frozen=True)
+class ScheduleSnapshot:
+    """Every task's schedule and last-run stamp from ONE settings read - for
+    the admin pages that list all of them (two queries for the whole REGISTRY,
+    where per-task reads cost seven each)."""
+
+    schedules: dict[str, ResolvedSchedule]
+    last_runs: dict[str, datetime | None]
+
+
+def snapshot(db: Session) -> ScheduleSnapshot:
+    stored = settings_svc.get_many(db, prefix="cron.")
+    sw_default = _source_worker_default(db)
+    return ScheduleSnapshot(
+        schedules={name: _resolve(name, stored, sw_default) for name in REGISTRY},
+        last_runs={name: _parse_last_run(stored.get(_key(name, "last_run_at"))) for name in REGISTRY},
+    )
 
 
 def mark_ran(db: Session, name: str, when: datetime | None = None) -> None:

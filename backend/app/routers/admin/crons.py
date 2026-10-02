@@ -10,13 +10,12 @@ from __future__ import annotations
 from datetime import timedelta
 
 from fastapi import APIRouter, Depends, Request
-from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from ...dependencies import get_current_admin, get_db
 from ...middleware.errors import AppError
 from ...models.audit_log import AuditEventType
-from ...models.cron_run import CronRun, CronRunStatus
+from ...models.cron_run import CronRunStatus
 from ...models.user import User
 from ...schemas.cron_settings import (
     CronCounts,
@@ -25,6 +24,7 @@ from ...schemas.cron_settings import (
     UpdateCronScheduleRequest,
 )
 from ...services import cron_schedule as cs
+from ...services import cron_tracker
 from ...services import settings as settings_svc
 from ...services import site as site_svc
 from ...services.audit import record_audit_event
@@ -33,49 +33,42 @@ from ...utils.timeutil import utc_now
 router = APIRouter()
 
 
-def _item(db: Session, name: str, tz: str, now) -> CronScheduleItem:
-    spec = cs.REGISTRY[name]
-    res = cs.effective(db, name)
-    last_run = cs.get_last_run(db, name)
-    last = (
-        db.query(CronRun)
-        .filter(CronRun.job_name == name)
-        .order_by(CronRun.started_at.desc(), CronRun.id.desc())
-        .first()
-    )
-    cutoff = now - timedelta(hours=24)
-    counts: dict[CronRunStatus | str, int] = {
-        row[0]: row[1]
-        for row in db.query(CronRun.status, func.count(CronRun.id))
-        .filter(CronRun.job_name == name, CronRun.started_at >= cutoff)
-        .group_by(CronRun.status)
-        .all()
-    }
-
-    def _c(s: CronRunStatus) -> int:
-        return int(counts.get(s, 0) or counts.get(s.value, 0) or 0)
-
-    last_status = None
-    if last is not None:
-        last_status = last.status.value if isinstance(last.status, CronRunStatus) else last.status
-    nxt = cs.next_run_at(res, last_run, now, tz)
-
-    return CronScheduleItem(
-        name=name, group=spec.group, description=spec.description,
-        enabled=res.enabled, kind=res.kind, interval_minutes=res.interval_minutes,
-        daily_time=res.daily_time, min_interval_minutes=spec.min_interval_min,
-        alert_on_failure=res.alert_on_failure,
-        last_run_at=(last.started_at.isoformat() if last and last.started_at else None),
-        last_status=last_status,
-        last_duration_ms=(last.duration_ms if last else None),
-        last_error=(last.error_msg if last else None),
-        next_run_at=(nxt.isoformat() if nxt else None),
-        last_24h=CronCounts(
-            success=_c(CronRunStatus.success),
-            failure=_c(CronRunStatus.failure),
-            running=_c(CronRunStatus.running),
-        ),
-    )
+def _items(db: Session, names, tz: str, now) -> list[CronScheduleItem]:
+    """The rows for `names`, in a fixed number of queries: one settings read for
+    every schedule (cron_schedule.snapshot), one for the newest run of every
+    task, one grouped count. Built per task this was about nine queries each."""
+    snap = cs.snapshot(db)
+    latest = cron_tracker.latest_runs(db)
+    counts = cron_tracker.run_counts_since(db, now - timedelta(hours=24))
+    out: list[CronScheduleItem] = []
+    for name in names:
+        spec = cs.REGISTRY[name]
+        res = snap.schedules[name]
+        last = latest.get(name)
+        c = counts.get(name, {})
+        last_status = None
+        if last is not None:
+            last_status = (
+                last.status.value if isinstance(last.status, CronRunStatus) else last.status
+            )
+        nxt = cs.next_run_at(res, snap.last_runs[name], now, tz)
+        out.append(CronScheduleItem(
+            name=name, group=spec.group, description=spec.description,
+            enabled=res.enabled, kind=res.kind, interval_minutes=res.interval_minutes,
+            daily_time=res.daily_time, min_interval_minutes=spec.min_interval_min,
+            alert_on_failure=res.alert_on_failure,
+            last_run_at=(last.started_at.isoformat() if last and last.started_at else None),
+            last_status=last_status,
+            last_duration_ms=(last.duration_ms if last else None),
+            last_error=(last.error_msg if last else None),
+            next_run_at=(nxt.isoformat() if nxt else None),
+            last_24h=CronCounts(
+                success=c.get("success", 0),
+                failure=c.get("failure", 0),
+                running=c.get("running", 0),
+            ),
+        ))
+    return out
 
 
 @router.get("/crons", response_model=CronListResponse)
@@ -86,7 +79,7 @@ def list_crons(
     tz = site_svc.get_site_timezone(db)
     now = utc_now()
     return CronListResponse(
-        items=[_item(db, name, tz, now) for name in cs.REGISTRY],
+        items=_items(db, list(cs.REGISTRY), tz, now),
         site_timezone=tz,
         error_alerts_enabled=settings_svc.get_bool(
             db, settings_svc.Keys.ERROR_ALERT_ENABLED, default=False
@@ -141,4 +134,4 @@ def update_cron(
         request=request,
     )
     db.commit()
-    return _item(db, name, site_svc.get_site_timezone(db), utc_now())
+    return _items(db, [name], site_svc.get_site_timezone(db), utc_now())[0]

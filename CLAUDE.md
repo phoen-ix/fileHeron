@@ -968,7 +968,7 @@ that raised them was deleted, so this is the last copy:
 - `share_expiring` is **not** at-least-once-unsafe - `notification.dispatch` defers its enqueue to `run_after_commit`, so the marker and the email share a transaction.
 - `image.py`'s decompression-bomb guard **is** tested - in `test_guard_thresholds.py`, **not** `test_image.py`.
 - `<a href="javascript:">` **is** covered - in `test_email_template_overrides.py`.
-- **16 CodeQL alerts were dismissed on 2026-09-29, each with its reason on GitHub**: SHA-1 in `hibp.py` (the range API requires it), SHA-256 in `sha256_hex` (random tokens only), logged key or event NAMES taken for passwords, 0644 on the updater's job and rollback files (root executor ↔ uid-1000 backend), the admin OIDC probe's URL, and the admin live-check `str(e)`. If one of them comes back under a new number after a code move, dismiss it again with the same reason rather than changing the code.
+- **16 CodeQL alerts were dismissed on 2026-09-29, each with its reason on GitHub**: SHA-1 in `hibp.py` (the range API requires it), SHA-256 in `sha256_hex` (random tokens only), logged key or event NAMES taken for passwords, 0644 on the updater's job and rollback files (root executor ↔ uid-1000 backend), the admin OIDC probe's URL, and the admin live-check `str(e)`. **Four more on 2026-10-02**, same class: `secret_reveal.py`'s lock warning (secret id, recipient id, two counts) and the desktop client's `i18n.py` missing-key warnings (a translation KEY such as `secrets.reveal.passphrase_label`, never user input). If one of them comes back under a new number after a code move, dismiss it again with the same reason rather than changing the code.
 
 ### Accepted residuals (deliberately CLOSED, don't re-file)
 

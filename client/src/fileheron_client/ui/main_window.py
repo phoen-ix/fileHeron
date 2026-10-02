@@ -18,6 +18,7 @@ from ..api import ApiClient
 from ..i18n import t
 from ..models import MeResponse
 from .app import reassert_visible
+from .secrets_panel import SecretsPanel
 from .settings_dialog import SettingsOverlay
 from .share_detail_view import pause_all_in_flight
 from .share_list_panel import ShareListPanel
@@ -31,6 +32,8 @@ from .widgets import Toast
 TAB_INBOX = "Inbox"
 TAB_OUTBOX = "Outbox"
 TAB_NEW_SHARE = "New share"
+# Present only when the server has secrets switched on (/me secrets_enabled).
+TAB_SECRETS = "Secrets"
 
 
 class MainWindow:
@@ -113,6 +116,17 @@ class MainWindow:
         )
         self.upload.pack(fill="both", expand=True)
 
+        # Secrets (server v2.24.0): only when the server has them switched on.
+        # An older server's /me has no `secrets_enabled`, so the tab stays away
+        # rather than offering routes the server lacks.
+        self.secrets: Optional[SecretsPanel] = None
+        if self._me.secrets_enabled:
+            secrets_tab = self.tabs.add(TAB_SECRETS)
+            self.secrets = SecretsPanel(
+                secrets_tab, self._app_root, self._api, self._me, flash=self.flash,
+            )
+            self.secrets.pack(fill="both", expand=True)
+
         # CTkTabview's tab change callback. Refresh the active list
         # panel so newly-created/expired shares show up without a
         # manual click. CTk's API surface is a bit awkward - the
@@ -146,6 +160,8 @@ class MainWindow:
             self.inbox.refresh()
         elif name == TAB_OUTBOX:
             self.outbox.refresh()
+        elif name == TAB_SECRETS and self.secrets is not None:
+            self.secrets.refresh()
 
     def _go_to_outbox(self) -> None:
         """Switch to the Outbox tab + refresh - wired into the upload-progress

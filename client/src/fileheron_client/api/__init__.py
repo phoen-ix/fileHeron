@@ -5,6 +5,22 @@ from .client import ApiClient, ApiError, SessionExpiredError
 from .download_resumable import download_file_resumable
 from .files import DownloadCancelled, DownloadPaused
 from .groups import list_recipient_groups
+from .secret_requests import (
+    answer_secret_request,
+    cancel_secret_request,
+    create_secret_request,
+    get_secret_request,
+    get_secret_request_links,
+    list_secret_requests,
+)
+from .secrets import (
+    burn_secret,
+    create_secret,
+    get_secret,
+    get_secret_links,
+    list_secrets,
+    reveal_secret,
+)
 from .shares import (
     create_share,
     expire_share_now,
@@ -43,4 +59,16 @@ __all__ = [
     "list_recipient_groups",
     "search_users",
     "branding_logo_png",
+    "list_secrets",
+    "get_secret",
+    "create_secret",
+    "reveal_secret",
+    "burn_secret",
+    "get_secret_links",
+    "list_secret_requests",
+    "get_secret_request",
+    "create_secret_request",
+    "answer_secret_request",
+    "cancel_secret_request",
+    "get_secret_request_links",
 ]

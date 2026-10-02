@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class _Base(BaseModel):
@@ -26,6 +26,15 @@ class RefreshResponse(_Base):
     expires_in_seconds: int
 
 
+class SecretLimitsResponse(_Base):
+    """The admin's ceilings, for the compose forms."""
+    max_views: int
+    max_expiry_days: int
+    max_lifetime_days: int
+    passphrase_failure_mode: str
+    passphrase_max_failures: int
+
+
 class MeResponse(_Base):
     id: int
     email: str
@@ -38,6 +47,15 @@ class MeResponse(_Base):
     # Admin-set default for the "notify recipients" toggle (share create +
     # add-files). Backend surfaces it on /me; default True if absent.
     share_notify_recipients_default: bool = True
+    # Secrets (server v2.24.0). An older server sends none of these, so the
+    # defaults hide the Secrets tab rather than offering routes it lacks.
+    # `secrets_enabled` shows the tab (anyone may RECEIVE a secret);
+    # `can_send_secrets` the New secret / Request a secret buttons;
+    # `can_send_secrets_external` the address + link options.
+    secrets_enabled: bool = False
+    can_send_secrets: bool = False
+    can_send_secrets_external: bool = False
+    secret_limits: Optional[SecretLimitsResponse] = None
 
 
 class ShareSenderRef(_Base):
@@ -184,3 +202,214 @@ class GroupItem(_Base):
 
 class GroupListResponse(_Base):
     items: list[GroupItem]
+
+
+# Secrets + secret requests (server v2.24.0) ------------------------------------
+#
+# Metadata only, except `RevealSecretResponse.content` - the one place a
+# secret's text ever reaches the client. Nothing here is logged.
+
+
+class SecretUserRef(_Base):
+    id: int
+    display_name: str
+
+
+class SecretGroupRef(_Base):
+    id: int
+    name: str
+
+
+class SecretRecipientSummary(_Base):
+    users: int = 0
+    groups: int = 0
+    emails: int = 0
+    link: bool = False
+
+
+class SecretListItem(_Base):
+    id: str
+    state: str
+    label: Optional[str] = None
+    # None for an answer written without an account (then `answered_via` and
+    # `answered_by_email` say where it came from).
+    sender: Optional[SecretUserRef] = None
+    created_at: datetime
+    ended_at: Optional[datetime] = None
+    expires_at: Optional[datetime] = None
+    max_views: Optional[int] = None
+    view_scope: str = "per_person"
+    # Sent box only; None in the received box.
+    views_used: Optional[int] = None
+    has_passphrase: bool = False
+    my_views_left: Optional[int] = None
+    recipient_summary: Optional[SecretRecipientSummary] = None
+    is_answer: bool = False
+    answered_via: Optional[str] = None
+    answered_by_email: Optional[str] = None
+
+
+class SecretListResponse(_Base):
+    items: list[SecretListItem]
+    total: int = 0
+    page: int = 1
+    page_size: int = 50
+
+
+class SecretMemberStatus(_Base):
+    user: SecretUserRef
+    views_used: int = 0
+    last_viewed_at: Optional[datetime] = None
+    eligible: bool = True
+    burned: bool = False
+
+
+class SecretRecipientStatus(_Base):
+    id: int
+    kind: str
+    user: Optional[SecretUserRef] = None
+    group: Optional[SecretGroupRef] = None
+    email: Optional[str] = None
+    views_used: int = 0
+    views_left: Optional[int] = None
+    failed_attempts: int = 0
+    locked_until: Optional[datetime] = None
+    burned: bool = False
+    revoked: bool = False
+    emailed_at: Optional[datetime] = None
+    members: list[SecretMemberStatus] = []
+
+
+class SecretEvent(_Base):
+    at: datetime
+    outcome: str
+    kind: Optional[str] = None
+    user: Optional[SecretUserRef] = None
+    email: Optional[str] = None
+    ip: Optional[str] = None
+
+
+class SecretResponse(_Base):
+    id: str
+    state: str
+    label: Optional[str] = None
+    sender: Optional[SecretUserRef] = None
+    created_at: datetime
+    ended_at: Optional[datetime] = None
+    expires_at: Optional[datetime] = None
+    max_views: Optional[int] = None
+    view_scope: str = "per_person"
+    views_used: Optional[int] = None
+    has_passphrase: bool = False
+    # The requester's own passphrase layer (an answer to a request only).
+    has_request_passphrase: bool = False
+    notify_on_view: bool = False
+    burn_after_failures: Optional[int] = None
+    viewer_role: str = "recipient"
+    is_answer: bool = False
+    request_id: Optional[str] = None
+    answered_via: Optional[str] = None
+    answered_by_email: Optional[str] = None
+    can_burn: bool = False
+    my_views_left: Optional[int] = None
+    can_reveal: bool = False
+    still_recipient: bool = False
+    burned_for_me: bool = False
+    my_failed_attempts: int = 0
+    recipients: list[SecretRecipientStatus] = []
+    recipient_summary: SecretRecipientSummary = Field(default_factory=SecretRecipientSummary)
+    events: list[SecretEvent] = []
+    # The create response only, when a link was made.
+    link_url: Optional[str] = None
+
+
+class RevealSecretResponse(_Base):
+    content: str
+    views_left: Optional[int] = None
+    # True when this view was the last one anybody had.
+    ended: bool = False
+
+
+class SecretLinkItem(_Base):
+    recipient_id: int
+    kind: str
+    email: Optional[str] = None
+    # None when the link can no longer be shown.
+    url: Optional[str] = None
+
+
+class SecretLinksResponse(_Base):
+    items: list[SecretLinkItem]
+
+
+class SecretRequestTargetStatus(_Base):
+    id: int
+    kind: str
+    user: Optional[SecretUserRef] = None
+    group: Optional[SecretGroupRef] = None
+    email: Optional[str] = None
+    notified_at: Optional[datetime] = None
+
+
+class SecretRequestResponse(_Base):
+    id: str
+    state: str
+    closed_reason: Optional[str] = None
+    label: str
+    note: Optional[str] = None
+    requester: SecretUserRef
+    created_at: datetime
+    expires_at: datetime
+    ended_at: Optional[datetime] = None
+    answer_max_views: Optional[int] = None
+    answer_expires_in_sec: Optional[int] = None
+    has_passphrase: bool = False
+    viewer_role: str = "target"
+    can_answer: bool = False
+    targets: list[SecretRequestTargetStatus] = []
+    target_summary: SecretRecipientSummary = Field(default_factory=SecretRecipientSummary)
+    fulfilled_at: Optional[datetime] = None
+    answered_via: Optional[str] = None
+    answered_by: Optional[SecretUserRef] = None
+    answered_by_email: Optional[str] = None
+    answer_secret_id: Optional[str] = None
+    # The create response only, when a link was made.
+    link_url: Optional[str] = None
+
+
+class SecretRequestListItem(_Base):
+    id: str
+    state: str
+    closed_reason: Optional[str] = None
+    label: str
+    requester: SecretUserRef
+    created_at: datetime
+    expires_at: datetime
+    ended_at: Optional[datetime] = None
+    has_passphrase: bool = False
+    target_summary: Optional[SecretRecipientSummary] = None
+    answer_secret_id: Optional[str] = None
+    can_answer: bool = False
+
+
+class SecretRequestListResponse(_Base):
+    items: list[SecretRequestListItem]
+    total: int = 0
+    page: int = 1
+    page_size: int = 50
+
+
+class AnswerSecretRequestResponse(_Base):
+    ok: bool
+    requester_name: Optional[str] = None
+
+
+class SecretRequestLinkItem(_Base):
+    target_id: int
+    kind: str
+    email: Optional[str] = None
+    url: Optional[str] = None
+
+
+class SecretRequestLinksResponse(_Base):
+    items: list[SecretRequestLinkItem]

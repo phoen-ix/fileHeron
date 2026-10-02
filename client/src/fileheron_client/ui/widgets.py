@@ -51,6 +51,9 @@ class PillLabel(ctk.CTkLabel):
         # cursor="hand2"; without forwarding it would raise TypeError
         # mid-render and the swallowed exception broke the whole rows.
         bg, fg = _PILL_COLOURS.get(state or text, ("#e5e7eb", "#374151"))
+        # 80px holds every English server state; a translated label (the
+        # Secrets tab's "Aufgebraucht") needs room, so a caller may widen it.
+        width = kwargs.pop("width", 80)
         # CTkLabel doesn't take padx/pady (those are geometry-manager
         # options). The "padding" effect is achieved with corner_radius
         # + a fixed width that's wider than the text. Width:auto would
@@ -63,7 +66,7 @@ class PillLabel(ctk.CTkLabel):
             text_color=fg,
             corner_radius=10,
             font=ctk.CTkFont(size=11, weight="bold"),
-            width=80,
+            width=width,
             height=20,
             **kwargs,
         )

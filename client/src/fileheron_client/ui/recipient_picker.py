@@ -215,10 +215,23 @@ class _InlineGroupSearch(_InlineMultiSelectPanel):
 
 
 class RecipientPickerWidget(ctk.CTkFrame):
-    def __init__(self, master, root: ctk.CTk, api: ApiClient) -> None:
+    def __init__(
+        self,
+        master,
+        root: ctk.CTk,
+        api: ApiClient,
+        *,
+        allow_groups: bool = True,
+        on_change: Callable[[], None] | None = None,
+    ) -> None:
+        """``allow_groups=False`` hides the groups row (a client sends a
+        secret only to the employees they work with, never to a group).
+        ``on_change`` fires after every pick or clear, so a form can re-derive
+        what blocks its Send button."""
         super().__init__(master, fg_color="transparent")
         self._app_root = root
         self._api = api
+        self._on_change = on_change
         self._user_ids: list[int] = []
         self._user_labels: list[str] = []
         self._group_ids: list[int] = []
@@ -245,7 +258,8 @@ class RecipientPickerWidget(ctk.CTkFrame):
 
         # Groups row
         groups_row = ctk.CTkFrame(self, fg_color="transparent")
-        groups_row.pack(fill="x")
+        if allow_groups:
+            groups_row.pack(fill="x")
         ctk.CTkLabel(
             groups_row, text=t("recipient_picker.groups_label"), width=60, anchor="w"
         ).pack(side="left")
@@ -353,3 +367,5 @@ class RecipientPickerWidget(ctk.CTkFrame):
         self.groups_summary_var.set(
             ", ".join(self._group_labels) if self._group_labels else t("recipient_picker.none")
         )
+        if self._on_change is not None:
+            self._on_change()

@@ -1,3 +1,37 @@
+# Desktop client 1.5.0
+
+**Secrets come to the desktop app: send, request, reveal and answer them in a
+new Secrets tab.**
+
+Requires server **v2.6.1 or newer** (unchanged). The Secrets tab needs server
+**v2.24.0** with secrets switched on by an administrator; without that it is
+simply not shown.
+
+---
+
+## The Secrets tab
+
+- **Received, Sent and Requests:** the secrets sent to you, the ones you sent,
+  and the requests you made or were asked to answer, with search and a filter
+  for active or ended ones.
+- **Reveal:** enter the passphrase if the secret has one (an answer to your
+  own request may also ask for the passphrase you chose when asking).
+  - The secret appears hidden behind dots until you press **Show**.
+  - **Copy** works while it is hidden.
+  - When you leave the page, the text is removed from the window.
+  - A wrong passphrase is shown under the field and does not use up a view.
+- **Your sent secrets:** who it went to, who viewed it and when, your links
+  again, and **Burn now**.
+- **Send a secret / Request a secret:** the same choices as in the web app -
+  people and groups, and email addresses or a link where your administrator
+  allows it, how often and how long it may be read, an optional passphrase.
+  **Generate a password** fills in a random one. A list under the form says
+  what is still missing before you can send.
+- **Answering a request:** type the secret, optionally with a passphrase of
+  your own, and send it. The person who asked is told.
+
+---
+
 # Desktop client 1.4.6
 
 **A server restart no longer signs you out, and the app is built from pinned,

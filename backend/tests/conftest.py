@@ -411,6 +411,41 @@ def _isolate_alert_dedup(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _isolate_encryption_lanes(monkeypatch):
+    """Give services/encryption_lanes a per-test in-memory Redis. Its lock and
+    dirty-mark keys are FIXED names, so against the live Redis one test's lock
+    would make the next one's lane report `busy` - and collide with
+    production's."""
+    from app.services import encryption_lanes
+
+    store: dict[str, str] = {}
+
+    class _Fake:
+        def set(self, key, value, ex=None, nx=False):
+            if nx and key in store:
+                return None
+            store[key] = value
+            return True
+
+        def get(self, key):
+            return store.get(key)
+
+        def getdel(self, key):
+            return store.pop(key, None)
+
+        def expire(self, key, _ttl):
+            return key in store
+
+        def delete(self, *keys):
+            for k in keys:
+                store.pop(k, None)
+
+    monkeypatch.setattr(encryption_lanes, "get_redis", lambda: _Fake())
+    yield store
+    store.clear()
+
+
+@pytest.fixture(autouse=True)
 def _reset_oidc_caches():
     """Discovery + JWKS caches are process-global; reset between tests
     so stale entries from one provider don't bleed into another."""

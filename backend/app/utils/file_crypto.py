@@ -58,6 +58,11 @@ class UnsupportedFormatError(FileCryptoError):
     """The file does not start with a header this code knows."""
 
 
+class EncryptionCancelledError(FileCryptoError):
+    """The caller asked the encryption to stop (worker shutdown). Not a fault
+    of the file: the lanes leave it to the next run instead of giving up."""
+
+
 class _Readable(Protocol):
     def read(self, size: int = -1, /) -> bytes: ...
 
@@ -178,7 +183,7 @@ class EncryptingReader:
             self._tail_checked = True
             return
         if self._cancel is not None and self._cancel.is_set():
-            raise FileCryptoError("encryption cancelled")
+            raise EncryptionCancelledError("encryption cancelled")
         want = _plain_len(self._next, self._size)
         data = _read_exactly(self._src, want)
         if len(data) != want:

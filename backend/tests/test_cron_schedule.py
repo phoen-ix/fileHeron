@@ -24,7 +24,9 @@ def test_registry_covers_all_jobs():
     # `functions`, not `cron_jobs`: the single minute dispatcher enqueues by
     # NAME from the registry (v1.28.0), so a registry entry with no matching
     # worker function is a job that can never run.
-    scheduled = {fn.__name__ for fn in worker.WorkerSettings.functions}
+    # An entry is a coroutine, or arq's `func(...)` wrapper (per-job limits)
+    # carrying its name in `.name`.
+    scheduled = {getattr(fn, "name", None) or fn.__name__ for fn in worker.WorkerSettings.functions}
     assert len(cs.REGISTRY) >= 20
     assert "imap_poll" in cs.REGISTRY and "prune_history" in cs.REGISTRY
     assert "drain_pending_update" in cs.REGISTRY

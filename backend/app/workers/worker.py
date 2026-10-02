@@ -21,6 +21,7 @@ from typing import Any, cast
 
 from arq.connections import RedisSettings
 from arq.cron import cron
+from arq.worker import func
 
 from ..config import settings
 from ..services.release_check import release_check
@@ -38,6 +39,7 @@ from .cleanup_stale_uploads import cleanup_stale_uploads
 from .cron_dispatch import cron_dispatch
 from .disk_check import disk_check
 from .drain_pending_update import drain_pending_update
+from .encrypt_at_rest import encrypt_new_files
 from .expire_files import expire_files
 from .expire_secrets import expire_secrets
 from .imap_poll import imap_poll
@@ -87,6 +89,11 @@ class WorkerSettings:
         expire_secrets,
         cron_dispatch,
         notify_admin_error,
+        # Encryption at rest: one job may walk a queue of 30 GB files, far past
+        # the default timeout. Never retried by arq - a run that died leaves its
+        # files' verdicts recorded, and the next kick or the scan sweep picks
+        # them up; there is no result anyone reads.
+        func(cast("Any", encrypt_new_files), timeout=6 * 3600, max_tries=1, keep_result=0),
     ]
     cron_jobs = [
         # v1.28.0: cadence/enable/disable for every job is admin-editable. A single

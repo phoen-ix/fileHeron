@@ -31,27 +31,30 @@ logger = logging.getLogger("fileheron.workers.av_scan")
 _RETRY_MAX_DEFER_SEC = 300
 
 
-def _notify_recipients_if_ready(db, *, share_id: str | None) -> None:
-    """A file just became downloadable: send whatever recipient mail was waiting
-    for that - the share's announcement or an owed "files added" notice
-    (v2.23.0, `share.notify_if_downloadable`). The minute sweep is the fallback.
-    Never raises: the verdict is already committed, and a mail that fails here is
-    sent by the sweep instead."""
-    if not share_id:
-        return
-    try:
-        from ..services import share as share_svc
+async def _release(db, *, file: File, verdict: str) -> str:
+    """Release `file` under `verdict` and commit: "released", or "held" - with
+    encryption at rest on, the verdict is recorded for the release lane
+    (services/encryption_lanes), which encrypts the file and THEN releases it,
+    so it is never downloadable as plaintext - or "superseded" when the row
+    left `ready_unscanned` mid-scan (share expiry committed `deleted` and freed
+    the bytes) and nothing changed. Both arms are conditional UPDATEs."""
+    from ..services import encryption_lanes, file_encryption
 
-        # Commit either way: a False return has written nothing, and a
-        # rollback would expire every object the session holds for no reason.
-        share_svc.notify_if_downloadable(db, share_id)
+    if file_encryption.is_enabled(db):
+        if not encryption_lanes.hold_for_encryption(db, file, verdict):
+            db.rollback()
+            return "superseded"
         db.commit()
-    except Exception:
+        await encryption_lanes.kick_release_lane()
+        return "held"
+    if not av_release.apply_verdict(db, file, verdict):
         db.rollback()
-        logger.exception("av_scan: recipient notice for share %s failed", share_id)
+        return "superseded"
+    db.commit()
+    return "released"
 
 
-def _release_unscanned(db, *, file_id: str, file: File, reason: str) -> dict:
+async def _release_unscanned(db, *, file_id: str, file: File, reason: str) -> dict:
     """Release a file without a trusted verdict: `clean` state,
     `av_unscanned = True`, and a durable audit row saying which threshold did it.
 
@@ -75,21 +78,22 @@ def _release_unscanned(db, *, file_id: str, file: File, reason: str) -> dict:
     was never going to happen."""
     # Conditional flip + the audit row, one transaction (services/av_release):
     # share expiry may have committed `deleted` and freed the bytes meanwhile.
-    if not av_release.apply_verdict(db, file, av_release.unscanned(reason)):
-        db.rollback()
+    share_id = file.share_id
+    outcome = await _release(db, file=file, verdict=av_release.unscanned(reason))
+    if outcome == "superseded":
         logger.info(
             "av_scan: %s left ready_unscanned mid-scan; not releasing", file_id
         )
         return {"file_id": file_id, "state": "superseded"}
-    share_id = file.share_id
-    db.commit()
+    if outcome == "held":
+        return {"file_id": file_id, "state": "awaiting_encryption", "av_unscanned": True}
     logger.warning(
         "av_scan: %s (%d bytes) released as UNSCANNED, not clean - %s",
         file_id,
         file.size_bytes or 0,
         reason,
     )
-    _notify_recipients_if_ready(db, share_id=share_id)
+    av_release.notify_recipients_if_ready(db, share_id=share_id)
     return {
         "file_id": file_id,
         "state": "clean",
@@ -114,6 +118,14 @@ async def av_scan_file(_ctx, file_id: str) -> dict:
                 file.state.value,
             )
             return {"file_id": file_id, "state": file.state.value, "skipped": True}
+        if file.release_verdict is not None:
+            # Scanned already: the verdict waits for the encryption release lane.
+            # The stale-upload sweep re-enqueues a file that sat here too long
+            # (a lane run killed by a restart) - kick the lane, never rescan.
+            from ..services import encryption_lanes
+
+            await encryption_lanes.kick_release_lane()
+            return {"file_id": file_id, "state": "awaiting_encryption"}
         if not file.storage_path:
             logger.warning("av_scan: file %s has no storage_path", file_id)
             return {"file_id": file_id, "state": "no_path"}
@@ -156,7 +168,7 @@ async def av_scan_file(_ctx, file_id: str) -> dict:
         # - which is exactly the case where clamd was never going to produce a
         # verdict anyway. Do not relax either check without revisiting this.
         if (file.size_bytes or 0) > CLAMD_MAX_FILE_SIZE and not settings.AV_SKIP:
-            return _release_unscanned(
+            return await _release_unscanned(
                 db, file_id=file_id, file=file, reason="exceeds_clamd_max_file_size"
             )
         # Both scan paths are BLOCKING socket I/O, and this is an `async def`
@@ -207,7 +219,7 @@ async def av_scan_file(_ctx, file_id: str) -> dict:
                 (file.size_bytes or 0) > settings.AV_MAX_SCAN_BYTES
                 and not settings.AV_SKIP
             ):
-                return _release_unscanned(
+                return await _release_unscanned(
                     db,
                     file_id=file_id,
                     file=file,
@@ -216,17 +228,19 @@ async def av_scan_file(_ctx, file_id: str) -> dict:
             # Conditional flip (services/av_release): a slow scan can run while
             # share expiry commits `deleted` (bytes gone), and marking clean then
             # would resurrect a deleted file whose bytes no longer exist.
-            if not av_release.apply_verdict(db, file, av_release.VERDICT_CLEAN):
-                db.rollback()
+            share_id = file.share_id
+            outcome = await _release(db, file=file, verdict=av_release.VERDICT_CLEAN)
+            if outcome == "superseded":
                 logger.info(
                     "av_scan: %s left ready_unscanned mid-scan; not marking clean",
                     file_id,
                 )
                 return {"file_id": file_id, "state": "superseded"}
-            share_id = file.share_id
-            db.commit()
+            if outcome == "held":
+                logger.info("av_scan: %s clean; held for encryption", file_id)
+                return {"file_id": file_id, "state": "awaiting_encryption"}
             logger.info("av_scan: %s clean", file_id)
-            _notify_recipients_if_ready(db, share_id=share_id)
+            av_release.notify_recipients_if_ready(db, share_id=share_id)
             return {"file_id": file_id, "state": "clean"}
 
         if result.state == "infected":

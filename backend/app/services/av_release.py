@@ -14,6 +14,7 @@ plaintext. Never commits - the caller does, and then notifies.
 """
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from sqlalchemy import update
@@ -24,6 +25,8 @@ from ..models.audit_log import AuditEventType
 from ..models.file import File, FileState
 from ..utils.dbresult import updated_rows
 from .audit import record_audit_event
+
+logger = logging.getLogger("fileheron.av_release")
 
 VERDICT_CLEAN = "clean"
 _UNSCANNED_PREFIX = "unscanned:"
@@ -69,3 +72,23 @@ def apply_verdict(
             },
         )
     return True
+
+
+def notify_recipients_if_ready(db: Session, *, share_id: str | None) -> None:
+    """A file just became downloadable: send whatever recipient mail was waiting
+    for that - the share's announcement or an owed "files added" notice
+    (v2.23.0, `share.notify_if_downloadable`). The minute sweep is the fallback.
+    Never raises: the release is already committed, and a mail that fails here
+    is sent by the sweep instead."""
+    if not share_id:
+        return
+    try:
+        from . import share as share_svc
+
+        # Commit either way: a False return has written nothing, and a
+        # rollback would expire every object the session holds for no reason.
+        share_svc.notify_if_downloadable(db, share_id)
+        db.commit()
+    except Exception:
+        db.rollback()
+        logger.exception("recipient notice for share %s failed", share_id)

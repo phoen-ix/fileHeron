@@ -201,10 +201,16 @@ def test_the_mid_scan_guard_reads_the_committed_row():
     # The clean branch was always safe: a conditional UPDATE reads the latest
     # committed row by definition. It lives in services/av_release now, the one
     # flip both verdicts (and the encryption release lane) go through.
-    from app.services import av_release
+    from app.services import av_release, encryption_lanes
 
-    assert "av_release.apply_verdict(" in clean_branch
+    assert "await _release(" in clean_branch
+    release_src = inspect.getsource(av_scan._release)
+    assert "av_release.apply_verdict(" in release_src
+    assert "encryption_lanes.hold_for_encryption(" in release_src
     assert "File.state == FileState.ready_unscanned" in inspect.getsource(av_release.apply_verdict)
+    assert "File.state == FileState.ready_unscanned" in inspect.getsource(
+        encryption_lanes.hold_for_encryption
+    )
     # The infected branch read the state with a plain SELECT, which under
     # REPEATABLE READ answers from the snapshot this transaction opened before
     # the scan started - so the guard could not fire at all.

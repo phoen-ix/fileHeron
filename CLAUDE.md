@@ -654,7 +654,9 @@ other=replace. Settings-change audits record counts/keys only (never values).
 
 Policy-gate pattern (mode ∈ everyone/employees_admins/admins_only + additive
 user/group allowlists; admin always passes): `api_token.*`, `public_link.*`,
-`share_approval.*`. **The registry** (`services/settings_registry.py::TUNABLES`) -
+`share_approval.*`. The SPA renders that block once, `components/admin/PolicyGate.vue`
+(labels arrive translated - the pages word it differently; the Secrets gates share its
+`usePolicyAllowlist` composable), and `PolicyPages.test.ts` snapshots each page's markup. **The registry** (`services/settings_registry.py::TUNABLES`) -
 each entry overlays a `config.Settings` env default, clamped, read live via
 `effective(db,key)` (no boot cache). **One writer**: `PUT /api/admin/settings/advanced`.
 **Many surfaces**: the frontend's `config/adminTunablePlacement.ts` says which

@@ -76,16 +76,14 @@
 </template>
 
 <script setup lang="ts">
-  import { onBeforeUnmount, ref, watch } from 'vue'
   import { useI18n } from 'vue-i18n'
 
-  import { searchUsers } from '@/api/users'
+  import { toggledGroups, usePolicyAllowlist } from '@/composables/usePolicyAllowlist'
   import type {
     GroupResponse,
     SecretAllowedGroup,
     SecretAllowedUser,
     SecretPolicyMode,
-    UserSearchItem,
   } from '@/types/api'
 
   interface PolicySideModel {
@@ -109,10 +107,6 @@
   const emit = defineEmits<{ 'update:modelValue': [value: PolicySideModel] }>()
   const { t } = useI18n()
 
-  const query = ref('')
-  const suggestions = ref<UserSearchItem[]>([])
-  let timer: ReturnType<typeof setTimeout> | null = null
-
   function modeHelp(opt: SecretPolicyMode): string {
     if (!props.outside) return t(`admin_settings_secrets.mode.${opt}_help`)
     return opt === 'admins_only'
@@ -133,51 +127,16 @@
     emit('update:modelValue', { ...props.modelValue, ...patch })
   }
 
-  watch(query, (q) => {
-    if (timer) clearTimeout(timer)
-    if (!q || q.length < 2) {
-      suggestions.value = []
-      return
-    }
-    timer = setTimeout(async () => {
-      try {
-        const { data } = await searchUsers(q)
-        suggestions.value = data.items.filter(
-          (u) =>
-            !props.modelValue.users.some((x) => x.id === u.user_id) &&
-            !(props.outside && u.role === 'client'),
-        )
-      } catch {
-        suggestions.value = []
-      }
-    }, 200)
+  // The out-of-the-organisation gate never offers a client: no mode or
+  // allowlist entry lets one send outside.
+  const { query, suggestions, addUser, removeUser } = usePolicyAllowlist({
+    users: () => props.modelValue.users,
+    setUsers: (users) => update({ users }),
+    exclude: (u) => !!props.outside && u.role === 'client',
   })
-  onBeforeUnmount(() => {
-    if (timer) clearTimeout(timer)
-  })
-
-  function addUser(u: UserSearchItem) {
-    update({
-      users: [
-        ...props.modelValue.users,
-        { id: u.user_id, display_name: u.display_name, email: u.email, role: u.role },
-      ],
-    })
-    query.value = ''
-    suggestions.value = []
-  }
-
-  function removeUser(id: number) {
-    update({ users: props.modelValue.users.filter((u) => u.id !== id) })
-  }
 
   function toggleGroup(g: GroupResponse) {
-    const on = props.modelValue.groups.some((x) => x.id === g.id)
-    update({
-      groups: on
-        ? props.modelValue.groups.filter((x) => x.id !== g.id)
-        : [...props.modelValue.groups, { id: g.id, name: g.name }],
-    })
+    update({ groups: toggledGroups(props.modelValue.groups, g) })
   }
 </script>
 

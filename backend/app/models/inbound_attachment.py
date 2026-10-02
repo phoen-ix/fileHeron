@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 
 import enum
 
-from sqlalchemy import BigInteger, ForeignKey, Integer, String
+from sqlalchemy import BigInteger, ForeignKey, Integer, SmallInteger, String
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -46,6 +46,9 @@ class InboundAttachment(Base):
         SAEnum(AttachmentAVState, native_enum=False, length=10),
         nullable=False, default=AttachmentAVState.pending,
     )
+    # Encryption at rest, as on `files`: NULL = plaintext at storage_key.
+    enc_version: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
+    key_encrypted: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     message: Mapped[InboundMessage] = relationship(
         "InboundMessage", back_populates="attachments"

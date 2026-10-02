@@ -50,6 +50,7 @@ from .secret_request import (
 from .share import Share, ShareKind, ShareState
 from .share_external_recipient import ShareExternalRecipient
 from .share_recipient import ShareRecipient
+from .storage_purge import StoragePurge
 from .user import Locale, User, UserRole
 from .user_notification_preference import (
     NotificationChannel,
@@ -119,6 +120,7 @@ __all__ = [
     "ShareKind",
     "ShareExternalRecipient",
     "ShareRecipient",
+    "StoragePurge",
     "ShareState",
     "User",
     "UserNotificationPreference",

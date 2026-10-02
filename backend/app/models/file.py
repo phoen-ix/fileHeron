@@ -27,7 +27,7 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Index, Integer, String
+from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Index, Integer, SmallInteger, String
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -77,6 +77,8 @@ class File(Base):
         # Per-user storage sum (quota display + reconcile) filters on
         # (uploaded_by_id, state).
         Index("ix_files_uploader_state", "uploaded_by_id", "state"),
+        # The encryption lanes select by (enc_version IS NULL, state).
+        Index("ix_files_enc_state", "enc_version", "state"),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_uuid)
@@ -136,6 +138,20 @@ class File(Base):
 
     # Set during the upload, cleared after post-finish move.
     tus_upload_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+
+    # Encryption at rest (services/file_encryption.py). `enc_version` NULL means
+    # the bytes at storage_path are PLAINTEXT - every pre-existing row, and every
+    # row on an instance that never switches encryption on - and every reader
+    # takes today's path for it. Otherwise it names the utils/file_crypto
+    # format, and `key_encrypted` holds the file's data key wrapped by the
+    # instance key with this row's id bound inside.
+    enc_version: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
+    key_encrypted: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # The AV verdict while the file waits to be encrypted ("clean", or
+    # "unscanned:<reason>"): with encryption on, a scanned file stays
+    # ready_unscanned - still answering 425 - until its ciphertext is in place,
+    # and only then flips. NULL otherwise.
+    release_verdict: Mapped[str | None] = mapped_column(String(48), nullable=True)
 
     share: Mapped[Share] = relationship("Share", back_populates="files")
     uploaded_by: Mapped[User] = relationship("User", foreign_keys=[uploaded_by_id])

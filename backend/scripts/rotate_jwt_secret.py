@@ -11,11 +11,14 @@ JWT_SECRET is the seed for the HKDF-derived Fernet key that protects:
 - ``secrets.key_encrypted``           (each secret's wrapped content key)
 - ``secret_recipients.token_encrypted``  (secret links, re-viewable by the sender)
 - ``secret_request_targets.token_encrypted``  (secret request links, for the requester)
+- ``files.key_encrypted`` / ``inbound_attachments.key_encrypted``  (the data key of
+  each file encrypted at rest - re-wrapped only; the file's bytes are untouched)
 
 If you rotate JWT_SECRET without this script, all of the above become
 unreadable - TOTP-enrolled users lock out, OIDC SSO breaks, the SMTP
 password disappears, admins can't re-view public-link URLs, every
-webhook delivery fails to sign, and every unread secret is lost.
+webhook delivery fails to sign, every unread secret is lost, and every
+file encrypted at rest becomes unreadable.
 
 ``secrets.key_encrypted`` is re-wrapped at its OUTER layer only. A secret
 sent with a passphrase has a second layer underneath, keyed by that
@@ -96,6 +99,8 @@ from cryptography.hazmat.primitives.kdf.hkdf import HKDF  # noqa: E402
 
 from app.database import SessionLocal  # noqa: E402
 from app.models.app_setting import AppSetting  # noqa: E402
+from app.models.file import File  # noqa: E402
+from app.models.inbound_attachment import InboundAttachment  # noqa: E402
 from app.models.oidc_provider import OIDCProvider  # noqa: E402
 from app.models.public_link import PublicLink  # noqa: E402
 from app.models.secret import Secret, SecretRecipient  # noqa: E402
@@ -285,6 +290,26 @@ def main() -> int:
             db.query(SecretRequestTarget).all(),
             lambda r: r.token_encrypted,
             lambda r, v: setattr(r, "token_encrypted", v),
+            is_bytes=False, old=old_f, new=new_f,
+        )
+        total_errors += s.errors
+
+        # 9-10. Data keys of files encrypted at rest (str column, NULL for every
+        # plaintext file). Re-wrapping is all rotation needs: the key inside is
+        # unchanged, so no file byte is rewritten.
+        s = rotate_table(
+            db, "files.key_encrypted",
+            db.query(File).filter(File.key_encrypted.isnot(None)).all(),
+            lambda r: r.key_encrypted,
+            lambda r, v: setattr(r, "key_encrypted", v),
+            is_bytes=False, old=old_f, new=new_f,
+        )
+        total_errors += s.errors
+        s = rotate_table(
+            db, "inbound_attachments.key_encrypted",
+            db.query(InboundAttachment).filter(InboundAttachment.key_encrypted.isnot(None)).all(),
+            lambda r: r.key_encrypted,
+            lambda r, v: setattr(r, "key_encrypted", v),
             is_bytes=False, old=old_f, new=new_f,
         )
         total_errors += s.errors

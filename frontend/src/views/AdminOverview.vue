@@ -119,6 +119,30 @@
       </div>
     </section>
 
+    <section class="ov-section" aria-labelledby="ov-changes-h">
+      <h2 id="ov-changes-h" class="ov-h2">{{ t('admin_overview.changes_heading') }}</h2>
+      <p v-if="changes === undefined" class="ov-changes-note">…</p>
+      <p v-else-if="changes === null" class="ov-changes-note">
+        {{ t('admin_overview.unavailable') }}
+      </p>
+      <p v-else-if="!changes.length" class="ov-changes-note">
+        {{ t('admin_overview.changes_empty') }}
+      </p>
+      <ul v-else class="ov-changes" data-testid="ov-changes">
+        <li v-for="c in changes" :key="c.row.id" class="ov-change">
+          <span class="ov-change-when">{{ formatDate(c.row.created_at) }}</span>
+          <span class="ov-change-who">{{ actorLabel(c.row) }}</span>
+          <RouterLink :to="{ name: c.link.routeName, hash: c.link.hash }" class="ov-change-where">
+            {{ c.crumb }}
+          </RouterLink>
+          <span v-if="c.detail" class="ov-change-detail">{{ c.detail }}</span>
+        </li>
+      </ul>
+      <RouterLink :to="{ name: 'admin-audit' }" class="ov-changes-all">
+        {{ t('admin_overview.changes_all') }}
+      </RouterLink>
+    </section>
+
     <section class="ov-section" aria-labelledby="ov-pages-h">
       <h2 id="ov-pages-h" class="ov-h2">{{ t('admin_overview.pages_heading') }}</h2>
       <div class="ov-cats">
@@ -148,13 +172,21 @@
     getInboxUnreadCount,
     getSystemStatus,
     listIpBlocks,
+    listSettingsChanges,
     type SystemStatusResponse,
   } from '@/api/admin'
   import { listPendingApprovals } from '@/api/shares'
   import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
+  import { useSiteDateFormat } from '@/composables/useSiteDateFormat'
   import { ADMIN_NAV, findNavItem } from '@/config/adminNav'
   import { ADMIN_SEARCH_INDEX } from '@/config/adminSearchIndex'
+  import {
+    type SettingsChangeLink,
+    settingsChangeDetail,
+    settingsChangeLink,
+  } from '@/config/adminSettingsChanges'
   import { useAuthStore } from '@/stores/auth'
+  import type { AdminAuditRow } from '@/types/api'
 
   const { t } = useI18n()
   const router = useRouter()
@@ -246,7 +278,45 @@
     ]
   })
 
+  /* ---- recently changed settings ----------------------------------------- */
+
+  const { formatDate } = useSiteDateFormat()
+
+  interface Change {
+    row: AdminAuditRow
+    link: SettingsChangeLink
+    crumb: string
+    detail: string | null
+  }
+
+  /** undefined = loading, null = the request failed. Loads on its own, like a
+   * tile: a failure blanks this section and nothing else. */
+  const changes = ref<Change[] | null | undefined>(undefined)
+
+  function actorLabel(row: AdminAuditRow): string {
+    if (row.actor_user_id === null) return t('admin_overview.changes_system')
+    return row.actor_display_name ?? t('admin_audit.actor_deleted')
+  }
+
+  async function loadChanges() {
+    try {
+      const { data } = await listSettingsChanges(8)
+      changes.value = data.items.map((row) => {
+        const link = settingsChangeLink(row)
+        return {
+          row,
+          link,
+          crumb: crumbFor(link.routeName) || link.routeName,
+          detail: settingsChangeDetail(row),
+        }
+      })
+    } catch {
+      changes.value = null
+    }
+  }
+
   onMounted(() => {
+    void loadChanges()
     void loadTile('inbox', async () => (await getInboxUnreadCount()).data.unread)
     void loadTile(
       'quarantine',
@@ -538,6 +608,44 @@
 
   .ov-health-sub {
     color: var(--fh-subtle);
+  }
+
+  .ov-changes {
+    list-style: none;
+    margin: 0 0 var(--fh-space-2);
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--fh-space-1);
+  }
+
+  .ov-change {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--fh-space-1) var(--fh-space-3);
+    padding: var(--fh-space-1) 0;
+    border-bottom: 1px solid var(--fh-hairline);
+  }
+
+  .ov-change-when,
+  .ov-change-detail {
+    font-family: var(--fh-font-mono);
+    font-size: var(--fh-text-mono-sm);
+    color: var(--fh-subtle);
+  }
+
+  .ov-change-detail {
+    overflow-wrap: anywhere;
+  }
+
+  .ov-changes-note {
+    color: var(--fh-subtle);
+    margin: 0 0 var(--fh-space-2);
+  }
+
+  .ov-changes-all {
+    font-size: var(--fh-text-body-sm);
   }
 
   .dot {

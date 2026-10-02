@@ -2953,6 +2953,10 @@
     "check_redis": "Redis",
     "check_av": "Antivirus",
     "unavailable": "unavailable",
+    "changes_heading": "Recently changed settings",
+    "changes_empty": "No settings have been changed yet.",
+    "changes_system": "system",
+    "changes_all": "Full audit log",
     "pages_heading": "All pages"
   },
   "admin_sessions_policy": {

@@ -13,6 +13,7 @@ vi.mock('@/api/admin', () => ({
   getInboxUnreadCount: vi.fn(() => new Promise(() => {})),
   getSystemStatus: vi.fn(() => new Promise(() => {})),
   listIpBlocks: vi.fn(() => new Promise(() => {})),
+  listSettingsChanges: vi.fn(() => new Promise(() => {})),
 }))
 vi.mock('@/api/shares', () => ({ listPendingApprovals: vi.fn(() => new Promise(() => {})) }))
 const push = vi.fn()

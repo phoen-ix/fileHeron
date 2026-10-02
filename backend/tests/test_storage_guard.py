@@ -74,8 +74,6 @@ async def test_disk_check_flips_flag_and_alerts(db, make_user, monkeypatch):
         storage_svc, "get_disk_stats",
         lambda _p: {"total_bytes": 100, "free_bytes": 1, "used_bytes": 99, "percent_free": 1.0},
     )
-    # Make the dedup check fail-open fast (no Redis in the sandbox).
-    monkeypatch.setattr(disk_check_mod, "get_redis", lambda: (_ for _ in ()).throw(RuntimeError()))
 
     result = await disk_check_mod.disk_check(None)
     assert result["is_critical"] is True
@@ -103,7 +101,6 @@ async def test_disk_check_recovers_flag(db, make_user, monkeypatch):
         storage_svc, "get_disk_stats",
         lambda _p: {"total_bytes": 10**15, "free_bytes": 5 * 10**14, "used_bytes": 0, "percent_free": 50.0},
     )
-    monkeypatch.setattr(disk_check_mod, "get_redis", lambda: (_ for _ in ()).throw(RuntimeError()))
 
     result = await disk_check_mod.disk_check(None)
     assert result["is_critical"] is False

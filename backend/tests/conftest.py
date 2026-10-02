@@ -357,6 +357,41 @@ def _isolated_transfer_marks(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _isolate_alert_dedup(monkeypatch):
+    """Give services/alert_dedup a per-test in-memory Redis and a fresh
+    in-process record.
+
+    Its keys are FIXED names (`fh:ops:alert:storage_critical_low`,
+    `fh:ops:alert:cron_failed:<job>`, ...), and the suite runs inside the
+    compose network - so a bare `get_redis()` wrote them into the LIVE Redis,
+    where an armed key both silenced the next test's alert and collided with
+    production (measured: `fh:ops:alert:cron_failed:test_job_failure` left on
+    the reference instance). The in-process fallback is module state and would
+    leak between tests just the same. A test about the Redis-down path patches
+    `alert_dedup.get_redis` to raise."""
+    from app.services import alert_dedup
+
+    store: dict[str, str] = {}
+
+    class _Fake:
+        def set(self, key, value, ex=None, nx=False):
+            if nx and key in store:
+                return None
+            store[key] = value
+            return True
+
+        def delete(self, *keys):
+            for k in keys:
+                store.pop(k, None)
+
+    monkeypatch.setattr(alert_dedup, "get_redis", lambda: _Fake())
+    alert_dedup._reset_local()
+    yield
+    store.clear()
+    alert_dedup._reset_local()
+
+
+@pytest.fixture(autouse=True)
 def _reset_oidc_caches():
     """Discovery + JWKS caches are process-global; reset between tests
     so stale entries from one provider don't bleed into another."""

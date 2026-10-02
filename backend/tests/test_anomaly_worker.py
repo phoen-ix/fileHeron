@@ -15,11 +15,11 @@ class _FakeRedis:
     def __init__(self):
         self.store: dict[str, str] = {}
 
-    def exists(self, k):
-        return k in self.store
-
-    def set(self, k, v, ex=None):
+    def set(self, k, v, ex=None, nx=False):
+        if nx and k in self.store:
+            return None
         self.store[k] = v
+        return True
 
 
 def _real_user(db, user_id):
@@ -97,9 +97,10 @@ def _seed_mass_download(db, user_id, n=5):
 
 @pytest.mark.asyncio
 async def test_anomaly_check_flags_and_alerts(db, make_user, monkeypatch):
+    from app.services import alert_dedup
     from app.workers import anomaly_check as ac
 
-    monkeypatch.setattr(ac, "get_redis", lambda: (_ for _ in ()).throw(RuntimeError()))
+    monkeypatch.setattr(alert_dedup, "get_redis", lambda: (_ for _ in ()).throw(RuntimeError()))
     admin = make_user(email="admin@test.local", role=UserRole.admin)
     user = make_user(email="u@test.local", role=UserRole.client)
     ssvc.set_value(db, key=ssvc.Keys.ANOMALY_MASS_DOWNLOAD_THRESHOLD, value="3", actor=None)
@@ -120,7 +121,9 @@ async def test_anomaly_check_dedups_within_window(db, make_user, monkeypatch):
     from app.workers import anomaly_check as ac
 
     fake = _FakeRedis()
-    monkeypatch.setattr(ac, "get_redis", lambda: fake)
+    from app.services import alert_dedup
+
+    monkeypatch.setattr(alert_dedup, "get_redis", lambda: fake)
     make_user(email="admin@test.local", role=UserRole.admin)
     user = make_user(email="u@test.local", role=UserRole.client)
     ssvc.set_value(db, key=ssvc.Keys.ANOMALY_MASS_DOWNLOAD_THRESHOLD, value="3", actor=None)

@@ -73,11 +73,6 @@ async def test_the_local_backend_still_takes_the_real_path(db, monkeypatch):
                 "percent_free": 99.0}
 
     monkeypatch.setattr(disk_check_mod.storage_svc, "get_disk_stats", _stats)
-    # Same trick the existing disk_check tests use: make the dedup check
-    # fail-open fast, since there is no Redis in this harness.
-    monkeypatch.setattr(
-        disk_check_mod, "get_redis", lambda: (_ for _ in ()).throw(RuntimeError())
-    )
     out = await disk_check_mod.disk_check(None)
     assert reached, "the local path never reached get_disk_stats"
     assert out.get("skipped") is not True

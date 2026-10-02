@@ -38,8 +38,8 @@ from ..models.audit_log import AuditEventType
 from ..models.cron_run import CronRun, CronRunStatus
 from ..models.notification import NotificationCategory
 from ..models.user import User, UserRole
-from ..redis_client import get_redis
 from ..utils.timeutil import utc_now
+from . import alert_dedup
 from . import sse as sse_svc
 from .audit import record_audit_event
 from .notification import dispatch
@@ -124,15 +124,8 @@ def _prune_old_runs(db: Session, job_name: str) -> None:
 
 def _maybe_alert_admins(db: Session, job_name: str, error_msg: str) -> None:
     """Dispatch ops_alert to admins, de-duplicated per job in a 1h window."""
-    try:
-        redis = get_redis()
-        key = f"fh:ops:alert:cron_failed:{job_name}"
-        if redis.exists(key):
-            return
-        redis.set(key, "1", ex=_DEDUP_TTL_SEC)
-    except Exception:
-        # Redis-down: dispatch anyway. Better noisy than silent.
-        logger.warning("ops dedup check skipped (redis): %s", job_name, exc_info=True)
+    if alert_dedup.seen_recently(f"fh:ops:alert:cron_failed:{job_name}", _DEDUP_TTL_SEC):
+        return
 
     admins = (
         db.query(User)

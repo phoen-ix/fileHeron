@@ -5,7 +5,7 @@ Reads free space on STORAGE_ROOT and maintains the `storage.critical_low` kv
 flag that routers/uploads.py gates new uploads on:
 
 - On transition healthy → critical: flip the flag to true + dispatch an
-  `ops_alert` to every non-disabled admin (deduped 1h via Redis).
+  `ops_alert` to every non-disabled admin (deduped 1h, services/alert_dedup).
 - On transition critical → healthy: flip the flag back to false + clear the
   dedup key so a future dip re-alerts immediately.
 
@@ -20,7 +20,7 @@ from ..config import settings
 from ..database import SessionLocal
 from ..models.notification import NotificationCategory
 from ..models.user import User, UserRole
-from ..redis_client import get_redis
+from ..services import alert_dedup
 from ..services import settings as settings_svc
 from ..services import storage as storage_svc
 from ..services.cron_tracker import track_cron
@@ -34,23 +34,12 @@ _DEDUP_TTL_SEC = 3600
 
 
 def _dedup_seen() -> bool:
-    """True if we've already alerted within the dedup window. Best-effort:
-    Redis down → False (better noisy than silent)."""
-    try:
-        redis = get_redis()
-        if redis.exists(_DEDUP_KEY):
-            return True
-        redis.set(_DEDUP_KEY, "1", ex=_DEDUP_TTL_SEC)
-        return False
-    except Exception:
-        return False
+    """True if we've already alerted within the dedup window."""
+    return alert_dedup.seen_recently(_DEDUP_KEY, _DEDUP_TTL_SEC)
 
 
 def _clear_dedup() -> None:
-    try:
-        get_redis().delete(_DEDUP_KEY)
-    except Exception:
-        pass
+    alert_dedup.forget(_DEDUP_KEY)
 
 
 def _alert_admins(db, *, payload: dict) -> int:

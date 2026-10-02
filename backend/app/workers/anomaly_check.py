@@ -18,7 +18,7 @@ from ..database import SessionLocal
 from ..models.audit_log import AuditEventType
 from ..models.notification import NotificationCategory
 from ..models.user import User, UserRole
-from ..redis_client import get_redis
+from ..services import alert_dedup
 from ..services import anomaly as anomaly_svc
 from ..services import cron_schedule as cron_sched
 from ..services import settings as settings_svc
@@ -42,17 +42,10 @@ _WINDOW_OVERLAP_MIN = 5
 
 
 def _dedup_seen(finding) -> bool:
-    """True if this (type, subject) was already alerted in the dedup window.
-    Best-effort: Redis down → False (better noisy than silent)."""
-    try:
-        redis = get_redis()
-        key = f"fh:anomaly:{finding.type}:{finding.subject}"
-        if redis.exists(key):
-            return True
-        redis.set(key, "1", ex=_DEDUP_TTL_SEC)
-        return False
-    except Exception:
-        return False
+    """True if this (type, subject) was already alerted in the dedup window."""
+    return alert_dedup.seen_recently(
+        f"fh:anomaly:{finding.type}:{finding.subject}", _DEDUP_TTL_SEC
+    )
 
 
 def _alert_admins(db, finding) -> None:

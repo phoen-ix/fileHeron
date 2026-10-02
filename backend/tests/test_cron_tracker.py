@@ -8,33 +8,6 @@ from app.models.cron_run import CronRun, CronRunStatus
 from app.services.cron_tracker import CRON_FAILED_KEY, track_cron
 
 
-@pytest.fixture(autouse=True)
-def _isolate_ops_alert_redis(monkeypatch):
-    """Keep every test in this file off the deployment's Redis.
-
-    `docker compose run` joins the compose network, so the bare `get_redis()` in
-    `_maybe_alert_admins` reaches the LIVE instance, and its dedup key is a
-    FIXED name (`fh:ops:alert:cron_failed:<job_name>`) - the sharp case, because
-    a fixed key collides with production every time a hashed one would not.
-    Measured: a run left `fh:ops:alert:cron_failed:test_job_failure` in the
-    reference instance's Redis. Same class of hazard as the scan-guard
-    watchlist (`test_admin_scan_guard.py`) and as tests writing into production
-    file storage.
-
-    Patched where the name is BOUND: `cron_tracker` does
-    `from ..redis_client import get_redis`, so patching `app.redis_client`
-    would not reach it.
-    """
-
-    class _Inert:
-        def __getattr__(self, _name):
-            def _noop(*_a, **_kw):
-                return None
-            return _noop
-
-    monkeypatch.setattr("app.services.cron_tracker.get_redis", lambda: _Inert())
-
-
 @pytest.mark.asyncio
 async def test_track_cron_records_success(db):
     @track_cron("test_job_success")

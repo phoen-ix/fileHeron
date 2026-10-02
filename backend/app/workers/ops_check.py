@@ -30,6 +30,7 @@ from ..models.cron_run import CronRun, CronRunStatus
 from ..models.notification import NotificationCategory
 from ..models.user import User, UserRole
 from ..redis_client import get_redis
+from ..services import alert_dedup
 from ..services.cron_tracker import track_cron
 from ..services.notification import dispatch
 from ..utils.timeutil import utc_now
@@ -49,17 +50,10 @@ _CRON_FAILURE_THRESHOLD = 3
 
 
 def _dedup_seen(reason: str) -> bool:
-    """Return True if we've already dispatched this reason in the dedup
-    window. Best-effort: if Redis is down, return False (better noisy)."""
-    try:
-        redis = get_redis()
-        key = f"fh:ops:alert:{reason}"
-        if redis.exists(key):
-            return True
-        redis.set(key, "1", ex=_DEDUP_TTL_SEC)
-        return False
-    except Exception:
-        return False
+    """True if we've already dispatched this reason in the dedup window. With
+    Redis down the in-process record answers, so `redis_unhealthy` itself goes
+    out once per window rather than on every run."""
+    return alert_dedup.seen_recently(f"fh:ops:alert:{reason}", _DEDUP_TTL_SEC)
 
 
 def _alert_admins(db, *, reason: str, detail: str) -> int:

@@ -16,6 +16,7 @@ export const SETTINGS_TARGET_ROUTES: Readonly<Record<string, string>> = {
   branding_logo: 'admin-settings-branding',
   legal: 'admin-settings-legal',
   email_change: 'admin-settings-email-change',
+  encryption: 'admin-settings-encryption',
   error_alerts: 'admin-settings-error-alerts',
   file_preview: 'admin-settings-transfers',
   share_defaults: 'admin-settings-transfers',

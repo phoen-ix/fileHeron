@@ -157,6 +157,47 @@ export function updateAutoUpdateSettings(payload: UpdateAutoUpdateSettingsReques
   return api.put<AutoUpdateSettingsResponse>('/admin/settings/auto-update', payload)
 }
 
+// --- Encryption at rest --------------------------------------------------
+// Both directions need the admin's password; turning it on also needs the
+// key-custody acknowledgement (backups restore encrypted files only with the
+// instance's .env).
+
+export interface EncryptionFileCounts {
+  encrypted: number
+  plaintext: number
+  plaintext_bytes: number
+  awaiting_encryption: number
+}
+
+export interface EncryptionAttachmentCounts {
+  encrypted: number
+  plaintext: number
+}
+
+export interface EncryptionSettingsResponse {
+  enabled: boolean
+  backend: string
+  files: EncryptionFileCounts
+  inbound_attachments: EncryptionAttachmentCounts
+  pending_purges: number
+  failed_purges: number
+  last_run: Record<string, unknown> | null
+}
+
+export interface UpdateEncryptionSettingsRequest {
+  enabled: boolean
+  acknowledge_key_custody?: boolean
+  password?: string
+}
+
+export function getEncryptionSettings() {
+  return api.get<EncryptionSettingsResponse>('/admin/settings/encryption')
+}
+
+export function updateEncryptionSettings(payload: UpdateEncryptionSettingsRequest) {
+  return api.put<EncryptionSettingsResponse>('/admin/settings/encryption', payload)
+}
+
 // --- Advanced (registry-driven) settings ---
 
 export type AdvancedSettingKind = 'int' | 'bool' | 'str'

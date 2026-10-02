@@ -236,6 +236,11 @@ export const ADMIN_NAV: AdminNavCategory[] = [
         labelKey: 'admin.nav.anomaly',
         matchNames: ['admin-settings-anomaly'],
       },
+      {
+        routeName: 'admin-settings-encryption',
+        labelKey: 'admin.nav.encryption',
+        matchNames: ['admin-settings-encryption'],
+      },
       { routeName: 'admin-audit', labelKey: 'admin.nav.audit', matchNames: ['admin-audit'] },
     ],
   },

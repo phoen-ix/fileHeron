@@ -333,7 +333,8 @@
     "SECRET_REQUEST_NOT_FOUND": "This request does not exist.",
     "SECRET_REQUEST_PASSPHRASE_INVALID": "The passphrase of your request is not correct.",
     "SECRET_REQUEST_PASSPHRASE_REQUIRED": "Enter the passphrase you set on your request.",
-    "SECRET_REQUEST_SELF": "You cannot answer your own request."
+    "SECRET_REQUEST_SELF": "You cannot answer your own request.",
+    "ENCRYPTION_ACK_REQUIRED": "Confirm that encrypted files can only be restored together with this instance's .env."
   },
   "login": {
     "title": "Sign in",
@@ -449,7 +450,8 @@
       "sign_in": "Sign-in policies",
       "transfers": "Files & transfers",
       "anomaly": "Anomaly detection",
-      "secrets": "Secrets"
+      "secrets": "Secrets",
+      "encryption": "Encryption at rest"
     },
     "nav_cat": {
       "people": "People & access",
@@ -2770,7 +2772,8 @@
     "secret_request_create": "Request a secret",
     "secret_request_detail": "Secret request",
     "public_secret_request": "Secret request",
-    "admin_secret_requests": "Secret requests"
+    "admin_secret_requests": "Secret requests",
+    "admin_settings_encryption": "Encryption at rest"
   },
   "not_found": {
     "eyebrow": "404 · not found",
@@ -3393,5 +3396,39 @@
       "requester": "Requester"
     },
     "cancel_confirm": "Cancel {name}'s request? Nobody can answer it any more."
+  },
+  "admin_encryption": {
+    "intro": "Stores every file encrypted, with a key only this instance holds. Backups, offsite copies, disk images and the storage bucket then hold no readable file contents. It does not protect against anyone who controls this server: the key lives beside the files.",
+    "status_title": "Status",
+    "state_label": "Encryption of new and existing files",
+    "state_on": "On",
+    "state_off": "Off",
+    "backend_label": "Storage",
+    "backend": {
+      "local": "Local disk",
+      "s3": "Object storage (S3)"
+    },
+    "files_encrypted": "Files encrypted",
+    "files_plaintext": "Files not encrypted",
+    "files_plaintext_size": "{n} ({size})",
+    "files_awaiting": "Scanned files waiting to be encrypted",
+    "attachments": "Inbound mail attachments (encrypted / not)",
+    "pending_purges": "Replaced copies waiting to be deleted",
+    "failed_purges": "of which failed at least once",
+    "how_title": "How it works",
+    "how_new": "A new upload is encrypted right after its virus scan, before anyone is told it is there. Until then it can't be downloaded, as today.",
+    "how_existing": "Files already stored are encrypted in the background, a few at a time, by the scheduled task \"Encrypt stored files\". The unencrypted copy is deleted an hour later.",
+    "how_downloads": "Downloads, previews, resumes and ZIP archives work exactly as before.",
+    "custody_title": "Before you turn it on",
+    "custody_body": "Encrypted files can only be read with this instance's JWT_SECRET, which lives in .env - and backups deliberately do not contain .env. Keep a copy of .env somewhere safe and separate from the backups. A restore without it brings back the database but not one encrypted file.",
+    "custody_ack": "I have a safe copy of .env, and I understand a backup restores encrypted files only together with it.",
+    "s3_note": "On a versioned bucket the replaced unencrypted objects stay as noncurrent versions until a lifecycle rule removes them.",
+    "turn_on": "Turn encryption on",
+    "turn_off": "Turn encryption off",
+    "off_help": "Files that are already encrypted stay encrypted and keep downloading normally. New uploads are then stored unencrypted.",
+    "password_on": "Enter your password to turn encryption at rest on.",
+    "password_off": "Enter your password to turn encryption at rest off. New uploads will be stored unencrypted.",
+    "saved_on": "Encryption at rest is on.",
+    "saved_off": "Encryption at rest is off."
   }
 }

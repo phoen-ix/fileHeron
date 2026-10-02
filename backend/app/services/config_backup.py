@@ -117,6 +117,7 @@ _TRANSIENT_SETTING_KEYS = {
     # skip a release it never tried nor report a job it never ran.
     settings_svc.Keys.UPDATES_AUTO_SKIP_TAG,
     settings_svc.Keys.MAINTENANCE_HANDOFF_JOB,
+    settings_svc.Keys.STORAGE_ENCRYPT_LAST_RUN,
 }
 # Logo locators are system-specific (absolute paths / object keys); the bytes
 # travel in the branding_logo section and locators are regenerated on import.

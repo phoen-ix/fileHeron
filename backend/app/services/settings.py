@@ -285,6 +285,13 @@ class Keys:
     # The job a drain hand-off launched ({job_id, target_tag, origin}), so the
     # drain worker can report its outcome once it is terminal.
     MAINTENANCE_HANDOFF_JOB = "maintenance.handoff_job"
+    # Encryption at rest of stored files (services/file_encryption.py). Off by
+    # default; a policy-route setting, NOT a registry tunable: turning it either
+    # way is step-up gated, and /settings/advanced has no step-up.
+    STORAGE_ENCRYPT_AT_REST = "storage.encrypt_at_rest"
+    # The last encryption backfill run's summary - this instance's history, kept
+    # out of config backups.
+    STORAGE_ENCRYPT_LAST_RUN = "storage.encrypt_at_rest.last_run"
     # Error alerting (email admins on server errors). Master switch + the HTTP-5xx
     # source toggle + recipient targeting are simple kv; the cooldown + hourly cap
     # are registry tunables (see settings_registry). The worker/cron source has

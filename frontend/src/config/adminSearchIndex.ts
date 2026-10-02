@@ -227,6 +227,9 @@ export const ADMIN_SEARCH_INDEX: readonly AdminSearchEntry[] = [
   { routeName: 'admin-settings-webhooks', labelKey: 'admin_webhooks.secret_created', keywords: ['signing secret', 'hmac', 'x-webhook-signature', 'webhook secret', 'signature'] },
   { routeName: 'admin-settings-webhooks', labelKey: 'admin_webhooks.deliveries', keywords: ['webhook deliveries', 'delivery log', 'retry', 'failed deliveries', 'zustellungen', 'webhook history'] },
 
+  // --- Encryption at rest (admin-settings-encryption)
+  { routeName: 'admin-settings-encryption', labelKey: 'admin_encryption.state_label', keywords: ['encryption', 'encrypt files', 'verschlüsselung', 'verschlüsseln', 'at rest', 'aes', 'disk encryption'] },
+  { routeName: 'admin-settings-encryption', labelKey: 'admin_encryption.custody_title', keywords: ['jwt_secret', '.env', 'encryption key', 'schlüssel', 'restore encrypted', 'backup key'] },
   // --- Scheduled tasks (admin-scheduled-tasks) - column/heading keys only,
   // the task names themselves come from the API
   { routeName: 'admin-scheduled-tasks', labelKey: 'admin_scheduled_tasks.col_schedule', keywords: ['cron', 'cadence', 'interval', 'how often', 'zeitplan', 'daily at', 'background jobs'] },

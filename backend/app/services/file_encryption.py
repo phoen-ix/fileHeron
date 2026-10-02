@@ -406,3 +406,65 @@ def sweep_purges(db: Session, *, limit: int = 200) -> dict[str, int]:
         db.commit()
         purged += 1
     return {"purged": purged, "failed": failed}
+
+
+# ---------------------------------------------------------------------------
+# The switch and the admin status
+# ---------------------------------------------------------------------------
+
+
+def is_enabled(db: Session) -> bool:
+    from . import settings as settings_svc
+
+    return settings_svc.get_bool(db, settings_svc.Keys.STORAGE_ENCRYPT_AT_REST, default=False)
+
+
+def status(db: Session) -> dict[str, Any]:
+    """Counts for the admin page. Cheap: three grouped counts and a sum."""
+    import json
+
+    from sqlalchemy import func
+
+    from ..models.file import File as FileModel
+    from ..models.file import FileState
+    from ..models.inbound_attachment import InboundAttachment as AttModel
+    from . import settings as settings_svc
+    from .storage_backend import get_storage_backend
+
+    stored = (FileState.clean, FileState.infected)
+    enc_files = db.query(func.count(FileModel.id)).filter(
+        FileModel.enc_version.isnot(None), FileModel.state.in_(stored)
+    ).scalar() or 0
+    plain = db.query(func.count(FileModel.id), func.coalesce(func.sum(FileModel.size_bytes), 0)).filter(
+        FileModel.enc_version.is_(None), FileModel.state.in_(stored), FileModel.storage_path.isnot(None)
+    ).one()
+    awaiting = db.query(func.count(FileModel.id)).filter(
+        FileModel.state == FileState.ready_unscanned, FileModel.release_verdict.isnot(None)
+    ).scalar() or 0
+    att = dict(
+        db.query(AttModel.enc_version.isnot(None), func.count(AttModel.id))
+        .group_by(AttModel.enc_version.isnot(None))
+        .all()
+    )
+    raw_last = settings_svc.get(db, settings_svc.Keys.STORAGE_ENCRYPT_LAST_RUN)
+    try:
+        last_run = json.loads(raw_last) if raw_last else None
+    except ValueError:
+        last_run = None
+    return {
+        "enabled": is_enabled(db),
+        "backend": get_storage_backend().name,
+        "files": {
+            "encrypted": int(enc_files),
+            "plaintext": int(plain[0] or 0),
+            "plaintext_bytes": int(plain[1] or 0),
+            "awaiting_encryption": int(awaiting),
+        },
+        "inbound_attachments": {
+            "encrypted": int(att.get(True, 0)),
+            "plaintext": int(att.get(False, 0)),
+        },
+        "pending_purges": db.query(func.count(StoragePurge.id)).scalar() or 0,
+        "failed_purges": db.query(func.count(StoragePurge.id)).filter(StoragePurge.attempts > 0).scalar() or 0,
+        "last_run": last_run,
+    }

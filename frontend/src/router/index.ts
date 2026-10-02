@@ -447,6 +447,16 @@ const router = createRouter({
           meta: { density: 'operator', titleKey: 'admin_settings_anomaly', requiresRole: 'admin' },
         },
         {
+          path: 'settings/encryption',
+          name: 'admin-settings-encryption',
+          component: () => import('@/views/AdminSettingsEncryption.vue'),
+          meta: {
+            density: 'operator',
+            titleKey: 'admin_settings_encryption',
+            requiresRole: 'admin',
+          },
+        },
+        {
           path: 'settings/share-approval',
           name: 'admin-settings-share-approval',
           component: () => import('@/views/AdminSettingsShareApproval.vue'),

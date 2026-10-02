@@ -333,7 +333,8 @@
     "SECRET_REQUEST_NOT_FOUND": "Diese Anfrage gibt es nicht.",
     "SECRET_REQUEST_PASSPHRASE_INVALID": "Die Passphrase deiner Anfrage ist nicht korrekt.",
     "SECRET_REQUEST_PASSPHRASE_REQUIRED": "Gib die Passphrase ein, die du bei deiner Anfrage gewählt hast.",
-    "SECRET_REQUEST_SELF": "Du kannst deine eigene Anfrage nicht beantworten."
+    "SECRET_REQUEST_SELF": "Du kannst deine eigene Anfrage nicht beantworten.",
+    "ENCRYPTION_ACK_REQUIRED": "Bestätige, dass verschlüsselte Dateien nur zusammen mit der .env dieser Instanz wiederhergestellt werden können."
   },
   "login": {
     "title": "Anmelden",
@@ -449,7 +450,8 @@
       "sign_in": "Anmelderichtlinien",
       "transfers": "Dateien & Übertragung",
       "anomaly": "Anomalie-Erkennung",
-      "secrets": "Geheimnisse"
+      "secrets": "Geheimnisse",
+      "encryption": "Verschlüsselung gespeicherter Dateien"
     },
     "nav_cat": {
       "people": "Personen & Zugriff",
@@ -2770,7 +2772,8 @@
     "secret_request_create": "Geheimnis anfragen",
     "secret_request_detail": "Anfrage",
     "public_secret_request": "Anfrage",
-    "admin_secret_requests": "Anfragen nach Geheimnissen"
+    "admin_secret_requests": "Anfragen nach Geheimnissen",
+    "admin_settings_encryption": "Verschlüsselung gespeicherter Dateien"
   },
   "not_found": {
     "eyebrow": "404 · nicht gefunden",
@@ -3393,5 +3396,39 @@
       "requester": "Anfragende Person"
     },
     "cancel_confirm": "Die Anfrage von {name} abbrechen? Niemand kann sie mehr beantworten."
+  },
+  "admin_encryption": {
+    "intro": "Speichert jede Datei verschlüsselt, mit einem Schlüssel, den nur diese Instanz kennt. Backups, externe Kopien, Festplattenabbilder und der Speicher-Bucket enthalten dann keine lesbaren Dateiinhalte. Gegen jemanden, der diesen Server kontrolliert, schützt es nicht: Der Schlüssel liegt neben den Dateien.",
+    "status_title": "Status",
+    "state_label": "Verschlüsselung neuer und vorhandener Dateien",
+    "state_on": "Ein",
+    "state_off": "Aus",
+    "backend_label": "Speicher",
+    "backend": {
+      "local": "Lokale Festplatte",
+      "s3": "Objektspeicher (S3)"
+    },
+    "files_encrypted": "Verschlüsselte Dateien",
+    "files_plaintext": "Unverschlüsselte Dateien",
+    "files_plaintext_size": "{n} ({size})",
+    "files_awaiting": "Geprüfte Dateien, die auf die Verschlüsselung warten",
+    "attachments": "Anhänge eingehender Mails (verschlüsselt / nicht)",
+    "pending_purges": "Ersetzte Kopien, die auf das Löschen warten",
+    "failed_purges": "davon mindestens einmal fehlgeschlagen",
+    "how_title": "So funktioniert es",
+    "how_new": "Ein neuer Upload wird direkt nach seiner Virenprüfung verschlüsselt, bevor jemand von ihm erfährt. Bis dahin ist er wie bisher nicht herunterladbar.",
+    "how_existing": "Bereits gespeicherte Dateien werden im Hintergrund nach und nach von der geplanten Aufgabe „Gespeicherte Dateien verschlüsseln“ verschlüsselt. Die unverschlüsselte Kopie wird eine Stunde später gelöscht.",
+    "how_downloads": "Downloads, Vorschauen, fortgesetzte Downloads und ZIP-Archive funktionieren genau wie bisher.",
+    "custody_title": "Bevor du sie einschaltest",
+    "custody_body": "Verschlüsselte Dateien lassen sich nur mit dem JWT_SECRET dieser Instanz lesen, das in der .env steht - und Backups enthalten die .env absichtlich nicht. Bewahre eine Kopie der .env sicher und getrennt von den Backups auf. Eine Wiederherstellung ohne sie bringt die Datenbank zurück, aber keine einzige verschlüsselte Datei.",
+    "custody_ack": "Ich habe eine sichere Kopie der .env und verstehe, dass ein Backup verschlüsselte Dateien nur zusammen mit ihr wiederherstellt.",
+    "s3_note": "In einem versionierten Bucket bleiben die ersetzten unverschlüsselten Objekte als ältere Versionen erhalten, bis eine Lifecycle-Regel sie entfernt.",
+    "turn_on": "Verschlüsselung einschalten",
+    "turn_off": "Verschlüsselung ausschalten",
+    "off_help": "Bereits verschlüsselte Dateien bleiben verschlüsselt und lassen sich weiter normal herunterladen. Neue Uploads werden dann unverschlüsselt gespeichert.",
+    "password_on": "Gib dein Passwort ein, um die Verschlüsselung gespeicherter Dateien einzuschalten.",
+    "password_off": "Gib dein Passwort ein, um die Verschlüsselung gespeicherter Dateien auszuschalten. Neue Uploads werden dann unverschlüsselt gespeichert.",
+    "saved_on": "Die Verschlüsselung gespeicherter Dateien ist eingeschaltet.",
+    "saved_off": "Die Verschlüsselung gespeicherter Dateien ist ausgeschaltet."
   }
 }

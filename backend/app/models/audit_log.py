@@ -48,6 +48,9 @@ class AuditEventType(str, enum.Enum):
     account_locked = "account_locked"                      # Phase 1b
     account_unlocked = "account_unlocked"                  # admin "Unlock now"
     file_integrity_failed = "file_integrity_failed"        # encrypted file failed to authenticate
+    encryption_at_rest_changed = "encryption_at_rest_changed"  # the storage.encrypt_at_rest switch
+    file_encryption_deferred = "file_encryption_deferred"  # released as plaintext; the backfill retries
+    file_encryption_failed = "file_encryption_failed"      # one backfill attempt failed
     rate_limited = "rate_limited"                          # Phase 1b
     # Re-auth gate refused (services/step_up.py). Deliberately NOT login_failure:
     # these are not logins, and folding them in would pollute the login-failure

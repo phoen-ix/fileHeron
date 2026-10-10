@@ -55,6 +55,8 @@ class PublicLinkResponse(APIBaseModel):
 class PublicShareFile(APIBaseModel):
     id: str
     original_filename: str
+    # The folder it was uploaded from, e.g. `Photos/2026`; null = top level.
+    relative_dir: str | None = None
     mime_type: str
     size_bytes: int
     state: str

@@ -272,6 +272,10 @@ def public_config(db: Session = Depends(get_db)) -> dict:
             settings_registry.effective(db, settings_registry.K.MAX_DIRECT_UPLOAD_BYTES)
         ),
         "site_timezone": site_svc.get_site_timezone(db),
+        # Folder uploads (v2.26.0): this server stores the folder a file came
+        # from. A client that has none of this field is talking to an older
+        # server, which silently drops `relative_dir` and lands files flat.
+        "folder_paths": True,
         "branding": branding,
         "legal": legal,
     }

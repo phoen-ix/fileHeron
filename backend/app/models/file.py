@@ -86,6 +86,10 @@ class File(Base):
         String(36), ForeignKey("shares.id", ondelete="CASCADE"), nullable=False, index=True
     )
     original_filename: Mapped[str] = mapped_column(String(512), nullable=False)
+    # The folder the file was uploaded from, '/'-separated, e.g. `Photos/2026`;
+    # NULL = the top level. `original_filename` stays a bare leaf - the folder
+    # is written ONLY through utils/paths.py::safe_relative_dir (v2.26.0).
+    relative_dir: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     mime_type: Mapped[str] = mapped_column(String(255), nullable=False, default="application/octet-stream")
     size_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
     storage_path: Mapped[str | None] = mapped_column(String(512), nullable=True)

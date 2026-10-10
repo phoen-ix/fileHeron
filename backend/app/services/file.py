@@ -24,12 +24,17 @@ from ..models.file import File, FileApprovalState, FileState
 from ..models.share import Share, ShareState
 from ..models.user import User
 from ..utils.columns import declared_width
+from ..utils.paths import safe_relative_dir
 from ..utils.timeutil import utc_now
 from .audit import record_audit_event
 from .quota import release_bytes
 from .storage_backend import get_storage_backend
 
 logger = logging.getLogger("fileheron.file")
+
+_FILENAME_MAX = declared_width(File.__table__.c.original_filename)
+_MIME_MAX = declared_width(File.__table__.c.mime_type)
+_RELATIVE_DIR_MAX = declared_width(File.__table__.c.relative_dir)
 
 
 def downloadable_files(db: Session, share_id: str) -> list[File]:
@@ -67,6 +72,24 @@ def downloadable_files(db: Session, share_id: str) -> list[File]:
     return out
 
 
+def display_order(files: list[File]) -> list[File]:
+    """The order a share's files are LISTED in: top-level files first, then by
+    folder and name (case-insensitive), with the id as the final tiebreaker.
+    `Share.files` has no ORDER BY of its own, and neither had the public link
+    page's query, so the same share could list its files differently from one
+    request to the next. The bulk ZIP keeps its own (created_at, id) order -
+    see `downloadable_files` - because its bytes are pinned for resume."""
+    return sorted(
+        files,
+        key=lambda f: (
+            f.relative_dir is not None,
+            (f.relative_dir or "").casefold(),
+            f.original_filename.casefold(),
+            f.id,
+        ),
+    )
+
+
 def safe_original_filename(name: str) -> str:
     """Reduce a client-supplied filename to a safe leaf: strip any directory
     components (both / and \\ - a Windows client may send back-slashes), drop
@@ -79,7 +102,7 @@ def safe_original_filename(name: str) -> str:
     leaf = "".join(ch for ch in leaf if ch >= " ").strip()
     if leaf in ("", ".", ".."):
         return "file"
-    return leaf[:512]
+    return leaf[:_FILENAME_MAX]
 
 
 def create_pending(
@@ -90,9 +113,14 @@ def create_pending(
     original_filename: str,
     mime_type: str,
     size_bytes: int,
+    relative_dir: str | None = None,
 ) -> File:
     """Insert a `files` row in state=uploading. Returns the row (caller
     commits).
+
+    `relative_dir` is the folder the file was dropped from (folder uploads);
+    it is stored only as `utils/paths.py::safe_relative_dir` leaves it, and
+    `original_filename` stays a bare leaf either way.
 
     A file landing on a share that was four-eyes-gated and is ALREADY past its
     decision needs its own review before recipients can reach it - otherwise the
@@ -106,7 +134,8 @@ def create_pending(
     record = File(
         share_id=share.id,
         original_filename=safe_original_filename(original_filename),
-        mime_type=(mime_type or "application/octet-stream")[:255],
+        relative_dir=safe_relative_dir(relative_dir, width=_RELATIVE_DIR_MAX),
+        mime_type=(mime_type or "application/octet-stream")[:_MIME_MAX],
         size_bytes=size_bytes,
         state=FileState.uploading,
         approval_state=(

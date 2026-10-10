@@ -34,8 +34,14 @@ logger = logging.getLogger("fileheron.quarantine")
 def _safe_filename(name: str) -> str:
     # Strip path separators and NULs; keep the rest. Quarantine paths
     # never round-trip back to disclose user-controlled bytes anywhere
-    # web-facing, so a light scrub is enough.
-    return name.replace("/", "_").replace("\\", "_").replace("\0", "")[:240] or "untitled.bin"
+    # web-facing, so a light scrub is enough. A name of only dots stays a
+    # placeholder: `..` survived the scrub as `..` - a parent directory in the
+    # quarantine locator - and was safe only because upload-time cleaning maps
+    # it to `file` first; folder uploads put more paths in play (v2.26.0).
+    scrubbed = name.replace("/", "_").replace("\\", "_").replace("\0", "")[:240]
+    if not scrubbed or set(scrubbed) == {"."}:
+        return "untitled.bin"
+    return scrubbed
 
 
 def quarantine_file(

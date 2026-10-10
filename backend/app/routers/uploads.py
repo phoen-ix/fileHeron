@@ -76,6 +76,7 @@ def init_upload(
         original_filename=payload.filename,
         mime_type=payload.mime_type,
         size_bytes=payload.size_bytes,
+        relative_dir=payload.relative_dir,
     )
     db.commit()
 
@@ -116,6 +117,7 @@ async def direct_upload(
     request: Request,
     share_id: str = Form(...),
     file: UploadFile = File(...),
+    relative_dir: str | None = Form(default=None, max_length=4096),
     user: User = Depends(require_scope("files:upload")),
     db: Session = Depends(get_db),
 ) -> DirectUploadResponse:
@@ -203,6 +205,7 @@ async def direct_upload(
             original_filename=file.filename or "upload.bin",
             mime_type=file.content_type or "application/octet-stream",
             size_bytes=received,
+            relative_dir=relative_dir,
         )
         db.flush()
 

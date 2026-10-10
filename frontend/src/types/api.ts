@@ -274,6 +274,8 @@ export type FileState = 'uploading' | 'ready_unscanned' | 'clean' | 'infected' |
 export interface FileInShareResponse {
   id: string
   original_filename: string
+  /** The folder the file was uploaded from, e.g. 'Photos/2026'; null/absent = top level. */
+  relative_dir?: string | null
   mime_type: string
   size_bytes: number
   state: FileState
@@ -469,6 +471,8 @@ export interface CreatePublicLinkRequest {
 export interface PublicShareFile {
   id: string
   original_filename: string
+  /** The folder the file was uploaded from, e.g. 'Photos/2026'; null/absent = top level. */
+  relative_dir?: string | null
   mime_type: string
   size_bytes: number
   state: FileState
@@ -1058,6 +1062,8 @@ export interface FileUploaderRef {
 export interface AdminFileItem {
   file_id: string
   filename: string
+  /** The folder the file was uploaded from, e.g. 'Photos/2026'; null/absent = top level. */
+  relative_dir?: string | null
   size_bytes: number
   state: FileState
   share_id: string

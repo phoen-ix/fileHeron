@@ -21,6 +21,10 @@ class UploadInitRequest(APIBaseModel):
     filename: str = Field(..., min_length=1, max_length=512)
     size_bytes: int = Field(..., ge=0, le=MAX_DECLARED_UPLOAD_BYTES)
     mime_type: str = Field(default="application/octet-stream", max_length=255)
+    # The folder the file was dropped from (folder uploads), e.g. `Photos/2026`.
+    # Bounded generously here and cleaned + fitted to the column by
+    # utils/paths.py::safe_relative_dir, never stored as sent.
+    relative_dir: str | None = Field(default=None, max_length=4096)
 
 
 class UploadInitResponse(APIBaseModel):

@@ -183,12 +183,13 @@ def landing(
             PublicShareFile(
                 id=f.id,
                 original_filename=f.original_filename,
+                relative_dir=f.relative_dir,
                 mime_type=f.mime_type,
                 size_bytes=f.size_bytes,
                 state=f.state.value,
                 av_unscanned=f.av_unscanned,
             )
-            for f in files
+            for f in file_svc.display_order(files)
         ],
     )
 

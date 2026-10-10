@@ -283,6 +283,8 @@ def _erase_user_locked(
             # still list every filename the erased user had ever uploaded
             # (audit 2026-07-30). The marker's job is accounting, not content.
             f.original_filename = "[erased]"
+            # The folder is content too (folder uploads, v2.26.0).
+            f.relative_dir = None
             f.mime_type = "application/octet-stream"
             db.commit()
             deleted_bytes += f_bytes

@@ -129,6 +129,8 @@ class PublicConfigResponse(APIBaseModel):
     providers: list[PublicProvider]
     site_timezone: str
     max_direct_upload_bytes: int
+    # This server stores the folder a file came from (folder uploads, v2.26.0).
+    folder_paths: bool = True
     branding: PublicBranding
     legal: PublicLegal
     motd: PublicMotd | None = None

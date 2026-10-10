@@ -58,6 +58,7 @@ def admin_list_files(
         AdminFileItem(
             file_id=r["file_id"],
             filename=r["filename"],
+            relative_dir=r["relative_dir"],
             size_bytes=r["size_bytes"],
             state=r["state"],
             share_id=r["share_id"],

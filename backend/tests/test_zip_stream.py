@@ -7,11 +7,13 @@ import zipfile
 import pytest
 
 from app.models.file import File
-from app.services.zip_stream import build_zip_stream, safe_arcname
+from app.services.zip_stream import ArcNames, build_zip_stream, safe_arcname
 
 
 def test_safe_arcname_strips_path_and_dedupes():
-    taken: set[str] = set()
+    # A stored NAME never carries a folder - that travels in `relative_dir`
+    # (tests/test_folder_uploads.py) - so directory parts in it are stripped.
+    taken = ArcNames()
     assert safe_arcname("../../etc/passwd", taken) == "passwd"
     assert safe_arcname("a/b/c/report.pdf", taken) == "report.pdf"
     # collision on the same basename → suffixed, not overwritten

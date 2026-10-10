@@ -36,6 +36,8 @@ export interface PublicConfigResponse {
    *  the site Pinia store. */
   site_timezone: string
   max_direct_upload_bytes: number
+  /** This server stores the folder a file came from (folder uploads, v2.26.0). */
+  folder_paths?: boolean
   /** Site branding (logo + display surfaces + link). */
   branding: PublicBranding
   /** Which legal footer pages are enabled. */

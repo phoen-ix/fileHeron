@@ -16,6 +16,8 @@ class FileUploaderRef(APIBaseModel):
 class AdminFileItem(APIBaseModel):
     file_id: str
     filename: str
+    # The folder it was uploaded from, e.g. `Photos/2026`; null = top level.
+    relative_dir: str | None = None
     size_bytes: int
     state: str
     share_id: str

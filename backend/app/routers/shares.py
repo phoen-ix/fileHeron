@@ -147,6 +147,7 @@ def _to_share_response(db: Session, share, *, viewer: User | None = None) -> Sha
             FileInShareResponse(
                 id=f.id,
                 original_filename=f.original_filename,
+                relative_dir=f.relative_dir,
                 mime_type=f.mime_type,
                 size_bytes=f.size_bytes,
                 state=f.state.value,
@@ -156,7 +157,7 @@ def _to_share_response(db: Session, share, *, viewer: User | None = None) -> Sha
                 av_unscanned=f.av_unscanned,
                 approval_state=f.approval_state.value,
             )
-            for f in files
+            for f in file_svc.display_order(files)
         ],
         download_limit=share.download_limit,
         downloads_remaining=share.downloads_remaining,

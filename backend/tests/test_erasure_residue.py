@@ -193,7 +193,8 @@ def test_the_retained_marker_row_loses_the_filename(db, admin, victim, victim_sh
         File(
             id="00000000-0000-0000-0000-0000000000e1",
             share_id=victim_share.id,
-            original_filename="2026-payslip.pdf", mime_type="application/pdf",
+            original_filename="2026-payslip.pdf", relative_dir="Payroll/2026",
+            mime_type="application/pdf",
             size_bytes=8, storage_path=str(p), state=FileState.clean,
             uploaded_by_id=victim.id,
         )
@@ -208,6 +209,7 @@ def test_the_retained_marker_row_loses_the_filename(db, admin, victim, victim_sh
     assert row.original_filename == "[erased]", (
         "the admin file browser can still list this person's filenames"
     )
+    assert row.relative_dir is None, "the folder names are content too"
 
 
 def test_an_in_flight_tus_upload_has_its_partial_unlinked(

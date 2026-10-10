@@ -104,7 +104,9 @@ _DOS_EPOCH = 315532800.0  # 1980-01-01T00:00:00Z
 # Bumped when a change alters the produced bytes. It is mixed into `signature()`
 # so an in-flight resume against an archive built by the previous version misses
 # its `If-Range` and restarts cleanly instead of splicing two layouts together.
-LAYOUT_VERSION = 1
+# 2 (v2.26.0): members keep the folder they were uploaded from, and duplicate
+# names are found case-insensitively (zip_stream.ArcNames).
+LAYOUT_VERSION = 2
 
 
 class CrcCache(Protocol):

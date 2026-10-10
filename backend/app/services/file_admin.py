@@ -101,6 +101,7 @@ def list_all_files(
         like = contains(q)
         filters.append(
             File.original_filename.ilike(like, escape=LIKE_ESCAPE)
+            | File.relative_dir.ilike(like, escape=LIKE_ESCAPE)
             | User.display_name.ilike(like, escape=LIKE_ESCAPE)
             | User.email.ilike(like, escape=LIKE_ESCAPE)
         )
@@ -217,6 +218,7 @@ def list_all_files(
             {
                 "file_id": f.id,
                 "filename": f.original_filename,
+                "relative_dir": f.relative_dir,
                 "size_bytes": f.size_bytes,
                 "state": f.state.value,
                 "share_id": s.id,

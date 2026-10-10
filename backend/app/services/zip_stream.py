@@ -41,9 +41,13 @@ from pathlib import Path
 from fastapi.responses import Response, StreamingResponse
 
 from ..models.file import File
+from ..utils.columns import declared_width
+from ..utils.paths import safe_relative_dir
 from .zip_writer import SizedZipStream
 
 logger = logging.getLogger("fileheron.zip_stream")
+
+_ARC_DIR_MAX = declared_width(File.__table__.c.relative_dir)
 
 # A member's bytes never change once it is `clean`, so its CRC is cacheable
 # forever; the TTL only bounds junk from files that are later deleted.
@@ -86,11 +90,10 @@ class RedisCrcCache:
             logger.warning("zip crc cache write failed", exc_info=True)
 
 
-def safe_arcname(name: str, taken: set[str]) -> str:
-    """Reduce an arbitrary stored filename to a safe, unique archive entry name.
-    The ZIP writer does NOT sanitize arcnames, so a stored name like
-    `../../etc/passwd` would otherwise land verbatim. Strip directory components
-    + null bytes, then de-duplicate collisions with a ` (n)` suffix.
+def _arc_leaf(name: str) -> str:
+    """Reduce a stored filename to a safe archive leaf. The ZIP writer does NOT
+    sanitize arcnames, so a stored name like `../../etc/passwd` would otherwise
+    land verbatim: strip directory components + null bytes.
 
     Backslashes are separators here too. `Path(...).name` treats them as
     ordinary characters on Linux, so `..\\..\\Users\\Public\\Startup\\x.exe`
@@ -101,17 +104,69 @@ def safe_arcname(name: str, taken: set[str]) -> str:
     base = Path(name.replace("\\", "/")).name.replace("\x00", "").strip() or "file"
     if set(base) <= {"."}:
         base = "file"
-    if base not in taken:
-        taken.add(base)
-        return base
-    stem, suffix = Path(base).stem, Path(base).suffix
-    i = 1
-    while True:
-        candidate = f"{stem} ({i}){suffix}"
-        if candidate not in taken:
-            taken.add(candidate)
-            return candidate
-        i += 1
+    return base
+
+
+def _numbered(name: str, i: int) -> str:
+    stem, suffix = Path(name).stem, Path(name).suffix
+    return f"{stem} ({i}){suffix}"
+
+
+class ArcNames:
+    """The member names already placed in one archive, and the folders they
+    imply. Compared CASE-INSENSITIVELY: Windows' extractor - and macOS on its
+    default volume - treat `Report.pdf` and `report.pdf` as one file and would
+    overwrite or refuse the second. A file never takes a folder's name and a
+    folder never takes a file's, or an extractor could create only one of them.
+    Folders that differ only in case are the same folder, as they would be on
+    Windows (folder uploads, v2.26.0)."""
+
+    def __init__(self) -> None:
+        self._files: set[str] = set()
+        # casefold of the folder path AS STORED -> the folder path as placed
+        self._dirs: dict[str, str] = {}
+        self._placed_dirs: set[str] = set()
+
+    def _place_dir(self, folder: str) -> str:
+        placed = ""
+        requested = ""
+        for seg in folder.split("/"):
+            requested = f"{requested}/{seg}" if requested else seg
+            known = self._dirs.get(requested.casefold())
+            if known is not None:
+                placed = known
+                continue
+            name, i = seg, 0
+            while True:
+                candidate = f"{placed}/{name}" if placed else name
+                if candidate.casefold() not in self._files:
+                    break
+                i += 1
+                name = f"{seg} ({i})"
+            self._dirs[requested.casefold()] = candidate
+            self._placed_dirs.add(candidate.casefold())
+            placed = candidate
+        return placed
+
+    def place(self, name: str, folder: str | None = None) -> str:
+        leaf = _arc_leaf(name)
+        # Re-cleaned here, not trusted from the row: a hand-edited or legacy
+        # value must not become a path an extractor follows.
+        clean_dir = safe_relative_dir(folder, width=_ARC_DIR_MAX) if folder else None
+        prefix = f"{self._place_dir(clean_dir)}/" if clean_dir else ""
+        candidate, i = f"{prefix}{leaf}", 0
+        while candidate.casefold() in self._files or candidate.casefold() in self._placed_dirs:
+            i += 1
+            candidate = f"{prefix}{_numbered(leaf, i)}"
+        self._files.add(candidate.casefold())
+        return candidate
+
+
+def safe_arcname(name: str, taken: ArcNames, *, folder: str | None = None) -> str:
+    """A safe, unique archive entry name for a stored file: its folder (if it
+    was uploaded from one) and its leaf, de-duplicated against `taken` with a
+    ` (n)` suffix on the leaf."""
+    return taken.place(name, folder)
 
 
 def build_zip_stream(
@@ -130,9 +185,9 @@ def build_zip_stream(
 
     backend = get_storage_backend()
     zs = SizedZipStream(mtime=mtime, crc_cache=crc_cache)
-    taken: set[str] = set()
+    taken = ArcNames()
     for f in files:
-        arcname = safe_arcname(f.original_filename or "file", taken)
+        arcname = safe_arcname(f.original_filename or "file", taken, folder=f.relative_dir)
         locator = f.storage_path
         if locator is None:
             # A servable file always has bytes. Reaching here is a corrupt row,

@@ -12,7 +12,7 @@ Browser flow:
 
 Phase 10 changes vs Phase 7/9:
 - `provider_id` in path lets us run multiple IdPs concurrently.
-- The state cookie stores `{state}::{provider_id}` so a stale cookie
+- The state cookie stores `{state}::{provider_id}::{nonce}` so a stale cookie
   pointing at provider A can't be replayed against provider B's
   callback.
 - Anonymous callback never creates a user - see

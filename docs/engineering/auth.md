@@ -10,7 +10,7 @@ summary and points here. Read this before changing the code listed below.
 **Login flows** all funnel through `services/jwt_session.py::create_refresh_token`
 → `enforce_session_cap` (session-cap eviction): `POST /api/auth/login` (`TOTP_REQUIRED`/`INVALID_TOTP`
 when 2FA on), `/login/recovery`, `/webauthn/begin`+`/complete`, OIDC
-`/oidc/start|callback/{id}` (state cookie packs `state::provider_id`),
+`/oidc/start|callback/{id}` (state cookie packs `state::provider_id::nonce`),
 `/register-from-invite`. **Session** = JWT access (15min, HS256) + refresh cookie
 `fh_refresh` (httpOnly, Secure-in-prod, SameSite=Lax, 7d, scoped `/api/auth`;
 64 random bytes, SHA-256 in DB).

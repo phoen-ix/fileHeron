@@ -18,6 +18,7 @@ Each split silently breaks a pin:
 ### Open / deferred / dropped
 
 - **Dropped:** Locust load-test baseline (real-load operation supersedes); zxcvbn-ts strength meter (HIBP is the real defense).
+- **Rejected (2026-10-10): upload links for people without an account ("file requests").** Only signed-in users upload - staff, or clients an admin invited; public links stay download-only. The owner's decision, not a technical limit.
 - **Rejected:** OpenAPI codegen for the frontend types (see CLAUDE.md §Testing + CI gates); a per-token access denylist (see `docs/engineering/auth.md` §Revocation); splitting the three files above.
 
 ### Verified FALSE - don't re-file

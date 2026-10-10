@@ -142,3 +142,42 @@ def test_finalize_raises_when_upload_missing(make_user, db, fake_tus_dirs):
             db, file=file_row, tus_upload_id="not_on_disk"
         )
     assert exc.value.code == "UPLOAD_MISSING"
+
+
+def test_finalize_refuses_a_tus_file_of_the_wrong_size(make_user, db, fake_tus_dirs):
+    """post-finish carries no proof it came through pre-finish, which is where
+    the reported size is checked. With /api/internal/* reachable, one valid
+    envelope plus ANOTHER in-flight upload's id attached those bytes to the
+    caller's file; a truncated working file passed too. Nothing may move."""
+    from app.middleware.errors import AppError
+    from app.models.audit_log import AuditEventType, AuditLog
+
+    tus_dir, storage_root = fake_tus_dirs
+    share, sender, _rec = _make_share(make_user, db)
+    file_row = file_svc.create_pending(
+        db,
+        share=share,
+        uploader=sender,
+        original_filename="doc.pdf",
+        mime_type="application/pdf",
+        size_bytes=4,
+    )
+    db.commit()
+    src = tus_dir / "someone_elses_upload"
+    src.write_bytes(b"NOT FOUR BYTES")
+
+    with pytest.raises(AppError) as exc:
+        file_svc.finalize_to_disk(db, file=file_row, tus_upload_id=src.name)
+
+    assert exc.value.code == "FINAL_SIZE_MISMATCH"
+    db.rollback()
+    db.refresh(file_row)
+    assert file_row.state == FileState.uploading
+    assert file_row.storage_path is None  # no locator written
+    assert src.read_bytes() == b"NOT FOUR BYTES"  # not moved
+    assert not any(p.is_file() for p in storage_root.rglob("*"))
+    row = db.query(AuditLog).filter(
+        AuditLog.event_type == AuditEventType.upload_size_mismatch.value
+    ).one()
+    assert row.target_id == str(file_row.id)
+    assert row.extra == {"expected_bytes": 4, "on_disk_bytes": 14, "tus_upload_id": src.name}

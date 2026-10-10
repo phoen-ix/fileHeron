@@ -48,6 +48,7 @@ class AuditEventType(str, enum.Enum):
     account_locked = "account_locked"                      # Phase 1b
     account_unlocked = "account_unlocked"                  # admin "Unlock now"
     file_integrity_failed = "file_integrity_failed"        # encrypted file failed to authenticate
+    upload_size_mismatch = "upload_size_mismatch"          # post-finish refused a tus file of the wrong size
     encryption_at_rest_changed = "encryption_at_rest_changed"  # the storage.encrypt_at_rest switch
     file_encryption_deferred = "file_encryption_deferred"  # released as plaintext; the backfill retries
     file_encryption_failed = "file_encryption_failed"      # one backfill attempt failed

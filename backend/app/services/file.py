@@ -143,6 +143,36 @@ def finalize_to_disk(
         # If neither exists, the upload didn't actually land - bail out.
         raise AppError(500, "UPLOAD_MISSING", f"tusd upload {tus_upload_id} not found on disk.")
 
+    # The bytes on disk must be the bytes this row authorised. pre-finish checks
+    # the size tusd REPORTS; this checks the file itself, because post-finish
+    # carries no proof of having come through pre-finish: anything that reached
+    # /api/internal/* with one valid envelope of its own could name ANOTHER
+    # in-flight upload's id and attach those bytes to its file. A working file
+    # truncated on disk is refused the same way. Nothing has moved yet, so the
+    # row stays `uploading` for the sweepers to reclaim.
+    on_disk = src.stat().st_size
+    if on_disk != file.size_bytes:
+        record_audit_event(
+            db,
+            event_type=AuditEventType.upload_size_mismatch,
+            actor_user_id=file.uploaded_by_id,
+            target_type="file",
+            target_id=file.id,
+            metadata={
+                "expected_bytes": file.size_bytes,
+                "on_disk_bytes": on_disk,
+                "tus_upload_id": tus_upload_id,
+            },
+            request=request,
+        )
+        # The AppError below rolls the request back; the evidence must survive it.
+        db.commit()
+        raise AppError(
+            413,
+            "FINAL_SIZE_MISMATCH",
+            f"The tus file is {on_disk} bytes; {file.size_bytes} were authorised.",
+        )
+
     when = utc_now()
     backend = get_storage_backend()
     locator = backend.generate_locator(file.id, when)

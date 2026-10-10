@@ -184,15 +184,23 @@ def _maybe_alert_admins(db: Session, job_name: str, error_msg: str) -> None:
         "error": error_msg[:500],
         "at": utc_now().isoformat(),
     }
+    from . import error_alert
+
+    # The same failure also goes through the error-alert pipeline (the
+    # notify_admin_error enqueue in _record_failure). Where that will mail an
+    # admin, this ops alert stays in the bell, so the failure reaches their
+    # inbox once, not twice.
+    error_event = {"source": "worker", "job_name": job_name}
     for admin in admins:
         try:
+            mailed_elsewhere = error_alert.mails_admin_for(db, error_event, admin)
             dispatch(
                 db,
                 user=admin,
                 category=NotificationCategory.ops_alert,
                 payload=payload,
                 link_url="/admin/system",
-                email_to=admin.email,
+                email_to=None if mailed_elsewhere else admin.email,
             )
         except Exception:
             logger.exception(

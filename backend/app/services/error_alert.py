@@ -40,6 +40,7 @@ from sqlalchemy.orm import Session
 
 from ..middleware.errors import AppError
 from ..models.notification import NotificationCategory
+from ..models.user_notification_preference import NotificationChannel
 from ..models.user import User, UserRole
 from ..redis_client import get_redis, sync
 from ..utils.crypto import sha256_hex
@@ -362,6 +363,27 @@ def _alert_source_enabled(db: Session, event: dict[str, Any]) -> bool:
             allow = error_log_svc.parse_4xx_codes(settings_svc.get(db, K.ERROR_LOG_4XX_CODES))
             return status in allow
     return False
+
+
+def mails_admin_for(db: Session, event: dict[str, Any], admin: User) -> bool:
+    """Whether this pipeline will mail `admin` about `event`: alerts on, the
+    event's source allowed, recipients = the admins, and the admin's own
+    `server_error` preference including mail. The cooldown and the hourly cap
+    are left out - they only ever hold back a REPEAT of an alert that already
+    went out.
+
+    cron_tracker asks, so a failed job reaches an admin's inbox once. It sent
+    the same failure twice - as an ops alert and as this error alert - to any
+    admin who had ops-alert mail on (fh@ on 2026-09-18 and 2026-10-07)."""
+    if not settings_svc.get_bool(db, K.ERROR_ALERT_ENABLED, default=False):
+        return False
+    mode = (settings_svc.get(db, K.ERROR_ALERT_RECIPIENTS_MODE) or "admins").strip().lower()
+    if mode == "custom" or not _alert_source_enabled(db, event):
+        return False
+    from . import notification_prefs
+
+    channel = notification_prefs.effective_channel(db, admin.id, NotificationCategory.server_error)
+    return channel in (NotificationChannel.email, NotificationChannel.both)
 
 
 def handle_error_event(db: Session, event: dict[str, Any]) -> dict[str, Any]:

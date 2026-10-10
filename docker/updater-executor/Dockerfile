@@ -17,7 +17,14 @@ WORKDIR /app
 # docker CLI + compose plugin for the up -d call. curl for the health
 # probe (avoids a Python HTTP dep beyond stdlib). git to fast-forward the
 # host checkout to the release (run as the checkout's owner, never root).
-RUN apk add --no-cache docker-cli docker-cli-compose curl git
+#
+# Pinned by MAJOR (`=~N`, apk's prefix match). Alpine keeps only the newest
+# build of a package in a branch, so an exact pin fails the build on the day a
+# security fix lands; a major pin lets those fixes in and fails only on a major
+# jump - docker 30, compose 6, git 3 - the change worth a look. ci.yml builds
+# this image on every push, so a pin that stops resolving shows up there and
+# not on a release tag.
+RUN apk add --no-cache "docker-cli=~29" "docker-cli-compose=~5" "curl=~8" "git=~2"
 
 ARG FH_VERSION=0.0.0-dev
 ARG FH_GIT_SHA=unknown

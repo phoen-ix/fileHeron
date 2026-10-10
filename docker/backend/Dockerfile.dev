@@ -1,14 +1,24 @@
-# Dev image - same as prod but with watchdog and source-mountable layout.
+# Dev image - the production dependency closure plus the dev tools, with the
+# source mounted by docker-compose.dev.yml for --reload.
 FROM python:3.14.8-slim-trixie
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-        gcc libmariadb-dev curl \
-    && rm -rf /var/lib/apt/lists/*
-
-COPY backend/pyproject.toml ./pyproject.toml
-RUN --mount=type=cache,target=/root/.cache/pip pip install '.[dev]'
+# No OS packages, like the prod image: nothing in the lock builds from source
+# (the gcc + libmariadb-dev this image carried were never needed) and the
+# backend healthcheck runs Python, not curl.
+#
+# The runtime packages come hash-checked from requirements.lock, so the dev
+# stack runs what production runs instead of whatever PyPI resolves today. The
+# dev extras (pytest, ruff, mypy, ...) go on top, constrained by the same lock
+# so they cannot move a runtime package. The constraints are a hash-stripped
+# copy: pip refuses hashed constraints next to a local project ("Can't verify
+# hashes ... because they point to directories").
+COPY backend/pyproject.toml backend/requirements.lock ./
+RUN --mount=type=cache,target=/root/.cache/pip pip install --require-hashes -r requirements.lock \
+    && sed -e '/--hash=/d' -e 's/ \\$//' requirements.lock > /tmp/constraints.txt \
+    && pip install -c /tmp/constraints.txt '.[dev]' \
+    && rm /tmp/constraints.txt
 
 COPY backend/alembic.ini ./alembic.ini
 # app/, alembic/, scripts/, tests/ are mounted via docker-compose.dev.yml
@@ -16,8 +26,9 @@ COPY backend/alembic.ini ./alembic.ini
 COPY docker/backend/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
+# appuser by number, as in the prod image.
 RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app /entrypoint.sh
-USER appuser
+USER 1000:1000
 
 EXPOSE 8000
 ENTRYPOINT ["/entrypoint.sh"]

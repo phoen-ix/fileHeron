@@ -26,10 +26,15 @@ From the 2026-07-30 audit.
 """
 from __future__ import annotations
 
+import json
+import os
 import re
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
+import yaml
 
 ROOT = Path(__file__).resolve().parents[3]
 
@@ -46,6 +51,18 @@ def dockerignore() -> list[str]:
 @pytest.fixture(scope="module")
 def compose() -> str:
     return (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
+
+
+def _backend_cmd() -> str:
+    """The shell command the backend image runs. Its CMD is the JSON form of
+    `/bin/sh -c "<command>"`, decoded the way Docker reads it: line
+    continuations joined first, then the array parsed."""
+    dockerfile = (ROOT / "docker" / "backend" / "Dockerfile").read_text(encoding="utf-8")
+    m = re.search(r"^CMD\s+(.+?)(?=\n[A-Z]|\Z)", dockerfile, re.M | re.S)
+    assert m, "no CMD in the backend Dockerfile"
+    argv = json.loads(m.group(1).replace("\\\n", ""))
+    assert argv[:2] == ["/bin/sh", "-c"] and len(argv) == 3, argv
+    return argv[2]
 
 
 # --- docker-4 ----------------------------------------------------------------
@@ -98,16 +115,14 @@ def test_the_backend_cmd_execs_so_uvicorn_becomes_pid_1():
     counts before a self-update. Measured: 10s to stop with NO shutdown line
     logged at all, versus 1s and the full sequence once `exec` was added.
 
-    Shell form is required because $FORWARDED_ALLOW_IPS must expand (hardcoding
+    A shell is required because $FORWARDED_ALLOW_IPS must expand (hardcoding
     it was audit 2026-07-30: the documented hardening setting had no reader).
-    Docker's own linter emits JSONArgsRecommended on this line - that advice
-    would drop the expansion and reintroduce the signal bug, which is exactly
-    why this is pinned.
+    So the CMD is the JSON form of `/bin/sh -c "exec uvicorn ..."` - what Docker
+    itself runs for a shell-form CMD, and what hadolint (DL3025) and BuildKit
+    (JSONArgsRecommended) accept. The bare exec-form CMD those linters suggest
+    would drop the expansion, which is why the wrapper and the `exec` are pinned.
     """
-    dockerfile = (ROOT / "docker" / "backend" / "Dockerfile").read_text(encoding="utf-8")
-    m = re.search(r"^CMD\s+(.+?)(?=\n[A-Z]|\Z)", dockerfile, re.M | re.S)
-    assert m, "no CMD in the backend Dockerfile"
-    body = m.group(1)
+    body = _backend_cmd()
     assert body.lstrip().startswith("exec "), (
         "backend CMD must start with `exec`, or /bin/sh stays PID 1 and uvicorn "
         "never receives SIGTERM"
@@ -131,7 +146,7 @@ def test_forwarded_allow_ips_has_one_name_and_one_default():
     env_example = (ROOT / ".env.example").read_text(encoding="utf-8")
 
     env_m = re.search(r'^ENV FORWARDED_ALLOW_IPS="([^"]*)"$', dockerfile, re.M)
-    cmd_m = re.search(r'--forwarded-allow-ips="\$\{FORWARDED_ALLOW_IPS:-([^}]*)\}"', dockerfile)
+    cmd_m = re.search(r'--forwarded-allow-ips="\$\{FORWARDED_ALLOW_IPS:-([^}]*)\}"', _backend_cmd())
     dev_m = re.search(r'--forwarded-allow-ips=\$\{FORWARDED_ALLOW_IPS:-([^}]*)\}', dev)
     example_m = re.search(r"^FORWARDED_ALLOW_IPS=(.*)$", env_example, re.M)
     found = {
@@ -163,10 +178,7 @@ def test_uvicorn_bounds_its_drain_under_every_stop_grace(executor, compose):
     completed anyway. The bound must stay under Docker's 10s default grace
     (every compose recreate of the backend) and under the updater's own stop
     timeout, or uvicorn is killed before it exits and the flag buys nothing."""
-    dockerfile = (ROOT / "docker" / "backend" / "Dockerfile").read_text(encoding="utf-8")
-    cmd = re.search(r"^CMD\s+(.+?)(?=\n[A-Z]|\Z)", dockerfile, re.M | re.S)
-    assert cmd, "no CMD in the backend Dockerfile"
-    m = re.search(r"--timeout-graceful-shutdown[ =](\d+)", cmd.group(1))
+    m = re.search(r"--timeout-graceful-shutdown[ =](\d+)", _backend_cmd())
     assert m, "the backend CMD lost --timeout-graceful-shutdown"
     bound = int(m.group(1))
     backend = re.search(r"\n  backend:\n(.*?)(?=\n  [a-z][a-z-]*:\n)", compose, re.S)
@@ -178,11 +190,66 @@ def test_uvicorn_bounds_its_drain_under_every_stop_grace(executor, compose):
     assert re.search(rf'"--timeout-graceful-shutdown",\s*"{bound}"', dev), "dev runs a different bound"
 
 
-def test_the_healthcheck_dependency_is_still_installed():
-    """Control: curl backs the compose HEALTHCHECK. Removing it would make every
-    backend container report unhealthy."""
-    dockerfile = (ROOT / "docker" / "backend" / "Dockerfile").read_text(encoding="utf-8")
-    assert "curl" in dockerfile
+def _backend_healthcheck() -> list[str]:
+    services = yaml.safe_load((ROOT / "docker-compose.yml").read_text(encoding="utf-8"))["services"]
+    return services["backend"]["healthcheck"]["test"]
+
+
+def test_the_backend_healthcheck_runs_the_images_own_python():
+    """curl was in the backend image for this check alone. The image ships no OS
+    package now - one network tool fewer in the container that handles uploads -
+    so the check must need nothing the image lacks: its own Python."""
+    assert _backend_healthcheck()[:3] == ["CMD", "python", "-c"]
+
+
+@pytest.fixture
+def health_server():
+    """A stand-in for /api/health whose answer the test sets."""
+    import http.server
+    import threading
+
+    state = {"status": 200}
+
+    class Handler(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):  # noqa: N802 - the stdlib's name
+            self.send_response(state["status"] if self.path == "/api/health" else 404)
+            self.end_headers()
+
+        def log_message(self, *_args):
+            pass
+
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    yield server, state
+    server.shutdown()
+    server.server_close()
+
+
+def test_the_backend_healthcheck_fails_on_an_error_and_never_uses_a_proxy(health_server):
+    """The compose healthcheck's own snippet, pointed at a stand-in: a 2xx is
+    healthy, a 503 and a refused port are not - and an HTTP_PROXY in the
+    environment (operators set one in .env for outbound calls) must not route
+    the loopback probe, or a proxy outage would mark a healthy backend down."""
+    server, state = health_server
+    url = "http://127.0.0.1:8000/api/health"
+    snippet = _backend_healthcheck()[3]
+    assert url in snippet
+    env = {**os.environ, "HTTP_PROXY": "http://127.0.0.1:9", "http_proxy": "http://127.0.0.1:9",
+           "NO_PROXY": "", "no_proxy": ""}
+
+    def probe(port: int) -> int:
+        code = snippet.replace(url, f"http://127.0.0.1:{port}/api/health")
+        return subprocess.run(  # noqa: S603 - the compose file's own snippet
+            [sys.executable, "-c", code], env=env, capture_output=True, timeout=30
+        ).returncode
+
+    port = server.server_port
+    assert probe(port) == 0, "a healthy backend reported unhealthy (did the probe use the proxy?)"
+    state["status"] = 503
+    assert probe(port) != 0, "a 503 passed the healthcheck"
+    server.shutdown()
+    server.server_close()
+    assert probe(port) != 0, "a refused connection passed the healthcheck"
 
 
 # --- docker-11 ---------------------------------------------------------------

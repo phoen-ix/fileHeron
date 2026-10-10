@@ -46,8 +46,8 @@ Area detail goes to its doc, not back here.
 
 ## Current state
 
-Backend **`v2.25.2`** is the newest tag (the 2026-10-10 audit fixes; v2.25.0 brought encryption at rest, off by default) and
-**`client-v1.5.2`** the newest desktop client; the reference host runs
+Backend **`v2.25.3`** is the newest tag (a dependency refresh; v2.25.2 brought the 2026-10-10 audit fixes, v2.25.0 encryption at rest, off by default) and
+**`client-v1.6.0`** the newest desktop client (Python 3.14, Windows 10 or newer); the reference host runs
 **v2.25.1**. What each release changed, the
 host's infra and the per-tag migrations, host steps and default moves are in
 [`releases.md`](docs/engineering/releases.md). **Keep this paragraph and that file current on release.**

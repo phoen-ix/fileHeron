@@ -7,7 +7,12 @@ summary and points here. Read this before changing the code listed below.
 
 ## Current state
 
-Backend **`v2.25.2`** is the newest tag (2026-10-10): the fixes of the 2026-10-10
+Backend **`v2.25.3`** is the newest tag (2026-10-10): a dependency refresh - the
+backend lock and the frontend tree to current, the SPA built on Node 26, ruff 0.17.0,
+and CI's linter images pinned where Dependabot looks (`.github/ci-tools/Dockerfile`).
+Desktop client **`client-v1.6.0`** ships beside it: Python 3.14 in the .exe, so it
+needs Windows 10 or newer (`docs/engineering/desktop-client.md`). **`v2.25.2`**
+(same day): the fixes of the 2026-10-10
 audit - daily tasks run once on DST nights, IMAP Fetch now no longer 500s, a tab
 from before an update reloads itself, mail survives an outage of an hour or
 more, one IMAP blip no longer alerts, one mail per failed job, an answer to a
@@ -63,7 +68,9 @@ no test mounted AdminLayout); v2.17.2 is that one-line fix plus
 13:45 UTC from v2.24.0, migration `202610030001` applied; encryption at rest is
 off there); the working tree's `scripts/` are live there
 as always. Its infra has been on `mariadb:12.3.3` /
-`redis:8.10.2` / `clamav:1.5.4` since the v2.19.0 update (API down ~70 s). The
+`redis:8.10.2` / `clamav:1.5.4` since the v2.19.0 update (API down ~70 s); db and
+clamav were recreated by hand on 2026-10-10 on Docker Hub's same-tag rebuilds, which
+the updater never pulls (it compares tags, not digests). The
 default moves of v2.16.0 and v2.19.0 are live there; v2.17.x, v2.18.0 and
 v2.19.1 through v2.25.1 move no default.
 `data/updater/rollback_target.json` holds the version BEFORE last, not the
@@ -111,6 +118,7 @@ record.
 | v2.25.0 | `202610030001` encryption at rest: `files.enc_version` + `key_encrypted` + `release_verdict` (+ `ix_files_enc_state`), `inbound_attachments.enc_version` + `key_encrypted`, table `storage_purge_queue`; `downgrade()` REFUSES while any row is encrypted | - when the updater can sync infra (tusd v2.9.2 -> v2.10.1); where it SKIPS, `docker compose up -d --no-deps tusd` after the fast-forward the log names | - (encryption ships OFF: `storage.encrypt_at_rest`. New `GET/PUT /api/admin/settings/encryption` (PUT step-up gated BOTH ways), `POST .../retry-failed`, `POST /api/admin/users/{id}/unlock`, `GET /api/account/email`, `GET /api/admin/audit-log/settings-changes`; Rollback answers `409 ROLLBACK_BLOCKED_BY_ENCRYPTION` while encrypted files exist and the target predates the migration. Behaviour: an empty `FORWARDED_ALLOW_IPS=` now reaches uvicorn as `*`, not "" - it had trusted no proxy) |
 | v2.25.1 | - | - | - (behaviour: `ops_check` alerts `av_unhealthy` only after 3 failed ClamAV pings over 20 s, not on one) |
 | v2.25.2 | - | - | **`auth.session_max_age_days` = 30**: a session signed in more than 30 days ago ends at its first refresh after the update (browser and desktop client); `0` restores the old unlimited behaviour. Behaviour: the 02:xx daily tasks run once on DST nights; `send_email_job` retries for ~1 h 51 min (its own `max_tries`); `imap_poll` alerts only on an outage (15 min without a success) or a non-transient error; a cron failure mails an admin once; `run_poll`'s message count is `skipped_messages` |
+| v2.25.3 | - | - | - (dependency refresh only: backend lock, frontend tree, the SPA built on Node 26. Desktop `client-v1.6.0` beside it bundles Python 3.14 and needs **Windows 10 or newer**) |
 
 Per-release admin-facing notes for v2.13.0 and newer are in `RELEASE_NOTES.md`,
 one `# file:Heron vX.Y.Z` section each, newest first; older releases live in

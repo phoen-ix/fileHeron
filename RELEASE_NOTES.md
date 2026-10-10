@@ -1,3 +1,43 @@
+# file:Heron v2.25.3
+
+**Up-to-date dependencies.** The server's libraries are refreshed to their
+current releases, and the web app is now built with Node.js 26. Desktop client
+**1.6.0** ships beside it and needs **Windows 10 or newer**.
+
+**No migration, no host step, no default moves.** Nothing changes in how
+file:Heron works. The database, Redis, ClamAV and tusd versions are unchanged.
+
+---
+
+## Server
+
+- Updated libraries: FastAPI 0.143.0, pydantic 2.14.0, SQLAlchemy 2.1.4,
+  httptools 0.9.0, websockets 17.2, dnspython 2.9.0 and smaller updates. No
+  known vulnerability affected the previous versions.
+
+## Web app
+
+- Built with Node.js 26, the release line that becomes Node's long-term
+  support version on 28 October. Node.js only builds the web app; a running
+  installation does not run it.
+- Updated libraries: Vite 8.3.4, Vue Router 5.4.0, vue-i18n 11.4.14 and
+  smaller updates.
+
+## Desktop client 1.6.0
+
+- The app now carries Python 3.14. Until now it carried a Python from April
+  2025, for which no Windows security fixes were published any more.
+- Python 3.14 does not run on **Windows 8.1**, so 1.6.0 needs **Windows 10 or
+  newer**. On Windows 8.1, stay on 1.5.2.
+
+---
+
+## Upgrading
+
+Click **Update**. Automatic updates install it at any scope, patch included.
+
+---
+
 # file:Heron v2.25.2
 
 **Fixes from an audit of the code and of a running instance's logs.** Daily

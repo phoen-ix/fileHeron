@@ -70,7 +70,7 @@ seed:
 # `app scripts` is the same scope CI uses.
 typecheck:
 	cd backend && docker run --rm -v "$$PWD":/w -w /w -e PYTHONDONTWRITEBYTECODE=1 \
-		python:3.14-slim sh -c \
+		-e PIP_ROOT_USER_ACTION=ignore python:3.14-slim sh -c \
 		'set -e; pip install -q --require-hashes -r requirements.lock; \
 		 pip install -q -e ".[dev]"; python -m mypy app scripts'
 
@@ -99,5 +99,5 @@ lint-frontend:
 # pin in a throwaway container, faithful to CI with nothing installed on the
 # host. --no-cache keeps it from leaving a root-owned .ruff_cache behind.
 lint-docker:
-	cd backend && docker run --rm -v "$$PWD":/w -w /w python:3.12-slim \
+	cd backend && docker run --rm -v "$$PWD":/w -w /w -e PIP_ROOT_USER_ACTION=ignore python:3.12-slim \
 		sh -c "pip install -q ruff==$(RUFF_PIN) && ruff check --no-cache ."

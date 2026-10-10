@@ -116,6 +116,7 @@ docker run --rm --network "$NETWORK" \
     -v "$ROOT":/src -w /src/backend \
     -e PYTHONPATH=/src/backend \
     -e PYTHONDONTWRITEBYTECODE=1 \
+    -e PIP_ROOT_USER_ACTION=ignore \
     -e RUN_ALEMBIC_ROUNDTRIP=1 \
     -e DB_HOST="$DB_CONTAINER" \
     -e DB_PORT=3306 \

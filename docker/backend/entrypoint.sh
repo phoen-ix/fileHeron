@@ -10,17 +10,14 @@
 set -euo pipefail
 
 echo "[entrypoint] waiting for DB at ${DB_HOST:-db}:${DB_PORT:-3306} ..."
-for i in {1..30}; do
-    if python -c "import socket, sys, os; s=socket.socket(); s.settimeout(2); s.connect((os.environ.get('DB_HOST','db'), int(os.environ.get('DB_PORT','3306')))); s.close()" 2>/dev/null; then
-        echo "[entrypoint] DB is reachable"
-        break
-    fi
-    if [ "$i" = "30" ]; then
-        echo "[entrypoint] FATAL: DB never became reachable" >&2
-        exit 1
-    fi
-    sleep 1
-done
+# A real login, closed cleanly: a bare TCP connect-and-close made MariaDB log an
+# "Aborted connection" warning on every container start (scripts/wait_for_db.py).
+if python -m scripts.wait_for_db 30; then
+    echo "[entrypoint] DB is reachable"
+else
+    echo "[entrypoint] FATAL: DB never became reachable" >&2
+    exit 1
+fi
 
 echo "[entrypoint] running alembic upgrade head ..."
 alembic upgrade head

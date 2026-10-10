@@ -24,7 +24,7 @@ if str(_ROOT) not in _sys.path:
 
 import sys  # noqa: E402
 
-from app.database import SessionLocal  # noqa: E402
+from app.database import SessionLocal, engine  # noqa: E402
 from app.services.admin_bootstrap import bootstrap_admin_if_configured  # noqa: E402
 
 
@@ -34,6 +34,9 @@ def main() -> int:
         bootstrap_admin_if_configured(db)
     finally:
         db.close()
+        # A clean close for the pooled connection; left to process exit it is an
+        # "Aborted connection" warning in MariaDB's log on every container start.
+        engine.dispose()
     return 0
 
 

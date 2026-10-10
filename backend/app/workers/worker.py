@@ -24,6 +24,7 @@ from arq.cron import cron
 from arq.worker import func
 
 from ..config import settings
+from ..database import engine
 from ..services.release_check import release_check
 from ..utils.logger import configure_logging
 from .analytics_aggregate import analytics_aggregate
@@ -57,6 +58,12 @@ from .webhook_deliver import webhook_deliver
 
 async def startup(_ctx) -> None:
     configure_logging(settings.LOG_LEVEL)
+
+
+async def shutdown(_ctx) -> None:
+    # Close the pool's connections properly; left to process exit, each one is an
+    # "Aborted connection" warning in MariaDB's log on every update and restart.
+    engine.dispose()
 
 
 class WorkerSettings:
@@ -109,6 +116,7 @@ class WorkerSettings:
         cron(cast("Any", cron_dispatch), hour=None, minute=set(range(60)), run_at_startup=False),
     ]
     on_startup = startup
+    on_shutdown = shutdown
     # Use a dedicated queue so the worker doesn't accidentally pick up
     # ad-hoc job enqueues from elsewhere if those ever appear.
     queue_name = "fileheron:default"

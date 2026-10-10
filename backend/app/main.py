@@ -16,7 +16,7 @@ from fastapi import Depends, FastAPI
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from .config import settings
-from .database import SessionLocal
+from .database import SessionLocal, engine
 from .middleware.errors import (
     AppError,
     app_error_handler,
@@ -81,6 +81,10 @@ async def lifespan(_app: FastAPI):
     finally:
         db.close()
     yield
+    # Close the pool's connections properly on the way out. Left to process exit,
+    # every pooled connection showed up in MariaDB's log as "Aborted connection"
+    # on each update and restart.
+    engine.dispose()
 
 
 _disable_docs = settings.is_production

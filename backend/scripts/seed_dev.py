@@ -24,7 +24,7 @@ if str(_ROOT) not in _sys.path:
 import sys  # noqa: E402
 
 from app.config import settings  # noqa: E402
-from app.database import SessionLocal  # noqa: E402
+from app.database import SessionLocal, engine  # noqa: E402
 from app.models.audit_log import AuditEventType  # noqa: E402
 from app.models.user import Locale, User, UserRole  # noqa: E402
 from app.services.audit import record_audit_event  # noqa: E402
@@ -72,6 +72,9 @@ def main() -> int:
         print(f"[seed_dev] seeded test user id={user.id} email={user.email}")
     finally:
         db.close()
+        # A clean close for the pooled connection; left to process exit it is an
+        # "Aborted connection" warning in MariaDB's log on every container start.
+        engine.dispose()
     return 0
 
 

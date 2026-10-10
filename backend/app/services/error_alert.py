@@ -40,8 +40,8 @@ from sqlalchemy.orm import Session
 
 from ..middleware.errors import AppError
 from ..models.notification import NotificationCategory
-from ..models.user_notification_preference import NotificationChannel
 from ..models.user import User, UserRole
+from ..models.user_notification_preference import NotificationChannel
 from ..redis_client import get_redis, sync
 from ..utils.crypto import sha256_hex
 from ..utils.timeutil import utc_now

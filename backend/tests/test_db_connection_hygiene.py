@@ -13,25 +13,63 @@ import pathlib
 
 import pymysql
 import pytest
+from sqlalchemy.exc import OperationalError
+from sqlalchemy.pool import NullPool
 
 from scripts import wait_for_db
 
 _ENTRYPOINT = pathlib.Path(__file__).resolve().parents[2] / "docker" / "backend" / "entrypoint.sh"
 
 
-class _Conn:
-    def __init__(self):
-        self.closed = False
+class _FakeEngine:
+    """Stands in for the probe's SQLAlchemy engine: records whether the
+    connection was left (closed) and the engine disposed."""
 
-    def close(self):
-        self.closed = True
+    def __init__(self, refuse_with: int | None = None):
+        self.refuse_with = refuse_with
+        self.closed = False
+        self.disposed = False
+
+    def connect(self):
+        if self.refuse_with is not None:
+            orig = pymysql.err.OperationalError(self.refuse_with, "x")
+            raise OperationalError("SELECT 1", {}, orig)
+        engine = self
+
+        class _Conn:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *exc):
+                engine.closed = True
+                return False
+
+        return _Conn()
+
+    def dispose(self):
+        self.disposed = True
 
 
 def test_the_probe_logs_in_and_closes(monkeypatch):
-    conn = _Conn()
-    monkeypatch.setattr(pymysql, "connect", lambda **_kw: conn)
+    fake = _FakeEngine()
+    monkeypatch.setattr(wait_for_db, "create_engine", lambda *_a, **_k: fake)
     assert wait_for_db.probe() is True
-    assert conn.closed, "a probe that does not close is the warning it exists to end"
+    assert fake.closed, "a probe that does not close is the warning it exists to end"
+    assert fake.disposed
+
+
+def test_the_probe_uses_a_pool_that_really_closes(monkeypatch):
+    seen = {}
+
+    def _capture(url, **kw):
+        seen.update(kw, url=url)
+        return _FakeEngine()
+
+    monkeypatch.setenv("DB_HOST", "db.internal")
+    monkeypatch.setattr(wait_for_db, "create_engine", _capture)
+    wait_for_db.probe()
+    assert seen["poolclass"] is NullPool
+    assert seen["url"].host == "db.internal" and seen["url"].drivername == "mysql+pymysql"
 
 
 @pytest.mark.parametrize(
@@ -44,11 +82,10 @@ def test_the_probe_logs_in_and_closes(monkeypatch):
     ],
 )
 def test_the_probe_waits_for_reachability_not_for_a_login(code, reachable, monkeypatch):
-    def _refuse(**_kw):
-        raise pymysql.err.OperationalError(code, "x")
-
-    monkeypatch.setattr(pymysql, "connect", _refuse)
+    fake = _FakeEngine(refuse_with=code)
+    monkeypatch.setattr(wait_for_db, "create_engine", lambda *_a, **_k: fake)
     assert wait_for_db.probe() is reachable
+    assert fake.disposed
 
 
 def test_wait_for_db_gives_up_after_its_attempts(monkeypatch):

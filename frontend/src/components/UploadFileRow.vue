@@ -1,7 +1,13 @@
 <template>
   <li class="file-row" :data-state="item.state">
-    <div class="file-row-name" :title="item.file.name">
-      <span class="file-name">{{ item.file.name }}</span>
+    <div
+      class="file-row-name"
+      :title="item.relativeDir ? `${item.relativeDir}/${item.file.name}` : item.file.name"
+    >
+      <span class="file-name">
+        <span v-if="item.relativeDir" class="file-dir">{{ item.relativeDir }}/</span
+        >{{ item.file.name }}
+      </span>
       <span class="file-size">{{ formatBytes(item.file.size) }}</span>
     </div>
     <div class="file-row-progress">
@@ -123,6 +129,13 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  /* The folder a file came from (folder uploads): muted, so the name reads first. */
+  .file-dir {
+    font-family: var(--fh-font-mono);
+    font-size: var(--fh-text-mono-sm);
+    color: var(--fh-subtle);
   }
 
   .file-size {

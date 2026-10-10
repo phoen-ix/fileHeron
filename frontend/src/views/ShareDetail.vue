@@ -33,6 +33,7 @@
   import { formatBytes } from '@/utils/bytes'
   import { afterReadyLabel } from '@/utils/duration'
   import { siteLocalIsoToUtcIso } from '@/utils/datetime'
+  import { groupByFolder } from '@/utils/folders'
   import { shareStatePill } from '@/utils/statePill'
 
   const route = useRoute()
@@ -43,6 +44,7 @@
   const { describe } = useApiError()
 
   const share = ref<ShareResponse | null>(null)
+  const fileGroups = computed(() => groupByFolder(share.value?.files ?? []))
   const loading = ref(true)
   const errorMsg = ref<string | null>(null)
   const expiringNow = ref(false)
@@ -228,9 +230,9 @@
   const addRegistrar = createSettledRegistrar({
     shareId: () => share.value?.id ?? null,
     items: () => addUpload.items.value,
-    register: async (id, fileIds) => {
+    register: async (id, fileIds, last) => {
       const { data } = await registerFilesAdded(id, {
-        notify: notifyOnAdd.value,
+        notify: last && notifyOnAdd.value,
         file_ids: fileIds,
       })
       share.value = data
@@ -755,14 +757,17 @@
       </div>
 
       <ul v-if="share.files.length > 0" class="files">
-        <FileRow
-          v-for="f in share.files"
-          :key="f.id"
-          :file="f"
-          :can-delete="isOwner && f.state !== 'infected'"
-          @deleted="onFileDeleted"
-          @preview="openPreview"
-        />
+        <template v-for="group in fileGroups" :key="group.dir ?? ''">
+          <li v-if="group.dir" class="folder-heading fh-mono">{{ group.dir }}/</li>
+          <FileRow
+            v-for="f in group.files"
+            :key="f.id"
+            :file="f"
+            :can-delete="isOwner && f.state !== 'infected'"
+            @deleted="onFileDeleted"
+            @preview="openPreview"
+          />
+        </template>
       </ul>
       <p v-else class="fh-field-help">{{ t('share_detail.empty') }}</p>
 
@@ -896,6 +901,16 @@
     margin: 0;
     padding: 0;
     border-top: var(--fh-border);
+  }
+
+  /* Folder uploads: a share's files arrive top level first, then by folder;
+     each folder gets one heading row and its files keep their leaf names. */
+  .folder-heading {
+    padding: var(--fh-space-3) 0 var(--fh-space-1);
+    border-bottom: var(--fh-border);
+    font-size: var(--fh-text-mono-sm);
+    color: var(--fh-subtle);
+    overflow-wrap: anywhere;
   }
 
   .owner-actions {

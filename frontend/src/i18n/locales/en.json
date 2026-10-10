@@ -1990,7 +1990,8 @@
       "headline_a": "Drop files here",
       "or": "or",
       "headline_b": "browse",
-      "hint": "Up to 30 GB per file. Resume picks up where the connection drops."
+      "hint": "Up to 30 GB per file. Resume picks up where the connection drops.",
+      "folder": "Choose a folder"
     },
     "state": {
       "queued": "Queued",

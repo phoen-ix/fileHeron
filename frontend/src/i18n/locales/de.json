@@ -1990,7 +1990,8 @@
       "headline_a": "Dateien hierher ziehen",
       "or": "oder",
       "headline_b": "auswählen",
-      "hint": "Bis 30 GB pro Datei. Bei Verbindungsabbruch wird automatisch fortgesetzt."
+      "hint": "Bis 30 GB pro Datei. Bei Verbindungsabbruch wird automatisch fortgesetzt.",
+      "folder": "Ordner auswählen"
     },
     "state": {
       "queued": "Wartet",

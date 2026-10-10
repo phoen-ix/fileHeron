@@ -28,6 +28,25 @@
       </div>
     </label>
 
+    <!-- Folders keep their structure (folder uploads). Outside the label on
+         purpose: a click inside it would also open the FILE picker. -->
+    <div class="folder-pick">
+      <button type="button" class="fh-btn-text" :disabled="disabled" @click="folderInput?.click()">
+        {{ t('upload.dropzone.folder') }}
+      </button>
+      <input
+        ref="folderInput"
+        type="file"
+        multiple
+        webkitdirectory
+        class="folder-input"
+        tabindex="-1"
+        aria-hidden="true"
+        :disabled="disabled"
+        @change="onFileChange"
+      />
+    </div>
+
     <ul v-if="items.length > 0" class="file-list">
       <UploadFileRow
         v-for="item in items"
@@ -42,6 +61,7 @@
 </template>
 
 <script setup lang="ts">
+  import { getDroppedFiles } from '@uppy/core/utils'
   import { ref } from 'vue'
   import { useI18n } from 'vue-i18n'
 
@@ -61,6 +81,7 @@
 
   const { t } = useI18n()
   const dragging = ref(false)
+  const folderInput = ref<HTMLInputElement | null>(null)
 
   function onFileChange(e: Event) {
     const target = e.target as HTMLInputElement
@@ -77,8 +98,14 @@
 
   function onDrop(e: DragEvent) {
     dragging.value = false
-    if (!e.dataTransfer?.files?.length) return
-    emit('add', Array.from(e.dataTransfer.files))
+    if (!e.dataTransfer) return
+    // Uppy's walker opens dropped folders - `dataTransfer.files` lists a
+    // folder as one unreadable pseudo-file - and stamps each file with the
+    // path it had inside them. It must be CALLED inside this handler: the
+    // browser revokes access to the dropped items once the event returns.
+    void getDroppedFiles(e.dataTransfer).then((files) => {
+      if (files.length > 0) emit('add', files)
+    })
   }
 </script>
 
@@ -113,7 +140,14 @@
     background: var(--fh-accent-soft);
   }
 
-  .dropzone-input {
+  .folder-pick {
+    display: flex;
+    justify-content: center;
+    margin-top: calc(-1 * var(--fh-space-2));
+  }
+
+  .dropzone-input,
+  .folder-input {
     position: absolute;
     width: 1px;
     height: 1px;

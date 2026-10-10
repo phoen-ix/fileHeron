@@ -47,7 +47,7 @@ test('resumable browser upload (Uppy/TUS) adds a file to an active share', async
   // file; with the forced threshold this goes through the Uppy/TUS client.
   await page.getByTestId('add-files-toggle').click()
   const fileName = `resumable-${Date.now()}.bin`
-  await page.locator('.add-files-panel input[type=file]').setInputFiles({
+  await page.locator('.add-files-panel input.dropzone-input').setInputFiles({
     name: fileName,
     mimeType: 'application/octet-stream',
     buffer: Buffer.from([1, 2, 3, 4, 5, 6, 7, 8]),

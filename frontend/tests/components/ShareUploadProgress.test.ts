@@ -18,6 +18,7 @@ function item(over: Partial<UploadItem> = {}): UploadItem {
     error: null,
     errorCode: null,
     bytesUploaded: 4,
+    relativeDir: null,
     ...over,
   }
 }

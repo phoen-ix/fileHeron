@@ -16,6 +16,7 @@ function item(state: UploadState, fileId: string | null): UploadItem {
     error: null,
     errorCode: null,
     bytesUploaded: 0,
+    relativeDir: null,
   }
 }
 

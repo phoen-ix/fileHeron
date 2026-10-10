@@ -116,7 +116,7 @@ test('share page (hero)', async ({ page }) => {
 test('new share', async ({ page }) => {
   await signIn(page, PEOPLE.lukas.email)
   await page.goto('/share/new')
-  await page.locator('input[type=file]').first().setInputFiles(
+  await page.locator('input.dropzone-input').setInputFiles(
     [
       { name: 'Riverside site photos.zip', bytes: 148.2 * MB, type: 'application/zip' },
       { name: 'Survey report.pdf', bytes: 3.4 * MB, type: 'application/pdf' },

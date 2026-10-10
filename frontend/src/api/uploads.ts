@@ -6,13 +6,22 @@ export function initUpload(payload: {
   filename: string
   size_bytes: number
   mime_type?: string
+  /** The folder the file came from (folder uploads), e.g. 'Photos/2026'. */
+  relative_dir?: string
 }) {
   return api.post<UploadInitResponse>('/uploads/init', payload)
 }
 
-export function directUpload(shareId: string, file: File, onProgress?: (n: number) => void) {
+export function directUpload(
+  shareId: string,
+  file: File,
+  onProgress?: (n: number) => void,
+  relativeDir?: string | null,
+) {
   const form = new FormData()
   form.append('share_id', shareId)
+  // Only for a file that came from a folder (folder uploads).
+  if (relativeDir) form.append('relative_dir', relativeDir)
   form.append('file', file)
   return api.post<DirectUploadResponse>('/uploads/direct', form, {
     // A direct upload can easily exceed the shared client's 30s default; the

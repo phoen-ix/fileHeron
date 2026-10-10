@@ -256,6 +256,7 @@
           <tr v-for="it in items" :key="it.file_id">
             <td>
               <div class="row-name">{{ it.filename }}</div>
+              <div v-if="it.relative_dir" class="fh-mono row-hint">{{ it.relative_dir }}/</div>
               <div class="fh-mono row-hint">{{ it.recipients_summary }}</div>
             </td>
             <td class="numeric fh-mono">{{ formatBytes(it.size_bytes) }}</td>

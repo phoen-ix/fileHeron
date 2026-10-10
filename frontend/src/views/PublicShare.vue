@@ -22,6 +22,7 @@
   import type { PublicShareFile, PublicShareResponse } from '@/types/api'
   import { formatBytes } from '@/utils/bytes'
   import { afterReadyLabel } from '@/utils/duration'
+  import { groupByFolder } from '@/utils/folders'
   import { previewKind } from '@/utils/preview'
 
   const route = useRoute()
@@ -32,6 +33,7 @@
   const showLogo = computed(() => showBrand.value && !!site.branding.logo_url)
 
   const share = ref<PublicShareResponse | null>(null)
+  const fileGroups = computed(() => groupByFolder(share.value?.files ?? []))
   const loading = ref(true)
   const errorMsg = ref<string | null>(null)
   const errorCode = ref<string | null>(null)
@@ -252,53 +254,56 @@
         </a>
 
         <ul class="files">
-          <li v-for="f in share.files" :key="f.id" class="file-row" :data-state="f.state">
-            <div class="meta">
-              <div class="filename" :title="f.original_filename">{{ f.original_filename }}</div>
-              <div class="sub fh-mono">{{ formatBytes(f.size_bytes) }} · {{ f.mime_type }}</div>
-            </div>
-            <div class="state-cell">
-              <span v-if="f.state === 'ready_unscanned'" class="fh-pill" data-state="warn">
-                {{ t('public_share.scanning') }}
-              </span>
-              <span v-else-if="f.state === 'infected'" class="fh-pill" data-state="danger">
-                {{ t('public_share.infected') }}
-              </span>
-              <!-- A file too large for clamd to read is served without a real
-                   verdict. The signed-in file list has shown this since v2.2.0;
-                   the public page never did, so an anonymous recipient - the
-                   one person who cannot ask the sender about it - saw nothing
-                   distinguishing it from a scanned file. schemas/public_link.py
-                   claimed otherwise in its own comment. -->
-              <span
-                v-else-if="f.av_unscanned"
-                class="fh-pill"
-                data-state="warn"
-                :title="t('files.av_unscanned_hint')"
-              >
-                {{ t('files.av_unscanned') }}
-              </span>
-            </div>
-            <div class="action">
-              <button
-                v-if="canPreview(f)"
-                type="button"
-                class="fh-btn-text"
-                @click="openPreview(f)"
-              >
-                {{ t('file_preview.open') }}
-              </button>
-              <a
-                v-if="fileEnabled(f.state)"
-                :href="publicDownloadUrl(token, f.id)"
-                class="fh-btn-text"
-                :download="f.original_filename"
-                @click="refreshAfterDownload"
-              >
-                {{ t('public_share.download') }} <span aria-hidden="true">↓</span>
-              </a>
-            </div>
-          </li>
+          <template v-for="group in fileGroups" :key="group.dir ?? ''">
+            <li v-if="group.dir" class="folder-heading fh-mono">{{ group.dir }}/</li>
+            <li v-for="f in group.files" :key="f.id" class="file-row" :data-state="f.state">
+              <div class="meta">
+                <div class="filename" :title="f.original_filename">{{ f.original_filename }}</div>
+                <div class="sub fh-mono">{{ formatBytes(f.size_bytes) }} · {{ f.mime_type }}</div>
+              </div>
+              <div class="state-cell">
+                <span v-if="f.state === 'ready_unscanned'" class="fh-pill" data-state="warn">
+                  {{ t('public_share.scanning') }}
+                </span>
+                <span v-else-if="f.state === 'infected'" class="fh-pill" data-state="danger">
+                  {{ t('public_share.infected') }}
+                </span>
+                <!-- A file too large for clamd to read is served without a real
+                     verdict. The signed-in file list has shown this since v2.2.0;
+                     the public page never did, so an anonymous recipient - the
+                     one person who cannot ask the sender about it - saw nothing
+                     distinguishing it from a scanned file. schemas/public_link.py
+                     claimed otherwise in its own comment. -->
+                <span
+                  v-else-if="f.av_unscanned"
+                  class="fh-pill"
+                  data-state="warn"
+                  :title="t('files.av_unscanned_hint')"
+                >
+                  {{ t('files.av_unscanned') }}
+                </span>
+              </div>
+              <div class="action">
+                <button
+                  v-if="canPreview(f)"
+                  type="button"
+                  class="fh-btn-text"
+                  @click="openPreview(f)"
+                >
+                  {{ t('file_preview.open') }}
+                </button>
+                <a
+                  v-if="fileEnabled(f.state)"
+                  :href="publicDownloadUrl(token, f.id)"
+                  class="fh-btn-text"
+                  :download="f.original_filename"
+                  @click="refreshAfterDownload"
+                >
+                  {{ t('public_share.download') }} <span aria-hidden="true">↓</span>
+                </a>
+              </div>
+            </li>
+          </template>
         </ul>
       </div>
     </template>
@@ -377,6 +382,16 @@
     margin: 0;
     padding: 0;
     border-top: var(--fh-border);
+  }
+
+  /* Folder uploads: a share's files arrive top level first, then by folder;
+     each folder gets one heading row and its files keep their leaf names. */
+  .folder-heading {
+    padding: var(--fh-space-3) 0 var(--fh-space-1);
+    border-bottom: var(--fh-border);
+    font-size: var(--fh-text-mono-sm);
+    color: var(--fh-subtle);
+    overflow-wrap: anywhere;
   }
 
   .file-row {

@@ -1,5 +1,9 @@
 import { settledFileIds, type UploadItem } from '@/composables/useUpload'
 
+/** The most ids `POST /shares/{id}/files-added` takes in one call
+ *  (schemas/share.py FilesAddedRequest). */
+export const FILES_ADDED_MAX = 1000
+
 /**
  * Register each settled upload with the server exactly once.
  *
@@ -14,7 +18,9 @@ import { settledFileIds, type UploadItem } from '@/composables/useUpload'
 export function createSettledRegistrar(opts: {
   shareId: () => string | null
   items: () => readonly UploadItem[]
-  register: (shareId: string, fileIds: string[]) => Promise<unknown>
+  /** `last` is true for the final chunk of a flush: a caller that
+   *  re-notifies recipients does it there, once, not per chunk. */
+  register: (shareId: string, fileIds: string[], last: boolean) => Promise<unknown>
 }) {
   const sent = new Set<string>()
   let inFlight: Promise<string[]> | null = null
@@ -24,8 +30,15 @@ export function createSettledRegistrar(opts: {
     if (!shareId) return []
     const fresh = settledFileIds(opts.items()).filter((id) => !sent.has(id))
     if (fresh.length === 0) return []
-    await opts.register(shareId, fresh)
-    fresh.forEach((id) => sent.add(id))
+    // The server takes FILES_ADDED_MAX ids per call, and a dropped folder
+    // easily holds more: 1,001 settled files got a 422 for the whole batch,
+    // so none were registered. Chunks go in order; each is marked only once
+    // the server accepted it, so a failure leaves the rest for the next flush.
+    for (let i = 0; i < fresh.length; i += FILES_ADDED_MAX) {
+      const chunk = fresh.slice(i, i + FILES_ADDED_MAX)
+      await opts.register(shareId, chunk, i + FILES_ADDED_MAX >= fresh.length)
+      chunk.forEach((id) => sent.add(id))
+    }
     return fresh
   }
 

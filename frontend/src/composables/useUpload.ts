@@ -26,6 +26,7 @@ import { computed, onBeforeUnmount, ref, type Ref } from 'vue'
 import { asEnvelope } from '@/api/client'
 import { directUpload, initUpload } from '@/api/uploads'
 import { useSiteStore } from '@/stores/site'
+import { folderOf } from '@/utils/folders'
 
 // Mirror backend's MAX_DIRECT_UPLOAD_BYTES default. Cheap-enough for the
 // smallest VPS - files above this take the chunked path with resume. Build-time
@@ -51,6 +52,9 @@ export interface UploadItem {
    *  text. The composable stays i18n-free; only the key travels. */
   errorCode: string | null
   bytesUploaded: number
+  /** The folder the file came from (a dropped or picked folder), e.g.
+   *  'Photos/2026'; null for a file picked or dropped on its own. */
+  relativeDir: string | null
 }
 
 // One timestamped line in the per-file activity log surfaced on the
@@ -185,6 +189,7 @@ export function useUpload(shareId: Ref<string | null>) {
         error: null,
         errorCode: null,
         bytesUploaded: 0,
+        relativeDir: folderOf(f),
       }
       items.value.push(item)
       pushLog(item, 'queued')
@@ -212,11 +217,16 @@ export function useUpload(shareId: Ref<string | null>) {
       if (item.file.size < directLimit) {
         // Direct path: one POST, server-managed progress estimation.
         pushLog(item, 'started')
-        const { data } = await directUpload(shareId.value, item.file, (n) => {
-          item.progress = Math.min(99, n)
-          item.bytesUploaded = Math.round((item.file.size * n) / 100)
-          if (item.state === 'preparing') item.state = 'uploading'
-        })
+        const { data } = await directUpload(
+          shareId.value,
+          item.file,
+          (n) => {
+            item.progress = Math.min(99, n)
+            item.bytesUploaded = Math.round((item.file.size * n) / 100)
+            if (item.state === 'preparing') item.state = 'uploading'
+          },
+          item.relativeDir,
+        )
         item.fileId = data.file_id
         item.progress = 100
         item.bytesUploaded = item.file.size
@@ -231,6 +241,7 @@ export function useUpload(shareId: Ref<string | null>) {
         filename: item.file.name,
         size_bytes: item.file.size,
         mime_type: item.file.type || 'application/octet-stream',
+        ...(item.relativeDir ? { relative_dir: item.relativeDir } : {}),
       })
       item.fileId = data.file_id
 

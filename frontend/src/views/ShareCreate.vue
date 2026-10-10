@@ -280,8 +280,8 @@
   const registrar = createSettledRegistrar({
     shareId: () => shareId.value,
     items: () => upload.items.value,
-    register: (id, fileIds) =>
-      registerFilesAdded(id, { notify: notifyRecipients.value, file_ids: fileIds }),
+    register: (id, fileIds, last) =>
+      registerFilesAdded(id, { notify: last && notifyRecipients.value, file_ids: fileIds }),
   })
   async function registerSettled() {
     try {

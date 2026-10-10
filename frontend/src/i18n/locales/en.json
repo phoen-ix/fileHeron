@@ -758,6 +758,7 @@
       "auth": {
         "access_token_expire_minutes": "Access-token lifetime (minutes)",
         "refresh_token_expire_days": "Refresh-token lifetime (days)",
+        "session_max_age_days": "Session lifetime from sign-in (days)",
         "max_active_sessions_per_user": "Max active sessions per user"
       },
       "rate_limit": {
@@ -860,6 +861,7 @@
       "auth": {
         "access_token_expire_minutes": "How long a signed-in session's access token stays valid before the browser silently refreshes it. Shorter is safer; longer means fewer refreshes. (5-1440 min, default 15.)",
         "refresh_token_expire_days": "How long a stored session can be refreshed before the user must sign in again. (1-365 days, default 7.)",
+        "session_max_age_days": "How long after signing in a session can keep being refreshed; after that the user signs in again, however active the session is. 0 = no limit. (0-365 days, default 30.)",
         "max_active_sessions_per_user": "Cap on concurrent signed-in sessions per user; the oldest is evicted past this. (1-100, default 10.)"
       },
       "retention": {

@@ -174,6 +174,7 @@ class Keys:
     # default in config.Settings; read live via settings_registry.effective.
     ACCESS_TOKEN_EXPIRE_MINUTES = "auth.access_token_expire_minutes"
     REFRESH_TOKEN_EXPIRE_DAYS = "auth.refresh_token_expire_days"
+    SESSION_MAX_AGE_DAYS = "auth.session_max_age_days"
     MAX_ACTIVE_SESSIONS_PER_USER = "auth.max_active_sessions_per_user"
     RATE_LIMIT_LOGIN = "rate_limit.login"
     RATE_LIMIT_REGISTER = "rate_limit.register"

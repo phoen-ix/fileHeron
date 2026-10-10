@@ -435,10 +435,37 @@ def rotate_refresh(
         db.commit()
         raise AppError(401, "TOKEN_REUSE", "Refresh token reuse detected; all sessions revoked.")
 
+    # The absolute session lifetime. `created_at` is the SIGN-IN this chain
+    # started from (carried forward on every rotation, below), and without a cap
+    # each refresh minted a fresh token - so an open tab, whose bell refreshes
+    # every 15 minutes, stayed signed in forever. Age, not theft: this token is
+    # retired softly and the rest of the family is left alone.
+    from . import settings_registry
+
+    now = utc_now()
+    max_age_days = settings_registry.effective(db, settings_registry.K.SESSION_MAX_AGE_DAYS)
+    if max_age_days and record.created_at <= now - timedelta(days=max_age_days):
+        db.execute(
+            update(RefreshToken)
+            .where(RefreshToken.id == record.id, RefreshToken.revoked_at.is_(None))
+            .values(revoked_at=now)
+        )
+        record_audit_event(
+            db,
+            event_type=AuditEventType.session_max_age_reached,
+            actor_user_id=record.user_id,
+            target_type="refresh_token",
+            target_id=record.id,
+            metadata={"signed_in_at": record.created_at.isoformat(), "max_age_days": max_age_days},
+            request=request,
+        )
+        # The AppError rolls the request back; the retirement must survive it.
+        db.commit()
+        raise AppError(401, "INVALID_REFRESH", "Session expired; please sign in again.")
+
     # Conditional UPDATE → atomic check-and-revoke. If two requests race, the
     # second sees affected_rows=0; see the branch below for what happens then -
     # it is NOT treated as reuse, which is what this comment used to claim.
-    now = utc_now()
     result = db.execute(
         update(RefreshToken)
         .where(RefreshToken.id == record.id, RefreshToken.revoked_at.is_(None))
@@ -463,6 +490,12 @@ def rotate_refresh(
     # latest activity (admins sort by it to spot stale/hanging sessions).
     new_record.created_at = record.created_at
     new_record.last_used_at = now
+    if max_age_days:
+        # Never outlive the session it continues: the sessions page shows the
+        # real end, and the cookie's last refresh is refused on time.
+        new_record.expires_at = min(
+            new_record.expires_at, record.created_at + timedelta(days=max_age_days)
+        )
     record.replaced_by_id = new_record.id
     db.flush()
 

@@ -1167,6 +1167,7 @@ via `/admin/settings/advanced`.
 | `JWT_ALGORITHM` | `HS256` | Access-token algorithm. |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | `15` | Access-JWT lifetime. ↻ (5-1440). |
 | `REFRESH_TOKEN_EXPIRE_DAYS` | `7` | Refresh-cookie lifetime. ↻ (1-365). |
+| `SESSION_MAX_AGE_DAYS` | `30` | Days after sign-in a session can still be refreshed; `0` = no limit. ↻ (0-365). |
 | `COOKIE_SECURE` | `false` | Forced `true` in production. |
 | `MAX_ACTIVE_SESSIONS_PER_USER` | `10` | Per-user session cap. ↻ (1-100). |
 | `ARGON2_TIME_COST` / `ARGON2_MEMORY_COST_KIB` / `ARGON2_PARALLELISM` | `3`/`65536`/`2` | Argon2id cost. |
@@ -1339,6 +1340,7 @@ Array query params need `paramsSerializer: { indexes: null }` → `?state=active
 
 - Access JWT: HS256, 15 min, `{sub, iat, exp, jti, type:"access"}`. Refresh: 64 random bytes, SHA-256 in DB, 7 d, httpOnly cookie scoped `/api/auth`, `SameSite=Lax`, `Secure` in prod.
 - Rotation on every refresh; reuse of a rotated token revokes the **entire user family** (`refresh_token_reused`). `services/jwt_session.py::create_refresh_token` → `enforce_session_cap` enforces the session cap across all login flows (password / recovery / OIDC / WebAuthn / register-from-invite).
+- **A session ends `auth.session_max_age_days` (default 30, `0` = never) after its sign-in**, however active it stays: rotation carries the sign-in time forward, refuses to refresh past the cap (`401 INVALID_REFRESH`, audited `session_max_age_reached`, the rest of the user's sessions untouched) and never issues a token that outlives it. The browser and the desktop client then ask to sign in again. Editable on the Sessions settings page.
 - **API-token scopes** are deny-by-default: every `get_actor` route carries `Depends(require_scope(...))`, enforced only for `auth_via == "api_token"` (JWT/session + NULL-scope pass through).
 - **Step-up re-authentication.** These routes also require the caller's own current password in the request body (`password`; a form field on the import), even with a valid session or API token: `POST /api/admin/backup/export`, `POST /api/admin/backup/import`, `POST /api/admin/users/{id}/erase`, `POST /api/account/api-tokens`, `POST /api/admin/api-tokens`, `POST /api/account/webauthn/register/begin`, the self-update routes `POST /api/admin/system/update`, `/rollback` and `/update/now`, `PUT /api/admin/settings/auto-update` when it turns automatic updates on or changes them while they are on (turning them off needs no password), and `PUT /api/admin/settings/encryption` whenever it switches encryption at rest on or off. A wrong password answers **`403 INVALID_PASSWORD`** (never 401 - the caller IS authenticated), is rate-limited per user and audited as `step_up_failed`. SSO-only accounts have no password and cannot pass it; the CLI escape hatch is the recovery. The SMTP/IMAP test buttons ask for it only when a stored secret would travel to a host other than the saved one.
 - **Approving a share** (`POST /api/shares/{id}/approve`) requires a `content_fingerprint` - the digest of the files as the approver saw them; a stale one answers `409 CONTENT_CHANGED`.
@@ -1362,7 +1364,7 @@ bind mounts; **don't** revert to `os.rename` (cross-device in containers).
 ## ARQ workers + cron
 
 Config: `backend/app/workers/worker.py::WorkerSettings` (queue `fileheron:default`,
-`max_tries=5`, all idempotent). A minute **dispatcher** (`workers/cron_dispatch.py`)
+`max_tries=5` - `send_email_job` registers its own, see `workers/send_email.py` - all idempotent). A minute **dispatcher** (`workers/cron_dispatch.py`)
 reads the per-cron schedule registry (`services/cron_schedule.py` + `cron.<name>.*`
 settings) and enqueues jobs that are due; admins re-time them on
 [Scheduled tasks](#scheduled-tasks-adminscheduled-tasks). Defaults reproduce the

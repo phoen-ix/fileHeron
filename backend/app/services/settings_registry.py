@@ -40,6 +40,7 @@ TUNABLES: list[Tunable] = [
     # --- Sessions & auth ---
     Tunable(K.ACCESS_TOKEN_EXPIRE_MINUTES, "ACCESS_TOKEN_EXPIRE_MINUTES", "int", "sessions", 5, 1440),
     Tunable(K.REFRESH_TOKEN_EXPIRE_DAYS, "REFRESH_TOKEN_EXPIRE_DAYS", "int", "sessions", 1, 365),
+    Tunable(K.SESSION_MAX_AGE_DAYS, "SESSION_MAX_AGE_DAYS", "int", "sessions", 0, 365),
     Tunable(K.MAX_ACTIVE_SESSIONS_PER_USER, "MAX_ACTIVE_SESSIONS_PER_USER", "int", "sessions", 1, 100),
     # --- Rate limit & lockout ---
     Tunable(K.RATE_LIMIT_LOGIN, "RATE_LIMIT_LOGIN", "int", "rate_limits", 1, 1000),

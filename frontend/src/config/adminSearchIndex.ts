@@ -260,6 +260,7 @@ export const ADMIN_SEARCH_INDEX: readonly AdminSearchEntry[] = [
   // backend/tests/test_admin_search_index_pin.py.
   { routeName: 'admin-settings-sessions', hash: '#tunable-auth.access_token_expire_minutes', labelKey: 'admin_advanced.keys.auth.access_token_expire_minutes', keywords: ['jwt', 'access token', 'session length', 'token ttl', 'sitzung', 'revoke window'] },
   { routeName: 'admin-settings-sessions', hash: '#tunable-auth.refresh_token_expire_days', labelKey: 'admin_advanced.keys.auth.refresh_token_expire_days', keywords: ['refresh token', 'stay signed in', 'remember me', 'session expiry', 'sitzungsdauer'] },
+  { routeName: 'admin-settings-sessions', hash: '#tunable-auth.session_max_age_days', labelKey: 'admin_advanced.keys.auth.session_max_age_days', keywords: ['session lifetime', 'sign in again', 'absolute timeout', 'max session age', 'erneut anmelden'] },
   { routeName: 'admin-settings-sessions', hash: '#tunable-auth.max_active_sessions_per_user', labelKey: 'admin_advanced.keys.auth.max_active_sessions_per_user', keywords: ['session cap', 'concurrent sessions', 'devices', 'max sessions', 'geräte'] },
   { routeName: 'admin-settings-sign-in', hash: '#tunable-rate_limit.login', labelKey: 'admin_advanced.keys.rate_limit.login', keywords: ['login attempts', 'per ip', 'rate limit', 'anmeldeversuche', '429'] },
   { routeName: 'admin-settings-sign-in', hash: '#tunable-rate_limit.register', labelKey: 'admin_advanced.keys.rate_limit.register', keywords: ['register limit', 'forgot password limit', 'invite rate limit', 'reset limit'] },

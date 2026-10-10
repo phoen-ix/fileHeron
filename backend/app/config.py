@@ -57,6 +57,11 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+    # Absolute session lifetime: a session can be refreshed for at most this many
+    # days after its sign-in, however active it stays (every refresh used to
+    # mint a fresh REFRESH_TOKEN_EXPIRE_DAYS token, so an open tab - whose bell
+    # refreshes every 15 minutes - stayed signed in forever). 0 = no limit.
+    SESSION_MAX_AGE_DAYS: int = 30
     COOKIE_SECURE: bool = False
     # Per-user concurrent session cap. On login, if the user already has
     # this many active (non-revoked, non-expired) refresh tokens, the

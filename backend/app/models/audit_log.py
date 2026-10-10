@@ -47,6 +47,7 @@ class AuditEventType(str, enum.Enum):
     recovery_code_used = "recovery_code_used"              # Phase 1b
     account_locked = "account_locked"                      # Phase 1b
     account_unlocked = "account_unlocked"                  # admin "Unlock now"
+    session_max_age_reached = "session_max_age_reached"    # refresh refused: signed in too long ago
     file_integrity_failed = "file_integrity_failed"        # encrypted file failed to authenticate
     upload_size_mismatch = "upload_size_mismatch"          # post-finish refused a tus file of the wrong size
     encryption_at_rest_changed = "encryption_at_rest_changed"  # the storage.encrypt_at_rest switch

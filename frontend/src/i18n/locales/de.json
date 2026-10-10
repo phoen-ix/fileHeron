@@ -758,6 +758,7 @@
       "auth": {
         "access_token_expire_minutes": "Access-Token-Lebensdauer (Minuten)",
         "refresh_token_expire_days": "Refresh-Token-Lebensdauer (Tage)",
+        "session_max_age_days": "Sitzungsdauer ab Anmeldung (Tage)",
         "max_active_sessions_per_user": "Max. aktive Sitzungen pro Benutzer"
       },
       "rate_limit": {
@@ -860,6 +861,7 @@
       "auth": {
         "access_token_expire_minutes": "Wie lange das Access-Token einer Sitzung gültig ist, bevor der Browser es still erneuert. Kürzer ist sicherer; länger bedeutet weniger Erneuerungen. (5-1440 Min., Standard 15.)",
         "refresh_token_expire_days": "Wie lange eine gespeicherte Sitzung erneuert werden kann, bevor eine erneute Anmeldung nötig ist. (1-365 Tage, Standard 7.)",
+        "session_max_age_days": "Wie lange eine Sitzung nach der Anmeldung erneuert werden kann; danach ist eine erneute Anmeldung nötig, egal wie aktiv die Sitzung ist. 0 = unbegrenzt. (0-365 Tage, Standard 30.)",
         "max_active_sessions_per_user": "Obergrenze gleichzeitiger Sitzungen pro Benutzer; die älteste wird darüber hinaus entfernt. (1-100, Standard 10.)"
       },
       "retention": {

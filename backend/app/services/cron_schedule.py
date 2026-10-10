@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from sqlalchemy.orm import Session
@@ -248,6 +248,28 @@ def _zone(tz_name: str) -> ZoneInfo:
 _DUE_SLACK = timedelta(seconds=5)
 
 
+def _daily_slot_utc(day: date, h: int, m: int, tz: ZoneInfo) -> datetime:
+    """The instant (naive UTC) of HH:MM on the local calendar `day`.
+
+    Built from the DATE, never by `.replace(hour=...)` on the current local time.
+    That kept `now`'s `fold`, so on the night the clocks go back an 02:xx slot
+    existed twice and every daily job there ran twice (Europe/Vienna,
+    2026-10-25). Inside the spring-forward gap the wall-clock check passed while
+    the slot's UTC instant still lay ahead, so the job stayed due on every
+    one-minute tick until that instant: 52 runs of the 02:51 job, possibly
+    overlapping (measured in a replay of the dispatcher, 2026-10-10). Six of the
+    seven daily defaults sit in that hour.
+
+    `fold=0` (the default) makes an ambiguous time its FIRST occurrence and
+    moves a nonexistent one forward by the gap (02:51 -> 03:51 local).
+    """
+    return (
+        datetime.combine(day, time(h, m), tzinfo=tz)
+        .astimezone(timezone.utc)
+        .replace(tzinfo=None)
+    )
+
+
 def is_due(res: ResolvedSchedule, last_run_at: datetime | None, now_utc: datetime, tz_name: str) -> bool:
     """Pure due-ness check. ``last_run_at`` / ``now_utc`` are naive UTC. A None
     last_run_at means 'never seeded' -> not due (the dispatcher seeds first)."""
@@ -255,15 +277,13 @@ def is_due(res: ResolvedSchedule, last_run_at: datetime | None, now_utc: datetim
         return False
     if res.kind == KIND_INTERVAL:
         return (now_utc - last_run_at) >= timedelta(minutes=res.interval_minutes) - _DUE_SLACK
-    # daily: due once we've passed today's HH:MM (site tz) and haven't run since.
+    # daily: due once today's HH:MM (site tz) has passed and nothing ran since.
+    # Both sides are UTC instants - see _daily_slot_utc for why not wall clock.
     tz = _zone(tz_name)
-    now_local = now_utc.replace(tzinfo=timezone.utc).astimezone(tz)
+    today = now_utc.replace(tzinfo=timezone.utc).astimezone(tz).date()
     h, m = _parse_hhmm(res.daily_time)
-    sched_local = now_local.replace(hour=h, minute=m, second=0, microsecond=0)
-    if now_local < sched_local:
-        return False
-    sched_utc = sched_local.astimezone(timezone.utc).replace(tzinfo=None)
-    return last_run_at < sched_utc
+    slot = _daily_slot_utc(today, h, m, tz)
+    return now_utc >= slot and last_run_at < slot
 
 
 def effective_cadence_minutes(db: Session, name: str) -> int:
@@ -281,9 +301,9 @@ def next_run_at(
         base = last_run_at or now_utc
         return base + timedelta(minutes=res.interval_minutes)
     tz = _zone(tz_name)
-    now_local = now_utc.replace(tzinfo=timezone.utc).astimezone(tz)
+    today = now_utc.replace(tzinfo=timezone.utc).astimezone(tz).date()
     h, m = _parse_hhmm(res.daily_time)
-    sched_local = now_local.replace(hour=h, minute=m, second=0, microsecond=0)
-    if now_local >= sched_local:
-        sched_local = sched_local + timedelta(days=1)
-    return sched_local.astimezone(timezone.utc).replace(tzinfo=None)
+    slot = _daily_slot_utc(today, h, m, tz)
+    if now_utc >= slot:
+        slot = _daily_slot_utc(today + timedelta(days=1), h, m, tz)
+    return slot

@@ -127,3 +127,78 @@ def test_the_slack_cannot_halve_the_shortest_cadence():
     r = _res(kind=cs.KIND_INTERVAL, interval_minutes=1)
     assert cs.is_due(r, now - timedelta(seconds=30), now, "UTC") is False
     assert cs._DUE_SLACK.total_seconds() < 15
+
+
+# --- Daylight saving ---------------------------------------------------------
+#
+# Six of the seven daily defaults sit between 02:05 and 02:51 - inside the hour
+# that Central European clocks skip in March and repeat in October. The slot was
+# built with `now_local.replace(hour=..)`, which kept `now`'s fold: on the night
+# the clocks go back every 02:xx job ran twice, and inside the spring-forward gap
+# the wall-clock check passed while the slot's UTC instant still lay ahead, so a
+# 02:51 job was due on every one-minute tick from 01:00 to 01:51 UTC - 52 runs.
+
+
+def _replay_dispatcher(daily_time, tz, start_utc, *, hours=24, last_run_at=None):
+    """Drive is_due exactly as cron_dispatch does: one tick a minute, and a due
+    job's last_run_at becomes that tick's `now` (mark_ran before enqueue)."""
+    r = _res(kind=cs.KIND_DAILY, daily_time=daily_time)
+    last = last_run_at if last_run_at is not None else start_utc - timedelta(minutes=1)
+    runs = []
+    now = start_utc
+    for _ in range(hours * 60):
+        if cs.is_due(r, last, now, tz):
+            runs.append(now)
+            last = now
+        now += timedelta(minutes=1)
+    return runs
+
+
+def test_a_daily_job_in_the_repeated_hour_runs_once_when_clocks_go_back():
+    # Vienna, 2026-10-25: 03:00 CEST -> 02:00 CET, so 02:13 happens twice.
+    runs = _replay_dispatcher("02:13", "Europe/Vienna", datetime(2026, 10, 24, 18, 0))
+    # The FIRST 02:13 (CEST, UTC+2) and never the second (CET, 01:13 UTC).
+    assert runs == [datetime(2026, 10, 25, 0, 13)]
+
+
+def test_a_daily_job_in_the_skipped_hour_runs_once_when_clocks_go_forward():
+    # Vienna, 2027-03-28: 02:00 CET -> 03:00 CEST, so 02:51 never happens on the
+    # wall clock. It runs once, at 03:51 CEST - not on every tick from 03:00.
+    runs = _replay_dispatcher("02:51", "Europe/Vienna", datetime(2027, 3, 27, 18, 0))
+    assert runs == [datetime(2027, 3, 28, 1, 51)]
+
+
+def test_new_york_transitions_run_each_daily_job_once():
+    # US clocks change at 02:00 local: 01:xx repeats in November, 02:xx is
+    # skipped in March.
+    fall = _replay_dispatcher("01:30", "America/New_York", datetime(2026, 10, 31, 18, 0))
+    assert fall == [datetime(2026, 11, 1, 5, 30)]  # 01:30 EDT, the first one
+    spring = _replay_dispatcher("02:30", "America/New_York", datetime(2027, 3, 13, 18, 0))
+    assert spring == [datetime(2027, 3, 14, 7, 30)]  # moved to 03:30 EDT
+
+
+def test_every_default_daily_job_runs_once_on_both_transition_nights():
+    daily = {n: s.default_daily_time for n, s in cs.REGISTRY.items() if s.default_kind == cs.KIND_DAILY}
+    assert daily, "the registry has no daily jobs - this test would prove nothing"
+    for name, hhmm in daily.items():
+        for night in (datetime(2026, 10, 24, 18, 0), datetime(2027, 3, 27, 18, 0)):
+            runs = _replay_dispatcher(hhmm, "Europe/Vienna", night)
+            assert len(runs) == 1, f"{name} at {hhmm} ran {len(runs)} times the night after {night:%Y-%m-%d}"
+
+
+def test_a_missed_daily_slot_still_runs_once_later_that_day():
+    # The worker was down at 02:43 and comes back at 07:00 Vienna: one catch-up run.
+    runs = _replay_dispatcher(
+        "02:43", "Europe/Vienna", datetime(2026, 10, 12, 5, 0), hours=10,
+        last_run_at=datetime(2026, 10, 11, 0, 43),
+    )
+    assert runs == [datetime(2026, 10, 12, 5, 0)]
+
+
+def test_next_run_at_on_transition_nights():
+    r = _res(kind=cs.KIND_DAILY, daily_time="02:51")
+    # 03:30 CEST on the spring-forward day, before the moved slot: still today.
+    assert cs.next_run_at(r, None, datetime(2027, 3, 28, 1, 30), "Europe/Vienna") == datetime(2027, 3, 28, 1, 51)
+    r = _res(kind=cs.KIND_DAILY, daily_time="02:13")
+    # 02:30 CET, the repeated hour, after the run at the first 02:13: tomorrow.
+    assert cs.next_run_at(r, None, datetime(2026, 10, 25, 1, 30), "Europe/Vienna") == datetime(2026, 10, 26, 1, 13)

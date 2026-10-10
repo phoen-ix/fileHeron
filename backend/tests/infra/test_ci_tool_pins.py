@@ -9,6 +9,7 @@ ci.yml reads each one from there by stage name.
 from __future__ import annotations
 
 import re
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -29,6 +30,8 @@ def _pins() -> dict[str, str]:
 def _what_ci_runs() -> dict[str, str]:
     """stage -> the image reference ci.yml's own sed expression yields from the stub."""
     ci = yaml.safe_load((_WORKFLOWS / "ci.yml").read_text(encoding="utf-8"))
+    sed = shutil.which("sed")
+    assert sed
     found: dict[str, str] = {}
     for job in ci["jobs"].values():
         for step in job.get("steps", []):
@@ -36,8 +39,8 @@ def _what_ci_runs() -> dict[str, str]:
             for expr in re.findall(r"sed -n '([^']+)' \.github/ci-tools/Dockerfile", run):
                 stage = re.search(r" AS ([\w-]+)\$", expr)
                 assert stage, expr
-                found[stage.group(1)] = subprocess.run(
-                    ["sed", "-n", expr, str(_STUB)], capture_output=True, text=True, check=True
+                found[stage.group(1)] = subprocess.run(  # noqa: S603 - the expression is ci.yml's own
+                    [sed, "-n", expr, str(_STUB)], capture_output=True, text=True, check=True
                 ).stdout.strip()
     return found
 

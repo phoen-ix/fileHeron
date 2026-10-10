@@ -74,3 +74,35 @@ def test_the_lock_hashes_every_requirement_and_covers_the_runtime_deps():
     assert declared and declared <= locked, sorted(declared - locked)
     # Resolved for the Windows runner, not the machine that generated it.
     assert "pywin32-ctypes==" in text
+
+
+def _python_before(steps: list[dict], step_name: str | None = None) -> str:
+    """The python-version of the last setup-python step before `step_name`
+    (or in the whole job when None) - the interpreter that step runs on."""
+    version = None
+    for step in steps:
+        if step_name is not None and step.get("name") == step_name:
+            break
+        if "actions/setup-python@" in str(step.get("uses", "")):
+            version = str(step["with"]["python-version"])
+    assert version, "no setup-python step"
+    return version
+
+
+def test_the_client_is_tested_and_audited_on_the_python_the_exe_ships():
+    """The .exe bundles the Python that client-release's setup-python installs,
+    so the client is tested and audited on exactly that. The rule existed only
+    in prose, and was already broken: CI's Linux leg tested 3.12.15 while
+    client-v1.5.2 shipped 3.12.10, the last 3.12 python.org built for Windows
+    (docs/engineering/desktop-client.md)."""
+    shipped = _python_before(_workflow()["jobs"]["build-windows"]["steps"])
+    ci = yaml.safe_load((_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8"))
+    assert _python_before(ci["jobs"]["client-tests"]["steps"]) == shipped
+    audit_steps = ci["jobs"]["dependency-audit"]["steps"]
+    client_audit = "pip-audit (desktop client, shipped runtime deps)"
+    assert any(s.get("name") == client_audit for s in audit_steps), "the client audit step was renamed"
+    assert _python_before(audit_steps, client_audit) == shipped
+    # requires-python and ruff's target follow the same line.
+    pyproject = _PYPROJECT.read_text(encoding="utf-8")
+    assert f'requires-python = ">={shipped}"' in pyproject
+    assert f'target-version = "py{shipped.replace(".", "")}"' in pyproject

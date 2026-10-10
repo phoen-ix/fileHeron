@@ -1,3 +1,35 @@
+# Desktop client 1.6.0
+
+**The app now runs on Python 3.14, and needs Windows 10 or newer.**
+
+Requires server **v2.6.1 or newer** (unchanged).
+
+---
+
+## A current Python inside the app
+
+The app carries its own copy of Python inside the `.exe`. Until now that was
+Python 3.12.10 from April 2025: Python's makers stop publishing Windows builds
+of a version once it only gets security fixes, so no fix made to Python 3.12
+since then - or to the OpenSSL library it brings for secure connections -
+reached the app. This version carries Python 3.14, which gets Windows builds
+until about October 2027.
+
+## Windows 10 or newer
+
+Python 3.14 does not run on Windows 8.1, so **neither does this version of the
+app**. Microsoft stopped updating Windows 8.1 in January 2023. On Windows 8.1,
+stay on 1.5.2.
+
+Features and settings are unchanged.
+
+## Also
+
+- Updated libraries: pydantic 2.14.0, platformdirs 4.12.4 and the time-zone
+  database (tzdata 2026.5).
+
+---
+
 # Desktop client 1.5.2
 
 **Outlined buttons are readable again in the light theme.**

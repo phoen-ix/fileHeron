@@ -4,9 +4,9 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "fileheron-client"
-version = "1.5.2"
+version = "1.6.0"
 description = "Desktop GUI client for the file:Heron self-hosted file-sharing platform."
-requires-python = ">=3.12"
+requires-python = ">=3.14"
 license = { text = "MIT" }
 authors = [{ name = "file:Heron contributors" }]
 readme = "README.md"
@@ -68,7 +68,7 @@ asyncio_mode = "auto"
 # and each ignore below carries the reason it is not simply a deferred fix.
 [tool.ruff]
 line-length = 120
-target-version = "py312"   # the .exe bundles its own 3.12 interpreter
+target-version = "py314"   # the .exe bundles its own 3.14 interpreter
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "N", "UP", "B", "S", "C4", "SIM"]

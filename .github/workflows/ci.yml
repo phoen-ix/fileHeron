@@ -276,7 +276,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: '3.12'
+          python-version: '3.14'
           cache: pip
           cache-dependency-path: client/requirements-build.lock
       # The SAME hashed closure the release job builds the .exe from, so every
@@ -439,12 +439,12 @@ jobs:
           pip-audit -r backend/requirements.lock --progress-spinner off
       # The desktop client's runtime deps are BUNDLED into a distributed .exe -
       # end users cannot patch them, only a new release can - and nothing here
-      # or in client-release.yml was auditing them. 3.12 to match the leg that
-      # actually builds the executable. Runtime deps only: the `dev`/`build`
+      # or in client-release.yml was auditing them. The same Python as the leg
+      # that actually builds the executable. Runtime deps only: the `dev`/`build`
       # extras (pytest, pyinstaller) never ship.
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: '3.12'
+          python-version: '3.14'
       - name: pip-audit (desktop client, shipped runtime deps)
         working-directory: client
         run: |

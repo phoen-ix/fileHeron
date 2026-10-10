@@ -16,7 +16,8 @@ release-build pipeline is Windows-only for now.
 
 Grab the latest `fileheron-client.exe` from the
 [releases page](https://github.com/phoen-ix/fileHeron/releases) and
-run it. First launch asks for the server URL
+run it. It needs **Windows 10 or newer**: the `.exe` bundles Python 3.14, which
+does not run on Windows 8.1 (since client-v1.6.0). First launch asks for the server URL
 (e.g. `https://files.example.com`) and credentials. Config is
 stored at `%LOCALAPPDATA%\fileHeron\config.json` (logs alongside it in
 `Logs\`; note LOCAL AppData, not roaming). An **API token**, if you sign in
@@ -67,7 +68,7 @@ pytest                        # 259 tests across 34 files (no GUI, no network)
 python -m fileheron_client    # launches the GUI against the server URL the config dialog asks for
 ```
 
-Python 3.12+. The runtime deps (customtkinter, tkinterdnd2, httpx, pydantic,
+Python 3.14+. The runtime deps (customtkinter, tkinterdnd2, httpx, pydantic,
 keyring, platformdirs) are all standard PyPI; no system packages required
 beyond Python itself. Every one is permissively licensed (MIT/BSD/Apache), so
 the published `.exe` can stay MIT - the date picker is built in-tree on stdlib

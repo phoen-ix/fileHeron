@@ -41,11 +41,28 @@ _TRANSIENT_ERRORS = (
     OSError,  # network blip
 )
 
-# Keep in sync with workers/worker.py WorkerSettings.max_tries. After the last
-# attempt arq abandons the job WITHOUT calling the function again, so the worker
-# itself must finalize the row on the final try - otherwise it sits `queued`
-# forever (the mail-log's terminal-status contract).
-_MAX_TRIES = 5
+# How long to wait before each retry of a transient failure. Long enough to
+# outlast an ordinary outage: the schedule was 1 s, 5 s, 30 s, 30 s - giving up
+# 2 min 47 s after the first try once the 20 s connect timeouts are counted - and
+# on 2026-10-07 20:14 UTC the reference host lost its network for 3-5 minutes:
+# every mail sent in that window failed for good, while SMTP answered again by
+# 20:19. These waits add up to about 1 h 51 min. The relay queues for days after
+# it accepts a mail; this only has to survive the relay being out of reach.
+_RETRY_DEFERS_SEC = (10, 60, 300, 900, 1800, 3600)
+
+# One try per wait plus the first. Registered WITH the job in workers/worker.py
+# (`func(send_email_job, max_tries=...)`), so arq and this module read the same
+# number: after the last try arq abandons the job WITHOUT calling the function
+# again, so the worker itself must finalize the row on that try - otherwise it
+# sits `queued` forever (the mail-log's terminal-status contract). It used to be
+# a "keep in sync with WorkerSettings.max_tries" comment.
+SEND_EMAIL_MAX_TRIES = len(_RETRY_DEFERS_SEC) + 1
+_MAX_TRIES = SEND_EMAIL_MAX_TRIES
+
+
+def _defer_for(attempt: int) -> int:
+    """Seconds to wait after failed try number `attempt` (1-based)."""
+    return _RETRY_DEFERS_SEC[min(attempt - 1, len(_RETRY_DEFERS_SEC) - 1)]
 
 
 def _recipient_refusal_detail(exc: SMTPRecipientsRefused) -> tuple[int | None, str]:
@@ -233,8 +250,7 @@ async def send_email_job(
             smtp_code=None, error_class=type(e).__name__, error_message=str(e),
         ):
             return {"to": to, "subject": subject, "status": "failed"}
-        # 1s, 5s, 30s - exponential-ish.
-        defer = (1, 5, 30)[min(attempt - 1, 2)]
+        defer = _defer_for(attempt)
         logger.warning(
             "transient SMTP error sending to %s (attempt %d/%d): %s - retrying in %ds",
             to,
@@ -263,7 +279,7 @@ async def send_email_job(
                 smtp_code=e.code, error_class=type(e).__name__, error_message=e.message,
             ):
                 return {"to": to, "subject": subject, "status": "failed", "code": e.code}
-            defer = (1, 5, 30)[min(attempt - 1, 2)]
+            defer = _defer_for(attempt)
             logger.warning(
                 "SMTP 4xx (%s) sending to %s (attempt %d/%d): %s - retrying in %ds",
                 e.code,

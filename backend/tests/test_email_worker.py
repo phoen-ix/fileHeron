@@ -141,3 +141,54 @@ async def test_a_refusal_with_no_detail_still_audits(monkeypatch):
 
     assert result["status"] == "failed"
     assert len(audited) == 1
+
+
+# --- How long a transient failure is retried ---------------------------------
+#
+# On 2026-10-07 20:14 UTC the reference host's network dropped for 3-5 minutes.
+# The schedule was 1 s, 5 s, 30 s, 30 s - giving up 2 min 47 s after the first
+# try - so all three mails sent in that window failed for good while SMTP was
+# answering again by 20:19.
+
+
+def test_the_retry_schedule_outlasts_an_ordinary_outage():
+    waits = worker_mod._RETRY_DEFERS_SEC
+    assert sum(waits) >= 3600
+    assert list(waits) == sorted(waits)  # backs off, never speeds up
+    assert worker_mod._defer_for(1) == waits[0]
+    assert worker_mod._defer_for(worker_mod._MAX_TRIES + 3) == waits[-1]
+
+
+def test_the_worker_registers_the_try_budget_the_job_finalizes_on():
+    """arq abandons a job after its last try WITHOUT calling it again, so the
+    job must know which try is the last - from the same number arq uses."""
+    from app.workers import worker
+
+    entry = next(
+        f
+        for f in worker.WorkerSettings.functions
+        if (getattr(f, "name", None) or getattr(f, "__name__", "")) == "send_email_job"
+    )
+    assert entry.max_tries == worker_mod._MAX_TRIES == len(worker_mod._RETRY_DEFERS_SEC) + 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "error", [SMTPConnectError("connection refused"), SMTPResponseException(421, "busy")]
+)
+async def test_each_failed_try_waits_its_turn_until_the_last(error, monkeypatch):
+    async def _fake(**kwargs):
+        raise error
+
+    monkeypatch.setattr(worker_mod, "send_email", _fake)
+    for attempt in range(1, worker_mod._MAX_TRIES):
+        with pytest.raises(Retry) as exc:
+            await worker_mod.send_email_job(
+                {"job_try": attempt}, to="x@example.com", subject="s", text_body="t"
+            )
+        # arq is pinned; defer_score is its millisecond form of `defer`.
+        assert exc.value.defer_score == worker_mod._defer_for(attempt) * 1000
+    last = await worker_mod.send_email_job(
+        {"job_try": worker_mod._MAX_TRIES}, to="x@example.com", subject="s", text_body="t"
+    )
+    assert last["status"] == "failed"

@@ -73,6 +73,10 @@ updates:
       - /docker/frontend
       - /docker/updater-shim
       - /docker/updater-executor
+      # The linter images ci.yml runs with `docker run`: a pin inside a
+      # workflow is invisible to this ecosystem, so they live in a stub that
+      # is never built (see its header). Watched since 2026-10-10.
+      - /.github/ci-tools
     schedule:
       interval: weekly
     open-pull-requests-limit: 5

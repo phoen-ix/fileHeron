@@ -343,7 +343,8 @@ jobs:
       # below: the gate existed, its scope did not cover the risky code.
       - name: shellcheck
         run: |
-          docker run --rm -v "$PWD:/mnt" -w /mnt koalaman/shellcheck-alpine:v0.10.0 \
+          IMAGE=$(sed -n 's/^FROM \([^ ]*\) AS shellcheck$/\1/p' .github/ci-tools/Dockerfile)
+          docker run --rm -v "$PWD:/mnt" -w /mnt "${IMAGE:?no shellcheck pin in .github/ci-tools/Dockerfile}" \
             shellcheck --severity=warning install.sh scripts/*.sh scripts/ops/*.sh \
             docker/updater-shim/shim.sh docker/backend/entrypoint.sh \
             docker/mariadb/init.sh
@@ -370,8 +371,9 @@ jobs:
           "
       - name: actionlint
         run: |
+          IMAGE=$(sed -n 's/^FROM \([^ ]*\) AS actionlint$/\1/p' .github/ci-tools/Dockerfile)
           docker run --rm -v "$PWD:/repo" -w /repo \
-            rhysd/actionlint:1.7.7 -color
+            "${IMAGE:?no actionlint pin in .github/ci-tools/Dockerfile}" -color
       # mypy was installed by backend-tests and INVOKED BY NOTHING, and
       # [tool.mypy] in pyproject.toml was read by nothing, for as long as both
       # existed - so "mypy is set up" was true and "mypy runs" was not
@@ -398,10 +400,12 @@ jobs:
           '
       - name: hadolint
         run: |
+          IMAGE=$(sed -n 's/^FROM \([^ ]*\) AS hadolint$/\1/p' .github/ci-tools/Dockerfile)
+          : "${IMAGE:?no hadolint pin in .github/ci-tools/Dockerfile}"
           for f in docker/*/Dockerfile docker/*/Dockerfile.dev; do
             [ -f "$f" ] || continue
             echo "::group::$f"
-            docker run --rm -i hadolint/hadolint:v2.12.0 \
+            docker run --rm -i "$IMAGE" \
               hadolint --failure-threshold error - < "$f"
             echo "::endgroup::"
           done

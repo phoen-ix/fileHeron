@@ -50,5 +50,10 @@ EXPOSE 80
 # HEALTHCHECK kept the broken form, so anyone running the image outside this
 # compose file (or reading it to learn the right invocation) got a container
 # that reports unhealthy while serving perfectly (audit 2026-07-30, docker-11).
+#
+# Shell form on purpose. hadolint's DL3025 asks for JSON notation so signals
+# reach PID 1, and a healthcheck is not PID 1; `|| exit 1` folds wget's exit
+# codes onto the 0/1 that Docker documents (2 is reserved).
+# hadolint ignore=DL3025
 HEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=3 \
     CMD wget --no-verbose --tries=1 --spider http://127.0.0.1/healthz || exit 1

@@ -16,7 +16,7 @@ RUFF_PIN := $(shell sed -n 's/.*"ruff==\([0-9.]*\)".*/\1/p' backend/pyproject.to
 help:
 	@echo "Targets:"
 	@echo "  lint / lint-backend / lint-frontend   CI lint gates (ruff + eslint + prettier)"
-	@echo "  lint-docker    backend ruff in an ephemeral python:3.12-slim (no local ruff needed)"
+	@echo "  lint-docker    backend ruff in an ephemeral python:3.14-slim (no local ruff needed)"
 	@echo "  typecheck      backend mypy, exactly as CI's infra-lint job runs it"
 	@echo "  test / test-backend / test-frontend   pytest (needs backend .[dev]) + vitest"
 	@echo "  test-mariadb   the three real-MariaDB test files, in throwaway containers"
@@ -99,5 +99,5 @@ lint-frontend:
 # pin in a throwaway container, faithful to CI with nothing installed on the
 # host. --no-cache keeps it from leaving a root-owned .ruff_cache behind.
 lint-docker:
-	cd backend && docker run --rm -v "$$PWD":/w -w /w -e PIP_ROOT_USER_ACTION=ignore python:3.12-slim \
+	cd backend && docker run --rm -v "$$PWD":/w -w /w -e PIP_ROOT_USER_ACTION=ignore python:3.14-slim \
 		sh -c "pip install -q ruff==$(RUFF_PIN) && ruff check --no-cache ."

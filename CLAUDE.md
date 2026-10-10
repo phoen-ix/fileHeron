@@ -214,6 +214,7 @@ warm-amber accent `#b45309` on `#faf8f3`. Density via `[data-density="operator"]
 - **axios array params** - the client needs `paramsSerializer: { indexes: null }` → `?state=active&state=expired` (FastAPI `Query(default=[])`), not `?state[]=active`.
 - **`TEST_ACCOUNT_*`** used by `backend/scripts/seed_dev.py` + `entrypoint.sh` - not dead.
 - **ClamAV slow first boot** - full `freshclam` mirror sync (~150 MB), then incremental.
+- **A tab opened before an update reloads itself** (`frontend/src/utils/staleBundle.ts`, installed in `main.ts`): its next lazy page asked for a chunk hash the update deleted, and vue-router silently aborted the click. `router.onError` loads the TARGET as a full page, `vite:preloadError` reloads the current one, at most once per 30 s (sessionStorage - never remove that guard, a genuinely missing asset would loop), and the System page reloads after a healthy update once the SPA answers again.
 - **`index.html` must stay no-cache** - `docker/frontend/nginx.conf` serves it with `Cache-Control: no-cache` so a browser fetches the fresh hashed bundle names after an in-app Update; a cached stale index points at deleted bundle hashes → blank page. Hashed `assets/*` stay long-cached. Don't re-add caching for it.
 - **`/api/config-public` does not disclose `running_version`.** `_peer_is_operator` trusts loopback plus the container's own compose network, not all of RFC1918.
 

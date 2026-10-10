@@ -15,6 +15,7 @@ The invariants that keep them true:
 (The update executor's invariants - `--no-deps`, the bounded drain, infra sync, pre-update backups and the rest - are in `docs/engineering/self-update.md` §Ops.)
 
 - **`restore.sh` decides full vs database-only from the manifest BEFORE the prompt and `down`.** It used to wipe `data/files` and then fail on the missing tarball. Run-the-script tests with a stub docker in `test_ops_scripts.py`.
+- **The entrypoint waits for the DB with a login that closes cleanly** (`backend/scripts/wait_for_db.py`: SQLAlchemy + NullPool, from the `DB_*` variables without importing the app; a server that refuses the login still counts as UP, so alembic reports the real problem), **and every process disposes its engine on the way out** - the FastAPI lifespan, the worker's `on_shutdown`, `create_admin` and `seed_dev`. A bare TCP probe and undisposed pools left a burst of "Aborted connection" warnings in MariaDB's log on every deploy.
 - **Which half of a fix is live on a host depends on where it ships.** `scripts/` and `scripts/ops/*` run from the WORKING TREE (systemd's `ExecStart` points at `<install-dir>/scripts/...`), so a commit to them takes effect on the next timer firing with no release, no image and no push. Everything under `backend/` and `frontend/` is baked into an image and reaches a host only via a tagged release. A local-only commit touching both therefore leaves the host running new scripts against old code. Don't infer "deployed" from `git log`.
 
 ### Deploy + rollback (`scripts/deploy.sh`, `scripts/rollback.sh`)

@@ -46,7 +46,7 @@ Area detail goes to its doc, not back here.
 
 ## Current state
 
-Backend **`v2.25.3`** is the newest tag (a dependency refresh; v2.25.2 brought the 2026-10-10 audit fixes, v2.25.0 encryption at rest, off by default) and
+Backend **`v2.26.0`** is the newest tag (folder uploads; v2.25.3 a dependency refresh, v2.25.2 the 2026-10-10 audit fixes, v2.25.0 encryption at rest, off by default) and
 **`client-v1.6.0`** the newest desktop client (Python 3.14, Windows 10 or newer); the reference host runs
 **v2.25.1**. What each release changed, the
 host's infra and the per-tag migrations, host steps and default moves are in
@@ -265,6 +265,7 @@ violation does the most damage; they are not the whole story.
 - tusd sends no `Upload.ID` on pre-create; post-receive is the first hook with a real id, and it must never raise.
 - Deferred-length uploads are refused and pre-create requires `announced_size == max_size`.
 - `cleanup_stale_uploads` keeps no size filter - it is the only automated rescan.
+- A file's folder lives in `files.relative_dir`, written only through `utils/paths.py::safe_relative_dir`; `original_filename` stays a bare leaf - three flatteners and every Content-Disposition depend on it.
 
 ### Downloads: budgets, transfer marks, bulk ZIP → [`downloads.md`](docs/engineering/downloads.md)
 

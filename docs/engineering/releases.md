@@ -7,7 +7,11 @@ summary and points here. Read this before changing the code listed below.
 
 ## Current state
 
-Backend **`v2.25.3`** is the newest tag (2026-10-10): a dependency refresh - the
+Backend **`v2.26.0`** is the newest tag (2026-10-10): folder uploads - a file keeps the
+folder it came from (`files.relative_dir`, one migration), the share and public pages
+group by folder and the ZIP carries the tree (`LAYOUT_VERSION` 2) - plus a share label
+that could name a file still pending review, and `/files-added` batches over 1,000.
+**`v2.25.3`** (same day): a dependency refresh - the
 backend lock and the frontend tree to current, the SPA built on Node 26, ruff 0.17.0,
 and CI's linter images pinned where Dependabot looks (`.github/ci-tools/Dockerfile`).
 Desktop client **`client-v1.6.0`** ships beside it: Python 3.14 in the .exe, so it
@@ -119,6 +123,7 @@ record.
 | v2.25.1 | - | - | - (behaviour: `ops_check` alerts `av_unhealthy` only after 3 failed ClamAV pings over 20 s, not on one) |
 | v2.25.2 | - | - | **`auth.session_max_age_days` = 30**: a session signed in more than 30 days ago ends at its first refresh after the update (browser and desktop client); `0` restores the old unlimited behaviour. Behaviour: the 02:xx daily tasks run once on DST nights; `send_email_job` retries for ~1 h 51 min (its own `max_tries`); `imap_poll` alerts only on an outage (15 min without a success) or a non-transient error; a cron failure mails an admin once; `run_poll`'s message count is `skipped_messages` |
 | v2.25.3 | - | - | - (dependency refresh only: backend lock, frontend tree, the SPA built on Node 26; the backend image ships no curl - its compose healthcheck runs Python - and runs as `USER 1000:1000`; every Dockerfile hadolint-clean and gated at `style`. Desktop `client-v1.6.0` beside it bundles Python 3.14 and needs **Windows 10 or newer**) |
+| v2.26.0 | `202610100001` `files.relative_dir` (nullable) | - | - (behaviour: the bulk ZIP's `LAYOUT_VERSION` is 2, so a ZIP resume in flight across the update restarts once; a subject-less share's label never names a file pending review; the SPA sends `/files-added` in chunks of 1,000) |
 
 Per-release admin-facing notes for v2.13.0 and newer are in `RELEASE_NOTES.md`,
 one `# file:Heron vX.Y.Z` section each, newest first; older releases live in

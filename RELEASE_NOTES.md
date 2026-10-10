@@ -1,3 +1,48 @@
+# file:Heron v2.26.0
+
+**Folders keep their structure.** Drop a folder into a share, or pick one with
+**Choose a folder**, and the share page, the public link page and
+**Download all (ZIP)** keep its folders. Also two fixes: a share label that
+could name a file still awaiting approval, and adding more than 1,000 files at
+once.
+
+**One migration** (`202610100001`, runs by itself on start). **No default
+moves, no host step.** The desktop client is unchanged; it gets folder support
+in its next release.
+
+---
+
+## Folders
+
+- Drop a folder onto the upload area, or click **Choose a folder**. Every file
+  keeps the folder it came from.
+- The share page and the public link page list the files under one heading per
+  folder.
+- **Download all (ZIP)** recreates the folders. Two names that differ only in
+  upper and lower case get a number, because Windows would treat them as one
+  file.
+- The admin **File history** shows each file's folder and finds files by
+  folder name.
+- The desktop client's **Save all** still saves the files side by side for now.
+
+## Fixes
+
+- **Share approval:** a share without a subject is labelled with its first
+  file's name. That label could be the name of a file added after approval and
+  still waiting for its own review, which recipients must not see yet. The
+  label now always comes from an approved file.
+- **Many files at once:** adding more than 1,000 files in one go failed, and
+  none of them was registered with the share. They are now registered in
+  batches, and recipients still get one notification.
+
+## Upgrading
+
+This is a **minor** release, so automatic updates at the default *patch* scope
+don't install it. Click **Update**. A **Download all (ZIP)** that was paused
+during the update starts again from the beginning once.
+
+---
+
 # file:Heron v2.25.3
 
 **Up-to-date dependencies.** The server's libraries are refreshed to their

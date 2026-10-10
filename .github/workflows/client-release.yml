@@ -79,9 +79,13 @@ jobs:
           echo "version $want matches both files"
 
 
+      # This interpreter ships inside the .exe, so it must be the newest patch:
+      # without check-latest, setup-python takes any cached 3.14.x, and the
+      # first client-v1.6.0 test build bundled 3.14.7 with 3.14.8 out.
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.14'
+          check-latest: true
           cache: 'pip'
           cache-dependency-path: 'client/requirements-build.lock'
 

@@ -106,3 +106,19 @@ def test_the_client_is_tested_and_audited_on_the_python_the_exe_ships():
     pyproject = _PYPROJECT.read_text(encoding="utf-8")
     assert f'requires-python = ">={shipped}"' in pyproject
     assert f'target-version = "py{shipped.replace(".", "")}"' in pyproject
+
+
+def test_the_exe_bundles_the_newest_patch_of_its_python_line():
+    """setup-python takes ANY cached 3.14.x that satisfies '3.14' unless
+    check-latest is set, and the interpreter is shipped: the first
+    workflow_dispatch build of client-v1.6.0 bundled 3.14.7 while 3.14.8 was
+    out. The release build asks for the newest patch, and the client tests
+    ask for the same one."""
+    ci = yaml.safe_load((_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8"))
+    for where, steps in (
+        ("client-release build-windows", _workflow()["jobs"]["build-windows"]["steps"]),
+        ("ci client-tests", ci["jobs"]["client-tests"]["steps"]),
+    ):
+        setups = [s for s in steps if "actions/setup-python@" in str(s.get("uses", ""))]
+        assert setups, where
+        assert all(s["with"].get("check-latest") is True for s in setups), where

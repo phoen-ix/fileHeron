@@ -210,6 +210,7 @@ async def fetch_now(
     return ImapFetchNowResponse(
         ok=bool(result.get("ok")),
         skipped=result.get("skipped"),
+        skipped_messages=result.get("skipped_messages"),
         error=result.get("error"),
         fetched=result.get("fetched"),
         ingested=result.get("ingested"),

@@ -369,9 +369,14 @@ def run_poll(*, manual: bool, db: Session | None = None, session_opener=open_ses
             "refused=%d backlog=%d last_uid=%d",
             cfg.mailbox, total, fetched, ingested, skipped, refused, backlog, last_uid,
         )
+        # The count goes out as `skipped_messages`, never `skipped`: that key is
+        # the REASON a whole poll did not run ("disabled", "already_running"),
+        # and one key carrying a str here and an int there made the admin's
+        # "Fetch now" answer 500 on every successful poll - its response model
+        # types `skipped` as a string (error_log, 2026-09-19).
         return {
             "ok": True, "fetched": fetched, "ingested": ingested,
-            "skipped": skipped, "refused_unknown_sender": refused,
+            "skipped_messages": skipped, "refused_unknown_sender": refused,
             "backlog": backlog,
             "last_uid": last_uid, "mailbox": cfg.mailbox, "total": total,
         }

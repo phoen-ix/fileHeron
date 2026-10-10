@@ -1398,7 +1398,10 @@ export interface ImapTestResponse {
 
 export interface ImapFetchNowResponse {
   ok: boolean
+  /** Why the poll did not run at all ("disabled", "already_running"). */
   skipped: string | null
+  /** Messages the poll passed over. */
+  skipped_messages: number | null
   error: string | null
   fetched: number | null
   ingested: number | null

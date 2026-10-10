@@ -153,7 +153,7 @@ def test_one_bad_message_does_not_stop_the_poll(db, imap_enabled, monkeypatch):
     )
 
     assert result["ok"] is True
-    assert result["skipped"] == 1
+    assert result["skipped_messages"] == 1
     assert result["ingested"] == 1
     # Highwater past the poison message - this is what breaks the loop.
     assert result["last_uid"] == 2
@@ -173,7 +173,7 @@ def test_highwater_advances_past_an_uningestable_message(db, imap_enabled, monke
     )
 
     assert result["ok"] is True
-    assert result["skipped"] == 2
+    assert result["skipped_messages"] == 2
     assert result["last_uid"] == 8
 
 

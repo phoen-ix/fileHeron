@@ -82,7 +82,10 @@ class ImapTestResponse(APIBaseModel):
 
 class ImapFetchNowResponse(APIBaseModel):
     ok: bool
+    # Why the poll did not run at all ("disabled", "already_running").
     skipped: str | None = None
+    # Messages the poll passed over (poison, oversize, unknown UIDVALIDITY ...).
+    skipped_messages: int | None = None
     error: str | None = None
     fetched: int | None = None
     ingested: int | None = None

@@ -112,16 +112,45 @@ async def test_test_connection_endpoint(make_user, client, login_as, monkeypatch
 
 
 @pytest.mark.asyncio
-async def test_fetch_now_endpoint(make_user, client, login_as, monkeypatch):
-    t = await _admin_token(make_user, login_as)
+@pytest.mark.parametrize("n_messages", [0, 2])
+async def test_fetch_now_answers_the_real_poll_result(
+    n_messages, make_user, client, login_as, db, monkeypatch
+):
+    """The route must carry run_poll's REAL result, so only the mailbox is faked.
+
+    This test used to replace run_poll with a hand-built dict that had no
+    `skipped` key, so it never saw the success path's message count - which went
+    out as `skipped`, an int, against a response model typing `skipped` as the
+    reason a poll did not run. Every successful manual fetch answered 500
+    (error_log, 2026-09-19)."""
+    import functools
+
     from app.services import imap_poll
+    from tests.test_inbound_mail import NORMAL, _FakeSession, _opener
+
+    t = await _admin_token(make_user, login_as)
+    s.set_value(db, key=s.Keys.IMAP_ENABLED, value="true", actor=None)
+    s.set_value(db, key=s.Keys.IMAP_HOST, value="imap.example.com", actor=None)
+    s.set_value(db, key=s.Keys.IMAP_REQUIRE_KNOWN_SENDER, value="false", actor=None)
+    db.commit()
+    msgs = {
+        uid: NORMAL.replace(b"<n1@example.com>", f"<n{uid}@example.com>".encode())
+        for uid in range(1, n_messages + 1)
+    }
     monkeypatch.setattr(
-        imap_poll, "run_poll",
-        lambda **k: {"ok": True, "fetched": 2, "ingested": 2},
+        imap_poll,
+        "run_poll",
+        functools.partial(imap_poll.run_poll, session_opener=_opener(_FakeSession(msgs))),
     )
+
     r = await client.post("/api/admin/settings/imap/fetch-now", headers=_h(t))
+
     assert r.status_code == 200, r.text
-    assert r.json()["ingested"] == 2
+    body = r.json()
+    assert body["ok"] is True
+    assert body["skipped"] is None  # the poll ran; nothing to report as a reason
+    assert body["skipped_messages"] == 0
+    assert body["ingested"] == n_messages
 
 
 @pytest.mark.asyncio

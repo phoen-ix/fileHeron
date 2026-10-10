@@ -79,7 +79,7 @@ def test_oversize_message_is_never_fetched(db, imap_enabled):
     )
 
     assert 1 not in session.fetched, "the oversize message was downloaded anyway"
-    assert result["skipped"] == 1
+    assert result["skipped_messages"] == 1
     assert result["ingested"] == 1
 
 
@@ -107,7 +107,7 @@ def test_server_under_reporting_size_is_still_caught(db, imap_enabled):
         manual=False, db=db, session_opener=lambda _c: session
     )
 
-    assert result["skipped"] == 1
+    assert result["skipped_messages"] == 1
     assert result["ingested"] == 0
     assert result["last_uid"] == 7
 
@@ -118,7 +118,7 @@ def test_normal_messages_are_unaffected(db, imap_enabled):
     result = imap_poll_svc.run_poll(
         manual=False, db=db, session_opener=lambda _c: session
     )
-    assert result["skipped"] == 0
+    assert result["skipped_messages"] == 0
     assert result["ingested"] == 1
     assert 3 in session.fetched
 
@@ -214,7 +214,7 @@ def test_a_many_part_message_under_the_byte_cap_is_skipped(db, imap_enabled, mon
         "a message with more parts than the cap was handed to the parser; "
         "that is the allocation that OOM-kills the worker"
     )
-    assert out.get("skipped", 0) >= 1
+    assert out.get("skipped_messages", 0) >= 1
 
 
 def test_the_highwater_advances_before_the_parse(db, imap_enabled, monkeypatch):

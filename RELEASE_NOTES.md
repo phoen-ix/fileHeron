@@ -23,6 +23,15 @@ file:Heron works. The database, Redis, ClamAV and tusd versions are unchanged.
 - Updated libraries: Vite 8.3.4, Vue Router 5.4.0, vue-i18n 11.4.14 and
   smaller updates.
 
+## Container images
+
+- The backend image no longer contains curl: its health check now uses the
+  image's own Python. If you ran curl inside the backend container
+  (`docker compose exec backend curl ...`), run it on the host instead, for
+  example `curl http://127.0.0.1:8000/api/health`.
+- The updater containers pin the versions of their system packages, and the
+  updater shim, the container that controls Docker, no longer carries curl.
+
 ## Desktop client 1.6.0
 
 - The app now carries Python 3.14. Until now it carried a Python from April

@@ -398,6 +398,9 @@ jobs:
             pip install -e ".[dev]"
             python -m mypy app scripts
           '
+      # Every finding fails, info and style included: the Dockerfiles were made
+      # clean on 2026-10-10 (until then `error` let seven warnings scroll by on
+      # every run), and a gate that tolerates some findings hides the new one.
       - name: hadolint
         run: |
           IMAGE=$(sed -n 's/^FROM \([^ ]*\) AS hadolint$/\1/p' .github/ci-tools/Dockerfile)
@@ -406,9 +409,18 @@ jobs:
             [ -f "$f" ] || continue
             echo "::group::$f"
             docker run --rm -i "$IMAGE" \
-              hadolint --failure-threshold error - < "$f"
+              hadolint --failure-threshold style - < "$f"
             echo "::endgroup::"
           done
+      # The updater images pin their apk packages by major (`pkg=~N`, see
+      # docker/updater-executor/Dockerfile). Alpine drops a build from its index
+      # the day a newer one lands, so only a build proves a pin still resolves -
+      # here, on every push and every Dependabot base-image bump, instead of
+      # first on a release tag.
+      - name: the updater images build (their apk pins resolve)
+        run: |
+          docker build -q -f docker/updater-shim/Dockerfile -t ci-updater-shim .
+          docker build -q -f docker/updater-executor/Dockerfile -t ci-updater-executor .
       # nginx resolves proxy_pass upstreams at CONFIG-PARSE time, so the compose
       # The upstreams are now named through variables, so nginx no longer
       # resolves them at config load and `nginx -t` needs no --add-host stubs.

@@ -58,11 +58,20 @@ def _effective_subject(share, files) -> str:
     Callers should pass ``list(share.files)`` (every file ever in the
     share, including deleted ones) so a share whose last file the
     owner just deleted still has an identifiable label - otherwise
-    the row turns into a faceless "(no subject)" tombstone."""
+    the row turns into a faceless "(no subject)" tombstone.
+
+    "First" is the EARLIEST file by (created_at, id), skipping files still
+    awaiting their own review. It was `files[0]`, and `Share.files` has no
+    ORDER BY, so the label was whichever row the database returned first -
+    which could be a file added after approval and still pending review, whose
+    NAME a recipient must not see (`_to_share_response` withholds it from the
+    file list). Files pending review are always newer than the approved ones,
+    so the earliest file is also the one the label always meant."""
     if share.subject:
         return share.subject
-    if files:
-        return files[0].original_filename
+    labels = [f for f in files if f.approval_state != FileApprovalState.pending_review]
+    if labels:
+        return min(labels, key=lambda f: (f.created_at, f.id)).original_filename
     return ""
 
 

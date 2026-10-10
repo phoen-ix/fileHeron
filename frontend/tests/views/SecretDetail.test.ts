@@ -72,11 +72,9 @@ beforeEach(() => {
 
 describe('SecretDetail', () => {
   it('keeps the revealed text on screen after the last view ends the secret', async () => {
-    api.getSecret
-      .mockResolvedValueOnce({ data: secret() })
-      .mockResolvedValue({
-        data: secret({ state: 'burned', can_reveal: false, my_views_left: 0, views_used: 1 }),
-      })
+    api.getSecret.mockResolvedValueOnce({ data: secret() }).mockResolvedValue({
+      data: secret({ state: 'burned', can_reveal: false, my_views_left: 0, views_used: 1 }),
+    })
     api.revealSecret.mockResolvedValue({
       data: { content: 'hunter2', views_left: 0, ended: true },
     })
@@ -98,9 +96,29 @@ describe('SecretDetail', () => {
     const w = mountView()
     await flushPromises()
     expect(w.find('[data-testid="secret-reveal"]').exists()).toBe(false)
-    expect(w.find('[data-testid="not-revealable"]').text()).toBe(
-      en.secrets.detail.burned_for_me,
-    )
+    expect(w.find('[data-testid="not-revealable"]').text()).toBe(en.secrets.detail.burned_for_me)
+  })
+
+  it('offers the sender the links of a secret, never of an answer to a request', async () => {
+    // An answer's "sender" is whoever answered it; a link would hand what only
+    // the requester may read to anyone holding the URL (the API refuses too).
+    for (const isAnswer of [false, true]) {
+      api.getSecret.mockResolvedValue({
+        data: secret({ viewer_role: 'sender', can_reveal: false, is_answer: isAnswer }),
+      })
+      const auth = useAuthStore()
+      const w = mountView()
+      auth.user = {
+        id: 2,
+        role: 'employee',
+        display_name: 'Ann',
+        can_send_secrets_external: true,
+      } as MeResponse
+      await flushPromises()
+      expect(w.find('[data-testid="show-links"]').exists()).toBe(!isAnswer)
+      expect(w.text().includes(en.secrets.detail.create_link)).toBe(!isAnswer)
+      w.unmount()
+    }
   })
 
   it('shows the sender the status and no reveal button', async () => {

@@ -318,6 +318,7 @@
     "SECRET_RECIPIENT_NOT_ALLOWED": "Du kannst ein Geheimnis nur an die Personen senden, mit denen du zusammenarbeitest.",
     "SECRET_NOT_FOUND": "Dieses Geheimnis gibt es nicht.",
     "SECRET_ENDED": "Dieses Geheimnis ist nicht mehr verfügbar.",
+    "SECRET_ANSWER_NO_LINK": "Eine Antwort auf eine Anfrage ist nur für die anfragende Person bestimmt und kann nicht als Link geteilt werden.",
     "SECRET_LINK_NOT_FOUND": "Dieses Geheimnis hat keinen Link.",
     "SECRET_LINK_REVOKED": "Der Absender hat diesen Link ersetzt oder entfernt.",
     "SECRET_LOCKED": "Dieses Geheimnis ist nach zu vielen falschen Passphrasen eine Weile gesperrt.",

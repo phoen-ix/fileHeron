@@ -55,6 +55,10 @@ _NOT_CLIENT_REACHABLE = {
         "step-up re-auth gates backup export/import, erasure, API-token creation "
         "and self-update - the client calls none of those routes"
     ),
+    "SECRET_ANSWER_NO_LINK": (
+        "raised only by POST /api/secrets/{id}/link, which the desktop client "
+        "never calls (it only reads links back)"
+    ),
 }
 
 # Admin-only service modules, mirroring test_error_code_i18n_coverage.py.

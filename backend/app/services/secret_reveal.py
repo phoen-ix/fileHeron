@@ -619,6 +619,11 @@ def reveal_by_token(
         data_key = _unwrap(db, secret, passphrase)
     except SecretPassphraseError:
         _token_wrong_passphrase(db, secret, rec, lim, ip=ip, request=request)
+    except SecretRequestPassphraseError:
+        # Only an answer to a request carries the requester's layer, and no
+        # token reaches an answer (recipient_by_token). Should one ever get
+        # here it is a 404, never the unhandled 500 it once was.
+        raise AppError(404, "SECRET_NOT_FOUND", "This secret does not exist.") from None
     except SecretUndecryptableError:
         raise _unreadable(secret) from None
 

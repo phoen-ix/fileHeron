@@ -318,6 +318,7 @@
     "SECRET_RECIPIENT_NOT_ALLOWED": "You can send a secret only to the people you work with.",
     "SECRET_NOT_FOUND": "This secret does not exist.",
     "SECRET_ENDED": "This secret is no longer available.",
+    "SECRET_ANSWER_NO_LINK": "An answer to a request is only for the person who asked - it cannot be shared as a link.",
     "SECRET_LINK_NOT_FOUND": "This secret has no link.",
     "SECRET_LINK_REVOKED": "The sender replaced or removed this link.",
     "SECRET_LOCKED": "This secret is locked for a while after too many wrong passphrases.",

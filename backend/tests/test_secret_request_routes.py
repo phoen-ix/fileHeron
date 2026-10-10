@@ -211,3 +211,82 @@ async def test_the_admin_lists_and_cancels_requests(db, people, client, login_as
     assert resp.status_code == 200 and resp.json()["state"] == "cancelled"
     ta, _ = await login_as(ann.email, PW)
     assert (await client.get("/api/admin/secret-requests", headers=h(ta))).status_code == 403
+
+
+# --- An answer never becomes a link -----------------------------------------
+#
+# An answer's "sender" is whoever answered it, and the detail page offered them
+# "Create link": that handed what only the requester may read to anyone holding
+# a URL, and with a request passphrase every reveal through the link escaped
+# reveal_by_token as an unhandled 500 (SecretRequestPassphraseError).
+
+REQUEST_PASSPHRASE = "the request pass phrase"
+
+
+def _answered(db, people):
+    from app.services import secret_request as request_svc
+
+    enable(db)
+    ann, ben, _ = people
+    req = ask(db, ann, users=(ben,), passphrase=REQUEST_PASSPHRASE).request
+    answer = request_svc.answer_request(
+        db, request_id=req.id, content=ANSWER, passphrase=None, by_user=ben
+    )
+    db.commit()
+    return ben, answer
+
+
+def _plant_link(db, secret):
+    """A link made before replace_link refused answers."""
+    from app.models.secret import SecretRecipientKind
+    from app.services import secret as secret_svc
+
+    rec, token = secret_svc._new_token_recipient(secret, SecretRecipientKind.link)
+    db.add(rec)
+    db.commit()
+    return rec, token
+
+
+@pytest.mark.asyncio
+async def test_the_answerer_cannot_turn_the_answer_into_a_link(db, people, client, login_as):
+    ben, answer = _answered(db, people)
+    tb, _ = await login_as(ben.email, PW)
+    detail = (await client.get(f"/api/secrets/{answer.id}", headers=h(tb))).json()
+    assert detail["viewer_role"] == "sender" and detail["is_answer"] is True
+
+    resp = await client.post(f"/api/secrets/{answer.id}/link", headers=h(tb))
+
+    assert resp.status_code == 409, resp.text
+    assert resp.json()["code"] == "SECRET_ANSWER_NO_LINK"
+    links = (await client.get(f"/api/secrets/{answer.id}/links", headers=h(tb))).json()
+    assert links["items"] == []
+
+
+@pytest.mark.asyncio
+async def test_a_link_left_on_an_answer_opens_nothing_and_never_500s(db, people, client):
+    _ben, answer = _answered(db, people)
+    _rec, token = _plant_link(db, answer)
+
+    for route in ("peek", "reveal"):
+        resp = await client.post(f"/api/public/secrets/{route}", json={"token": token})
+        assert resp.status_code == 404, (route, resp.text)
+        assert resp.json()["code"] == "SECRET_NOT_FOUND"
+    assert ANSWER not in resp.text
+
+
+def test_reveal_by_token_never_lets_the_request_layer_escape(db, people, monkeypatch):
+    """Belt to recipient_by_token's braces: should any path ever hand a token on
+    an answer to reveal_by_token, the requester's layer answers 404, not 500."""
+    from app.middleware.errors import AppError
+    from app.services import secret as secret_svc
+    from app.services import secret_reveal
+
+    _ben, answer = _answered(db, people)
+    rec, token = _plant_link(db, answer)
+    monkeypatch.setattr(secret_svc, "recipient_by_token", lambda _db, _token: rec)
+
+    with pytest.raises(AppError) as exc:
+        secret_reveal.reveal_by_token(db, token=token, passphrase=None, ip="203.0.113.9")
+
+    assert exc.value.status_code == 404
+    assert exc.value.code == "SECRET_NOT_FOUND"

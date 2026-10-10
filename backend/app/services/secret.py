@@ -215,7 +215,11 @@ def recipient_by_token(db: Session, token: str) -> SecretRecipient:
         .filter(SecretRecipient.token_hash == sha256_hex(token))
         .one_or_none()
     )
-    if rec is None or rec.kind not in _ANONYMOUS_KINDS:
+    # An answer to a request has exactly one reader, the requester, so no token
+    # opens it - not even one that exists from before replace_link refused
+    # answers. Such a link also could not work: an answer sealed to the request
+    # passphrase needs that passphrase, which only the signed-in requester has.
+    if rec is None or rec.kind not in _ANONYMOUS_KINDS or rec.secret.is_answer:
         raise AppError(404, "SECRET_NOT_FOUND", "This secret does not exist.")
     return rec
 
@@ -1080,6 +1084,14 @@ def replace_link(db: Session, secret: Secret, *, actor: User, request=None) -> t
     new one starts with a fresh count). Caller commits."""
     _assert_sender(secret, actor)
     _assert_active(secret)
+    if secret.is_answer:
+        # The answerer is the answer's "sender", and a link would hand what only
+        # the requester may read to anyone holding it (v2.25.2).
+        raise AppError(
+            409,
+            "SECRET_ANSWER_NO_LINK",
+            "An answer to a request is for the person who asked; it cannot be shared as a link.",
+        )
     if not is_enabled(db):
         raise AppError(403, "SECRETS_DISABLED", "Secrets are turned off on this instance.")
     if not may_send_external(db, actor):

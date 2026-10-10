@@ -48,8 +48,13 @@
   const isRecipient = computed(() => secret.value?.viewer_role === 'recipient')
   const showsRoster = computed(() => isSender.value || auth.user?.role === 'admin')
   const active = computed(() => secret.value?.state === 'active')
+  // An answer to a request is for the requester alone: its answerer is its
+  // "sender", but there is no link to show, make or remove (the API refuses).
+  const showsLinks = computed(
+    () => isSender.value && active.value && secret.value?.is_answer !== true,
+  )
   const canManageLink = computed(
-    () => isSender.value && active.value && auth.user?.can_send_secrets_external === true,
+    () => showsLinks.value && auth.user?.can_send_secrets_external === true,
   )
 
   async function load() {
@@ -337,7 +342,7 @@
           </button>
         </div>
 
-        <section v-if="isSender && active" class="links-section">
+        <section v-if="showsLinks" class="links-section">
           <h2 class="section-h2">{{ t('secrets.detail.links_title') }}</h2>
           <p class="fh-field-help">{{ t('secrets.detail.links_help') }}</p>
           <div class="actions-row">

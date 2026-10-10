@@ -411,6 +411,34 @@ def _isolate_alert_dedup(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _isolate_secret_sweep_cursor(monkeypatch):
+    """Give services/secret's sweep cursor a per-test in-memory Redis. The key is
+    a FIXED name, so against a live Redis one test's cursor would skip the next
+    test's secrets - and land in production's. Yields the backing dict."""
+    from app.services import secret as secret_svc
+
+    store: dict[str, str] = {}
+
+    class _Fake:
+        def get(self, key):
+            return store.get(key)
+
+        def set(self, key, value, ex=None, nx=False):
+            if nx and key in store:
+                return None
+            store[key] = value
+            return True
+
+        def delete(self, *keys):
+            for k in keys:
+                store.pop(k, None)
+
+    monkeypatch.setattr(secret_svc, "get_redis", lambda: _Fake())
+    yield store
+    store.clear()
+
+
+@pytest.fixture(autouse=True)
 def _isolate_encryption_lanes(monkeypatch):
     """Give services/encryption_lanes a per-test in-memory Redis. Its lock,
     dirty-mark and deferral keys are FIXED names, so against the live Redis one

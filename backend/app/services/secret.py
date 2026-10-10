@@ -54,6 +54,7 @@ from ..models.secret import (
     SecretViewScope,
 )
 from ..models.user import User, UserRole
+from ..redis_client import get_redis
 from ..utils.columns import declared_width
 from ..utils.crypto import (
     SecretUndecryptableError,
@@ -1002,18 +1003,57 @@ def expire_due(db: Session, *, limit: int = 500) -> int:
     return sum(1 for s in due if end_secret(db, s, SecretState.expired, reason="expired"))
 
 
+# Where the last sweep stopped, as "<created_at iso>|<id>". A FIXED key: tests
+# replace get_redis (conftest `_isolate_secret_sweep_cursor`). Losing it (Redis
+# down or flushed) only restarts the round from the oldest secret.
+_SWEEP_CURSOR_KEY = "fh:secrets:sweep_cursor"
+
+
+def _load_sweep_cursor() -> tuple[datetime, str] | None:
+    try:
+        raw = get_redis().get(_SWEEP_CURSOR_KEY)
+        if not raw:
+            return None
+        text = raw.decode() if isinstance(raw, bytes) else str(raw)
+        created, sid = text.split("|", 1)
+        return datetime.fromisoformat(created), sid
+    except Exception:
+        return None
+
+
+def _save_sweep_cursor(cursor: tuple[datetime, str] | None) -> None:
+    try:
+        if cursor is None:
+            get_redis().delete(_SWEEP_CURSOR_KEY)
+        else:
+            get_redis().set(_SWEEP_CURSOR_KEY, f"{cursor[0].isoformat()}|{cursor[1]}")
+    except Exception:
+        logger.warning("secret sweep: could not store the cursor; the next run starts over")
+
+
 def sweep_exhausted(db: Session, *, limit: int = 1000) -> int:
     """Burn active secrets nobody can read any more - a member left the group,
     an account was disabled. The reveal path catches its own last view; this
-    catches what happens between views. Caller commits."""
-    active = (
-        db.query(Secret)
-        .filter(Secret.state == _ACTIVE)
-        .order_by(Secret.created_at, Secret.id)
-        .limit(limit)
-        .all()
-    )
-    return sum(1 for s in active if end_if_exhausted(db, s))
+    catches what happens between views. Caller commits.
+
+    Walks the active secrets `limit` at a time in (created_at, id) order and
+    carries on where the previous run stopped, starting over after the newest.
+    It used to re-select the OLDEST `limit` on every run, so past that many
+    active secrets a newer one nobody could read was never burned before it
+    expired (audit 2026-10-10)."""
+    query = db.query(Secret).filter(Secret.state == _ACTIVE)
+    cursor = _load_sweep_cursor()
+    if cursor is not None:
+        created, sid = cursor
+        query = query.filter(
+            or_(Secret.created_at > created, and_(Secret.created_at == created, Secret.id > sid))
+        )
+    # One row past the batch says whether anything is left after it.
+    rows = query.order_by(Secret.created_at, Secret.id).limit(limit + 1).all()
+    batch = rows[:limit]
+    more = len(rows) > limit
+    _save_sweep_cursor((batch[-1].created_at, batch[-1].id) if more else None)
+    return sum(1 for s in batch if end_if_exhausted(db, s))
 
 
 def revoke_all_active(db: Session, *, actor: User | None, reason: str, request=None) -> int:

@@ -121,6 +121,32 @@ def test_deleting_a_group_takes_its_entry_and_the_secret_with_it(db, people):
     assert secret_svc.sweep_exhausted(db) == 1
 
 
+def test_the_sweep_reaches_secrets_beyond_its_batch(db, people, _isolate_secret_sweep_cursor):
+    """Each run walks one batch and the next carries on after it. It used to
+    re-select the OLDEST batch every run, so past `limit` active secrets a newer
+    one nobody could read stayed until it expired."""
+    enable(db)
+    a, b, c = people
+    readable = [send(db, a, users=(b,)).secret for _ in range(3)]
+    unreadable = send(db, a, users=(c,)).secret  # the newest
+    base = utc_now() - timedelta(hours=1)
+    for i, x in enumerate([*readable, unreadable]):
+        x.created_at = base + timedelta(minutes=i)  # a strict order, whatever the clock did
+    c.is_disabled = True
+    db.commit()
+
+    assert secret_svc.sweep_exhausted(db, limit=2) == 0  # the two oldest, both readable
+    db.commit()
+    assert _isolate_secret_sweep_cursor  # a cursor was kept for the next run
+    assert secret_svc.sweep_exhausted(db, limit=2) == 1  # carries on: #3 and the newest
+    db.commit()
+    db.expire_all()
+    assert db.get(Secret, unreadable.id).state == SecretState.burned
+    assert all(db.get(Secret, x.id).state == SecretState.active for x in readable)
+    assert not _isolate_secret_sweep_cursor  # the end was reached: the next run starts over
+    assert secret_svc.sweep_exhausted(db, limit=2) == 0
+
+
 # ---- retention ---------------------------------------------------------------------
 
 

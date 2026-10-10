@@ -29,6 +29,7 @@
   import { useSSE } from '@/composables/useSSE'
   import { useUiStore } from '@/stores/ui'
   import { formatInSiteTime } from '@/utils/datetime'
+  import { reloadAfterUpdate, takeUpdateDoneNotice } from '@/utils/staleBundle'
 
   const { t, te, locale } = useI18n()
   const { describe } = useApiError()
@@ -240,6 +241,9 @@
           void loadUpdaterStatus()
           if (data.state === 'healthy') {
             ui.pushToast(t('admin_system.update.toast.done', { tag: data.target_tag }), 'success')
+            // This tab still runs the bundle from before the update, and its
+            // next lazy page would 404 on a chunk the update replaced.
+            void reloadAfterUpdate(data.id, data.target_tag)
           } else if (data.state === 'rolled_back') {
             // Self-heal: the update failed but the updater restored the previous
             // version automatically. Prod is up - warn, don't alarm.
@@ -380,6 +384,10 @@
   })
 
   onMounted(() => {
+    const reloadedFor = takeUpdateDoneNotice()
+    if (reloadedFor) {
+      ui.pushToast(t('admin_system.update.toast.reloaded', { tag: reloadedFor }), 'success')
+    }
     void load()
     void loadUpdaterStatus()
     void loadTransferActivity()

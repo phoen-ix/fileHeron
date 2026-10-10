@@ -31,6 +31,12 @@ vi.mock('@/composables/useSSE', () => ({
 }))
 const pushToast = vi.fn()
 vi.mock('@/stores/ui', () => ({ useUiStore: () => ({ pushToast, confirm: vi.fn() }) }))
+// The reload into the new bundle after a healthy job has its own test
+// (AdminSystemUpdateReload.test.ts); here it must neither fetch nor reload.
+vi.mock('@/utils/staleBundle', () => ({
+  reloadAfterUpdate: vi.fn(async () => false),
+  takeUpdateDoneNotice: vi.fn(() => null),
+}))
 
 import AdminSystem from '@/views/AdminSystem.vue'
 

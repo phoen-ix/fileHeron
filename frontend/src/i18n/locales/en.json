@@ -24,7 +24,8 @@
     "language": "Language",
     "delete": "Delete",
     "dismiss": "Dismiss",
-    "filter": "Filter"
+    "filter": "Filter",
+    "new_version": "A new version of file:Heron is available. Reload the page to continue."
   },
   "setup": {
     "title": "Welcome to fileHeron",
@@ -634,6 +635,7 @@
       },
       "toast": {
         "done": "Successfully updated to {tag}.",
+        "reloaded": "Page reloaded - you are now using {tag}.",
         "failed": "Update failed: {err}",
         "rolled_back": "Update to {tag} failed; automatically rolled back to {prev}.",
         "no_target": "No release tag to update to."

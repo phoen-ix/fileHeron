@@ -24,7 +24,8 @@
     "language": "Sprache",
     "delete": "Löschen",
     "dismiss": "Schließen",
-    "filter": "Filter"
+    "filter": "Filter",
+    "new_version": "Eine neue Version von file:Heron ist verfügbar. Laden Sie die Seite neu, um fortzufahren."
   },
   "setup": {
     "title": "Willkommen bei fileHeron",
@@ -634,6 +635,7 @@
       },
       "toast": {
         "done": "Erfolgreich auf {tag} aktualisiert.",
+        "reloaded": "Seite neu geladen - Sie verwenden jetzt {tag}.",
         "failed": "Update fehlgeschlagen: {err}",
         "rolled_back": "Update auf {tag} fehlgeschlagen; automatisch auf {prev} zurückgerollt.",
         "no_target": "Kein Release-Tag zum Aktualisieren."

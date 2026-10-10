@@ -6,7 +6,9 @@ import { i18n, setLocale } from './i18n'
 import router from './router'
 import { useAuthStore } from './stores/auth'
 import { useSiteStore } from './stores/site'
+import { useUiStore } from './stores/ui'
 import './styles/global.css'
+import { installStaleBundleRecovery } from './utils/staleBundle'
 
 const app = createApp(App)
 const pinia = createPinia()
@@ -14,6 +16,13 @@ const pinia = createPinia()
 app.use(pinia)
 app.use(i18n)
 app.use(router)
+
+// A tab opened before an update reloads instead of dead-ending on a chunk the
+// update replaced (utils/staleBundle.ts). The toast is the fallback for when it
+// already reloaded once and the chunk is still missing.
+installStaleBundleRecovery(router, () =>
+  useUiStore().pushToast(i18n.global.t('common.new_version'), 'warn', 0),
+)
 
 // Wire up auth bootstrap + auth-lost handler before mounting so the router's
 // first beforeEach can wait for the silent-refresh result.

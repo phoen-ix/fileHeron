@@ -7,7 +7,14 @@ summary and points here. Read this before changing the code listed below.
 
 ## Current state
 
-Backend **`v2.25.1`** is the newest tag (2026-10-02): `ops_check` retries a failed
+Backend **`v2.25.2`** is the newest tag (2026-10-10): the fixes of the 2026-10-10
+audit - daily tasks run once on DST nights, IMAP Fetch now no longer 500s, a tab
+from before an update reloads itself, mail survives an outage of an hour or
+more, one IMAP blip no longer alerts, one mail per failed job, an answer to a
+secret request can never become a link, the secret sweep reaches every active
+secret, post-finish checks the tus file's size, clean DB connections on deploy -
+and one default move, sessions ending 30 days after sign-in
+(`auth.session_max_age_days`). **`v2.25.1`** (2026-10-02): `ops_check` retries a failed
 ClamAV ping before alerting (a signature reload had mailed a false
 `av_unhealthy` two days running), and the README's Architecture section is
 current again. **`v2.25.0`** (same day): encryption at rest - every
@@ -51,9 +58,10 @@ audit on three anyio CVEs; tags are immutable, so the same commits shipped as
 v2.17.1 plus the anyio bump). **v2.17.1 shipped a sidebar showing nothing but
 "Overview"** (a `v-if` on the Overview link captured the categories' `v-else`;
 no test mounted AdminLayout); v2.17.2 is that one-line fix plus
-`tests/components/AdminLayout.test.ts`. **The reference host runs v2.24.0**
-(in-app update 2026-10-02 06:57 UTC from v2.23.2, 48 s to `healthy`, no
-warnings, pre-update backup taken); the working tree's `scripts/` are live there
+`tests/components/AdminLayout.test.ts`. **The reference host runs v2.25.1**
+(an automatic update the admin ran by hand from Scheduled tasks, 2026-10-02
+13:45 UTC from v2.24.0, migration `202610030001` applied; encryption at rest is
+off there); the working tree's `scripts/` are live there
 as always. Its infra has been on `mariadb:12.3.3` /
 `redis:8.10.2` / `clamav:1.5.4` since the v2.19.0 update (API down ~70 s). The
 default moves of v2.16.0 and v2.19.0 are live there; v2.17.x, v2.18.0 and
@@ -102,6 +110,7 @@ record.
 | v2.24.0 | `202610010001` five tables: `secrets`, `secret_recipients`, `secret_group_members`, `secret_user_states`, `secret_access_events`; `202610020001` secret requests: `secret_requests`, `secret_request_targets`, `secret_request_group_members`, and on `secrets` a NULLable `created_by_id` plus `request_id`, `is_answer`, `answered_by_email`, `req_*`, `has_request_passphrase` | - | - (secrets ship OFF: `secrets.enabled`. New `/api/secrets*`, `/api/secret-requests*`, `/api/public/secrets/{peek,reveal}`, `/api/public/secret-requests/{peek,answer}`, six `secrets:*` token scopes (`secrets:request` asks), `/me` gains `secrets_enabled`, `can_send_secrets`, `can_send_secrets_external`, `secret_limits`; config import now also burns every active secret. `PUBLIC_LINK_BASE_PATH` is no longer read from the environment - the SPA only ever served `/d`, so a different value had only produced dead links) |
 | v2.25.0 | `202610030001` encryption at rest: `files.enc_version` + `key_encrypted` + `release_verdict` (+ `ix_files_enc_state`), `inbound_attachments.enc_version` + `key_encrypted`, table `storage_purge_queue`; `downgrade()` REFUSES while any row is encrypted | - when the updater can sync infra (tusd v2.9.2 -> v2.10.1); where it SKIPS, `docker compose up -d --no-deps tusd` after the fast-forward the log names | - (encryption ships OFF: `storage.encrypt_at_rest`. New `GET/PUT /api/admin/settings/encryption` (PUT step-up gated BOTH ways), `POST .../retry-failed`, `POST /api/admin/users/{id}/unlock`, `GET /api/account/email`, `GET /api/admin/audit-log/settings-changes`; Rollback answers `409 ROLLBACK_BLOCKED_BY_ENCRYPTION` while encrypted files exist and the target predates the migration. Behaviour: an empty `FORWARDED_ALLOW_IPS=` now reaches uvicorn as `*`, not "" - it had trusted no proxy) |
 | v2.25.1 | - | - | - (behaviour: `ops_check` alerts `av_unhealthy` only after 3 failed ClamAV pings over 20 s, not on one) |
+| v2.25.2 | - | - | **`auth.session_max_age_days` = 30**: a session signed in more than 30 days ago ends at its first refresh after the update (browser and desktop client); `0` restores the old unlimited behaviour. Behaviour: the 02:xx daily tasks run once on DST nights; `send_email_job` retries for ~1 h 51 min (its own `max_tries`); `imap_poll` alerts only on an outage (15 min without a success) or a non-transient error; a cron failure mails an admin once; `run_poll`'s message count is `skipped_messages` |
 
 Per-release admin-facing notes for v2.13.0 and newer are in `RELEASE_NOTES.md`,
 one `# file:Heron vX.Y.Z` section each, newest first; older releases live in

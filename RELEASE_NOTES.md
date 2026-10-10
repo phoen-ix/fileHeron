@@ -1,3 +1,98 @@
+# file:Heron v2.25.2
+
+**Fixes from an audit of the code and of a running instance's logs.** Daily
+scheduled tasks no longer run twice when the clocks go back (next: the night of
+25 October). IMAP **Fetch now** works again. A browser tab left open across an
+update no longer gets stuck. A short network outage no longer loses the mails
+sent during it. **New: a session ends 30 days after its sign-in.**
+
+**No migration, no host step. One default move:** sessions end 30 days after
+sign-in (below). The desktop client stays at **1.5.2**.
+
+---
+
+## Sessions end 30 days after sign-in
+
+- Until now, a browser tab left open stayed signed in indefinitely. Every
+  refresh issued a new session token, and the notification bell refreshes every
+  15 minutes.
+- New setting **Session lifetime from sign-in (days)** at **Admin › People &
+  access › Sessions › Policy**: default **30**, `0` = no limit. When it is reached, the next page
+  load asks the user to sign in again. Their other sessions are not affected.
+- **On the update:** anyone who signed in more than 30 days ago is asked to
+  sign in again, in the desktop client too. To keep the old behaviour, set the
+  value to `0`.
+
+## Scheduled tasks and daylight saving time
+
+- Six of the seven daily tasks run between 02:05 and 02:51. When the clocks go
+  back that hour happens twice, and each of those tasks ran twice. When they go
+  forward the hour does not exist, and a task in it ran every minute for most
+  of the next hour (the 02:51 one up to 52 times).
+- **Now** each runs once per day. A time that happens twice runs at its first
+  occurrence; a time that does not exist runs one hour later.
+- **Scheduled tasks** shows the right next run on those nights as well.
+
+## IMAP: Fetch now
+
+- **Fetch now** at **Admin › Email & notifications › Inbound mail (IMAP)**
+  answered with an internal error whenever the mailbox was polled successfully,
+  and mailed the admins an error alert. It works again.
+
+## After an update
+
+- A browser tab opened before an update kept the old version of the app. The
+  next time it opened a page it had not shown yet, the click did nothing.
+- **Now** such a tab reloads itself into the new version, at most once.
+- The tab that ran the update reloads itself once the new version is up, and
+  then says which version it is running.
+
+## Mail during an outage
+
+- A mail that could not be sent was retried for less than three minutes. In a
+  network outage of a few minutes, every mail sent during it was lost.
+- **Now** it is retried for almost two hours: after 10 seconds, then 1, 5, 15,
+  30 and 60 minutes. The **Mail log** shows it as queued, with the attempts so
+  far.
+
+## Fewer false alerts
+
+- **One failed IMAP poll** no longer alerts the admins. The next poll, five
+  minutes later, usually works. The admins are alerted when the mailbox has not
+  answered for 15 minutes. Wrong credentials and certificate problems are still
+  reported at once.
+- **One mail per failed task:** an admin who receives both operations alerts
+  and error alerts by mail got the same failure twice. The error alert is now
+  the mail; the operations alert stays in the bell.
+
+## Secrets
+
+- The person who answers a secret request could turn the answer into a link,
+  which only the requester should ever read. When the request had a
+  passphrase, opening that link caused an internal error. Answers can no longer
+  be shared as a link, and any such link no longer opens.
+- On an instance with more than 1,000 active secrets, the check that ends a
+  secret nobody can read any more (its readers left the group or were disabled)
+  never reached the newer ones. It now goes through all of them.
+
+## Smaller fixes
+
+- **Uploads:** finishing a resumable upload checks the size of the stored data
+  against the size that was authorised before keeping it. This is a security
+  hardening. A mismatch is refused and recorded in the audit log as
+  `upload_size_mismatch`.
+- **Database log:** every update and restart left a burst of "Aborted
+  connection" warnings in MariaDB's log. The containers now open and close
+  their database connections cleanly.
+
+---
+
+## Upgrading
+
+Click **Update**. Automatic updates install it at any scope, patch included.
+
+---
+
 # file:Heron v2.25.1
 
 **No more false "ClamAV unhealthy" alerts when the virus signatures update.**

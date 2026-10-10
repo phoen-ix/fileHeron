@@ -8,15 +8,20 @@ session is injectable (``session_opener``) so tests drive it with a fake.
 from __future__ import annotations
 
 import contextlib
+import errno
+import imaplib
 import logging
 import re
 import secrets
+import socket
+import ssl
+from datetime import datetime, timedelta
 
 from sqlalchemy.orm import Session
 
 from ..database import SessionLocal
 from ..redis_client import get_redis
-from ..utils.timeutil import utc_now
+from ..utils.timeutil import to_naive_utc, utc_now
 from . import imap_config, inbound_mail, inbound_parse
 from . import settings as settings_svc
 from .imap_client import open_session
@@ -118,6 +123,78 @@ def _release_poll_lock(token: str) -> None:
             r.delete(_POLL_LOCK_KEY)
     except Exception:
         pass
+
+
+# Failing to REACH the server is retried by the next cycle; a refused login, a
+# TLS fault or a bad mailbox name is not going to fix itself. EAI_AGAIN is the
+# resolver's "temporary failure"; a name that does not exist (EAI_NONAME) is a
+# configuration error and alerts at once.
+_TRANSIENT_ERRNOS = frozenset({
+    errno.ENETUNREACH, errno.ENETDOWN, errno.EHOSTUNREACH, errno.EHOSTDOWN,
+    errno.ECONNREFUSED, errno.ECONNRESET, errno.ECONNABORTED, errno.ETIMEDOUT,
+    socket.EAI_AGAIN,
+})
+
+# How long a mailbox may be unreachable before it is an outage worth an alert:
+# three five-minute cycles.
+TRANSIENT_GRACE = timedelta(minutes=15)
+
+
+def is_transient(exc: BaseException) -> bool:
+    """True when `exc` is a failure to reach the server at all.
+
+    Walks `__cause__`: imap_client._connect_failure re-raises a connect error as
+    a plain OSError (keeping errno, naming every address it tried), so a
+    TimeoutError arrives as `OSError(None, "timed out [...]")` with the original
+    behind it."""
+    seen: BaseException | None = exc
+    for _ in range(5):
+        if seen is None:
+            return False
+        if isinstance(seen, ssl.SSLError):
+            return False
+        if isinstance(seen, (TimeoutError, ConnectionError, imaplib.IMAP4.abort)):
+            return True
+        if isinstance(seen, OSError) and seen.errno in _TRANSIENT_ERRNOS:
+            return True
+        seen = seen.__cause__
+    return False
+
+
+def is_outage(result: dict, *, last_success_at: datetime | None, now: datetime) -> bool:
+    """Whether a failed poll result should be reported as a failure (and so
+    alert). A transient failure is not, while the mailbox answered within
+    TRANSIENT_GRACE: one missed cycle is a blip, and the next one retries.
+
+    Two single blips alerted on the reference instance in thirty days
+    (2026-09-18 12:47 and 2026-10-07 20:14) - each a cron_failed and mail to
+    every admin, each followed by a clean poll five minutes later - while the
+    hours-long outages of August must still alert, and do: by then the last
+    success is older than the grace. A mailbox that never answered alerts on
+    its first failure."""
+    if result.get("ok") or result.get("error") == "not_configured":
+        return False
+    if not result.get("transient") or last_success_at is None:
+        return True
+    return now - last_success_at > TRANSIENT_GRACE
+
+
+def last_success_at(db: Session | None = None) -> datetime | None:
+    """When a poll last succeeded (naive UTC), or None if one never has."""
+    own = db is None
+    db = db or SessionLocal()
+    try:
+        raw = settings_svc.get(db, K.IMAP_LAST_SUCCESS_AT)
+    finally:
+        if own:
+            db.close()
+    if not raw:
+        return None
+    try:
+        parsed = datetime.fromisoformat(raw)
+    except ValueError:
+        return None
+    return to_naive_utc(parsed) if parsed.tzinfo is not None else parsed
 
 
 def run_poll(*, manual: bool, db: Session | None = None, session_opener=open_session) -> dict:
@@ -387,7 +464,11 @@ def run_poll(*, manual: bool, db: Session | None = None, session_opener=open_ses
             )
             db.commit()
         logger.exception("imap poll failed")
-        return {"ok": False, "error": f"{type(exc).__name__}: {str(exc)[:200]}"}
+        return {
+            "ok": False,
+            "error": f"{type(exc).__name__}: {str(exc)[:200]}",
+            "transient": is_transient(exc),
+        }
     finally:
         if lock_token is not None:
             _release_poll_lock(lock_token)

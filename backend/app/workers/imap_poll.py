@@ -11,6 +11,7 @@ import asyncio
 
 from ..services import imap_poll as imap_poll_svc
 from ..services.cron_tracker import track_cron
+from ..utils.timeutil import utc_now
 
 
 class InboundPollError(RuntimeError):
@@ -27,9 +28,13 @@ async def imap_poll(_ctx) -> dict:
     # log entry, and a green Scheduled Tasks page (audit 2026-07-30). Re-raise so
     # a broken poll is actually visible.
     #
-    # "not configured" is excluded on purpose - that is a deployment without
-    # inbound mail, not a fault, and alerting on it would train operators to
-    # ignore this job.
+    # But not on one missed cycle: a failure to REACH the server while the
+    # mailbox answered within imap_poll_svc.TRANSIENT_GRACE is a blip the next
+    # cycle retries (is_outage has the history). "not configured" is excluded
+    # on purpose - that is a deployment without inbound mail, not a fault, and
+    # alerting on it would train operators to ignore this job.
     if not result.get("ok") and result.get("error") != "not_configured":
-        raise InboundPollError(str(result.get("error") or "imap poll failed"))
+        last_ok = await asyncio.to_thread(imap_poll_svc.last_success_at)
+        if imap_poll_svc.is_outage(result, last_success_at=last_ok, now=utc_now()):
+            raise InboundPollError(str(result.get("error") or "imap poll failed"))
     return result

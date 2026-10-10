@@ -42,6 +42,7 @@
         class="folder-input"
         tabindex="-1"
         aria-hidden="true"
+        :aria-label="t('upload.dropzone.folder')"
         :disabled="disabled"
         @change="onFileChange"
       />

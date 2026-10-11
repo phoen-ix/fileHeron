@@ -7,14 +7,18 @@ summary and points here. Read this before changing the code listed below.
 
 ## Current state
 
-Backend **`v2.26.0`** is the newest tag (2026-10-10): folder uploads - a file keeps the
+Backend **`v2.27.0`** is the newest tag (2026-10-11): passkey sign-in - a passkey alone
+signs in, and counts as 2FA - behind one admin switch, off by default
+(`auth.passkey_signin`, docs/engineering/auth.md §Passkey sign-in), one migration.
+**`v2.26.0`** (same day): folder uploads - a file keeps the
 folder it came from (`files.relative_dir`, one migration), the share and public pages
 group by folder and the ZIP carries the tree (`LAYOUT_VERSION` 2) - plus a share label
 that could name a file still pending review, and `/files-added` batches over 1,000.
 **`v2.25.3`** (same day): a dependency refresh - the
 backend lock and the frontend tree to current, the SPA built on Node 26, ruff 0.17.0,
 and CI's linter images pinned where Dependabot looks (`.github/ci-tools/Dockerfile`).
-Desktop client **`client-v1.6.0`** ships beside it: Python 3.14 in the .exe, so it
+Desktop client **`client-v1.6.0`** is prepared beside it, untagged until a Windows
+try-out (its build from 84ceb21 is the one being tried): Python 3.14 in the .exe, so it
 needs Windows 10 or newer (`docs/engineering/desktop-client.md`). **`v2.25.2`**
 (same day): the fixes of the 2026-10-10
 audit - daily tasks run once on DST nights, IMAP Fetch now no longer 500s, a tab
@@ -67,16 +71,19 @@ audit on three anyio CVEs; tags are immutable, so the same commits shipped as
 v2.17.1 plus the anyio bump). **v2.17.1 shipped a sidebar showing nothing but
 "Overview"** (a `v-if` on the Overview link captured the categories' `v-else`;
 no test mounted AdminLayout); v2.17.2 is that one-line fix plus
-`tests/components/AdminLayout.test.ts`. **The reference host runs v2.25.1**
-(an automatic update the admin ran by hand from Scheduled tasks, 2026-10-02
-13:45 UTC from v2.24.0, migration `202610030001` applied; encryption at rest is
-off there); the working tree's `scripts/` are live there
+`tests/components/AdminLayout.test.ts`. **The reference host runs v2.25.2**
+(the nightly automatic patch update, 2026-10-11 01:31 UTC from v2.25.1, no
+migration; it skipped the infra sync because the checkout was ahead of the tag,
+as designed; encryption at rest is off there). v2.26.0 and later are MINOR
+releases, which the default patch scope never installs - they wait for a click on
+Update. The working tree's `scripts/` are live there
 as always. Its infra has been on `mariadb:12.3.3` /
 `redis:8.10.2` / `clamav:1.5.4` since the v2.19.0 update (API down ~70 s); db and
 clamav were recreated by hand on 2026-10-10 on Docker Hub's same-tag rebuilds, which
 the updater never pulls (it compares tags, not digests). The
-default moves of v2.16.0 and v2.19.0 are live there; v2.17.x, v2.18.0 and
-v2.19.1 through v2.25.1 move no default.
+default moves of v2.16.0, v2.19.0 and v2.25.2 (sessions end 30 days after
+sign-in) are live there; v2.17.x, v2.18.0 and v2.19.1 through v2.25.1 move no
+default.
 `data/updater/rollback_target.json` holds the version BEFORE last, not the
 running one. Images and working tree can diverge without any deploy - see `docs/engineering/deploy-and-backups.md` §Ops
 on which half of a fix is live.
@@ -122,8 +129,9 @@ record.
 | v2.25.0 | `202610030001` encryption at rest: `files.enc_version` + `key_encrypted` + `release_verdict` (+ `ix_files_enc_state`), `inbound_attachments.enc_version` + `key_encrypted`, table `storage_purge_queue`; `downgrade()` REFUSES while any row is encrypted | - when the updater can sync infra (tusd v2.9.2 -> v2.10.1); where it SKIPS, `docker compose up -d --no-deps tusd` after the fast-forward the log names | - (encryption ships OFF: `storage.encrypt_at_rest`. New `GET/PUT /api/admin/settings/encryption` (PUT step-up gated BOTH ways), `POST .../retry-failed`, `POST /api/admin/users/{id}/unlock`, `GET /api/account/email`, `GET /api/admin/audit-log/settings-changes`; Rollback answers `409 ROLLBACK_BLOCKED_BY_ENCRYPTION` while encrypted files exist and the target predates the migration. Behaviour: an empty `FORWARDED_ALLOW_IPS=` now reaches uvicorn as `*`, not "" - it had trusted no proxy) |
 | v2.25.1 | - | - | - (behaviour: `ops_check` alerts `av_unhealthy` only after 3 failed ClamAV pings over 20 s, not on one) |
 | v2.25.2 | - | - | **`auth.session_max_age_days` = 30**: a session signed in more than 30 days ago ends at its first refresh after the update (browser and desktop client); `0` restores the old unlimited behaviour. Behaviour: the 02:xx daily tasks run once on DST nights; `send_email_job` retries for ~1 h 51 min (its own `max_tries`); `imap_poll` alerts only on an outage (15 min without a success) or a non-transient error; a cron failure mails an admin once; `run_poll`'s message count is `skipped_messages` |
-| v2.25.3 | - | - | - (dependency refresh only: backend lock, frontend tree, the SPA built on Node 26; the backend image ships no curl - its compose healthcheck runs Python - and runs as `USER 1000:1000`; every Dockerfile hadolint-clean and gated at `style`. Desktop `client-v1.6.0` beside it bundles Python 3.14 and needs **Windows 10 or newer**) |
+| v2.25.3 | - | - | - (dependency refresh only: backend lock, frontend tree, the SPA built on Node 26; the backend image ships no curl - its compose healthcheck runs Python - and runs as `USER 1000:1000`; every Dockerfile hadolint-clean and gated at `style`. Desktop `client-v1.6.0`, prepared beside it and untagged until a Windows try-out, bundles Python 3.14 and needs **Windows 10 or newer**) |
 | v2.26.0 | `202610100001` `files.relative_dir` (nullable) | - | - (behaviour: the bulk ZIP's `LAYOUT_VERSION` is 2, so a ZIP resume in flight across the update restarts once; a subject-less share's label never names a file pending review; the SPA sends `/files-added` in chunks of 1,000) |
+| v2.27.0 | `202610110001` `user_webauthn_credentials.discoverable` (nullable) | - | - (passkey sign-in ships OFF: `auth.passkey_signin`, written through `PUT /api/admin/settings/twofa` - `passkey_signin`, omitted = unchanged. New `POST /api/auth/passkey/{begin,complete}` and `/api/auth/2fa/passkey/{begin,complete}`; `/api/config-public` gains `passkey_signin`, `WebAuthnCredentialItem` gains `discoverable`, the SSO second-factor redirect gains `&methods=`. Only with the switch ON: `POST /api/auth/login` answers `401 WEBAUTHN_REQUIRED` to an account with a passkey and no TOTP, and a passkey satisfies `is_2fa_required`) |
 
 Per-release admin-facing notes for v2.13.0 and newer are in `RELEASE_NOTES.md`,
 one `# file:Heron vX.Y.Z` section each, newest first; older releases live in

@@ -13,7 +13,11 @@ endpoints. Auth: email+password (TOTP/recovery) OR an `fh_…` API token; tokens
 OS keyring; server URL per-install (`%LOCALAPPDATA%\fileHeron\config.json`, logs
 in `Logs\` beside it - platformdirs is non-roaming, so `%APPDATA%` is empty).
 Out of scope v1: OIDC, WebAuthn, admin shell, SSE. Direct ≤100 MB; TUS above
-(own `client/src/fileheron_client/tus.py`).
+(own `client/src/fileheron_client/tus.py`). **While the server's passkey sign-in
+is on (v2.27.0), a password sign-in whose second factor is a passkey answers
+`WEBAUTHN_REQUIRED`**, which the client cannot finish: its locale maps that code
+to "sign in with an API token instead", and `test_client_error_codes.py` declares
+it reachable despite the `WEBAUTHN_` prefix.
 
 - **Only 401/403 from `/api/auth/refresh` end a desktop session** - the SPA's `RefreshOutcome` split, which the client lacked: a 502/503/504 during the in-app updater's restart, or a 429, became SessionExpiredError, tore down the main window and paused every transfer. Anything else is `ApiError SERVER_UNAVAILABLE`.
 - **The .exe installs from `client/requirements-build.lock`** (hashed, universal, recipe in its header) and only the tag-gated `publish` job holds `contents: write`; `ci.yml` client-tests install the SAME lock on ubuntu + windows, so a lock that cannot install fails on a push, not on an immutable `client-v*` tag. Regenerate it after a Dependabot pip PR.

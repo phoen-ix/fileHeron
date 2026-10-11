@@ -1,3 +1,62 @@
+# file:Heron v2.27.0
+
+**Sign in with a passkey.** An admin can now let people sign in with a passkey
+alone - no email, no password. It is **off by default**: switch it on under
+**2FA enforcement** (`/admin/settings/twofa`).
+
+**One migration** (`202610110001`, runs by itself on start). **No default
+moves, no host step.** While passkey sign-in is off, nothing changes.
+
+---
+
+## Passkey sign-in
+
+- The sign-in page offers **Sign in with a passkey**. The browser offers the
+  passkeys it keeps for this site, and browsers that can also list them in the
+  email field's suggestions.
+- The passkey must verify you with a PIN, fingerprint or face, because nothing
+  else is asked: the device and that check are the two factors.
+- A passkey that fails to sign in never counts towards locking the account;
+  attempts are limited per network address instead.
+
+## A passkey counts as two-factor authentication
+
+While passkey sign-in is on:
+
+- Someone with a passkey and no authenticator app who signs in with their
+  password finishes with the passkey (**Use your passkey**).
+- After signing in with SSO, the second-factor page takes the passkey as well
+  as the code.
+- A passkey meets the two-factor policy: someone who must use two-factor
+  authentication and already has a passkey is not asked to set up an
+  authenticator app. Someone with neither still sets up the app first and can
+  add a passkey afterwards.
+- The admin user list and user page show **2FA on** for someone whose second
+  factor is a passkey.
+
+**The desktop app cannot use passkeys yet.** While passkey sign-in is on,
+people whose only second factor is a passkey can sign in to the desktop app
+only with an API token.
+
+**Keep a second way in.** A passkey has no recovery codes. Someone who loses
+their only passkey and has no authenticator app cannot sign in while passkey
+sign-in is on; switching it off lets them in with their password again. The
+account page reminds passkey owners to add a second passkey or an
+authenticator app.
+
+## Also
+
+- The account page marks a passkey that can sign in on its own with **Signs
+  in without a password**. Passkeys added before this version carry no mark
+  but may still work.
+
+## Upgrading
+
+This is a **minor** release, so automatic updates at the default *patch* scope
+don't install it. Click **Update**.
+
+---
+
 # file:Heron v2.26.0
 
 **Folders keep their structure.** Drop a folder into a share, or pick one with

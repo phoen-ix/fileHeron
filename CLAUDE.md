@@ -46,9 +46,9 @@ Area detail goes to its doc, not back here.
 
 ## Current state
 
-Backend **`v2.26.0`** is the newest tag (folder uploads; v2.25.3 a dependency refresh, v2.25.2 the 2026-10-10 audit fixes, v2.25.0 encryption at rest, off by default) and
-**`client-v1.6.0`** the newest desktop client (Python 3.14, Windows 10 or newer); the reference host runs
-**v2.25.1**. What each release changed, the
+Backend **`v2.27.0`** is the newest tag (passkey sign-in, off by default; v2.26.0 folder uploads, v2.25.3 a dependency refresh, v2.25.2 the 2026-10-10 audit fixes, v2.25.0 encryption at rest, off by default) and
+**`client-v1.5.2`** the newest desktop client tag (**`client-v1.6.0`** - Python 3.14, Windows 10 or newer - is prepared and is tagged only after a Windows try-out, on the commit that was tried); the reference host runs
+**v2.25.2**. What each release changed, the
 host's infra and the per-tag migrations, host steps and default moves are in
 [`releases.md`](docs/engineering/releases.md). **Keep this paragraph and that file current on release.**
 
@@ -155,7 +155,7 @@ separately requires a `content_fingerprint`.
 `make typecheck` / `make test-mariadb` and CONTRIBUTING §Before you push own the
 gate table. The traps:
 
-- **Any compose invocation naming `docker-compose.e2e.yml` must carry `COMPOSE_PROJECT_NAME=fileheron_e2e`, and must ship with its matching teardown.** Compose defaults the project name to the DIRECTORY, and a checkout at `fileHeron/` normalises to `fileheron` - **the live project** - so the command recreates the production containers with `AV_SKIP=true`, `ENVIRONMENT=development`, `COOKIE_SECURE=false` and `RATE_LIMIT_LOGIN=1000`. `ENVIRONMENT=development` is also what re-enables `entrypoint.sh`'s dev seeding, so `user@e2e.local` is created as a CLIENT (`admin@e2e.local` is NOT: Path 1 of `admin_bootstrap` refuses to auto-create when any admin exists, and Path 2 needs the user to already exist - measured, not assumed). Without a teardown line the obvious follow-up, `docker compose down`, takes production with it. Pinned by `tests/infra/test_ops_scripts.py`. See [[project-running-e2e-safely]] - run it from a separate clone.
+- **Any compose invocation naming `docker-compose.e2e.yml` must carry `COMPOSE_PROJECT_NAME=fileheron_e2e`, and must ship with its matching teardown.** Compose defaults the project name to the DIRECTORY, and a checkout at `fileHeron/` normalises to `fileheron` - **the live project** - so the command recreates the production containers with `AV_SKIP=true`, `ENVIRONMENT=development`, `COOKIE_SECURE=false`, `RATE_LIMIT_LOGIN=1000` and `RATE_LIMIT_REGISTER=1000`. `ENVIRONMENT=development` is also what re-enables `entrypoint.sh`'s dev seeding, so `user@e2e.local` is created as a CLIENT (`admin@e2e.local` is NOT: Path 1 of `admin_bootstrap` refuses to auto-create when any admin exists, and Path 2 needs the user to already exist - measured, not assumed). Without a teardown line the obvious follow-up, `docker compose down`, takes production with it. Pinned by `tests/infra/test_ops_scripts.py`. See [[project-running-e2e-safely]] - run it from a separate clone.
 - **Never hand-roll a MariaDB container for the `RUN_ALEMBIC_ROUNDTRIP` files.** `make test-mariadb` (`scripts/run_mariadb_tests.sh`) is the supported path; the three files skip in the main suite and CI runs them as an Actions `service:`. `mariadb:11` declares `VOLUME /var/lib/mysql`, so a hand-rolled `docker run -d --name …` torn down with `docker rm -f` and no `-v` strands ~167 MB per cycle (~1 GB/day on the reference host). The script keeps `--rm` **and** a trap doing `docker rm -f -v`: each covers a case the other does not (`--rm` misses a killed container or a daemon restart; only `-v` takes the datadir).
 - **`docker volume prune -a` is FORBIDDEN on this host** - it is shared with nextcloud and others, and `-a` takes unused NAMED volumes. This prohibition exists nowhere else in the repo.
 - **Adding a `RUN_ALEMBIC_ROUNDTRIP`-gated test file means editing the roundtrip step's file list**, or it skips in the main suite and runs nowhere else (`tests/test_mariadb_semantics.py` had NEVER executed). `-rs` prints skip reasons so a file that stops running is visible in the log.
@@ -253,7 +253,8 @@ violation does the most damage; they are not the whole story.
 - Never let one client refresh concurrently on one cookie - a time-based grace window in `rotate_refresh` cannot be made safe; the SPA (`withRefreshLock`) and the desktop client (`ApiClient._refresh_access_token`) prevent it, so fix both or neither.
 - Only 401 and 403 from `/api/auth/refresh` are verdicts (`RefreshOutcome` `expired`); a 5xx, 429 or timeout is `unavailable` and must never sign anyone out.
 - `isAuthCall` in `frontend/src/api/client.ts` must list every route that 401s for a wrong submitted secret, or a typo signs the user out; pinned by `test_wrong_secret_routes.py`.
-- `is_2fa_required` answers "must they still enrol", never "must they present a code" - challenge with `totp_svc.is_enabled`; `rate_limit.record_success` runs only after the second factor.
+- `is_2fa_required` answers "must they still enrol", never "must they present a code" - challenge with `totp_svc.is_enabled` or `auth.second_factor_methods`; `rate_limit.record_success` runs only after the second factor.
+- Passkey sign-in is ONE switch (`auth.passkey_signin`, off): on, a passkey alone signs in AND counts as 2FA (`WEBAUTHN_REQUIRED` after a password). Every passkey failure answers one code, and none calls `record_failure` - a credential id is no secret.
 - `users.sessions_invalidated_at` (stamped in `jwt_session.revoke_all_user_refresh_tokens`) is what makes revoke cover access tokens; it is compared with `<`, not `<=`.
 - OIDC roles stay local and there is no auto-create; the issuer check is ours (`oidc._verify_token_response`) and tolerates exactly one trailing slash.
 - `email_change._apply_email_change` is the only writer of `users.email`; don't "fix" the `email_verified` model default.

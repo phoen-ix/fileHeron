@@ -15,6 +15,9 @@ other way, and adding to it should feel like a decision:
     public_secrets / public_secret_requests - the holder of a secret's or a
     request's link has no account; the token rides the request body)
   - reachable before 2FA setup completes (auth, account.setup_router)
+  - signing in, which has no session yet to gate (webauthn.auth_router, and
+    webauthn.signin_router - a passkey alone, or a passkey finishing a pending
+    sign-in after SSO)
   - self-authenticating on a signed token or HMAC, because the caller cannot
     send an Authorization header (files.download_router `?dt=`, both SSE
     stream routers `?token=`, oidc_connect.callback_router state cookie,
@@ -44,6 +47,7 @@ _EXEMPT = {
     "tus_hooks.router",
     "oidc.router",
     "webauthn.auth_router",
+    "webauthn.signin_router",
     "files.download_router",
     "notifications.stream_router",
     "admin.stream_router",

@@ -784,6 +784,7 @@
     "TOTP_ALREADY_ENABLED": "Two-factor auth is already on for this account.",
     "TOTP_NOT_ENABLED": "Two-factor auth is not enabled.",
     "TOTP_REQUIRED": "Enter your six-digit code from your authenticator app.",
+    "WEBAUTHN_REQUIRED": "This account finishes signing in with a passkey, which the desktop app can't use yet. Sign in with an API token instead - you create one on the website under Account.",
     "TOTP_SECRET_UNAVAILABLE": "Your two-factor secret cannot be read. An administrator must re-enrol your device.",
     "TOTP_SETUP_MISSING": "Begin two-factor setup first.",
     "TUSD_INVALID_UPLOAD_ID": "This upload could not be identified. Please start it again.",

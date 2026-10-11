@@ -22,8 +22,13 @@ class TwofaPolicyResponse(APIBaseModel):
     # "currently inheriting from environment" instead of pretending
     # the unsaved form is the truth.
     is_kv_overridden: bool
+    # Passkey sign-in (v2.27.0): a passkey alone signs in, and counts as 2FA.
+    passkey_signin: bool = False
 
 
 class UpdateTwofaPolicyRequest(APIBaseModel):
     required_roles: list[str] = Field(default_factory=list)
     required_group_ids: list[int] = Field(default_factory=list)
+    # None leaves the switch as it is, so a page that predates it cannot turn
+    # it off by saving the policy.
+    passkey_signin: bool | None = None

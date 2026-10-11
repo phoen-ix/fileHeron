@@ -115,16 +115,25 @@ def test_immediate_replay_of_the_current_code_is_still_refused(db, totp_user):
 
 def test_webauthn_challenges_are_consumed_not_merely_read():
     """`get` leaves the challenge in Redis for its full 300s TTL, so the same
-    assertion replays. Asserted at the source level because both call sites are
-    async Redis paths with no seam the unit suite can reach."""
+    assertion replays. Asserted at the source level, over EVERY challenge-key
+    constant the module defines, so a new ceremony is covered the day it lands
+    (passkey sign-in added a third). The passkey sign-in path is also pinned
+    behaviourally, through `_webauthn_helpers.install_challenge_store`:
+    `test_passkey_signin.py::test_a_signin_challenge_is_single_use`."""
     import inspect
 
     from app.services import webauthn
 
     src = inspect.getsource(webauthn)
-    assert "r.get(f\"{AUTH_KEY}" not in src, "auth challenge is still read non-destructively"
-    assert "r.get(f\"{REGISTER_KEY}" not in src, "register challenge is still read non-destructively"
-    assert src.count("getdel(") == 2
+    keys = [
+        name for name, value in vars(webauthn).items()
+        if name.endswith("_KEY") and isinstance(value, str) and value.startswith("fh:webauthn:")
+    ]
+    assert len(keys) >= 3, keys
+    for name in keys:
+        assert f'getdel(f"{{{name}}}' in src, f"the {name} challenge is never consumed"
+        assert f'r.get(f"{{{name}}}' not in src, f"the {name} challenge is read non-destructively"
+    assert src.count("getdel(") == len(keys)
 
 
 # --- crypto-10: state disclosure before proof of possession -----------------

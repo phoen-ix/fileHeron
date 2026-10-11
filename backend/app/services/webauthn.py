@@ -44,12 +44,32 @@ from ..models.user import User
 from ..models.user_webauthn_credential import UserWebAuthnCredential
 from ..utils.dbresult import updated_rows
 from ..utils.timeutil import utc_now
+from . import settings as settings_svc
 
 logger = logging.getLogger("fileheron.webauthn")
 
 CHALLENGE_TTL_SEC = 300  # 5 minutes per spec recommendation
 REGISTER_KEY = "fh:webauthn:reg:"
 AUTH_KEY = "fh:webauthn:auth:"
+# Passkey-only sign-in: the challenge belongs to no user yet - the credential
+# the browser picks decides who is signing in.
+SIGNIN_KEY = "fh:webauthn:signin:"
+
+
+def passkey_signin_enabled(db: Session) -> bool:
+    """The ONE reading of the passkey sign-in switch (off by default). While it
+    is on, a passkey alone signs a user in AND counts as their second factor -
+    see settings.Keys.PASSKEY_SIGNIN for why those two travel together."""
+    return settings_svc.get_bool(db, settings_svc.Keys.PASSKEY_SIGNIN, default=False)
+
+
+def has_passkeys(db: Session, user_id: int) -> bool:
+    return (
+        db.query(UserWebAuthnCredential.id)
+        .filter(UserWebAuthnCredential.user_id == user_id)
+        .first()
+        is not None
+    )
 
 
 def _redis() -> aioredis.Redis:
@@ -125,7 +145,11 @@ async def register_begin(db: Session, *, user: User) -> dict[str, Any]:
     finally:
         await r.aclose()
 
-    return json.loads(options_to_json(options))
+    out = json.loads(options_to_json(options))
+    # Ask the browser to say whether the credential was stored on the device
+    # (`credProps.rk`): only those can sign in with no email (passkey sign-in).
+    out["extensions"] = {**out.get("extensions", {}), "credProps": True}
+    return out
 
 
 async def register_complete(
@@ -185,10 +209,20 @@ async def register_complete(
         sign_count=verification.sign_count,
         transports=transports[:120],
         name=(name or "passkey")[:120],
+        discoverable=_reported_discoverable(credential_response),
     )
     db.add(record)
     db.flush()
     return record
+
+
+def _reported_discoverable(credential_response: dict[str, Any]) -> bool | None:
+    """The browser's `credProps.rk`, or None when it did not report one. Client
+    side and unsigned - a UI hint, never a security decision."""
+    ext = credential_response.get("clientExtensionResults")
+    props = ext.get("credProps") if isinstance(ext, dict) else None
+    rk = props.get("rk") if isinstance(props, dict) else None
+    return rk if isinstance(rk, bool) else None
 
 
 # --------------------------------------------------------------------------
@@ -312,6 +346,31 @@ async def authenticate_complete(
             401, "WEBAUTHN_UNKNOWN_CREDENTIAL", "Credential is not registered."
         )
 
+    verification = _verify_and_count(
+        db,
+        record=record,
+        challenge=challenge,
+        credential_response=credential_response,
+        require_user_verification=False,
+    )
+
+    user = db.query(User).filter(User.id == user_id).one()
+    return PasskeyAuthResult(user=user, user_verified=bool(verification.user_verified))
+
+
+def _verify_and_count(
+    db: Session,
+    *,
+    record: UserWebAuthnCredential,
+    challenge: bytes,
+    credential_response: dict[str, Any],
+    require_user_verification: bool,
+):
+    """Verify an assertion against `record` and advance its sign count. The ONE
+    implementation both sign-in flows use. Raises AppError(401,
+    WEBAUTHN_VERIFY_FAILED) on a bad assertion - and on a lost race: the
+    sign-count UPDATE is conditional on the value just read, so two concurrent
+    uses of one credential (potentially a clone) fail closed."""
     try:
         verification = verify_authentication_response(
             credential=credential_response,
@@ -320,12 +379,12 @@ async def authenticate_complete(
             expected_origin=_origins(),
             credential_public_key=record.public_key,
             credential_current_sign_count=record.sign_count,
-            require_user_verification=False,
+            require_user_verification=require_user_verification,
         )
     except Exception as e:
         logger.warning(
             "webauthn auth verify failed for user %d cred %d: %s",
-            user_id,
+            record.user_id,
             record.id,
             e,
         )
@@ -333,9 +392,6 @@ async def authenticate_complete(
             401, "WEBAUTHN_VERIFY_FAILED", "Passkey verification failed."
         ) from e
 
-    # Atomic conditional UPDATE: only commit the new sign_count if the
-    # row hasn't moved since we read it. Otherwise another concurrent
-    # auth (potentially a clone) raced us - fail closed.
     now = utc_now()
     result = db.execute(
         update(UserWebAuthnCredential)
@@ -352,7 +408,7 @@ async def authenticate_complete(
     if updated_rows(result) != 1:
         logger.warning(
             "webauthn concurrent auth detected for user=%d cred=%d",
-            user_id, record.id,
+            record.user_id, record.id,
         )
         raise AppError(
             401,
@@ -360,9 +416,98 @@ async def authenticate_complete(
             "Concurrent authentication detected.",
         )
     db.refresh(record)
+    return verification
 
-    user = db.query(User).filter(User.id == user_id).one()
-    return PasskeyAuthResult(user=user, user_verified=bool(verification.user_verified))
+
+# --------------------------------------------------------------------------
+# Passkey-only sign-in (v2.27.0)
+# --------------------------------------------------------------------------
+
+
+class PasskeySigninError(Exception):
+    """Every way a passkey-only sign-in can fail, carried as ONE thing so the
+    caller answers one code: which check failed must not be observable. `user`
+    is set when the credential named an account, for the login-attempts row."""
+
+    def __init__(self, reason: str, user: User | None = None) -> None:
+        super().__init__(reason)
+        self.reason = reason
+        self.user = user
+
+
+async def signin_begin(*, session_key: str) -> dict[str, Any]:
+    """Options for a sign-in with no email: NO `allowCredentials`, so the
+    browser offers the passkeys it holds for this site, and user verification
+    REQUIRED - with no password in front of it, the passkey is both factors
+    (possession + PIN/biometric), and a bare touch would be one."""
+    options = generate_authentication_options(
+        rp_id=settings.WEBAUTHN_RP_ID,
+        allow_credentials=[],
+        user_verification=UserVerificationRequirement.REQUIRED,
+    )
+    r = _redis()
+    try:
+        await r.set(f"{SIGNIN_KEY}{session_key}", _b64url(options.challenge), ex=CHALLENGE_TTL_SEC)
+    finally:
+        await r.aclose()
+    return json.loads(options_to_json(options))
+
+
+async def signin_complete(
+    db: Session, *, session_key: str, credential_response: dict[str, Any]
+) -> User:
+    """Verify a passkey-only sign-in and return the user it proves. Raises
+    AppError(400, WEBAUTHN_NO_CHALLENGE) for a stale or reused session and
+    PasskeySigninError for every check that concerns the credential itself.
+    Caller commits."""
+    r = _redis()
+    try:
+        stored = await r.getdel(f"{SIGNIN_KEY}{session_key}")
+    finally:
+        await r.aclose()
+    if stored is None:
+        raise AppError(400, "WEBAUTHN_NO_CHALLENGE", "Sign-in challenge expired - start over.")
+
+    cred_id_b64 = credential_response.get("rawId") or credential_response.get("id")
+    try:
+        cred_id = _b64url_decode(cred_id_b64) if isinstance(cred_id_b64, str) else b""
+    except Exception:
+        cred_id = b""
+    record = (
+        db.query(UserWebAuthnCredential)
+        .filter(UserWebAuthnCredential.credential_id == cred_id)
+        .one_or_none()
+        if cred_id
+        else None
+    )
+    if record is None:
+        raise PasskeySigninError("unknown_credential")
+    user = db.query(User).filter(User.id == record.user_id).one()
+
+    # The credential names its account twice: the row it matched, and the user
+    # handle the authenticator stored with it at registration. A credential
+    # whose handle is not this account's id did not come from this account's
+    # registration.
+    response = credential_response.get("response")
+    handle_b64 = response.get("userHandle") if isinstance(response, dict) else None
+    try:
+        handle = _b64url_decode(handle_b64) if isinstance(handle_b64, str) and handle_b64 else b""
+    except Exception:
+        handle = b""
+    if handle != str(user.id).encode("utf-8"):
+        raise PasskeySigninError("user_handle_mismatch", user)
+
+    try:
+        _verify_and_count(
+            db,
+            record=record,
+            challenge=_b64url_decode(stored),
+            credential_response=credential_response,
+            require_user_verification=True,
+        )
+    except AppError as e:
+        raise PasskeySigninError("verify_failed", user) from e
+    return user
 
 
 def list_credentials_for(db: Session, user_id: int) -> list[UserWebAuthnCredential]:

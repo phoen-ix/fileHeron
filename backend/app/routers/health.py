@@ -223,6 +223,7 @@ def public_config(db: Session = Depends(get_db)) -> dict:
     from ..services import settings as settings_svc
     from ..services import settings_registry
     from ..services import site as site_svc
+    from ..services import webauthn as webauthn_svc
     motd: dict | None = None
     if settings_svc.get_bool(db, settings_svc.Keys.MOTD_ENABLED, default=False):
         text = (settings_svc.get(db, settings_svc.Keys.MOTD_TEXT) or "").strip()
@@ -276,6 +277,9 @@ def public_config(db: Session = Depends(get_db)) -> dict:
         # from. A client that has none of this field is talking to an older
         # server, which silently drops `relative_dir` and lands files flat.
         "folder_paths": True,
+        # Whether the login page offers a passkey alone. Not a secret: a
+        # browser holding a passkey for this site can try it either way.
+        "passkey_signin": webauthn_svc.passkey_signin_enabled(db),
         "branding": branding,
         "legal": legal,
     }

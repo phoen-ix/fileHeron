@@ -12,6 +12,9 @@ exposes:
   - single-call helper that wires both the token-endpoint stub and the
   JWKS mock for the most common test pattern (one fake login round
   trip).
+- ``sso_sign_in(client, monkeypatch, provider, *, sub, email)`` - the
+  whole callback round trip; ``pending_from(location)`` reads the
+  pending-2FA token and the offered methods out of its redirect.
 
 A fresh keypair per test means the JWKS cache reset autouse in
 ``conftest`` keeps tests independent."""
@@ -19,6 +22,7 @@ from __future__ import annotations
 
 import time
 from typing import Any
+from urllib.parse import parse_qs, urlsplit
 
 import jwt
 from cryptography.hazmat.primitives.asymmetric import rsa
@@ -119,3 +123,26 @@ def patch_exchange(
 
     monkeypatch.setattr(oidc_svc, "_exchange_code", fake_exchange)
     oidc_svc.reset_discovery_cache()
+
+
+async def sso_sign_in(client, monkeypatch, provider, *, sub: str, email: str):
+    """One callback round trip as `sub` / `email`; returns the redirect."""
+    from app.services import oidc as oidc_svc
+
+    state, nonce = "s" * 24, "n" * 24
+    patch_exchange(monkeypatch, make_claims(provider, sub=sub, email=email, nonce=nonce))
+    client.cookies.set(oidc_svc.STATE_COOKIE, f"{state}::{provider.id}::{nonce}")
+    return await client.get(
+        f"/api/auth/oidc/callback/{provider.id}",
+        params={"code": "abc", "state": state},
+        follow_redirects=False,
+    )
+
+
+def pending_from(location: str) -> tuple[str, list[str]]:
+    """(pending token, methods) from a `/login/2fa?pending=...&methods=...`
+    redirect - parsed, never split on a substring, because the token is no
+    longer the last parameter."""
+    query = parse_qs(urlsplit(location).query)
+    methods = query.get("methods", [""])[0]
+    return query["pending"][0], [m for m in methods.split(",") if m]

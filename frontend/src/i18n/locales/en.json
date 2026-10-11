@@ -338,7 +338,11 @@
     "SECRET_REQUEST_SELF": "You cannot answer your own request.",
     "ENCRYPTION_ACK_REQUIRED": "Confirm that encrypted files can only be restored together with this instance's .env.",
     "REDIS_UNAVAILABLE": "The cache service can't be reached right now. Try again in a moment.",
-    "ROLLBACK_BLOCKED_BY_ENCRYPTION": "Stored files are encrypted at rest, and the version you would roll back to cannot read them. Turn encryption at rest off and run scripts/decrypt_files_at_rest.py in the backend container first."
+    "ROLLBACK_BLOCKED_BY_ENCRYPTION": "Stored files are encrypted at rest, and the version you would roll back to cannot read them. Turn encryption at rest off and run scripts/decrypt_files_at_rest.py in the backend container first.",
+    "PASSKEY_SIGNIN_DISABLED": "Passkey sign-in is switched off. Sign in again.",
+    "PASSKEY_SIGNIN_FAILED": "That passkey could not sign you in.",
+    "PASSKEY_ALREADY_PRESENTED": "This sign-in already used your passkey. Enter your code instead.",
+    "WEBAUTHN_REQUIRED": "Finish signing in with your passkey."
   },
   "login": {
     "title": "Sign in",
@@ -350,6 +354,10 @@
     "code_placeholder": "6-digit code or XXXX-XXXX",
     "use_passkey": "Use a passkey instead",
     "passkey_cancelled": "Passkey prompt cancelled.",
+    "passkey_signin": "Sign in with a passkey",
+    "passkey_continue": "Use your passkey",
+    "passkey_step_help": "Your password is right. This account finishes signing in with a passkey - use it to continue.",
+    "passkey_unsupported": "This account finishes signing in with a passkey, and this browser can't use passkeys. Try another browser or device.",
     "pending_expired": "Your sign-in took too long and the second-factor step expired. Please sign in again.",
     "motd_aria": "Site announcement",
     "submit": "Continue",
@@ -938,7 +946,11 @@
     "effect_redirect": "Affected users are redirected to /account/2fa/forced on every navigation until they finish setup.",
     "effect_recovery": "Recovery codes still bypass login one-time so an enrolled user who loses their authenticator isn't locked out.",
     "effect_lockout": "If you save a policy that applies to you and you don't yet have 2FA, you'll be redirected straight into the QR enrolment wizard - no intermediate lockout. Recovery codes still bypass login one-time if you ever lose your authenticator.",
-    "saved_toast": "2FA enforcement policy saved."
+    "saved_toast": "2FA enforcement policy saved.",
+    "passkey_heading": "Passkey sign-in",
+    "passkey_label": "Let people sign in with a passkey alone",
+    "passkey_help": "With this on, the sign-in page offers \"Sign in with a passkey\": no email, no password - the passkey and the PIN or fingerprint that unlocks it are both factors. A passkey then also counts as two-factor authentication, so someone who has a passkey and no authenticator app is asked for the passkey after signing in with their password or SSO.",
+    "passkey_desktop_warning": "The desktop app cannot use passkeys yet. Until it can, people whose only second factor is a passkey can sign in to it only with an API token."
   },
   "admin_site_url": {
     "title": "Site URL",
@@ -1420,7 +1432,9 @@
     "already_registered": "This authenticator is already registered to your account.",
     "created": "added {d}",
     "last_used": "last used {d}",
-    "never_used": "never used"
+    "never_used": "never used",
+    "signs_in_alone": "Signs in without a password",
+    "signin_note": "Passkey sign-in is on: a passkey signs you in on its own and counts as your second factor. Keep a second way in - another passkey, or an authenticator app - in case you lose this device."
   },
   "notif_bell": {
     "aria": "Notifications",
@@ -2848,7 +2862,11 @@
     "recovery_label": "Recovery code",
     "submit": "Continue",
     "use_recovery": "Use a recovery code",
-    "use_totp": "Use an authenticator code"
+    "use_totp": "Use an authenticator code",
+    "passkey_help": "Finish signing in with your passkey.",
+    "use_passkey": "Use your passkey",
+    "use_passkey_instead": "Use a passkey instead",
+    "passkey_unsupported": "This account finishes signing in with a passkey, and this browser can't use passkeys. Try another browser or device."
   },
   "admin_ip_blocks": {
     "intro": "Every address and range the scan guard is currently refusing, plus the sources it is watching. Blocks are always temporary — none is permanent, and released rows stay here as history until they age out.",

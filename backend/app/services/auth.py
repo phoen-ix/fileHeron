@@ -16,6 +16,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import timedelta
+from typing import Any
 
 from fastapi import Request
 from sqlalchemy import update
@@ -46,6 +47,7 @@ from ..utils.ua_fingerprint import ua_fingerprint_hash
 from . import jwt_session, settings_registry
 from . import rate_limit as rate_limit_svc
 from . import totp as totp_svc
+from . import webauthn as webauthn_svc
 from .audit import record_audit_event
 from .hibp import assert_password_not_breached
 from .jwt_session import (
@@ -607,6 +609,26 @@ async def authenticate_first_factor(
     return user
 
 
+def _passkey_is_the_second_factor(db: Session, user: User) -> bool:
+    """Passkey sign-in is on and the account has a passkey - the passkey then
+    counts as the account's second factor (twofa_policy.has_second_factor)."""
+    return webauthn_svc.passkey_signin_enabled(db) and webauthn_svc.has_passkeys(db, user.id)
+
+
+def second_factor_methods(db: Session, user: User) -> list[str]:
+    """What can finish a sign-in whose first factor was not a password - SSO:
+    `totp` when the account has it, `passkey` when its passkey counts as 2FA.
+    Empty means the first factor is enough. The OIDC callback hands this to the
+    web app's 2FA page as `methods=`, so the page offers exactly what the
+    pending-token routes will accept."""
+    methods = []
+    if totp_svc.is_enabled(user):
+        methods.append("totp")
+    if _passkey_is_the_second_factor(db, user):
+        methods.append("passkey")
+    return methods
+
+
 async def login(
     db: Session,
     *,
@@ -627,6 +649,8 @@ async def login(
     - EMAIL_NOT_VERIFIED
     - TOTP_REQUIRED     - 2FA is on, totp_code missing
     - INVALID_TOTP      - totp_code wrong (also bumps failure counter)
+    - WEBAUTHN_REQUIRED - passkey sign-in is on and the account's second factor
+                          is a passkey: finish through /api/auth/webauthn/*
     """
     user = await authenticate_first_factor(
         db, email=email, password=password, request=request
@@ -673,6 +697,14 @@ async def login(
                     )
             db.commit()
             raise AppError(401, "INVALID_TOTP", "Two-factor code is invalid.")
+    elif _passkey_is_the_second_factor(db, user):
+        # With passkey sign-in on, a passkey counts as 2FA - it satisfies
+        # twofa_policy.is_2fa_required - so the password alone must not finish
+        # the sign-in, or the requirement would be met by one factor. No
+        # session and no record_success: /api/auth/webauthn/begin + /complete
+        # (password + passkey) finishes it.
+        db.commit()
+        raise AppError(401, "WEBAUTHN_REQUIRED", "Sign in with your passkey to finish.")
 
     # Success path
     rate_limit_svc.record_success(db, user=user)
@@ -988,5 +1020,178 @@ async def complete_pending_second_factor(
     rate_limit_svc.record_success(db, user=user)
     access, expires_in, refresh_plain = finalize_successful_login(
         db, user=user, request=request, settings=settings, via=f"{via}+2fa",
+    )
+    return user, access, expires_in, refresh_plain
+
+
+# --------------------------------------------------------------------------
+# Passkey sign-in (v2.27.0) - only while the admin switch is on
+# --------------------------------------------------------------------------
+
+
+def _require_passkey_signin(db: Session) -> None:
+    if not webauthn_svc.passkey_signin_enabled(db):
+        raise AppError(403, "PASSKEY_SIGNIN_DISABLED", "Passkey sign-in is switched off.")
+
+
+def _record_passkey_failure(
+    db: Session, *, user: User | None, request: Request | None, reason: str, via: str
+) -> None:
+    """The login_attempts row and the login_failure audit a failed passkey owes
+    - and deliberately NOT record_failure. A credential id is no secret (it
+    travels in clear in every ceremony), so counting failures against the
+    account it names would hand anyone a lever to lock that account out. The
+    routes bound passkey attempts per IP instead."""
+    _record_login_attempt(
+        db,
+        email_value=user.email if user is not None else None,
+        ip=_request_ip(request),
+        outcome=LoginOutcome.bad_passkey,
+    )
+    record_audit_event(
+        db,
+        event_type=AuditEventType.login_failure,
+        actor_user_id=user.id if user is not None else None,
+        target_type="user",
+        target_id=user.id if user is not None else None,
+        metadata={"reason": reason, "via": via},
+        request=request,
+    )
+    db.commit()
+
+
+async def login_with_passkey(
+    db: Session,
+    *,
+    session_key: str,
+    credential_response: dict[str, Any],
+    request: Request | None,
+    settings,
+) -> tuple[User, str, int, str]:
+    """Sign in with a passkey alone - no email, no password. The passkey is both
+    factors (the device, and the PIN or fingerprint that unlocks it), which is
+    why webauthn.signin_complete REQUIRES user verification.
+
+    Every way the passkey itself can fail - unknown, wrong user handle, bad
+    signature, no user verification - answers one code, PASSKEY_SIGNIN_FAILED,
+    so which check failed is not observable. The account-state answers below
+    come only after a passkey that verified, so they tell its owner nothing a
+    stranger could learn."""
+    _require_passkey_signin(db)
+    try:
+        user = await webauthn_svc.signin_complete(
+            db, session_key=session_key, credential_response=credential_response
+        )
+    except webauthn_svc.PasskeySigninError as e:
+        _record_passkey_failure(
+            db, user=e.user, request=request, reason=f"passkey_{e.reason}", via="passkey"
+        )
+        raise AppError(401, "PASSKEY_SIGNIN_FAILED", "That passkey could not sign you in.") from None
+
+    # The same account-state gate as the password flow, in the same order as
+    # /api/auth/webauthn/complete; the assertion is spent either way.
+    ip = _request_ip(request)
+    if user.is_disabled:
+        _record_login_attempt(db, email_value=user.email, ip=ip, outcome=LoginOutcome.account_disabled)
+        db.commit()
+        raise AppError(403, "ACCOUNT_DISABLED", "This account has been disabled.")
+    if rate_limit_svc.is_account_locked(user):
+        _record_login_attempt(db, email_value=user.email, ip=ip, outcome=LoginOutcome.locked)
+        db.commit()
+        raise AppError(
+            423,
+            "ACCOUNT_LOCKED",
+            "Account is temporarily locked due to too many failed attempts.",
+            details={"locked_until": user.locked_until.isoformat() if user.locked_until else None},
+        )
+    if not user.email_verified:
+        _record_login_attempt(db, email_value=user.email, ip=ip, outcome=LoginOutcome.email_not_verified)
+        db.commit()
+        raise AppError(403, "EMAIL_NOT_VERIFIED", "Please verify your email first.")
+
+    rate_limit_svc.record_success(db, user=user)
+    access, expires_in, refresh_plain = finalize_successful_login(
+        db, user=user, request=request, settings=settings, via="passkey",
+    )
+    return user, access, expires_in, refresh_plain
+
+
+async def begin_passkey_signin(db: Session) -> tuple[str, dict[str, Any]]:
+    """Start a passkey-only sign-in. Returns (session, options)."""
+    _require_passkey_signin(db)
+    session_key = random_token(24)
+    return session_key, await webauthn_svc.signin_begin(session_key=session_key)
+
+
+def _pending_for_passkey(db: Session, pending_token: str, settings) -> tuple[User, str]:
+    """Resolve a pending-2FA token that a passkey may finish."""
+    user, via = jwt_session.resolve_pending_2fa_token(db, pending_token, settings)
+    # A passkey-first sign-in that still owes its TOTP code (password + a
+    # passkey without user verification) must not be finished by that same
+    # passkey a second time.
+    if via == "webauthn":
+        raise AppError(
+            409, "PASSKEY_ALREADY_PRESENTED", "This sign-in already used your passkey; enter your code."
+        )
+    _require_passkey_signin(db)
+    if rate_limit_svc.is_account_locked(user):
+        raise AppError(423, "ACCOUNT_LOCKED", "Account is temporarily locked.")
+    return user, via
+
+
+async def begin_pending_passkey(
+    db: Session, *, pending_token: str, settings
+) -> tuple[str, dict[str, Any]]:
+    """Start finishing a pending sign-in (SSO, today) with a passkey. Returns
+    (session, options). An account with TOTP needs a passkey that VERIFIES the
+    user to stand in for the code - the same rule as /api/auth/webauthn/* - so
+    the browser is asked to require it."""
+    user, _via = _pending_for_passkey(db, pending_token, settings)
+    session_key = random_token(24)
+    options = await webauthn_svc.authenticate_begin(
+        db,
+        user=user,
+        session_key=session_key,
+        require_user_verification=totp_svc.is_enabled(user),
+    )
+    return session_key, options
+
+
+async def complete_pending_with_passkey(
+    db: Session,
+    *,
+    pending_token: str,
+    session_key: str,
+    credential_response: dict[str, Any],
+    request: Request | None,
+    settings,
+) -> tuple[User, str, int, str]:
+    """Finish a pending sign-in with a passkey. Like
+    complete_pending_second_factor, record_success waits for this second factor.
+    A failed passkey does not count towards the lockout - see
+    _record_passkey_failure."""
+    user, via = _pending_for_passkey(db, pending_token, settings)
+    try:
+        result = await webauthn_svc.authenticate_complete(
+            db, session_key=session_key, credential_response=credential_response
+        )
+    except AppError as e:
+        if e.code == "WEBAUTHN_NO_CHALLENGE":
+            raise
+        _record_passkey_failure(db, user=user, request=request, reason="passkey_verify_failed", via=via)
+        raise
+    # The ceremony's session is bound to the account it was started for, and
+    # that need not be the one this pending token names: both are bearer values
+    # the caller chose. Finish only the sign-in the passkey belongs to.
+    if result.user.id != user.id:
+        _record_passkey_failure(db, user=user, request=request, reason="passkey_user_mismatch", via=via)
+        raise AppError(401, "WEBAUTHN_VERIFY_FAILED", "Passkey verification failed.")
+    if totp_svc.is_enabled(user) and not result.user_verified:
+        _record_passkey_failure(db, user=user, request=request, reason="passkey_no_uv", via=via)
+        raise AppError(401, "WEBAUTHN_VERIFY_FAILED", "Passkey verification failed.")
+
+    rate_limit_svc.record_success(db, user=user)
+    access, expires_in, refresh_plain = finalize_successful_login(
+        db, user=user, request=request, settings=settings, via=f"{via}+passkey",
     )
     return user, access, expires_in, refresh_plain

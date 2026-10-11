@@ -67,6 +67,12 @@ class Keys:
     # `REQUIRE_2FA` is the source of truth.
     TWOFA_REQUIRED_ROLES = "twofa.required_roles"        # JSON list[str]
     TWOFA_REQUIRED_GROUPS = "twofa.required_group_ids"   # JSON list[int]
+    # Passkey sign-in (v2.27.0), off by default. While on, anyone may sign in
+    # with a passkey alone, AND a passkey counts as 2FA - so a password sign-in
+    # by someone with a passkey but no TOTP asks for the passkey. Tied to one
+    # switch because that second half locks passkey-only users out of the
+    # desktop app, which cannot do WebAuthn. Written by the 2FA policy route.
+    PASSKEY_SIGNIN = "auth.passkey_signin"  # boolean
     # When true, ClamAV-detected infections fan out an in-app
     # `file_quarantined` notification to every non-disabled admin in
     # addition to the uploader. Email is not sent - admin plaintext

@@ -338,7 +338,11 @@
     "SECRET_REQUEST_SELF": "Du kannst deine eigene Anfrage nicht beantworten.",
     "ENCRYPTION_ACK_REQUIRED": "Bestätige, dass verschlüsselte Dateien nur zusammen mit der .env dieser Instanz wiederhergestellt werden können.",
     "REDIS_UNAVAILABLE": "Der Cache-Dienst ist gerade nicht erreichbar. Versuche es gleich noch einmal.",
-    "ROLLBACK_BLOCKED_BY_ENCRYPTION": "Gespeicherte Dateien sind verschlüsselt, und die Version, auf die du zurückgehen würdest, kann sie nicht lesen. Schalte die Verschlüsselung gespeicherter Dateien aus und führe zuerst scripts/decrypt_files_at_rest.py im Backend-Container aus."
+    "ROLLBACK_BLOCKED_BY_ENCRYPTION": "Gespeicherte Dateien sind verschlüsselt, und die Version, auf die du zurückgehen würdest, kann sie nicht lesen. Schalte die Verschlüsselung gespeicherter Dateien aus und führe zuerst scripts/decrypt_files_at_rest.py im Backend-Container aus.",
+    "PASSKEY_SIGNIN_DISABLED": "Die Passkey-Anmeldung ist ausgeschaltet. Melde dich erneut an.",
+    "PASSKEY_SIGNIN_FAILED": "Mit diesem Passkey konntest du nicht angemeldet werden.",
+    "PASSKEY_ALREADY_PRESENTED": "Diese Anmeldung hat deinen Passkey schon verwendet. Gib stattdessen deinen Code ein.",
+    "WEBAUTHN_REQUIRED": "Schließ die Anmeldung mit deinem Passkey ab."
   },
   "login": {
     "title": "Anmelden",
@@ -350,6 +354,10 @@
     "code_placeholder": "6-stelliger Code oder XXXX-XXXX",
     "use_passkey": "Stattdessen Passkey verwenden",
     "passkey_cancelled": "Passkey-Eingabe abgebrochen.",
+    "passkey_signin": "Mit Passkey anmelden",
+    "passkey_continue": "Passkey verwenden",
+    "passkey_step_help": "Dein Passwort stimmt. Dieses Konto schließt die Anmeldung mit einem Passkey ab - verwende ihn, um fortzufahren.",
+    "passkey_unsupported": "Dieses Konto schließt die Anmeldung mit einem Passkey ab, und dieser Browser kann keine Passkeys verwenden. Versuch es mit einem anderen Browser oder Gerät.",
     "pending_expired": "Die Anmeldung hat zu lange gedauert und der zweite Schritt ist abgelaufen. Bitte melde dich erneut an.",
     "motd_aria": "Hinweis zur Website",
     "submit": "Weiter",
@@ -938,7 +946,11 @@
     "effect_redirect": "Betroffene Benutzer werden bei jeder Navigation auf /account/2fa/forced umgeleitet, bis sie die Einrichtung abgeschlossen haben.",
     "effect_recovery": "Wiederherstellungscodes umgehen die Anmeldung weiterhin einmalig, sodass ein registrierter Benutzer mit verlorenem Authenticator nicht ausgesperrt ist.",
     "effect_lockout": "Wenn du eine Richtlinie speicherst, die dich selbst betrifft und du noch keine 2FA aktiviert hast, wirst du direkt in den QR-Einrichtungs-Assistenten umgeleitet - keine zwischenzeitliche Aussperrung. Wiederherstellungscodes umgehen die Anmeldung weiterhin einmalig, falls du den Authenticator verlierst.",
-    "saved_toast": "Zwei-Faktor-Pflicht gespeichert."
+    "saved_toast": "Zwei-Faktor-Pflicht gespeichert.",
+    "passkey_heading": "Passkey-Anmeldung",
+    "passkey_label": "Anmeldung nur mit Passkey erlauben",
+    "passkey_help": "Ist das aktiv, bietet die Anmeldeseite \"Mit Passkey anmelden\" an: keine E-Mail, kein Passwort - der Passkey und die PIN oder der Fingerabdruck, mit dem er entsperrt wird, sind beide Faktoren. Ein Passkey gilt dann auch als Zwei-Faktor-Authentifizierung: Wer einen Passkey, aber keine Authenticator-App hat, wird nach der Anmeldung mit Passwort oder SSO nach dem Passkey gefragt.",
+    "passkey_desktop_warning": "Die Desktop-App kann noch keine Passkeys verwenden. Bis sie es kann, können sich Personen, deren einziger zweiter Faktor ein Passkey ist, dort nur mit einem API-Token anmelden."
   },
   "admin_site_url": {
     "title": "Site-URL",
@@ -1420,7 +1432,9 @@
     "already_registered": "Dieser Authentifikator ist bereits für dein Konto registriert.",
     "created": "hinzugefügt {d}",
     "last_used": "zuletzt verwendet {d}",
-    "never_used": "noch nicht verwendet"
+    "never_used": "noch nicht verwendet",
+    "signs_in_alone": "Anmeldung ohne Passwort",
+    "signin_note": "Die Passkey-Anmeldung ist aktiv: Ein Passkey meldet dich allein an und gilt als dein zweiter Faktor. Halte einen zweiten Weg bereit - einen weiteren Passkey oder eine Authenticator-App -, falls du dieses Gerät verlierst."
   },
   "notif_bell": {
     "aria": "Benachrichtigungen",
@@ -2848,7 +2862,11 @@
     "recovery_label": "Wiederherstellungscode",
     "submit": "Weiter",
     "use_recovery": "Wiederherstellungscode verwenden",
-    "use_totp": "Authenticator-Code verwenden"
+    "use_totp": "Authenticator-Code verwenden",
+    "passkey_help": "Schließ die Anmeldung mit deinem Passkey ab.",
+    "use_passkey": "Passkey verwenden",
+    "use_passkey_instead": "Stattdessen Passkey verwenden",
+    "passkey_unsupported": "Dieses Konto schließt die Anmeldung mit einem Passkey ab, und dieser Browser kann keine Passkeys verwenden. Versuch es mit einem anderen Browser oder Gerät."
   },
   "admin_ip_blocks": {
     "intro": "Alle Adressen und Bereiche, die der Scan-Schutz derzeit abweist, sowie die beobachteten Quellen. Sperren sind immer befristet – keine ist dauerhaft, und aufgehobene Einträge bleiben als Verlauf stehen, bis sie verfallen.",

@@ -88,3 +88,44 @@ describe('WebAuthnPanel asks for the password in a dialog', () => {
     expect(performRegistration).not.toHaveBeenCalled()
   })
 })
+
+describe('WebAuthnPanel under passkey sign-in', () => {
+  const item = (id: number, discoverable: boolean | null) => ({
+    id,
+    name: `key ${id}`,
+    transports: [],
+    created_at: '2026-10-01T00:00:00',
+    last_used_at: null,
+    discoverable,
+  })
+
+  async function mountWith(passkeySignin: boolean) {
+    const api = await import('@/api/webauthn')
+    vi.mocked(api.listCredentials).mockResolvedValueOnce({
+      data: { items: [item(1, true), item(2, false), item(3, null)] },
+    } as never)
+    setActivePinia(createPinia())
+    const { useSiteStore } = await import('@/stores/site')
+    useSiteStore().passkeySignin = passkeySignin
+    const i18n = createI18n({ legacy: false, locale: 'en', fallbackLocale: 'en', messages: { en } })
+    const w = mount(WebAuthnPanel, { global: { plugins: [i18n] } })
+    await flushPromises()
+    return w
+  }
+
+  it('marks the passkeys that sign in on their own, and says what is at stake', async () => {
+    const w = await mountWith(true)
+
+    const badges = w.findAll('[data-testid="passkey-signs-in-alone"]')
+    expect(badges).toHaveLength(1)
+    expect(badges[0].text()).toBe(en.webauthn.signs_in_alone)
+    expect(w.text()).toContain(en.webauthn.signin_note)
+  })
+
+  it('says nothing about it while the switch is off', async () => {
+    const w = await mountWith(false)
+
+    expect(w.find('[data-testid="passkey-signs-in-alone"]').exists()).toBe(false)
+    expect(w.text()).not.toContain(en.webauthn.signin_note)
+  })
+})

@@ -9,8 +9,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import en from '@/i18n/locales/en.json'
 
 const completeSecondFactor = vi.fn(async () => ({}))
+const completeSecondFactorWithPasskey = vi.fn(async (_pending: string) => ({}))
 vi.mock('@/stores/auth', () => ({
-  useAuthStore: () => ({ completeSecondFactor }),
+  useAuthStore: () => ({ completeSecondFactor, completeSecondFactorWithPasskey }),
+}))
+
+let passkeysSupported = true
+vi.mock('@/composables/useWebAuthn', () => ({
+  isWebAuthnSupported: () => passkeysSupported,
 }))
 
 const replace = vi.fn(async () => {})
@@ -31,9 +37,12 @@ function makeWrapper() {
 describe('LoginSecondFactor', () => {
   beforeEach(() => {
     completeSecondFactor.mockClear()
+    completeSecondFactorWithPasskey.mockReset()
     replace.mockClear()
     query = { pending: 'pending-token-abc' }
+    passkeysSupported = true
     completeSecondFactor.mockImplementation(async () => ({}))
+    completeSecondFactorWithPasskey.mockImplementation(async () => ({}))
   })
 
   it('sends the pending token with the TOTP code', async () => {
@@ -87,6 +96,61 @@ describe('LoginSecondFactor', () => {
     await flushPromises()
     await w.find('input').setValue('123456')
     await w.find('form').trigger('submit')
+    await flushPromises()
+
+    expect(replace).toHaveBeenCalledWith({ name: 'login', query: { expired: '1' } })
+  })
+
+  it('takes a code only when the server names no methods (an older server)', async () => {
+    const w = makeWrapper()
+    await flushPromises()
+    expect(w.find('form').exists()).toBe(true)
+    expect(w.find('[data-testid="twofa-passkey"]').exists()).toBe(false)
+  })
+
+  it('offers only the passkey when that is all the account has', async () => {
+    query = { pending: 'pending-token-abc', methods: 'passkey' }
+    const w = makeWrapper()
+    await flushPromises()
+
+    expect(w.find('form').exists()).toBe(false)
+    const button = w.find('[data-testid="twofa-passkey"]')
+    expect(button.text()).toBe(en.login_2fa.use_passkey)
+    await button.trigger('click')
+    await flushPromises()
+
+    expect(completeSecondFactorWithPasskey).toHaveBeenCalledWith('pending-token-abc')
+    expect(replace).toHaveBeenLastCalledWith({ name: 'home' })
+  })
+
+  it('offers both when the account has both', async () => {
+    query = { pending: 'pending-token-abc', methods: 'totp,passkey' }
+    const w = makeWrapper()
+    await flushPromises()
+
+    expect(w.find('form').exists()).toBe(true)
+    expect(w.find('[data-testid="twofa-passkey"]').text()).toBe(en.login_2fa.use_passkey_instead)
+  })
+
+  it('tells a browser without passkeys why it cannot continue', async () => {
+    passkeysSupported = false
+    query = { pending: 'pending-token-abc', methods: 'passkey' }
+    const w = makeWrapper()
+    await flushPromises()
+
+    expect(w.find('[data-testid="twofa-passkey"]').exists()).toBe(false)
+    expect(w.find('[role="alert"]').text()).toBe(en.login_2fa.passkey_unsupported)
+  })
+
+  it('sends the user back to login when the pending token expired mid-passkey', async () => {
+    query = { pending: 'pending-token-abc', methods: 'passkey' }
+    completeSecondFactorWithPasskey.mockRejectedValueOnce({
+      isAxiosError: true,
+      response: { status: 401, data: { code: 'PENDING_2FA_EXPIRED', error: 'gone' } },
+    })
+    const w = makeWrapper()
+    await flushPromises()
+    await w.find('[data-testid="twofa-passkey"]').trigger('click')
     await flushPromises()
 
     expect(replace).toHaveBeenCalledWith({ name: 'login', query: { expired: '1' } })

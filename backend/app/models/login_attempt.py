@@ -31,6 +31,10 @@ class LoginOutcome(str, enum.Enum):
     rate_limited = "rate_limited"
     account_disabled = "account_disabled"
     email_not_verified = "email_not_verified"
+    # A passkey that could not sign anyone in (v2.27.0): unknown credential,
+    # bad signature, wrong user handle, no user verification - one outcome,
+    # as the caller gets one answer.
+    bad_passkey = "bad_passkey"
 
 
 

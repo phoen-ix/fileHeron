@@ -38,6 +38,9 @@ export interface PublicConfigResponse {
   max_direct_upload_bytes: number
   /** This server stores the folder a file came from (folder uploads, v2.26.0). */
   folder_paths?: boolean
+  /** The login page offers "Sign in with a passkey" (v2.27.0). Absent from an
+   *  older server, which has no passkey sign-in. */
+  passkey_signin?: boolean
   /** Site branding (logo + display surfaces + link). */
   branding: PublicBranding
   /** Which legal footer pages are enabled. */

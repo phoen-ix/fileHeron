@@ -145,6 +145,7 @@ app.include_router(telemetry.router)             # anonymous SPA client-404 beac
 app.include_router(tus_hooks.router)             # internal HMAC-gated
 app.include_router(oidc.router)                  # anonymous OIDC login
 app.include_router(webauthn.auth_router)         # WebAuthn login flow
+app.include_router(webauthn.signin_router)       # passkey sign-in (anonymous, switch-gated)
 
 # Subject to the gate.
 # account.router carries everything /api/account/* EXCEPT the setup routes

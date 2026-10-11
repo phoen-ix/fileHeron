@@ -43,6 +43,9 @@ export const useSiteStore = defineStore('site', () => {
   /** Live server ceiling for a single-POST upload. The client used to decide
    *  direct vs resumable from a build-time constant (audit #2). */
   const maxDirectUploadBytes = ref<number>(100 * 1024 * 1024)
+  /** An admin switched passkey sign-in on: the login page offers a passkey
+   *  alone, and a passkey counts as 2FA. */
+  const passkeySignin = ref(false)
   const loaded = ref(false)
 
   function _apply(cfg: PublicConfigResponse) {
@@ -55,6 +58,7 @@ export const useSiteStore = defineStore('site', () => {
     legal.value = cfg.legal ?? { ...EMPTY_LEGAL }
     maintenance.value = cfg.maintenance ?? null
     if (cfg.max_direct_upload_bytes) maxDirectUploadBytes.value = cfg.max_direct_upload_bytes
+    passkeySignin.value = cfg.passkey_signin === true
     loaded.value = true
   }
 
@@ -79,6 +83,7 @@ export const useSiteStore = defineStore('site', () => {
     legal,
     maintenance,
     maxDirectUploadBytes,
+    passkeySignin,
     loaded,
     loadConfig,
   }

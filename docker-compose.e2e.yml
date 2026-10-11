@@ -20,6 +20,10 @@ services:
       # The suite logs in ~14x from the single runner IP; the default 10/15min
       # per-IP login limit would 429 the later journeys. Max the limit for E2E.
       RATE_LIMIT_LOGIN: "1000"
+      # Same for registering: four journeys each register a fresh account
+      # (forced-2fa, invite-register, login-totp, passkey-signin), one more
+      # than the default 3/15min per-IP limit allows.
+      RATE_LIMIT_REGISTER: "1000"
       ADMIN_BOOTSTRAP_EMAIL: admin@e2e.local
       ADMIN_BOOTSTRAP_PASSWORD: AdminPass123!
       TEST_ACCOUNT_EMAIL: user@e2e.local

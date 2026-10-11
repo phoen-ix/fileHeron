@@ -7,6 +7,9 @@ export interface WebAuthnCredentialItem {
   transports: string[]
   created_at: string
   last_used_at: string | null
+  /** The browser said the passkey lives on the device, so it can sign in with
+   *  no email or password. null: not reported (passkeys added before v2.27.0). */
+  discoverable: boolean | null
 }
 
 export interface WebAuthnCredentialListResponse {
@@ -64,6 +67,45 @@ export function authComplete(session: string, credential: unknown) {
   return anonClient.post<WebAuthnAuthCompleteResponse>(
     '/auth/webauthn/complete',
     { session, credential },
+    { withCredentials: true },
+  )
+}
+
+export interface PasskeyBeginResponse {
+  session: string
+  options: Record<string, unknown>
+}
+
+export interface PasskeyLoginResponse {
+  access_token: string
+  expires_in_seconds: number
+}
+
+/** Passkey sign-in (v2.27.0, while an admin has it on): the options name no
+ *  account, so the browser offers whichever passkeys it holds for this site. */
+export function passkeySigninBegin() {
+  return anonClient.post<PasskeyBeginResponse>('/auth/passkey/begin')
+}
+
+export function passkeySigninComplete(session: string, credential: unknown) {
+  return anonClient.post<PasskeyLoginResponse>(
+    '/auth/passkey/complete',
+    { session, credential },
+    { withCredentials: true },
+  )
+}
+
+/** Finish a pending sign-in (after SSO) with a passkey instead of a code. */
+export function pendingPasskeyBegin(pendingToken: string) {
+  return anonClient.post<PasskeyBeginResponse>('/auth/2fa/passkey/begin', {
+    pending_token: pendingToken,
+  })
+}
+
+export function pendingPasskeyComplete(pendingToken: string, session: string, credential: unknown) {
+  return anonClient.post<PasskeyLoginResponse>(
+    '/auth/2fa/passkey/complete',
+    { pending_token: pendingToken, session, credential },
     { withCredentials: true },
   )
 }

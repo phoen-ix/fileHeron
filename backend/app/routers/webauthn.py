@@ -8,10 +8,12 @@ Two ceremony pairs:
   string the client passes back on complete):
   /api/auth/webauthn/begin → /api/auth/webauthn/complete
 
-The login flow gates on a successful password check first - passkeys
-in this codebase are an *additional* factor (or a TOTP replacement),
-not a passwordless first-factor. That's a deliberate scope choice;
-true passwordless can be a follow-up.
+The login flow gates on a successful password check first - there a
+passkey is an *additional* factor (or a TOTP replacement). Passkey
+sign-in (v2.27.0, `signin_router`, off unless an admin switches it on)
+adds the passwordless ceremony, /api/auth/passkey/begin → /complete,
+and lets a passkey finish a pending sign-in after SSO,
+/api/auth/2fa/passkey/begin → /complete.
 
 A passkey replaces TOTP only when the authenticator reports USER
 VERIFICATION (PIN / biometric): password + UV-verified passkey is two
@@ -32,8 +34,10 @@ from ..config import settings
 from ..dependencies import get_current_user, get_db
 from ..middleware.errors import AppError
 from ..models.user import User
-from ..schemas.auth import WebAuthnAuthCompleteResponse
+from ..schemas.auth import LoginResponse, WebAuthnAuthCompleteResponse
 from ..schemas.webauthn import (
+    PendingPasskeyBeginRequest,
+    PendingPasskeyCompleteRequest,
     WebAuthnAuthBeginRequest,
     WebAuthnAuthBeginResponse,
     WebAuthnAuthCompleteRequest,
@@ -52,9 +56,10 @@ from ..services.audit import record_audit_event
 
 logger = logging.getLogger("fileheron.webauthn_router")
 
-# Two routers in one module - different prefixes.
+# Three routers in one module - different prefixes.
 account_router = APIRouter(prefix="/api/account/webauthn", tags=["webauthn"])
 auth_router = APIRouter(prefix="/api/auth/webauthn", tags=["webauthn"])
+signin_router = APIRouter(prefix="/api/auth", tags=["webauthn"])
 
 
 def _to_item(c) -> WebAuthnCredentialItem:
@@ -64,6 +69,19 @@ def _to_item(c) -> WebAuthnCredentialItem:
         transports=[t for t in c.transports.split(",") if t],
         created_at=c.created_at,
         last_used_at=c.last_used_at,
+        discoverable=c.discoverable,
+    )
+
+
+def _set_refresh_cookie(response: Response, refresh_plain: str, db: Session) -> None:
+    response.set_cookie(
+        key="fh_refresh",
+        value=refresh_plain,
+        max_age=settings_registry.effective(db, settings_registry.K.REFRESH_TOKEN_EXPIRE_DAYS) * 24 * 3600,
+        httponly=True,
+        secure=settings.COOKIE_SECURE,
+        samesite="lax",
+        path="/api/auth",
     )
 
 
@@ -246,14 +264,95 @@ async def auth_complete(
         db, user=user, request=request, settings=settings, via="webauthn",
     )
     db.commit()
-
-    response.set_cookie(
-        key="fh_refresh",
-        value=refresh_plain,
-        max_age=settings_registry.effective(db, settings_registry.K.REFRESH_TOKEN_EXPIRE_DAYS) * 24 * 3600,
-        httponly=True,
-        secure=settings.COOKIE_SECURE,
-        samesite="lax",
-        path="/api/auth",
-    )
+    _set_refresh_cookie(response, refresh_plain, db)
     return {"access_token": access, "expires_in_seconds": expires_in}
+
+
+# ---- Auth: passkey sign-in (v2.27.0) --------------------------------------
+
+# A passkey has nothing to guess, so this bound is for what a ceremony leaves
+# behind: a challenge in Redis and, when it fails, a login_attempts row and an
+# audit row. It is the password login's budget times three because the login
+# page starts a ceremony for browser autofill on every visit, and the button and
+# a retry each start their own. /complete needs no budget of its own: each
+# ceremony's challenge is single-use.
+_PASSKEY_CEREMONIES_PER_LOGIN_ATTEMPT = 3
+
+
+@signin_router.post("/passkey/begin", response_model=WebAuthnAuthBeginResponse)
+async def passkey_signin_begin(
+    request: Request,
+    db: Session = Depends(get_db),
+) -> WebAuthnAuthBeginResponse:
+    """Start a sign-in with a passkey alone. The options name no account, so the
+    browser offers whichever passkeys it holds for this site."""
+    ip = request.client.host if request.client else ""
+    if not rate_limit_svc.check_ip_allowed(
+        "passkey_signin", ip,
+        settings_registry.effective(db, settings_registry.K.RATE_LIMIT_LOGIN)
+        * _PASSKEY_CEREMONIES_PER_LOGIN_ATTEMPT,
+        settings_registry.effective(db, settings_registry.K.LOGIN_RATE_WINDOW_SEC),
+    ):
+        raise AppError(429, "RATE_LIMITED", "Too many attempts; try again shortly.")
+    session_key, options = await auth_svc.begin_passkey_signin(db)
+    return WebAuthnAuthBeginResponse(session=session_key, options=options)
+
+
+@signin_router.post("/passkey/complete", response_model=LoginResponse)
+async def passkey_signin_complete(
+    payload: WebAuthnAuthCompleteRequest,
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
+) -> LoginResponse:
+    _user, access, expires_in, refresh_plain = await auth_svc.login_with_passkey(
+        db,
+        session_key=payload.session,
+        credential_response=payload.credential,
+        request=request,
+        settings=settings,
+    )
+    db.commit()
+    _set_refresh_cookie(response, refresh_plain, db)
+    return LoginResponse(access_token=access, expires_in_seconds=expires_in)
+
+
+@signin_router.post("/2fa/passkey/begin", response_model=WebAuthnAuthBeginResponse)
+async def pending_passkey_begin(
+    payload: PendingPasskeyBeginRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> WebAuthnAuthBeginResponse:
+    """Finish a pending sign-in (after SSO) with a passkey instead of a code.
+    Shares /api/auth/2fa/complete's per-IP budget: both spend one pending
+    token's attempts."""
+    ip = request.client.host if request.client else ""
+    if not rate_limit_svc.check_ip_allowed(
+        "twofa_complete", ip,
+        settings_registry.effective(db, settings_registry.K.RATE_LIMIT_LOGIN),
+    ):
+        raise AppError(429, "RATE_LIMITED", "Too many attempts; try again shortly.")
+    session_key, options = await auth_svc.begin_pending_passkey(
+        db, pending_token=payload.pending_token, settings=settings
+    )
+    return WebAuthnAuthBeginResponse(session=session_key, options=options)
+
+
+@signin_router.post("/2fa/passkey/complete", response_model=LoginResponse)
+async def pending_passkey_complete(
+    payload: PendingPasskeyCompleteRequest,
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
+) -> LoginResponse:
+    _user, access, expires_in, refresh_plain = await auth_svc.complete_pending_with_passkey(
+        db,
+        pending_token=payload.pending_token,
+        session_key=payload.session,
+        credential_response=payload.credential,
+        request=request,
+        settings=settings,
+    )
+    db.commit()
+    _set_refresh_cookie(response, refresh_plain, db)
+    return LoginResponse(access_token=access, expires_in_seconds=expires_in)

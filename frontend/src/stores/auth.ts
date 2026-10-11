@@ -11,7 +11,7 @@ import { refreshSession, setAccessToken, setOnAuthLost } from '@/api/client'
 import { setLocale, type SupportedLocale } from '@/i18n'
 import { useNotificationsStore } from '@/stores/notifications'
 import * as webauthnApi from '@/api/webauthn'
-import { performAuthentication } from '@/composables/useWebAuthn'
+import { authOptionsFrom, performAuthentication } from '@/composables/useWebAuthn'
 import type { Locale, MeResponse, UserRole } from '@/types/api'
 
 export const useAuthStore = defineStore('auth', () => {
@@ -196,20 +196,7 @@ export const useAuthStore = defineStore('auth', () => {
     password: string,
   ): Promise<{ status: 'ok'; me: MeResponse } | { status: 'pending_2fa'; pendingToken: string }> {
     const begin = await webauthnApi.authBegin(email, password)
-    const opts = begin.data.options as {
-      challenge: string
-      rpId: string
-      allowCredentials?: { id: string; type: 'public-key'; transports?: string[] }[]
-      userVerification?: 'required' | 'preferred' | 'discouraged'
-      timeout?: number
-    }
-    const credential = await performAuthentication({
-      challenge: opts.challenge,
-      rpId: opts.rpId,
-      allowCredentials: opts.allowCredentials,
-      userVerification: opts.userVerification,
-      timeout: opts.timeout,
-    })
+    const credential = await performAuthentication(authOptionsFrom(begin.data.options))
     const resp = await webauthnApi.authComplete(begin.data.session, credential)
     if (resp.data.pending_2fa_token) {
       return { status: 'pending_2fa', pendingToken: resp.data.pending_2fa_token }
@@ -223,6 +210,52 @@ export const useAuthStore = defineStore('auth', () => {
     const me = await getMe()
     user.value = me.data
     return { status: 'ok', me: applyUserLocale(me.data) }
+  }
+
+  /** Sign in with a passkey alone (v2.27.0, while an admin has it on): no
+   *  email, no password. `mediation: 'conditional'` waits for the user to pick
+   *  a passkey from the email field's autofill instead of opening a dialog;
+   *  `signal` aborts that wait. `onPicked` runs once the browser has a signed
+   *  answer, so a caller can tell a failure the user acted on from one before. */
+  async function loginWithPasskeyOnly(
+    opts: {
+      mediation?: CredentialMediationRequirement
+      signal?: AbortSignal
+      onPicked?: () => void
+    } = {},
+  ) {
+    const begin = await webauthnApi.passkeySigninBegin()
+    const credential = await performAuthentication(authOptionsFrom(begin.data.options), {
+      mediation: opts.mediation,
+      signal: opts.signal,
+    })
+    opts.onPicked?.()
+    const resp = await webauthnApi.passkeySigninComplete(begin.data.session, credential)
+    return adoptPasskeySession(resp.data)
+  }
+
+  /** Finish a pending sign-in (after SSO) with a passkey instead of a code. */
+  async function completeSecondFactorWithPasskey(pendingToken: string) {
+    const begin = await webauthnApi.pendingPasskeyBegin(pendingToken)
+    const credential = await performAuthentication(authOptionsFrom(begin.data.options))
+    const resp = await webauthnApi.pendingPasskeyComplete(
+      pendingToken,
+      begin.data.session,
+      credential,
+    )
+    return adoptPasskeySession(resp.data)
+  }
+
+  /** The passkey routes answer through the bare anonymous client, so a captive
+   *  portal or an SPA-fallback answering 200 with HTML reaches here as-is:
+   *  refuse it rather than adopt an empty token (as loginWithPasskey does). */
+  async function adoptPasskeySession(data: { access_token?: unknown } | null | undefined) {
+    const token = data?.access_token
+    if (typeof token !== 'string' || !token) throw new Error('passkey sign-in returned no session')
+    setAccessToken(token)
+    const me = await getMe()
+    user.value = me.data
+    return applyUserLocale(me.data)
   }
 
   async function registerFromInvite(payload: {
@@ -294,7 +327,9 @@ export const useAuthStore = defineStore('auth', () => {
     login,
     loginWithRecovery,
     completeSecondFactor,
+    completeSecondFactorWithPasskey,
     loginWithPasskey,
+    loginWithPasskeyOnly,
     registerFromInvite,
     logout,
     refreshMe,

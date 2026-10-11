@@ -25,9 +25,8 @@ import pytest
 
 from app.models.user import UserRole
 from app.models.user_totp import UserTOTP
-from app.services import oidc as oidc_svc
 
-from ._oidc_helpers import install_jwks_mock, make_claims, patch_exchange
+from ._oidc_helpers import pending_from, sso_sign_in
 
 
 def _enable_totp(db, user_id: int) -> None:
@@ -42,19 +41,6 @@ def _enable_totp(db, user_id: int) -> None:
     db.commit()
 
 
-async def _oidc_callback(client, monkeypatch, provider, *, sub, email):
-    state, nonce = "s" * 24, "n" * 24
-    install_jwks_mock(monkeypatch)
-    patch_exchange(monkeypatch, make_claims(provider, sub=sub, email=email, nonce=nonce))
-    oidc_svc.reset_discovery_cache()
-    client.cookies.set(oidc_svc.STATE_COOKIE, f"{state}::{provider.id}::{nonce}")
-    return await client.get(
-        f"/api/auth/oidc/callback/{provider.id}",
-        params={"code": "abc", "state": state},
-        follow_redirects=False,
-    )
-
-
 @pytest.mark.asyncio
 async def test_sso_without_2fa_still_signs_straight_in(
     db, client, monkeypatch, make_provider, make_user
@@ -65,7 +51,7 @@ async def test_sso_without_2fa_still_signs_straight_in(
     u.oidc_provider_id, u.oidc_subject = p.id, "sub-plain"
     db.commit()
 
-    r = await _oidc_callback(client, monkeypatch, p, sub="sub-plain", email="plain@example.com")
+    r = await sso_sign_in(client, monkeypatch, p, sub="sub-plain", email="plain@example.com")
 
     assert r.status_code == 302
     assert "/login/2fa" not in r.headers["location"]
@@ -83,7 +69,7 @@ async def test_sso_with_totp_enabled_gets_no_session_yet(
     db.commit()
     _enable_totp(db, u.id)
 
-    r = await _oidc_callback(client, monkeypatch, p, sub="sub-2fa", email="2fa@example.com")
+    r = await sso_sign_in(client, monkeypatch, p, sub="sub-2fa", email="2fa@example.com")
 
     assert r.status_code == 302
     assert "/login/2fa?pending=" in r.headers["location"]
@@ -104,8 +90,8 @@ async def test_the_pending_token_is_not_an_access_token(
     db.commit()
     _enable_totp(db, u.id)
 
-    r = await _oidc_callback(client, monkeypatch, p, sub="sub-pend", email="pend@example.com")
-    pending = r.headers["location"].split("pending=", 1)[1]
+    r = await sso_sign_in(client, monkeypatch, p, sub="sub-pend", email="pend@example.com")
+    pending, _methods = pending_from(r.headers["location"])
 
     me = await client.get("/api/account/me", headers={"Authorization": f"Bearer {pending}"})
     assert me.status_code == 401, me.text
@@ -121,8 +107,8 @@ async def test_a_correct_code_completes_the_login(
     db.commit()
     _enable_totp(db, u.id)
 
-    r = await _oidc_callback(client, monkeypatch, p, sub="sub-ok", email="ok@example.com")
-    pending = r.headers["location"].split("pending=", 1)[1]
+    r = await sso_sign_in(client, monkeypatch, p, sub="sub-ok", email="ok@example.com")
+    pending, _methods = pending_from(r.headers["location"])
 
     from app.services import totp as totp_svc
 
@@ -152,8 +138,8 @@ async def test_a_recovery_code_also_completes_the_login(
     db.commit()
     _enable_totp(db, u.id)
 
-    r = await _oidc_callback(client, monkeypatch, p, sub="sub-rec", email="rec@example.com")
-    pending = r.headers["location"].split("pending=", 1)[1]
+    r = await sso_sign_in(client, monkeypatch, p, sub="sub-rec", email="rec@example.com")
+    pending, _methods = pending_from(r.headers["location"])
 
     from app.services import totp as totp_svc
 
@@ -187,8 +173,8 @@ async def test_a_wrong_code_is_refused_and_counted(
     db.commit()
     _enable_totp(db, u.id)
 
-    r = await _oidc_callback(client, monkeypatch, p, sub="sub-bad", email="bad@example.com")
-    pending = r.headers["location"].split("pending=", 1)[1]
+    r = await sso_sign_in(client, monkeypatch, p, sub="sub-bad", email="bad@example.com")
+    pending, _methods = pending_from(r.headers["location"])
 
     db.expire_all()
     assert db.query(User).filter(User.id == u.id).one().failed_login_count == 3, (

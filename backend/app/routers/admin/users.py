@@ -34,11 +34,6 @@ from ...utils.timeutil import utc_now
 router = APIRouter()
 
 
-def _has_2fa(db: Session, user_id: int) -> bool:
-    totp = db.query(UserTOTP).filter(UserTOTP.user_id == user_id).one_or_none()
-    return totp is not None and totp.enabled_at is not None
-
-
 def _locked_until(u: User):
     """`locked_until` only while it is in force - a lapsed lockout leaves the
     column set until the next login attempt, and the page must not call that
@@ -65,7 +60,9 @@ def _to_user_item(db: Session, u: User) -> AdminUserItem:
         storage_used_bytes=quota_svc.storage_used_bytes(db, user_id=u.id),
         created_at=u.created_at,
         last_login_at=u.last_login_at,
-        has_2fa=_has_2fa(db, u.id),
+        # TOTP, or a passkey while passkey sign-in counts it - the same rule
+        # the requirement above is satisfied by.
+        has_2fa=twofa_policy_svc.has_second_factor(db, u),
         email_verified=u.email_verified,
         locked_until=_locked_until(u),
     )
@@ -86,6 +83,7 @@ def _hydrate_user_items(db: Session, rows: list[User]) -> list[AdminUserItem]:
         for t in db.query(UserTOTP).filter(UserTOTP.user_id.in_(ids)).all()
     }
     requires_2fa = twofa_policy_svc.is_2fa_required_bulk(db, rows)
+    passkey_2fa = twofa_policy_svc.passkey_holders(db, ids)
     used = quota_svc.storage_used_bytes_bulk(db, ids)
     return [
         AdminUserItem(
@@ -99,7 +97,7 @@ def _hydrate_user_items(db: Session, rows: list[User]) -> list[AdminUserItem]:
             storage_used_bytes=used.get(u.id, 0),
             created_at=u.created_at,
             last_login_at=u.last_login_at,
-            has_2fa=totp_enabled.get(u.id, False),
+            has_2fa=totp_enabled.get(u.id, False) or u.id in passkey_2fa,
             email_verified=u.email_verified,
             locked_until=_locked_until(u),
         )

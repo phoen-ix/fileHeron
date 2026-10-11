@@ -24,7 +24,9 @@ from sqlalchemy.orm import Session
 from ..config import settings
 from ..models.group_member import GroupMember
 from ..models.user import User, UserRole
+from ..models.user_webauthn_credential import UserWebAuthnCredential
 from . import settings as settings_svc
+from . import webauthn as webauthn_svc
 
 logger = logging.getLogger("fileheron.twofa_policy")
 
@@ -93,10 +95,42 @@ def has_totp_enabled(user: User) -> bool:
     return user.totp is not None and user.totp.enabled_at is not None
 
 
+def has_second_factor(db: Session, user: User) -> bool:
+    """Whether the user HAS a second factor set up: TOTP, or - only while passkey
+    sign-in is switched on - a passkey (v2.27.0). The switch gates the passkey
+    half because counting it means a password sign-in must then ask for the
+    passkey (services/auth.py::login), which the desktop app cannot do."""
+    if has_totp_enabled(user):
+        return True
+    return webauthn_svc.passkey_signin_enabled(db) and webauthn_svc.has_passkeys(db, user.id)
+
+
+def passkey_holders(db: Session, user_ids: list[int]) -> set[int]:
+    """Of these users, the ones whose passkey counts as their second factor -
+    none while passkey sign-in is off: has_second_factor's passkey half for a
+    page of users, in one query."""
+    if not user_ids or not webauthn_svc.passkey_signin_enabled(db):
+        return set()
+    return {
+        r[0]
+        for r in db.query(UserWebAuthnCredential.user_id)
+        .filter(UserWebAuthnCredential.user_id.in_(user_ids))
+        .distinct()
+        .all()
+    }
+
+
 def is_2fa_required(db: Session, user: User) -> bool:
     """True iff the user must enable 2FA but hasn't yet."""
-    if has_totp_enabled(user):
+    # The policy before the passkey half of has_second_factor: the 2FA gate asks
+    # this on every request, and that half costs a settings read and a query
+    # that only a user the policy covers needs.
+    if has_totp_enabled(user) or not _policy_covers(db, user):
         return False
+    return not has_second_factor(db, user)
+
+
+def _policy_covers(db: Session, user: User) -> bool:
     roles, group_ids, _ = _resolve_policy(db)
     if user.role.value in roles:
         return True
@@ -138,9 +172,10 @@ def is_2fa_required_bulk(db: Session, users: list[User]) -> dict[int, bool]:
             .all()
         )
         member_ids = {r[0] for r in rows}
+    with_passkeys = passkey_holders(db, [u.id for u in users])
     out: dict[int, bool] = {}
     for u in users:
-        if has_totp_enabled(u):
+        if has_totp_enabled(u) or u.id in with_passkeys:
             out[u.id] = False
         elif u.role.value in roles:
             out[u.id] = True

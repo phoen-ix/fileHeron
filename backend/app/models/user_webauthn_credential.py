@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING
 
 from sqlalchemy import (
     BigInteger,
+    Boolean,
     DateTime,
     ForeignKey,
     Integer,
@@ -58,6 +59,13 @@ class UserWebAuthnCredential(Base):
     # User-given label so they can tell credentials apart in the
     # account UI ("MacBook Touch ID", "Yubikey 5C", etc.).
     name: Mapped[str] = mapped_column(String(120), nullable=False, default="passkey")
+    # Whether the authenticator stored the credential ON the device (a
+    # "discoverable" credential), as the browser reported it at registration
+    # (`credProps.rk`). Only those can sign in with no email and no password.
+    # The report is client-side and unsigned, so this drives a UI badge and
+    # nothing else - the usernameless ceremony itself is the proof. NULL for
+    # passkeys registered before v2.27.0, which may still be discoverable.
+    discoverable: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(), nullable=False, default=utc_now

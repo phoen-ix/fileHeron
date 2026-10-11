@@ -20,7 +20,9 @@ from ....schemas.twofa_policy import (
     TwofaPolicyResponse,
     UpdateTwofaPolicyRequest,
 )
+from ....services import settings as settings_svc
 from ....services import twofa_policy as twofa_policy_svc
+from ....services import webauthn as webauthn_svc
 from ....services.audit import record_audit_event
 
 router = APIRouter()
@@ -48,6 +50,7 @@ def _twofa_policy_response(db: Session) -> TwofaPolicyResponse:
             if (g := by_id.get(gid)) is not None
         ],
         is_kv_overridden=is_kv_overridden,
+        passkey_signin=webauthn_svc.passkey_signin_enabled(db),
     )
 
 
@@ -101,16 +104,28 @@ def update_twofa_policy(
         required_roles=payload.required_roles,
         required_group_ids=payload.required_group_ids,
     )
+    metadata: dict[str, object] = {
+        "role_count": len(set(payload.required_roles)),
+        "group_count": len(set(payload.required_group_ids)),
+    }
+    if (
+        payload.passkey_signin is not None
+        and payload.passkey_signin != webauthn_svc.passkey_signin_enabled(db)
+    ):
+        settings_svc.set_value(
+            db,
+            key=settings_svc.Keys.PASSKEY_SIGNIN,
+            value="true" if payload.passkey_signin else "false",
+            actor=admin,
+        )
+        metadata["passkey_signin"] = payload.passkey_signin
     record_audit_event(
         db,
         event_type=AuditEventType.twofa_policy_changed,
         actor_user_id=admin.id,
         target_type="settings",
         target_id="twofa_policy",
-        metadata={
-            "role_count": len(set(payload.required_roles)),
-            "group_count": len(set(payload.required_group_ids)),
-        },
+        metadata=metadata,
         request=request,
     )
     db.commit()

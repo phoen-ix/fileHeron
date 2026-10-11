@@ -22,6 +22,8 @@
   const errorMsg = ref<string | null>(null)
   const isKvOverridden = ref(false)
 
+  // Passkey sign-in (v2.27.0): a passkey alone signs in, and counts as 2FA.
+  const passkeySignin = ref(false)
   const requiredRoles = ref<Set<string>>(new Set())
   const requiredGroups = ref<RequiredGroupRef[]>([])
   const availableGroups = ref<GroupResponse[]>([])
@@ -55,6 +57,7 @@
     requiredRoles.value = new Set(data.required_roles)
     requiredGroups.value = data.required_groups
     isKvOverridden.value = data.is_kv_overridden
+    passkeySignin.value = data.passkey_signin
   }
 
   async function load() {
@@ -81,6 +84,7 @@
       const { data } = await updateTwofaPolicy({
         required_roles: [...requiredRoles.value],
         required_group_ids: requiredGroups.value.map((g) => g.id),
+        passkey_signin: passkeySignin.value,
       })
       applyResponse(data)
       // Refresh /me so the running session sees the new requires_2fa
@@ -154,6 +158,18 @@
             </label>
           </li>
         </ul>
+      </fieldset>
+
+      <fieldset class="role-fieldset">
+        <legend class="fh-field-label">{{ t('admin_twofa_policy.passkey_heading') }}</legend>
+        <label class="role-check">
+          <input v-model="passkeySignin" type="checkbox" data-testid="passkey-signin-switch" />
+          <span>{{ t('admin_twofa_policy.passkey_label') }}</span>
+        </label>
+        <p class="fh-field-help">{{ t('admin_twofa_policy.passkey_help') }}</p>
+        <div v-if="passkeySignin" class="fh-notice" data-tone="warning">
+          {{ t('admin_twofa_policy.passkey_desktop_warning') }}
+        </div>
       </fieldset>
 
       <section class="effects">

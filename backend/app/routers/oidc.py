@@ -34,7 +34,6 @@ from ..services import jwt_session, settings_registry
 from ..services import oidc as oidc_svc
 from ..services import oidc_admin as oidc_admin_svc
 from ..services import rate_limit as rate_limit_svc
-from ..services import totp as totp_svc
 
 logger = logging.getLogger("fileheron.routers.oidc")
 
@@ -142,13 +141,15 @@ async def _callback_inner(
 
     from ..services import site as site_svc
 
-    # A user with TOTP enabled must present it, whatever the first factor was.
-    # This path used to finalize outright, so enabling 2FA did nothing at all
-    # for anyone signing in through SSO - silently, which is the worst version.
-    # `twofa_policy.is_2fa_required` is the WRONG predicate here: it returns
-    # False once the user HAS TOTP, because it answers "must they still set it
-    # up". `totp_svc.is_enabled` is what the password flow asks.
-    if totp_svc.is_enabled(user):
+    # A user with a second factor must present it, whatever the first factor
+    # was. This path used to finalize outright, so enabling 2FA did nothing at
+    # all for anyone signing in through SSO - silently, which is the worst
+    # version. `twofa_policy.is_2fa_required` is the WRONG predicate here: it
+    # returns False once the user HAS a second factor, because it answers "must
+    # they still set one up". `second_factor_methods` asks what the password
+    # flow asks - TOTP, or a passkey while passkey sign-in counts it as 2FA.
+    methods = auth_svc.second_factor_methods(db, user)
+    if methods:
         # NB: record_success is NOT called yet. It clears failed_login_count and
         # locked_until, so calling it at the first factor would hand a failing
         # second factor a freshly reset lockout counter.
@@ -156,9 +157,13 @@ async def _callback_inner(
         db.commit()
         # The pending token rides the URL because the browser is mid-redirect
         # and holds no session yet. It is why that token grants nothing on its
-        # own and lives five minutes.
+        # own and lives five minutes. `methods` only tells the page what to
+        # offer; the routes behind it check for themselves.
         resp = RedirectResponse(
-            url=f"{site_svc.get_site_url(db)}/login/2fa?pending={pending}",
+            url=(
+                f"{site_svc.get_site_url(db)}/login/2fa?pending={pending}"
+                f"&methods={','.join(methods)}"
+            ),
             status_code=302,
         )
         resp.delete_cookie(oidc_svc.STATE_COOKIE, path="/api/auth/oidc")

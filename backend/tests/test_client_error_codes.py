@@ -71,6 +71,14 @@ _ADMIN_SERVICES = (
 _CODE = re.compile(r'AppError\(\s*\d+\s*,\s*"([A-Z][A-Z0-9_]+)"')
 # The client implements neither flow, so these can never surface in it.
 _OUT_OF_SCOPE_PREFIXES = ("OIDC_", "WEBAUTHN_", "PASSKEY_")
+# ...except where a flow the client DOES use answers with one. Each needs the
+# route it comes from.
+_REACHABLE_DESPITE_PREFIX = {
+    "WEBAUTHN_REQUIRED": (
+        "POST /api/auth/login answers it to a password sign-in whose second "
+        "factor is a passkey, once passkey sign-in is on (v2.27.0)"
+    ),
+}
 
 
 def _client_reachable() -> set[str]:
@@ -84,7 +92,7 @@ def _client_reachable() -> set[str]:
         reachable |= set(_CODE.findall(path.read_text(encoding="utf-8")))
     return {
         c for c in reachable
-        if not c.startswith(_OUT_OF_SCOPE_PREFIXES)
+        if not c.startswith(_OUT_OF_SCOPE_PREFIXES) or c in _REACHABLE_DESPITE_PREFIX
     } - set(_NOT_CLIENT_REACHABLE)
 
 
@@ -118,5 +126,5 @@ def test_every_declared_exemption_is_still_a_real_code():
     all_codes: set[str] = set()
     for path in _APP.rglob("*.py"):
         all_codes |= set(_CODE.findall(path.read_text(encoding="utf-8")))
-    stale = sorted(set(_NOT_CLIENT_REACHABLE) - all_codes)
+    stale = sorted((set(_NOT_CLIENT_REACHABLE) | set(_REACHABLE_DESPITE_PREFIX)) - all_codes)
     assert not stale, f"these are exempted but the backend no longer raises them: {stale}"

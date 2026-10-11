@@ -1159,11 +1159,15 @@ export interface TwofaPolicyResponse {
   required_groups: RequiredGroupRef[]
   /** False = inheriting from REQUIRE_2FA env (no kv override saved). */
   is_kv_overridden: boolean
+  /** Passkey sign-in (v2.27.0): a passkey alone signs in, and counts as 2FA. */
+  passkey_signin: boolean
 }
 
 export interface UpdateTwofaPolicyRequest {
   required_roles: string[]
   required_group_ids: number[]
+  /** Omitted = leave the switch as it is. */
+  passkey_signin?: boolean
 }
 
 /* Admin site URL (kv override of APP_URL env, post-Phase 10) */

@@ -8,9 +8,23 @@
     </div>
 
     <div v-else>
+      <!-- Passkey sign-in (v2.27.0) is on: a passkey signs in alone and is the
+           account's second factor, so losing the only one locks its owner out. -->
+      <p v-if="site.passkeySignin && credentials.length > 0" class="fh-notice" data-tone="info">
+        {{ t('webauthn.signin_note') }}
+      </p>
       <ul v-if="credentials.length > 0" class="cred-list">
         <li v-for="c in credentials" :key="c.id" class="cred-row">
-          <div class="cred-name">{{ c.name }}</div>
+          <div class="cred-name">
+            {{ c.name }}
+            <span
+              v-if="site.passkeySignin && c.discoverable"
+              class="fh-pill"
+              data-testid="passkey-signs-in-alone"
+            >
+              {{ t('webauthn.signs_in_alone') }}
+            </span>
+          </div>
           <div class="cred-meta">
             <span class="fh-mono">
               {{ t('webauthn.created', { d: formatDate(c.created_at) }) }}
@@ -94,10 +108,16 @@
   import StepUpDialog from '@/components/StepUpDialog.vue'
   import { useApiError } from '@/composables/useApiError'
   import { useSiteDateFormat } from '@/composables/useSiteDateFormat'
-  import { isWebAuthnSupported, performRegistration } from '@/composables/useWebAuthn'
+  import {
+    isWebAuthnSupported,
+    performRegistration,
+    type RegisterOptions,
+  } from '@/composables/useWebAuthn'
+  import { useSiteStore } from '@/stores/site'
   import { useUiStore } from '@/stores/ui'
 
   const { t } = useI18n()
+  const site = useSiteStore()
   const { formatDate } = useSiteDateFormat()
   const { describe } = useApiError()
   const ui = useUiStore()
@@ -168,6 +188,7 @@
             }
           | undefined,
         attestation: opts.attestation as 'none' | 'indirect' | 'direct' | undefined,
+        extensions: opts.extensions as RegisterOptions['extensions'],
       })
       await registerComplete(newName.value, cred)
       adding.value = false

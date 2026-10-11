@@ -30,6 +30,7 @@ vi.mock('@/api/setup', () => ({
 vi.mock('@/api/webauthn')
 vi.mock('@/composables/useWebAuthn', () => ({
   isWebAuthnSupported: () => true,
+  authOptionsFrom: (o: Record<string, unknown>) => o,
   performAuthentication: vi.fn(async () => ({ id: 'cred', rawId: 'cred' })),
 }))
 
@@ -343,5 +344,89 @@ describe('useAuthStore', () => {
     const auth = useAuthStore()
     await expect(auth.loginWithPasskey('a@example.com', 'pw')).rejects.toThrow()
     expect(auth.isAuthenticated).toBe(false)
+  })
+
+  it('loginWithPasskeyOnly() runs the ceremony with no account named and adopts the session', async () => {
+    const webauthnApi = await import('@/api/webauthn')
+    const { performAuthentication } = await import('@/composables/useWebAuthn')
+    const { setAccessToken } = await import('@/api/client')
+    vi.mocked(webauthnApi.passkeySigninBegin).mockResolvedValueOnce({
+      data: { session: 'sess', options: { challenge: 'c', rpId: 'files.example' } },
+    } as never)
+    vi.mocked(webauthnApi.passkeySigninComplete).mockResolvedValueOnce({
+      data: { access_token: 'tok', expires_in_seconds: 900 },
+    } as never)
+    vi.mocked(accountApi.getMe).mockResolvedValueOnce({ data: fakeMe } as never)
+    const controller = new AbortController()
+    const order: string[] = []
+    vi.mocked(performAuthentication).mockImplementationOnce(async () => {
+      order.push('picked')
+      return { id: 'cred', rawId: 'cred' } as never
+    })
+    const auth = useAuthStore()
+
+    await auth.loginWithPasskeyOnly({
+      mediation: 'conditional',
+      signal: controller.signal,
+      onPicked: () => order.push('onPicked'),
+    })
+
+    expect(performAuthentication).toHaveBeenCalledWith(
+      { challenge: 'c', rpId: 'files.example' },
+      { mediation: 'conditional', signal: controller.signal },
+    )
+    expect(webauthnApi.passkeySigninComplete).toHaveBeenCalledWith('sess', {
+      id: 'cred',
+      rawId: 'cred',
+    })
+    // onPicked fires after the browser answered, before the server is asked.
+    expect(order).toEqual(['picked', 'onPicked'])
+    expect(setAccessToken).toHaveBeenCalledWith('tok')
+    expect(auth.user).toEqual(fakeMe)
+  })
+
+  it('loginWithPasskeyOnly() does not report a pick when the start is refused', async () => {
+    const webauthnApi = await import('@/api/webauthn')
+    vi.mocked(webauthnApi.passkeySigninBegin).mockRejectedValueOnce(new Error('403'))
+    const onPicked = vi.fn()
+    const auth = useAuthStore()
+
+    await expect(auth.loginWithPasskeyOnly({ onPicked })).rejects.toThrow()
+    expect(onPicked).not.toHaveBeenCalled()
+  })
+
+  it('loginWithPasskeyOnly() refuses a 200 that carries no session', async () => {
+    const webauthnApi = await import('@/api/webauthn')
+    const { setAccessToken } = await import('@/api/client')
+    vi.mocked(webauthnApi.passkeySigninBegin).mockResolvedValueOnce({
+      data: { session: 'sess', options: { challenge: 'c', rpId: 'files.example' } },
+    } as never)
+    vi.mocked(webauthnApi.passkeySigninComplete).mockResolvedValueOnce({ data: '<html>' } as never)
+    const auth = useAuthStore()
+
+    await expect(auth.loginWithPasskeyOnly()).rejects.toThrow()
+    expect(setAccessToken).not.toHaveBeenCalled()
+    expect(auth.isAuthenticated).toBe(false)
+  })
+
+  it('completeSecondFactorWithPasskey() sends the pending token with both halves', async () => {
+    const webauthnApi = await import('@/api/webauthn')
+    vi.mocked(webauthnApi.pendingPasskeyBegin).mockResolvedValueOnce({
+      data: { session: 'sess', options: { challenge: 'c', rpId: 'files.example' } },
+    } as never)
+    vi.mocked(webauthnApi.pendingPasskeyComplete).mockResolvedValueOnce({
+      data: { access_token: 'tok', expires_in_seconds: 900 },
+    } as never)
+    vi.mocked(accountApi.getMe).mockResolvedValueOnce({ data: fakeMe } as never)
+    const auth = useAuthStore()
+
+    await auth.completeSecondFactorWithPasskey('pend-1')
+
+    expect(webauthnApi.pendingPasskeyBegin).toHaveBeenCalledWith('pend-1')
+    expect(webauthnApi.pendingPasskeyComplete).toHaveBeenCalledWith('pend-1', 'sess', {
+      id: 'cred',
+      rawId: 'cred',
+    })
+    expect(auth.user).toEqual(fakeMe)
   })
 })

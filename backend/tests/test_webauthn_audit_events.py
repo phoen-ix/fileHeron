@@ -30,6 +30,7 @@ class _FakeRecord:
     transports = "internal"
     created_at = datetime.now(tz=timezone.utc).replace(tzinfo=None)
     last_used_at = None
+    discoverable = None
 
 
 @pytest.mark.asyncio

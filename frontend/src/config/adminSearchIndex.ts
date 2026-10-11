@@ -148,6 +148,7 @@ export const ADMIN_SEARCH_INDEX: readonly AdminSearchEntry[] = [
   // --- 2FA enforcement (admin-settings-twofa)
   { routeName: 'admin-settings-twofa', labelKey: 'admin_twofa_policy.roles_heading', keywords: ['2fa', 'two factor', 'totp', 'mfa', 'require 2fa', 'zwei-faktor', 'zwei faktor', 'authenticator', 'enforce 2fa', 'passkey'] },
   { routeName: 'admin-settings-twofa', labelKey: 'admin_twofa_policy.groups_heading', keywords: ['2fa groups', 'require 2fa for group', 'mfa', 'zwei-faktor gruppen'] },
+  { routeName: 'admin-settings-twofa', labelKey: 'admin_twofa_policy.passkey_heading', keywords: ['passkey', 'passwordless', 'webauthn', 'sign in without password', 'passkey-anmeldung', 'ohne passwort'] },
 
   // --- Quarantine alerts & scanner (admin-settings-quarantine)
   { routeName: 'admin-settings-quarantine', labelKey: 'admin_settings_quarantine.toggle_label', keywords: ['virus alert', 'malware', 'infected', 'quarantine email', 'notify admins virus', 'virenfund', 'quarantäne'] },

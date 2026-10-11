@@ -24,7 +24,24 @@ export function isWebAuthnSupported(): boolean {
   return typeof window !== 'undefined' && !!window.PublicKeyCredential
 }
 
-interface RegisterOptions {
+/** Whether the browser can offer passkeys in the email field's autofill
+ *  (`mediation: 'conditional'`). False wherever the check itself is missing. */
+export async function isConditionalMediationAvailable(): Promise<boolean> {
+  if (!isWebAuthnSupported()) return false
+  const check = (
+    window.PublicKeyCredential as unknown as {
+      isConditionalMediationAvailable?: () => Promise<boolean>
+    }
+  ).isConditionalMediationAvailable
+  if (typeof check !== 'function') return false
+  try {
+    return await check.call(window.PublicKeyCredential)
+  } catch {
+    return false
+  }
+}
+
+export interface RegisterOptions {
   challenge: string
   rp: { id: string; name: string }
   user: { id: string; name: string; displayName: string }
@@ -36,14 +53,28 @@ interface RegisterOptions {
   }
   attestation?: 'none' | 'indirect' | 'direct'
   timeout?: number
+  /** Passed through as-is - `credProps` asks the browser whether the passkey
+   *  was stored on the device, the kind that can sign in without a password. */
+  extensions?: AuthenticationExtensionsClientInputs
 }
 
-interface AuthOptions {
+export interface AuthOptions {
   challenge: string
   rpId: string
   allowCredentials?: { id: string; type: 'public-key'; transports?: string[] }[]
   userVerification?: 'required' | 'preferred' | 'discouraged'
   timeout?: number
+}
+
+/** The server's request options (py_webauthn's JSON shape) as AuthOptions. */
+export function authOptionsFrom(raw: Record<string, unknown>): AuthOptions {
+  return {
+    challenge: raw.challenge as string,
+    rpId: raw.rpId as string,
+    allowCredentials: raw.allowCredentials as AuthOptions['allowCredentials'],
+    userVerification: raw.userVerification as AuthOptions['userVerification'],
+    timeout: raw.timeout as number | undefined,
+  }
 }
 
 export async function performRegistration(serverOptions: RegisterOptions) {
@@ -64,6 +95,7 @@ export async function performRegistration(serverOptions: RegisterOptions) {
     authenticatorSelection: serverOptions.authenticatorSelection,
     attestation: serverOptions.attestation,
     timeout: serverOptions.timeout ?? 60000,
+    extensions: serverOptions.extensions,
   }
 
   const cred = (await navigator.credentials.create({
@@ -88,7 +120,13 @@ export async function performRegistration(serverOptions: RegisterOptions) {
   }
 }
 
-export async function performAuthentication(serverOptions: AuthOptions) {
+/** `mediation: 'conditional'` makes the request wait for the user to pick a
+ *  passkey from the email field's autofill instead of opening a dialog; abort
+ *  it through `signal` before starting another request. */
+export async function performAuthentication(
+  serverOptions: AuthOptions,
+  opts: { mediation?: CredentialMediationRequirement; signal?: AbortSignal } = {},
+) {
   const publicKey: PublicKeyCredentialRequestOptions = {
     challenge: b64urlToBuf(serverOptions.challenge),
     rpId: serverOptions.rpId,
@@ -103,6 +141,8 @@ export async function performAuthentication(serverOptions: AuthOptions) {
 
   const cred = (await navigator.credentials.get({
     publicKey,
+    ...(opts.mediation ? { mediation: opts.mediation } : {}),
+    ...(opts.signal ? { signal: opts.signal } : {}),
   })) as PublicKeyCredential | null
   if (!cred) throw new Error('No credential returned')
   const r = cred.response as AuthenticatorAssertionResponse

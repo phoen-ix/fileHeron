@@ -131,6 +131,8 @@ class PublicConfigResponse(APIBaseModel):
     max_direct_upload_bytes: int
     # This server stores the folder a file came from (folder uploads, v2.26.0).
     folder_paths: bool = True
+    # The login page offers "Sign in with a passkey" (v2.27.0).
+    passkey_signin: bool = False
     branding: PublicBranding
     legal: PublicLegal
     motd: PublicMotd | None = None

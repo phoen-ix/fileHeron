@@ -1,5 +1,5 @@
 # Production image - minimal, non-root, slim Python.
-FROM python:3.14.8-slim-trixie
+FROM python:3.15.0rc3-slim-trixie
 
 WORKDIR /app
 

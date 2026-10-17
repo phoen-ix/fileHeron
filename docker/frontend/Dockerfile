@@ -32,7 +32,7 @@ COPY frontend/ ./
 RUN npm run build
 
 # Stage 2: serve.
-FROM nginx:1.31.6-alpine3.24
+FROM nginx:1.31.7-alpine3.24
 
 ARG FH_VERSION=0.0.0-dev
 ARG FH_GIT_SHA=unknown

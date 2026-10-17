@@ -432,7 +432,7 @@ jobs:
         run: |
           docker run --rm \
             -v "$PWD/docker/frontend/nginx.conf:/etc/nginx/conf.d/default.conf:ro" \
-            nginx:1.31.6-alpine3.24 nginx -t
+            nginx:1.31.7-alpine3.24 nginx -t
 
   # Supply-chain audit of the deps that actually ship. Python: the hash-locked
   # requirements.lock is the source of truth. Node: --omit=dev so dev-only tool

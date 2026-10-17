@@ -1,3 +1,29 @@
+# file:Heron v2.27.1
+
+**Security fixes in the web server.** The web app's container now runs nginx
+1.31.7, which fixes five security vulnerabilities in nginx. Update soon.
+
+**No migration, no host step, no default moves.** Nothing changes in how
+file:Heron works. The database, Redis, ClamAV and tusd versions are unchanged.
+
+---
+
+## Container images
+
+- The frontend image is built on nginx 1.31.7 (was 1.31.6). nginx 1.31.7 fixes
+  CVE-2026-15176, CVE-2026-93479, CVE-2026-95101, CVE-2026-97629 and
+  CVE-2026-97205: two buffer overflows, a use-after-free, a TLS session that
+  could be forged, and an HTTP/3 request body that could bypass
+  `client_max_body_size`.
+
+---
+
+## Upgrading
+
+Click **Update**. Automatic updates install it at any scope, patch included.
+
+---
+
 # file:Heron v2.27.0
 
 **Sign in with a passkey.** An admin can now let people sign in with a passkey

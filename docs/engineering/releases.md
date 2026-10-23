@@ -7,7 +7,10 @@ summary and points here. Read this before changing the code listed below.
 
 ## Current state
 
-Backend **`v2.27.1`** is the newest tag (2026-10-17): a security patch - the frontend
+Backend **`v2.27.2`** is the newest tag (2026-10-23): a security patch - Pillow 13.0.0
+(39 advisories) and certifi 2026.10.23 (emSign roots dropped) in the backend, images on
+python 3.14.9, nginx 1.31.8, alpine 3.24.3; no migration, no host step, no default move.
+**`v2.27.1`** (2026-10-17): a security patch - the frontend
 image on `nginx:1.31.7-alpine3.24`, which fixes five nginx CVEs (plus vue-tsc 3.3.13 in
 the dev tree); no migration, no host step, no default move.
 **`v2.27.0`** (2026-10-11): passkey sign-in - a passkey alone
@@ -136,6 +139,7 @@ record.
 | v2.26.0 | `202610100001` `files.relative_dir` (nullable) | - | - (behaviour: the bulk ZIP's `LAYOUT_VERSION` is 2, so a ZIP resume in flight across the update restarts once; a subject-less share's label never names a file pending review; the SPA sends `/files-added` in chunks of 1,000) |
 | v2.27.0 | `202610110001` `user_webauthn_credentials.discoverable` (nullable) | - | - (passkey sign-in ships OFF: `auth.passkey_signin`, written through `PUT /api/admin/settings/twofa` - `passkey_signin`, omitted = unchanged. New `POST /api/auth/passkey/{begin,complete}` and `/api/auth/2fa/passkey/{begin,complete}`; `/api/config-public` gains `passkey_signin`, `WebAuthnCredentialItem` gains `discoverable`, the SSO second-factor redirect gains `&methods=`. Only with the switch ON: `POST /api/auth/login` answers `401 WEBAUTHN_REQUIRED` to an account with a passkey and no TOTP, and a passkey satisfies `is_2fa_required`) |
 | v2.27.1 | - | - | - (security patch: the frontend image on nginx 1.31.7, which fixes five nginx CVEs) |
+| v2.27.2 | - | - | - (security patch: Pillow 13.0.0 and certifi 2026.10.23 in the backend; images on python 3.14.9, nginx 1.31.8, alpine 3.24.3) |
 
 Per-release admin-facing notes for v2.13.0 and newer are in `RELEASE_NOTES.md`,
 one `# file:Heron vX.Y.Z` section each, newest first; older releases live in

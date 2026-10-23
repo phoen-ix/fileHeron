@@ -1,3 +1,48 @@
+# file:Heron v2.27.2
+
+**Security fixes in image handling and trusted certificates.** The backend now
+uses Pillow 13.0.0, which fixes 39 security vulnerabilities in Pillow's image
+readers and writers. It also uses certifi 2026.10.23, which stops trusting the
+emSign root certificates after their intermediate CA keys were compromised.
+Update soon.
+
+**No migration, no host step, no default moves.** Nothing changes in how
+file:Heron works. The database, Redis, ClamAV and tusd versions are unchanged.
+
+---
+
+## Security
+
+- **Pillow 13.0.0** (was 12.3.0). file:Heron uses Pillow to resize the logo an
+  admin uploads for the desktop client. The fixed advisories include heap
+  buffer overflows in the JPEG and TIFF decoders, multi-frame images that got
+  around the decompression-bomb check, and small files that made opening an
+  image loop or run out of memory (GHSA-78g4-xqwv-q3g8, CVE-2026-96636 and 37
+  more).
+- **certifi 2026.10.23** (was 2026.7.22) drops the emSign root CAs
+  (PYSEC-2026-4320). The backend's outgoing HTTPS connections - SSO sign-in,
+  webhooks, the release check, the leaked-password check - no longer accept
+  certificates that chain to them.
+
+---
+
+## Container images
+
+- The backend and updater-executor images run Python 3.14.9 (was 3.14.8), a
+  patch release with security fixes.
+- The frontend image runs nginx 1.31.8 (was 1.31.7, bug fixes) and is built with
+  Node 26.12.1, a security release.
+- The updater-shim image is built on Alpine 3.24.3 (was 3.24.2).
+- The web app: Vue 3.5.44, Pinia 4.1.0 and Uppy 6.3.0 (patch and minor updates).
+
+---
+
+## Upgrading
+
+Click **Update**. Automatic updates install it at any scope, patch included.
+
+---
+
 # file:Heron v2.27.1
 
 **Security fixes in the web server.** The web app's container now runs nginx

@@ -47,9 +47,10 @@ DB_PASSWORD=rt-not-a-secret
 DB_ROOT_PASSWORD=root-not-a-secret
 
 # Pinned to what the backend image and CI actually use, so a green run here
-# means the same thing a green run there does.
+# means the same thing a green run there does. The full Debian Python image:
+# on 3.15, hiredis and PyYAML in the lock build from source and need its compiler.
 MARIADB_IMAGE=mariadb:12.3.3
-PYTHON_IMAGE=python:3.14-slim
+PYTHON_IMAGE=python:3.15-trixie
 
 DEFAULT_FILES=(
     tests/test_alembic_roundtrip.py

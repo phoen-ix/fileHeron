@@ -9,7 +9,7 @@ name = "fileheron-backend"
 version = "2.8.0"
 description = "fileHeron backend - bidirectional self-hosted file-sharing platform"
 license = { text = "MIT" }
-requires-python = ">=3.14"
+requires-python = ">=3.15"
 
 dependencies = [
     # Plain `fastapi`, NO extra. `fastapi[standard]` pulled fastapi-cli ->
@@ -108,7 +108,7 @@ include = ["app*", "scripts*"]
 
 [tool.ruff]
 line-length = 120
-target-version = "py314"
+target-version = "py315"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "N", "UP", "B", "S", "ASYNC", "C4", "SIM"]
@@ -136,7 +136,7 @@ ignore = [
 "tests/**/*.py" = ["S105", "S106", "S107", "S108", "S311", "S608"]
 
 [tool.mypy]
-python_version = "3.14"
+python_version = "3.15"
 strict_optional = true
 warn_unused_ignores = true
 # Measured before enabling: this adds exactly zero errors. 85% of app/ is

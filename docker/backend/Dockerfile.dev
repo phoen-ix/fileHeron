@@ -1,12 +1,13 @@
 # Dev image - the production dependency closure plus the dev tools, with the
 # source mounted by docker-compose.dev.yml for --reload.
-FROM python:3.14.9-slim-trixie
+FROM python:3.15.1-trixie
 
 WORKDIR /app
 
-# No OS packages, like the prod image: nothing in the lock builds from source
-# (the gcc + libmariadb-dev this image carried were never needed) and the
-# backend healthcheck runs Python, not curl.
+# The full Debian image, not slim: on Python 3.15, hiredis and PyYAML ship no
+# wheel and build from source, which needs its compiler. The prod image builds
+# them in a separate stage and stays compiler-free; this image is never shipped.
+# No apt installs, and the backend healthcheck runs Python, not curl.
 #
 # The runtime packages come hash-checked from requirements.lock, so the dev
 # stack runs what production runs instead of whatever PyPI resolves today. The

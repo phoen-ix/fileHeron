@@ -51,7 +51,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: '3.14'
+          python-version: '3.15'
           cache: pip
           cache-dependency-path: backend/pyproject.toml
       # Install the LOCKED closure first, then the dev extras on top.
@@ -113,7 +113,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: '3.14'
+          python-version: '3.15'
           cache: pip
           cache-dependency-path: backend/pyproject.toml
       # Install the LOCKED closure, not resolved ranges. backend-tests does this
@@ -178,7 +178,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: '3.14'
+          python-version: '3.15'
           cache: pip
           cache-dependency-path: backend/pyproject.toml
       # Install the LOCKED closure, not resolved ranges. backend-tests does this
@@ -276,7 +276,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: '3.14'
+          python-version: '3.15'
           # The patch the release build bundles (client-release.yml).
           check-latest: true
           cache: pip
@@ -360,7 +360,7 @@ jobs:
         run: |
           RUFF_PIN=$(sed -n 's/.*"ruff==\([0-9.]*\)".*/\1/p' backend/pyproject.toml | head -1)
           MYPY_PIN=$(sed -n 's/.*"mypy==\([0-9.]*\)".*/\1/p' backend/pyproject.toml | head -1)
-          docker run --rm -v "$PWD:/repo:ro" -w /repo python:3.14-slim sh -c "
+          docker run --rm -v "$PWD:/repo:ro" -w /repo python:3.15-slim sh -c "
             set -e
             pip install -q ruff==$RUFF_PIN mypy==$MYPY_PIN
             ruff check --no-cache docker/
@@ -387,14 +387,15 @@ jobs:
       # the same reason: resolving `.[dev]` fresh type-checks against whatever
       # stubs PyPI served this morning, not the ones the image ships. pip output
       # is no longer swallowed - a failed install used to surface only as
-      # "No module named mypy" from the next line.
+      # "No module named mypy" from the next line. The full Debian image, not
+      # slim: on 3.15 hiredis and PyYAML build from source and need its compiler.
       #
       # `scripts` is in scope too: it is the privileged operator tooling
       # (rotate_jwt_secret, promote_user, unblock_ip) and ruff has always
       # covered it.
       - name: mypy
         run: |
-          docker run --rm -v "$PWD/backend:/w" -w /w -e PYTHONDONTWRITEBYTECODE=1 python:3.14-slim sh -c '
+          docker run --rm -v "$PWD/backend:/w" -w /w -e PYTHONDONTWRITEBYTECODE=1 python:3.15-trixie sh -c '
             set -e
             pip install --require-hashes -r requirements.lock
             pip install -e ".[dev]"
@@ -446,7 +447,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: '3.14'
+          python-version: '3.15'
       - name: pip-audit (backend, hash-locked deps)
         run: |
           pip install pip-audit
@@ -458,7 +459,7 @@ jobs:
       # extras (pytest, pyinstaller) never ship.
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: '3.14'
+          python-version: '3.15'
       - name: pip-audit (desktop client, shipped runtime deps)
         working-directory: client
         run: |

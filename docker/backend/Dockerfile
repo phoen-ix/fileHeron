@@ -1,5 +1,19 @@
 # Production image - minimal, non-root, slim Python.
-FROM python:3.14.9-slim-trixie
+
+# Builder stage: installs the locked closure. Two packages in the lock ship no
+# cp315 wheel yet - hiredis (arq asks for redis[hiredis]) and PyYAML
+# (uvicorn[standard]) - so pip builds them from their hash-checked sdists, which
+# needs a compiler. The full Debian image brings one, and so do no apt installs
+# here. The runtime stage below copies only the installed packages: still no
+# compiler in the image that processes untrusted uploads (docker-12). Same
+# Python patch and Debian release in both stages, so the C extensions match.
+FROM python:3.15.1-trixie AS deps
+WORKDIR /build
+COPY backend/requirements.lock ./
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --require-hashes --prefix=/install -r requirements.lock
+
+FROM python:3.15.1-slim-trixie
 
 WORKDIR /app
 
@@ -19,13 +33,11 @@ LABEL org.opencontainers.image.version="${FH_VERSION}" \
 # network tool fewer in the container that processes untrusted uploads.
 #
 # `gcc` and `libmariadb-dev` used to be here "for pymysql/cryptography wheels" -
-# but pymysql is pure Python, cryptography and argon2-cffi ship manylinux
-# wheels, and nothing in the lock is source-only. So the runtime image carried a
-# C toolchain and MariaDB headers it never used: ~200 MB of image, and a
-# compiler sitting in a container that processes untrusted uploads (audit
-# 2026-07-30, docker-12). If a future dependency ever needs to build from
-# source, the build fails loudly here - which is the right place to find out,
-# and the fix is a builder stage, not a compiler in production.
+# but pymysql is pure Python, and cryptography and argon2-cffi ship manylinux
+# wheels. So the runtime image carried a C toolchain and MariaDB headers it never
+# used: ~200 MB of image, and a compiler sitting in a container that processes
+# untrusted uploads (audit 2026-07-30, docker-12). Dependencies that do build
+# from source (hiredis and PyYAML on Python 3.15) build in the `deps` stage above.
 
 # Python deps first (cache layer). Install from the committed, fully-pinned +
 # hashed lock (regenerate with `uv pip compile pyproject.toml --generate-hashes
@@ -44,7 +56,7 @@ LABEL org.opencontainers.image.version="${FH_VERSION}" \
 # pyproject.toml's ranges by tests/test_requirements_lock_sync.py and scanned by
 # CI's dependency-audit job, so nothing depends on reproducing that resolve.
 COPY backend/pyproject.toml backend/requirements.lock ./
-RUN --mount=type=cache,target=/root/.cache/pip pip install --require-hashes -r requirements.lock
+COPY --from=deps /install /usr/local
 # Fail the build on a broken/conflicting dependency closure. Complements the
 # import-smoke below: pip check catches version conflicts among declared deps;
 # the import-smoke catches modules imported in code but not declared at all.

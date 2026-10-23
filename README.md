@@ -130,7 +130,7 @@ admin mail log keeps a masked copy. Full operator walkthrough: [First install](#
 
 | Layer | Choice |
 |---|---|
-| Backend | Python 3.14, FastAPI, SQLAlchemy 2.0, Alembic, Pydantic v2, ARQ |
+| Backend | Python 3.15, FastAPI, SQLAlchemy 2.0, Alembic, Pydantic v2, ARQ |
 | Auth / crypto | argon2-cffi (Argon2id), PyJWT, py_webauthn, multi-provider OIDC code flow; cryptography (Fernet for secret fields, AES-256-GCM for files at rest) |
 | Data / cache | MariaDB 12.3, Redis 8 (ARQ queue, rate limits, quota Lua, SSE pubsub) |
 | Upload | tusd (Go) + Uppy (browser) + any TUS client (API) |

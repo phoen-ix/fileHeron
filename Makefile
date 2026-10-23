@@ -16,7 +16,7 @@ RUFF_PIN := $(shell sed -n 's/.*"ruff==\([0-9.]*\)".*/\1/p' backend/pyproject.to
 help:
 	@echo "Targets:"
 	@echo "  lint / lint-backend / lint-frontend   CI lint gates (ruff + eslint + prettier)"
-	@echo "  lint-docker    backend ruff in an ephemeral python:3.14-slim (no local ruff needed)"
+	@echo "  lint-docker    backend ruff in an ephemeral python:3.15-slim (no local ruff needed)"
 	@echo "  typecheck      backend mypy, exactly as CI's infra-lint job runs it"
 	@echo "  test / test-backend / test-frontend   pytest (needs backend .[dev]) + vitest"
 	@echo "  test-mariadb   the three real-MariaDB test files, in throwaway containers"
@@ -65,12 +65,13 @@ seed:
 # mypy runs in CI's infra-lint job, and used to be invisible here - it was
 # absent from this file and from CONTRIBUTING's gate table, so the documented
 # local gate was ruff-only and a type error first surfaced on a red main. Runs
-# in an ephemeral container matching the backend image, so it needs nothing
+# in an ephemeral container matching the backend image (the full Debian one: on
+# 3.15 hiredis and PyYAML build from source), so it needs nothing
 # installed on the host and cannot drift from the pinned mypy in pyproject.
 # `app scripts` is the same scope CI uses.
 typecheck:
 	cd backend && docker run --rm -v "$$PWD":/w -w /w -e PYTHONDONTWRITEBYTECODE=1 \
-		-e PIP_ROOT_USER_ACTION=ignore python:3.14-slim sh -c \
+		-e PIP_ROOT_USER_ACTION=ignore python:3.15-trixie sh -c \
 		'set -e; pip install -q --require-hashes -r requirements.lock; \
 		 pip install -q -e ".[dev]"; python -m mypy app scripts'
 
@@ -99,5 +100,5 @@ lint-frontend:
 # pin in a throwaway container, faithful to CI with nothing installed on the
 # host. --no-cache keeps it from leaving a root-owned .ruff_cache behind.
 lint-docker:
-	cd backend && docker run --rm -v "$$PWD":/w -w /w -e PIP_ROOT_USER_ACTION=ignore python:3.14-slim \
+	cd backend && docker run --rm -v "$$PWD":/w -w /w -e PIP_ROOT_USER_ACTION=ignore python:3.15-slim \
 		sh -c "pip install -q ruff==$(RUFF_PIN) && ruff check --no-cache ."

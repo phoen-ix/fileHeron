@@ -24,7 +24,7 @@ that could name a file still pending review, and `/files-added` batches over 1,0
 backend lock and the frontend tree to current, the SPA built on Node 26, ruff 0.17.0,
 and CI's linter images pinned where Dependabot looks (`.github/ci-tools/Dockerfile`).
 Desktop client **`client-v1.6.0`** is prepared beside it, untagged until a Windows
-try-out (its build from 84ceb21 is the one being tried): Python 3.14 in the .exe, so it
+try-out: Python 3.15 in the .exe since 2026-10-23 (the 3.14 build from 84ceb21 that was being tried is superseded; it needs a fresh try-out), so it
 needs Windows 10 or newer (`docs/engineering/desktop-client.md`). **`v2.25.2`**
 (same day): the fixes of the 2026-10-10
 audit - daily tasks run once on DST nights, IMAP Fetch now no longer 500s, a tab

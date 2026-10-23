@@ -24,9 +24,7 @@ How this file was trimmed and split, and why it stays short: [`docs/history.md`]
 
 ## Current state
 
-Backend **`v2.28.0`** is the newest tag (Python 3.15; v2.27.2 a Pillow/certifi security patch; v2.27.1 an nginx security patch; v2.27.0 passkey sign-in, off by default; v2.26.0 folder uploads, v2.25.3 a dependency refresh, v2.25.2 the 2026-10-10 audit fixes, v2.25.0 encryption at rest, off by default) and **`client-v1.6.0`** the newest desktop client tag (Python 3.15, Windows 10 or newer; tagged with v2.28.0); the reference host runs **v2.25.2**. What each release changed, the host's infra and the per-tag migrations, host steps and default moves are in [`releases.md`](docs/engineering/releases.md). **Keep this paragraph and that file current on release.**
-
-**The updater only ever offers TAGGED releases.** `server-release.yml` fires on `v[0-9]+.[0-9]+.[0-9]+` only, so a commit on `main` builds no image and is not an available update. A release also needs the desktop-client half bumped in `pyproject.toml` + `__init__.py` + `client/RELEASE_NOTES.md` in lockstep before its `client-v*` tag; CI checks that on every push.
+Backend **`v2.28.0`** is the newest tag (Python 3.15; v2.27.2 a Pillow/certifi security patch; v2.27.1 an nginx security patch; v2.27.0 passkey sign-in, off by default; v2.26.0 folder uploads, v2.25.3 a dependency refresh, v2.25.2 the 2026-10-10 audit fixes, v2.25.0 encryption at rest, off by default) and **`client-v1.6.0`** the newest desktop client tag (Python 3.15, Windows 10 or newer; tagged with v2.28.0); the reference host runs **v2.25.2**. What each release changed, the host's infra and the per-tag migrations, host steps and default moves are in [`releases.md`](docs/engineering/releases.md).
 
 ## Commands
 
@@ -37,6 +35,11 @@ Backend **`v2.28.0`** is the newest tag (Python 3.15; v2.27.2 a Pillow/certifi s
 ## Invariants
 
 Every must/never rule, by subsystem; the area detail is in `docs/engineering/`.
+
+### Releases
+
+- **Keep §Current state and `releases.md` current on release.**
+- **The updater only ever offers TAGGED releases.** `server-release.yml` fires on `v[0-9]+.[0-9]+.[0-9]+` only, so a commit on `main` builds no image and is not an available update. A release also needs the desktop-client half bumped in `pyproject.toml` + `__init__.py` + `client/RELEASE_NOTES.md` in lockstep before its `client-v*` tag; CI checks that on every push.
 
 ### Mail, first admin, escape hatches (README §Quickstart owns the steps)
 
@@ -123,7 +126,7 @@ These apply to every route, whatever area it belongs to.
 - **The test engine enforces foreign keys**: a new test that inserts a child row needs a real parent and often a `db.flush()` between them.
 - **`client-tests` is a MATRIX (ubuntu + windows) and must stay one.** Linux-only for a Windows-only product meant the suite's first Windows run was on the release tag, and `client-v*` tags are immutable by repo ruleset, so a Windows-only failure spends the version number - `client-v1.3.0` died that way (`ZoneInfo` raises on Windows, which ships no IANA database; `tzdata` is now a dependency AND collected in the spec). **A `skipif` on Windows is a hole, not a nicety.** `ci.yml` also checks that `pyproject.toml`, `__init__.py` and `client/RELEASE_NOTES.md` agree on the version on every push.
 - **A `.md`-only push runs nothing**, nor does one touching only `docs/**` (the README screenshots): `ci.yml` and `codeql.yml` both carry `paths-ignore: ['**/*.md', ..., 'docs/**']`, and `server-release.yml` fires only on a `v[0-9]+.[0-9]+.[0-9]+` tag.
-- **The docs tour (`e2e/docs/`, `-c playwright.docs.config.ts`) makes the docs screenshots AND is a render check.** `e2e.yml` runs it LAST, after the journey specs, because its seed rewrites settings they rely on (2FA policy, share approval, secrets, legal pages, site URL) - and it resets the 2FA policy itself because `forced-2fa.spec.ts` leaves employees required to enrol. Commit screenshots only from `scripts/docs-screenshots.sh` (locally or via `docs-screenshots.yml`): a fresh stack under `docker-compose.docs.yml` whose timestamps the tour moves to fixed times (`backdate`, only with `DOCS_DB_CONTAINER`); the render-check artifact shows the e2e fixtures. It fails on `pageerror`, never on console errors: a signed-out SPA logs the expected 401 of its silent refresh. Each persona signs in once and keeps its browser context - a saved storage state replays a rotated refresh token and trips reuse detection.
+- **The docs tour (`e2e/docs/`, `-c playwright.docs.config.ts`) makes the docs screenshots AND is a render check.** `e2e.yml` runs it LAST, after the journey specs, because its seed rewrites settings they rely on (2FA policy, share approval, secrets, legal pages, site URL) - and it resets the 2FA policy itself because `forced-2fa.spec.ts` leaves employees required to enrol. Commit screenshots only from `scripts/docs-screenshots.sh` (locally or via `docs-screenshots.yml`): a fresh stack under `docker-compose.docs.yml` whose timestamps the tour moves to fixed times (`backdate` and `pinLogs`, only with `DOCS_DB_CONTAINER`; times the server computes per request are rewritten in the response, `editJson`); the render-check artifact shows the e2e fixtures. It fails on `pageerror`, never on console errors: a signed-out SPA logs the expected 401 of its silent refresh. Each persona signs in once and keeps its browser context - a saved storage state replays a rotated refresh token and trips reuse detection.
 
 ### Database schema
 
@@ -132,8 +135,6 @@ Per-table models are the source; non-obvious facts only. **BigInteger PK** on hi
 - `refresh_tokens` - `replaced_by_id` self-FK = rotation chain; reuse → revoke whole family.
 - `group_members` / `client_employee_connections` - composite PKs; membership dynamic (affects past group-targeted shares immediately).
 - **`files.sha256_hex` is direct-upload-only and verified nowhere** - see the docstring in `models/file.py`. NULL for every tus upload, so the SPA's sha badge never renders above 100 MB. The digest that IS load-bearing for integrity is the approval `content_fingerprint`.
-
-The per-tag migrations, with the host steps and default moves that ride along, are in [`releases.md`](docs/engineering/releases.md); a rollback past any of them needs the `alembic stamp` recovery described there.
 
 ### Design system
 
@@ -287,7 +288,7 @@ One doc per subsystem in `docs/engineering/`. They are not auto-loaded. **Before
 - `client-v*` tags are immutable and `client-tests` stays an ubuntu + windows matrix.
 #### Release history: current state and per-tag migrations → [`releases.md`](docs/engineering/releases.md)
 - The per-tag table of migrations, host steps and default moves is the only record of host steps and default moves - add a row with every release.
-- A rollback past any migration in it needs the `alembic stamp` recovery.
+- A rollback past any migration in it needs the `alembic stamp` recovery (`git log -S 'alembic stamp'` finds the write-ups).
 - Admin-facing notes go in `RELEASE_NOTES.md`, one `# file:Heron vX.Y.Z` section per release, newest first; the desktop client's in `client/RELEASE_NOTES.md`.
 
 ## Don't re-propose / don't re-file

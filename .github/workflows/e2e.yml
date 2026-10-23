@@ -115,7 +115,7 @@ jobs:
       # "Overview" because nothing rendered it). It runs LAST because it seeds a
       # demo organisation and changes settings the specs above rely on. Its
       # screenshots carry the e2e fixtures - never commit them; the README's
-      # come from docs-screenshots.yml.
+      # come from scripts/docs-screenshots.sh (or docs-screenshots.yml).
       - name: Docs tour (render check)
         working-directory: e2e
         env:

@@ -121,7 +121,7 @@ admin mail log keeps a masked copy. Full operator walkthrough: [First install](#
 - **Downloads** stream from FastAPI via `FileResponse` + kernel `sendfile()`, fast even for 30 GB files, with resume (HTTP Range). On S3 a plain file is a short-lived presigned redirect to the bucket; an [encrypted](#encryption-at-rest) file is decrypted by the backend as it streams.
 - **Virus scanning:** ClamAV scans each upload after finalize, before anyone can download it, up to clamd's own ~2 GiB ceiling; larger files are served flagged as not scanned. Infected files are quarantined and the parent share auto-revoked.
 - **Encryption at rest** (optional, off by default): after the scan each file is rewritten as AES-256-GCM ciphertext under its own key, so backups, disk images and the bucket hold no readable file contents. See [Encryption at rest](#encryption-at-rest).
-- **The ARQ worker** runs the scans, outgoing mail, webhooks and 23 scheduled tasks (expiry, cleanup, the inbound-mail poll, the encryption backfill, the update check), each re-timed on [Scheduled tasks](#scheduled-tasks-adminscheduled-tasks).
+- **The ARQ worker** runs the scans, outgoing mail, webhooks and the scheduled tasks (expiry, cleanup, the inbound-mail poll, the encryption backfill, the update check), each re-timed on [Scheduled tasks](#scheduled-tasks-adminscheduled-tasks).
 - **In-app updates:** the `updater-shim` container picks up an Update or Rollback requested in the admin console and runs `updater-executor`, which by default backs up the database and Redis, pulls the release's images, swaps the app containers, brings changed infrastructure along, checks health and rolls back on failure. See [Upgrades](#upgrades).
 - **The desktop client** (Windows) uses the same REST API as the web app.
 - Optional **S3-compatible** storage backend (see [storage backend](#storage-backend-storage_backend)).
@@ -152,7 +152,7 @@ admin mail log keeps a masked copy. Full operator walkthrough: [First install](#
 - **Notifications** via one dispatch funnel (email + in-app SSE bell), per-user per-category channel prefs, one-click unsubscribe (RFC 8058).
 - **Email + branding self-service** - per-language **ProseMirror rich-text** editor for every email template and the imprint/privacy pages; logo white-labelling; inbound **IMAP** mailbox (replies / bounces / auto-replies surfaced in-app).
 - **Observability** - admin **Analytics** dashboard, **Error log** (+ configurable error/scanner alerts), **Webhooks**, **anomaly detection** (heuristic, alert-only), Prometheus `/api/metrics`, audit log, mail log.
-- **Operations** - in-app **self-update** with one-click rollback and optional **automatic updates** (off by default), **maintenance mode + drain-before-update**, **config backup/restore**, a runtime **settings registry** (~40 knobs tunable live), admin-tunable **cron schedules**, dated backups + optional `restic`, and continuously-drilled restore.
+- **Operations** - in-app **self-update** with one-click rollback and optional **automatic updates** (off by default), **maintenance mode + drain-before-update**, **config backup/restore**, a runtime **settings registry** (knobs tunable live), admin-tunable **cron schedules**, dated backups + optional `restic`, and continuously-drilled restore.
 - **i18n** EN + DE everywhere; **24-hour timestamps** in an admin-set IANA timezone across UI and email. Pluggable storage: local bind-mount (default) or any **S3-compatible** store.
 
 ---
@@ -427,7 +427,7 @@ request expires at its time and you are told.
 <details>
 <summary>How a secret is protected</summary>
 
-- **Encryption.** Each secret's text is encrypted with a key made for it alone. That key is wrapped by the instance key (derived from `JWT_SECRET`, like TOTP secrets) and, with a passphrase, by an Argon2id key derived from the passphrase underneath. The passphrase is stored nowhere. `scripts/rotate_jwt_secret.py` re-wraps the outer layer without needing any passphrase.
+- **Encryption.** Each secret's text is encrypted with a key made for it alone. That key is wrapped by the instance key (derived from `JWT_SECRET`, like TOTP secrets) and, with a passphrase, by an Argon2id key derived from the passphrase underneath. The passphrase is stored nowhere. `backend/scripts/rotate_jwt_secret.py` re-wraps the outer layer without needing any passphrase.
 - **Only recipients read it.** The text is in exactly one response: the reveal. Audit rows, webhooks and logs carry the label, ids and counts - never the text, a token or an address (the audit log counts addresses). Notifications and mail never carry the text; the sender's "viewed" notice names who viewed it - the person, or the address or link and its IP.
 - **Counting.** A view is claimed by one conditional `UPDATE ... WHERE views_used < limit` while the secret's row is locked, so two people revealing the last view at once cannot both get it.
 - **Tokens.** A link token is 43 random characters; the server stores its SHA-256 for lookup and an encrypted copy so the sender can copy the link again (showing it again is audited). The page posts the token in a request body, never in a URL, and the mail log masks it (`/s#<redacted>`, no resend).

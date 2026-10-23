@@ -104,8 +104,8 @@ does not.
 
 ### Migrations, host steps and default moves
 
-A rollback past any migration below needs the
-[[reference_rollback_migration_trap]] `alembic stamp` recovery. Neither a host
+A rollback past any migration below needs an
+`alembic stamp` recovery (`git log -S 'alembic stamp'` finds the write-ups). Neither a host
 step nor a default move is a searchable file change, so this table is their only
 record.
 

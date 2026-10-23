@@ -46,8 +46,8 @@ Area detail goes to its doc, not back here.
 
 ## Current state
 
-Backend **`v2.27.2`** is the newest tag (a Pillow/certifi security patch; v2.27.1 an nginx security patch; v2.27.0 passkey sign-in, off by default; v2.26.0 folder uploads, v2.25.3 a dependency refresh, v2.25.2 the 2026-10-10 audit fixes, v2.25.0 encryption at rest, off by default) and
-**`client-v1.5.2`** the newest desktop client tag (**`client-v1.6.0`** - Python 3.15, Windows 10 or newer - is prepared and is tagged only after a Windows try-out, on the commit that was tried); the reference host runs
+Backend **`v2.28.0`** is the newest tag (Python 3.15; v2.27.2 a Pillow/certifi security patch; v2.27.1 an nginx security patch; v2.27.0 passkey sign-in, off by default; v2.26.0 folder uploads, v2.25.3 a dependency refresh, v2.25.2 the 2026-10-10 audit fixes, v2.25.0 encryption at rest, off by default) and
+**`client-v1.6.0`** the newest desktop client tag (Python 3.15, Windows 10 or newer; tagged with v2.28.0); the reference host runs
 **v2.25.2**. What each release changed, the
 host's infra and the per-tag migrations, host steps and default moves are in
 [`releases.md`](docs/engineering/releases.md). **Keep this paragraph and that file current on release.**

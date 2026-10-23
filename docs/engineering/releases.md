@@ -7,7 +7,12 @@ summary and points here. Read this before changing the code listed below.
 
 ## Current state
 
-Backend **`v2.27.2`** is the newest tag (2026-10-23): a security patch - Pillow 13.0.0
+Backend **`v2.28.0`** is the newest tag (2026-10-23): Python 3.15.1 in the backend, worker and
+updater-executor images (the backend image builds hiredis and PyYAML in a `deps` stage: no
+cp315 wheels yet); no migration, no host step, no default move. Desktop client
+**`client-v1.6.0`** is tagged beside it: Python 3.15 in the .exe, so it needs Windows 10 or
+newer (`docs/engineering/desktop-client.md`).
+**`v2.27.2`** (same day): a security patch - Pillow 13.0.0
 (39 advisories) and certifi 2026.10.23 (emSign roots dropped) in the backend, images on
 python 3.14.9, nginx 1.31.8, alpine 3.24.3; no migration, no host step, no default move.
 **`v2.27.1`** (2026-10-17): a security patch - the frontend
@@ -23,9 +28,8 @@ that could name a file still pending review, and `/files-added` batches over 1,0
 **`v2.25.3`** (same day): a dependency refresh - the
 backend lock and the frontend tree to current, the SPA built on Node 26, ruff 0.17.0,
 and CI's linter images pinned where Dependabot looks (`.github/ci-tools/Dockerfile`).
-Desktop client **`client-v1.6.0`** is prepared beside it, untagged until a Windows
-try-out: Python 3.15 in the .exe since 2026-10-23 (the 3.14 build from 84ceb21 that was being tried is superseded; it needs a fresh try-out), so it
-needs Windows 10 or newer (`docs/engineering/desktop-client.md`). **`v2.25.2`**
+Desktop client `client-v1.6.0` was prepared beside it on Python 3.14 and shipped with
+v2.28.0 on Python 3.15. **`v2.25.2`**
 (same day): the fixes of the 2026-10-10
 audit - daily tasks run once on DST nights, IMAP Fetch now no longer 500s, a tab
 from before an update reloads itself, mail survives an outage of an hour or
@@ -140,6 +144,7 @@ record.
 | v2.27.0 | `202610110001` `user_webauthn_credentials.discoverable` (nullable) | - | - (passkey sign-in ships OFF: `auth.passkey_signin`, written through `PUT /api/admin/settings/twofa` - `passkey_signin`, omitted = unchanged. New `POST /api/auth/passkey/{begin,complete}` and `/api/auth/2fa/passkey/{begin,complete}`; `/api/config-public` gains `passkey_signin`, `WebAuthnCredentialItem` gains `discoverable`, the SSO second-factor redirect gains `&methods=`. Only with the switch ON: `POST /api/auth/login` answers `401 WEBAUTHN_REQUIRED` to an account with a passkey and no TOTP, and a passkey satisfies `is_2fa_required`) |
 | v2.27.1 | - | - | - (security patch: the frontend image on nginx 1.31.7, which fixes five nginx CVEs) |
 | v2.27.2 | - | - | - (security patch: Pillow 13.0.0 and certifi 2026.10.23 in the backend; images on python 3.14.9, nginx 1.31.8, alpine 3.24.3) |
+| v2.28.0 | - | - | - (Python 3.15.1 in the backend, worker and updater-executor images; the backend image builds hiredis and PyYAML in a `deps` stage and its runtime stage stays compiler-free. Desktop `client-v1.6.0` tagged beside it: Python 3.15, Windows 10 or newer) |
 
 Per-release admin-facing notes for v2.13.0 and newer are in `RELEASE_NOTES.md`,
 one `# file:Heron vX.Y.Z` section each, newest first; older releases live in

@@ -1,3 +1,46 @@
+# file:Heron v2.28.0
+
+**The server now runs on Python 3.15.** The backend, worker and updater
+containers move to Python 3.15.1, the newest Python version, which gets bug
+fixes until about October 2028 and security fixes until October 2031. Nothing
+changes in how file:Heron works.
+
+**No migration, no host step, no default moves.** The database, Redis, ClamAV
+and tusd versions are unchanged.
+
+**Desktop client 1.6.0 is released beside it** (see below).
+
+---
+
+## Container images
+
+- The backend, worker and updater-executor images run Python 3.15.1 (was
+  3.14.9).
+- Two libraries the server uses, hiredis and PyYAML, are not yet published
+  ready-built for Python 3.15. The backend image now builds them in a separate
+  build step, so the image you run still contains no compiler.
+
+---
+
+## Desktop client 1.6.0
+
+- The app now carries Python 3.15, not 3.14 as the v2.25.3 notes announced.
+  Until now it carried a Python from April 2025, for which no Windows security
+  fixes were published any more.
+- Python 3.15 does not run on **Windows 8.1**, so 1.6.0 needs **Windows 10 or
+  newer**. On Windows 8.1, stay on 1.5.2.
+- It no longer trusts the emSign root certificates, whose intermediate CA keys
+  were compromised.
+
+---
+
+## Upgrading
+
+This is a **minor** release, so automatic updates at the default *patch* scope
+don't install it. Click **Update**.
+
+---
+
 # file:Heron v2.27.2
 
 **Security fixes in image handling and trusted certificates.** The backend now

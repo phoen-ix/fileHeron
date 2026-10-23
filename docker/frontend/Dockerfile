@@ -1,7 +1,7 @@
 # Multi-stage: build Vite output, then serve the static SPA from nginx:alpine.
 # The backend serves /api on its own container; this image only ships the SPA.
 
-FROM node:26.12.0-alpine3.24 AS build
+FROM node:26.12.1-alpine3.24 AS build
 WORKDIR /build
 
 # Baked-in version metadata. Vite picks up VITE_* env vars at build time
@@ -32,7 +32,7 @@ COPY frontend/ ./
 RUN npm run build
 
 # Stage 2: serve.
-FROM nginx:1.31.7-alpine3.24
+FROM nginx:1.31.8-alpine3.24
 
 ARG FH_VERSION=0.0.0-dev
 ARG FH_GIT_SHA=unknown

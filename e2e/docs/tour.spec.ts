@@ -18,6 +18,7 @@ import {
   REQUEST_LABEL,
   SECRET_LABEL,
   SSO_NAME,
+  TOKEN_NAME,
   fileBytes,
   seedDemo,
   type Demo,
@@ -137,18 +138,51 @@ function backdate(seedStart: Date): Date {
           `SELECT 'UPDATE shares s LEFT JOIN files f ON f.share_id = s.id SET s.created_at = s.created_at - INTERVAL ${days} DAY, ` +
           `f.created_at = f.created_at - INTERVAL ${days} DAY WHERE s.subject = ''${subject}'';';`,
       )
-      .join('')
-  const client = 'mariadb -uroot -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE"'
+      .join('') +
+    // The seeded API token's shown tail is random; display only.
+    "SELECT 'UPDATE api_tokens SET last4 = ''x7Kq'';';"
   // Once per stack: a worker restart re-runs beforeAll, and a second pass
   // would move the future timestamps (expiries) again. The boot rows, the
   // bootstrap admin among them, carry the marker.
   const done = `SELECT COUNT(*) FROM users WHERE created_at = '${boot}'`
   execFileSync(
     'docker',
-    ['exec', '-i', db, 'sh', '-c', `[ "$(${client} -N -e "${done}")" != 0 ] || ${client} -N | ${client}`],
+    ['exec', '-i', db, 'sh', '-c', `[ "$(${SQL} -N -e "${done}")" != 0 ] || ${SQL} -N | ${SQL}`],
     { input: generate },
   )
+  logAnchor = sqlTime(anchor)
   return new Date(anchor.getTime() + 5 * 60_000)
+}
+
+const SQL = 'mariadb -uroot -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE"'
+let logAnchor = ''
+
+/** The logs show seconds, and the rows the worker writes late (mails, the
+ * sign-ins' side effects) would land after backdate() at the real time: just
+ * before shooting a log, give every row the anchor plus its id in seconds
+ * (order kept) and a request id derived from its id. Idempotent. */
+function pinLogs(): void {
+  const db = process.env.DOCS_DB_CONTAINER
+  if (!db || !logAnchor) return
+  const at = `TIMESTAMP '${logAnchor}' + INTERVAL id SECOND`
+  execFileSync('docker', ['exec', '-i', db, 'sh', '-c', SQL], {
+    input:
+      `UPDATE audit_log SET created_at = ${at}, request_id = MD5(CONCAT('docs-', id));` +
+      `UPDATE email_log SET created_at = ${at}, updated_at = ${at};`,
+  })
+}
+
+const naive = (d: Date) => d.toISOString().slice(0, 19)
+
+/** Answers `url` with the server's JSON, edited first: for the times the
+ * server computes from its own clock at request time. */
+async function editJson<T>(page: Page, url: RegExp, edit: (body: T) => void): Promise<void> {
+  await page.route(url, async (route) => {
+    const response = await route.fetch()
+    const body = (await response.json()) as T
+    edit(body)
+    await route.fulfill({ response, json: body })
+  })
 }
 
 const MB = 1024 * 1024
@@ -183,10 +217,49 @@ const ADMIN_CROP = { within: '.admin-content' }
 
 const title = (page: Page, t: string) => expect(page).toHaveTitle(`${t} · file:Heron`)
 
+/** The lowest y at or above `limit` that cuts through no line of text, control
+ * or table row inside `selector`, plus a little of the gap below it - so a
+ * cropped shot ends between rows, never through one. Boxes taller than 300 px
+ * (an editor, a long paragraph) may be cut. `trim`: also stop 24 px below the
+ * last thing drawn, not at the bottom of a stretched column. Runs in the page. */
+function cleanBottom([selector, limit, trim]: [string, number, boolean]): number {
+  const root = document.querySelector(selector)!
+  const boxes: Array<{ top: number; bottom: number }> = []
+  if (trim) {
+    const drawn = [...root.querySelectorAll('*')].map((el) => el.getBoundingClientRect()).filter((r) => r.height > 1)
+    limit = Math.min(limit, Math.max(...drawn.map((r) => r.bottom)) + 24)
+  }
+  for (const el of root.querySelectorAll('*')) {
+    const atomic =
+      el.matches('tr, img, svg, canvas, input, select, textarea, button, hr') ||
+      [...el.childNodes].some((n) => n.nodeType === Node.TEXT_NODE && n.textContent!.trim())
+    if (!atomic || getComputedStyle(el).visibility === 'hidden') continue
+    const r = el.getBoundingClientRect()
+    if (r.width <= 1) continue
+    // What a scrolling or collapsed ancestor (a closed sidebar panel) hides
+    // is not on the picture.
+    let { top, bottom } = r
+    for (let a = el.parentElement; a && a !== document.body; a = a.parentElement) {
+      if (getComputedStyle(a).overflowY === 'visible') continue
+      const c = a.getBoundingClientRect()
+      top = Math.max(top, c.top)
+      bottom = Math.min(bottom, c.bottom)
+    }
+    if (bottom - top > 1 && r.height <= 300) boxes.push({ top, bottom })
+  }
+  const cuts = (y: number) => boxes.some((b) => b.top < y && b.bottom > y)
+  if (!cuts(limit)) return limit
+  const ends = boxes.map((b) => b.bottom).filter((y) => y < limit && !cuts(y))
+  if (!ends.length) return limit
+  const y = Math.max(...ends)
+  return Math.min(y + 16, ...boxes.filter((b) => b.top >= y).map((b) => b.top))
+}
+
 /** `clipAbove`: the whole page from the top down to just above that element -
  * for a page too tall to show whole. `fullPage` stops at 2400 CSS px.
- * `within`: only that element, at most `ADMIN_HEIGHT` tall - the admin pages
- * without the sidebar every admin shot would repeat (the size budget). */
+ * `within`: only that element (and 16 px around it), at most `ADMIN_HEIGHT`
+ * tall - the admin pages without the sidebar every admin shot would repeat
+ * (the size budget). Every crop ends between two lines (cleanBottom). */
 async function shoot(
   page: Page,
   name: string,
@@ -208,8 +281,10 @@ async function shoot(
   // From the top, with the pointer parked where it hovers nothing.
   await page.evaluate(() => window.scrollTo(0, 0))
   await page.mouse.move(0, 0)
-  const width = page.viewportSize()!.width
-  let clip: { x: number; y: number; width: number; height: number } | undefined
+  const { width, height: viewHeight } = page.viewportSize()!
+  const bottom = (selector: string, limit: number, trim = false) =>
+    page.evaluate(cleanBottom, [selector, limit, trim] as [string, number, boolean])
+  let clip: { x: number; y: number; width: number; height: number }
   if (opts.clipAbove) {
     const box = await page.locator(opts.clipAbove).boundingBox()
     if (!box) throw new Error(`[docs] ${opts.clipAbove} is not on the page`)
@@ -217,16 +292,18 @@ async function shoot(
   } else if (opts.within) {
     const box = await page.locator(opts.within).boundingBox()
     if (!box) throw new Error(`[docs] ${opts.within} is not on the page`)
-    clip = { x: box.x, y: box.y, width: box.width, height: Math.min(ADMIN_HEIGHT, box.height) }
-  } else if (opts.fullPage) {
-    const height = await page.evaluate(() => document.documentElement.scrollHeight)
-    clip = { x: 0, y: 0, width, height: Math.min(2400, height) }
+    const x = Math.max(0, box.x - 16)
+    const end = Math.min(box.y + box.height, await bottom(opts.within, box.y + ADMIN_HEIGHT, true))
+    clip = { x, y: box.y, width: Math.min(width, box.x + box.width + 16) - x, height: end - box.y }
+  } else {
+    const full = opts.fullPage ? await page.evaluate(() => document.documentElement.scrollHeight) : viewHeight
+    clip = { x: 0, y: 0, width, height: await bottom('body', Math.min(opts.fullPage ? 2400 : viewHeight, full)) }
   }
   await page.screenshot({
     path: path.join(OUT, `${name}.png`),
     animations: 'disabled',
     caret: 'hide',
-    fullPage: Boolean(clip),
+    fullPage: Boolean(opts.clipAbove || opts.within || opts.fullPage),
     clip,
   })
 }
@@ -236,14 +313,22 @@ async function shoot(
 
 test('admin audit log', async () => {
   const page = await as('anna')
+  pinLogs()
   await page.goto('/admin/audit-log')
   await title(page, 'Audit log')
   await expect(page.locator('h1.admin-page-title')).toBeVisible()
+  // Filtered: every page load rotates the refresh token, which adds a row at
+  // the real time above the pinned ones.
+  await page.getByPlaceholder(/^event_type/).fill('login_success')
+  const rows = page.locator('tbody tr')
+  await expect(rows.filter({ hasText: 'refresh_token_rotated' })).toHaveCount(0)
+  await expect(rows.filter({ hasText: PEOPLE.julia.displayName }).first()).toBeVisible()
   await shoot(page, 'admin-audit-log', ADMIN_CROP)
 })
 
 test('admin mail log + one mail', async () => {
   const page = await as('anna')
+  pinLogs()
   await page.goto('/admin/mail-log')
   await title(page, 'Mail log')
   // A mail whose body carries no send-time timestamp.
@@ -308,7 +393,7 @@ test('public link page', async ({ page }) => {
   await page.locator('input[type=password]').fill(LINK_PASSWORD)
   await page.locator('form.unlock-form button').click()
   await expect(page.getByText('A-101 Ground floor plan rev C.pdf')).toBeVisible()
-  await shoot(page, 'public-link')
+  await shoot(page, 'public-link', { fullPage: true })
 })
 
 test('public secret link', async ({ page }) => {
@@ -607,13 +692,57 @@ const RENDER_ONLY = [
   ['/admin/settings/sso/new', 'New SSO provider'],
 ] as const
 
+const DAY = 86_400_000
+
+type Tunables = { items: Array<{ key: string; value: unknown; default: unknown }> }
+type Crons = { items: Array<{ kind: string; interval_minutes: number; next_run_at: string | null }> }
+
+/** Per page, before it loads. */
+const PREPARE: Partial<Record<(typeof ADMIN_PAGES)[number][1], (page: Page) => Promise<void>>> = {
+  // The e2e overlay raises these to their maximum for the tour's own
+  // sign-ins; show the product defaults instead.
+  'admin-sign-in': (page) =>
+    editJson<Tunables>(page, /\/api\/admin\/settings\/advanced$/, (b) => {
+      for (const it of b.items) {
+        const def = { 'rate_limit.login': 10, 'rate_limit.register': 3 }[it.key]
+        if (def !== undefined) it.value = it.default = def
+      }
+    }),
+  // When the probes ran and the next runs: the server's clock at request time.
+  'admin-system': (page) =>
+    editJson<{ live: { checked_at: string | null } }>(page, /\/api\/admin\/system\/status$/, (b) => {
+      b.live.checked_at = naive(now)
+    }),
+  'admin-scheduled-tasks': (page) =>
+    editJson<Crons>(page, /\/api\/admin\/crons$/, (b) => {
+      for (const it of b.items) {
+        if (!it.next_run_at) continue
+        let t = now.getTime() + it.interval_minutes * 60_000
+        if (it.kind !== 'interval') {
+          // A daily slot: the first one after the tour's clock.
+          t = Date.parse(`${it.next_run_at}Z`)
+          while (t > now.getTime() + DAY) t -= DAY
+          while (t <= now.getTime()) t += DAY
+        }
+        it.next_run_at = naive(new Date(t))
+      }
+    }),
+}
+
 for (const [route, name, heading] of ADMIN_PAGES) {
   test(`admin page ${name}`, async () => {
     const page = await as('anna')
+    await PREPARE[name]?.(page)
     await page.goto(route)
     await title(page, heading)
     await expect(page.locator('h1.admin-page-title')).toBeVisible()
     if (name === 'admin-sso') await expect(page.getByText(SSO_NAME)).toBeVisible()
+    if (name === 'admin-api-tokens') await expect(page.getByText(TOKEN_NAME)).toBeVisible()
+    if (name === 'admin-email-templates') {
+      // It opens on the first locale; the English set shows English.
+      await page.getByRole('tab', { name: 'English' }).click()
+      await expect(page.getByRole('tab', { name: 'English' })).toHaveClass(/active/)
+    }
     await shoot(page, name, ADMIN_CROP)
   })
 }

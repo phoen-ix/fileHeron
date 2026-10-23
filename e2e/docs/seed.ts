@@ -1,9 +1,11 @@
 import { ADMIN, BASE, apiFetch, apiLogin, enroll2FA } from '../helpers'
 
 /* The demo organisation the docs tour photographs. Seeded through the public
- * API only, so the tour needs no docker CLI and runs against any stack: the
- * docs stack (docker-compose.docs.yml, where the bootstrap admin is Anna's
- * address) or the e2e stack after its specs (the render check in e2e.yml).
+ * API only, so it runs against any stack: the docs stack
+ * (scripts/docs-screenshots.sh, where the bootstrap admin is Anna's address)
+ * or the e2e stack after its specs (the render check in e2e.yml). The tour
+ * itself needs the docker CLI: it reads a mail link from the worker's log,
+ * and on the docs stack it moves timestamps with SQL (tour.spec.ts).
  *
  * IDEMPOTENT: every user, group and share is looked up before it is created,
  * so a second run against the same stack reuses what the first one made.
@@ -135,6 +137,7 @@ const SOPHIE_HELD: DemoShare = {
 export const SECRET_LABEL = 'Site office Wi-Fi'
 export const REQUEST_LABEL = 'Data room password'
 export const SSO_NAME = 'Heron Demo SSO'
+export const TOKEN_NAME = 'Desktop client - office PC'
 
 export interface Demo {
   /** Lukas's access token, minted during the seed - a later sign-in would
@@ -265,11 +268,12 @@ async function createShare(
     }),
     `create share ${s.subject}`,
   )
+  const fileIds: string[] = []
   for (const f of s.files) {
     const form = new FormData()
     form.append('share_id', created.id)
     form.append('file', new Blob([fileBytes(f)], { type: f.type }), f.name)
-    await ok(
+    const upload = await json<{ file_id: string }>(
       await fetch(`${BASE}/api/uploads/direct`, {
         method: 'POST',
         headers: { authorization: `Bearer ${token}` },
@@ -277,7 +281,18 @@ async function createShare(
       }),
       `upload ${f.name}`,
     )
+    fileIds.push(upload.file_id)
   }
+  // The batch-complete signal the SPA sends: it announces the share now.
+  // Without it the once-a-minute sweep announces it at some point during the
+  // tour, and the bell counts differ between runs.
+  await ok(
+    await apiFetch(token, `/api/shares/${created.id}/files-added`, {
+      method: 'POST',
+      body: JSON.stringify({ notify: true, file_ids: fileIds }),
+    }),
+    `announce ${s.subject}`,
+  )
   if (s.end === 'expire') {
     await ok(await apiFetch(token, `/api/shares/${created.id}/expire`, { method: 'POST' }), 'expire')
   } else if (s.end === 'revoke') {
@@ -388,6 +403,7 @@ export async function seedDemo(): Promise<Demo> {
     body: JSON.stringify({ email: PEOPLE.thomas.email, password: PASSWORD }),
   })
   if (thomas.ok && (await thomas.json()).access_token) await enroll2FA(PEOPLE.thomas.email, PASSWORD)
+  await ensureApiToken(lukas)
   const secret = await ensureSecret(lukas, users.martin)
   const request = await ensureSecretRequest(lukas, users.julia)
   const sso = await json<{ items: Array<{ id: string; name: string }> }>(
@@ -526,4 +542,24 @@ async function ensureSecretRequest(
     'secret request links',
   )
   return { requestId, requestLinkToken: linkToken(links.items.find((l) => l.url)?.url, '#') }
+}
+
+async function ensureApiToken(lukas: string): Promise<void> {
+  const mine = await json<{ items: Array<{ name: string }> }>(
+    await apiFetch(lukas, '/api/account/api-tokens'),
+    'list API tokens',
+  )
+  if (mine.items.some((t) => t.name === TOKEN_NAME)) return
+  await ok(
+    await apiFetch(lukas, '/api/account/api-tokens', {
+      method: 'POST',
+      body: JSON.stringify({
+        name: TOKEN_NAME,
+        password: PASSWORD,
+        expires_at: new Date(Date.now() + 90 * 86_400_000).toISOString(),
+        scopes: ['files:upload', 'shares:create', 'shares:read', 'recipients:search'],
+      }),
+    }),
+    'create API token',
+  )
 }

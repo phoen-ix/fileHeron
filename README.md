@@ -370,7 +370,7 @@ approver whose own shares are exempt may still attach one to their own share.
 
 ## Secrets (`/secrets`)
 
-<img src="docs/screenshots/secrets.png" alt="The secrets page: sent secrets and secret requests with their state" width="800">
+<img src="docs/screenshots/secrets.png" alt="The secrets page: the Sent tab with one secret and its state" width="800">
 
 Off by default (*Admin → Sharing & files → Secrets → Policy*); once an admin turns
 it on, a **Secrets** link appears in the header. A secret is a password, a key or

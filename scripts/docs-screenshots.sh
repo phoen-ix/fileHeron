@@ -20,6 +20,7 @@ OUT="${1:-$ROOT/docs/screenshots}"
 OUT="$(mkdir -p "$OUT" && cd "$OUT" && pwd)"
 cd "$ROOT"
 ARTIFACTS="${ARTIFACTS:-$(mktemp -d)}"
+mkdir -p "$ARTIFACTS"
 PORT_BASE="${PORT_BASE:-8080}"
 export COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-fileheron_docs}"
 
@@ -40,7 +41,8 @@ fi
 # Never a live root: the mounts must be this checkout's data/.
 unset COMPOSE_HOST_ROOT
 export APP_FRONTEND_PORT="$PORT_BASE" APP_BACKEND_PORT="$((PORT_BASE + 3))"
-export APP_URL="http://localhost:$PORT_BASE"
+# Shown on the General settings page; the demo domain, whatever the port.
+export APP_URL=https://files.heron-demo.example
 # Compose requires these (${VAR:?}); test-only values.
 export DB_ROOT_PASSWORD=docs-root-not-a-secret DB_PASSWORD=docs-db-not-a-secret
 export JWT_SECRET=docs-jwt-secret-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa

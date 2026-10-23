@@ -28,7 +28,7 @@ With 2FA on, the password step reveals one field for an authenticator code or a 
 
 A fresh instance without an admin opens this wizard; `install.sh` prints its `/setup?token=…` link.
 
-<img src="setup.png" alt="First-admin setup: a fresh instance without an admin opens this wizard; `install.sh` prints its `/setup?token=…` link." width="800">
+<img src="setup.png" alt="First-admin setup: a fresh instance without an admin opens this wizard; install.sh prints its setup link." width="800">
 
 ## Accept an invitation (`/register/…`)
 
@@ -200,9 +200,9 @@ Turning on an authenticator app; recovery codes follow.
 
 ## Overview (`/admin`)
 
-The task-grouped sidebar, the setting search, attention tiles, service status and every admin page.
+The task-grouped sidebar, the setting search, the attention tiles, service status and the recently changed settings.
 
-<img src="admin-overview.png" alt="Overview: the task-grouped sidebar, the setting search, attention tiles, service status and every admin page." width="800">
+<img src="admin-overview.png" alt="Overview: the task-grouped sidebar, the setting search, the attention tiles, service status and the recently changed settings." width="800">
 
 ## Users (`/admin/users`)
 
@@ -212,9 +212,9 @@ Employees and clients with role, status, 2FA, storage and last sign-in.
 
 ## A user (`/admin/users/…`)
 
-Role, status, quota, sessions, connections and the account actions.
+One account: its address, role and 2FA state, and the profile form - display name, role, quota and the switch that disables it. Sessions, connections and the account actions follow further down.
 
-<img src="admin-user-detail.png" alt="A user: role, status, quota, sessions, connections and the account actions." width="800">
+<img src="admin-user-detail.png" alt="A user: the address, role and 2FA state, and the profile form with display name, role, quota and the switch that disables the account." width="800">
 
 ## Groups (`/admin/groups`)
 
@@ -230,9 +230,9 @@ Its members and settings.
 
 ## Audit log (`/admin/audit-log`)
 
-Every security-relevant event, filterable by type, actor and date.
+Every security-relevant event, filterable by type, target and date - here filtered to successful sign-ins.
 
-<img src="admin-audit-log.png" alt="Audit log: every security-relevant event, filterable by type, actor and date." width="800">
+<img src="admin-audit-log.png" alt="Audit log: every security-relevant event, filterable by type, target and date - here filtered to successful sign-ins." width="800">
 
 ## File history (`/admin/file-history`)
 
@@ -254,9 +254,9 @@ Signed-in devices across all users, revocable one by one.
 
 ## API tokens (`/admin/api-tokens`)
 
-Every user's tokens, with scopes, expiry and last use.
+Every user's API tokens with their owner, scopes, status, last use and expiry - here one desktop-client token.
 
-<img src="admin-api-tokens.png" alt="API tokens: every user's tokens, with scopes, expiry and last use." width="800">
+<img src="admin-api-tokens.png" alt="API tokens: every user's API tokens with their owner, scopes, status, last use and expiry - here one desktop-client token." width="800">
 
 ## Secrets (`/admin/secrets`)
 
@@ -278,9 +278,9 @@ Files the virus scanner flagged, to release or delete.
 
 ## Error log (`/admin/error-log`)
 
-Server errors and opted-in client errors, with request details.
+Server errors, opted-in client errors and failed scheduled tasks, filterable by code, address, status, source and time; empty on this demo instance.
 
-<img src="admin-error-log.png" alt="Error log: server errors and opted-in client errors, with request details." width="800">
+<img src="admin-error-log.png" alt="Error log: server errors, opted-in client errors and failed scheduled tasks, filterable by code, address, status, source and time; empty on this demo instance." width="800">
 
 ## Blocked sources (`/admin/ip-blocks`)
 
@@ -296,9 +296,9 @@ Replies, bounces and auto-replies the IMAP poll picked up.
 
 ## Webhooks (`/admin/settings/webhooks`)
 
-Outgoing event notifications to other systems, with delivery history.
+Outgoing event notifications to other systems: the form that adds one, with the events it fires on.
 
-<img src="admin-webhooks.png" alt="Webhooks: outgoing event notifications to other systems, with delivery history." width="800">
+<img src="admin-webhooks.png" alt="Webhooks: outgoing event notifications to other systems: the form that adds one, with the events it fires on." width="800">
 
 ## Mail log (`/admin/mail-log`)
 
@@ -308,9 +308,9 @@ Every mail the instance sent or tried to send.
 
 ## A mail (`/admin/mail-log/…`)
 
-One mail with its masked body and delivery attempts, resendable.
+One mail: its status, recipient, time, category and delivery attempts, and the Resend button, greyed out here because this demo instance only logs its mail; the masked body follows below.
 
-<img src="admin-mail-detail.png" alt="A mail: one mail with its masked body and delivery attempts, resendable." width="800">
+<img src="admin-mail-detail.png" alt="A mail: its status, recipient, time, category and delivery attempts, with a greyed-out Resend button." width="800">
 
 ## General (`/admin/settings/general`)
 
@@ -344,9 +344,9 @@ Encrypts every stored file with its own key; off by default.
 
 ## Sign-in policies (`/admin/settings/sign-in`)
 
-Password rules, lockout and the sign-in options.
+The per-address rate limits and the account lockout against password guessing; the password rules and the sign-in options follow further down.
 
-<img src="admin-sign-in.png" alt="Sign-in policies: password rules, lockout and the sign-in options." width="800">
+<img src="admin-sign-in.png" alt="Sign-in policies: the per-address rate limits and the account lockout against password guessing." width="800">
 
 ## 2FA enforcement (`/admin/settings/twofa`)
 
@@ -362,9 +362,9 @@ The OpenID Connect providers users can sign in with.
 
 ## An SSO provider (`/admin/settings/sso/…`)
 
-Preset, issuer, client credentials and redirect URI, with a connection test.
+Display name, preset, the Keycloak host and realm, and the issuer URL; the client credentials and the redirect URI follow further down.
 
-<img src="admin-sso-edit.png" alt="An SSO provider: preset, issuer, client credentials and redirect URI, with a connection test." width="800">
+<img src="admin-sso-edit.png" alt="An SSO provider: display name, preset, the Keycloak host and realm, and the issuer URL." width="800">
 
 ## Outgoing mail (`/admin/settings/email`)
 
@@ -404,6 +404,6 @@ Every background job with its schedule, last run and a run-now button.
 
 ## Status & updates (`/admin/system`)
 
-Service health, the running version, updates and rollback.
+The running version and the update check, then the live checks of the database, Redis and the virus scanner.
 
-<img src="admin-system.png" alt="Status & updates: service health, the running version, updates and rollback." width="800">
+<img src="admin-system.png" alt="Status & updates: the running version and the update check, then the live checks of the database, Redis and the virus scanner." width="800">

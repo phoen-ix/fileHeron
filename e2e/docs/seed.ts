@@ -1,4 +1,4 @@
-import { ADMIN, BASE, apiFetch, apiLogin } from '../helpers'
+import { ADMIN, BASE, apiFetch, apiLogin, enroll2FA } from '../helpers'
 
 /* The demo organisation the docs tour photographs. Seeded through the public
  * API only, so the tour needs no docker CLI and runs against any stack: the
@@ -132,10 +132,24 @@ const SOPHIE_HELD: DemoShare = {
   expiresInDays: 7,
 }
 
+export const SECRET_LABEL = 'Site office Wi-Fi'
+export const REQUEST_LABEL = 'Data room password'
+export const SSO_NAME = 'Heron Demo SSO'
+
 export interface Demo {
+  /** Lukas's access token, minted during the seed - a later sign-in would
+   * add a session, an audit row and a new-device mail to the shots. */
+  lukasToken: string
   heroShareId: string
   heroLinkToken: string
   heldShareId: string
+  users: Record<keyof typeof PEOPLE, number>
+  groupId: number
+  secretId: string
+  secretLinkToken: string
+  requestId: string
+  requestLinkToken: string
+  ssoId: string
 }
 
 async function ok(r: Response, what: string): Promise<Response> {
@@ -304,8 +318,10 @@ export async function seedDemo(): Promise<Demo> {
     '2FA policy',
   )
 
-  const users: Record<string, number> = {}
-  for (const [key, p] of Object.entries(PEOPLE)) users[key] = await ensureUser(admin, p)
+  const users = {} as Record<keyof typeof PEOPLE, number>
+  for (const [key, p] of Object.entries(PEOPLE)) {
+    users[key as keyof typeof PEOPLE] = await ensureUser(admin, p)
+  }
 
   const groups: Record<string, number> = {
     [RIVERSIDE]: await ensureGroup(
@@ -363,5 +379,151 @@ export async function seedDemo(): Promise<Demo> {
   if (!link.url) throw new Error('[docs seed] the hero share has no re-viewable link URL')
   const heroLinkToken = link.url.split('/d/')[1]
 
-  return { heroShareId, heroLinkToken, heldShareId }
+  await seedExtras(admin)
+  // Thomas signs in with a second factor; once enrolled, his password alone
+  // is refused.
+  const thomas = await fetch(`${BASE}/api/auth/login`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ email: PEOPLE.thomas.email, password: PASSWORD }),
+  })
+  if (thomas.ok && (await thomas.json()).access_token) await enroll2FA(PEOPLE.thomas.email, PASSWORD)
+  const secret = await ensureSecret(lukas, users.martin)
+  const request = await ensureSecretRequest(lukas, users.julia)
+  const sso = await json<{ items: Array<{ id: string; name: string }> }>(
+    await apiFetch(admin, '/api/admin/settings/sso/providers'),
+    'list SSO providers',
+  )
+  const ssoId =
+    sso.items.find((p) => p.name === SSO_NAME)?.id ??
+    (
+      await json<{ id: string }>(
+        await apiFetch(admin, '/api/admin/settings/sso/providers', {
+          method: 'POST',
+          body: JSON.stringify({
+            name: SSO_NAME,
+            preset: 'keycloak',
+            issuer_url: 'https://sso.heron-demo.example/realms/heron',
+            client_id: 'fileheron',
+            client_secret: 'docs-not-a-secret',
+            enabled: false,
+          }),
+        }),
+        'create SSO provider',
+      )
+    ).id
+
+  return {
+    lukasToken: lukas,
+    heroShareId,
+    heroLinkToken,
+    heldShareId,
+    users,
+    groupId: groups[RIVERSIDE],
+    ...secret,
+    ...request,
+    ssoId,
+  }
+}
+
+/** Settings the extra screens need: secrets on, the legal pages written. */
+async function seedExtras(admin: string): Promise<void> {
+  await ok(
+    await apiFetch(admin, '/api/admin/settings/secrets', {
+      method: 'PUT',
+      body: JSON.stringify({
+        enabled: true,
+        send: { mode: 'employees_admins' },
+        external: { mode: 'employees_admins' },
+      }),
+    }),
+    'enable secrets',
+  )
+  await ok(
+    await apiFetch(admin, '/api/admin/settings/legal', {
+      method: 'PUT',
+      body: JSON.stringify({
+        imprint: {
+          enabled: true,
+          en:
+            '<h2>Heron Demo Architects Ltd.</h2><p>Riverside Lane 12, 1020 Vienna, Austria</p>' +
+            '<p>Email: office@heron-demo.example<br>Company register: FN 000000x (demo)</p>',
+          de: '',
+        },
+        privacy: {
+          enabled: true,
+          en: '<h2>Privacy</h2><p>We store the files you share only as long as the share runs.</p>',
+          de: '',
+        },
+      }),
+    }),
+    'legal pages',
+  )
+}
+
+const linkToken = (url: string | null | undefined, sep: string): string => url?.split(sep)[1] ?? ''
+
+async function ensureSecret(
+  lukas: string,
+  martinId: number,
+): Promise<{ secretId: string; secretLinkToken: string }> {
+  const sent = await json<{ items: Array<{ id: string; label: string | null }> }>(
+    await apiFetch(lukas, `/api/secrets?box=sent&q=${encodeURIComponent(SECRET_LABEL)}`),
+    'list secrets',
+  )
+  const secretId =
+    sent.items.find((s) => s.label === SECRET_LABEL)?.id ??
+    (
+      await json<{ id: string }>(
+        await apiFetch(lukas, '/api/secrets', {
+          method: 'POST',
+          body: JSON.stringify({
+            content: 'Network: Riverside-Site\nPassword: demo-wifi-not-real',
+            label: SECRET_LABEL,
+            max_views: 3,
+            recipients: { user_ids: [martinId] },
+            create_link: true,
+          }),
+        }),
+        'create secret',
+      )
+    ).id
+  const links = await json<{ items: Array<{ kind: string; url: string | null }> }>(
+    await apiFetch(lukas, `/api/secrets/${secretId}/links`),
+    'secret links',
+  )
+  return { secretId, secretLinkToken: linkToken(links.items.find((l) => l.url)?.url, '#') }
+}
+
+async function ensureSecretRequest(
+  lukas: string,
+  juliaId: number,
+): Promise<{ requestId: string; requestLinkToken: string }> {
+  const mine = await json<{ items: Array<{ id: string; label: string }> }>(
+    await apiFetch(lukas, `/api/secret-requests?box=mine&q=${encodeURIComponent(REQUEST_LABEL)}`),
+    'list secret requests',
+  )
+  const requestId =
+    mine.items.find((r) => r.label === REQUEST_LABEL)?.id ??
+    (
+      await json<{ id: string }>(
+        await apiFetch(lukas, '/api/secret-requests', {
+          method: 'POST',
+          body: JSON.stringify({
+            label: REQUEST_LABEL,
+            note: 'For the Novak due-diligence data room - one view is enough.',
+            expires_at: new Date(Date.now() + 7 * 86_400_000).toISOString(),
+            answer_max_views: 1,
+            recipients: { user_ids: [juliaId] },
+            create_link: true,
+          }),
+        }),
+        'create secret request',
+      )
+    ).id
+  const links = await json<{ items: Array<{ url: string | null }> }>(
+    await apiFetch(lukas, `/api/secret-requests/${requestId}/links`),
+    'secret request links',
+  )
+  return { requestId, requestLinkToken: linkToken(links.items.find((l) => l.url)?.url, '#') }
 }

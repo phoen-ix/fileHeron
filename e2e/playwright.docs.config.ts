@@ -6,8 +6,8 @@ import { defineConfig, devices } from '@playwright/test'
  *
  *   npx playwright test -c playwright.docs.config.ts
  *
- * Screenshots land in ../docs/screenshots (DOCS_SCREENSHOT_DIR overrides). The
- * committed ones come from .github/workflows/docs-screenshots.yml - see
+ * Screenshots land in ../docs/screenshots (DOCS_SCREENSHOT_DIR overrides).
+ * scripts/docs-screenshots.sh runs it against a fresh stack - see
  * CONTRIBUTING.md "Docs screenshots". */
 export default defineConfig({
   testDir: './docs',
@@ -33,6 +33,7 @@ export default defineConfig({
       env: { ...process.env, LANG: 'en_GB.UTF-8', LANGUAGE: 'en_GB:en', LC_ALL: 'en_GB.UTF-8' },
     },
     timezoneId: 'Europe/Vienna',
+    contextOptions: { reducedMotion: 'reduce' },
     screenshot: 'only-on-failure',
     trace: 'off',
   },

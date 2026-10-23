@@ -15,15 +15,15 @@ const BACKEND_CONTAINER = process.env.E2E_BACKEND_CONTAINER ?? 'fileheron_e2e-ba
  * unset the backend prints an "EMAIL DEV ->" block containing the LIVE token
  * (the mail-log API masks these, so stdout is the only source). `kind` is the
  * URL path segment: 'register' | 'reset-password' | 'verify-email'. Newest wins. */
-export function tokenFromStdout(kind: string): string {
+export function tokenFromStdout(kind: string, container = BACKEND_CONTAINER): string {
   // No shell: the container name comes from the environment. stderr goes first
   // so stdout, where both print() and the JSON log handler write, stays newest.
-  const r = spawnSync('docker', ['logs', BACKEND_CONTAINER], {
+  const r = spawnSync('docker', ['logs', container], {
     maxBuffer: 128 * 1024 * 1024,
     encoding: 'utf8',
   })
   if (r.error) throw r.error
-  if (r.status !== 0) throw new Error(`[e2e] docker logs ${BACKEND_CONTAINER} exited ${r.status}: ${r.stderr}`)
+  if (r.status !== 0) throw new Error(`[e2e] docker logs ${container} exited ${r.status}: ${r.stderr}`)
   const logs = r.stderr + r.stdout
   const matches = [...logs.matchAll(new RegExp(`/${kind}/([A-Za-z0-9._~-]+)`, 'g'))].map((m) => m[1])
   if (matches.length === 0) throw new Error(`[e2e] no /${kind}/ token in backend stdout`)

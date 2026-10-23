@@ -54,32 +54,29 @@ cd .. && docker compose -f docker-compose.yml -f docker-compose.e2e.yml down -v
 
 ### Docs screenshots
 
-The README's screenshots (`docs/screenshots/*.png`) come from the docs tour in
-`e2e/docs/`: it seeds a demo organisation through the API and takes one
-screenshot per page. To regenerate them, run the **Docs screenshots** workflow
-(Actions → Docs screenshots → Run workflow), download its `docs-screenshots`
-artifact, unzip it over `docs/screenshots/`, look at the diff and commit it.
-Regenerate when a page worth showing has changed; each set adds ~2 MB to the
-history.
+The screenshots in the docs (`docs/screenshots/*.png`, gallery in
+[`docs/screenshots/README.md`](docs/screenshots/README.md)) come from the docs tour in
+`e2e/docs/`: it seeds a demo organisation through the API and takes one screenshot per
+screen. `scripts/docs-screenshots.sh [outdir]` is the one entry point: it builds the prod
+images, starts a throwaway stack under `COMPOSE_PROJECT_NAME=fileheron_docs` (the e2e and
+docs overlays) on `127.0.0.1:${PORT_BASE:-8080}`, runs the tour and tears the stack down
+with `down -v`.
+
+```bash
+cd e2e && npm ci && npx playwright install chromium && cd ..
+scripts/docs-screenshots.sh            # -> docs/screenshots/
+```
+
+Like the e2e stack it mounts `./data` of the checkout it starts from, so it refuses a
+checkout with a `.env` or files in `data/`: on a machine that also runs a live instance,
+start it from a separate clone. Without Docker locally, run the **Docs screenshots**
+workflow (Actions → Docs screenshots → Run workflow) and unzip its `docs-screenshots`
+artifact over `docs/screenshots/`. Look at the diff before committing; regenerate when a
+screen worth showing has changed, since each set adds megabytes to the history.
 
 The E2E workflow runs the same tour as a render check, after the journey specs.
 Its `docs-tour` artifact shows the e2e fixtures (`admin@e2e.local`, test
 shares) - **never commit that one**.
-
-Locally, the docs stack is a third compose file over the e2e overlay, under its
-own project name. Like the e2e stack it mounts `./data` of the checkout it
-starts from, so on a machine where that checkout also runs a live instance,
-start it from a separate clone.
-
-```bash
-export COMPOSE_PROJECT_NAME=fileheron_docs
-docker compose -f docker-compose.yml -f docker-compose.e2e.yml -f docker-compose.docs.yml \
-  up -d --build db redis backend worker tusd frontend
-cd e2e && DOCS_ADMIN_EMAIL=anna.berger@heron-demo.example \
-  npx playwright test -c playwright.docs.config.ts      # writes ../docs/screenshots/
-
-cd .. && docker compose -f docker-compose.yml -f docker-compose.e2e.yml -f docker-compose.docs.yml down -v
-```
 
 ## Before you push - the gates CI runs
 

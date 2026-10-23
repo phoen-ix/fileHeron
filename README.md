@@ -26,7 +26,8 @@ the rest.
 </details>
 
 <sub>Every screenshot here is of a seeded demo organisation, taken by the docs tour in
-[`e2e/docs/`](e2e/docs/) - see [CONTRIBUTING.md](CONTRIBUTING.md#docs-screenshots).</sub>
+[`e2e/docs/`](e2e/docs/) - see [Screenshots](#screenshots-and-end-to-end-tests). **Every screen,
+admin console included: [the screenshot gallery](docs/screenshots/README.md).**</sub>
 
 > **Naming.** The display name is **file:Heron** (with the colon). The repository
 > directory, container names, package names, code identifiers, and env-var names all
@@ -50,7 +51,7 @@ the rest.
   - [Install](#first-install) · [Ports](#compose-ports) · [Traefik](#traefik-on-the-host) · [Hardening](#production-hardening-checklist) · [Storage](#storage-layout) · [Encryption at rest](#encryption-at-rest) · [Backups](#backups) · [Restore](#restore) · [Upgrades](#upgrades) · [Health & metrics](#health-checks--metrics) · [Background jobs](#background-jobs--housekeeping)
   - [**Settings reference**](#settings-reference): [env vars](#1-environment-variables-boot) · [runtime settings](#2-admin-runtime-settings-hot---no-restart) · [per-user](#3-per-user-preferences-account)
 - [**Developer guide**](#developer-guide)
-  - [Code layout](#code-layout) · [Request flow](#request-flow-typical) · [Auth](#auth-specifics) · [Uploads](#upload-pipeline) · [Cron](#arq-workers--cron) · [Conventions](#coding-conventions)
+  - [Code layout](#code-layout) · [Request flow](#request-flow-typical) · [Auth](#auth-specifics) · [Uploads](#upload-pipeline) · [Cron](#arq-workers--cron) · [Tests](#running-tests) · [Screenshots](#screenshots-and-end-to-end-tests) · [Conventions](#coding-conventions)
 - [License](#license)
 
 ## Quickstart
@@ -368,6 +369,8 @@ that this policy would hold needs an admin (`409 APPROVAL_REQUIRED`); an
 approver whose own shares are exempt may still attach one to their own share.
 
 ## Secrets (`/secrets`)
+
+<img src="docs/screenshots/secrets.png" alt="The secrets page: sent secrets and secret requests with their state" width="800">
 
 Off by default (*Admin → Sharing & files → Secrets → Policy*); once an admin turns
 it on, a **Secrets** link appears in the header. A secret is a password, a key or
@@ -1424,6 +1427,29 @@ cd frontend && npx vitest run             # unit + i18n parity
 CI (`.github/workflows/ci.yml`) runs backend tests, a **MariaDB alembic-roundtrip**
 (exercises every migration up + down), frontend type-check/lint/vitest, and a
 dependency audit.
+
+## Screenshots and end-to-end tests
+
+The Playwright journeys in `e2e/tests/` run against a real compose stack - always under
+`COMPOSE_PROJECT_NAME=fileheron_e2e`, never the directory's default `fileheron`
+([CONTRIBUTING.md](CONTRIBUTING.md#end-to-end-playwright-against-a-real-compose-stack)).
+
+Every screenshot in the docs comes from the docs tour (`e2e/docs/`), which seeds a demo
+organisation through the API and photographs every screen into
+[`docs/screenshots/`](docs/screenshots/README.md). One command builds the prod images,
+starts a throwaway stack, runs the tour and tears the stack down again:
+
+```bash
+cd e2e && npm ci && npx playwright install chromium && cd ..
+scripts/docs-screenshots.sh                    # writes docs/screenshots/*.png
+PORT_BASE=24300 scripts/docs-screenshots.sh ../shots   # another port / output dir
+```
+
+It runs as compose project `fileheron_docs` on `127.0.0.1:${PORT_BASE:-8080}` (the API on
+`PORT_BASE+3`), and refuses to start in a checkout with a `.env` or a non-empty `data/`:
+like the e2e stack it bind-mounts `./data`, so use a clean clone on a machine that also
+runs an instance. The **Docs screenshots** workflow (Actions, manual) runs the same script
+and returns the PNGs as an artifact.
 
 ## Coding conventions
 

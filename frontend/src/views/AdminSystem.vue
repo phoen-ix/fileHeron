@@ -116,6 +116,9 @@
     checking.value = true
     try {
       const { data } = await checkUpdatesNow()
+      // Refresh status so the version card picks up the new cache - after a
+      // failed check too: its "checked" time and error are the card's to show.
+      await load()
       if (!data.ok) {
         ui.pushToast(
           t('admin_system.update.check_now_toast.error', {
@@ -125,8 +128,6 @@
         )
         return
       }
-      // Refresh status so the version card picks up the new cache.
-      await load()
       if (data.latest_version && data.latest_version !== status.value?.version.running) {
         ui.pushToast(
           t('admin_system.update.check_now_toast.found', { v: data.latest_version }),

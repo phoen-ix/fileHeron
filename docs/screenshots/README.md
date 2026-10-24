@@ -50,9 +50,9 @@ The reset link's page: a new password, checked against the strength rules.
 
 ## A spent or invalid link (`/verify-email/…`)
 
-What an expired or already used email link shows - the same card serves the email-change confirm and cancel links.
+What an expired or already used verification link shows. The email-change confirm and cancel links fail the same way, each under its own heading.
 
-<img src="verify-email-invalid.png" alt="A spent or invalid link: what an expired or already used email link shows - the same card serves the email-change confirm and cancel links." width="800">
+<img src="verify-email-invalid.png" alt="A spent or invalid link: what an expired or already used verification link shows." width="800">
 
 ## Public link, locked (`/d/…`)
 
@@ -392,9 +392,9 @@ Export and import the configuration; both ask for the admin's password.
 
 ## Maintenance mode (`/admin/settings/maintenance`)
 
-Pauses sign-ins and transfers, for example before an update.
+Pauses new uploads and downloads while running ones finish, for example before an update, with an optional banner message.
 
-<img src="admin-maintenance.png" alt="Maintenance mode: pauses sign-ins and transfers, for example before an update." width="800">
+<img src="admin-maintenance.png" alt="Maintenance mode: pauses new uploads and downloads while running ones finish, with an optional banner message." width="800">
 
 ## Scheduled tasks (`/admin/scheduled-tasks`)
 

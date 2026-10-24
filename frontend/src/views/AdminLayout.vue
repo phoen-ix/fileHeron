@@ -239,6 +239,8 @@
     background: none;
     border: 0;
     cursor: pointer;
+    /* A <button> centres its text; a wrapped label lines up with the rest. */
+    text-align: start;
     font-family: var(--fh-font-mono);
     font-size: var(--fh-text-mono-sm);
     text-transform: uppercase;

@@ -619,6 +619,12 @@ test('admin overview', async () => {
   // All six sidebar categories: v2.17.1 shipped a sidebar showing only
   // "Overview", and nothing that ran before a release rendered it.
   await expect(page.locator('.nav-cat')).toHaveCount(6)
+  // A category button left its text centred, so "Email & notifications",
+  // which wraps, sat centred under the left-aligned others.
+  const aligns = await page.locator('.nav-cat-header').evaluateAll((els) =>
+    els.map((el) => getComputedStyle(el).textAlign),
+  )
+  expect(aligns.filter((a) => a !== 'start' && a !== 'left')).toEqual([])
   // The attention tiles and the status line show "…" until they load.
   await expect(page.getByText('…', { exact: true })).toHaveCount(0)
   await shoot(page, 'admin-overview')

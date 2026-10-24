@@ -296,7 +296,7 @@
             role="tab"
             class="locale-tab"
             :class="{ active: loc.code === activeLocale }"
-            :aria-pressed="loc.code === activeLocale"
+            :aria-selected="loc.code === activeLocale"
             @click="selectLocale(loc.code)"
           >
             {{ localeLabel(loc.code) }}

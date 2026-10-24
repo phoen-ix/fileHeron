@@ -130,6 +130,15 @@ describe('AdminSettingsEmailTemplates', () => {
     expect(w.find('[role="tab"].active').text()).toBe(ui === 'en' ? 'English' : 'Deutsch')
   })
 
+  // role="tab" announces aria-selected; it carried aria-pressed, a button's state.
+  it('announces the active language tab as selected', async () => {
+    const w = makeWrapper()
+    await flushPromises()
+    const tabs = w.findAll('[role="tab"]')
+    expect(tabs.map((t) => t.attributes('aria-selected'))).toEqual(['true', 'false'])
+    expect(tabs.every((t) => t.attributes('aria-pressed') === undefined)).toBe(true)
+  })
+
   it('selecting a template fetches its detail', async () => {
     const w = makeWrapper()
     await flushPromises()

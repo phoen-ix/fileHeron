@@ -140,7 +140,7 @@
           <div class="logo-actions">
             <input
               ref="fileInput"
-              :aria-label="t('common.filter')"
+              :aria-label="t('admin_branding.logo.upload')"
               type="file"
               accept="image/png,image/jpeg,image/webp"
               class="visually-hidden"

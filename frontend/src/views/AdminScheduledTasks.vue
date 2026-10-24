@@ -178,7 +178,7 @@
                     <select
                       v-model="it.kind"
                       class="fh-field-input kind"
-                      :aria-label="t('common.filter')"
+                      :aria-label="`${it.name}: ${t('admin_scheduled_tasks.col_schedule')}`"
                     >
                       <option value="interval">
                         {{ t('admin_scheduled_tasks.kind_interval') }}
@@ -188,7 +188,7 @@
                     <span v-if="it.kind === 'interval'" class="sched-input">
                       <input
                         v-model.number="it.interval_minutes"
-                        :aria-label="t('common.filter')"
+                        :aria-label="`${it.name}: ${t('admin_scheduled_tasks.kind_interval')} (${t('admin_scheduled_tasks.minutes')})`"
                         type="number"
                         class="fh-field-input num"
                         :min="it.min_interval_minutes"
@@ -201,7 +201,7 @@
                         v-model="it.daily_time"
                         type="time"
                         class="fh-field-input time"
-                        :aria-label="t('common.filter')"
+                        :aria-label="`${it.name}: ${t('admin_scheduled_tasks.kind_daily')}`"
                       />
                     </span>
                   </div>

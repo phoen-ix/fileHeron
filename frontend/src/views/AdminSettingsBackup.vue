@@ -249,7 +249,7 @@
         <input
           type="file"
           accept=".json,application/json"
-          :aria-label="t('common.filter')"
+          :aria-label="t('admin_backup.import_file_label')"
           @change="onPickFile"
         />
         <input
